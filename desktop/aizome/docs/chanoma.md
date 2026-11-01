@@ -182,6 +182,59 @@ pointer through, and only the menu takes the keyboard (The way home,
 above). The strip along the top that brings the bar down is another,
 open while the page shows.
 
+### Films and shows
+
+Films play through Utsushi's engine (`aizome-media`'s `Player`), into
+the window's second video. Some things come from the engine so that
+Chanoma and Utsushi agree:
+
+- **What counts as a video.** `aizome_media::is_video` decides, by
+  extension.
+- **Where a film carries on.** `resume_point` gives where it was left,
+  unless the film is under five minutes, was left in its first thirty
+  seconds, or is within half a minute (or the last twentieth) of its end.
+- **Where a show starts.** A show's episodes start at the first one not
+  `finished`.
+
+**Subtitles and languages.** The engine lists a film's sound and subtitle
+tracks: embedded ones, and subtitle files beside it (`film.srt`,
+`film.en.srt`). It picks the defaults: a track marked default or forced,
+else a file beside it.
+
+- **The menus.** The film's menu (Back) adds *Subtitles* where there are
+  any, and *Language* where there's more than one sound track. Each
+  opens a menu of the tracks, with the focus on the one playing; Back
+  returns to the film's menu.
+- **What's kept.** A choice is kept in `recent.json` for the show (its
+  folder) or the film (its file). It's matched by language where the
+  track names one, so the next episode's English is found wherever it
+  sits (`en` and `eng` alike), and by place otherwise. A show's next
+  episode, and the next time, open with it.
+
+**Drawing subtitles.** The engine sends cues as it reads them, and
+`aizome_media::Cues` keeps them, as it does for Utsushi. A timer wakes
+Chanoma whenever what shows changes.
+
+- Words are drawn on the stage canvas, white on a dark band behind each
+  line, at 4.5% of the picture's height.
+- They go in the letterbox under the picture where they fit, so nothing
+  covers it, and over its foot otherwise. A cue placed at the top goes
+  at the top.
+- They stay above the film's bar while it shows.
+- A disc's picture subtitles are drawn where they were placed.
+- While subtitles show, the stage is over the video (`over_video`), as
+  it is for the bar.
+
+**The desktop's media controls.** Chanoma serves MPRIS as
+`org.mpris.MediaPlayer2.chanoma`, through `aizome-mpris` as Utsushi does.
+
+- A keyboard's or a remote's media keys, and the menu bar's media
+  widget, can play, pause, seek, skip episodes and stop the film.
+- The volume they set is the film's.
+- They can't ask Chanoma to open anything, to change speed or to quit
+  (leaving takes the PIN). Raise brings Chanoma forward.
+- Between films, Chanoma says nothing is playing.
+
 ### Rules
 
 The PIN is kept as PBKDF2-HMAC-SHA-256 with a random salt and 150,000
@@ -255,7 +308,13 @@ CHANOMA_TEST_CORES=<folder of *_libretro.so> \
   drivers, events into buttons and axes, navigation repeats and stick
   hysteresis, the sound ring and resampler, pixel conversion and
   enlargement, core options, game and video scanning (systems by folder
-  and extension, cue sheets' tracks, box art, shows), and layouts.
+  and extension, cue sheets' tracks, box art, shows), layouts, and a
+  language chosen found again in the next episode (by name, `en` as
+  `eng`; by place without one; none rather than another language). What
+  plays, where a film carries on and the subtitles' cues are
+  `aizome-media`'s, tested there; serving the media controls is
+  `aizome-mpris`'s, tested there against a private `dbus-daemon` (what a
+  player says, and which asks reach it).
 - **Headless** (`tests/chanoma.rs`, also in the package's check): the
   first setup by controller and keyboard; Home for kids and grown-ups;
   wrong PINs and their wait, surviving a restart; a game played through a
@@ -274,7 +333,12 @@ CHANOMA_TEST_CORES=<folder of *_libretro.so> \
   note saying how to come back, the strip along the top bringing the bar,
   the menu taking the keyboard and giving it back, the bar going as the
   pointer returns to the page, and the compositor's word of Home on the
-  keyboard leading home). The unit tests add where clicks land: the
+  keyboard leading home); a film, the engine's test card with a SubRip
+  file beside it (its subtitles showing as it plays, in italics where the
+  file says; the film's menu offering them and no language for one sound
+  track; the subtitles' menu on the track showing, Back to the film's
+  menu, Off; kept, and the film opening again without them; the media
+  controls' play and stop). The unit tests add where clicks land: the
   hints, the bar's *Home* in a 16:10 window, beside a menu.
 - **Real cores** (`tests/cores.rs`, opt-in): every system's cores from
   nixpkgs load and list the extensions Chanoma sends them; gambatte,
@@ -328,3 +392,9 @@ before calling any of it tested on hardware.
   touch screens (the DS).
 - Adding a website needs a keyboard and a mouse (its address is typed).
   Choosing folders doesn't: see Choosing folders above.
+- Subtitles lose ASS styling (italics and top placement are kept), as in
+  Utsushi. A subtitle file beside a film with no language in its name is
+  called *Track 1*. There's no household language to start every film
+  in: a choice is kept per show or film. Choosing a language hasn't been
+  tried on a film with several sound tracks; the engine's test media
+  have one each, so the matching is checked in unit tests only.

@@ -69,6 +69,7 @@ dependencies = [
  "aizome-ipc",
  "aizome-kit",
  "aizome-media",
+ "aizome-mpris",
  "aizome-sys",
  "aizome-theme",
  "env_logger",
@@ -341,6 +342,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aizome-mpris"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "zbus",
+]
+
+[[package]]
 name = "aizome-myaku"
 version = "0.1.0"
 dependencies = [
@@ -606,13 +615,13 @@ version = "0.1.0"
 dependencies = [
  "aizome-kit",
  "aizome-media",
+ "aizome-mpris",
  "env_logger",
  "image",
  "log",
  "serde",
  "serde_json",
  "sidestep-engine",
- "zbus",
 ]
 
 [[package]]

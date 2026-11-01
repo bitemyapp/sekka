@@ -29,8 +29,9 @@ use std::rc::Rc;
 
 use aizome_kit::Icon;
 use aizome_kit::layout::{Point, Rect, Size};
-use aizome_kit::sidestep_ui::{Canvas, Image};
-use aizome_kit::theme::{Role, Theme};
+use aizome_kit::sidestep_ui::{Canvas, Color, Image};
+use aizome_kit::theme::{FontSpec, Role, Theme};
+use aizome_media::{Cue, CueBody};
 
 use crate::pad::{Button, Family};
 use look::*;
@@ -186,6 +187,8 @@ pub struct Scene {
     pub art: Rc<HashMap<PathBuf, Image>>,
     /// Counts pictures arriving, for the hash.
     pub art_rev: u64,
+    /// A film's subtitles showing.
+    pub subtitles: Option<Subtitles>,
     content: u64,
 }
 
@@ -220,7 +223,17 @@ impl Scene {
             // The places scroll with the focus.
             p.side_first(focus).hash(&mut h);
         }
-        Scene { view, chrome, overlay, focus, modal_focus, art, art_rev, content: h.finish() }
+        Scene { view, chrome, overlay, focus, modal_focus, art, art_rev, subtitles: None, content: h.finish() }
+    }
+
+    /// With a film's subtitles drawn over it.
+    pub fn with_subtitles(mut self, subtitles: Option<Subtitles>) -> Scene {
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        self.content.hash(&mut h);
+        subtitles.hash(&mut h);
+        self.content = h.finish();
+        self.subtitles = subtitles;
+        self
     }
 
     /// The parts that move with the focus, in the window's points.
@@ -286,6 +299,14 @@ impl Scene {
             }
             if let Some(ch) = &self.chrome {
                 paint_chrome(c, theme, ch);
+            }
+            if let Some(s) = &self.subtitles {
+                // The picture's place in the design: where the window's
+                // video puts it.
+                let at = aizome_kit::video::fit(b.size(), Some(Size::new(s.picture.0, s.picture.1)));
+                let picture = fit.visible(at + b.origin().to_vec2());
+                let bar = matches!(self.overlay, Some(Overlay::Bar(..)));
+                subtitles(c, theme, s, picture, fit.visible(b), bar);
             }
         });
         match &self.overlay {
@@ -360,6 +381,86 @@ pub fn film_bar(c: &mut Canvas, theme: &Theme, label: &str, progress: u16) {
         Rect::new(inner.x0, inner.y0, inner.x0 + inner.width() * f64::from(progress.min(1000)) / 1000.0, inner.y1);
     if done.width() >= 1.0 {
         c.fill_rect(done, theme.selection());
+    }
+}
+
+/// A film's subtitles showing, and the shape of its picture, which they're
+/// placed by.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Subtitles {
+    pub picture: (f64, f64),
+    pub cues: Vec<Cue>,
+}
+
+impl Hash for Subtitles {
+    fn hash<H: Hasher>(&self, h: &mut H) {
+        self.picture.0.to_bits().hash(h);
+        self.picture.1.to_bits().hash(h);
+        for c in &self.cues {
+            c.id.hash(h);
+        }
+    }
+}
+
+/// Subtitles' words, white on a dark band behind each line, whatever the
+/// theme (as a television's are): in the letterbox under the picture
+/// where they fit, so nothing covers it, else over its foot (its head,
+/// for a cue placed there); above the film's bar while it shows. Picture
+/// subtitles (a disc's) go where they were placed on the picture. `picture`
+/// and `window` are in the design's points.
+fn subtitles(c: &mut Canvas, theme: &Theme, s: &Subtitles, picture: Rect, window: Rect, bar: bool) {
+    let size = (picture.height() * 0.045).clamp(30.0, 52.0).round();
+    let line_h = (size * 1.35).round();
+    let pad = (size * 0.35).round();
+    let mut foot: Vec<(String, FontSpec)> = Vec::new();
+    let mut head: Vec<(String, FontSpec)> = Vec::new();
+    for cue in &s.cues {
+        match &cue.body {
+            CueBody::Text { text, italic, top } => {
+                let spec = FontSpec { italic: *italic, ..font(size, MEDIUM) };
+                let lines = text.lines().flat_map(|l| wrap(theme, l, picture.width() * 0.84, spec));
+                let to = if *top { &mut head } else { &mut foot };
+                to.extend(lines.map(|l| (l, spec)));
+            }
+            CueBody::Picture { rgba, w, h, x, y, frame } => {
+                let Some(img) = Image::from_rgba(*w, *h, rgba) else { continue };
+                if frame.0 == 0 || frame.1 == 0 {
+                    continue;
+                }
+                let k = picture.width() / f64::from(frame.0);
+                let at = Point::new(picture.x0 + f64::from(*x) * k, picture.y0 + f64::from(*y) * k);
+                c.draw_image(&img, Rect::from_origin_size(at, Size::new(f64::from(*w) * k, f64::from(*h) * k)));
+            }
+            CueBody::Clear => {}
+        }
+    }
+    let block = |n: usize| n as f64 * line_h;
+    let lines = |c: &mut Canvas, lines: &[(String, FontSpec)], top: f64| {
+        for (i, (l, spec)) in lines.iter().enumerate() {
+            let w = measure(theme, l, *spec).width;
+            let y = top + i as f64 * line_h;
+            let x = picture.center().x;
+            let band = Rect::new((x - w / 2.0 - pad).round(), y, (x + w / 2.0 + pad).round(), y + line_h);
+            c.fill_rect(band, Color::BLACK.with_alpha(0.62));
+            text_mid(c, theme, l, x - w / 2.0, y + line_h / 2.0, *spec, Color::WHITE);
+        }
+    };
+    if !foot.is_empty() {
+        let h = block(foot.len());
+        let room = window.y1 - picture.y1;
+        let mut top =
+            if room >= h + size { picture.y1 + (room - h) / 2.0 } else { picture.y1 - picture.height() * 0.06 - h };
+        if bar {
+            // The film's bar starts 200 points from the foot.
+            top = top.min(H - 220.0 - h);
+        }
+        lines(c, &foot, top.round());
+    }
+    if !head.is_empty() {
+        let h = block(head.len());
+        let room = picture.y0 - window.y0;
+        let top = if room >= h + size { window.y0 + (room - h) / 2.0 } else { picture.y0 + picture.height() * 0.06 };
+        lines(c, &head, top.round());
     }
 }
 
