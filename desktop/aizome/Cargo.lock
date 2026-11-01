@@ -302,10 +302,12 @@ dependencies = [
 name = "aizome-media"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "ffmpeg-sys-next",
  "libc",
  "log",
  "pipewire",
+ "pkg-config",
  "sidestep-ui",
 ]
 
