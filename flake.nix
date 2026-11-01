@@ -346,6 +346,9 @@
       };
       checks.${system} = {
         cargo-geiger = self.packages.${system}.cargo-geiger;
+        aizome-media-defaults = import ./nix/aizome-media-defaults-test.nix {
+          inherit pkgs inputs installer;
+        };
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit pkgs installer;
           references = referenceSystems;
