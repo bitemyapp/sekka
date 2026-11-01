@@ -9,6 +9,7 @@
 {
   environment.systemPackages = [ pkgs.file ];
   imports = [
+    ../../../../agent-skills/module.nix
     ./binary-cache.nix
     ./boot-splash
     ./desktops.nix

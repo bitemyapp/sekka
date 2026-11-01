@@ -11,6 +11,12 @@
 //!   - `--packages a,b` and `--programs x,y`: what `yukimi.nix` installs
 //!     (written next to the main configuration file, and imported from it
 //!     once);
+//!   - `--add-packages a,b` / `--remove-packages a,b`: edit the current list
+//!     under the operation lock (without replacing another client's changes);
+//!   - `--configuration STOREPATH`: apply a prepared before/after snapshot,
+//!     rejecting a stale base before writing, with normal history and rollback;
+//!   - `--setting name --add-applications x,y` / `--remove-applications x,y`:
+//!     edit the current catalog selection under the lock;
 //!   - `--setting name --applications x,y`: a list of application ids that
 //!     a catalog the system brings is installed through;
 //!   - `--unlist-system a,b` and `--unlist-user name:a,b`: entries to take
@@ -41,6 +47,7 @@
 //! already being started, which is never interrupted.
 use std::io::{Read, Write};
 
+mod configuration;
 mod transaction;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -234,8 +241,19 @@ fn output(mut c: Command, what: &str) -> Result<String> {
 struct Backup(Vec<(PathBuf, Option<Vec<u8>>)>);
 
 impl Backup {
-    fn take(files: &[PathBuf]) -> Backup {
-        Backup(files.iter().map(|path| (path.clone(), std::fs::read(path).ok())).collect())
+    fn take(files: &[PathBuf]) -> Result<Backup> {
+        let saved = files
+            .iter()
+            .map(|path| {
+                let bytes = match std::fs::read(path) {
+                    Ok(bytes) => Some(bytes),
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+                    Err(e) => return Err(Failure(format!("Cannot back up {}: {e}", path.display()))),
+                };
+                Ok((path.clone(), bytes))
+            })
+            .collect::<Result<_>>()?;
+        Ok(Backup(saved))
     }
 
     fn restore(&self) {
@@ -299,7 +317,7 @@ fn saved(generation: u32) -> PathBuf {
 }
 
 /// Copy a configuration directory: its files and folders, not hidden ones
-/// (such as a Git directory), build results or large files. Each file keeps
+/// (such as a Git directory), symlinks or large files. Each file keeps
 /// its permissions, so a file only its owner may read (in a configuration
 /// kept in a home directory, say) stays that way.
 fn copy_configuration(from: &Path, to: &Path) -> Result<()> {
@@ -308,7 +326,7 @@ fn copy_configuration(from: &Path, to: &Path) -> Result<()> {
         let entry = entry?;
         let name = entry.file_name();
         let text = name.to_string_lossy();
-        if text.starts_with('.') || text.starts_with("result") {
+        if text.starts_with('.') {
             continue;
         }
         let (from, to) = (entry.path(), to.join(&name));
@@ -345,6 +363,15 @@ fn restore_choices(setup: &Setup, kept: &Path, running: Option<&Path>) -> Vec<Pa
     let mut files = vec![setup.dir.join("flake.nix"), setup.dir.join("flake.lock")];
     files.extend(setup.main.clone());
     files.extend(setup.packages_file());
+    // Prepared edits can also change imported modules. Restore those (or
+    // remove newly added ones), preserving anything edited since the snapshot.
+    for snapshot in std::iter::once(kept).chain(running) {
+        if let Ok(saved) = configuration::files(snapshot) {
+            files.extend(saved.keys().filter(|p| p.extension().is_some_and(|e| e == "nix")).map(|p| setup.dir.join(p)));
+        }
+    }
+    files.sort();
+    files.dedup();
     let mut left = Vec::new();
     for file in files {
         let Ok(relative) = file.strip_prefix(&setup.dir) else { continue };
@@ -527,6 +554,10 @@ fn build(setup: &Setup) -> Result<String> {
         }
         return Ok(with_room(|| output(build, "Building the new system"))?.trim().to_owned());
     }
+    build_flake(setup, &configuration_name(setup)?)
+}
+
+fn configuration_name(setup: &Setup) -> Result<String> {
     if !valid_host(&setup.host) {
         return Err(Failure(format!("Not a configuration name: {:?}", setup.host)));
     }
@@ -550,7 +581,7 @@ fn build(setup: &Setup) -> Result<String> {
             }
         }
     };
-    build_flake(setup, &host)
+    Ok(host)
 }
 
 /// Make a built system the current generation and start it (`switch`) or
@@ -647,9 +678,14 @@ fn activation_mode(requested: &str, reasons: &[String]) -> Result<&'static str> 
 #[derive(Debug, Default, PartialEq, Eq)]
 struct Change {
     packages: Option<Vec<String>>,
+    add_packages: Vec<String>,
+    remove_packages: Vec<String>,
     programs: Option<Vec<String>>,
     setting: Option<String>,
     applications: Option<Vec<String>>,
+    add_applications: Vec<String>,
+    remove_applications: Vec<String>,
+    configuration: Option<PathBuf>,
     unlist_system: Vec<String>,
     unlist_user: Vec<(String, Vec<String>)>,
     update: Vec<String>,
@@ -680,9 +716,18 @@ impl Change {
             let value = it.next().ok_or_else(|| Failure(format!("{flag} needs a value")))?;
             match flag.as_str() {
                 "--packages" => change.packages = Some(split_list(value)),
+                "--add-packages" => change.add_packages.extend(split_list(value)),
+                "--remove-packages" => change.remove_packages.extend(split_list(value)),
                 "--programs" => change.programs = Some(split_list(value)),
                 "--setting" => change.setting = Some(value.clone()),
                 "--applications" => change.applications = Some(split_list(value)),
+                "--add-applications" => change.add_applications.extend(split_list(value)),
+                "--remove-applications" => change.remove_applications.extend(split_list(value)),
+                "--configuration" => {
+                    if change.configuration.replace(PathBuf::from(value)).is_some() {
+                        return Err(Failure("--configuration may only be given once".into()));
+                    }
+                }
                 "--unlist-system" => change.unlist_system = split_list(value),
                 "--unlist-user" => {
                     let (user, attrs) =
@@ -719,17 +764,47 @@ impl Change {
             return Err(Failure(format!("Unknown mode {}", change.mode)));
         }
         let attrs = change.unlist_system.iter().chain(change.unlist_user.iter().flat_map(|(_, a)| a));
-        if let Some(bad) = change.update.iter().chain(attrs).find(|i| !packages::valid_attribute(i)) {
+        if let Some(bad) = change
+            .update
+            .iter()
+            .chain(attrs)
+            .chain(&change.add_packages)
+            .chain(&change.remove_packages)
+            .find(|i| !packages::valid_attribute(i))
+        {
             return Err(Failure(format!("Not an attribute name: {bad:?}")));
         }
         if let Some((bad, _)) = change.unlist_user.iter().find(|(user, _)| !valid_user(user)) {
             return Err(Failure(format!("Not a user name: {bad:?}")));
         }
-        if let Some(bad) = change.applications.iter().flatten().find(|a| !catalog::valid_id(a)) {
+        if let Some(bad) = change
+            .applications
+            .iter()
+            .flatten()
+            .chain(&change.add_applications)
+            .chain(&change.remove_applications)
+            .find(|a| !catalog::valid_id(a))
+        {
             return Err(Failure(format!("Not an application id: {bad:?}")));
         }
-        if change.applications.is_some() != change.setting.is_some() {
-            return Err(Failure("--applications goes with --setting".into()));
+        if change.changes_applications() != change.setting.is_some() {
+            return Err(Failure("Application changes go with --setting".into()));
+        }
+        if (change.packages.is_some() && (!change.add_packages.is_empty() || !change.remove_packages.is_empty()))
+            || (change.applications.is_some()
+                && (!change.add_applications.is_empty() || !change.remove_applications.is_empty()))
+        {
+            return Err(Failure("Do not combine replacement lists with add/remove operations".into()));
+        }
+        if change.configuration.is_some()
+            && (change.edits_main()
+                || change.channels
+                || change.sekka
+                || !change.update.is_empty()
+                || change.lock.is_some()
+                || change.follow.is_some())
+        {
+            return Err(Failure("--configuration only goes with --mode".into()));
         }
         if change.lock.is_some() && change.update.is_empty() {
             return Err(Failure("--lock goes with --update".into()));
@@ -738,8 +813,10 @@ impl Change {
             // The system's choices and Sekka's own branch may change with it.
             let other_follow = change.follow.as_ref().is_some_and(|(input, _)| input != "sekka");
             let other_edits = change.packages.is_some()
+                || !change.add_packages.is_empty()
+                || !change.remove_packages.is_empty()
                 || change.programs.is_some()
-                || change.applications.is_some()
+                || change.changes_applications()
                 || !change.unlist_system.is_empty()
                 || !change.unlist_user.is_empty();
             if change.channels || other_follow || change.lock.is_some() || other_edits {
@@ -765,11 +842,26 @@ impl Change {
     /// Whether it changes the main configuration file.
     fn edits_main(&self) -> bool {
         self.packages.is_some()
+            || !self.add_packages.is_empty()
+            || !self.remove_packages.is_empty()
             || self.programs.is_some()
-            || self.applications.is_some()
+            || self.changes_applications()
             || !self.unlist_system.is_empty()
             || !self.unlist_user.is_empty()
             || !self.choices.is_empty()
+    }
+
+    fn changes_applications(&self) -> bool {
+        self.applications.is_some() || !self.add_applications.is_empty() || !self.remove_applications.is_empty()
+    }
+}
+
+fn change_list(list: &mut Vec<String>, add: &[String], remove: &[String]) {
+    list.retain(|item| !remove.contains(item));
+    for item in add {
+        if !list.contains(item) {
+            list.push(item.clone());
+        }
     }
 }
 
@@ -804,6 +896,8 @@ fn unlist(text: &str, path: &[&str], attr: &str) -> Result<String> {
 fn change(args: &[String]) -> Result<String> {
     let change = Change::parse(args)?;
     let setup = Setup::detect();
+    let prepared =
+        change.configuration.as_deref().map(|path| configuration::Plan::prepare(path, &setup.dir)).transpose()?;
     // Validate migration before touching any files. The GUI's detection is
     // only a convenience; the privileged helper always checks again.
     let sekka_flake = if change.sekka {
@@ -848,7 +942,7 @@ fn change(args: &[String]) -> Result<String> {
     // so going back to that generation brings it back.
     if let Some(generation) = current_generation() {
         let saved = save_configuration(&setup, generation, false);
-        if change.sekka {
+        if change.sekka || prepared.is_some() {
             saved?;
         }
     }
@@ -857,8 +951,18 @@ fn change(args: &[String]) -> Result<String> {
     let mut touched = vec![lock_file.clone(), flake_file.clone()];
     touched.extend(main.clone());
     touched.extend(packages_file.clone());
-    let backup = Backup::take(&touched);
+    if let Some(plan) = &prepared {
+        touched.extend(plan.edits.iter().map(|(path, _)| path.clone()));
+    }
+    touched.sort();
+    touched.dedup();
+    let backup = Backup::take(&touched)?;
     let attempt = || -> Result<String> {
+        if let Some(plan) = &prepared {
+            stage(1, "Installing your prepared configuration");
+            plan.install(&setup)?;
+            stage_done(1);
+        }
         if let Some(text) = &sekka_flake {
             stage(1, "Preparing your Sekka configuration");
             write_file(&setup, &flake_file, text)?;
@@ -867,16 +971,21 @@ fn change(args: &[String]) -> Result<String> {
         if let (Some(main), true) = (&main, change.edits_main()) {
             stage(1, "Writing your configuration");
             let mut configuration = std::fs::read_to_string(main)?;
-            if change.packages.is_some() || change.programs.is_some() {
+            if change.packages.is_some()
+                || change.programs.is_some()
+                || !change.add_packages.is_empty()
+                || !change.remove_packages.is_empty()
+            {
                 let file = packages_file.clone().ok_or_else(|| Failure("No place for yukimi.nix".into()))?;
-                let mut choices = std::fs::read_to_string(&file)
-                    .ok()
-                    .map(|text| packages::read(&text))
-                    .transpose()?
-                    .unwrap_or_default();
+                let mut choices = match std::fs::read_to_string(&file) {
+                    Ok(text) => packages::read(&text)?,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => Default::default(),
+                    Err(error) => return Err(error.into()),
+                };
                 if let Some(list) = &change.packages {
                     choices.packages = list.clone();
                 }
+                change_list(&mut choices.packages, &change.add_packages, &change.remove_packages);
                 if let Some(list) = &change.programs {
                     choices.programs = list.clone();
                 }
@@ -886,6 +995,34 @@ fn change(args: &[String]) -> Result<String> {
             if let (Some(setting), Some(list)) = (&change.setting, &change.applications) {
                 let path: Vec<&str> = setting.split('.').collect();
                 configuration = edit::set_string_list(&configuration, &path, list)?;
+            }
+            if !change.add_applications.is_empty() || !change.remove_applications.is_empty() {
+                let setting = change.setting.as_deref().unwrap();
+                let catalog = catalog::load(&setup.facts.catalogs);
+                for id in &change.add_applications {
+                    if !catalog.iter().any(|app| app.id == *id && app.setting.as_deref() == Some(setting)) {
+                        return Err(Failure(format!("{id} isn't in the catalog for {setting}")));
+                    }
+                }
+                let path: Vec<_> = setting.split('.').collect();
+                // Refuse to replace a custom expression, but include effective
+                // defaults/imports when the system is a flake. Otherwise adding
+                // the first explicit list could drop default applications.
+                let explicit = edit::string_list(&configuration, &path)?;
+                let mut list = if setup.kind == Kind::Flake {
+                    let host = configuration_name(&setup)?;
+                    let mut eval = nix();
+                    eval.args([
+                        "eval",
+                        "--json",
+                        &format!("{}#nixosConfigurations.\"{host}\".config.{setting}", setup.flake()),
+                    ]);
+                    serde_json::from_str(&output(eval, "Reading installed applications")?)?
+                } else {
+                    explicit.unwrap_or_default()
+                };
+                change_list(&mut list, &change.add_applications, &change.remove_applications);
+                configuration = edit::set_string_list(&configuration, &path, &list)?;
             }
             for (setting, values) in &change.choices {
                 // Checked above: each is declared and allows its values.
@@ -1287,6 +1424,12 @@ mod tests {
             "--follow x;y=main",
             "--update tatami --lock /tmp/x.lock --follow tatami=main",
             "--packages",
+            "--add-packages a;b",
+            "--packages a --add-packages b",
+            "--setting calamares.applications --applications a --remove-applications b",
+            "--add-applications a",
+            "--configuration /nix/store/plan --packages a",
+            "--configuration /nix/store/plan --configuration /nix/store/other",
         ] {
             assert!(Change::parse(&args(bad)).is_err(), "{bad}");
         }
@@ -1351,7 +1494,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let (kept, created) = (dir.join("kept"), dir.join("created"));
         std::fs::write(&kept, "before").unwrap();
-        let backup = Backup::take(&[kept.clone(), created.clone()]);
+        let backup = Backup::take(&[kept.clone(), created.clone()]).unwrap();
         std::fs::write(&kept, "after").unwrap();
         std::fs::write(&created, "new").unwrap();
         backup.restore();

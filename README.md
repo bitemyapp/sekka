@@ -263,6 +263,36 @@ screen and the boot splash can be changed after installing too: in Aizome's
 password, builds the new system, and offers a restart when the change needs
 one, as an update does.
 
+## Working with AI agents
+
+Coding agents such as Claude Code, Codex, ChatGPT, OpenCode and oh-my-pi
+come with notes on how Sekka works, as agent skills. They tell an agent
+how to install software, change system settings and update Sekka the way
+Yukimi does, and how to set up Aizome and Tatami. When the work needs
+administrator rights, the agent tells you, and your desktop shows its usual
+password dialog. You don't have to copy commands into a terminal.
+
+The skills are in your home folder, in `~/.agents/skills`. Claude reads
+them through `~/.claude/skills`. They follow Sekka's updates until you change
+or delete one, and then it stays as you left it.
+
+- `sekka-agent-skills status` lists the skills and which ones you've changed.
+- `sekka-agent-skills diff` shows your changes.
+- `sekka-agent-skills restore` brings back Sekka's versions, keeping a copy
+  of yours.
+
+To leave the skills out of every account, set
+`calamares.agentSkills.enable = false;` in `/etc/nixos/configuration.nix`
+and apply it. At each user's next login or system switch, Sekka removes its
+managed copies and links, keeping edited copies in its backup folder.
+Unrelated skills are left alone, and `sekka-agent-skills` stays available.
+
+The password dialog has only been tried in Aizome, in a virtual machine.
+The dialog needs a desktop session. An agent working over SSH, or one whose
+own sandbox blocks the password request, still has to ask you to run the
+command yourself. Each agent decides for itself when to read a skill, so it
+may still sometimes go its own way.
+
 ## Questions, bugs, and contributions
 
 Please [open an issue](https://github.com/bitemyapp/sekka/issues) with what you tried, what happened, and the image version or source revision. Hardware details help with boot and display problems. Review logs for personal information before attaching them.
