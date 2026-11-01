@@ -50,7 +50,9 @@ published screenshots and visual-test baselines need pinned asset/fixture
 inputs before removal; their current consumers are recorded in the inventory.
 The byte savings concern source transfer and snapshots, not a measured
 evaluation-time improvement. Run restoration regressions with
-`python3 -m unittest discover -s tests -p test_restore_hotaru_evidence.py`.
+`python3 -m unittest discover -s tests -p test_restore_hotaru_evidence.py`
+or `nix build .#checks.x86_64-linux.hotaru-evidence`. The latter is included
+in the root `nix flake check` suite and automatic PR checks.
 
 ## Build and check
 
