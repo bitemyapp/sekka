@@ -914,6 +914,13 @@ is put together, is in `docs/shiori.md`.
 
 ### Utsushi (Media Player)
 
+**View → Playback Statistics** (⇧❖I, or I over the picture) opens a separate
+window that updates once a second while visible. It shows the current file,
+position, chapter, speed and bit rate, video dimensions and decoder, frame
+path and counts, display feedback, and the audio track and output. Playback
+remains usable with the window open. Frame counters accumulate since Utsushi
+started; presentation feedback and refresh rate depend on the compositor.
+
 Films, clips and music, played with as little work as the machine can
 do them with. It opens what FFmpeg reads (MP4, Matroska, WebM, QuickTime,
 AVI, MPEG transport streams, MP3, AAC, FLAC, Ogg, Opus, WAV and the

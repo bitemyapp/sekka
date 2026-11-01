@@ -456,6 +456,43 @@ fn media_info_says_how_it_plays() {
 }
 
 #[test]
+fn statistics_refresh_without_blocking_playback_and_close_independently() {
+    let mut h = harness();
+    let w = window(&h);
+    play_without_subtitles(&mut h, "chaptered.mkv");
+    h.type_text(w, "i");
+    let stats = h.program().statistics.expect("a statistics window");
+    assert!(h.program().sheet.is_none(), "statistics are not modal");
+    assert_eq!(h.title(stats), "Playback Statistics");
+    let texts = h.texts(stats);
+    if let Some(path) = std::env::var_os("UTSUSHI_STATS_SCREENSHOT") {
+        h.save_png(stats, path, 1.0);
+    }
+    for label in ["Frames decoded", "Frames dropped by player", "Presentation feedback", "Frame path"] {
+        assert!(texts.iter().any(|t| t == label), "{label}: {texts:?}");
+    }
+    until(&mut h, 2.0, |a| a.player.as_ref().unwrap().stats().decoded >= 8);
+    h.advance(Duration::from_secs(1));
+    let decoded = h.program().player.as_ref().unwrap().stats().decoded.to_string();
+    assert!(h.texts(stats).contains(&decoded));
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    h.send(Msg::ShowStats);
+    assert_eq!(h.program().statistics, Some(stats), "reuse the existing window");
+    h.send(Msg::Open(vec![fixture("song.flac")]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing && !a.has_video());
+    assert!(h.texts(stats).iter().any(|t| t == "Indigo"));
+    assert!(!h.texts(stats).iter().any(|t| t == "Frames decoded"));
+    h.request_close(stats);
+    assert!(h.program().statistics.is_none());
+    assert!(h.is_shown(w));
+    h.send(Msg::ShowStats);
+    let reopened = h.program().statistics.unwrap();
+    h.send(Msg::Close);
+    assert!(h.texts(reopened).iter().any(|t| t.starts_with("Open a video")));
+}
+
+#[test]
 fn media_info_and_file_panel_cover_video_without_subtitles() {
     use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
 

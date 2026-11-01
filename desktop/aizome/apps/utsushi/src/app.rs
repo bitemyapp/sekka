@@ -102,6 +102,9 @@ pub enum Msg {
     CueTick,
     ShowInfo,
     InfoTick,
+    ShowStats,
+    StatsTick,
+    CloseStats,
     /// `UTSUSHI_STATS=1`: the pipeline and frame counts to the log, every
     /// five seconds (for measuring).
     LogStats,
@@ -146,6 +149,7 @@ pub struct Utsushi {
     pub null_audio: bool,
     pub window: WindowKey,
     pub sheet: Option<WindowKey>,
+    pub statistics: Option<WindowKey>,
     pub player: Option<Player>,
     sender: Option<MsgSender<Msg>>,
     pub queue: Vec<PathBuf>,
@@ -191,6 +195,7 @@ pub struct Utsushi {
     tick: Option<TimerHandle>,
     cue_timer: Option<TimerHandle>,
     info_timer: Option<TimerHandle>,
+    stats_timer: Option<TimerHandle>,
     pub show_remaining: bool,
     /// Started where it was left: shown for a while, with Start Over.
     pub resumed: Option<f64>,
@@ -219,6 +224,7 @@ impl Utsushi {
             null_audio: false,
             window: WindowKey::NONE,
             sheet: None,
+            statistics: None,
             player: None,
             sender: None,
             queue: Vec::new(),
@@ -253,6 +259,7 @@ impl Utsushi {
             tick: None,
             cue_timer: None,
             info_timer: None,
+            stats_timer: None,
             show_remaining: true,
             resumed: None,
             resumed_timer: None,
@@ -1012,6 +1019,25 @@ impl Program for Utsushi {
                 }
             }
             Msg::InfoTick => {}
+            Msg::ShowStats => {
+                if let Some(w) = self.statistics {
+                    cx.activate(w);
+                } else if self.info.is_some() {
+                    self.statistics = Some(cx.open_window(
+                        WindowSpec::new("Playback Statistics").size(560.0, 680.0).min_size(400.0, 300.0),
+                    ));
+                    self.stats_timer = Some(cx.every(Duration::from_secs(1), Msg::StatsTick));
+                }
+            }
+            Msg::StatsTick => {}
+            Msg::CloseStats => {
+                if let Some(w) = self.statistics.take() {
+                    cx.close_window(w);
+                }
+                if let Some(t) = self.stats_timer.take() {
+                    cx.cancel(t);
+                }
+            }
             Msg::LogStats => {
                 if let Some(p) = self.player() {
                     eprintln!("utsushi: {:?} {:?} at {:.2}", self.pipeline, p.stats(), p.position());
@@ -1125,6 +1151,9 @@ impl Program for Utsushi {
     }
 
     fn view(&self, window: WindowKey) -> Element<Msg> {
+        if Some(window) == self.statistics {
+            return crate::ui::statistics(self);
+        }
         if Some(window) == self.sheet {
             return crate::ui::info_sheet(self);
         }
@@ -1136,6 +1165,16 @@ impl Program for Utsushi {
     }
 
     fn window_state(&mut self, window: WindowKey, state: WindowState, cx: &mut Cx<Msg>) {
+        if Some(window) == self.statistics {
+            if state.suspended {
+                if let Some(t) = self.stats_timer.take() {
+                    cx.cancel(t);
+                }
+            } else if self.stats_timer.is_none() {
+                self.stats_timer = Some(cx.every(Duration::from_secs(1), Msg::StatsTick));
+            }
+            return;
+        }
         if window != self.window {
             return;
         }
@@ -1178,6 +1217,10 @@ impl Program for Utsushi {
     }
 
     fn close_requested(&mut self, window: WindowKey, cx: &mut Cx<Msg>) -> bool {
+        if Some(window) == self.statistics {
+            cx.send(Msg::CloseStats);
+            return false;
+        }
         if Some(window) == self.sheet {
             cx.send(Msg::CloseSheet);
             return false;
