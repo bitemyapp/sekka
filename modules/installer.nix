@@ -44,6 +44,8 @@ in
     inputs.aizome.nixosModules.default
     # Sekka's boot splash, as on installed systems.
     ../installer/genkan/rust/system/boot-splash
+    # Intel page flips use the same replacement module as installed systems.
+    ../installer/genkan/rust/system/xe-dpt
     # Deferred installations build the system from the live session's store.
     ../installer/genkan/rust/system/binary-cache.nix
     # The live session joins Wi-Fi with installed systems' wpa_supplicant.
