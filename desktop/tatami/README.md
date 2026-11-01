@@ -123,7 +123,9 @@ applets (nm-applet, the printer applet) do not start in it, and the session
 reports `XDG_CURRENT_DESKTOP=Hyprland:Tatami` so such entries can tell it
 apart. In turn, Tatami's own Displays, Network, Bluetooth, Sound and Activity
 windows are listed only in Tatami: other desktops' menus show their own
-settings instead. Setup › Hyprland creates `~/.config/tatami/hyprland.lua`, which loads
+settings instead. So are GNOME's Files and Calculator, which Tatami brings,
+unless GNOME is installed too: then they're GNOME's, and every desktop lists
+them. Setup › Hyprland creates `~/.config/tatami/hyprland.lua`, which loads
 Tatami's defaults first and then your own settings, so later updates of the
 defaults still apply.
 

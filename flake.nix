@@ -313,6 +313,13 @@
             applicationCatalog
             ;
         };
+        tatami-gnome-apps = import ./nix/tatami-gnome-apps-test.nix {
+          inherit
+            pkgs
+            inputs
+            applicationCatalog
+            ;
+        };
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit
             pkgs

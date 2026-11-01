@@ -168,6 +168,9 @@ impl Scope {
 pub struct Candidate {
     /// The row's main text, matched and highlighted ("Find and Replace…").
     pub title: String,
+    /// Other names it goes by, matched as strongly as the title but not
+    /// highlighted ("Files" for Hako, beside GNOME's app named "Files").
+    pub aliases: Vec<String>,
     /// Other names it answers to, matched but not shown ("Settings" for
     /// Settei, "calculator" for Soroban, "wifi" for Network).
     pub keywords: Vec<String>,
@@ -186,16 +189,18 @@ pub struct Ranked {
 
 /// Ranks candidates against a query, best first, keeping at most `limit`.
 ///
-/// A candidate matches by its title or by any keyword; a title match scores
-/// higher than the same match on a keyword, and prefix matches of the
-/// title's words outrank scattered ones (the matcher's bonuses). Ties keep
-/// the input order, so callers put the likelier items first.
+/// A candidate matches by its title, an alias or any keyword; a title or
+/// alias match scores higher than the same match on a keyword, and prefix
+/// matches of the title's words outrank scattered ones (the matcher's
+/// bonuses). Ties keep the input order, so callers put the likelier items
+/// first.
 pub fn rank(query: &mut Query, candidates: &[Candidate], limit: usize) -> Vec<Ranked> {
     let mut ranked: Vec<Ranked> = candidates
         .iter()
         .enumerate()
         .filter_map(|(index, candidate)| {
             let title = query.matches(&candidate.title);
+            let alias = candidate.aliases.iter().filter_map(|a| query.score(a)).max();
             let keyword = candidate
                 .keywords
                 .iter()
@@ -203,7 +208,7 @@ pub fn rank(query: &mut Query, candidates: &[Candidate], limit: usize) -> Vec<Ra
                 .max()
                 // A keyword hit counts for less than the same hit on the title.
                 .map(|s| s * 3 / 4);
-            let (score, ranges) = match (title, keyword) {
+            let (score, ranges) = match (title, alias.max(keyword)) {
                 (Some(t), Some(k)) if k > t.score => (k, Vec::new()),
                 (Some(t), _) => (t.score, t.ranges),
                 (None, Some(k)) => (k, Vec::new()),
@@ -263,12 +268,27 @@ mod tests {
     #[test]
     fn keywords_find_but_titles_win() {
         let items = vec![
-            Candidate { title: "Soroban".into(), keywords: vec!["Calculator".into()], boost: 0 },
+            Candidate { title: "Soroban".into(), keywords: vec!["Calculator".into()], ..Default::default() },
             Candidate { title: "Calculate Totals".into(), ..Default::default() },
         ];
         let ranked = rank(&mut Query::new("calc"), &items, 10);
         assert_eq!(ranked.len(), 2);
         assert_eq!(ranked[0].index, 1);
+        assert!(ranked[1].ranges.is_empty());
+    }
+
+    #[test]
+    fn aliases_match_as_titles_do_without_highlights() {
+        let items = vec![
+            Candidate { title: "Calculator".into(), ..Default::default() },
+            Candidate { title: "Soroban".into(), aliases: vec!["Calculator".into()], ..Default::default() },
+        ];
+        let ranked = rank(&mut Query::new("calc"), &items, 10);
+        assert_eq!(ranked.len(), 2);
+        assert_eq!(ranked[0].score, ranked[1].score);
+        // Tied, so in the input's order.
+        assert_eq!((ranked[0].index, ranked[1].index), (0, 1));
+        assert!(!ranked[0].ranges.is_empty());
         assert!(ranked[1].ranges.is_empty());
     }
 

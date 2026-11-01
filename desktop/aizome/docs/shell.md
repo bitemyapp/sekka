@@ -239,6 +239,11 @@ Results:
   app's commands when one of them starts a word with the query: “file” in
   an editor is its File menu, then Hako. Specific app names still find
   other installed apps; “terminal settings” still leads to settings.
+  Aizome's own apps answer to their kind as strongly as other desktops'
+  apps answer to names that say the same: “files” and “fi” find Hako
+  before GNOME's Files, “calculator” Soroban before GNOME's Calculator.
+  Between equal matches they come first, unless the other has been opened
+  more; “nautilus” still finds Nautilus.
 - **Settings**: every Settei pane and its main options ("Keyboard ›
   Remap Caps Lock"), opening Settei at that place. The list comes from
   `aizome-settei --list-settings --json` (cached), so it stays in step.
