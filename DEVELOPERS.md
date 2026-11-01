@@ -19,7 +19,7 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `site/` | The sekka.computer website generator |
 | `aizome-site/` | The aizome.computer website generator |
 | `tests/` | Generated-system configuration matrices and integration checks |
-| `docs/` | Architecture, migration notes, screenshots, historical evidence, [incident records](docs/incidents/README.md), brand, patches sent upstream |
+| `docs/` | Architecture, migration notes, screenshots, historical evidence, [incident records](docs/incidents/README.md), brand, patches sent upstream, [scripts for demos and tutorials](docs/videos.md) |
 
 The initial import preserves component layouts and separate Cargo workspaces, and Aizome, which joined later, keeps its own workspace in `desktop/aizome` ([migration record](docs/migration.md#aizome)). There are no submodules or remote first-party flake inputs. Sukumo, Aizome's toolkit, is a workspace of its own inside `desktop/aizome` ([Sukumo](#sukumo)). `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
 
