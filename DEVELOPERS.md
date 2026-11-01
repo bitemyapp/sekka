@@ -1611,6 +1611,19 @@ of the instance. The UI tests check that reveal requests select the files,
 one window to a folder, and that the last window takes the token. These are
 component checks, not browser or ISO qualification.
 
+### Utsushi diagnostics
+
+Utsushi sends FFmpeg's nonfatal library diagnostics to the
+`aizome_media::ffmpeg` log target at debug level; verbose decoder traces
+use trace level. For seek investigation, run
+`RUST_LOG=aizome_media::ffmpeg=debug aizome-utsushi FILE`. Fatal FFmpeg
+messages stay at error level, and failed open/decode operations still
+report errors through the player's normal UI. This changes diagnostic
+routing, not open-GOP recovery or frame selection. The media crate's
+`diagnostics` integration test exercises the C variadic bridge concurrently
+and seeks/rate changes in a generated open-GOP H.264 fixture, including
+post-seek snapshots. It does not certify every recovery frame's fidelity.
+
 ### Sukumo
 
 Sukumo, Aizome's toolkit, is in `desktop/aizome/sukumo`: the Wayland engine
