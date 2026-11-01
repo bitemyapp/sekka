@@ -23,6 +23,14 @@ use crate::audio::{Output, Ring, amplitude, fill};
 use crate::av::ChannelLayout;
 use crate::clock::Clock;
 
+/// An output advertised by PipeWire. Names survive reconnects; numeric
+/// registry IDs do not, so preferences and target.object use the name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AudioDevice {
+    pub name: String,
+    pub description: String,
+}
+
 /// What the stream is for: how long its cycles may be, and its role.
 #[derive(Clone, Debug)]
 pub struct StreamKind {
@@ -35,7 +43,7 @@ pub struct StreamKind {
 }
 
 enum Cmd {
-    Open { ring: Arc<Ring>, clock: Arc<Clock>, media: String, kind: StreamKind, reply: mpsc::Sender<Result<(), String>> },
+    Open { ring: Arc<Ring>, clock: Arc<Clock>, media: String, kind: StreamKind, device: Option<String>, reply: mpsc::Sender<Result<(), String>> },
     Playing(bool, mpsc::Sender<()>),
     Flush,
     Volume(f32, bool),
@@ -49,22 +57,30 @@ pub struct PipeWireOutput {
     thread: Option<std::thread::JoinHandle<()>>,
     kind: StreamKind,
     describe: Arc<Mutex<String>>,
+    device: Option<String>,
 }
 
 impl PipeWireOutput {
     /// Connect to PipeWire (on a thread of its own): an error where it
     /// can't.
     pub fn connect(kind: StreamKind) -> Result<PipeWireOutput, String> {
+        Self::connect_with_devices(kind, |_| {})
+    }
+
+    pub fn connect_with_devices(
+        kind: StreamKind,
+        devices: impl Fn(Vec<AudioDevice>) + Send + Sync + 'static,
+    ) -> Result<PipeWireOutput, String> {
         let (tx, rx) = pw::channel::channel::<Cmd>();
         let (ready_tx, ready_rx) = mpsc::channel();
         let describe = Arc::new(Mutex::new(String::from("PipeWire")));
         let d = describe.clone();
         let thread = std::thread::Builder::new()
             .name("aizome-media-audio".into())
-            .spawn(move || run(rx, ready_tx, d))
+            .spawn(move || run(rx, ready_tx, d, Arc::new(devices)))
             .map_err(|e| e.to_string())?;
         match ready_rx.recv() {
-            Ok(Ok(())) => Ok(PipeWireOutput { tx, thread: Some(thread), kind, describe }),
+            Ok(Ok(())) => Ok(PipeWireOutput { tx, thread: Some(thread), kind, describe, device: None }),
             Ok(Err(e)) => {
                 let _ = thread.join();
                 Err(e)
@@ -76,6 +92,10 @@ impl PipeWireOutput {
 }
 
 impl Output for PipeWireOutput {
+    fn set_device(&mut self, device: Option<&str>) {
+        self.device = device.map(str::to_owned);
+    }
+
     fn set_stream(&mut self, latency: f64, role: &'static str) {
         self.kind.latency = latency;
         self.kind.role = role;
@@ -83,7 +103,7 @@ impl Output for PipeWireOutput {
 
     fn open(&mut self, ring: Arc<Ring>, clock: Arc<Clock>, media: &str) -> Result<(), String> {
         let (reply, rx) = mpsc::channel();
-        let cmd = Cmd::Open { ring, clock, media: media.to_owned(), kind: self.kind.clone(), reply };
+        let cmd = Cmd::Open { ring, clock, media: media.to_owned(), kind: self.kind.clone(), device: self.device.clone(), reply };
         if self.tx.send(cmd).is_err() {
             return Err("PipeWire's thread stopped".into());
         }
@@ -134,10 +154,15 @@ struct Playing {
     clock: Arc<Clock>,
     channels: u32,
     active: bool,
-    volume: (f32, bool),
+    volume: std::rc::Rc<std::cell::Cell<(f32, bool)>>,
 }
 
-fn run(rx: pw::channel::Receiver<Cmd>, ready: mpsc::Sender<Result<(), String>>, describe: Arc<Mutex<String>>) {
+fn run(
+    rx: pw::channel::Receiver<Cmd>,
+    ready: mpsc::Sender<Result<(), String>>,
+    describe: Arc<Mutex<String>>,
+    devices: Arc<dyn Fn(Vec<AudioDevice>) + Send + Sync>,
+) {
     pw::init();
     let setup = || -> Result<(pw::main_loop::MainLoopRc, pw::core::CoreRc), pw::Error> {
         let mainloop = pw::main_loop::MainLoopRc::new(None)?;
@@ -152,23 +177,55 @@ fn run(rx: pw::channel::Receiver<Cmd>, ready: mpsc::Sender<Result<(), String>>, 
             return;
         }
     };
+    let registry = match core.get_registry_rc() {
+        Ok(r) => r,
+        Err(e) => {
+            let _ = ready.send(Err(format!("PipeWire outputs: {e}")));
+            return;
+        }
+    };
+    let outputs = std::rc::Rc::new(std::cell::RefCell::new(std::collections::BTreeMap::<u32, AudioDevice>::new()));
+    let added = outputs.clone();
+    let removed = outputs.clone();
+    let changed = devices.clone();
+    let _registry_listener = registry.add_listener_local()
+        .global(move |object| {
+            if object.type_ != pw::types::ObjectType::Node {
+                return;
+            }
+            let Some(props) = object.props else { return };
+            if props.get("media.class") != Some("Audio/Sink") {
+                return;
+            }
+            let Some(name) = props.get("node.name") else { return };
+            let description = props.get("node.description").or_else(|| props.get("node.nick")).unwrap_or(name);
+            added.borrow_mut().insert(object.id, AudioDevice { name: name.into(), description: description.into() });
+            publish_devices(&added.borrow(), &changed);
+        })
+        .global_remove(move |id| {
+            if removed.borrow_mut().remove(&id).is_some() {
+                publish_devices(&removed.borrow(), &devices);
+            }
+        })
+        .register();
     let _ = ready.send(Ok(()));
     let current: std::rc::Rc<std::cell::RefCell<Option<Playing>>> = Default::default();
     let ml = mainloop.clone();
     let cur = current.clone();
     let _attached = rx.attach(mainloop.loop_(), move |cmd| match cmd {
-        Cmd::Open { ring, clock, media, kind, reply } => {
+        Cmd::Open { ring, clock, media, kind, device, reply } => {
             close(&cur);
-            let r = open(&core, ring, clock, &media, &kind);
+            let r = open(&core, ring, clock, &media, &kind, device.as_deref());
             match r {
                 Ok(p) => {
                     let f = p.ring.format;
                     *describe.lock().unwrap_or_else(|e| e.into_inner()) = format!(
-                        "PipeWire, {} Hz, {} channel{}, {} ms cycles",
+                        "PipeWire, {} Hz, {} channel{}, {} ms cycles · requested output: {}",
                         f.rate,
                         f.channels,
                         if f.channels == 1 { "" } else { "s" },
-                        (kind.latency * 1000.0).round()
+                        (kind.latency * 1000.0).round(),
+                        device.as_deref().unwrap_or("System Default")
                     );
                     *cur.borrow_mut() = Some(p);
                     let _ = reply.send(Ok(()));
@@ -191,8 +248,8 @@ fn run(rx: pw::channel::Receiver<Cmd>, ready: mpsc::Sender<Result<(), String>>, 
         }
         Cmd::Volume(v, muted) => {
             if let Some(p) = cur.borrow_mut().as_mut() {
-                p.volume = (v, muted);
-                apply_volume(p);
+                p.volume.set((v, muted));
+                apply_volume(&p.stream, p.channels, p.volume.get());
             }
         }
         Cmd::Close(reply) => {
@@ -205,6 +262,15 @@ fn run(rx: pw::channel::Receiver<Cmd>, ready: mpsc::Sender<Result<(), String>>, 
         }
     });
     mainloop.run();
+}
+
+fn publish_devices(
+    outputs: &std::collections::BTreeMap<u32, AudioDevice>,
+    changed: &Arc<dyn Fn(Vec<AudioDevice>) + Send + Sync>,
+) {
+    let mut list: Vec<_> = outputs.values().cloned().collect();
+    list.sort_by(|a, b| a.description.cmp(&b.description).then_with(|| a.name.cmp(&b.name)));
+    changed(list);
 }
 
 fn close(cur: &std::rc::Rc<std::cell::RefCell<Option<Playing>>>) {
@@ -262,11 +328,11 @@ pub fn quantum(secs: f64, rate: u32) -> u32 {
     (frames.log2().round().exp2() as u32).clamp(64, 8192)
 }
 
-fn open(core: &pw::core::CoreRc, ring: Arc<Ring>, clock: Arc<Clock>, media: &str, kind: &StreamKind) -> Result<Playing, String> {
+fn open(core: &pw::core::CoreRc, ring: Arc<Ring>, clock: Arc<Clock>, media: &str, kind: &StreamKind, device: Option<&str>) -> Result<Playing, String> {
     let fmt = ring.format;
     let channels = fmt.channels.clamp(1, 8);
     let latency = format!("{}/{}", quantum(kind.latency, fmt.rate), fmt.rate);
-    let props = pw::properties::properties! {
+    let mut props = pw::properties::properties! {
         "media.type" => "Audio",
         "media.category" => "Playback",
         "media.role" => kind.role,
@@ -275,15 +341,33 @@ fn open(core: &pw::core::CoreRc, ring: Arc<Ring>, clock: Arc<Clock>, media: &str
         "application.id" => kind.app_id.as_str(),
         "application.icon-name" => kind.app_id.as_str(),
         "node.name" => kind.app_name.to_lowercase().as_str(),
+        // Utsushi owns this preference. A remembered external route must
+        // not override choosing System Default when this stream reopens.
+        "state.restore-target" => "false",
+        // The player restores its own volume/mute too. WirePlumber's
+        // default/restored volumes otherwise overwrite them on reconnect.
+        "state.restore-props" => "false",
         "node.latency" => latency.as_str(),
         "audio.channels" => channels.to_string().as_str(),
     };
+    if let Some(name) = device {
+        props.insert("target.object", name);
+    }
     let stream = pw::stream::StreamRc::new(core.clone(), &kind.app_name, props).map_err(|e| e.to_string())?;
     let r = ring.clone();
     let c = clock.clone();
     let stride = (channels as usize) * std::mem::size_of::<f32>();
+    let volume = std::rc::Rc::new(std::cell::Cell::new((1.0, false)));
+    let ready_volume = volume.clone();
     let listener = stream
         .add_local_listener::<()>()
+        .state_changed(move |stream, _, _, state| {
+            // Commands can arrive before the new stream's controls exist.
+            // Reapply once connected, including a stream opened paused.
+            if matches!(state, pw::stream::StreamState::Paused | pw::stream::StreamState::Streaming) {
+                apply_volume(stream, channels, ready_volume.get());
+            }
+        })
         .process(move |stream, _| {
             // SAFETY: a buffer dequeued is ours until queued; its first
             // data's memory is mapped (MAP_BUFFERS), maxsize bytes.
@@ -353,17 +437,30 @@ fn open(core: &pw::core::CoreRc, ring: Arc<Ring>, clock: Arc<Clock>, media: &str
             &mut params,
         )
         .map_err(|e| e.to_string())?;
-    let mut p = Playing { stream, _listener: listener, ring, clock, channels, active: false, volume: (1.0, false) };
-    apply_volume(&mut p);
-    Ok(p)
+    Ok(Playing { stream, _listener: listener, ring, clock, channels, active: false, volume })
 }
 
-fn apply_volume(p: &mut Playing) {
-    let (v, muted) = p.volume;
-    let amp = amplitude(v);
-    let volumes = vec![amp; p.channels as usize];
-    let _ = p.stream.set_control(spa::sys::SPA_PROP_channelVolumes, &volumes);
-    let _ = p.stream.set_control(spa::sys::SPA_PROP_mute, &[if muted { 1.0 } else { 0.0 }]);
+fn apply_volume(stream: &pw::stream::Stream, channels: u32, (v, muted): (f32, bool)) {
+    use spa::pod::{Object, Property, Value, ValueArray};
+    // Send Props directly: an inactive stream may not have advertised
+    // its controls yet. This also avoids pipewire-rs 0.10.1's variadic
+    // set_control wrapper, which omits the required terminating 0u32.
+    let props = Value::Object(Object {
+        type_: spa::sys::SPA_TYPE_OBJECT_Props,
+        id: spa::sys::SPA_PARAM_Props,
+        properties: vec![
+            Property::new(spa::sys::SPA_PROP_channelVolumes, Value::ValueArray(ValueArray::Float(vec![amplitude(v); channels as usize]))),
+            Property::new(spa::sys::SPA_PROP_mute, Value::Bool(muted)),
+        ],
+    });
+    let Ok((bytes, _)) = spa::pod::serialize::PodSerializer::serialize(std::io::Cursor::new(Vec::new()), &props) else { return };
+    let bytes = bytes.into_inner();
+    let Some(pod) = spa::pod::Pod::from_bytes(&bytes) else { return };
+    // SAFETY: called on the stream's main loop; the serialized pod lives
+    // throughout the synchronous call and contains only owned values.
+    unsafe {
+        pw::sys::pw_stream_set_param(stream.as_raw_ptr(), spa::sys::SPA_PARAM_Props, pod.as_raw_ptr());
+    }
 }
 
 fn set_playing(p: &mut Playing, on: bool) {

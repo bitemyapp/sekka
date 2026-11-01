@@ -223,6 +223,8 @@ pub struct Pipeline {
 /// What the player tells the interface.
 #[derive(Clone, Debug)]
 pub enum Event {
+    /// Available PipeWire outputs, including hotplug changes.
+    AudioDevices(Vec<crate::pipewire::AudioDevice>),
     Opened(Arc<MediaInfo>),
     /// It couldn't be opened or played.
     Failed(String),
@@ -249,6 +251,7 @@ enum Command {
     Speed(f64),
     Volume(f32, bool),
     Audio(Option<usize>),
+    AudioDevice(Option<String>),
     Subtitles(Option<usize>),
     AddSubtitles(PathBuf),
     Visible(bool),
@@ -278,6 +281,12 @@ pub struct Player {
 }
 
 impl Player {
+    /// Route this player's sound to a named PipeWire output, or follow the
+    /// session default. Applies now and to subsequent items.
+    pub fn set_audio_device(&self, name: Option<String>) {
+        self.send(Command::AudioDevice(name));
+    }
+
     pub fn new(options: Options, events: impl Fn(Event) + Send + Sync + 'static) -> Player {
         av::quiet();
         let (tx, rx) = mpsc::channel();
@@ -684,7 +693,10 @@ impl Ctl {
         events: Arc<dyn Fn(Event) + Send + Sync>,
     ) -> Ctl {
         let output: Box<dyn Output> = match options.audio {
-            AudioChoice::PipeWire(kind) => match crate::pipewire::PipeWireOutput::connect(kind) {
+            AudioChoice::PipeWire(kind) => match crate::pipewire::PipeWireOutput::connect_with_devices(kind, {
+                let events = events.clone();
+                move |devices| events(Event::AudioDevices(devices))
+            }) {
                 Ok(o) => Box::new(o),
                 Err(e) => {
                     log::warn!("no sound: {e}");
@@ -788,6 +800,7 @@ impl Ctl {
                 self.out().set_volume(v, m);
             }
             Command::Audio(i) => self.select_audio(i),
+            Command::AudioDevice(name) => self.select_device(name.as_deref()),
             Command::Subtitles(i) => self.select_subtitles(i),
             Command::AddSubtitles(path) => self.add_subtitles(path),
             Command::Visible(v) => self.visible = v,
@@ -991,6 +1004,38 @@ impl Ctl {
                 }
                 Err(e) => log::warn!("{}: {e}", file.display()),
             }
+        }
+    }
+
+    fn select_device(&mut self, name: Option<&str>) {
+        self.output.set_device(name);
+        let Some(s) = self.session.as_ref() else { return };
+        let Some(audio) = &s.audio else { return };
+        let ring = audio.ring.clone();
+        let media = s.info.title.clone();
+        let started = s.started && !s.ended;
+        // Pause rewinds the ring to the audible position. Reopen with that
+        // same ring, without seeking or rebuilding a decoder: live streams
+        // and paused playback work too.
+        self.out().set_playing(false);
+        self.output.close();
+        self.silent = None;
+        if let Err(e) = self.output.open(ring.clone(), self.clock.clone(), &media) {
+            log::warn!("audio output: {e}");
+            let mut null = NullOutput::new();
+            if let Err(e) = null.open(ring, self.clock.clone(), &media) {
+                self.emit(Event::Failed(e));
+                return;
+            }
+            self.silent = Some(null);
+        }
+        let (volume, muted) = self.volume;
+        self.out().set_volume(volume, muted);
+        self.pipeline.audio_output = self.out().describe();
+        self.emit(Event::Pipeline(self.pipeline.clone()));
+        if self.want_play && started {
+            self.started_at = Some(std::time::Instant::now());
+            self.out().set_playing(true);
         }
     }
 
