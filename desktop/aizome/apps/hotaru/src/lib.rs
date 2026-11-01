@@ -23,3 +23,6 @@ mod terminal_view;
 compile_error!("Hotaru supports Linux only.");
 
 mod sprites;
+
+#[cfg(test)]
+mod selection_regressions;
