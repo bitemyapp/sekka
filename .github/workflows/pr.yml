@@ -1,0 +1,134 @@
+name: Trusted PR build and tests
+
+# The gate and workflow come from main, never the PR. No PR code runs until
+# current write permission and the same-repository branch have been checked.
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Open, non-draft pull request number to check
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sekka-pr-${{ github.event.pull_request.number || inputs.pr }}
+  cancel-in-progress: true
+
+jobs:
+  trust:
+    if: github.repository == 'bitemyapp/sekka' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: write
+    outputs:
+      allowed: ${{ steps.trust.outputs.allowed }}
+      head: ${{ steps.trust.outputs.head }}
+      merge: ${{ steps.trust.outputs.merge }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Check current repository permissions and merge identity
+        id: trust
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/check-pr-trust.py
+      - name: Mark the admitted head pending
+        if: steps.trust.outputs.allowed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.trust.outputs.head }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
+            -f state=pending -f context='Trusted PR / build and tests' \
+            -f description='Building and testing the verified merge commit' \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  build:
+    needs: trust
+    if: needs.trust.outputs.allowed == 'true'
+    runs-on: [self-hosted, linux, x64, sekka-builder]
+    timeout-minutes: 720
+    # No environment, publishing secrets, write token or persisted checkout
+    # credentials. The disposable runner executes only an admitted merge SHA.
+    permissions:
+      contents: read
+    env:
+      GC_INITIAL_HEAP_SIZE: "34359738368"
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Recheck trust after waiting for the builder
+        id: recheck
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr }}
+          EXPECTED_HEAD: ${{ needs.trust.outputs.head }}
+        run: python3 scripts/check-pr-trust.py
+      - name: Require the same admitted merge
+        env:
+          ALLOWED: ${{ steps.recheck.outputs.allowed }}
+          CURRENT_MERGE: ${{ steps.recheck.outputs.merge }}
+          EXPECTED_MERGE: ${{ needs.trust.outputs.merge }}
+        run: |
+          test "$ALLOWED" = true
+          test "$CURRENT_MERGE" = "$EXPECTED_MERGE"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.trust.outputs.merge }}
+          persist-credentials: false
+      - name: Check the builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix --version
+          # shellcheck disable=SC2016
+          nix build --no-link --impure --print-build-logs --expr '
+            let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.x86_64-linux;
+            in pkgs.runCommand "kvm-${toString builtins.currentTime}" { requiredSystemFeatures = [ "kvm" ]; } "exec 3<>/dev/kvm && touch $out"
+          '
+      - name: Build Uta
+        run: nix build --no-update-lock-file --print-build-logs --no-link .#uta
+      - name: Build and test components
+        run: |
+          set -euo pipefail
+          nix flake check --no-update-lock-file --print-build-logs
+          git diff --exit-code
+
+  result:
+    needs: [trust, build]
+    if: always() && needs.trust.outputs.allowed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      - name: Report against the tested PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ needs.trust.outputs.head }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          case "$BUILD_RESULT" in
+            success) state=success ;;
+            failure) state=failure ;;
+            *) state=error ;;
+          esac
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
+            -f "state=$state" -f context='Trusted PR / build and tests' \
+            -f "description=Build and tests: $BUILD_RESULT" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

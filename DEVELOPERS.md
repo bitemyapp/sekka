@@ -2487,6 +2487,40 @@ before building if any is missing. The nightly's own push to `main` starts no
 run: the workflow token's pushes start no workflows, and the nightly publishes
 that revision itself.
 
+### Trusted pull requests
+
+`.github/workflows/pr.yml` builds and tests open, non-draft PRs targeting
+`main`, on opening, new commits, reopening and marking ready for review.
+Only branches in `bitemyapp/sekka` are eligible. The author, triggering
+developer and rerun initiator must each currently have repository write or
+admin permission (GitHub maps maintain to write). A prior contribution,
+organization membership or a label alone does not grant access. Fork PRs
+are excluded; a maintainer can review and bring a contribution onto a branch
+in this repository before testing it here.
+
+The workflow and trust script come from immutable main workflow source,
+using `pull_request_target`. The GitHub-hosted permission gate never loads
+PR code. It verifies the head and base parents of GitHub's merge commit;
+the isolated builder rechecks trust after queueing, then checks out only that
+SHA with credentials persistence disabled. Build jobs have a read-only
+token, no publishing environment or secrets, and publish no cache or ISO.
+Ordinary PR-owned workflows remain rejected by the runner's admission hook.
+
+The job builds Uta and runs the full root `nix flake check` with the existing
+lock, including package check phases and the component VM checks exposed
+under `checks.x86_64-linux`. The separate `aizome-checks` legacy outputs and
+actual ISO installation/hardware qualification remain separate. Results
+appear on the tested PR head as `Trusted PR / build and tests`; a newer
+push cancels the previous run. To check an already open PR, dispatch from
+main: `gh workflow run pr.yml --ref main -f pr=233`. If the head or base
+changes while queued, dispatch again against the new merge.
+
+`nix build .#checks.x86_64-linux.pr-ci` exercises trust rejection, merge
+identity, API failures and runner admission, and lints the workflow. Enabling
+this workflow requires deploying the updated runner image below; the former
+admission hook rejects all pull-request events. Release publication remains
+manually disabled.
+
 ### The builder
 
 Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
@@ -2505,11 +2539,13 @@ Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
   the host: no Docker socket, `/dev/kvm` or home directories. Its builds run
   in the daemon's own sandbox as an untrusted user, which cannot add
   substituters or change trusted settings.
-- Before the first step, the runner's job-started hook admits only
+- Before the first step, the runner's job-started hook admits
   `workflow_dispatch`, `schedule` and `push` on `refs/heads/main` of
   `bitemyapp/sekka`: workflows only maintainers can start or change, and
-  pushes to `main`, which only they can make. For anything else, such as a
-  pull request's workflow, it kills every process of the job but the runner,
+  pushes to `main`, which only they can make. It also admits the specific
+  `pr.yml` workflow from main on `pull_request_target`, after that workflow's
+  trusted-developer gate. For anything else, such as a pull request's own
+  workflow, it kills every process of the job but the runner,
   so even `if: always()` steps never run, and the job fails.
 - The repository requires approval before any workflow from an outside
   contributor's pull request runs (Settings, Actions, General: "Require

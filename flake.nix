@@ -305,6 +305,7 @@
         };
       };
       checks.${system} = {
+        pr-ci = import ./nix/pr-ci-test.nix { inherit pkgs; };
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit
             pkgs
