@@ -1,0 +1,39 @@
+[package]
+name = "aizome-chanoma"
+description = "Chanoma 茶の間 (TV), Aizome's living-room app: streaming services, films and games, all from a controller, with a grown-up's PIN on what the kids may do"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "aizome_chanoma"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-chanoma"
+path = "src/main.rs"
+
+[dependencies]
+aizome-kit.workspace = true
+aizome-ipc.workspace = true
+# Pairing controllers through BlueZ, as Settei does.
+aizome-sys.workspace = true
+# Films and episodes from the disk play through Utsushi's engine.
+aizome-media = { path = "../../crates/aizome-media" }
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true
+# Controllers through evdev, cores through dlopen, shared memory for frames.
+libc = "0.2"
+libloading.workspace = true
+# Games' sound: a short-cycle stream of its own (aizome-media's is for
+# films, in long cycles). The same version and features as aizome-media's.
+pipewire = { version = "0.10.1", features = ["v1_2_0"] }
+# The PIN's hash (PBKDF2 over HMAC-SHA-256, written out here).
+sha2 = "0.10"
+# Box art and posters, decoded off the interface thread. The same version
+# and features as Shashin's, so nothing is built twice.
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "tiff", "ico"] }
