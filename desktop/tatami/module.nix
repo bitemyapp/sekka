@@ -46,6 +46,28 @@ let
         ];
       };
     };
+  # GNOME's apps Tatami brings, listed in its launcher alone, as its own
+  # windows are: the other desktops have their own (Aizome's Hako and
+  # Soroban, Plasma's Dolphin). With GNOME installed they're GNOME's too, and
+  # every desktop lists them, as it did.
+  onlyInTatami =
+    package: entry:
+    if config.services.desktopManager.gnome.enable then
+      package
+    else
+      pkgs.symlinkJoin {
+        inherit (package) name;
+        paths = [ package ];
+        postBuild = ''
+          src=${package}/share/applications/${entry}
+          if grep -q '^OnlyShowIn=' "$src"; then
+            echo "$src already says where it shows" >&2
+            exit 1
+          fi
+          rm $out/share/applications/${entry}
+          sed '/^\[Desktop Entry\]$/a OnlyShowIn=Tatami;' "$src" > $out/share/applications/${entry}
+        '';
+      };
   # Desktop names Hyprland:Tatami: Hyprland first, so portals and the
   # terminal choice follow Hyprland's; Tatami makes uwsm load env-tatami.
   # uwsm and tatami from the system profile (both in systemPackages), as
@@ -550,10 +572,10 @@ in
       # Hotaru until it exits.
       pkgs.bottom
       pkgs.fastfetch
-      pkgs.nautilus
+      (onlyInTatami pkgs.nautilus "org.gnome.Nautilus.desktop")
       pkgs.imv
       pkgs.mpv
-      pkgs.gnome-calculator
+      (onlyInTatami pkgs.gnome-calculator "org.gnome.Calculator.desktop")
       pkgs.xdg-utils
       pkgs.udiskie
       pkgs.yaru-theme

@@ -656,6 +656,16 @@ with the same configuration is the negative control. The patch applies
 without fuzz to Elephant 2.22.0 and 2.22.1. After an Elephant update, run the
 check, and review any patch failure rather than skipping it.
 
+Tatami brings GNOME's Files and Calculator (`pkgs.nautilus`,
+`pkgs.gnome-calculator`) for its own use. Unless GNOME is enabled,
+`desktop/tatami/module.nix` installs each as a symlink tree of the Nixpkgs
+package whose desktop entry adds `OnlyShowIn=Tatami;`, so other desktops'
+menus and Aizome's palette leave them out. Nothing is rebuilt: the program,
+D-Bus service and icons are still the Nixpkgs package's. With GNOME enabled
+they are GNOME's own unchanged packages. The build fails if an upstream entry
+starts to set `OnlyShowIn` itself. `nix build .#checks.x86_64-linux.tatami-gnome-apps`
+evaluates installed Aizome and Tatami with and without GNOME and checks both.
+
 Tatami's Sound window (`desktop/tatami/sound/`, `tatami-sound`) is a separate
 GTK 4/libadwaita Cargo workspace, laid out after Aizome's Sound settings
 (Settei's `panes/sound.rs`) on one page: each device list with the default
