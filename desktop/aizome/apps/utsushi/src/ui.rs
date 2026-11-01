@@ -24,10 +24,36 @@ pub fn window(app: &Utsushi) -> Element<Msg> {
     let stage = stage(app);
     // A column either way, so the picture keeps its place in the tree and
     // the keyboard with it as full screen comes and goes.
-    if app.fullscreen && app.has_video() {
-        return column![stage].into();
+    let content = if app.fullscreen && app.has_video() {
+        column![stage].into()
+    } else {
+        column![stage, bar(app, false)].into()
+    };
+    Element::new(PlaybackKeys, vec![content]).width(Fill).height(Fill)
+}
+
+// Space belongs to playback throughout the main window, including when
+// Tab or a click leaves focus on a control. Sheets and file panels have
+// their own roots, so typing a space there keeps its ordinary meaning.
+struct PlaybackKeys;
+
+impl Widget for PlaybackKeys {
+    fn name(&self) -> &'static str {
+        "utsushi-playback-keys"
     }
-    column![stage, bar(app, false)].into()
+
+    fn event(&mut self, cx: &mut EventCx, event: &Event) -> EventStatus {
+        if let Event::Key(k) = event
+            && k.modifiers.is_empty()
+            && matches!(&k.key, Key::Character(s) if s == " ")
+        {
+            if k.pressed && !k.repeat {
+                cx.emit(&aizome_kit::element::MsgFn::new(Msg::Toggle));
+            }
+            return EventStatus::Handled;
+        }
+        EventStatus::Ignored
+    }
 }
 
 /// The picture, the cover, or what to do; what's over them; and the
@@ -158,7 +184,7 @@ fn keys(k: &aizome_kit::sidestep_ui::KeyEvent) -> Option<Msg> {
         Key::Named(NamedKey::PageDown) => Some(Msg::Chapter(1)),
         Key::Named(NamedKey::Escape) => Some(Msg::Escape),
         Key::Character(s) => match s.to_lowercase().as_str() {
-            " " | "k" => Some(Msg::Toggle),
+            "k" => Some(Msg::Toggle),
             "j" => Some(Msg::SeekBy(-10.0)),
             "l" => Some(Msg::SeekBy(10.0)),
             "f" => Some(Msg::ToggleFullscreen),
