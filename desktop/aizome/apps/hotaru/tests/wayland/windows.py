@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Hotaru windows and Super+Return in a private headless Aizome session.
 
-Drives real keyboard shortcuts, reads compositor state and rendered widget
-inspection, and runs commands in actual PTYs. Never uses the live desktop.
+One Hotaru process runs every window of a display. Super+Return names the
+window it wants a tab in by the compositor's identifier for it (Aizome's
+toplevel identity protocol); this drives real keyboard shortcuts, reads
+compositor state and rendered widget inspection (which carries the same
+identifiers), and runs commands in actual PTYs. Never uses the live desktop.
 """
 import argparse
 import hashlib
@@ -65,7 +68,7 @@ def main():
                     value = check()
                     if value:
                         return value
-                except (OSError, subprocess.SubprocessError, json.JSONDecodeError, StopIteration):
+                except (OSError, subprocess.SubprocessError, json.JSONDecodeError, StopIteration, KeyError):
                     pass
                 time.sleep(0.05)
             raise AssertionError(description)
@@ -77,8 +80,13 @@ def main():
             return next((w for w in windows() if w["focused"]), None)
 
         def inspected(window):
-            docs = [json.loads(path.read_text()) for path in (root / "inspect").glob(f"org.aizome.Hotaru.{window['pid']}.*.json")]
-            return next(doc for doc in docs if any(e.get("name", "").startswith("terminal-") for e in doc["elements"]))
+            # The compositor's identifier for the window is the one Hotaru
+            # heard: it names the window's inspection too.
+            for path in (root / "inspect").glob(f"org.aizome.Hotaru.{window['pid']}.*.json"):
+                doc = json.loads(path.read_text())
+                if doc.get("identifier") == window["identifier"]:
+                    return doc
+            raise KeyError(window["identifier"])
 
         def tabs(window):
             return len([e for e in inspected(window)["elements"] if e.get("name", "").startswith("tab-")])
@@ -106,7 +114,7 @@ def main():
             ctl("set-desk-folder", "2", str(root / "desk-two"))
             chord("super+Return")
             first = wait("first window on desk one", lambda: front())
-            assert first["desk"] == 1
+            assert first["desk"] == 1 and first["identifier"]
             wait("first pane", lambda: tabs(first) == 1)
             marker = root / "one-cwd"
             command(f"pwd > {marker}", marker, str(root / "desk-one"))
@@ -118,14 +126,15 @@ def main():
             desk(2)
             chord("super+Return")
             second = wait("new window on desk two", lambda: len(windows()) == 2 and front())
-            assert second["desk"] == 2 and second["pid"] != first["pid"]
+            assert second["desk"] == 2 and second["identifier"] != first["identifier"]
+            assert second["pid"] == first["pid"], "one process runs both windows"
             wait("second window pane", lambda: tabs(second) == 1)
             marker = root / "two-cwd"
             command(f"pwd > {marker}", marker, str(root / "desk-two"))
             chord("super+Return")
             wait("desk two gains a tab", lambda: tabs(second) == 2)
             assert tabs(first) == 2 and front()["id"] == second["id"]
-            result["checks"].append("a desk without Hotaru gets its own window and working directory")
+            result["checks"].append("a desk without Hotaru gets a window of the same process, in the desk's folder")
 
             desk(1)
             chord("super+Return")
@@ -134,6 +143,7 @@ def main():
             chord("super+n")
             third = wait("New Window shortcut", lambda: len(windows()) == 3 and front())
             assert third["desk"] == 1 and third["id"] not in (first["id"], second["id"])
+            assert third["pid"] == first["pid"]
             wait("new window's pane", lambda: tabs(third) == 1)
             chord("super+Return")
             wait("most recently used window gets the tab", lambda: tabs(third) == 2)
@@ -146,8 +156,8 @@ def main():
             ctl("minimise", str(first["id"]))
             ctl("minimise", str(third["id"]))
             chord("super+Return")
-            restored = wait("minimised window restored", front)
-            assert restored["id"] in (first["id"], third["id"])
+            restored = wait("minimised window restored by the launch's activation token", front)
+            assert restored["id"] in (first["id"], third["id"]) and not restored["minimised"]
             assert len(windows()) == 3
             result["checks"].append("minimised windows are restored instead of duplicated")
 
@@ -193,18 +203,26 @@ def main():
             desk(2)
             ctl("focus", str(replacement["id"]))
 
+            # A command line naming a window by its identifier, as
+            # Super+Return does, opens a tab there with its own directory.
             forwarded = root / "forwarded-cwd"
-            subprocess.run([binaries["hotaru"], "--window", str(replacement["pid"]), "--working-directory",
+            subprocess.run([binaries["hotaru"], "--window", replacement["identifier"], "--working-directory",
                 str(root / "desk-one"), "--", shutil.which("sh"), "-c", f"pwd > {forwarded}; sleep 60"],
                 env=env, check=True, timeout=5)
-            wait("explicit command reaches the selected window", lambda: tabs(replacement) == 3)
+            wait("explicit command reaches the named window", lambda: tabs(replacement) == 3)
             wait("explicit working directory survives handoff", lambda: forwarded.exists() and forwarded.read_text().strip() == str(root / "desk-one"))
             chord("super+w")
             wait("Close Pane closes just the command's tab", lambda: tabs(replacement) == 2)
-            result["checks"].append("targeted command handoff preserves arguments, directory and pane-local closing")
+            # A name no window has (a window closed since) gets a window.
+            subprocess.run([binaries["hotaru"], "--window", first["identifier"]], env=env, check=True, timeout=5)
+            stray = wait("a closed window's name opens a window", lambda: len(windows()) == 3 and front())
+            assert stray["pid"] == first["pid"] and stray["id"] not in (replacement["id"], third["id"])
+            ctl("close", str(stray["id"]))
+            wait("stray window closes", lambda: len(windows()) == 2)
+            result["checks"].append("named handoff preserves arguments and directory; a stale name opens a window")
 
-            # A second compositor shares the runtime directory: Quit must
-            # remain scoped to the Wayland display, not just the user.
+            # A second compositor shares the runtime directory: its Hotaru is
+            # its own, and Quit stays in its own Wayland session.
             other_env = {**env, "WAYLAND_DISPLAY": "hotaru-other", "AIZOME_SOCKET": str(root / "runtime/aizome.hotaru-other.sock")}
             with (args.evidence / "other-session.log").open("w") as log:
                 other_compositor = subprocess.Popen([binaries["compositor"], "--backend", "headless", "--renderer", "pixman",
@@ -219,15 +237,15 @@ def main():
                 return json.loads(subprocess.check_output([binaries["ctl"], "--json", "windows"], env=other_env, text=True, timeout=5))["windows"]
 
             wait("other session's Hotaru", other_windows)
-            with (args.evidence / "other-session.log").open("a") as log:
-                ordinary = subprocess.Popen([binaries["hotaru"]], env=other_env, stdout=log, stderr=log)
-                children.append(ordinary)
+            assert other_windows()[0]["pid"] != first["pid"], "each display has a Hotaru of its own"
+            subprocess.run([binaries["hotaru"]], env=other_env, check=True, timeout=5)
             wait("an ordinary launch opens another window", lambda: len(other_windows()) == 2)
-            result["checks"].append("ordinary launches create independent windows")
+            assert len({w["pid"] for w in other_windows()}) == 1
+            result["checks"].append("ordinary launches open windows in the display's Hotaru")
 
             chord("super+q")
             wait("Quit Hotaru closes all windows in this session", lambda: not windows())
-            assert other_hotaru.poll() is None and ordinary.poll() is None and len(other_windows()) == 2
+            assert other_hotaru.poll() is None and len(other_windows()) == 2
             result["checks"].append("Quit closes every Hotaru window in the session")
             result["checks"].append("Quit leaves a different Wayland session untouched")
 

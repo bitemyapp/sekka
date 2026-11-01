@@ -216,6 +216,7 @@ surface/hidden cursor), `pointer_focus` and `keyboard_focus` (app IDs;
 | `client_side_decorations` | it draws its own title bar; Aizome adds only the tab |
 | `kit_app` | app_id starts with `org.aizome.`: ❖ isn't translated for it |
 | `parent` | the window it's a dialog of |
+| `identifier` | its ext-foreign-toplevel-list identifier while it's mapped, never given to another window: the name other processes, and its own client (Aizome's toplevel identity protocol), know it by. `aizome-hotaru --window` takes it |
 
 ### DeskInfo
 

@@ -593,6 +593,7 @@ impl Actions for State {
             client_side_decorations: !w.ssd,
             kit_app: crate::cmdkey::is_kit_app(&w.app_id),
             parent: w.parent,
+            identifier: aizome_comp_core::protocols::foreign_toplevel::identifier(&self.az, id),
         })
     }
 }

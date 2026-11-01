@@ -148,7 +148,10 @@ fifo, commit-timing, xdg-toplevel-icon, xdg-system-bell (rung as the
 shell's `bell` binding), ext-foreign-toplevel-list,
 wlr-foreign-toplevel-management (3), wlr-output-management (4),
 wlr-screencopy (3), ext-image-copy-capture (1) with ext-image-capture-source
-(1) and wlr-gamma-control (1). Privileged ones (layer shell,
+(1), wlr-gamma-control (1) and Aizome's own toplevel identity (1), which
+tells a client the ext-foreign-toplevel-list identifier of each of its
+toplevels as it maps (`aizome-toplevel-identity-v1.xml`, in Sukumo's
+`sidestep-engine`). Privileged ones (layer shell,
 session lock, data control, input method, virtual keyboard, screencopy,
 image copy capture and its sources,
 foreign toplevel management, output management, foreign toplevel list,

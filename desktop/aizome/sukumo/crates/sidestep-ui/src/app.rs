@@ -316,6 +316,11 @@ pub trait Handler {
         let _ = (cx, request, token);
     }
 
+    /// The compositor answered roundtrip `token` ([`Cx::roundtrip`]).
+    fn roundtrip(&mut self, cx: &mut Cx, token: u64) {
+        let _ = (cx, token);
+    }
+
     /// The session lock ended without [`Cx::unlock_session`]: the
     /// compositor refused it (another program holds one, or it can't lock)
     /// or ended it. Its surfaces have closed.
@@ -729,6 +734,7 @@ impl App {
             looks: (Appearance::system(), Appearance::system().color(SystemColor::Accent)),
             locking: Locking::Unlocked,
             next_activation: 1,
+            next_roundtrip: 1,
             next_drag: 1,
         };
         handler.launched(&mut cx);
@@ -796,6 +802,7 @@ pub struct Cx {
     looks: (Appearance, Color),
     locking: Locking,
     next_activation: u64,
+    next_roundtrip: u64,
     next_drag: u64,
 }
 
@@ -1016,6 +1023,18 @@ impl Cx {
         self.next_activation += 1;
         send(&self.backend.tx, ToRender::RequestActivationToken { request, app_id: app_id.map(str::to_owned) });
         ActivationRequest(request)
+    }
+
+    /// Ask the compositor to answer once it has answered everything asked
+    /// of it so far (a Wayland roundtrip): the handler's
+    /// [`roundtrip`](Handler::roundtrip) hears the token returned after
+    /// everything the compositor said until then (a window's
+    /// [identifier](Window::identifier)).
+    pub fn roundtrip(&mut self) -> u64 {
+        let token = self.next_roundtrip;
+        self.next_roundtrip += 1;
+        send(&self.backend.tx, ToRender::Roundtrip { token });
+        token
     }
 
     // Window memory.
@@ -1602,6 +1621,14 @@ impl Cx {
             FromRender::ActivationToken { request, token } => {
                 handler.activation_token(self, ActivationRequest(request), token);
             }
+            FromRender::Identifier { window, identifier } => {
+                let Some(window) = of(self, window) else { return };
+                if let Some(w) = self.windows.get_mut(&window) {
+                    w.identifier = Some(identifier.clone());
+                    handler.window_event(self, window, WindowEvent::Identified(identifier));
+                }
+            }
+            FromRender::Roundtrip { token } => handler.roundtrip(self, token),
             FromRender::SessionLocked => {
                 if self.locking == Locking::Asked {
                     self.locking = Locking::Locked;

@@ -129,6 +129,10 @@ pub trait Platform {
     /// Ask for an activation token: the engine hears it under the id
     /// returned.
     fn request_activation_token(&mut self, app_id: Option<&str>) -> u64;
+    /// Ask the compositor to answer once it has answered everything asked
+    /// before: the engine hears it under the id returned, or at once with
+    /// none (nothing to wait for).
+    fn roundtrip(&mut self) -> Option<u64>;
     /// Have `bytes` of window memory free and faulted in now (see
     /// [`Cx::reserve_buffers`](crate::Cx::reserve_buffers)); nothing where
     /// there's no shared memory.

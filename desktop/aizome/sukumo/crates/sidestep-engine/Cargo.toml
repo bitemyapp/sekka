@@ -11,6 +11,9 @@ repository.workspace = true
 # Objective-C runtime.
 [target.'cfg(not(target_vendor = "apple"))'.dependencies]
 smithay-client-toolkit = { version = "0.19", default-features = false, features = ["calloop"] }
+# Aizome's own Wayland protocol (src/backend/identity.rs), generated from
+# its XML as wayland-protocols generates the standard ones.
+wayland-scanner = "0.31"
 tiny-skia = { version = "0.12", default-features = false, features = ["std", "simd"] }
 # Path geometry: bounds, winding, flattening, stroking.
 kurbo = { version = "0.13", default-features = false, features = ["std"] }

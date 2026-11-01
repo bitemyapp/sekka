@@ -354,12 +354,12 @@ fn selection_find_and_link_hover_never_leave_copied_overlays() {
     show(&mut h, term.snapshot_scrolled(1));
     assert_eq!(exact(&mut h, 1.).moves, 0, "old hover underline must not move");
     h.key(w, Key::Unidentified, Modifiers::NONE);
-    h.send(Msg::Find);
-    h.send(Msg::Search("needle".into()));
+    h.send(Msg::Find(h.window()));
+    h.send(Msg::Search(h.window(), "needle".into()));
     assert!(h.settle(Duration::from_secs(5), |app| app.search_status().contains(" of ")));
     show(&mut h, term.snapshot_scrolled(2));
     assert_eq!(exact(&mut h, 1.).moves, 0, "matched and selected Find spans must redraw");
-    h.send(Msg::CloseFind);
+    h.send(Msg::CloseFind(h.window()));
     show(&mut h, term.snapshot());
     exact(&mut h, 1.);
     show(&mut h, term.snapshot_scrolled(1));

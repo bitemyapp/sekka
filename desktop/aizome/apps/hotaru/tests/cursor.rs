@@ -75,7 +75,7 @@ fn cursor_shapes_blink_focus_input_and_damage_are_native() {
     term.feed(b"\x1b[1 q\x1b[?25h");
     show(&mut h, &term);
     let old = h.platform.timer_tokens();
-    h.send(Msg::CloseTab);
+    h.send(Msg::CloseTab(h.window()));
     h.advance(Duration::ZERO);
     for token in old {
         h.deliver_timer(token);

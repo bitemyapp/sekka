@@ -436,7 +436,7 @@ pub fn body(site: &Site, app: &App) -> Result<String> {
                 "settings",
                 "Settings",
                 "",
-                "<p>Hotaru › Settings… (⟦❖ ,⟧) has four pages laid out as Settei's: General; Text (family, size, weight, ligatures, fallback); Appearance (Follow Desktop, Night, Day or High Contrast, each shown as a small terminal; the cursor's shape and blink); and Shortcuts, where any command takes a new key. Changes reach every pane in that window at once and are saved in <code>~/.config/aizome/hotaru.toml</code>; ⟦⇧ ❖ ,⟧ reads saved changes in other open windows too. CJK and colour emoji fallback fonts come with Hotaru.</p>",
+                "<p>Hotaru › Settings… (⟦❖ ,⟧) has four pages laid out as Settei's: General; Text (family, size, weight, ligatures, fallback); Appearance (Follow Desktop, Night, Day or High Contrast, each shown as a small terminal; the cursor's shape and blink); and Shortcuts, where any command takes a new key. Changes reach every pane at once and are saved in <code>~/.config/aizome/hotaru.toml</code>; edit the file and ⟦⇧ ❖ ,⟧ reloads it. CJK and colour emoji fallback fonts come with Hotaru.</p>",
             );
             b += "</div>";
             b += &win(

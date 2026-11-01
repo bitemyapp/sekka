@@ -107,10 +107,11 @@ minimised window is restored; a sticky window counts on every Desk. The new
 session starts in the Desk's folder.
 
 File → New Window (❖N or ⌃⇧N), the desktop's New Window command, and running
-`hotaru` open a separate window. File → New Tab stays in the current window.
+`hotaru` open another window. File → New Tab stays in the current window.
 Closing a window closes only its sessions; Quit Hotaru (❖Q) closes every
-Hotaru window in the desktop session. Closing still does not ask for
-confirmation, including when programs are running.
+window. Closing still does not ask for confirmation, including when programs
+are running. One Hotaru runs all of a desktop's windows, sharing their
+settings and fonts, so a crash would end every window's sessions.
 
 File → Split Right/Down divides the focused pane equally and focuses the new
 session. Native dividers resize the panes. Close Pane removes just that session
@@ -149,10 +150,10 @@ copy format, copy on select, what programs may do with the clipboard, the file
 itself), Text
 (family, size, weight, ligatures, fallback), Appearance (Follow Desktop, Night,
 Day or High Contrast, each shown as a small terminal in its colours; cursor
-shape and blinking) and Shortcuts. Changes reach every pane in that window
-as they're made and are saved at once. The family list holds the monospaced
-families installed, found on a worker the first time Settings opens.
-❖W in Settings closes Settings.
+shape and blinking) and Shortcuts. Changes reach every pane, in every window, as
+they're made and are saved at once. The family list holds the monospaced
+families installed, found on a worker the first time Settings opens. ❖W in
+Settings closes Settings.
 
 Shortcuts lists every command with its keys. The pencil opens a command's row:
 the next key pressed with ❖, ⌃ or ⌥ (or a function key, or ⇧ with Page Up/Down,
@@ -165,15 +166,14 @@ Restore Defaults empties `[keybindings]`.
 
 Settings live at `$XDG_CONFIG_HOME/aizome/hotaru.toml`, falling back to
 `~/.config/aizome/hotaru.toml`. `--config-file FILE` selects the configuration for
-the new window; a tab opened with `--window PID` uses that window's settings.
-Settings and the View menu's weight and appearance choices save through a
-bounded background worker. ❖+ and ❖− zoom
+the initial application instance; a later launch opens its window there, with
+its settings. Settings and the View menu's weight and appearance choices save
+through a bounded background worker. ❖+ and ❖− zoom
 the window's text for now, as Ghostty and foot do; Actual Size (❖0) returns to
 the size Settings keeps. Hotaru → Reload Configuration (⇧❖,) applies file
 edits; invalid settings leave the current configuration intact. A managed
 symbolic link (a system configuration's) is read, never replaced: Settings says
-changes last until that Hotaru window closes. Other open windows read saved
-changes when you choose Reload Configuration; new windows read them at startup.
+changes last until Hotaru quits.
 
 To choose a shell for Hotaru, set `shell = "zsh"` (or another executable) in
 that file. The graphical Settings window controls shell integration, but

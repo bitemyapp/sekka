@@ -188,12 +188,27 @@ while True: time.sleep(1)
         window = wait("Hotaru Wayland window", lambda: next((n for n in tree_nodes(sway("-t", "get_tree")) if n.get("app_id") == "org.aizome.Hotaru"), None))
         sway(f"[con_id={window['id']}] focus")
 
+        # The first window's: later launches open windows of their own.
+        first_window = []
+
         def inspected():
             try:
-                path = next(inspect.glob(f"org.aizome.Hotaru.{app.pid}.*.json"))
-                return json.loads(path.read_text())
+                if not first_window:
+                    first_window.append(next(inspect.glob(f"org.aizome.Hotaru.{app.pid}.*.json")))
+                return json.loads(first_window[0].read_text())
             except (StopIteration, json.JSONDecodeError, FileNotFoundError):
                 return None
+
+        def other_windows():
+            found = []
+            for path in inspect.glob(f"org.aizome.Hotaru.{app.pid}.*.json"):
+                try:
+                    doc = json.loads(path.read_text())
+                except (json.JSONDecodeError, FileNotFoundError):
+                    continue
+                if path not in first_window and any(e.get("name", "").startswith("terminal-") for e in doc["elements"]):
+                    found.append(doc)
+            return found
 
         wait("native terminal inspection", inspected)
         time.sleep(.3)
@@ -236,13 +251,14 @@ while True: time.sleep(1)
         result["checks"]["cancelled_readers"] = ["text/plain", "text/html"]
 
         # A burst of copies followed by closing their pane cannot overwrite a
-        # newer foreign selection with a late formatter completion.
-        original = next(e["name"] for e in inspected()["elements"] if e.get("name", "").startswith("terminal-"))
-        subprocess.run([str(binary), "--window", str(app.pid), "--", sys.executable, "-c", "import time; print('CLOSING-PANE', flush=True); time.sleep(30)"],
+        # newer foreign selection with a late formatter completion. A later
+        # launch opens a window of its own in this process (sway names no
+        # window to open it in as a tab); closing its pane closes it.
+        subprocess.run([str(binary), "--", sys.executable, "-c", "import time; print('CLOSING-PANE', flush=True); time.sleep(30)"],
                        env=env, check=True, timeout=3)
-        wait("temporary copy pane", lambda: any(e.get("name", "").startswith("terminal-") and e["name"] != original for e in inspected()["elements"]))
+        wait("temporary copy pane", other_windows)
         keys([(46, "super,shift")] * 16 + [(17, "super")])
-        wait("copy pane closes", lambda: any(e.get("name") == original for e in inspected()["elements"]))
+        wait("copy pane closes", lambda: not other_windows())
         sentinel = b"selection-after-closed-pane"
         sentinel_owner = subprocess.Popen(["wl-copy", "--foreground", "--type", "text/plain;charset=utf-8"],
                                          env=env, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

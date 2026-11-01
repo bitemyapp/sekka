@@ -1,17 +1,18 @@
-//! One process per terminal window, with explicit, session-scoped handoff.
-//! The compositor chooses the window on the current Desk; an ordinary launch
-//! opens a new one. Neither window ownership nor routing depends on its title.
+//! One Hotaru per Wayland display, with all its windows: a later launch
+//! hands its command to the running one through a private socket and
+//! exits. It names the window to open the command in as a tab (the
+//! compositor's identifier for it, which Aizome's ❖Return passes), or asks
+//! for a window of its own. A lock tells startup from a socket left by a
+//! crash.
 
-use std::collections::hash_map::DefaultHasher;
-use std::fs;
-use std::hash::{Hash, Hasher};
+use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
-use std::os::unix::fs::{DirBuilderExt, FileTypeExt, MetadataExt};
+use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use aizome_kit::MsgSender;
 use hotaru_io::PtyCommand;
@@ -22,17 +23,54 @@ use crate::app::Msg;
 const MAX_REQUEST: usize = 1024 * 1024;
 const TIMEOUT: Duration = Duration::from_secs(2);
 
+/// Where a launch's command goes.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum Target {
+    /// A window of its own.
+    NewWindow,
+    /// A tab in the window the compositor knows by this identifier, or a
+    /// window of its own if no window of ours is (any longer) called that.
+    Window(String),
+}
+
+/// A launch, handed to the running Hotaru or run by this one.
+#[derive(Clone)]
+pub struct Launch {
+    pub target: Target,
+    pub command: PtyCommand,
+    /// The launcher's activation token, for the window to come forward
+    /// with the keyboard.
+    pub activation_token: Option<String>,
+}
+
+/// What a launch found.
+pub enum Claim {
+    /// This is the display's Hotaru: serve the listener.
+    First(Instance),
+    /// The running Hotaru took the launch.
+    Forwarded,
+    /// Neither could be had (no private runtime directory, no lock): run
+    /// alone.
+    Alone(io::Error),
+    /// The request went to the running Hotaru but wasn't acknowledged: it
+    /// may have started the command, so it mustn't be started again.
+    Unanswered(io::Error),
+}
+
 pub struct Instance {
     listener: UnixListener,
-    path: PathBuf,
+    _lock: File,
 }
 
 #[derive(Serialize, Deserialize)]
-enum Request {
-    Launch(Command),
-    Quit,
+struct Request {
+    target: Target,
+    command: Command,
+    activation_token: Option<String>,
 }
 
+/// A command as bytes: arguments, folders and environments needn't be
+/// UTF-8.
 #[derive(Serialize, Deserialize)]
 struct Command {
     program: Vec<u8>,
@@ -46,12 +84,13 @@ impl Command {
     fn from_command(command: &PtyCommand) -> Self {
         Self {
             program: command.program.as_bytes().to_vec(),
-            args: command.args.iter().map(|s| s.as_bytes().to_vec()).collect(),
-            cwd: command.cwd.as_ref().map(|p| p.as_os_str().as_bytes().to_vec()),
-            env: command.env.iter().map(|(k, v)| (k.as_bytes().to_vec(), v.as_bytes().to_vec())).collect(),
+            args: command.args.iter().map(|arg| arg.as_bytes().to_vec()).collect(),
+            cwd: command.cwd.as_ref().map(|path| path.as_os_str().as_bytes().to_vec()),
+            env: command.env.iter().map(|(key, value)| (key.as_bytes().to_vec(), value.as_bytes().to_vec())).collect(),
             integrate_shell: command.integrate_shell,
         }
     }
+
     fn command(self) -> PtyCommand {
         use std::ffi::OsString;
         PtyCommand {
@@ -64,158 +103,122 @@ impl Command {
     }
 }
 
-fn private_directory(path: &Path) -> io::Result<()> {
-    let metadata = path.symlink_metadata()?;
-    // SAFETY: geteuid takes no arguments and cannot fail.
-    if !metadata.is_dir() || metadata.uid() != unsafe { libc::geteuid() } || metadata.mode() & 0o077 != 0 {
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "Hotaru's runtime directory must be private and owned by this user",
-        ));
+impl Request {
+    fn from_launch(launch: &Launch) -> Self {
+        Self {
+            target: launch.target.clone(),
+            command: Command::from_command(&launch.command),
+            activation_token: launch.activation_token.clone(),
+        }
     }
-    Ok(())
+
+    fn launch(self) -> Launch {
+        Launch { target: self.target, command: self.command.command(), activation_token: self.activation_token }
+    }
 }
 
-fn directory() -> io::Result<PathBuf> {
+/// The socket and the lock for Wayland display `display`: a nested or
+/// headless session (a test's) has a Hotaru of its own.
+fn paths(runtime: &Path, display: &str) -> (PathBuf, PathBuf) {
+    let display = display.replace('/', "_");
+    (
+        runtime.join(format!("aizome-app.hotaru.{display}.sock")),
+        runtime.join(format!("aizome-app.hotaru.{display}.lock")),
+    )
+}
+
+/// Become the display's Hotaru, or hand `launch` to it.
+pub fn claim(launch: &Launch) -> Claim {
+    let runtime = match runtime() {
+        Ok(runtime) => runtime,
+        Err(error) => return Claim::Alone(error),
+    };
+    let (path, lock) = paths(&runtime, &std::env::var("WAYLAND_DISPLAY").unwrap_or_default());
+    let lock = match OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(lock)
+    {
+        Ok(lock) => lock,
+        Err(error) => return Claim::Alone(error),
+    };
+    // SAFETY: lock owns a live file descriptor; flock neither borrows nor writes memory.
+    if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+        return match Instance::bind(&path, lock) {
+            Ok(instance) => Claim::First(instance),
+            Err(error) => Claim::Alone(error),
+        };
+    }
+    let error = io::Error::last_os_error();
+    if error.kind() != io::ErrorKind::WouldBlock {
+        return Claim::Alone(error);
+    }
+    match send(&path, &Request::from_launch(launch)) {
+        Ok(()) => Claim::Forwarded,
+        Err(Failed::Before(error)) => Claim::Alone(error),
+        Err(Failed::After(error)) => Claim::Unanswered(error),
+    }
+}
+
+fn runtime() -> io::Result<PathBuf> {
     let runtime = std::env::var_os("XDG_RUNTIME_DIR")
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "XDG_RUNTIME_DIR is unset"))?;
-    private_directory(&runtime)?;
-    // Two nested compositors may share a runtime directory. Quit and tab
-    // requests must never cross from one Wayland display into another.
-    let mut session = DefaultHasher::new();
-    let display = PathBuf::from(std::env::var_os("WAYLAND_DISPLAY").unwrap_or_default());
-    runtime.join(display).hash(&mut session);
-    let path = runtime.join(format!("hotaru-{:016x}", session.finish()));
-    match fs::DirBuilder::new().mode(0o700).create(&path) {
-        Ok(()) => {}
-        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
-        Err(error) => return Err(error),
+    let metadata = runtime.metadata()?;
+    // SAFETY: geteuid takes no arguments and cannot fail.
+    if metadata.uid() != unsafe { libc::geteuid() } || metadata.mode() & 0o077 != 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "XDG_RUNTIME_DIR must be private and owned by this user",
+        ));
     }
-    private_directory(&path)?;
-    Ok(path)
+    Ok(runtime)
 }
 
-fn socket(dir: &Path, pid: u32) -> PathBuf {
-    dir.join(format!("{pid}.sock"))
+/// A handoff that failed before the request could reach the running
+/// Hotaru, or after it might have.
+enum Failed {
+    Before(io::Error),
+    After(io::Error),
 }
 
-pub fn listen() -> io::Result<Instance> {
-    Instance::bind(socket(&directory()?, std::process::id()))
-}
-
-/// False only when the selected window has already gone. Once a request
-/// may have reached it, an error must not start the command a second time.
-pub fn forward(pid: u32, command: &PtyCommand) -> io::Result<bool> {
-    send(&directory()?, pid, &Request::Launch(Command::from_command(command)))
-}
-
-/// Close the other windows in this Wayland session. Each uses its ordinary
-/// close path, including any pending settings save. The caller closes last.
-pub fn quit_others(dir: &Path) -> io::Result<()> {
-    let mut first_error = None;
-    for entry in fs::read_dir(&dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.extension().is_none_or(|ext| ext != "sock") {
-            continue;
-        }
-        let Some(pid) = path.file_stem().and_then(|s| s.to_str()).and_then(|s| s.parse::<u32>().ok()) else { continue };
-        if pid == std::process::id() || !entry.file_type()?.is_socket() {
-            continue;
-        }
-        if let Err(error) = send(&dir, pid, &Request::Quit) {
-            first_error.get_or_insert(error);
-        }
-    }
-    first_error.map_or(Ok(()), Err)
-}
-
-fn send(dir: &Path, pid: u32, request: &Request) -> io::Result<bool> {
-    let bytes = serde_json::to_vec(request)?;
+fn send(path: &Path, request: &Request) -> Result<(), Failed> {
+    let bytes = serde_json::to_vec(request).map_err(|error| Failed::Before(error.into()))?;
     if bytes.len() > MAX_REQUEST {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Command is too large"));
+        return Err(Failed::Before(io::Error::new(io::ErrorKind::InvalidInput, "Command is too large")));
     }
-    let mut stream = match UnixStream::connect(socket(dir, pid)) {
-        Ok(stream) => stream,
-        Err(error) if matches!(error.kind(), io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused) => {
-            return Ok(false);
-        }
-        Err(error) => return Err(error),
-    };
-    // A stale socket after PID reuse must not target a different process.
-    let mut peer: libc::ucred = unsafe { std::mem::zeroed() };
-    let mut length = std::mem::size_of_val(&peer) as libc::socklen_t;
-    // SAFETY: the live fd and writable ucred/length storage match SO_PEERCRED.
-    let result = unsafe {
-        libc::getsockopt(
-            stream.as_raw_fd(),
-            libc::SOL_SOCKET,
-            libc::SO_PEERCRED,
-            (&mut peer as *mut libc::ucred).cast(),
-            &mut length,
-        )
-    };
-    if result != 0 {
-        return Err(io::Error::last_os_error());
-    }
-    if peer.pid as u32 != pid || peer.uid != unsafe { libc::geteuid() } {
-        return Err(io::Error::new(io::ErrorKind::PermissionDenied, "Hotaru window identity changed"));
-    }
-    stream.set_write_timeout(Some(TIMEOUT))?;
-    stream.set_read_timeout(Some(TIMEOUT))?;
-    stream.write_all(&(bytes.len() as u32).to_le_bytes())?;
-    stream.write_all(&bytes)?;
-    let mut acknowledgement = [0u8];
-    stream.read_exact(&mut acknowledgement)?;
-    if acknowledgement != [1] {
-        return Err(io::Error::other("Window refused command"));
-    }
-    Ok(true)
-}
-
-impl Instance {
-    pub fn directory(&self) -> &Path {
-        self.path.parent().unwrap()
-    }
-
-    fn bind(path: PathBuf) -> io::Result<Self> {
-        if let Ok(metadata) = path.symlink_metadata() {
-            if !metadata.file_type().is_socket() || metadata.uid() != unsafe { libc::geteuid() } {
-                return Err(io::Error::new(io::ErrorKind::AlreadyExists, "Window path is not our socket"));
+    // The running Hotaru may still be starting: its listener comes after
+    // the lock.
+    let started = Instant::now();
+    let mut stream = loop {
+        match UnixStream::connect(path) {
+            Ok(stream) => break stream,
+            Err(e)
+                if started.elapsed() < TIMEOUT
+                    && matches!(e.kind(), io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused) =>
+            {
+                std::thread::sleep(Duration::from_millis(10));
             }
-            // Our PID cannot belong to another live process.
-            fs::remove_file(&path)?;
+            Err(e) => return Err(Failed::Before(e)),
         }
-        Ok(Self { listener: UnixListener::bind(&path)?, path })
-    }
-
-    pub fn serve(self, tx: MsgSender<Msg>) -> io::Result<()> {
-        std::thread::Builder::new().name("hotaru-instance".into()).spawn(move || {
-            for incoming in self.listener.incoming() {
-                let Ok(mut stream) = incoming else { continue };
-                let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
-                let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
-                let Ok(request) = read_request(&mut stream) else { continue };
-                let message = match request {
-                    Request::Launch(command) => Msg::Launch(command.command()),
-                    Request::Quit => Msg::CloseWindow,
-                };
-                if !tx.send(message) {
-                    return;
-                }
-                let _ = stream.write_all(&[1]);
-            }
-        })?;
+    };
+    let sent = (|| {
+        stream.set_write_timeout(Some(TIMEOUT))?;
+        stream.set_read_timeout(Some(TIMEOUT))?;
+        stream.write_all(&(bytes.len() as u32).to_le_bytes())?;
+        stream.write_all(&bytes)?;
+        let mut acknowledgement = [0u8];
+        stream.read_exact(&mut acknowledgement)?;
+        if acknowledgement != [1] {
+            return Err(io::Error::other("Hotaru refused the command"));
+        }
         Ok(())
-    }
-}
-
-impl Drop for Instance {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
-    }
+    })();
+    sent.map_err(Failed::After)
 }
 
 fn read_request(stream: &mut impl Read) -> io::Result<Request> {
@@ -230,6 +233,39 @@ fn read_request(stream: &mut impl Read) -> io::Result<Request> {
     Ok(serde_json::from_slice(&bytes)?)
 }
 
+impl Instance {
+    /// Listen at `path` while holding `lock`: a socket there is one a
+    /// crashed Hotaru left.
+    fn bind(path: &Path, lock: File) -> io::Result<Self> {
+        if let Ok(metadata) = path.symlink_metadata() {
+            // SAFETY: geteuid takes no arguments and cannot fail.
+            if !metadata.file_type().is_socket() || metadata.uid() != unsafe { libc::geteuid() } {
+                return Err(io::Error::new(io::ErrorKind::AlreadyExists, "Instance path is not our socket"));
+            }
+            std::fs::remove_file(path)?;
+        }
+        Ok(Self { listener: UnixListener::bind(path)?, _lock: lock })
+    }
+
+    pub fn serve(self, tx: MsgSender<Msg>) -> io::Result<()> {
+        std::thread::Builder::new().name("hotaru-instance".into()).spawn(move || {
+            // Keep the startup lock alive until the listener thread exits.
+            let _lock = self._lock;
+            for incoming in self.listener.incoming() {
+                let Ok(mut stream) = incoming else { continue };
+                let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
+                let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
+                let Ok(request) = read_request(&mut stream) else { continue };
+                if !tx.send(Msg::Launched(request.launch(), false)) {
+                    return;
+                }
+                let _ = stream.write_all(&[1]);
+            }
+        })?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -241,79 +277,89 @@ mod tests {
         fn new() -> Self {
             static NEXT: AtomicU64 = AtomicU64::new(0);
             let path = std::env::temp_dir().join(format!(
-                "hotaru-windows-{}-{}",
+                "hotaru-instance-{}-{}",
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
-            fs::DirBuilder::new().mode(0o700).create(&path).unwrap();
+            std::fs::create_dir(&path).unwrap();
             Self(path)
+        }
+        fn lock(&self) -> File {
+            File::create(self.0.join("lock")).unwrap()
         }
     }
     impl Drop for Directory {
         fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
+            let _ = std::fs::remove_dir_all(&self.0);
         }
     }
 
     #[test]
-    fn handoff_preserves_command_bytes_and_requires_acknowledgement() {
+    fn handoff_keeps_command_bytes_target_and_token_and_needs_acknowledgement() {
         let dir = Directory::new();
-        let instance = Instance::bind(socket(&dir.0, std::process::id())).unwrap();
+        let path = dir.0.join("socket");
+        let instance = Instance::bind(&path, dir.lock()).unwrap();
         let server = std::thread::spawn(move || {
             let (mut stream, _) = instance.listener.accept().unwrap();
-            let Request::Launch(command) = read_request(&mut stream).unwrap() else { panic!("expected a launch") };
+            let request = read_request(&mut stream).unwrap();
             stream.write_all(&[1]).unwrap();
-            command.command()
+            request.launch()
         });
         let mut command = PtyCommand::new("/bin/echo");
         command.args = vec!["spaces ' $() stay literal".into(), OsString::from_vec(vec![0xff])];
         command.cwd = Some(PathBuf::from(OsString::from_vec(b"/tmp/non-utf8-\xff".to_vec())));
         command.env = vec![("TEST".into(), "value".into())];
-        assert!(send(&dir.0, std::process::id(), &Request::Launch(Command::from_command(&command))).unwrap());
+        let launch = Launch {
+            target: Target::Window("abcDEF0123".into()),
+            command: command.clone(),
+            activation_token: Some("token".into()),
+        };
+        assert!(send(&path, &Request::from_launch(&launch)).is_ok());
         let received = server.join().unwrap();
-        assert_eq!(received.program, command.program);
-        assert_eq!(received.args, command.args);
-        assert_eq!(received.cwd, command.cwd);
-        assert_eq!(received.env, command.env);
-        assert_eq!(received.integrate_shell, command.integrate_shell);
+        assert_eq!(received.target, launch.target);
+        assert_eq!(received.activation_token, launch.activation_token);
+        assert_eq!(received.command.program, command.program);
+        assert_eq!(received.command.args, command.args);
+        assert_eq!(received.command.cwd, command.cwd);
+        assert_eq!(received.command.env, command.env);
+        assert_eq!(received.command.integrate_shell, command.integrate_shell);
     }
 
     #[test]
-    fn vanished_window_can_fall_back_but_an_unacknowledged_launch_cannot() {
+    fn a_lost_acknowledgement_is_not_a_reason_to_start_the_command_again() {
         let dir = Directory::new();
-        let pid = std::process::id();
-        assert!(!send(&dir.0, pid, &Request::Quit).unwrap());
-        let instance = Instance::bind(socket(&dir.0, pid)).unwrap();
+        let path = dir.0.join("socket");
+        let launch = Launch { target: Target::NewWindow, command: PtyCommand::shell(), activation_token: None };
+        let instance = Instance::bind(&path, dir.lock()).unwrap();
         let server = std::thread::spawn(move || {
             let (mut stream, _) = instance.listener.accept().unwrap();
+            // The command may already have run: no acknowledgement.
             let _ = read_request(&mut stream).unwrap();
-            // The command may already have run. Losing its acknowledgement
-            // must report an error instead of inviting duplicate execution.
         });
-        assert!(send(&dir.0, pid, &Request::Launch(Command::from_command(&PtyCommand::shell()))).is_err());
+        assert!(matches!(send(&path, &Request::from_launch(&launch)), Err(Failed::After(_))));
         server.join().unwrap();
-        assert!(!send(&dir.0, pid, &Request::Quit).unwrap());
-        // A socket left by an unclean exit also falls back safely.
-        drop(UnixListener::bind(socket(&dir.0, pid)).unwrap());
-        assert!(!send(&dir.0, pid, &Request::Quit).unwrap());
     }
 
     #[test]
-    fn handoff_refuses_the_wrong_process_and_oversized_requests() {
+    fn oversized_requests_and_strangers_files_are_refused() {
         let dir = Directory::new();
-        let pid = std::process::id();
-        let _wrong = Instance::bind(socket(&dir.0, pid + 1)).unwrap();
-        assert_eq!(send(&dir.0, pid + 1, &Request::Quit).unwrap_err().kind(), io::ErrorKind::PermissionDenied);
         let mut command = PtyCommand::shell();
         command.args = vec!["x".repeat(MAX_REQUEST).into()];
-        assert_eq!(
-            send(&dir.0, pid, &Request::Launch(Command::from_command(&command))).unwrap_err().kind(),
-            io::ErrorKind::InvalidInput
-        );
+        let launch = Launch { target: Target::NewWindow, command, activation_token: None };
+        assert!(matches!(send(&dir.0.join("socket"), &Request::from_launch(&launch)), Err(Failed::Before(_))));
         assert!(read_request(&mut ((MAX_REQUEST + 1) as u32).to_le_bytes().as_slice()).is_err());
-        let path = socket(&dir.0, pid);
-        fs::write(&path, b"keep this file").unwrap();
-        assert!(Instance::bind(path.clone()).is_err());
-        assert_eq!(fs::read(&path).unwrap(), b"keep this file");
+        let path = dir.0.join("file");
+        std::fs::write(&path, b"keep this file").unwrap();
+        assert!(Instance::bind(&path, dir.lock()).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"keep this file");
+    }
+
+    #[test]
+    fn each_display_has_its_own_socket() {
+        let runtime = Path::new("/run/user/1000");
+        let one = paths(runtime, "wayland-1");
+        let nested = paths(runtime, "/tmp/nested/wayland-9");
+        assert_ne!(one, nested);
+        assert_eq!(nested.0, runtime.join("aizome-app.hotaru._tmp_nested_wayland-9.sock"));
     }
 }

@@ -195,6 +195,7 @@ impl State {
         }
         self.az.window_outputs_dirty = true;
         crate::protocols::foreign_toplevel::window_opened(self, id);
+        crate::protocols::toplevel_identity::window_opened(self, id);
     }
 
     fn commit_mapped(&mut self, id: WinId, is_root: bool) {

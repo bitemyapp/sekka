@@ -85,6 +85,7 @@ What `launched` and `update` act with:
 |---|---|
 | `open_window(WindowSpec) -> WindowKey` | `WindowSpec::new(title).size(w, h).min_size(..).max_size(..).resizable(b)`, `.dialog(parent)`, `.utility()`, `.foreign_parent(handle)` (over another program's window, by the handle it exported: a portal dialog's `wayland:<handle>`), `WindowSpec::layer(LayerOptions, w, h)`, `WindowSpec::lock(output)`. Sizes are the content's: where the kit draws the menu bar in the window (no Aizome shell), the bar comes on top. |
 | `close_window(key)`, `set_title(key, t)`, `request_size`, `minimise`, `set_fullscreen(key, on)`, `activate(key)`, `windows()`, `key_window()` | `activate` brings a window forward (a one-instance app hearing its second launch); `key_window` is the window with the keyboard (or the last that had it), the one a document app's menu commands are for. |
+| `activate_with_token(key, token)`, `window_identifier(key)`, `after_roundtrip(msg)` | `activate_with_token` spends a launcher's xdg-activation token (one a later launch handed over) on a window. `window_identifier` is the compositor's name for the window while it shows, its ext-foreign-toplevel-list identifier (only Aizome says it, through its toplevel identity protocol): the name another process is given for exactly that window. `after_roundtrip` sends `msg` once the compositor has answered everything asked of it so far, so what it said before then (an identifier) is known. |
 | `show_window(key)`, `hide_window(key)`, `prepare_window(key, scale) -> bool` | A window opened hidden (`.hidden()` on its `WindowSpec`) or hidden since isn't viewed, its widgets' ticks wait and its focus leaves it (coming back when it shows); shown, it's as it was. `prepare_window` draws a hidden window ahead of its next showing at the scale it'll show at: laid out at once, drawn offscreen at idle in bands of about a millisecond, again when asked, when its focus moves or the theme changes. Shown at that size and scale, its first frame copies the pictures in and draws only what changed since, rather than rasterising all of it (the shell's palette: see `ahead.rs`). The pictures hold the window's pixels while it's hidden. |
 | `spawn(\|\| msg)` | Work on the kit's thread pool; its result comes back as a message. |
 | `stream() -> MsgSender<Msg>` | A `Clone + Send` sender for threads that keep sending (D-Bus, IPC event streams, file watchers): `sender.send(msg)` wakes the loop. |
@@ -92,6 +93,7 @@ What `launched` and `update` act with:
 | `clipboard_text()`, `set_clipboard_text(s)` | |
 | `open_url(url)`, `notify(summary, body)` | xdg-open; a desktop notification. |
 | `focus(name)` | Focus the element given `.id(name)` (now, or once it shows). |
+| `focus_in(window, name)` | The same in a given window, for a name several windows' views use. |
 | `element_rect(window, name)` | Where the element given `.id(name)` is in a window, as last laid out (to put something by it without a press: the shell's panels asked for over its socket). |
 | `theme() -> &Theme`, `quit()` | |
 | `show_context_menu(window, at, Menu)` | A menu at a point. |

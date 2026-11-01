@@ -1519,6 +1519,7 @@ dependencies = [
  "swash",
  "tiny-skia",
  "wayland-cursor",
+ "wayland-scanner",
 ]
 
 [[package]]

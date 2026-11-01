@@ -301,8 +301,9 @@ fn text_page(app: &Hotaru) -> Vec<Element<Msg>> {
         None => "Monospaced fonts installed for you or the system.".into(),
     };
     let weight = WEIGHTS.iter().position(|(w, _)| *w == s.font_weight);
-    let zoom = if (app.font_size - s.font_size).abs() > f64::EPSILON {
-        format!("This window is zoomed to {} pt for now; ❖0 comes back to this size.", trim(app.font_size))
+    let zoomed = app.front().map_or(s.font_size, |window| window.font_size);
+    let zoom = if (zoomed - s.font_size).abs() > f64::EPSILON {
+        format!("This window is zoomed to {} pt for now; ❖0 comes back to this size.", trim(zoomed))
     } else {
         "❖+ and ❖− zoom the window for now; ❖0 comes back to this size.".into()
     };

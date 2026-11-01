@@ -869,9 +869,7 @@ fn terminal_launch_uses_the_last_main_window_on_this_desk() {
     let (desk1, desk2) = (m.desks()[0].id, m.desks()[1].id);
     let app = "org.aizome.Hotaru";
     let first = add(&mut m, app);
-    m.get_mut(first).unwrap().pid = Some(101);
     let second = add(&mut m, app);
-    m.get_mut(second).unwrap().pid = Some(102);
     assert_eq!(m.app_window_on_current_desk(app).unwrap().id, second);
     m.focus(Some(first));
     assert_eq!(m.app_window_on_current_desk(app).unwrap().id, first);
@@ -889,6 +887,4 @@ fn terminal_launch_uses_the_last_main_window_on_this_desk() {
     assert!(m.app_window_on_current_desk(app).is_none(), "never reuse another Desk's window");
     m.get_mut(second).unwrap().sticky = true;
     assert_eq!(m.app_window_on_current_desk(app).unwrap().id, second, "sticky windows belong to every Desk");
-    m.get_mut(second).unwrap().pid = None;
-    assert!(m.app_window_on_current_desk(app).is_none());
 }

@@ -1286,11 +1286,14 @@ impl Widget for TerminalView {
             _ => false,
         }
     }
+    /// The focused pane's edit commands: its window has the keyboard, so
+    /// they're the front window's, as the menus' are.
     fn command(&mut self, cx: &mut EventCx, command: EditCommand) -> bool {
+        use crate::settings::Action;
         match command {
-            EditCommand::Copy => emit(cx, Msg::Copy),
-            EditCommand::Paste => emit(cx, Msg::Paste),
-            EditCommand::Find => emit(cx, Msg::Find),
+            EditCommand::Copy => emit(cx, Msg::Action(Action::Copy)),
+            EditCommand::Paste => emit(cx, Msg::Action(Action::Paste)),
+            EditCommand::Find => emit(cx, Msg::Action(Action::Find)),
             _ => return false,
         }
         true
@@ -1635,7 +1638,7 @@ mod scroll_retention_tests {
         h.advance(Duration::ZERO);
         assert!(h.is_shown(window));
         assert!(original.upgrade().is_none(), "show replaces the old retained view");
-        h.send(Msg::CloseTab);
+        h.send(Msg::CloseTab(window));
         h.advance(Duration::ZERO);
         assert!(frames.iter().all(|frame| frame.upgrade().is_none()), "closing releases the final displayed frame");
     }

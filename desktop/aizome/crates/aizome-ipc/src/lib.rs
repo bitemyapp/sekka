@@ -767,6 +767,11 @@ pub struct WindowInfo {
     pub kit_app: bool,
     /// The window this one is a dialog of.
     pub parent: Option<WindowId>,
+    /// Its ext-foreign-toplevel-list identifier: the name other processes
+    /// (and, through Aizome's toplevel identity protocol, its own client)
+    /// know exactly this window by while it's mapped.
+    #[serde(default)]
+    pub identifier: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

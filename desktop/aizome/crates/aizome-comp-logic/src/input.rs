@@ -442,13 +442,11 @@ impl InputExt for State {
             }
             Action::Terminal => {
                 let cwd = self.desk_folder();
-                let hotaru = self
-                    .lg
-                    .r()
-                    .wm
-                    .app_window_on_current_desk("org.aizome.Hotaru")
-                    .and_then(|w| w.pid.map(|pid| (w.id, pid)));
-                aizome_comp_core::terminal::spawn(&self.az, cwd, hotaru);
+                // Hotaru's window for this Desk, by the name it knows it by.
+                let hotaru = self.lg.r().wm.app_window_on_current_desk("org.aizome.Hotaru").map(|w| w.id);
+                let hotaru =
+                    hotaru.and_then(|id| aizome_comp_core::protocols::foreign_toplevel::identifier(&self.az, id));
+                aizome_comp_core::terminal::spawn(&mut self.az, cwd, hotaru);
             }
             Action::TerminalClose | Action::TerminalQuit => {
                 // Match the shell's fallback Close/Quit: a polite close

@@ -13,22 +13,23 @@ use crate::session::{Command, Defaults, Session};
 use crate::settings::{self, Access, Action, Bindings, Settings};
 use crate::terminal_view::{Selection, colors_for, terminal_view};
 
+/// Messages for a window name it, or a pane of it. Menu commands and
+/// shortcuts (`Action`) are for the front window, and become messages
+/// naming it.
 #[derive(Clone)]
 pub enum Msg {
     NewWindow,
-    WindowOpened(Result<(), String>),
-    QuitAll,
-    OtherWindowsClosed(Result<(), String>),
-    CloseWindow,
-    NewTab,
-    Launch(PtyCommand),
+    NewTab(WindowKey),
+    /// A later launch handed over by `instance`; true once the compositor
+    /// has been asked what it said (a roundtrip) about the window named.
+    Launched(crate::instance::Launch, bool),
     SelectTab(u64),
-    CloseTab,
-    Split(Axis),
-    ClosePane,
+    CloseTab(WindowKey),
+    Split(WindowKey, Axis),
+    ClosePane(WindowKey),
     FocusPane(u64),
     RestoreFocus(u64, u64),
-    MoveFocus(Direction),
+    MoveFocus(WindowKey, Direction),
     Geometry(u64, Rect),
     Action(Action),
     SetTheme(settings::Theme),
@@ -87,14 +88,14 @@ pub enum Msg {
     ResizePixels(u64, usize, usize, u16, u16),
     Scroll(u64, i32),
     Select(u64, Selection),
-    Copy,
-    CopyScreen,
-    CopyAll,
+    Copy(WindowKey),
+    CopyScreen(WindowKey),
+    CopyAll(WindowKey),
     CopySnapshot(u64, u64, Arc<ContentSnapshot>),
     CopyReady(u64, u64, PreparedClipboard),
     CopyFailed(u64, u64, String),
     PasteReady(u64, u64, ClipboardRead, Option<Arc<str>>),
-    Paste,
+    Paste(WindowKey),
     /// A pointer selection in the pane is finished: with copy on select,
     /// it becomes the primary selection.
     Selected(u64),
@@ -109,21 +110,23 @@ pub enum Msg {
     ClipboardAnswer(u64, crate::selections::Answer),
     /// A program's notification (OSC 9 or 777): its title and body.
     Notify(u64, String, String),
-    Find,
-    Search(String),
-    SearchRefresh(u64),
+    Find(WindowKey),
+    Search(WindowKey, String),
+    SearchRefresh(WindowKey, u64),
     SearchSnapshot(u64, u64, Arc<ContentSnapshot>),
     SearchReady(u64, u64, u64, crate::search::Cache),
     SearchFailed(u64, u64, String),
-    SearchStep(bool),
+    SearchStep(WindowKey, bool),
     SearchNavigated(u64, u64, bool),
-    CloseFind,
-    FontSize(i8),
+    CloseFind(WindowKey),
+    FontSize(WindowKey, i8),
     Theme(Arc<TerminalColors>),
 }
 
 pub struct Pane {
     pub id: u64,
+    /// The window whose tabs hold it.
+    pub window: WindowKey,
     pub title: String,
     /// Last bounded local directory reported by this shell via OSC 7.
     pub working_directory: Option<std::path::PathBuf>,
@@ -164,21 +167,44 @@ pub struct Tab {
     pub zoomed: bool,
 }
 
-pub struct Hotaru {
+/// A terminal window: its tabs (their panes are the app's, by id), what
+/// it finds and how large its text is.
+pub struct TerminalWindow {
+    pub key: WindowKey,
     pub tabs: Vec<Tab>,
-    pub panes: Vec<Pane>,
     pub active: u64,
     /// The size text is drawn at: the configured size, zoomed by ❖+ and ❖−.
     pub font_size: f64,
     pub find: bool,
     pub search: String,
     pub(crate) find_state: crate::search::State,
-    window: WindowKey,
+    /// What New Tab and splits start: what the window was opened with.
+    command: PtyCommand,
+    focus_timer: Option<TimerHandle>,
+    focus_generation: u64,
+}
+
+impl TerminalWindow {
+    pub fn active_tab(&self) -> Option<&Tab> {
+        self.tabs.iter().find(|t| t.id == self.active)
+    }
+}
+
+/// One process for every window on the display: windows share the
+/// settings, workers and font caches, and a later launch opens a window or
+/// a tab here (`instance`).
+pub struct Hotaru {
+    /// The terminal windows, oldest first.
+    pub windows: Vec<TerminalWindow>,
+    /// The terminal window menu commands go to: the key window, or the
+    /// last one that was.
+    front: WindowKey,
+    pub panes: Vec<Pane>,
     next_id: u64,
+    /// What the first window starts.
     command: PtyCommand,
     demo: bool,
     pub instance: Option<crate::instance::Instance>,
-    instance_directory: Option<std::path::PathBuf>,
     clipboard: Option<ClipboardWorker>,
     clipboard_token: u64,
     clipboard_cancel: Arc<AtomicBool>,
@@ -193,15 +219,15 @@ pub struct Hotaru {
     settings_pending: bool,
     closing: bool,
     desktop_appearance: aizome_kit::theme::Appearance,
-    focus_timer: Option<TimerHandle>,
-    focus_generation: u64,
     automatic_worker: Option<crate::automatic_links::Worker>,
     automatic_request: Option<Arc<crate::automatic_links::Request>>,
     automatic_hit: Option<crate::links::Link>,
     resolver_worker: Option<crate::link_resolver::Worker>,
     resolver_request: Option<Arc<crate::link_resolver::Request>>,
-    /// The Settings window, while it's open.
+    /// The Settings window, while it's open, and the terminal window it
+    /// belongs to.
     pub settings_window: Option<WindowKey>,
+    settings_parent: WindowKey,
     pub settings_page: Page,
     pub(crate) settings_notice: Option<Notice>,
     /// The configuration is a symbolic link (a system's): changes aren't saved.
@@ -227,19 +253,13 @@ pub struct Hotaru {
 impl Hotaru {
     pub fn new(command: PtyCommand) -> Self {
         Self {
-            tabs: Vec::new(),
+            windows: Vec::new(),
+            front: WindowKey::NONE,
             panes: Vec::new(),
-            active: 0,
-            font_size: settings::DEFAULT_FONT_SIZE,
-            find: false,
-            search: String::new(),
-            find_state: crate::search::State::default(),
-            window: WindowKey::NONE,
             next_id: 1,
             command,
             demo: false,
             instance: None,
-            instance_directory: None,
             clipboard: None,
             clipboard_token: 0,
             clipboard_cancel: Arc::new(AtomicBool::new(false)),
@@ -254,14 +274,13 @@ impl Hotaru {
             settings_pending: false,
             closing: false,
             desktop_appearance: aizome_kit::theme::Appearance::default(),
-            focus_timer: None,
-            focus_generation: 0,
             automatic_worker: None,
             automatic_request: None,
             automatic_hit: None,
             resolver_worker: None,
             resolver_request: None,
             settings_window: None,
+            settings_parent: WindowKey::NONE,
             settings_page: Page::default(),
             settings_notice: None,
             settings_managed: false,
@@ -285,13 +304,56 @@ impl Hotaru {
         app
     }
 
-    pub fn active_tab(&self) -> Option<&Tab> {
-        self.tabs.iter().find(|t| t.id == self.active)
+    pub fn window(&self, key: WindowKey) -> Option<&TerminalWindow> {
+        self.windows.iter().find(|w| w.key == key)
     }
 
+    fn window_mut(&mut self, key: WindowKey) -> Option<&mut TerminalWindow> {
+        self.windows.iter_mut().find(|w| w.key == key)
+    }
+
+    /// The terminal window menu commands go to.
+    pub fn front(&self) -> Option<&TerminalWindow> {
+        self.window(self.front)
+    }
+
+    pub fn front_mut(&mut self) -> Option<&mut TerminalWindow> {
+        self.window_mut(self.front)
+    }
+
+    /// The front window's tab in front.
+    pub fn active_tab(&self) -> Option<&Tab> {
+        self.front()?.active_tab()
+    }
+
+    /// The front window's pane with the keyboard.
     pub fn active_pane(&self) -> Option<&Pane> {
-        let pane = self.active_tab()?.active;
+        self.pane_in(self.front)
+    }
+
+    /// Window `w`'s pane with the keyboard, in its tab in front.
+    fn pane_in(&self, w: WindowKey) -> Option<&Pane> {
+        let pane = self.window(w)?.active_tab()?.active;
         self.panes.iter().find(|p| p.id == pane)
+    }
+
+    /// The window whose tabs hold pane `id`.
+    fn owner(&self, id: u64) -> Option<WindowKey> {
+        self.panes.iter().find(|pane| pane.id == id).map(|pane| pane.window)
+    }
+
+    /// Where a command goes: the key window if it's a terminal window,
+    /// else the one that last was (as when Settings has the keyboard).
+    fn front_for(&mut self, cx: &mut Cx<Msg>) -> WindowKey {
+        if let Some(key) = cx.key_window()
+            && self.window(key).is_some()
+        {
+            self.front = key;
+        }
+        if self.window(self.front).is_none() {
+            self.front = self.windows.last().map_or(WindowKey::NONE, |w| w.key);
+        }
+        self.front
     }
 
     pub fn bindings(&self) -> &Bindings {
@@ -317,28 +379,37 @@ impl Hotaru {
         families.into()
     }
 
-    fn focus_active(&self, cx: &mut Cx<Msg>) {
-        if let Some(pane) = self.active_pane() {
-            cx.focus(&format!("terminal-{}", pane.id));
-            cx.set_title(self.window, format!("{} — Hotaru", pane.title));
+    fn focus_active(&self, w: WindowKey, cx: &mut Cx<Msg>) {
+        if let Some(pane) = self.pane_in(w) {
+            cx.focus_in(w, &format!("terminal-{}", pane.id));
+            cx.set_title(w, format!("{} — Hotaru", pane.title));
         }
     }
 
-    fn focus_after_rebuild(&mut self, cx: &mut Cx<Msg>) {
-        self.focus_active(cx);
-        if let Some(timer) = self.focus_timer.take() {
+    fn focus_after_rebuild(&mut self, w: WindowKey, cx: &mut Cx<Msg>) {
+        self.focus_active(w, cx);
+        let pane = self.pane_in(w).map(|pane| pane.id);
+        let Some(window) = self.window_mut(w) else { return };
+        if let Some(timer) = window.focus_timer.take() {
             cx.cancel(timer);
         }
-        self.focus_generation = self.focus_generation.wrapping_add(1);
-        if let Some(pane) = self.active_pane() {
+        window.focus_generation = window.focus_generation.wrapping_add(1);
+        if let Some(pane) = pane {
             // A split edit reparents a still-named leaf. An immediate focus can
             // succeed on its old node, which is removed during the next build.
-            self.focus_timer =
-                Some(cx.after(std::time::Duration::ZERO, Msg::RestoreFocus(pane.id, self.focus_generation)));
+            window.focus_timer =
+                Some(cx.after(std::time::Duration::ZERO, Msg::RestoreFocus(pane, window.focus_generation)));
         }
     }
 
-    fn new_pane(&mut self, cx: &mut Cx<Msg>, inherit_cwd: bool) -> u64 {
+    /// The panes in window `w`'s tabs.
+    fn pane_count(&self, w: WindowKey) -> usize {
+        self.panes.iter().filter(|pane| pane.window == w).count()
+    }
+
+    /// A pane for window `w` running `command`, else what the window runs;
+    /// with `inherit_cwd`, in the folder of its pane with the keyboard.
+    fn new_pane(&mut self, w: WindowKey, cx: &mut Cx<Msg>, inherit_cwd: bool, command: Option<PtyCommand>) -> u64 {
         let id = self.next_id;
         self.next_id += 1;
         let mut terminal = Terminal::new(80, 24, self.settings.scrollback);
@@ -350,7 +421,8 @@ impl Hotaru {
         if self.demo {
             terminal.feed(b"\x1b[1;36mHotaru\x1b[0m  \xe8\x9b\x8d\r\n\r\nA little light for your work.\r\n\r\n\x1b[32mcallen\x1b[0m \x1b[34m~/work/sekka\x1b[0m\r\n\xe2\x9d\xaf cargo test\r\n\x1b[32m   Compiling\x1b[0m hotaru-core\r\n\x1b[32m    Finished\x1b[0m test profile\r\n\r\n\x1b[1mtest result:\x1b[0m ok\r\n\r\n\xe2\x9d\xaf ");
         }
-        let mut command = self.command.clone();
+        let mut command =
+            command.or_else(|| self.window(w).map(|window| window.command.clone())).unwrap_or_else(PtyCommand::shell);
         // The system's Bash-to-Fish handoff must not replace a shell Hotaru
         // chose. The parent PID scopes this to our own PTYs, not terminals
         // later launched from one of them which inherit the environment.
@@ -361,7 +433,7 @@ impl Hotaru {
         }
         if inherit_cwd
             && command.integrate_shell
-            && let Some(directory) = self.active_pane().and_then(|pane| pane.working_directory.clone())
+            && let Some(directory) = self.pane_in(w).and_then(|pane| pane.working_directory.clone())
         {
             command.cwd = Some(directory);
         }
@@ -378,6 +450,7 @@ impl Hotaru {
         };
         self.panes.push(Pane {
             id,
+            window: w,
             title: "Shell".into(),
             working_directory,
             link_directory: None,
@@ -401,126 +474,203 @@ impl Hotaru {
         id
     }
 
-    fn new_tab(&mut self, cx: &mut Cx<Msg>, inherit_cwd: bool) {
-        if self.panes.len() >= 64 {
-            if let Some(id) = self.active_pane().map(|pane| pane.id) {
+    /// A tab in window `w`, running `command` else what the window runs.
+    fn new_tab(&mut self, w: WindowKey, cx: &mut Cx<Msg>, inherit_cwd: bool, command: Option<PtyCommand>) {
+        if self.pane_count(w) >= 64 {
+            if let Some(id) = self.pane_in(w).map(|pane| pane.id) {
                 self.notice(id, "The 64 pane limit has been reached.");
             }
             return;
         }
-        let id = self.new_pane(cx, inherit_cwd);
-        self.tabs.push(Tab { id, tree: PaneTree::Leaf(id), active: id, zoomed: false });
-        self.active = id;
-        self.focus_after_rebuild(cx);
+        let id = self.new_pane(w, cx, inherit_cwd, command);
+        let Some(window) = self.window_mut(w) else { return };
+        window.tabs.push(Tab { id, tree: PaneTree::Leaf(id), active: id, zoomed: false });
+        window.active = id;
+        self.focus_after_rebuild(w, cx);
     }
 
-    fn new_window(&mut self, cx: &mut Cx<Msg>) {
-        let cwd = self.active_pane().and_then(|pane| pane.working_directory.clone());
-        let settings = self.settings_path.clone();
-        cx.spawn(move || {
-            let result = (|| -> std::io::Result<()> {
-                let mut command = std::process::Command::new(std::env::current_exe()?);
-                command.arg("--new-window").stdin(std::process::Stdio::null());
-                if let Some(path) = settings {
-                    command.arg("--config-file").arg(path);
-                }
-                if let Some(path) = cwd {
-                    command.arg("--working-directory").arg(path);
-                }
-                // A new GUI window must survive a hangup of the terminal
-                // from which this window might originally have been started.
-                use std::os::unix::process::CommandExt;
-                unsafe {
-                    command.pre_exec(|| {
-                        // SAFETY: setsid is async-signal-safe, with no pointers.
-                        if libc::setsid() < 0 {
-                            return Err(std::io::Error::last_os_error());
-                        }
-                        Ok(())
-                    });
-                }
-                let mut child = command.spawn()?;
-                std::thread::Builder::new().name("hotaru-window-reap".into()).spawn(move || {
-                    let _ = child.wait();
-                })?;
-                Ok(())
-            })();
-            Msg::WindowOpened(result.map_err(|error| error.to_string()))
+    /// Open a terminal window, `command` running in its first tab.
+    fn open_terminal_window(&mut self, command: PtyCommand, cx: &mut Cx<Msg>) -> WindowKey {
+        let key = cx.open_window(WindowSpec::new("Hotaru").size(960.0, 640.0).min_size(320.0, 180.0));
+        if key == WindowKey::NONE {
+            return key;
+        }
+        let find_state = crate::search::State {
+            worker: crate::search::Worker::new(cx.stream()).map_err(|error| log::warn!("Search worker: {error}")).ok(),
+            ..Default::default()
+        };
+        self.windows.push(TerminalWindow {
+            key,
+            tabs: Vec::new(),
+            active: 0,
+            font_size: self.settings.font_size,
+            find: false,
+            search: String::new(),
+            find_state,
+            command,
+            focus_timer: None,
+            focus_generation: 0,
         });
+        self.front = key;
+        self.new_tab(key, cx, false, None);
+        key
     }
 
-    /// The tab at `index` (0-based), or the last for `None`.
-    fn select_tab_at(&mut self, index: Option<usize>, cx: &mut Cx<Msg>) {
+    /// New Window: a shell of its own, in the front pane's folder.
+    fn new_window(&mut self, cx: &mut Cx<Msg>) {
+        let front = self.front_for(cx);
+        let mut command = PtyCommand::shell();
+        command.cwd = self
+            .pane_in(front)
+            .and_then(|pane| pane.working_directory.clone())
+            .or_else(|| self.window(front).and_then(|window| window.command.cwd.clone()));
+        self.open_terminal_window(command, cx);
+    }
+
+    /// A later launch (`instance`): a tab in the window it names, if that's
+    /// one of ours, else a window of its own.
+    fn launch(&mut self, launch: crate::instance::Launch, asked: bool, cx: &mut Cx<Msg>) {
+        use crate::instance::Target;
+        let named = match &launch.target {
+            Target::Window(name) => {
+                let found =
+                    self.windows.iter().map(|w| w.key).find(|&key| cx.window_identifier(key).as_deref() == Some(name));
+                // The compositor told us the window's name before it named
+                // the window to the launch: if that isn't heard yet, it is
+                // once the compositor has answered what was asked since.
+                if found.is_none() && !asked {
+                    cx.after_roundtrip(Msg::Launched(launch, true));
+                    return;
+                }
+                found
+            }
+            Target::NewWindow => None,
+        };
+        let crate::instance::Launch { command, activation_token, .. } = launch;
+        let Some(w) = named else {
+            self.open_terminal_window(command, cx);
+            return;
+        };
+        self.new_tab(w, cx, false, Some(command));
+        self.front = w;
+        // The launcher's token brings a hidden, minimised or covered window
+        // forward with the keyboard.
+        match activation_token {
+            Some(token) => cx.activate_with_token(w, &token),
+            None => cx.activate(w),
+        }
+    }
+    /// Window `w`'s tab at `index` (0-based), or its last for `None`.
+    fn select_tab_at(&mut self, w: WindowKey, index: Option<usize>, cx: &mut Cx<Msg>) {
+        let Some(window) = self.window(w) else { return };
         let tab = match index {
-            Some(index) => self.tabs.get(index),
-            None => self.tabs.last(),
+            Some(index) => window.tabs.get(index),
+            None => window.tabs.last(),
         };
         if let Some(id) = tab.map(|tab| tab.id) {
             self.update(Msg::SelectTab(id), cx);
         }
     }
 
-    /// The tab `step` places along, round from the last to the first.
-    fn step_tab(&mut self, step: isize, cx: &mut Cx<Msg>) {
-        let Some(index) = self.tabs.iter().position(|tab| tab.id == self.active) else { return };
-        let count = self.tabs.len() as isize;
-        self.select_tab_at(Some((index as isize + step).rem_euclid(count) as usize), cx);
+    /// Window `w`'s tab `step` places along, round from the last to the first.
+    fn step_tab(&mut self, w: WindowKey, step: isize, cx: &mut Cx<Msg>) {
+        let Some(window) = self.window(w) else { return };
+        let Some(index) = window.tabs.iter().position(|tab| tab.id == window.active) else { return };
+        let count = window.tabs.len() as isize;
+        self.select_tab_at(w, Some((index as isize + step).rem_euclid(count) as usize), cx);
     }
 
-    fn toggle_zoom(&mut self, cx: &mut Cx<Msg>) {
-        let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == self.active) else { return };
+    fn toggle_zoom(&mut self, w: WindowKey, cx: &mut Cx<Msg>) {
+        let Some(window) = self.window_mut(w) else { return };
+        let active = window.active;
+        let Some(tab) = window.tabs.iter_mut().find(|tab| tab.id == active) else { return };
         // A lone pane already fills its tab.
         tab.zoomed = !tab.zoomed && matches!(tab.tree, PaneTree::Split { .. });
-        self.focus_after_rebuild(cx);
+        self.focus_after_rebuild(w, cx);
     }
 
-    fn split_pane(&mut self, axis: Axis, cx: &mut Cx<Msg>) {
-        let Some(target) = self.active_pane().map(|pane| pane.id) else { return };
-        if self.panes.len() >= 64 {
+    fn split_pane(&mut self, w: WindowKey, axis: Axis, cx: &mut Cx<Msg>) {
+        let Some(target) = self.pane_in(w).map(|pane| pane.id) else { return };
+        if self.pane_count(w) >= 64 {
             self.notice(target, "The 64 pane limit has been reached.");
             return;
         }
-        let id = self.new_pane(cx, true);
+        let id = self.new_pane(w, cx, true, None);
         let split = self.next_id;
         self.next_id += 1;
-        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == self.active) {
-            tab.tree.split(target, id, split, axis);
-            tab.active = id;
-            tab.zoomed = false;
+        if let Some(window) = self.window_mut(w) {
+            let active = window.active;
+            if let Some(tab) = window.tabs.iter_mut().find(|tab| tab.id == active) {
+                tab.tree.split(target, id, split, axis);
+                tab.active = id;
+                tab.zoomed = false;
+            }
         }
-        self.focus_after_rebuild(cx);
+        self.focus_after_rebuild(w, cx);
     }
 
-    fn close_tab(&mut self, cx: &mut Cx<Msg>) {
-        let Some(index) = self.tabs.iter().position(|tab| tab.id == self.active) else { return };
+    fn close_tab(&mut self, w: WindowKey, cx: &mut Cx<Msg>) {
+        let Some(window) = self.window(w) else { return };
+        let Some(index) = window.tabs.iter().position(|tab| tab.id == window.active) else { return };
         self.clipboard_request();
-        self.remove_tab(index, cx);
+        self.remove_tab(w, index, cx);
     }
 
-    /// Take away the tab at `index`; the window goes with the last.
-    fn remove_tab(&mut self, index: usize, cx: &mut Cx<Msg>) {
-        let tab = self.tabs.remove(index);
+    /// Take away window `w`'s tab at `index`; the window goes with the last.
+    fn remove_tab(&mut self, w: WindowKey, index: usize, cx: &mut Cx<Msg>) {
+        let Some(window) = self.window_mut(w) else { return };
+        let tab = window.tabs.remove(index);
+        let shown = tab.id == window.active;
+        if shown && !window.tabs.is_empty() {
+            window.active = window.tabs[index.min(window.tabs.len() - 1)].id;
+        }
+        let emptied = window.tabs.is_empty();
         let removed = tab.tree.leaves();
         self.panes.retain(|pane| !removed.contains(&pane.id));
-        if self.tabs.is_empty() {
-            // Settings alone would be a terminal without a terminal.
-            if let Some(window) = self.settings_window.take() {
-                self.recording = None;
-                cx.close_window(window);
-            }
-            if self.settings_pending {
-                self.closing = true;
-            } else {
-                cx.close_window(self.window);
-            }
-        } else if tab.id == self.active {
-            self.active = self.tabs[index.min(self.tabs.len() - 1)].id;
-            self.focus_after_rebuild(cx);
+        if emptied {
+            self.close_terminal_window(w, cx);
+        } else if shown {
+            self.focus_after_rebuild(w, cx);
         }
     }
 
-    fn close_pane(&mut self, cx: &mut Cx<Msg>) {
-        let Some(id) = self.active_pane().map(|pane| pane.id) else { return };
+    /// Window `w` has no tab left: it closes, with Settings if it's its
+    /// (Settings alone would be a terminal without a terminal). The last
+    /// window waits for settings still being saved.
+    fn close_terminal_window(&mut self, w: WindowKey, cx: &mut Cx<Msg>) {
+        if self.settings_window.is_some() && self.settings_parent == w {
+            self.close_settings(cx);
+        }
+        if self.settings_pending && self.windows.iter().all(|window| window.key == w) {
+            self.closing = true;
+            return;
+        }
+        self.forget_window(w, cx);
+        cx.close_window(w);
+    }
+
+    /// Window `w` is going: its panes' sessions end, its timers stop, and
+    /// a question for one of its programs is no longer asked.
+    fn forget_window(&mut self, w: WindowKey, cx: &mut Cx<Msg>) {
+        let Some(index) = self.windows.iter().position(|window| window.key == w) else { return };
+        let mut window = self.windows.remove(index);
+        for timer in [window.focus_timer.take(), window.find_state.timer.take()].into_iter().flatten() {
+            cx.cancel(timer);
+        }
+        // Its question goes with it (the pane may be gone already: the
+        // window's last tab closed).
+        let asked = self.asking.as_ref().map(|question| question.request.pane);
+        if asked.is_some_and(|pane| self.owner(pane).is_none_or(|owner| owner == w)) {
+            self.asking = None;
+        }
+        self.panes.retain(|pane| pane.window != w);
+        if self.front == w {
+            self.front = self.windows.last().map_or(WindowKey::NONE, |window| window.key);
+        }
+    }
+
+    fn close_pane(&mut self, w: WindowKey, cx: &mut Cx<Msg>) {
+        let Some(id) = self.pane_in(w).map(|pane| pane.id) else { return };
         self.clipboard_request();
         self.remove_pane(id, cx);
     }
@@ -528,24 +678,27 @@ impl Hotaru {
     /// Take pane `id` out of whichever tab holds it, and that tab away with
     /// its last pane. Another tab's pane leaves the one in front alone.
     fn remove_pane(&mut self, id: u64, cx: &mut Cx<Msg>) {
-        let Some(index) = self.tabs.iter().position(|tab| tab.tree.leaves().contains(&id)) else { return };
-        let leaves = self.tabs[index].tree.leaves();
+        let Some(w) = self.owner(id) else { return };
+        let Some(window) = self.window_mut(w) else { return };
+        let Some(index) = window.tabs.iter().position(|tab| tab.tree.leaves().contains(&id)) else { return };
+        let leaves = window.tabs[index].tree.leaves();
         if leaves.len() == 1 {
-            self.remove_tab(index, cx);
+            self.remove_tab(w, index, cx);
             return;
         }
         let at = leaves.iter().position(|pane| *pane == id).unwrap();
-        let tab = &mut self.tabs[index];
+        let active = window.active;
+        let tab = &mut window.tabs[index];
         tab.tree = std::mem::replace(&mut tab.tree, PaneTree::Leaf(0)).remove(id).unwrap();
         if tab.active == id {
             tab.active = leaves[if at == 0 { 1 } else { at - 1 }];
             tab.zoomed = false;
         }
         tab.zoomed &= matches!(tab.tree, PaneTree::Split { .. });
-        let shown = tab.id == self.active;
+        let shown = tab.id == active;
         self.panes.retain(|pane| pane.id != id);
         if shown {
-            self.focus_after_rebuild(cx);
+            self.focus_after_rebuild(w, cx);
         }
     }
 
@@ -566,7 +719,7 @@ impl Hotaru {
     }
     fn valid_link_activation(&self, id: u64, link: &crate::links::Link) -> bool {
         self.current_link_request(link)
-            && self.active_pane().is_some_and(|pane| pane.id == id)
+            && self.owner(id).and_then(|w| self.pane_in(w)).is_some_and(|pane| pane.id == id)
             && self.panes.iter().any(|pane| {
                 pane.id == id && pane.displayed_snapshot().is_some_and(|snapshot| link.matches_snapshot(snapshot))
             })
@@ -577,9 +730,9 @@ impl Hotaru {
         }
     }
 
-    fn focus_direction(&mut self, direction: Direction, cx: &mut Cx<Msg>) {
-        let Some(tab) = self.active_tab() else { return };
-        let Some(current) = self.active_pane() else { return };
+    fn focus_direction(&mut self, w: WindowKey, direction: Direction, cx: &mut Cx<Msg>) {
+        let Some(tab) = self.window(w).and_then(TerminalWindow::active_tab) else { return };
+        let Some(current) = self.pane_in(w) else { return };
         let target = match direction {
             Direction::Previous | Direction::Next => tab.tree.adjacent(tab.active, direction == Direction::Previous),
             _ => {
@@ -609,8 +762,10 @@ impl Hotaru {
     }
 
     fn focus_pane(&mut self, id: u64, cx: &mut Cx<Msg>) {
-        if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.tree.leaves().contains(&id)) {
-            self.active = tab.id;
+        let Some(w) = self.owner(id) else { return };
+        let Some(window) = self.window_mut(w) else { return };
+        if let Some(tab) = window.tabs.iter_mut().find(|tab| tab.tree.leaves().contains(&id)) {
+            window.active = tab.id;
             // Going to another pane brings the tab's splits back, as Ghostty does.
             let unzoomed = tab.zoomed && tab.active != id;
             if unzoomed {
@@ -620,7 +775,7 @@ impl Hotaru {
             if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
                 pane.bell = false;
             }
-            if unzoomed { self.focus_after_rebuild(cx) } else { self.focus_active(cx) }
+            if unzoomed { self.focus_after_rebuild(w, cx) } else { self.focus_active(w, cx) }
         }
     }
 
@@ -642,7 +797,10 @@ impl Hotaru {
     }
 
     fn shape_pane(&mut self, id: u64, invalidate: bool) {
-        let config = Arc::new(self.settings.fonts(self.font_size));
+        let Some(w) = self.owner(id) else { return };
+        let Some(window) = self.windows.iter().find(|window| window.key == w) else { return };
+        let config = Arc::new(self.settings.fonts(window.font_size));
+        let search = (window.find && window.find_state.pane == Some(id)).then_some(&window.find_state.caches);
         if let Some(pane) = self.panes.iter_mut().find(|p| p.id == id) {
             if invalidate {
                 pane.font_epoch = pane.font_epoch.wrapping_add(1);
@@ -654,9 +812,7 @@ impl Hotaru {
                     config,
                     scale: pane.font_scale,
                     selection: pane.selection,
-                    search: (self.find && self.find_state.pane == Some(id))
-                        .then(|| self.find_state.caches[usize::from(pane.snapshot.modes.alternate_screen)].clone())
-                        .flatten(),
+                    search: search.and_then(|caches| caches[usize::from(pane.snapshot.modes.alternate_screen)].clone()),
                 });
             }
         }
@@ -669,78 +825,94 @@ impl Hotaru {
         }
     }
 
-    fn sync_search(&mut self, cx: &mut Cx<Msg>) {
-        let pane = self.find.then(|| self.active_pane().map(|pane| pane.id)).flatten();
-        if self.find_state.pane != pane {
-            if let Some(timer) = self.find_state.timer.take() {
+    /// Window `w`'s panes, shaped again.
+    fn shape_window(&mut self, w: WindowKey) {
+        let ids: Vec<_> = self.panes.iter().filter(|p| p.window == w).map(|p| p.id).collect();
+        for id in ids {
+            self.shape_pane(id, true);
+        }
+    }
+
+    fn sync_search(&mut self, w: WindowKey, cx: &mut Cx<Msg>) {
+        let pane = self.window(w).is_some_and(|window| window.find).then(|| self.pane_in(w).map(|pane| pane.id));
+        let Some(window) = self.window_mut(w) else { return };
+        let pane = pane.flatten();
+        if window.find_state.pane != pane {
+            if let Some(timer) = window.find_state.timer.take() {
                 cx.cancel(timer);
             }
-            self.find_state.invalidate(true);
-            self.find_state.pane = pane;
-            self.shape_all();
-            self.request_search(cx);
+            window.find_state.invalidate(true);
+            window.find_state.pane = pane;
+            self.shape_window(w);
+            self.request_search(w, cx);
         }
     }
 
-    fn schedule_search(&mut self, cx: &mut Cx<Msg>) {
-        if !self.find || self.search.is_empty() || self.find_state.pane.is_none() {
+    fn schedule_search(&mut self, w: WindowKey, cx: &mut Cx<Msg>) {
+        let Some(window) = self.window_mut(w) else { return };
+        if !window.find || window.search.is_empty() || window.find_state.pane.is_none() {
             return;
         }
-        self.find_state.dirty = true;
-        if !self.find_state.in_flight && self.find_state.timer.is_none() {
+        window.find_state.dirty = true;
+        if !window.find_state.in_flight && window.find_state.timer.is_none() {
             // Do not restart this timer for each output frame: a continuous
             // stream must eventually capture and present completed results.
-            self.find_state.timer =
-                Some(cx.after(std::time::Duration::from_millis(120), Msg::SearchRefresh(self.find_state.token)));
+            window.find_state.timer =
+                Some(cx.after(std::time::Duration::from_millis(120), Msg::SearchRefresh(w, window.find_state.token)));
         }
     }
 
-    fn request_search(&mut self, cx: &mut Cx<Msg>) {
-        if let Some(timer) = self.find_state.timer.take() {
+    fn request_search(&mut self, w: WindowKey, cx: &mut Cx<Msg>) {
+        let Some(window) = self.windows.iter_mut().find(|window| window.key == w) else { return };
+        let state = &mut window.find_state;
+        if let Some(timer) = state.timer.take() {
             cx.cancel(timer);
         }
-        if !self.find || self.search.is_empty() || self.find_state.worker.is_none() {
-            self.find_state.dirty = false;
+        if !window.find || window.search.is_empty() || state.worker.is_none() {
+            state.dirty = false;
             return;
         }
-        if self.find_state.in_flight {
-            self.find_state.dirty = true;
+        if state.in_flight {
+            state.dirty = true;
             return;
         }
-        let Some(id) = self.find_state.pane else { return };
-        self.find_state.token = self.find_state.token.wrapping_add(1);
-        let token = self.find_state.token;
-        self.find_state.in_flight = true;
-        self.find_state.dirty = false;
-        self.find_state.error = None;
+        let Some(id) = state.pane else { return };
+        state.token = state.token.wrapping_add(1);
+        let token = state.token;
+        state.in_flight = true;
+        state.dirty = false;
+        state.error = None;
         let Some(pane) = self.panes.iter().find(|pane| pane.id == id) else { return };
         if pane.ended && pane.session.is_none() {
-            self.find_state.in_flight = false;
-            self.find_state.error = Some("Search unavailable: terminal worker ended.".into());
+            state.in_flight = false;
+            state.error = Some("Search unavailable: terminal worker ended.".into());
             return;
         }
         if let Some(session) = &pane.session {
             if let Err(error) = session.command(Command::Search(crate::session::SearchControl::Capture {
                 token,
-                cancel: self.find_state.cancel.clone(),
+                cancel: state.cancel.clone(),
             })) {
-                self.find_state.in_flight = false;
-                self.find_state.error = Some(error.into());
+                state.in_flight = false;
+                state.error = Some(error.into());
             }
         } else {
             // Preview has a bounded visible snapshot and no PTY owner.
-            self.update(Msg::SearchSnapshot(token, id, Arc::new(ContentSnapshot::from((*pane.snapshot).clone()))), cx);
+            let snapshot = Arc::new(ContentSnapshot::from((*pane.snapshot).clone()));
+            self.update(Msg::SearchSnapshot(token, id, snapshot), cx);
         }
     }
 
-    fn navigate_search(&mut self, previous: bool, first: bool, cx: &mut Cx<Msg>) {
-        let Some(pane) = self.active_pane() else { return };
+    fn navigate_search(&mut self, w: WindowKey, previous: bool, first: bool, cx: &mut Cx<Msg>) {
+        let Some(pane) = self.pane_in(w) else { return };
         let (id, alternate) = (pane.id, pane.snapshot.modes.alternate_screen);
-        if !self.find || self.search.is_empty() {
+        let Some(window) = self.windows.iter_mut().find(|window| window.key == w) else { return };
+        if !window.find || window.search.is_empty() {
             return;
         }
-        let Some(cache) = self.find_state.caches[usize::from(alternate)].as_mut() else {
-            self.request_search(cx);
+        let state = &mut window.find_state;
+        let Some(cache) = state.caches[usize::from(alternate)].as_mut() else {
+            self.request_search(w, cx);
             return;
         };
         let count = cache.results.matches.len();
@@ -763,22 +935,22 @@ impl Hotaru {
         };
         cache.selected = Some(index);
         let results = cache.results.clone();
-        self.find_state.navigation = self.find_state.navigation.wrapping_add(1);
-        let token = self.find_state.navigation;
-        self.find_state.pending_navigation = Some((token, results.clone(), index));
-        self.find_state.copy = None;
-        if let Some(session) = &self.active_pane().unwrap().session {
+        state.navigation = state.navigation.wrapping_add(1);
+        let token = state.navigation;
+        state.pending_navigation = Some((token, results.clone(), index));
+        state.copy = None;
+        let Some(pane) = self.panes.iter().find(|pane| pane.id == id) else { return };
+        if let Some(session) = &pane.session {
             if let Err(error) = session.command(Command::Search(crate::session::SearchControl::Navigate {
                 token,
                 results,
                 index,
-                cancel: self.find_state.cancel.clone(),
+                cancel: state.cancel.clone(),
             })) {
-                self.find_state.error = Some(error.into());
+                state.error = Some(error.into());
             }
         } else {
-            let snapshot = &self.active_pane().unwrap().snapshot;
-            let valid = results.resolve_match(index, &snapshot.position, snapshot.generation).is_some();
+            let valid = results.resolve_match(index, &pane.snapshot.position, pane.snapshot.generation).is_some();
             self.update(Msg::SearchNavigated(token, id, valid), cx);
         }
         self.shape_pane(id, true);
@@ -789,13 +961,19 @@ impl Hotaru {
         self.asking.is_some()
     }
 
+    /// What the front window's find bar says of its search.
     pub fn search_status(&self) -> String {
-        self.find_state.label(self.active_pane().is_some_and(|pane| pane.snapshot.modes.alternate_screen))
+        self.search_status_in(self.front)
+    }
+
+    fn search_status_in(&self, w: WindowKey) -> String {
+        let Some(window) = self.window(w) else { return String::new() };
+        window.find_state.label(self.pane_in(w).is_some_and(|pane| pane.snapshot.modes.alternate_screen))
     }
 
     pub fn search_selected(&self) -> Option<hotaru_core::search::Match> {
         let pane = self.active_pane()?;
-        let (results, index) = self.find_state.copy.as_ref()?;
+        let (results, index) = self.front()?.find_state.copy.as_ref()?;
         results.resolve_match(*index, &pane.snapshot.position, pane.snapshot.generation)
     }
 
@@ -810,9 +988,9 @@ impl Hotaru {
         self.clipboard_token
     }
 
-    fn copy(&mut self, selected: bool) {
-        let Some(tab) = self.active_pane() else { return };
-        let found = selected.then(|| self.find_state.copy.clone()).flatten();
+    fn copy(&mut self, w: WindowKey, selected: bool) {
+        let Some(tab) = self.pane_in(w) else { return };
+        let found = selected.then(|| self.window(w).and_then(|window| window.find_state.copy.clone())).flatten();
         let selection = if selected && found.is_none() {
             let Some(selection) = tab.selection.filter(|s| !s.is_empty()) else { return };
             Some(selection)
@@ -959,6 +1137,7 @@ impl Hotaru {
             }
             return;
         }
+        let pane_window = pane.window;
         let title = pane.title.chars().take(60).collect::<String>();
         // Kitty's programs give a name, theirs to choose: shown with the pane's title.
         let (name, pw) = match &request.kind {
@@ -1001,7 +1180,7 @@ impl Hotaru {
         if !pw.is_empty() {
             alert = alert.button("Allow for This Session", Msg::ClipboardAnswer(token, Answer::Remember));
         }
-        cx.alert(self.window, alert.cancel_with("Don’t Allow", Msg::ClipboardAnswer(token, Answer::Refuse)));
+        cx.alert(pane_window, alert.cancel_with("Don’t Allow", Msg::ClipboardAnswer(token, Answer::Refuse)));
         self.asking = Some(crate::selections::Question { token, request, reply });
     }
 
@@ -1075,14 +1254,14 @@ impl Hotaru {
         cx.notify(&summary, &body);
     }
 
-    fn pane_tree_view(&self, tree: &PaneTree) -> Element<Msg> {
+    fn pane_tree_view(&self, window: &TerminalWindow, tree: &PaneTree) -> Element<Msg> {
         match tree {
             PaneTree::Leaf(id) => {
                 let pane = self.panes.iter().find(|pane| pane.id == *id).expect("split leaf owns a pane");
                 terminal_view(
                     pane.id,
                     pane.snapshot.clone(),
-                    (self.font_size, self.settings.font_weight),
+                    (window.font_size, self.settings.font_weight),
                     pane.selection,
                     self.bindings.clone(),
                     pane.rendered.clone(),
@@ -1099,8 +1278,9 @@ impl Hotaru {
                 .height(Fill)
             }
             PaneTree::Split { id, axis, first, second } => {
-                let panes =
-                    split(self.pane_tree_view(first), self.pane_tree_view(second)).min_sizes(80.0, 80.0).key(*id);
+                let panes = split(self.pane_tree_view(window, first), self.pane_tree_view(window, second))
+                    .min_sizes(80.0, 80.0)
+                    .key(*id);
                 if *axis == Axis::Down { panes.vertical().into() } else { panes.into() }
             }
         }
@@ -1109,7 +1289,9 @@ impl Hotaru {
     fn apply_settings(&mut self, settings: Settings, cx: &mut Cx<Msg>) {
         let cursor = (settings.cursor_style, settings.cursor_blink);
         let cursor_changed = cursor != (self.settings.cursor_style, self.settings.cursor_blink);
-        self.font_size = settings.font_size;
+        for window in &mut self.windows {
+            window.font_size = settings.font_size;
+        }
         self.bindings = Arc::new(Bindings::new(&settings));
         self.settings = settings;
         self.apply_appearance(cx);
@@ -1144,12 +1326,16 @@ impl Hotaru {
             cx.activate(window);
             return;
         }
-        let spec = WindowSpec::new("Hotaru Settings").size(720.0, 560.0).min_size(560.0, 400.0).dialog(self.window);
+        // A dialog of the front window: never taken for a terminal window,
+        // and closed with it.
+        let parent = self.front_for(cx);
+        let spec = WindowSpec::new("Hotaru Settings").size(720.0, 560.0).min_size(560.0, 400.0).dialog(parent);
         let window = cx.open_window(spec);
         if window == WindowKey::NONE {
             return;
         }
         self.settings_window = Some(window);
+        self.settings_parent = parent;
         self.settings_notice = None;
         if self.monospace.is_none() {
             cx.spawn(|| Msg::MonospaceFamilies(crate::font::monospaced_families()));
@@ -1234,20 +1420,22 @@ impl Hotaru {
         }
     }
 
-    fn find_selection(&mut self, cx: &mut Cx<Msg>) {
-        let Some(pane) = self.active_pane() else { return };
+    fn find_selection(&mut self, w: WindowKey, cx: &mut Cx<Msg>) {
+        let Some(pane) = self.pane_in(w) else { return };
         let Some(selection) = pane.selection.filter(|selection| !selection.is_empty()) else { return };
         let text = selection.text(pane.displayed_snapshot().unwrap_or(&pane.snapshot));
         let needle: String = text.trim_end_matches(['\r', '\n']).chars().take(4096).collect();
         if needle.trim().is_empty() {
             return;
         }
-        self.find = true;
-        self.update(Msg::Search(needle), cx);
+        if let Some(window) = self.window_mut(w) {
+            window.find = true;
+        }
+        self.update(Msg::Search(w, needle), cx);
     }
 
-    fn pane_command(&mut self, command: Command) {
-        let Some(id) = self.active_pane().map(|pane| pane.id) else { return };
+    fn pane_command(&mut self, w: WindowKey, command: Command) {
+        let Some(id) = self.pane_in(w).map(|pane| pane.id) else { return };
         if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
             pane.selection = None;
         }
@@ -1280,7 +1468,9 @@ impl Hotaru {
         }
     }
 
+    /// A menu command or shortcut: for the front window.
     fn action(&mut self, action: Action, cx: &mut Cx<Msg>) {
+        let w = self.front_for(cx);
         if self.settings_window.is_some() && cx.key_window() == self.settings_window {
             match action {
                 // ❖W closes the window it's pressed in, as everywhere.
@@ -1288,11 +1478,11 @@ impl Hotaru {
                     self.close_settings(cx);
                     return;
                 }
-                Action::NewTab | Action::SplitRight | Action::SplitDown => cx.activate(self.window),
+                Action::NewTab | Action::SplitRight | Action::SplitDown => cx.activate(w),
                 _ => {}
             }
         }
-        let page = self.active_pane().map(|pane| (pane.id, pane.snapshot.rows as i32));
+        let page = self.pane_in(w).map(|pane| (pane.id, pane.snapshot.rows as i32));
         let message = match action {
             Action::Ignore => return,
             Action::NewWindow => Msg::NewWindow,
@@ -1300,23 +1490,23 @@ impl Hotaru {
                 self.show_settings(cx);
                 return;
             }
-            Action::NewTab => Msg::NewTab,
-            Action::ClosePane => Msg::ClosePane,
-            Action::CloseTab => Msg::CloseTab,
-            Action::SplitRight => Msg::Split(Axis::Right),
-            Action::SplitDown => Msg::Split(Axis::Down),
+            Action::NewTab => Msg::NewTab(w),
+            Action::ClosePane => Msg::ClosePane(w),
+            Action::CloseTab => Msg::CloseTab(w),
+            Action::SplitRight => Msg::Split(w, Axis::Right),
+            Action::SplitDown => Msg::Split(w, Axis::Down),
             Action::ZoomPane => {
-                self.toggle_zoom(cx);
+                self.toggle_zoom(w, cx);
                 return;
             }
-            Action::PreviousPane => Msg::MoveFocus(Direction::Previous),
-            Action::NextPane => Msg::MoveFocus(Direction::Next),
-            Action::FocusLeft => Msg::MoveFocus(Direction::Left),
-            Action::FocusRight => Msg::MoveFocus(Direction::Right),
-            Action::FocusUp => Msg::MoveFocus(Direction::Up),
-            Action::FocusDown => Msg::MoveFocus(Direction::Down),
+            Action::PreviousPane => Msg::MoveFocus(w, Direction::Previous),
+            Action::NextPane => Msg::MoveFocus(w, Direction::Next),
+            Action::FocusLeft => Msg::MoveFocus(w, Direction::Left),
+            Action::FocusRight => Msg::MoveFocus(w, Direction::Right),
+            Action::FocusUp => Msg::MoveFocus(w, Direction::Up),
+            Action::FocusDown => Msg::MoveFocus(w, Direction::Down),
             Action::PreviousTab | Action::NextTab => {
-                self.step_tab(if action == Action::PreviousTab { -1 } else { 1 }, cx);
+                self.step_tab(w, if action == Action::PreviousTab { -1 } else { 1 }, cx);
                 return;
             }
             Action::SelectTab1
@@ -1328,41 +1518,44 @@ impl Hotaru {
             | Action::SelectTab7
             | Action::SelectTab8 => {
                 if let Some(index) = Action::SELECT_TAB.iter().position(|tab| *tab == action) {
-                    self.select_tab_at(Some(index), cx);
+                    self.select_tab_at(w, Some(index), cx);
                 }
                 return;
             }
             Action::LastTab => {
-                self.select_tab_at(None, cx);
+                self.select_tab_at(w, None, cx);
                 return;
             }
-            Action::Copy => Msg::Copy,
-            Action::Paste => Msg::Paste,
-            Action::CopyScreen => Msg::CopyScreen,
-            Action::CopyAll => Msg::CopyAll,
-            Action::Find => Msg::Find,
-            Action::FindNext => Msg::SearchStep(false),
-            Action::FindPrevious => Msg::SearchStep(true),
+            Action::Copy => Msg::Copy(w),
+            Action::Paste => Msg::Paste(w),
+            Action::CopyScreen => Msg::CopyScreen(w),
+            Action::CopyAll => Msg::CopyAll(w),
+            Action::Find => Msg::Find(w),
+            Action::FindNext => Msg::SearchStep(w, false),
+            Action::FindPrevious => Msg::SearchStep(w, true),
             Action::FindSelection => {
-                self.find_selection(cx);
+                self.find_selection(w, cx);
                 return;
             }
             Action::ClearScreen => {
-                self.pane_command(Command::Clear);
+                self.pane_command(w, Command::Clear);
                 return;
             }
             Action::ResetTerminal => {
-                self.pane_command(Command::Reset);
+                self.pane_command(w, Command::Reset);
                 if let Some((id, _)) = page {
                     self.notice(id, "Terminal reset");
                 }
                 return;
             }
-            Action::LargerText => Msg::FontSize(1),
-            Action::SmallerText => Msg::FontSize(-1),
+            Action::LargerText => Msg::FontSize(w, 1),
+            Action::SmallerText => Msg::FontSize(w, -1),
             Action::ActualSize => {
-                self.font_size = self.settings.font_size;
-                self.shape_all();
+                let size = self.settings.font_size;
+                if let Some(window) = self.window_mut(w) {
+                    window.font_size = size;
+                }
+                self.shape_window(w);
                 return;
             }
             Action::ScrollToTop | Action::ScrollToBottom | Action::ScrollPageUp | Action::ScrollPageDown => {
@@ -1407,7 +1600,7 @@ impl Hotaru {
                 .separator();
         }
         let selected = pane.selection.is_some_and(|s| !s.is_empty());
-        let alone = self.tabs.iter().any(|tab| tab.tree.leaves() == [pane.id]);
+        let alone = self.window(pane.window).is_some_and(|w| w.tabs.iter().any(|tab| tab.tree.leaves() == [pane.id]));
         menu.item(self.item("Copy", Action::Copy).enabled(selected))
             .item(self.item("Paste", Action::Paste))
             .separator()
@@ -1448,10 +1641,7 @@ impl Program for Hotaru {
     fn launched(&mut self, cx: &mut Cx<Msg>) {
         self.desktop_appearance = cx.appearance();
         self.apply_settings(self.settings.clone(), cx);
-        self.window = cx.open_window(WindowSpec::new("Hotaru").size(960.0, 640.0).min_size(320.0, 180.0));
-        self.find_state.worker =
-            crate::search::Worker::new(cx.stream()).map_err(|error| log::warn!("Search worker: {error}")).ok();
-        self.new_tab(cx, false);
+        self.open_terminal_window(self.command.clone(), cx);
         if let Some(path) = self.settings_path.clone() {
             match settings::Worker::new(path, cx.stream()) {
                 Ok(worker) => self.settings_worker = Some(worker),
@@ -1468,43 +1658,17 @@ impl Program for Hotaru {
         }
         self.selections =
             crate::selections::Worker::new(cx.stream()).map_err(|error| log::warn!("Selection worker: {error}")).ok();
-        if let Some(instance) = self.instance.take() {
-            self.instance_directory = Some(instance.directory().to_owned());
-            if let Err(e) = instance.serve(cx.stream()) {
-                log::warn!("Could not serve application instance: {e}");
-            }
+        if let Some(instance) = self.instance.take()
+            && let Err(e) = instance.serve(cx.stream())
+        {
+            log::warn!("Could not serve application instance: {e}");
         }
     }
     fn update(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
+        self.front_for(cx);
         match msg {
             Msg::NewWindow => self.new_window(cx),
-            Msg::WindowOpened(result) => {
-                if let Err(error) = result
-                    && let Some(id) = self.active_pane().map(|pane| pane.id)
-                {
-                    self.notice(id, &format!("Could not open a window: {error}"));
-                }
-            }
-            Msg::QuitAll => {
-                if let Some(dir) = self.instance_directory.clone() {
-                    cx.spawn(move || {
-                        Msg::OtherWindowsClosed(crate::instance::quit_others(&dir).map_err(|error| error.to_string()))
-                    });
-                } else {
-                    self.update(Msg::CloseWindow, cx);
-                }
-            }
-            Msg::OtherWindowsClosed(result) => {
-                if let Err(error) = result {
-                    log::warn!("Could not close another Hotaru window: {error}");
-                }
-                self.update(Msg::CloseWindow, cx);
-            }
-            Msg::CloseWindow => {
-                if self.close_requested(self.window, cx) {
-                    cx.close_window(self.window);
-                }
-            }
+            Msg::Launched(launch, asked) => self.launch(launch, asked, cx),
             Msg::Action(action) => self.action(action, cx),
             Msg::SetTheme(theme) => {
                 self.settings.theme = theme;
@@ -1524,7 +1688,9 @@ impl Program for Hotaru {
                 let points = ((points * 2.0).round() / 2.0).clamp(8.0, 72.0);
                 if points.is_finite() {
                     self.settings.font_size = points;
-                    self.font_size = points;
+                    for window in &mut self.windows {
+                        window.font_size = points;
+                    }
                     self.save_settings();
                     self.shape_all();
                 }
@@ -1681,9 +1847,14 @@ impl Program for Hotaru {
                         }
                     }
                 }
+                // The last window was closed while saving; it, and any a
+                // Quit left open, go now.
                 if self.closing {
                     self.close_settings(cx);
-                    cx.close_window(self.window);
+                    for window in cx.windows() {
+                        self.forget_window(window, cx);
+                        cx.close_window(window);
+                    }
                 }
             }
             Msg::Theme(colors) => {
@@ -1712,37 +1883,36 @@ impl Program for Hotaru {
                     self.shape_all();
                 }
             }
-            Msg::NewTab => self.new_tab(cx, true),
-            Msg::Split(axis) => self.split_pane(axis, cx),
-            Msg::ClosePane => self.close_pane(cx),
+            Msg::NewTab(w) => self.new_tab(w, cx, true, None),
+            Msg::Split(w, axis) => self.split_pane(w, axis, cx),
+            Msg::ClosePane(w) => self.close_pane(w, cx),
             Msg::FocusPane(id) => self.focus_pane(id, cx),
             Msg::RestoreFocus(id, generation) => {
-                if generation == self.focus_generation {
-                    self.focus_timer = None;
-                    if self.active_pane().is_some_and(|pane| pane.id == id) {
-                        self.focus_active(cx);
+                let Some(w) = self.owner(id) else { return };
+                if let Some(window) = self.window_mut(w)
+                    && generation == window.focus_generation
+                {
+                    window.focus_timer = None;
+                    if self.pane_in(w).is_some_and(|pane| pane.id == id) {
+                        self.focus_active(w, cx);
                     }
                 }
             }
-            Msg::MoveFocus(direction) => self.focus_direction(direction, cx),
+            Msg::MoveFocus(w, direction) => self.focus_direction(w, direction, cx),
             Msg::Geometry(id, rect) => {
                 if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
                     pane.rect = rect;
                 }
             }
-            Msg::Launch(command) => {
-                let previous = std::mem::replace(&mut self.command, command);
-                self.new_tab(cx, false);
-                self.command = previous;
-                cx.activate(self.window);
-            }
             Msg::SelectTab(id) => {
-                if self.tabs.iter().any(|tab| tab.id == id) {
-                    self.active = id;
-                    self.focus_after_rebuild(cx);
+                if let Some(window) = self.windows.iter_mut().find(|window| window.tabs.iter().any(|tab| tab.id == id))
+                {
+                    window.active = id;
+                    let w = window.key;
+                    self.focus_after_rebuild(w, cx);
                 }
             }
-            Msg::CloseTab => self.close_tab(cx),
+            Msg::CloseTab(w) => self.close_tab(w, cx),
             Msg::Frame(id, frame) => {
                 let mut search_changed = false;
                 let mut screen_changed = false;
@@ -1760,29 +1930,34 @@ impl Program for Hotaru {
                     screen_changed = tab.snapshot.modes.alternate_screen != frame.modes.alternate_screen;
                     tab.snapshot = frame;
                 }
-                if self.find_state.pane == Some(id) && search_changed {
-                    if let Some((results, index)) = &self.find_state.copy
-                        && let Some(pane) = self.panes.iter().find(|pane| pane.id == id)
+                let w = self.owner(id).unwrap_or(WindowKey::NONE);
+                if search_changed
+                    && let Some(window) =
+                        self.windows.iter_mut().find(|window| window.key == w && window.find_state.pane == Some(id))
+                {
+                    let state = &mut window.find_state;
+                    let pane = self.panes.iter().find(|pane| pane.id == id);
+                    if let Some((results, index)) = &state.copy
+                        && let Some(pane) = pane
                         && results.resolve_match(*index, &pane.snapshot.position, pane.snapshot.generation).is_none()
                     {
-                        self.find_state.copy = None;
+                        state.copy = None;
                     }
                     if screen_changed {
-                        self.find_state.invalidate(false);
-                        self.request_search(cx);
+                        state.invalidate(false);
+                        self.request_search(w, cx);
                     } else {
                         // A worker result can precede its coalesced actor frame.
                         // Keep its logical selection in the owned capture and
                         // publish copy only once this frame validates it. A
                         // pointer clear removes cache.selected; navigation has
                         // its own acknowledgment and must not be superseded.
-                        if self.find_state.pending_navigation.is_none()
-                            && !self.find_state.retry_navigation
-                            && let Some(pane) = self.panes.iter().find(|pane| pane.id == id)
-                            && let Some(cache) =
-                                &self.find_state.caches[usize::from(pane.snapshot.modes.alternate_screen)]
+                        if state.pending_navigation.is_none()
+                            && !state.retry_navigation
+                            && let Some(pane) = pane
+                            && let Some(cache) = &state.caches[usize::from(pane.snapshot.modes.alternate_screen)]
                         {
-                            self.find_state.copy = cache
+                            state.copy = cache
                                 .selected
                                 .filter(|&index| {
                                     cache
@@ -1792,7 +1967,7 @@ impl Program for Hotaru {
                                 })
                                 .map(|index| (cache.results.clone(), index));
                         }
-                        self.schedule_search(cx);
+                        self.schedule_search(w, cx);
                     }
                 }
                 self.shape_pane(id, false);
@@ -1971,14 +2146,14 @@ impl Program for Hotaru {
                 }
             }
             Msg::Title(id, title) => {
-                if let Some(tab) = self.panes.iter_mut().find(|t| t.id == id) {
-                    tab.title = title.chars().filter(|c| !c.is_control()).take(256).collect();
-                    if tab.title.is_empty() {
-                        tab.title = "Shell".into();
-                    }
-                    if self.tabs.iter().any(|tab| tab.id == self.active && tab.active == id) {
-                        cx.set_title(self.window, format!("{} — Hotaru", tab.title));
-                    }
+                let Some(pane) = self.panes.iter_mut().find(|t| t.id == id) else { return };
+                pane.title = title.chars().filter(|c| !c.is_control()).take(256).collect();
+                if pane.title.is_empty() {
+                    pane.title = "Shell".into();
+                }
+                let (w, title) = (pane.window, format!("{} — Hotaru", pane.title));
+                if self.window(w).and_then(TerminalWindow::active_tab).is_some_and(|tab| tab.active == id) {
+                    cx.set_title(w, title);
                 }
             }
             Msg::Exited(id, status, abnormal) => {
@@ -1996,13 +2171,14 @@ impl Program for Hotaru {
                 }
             }
             Msg::Failed(id, status) => {
-                if self.find_state.pane == Some(id) {
-                    if let Some(timer) = self.find_state.timer.take() {
+                if let Some(window) = self.windows.iter_mut().find(|window| window.find_state.pane == Some(id)) {
+                    let state = &mut window.find_state;
+                    if let Some(timer) = state.timer.take() {
                         cx.cancel(timer);
                     }
-                    self.find_state.invalidate(false);
-                    self.find_state.dirty = false;
-                    self.find_state.error = Some("Search unavailable: terminal worker ended.".into());
+                    state.invalidate(false);
+                    state.dirty = false;
+                    state.error = Some("Search unavailable: terminal worker ended.".into());
                 }
                 if let Some(tab) = self.panes.iter_mut().find(|t| t.id == id) {
                     tab.status = format!("Session failed: {status}");
@@ -2050,6 +2226,10 @@ impl Program for Hotaru {
             Msg::TerminalFocus(id, focused) => {
                 if focused {
                     self.focused_pane = Some(id);
+                    // Its window has the keyboard: commands go there now.
+                    if let Some(w) = self.owner(id) {
+                        self.front = w;
+                    }
                 } else if self.focused_pane == Some(id) {
                     self.focused_pane = None;
                 }
@@ -2099,8 +2279,11 @@ impl Program for Hotaru {
             }
             Msg::ClipboardAnswer(token, answer) => {
                 let Some(question) = self.asking.take_if(|question| question.token == token) else { return };
+                let w = self.owner(question.request.pane);
                 self.answer(question.request, question.reply, answer, cx);
-                self.focus_active(cx);
+                if let Some(w) = w {
+                    self.focus_active(w, cx);
+                }
             }
             Msg::Notify(id, title, body) => self.notify(id, &title, &body, cx),
             Msg::Resize(id, cols, rows) => self.send(id, Command::Resize { cols, rows }),
@@ -2115,12 +2298,13 @@ impl Program for Hotaru {
                 self.shape_pane(id, true);
             }
             Msg::Select(id, selection) => {
-                if self.find_state.pane == Some(id) {
-                    self.find_state.navigation = self.find_state.navigation.wrapping_add(1);
-                    self.find_state.copy = None;
-                    self.find_state.pending_navigation = None;
-                    self.find_state.retry_navigation = false;
-                    for cache in self.find_state.caches.iter_mut().flatten() {
+                if let Some(window) = self.windows.iter_mut().find(|window| window.find_state.pane == Some(id)) {
+                    let state = &mut window.find_state;
+                    state.navigation = state.navigation.wrapping_add(1);
+                    state.copy = None;
+                    state.pending_navigation = None;
+                    state.retry_navigation = false;
+                    for cache in state.caches.iter_mut().flatten() {
                         cache.selected = None;
                     }
                 }
@@ -2129,10 +2313,10 @@ impl Program for Hotaru {
                 }
                 self.shape_pane(id, true);
             }
-            Msg::Copy => self.copy(true),
-            Msg::CopyScreen => self.copy(false),
-            Msg::CopyAll => {
-                let Some(id) = self.active_pane().map(|pane| pane.id) else { return };
+            Msg::Copy(w) => self.copy(w, true),
+            Msg::CopyScreen(w) => self.copy(w, false),
+            Msg::CopyAll(w) => {
+                let Some(id) = self.pane_in(w).map(|pane| pane.id) else { return };
                 let token = self.clipboard_request();
                 self.send(id, Command::CopyAll(token));
             }
@@ -2160,8 +2344,8 @@ impl Program for Hotaru {
                     self.notice(pane, &error);
                 }
             }
-            Msg::Paste => {
-                let Some(id) = self.active_pane().map(|pane| pane.id) else { return };
+            Msg::Paste(w) => {
+                let Some(id) = self.pane_in(w).map(|pane| pane.id) else { return };
                 let token = self.clipboard_request();
                 let read = cx.clipboard_read();
                 if self.paste_event(id, false, &read) {
@@ -2182,72 +2366,84 @@ impl Program for Hotaru {
                     } else if let Some(target) = self.panes.iter_mut().find(|t| t.id == tab) {
                         target.status = "Clipboard text unavailable, too large, or timed out.".into();
                     }
-                    if self.active_pane().is_some_and(|pane| pane.id == tab) {
-                        self.focus_active(cx);
+                    if let Some(w) = self.owner(tab)
+                        && self.pane_in(w).is_some_and(|pane| pane.id == tab)
+                    {
+                        self.focus_active(w, cx);
                     }
                 }
                 if token == self.clipboard_token {
                     self.clipboard_read = None;
                 }
             }
-            Msg::Find => {
-                self.find = true;
-                cx.focus("find");
+            Msg::Find(w) => {
+                if let Some(window) = self.window_mut(w) {
+                    window.find = true;
+                    cx.focus_in(w, "find");
+                }
             }
-            Msg::Search(search) => {
-                self.search = search;
-                self.find_state.invalidate(true);
-                self.request_search(cx);
-                self.shape_all();
+            Msg::Search(w, search) => {
+                if let Some(window) = self.window_mut(w) {
+                    window.search = search;
+                    window.find_state.invalidate(true);
+                    self.request_search(w, cx);
+                    self.shape_window(w);
+                }
             }
-            Msg::SearchRefresh(token) => {
-                if token == self.find_state.token {
-                    self.find_state.timer = None;
-                    self.request_search(cx);
+            Msg::SearchRefresh(w, token) => {
+                if let Some(window) = self.window_mut(w)
+                    && token == window.find_state.token
+                {
+                    window.find_state.timer = None;
+                    self.request_search(w, cx);
                 }
             }
             Msg::SearchSnapshot(token, id, snapshot) => {
-                if token == self.find_state.token
-                    && self.find_state.pane == Some(id)
-                    && self.find_state.in_flight
-                    && let Some(worker) = &self.find_state.worker
+                if let Some(window) = self.windows.iter().find(|window| window.find_state.pane == Some(id))
+                    && token == window.find_state.token
+                    && window.find_state.in_flight
+                    && let Some(worker) = &window.find_state.worker
                 {
-                    let preserve = self.find_state.caches[usize::from(snapshot.modes.alternate_screen)]
+                    let state = &window.find_state;
+                    let preserve = state.caches[usize::from(snapshot.modes.alternate_screen)]
                         .as_ref()
                         .map(|cache| (cache.results.clone(), cache.selected));
                     worker.submit(crate::search::Job {
                         token,
                         pane: id,
-                        navigation: self.find_state.navigation,
+                        navigation: state.navigation,
                         snapshot: (*snapshot).clone(),
-                        needle: self.search.as_bytes().to_vec(),
+                        needle: window.search.as_bytes().to_vec(),
                         preserve,
-                        cancel: self.find_state.cancel.clone(),
+                        cancel: state.cancel.clone(),
                     });
                 }
             }
             Msg::SearchReady(token, id, navigation, cache) => {
-                if token == self.find_state.token
-                    && self.find_state.pane == Some(id)
-                    && self.find
-                    && self.find_state.in_flight
+                let w = self.owner(id).unwrap_or(WindowKey::NONE);
+                let active = self.pane_in(w).map(|pane| pane.id);
+                if let Some(window) = self.windows.iter_mut().find(|window| window.key == w)
+                    && token == window.find_state.token
+                    && window.find_state.pane == Some(id)
+                    && window.find
+                    && window.find_state.in_flight
                 {
-                    if navigation != self.find_state.navigation
-                        || self
-                            .active_pane()
-                            .is_none_or(|pane| pane.snapshot.position.epoch != cache.results.snapshot.position.epoch)
+                    let state = &mut window.find_state;
+                    let pane = active.and_then(|active| self.panes.iter().find(|pane| pane.id == active));
+                    if navigation != state.navigation
+                        || pane.is_none_or(|pane| pane.snapshot.position.epoch != cache.results.snapshot.position.epoch)
                     {
-                        self.find_state.in_flight = false;
-                        self.schedule_search(cx);
+                        state.in_flight = false;
+                        self.schedule_search(w, cx);
                         return;
                     }
                     let slot = usize::from(cache.results.snapshot.modes.alternate_screen);
-                    let first = self.find_state.caches[slot].is_none();
-                    if self.find_state.pending_navigation.is_none()
-                        && !self.find_state.retry_navigation
-                        && let Some(pane) = self.active_pane()
+                    let first = state.caches[slot].is_none();
+                    if state.pending_navigation.is_none()
+                        && !state.retry_navigation
+                        && let Some(pane) = pane
                     {
-                        self.find_state.copy = cache
+                        state.copy = cache
                             .selected
                             .filter(|&index| {
                                 cache
@@ -2257,51 +2453,58 @@ impl Program for Hotaru {
                             })
                             .map(|index| (cache.results.clone(), index));
                     }
-                    self.find_state.caches[slot] = Some(cache);
-                    self.find_state.in_flight = false;
-                    self.find_state.error = None;
-                    if first || std::mem::take(&mut self.find_state.retry_navigation) {
-                        self.navigate_search(false, true, cx);
+                    state.caches[slot] = Some(cache);
+                    state.in_flight = false;
+                    state.error = None;
+                    if first || std::mem::take(&mut state.retry_navigation) {
+                        self.navigate_search(w, false, true, cx);
                     }
                     self.shape_pane(id, true);
-                    if self.find_state.dirty {
-                        self.schedule_search(cx);
+                    if self.window(w).is_some_and(|window| window.find_state.dirty) {
+                        self.schedule_search(w, cx);
                     }
                 }
             }
             Msg::SearchFailed(token, id, error) => {
-                if token == self.find_state.token && self.find_state.pane == Some(id) {
-                    self.find_state.in_flight = false;
-                    self.find_state.error = Some(error);
+                if let Some(window) = self.windows.iter_mut().find(|window| window.find_state.pane == Some(id))
+                    && token == window.find_state.token
+                {
+                    window.find_state.in_flight = false;
+                    window.find_state.error = Some(error);
                 }
             }
-            Msg::SearchStep(previous) => self.navigate_search(previous, false, cx),
+            Msg::SearchStep(w, previous) => self.navigate_search(w, previous, false, cx),
             Msg::SearchNavigated(token, id, valid) => {
-                if self.find_state.pane == Some(id)
-                    && self.find_state.pending_navigation.as_ref().is_some_and(|(pending, _, _)| *pending == token)
+                if let Some(window) = self.windows.iter_mut().find(|window| window.find_state.pane == Some(id))
+                    && window.find_state.pending_navigation.as_ref().is_some_and(|(pending, _, _)| *pending == token)
                 {
-                    let (_, results, index) = self.find_state.pending_navigation.take().unwrap();
+                    let (w, state) = (window.key, &mut window.find_state);
+                    let (_, results, index) = state.pending_navigation.take().unwrap();
                     if valid {
-                        self.find_state.copy = Some((results, index));
+                        state.copy = Some((results, index));
                     } else {
-                        self.find_state.copy = None;
-                        self.find_state.retry_navigation = true;
-                        self.find_state.dirty = true;
-                        self.schedule_search(cx);
+                        state.copy = None;
+                        state.retry_navigation = true;
+                        state.dirty = true;
+                        self.schedule_search(w, cx);
                     }
                 }
             }
-            Msg::CloseFind => {
-                self.find = false;
-                self.search.clear();
-                self.shape_all();
-                self.focus_active(cx);
+            Msg::CloseFind(w) => {
+                if let Some(window) = self.window_mut(w) {
+                    window.find = false;
+                    window.search.clear();
+                }
+                self.shape_window(w);
+                self.focus_active(w, cx);
             }
-            Msg::FontSize(delta) => {
-                // ❖+ and ❖− zoom for now, as other terminals do; Actual Size (❖0)
-                // comes back to the size Settings keeps.
-                self.font_size = (self.font_size + f64::from(delta)).clamp(8.0, 72.0);
-                self.shape_all();
+            Msg::FontSize(w, delta) => {
+                // ❖+ and ❖− zoom the window for now, as other terminals do;
+                // Actual Size (❖0) comes back to the size Settings keeps.
+                if let Some(window) = self.window_mut(w) {
+                    window.font_size = (window.font_size + f64::from(delta)).clamp(8.0, 72.0);
+                }
+                self.shape_window(w);
             }
         }
         if self.automatic_request.as_ref().is_some_and(|request| {
@@ -2312,13 +2515,20 @@ impl Program for Hotaru {
         }) {
             self.cancel_automatic();
         }
-        self.sync_search(cx);
+        let keys: Vec<WindowKey> = self.windows.iter().map(|window| window.key).collect();
+        for w in keys {
+            self.sync_search(w, cx);
+        }
     }
-    fn view(&self, window: WindowKey) -> Element<Msg> {
-        if Some(window) == self.settings_window {
+    fn view(&self, key: WindowKey) -> Element<Msg> {
+        if Some(key) == self.settings_window {
             return crate::preferences::view(self);
         }
-        let mut tabs: Vec<Element<Msg>> = self
+        let Some(window) = self.window(key) else {
+            // Closing (as Quit waits for settings being saved).
+            return aizome_kit::widgets::layout::column(Vec::new()).width(Fill).height(Fill).into();
+        };
+        let mut tabs: Vec<Element<Msg>> = window
             .tabs
             .iter()
             .map(|tab| {
@@ -2327,7 +2537,7 @@ impl Program for Hotaru {
                 let bell = tab.tree.leaves().iter().any(|id| self.panes.iter().any(|pane| pane.id == *id && pane.bell));
                 button(if bell { format!("• {title}") } else { title.to_owned() })
                     .toolbar()
-                    .selected(tab.id == self.active)
+                    .selected(tab.id == window.active)
                     .on_press(Msg::SelectTab(tab.id))
                     .id(format!("tab-{}", tab.id))
                     .max_width(240.0)
@@ -2337,65 +2547,74 @@ impl Program for Hotaru {
             .collect();
         tabs.push(spacer().into());
         tabs.push(
-            icon_button(Icon::Plus).toolbar().on_press(Msg::NewTab).tooltip(self.tip("New Tab", Action::NewTab)).into(),
+            icon_button(Icon::Plus)
+                .toolbar()
+                .on_press(Msg::NewTab(key))
+                .tooltip(self.tip("New Tab", Action::NewTab))
+                .into(),
         );
         tabs.push(
-            icon_button(Icon::Search).toolbar().on_press(Msg::Find).tooltip(self.tip("Find", Action::Find)).into(),
+            icon_button(Icon::Search).toolbar().on_press(Msg::Find(key)).tooltip(self.tip("Find", Action::Find)).into(),
         );
         let mut contents: Vec<Element<Msg>> = vec![toolbar(tabs)];
-        if self.find {
+        if window.find {
             contents.push(
                 row![
-                    search_field(&self.search)
-                        .on_change(Msg::Search)
-                        .on_submit(Msg::SearchStep(false))
+                    search_field(&window.search)
+                        .on_change(move |text| Msg::Search(key, text))
+                        .on_submit(Msg::SearchStep(key, false))
                         .id("find")
                         .width(Fill),
-                    status_text(self.search_status()),
+                    status_text(self.search_status_in(key)),
                     button("Previous")
-                        .on_press(Msg::SearchStep(true))
+                        .on_press(Msg::SearchStep(key, true))
                         .tooltip(self.tip("Previous match", Action::FindPrevious)),
-                    button("Next").on_press(Msg::SearchStep(false)).tooltip(self.tip("Next match", Action::FindNext)),
-                    button("Done").on_press(Msg::CloseFind)
+                    button("Next")
+                        .on_press(Msg::SearchStep(key, false))
+                        .tooltip(self.tip("Next match", Action::FindNext)),
+                    button("Done").on_press(Msg::CloseFind(key))
                 ]
                 .padding([6.0, 10.0])
                 .spacing(8.0)
                 .into(),
             );
         }
-        if let Some(tab) = self.active_tab() {
+        if let Some(tab) = window.active_tab() {
             // Zoomed, the active pane stands alone; its splits wait in the tree.
             contents.push(if tab.zoomed {
-                self.pane_tree_view(&PaneTree::Leaf(tab.active))
+                self.pane_tree_view(window, &PaneTree::Leaf(tab.active))
             } else {
-                self.pane_tree_view(&tab.tree)
+                self.pane_tree_view(window, &tab.tree)
             });
         }
-        if let Some(pane) = self.active_pane() {
+        if let Some(pane) = self.pane_in(key) {
             let mut bar = vec![
                 status_text(pane.hovered_link.as_ref().map_or(pane.status.as_str(), |link| link.target.as_ref())),
                 spacer().into(),
             ];
-            if let Some(tab) = self.active_tab().filter(|tab| tab.zoomed) {
+            if let Some(tab) = window.active_tab().filter(|tab| tab.zoomed) {
                 let count = tab.tree.leaves().len();
                 bar.push(status_text(format!("Zoomed: 1 of {count} panes")));
             }
-            if (self.font_size - self.settings.font_size).abs() > f64::EPSILON {
-                bar.push(status_text(format!("{} pt", self.font_size)));
+            if (window.font_size - self.settings.font_size).abs() > f64::EPSILON {
+                bar.push(status_text(format!("{} pt", window.font_size)));
             }
             bar.push(status_text(format!("{} × {}", pane.snapshot.cols, pane.snapshot.rows)));
             contents.push(status_bar(bar));
         }
         aizome_kit::widgets::layout::column(contents).width(Fill).height(Fill).into()
     }
+    /// The front window's.
     fn menus(&self) -> MenuBar<Msg> {
-        let selected = self.find_state.copy.is_some()
+        let front = self.front();
+        let selected = front.is_some_and(|w| w.find_state.copy.is_some())
             || self.active_pane().is_some_and(|t| t.selection.is_some_and(|s| !s.is_empty()));
         let selection = self.active_pane().is_some_and(|t| t.selection.is_some_and(|s| !s.is_empty()));
         let tab = self.active_tab();
         let split = tab.is_some_and(|tab| matches!(tab.tree, PaneTree::Split { .. }));
         let zoomed = tab.is_some_and(|tab| tab.zoomed);
-        let several = self.tabs.len() > 1;
+        let tabs = front.map_or(&[][..], |w| &w.tabs);
+        let several = tabs.len() > 1;
         let role = |label: &str, role: MenuRole| MenuItem::<Msg>::role_item(label, role);
         // The app menu as standard, with Settings… and the file behind it.
         let app = Menu::new("Hotaru")
@@ -2409,9 +2628,7 @@ impl Program for Hotaru {
             .item(self.keyed(role("Hide Hotaru", MenuRole::Hide), Some(Shortcut::cmd('H'))))
             .item(self.keyed(role("Hide Others", MenuRole::HideOthers), Some(Shortcut::cmd('H').alt())))
             .separator()
-            .item(
-                self.keyed(MenuItem::new("Quit Hotaru", Msg::QuitAll).role(MenuRole::Quit), Some(Shortcut::cmd('Q'))),
-            );
+            .item(self.keyed(role("Quit Hotaru", MenuRole::Quit), Some(Shortcut::cmd('Q'))));
         let file = Menu::new("File")
             .item(self.item("New Window", Action::NewWindow))
             .item(self.item("New Tab", Action::NewTab))
@@ -2430,7 +2647,7 @@ impl Program for Hotaru {
             copy_format = copy_format
                 .item(MenuItem::new(name, Msg::SetCopyFormat(format)).checked(self.settings.copy_format == format));
         }
-        let searching = self.find && !self.search.is_empty();
+        let searching = front.is_some_and(|w| w.find && !w.search.is_empty());
         let edit = Menu::new("Edit")
             .item(self.item("Copy", Action::Copy).enabled(selected))
             .item(self.item("Paste", Action::Paste))
@@ -2464,7 +2681,7 @@ impl Program for Hotaru {
             .item(self.item("Smaller Text", Action::SmallerText))
             .item(
                 self.item("Actual Size", Action::ActualSize)
-                    .enabled((self.font_size - self.settings.font_size).abs() > f64::EPSILON),
+                    .enabled(front.is_some_and(|w| (w.font_size - self.settings.font_size).abs() > f64::EPSILON)),
             )
             .submenu(weight)
             .submenu(appearance)
@@ -2494,8 +2711,8 @@ impl Program for Hotaru {
             .submenu(select_pane)
             .separator();
         // The tabs by their titles, ❖1 to ❖8 and the last ❖9, as in Ghostty.
-        let last = self.tabs.len().saturating_sub(1);
-        for (index, tab) in self.tabs.iter().enumerate() {
+        let last = tabs.len().saturating_sub(1);
+        for (index, tab) in tabs.iter().enumerate() {
             let title =
                 self.panes.iter().find(|pane| pane.id == tab.active).map_or("Shell", |pane| pane.title.as_str());
             let title: String = title.chars().take(48).collect();
@@ -2504,9 +2721,10 @@ impl Program for Hotaru {
                 None if index == last => self.bindings.shortcut(Action::LastTab),
                 None => None,
             };
-            window = window.item(
-                self.keyed(MenuItem::new(title, Msg::SelectTab(tab.id)).checked(tab.id == self.active), shortcut),
-            );
+            window = window.item(self.keyed(
+                MenuItem::new(title, Msg::SelectTab(tab.id)).checked(front.is_some_and(|w| tab.id == w.active)),
+                shortcut,
+            ));
         }
         let window = window
             .separator()
@@ -2526,18 +2744,22 @@ impl Program for Hotaru {
             self.recording = None;
             return true;
         }
-        self.cancel_automatic();
-        self.automatic_worker = None;
-        self.resolver_worker = None;
-        self.close_settings(cx);
-        if self.settings_pending {
-            self.closing = true;
-            return false;
+        if self.settings_window.is_some() && self.settings_parent == window {
+            self.close_settings(cx);
         }
-        self.clipboard_request();
-        self.clipboard = None;
-        self.tabs.clear();
-        self.panes.clear();
+        // The other windows go on; with the last, the app.
+        if self.windows.iter().all(|w| w.key == window) {
+            self.cancel_automatic();
+            self.automatic_worker = None;
+            self.resolver_worker = None;
+            if self.settings_pending {
+                self.closing = true;
+                return false;
+            }
+            self.clipboard_request();
+            self.clipboard = None;
+        }
+        self.forget_window(window, cx);
         true
     }
 }

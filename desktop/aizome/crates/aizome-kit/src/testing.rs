@@ -398,6 +398,11 @@ impl Platform for TestPlatform {
         self.activation_requests.len() as u64
     }
 
+    /// The test's compositor has always answered everything.
+    fn roundtrip(&mut self) -> Option<u64> {
+        None
+    }
+
     fn show_window(&mut self, id: WinId, shown: bool) {
         if !shown {
             self.hidden.insert(id);
@@ -1055,6 +1060,14 @@ impl<P: Program> Harness<P> {
         self.platform.lock_asked = false;
         self.platform.locked = false;
         self.rt.session_lock_finished(&mut self.platform);
+    }
+
+    /// The compositor names `window`, as Aizome does when it maps
+    /// ([`Cx::window_identifier`](crate::Cx::window_identifier)).
+    pub fn identify(&mut self, window: crate::program::WindowKey, identifier: &str) {
+        if let Some(win) = self.rt.core.window_of(window) {
+            self.rt.core.identified(win, identifier.to_owned(), &mut self.platform);
+        }
     }
 
     /// An activation token arriving for request `n` (counting from 1).

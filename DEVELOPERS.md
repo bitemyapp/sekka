@@ -1569,30 +1569,50 @@ the keys. Neither runs a browser or the installed session.
 
 ### Hotaru windows
 
-Hotaru runs one process per terminal window. Ordinary launches and
-`--new-window` create a window; `--window PID` hands the requested command
-and directory to that process as a new tab. Super+Return takes the most
-recent main Hotaru window on the current Desk from the compositor's model
-(including hidden, minimised and sticky windows), and adds `--window` only
-when Hotaru is the selected default terminal. Other terminals keep their
-desktop-entry command. Settings is a transient of its terminal window and
-cannot become a handoff target by itself.
+One Hotaru process runs every terminal window on a Wayland display. A launch
+while it runs hands its command, directory and activation token to it through
+a private socket scoped to the display
+(`$XDG_RUNTIME_DIR/aizome-app.hotaru.<display>.sock`, behind a lock that tells
+startup from a crash's leftover socket) and exits. Hotaru acknowledges each
+request; a failure after sending is reported rather than risking running the
+command twice. Ordinary launches and `--new-window` open a window; `--window
+ID` opens a tab in the window the compositor knows by ID, or a window if none
+of Hotaru's is (any longer) called that.
 
-Handoff sockets are private, per-process and scoped to the Wayland display.
-The sender verifies the peer PID and UID, bounds the request and waits for
-acknowledgement. A missing or disconnected target opens a new window;
-failure after sending is reported rather than risking duplicate command
-execution. Quit requests each window's normal close path, off the UI thread.
-Settings writes are atomic per process; open windows reload saved changes
-on request. This does not add confirmation for closing live terminal sessions.
+Super+Return takes the most recent main Hotaru window on the current Desk from
+the compositor's model (including hidden, minimised and sticky windows) and
+names it by its ext-foreign-toplevel-list identifier: the compositor's name
+for exactly that window, never given to another. Hotaru learns its own
+windows' identifiers through Aizome's toplevel identity protocol
+(`aizome-toplevel-identity-v1.xml`, in Sukumo's
+`sidestep-engine/src/backend/`), which Sukumo asks for on every toplevel and
+`aizome-comp-core`'s `protocols/toplevel_identity.rs` answers. A
+client-chosen name wouldn't do: an xdg-toplevel tag names a kind of window
+and outlives it, and an xdg-foreign handle is a client's to share. The
+compositor says the identifier before it starts the command naming it, and a
+connection's events arrive in order, so an identifier Hotaru hasn't heard yet
+is heard after one roundtrip (`Cx::after_roundtrip`); still unknown, the window
+has gone. Super+Return also gives the command an activation token, which
+Hotaru spends on the window it opens the tab in, so a hidden, minimised or
+covered window comes forward through ordinary xdg-activation. The flags are
+added only when Hotaru is the selected default terminal; another terminal
+keeps its desktop-entry command and gets the token. Settings is a dialog of its
+terminal window and never stands in for one.
 
-The routing and transport unit tests run with the Hotaru and compositor
+Within the process each window has its own tabs, zoom and search. Panes know
+their window; settings, workers and fonts are shared, so Settings reaches
+every window at once. Messages from a window's own controls name it, and menu
+commands go to the front (key) window. Quit closes every window through its
+normal close path. A crash ends every window's sessions, as it did when
+Hotaru had one window.
+
+The routing, handoff and window tests run with the Hotaru, kit and compositor
 logic tests. To check actual shortcuts, windows, tabs, Desk folders, moving
 windows, window-local closing and application-wide Quit in a private headless
 session, build from the root development shell and run:
 
 ```sh
-nix develop .#aizome -c cargo build --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-hotaru -p aizome-comp -p aizome-ipc --bins
+nix develop .#aizome -c cargo build --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-hotaru -p aizome-comp -p aizome-comp-logic -p aizome-ipc --bins
 nix develop .#aizome -c nix shell --inputs-from . nixpkgs#python3 -c python3 desktop/aizome/apps/hotaru/tests/wayland/windows.py \
   --hotaru desktop/aizome/target/debug/aizome-hotaru \
   --compositor desktop/aizome/target/debug/aizome \

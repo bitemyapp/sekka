@@ -189,6 +189,16 @@ impl<Msg: Clone + Send + 'static> Cx<'_, Msg> {
         }
     }
 
+    /// The compositor's name for `window`: the identifier another process
+    /// is given for exactly this window (ext-foreign-toplevel-list's, by
+    /// which Aizome's ❖Return names a terminal's window to the command it
+    /// starts), once the compositor has said it. None before the window
+    /// maps, and under compositors that don't say (only Aizome does).
+    pub fn window_identifier(&self, window: WindowKey) -> Option<String> {
+        let win = self.core.window_of(window)?;
+        self.core.wins.get(&win)?.identifier.clone()
+    }
+
     /// The open windows (not sheets), oldest first.
     pub fn windows(&self) -> Vec<WindowKey> {
         self.core.app_windows().into_iter().map(|(_, k)| k).collect()
@@ -244,6 +254,19 @@ impl<Msg: Clone + Send + 'static> Cx<'_, Msg> {
     /// Send `msg` to `update` once this one returns.
     pub fn send(&mut self, msg: Msg) {
         self.core.queue.push_back(Box::new(msg));
+    }
+
+    /// Send `msg` once the compositor has answered everything asked of it
+    /// so far (a Wayland roundtrip): what it said before then, such as a
+    /// window's [identifier](Cx::window_identifier), is known by the time
+    /// `msg` arrives.
+    pub fn after_roundtrip(&mut self, msg: Msg) {
+        match self.platform.roundtrip() {
+            Some(id) => {
+                self.core.roundtrips.insert(id, Box::new(msg));
+            }
+            None => self.core.queue.push_back(Box::new(msg)),
+        }
     }
 
     // The desktop.
@@ -360,6 +383,15 @@ impl<Msg: Clone + Send + 'static> Cx<'_, Msg> {
             }
         }
         self.core.pending_focus.push((None, name.into()));
+    }
+
+    /// Focus the element given `.id(name)` in `window` (now, or once its
+    /// view has it): for a name several windows' views use.
+    pub fn focus_in(&mut self, window: WindowKey, name: &str) {
+        let Some(win) = self.core.window_of(window) else { return };
+        if !self.core.focus_name(win, name, self.platform) {
+            self.core.pending_focus.push((Some(win), name.into()));
+        }
     }
 
     pub fn theme(&self) -> &Theme {

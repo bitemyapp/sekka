@@ -203,7 +203,7 @@ mod tests {
         let captured = ContentSnapshot::from((*h.program().active_pane().unwrap().snapshot).clone());
         let results = Arc::new(search::find(captured, b"Hotaru", Default::default(), &AtomicBool::new(false)).unwrap());
         assert_eq!(results.matches.len(), 2);
-        let app = h.program_mut();
+        let app = h.program_mut().front_mut().unwrap();
         app.find = true;
         app.search = "Hotaru".into();
         app.find_state.pane = Some(id);
@@ -213,13 +213,13 @@ mod tests {
         app.find_state.caches[0] = Some(Cache { results: results.clone(), selected: Some(1) });
         app.find_state.copy = Some((results.clone(), 1));
         h.send(Msg::SearchReady(42, id, 6, Cache { results, selected: Some(0) }));
-        assert_eq!(h.program().find_state.caches[0].as_ref().unwrap().selected, Some(1));
-        assert_eq!(h.program().find_state.copy.as_ref().unwrap().1, 1);
-        assert!(!h.program().find_state.in_flight);
-        assert!(h.program().find_state.dirty);
+        assert_eq!(h.program().front().unwrap().find_state.caches[0].as_ref().unwrap().selected, Some(1));
+        assert_eq!(h.program().front().unwrap().find_state.copy.as_ref().unwrap().1, 1);
+        assert!(!h.program().front().unwrap().find_state.in_flight);
+        assert!(h.program().front().unwrap().find_state.dirty);
         h.send(Msg::Select(id, crate::terminal_view::Selection::default()));
-        assert!(h.program().find_state.copy.is_none());
-        assert!(h.program().find_state.caches[0].as_ref().unwrap().selected.is_none());
+        assert!(h.program().front().unwrap().find_state.copy.is_none());
+        assert!(h.program().front().unwrap().find_state.caches[0].as_ref().unwrap().selected.is_none());
     }
 
     #[test]
@@ -234,6 +234,7 @@ mod tests {
         terminal.feed(b"X");
         let app = h.program_mut();
         app.panes[0].snapshot = Arc::new(terminal.snapshot());
+        let app = app.front_mut().unwrap();
         app.find = true;
         app.search = "a".into();
         app.find_state.pane = Some(id);
@@ -242,17 +243,17 @@ mod tests {
         app.find_state.caches[0] = Some(Cache { results: results.clone(), selected: Some(0) });
         app.find_state.copy = Some((results.clone(), 0));
         h.send(Msg::SearchReady(42, id, 0, Cache { results, selected: Some(0) }));
-        assert!(h.program().find_state.copy.is_none());
+        assert!(h.program().front().unwrap().find_state.copy.is_none());
         // The logical index belongs to the result, while copy requires a
         // currently valid display anchor. The next worker refresh decides
         // whether the selected match itself survived.
-        assert_eq!(h.program().find_state.caches[0].as_ref().unwrap().selected, Some(0));
-        h.program_mut().find_state.in_flight = true;
-        let cancellation = h.program().find_state.cancel.clone();
+        assert_eq!(h.program().front().unwrap().find_state.caches[0].as_ref().unwrap().selected, Some(0));
+        h.program_mut().front_mut().unwrap().find_state.in_flight = true;
+        let cancellation = h.program().front().unwrap().find_state.cancel.clone();
         h.send(Msg::Failed(id, "injected worker failure".into()));
-        assert!(!h.program().find_state.in_flight);
+        assert!(!h.program().front().unwrap().find_state.in_flight);
         assert!(cancellation.load(Ordering::Acquire));
-        assert!(h.program().find_state.error.is_some());
+        assert!(h.program().front().unwrap().find_state.error.is_some());
     }
 
     #[test]
@@ -273,6 +274,7 @@ mod tests {
         assert!(results.resolve_match(selected, &old_frame.position, old_frame.generation).is_none());
         let app = h.program_mut();
         app.panes[0].snapshot = old_frame;
+        let app = app.front_mut().unwrap();
         app.find = true;
         app.search = "Mark".into();
         app.find_state.pane = Some(id);
@@ -281,12 +283,12 @@ mod tests {
         app.find_state.caches[0] = Some(Cache { results: old.clone(), selected: Some(0) });
         app.find_state.copy = Some((old, 0));
         h.send(Msg::SearchReady(42, id, 0, Cache { results, selected: Some(selected) }));
-        assert_eq!(h.program().find_state.caches[0].as_ref().unwrap().selected, Some(selected));
-        assert!(h.program().find_state.copy.is_none());
+        assert_eq!(h.program().front().unwrap().find_state.caches[0].as_ref().unwrap().selected, Some(selected));
+        assert!(h.program().front().unwrap().find_state.copy.is_none());
         h.send(Msg::Frame(id, Arc::new(terminal.snapshot())));
-        assert_eq!(h.program().find_state.copy.as_ref().unwrap().1, selected);
+        assert_eq!(h.program().front().unwrap().find_state.copy.as_ref().unwrap().1, selected);
         h.send(Msg::Select(id, crate::terminal_view::Selection::default()));
         h.send(Msg::Frame(id, Arc::new(terminal.snapshot())));
-        assert!(h.program().find_state.copy.is_none());
+        assert!(h.program().front().unwrap().find_state.copy.is_none());
     }
 }

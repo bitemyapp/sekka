@@ -146,6 +146,9 @@ pub(crate) struct Win {
     focus_modal: Option<NodeId>,
     pub focus_visible: bool,
     pub has_keyboard: bool,
+    /// The compositor's name for the window while it shows (only Aizome
+    /// says it): see [`Cx::window_identifier`](crate::Cx::window_identifier).
+    pub identifier: Option<String>,
     pub pointer: Option<Point>,
     pub dirty: bool,
     pub cursor: Cursor,
@@ -207,6 +210,7 @@ impl Win {
             focus_modal: None,
             focus_visible: false,
             has_keyboard: false,
+            identifier: None,
             pointer: None,
             dirty: true,
             cursor: Cursor::Default,
@@ -288,6 +292,9 @@ pub(crate) struct Core {
     pub keys: HashMap<WindowKey, KeyTarget>,
     pub queue: VecDeque<AnyMsg>,
     pub timers: HashMap<u64, TimerUse>,
+    /// Messages waiting on the compositor's answer to a roundtrip, by
+    /// the platform's id for it ([`Cx::after_roundtrip`](crate::Cx::after_roundtrip)).
+    pub roundtrips: HashMap<u64, AnyMsg>,
     pub menubar: Vec<MenuSpec>,
     pub info: AppInfo,
     /// No Aizome shell: draw the menu bar along each window's top.
@@ -322,6 +329,7 @@ impl Core {
             keys: HashMap::new(),
             queue: VecDeque::new(),
             timers: HashMap::new(),
+            roundtrips: HashMap::new(),
             menubar: Vec::new(),
             info,
             in_window_menus: std::env::var_os("AIZOME_SHELL_SOCKET").is_none(),
@@ -485,6 +493,10 @@ impl Core {
         }
         let Some(w) = self.wins.get_mut(&win) else { return };
         w.hidden = !shown;
+        if !shown {
+            // Shown again, it's named anew.
+            w.identifier = None;
+        }
         w.ahead = None;
         w.refresh = false;
         // Shown, it's viewed again at once: what changed since it was drawn
@@ -2300,6 +2312,17 @@ impl Core {
         self.stats.event(started.elapsed());
     }
 
+    /// The compositor named window `win`: kept for the program
+    /// ([`Cx::window_identifier`](crate::Cx::window_identifier)), and drawn
+    /// again where tests read what windows show, to say it there too.
+    pub fn identified(&mut self, win: WinId, identifier: String, platform: &mut dyn Platform) {
+        let Some(w) = self.wins.get_mut(&win) else { return };
+        w.identifier = Some(identifier);
+        if crate::inspect::enabled() {
+            platform.invalidate_all(win);
+        }
+    }
+
     pub fn window_focus(&mut self, win: WinId, on: bool, platform: &mut dyn Platform) {
         let Some(w) = self.wins.get_mut(&win) else { return };
         w.has_keyboard = on;
@@ -2844,6 +2867,7 @@ impl Core {
             "size": [w.size.width, w.size.height],
             "menu_strip": self.menu_strip_of(win),
             "has_keyboard": w.has_keyboard,
+            "identifier": w.identifier,
             "pointer": w.pointer.map(|p| [p.x, p.y]),
         });
         crate::inspect::painted(&self.info.app_id, win, header, &w.tree, w.focused);
