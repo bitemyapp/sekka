@@ -346,6 +346,7 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
         match msg {
             ToRender::CreateWindow { window, mut width, mut height, popup, sheet_of, layer, lock, .. } => {
                 let keyboard = layer.as_ref().map(|p| p.keyboard);
+                let toplevel = popup.is_none() && sheet_of.is_none() && layer.is_none() && lock.is_none();
                 if let Some(placement) = &layer {
                     note(Seen::Layer { window, placement: placement.clone(), asked: (width, height) });
                 }
@@ -375,6 +376,10 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
                     sheet_of,
                 });
                 windows.insert(window, win);
+                // A toplevel is named as Aizome names one, as it maps.
+                if toplevel {
+                    send(FromRender::Identifier { window, identifier: format!("null-toplevel-{window}") });
+                }
                 // Popups and sheets are parts of other windows: the
                 // keyboard stays where it is; a layer surface takes it only
                 // if it takes it exclusively.
@@ -435,6 +440,7 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
                 send(FromRender::SessionLocked);
             }
             ToRender::UnlockSession => note(Seen::SessionLock { locked: false }),
+            ToRender::Roundtrip { token } => send(FromRender::Roundtrip { token }),
             ToRender::RequestActivationToken { request, .. } => {
                 send(FromRender::ActivationToken { request, token: Some(format!("null-activation-{request}")) });
             }

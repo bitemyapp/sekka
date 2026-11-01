@@ -927,6 +927,12 @@ pub enum ToRender {
         request: u64,
         app_id: Option<String>,
     },
+    /// Answer `FromRender::Roundtrip` under `token` once the compositor has
+    /// answered everything asked of it before (a `wl_display.sync`): what
+    /// it said until then reaches the main thread first.
+    Roundtrip {
+        token: u64,
+    },
     /// Show video `video` of the window there (see `crate::video`), or
     /// none: in order with the paints, so it moves with the next present.
     PlaceVideo {
@@ -1174,6 +1180,19 @@ pub enum FromRender {
     ActivationToken {
         request: u64,
         token: Option<String>,
+    },
+    /// The compositor's identifier for the toplevel `window`, as
+    /// ext-foreign-toplevel-list names it to other processes: sent each
+    /// time it's mapped, by compositors with Aizome's toplevel identity
+    /// protocol (`backend::identity`).
+    Identifier {
+        window: WindowId,
+        identifier: String,
+    },
+    /// The compositor has answered what was asked of it before
+    /// `ToRender::Roundtrip` `token`.
+    Roundtrip {
+        token: u64,
     },
     /// The session lock is over without the program unlocking it: the
     /// compositor refused it (another program holds one, or it has no

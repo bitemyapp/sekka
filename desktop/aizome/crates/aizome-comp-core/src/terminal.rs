@@ -18,7 +18,7 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use aizome_apps::{AppIndex, DESKTOP_NAME, Locale, TerminalMove, XdgDirs, parse_desktops};
+use aizome_apps::{AppIndex, DESKTOP_NAME, DefaultRole, Locale, TerminalMove, XdgDirs, parse_desktops};
 use tracing::{info, warn};
 
 use crate::session::spawn_with;
@@ -47,11 +47,26 @@ fn with_index<T>(f: impl FnOnce(&mut AppIndex) -> T) -> T {
 }
 
 /// Start the default terminal, in `cwd` (else the home folder), with the
-/// session's environment.
-pub fn spawn(az: &Aizome, cwd: Option<PathBuf>) {
-    let env = crate::session::session_env(az);
+/// session's environment and an activation token for the key press, so
+/// the window it opens or shows may take the keyboard. For Hotaru,
+/// `hotaru` names the window to open a tab in (its identifier, as
+/// `protocols::toplevel_identity` tells Hotaru it), else it opens a window.
+pub fn spawn(az: &mut Aizome, cwd: Option<PathBuf>, hotaru: Option<String>) {
+    let mut env = crate::session::session_env(az);
+    env.push(("XDG_ACTIVATION_TOKEN".into(), launch_token(az)));
     let started = std::thread::Builder::new().name("aizome-terminal".into()).spawn(move || {
-        let Some(argv) = with_index(|index| index.terminal_exec()) else {
+        let Some(argv) = with_index(|index| {
+            let mut argv = index.terminal_exec()?;
+            // Only Hotaru understands the per-window handoff. Keep another
+            // chosen terminal's Exec and arguments exactly as they were.
+            if index.role_default(DefaultRole::Terminal).as_deref() == Some("org.aizome.Hotaru.desktop") {
+                match hotaru {
+                    Some(window) => argv.extend(["--window".into(), window]),
+                    None => argv.push("--new-window".into()),
+                }
+            }
+            Some(argv)
+        }) else {
             warn!("❖Return: no terminal is installed");
             return;
         };
@@ -62,6 +77,26 @@ pub fn spawn(az: &Aizome, cwd: Option<PathBuf>) {
     if let Err(e) = started {
         warn!("❖Return: {e}");
     }
+}
+
+/// An activation token for a program started at the user's word: valid,
+/// as a token a client asks for during a click or key press is
+/// (`handlers.rs`), so the program's window may take the keyboard. Tokens
+/// count for 30 seconds there: older ones made here (no client's) that
+/// nobody used are dropped first.
+fn launch_token(az: &mut Aizome) -> String {
+    let expired = |data: &smithay::wayland::xdg_activation::XdgActivationTokenData| {
+        data.client_id.is_none() && data.timestamp.elapsed().as_secs() >= 30
+    };
+    let stale: Vec<String> =
+        az.xdg_activation.tokens().filter(|(_, data)| expired(data)).map(|(token, _)| token.to_string()).collect();
+    az.xdg_activation.retain_tokens(|_, data| !expired(data));
+    for token in stale {
+        az.valid_tokens.remove(&token);
+    }
+    let token = az.xdg_activation.create_external_token(None).0.to_string();
+    az.valid_tokens.insert(token.clone());
+    token
 }
 
 /// Move the default terminal from foot to Hotaru, unless that was done

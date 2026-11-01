@@ -98,7 +98,20 @@ for 100 milliseconds. This retains owned snapshots and avoids doing compression
 on the UI thread. Allocator behavior can retain freed pages, so this is not a
 claim of reduced resident memory.
 
-## Panes and settings
+## Windows, panes and settings
+
+Each window has its own tabs and panes, so different Desks can hold different
+work. On Aizome, ❖Return opens a tab in the most recently used Hotaru window
+on the current Desk, or opens a new window there if none exists. A hidden or
+minimised window is restored; a sticky window counts on every Desk. The new
+session starts in the Desk's folder.
+
+File → New Window (❖N or ⌃⇧N), the desktop's New Window command, and running
+`hotaru` open another window. File → New Tab stays in the current window.
+Closing a window closes only its sessions; Quit Hotaru (❖Q) closes every
+window. Closing still does not ask for confirmation, including when programs
+are running. One Hotaru runs all of a desktop's windows, sharing their
+settings and fonts, so a crash would end every window's sessions.
 
 File → Split Right/Down divides the focused pane equally and focuses the new
 session. Native dividers resize the panes. Close Pane removes just that session
@@ -137,9 +150,10 @@ copy format, copy on select, what programs may do with the clipboard, the file
 itself), Text
 (family, size, weight, ligatures, fallback), Appearance (Follow Desktop, Night,
 Day or High Contrast, each shown as a small terminal in its colours; cursor
-shape and blinking) and Shortcuts. Changes reach every pane as they're made and
-are saved at once. The family list holds the monospaced families installed,
-found on a worker the first time Settings opens. ❖W in Settings closes Settings.
+shape and blinking) and Shortcuts. Changes reach every pane, in every window, as
+they're made and are saved at once. The family list holds the monospaced
+families installed, found on a worker the first time Settings opens. ❖W in
+Settings closes Settings.
 
 Shortcuts lists every command with its keys. The pencil opens a command's row:
 the next key pressed with ❖, ⌃ or ⌥ (or a function key, or ⇧ with Page Up/Down,
@@ -152,8 +166,9 @@ Restore Defaults empties `[keybindings]`.
 
 Settings live at `$XDG_CONFIG_HOME/aizome/hotaru.toml`, falling back to
 `~/.config/aizome/hotaru.toml`. `--config-file FILE` selects the configuration for
-the initial application instance. Settings and the View menu's weight and
-appearance choices save through a bounded background worker. ❖+ and ❖− zoom
+the initial application instance; a later launch opens its window there, with
+its settings. Settings and the View menu's weight and appearance choices save
+through a bounded background worker. ❖+ and ❖− zoom
 the window's text for now, as Ghostty and foot do; Actual Size (❖0) returns to
 the size Settings keeps. Hotaru → Reload Configuration (⇧❖,) applies file
 edits; invalid settings leave the current configuration intact. A managed
@@ -214,6 +229,7 @@ panes is ⇧❖ and the arrows.
 | Action | Default keys |
 |---|---|
 | `settings`, `reload-config` | ❖, · ⇧❖, |
+| `new-window` | ❖N, ⌃⇧N |
 | `new-tab`, `split-right`, `split-down` | ❖T, ⌃⇧T · ❖D, ⌃⇧O · ⇧❖D, ⌃⇧E |
 | `close-pane`, `close-tab`, `zoom-pane` | ❖W, ⌃⇧W · ⌥❖W · ⇧❖↩ |
 | `previous-tab`, `next-tab` | ⇧❖[, ❖PgUp, ⌃⇧Tab, ⌃PgUp · ⇧❖], ❖PgDn, ⌃Tab, ⌃PgDn |

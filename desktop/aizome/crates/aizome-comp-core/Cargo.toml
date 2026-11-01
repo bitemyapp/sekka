@@ -25,6 +25,9 @@ sidestep-ui.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 smithay.workspace = true
+# Aizome's own Wayland protocol (protocols/toplevel_identity.rs), generated
+# from the XML Sukumo's client side is generated from.
+wayland-scanner = "0.31"
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "ansi", "tracing-log", "std"] }
 png = "0.18"

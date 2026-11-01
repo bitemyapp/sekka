@@ -862,3 +862,29 @@ fn a_bar_coming_to_a_display_fits_windows_rather_than_scaling_them() {
     assert_eq!(m.get(a).unwrap().restore, Some(r));
     assert_eq!(m.get(a).unwrap().frame, Some(usable(LAPTOP)));
 }
+
+#[test]
+fn terminal_launch_uses_the_last_main_window_on_this_desk() {
+    let mut m = model();
+    let (desk1, desk2) = (m.desks()[0].id, m.desks()[1].id);
+    let app = "org.aizome.Hotaru";
+    let first = add(&mut m, app);
+    let second = add(&mut m, app);
+    assert_eq!(m.app_window_on_current_desk(app).unwrap().id, second);
+    m.focus(Some(first));
+    assert_eq!(m.app_window_on_current_desk(app).unwrap().id, first);
+    let settings = m.insert(app, "Hotaru Settings", Some(101), Rect::default(), Some(first));
+    m.focus(Some(settings));
+    assert_eq!(m.app_window_on_current_desk(app).unwrap().id, first, "Settings is not a terminal");
+    m.move_to_desk(first, desk2);
+    assert_eq!(m.app_window_on_current_desk(app).unwrap().id, second);
+    m.minimise(second);
+    m.hide_app(app);
+    assert_eq!(m.app_window_on_current_desk(app).unwrap().id, second, "hidden/minimised windows are reusable");
+    m.switch_desk(desk2);
+    assert_eq!(m.app_window_on_current_desk(app).unwrap().id, first, "follow a moved window");
+    m.move_to_desk(first, desk1);
+    assert!(m.app_window_on_current_desk(app).is_none(), "never reuse another Desk's window");
+    m.get_mut(second).unwrap().sticky = true;
+    assert_eq!(m.app_window_on_current_desk(app).unwrap().id, second, "sticky windows belong to every Desk");
+}

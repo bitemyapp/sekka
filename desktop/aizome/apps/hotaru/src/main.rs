@@ -2,6 +2,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use aizome_hotaru::app::Hotaru;
+use aizome_hotaru::instance::{Claim, Launch, Target};
 use hotaru_io::PtyCommand;
 
 fn main() {
@@ -15,18 +16,33 @@ fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
     let mut command = PtyCommand::shell();
     let mut settings_path = aizome_hotaru::settings::default_path();
+    let mut window: Option<String> = None;
+    let mut new_window = false;
     let mut args = std::env::args_os().skip(1);
     while let Some(arg) = args.next() {
         match arg.to_str() {
             Some("--help" | "-h") => {
                 println!(
-                    "Hotaru 蛍 — Aizome's terminal\n\nUsage: aizome-hotaru [--config-file FILE] [--working-directory DIR] [-- COMMAND [ARG…]]"
+                    "Hotaru 蛍 — Aizome's terminal\n\nUsage: aizome-hotaru [--new-window | --window ID] [--config-file FILE] [--working-directory DIR] [-- COMMAND [ARG…]]\n\nOne Hotaru runs every window on a display: a launch while it runs opens a\nwindow there. --window ID opens a tab in the window the compositor names ID\n(as Aizome's ❖Return does), or a window if none is called that."
                 );
                 return;
             }
             Some("--version" | "-V") => {
                 println!("Hotaru {}", env!("CARGO_PKG_VERSION"));
                 return;
+            }
+            Some("--new-window") => new_window = true,
+            Some("--window") => {
+                // ext-foreign-toplevel-list's identifiers are at most 32
+                // printable ASCII bytes.
+                window = args
+                    .next()
+                    .and_then(|value| value.into_string().ok())
+                    .filter(|id| (1..=32).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_graphic()));
+                if window.is_none() {
+                    eprintln!("--window requires the window's identifier");
+                    std::process::exit(2);
+                }
             }
             Some("--working-directory") => {
                 let Some(dir) = args.next() else {
@@ -58,17 +74,30 @@ fn main() {
             }
         }
     }
+    if new_window && window.is_some() {
+        eprintln!("--new-window and --window cannot be used together");
+        std::process::exit(2);
+    }
     if let Some(path) = command.cwd.as_mut() {
         *path = std::path::absolute(&*path).unwrap_or_else(|_| path.clone());
     } else {
         command.cwd = std::env::current_dir().ok();
     }
-    let instance = match aizome_hotaru::instance::claim(&command) {
-        Ok(aizome_hotaru::instance::Claim::Forwarded) => return,
-        Ok(aizome_hotaru::instance::Claim::First(instance)) => Some(instance),
-        Err(e) => {
-            log::warn!("Could not join Hotaru's running instance: {e}");
+    let launch = Launch {
+        target: window.map_or(Target::NewWindow, Target::Window),
+        command: command.clone(),
+        activation_token: std::env::var("XDG_ACTIVATION_TOKEN").ok().filter(|token| !token.is_empty()),
+    };
+    let instance = match aizome_hotaru::instance::claim(&launch) {
+        Claim::First(instance) => Some(instance),
+        Claim::Forwarded => return,
+        Claim::Alone(error) => {
+            log::warn!("Could not join Hotaru's running instance: {error}");
             None
+        }
+        Claim::Unanswered(error) => {
+            eprintln!("Hotaru took the command but didn't answer: {error}");
+            std::process::exit(1);
         }
     };
     let mut app = Hotaru::new(command);

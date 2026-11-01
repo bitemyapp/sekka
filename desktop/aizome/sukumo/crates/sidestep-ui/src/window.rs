@@ -380,6 +380,9 @@ pub(crate) struct WindowData {
     /// The pointer is over the content.
     pub pointer_inside: bool,
     pub outputs: Vec<u32>,
+    /// The compositor's identifier for the current showing, once it
+    /// has said it ([`Window::identifier`]).
+    pub identifier: Option<String>,
     pub cursor: Cursor,
     pub text_input: (bool, Option<Rect>),
     /// Where the content takes pointer input, and where it's opaque, as
@@ -477,6 +480,7 @@ impl WindowData {
             focused: false,
             pointer_inside: false,
             outputs: Vec::new(),
+            identifier: None,
             cursor: Cursor::Default,
             text_input: (false, None),
             input_region: None,
@@ -590,6 +594,8 @@ impl WindowData {
         self.title_dirty = true;
         self.titlebar = 0;
         self.outputs.clear();
+        // A toplevel mapped anew is named anew.
+        self.identifier = None;
     }
 
     /// Take the window off the screen.
@@ -734,6 +740,14 @@ impl Window<'_> {
     /// window is on, in the order it entered them.
     pub fn outputs(&self) -> &[u32] {
         &self.data.outputs
+    }
+
+    /// The compositor's identifier for the window while it shows: the
+    /// name another process is given for exactly this window
+    /// (ext-foreign-toplevel-list's). Only Aizome says it, as the window
+    /// maps; a window shown again is named again.
+    pub fn identifier(&self) -> Option<&str> {
+        self.data.identifier.as_deref()
     }
 
     pub fn set_title(&mut self, title: impl Into<String>) {

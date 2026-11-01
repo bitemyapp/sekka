@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use aizome_hotaru::app::{Hotaru, Msg};
+use aizome_hotaru::instance::{Launch, Target};
 use aizome_hotaru::panes::{Axis, Direction};
 use aizome_kit::testing::Harness;
 use aizome_kit::theme::{Appearance, ThemeChoice};
@@ -215,14 +216,17 @@ fn internal_panes_inherit_reported_cwd_but_external_launch_keeps_its_directory()
     let mut h = Harness::new(Hotaru::preview());
     let first = h.program().active_pane().unwrap().id;
     h.send(Msg::WorkingDirectory(first, "/tmp/reported-directory".into()));
-    h.send(Msg::Split(Axis::Right));
+    h.send(Msg::Split(h.window(), Axis::Right));
     assert_eq!(
         h.program().active_pane().unwrap().working_directory.as_deref(),
         Some(std::path::Path::new("/tmp/reported-directory"))
     );
     let mut explicit = PtyCommand::shell();
     explicit.cwd = Some("/tmp/requested-directory".into());
-    h.send(Msg::Launch(explicit));
+    h.identify(h.window(), "the-first-window");
+    let launch =
+        Launch { target: Target::Window("the-first-window".into()), command: explicit, activation_token: None };
+    h.send(Msg::Launched(launch, false));
     assert_eq!(
         h.program().active_pane().unwrap().working_directory.as_deref(),
         Some(std::path::Path::new("/tmp/requested-directory"))
@@ -261,26 +265,26 @@ fn find_navigates_owned_history_and_wraps_in_both_directions() {
     ];
     let mut h = Harness::new(keeping(command));
     assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().ended));
-    h.send(Msg::Find);
-    h.send(Msg::Search("needle".into()));
+    h.send(Msg::Find(h.window()));
+    h.send(Msg::Search(h.window(), "needle".into()));
     settle_search(&mut h, "1 of 120");
     assert!(h.settle(Duration::from_secs(3), |app| app.search_selected().is_some()));
     let latest = h.program().search_selected().unwrap();
-    h.send(Msg::SearchStep(false));
+    h.send(Msg::SearchStep(h.window(), false));
     settle_search(&mut h, "2 of 120");
     assert!(h.settle(Duration::from_secs(3), |app| {
         app.search_selected().is_some_and(|found| found.start.row < latest.start.row)
     }));
-    h.send(Msg::SearchStep(true));
+    h.send(Msg::SearchStep(h.window(), true));
     settle_search(&mut h, "1 of 120");
-    h.send(Msg::SearchStep(true));
+    h.send(Msg::SearchStep(h.window(), true));
     settle_search(&mut h, "120 of 120");
     assert!(h.settle(Duration::from_secs(3), |app| {
         let pane = app.active_pane().unwrap();
         app.search_selected().is_some_and(|found| found.start.row < pane.snapshot.position.history_rows)
             && pane.snapshot.plain_text().contains("Needle 000")
     }));
-    h.send(Msg::Copy);
+    h.send(Msg::Copy(h.window()));
     let until = Instant::now() + Duration::from_secs(3);
     while h.platform.clipboard.as_deref() != Some("Needle") && Instant::now() < until {
         h.advance(Duration::from_millis(1));
@@ -295,10 +299,10 @@ fn find_navigates_owned_history_and_wraps_in_both_directions() {
         h.program().search_selected()
     );
     let complete = (0..120).map(|n| format!("Needle {n:03}")).collect::<Vec<_>>().join("\n");
-    h.send(Msg::Search(complete.clone()));
+    h.send(Msg::Search(h.window(), complete.clone()));
     settle_search(&mut h, "1 of 1");
     h.platform.clipboard = None;
-    h.send(Msg::Copy);
+    h.send(Msg::Copy(h.window()));
     let until = Instant::now() + Duration::from_secs(3);
     while h.platform.clipboard.as_deref() != Some(complete.as_str()) && Instant::now() < until {
         h.advance(Duration::from_millis(1));
@@ -318,13 +322,13 @@ fn find_soft_wrap_wide_text_and_copy_use_complete_owned_match() {
     let mut terminal = Terminal::new(6, 4, 20);
     terminal.feed("ab界cDE".as_bytes());
     h.send(Msg::Frame(id, Arc::new(terminal.snapshot())));
-    h.send(Msg::Find);
-    h.send(Msg::Search("界cDE".into()));
+    h.send(Msg::Find(h.window()));
+    h.send(Msg::Search(h.window(), "界cDE".into()));
     settle_search(&mut h, "1 of 1");
     assert!(h.settle(Duration::from_secs(3), |app| app.search_selected().is_some()));
     let found = h.program().search_selected().unwrap();
     assert_eq!((found.start.row, found.start.col, found.end.row, found.end.col), (0, 2, 1, 1));
-    h.send(Msg::Copy);
+    h.send(Msg::Copy(h.window()));
     let until = Instant::now() + Duration::from_secs(3);
     while h.platform.clipboard.as_deref() != Some("界cDE") && Instant::now() < until {
         h.advance(Duration::from_millis(1));
@@ -344,18 +348,18 @@ fn obsolete_searches_and_closed_panes_cannot_replace_the_active_query() {
     let mut old = Terminal::new(4000, 128, 0);
     old.feed(&vec![b'a'; 4000 * 128]);
     h.send(Msg::Frame(first, Arc::new(old.snapshot())));
-    h.send(Msg::Find);
-    h.send(Msg::Search("aa".into()));
-    h.send(Msg::NewTab);
-    h.send(Msg::Search("little light".into()));
+    h.send(Msg::Find(h.window()));
+    h.send(Msg::Search(h.window(), "aa".into()));
+    h.send(Msg::NewTab(h.window()));
+    h.send(Msg::Search(h.window(), "little light".into()));
     settle_search(&mut h, "1 of 1");
     let second = h.program().active_pane().unwrap().id;
     h.send(Msg::SelectTab(first));
-    h.send(Msg::CloseTab);
+    h.send(Msg::CloseTab(h.window()));
     h.send(Msg::SearchSnapshot(u64::MAX, first, Arc::new(old.content_snapshot())));
     settle_search(&mut h, "1 of 1");
     assert_eq!(h.program().active_pane().unwrap().id, second);
-    assert_eq!(h.program().search, "little light");
+    assert_eq!(h.program().front().unwrap().search, "little light");
 }
 
 #[test]
@@ -376,15 +380,15 @@ fn find_retains_historical_anchors_through_append_and_recovers_after_alternate_a
     // can arrive after the output, and the resize they bring reflows, which
     // rightly drops a selected match's anchor.
     settle_grid(&mut h);
-    h.send(Msg::Find);
-    h.send(Msg::Search("Mark".into()));
+    h.send(Msg::Find(h.window()));
+    h.send(Msg::Search(h.window(), "Mark".into()));
     for _ in 0..20 {
         h.advance(Duration::from_millis(150));
         h.settle(Duration::from_millis(20), |app| app.search_selected().is_some());
     }
     assert!(h.program().search_selected().is_some());
     for _ in 0..30 {
-        h.send(Msg::SearchStep(false));
+        h.send(Msg::SearchStep(h.window(), false));
     }
     assert!(advancing(&mut h, |app| {
         app.search_selected()
@@ -404,12 +408,12 @@ fn find_retains_historical_anchors_through_append_and_recovers_after_alternate_a
     assert!(advancing(&mut h, |app| app.search_selected().is_some()), "the match survives appended output");
     let pane = h.program().active_pane().unwrap();
     assert_eq!(pane.snapshot.position.origin + h.program().search_selected().unwrap().start.row as u64, absolute);
-    h.send(Msg::Search("Mark".into()));
+    h.send(Msg::Search(h.window(), "Mark".into()));
     for _ in 0..10 {
         h.advance(Duration::from_millis(150));
         h.settle(Duration::from_millis(20), |_| false);
     }
-    h.send(Msg::SearchStep(true));
+    h.send(Msg::SearchStep(h.window(), true));
     assert!(advancing(&mut h, |app| app.search_selected().is_some_and(|found| found.start.row == 0)));
     h.send(Msg::Input(id, b"prune\n".to_vec()));
     assert!(h.settle(Duration::from_secs(3), |app| {
@@ -420,7 +424,7 @@ fn find_retains_historical_anchors_through_append_and_recovers_after_alternate_a
         h.settle(Duration::from_millis(20), |_| false);
     }
     assert!(h.program().search_selected().is_none(), "an evicted match cannot remain selected");
-    h.send(Msg::SearchStep(false));
+    h.send(Msg::SearchStep(h.window(), false));
     assert!(advancing(&mut h, |app| app.search_selected().is_some()));
     h.send(Msg::Input(id, b"alternate\n".to_vec()));
     assert!(h.settle(Duration::from_secs(3), |app| app.active_pane().unwrap().snapshot.modes.alternate_screen));
@@ -440,7 +444,7 @@ fn find_retains_historical_anchors_through_append_and_recovers_after_alternate_a
         h.advance(Duration::from_millis(150));
         h.settle(Duration::from_millis(20), |_| false);
     }
-    h.send(Msg::SearchStep(false));
+    h.send(Msg::SearchStep(h.window(), false));
     assert!(advancing(&mut h, |app| app.search_selected().is_some()));
 }
 
@@ -557,7 +561,7 @@ fn native_settings_changes_are_saved_and_invalid_reload_preserves_current_config
     let mut app = Hotaru::preview();
     app.settings_path = Some(path.clone());
     let mut h = Harness::new(app);
-    assert_eq!(h.program().font_size, aizome_hotaru::settings::DEFAULT_FONT_SIZE);
+    assert_eq!(h.program().front().unwrap().font_size, aizome_hotaru::settings::DEFAULT_FONT_SIZE);
     h.send(Msg::SetFontSize(17.0));
     assert!(
         h.settle(Duration::from_secs(3), |_| Settings::load(&path).is_ok_and(|settings| settings.font_size == 17.0))
@@ -565,16 +569,16 @@ fn native_settings_changes_are_saved_and_invalid_reload_preserves_current_config
     // Zooming is for now: ❖0 comes back to the size Settings keeps.
     h.send(Msg::Action(Action::LargerText));
     h.send(Msg::Action(Action::LargerText));
-    assert_eq!(h.program().font_size, 19.0);
+    assert_eq!(h.program().front().unwrap().font_size, 19.0);
     h.send(Msg::Action(Action::ActualSize));
-    assert_eq!(h.program().font_size, 17.0);
+    assert_eq!(h.program().front().unwrap().font_size, 17.0);
     h.send(Msg::Action(Action::SmallerText));
     h.advance(Duration::from_millis(50));
     assert_eq!(Settings::load(&path).unwrap().font_size, 17.0);
     std::fs::write(&path, "font_size = 999999").unwrap();
     h.send(Msg::Action(Action::ReloadConfig));
     assert!(h.settle(Duration::from_secs(3), |app| app.active_pane().unwrap().status.contains("not loaded")));
-    assert_eq!(h.program().font_size, 16.0);
+    assert_eq!(h.program().front().unwrap().font_size, 16.0);
     drop(h);
     std::fs::remove_dir_all(directory).unwrap();
 }
@@ -637,7 +641,7 @@ fn settings_window_opens_once_changes_everything_live_and_saves() {
     let pane = h.program().active_pane().unwrap();
     assert_eq!(pane.snapshot.cursor.shape, hotaru_core::CursorShape::Underline);
     assert!(!pane.snapshot.cursor.blinking);
-    assert_eq!(h.program().font_size, 15.5);
+    assert_eq!(h.program().front().unwrap().font_size, 15.5);
     // ❖W in Settings closes Settings, not the pane behind it.
     h.focus_window(settings, true);
     h.command(settings, 'w');
@@ -674,7 +678,7 @@ fn shortcuts_are_recorded_refused_removed_and_restored() {
     assert_eq!(h.program().recording, Some(Action::ClearScreen));
     // The menus give way while a shortcut is typed: ❖T isn't New Tab now.
     h.key(settings, Key::Character("t".into()), Modifiers::SUPER | Modifiers::ALT);
-    assert_eq!(h.program().tabs.len(), 1);
+    assert_eq!(h.program().front().unwrap().tabs.len(), 1);
     // The row stays open for taking the old one away, until Done or Escape.
     assert_eq!(h.program().recording, Some(Action::ClearScreen));
     h.advance(Duration::from_millis(1));
@@ -712,22 +716,22 @@ fn tabs_are_reached_by_number_and_in_turn_and_panes_zoom() {
     use aizome_hotaru::settings::Action;
     let mut h = Harness::new(Hotaru::preview());
     let window = h.window();
-    let first = h.program().active;
-    h.send(Msg::NewTab);
-    h.send(Msg::NewTab);
-    let third = h.program().active;
+    let first = h.program().front().unwrap().active;
+    h.send(Msg::NewTab(h.window()));
+    h.send(Msg::NewTab(h.window()));
+    let third = h.program().front().unwrap().active;
     h.command(window, '1');
-    assert_eq!(h.program().active, first);
+    assert_eq!(h.program().front().unwrap().active, first);
     h.command(window, '9');
-    assert_eq!(h.program().active, third);
+    assert_eq!(h.program().front().unwrap().active, third);
     h.send(Msg::Action(Action::NextTab));
-    assert_eq!(h.program().active, first, "Next Tab goes round");
+    assert_eq!(h.program().front().unwrap().active, first, "Next Tab goes round");
     h.send(Msg::Action(Action::PreviousTab));
-    assert_eq!(h.program().active, third);
+    assert_eq!(h.program().front().unwrap().active, third);
     // A lone pane has nothing to zoom over.
     h.send(Msg::Action(Action::ZoomPane));
     assert!(!h.program().active_tab().unwrap().zoomed);
-    h.send(Msg::Split(Axis::Right));
+    h.send(Msg::Split(h.window(), Axis::Right));
     let right = h.program().active_pane().unwrap().id;
     h.send(Msg::Action(Action::ZoomPane));
     assert!(h.program().active_tab().unwrap().zoomed);
@@ -735,7 +739,7 @@ fn tabs_are_reached_by_number_and_in_turn_and_panes_zoom() {
     assert_eq!(h.focused_name(window), Some(format!("terminal-{right}")));
     assert!(h.texts(window).iter().any(|text| text.contains("Zoomed")));
     // Going to the other pane brings the split back.
-    h.send(Msg::MoveFocus(Direction::Previous));
+    h.send(Msg::MoveFocus(h.window(), Direction::Previous));
     assert!(!h.program().active_tab().unwrap().zoomed);
     h.advance(Duration::from_millis(1));
     assert_ne!(h.program().active_pane().unwrap().id, right);
@@ -744,32 +748,32 @@ fn tabs_are_reached_by_number_and_in_turn_and_panes_zoom() {
 #[test]
 fn splits_have_independent_snapshots_and_close_only_the_focused_pane() {
     let mut h = Harness::new(Hotaru::preview());
-    let tab = h.program().active;
+    let tab = h.program().front().unwrap().active;
     let first = h.program().active_pane().unwrap().id;
-    h.send(Msg::Split(Axis::Right));
+    h.send(Msg::Split(h.window(), Axis::Right));
     let second = h.program().active_pane().unwrap().id;
-    h.send(Msg::Split(Axis::Down));
+    h.send(Msg::Split(h.window(), Axis::Down));
     let third = h.program().active_pane().unwrap().id;
-    assert_eq!(h.program().tabs.len(), 1);
+    assert_eq!(h.program().front().unwrap().tabs.len(), 1);
     assert_eq!(h.program().panes.len(), 3);
-    assert_eq!(h.program().active, tab);
+    assert_eq!(h.program().front().unwrap().active, tab);
     let mut terminal = Terminal::new(30, 10, 0);
     terminal.feed(b"only the second pane");
     h.send(Msg::Frame(second, Arc::new(terminal.snapshot())));
     h.send(Msg::FocusPane(second));
     assert!(h.program().active_pane().unwrap().snapshot.plain_text().contains("only the second pane"));
-    h.send(Msg::ClosePane);
+    h.send(Msg::ClosePane(h.window()));
     h.advance(Duration::from_millis(1));
     assert_eq!(h.program().active_pane().unwrap().id, first);
     assert_eq!(h.focused_name(h.window()), Some(format!("terminal-{first}")));
     assert_eq!(h.program().panes.len(), 2);
-    h.send(Msg::MoveFocus(Direction::Next));
+    h.send(Msg::MoveFocus(h.window(), Direction::Next));
     assert_eq!(h.program().active_pane().unwrap().id, third);
-    h.send(Msg::NewTab);
+    h.send(Msg::NewTab(h.window()));
     h.send(Msg::SelectTab(tab));
-    h.send(Msg::CloseTab);
+    h.send(Msg::CloseTab(h.window()));
     h.advance(Duration::from_millis(1));
-    assert_eq!(h.program().tabs.len(), 1);
+    assert_eq!(h.program().front().unwrap().tabs.len(), 1);
     assert_eq!(h.program().panes.len(), 1);
     assert_eq!(h.focused_name(h.window()), Some(format!("terminal-{}", h.program().active_pane().unwrap().id)));
 }
@@ -785,7 +789,7 @@ fn split_divider_grab_band_resizes_before_terminal_selection() {
             let mut h = Harness::new(Hotaru::preview());
             let w = h.window();
             let first = h.program().active_pane().unwrap().id;
-            h.send(Msg::Split(axis));
+            h.send(Msg::Split(h.window(), axis));
             h.advance(Duration::ZERO);
             let rect = h.find_id(w, &format!("terminal-{first}")).unwrap();
             let (at, delta, cursor) = match axis {
@@ -826,7 +830,7 @@ fn dragging_outside_split_grab_band_still_selects_terminal_text() {
             let mut h = Harness::new(Hotaru::preview());
             let w = h.window();
             let first = h.program().active_pane().unwrap().id;
-            h.send(Msg::Split(axis));
+            h.send(Msg::Split(h.window(), axis));
             let rect = h.find_id(w, &format!("terminal-{first}")).unwrap();
             let at = match axis {
                 Axis::Right => Point::new(rect.x1 + 0.5 + side * 6.0, rect.center().y),
@@ -851,9 +855,9 @@ fn nested_split_dividers_keep_their_local_grab_areas() {
     let mut h = Harness::new(Hotaru::preview());
     let w = h.window();
     let first = h.program().active_pane().unwrap().id;
-    h.send(Msg::Split(Axis::Right));
+    h.send(Msg::Split(h.window(), Axis::Right));
     let second = h.program().active_pane().unwrap().id;
-    h.send(Msg::Split(Axis::Down));
+    h.send(Msg::Split(h.window(), Axis::Down));
     let rect = h.find_id(w, &format!("terminal-{second}")).unwrap();
     let at = Point::new(rect.center().x, rect.y1 - 2.0);
     h.press(w, at, PointerButton::Left, 1);
@@ -863,7 +867,7 @@ fn nested_split_dividers_keep_their_local_grab_areas() {
     assert!(h.program().panes.iter().all(|p| p.selection.is_none()));
     // Collapsing the inner split must leave the outer divider draggable.
     h.send(Msg::FocusPane(second));
-    h.send(Msg::ClosePane);
+    h.send(Msg::ClosePane(h.window()));
     let rect = h.find_id(w, &format!("terminal-{first}")).unwrap();
     let at = Point::new(rect.x1 + 3.0, rect.center().y);
     h.press(w, at, PointerButton::Left, 1);
@@ -876,18 +880,18 @@ fn nested_split_dividers_keep_their_local_grab_areas() {
 #[test]
 fn tabs_keep_independent_terminal_snapshots() {
     let mut h = Harness::new(Hotaru::preview());
-    let first = h.program().active;
-    h.send(Msg::NewTab);
-    let second = h.program().active;
+    let first = h.program().front().unwrap().active;
+    h.send(Msg::NewTab(h.window()));
+    let second = h.program().front().unwrap().active;
     assert_ne!(first, second);
     let mut terminal = Terminal::new(80, 24, 100);
     terminal.feed(b"independent tab");
     h.send(Msg::Frame(second, Arc::new(terminal.snapshot())));
     h.send(Msg::SelectTab(first));
     assert!(!h.program().active_pane().unwrap().snapshot.plain_text().contains("independent tab"));
-    h.send(Msg::CloseTab);
-    assert_eq!(h.program().tabs.len(), 1);
-    assert_eq!(h.program().active, second);
+    h.send(Msg::CloseTab(h.window()));
+    assert_eq!(h.program().front().unwrap().tabs.len(), 1);
+    assert_eq!(h.program().front().unwrap().active, second);
     assert!(h.program().active_pane().unwrap().snapshot.plain_text().contains("independent tab"));
 }
 
@@ -917,17 +921,17 @@ fn night_and_day_views_render_with_native_chrome() {
     assert_ne!(day.default_foreground, night.default_foreground);
     assert_ne!(day.default_background, night.default_background);
     assert_eq!(h.render_rgba(window, 1.0).2.len(), pixels.len());
-    h.send(Msg::Find);
-    assert!(h.program().find);
-    h.send(Msg::CloseFind);
-    assert!(!h.program().find);
+    h.send(Msg::Find(h.window()));
+    assert!(h.program().front().unwrap().find);
+    h.send(Msg::CloseFind(h.window()));
+    assert!(!h.program().front().unwrap().find);
 }
 
 #[test]
 fn explicit_terminal_background_is_rendered_even_when_it_matches_the_builtin_default() {
     let mut h = Harness::new(Hotaru::preview());
     h.advance(Duration::from_millis(1));
-    let id = h.program().active;
+    let id = h.program().front().unwrap().active;
     let terminal = Terminal::new(80, 24, 0);
     h.send(Msg::Frame(id, Arc::new(terminal.snapshot())));
     settle_frame(&mut h);
@@ -974,10 +978,10 @@ fn pty_worker_publishes_final_output_before_exit() {
     let mut h = Harness::new(keeping(command));
     assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().is_some_and(|t| t.ended)));
     assert!(h.program().active_pane().unwrap().snapshot.plain_text().contains("PTY ready"));
-    h.send(Msg::CopyAll);
+    h.send(Msg::CopyAll(h.window()));
     let until = Instant::now() + Duration::from_secs(2);
     while h.platform.clipboard.is_none() && Instant::now() < until {
-        h.send(Msg::FontSize(0));
+        h.send(Msg::FontSize(h.window(), 0));
         std::thread::sleep(Duration::from_millis(2));
     }
     assert!(h.platform.clipboard.as_ref().unwrap().contains("PTY ready"));
@@ -1115,17 +1119,17 @@ fn reply_flood_child() {
 #[test]
 fn large_copy_finishes_off_thread_and_stale_reply_is_ignored() {
     let mut h = Harness::new(Hotaru::preview());
-    let id = h.program().active;
+    let id = h.program().front().unwrap().active;
     let mut terminal = Terminal::new(4096, 320, 0);
     let bytes = vec![b'x'; 4096 * 300];
     terminal.feed(&bytes);
     h.send(Msg::Frame(id, Arc::new(terminal.snapshot())));
-    h.send(Msg::CopyScreen);
-    h.send(Msg::FontSize(1));
-    assert_eq!(h.program().font_size, aizome_hotaru::settings::DEFAULT_FONT_SIZE + 1.0);
+    h.send(Msg::CopyScreen(h.window()));
+    h.send(Msg::FontSize(h.window(), 1));
+    assert_eq!(h.program().front().unwrap().font_size, aizome_hotaru::settings::DEFAULT_FONT_SIZE + 1.0);
     let until = Instant::now() + Duration::from_secs(3);
     while h.platform.clipboard.is_none() && Instant::now() < until {
-        h.send(Msg::FontSize(0));
+        h.send(Msg::FontSize(h.window(), 0));
         std::thread::sleep(Duration::from_millis(2));
     }
     let text = h.platform.clipboard.as_ref().expect("worker published clipboard");
@@ -1144,12 +1148,12 @@ fn newer_copies_win_and_closed_panes_cannot_publish_results() {
     large.feed(&vec![b'x'; 4096 * 290]);
     h.send(Msg::Frame(first, Arc::new(large.snapshot())));
     for _ in 0..16 {
-        h.send(Msg::CopyScreen);
+        h.send(Msg::CopyScreen(h.window()));
     }
     let mut latest = Terminal::new(80, 24, 0);
     latest.feed(b"newest copy survives");
     h.send(Msg::Frame(first, Arc::new(latest.snapshot())));
-    h.send(Msg::CopyScreen);
+    h.send(Msg::CopyScreen(h.window()));
     let until = Instant::now() + Duration::from_secs(3);
     while h.platform.clipboard.as_deref().is_none_or(|text| !text.contains("newest copy survives"))
         && Instant::now() < until
@@ -1160,10 +1164,10 @@ fn newer_copies_win_and_closed_panes_cannot_publish_results() {
     assert!(h.platform.clipboard.as_deref().unwrap().contains("newest copy survives"));
     assert!(!h.platform.clipboard.as_deref().unwrap().contains("xxx"));
     let copied = h.platform.clipboard.clone();
-    h.send(Msg::NewTab);
+    h.send(Msg::NewTab(h.window()));
     h.send(Msg::SelectTab(first));
-    h.send(Msg::CopyScreen); // token18
-    h.send(Msg::CloseTab); // invalidates token18 and removes its pane
+    h.send(Msg::CopyScreen(h.window())); // token18
+    h.send(Msg::CloseTab(h.window())); // invalidates token18 and removes its pane
     h.send(Msg::CopyReady(18, first, aizome_kit::PreparedClipboardText::new("closed pane".into()).into()));
     for _ in 0..20 {
         h.advance(Duration::from_millis(1));
@@ -1178,7 +1182,7 @@ fn html_only_copy_has_no_stale_plain_text_fallback() {
     let mut h = Harness::new(Hotaru::preview());
     h.platform.clipboard = Some("old foreign text".into());
     h.send(Msg::SetCopyFormat(CopyFormat::Html));
-    h.send(Msg::CopyScreen);
+    h.send(Msg::CopyScreen(h.window()));
     let until = Instant::now() + Duration::from_secs(3);
     while h.platform.clipboard_data.is_none() && Instant::now() < until {
         h.advance(Duration::from_millis(1));
@@ -1216,7 +1220,7 @@ fn an_ended_shell_closes_its_pane_then_its_tab_then_the_window() {
     use aizome_hotaru::settings::Action;
     let mut h = Harness::new(Hotaru::new(shell("read line")));
     let first = h.program().active_pane().unwrap().id;
-    h.send(Msg::Split(Axis::Right));
+    h.send(Msg::Split(h.window(), Axis::Right));
     let second = h.program().active_pane().unwrap().id;
     h.send(Msg::Action(Action::NewTab));
     let third = h.program().active_pane().unwrap().id;
@@ -1224,14 +1228,14 @@ fn an_ended_shell_closes_its_pane_then_its_tab_then_the_window() {
     h.send(Msg::Input(first, b"\n".to_vec()));
     assert!(h.settle(Duration::from_secs(5), |app| app.panes.len() == 2));
     assert_eq!(h.program().active_pane().unwrap().id, third);
-    assert_eq!(h.program().tabs[0].tree.leaves(), [second]);
+    assert_eq!(h.program().front().unwrap().tabs[0].tree.leaves(), [second]);
     // The tab in front loses its last pane: the other comes forward.
     h.send(Msg::Input(third, b"\n".to_vec()));
-    assert!(h.settle(Duration::from_secs(5), |app| app.tabs.len() == 1));
+    assert!(h.settle(Duration::from_secs(5), |app| app.front().is_some_and(|w| w.tabs.len() == 1)));
     assert_eq!(h.program().active_pane().unwrap().id, second);
     // The last pane ends, and the window goes with it.
     h.send(Msg::Input(second, b"\n".to_vec()));
-    assert!(h.settle(Duration::from_secs(5), |app| app.tabs.is_empty()));
+    assert!(h.settle(Duration::from_secs(5), |app| app.windows.is_empty()));
     assert!(h.windows().is_empty());
 }
 
@@ -1251,7 +1255,7 @@ fn a_program_failing_as_it_starts_keeps_its_pane_until_a_key() {
     h.send(Msg::Key(id, Arc::new(shift)));
     assert_eq!(h.program().panes.len(), 1);
     h.send(Msg::Key(id, Arc::new(hotaru_core::input::KeyEvent::new(hotaru_core::input::Key::Character('q')))));
-    assert!(h.program().tabs.is_empty());
+    assert!(h.program().windows.is_empty());
     assert!(h.windows().is_empty());
 }
 
@@ -1561,7 +1565,7 @@ fn paste_events_list_the_clipboards_types_and_their_password_reads_once_without_
     h.platform.clipboard = Some("pasted".into());
     go(&mut h);
     assert!(h.settle(Duration::from_secs(5), |app| kitty_reply(app, 0).is_some()));
-    h.send(Msg::Paste);
+    h.send(Msg::Paste(h.window()));
     let event = kitty_answered(&mut h, 1);
     let types = "dGV4dC9wbGFpbjtjaGFyc2V0PXV0Zi04IFVURjhfU1RSSU5HIHRleHQvcGxhaW4gU1RSSU5HIFRFWFQK";
     let pw = event.strip_prefix(r"\x1b]5522;type=read:status=OK:pw=").unwrap();
@@ -1710,4 +1714,73 @@ fn a_right_click_opens_the_pane_menu_and_dropped_files_paste_as_quoted_paths() {
     assert!(h.settle(Duration::from_secs(5), |app| {
         app.active_pane().unwrap().snapshot.plain_text().contains("'/tmp/two words.txt' /etc/hosts")
     }));
+}
+
+fn tab_count(h: &Harness<Hotaru>, window: aizome_kit::WindowKey) -> usize {
+    h.program().window(window).map_or(0, |w| w.tabs.len())
+}
+
+#[test]
+fn new_window_has_tabs_of_its_own_and_messages_act_on_the_window_they_name() {
+    let mut h = Harness::new(Hotaru::preview());
+    let first = h.window();
+    h.send(Msg::Action(aizome_hotaru::settings::Action::NewWindow));
+    let windows = h.windows();
+    assert_eq!(windows.len(), 2, "one process, two windows");
+    let second = windows[1];
+    assert_eq!(h.program().front().unwrap().key, second, "commands go to the new window");
+    assert_eq!((tab_count(&h, first), tab_count(&h, second)), (1, 1));
+    // A message naming the first window acts there, though the second is in front.
+    h.send(Msg::NewTab(first));
+    assert_eq!((tab_count(&h, first), tab_count(&h, second)), (2, 1));
+    h.send(Msg::Split(second, Axis::Right));
+    let app = h.program();
+    assert_eq!(app.panes.iter().filter(|pane| pane.window == first).count(), 2);
+    assert_eq!(app.panes.iter().filter(|pane| pane.window == second).count(), 2);
+    // Each window finds in its own panes.
+    h.send(Msg::Find(first));
+    assert!(h.program().window(first).unwrap().find);
+    assert!(!h.program().window(second).unwrap().find);
+}
+
+#[test]
+fn a_launch_opens_a_tab_in_the_window_it_names_else_a_window_of_its_own() {
+    let mut h = Harness::new(Hotaru::preview());
+    let first = h.window();
+    h.send(Msg::Action(aizome_hotaru::settings::Action::NewWindow));
+    let second = h.windows()[1];
+    h.identify(first, "first-window");
+    h.identify(second, "second-window");
+    let launch = |target| Launch { target, command: PtyCommand::shell(), activation_token: Some("token".into()) };
+    h.send(Msg::Launched(launch(Target::Window("first-window".into())), false));
+    assert_eq!((tab_count(&h, first), tab_count(&h, second)), (2, 1));
+    assert_eq!(h.program().front().unwrap().key, first);
+    let activated = h.platform.activations.last().cloned().expect("the window came forward");
+    assert_eq!(activated.1.as_deref(), Some("token"), "with the launcher's token");
+    // No window of ours has that name (it closed since): a window of its own.
+    h.send(Msg::Launched(launch(Target::Window("closed-window".into())), false));
+    assert_eq!(h.windows().len(), 3);
+    assert_eq!((tab_count(&h, first), tab_count(&h, second)), (2, 1));
+    h.send(Msg::Launched(launch(Target::NewWindow), false));
+    assert_eq!(h.windows().len(), 4);
+}
+
+#[test]
+fn closing_a_window_leaves_the_others_and_settings_reach_every_window() {
+    let mut h = Harness::new(Hotaru::preview());
+    let first = h.window();
+    h.send(Msg::Action(aizome_hotaru::settings::Action::NewWindow));
+    let second = h.windows()[1];
+    let size = aizome_hotaru::settings::DEFAULT_FONT_SIZE;
+    h.send(Msg::FontSize(second, 2));
+    assert_eq!(h.program().window(first).unwrap().font_size, size, "zoom is the window's");
+    assert_eq!(h.program().window(second).unwrap().font_size, size + 2.0);
+    h.send(Msg::SetFontSize(15.0));
+    assert!(h.program().windows.iter().all(|w| w.font_size == 15.0), "Settings is every window's");
+    h.send(Msg::CloseTab(second));
+    assert_eq!(h.windows(), vec![first]);
+    assert!(h.program().panes.iter().all(|pane| pane.window == first));
+    assert_eq!(h.program().front().unwrap().key, first);
+    h.send(Msg::NewTab(first));
+    assert_eq!(tab_count(&h, first), 2);
 }

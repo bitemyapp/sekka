@@ -342,6 +342,14 @@ impl<P: Program> Runtime<P> {
         self.flush(platform);
     }
 
+    /// The compositor answered roundtrip `id`: the message waiting on it goes.
+    pub fn roundtrip_done(&mut self, id: u64, platform: &mut dyn Platform) {
+        if let Some(msg) = self.core.roundtrips.remove(&id) {
+            self.core.queue.push_back(msg);
+        }
+        self.flush(platform);
+    }
+
     pub fn activation_token(&mut self, request: u64, token: Option<String>, platform: &mut dyn Platform) {
         let mut cx = Cx { core: &mut self.core, platform, pool: &mut self.pool, _m: PhantomData };
         self.program.activation_token(crate::program::ActivationRequest(request), token, &mut cx);
@@ -734,6 +742,10 @@ impl Platform for SidestepPlatform<'_> {
         self.maps.next_activation
     }
 
+    fn roundtrip(&mut self) -> Option<u64> {
+        Some(self.sx.roundtrip())
+    }
+
     fn reserve_buffers(&mut self, bytes: usize) {
         self.sx.reserve_buffers(bytes);
     }
@@ -781,6 +793,7 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
             WindowEvent::Resized(size) => core.resized(win, size),
             WindowEvent::ScaleChanged(scale) => core.scale_changed(win, scale),
             WindowEvent::Focused(on) => core.window_focus(win, on, &mut p),
+            WindowEvent::Identified(identifier) => core.identified(win, identifier, &mut p),
             WindowEvent::Key(k) => core.key(win, k, &mut p),
             WindowEvent::ModifiersChanged(m) => core.mods = m,
             WindowEvent::PointerEntered(at) => {
@@ -882,6 +895,11 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
     fn session_lock_finished(&mut self, cx: &mut sidestep_ui::Cx) {
         let (rt, mut p) = self.split(cx);
         rt.session_lock_finished(&mut p);
+    }
+
+    fn roundtrip(&mut self, cx: &mut sidestep_ui::Cx, token: u64) {
+        let (rt, mut p) = self.split(cx);
+        rt.roundtrip_done(token, &mut p);
     }
 
     fn activation_token(

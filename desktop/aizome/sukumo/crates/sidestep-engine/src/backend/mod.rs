@@ -37,6 +37,7 @@ mod decor;
 mod dnd;
 mod drag_out;
 mod foreign;
+mod identity;
 mod keyboard;
 mod layer;
 mod lock;
@@ -293,6 +294,7 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
         viewporter,
         fractional,
         foreign: foreign::Foreign::new(&globals, &qh),
+        identities: identity::Identities::new(&globals, &qh),
         xdg,
         shm,
         pool,
@@ -362,6 +364,9 @@ pub struct State {
     fractional: Option<WpFractionalScaleManagerV1>,
     /// xdg-foreign v2, to keep windows over other programs' (see `foreign`).
     foreign: foreign::Foreign,
+    /// The compositor's identifiers for our toplevels, where it says them
+    /// (see `identity`).
+    identities: identity::Identities,
     xdg: XdgShell,
     shm: Shm,
     pool: SlotPool,
@@ -447,6 +452,8 @@ struct Frame {
     /// The content's size and its top in the frame, in points, as last
     /// placed.
     placed: Option<(u32, u32, u32)>,
+    /// Asks for the toplevel's identifier, while the window lasts.
+    _identity: Option<identity::Identity>,
 }
 
 impl Frame {
@@ -632,6 +639,9 @@ struct FrameTag {
     window: WindowId,
     seq: u64,
 }
+
+/// A `ToRender::Roundtrip`'s callback, by its token.
+struct Roundtrip(u64);
 
 struct RootBuffer {
     buffer: Buffer,
@@ -1042,6 +1052,9 @@ impl State {
                 }
             }
             ToRender::Request { window, request } => self.request(window, request),
+            ToRender::Roundtrip { token } => {
+                self.conn.display().sync(&self.qh, Roundtrip(token));
+            }
             ToRender::ActivateWithToken { window, token } => {
                 let window = sheet::toplevel_of(self, window);
                 if let (Some(activation), Some(win)) = (&self.activation, self.windows.get(&window)) {
@@ -1263,10 +1276,20 @@ impl State {
                 frame.set_input_region(Some(&self.empty_region()));
                 let viewport = self.viewporter.get().expect("viewporter").get_viewport(&frame, &self.qh, ());
                 self.roles.insert(frame.id(), Role::Frame(window));
+                // Asked before the first commit, so it comes as the window maps.
+                let identity = self.identities.watch(w.xdg_toplevel(), window, &self.qh);
                 w.commit();
                 let surface = content.clone();
                 (
-                    Shell::Toplevel(Frame { window: w, subsurface, content, viewport, pixel: None, placed: None }),
+                    Shell::Toplevel(Frame {
+                        window: w,
+                        subsurface,
+                        content,
+                        viewport,
+                        pixel: None,
+                        placed: None,
+                        _identity: identity,
+                    }),
                     surface,
                 )
             }
@@ -2373,6 +2396,23 @@ impl ProvidesRegistryState for State {
 impl AsMut<SimpleGlobal<WpViewporter, 1>> for State {
     fn as_mut(&mut self) -> &mut SimpleGlobal<WpViewporter, 1> {
         &mut self.viewporter
+    }
+}
+
+impl Dispatch<WlCallback, Roundtrip> for State {
+    fn event(
+        state: &mut State,
+        _: &WlCallback,
+        event: wl_callback::Event,
+        tag: &Roundtrip,
+        _: &Connection,
+        _: &QueueHandle<State>,
+    ) {
+        // Every event the compositor sent before this one has been
+        // handled, and what it said has gone to the main thread first.
+        if let wl_callback::Event::Done { .. } = event {
+            state.send(FromRender::Roundtrip { token: tag.0 });
+        }
     }
 }
 

@@ -366,6 +366,16 @@ impl Model {
         self.wins.get(&id).is_some_and(|w| w.sticky || w.desk == self.current)
     }
 
+    /// The last-used main window of an app on this Desk. Hidden and
+    /// minimised windows can be restored; dialogs never stand in for one.
+    pub fn app_window_on_current_desk(&self, app: &str) -> Option<&Win> {
+        self.mru
+            .iter()
+            .chain(self.stacking.iter().rev())
+            .filter_map(|id| self.wins.get(id))
+            .find(|w| w.app_id == app && w.parent.is_none() && self.on_current_desk(w.id))
+    }
+
     #[allow(dead_code)]
     pub fn on_desk(&self, id: WinId, desk: DeskId) -> bool {
         self.wins.get(&id).is_some_and(|w| w.sticky || w.desk == desk)

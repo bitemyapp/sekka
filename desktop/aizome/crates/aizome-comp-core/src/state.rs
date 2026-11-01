@@ -257,6 +257,9 @@ pub struct Aizome {
     /// What lets commits waiting on fifo barriers and times through.
     pub pacing: crate::pacing::Pacing,
     pub foreign_toplevel_list: ForeignToplevelListState,
+    /// Who asked for their toplevels' identifiers
+    /// (`protocols::toplevel_identity`).
+    pub toplevel_identities: crate::protocols::toplevel_identity::ToplevelIdentities,
     pub foreign_toplevel_mgmt: ForeignToplevelManagerState,
     pub screencopy: ScreencopyManagerState,
     pub output_management: OutputManagementState,
@@ -425,6 +428,7 @@ impl State {
         let content_type = ContentTypeState::new::<State>(&dh);
         let tablet = TabletManagerState::new::<State>(&dh);
         crate::protocols::toplevel_icon::create_global(&dh);
+        crate::protocols::toplevel_identity::create_global(&dh);
         let system_bell = smithay::wayland::xdg_system_bell::XdgSystemBellState::new::<State>(&dh);
         let alpha_modifier = AlphaModifierState::new::<State>(&dh);
         let fifo = FifoManagerState::new::<State>(&dh);
@@ -513,6 +517,7 @@ impl State {
             commit_timing,
             pacing: Default::default(),
             foreign_toplevel_list,
+            toplevel_identities: Default::default(),
             foreign_toplevel_mgmt,
             screencopy,
             output_management,

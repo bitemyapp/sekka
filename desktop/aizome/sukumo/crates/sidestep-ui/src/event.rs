@@ -22,6 +22,10 @@ pub enum WindowEvent {
     CloseRequested,
     /// The window got or lost the keyboard.
     Focused(bool),
+    /// The compositor named the window, as it shows: the identifier
+    /// another process is given for exactly this window
+    /// ([`Window::identifier`](crate::Window::identifier)). Only Aizome does.
+    Identified(String),
     Key(KeyEvent),
     /// The modifier keys held changed.
     ModifiersChanged(Modifiers),

@@ -83,6 +83,7 @@ pub enum Access {
 pub enum Action {
     Ignore,
     Settings,
+    NewWindow,
     NewTab,
     ClosePane,
     CloseTab,
@@ -151,8 +152,9 @@ impl Action {
         use Action::*;
         [
             (
-                "Tabs and panes",
+                "Windows, tabs and panes",
                 &[
+                    (NewWindow, "New Window"),
                     (NewTab, "New Tab"),
                     (SplitRight, "Split Right"),
                     (SplitDown, "Split Down"),
@@ -634,6 +636,7 @@ fn defaults() -> Vec<(Shortcut, Action)> {
         ("super+,", Settings),
         ("super+shift+,", ReloadConfig),
         ("super+t", NewTab),
+        ("super+n", NewWindow),
         ("super+w", ClosePane),
         ("super+alt+w", CloseTab),
         ("super+d", SplitRight),
@@ -677,6 +680,7 @@ fn defaults() -> Vec<(Shortcut, Action)> {
         ("ctrl+shift+o", SplitRight),
         ("ctrl+shift+e", SplitDown),
         ("ctrl+shift+t", NewTab),
+        ("ctrl+shift+n", NewWindow),
         ("ctrl+shift+w", ClosePane),
         ("ctrl+alt+left", FocusLeft),
         ("ctrl+alt+right", FocusRight),
