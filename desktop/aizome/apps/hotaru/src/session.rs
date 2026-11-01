@@ -34,6 +34,8 @@ pub enum Command {
     ResizePixels { cols: usize, rows: usize, width: u16, height: u16 },
     Scroll(i32),
     CopyAll(u64),
+    // Capture all content for a selection that goes past the screen.
+    Capture(u64),
     Search(SearchControl),
     Colors(Arc<TerminalColors>),
     // The cursor programs get until they ask for another, and whether it blinks.
@@ -599,6 +601,9 @@ fn run(
                 }
                 Ok(Command::CopyAll(token)) => {
                     tx.send(Msg::CopySnapshot(token, id, Arc::new(terminal.content_snapshot())));
+                }
+                Ok(Command::Capture(token)) => {
+                    tx.send(Msg::Captured(token, id, Arc::new(terminal.content_snapshot())));
                 }
                 Ok(Command::Clear) => {
                     // Control-L asks the shell to clear and draw its prompt.

@@ -18,6 +18,8 @@ const COPY_LIMIT: usize = 128 * 1024 * 1024;
 pub enum CopySource {
     Viewport { snapshot: Arc<Snapshot>, selection: Option<Selection> },
     Content(Arc<ContentSnapshot>),
+    // A selection that goes past the screen, in a capture of all content.
+    Selected { snapshot: Arc<ContentSnapshot>, start: (usize, usize), end: (usize, usize) },
     Search { results: Arc<hotaru_core::search::Results>, index: usize },
 }
 
@@ -73,6 +75,9 @@ pub(crate) fn prepare_copy(
     }
     let (snapshot, selection) = match source {
         CopySource::Content(snapshot) => (snapshot, None),
+        CopySource::Selected { snapshot, start, end } => {
+            (snapshot, Some(formatter::Selection { start, end, rectangle: false }))
+        }
         CopySource::Search { results, index } => {
             let found = results.matches.get(index)?;
             (
