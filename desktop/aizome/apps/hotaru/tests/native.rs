@@ -1708,6 +1708,37 @@ fn selecting_words_and_lines_fills_the_primary_selection_and_a_middle_click_past
     }));
 }
 
+/// Tatami's ❖C and ❖V press ⌃Insert and ⇧Insert in terminals.
+#[test]
+fn control_and_shift_insert_copy_and_paste_the_clipboard() {
+    use aizome_kit::Vec2;
+    use aizome_kit::sidestep_ui::{Modifiers, NamedKey, PointerButton};
+    let mut h = Harness::new(Hotaru::new(PtyCommand::new("cat")));
+    let id = h.program().active_pane().unwrap().id;
+    h.send(Msg::Input(id, b"hello world\n".to_vec()));
+    assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().snapshot.plain_text().contains("hello")));
+    // Select once the grid has its final size: the resize late fonts bring
+    // on a loaded machine drops the selection.
+    settle_grid(&mut h);
+    let win = h.window();
+    let metrics = h.program().active_pane().unwrap().font_metrics().unwrap();
+    let origin = h.find_id(win, &format!("terminal-{id}")).unwrap().origin() + Vec2::new(10., 10.);
+    let word = origin + Vec2::new(8.5 * metrics.cell_width(), metrics.cell_height() * 0.4);
+    h.press(win, word, PointerButton::Left, 2);
+    h.release(win, word, PointerButton::Left);
+    assert!(pump(&mut h, |h| h.platform.primary.as_deref() == Some("world")));
+    assert!(h.platform.clipboard.is_none());
+    assert!(h.program().active_pane().unwrap().selection.is_some(), "the selection holds");
+    h.named(win, NamedKey::Insert, Modifiers::CONTROL);
+    assert!(pump(&mut h, |h| h.platform.clipboard.as_deref() == Some("world")));
+    // ⇧Insert pastes the clipboard rather than the primary selection.
+    h.platform.clipboard = Some("from the clipboard".into());
+    h.named(win, NamedKey::Insert, Modifiers::SHIFT);
+    assert!(h.settle(Duration::from_secs(5), |app| {
+        app.active_pane().unwrap().snapshot.plain_text().contains("from the clipboard")
+    }));
+}
+
 #[test]
 fn a_right_click_opens_the_pane_menu_and_dropped_files_paste_as_quoted_paths() {
     use aizome_kit::sidestep_ui::PointerButton;

@@ -208,9 +208,9 @@ fn is_false(b: &bool) -> bool {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Shortcut {
     /// The key: a character (`"N"`, `","`) or a name (`"Enter"`, `"Tab"`,
-    /// `"Space"`, `"Escape"`, `"Backspace"`, `"Delete"`, `"Up"`, `"Down"`,
-    /// `"Left"`, `"Right"`, `"Home"`, `"End"`, `"PageUp"`, `"PageDown"`,
-    /// `"F1"`…).
+    /// `"Space"`, `"Escape"`, `"Backspace"`, `"Delete"`, `"Insert"`, `"Up"`,
+    /// `"Down"`, `"Left"`, `"Right"`, `"Home"`, `"End"`, `"PageUp"`,
+    /// `"PageDown"`, `"F1"`…).
     pub key: String,
     #[serde(default, skip_serializing_if = "is_false")]
     pub command: bool,

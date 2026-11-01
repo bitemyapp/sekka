@@ -180,6 +180,7 @@ fn shortcut(s: &Shortcut) -> proto::Shortcut {
         ShortcutKey::Escape => "Escape".into(),
         ShortcutKey::Backspace => "Backspace".into(),
         ShortcutKey::Delete => "Delete".into(),
+        ShortcutKey::Insert => "Insert".into(),
         ShortcutKey::Up => "Up".into(),
         ShortcutKey::Down => "Down".into(),
         ShortcutKey::Left => "Left".into(),

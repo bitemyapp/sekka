@@ -497,6 +497,7 @@ pub fn parse_shortcut(value: &str) -> Result<Shortcut, String> {
                 "escape" | "esc" => ShortcutKey::Escape,
                 "backspace" => ShortcutKey::Backspace,
                 "delete" => ShortcutKey::Delete,
+                "insert" => ShortcutKey::Insert,
                 "left" => ShortcutKey::Left,
                 "right" => ShortcutKey::Right,
                 "up" => ShortcutKey::Up,
@@ -537,6 +538,7 @@ pub fn format_shortcut(shortcut: Shortcut) -> String {
         ShortcutKey::Escape => out.push_str("escape"),
         ShortcutKey::Backspace => out.push_str("backspace"),
         ShortcutKey::Delete => out.push_str("delete"),
+        ShortcutKey::Insert => out.push_str("insert"),
         ShortcutKey::Up => out.push_str("up"),
         ShortcutKey::Down => out.push_str("down"),
         ShortcutKey::Left => out.push_str("left"),
@@ -573,6 +575,7 @@ pub fn shortcut_for(event: &KeyEvent) -> Option<Shortcut> {
             NamedKey::Escape => ShortcutKey::Escape,
             NamedKey::Backspace => ShortcutKey::Backspace,
             NamedKey::Delete => ShortcutKey::Delete,
+            NamedKey::Insert => ShortcutKey::Insert,
             NamedKey::ArrowUp => ShortcutKey::Up,
             NamedKey::ArrowDown => ShortcutKey::Down,
             NamedKey::ArrowLeft => ShortcutKey::Left,
@@ -673,6 +676,10 @@ fn defaults() -> Vec<(Shortcut, Action)> {
         // with foot's (Aizome's other terminal) for find and text size.
         ("ctrl+shift+c", Copy),
         ("ctrl+shift+v", Paste),
+        // The PC keyboard's copy and paste. Tatami's ❖C and ❖V send these to
+        // terminals, so that Ctrl+C stays an interrupt.
+        ("ctrl+insert", Copy),
+        ("shift+insert", Paste),
         ("ctrl+shift+f", Find),
         ("ctrl+shift+o", SplitRight),
         ("ctrl+shift+e", SplitDown),
@@ -951,6 +958,24 @@ mod tests {
         assert_eq!(bindings.action(&press(Key::Character("3".into()), Modifiers::SUPER)), Some(Action::SelectTab3));
         let capital = press(Key::Character("T".into()), Modifiers::SUPER | Modifiers::SHIFT);
         assert_eq!(shortcut_for(&capital).map(format_shortcut).as_deref(), Some("super+shift+t"));
+    }
+
+    #[test]
+    fn insert_copies_and_pastes_as_on_pc_keyboards() {
+        use aizome_kit::sidestep_ui::{Key, Modifiers, NamedKey};
+        let bindings = Bindings::new(&Settings::default());
+        let insert = |modifiers| press(Key::Named(NamedKey::Insert), modifiers);
+        assert_eq!(bindings.action(&insert(Modifiers::CONTROL)), Some(Action::Copy));
+        assert_eq!(bindings.action(&insert(Modifiers::SHIFT)), Some(Action::Paste));
+        // Insert alone still reaches the program.
+        assert_eq!(bindings.action(&insert(Modifiers::NONE)), None);
+        assert_eq!(shortcut_for(&insert(Modifiers::CONTROL)).map(format_shortcut).as_deref(), Some("ctrl+insert"));
+        // Menus keep showing ❖C and ❖V.
+        assert_eq!(bindings.shortcut(Action::Copy).map(format_shortcut).as_deref(), Some("super+c"));
+        assert_eq!(bindings.shortcut(Action::Paste).map(format_shortcut).as_deref(), Some("super+v"));
+        // Either can be given back to the program.
+        let settings = Settings::parse("[keybindings]\n'shift+insert' = 'ignore'").unwrap();
+        assert_eq!(Bindings::new(&settings).action(&insert(Modifiers::SHIFT)), Some(Action::Ignore));
     }
 
     #[test]

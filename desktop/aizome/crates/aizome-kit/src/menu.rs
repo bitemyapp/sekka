@@ -35,6 +35,7 @@ pub enum ShortcutKey {
     Escape,
     Backspace,
     Delete,
+    Insert,
     Up,
     Down,
     Left,
@@ -106,6 +107,7 @@ impl Shortcut {
             ShortcutKey::Escape => "⎋".into(),
             ShortcutKey::Backspace => "⌫".into(),
             ShortcutKey::Delete => "⌦".into(),
+            ShortcutKey::Insert => "Insert".into(),
             ShortcutKey::Up => "↑".into(),
             ShortcutKey::Down => "↓".into(),
             ShortcutKey::Left => "←".into(),
@@ -150,6 +152,7 @@ impl Shortcut {
                             | (NamedKey::Escape, ShortcutKey::Escape)
                             | (NamedKey::Backspace, ShortcutKey::Backspace)
                             | (NamedKey::Delete, ShortcutKey::Delete)
+                            | (NamedKey::Insert, ShortcutKey::Insert)
                             | (NamedKey::ArrowUp, ShortcutKey::Up)
                             | (NamedKey::ArrowDown, ShortcutKey::Down)
                             | (NamedKey::ArrowLeft, ShortcutKey::Left)

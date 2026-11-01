@@ -397,6 +397,7 @@ pub fn kit_shortcut(s: &proto::Shortcut) -> Option<aizome_kit::Shortcut> {
         "Escape" => K::Escape,
         "Backspace" => K::Backspace,
         "Delete" => K::Delete,
+        "Insert" => K::Insert,
         "Up" | "↑" => K::Up,
         "Down" | "↓" => K::Down,
         "Left" | "←" => K::Left,

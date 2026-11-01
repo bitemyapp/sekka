@@ -214,7 +214,9 @@ Keybindings accept Super, Ctrl, Alt and Shift modifiers plus a character, named
 navigation key or F1–F35; shifted punctuation is named by its unshifted key
 (`super+shift+[` is ⇧❖[, whatever the layout types). Aizome's Super shortcuts are
 the defaults; familiar Linux aliases (Ghostty's, GNOME Terminal's and those of
-Aizome's foot configuration) also work. Plain Control-C remains terminal input.
+Aizome's foot configuration) also work, and so do the PC keyboard's ⌃Insert and
+⇧Insert, which Tatami's ❖C and ❖V press in terminals. Plain Control-C remains
+terminal input.
 ⌥❖ and the arrows fill and split windows on Aizome's desktop, so moving between
 panes is ⇧❖ and the arrows.
 
@@ -227,7 +229,7 @@ panes is ⇧❖ and the arrows.
 | `select-tab-1` … `select-tab-8`, `last-tab` | ❖1 … ❖8 · ❖9 |
 | `previous-pane`, `next-pane` | ❖[ · ❖] |
 | `focus-left/right/up/down` | ⇧❖←→↑↓, ⌃⌥←→↑↓ |
-| `copy`, `paste`, `copy-screen`, `copy-all` | ❖C, ⌃⇧C · ❖V, ⌃⇧V · none · ⇧❖C |
+| `copy`, `paste`, `copy-screen`, `copy-all` | ❖C, ⌃⇧C, ⌃Insert · ❖V, ⌃⇧V, ⇧Insert · none · ⇧❖C |
 | `find`, `find-next`, `find-previous`, `find-selection` | ❖F, ⌃⇧F · ❖G · ⇧❖G · ❖E |
 | `clear-screen`, `reset-terminal` | ❖K · ⌥❖R |
 | `larger-text`, `smaller-text`, `actual-size` | ❖+, ❖=, ⌃+, ⌃= · ❖−, ⌃− · ❖0, ⌃0 |
