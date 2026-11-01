@@ -2772,6 +2772,17 @@ from the start, keeps the choice in `localStorage` (`sekka-theme`) and sets
 checkbox. That script is the only one, and the content security policy
 allows scripts from the site alone.
 
+The home page's video is the one thing from elsewhere, and only once it is
+played. Its frame first holds a page of the site's own, written into the
+frame's `srcdoc` (`Site::video`): a still from the video
+(`docs/images/sekka/hype-video.png`, frame 1284 of
+[sekka-aizome-hype](https://github.com/bitemyapp/sekka-aizome-hype)) and a
+play button, which is a link to YouTube's player at youtube-nocookie.com. The
+content security policy allows frames from there alone. The link sends the
+site's origin as its referrer, past the site's `no-referrer`: YouTube's
+embedded player won't play without one. To show another video, change
+`VIDEO` in `site/src/main.rs` and put its still in place of `hype-video.png`.
+
 The stylesheet, images, logos, fonts and licence texts are published under
 names that include a hash of their bytes (`images/yukimi.<hash>.png`), and
 `_headers` lets browsers and Cloudflare keep exactly those files for a year.

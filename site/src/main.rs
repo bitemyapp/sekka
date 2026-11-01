@@ -55,6 +55,15 @@ const IMAGES: [(&str, &str); 14] = [
     ),
 ];
 
+/// The Sekka × Aizome video on YouTube (github.com/bitemyapp/sekka-aizome-hype).
+const VIDEO: &str = "jF4OwL1GbxY";
+/// Where its player comes from, the one origin the security policy lets a
+/// frame load (shared.rs).
+const PLAYER: &str = "https://www.youtube-nocookie.com";
+/// What the home page shows in the video's place until it is played: the
+/// video's frame 1284 (21.4 s), rendered by its `frame` command.
+const VIDEO_POSTER: (&str, &str) = ("hype-video.png", "docs/images/sekka/hype-video.png");
+
 const BRAND_FILES: [(&str, &str); 8] = [
     (
         "sekka-lockup-night.svg",
@@ -167,6 +176,29 @@ impl Site {
             r#"<figure class="{class}"><a href="{url}" aria-label="{label}"><img src="{url}" width="{w}" height="{h}" alt="{alt}" {loading} decoding="async"></a><figcaption>{caption} <span class="dims">{w} × {h}, not upscaled</span></figcaption></figure>"#,
             label = html::esc(&format!("{alt} Open the full-resolution original.")),
             alt = html::esc(alt),
+            caption = html::esc(caption),
+        ))
+    }
+
+    /// The video in a frame that first holds a page of this site's own: its
+    /// poster and a play button, with no script. Nothing is fetched from
+    /// YouTube until the button, a link, loads YouTube's player in the frame.
+    /// The link sends this site's origin, which the player requires, past the
+    /// policy of sending no referrer. The frame has no `src`, so `allow` names
+    /// the player's origin: by default it would delegate to the poster's.
+    pub fn video(&self, title: &str, caption: &str, class: &str) -> Result<String> {
+        let (name, source) = VIDEO_POSTER;
+        let (w, h) = png_size(&self.repo.join(source))?;
+        let poster = format!(
+            r#"<!doctype html><html lang="en"><head><meta name="color-scheme" content="dark"><link rel="stylesheet" href="{css}"></head><body class="poster"><a class="poster-play" href="{PLAYER}/embed/{VIDEO}?autoplay=1&amp;rel=0" referrerpolicy="origin"><img src="{img}" width="{w}" height="{h}" alt=""><span class="button poster-button"><svg class="poster-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 1v10l9-5z" fill="currentColor"/></svg>Play<span class="visually-hidden"> {title}, from YouTube</span></span></a></body></html>"#,
+            css = self.asset("site.css")?,
+            img = self.asset(&format!("images/{name}"))?,
+            title = html::esc(title),
+        );
+        Ok(format!(
+            r#"<figure class="win shot video {class}"><iframe srcdoc="{poster}" title="{title}" width="{w}" height="{h}" allow="autoplay {PLAYER}; encrypted-media {PLAYER}; fullscreen {PLAYER}; picture-in-picture {PLAYER}"></iframe><figcaption>{caption} <a href="https://www.youtube.com/watch?v={VIDEO}">Watch on YouTube</a></figcaption></figure>"#,
+            poster = html::esc(&poster),
+            title = html::esc(title),
             caption = html::esc(caption),
         ))
     }
@@ -334,7 +366,7 @@ fn main() -> Result<()> {
     fs::create_dir_all(out)?;
 
     let mut assets = BTreeMap::new();
-    for (name, source) in IMAGES {
+    for (name, source) in IMAGES.into_iter().chain([VIDEO_POSTER]) {
         publish_file(
             &a.repo.join(source),
             out,

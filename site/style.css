@@ -214,6 +214,22 @@ kbd {
 .button:hover { background: var(--surface); color: var(--accent); }
 .page-head .cta { margin-top: 1.25em; }
 
+/* The video: a frame that holds the poster page until it is played. */
+.video iframe { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border: 0; background: var(--surface); }
+/* The poster page, inside that frame: the still, and a play button sized to
+   the frame, in the corner the still leaves empty. */
+.poster { overflow: hidden; }
+.poster-play { position: relative; display: block; height: 100vh; }
+.poster-play:focus-visible { outline-offset: calc(-2 * var(--border-width)); }
+.poster-play img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.poster-button {
+  position: absolute; right: 5%; bottom: 5%;
+  display: inline-flex; align-items: center; gap: 0.6em; padding: 0.6em 1.2em;
+  font-family: var(--font-mono); font-weight: 800; font-size: clamp(0.7rem, 2.4vw, 1.05rem);
+}
+.poster-play:hover .poster-button { background: var(--surface); color: var(--accent); }
+.poster-icon { width: 0.75em; height: 0.75em; }
+
 /* A closing call to action: a focused window with its button at the right. */
 .cta-band { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--pad); }
 .cta-band > div { flex: 1 1 30em; min-width: 0; }

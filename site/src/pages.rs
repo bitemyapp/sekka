@@ -47,11 +47,10 @@ pub fn home(site: &Site) -> Result<Page> {
         lockup = site
             .brand
             .inline("sekka-lockup-night.svg", "hero-lockup", "Sekka 雪花")?,
-        shot = site.shot(
-            "aizome-desktop.png",
-            "The Aizome desktop: Sumi editing a Markdown file, Files and Hotaru, Aizome's terminal, running fastfetch, stacked in one tab group beside it, the menu bar along the top, and a notification filed under Tenki in the Deskbar.",
-            "Aizome: Sumi, with Files and Hotaru, its terminal, stacked in one tab group, in a test VM built from Sekka's own modules.",
-            "win hero-shot",
+        shot = site.video(
+            "Sekka and Aizome in 70 seconds",
+            "Sekka and Aizome in 70 seconds. Nothing comes from YouTube until you press play; then its player loads here, from youtube-nocookie.com.",
+            "hero-shot",
         )?,
     )?;
 
@@ -1113,7 +1112,7 @@ pub fn status(site: &Site) -> Result<Page> {
   <article class="win">
     <h2>Privacy</h2>
     <ul class="facts">
-      <li>This site sets no cookies and sends no analytics to your browser. Its one script remembers whether you chose Night or Day, in your browser's local storage, and sends it nowhere. Cloudflare serves it and sees requests, as any host would. The download page lists the nightly builds as Cloudflare serves it.</li>
+      <li>This site sets no cookies and sends no analytics to your browser. Its one script remembers whether you chose Night or Day, in your browser's local storage, and sends it nowhere. Cloudflare serves it and sees requests, as any host would. The download page lists the nightly builds as Cloudflare serves it. The video on the home page fetches nothing from YouTube until you press play; then YouTube's player, from youtube-nocookie.com, plays it under YouTube's privacy policy.</li>
       <li>Tatami's weather asks wttr.in and Open-Meteo; wttr.in locates you by IP address unless you set a place in Setup › Weather.</li>
       <li>Genkan's GitHub step is optional. It reads your public SSH keys and sets your Git identity.</li>
       <li>Sekka's own packages download from cache.sekka.computer, on Cloudflare R2. Only free software is published there.</li>
