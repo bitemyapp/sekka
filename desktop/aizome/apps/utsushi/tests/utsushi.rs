@@ -456,6 +456,47 @@ fn media_info_says_how_it_plays() {
 }
 
 #[test]
+fn space_pauses_and_resumes_from_each_control() {
+    use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
+
+    for name in ["chaptered.mkv", "song.flac"] {
+        let mut h = harness();
+        let w = window(&h);
+        h.send(Msg::Open(vec![fixture(name)]));
+        until(&mut h, 5.0, |a| a.status == Status::Playing);
+        // Traverse the bar with Tab, keeping each control's focus. Space
+        // must toggle playback, not activate Mute, Next or the time label.
+        for _ in 0..9 {
+            h.named(w, NamedKey::Tab, Modifiers::NONE);
+            let current = h.program().current;
+            let muted = h.program().muted;
+            let remaining = h.program().show_remaining;
+            h.type_text(w, " ");
+            until(&mut h, 2.0, |a| a.status == Status::Paused);
+            h.type_text(w, " ");
+            until(&mut h, 2.0, |a| a.status == Status::Playing);
+            assert_eq!(h.program().current, current);
+            assert_eq!(h.program().muted, muted);
+            assert_eq!(h.program().show_remaining, remaining);
+        }
+    }
+}
+
+#[test]
+fn space_in_media_info_does_not_toggle_playback() {
+    let mut h = harness();
+    let w = window(&h);
+    play_without_subtitles(&mut h, "chaptered.mkv");
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    h.command(w, 'i');
+    h.type_text(w, " ");
+    std::thread::sleep(Duration::from_millis(80));
+    h.send_all(std::iter::empty());
+    assert_eq!(h.program().status, Status::Paused);
+}
+
+#[test]
 fn media_info_and_file_panel_cover_video_without_subtitles() {
     use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
 
