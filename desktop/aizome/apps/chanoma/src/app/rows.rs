@@ -421,7 +421,7 @@ impl Chanoma {
             }
             Act::GrownUps => self.ask_pin(super::AfterPin::Unlock, cx),
             Act::Settings => self.open_grownups(None, cx),
-            Act::AddGames => self.open_grownups(Some(2), cx),
+            Act::AddGames => self.open_picker(super::grownups::FolderKind::Games, cx),
             Act::Lock => self.lock(cx),
             Act::Leave => {
                 self.shutdown();

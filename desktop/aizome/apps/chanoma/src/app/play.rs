@@ -14,7 +14,7 @@ use crate::browser::{self, Action, Browser};
 use crate::pad::{Button, Dir, Family};
 use crate::retro::{CoreSource, Event as GameEvent, Launch, Session};
 use crate::services::{self, Drive};
-use crate::ui::{Chrome, Overlay, Scene, View};
+use crate::ui::{self, Chrome, Overlay, Scene, View};
 
 /// A game being played.
 pub struct Game {
@@ -270,13 +270,20 @@ impl Chanoma {
                 if let Some(p) = &mut self.page {
                     p.shown = true;
                 }
-                self.sync_hud(cx);
+                // The page covers Chanoma: how to come back, said over it.
+                self.toast_note(ui::Note::Home, self.way_back(), cx);
             }
             browser::Event::Gone => {
                 if self.page.take().is_some() && self.screen == Screen::Watching {
                     self.modal = None;
                     self.after_activity(cx);
                 }
+            }
+            // Home on the keyboard, kept from the page by the compositor:
+            // as the controller's Home button, the menu with the way home.
+            browser::Event::Home => {
+                self.family = Family::Keyboard;
+                self.input(Input::Home, cx);
             }
         }
     }

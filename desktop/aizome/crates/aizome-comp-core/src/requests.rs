@@ -33,7 +33,9 @@ impl State {
             },
             Request::Outputs => Response::Outputs { outputs: crate::outputs::all_info(&self.az) },
             Request::Keyboards => Response::Keyboards { keyboards: self.az.keyboards.info() },
-            Request::CatchKey { .. } => return Err("the connection that waits for the key asks".into()),
+            Request::CatchKey { .. } | Request::CatchKeys { .. } => {
+                return Err("the connection that waits for the keys asks".into());
+            }
             Request::IdleInhibitors => Response::IdleInhibitors { inhibitors: self.idle_inhibitors() },
             Request::KeepAwake => return Err("the connection that holds as Keep Awake asks".into()),
             Request::Spawn { argv, cwd, in_desk_folder } => {
@@ -533,6 +535,8 @@ pub fn key_code(name: &str) -> Result<u32, String> {
         "volumedown" => 114,
         "volumeup" => 115,
         "super" | "logo" | "cmd" | "leftmeta" => 125,
+        "back" => 158,
+        "homepage" => 172,
         _ => return Err(format!("unknown key {name}")),
     };
     Ok(code)

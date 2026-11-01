@@ -8,11 +8,13 @@
 //! - [`browser`]: services, full screen in a browser the controller drives
 //!   through the compositor.
 //! - [`rules`]: the PIN, what kids may open, and for how long.
+//! - [`folders`]: choosing a games or videos folder from the sofa.
 //! - [`app`] and [`ui`]: the program and what it draws.
 
 pub mod app;
 pub mod browser;
 pub mod clock;
+pub mod folders;
 pub mod instance;
 pub mod library;
 pub mod pad;

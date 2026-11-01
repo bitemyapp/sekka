@@ -21,6 +21,7 @@ impl Chanoma {
     }
 
     pub fn tick(&mut self, cx: &mut Cx<Msg>) {
+        self.picker_tick(cx);
         let now = Instant::now();
         let elapsed = self.last_tick.map_or(0.0, |t| now.duration_since(t).as_secs_f64().min(5.0));
         self.last_tick = Some(now);
@@ -54,6 +55,7 @@ impl Chanoma {
             self.toast = None;
             self.sync_hud(cx);
         }
+        self.bar_tick(cx);
         self.film_tick();
         self.setup_tick(cx);
         self.check_gate(cx);

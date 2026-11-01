@@ -446,6 +446,9 @@ pub fn button_glyph(c: &mut Canvas, theme: &Theme, family: Family, b: Button, at
     }
 }
 
+/// The room between hints along the foot.
+pub const HINT_GAP: f64 = 44.0;
+
 /// A hint along the foot: a button and what it does. Returns where the
 /// next starts.
 pub fn hint(c: &mut Canvas, theme: &Theme, family: Family, b: Button, what: &str, x: f64, y: f64) -> f64 {
@@ -453,7 +456,12 @@ pub fn hint(c: &mut Canvas, theme: &Theme, family: Family, b: Button, what: &str
     let w = glyph_width(theme, family, b, r);
     button_glyph(c, theme, family, b, Point::new(x + w / 2.0, y), r);
     let tw = text_mid(c, theme, what, x + w + 14.0, y, font(SMALL + 2.0, REGULAR), theme.text2());
-    x + w + 14.0 + tw + 44.0
+    x + w + 14.0 + tw + HINT_GAP
+}
+
+/// A hint's width, without the room after it.
+pub fn hint_width(theme: &Theme, family: Family, b: Button, what: &str) -> f64 {
+    glyph_width(theme, family, b, 22.0) + 14.0 + measure(theme, what, font(SMALL + 2.0, REGULAR)).width
 }
 
 #[cfg(test)]
