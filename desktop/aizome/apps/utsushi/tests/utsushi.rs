@@ -554,21 +554,34 @@ fn stage_music_queue_row_receives_double_click() {
 }
 
 #[test]
-fn stage_background_keeps_playback_keys_and_double_click() {
+fn stage_click_focuses_without_changing_playback() {
     use aizome_kit::sidestep_ui::PointerButton;
 
     let mut h = harness();
     let w = window(&h);
     play_without_subtitles(&mut h, "chaptered.mkv");
     let at = Point::new(100.0, 100.0);
-    h.click(w, at);
-    until(&mut h, 2.0, |a| a.status == Status::Paused);
-    assert_eq!(h.focused_name(w).as_deref(), Some("stage"));
+    for paused in [false, true] {
+        if paused {
+            h.send(Msg::Toggle);
+            until(&mut h, 2.0, |a| a.status == Status::Paused);
+        }
+        let state = h.program().status;
+        h.focus_window(w, false);
+        h.focus_window(w, true);
+        h.click(w, at);
+        assert_eq!(h.focused_name(w).as_deref(), Some("stage"));
+        // Drain decoder replies: neither click may enqueue a toggle.
+        std::thread::sleep(Duration::from_millis(80));
+        h.send_all(std::iter::empty());
+        assert_eq!(h.program().status, state);
+        h.press(w, at, PointerButton::Left, 2);
+        h.release(w, at, PointerButton::Left);
+        assert_eq!(h.fullscreen_asked(w), Some(true));
+        std::thread::sleep(Duration::from_millis(80));
+        h.send_all(std::iter::empty());
+        assert_eq!(h.program().status, state);
+    }
     h.type_text(w, " ");
-    until(&mut h, 2.0, |a| a.status == Status::Playing);
-    h.click(w, at);
-    h.press(w, at, PointerButton::Left, 2);
-    h.release(w, at, PointerButton::Left);
-    assert_eq!(h.fullscreen_asked(w), Some(true));
     until(&mut h, 2.0, |a| a.status == Status::Playing);
 }
