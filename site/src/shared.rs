@@ -12,11 +12,12 @@ pub const NIGHTLY: &str = "https://downloads.sekka.computer/nightly";
 pub const BUILDS_TTL: u32 = 300;
 
 /// Every page's headers. _headers gives them to static files; the worker,
-/// whose responses Pages leaves alone, sets them itself.
+/// whose responses Pages leaves alone, sets them itself. The one frame is
+/// the home page's video, which loads YouTube's player when it is played.
 pub const HEADERS: &[(&str, &str)] = &[
     (
         "Content-Security-Policy",
-        "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; frame-src https://www.youtube-nocookie.com; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     ),
     ("Referrer-Policy", "no-referrer"),
     ("X-Content-Type-Options", "nosniff"),
