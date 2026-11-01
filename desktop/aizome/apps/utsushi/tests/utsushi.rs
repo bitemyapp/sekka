@@ -442,20 +442,6 @@ fn a_song_shows_its_cover_and_who_made_it() {
 }
 
 #[test]
-fn media_info_says_how_it_plays() {
-    let mut h = harness();
-    let w = window(&h);
-    h.send(Msg::Open(vec![fixture("clip.mp4")]));
-    until(&mut h, 5.0, |a| a.status == Status::Playing && a.pipeline.video_decoder.is_some());
-    h.command(w, 'i');
-    let sheet = h.program().sheet.expect("the info sheet");
-    let texts = h.texts(sheet);
-    for want in ["Video decoding", "h264 in software", "Frames to the screen", "No audio output"] {
-        assert!(texts.iter().any(|t| t == want), "{want} in {texts:?}");
-    }
-}
-
-#[test]
 fn statistics_refresh_without_blocking_playback_and_close_independently() {
     let mut h = harness();
     let w = window(&h);
@@ -490,6 +476,20 @@ fn statistics_refresh_without_blocking_playback_and_close_independently() {
     let reopened = h.program().statistics.unwrap();
     h.send(Msg::Close);
     assert!(h.texts(reopened).iter().any(|t| t.starts_with("Open a video")));
+}
+
+#[test]
+fn media_info_says_how_it_plays() {
+    let mut h = harness();
+    let w = window(&h);
+    h.send(Msg::Open(vec![fixture("clip.mp4")]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing && a.pipeline.video_decoder.is_some());
+    h.command(w, 'i');
+    let sheet = h.program().sheet.expect("the info sheet");
+    let texts = h.texts(sheet);
+    for want in ["Video decoding", "h264 in software", "Frames to the screen", "No audio output"] {
+        assert!(texts.iter().any(|t| t == want), "{want} in {texts:?}");
+    }
 }
 
 #[test]
