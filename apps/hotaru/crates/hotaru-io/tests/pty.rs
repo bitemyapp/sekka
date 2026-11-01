@@ -173,3 +173,34 @@ fn session_can_move_to_worker_thread() {
     fn assert_send<T: Send>() {}
     assert_send::<Pty>();
 }
+
+#[test]
+fn working_directory_tracks_the_shell_and_is_unavailable_after_exit() {
+    use std::os::unix::ffi::OsStringExt;
+    let root = std::env::temp_dir().join(format!("hotaru-pty-cwd-{}", std::process::id()));
+    let directory = root.join(std::ffi::OsString::from_vec(b"space \xff".to_vec()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let mut cmd = command("cd -- \"$TARGET\" || exit 1; printf ready; read line");
+    cmd.cwd = Some(root.clone());
+    cmd.env
+        .push(("TARGET".into(), directory.clone().into_os_string()));
+    let mut pty = Pty::spawn(cmd, PtySize::default()).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut ready = [0_u8; 32];
+    loop {
+        if matches!(pty.read(&mut ready), Ok(n) if n > 0) {
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert_eq!(pty.working_directory().unwrap(), Some(directory));
+    pty.write(b"exit\n").unwrap();
+    collect(&pty);
+    while pty.try_wait().unwrap().is_none() {
+        assert!(Instant::now() < deadline);
+        std::thread::yield_now();
+    }
+    assert_eq!(pty.working_directory().unwrap(), None);
+    std::fs::remove_dir_all(root).unwrap();
+}

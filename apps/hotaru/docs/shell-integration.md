@@ -88,11 +88,20 @@ Non-control non-UTF8 Linux names remain representable. The core owns/coalesces
 the URI event and the actor owns parsing; neither interprets shell text.
 
 Accepted directory text supplies a native sanitized title until the program
-sets an explicit title. New tabs/splits from a default shell inherit its last
-accepted local directory. A new external launch keeps its explicitly supplied
-directory. This is shell-reported state, not proof of a process's current
-directory. The path is not opened during parsing; a later spawn reports any
-failure to enter it normally.
+sets an explicit title. New tabs and splits inherit the focused pane's last
+accepted local directory. Without a report, the source PTY worker reads its
+shell's `/proc/PID/cwd`, including for explicit commands and when shell
+integration is disabled. The source session is captured before changing focus;
+the new worker waits up to one second for the reply, falling back to the last
+known or original launch directory if the lookup fails or the shell has exited.
+The PTY owner checks exit before looking up the PID so a reaped child's PID
+cannot select an unrelated process. No directory lookup or wait runs on the UI
+thread. A new external launch keeps its explicitly supplied directory.
+
+Shell reports remain preferred for nested shells; the process fallback follows
+the local shell Hotaru started, not a remote SSH directory or a nested shell
+that sends no reports. Reported paths are not opened during parsing; a later
+spawn reports any failure to enter the selected directory normally.
 
 ## Validation
 

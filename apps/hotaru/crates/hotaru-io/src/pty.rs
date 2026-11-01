@@ -200,6 +200,16 @@ impl Pty {
         self.child.as_ref().expect("live Pty owns its child").id()
     }
 
+    /// The local shell's current directory when it sends no OSC 7 updates.
+    /// Call on the PTY owner: checking exit first avoids looking up a reused
+    /// PID, and the child cannot be reaped between that check and read_link.
+    pub fn working_directory(&mut self) -> io::Result<Option<PathBuf>> {
+        if self.try_wait()?.is_some() {
+            return Ok(None);
+        }
+        std::fs::read_link(format!("/proc/{}/cwd", self.child_id())).map(Some)
+    }
+
     /// One nonblocking read. Linux returns EIO when the last slave closes;
     /// expose that as EOF after any already buffered output has been drained.
     pub fn read(&self, buffer: &mut [u8]) -> io::Result<usize> {

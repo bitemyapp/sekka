@@ -220,6 +220,14 @@ fn internal_panes_inherit_reported_cwd_but_external_launch_keeps_its_directory()
         h.program().active_pane().unwrap().working_directory.as_deref(),
         Some(std::path::Path::new("/tmp/reported-directory"))
     );
+    let split = h.program().active_pane().unwrap().id;
+    h.send(Msg::WorkingDirectory(split, "/tmp/split-directory".into()));
+    h.send(Msg::FocusPane(first));
+    h.send(Msg::NewTab);
+    assert_eq!(
+        h.program().active_pane().unwrap().working_directory.as_deref(),
+        Some(std::path::Path::new("/tmp/reported-directory"))
+    );
     let mut explicit = PtyCommand::shell();
     explicit.cwd = Some("/tmp/requested-directory".into());
     h.send(Msg::Launch(explicit));
@@ -227,6 +235,85 @@ fn internal_panes_inherit_reported_cwd_but_external_launch_keeps_its_directory()
         h.program().active_pane().unwrap().working_directory.as_deref(),
         Some(std::path::Path::new("/tmp/requested-directory"))
     );
+}
+
+#[test]
+fn new_tabs_and_splits_follow_the_focused_shell_without_directory_reports() {
+    let root = std::env::temp_dir().join(format!("hotaru-tab-cwd-{}", std::process::id()));
+    let first_dir = root.join("first space 日本");
+    let second_dir = root.join("second");
+    std::fs::create_dir_all(&first_dir).unwrap();
+    std::fs::create_dir_all(&second_dir).unwrap();
+    // Exercise both a configured shell with integration disabled and an
+    // explicit shell command. Neither fixture emits OSC 7 or reads dotfiles.
+    for default_shell in [true, false] {
+        let mut command = PtyCommand::new("/bin/sh");
+        command.integrate_shell = default_shell;
+        command.cwd = Some(root.clone());
+        command.args = vec![
+            "-c".into(),
+            "stty -echo; printf 'START:%s\\n' \"$PWD\"; while IFS= read -r dir; do cd -- \"$dir\" || exit 1; printf 'CHANGED:%s\\n' \"$PWD\"; done".into(),
+        ];
+        let mut app = keeping(command.clone());
+        app.settings.shell = Some("/bin/sh".into());
+        app.settings.shell_integration = false;
+        let mut h = Harness::new(app);
+        let started = |h: &mut Harness<Hotaru>, id, path: &std::path::Path| {
+            let expected = format!("START:{}", path.display());
+            assert!(
+                h.settle(Duration::from_secs(5), |app| app
+                    .panes
+                    .iter()
+                    .any(|pane| { pane.id == id && pane.snapshot.plain_text().contains(&expected) })),
+                "pane {id} did not start in {}",
+                path.display()
+            );
+        };
+        let cd = |h: &mut Harness<Hotaru>, id, path: &std::path::Path| {
+            h.send(Msg::Input(id, format!("{}\n", path.display()).into_bytes()));
+            let expected = format!("CHANGED:{}", path.display());
+            assert!(h.settle(Duration::from_secs(5), |app| {
+                app.panes.iter().any(|pane| pane.id == id && pane.snapshot.plain_text().contains(&expected))
+            }));
+        };
+        let first = h.program().active_pane().unwrap().id;
+        started(&mut h, first, &root);
+        cd(&mut h, first, &first_dir);
+        h.send(Msg::NewTab);
+        let second = h.program().active_pane().unwrap().id;
+        started(&mut h, second, &first_dir);
+        cd(&mut h, second, &second_dir);
+        h.send(Msg::SelectTab(first));
+        h.send(Msg::NewTab);
+        let third = h.program().active_pane().unwrap().id;
+        // A later focus change cannot redirect the pending launch's lookup.
+        h.send(Msg::SelectTab(second));
+        started(&mut h, third, &first_dir);
+        h.send(Msg::Split(Axis::Right));
+        let split = h.program().active_pane().unwrap().id;
+        started(&mut h, split, &second_dir);
+        cd(&mut h, split, &first_dir);
+        h.send(Msg::FocusPane(second));
+        h.send(Msg::NewTab);
+        let fourth = h.program().active_pane().unwrap().id;
+        started(&mut h, fourth, &second_dir);
+        // A nested shell's accepted report takes precedence over the local
+        // parent shell's directory (first_dir).
+        h.send(Msg::WorkingDirectory(first, second_dir.clone()));
+        h.send(Msg::SelectTab(first));
+        h.send(Msg::NewTab);
+        let reported = h.program().active_pane().unwrap().id;
+        started(&mut h, reported, &second_dir);
+        h.send(Msg::Launch(command));
+        let external = h.program().active_pane().unwrap().id;
+        started(&mut h, external, &root);
+        h.send(Msg::Input(external, vec![4]));
+        assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().ended));
+        h.send(Msg::NewTab);
+        let after_exit = h.program().active_pane().unwrap().id;
+        started(&mut h, after_exit, &root);
+    }
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
