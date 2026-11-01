@@ -1512,6 +1512,33 @@ The engine evaluation (PDFium against hayro over the pdf.js corpus, and
 why MuPDF and Poppler were ruled out by licence), the fork's work, and the
 reader's design are in [Shiori's notes](desktop/aizome/docs/shiori.md).
 
+Chanoma (`desktop/aizome/apps/chanoma`), the family television, is
+installed only where `programs.aizome.chanoma.enable` is set: the package
+builds it into a `chanoma` output of its own, and the module adds it with
+its libretro cores (unfree snes9x and Genesis Plus GX only where unfree
+packages are allowed). It reads controllers from evdev itself so that it
+can grab them, drives libretro cores in its own process, and opens
+streaming services in Chrome or Chromium driven through the compositor's
+IPC. The PIN keeps out kids with a controller, not someone with a terminal.
+
+```sh
+cargo test -p aizome-chanoma
+CHANOMA_TEST_CORES=<folder of *_libretro.so> \
+  cargo test -p aizome-chanoma --test cores -- --ignored --nocapture
+nix build .#aizome-checks.chanoma -L
+```
+
+The first (also run in the package's check phase) covers the rules,
+controller mappings, the frontend and whole evenings through a core the
+test defines. The second loads nixpkgs' cores and plays a generated Game
+Boy game with gambatte, SameBoy and mGBA. The VM check drives the packaged
+app in an Aizome session with a uinput controller alone: found and held,
+a game opened, played (its picture read from the compositor), paused and
+kept; a page in Chromium clicked, keyed and pointed at, and the overlay
+menu over it. None of these is a physical controller, a DRM service or a
+television; [Chanoma's notes](desktop/aizome/docs/chanoma.md) record what
+has and hasn't been checked.
+
 The lock screen follows enabled Wayland outputs throughout lock acquisition
 and the confirmed lock. Every display has a focused password field sharing
 one authentication state; mirrors show their source's prompt and explicitly

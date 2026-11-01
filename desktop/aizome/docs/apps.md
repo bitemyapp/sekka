@@ -25,6 +25,7 @@ the Toolchest, the palette and the Deskbar show beside it and search by.
 | Utsushi 映し | Media Player | `apps/utsushi` | `aizome-utsushi` | `org.aizome.Utsushi` | projecting, as onto a screen (the 映 of 映画, film) |
 | Annai 案内 | Welcome | `apps/annai` | `aizome-annai` | `org.aizome.Annai` | guidance |
 | Koe 声 | Dictation | `apps/koe` | `aizome-koe` | `org.aizome.Koe` | voice |
+| Chanoma 茶の間 | TV | `apps/chanoma` | `aizome-chanoma` | `org.aizome.Chanoma` | the family room, where the television is (and the low table it stands on) |
 
 Also part of the session, not separate apps: the Toolchest, the command
 palette, notifications, the lock screen and the polkit dialog (all in
@@ -1079,6 +1080,85 @@ the compositor's IPC after checking the focus and the lock, and keeps
 audio and transcripts in memory. `aizome-koe` also has the commands
 scripts and agents use (`record`, `status`, `watch`, `model`, `packs`,
 `words`, `examples`, `enable`, `disable`).
+
+### Chanoma (TV)
+
+The family television: streaming services, films and shows from the
+disk, and games, all from a game controller, with a grown-up's PIN on
+what the kids may watch and play, and for how long. It isn't in every
+Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
+(below, and [docs/chanoma.md](chanoma.md) for how it works).
+
+- **Home** is shelves of big tiles: *Keep playing* (games where they were
+  left, with a picture of where; shows and films part watched), *Watch*
+  (the services), *Films and shows*, *Games*, and the grown-ups' door. The
+  tile the controller is on is ringed in amber, its name under it. The
+  arrows or the left stick move, held they repeat; the confirm button
+  opens. The hints along the foot show the controller's own buttons:
+  Xbox's coloured letters, PlayStation's shapes, Nintendo's letters (with
+  A, on the right, saying yes), or for any other controller the four
+  buttons as a diamond with the one meant filled in; keycaps for a
+  keyboard. The header has the time, the time left today, and each
+  controller with its player number and battery.
+- **Only a controller**: Bluetooth controllers, paired once in the
+  settings, reconnect by themselves when switched on. Chanoma holds them
+  exclusively while it runs. The Home button (or, on a controller
+  without one, Select and Start held for a second) always brings up a
+  menu with the way back: over a game it pauses it; over a service, a
+  film, a menu, Home. Without a controller a banner says how to wake
+  one; a game whose player 1 goes away pauses until they're back.
+- **Games** play through libretro cores that Chanoma drives itself (the
+  emulators RetroArch uses, without its menus): the NES, Super NES, Game
+  Boy, Game Boy Color and Advance, Mega Drive, Master System and Game Gear,
+  PC Engine, PlayStation, Atari 2600 and Lynx, Neo Geo Pocket and
+  WonderSwan. Games are found in the games folders by their system's
+  folder name (`snes`, `Super Nintendo`, `gba`…) or their extension, with
+  box art beside them (`Game.png`, or in `media/`, `boxart/` or
+  libretro-thumbnails' `Named_Boxarts/`). A game's own saves are kept as
+  they change; leaving it keeps exactly where it was, and the next start
+  carries on from there. The picture is enlarged with square pixels and
+  letterboxed to the console's shape; sound plays with short latency;
+  controllers rumble where the game asks.
+- **Services** open full screen in Google Chrome (or Chromium), each in a
+  browser profile of its own, so a grown-up signs in once (with a keyboard,
+  in grown-up mode) and kids never see a sign-in, an address bar or a
+  tab. The controller drives the page: the left stick moves the pointer
+  and the confirm button clicks, the right stick scrolls, the arrows are
+  arrow keys (seeking in players), Back is Escape (held, the browser's
+  Back), X or Start plays and pauses, Y is full screen, the shoulders move
+  between a page's controls. YouTube opens its television interface,
+  driven with the arrows. Windows a page opens are closed. Grown-ups can
+  add any website.
+- **Films and shows** from the videos folders: a folder of episodes is a
+  show (with its `poster.jpg`), a lone video a film. They play through
+  Utsushi's engine; the confirm button plays and pauses, left and right
+  skip ten seconds, the shoulders go to the previous or next episode, and
+  the next plays by itself. Where each was left is kept.
+- **Grown-ups** unlock with the PIN (four to eight digits; three wrong
+  ones are free, then the pad waits, longer each time, and a restart
+  doesn't reset that). In grown-up mode everything shows, nothing counts
+  against today's time, and the settings open: limits for weekdays and for
+  the weekend, bedtime and waking, more time today; which services kids
+  see; games folders, and which games kids may play (new ones wait for a
+  grown-up's say, unless set to show at once); videos folders; pairing
+  controllers and setting up the buttons of one Chanoma doesn't know; the
+  PIN; leaving Chanoma. Grown-up mode locks itself after a while untouched
+  (never in the middle of a film or game).
+- **Time** counts only while something plays. Five minutes before the
+  end, and one, a note says so. At the end the game is kept where it was
+  left and the service or film closed, and a friendly screen says that's
+  all for today (or, at bedtime, goodnight, with when it opens again). A
+  grown-up's PIN there gives fifteen minutes, half an hour or an hour, or
+  carries on in grown-up mode.
+- **A television** (`programs.aizome.chanoma.autostart`, with
+  `services.displayManager.autoLogin`): it comes on with the computer and
+  starts again if it ever stops unasked. Kids can't close it; leaving
+  takes the PIN.
+
+`aizome-chanoma --reset-pin`, from a grown-up's terminal, forgets the PIN
+(the next start asks for a new one). Chanoma keeps its settings in
+`$XDG_CONFIG_HOME/aizome/chanoma.json` (JSON rather than TOML: a day
+without a limit is a null in a list, which TOML can't hold).
 
 ### The file chooser (portal)
 

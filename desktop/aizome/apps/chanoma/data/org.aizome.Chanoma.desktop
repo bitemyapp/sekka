@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Chanoma
+GenericName=TV
+Comment=Shows, films and games on the television, all from a controller, within a grown-up's limits
+Keywords=tv;television;htpc;media center;home theater;living room;streaming;netflix;youtube;films;games;emulator;retro;parental controls;kids;
+Categories=AudioVideo;Video;Game;
+Icon=org.aizome.Chanoma
+Exec=aizome-chanoma
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Chanoma
+DBusActivatable=false

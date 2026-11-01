@@ -139,6 +139,19 @@ let
     _JAVA_AWT_WM_NONREPARENTING = "1";
     AIZOME_WALLPAPER_NIGHT = toString cfg.wallpapers.night;
     AIZOME_WALLPAPER_DAY = toString cfg.wallpapers.day;
+  }
+  // lib.optionalAttrs cfg.chanoma.enable {
+    # Where Chanoma finds its game cores.
+    CHANOMA_CORES = "${chanomaCores}/lib/retroarch/cores";
+  }
+  // lib.optionalAttrs (cfg.chanoma.enable && cfg.chanoma.browser != null) {
+    # The browser it was given, found without a PATH (its autostarted
+    # unit has only systemd's).
+    CHANOMA_BROWSER = lib.getExe cfg.chanoma.browser;
+  };
+  chanomaCores = pkgs.symlinkJoin {
+    name = "chanoma-cores";
+    paths = cfg.chanoma.cores;
   };
 in
 {
@@ -177,6 +190,62 @@ in
       type = lib.types.bool;
       default = true;
       description = "Let Tokei's alarms wake the computer from sleep (CAP_WAKE_ALARM for user services).";
+    };
+    chanoma = {
+      enable = lib.mkEnableOption ''
+        Chanoma, the family television: streaming services, films and shows
+        from the disk, and games, from a Bluetooth controller, with a
+        grown-up's PIN on what kids may watch and play and for how long
+      '';
+      cores = lib.mkOption {
+        type = lib.types.listOf lib.types.package;
+        default =
+          with pkgs.libretro;
+          [
+            mesen
+            bsnes
+            gambatte
+            mgba
+            smsplus-gx
+            beetle-pce-fast
+            pcsx-rearmed
+            stella
+            handy
+            beetle-ngp
+            beetle-wswan
+          ]
+          # Faster for the Super NES, and the Mega Drive's only one here;
+          # both under licences that forbid selling them (unfree in Nixpkgs).
+          ++ lib.optionals (config.nixpkgs.config.allowUnfree or false) [
+            snes9x
+            genesis-plus-gx
+          ];
+        defaultText = lib.literalExpression "with pkgs.libretro; [ mesen bsnes gambatte mgba smsplus-gx beetle-pce-fast pcsx-rearmed stella handy beetle-ngp beetle-wswan ] ++ (snes9x and genesis-plus-gx where unfree packages are allowed)";
+        description = ''
+          The libretro cores Chanoma plays games with. Cores that need
+          OpenGL or Vulkan (Nintendo 64, Dreamcast and later) don't run
+          in Chanoma.
+        '';
+      };
+      browser = lib.mkOption {
+        type = lib.types.nullOr lib.types.package;
+        default = null;
+        example = lib.literalExpression "pkgs.google-chrome";
+        description = ''
+          A browser for the streaming services, installed with Chanoma.
+          Chanoma uses Google Chrome or Chromium from the PATH; DRM-protected
+          services (Netflix, Disney+ and the like) need Google Chrome.
+        '';
+      };
+      autostart = lib.mkOption {
+        type = lib.types.bool;
+        default = false;
+        description = ''
+          Start Chanoma with every Aizome session on this computer, and
+          start it again if it ever stops unasked: a television. With
+          `services.displayManager.autoLogin` it comes on with the computer.
+        '';
+      };
     };
     wallpapers = {
       night = lib.mkOption {
@@ -221,7 +290,34 @@ in
       # vainfo: whether wf-recorder can encode on the GPU (VA-API), which
       # the shell asks once a session rather than finding out mid-recording.
       pkgs.libva-utils
-    ];
+    ]
+    ++ lib.optionals cfg.chanoma.enable (
+      [ cfg.package.chanoma ] ++ lib.optional (cfg.chanoma.browser != null) cfg.chanoma.browser
+    );
+
+    # Controllers reconnect by themselves once paired (Chanoma trusts
+    # them): quicker with fast connection; and one that forgot the
+    # computer pairs again without anyone confirming (just-works
+    # re-pairing), which a kid with only a controller couldn't do.
+    hardware.bluetooth.settings.General = lib.mkIf cfg.chanoma.enable {
+      FastConnectable = lib.mkDefault true;
+      JustWorksRepairing = lib.mkDefault "always";
+    };
+    # A television: Chanoma with every session, and again after a crash.
+    # Leaving it with the PIN ends it for the session.
+    systemd.user.services.aizome-chanoma = lib.mkIf (cfg.chanoma.enable && cfg.chanoma.autostart) {
+      description = "Chanoma, the television";
+      wantedBy = [ "aizome-session.target" ];
+      partOf = [ "aizome-session.target" ];
+      # The target starts once the compositor is ready; wanted alone, the
+      # unit would start beside it and find no display yet.
+      after = [ "aizome-session.target" ];
+      serviceConfig = {
+        ExecStart = "${cfg.package.chanoma}/bin/aizome-chanoma";
+        Restart = "on-failure";
+        RestartSec = 2;
+      };
+    };
     # Screen recording (the palette's Record Screen and Record Area, ⌥Print):
     # gpu-screen-recorder, with the capability wrapper its KMS capture needs
     # (gsr-kms-server, CAP_SYS_ADMIN), as Tatami has it.
