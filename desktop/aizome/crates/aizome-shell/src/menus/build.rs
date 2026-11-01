@@ -374,10 +374,8 @@ pub fn desk_context(desk: &DeskInfo, can_remove: bool) -> Menu {
         desk.name.clone(),
         vec![
             Entry::action("Rename", Action::RenameDesk { index: desk.index }),
-            Entry::action(
-                "Set Folder…",
-                Action::Settings { pane: "desktop".into(), anchor: Some(format!("desks.{}", desk.index)) },
-            ),
+            // Settei's Desks, where each Desk's folder is set.
+            Entry::action("Set Folder…", Action::Settings { pane: "desktop".into(), anchor: Some("desks".into()) }),
             Entry::separator(),
             Entry::action("Remove", Action::Wm(Request::RemoveDesk { desk: aizome_ipc::DeskSel::Index(desk.index) }))
                 .enabled(can_remove),
@@ -482,6 +480,17 @@ mod tests {
         assert_eq!(move_to.items[1].label, "Desk 2");
         assert!(move_to.items[1].checked);
         assert_eq!(move_to.items[0].action, crate::actions::wm::move_to_desk(Some(5), 1));
+    }
+
+    #[test]
+    fn set_folder_opens_settei_at_the_desks() {
+        let m = desk_context(&desks()[1], true);
+        let set = m.items.iter().find(|e| e.label == "Set Folder…").unwrap();
+        let Action::Settings { pane, anchor } = &set.action else { panic!("{:?}", set.action) };
+        assert_eq!(
+            crate::launch::settings(pane, anchor.as_deref()),
+            crate::launch::Launch::Argv(vec!["aizome-settei".into(), "--pane".into(), "desktop.desks".into()])
+        );
     }
 
     #[test]
