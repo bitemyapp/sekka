@@ -196,7 +196,7 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
                 .iter()
                 .map(|i| Candidate {
                     title: i.title.clone(),
-                    keywords: keywords_of(i),
+                    keywords: keywords_of(i, q),
                     boost: i.boost + exactness(&i.title, q) + app_discovery_boost(i, q),
                 })
                 .collect();
@@ -213,13 +213,28 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
             (scope == Scope::Command).then(|| r.app_name.map(|a| format!("{} MENUS", a.to_uppercase()))).flatten();
         out.push(Section { scope, head, sub, rows });
     }
-    // With something typed, the section holding the best match leads.
+    // With something typed, the section holding the best match leads. A
+    // purpose's lift carries Apps past settings, windows and files, but not
+    // past the focused app's commands when one of them starts a word with
+    // the query: "file" in an editor is its File menu before Hako.
     if !q.is_empty() && r.scope.is_none() {
         let answer = out.first().is_some_and(|s| s.scope == Scope::Answer) as usize;
-        out[answer..].sort_by(|a, b| {
-            let best = |s: &Section| s.rows.iter().map(|r| r.score).max().unwrap_or(0);
-            best(b).cmp(&best(a)).then(order_of(a.scope).cmp(&order_of(b.scope)))
-        });
+        let best = |s: &Section| s.rows.iter().map(|r| r.score).max().unwrap_or(0);
+        let commands = out
+            .iter()
+            .find(|s| {
+                s.scope == Scope::Command
+                    && s.rows.iter().any(|r| starts_a_word(&format!("{} {}", r.item.trail, r.item.title), q))
+            })
+            .map(best);
+        let standing = |s: &Section| match commands {
+            Some(commands) if s.scope == Scope::App => {
+                let unlifted = s.rows.iter().map(|r| r.score - app_discovery_boost(&r.item, q)).max().unwrap_or(0);
+                unlifted.max(best(s).min(commands))
+            }
+            _ => best(s),
+        };
+        out[answer..].sort_by(|a, b| standing(b).cmp(&standing(a)).then(order_of(a.scope).cmp(&order_of(b.scope))));
     }
     out
 }
@@ -228,30 +243,47 @@ fn order_of(s: Scope) -> usize {
     ORDER.iter().position(|x| *x == s).unwrap_or(ORDER.len())
 }
 
-fn keywords_of(i: &Item) -> Vec<String> {
+fn keywords_of(i: &Item, q: &str) -> Vec<String> {
     let mut k = i.keywords.clone();
     if !i.trail.is_empty() && i.scope == Scope::Command {
         // "Edit › Find" helps "edit find" find its items.
         k.push(format!("{} {}", i.trail, i.title));
     }
+    if i.scope == Scope::App && q.contains(char::is_whitespace) {
+        // "sumi editor" and "hotaru terminal" match an app's name and kind
+        // together. One word doesn't spread across them: "fi" isn't in
+        // "Foot Terminal".
+        k.extend(i.app_names.iter().map(|kind| format!("{} {kind}", i.title)));
+    }
     k
 }
 
 /// Asking for an app's purpose should launch the app before offering to
-/// configure it. Only literal purpose prefixes get this lift: "terminal
-/// settings" remains a settings query, and "kitty" still finds kitty.
+/// configure it. Only the start of a purpose's name, three letters or
+/// more, gets this lift: "term" and "command line" do, while "line",
+/// "viewer" and "co" rank as they would without it. "terminal settings"
+/// remains a settings query, and "kitty" still finds kitty.
 fn app_discovery_boost(item: &Item, query: &str) -> i64 {
-    if item.scope != Scope::App || query.chars().count() < 2 {
+    let query = words(query);
+    if item.scope != Scope::App || query.chars().count() < 3 {
         return 0;
     }
-    let query = query.to_lowercase();
-    let starts_word = |name: &String| {
-        let name = name.to_lowercase();
-        name.match_indices(&query).any(|(at, _)| at == 0 || name[..at].ends_with(char::is_whitespace))
-    };
-    let purpose = item.app_names.iter().any(starts_word);
-    let preferred = item.default_names.iter().any(starts_word);
-    i64::from(purpose) * 180 + i64::from(preferred) * 360
+    let starts = |names: &[String]| names.iter().any(|name| words(name).starts_with(&query));
+    i64::from(starts(&item.app_names)) * 180 + i64::from(starts(&item.default_names)) * 360
+}
+
+/// Lowercase words joined by single spaces, without punctuation: "Edit ›
+/// Find…" is "edit find".
+fn words(s: &str) -> String {
+    s.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" ").to_lowercase()
+}
+
+/// Whether the query starts one of the text's words: "line" in "Search ›
+/// Go to Line…", "edit copy" in "Edit › Copy", but not "term" in
+/// "Determine".
+fn starts_a_word(text: &str, query: &str) -> bool {
+    let (text, query) = (words(text), words(query));
+    !query.is_empty() && text.match_indices(&query).any(|(at, _)| at == 0 || text[..at].ends_with(' '))
 }
 
 /// Searchable purposes, shared by every app chosen for a role rather than
@@ -433,6 +465,179 @@ mod tests {
 
     fn ranking(q: &str, scope: Option<Scope>) -> Ranking<'_> {
         Ranking { query: q, scope, per_section: 4, app_name: Some("Editor") }
+    }
+
+    /// An app as the shell lists it: its generic name, and the names of the
+    /// roles it's the default for, among its keywords.
+    fn app(name: &str, generic: &str, roles: &[aizome_sys::apps::DefaultRole]) -> Item {
+        let defaults: Vec<String> = roles.iter().flat_map(|r| role_names(*r).iter().map(|n| n.to_string())).collect();
+        let keywords = std::iter::once(generic.to_owned()).chain(defaults.clone()).collect();
+        let mut i = Item::new(Scope::App, name, Icon::SquareTerminal, Action::None).trail(generic).keywords(keywords);
+        i.app_names = vec![generic.into()];
+        i.default_names = defaults;
+        i
+    }
+
+    /// Apps whose purposes compete with a setting and a focused editor's
+    /// commands that only loosely match them ("term" in "Determine").
+    fn desktop() -> Vec<Item> {
+        use aizome_sys::apps::DefaultRole::*;
+        let mut foot = app("Foot", "Terminal", &[]);
+        // About a hundred launches.
+        foot.boost = 110;
+        vec![
+            cmd("Go to Line…", "Search"),
+            cmd("Determine Encoding…", "Format"),
+            cmd("Zoom In", "View"),
+            app("Hotaru", "Terminal", &[Terminal]),
+            foot,
+            app("kitty", "Terminal", &[]),
+            app("Hako", "File Manager", &[FileManager]),
+            app("Sumi", "Text Editor", &[TextEditor]),
+            app("Shiori", "PDF Viewer", &[PdfViewer]),
+            app("Utsushi", "Video Player", &[VideoPlayer]),
+            Item::new(Scope::Setting, "General › Default Apps › Terminal", Icon::Settings, Action::None)
+                .trail("Settings")
+                .keywords(vec!["terminal settings".into()]),
+        ]
+    }
+
+    /// A focused editor's commands that start purpose words.
+    fn editor_commands() -> Vec<Item> {
+        vec![
+            cmd("New", "File"),
+            cmd("Open…", "File"),
+            cmd("Open Terminal Here", "File"),
+            cmd("Copy", "Edit"),
+            cmd("Play", "Playback"),
+        ]
+    }
+
+    fn first(s: &[Section]) -> (Scope, &str) {
+        (s[0].scope, s[0].rows[0].item.title.as_str())
+    }
+
+    fn scopes(s: &[Section]) -> Vec<Scope> {
+        s.iter().map(|s| s.scope).collect()
+    }
+
+    #[test]
+    fn a_purpose_finds_its_default_app_first() {
+        for (q, wanted) in [
+            ("ter", "Hotaru"),
+            ("term", "Hotaru"),
+            ("terminal", "Hotaru"),
+            ("TERM", "Hotaru"),
+            ("shell", "Hotaru"),
+            ("console", "Hotaru"),
+            ("command line", "Hotaru"),
+            ("files", "Hako"),
+            ("file manager", "Hako"),
+            ("text editor", "Sumi"),
+            ("editor", "Sumi"),
+            ("pdf", "Shiori"),
+            ("videos", "Utsushi"),
+        ] {
+            let s = sections(&ranking(q, None), &desktop(), &[]);
+            assert_eq!(first(&s), (Scope::App, wanted), "query: {q}");
+        }
+        // Ahead of the setting that chooses it, and of a terminal used more.
+        let s = sections(&ranking("terminal", None), &desktop(), &[]);
+        assert_eq!(scopes(&s)[..2], [Scope::App, Scope::Setting]);
+        assert_eq!(s[0].rows[1].item.title, "Foot");
+        // Configuring is still a settings query, and names find their apps.
+        assert_eq!(first(&sections(&ranking("terminal settings", None), &desktop(), &[])).0, Scope::Setting);
+        assert_eq!(first(&sections(&ranking("foot", None), &desktop(), &[])), (Scope::App, "Foot"));
+        assert_eq!(first(&sections(&ranking("kitty", None), &desktop(), &[])), (Scope::App, "kitty"));
+    }
+
+    #[test]
+    fn other_words_rank_as_they_would_without_the_lift() {
+        let lifted: Vec<Item> = editor_commands().into_iter().chain(desktop()).collect();
+        let plain: Vec<Item> = lifted
+            .iter()
+            .cloned()
+            .map(|mut i| {
+                i.app_names.clear();
+                i.default_names.clear();
+                i
+            })
+            .collect();
+        let order = |s: Vec<Section>| -> Vec<(Scope, Vec<(String, i64)>)> {
+            s.into_iter().map(|s| (s.scope, s.rows.into_iter().map(|r| (r.item.title, r.score)).collect())).collect()
+        };
+        // Inner words of a purpose, and starts too short to mean one.
+        for q in ["line", "viewer", "player", "manager", "co", "fi", "te", "ed", "foot", "hotaru", "zoom", "open"] {
+            assert_eq!(
+                order(sections(&ranking(q, None), &lifted, &[])),
+                order(sections(&ranking(q, None), &plain, &[])),
+                "query: {q}"
+            );
+        }
+        assert_eq!(first(&sections(&ranking("line", None), &lifted, &[])), (Scope::Command, "Go to Line…"));
+    }
+
+    #[test]
+    fn the_focused_apps_commands_come_before_the_lift() {
+        let items: Vec<Item> = editor_commands().into_iter().chain(desktop()).collect();
+        // Before any app has been opened from the palette.
+        let fresh: Vec<Item> = items
+            .iter()
+            .cloned()
+            .map(|mut i| {
+                i.boost = 0;
+                i
+            })
+            .collect();
+        for (q, command, app) in
+            [("file", "New", "Hako"), ("edit", "Copy", "Sumi"), ("term", "Open Terminal Here", "Hotaru")]
+        {
+            let s = sections(&ranking(q, None), &fresh, &[]);
+            assert_eq!(first(&s), (Scope::Command, command), "query: {q}");
+            // The lift still puts the default first among apps, and apps
+            // before the setting.
+            let apps = s.iter().position(|s| s.scope == Scope::App).unwrap();
+            assert_eq!(s[apps].rows[0].item.title, app, "query: {q}");
+            assert!(s.iter().position(|s| s.scope == Scope::Setting).is_none_or(|at| at > apps), "query: {q}");
+        }
+        // A terminal opened a hundred times still brings Apps ahead, as it
+        // did without the lift, and the default heads them.
+        let s = sections(&ranking("term", None), &items, &[]);
+        assert_eq!(first(&s), (Scope::App, "Hotaru"));
+        assert_eq!(s[1].scope, Scope::Command);
+        // A whole purpose word no command starts still finds the app.
+        assert_eq!(first(&sections(&ranking("files", None), &items, &[])), (Scope::App, "Hako"));
+        assert_eq!(first(&sections(&ranking("play", None), &items, &[])), (Scope::Command, "Play"));
+    }
+
+    #[test]
+    fn a_purpose_named_like_a_folder_opens_the_app_before_the_folder() {
+        let folder = Item::file(Path::new("/home/u/Documents"), true, Path::new("/home/u"));
+        let s = sections(&ranking("documents", None), &desktop(), &[folder]);
+        assert_eq!(first(&s), (Scope::App, "Shiori"));
+        assert!(s.iter().any(|s| s.scope == Scope::File), "the folder is still offered");
+    }
+
+    #[test]
+    fn only_several_words_match_an_apps_name_and_kind_together() {
+        let apps = desktop();
+        let found = |q: &str| -> Vec<String> {
+            let s = sections(&ranking(q, Some(Scope::App)), &apps, &[]);
+            s.into_iter().flat_map(|s| s.rows).map(|r| r.item.title).collect()
+        };
+        assert_eq!(found("hotaru terminal").first().map(String::as_str), Some("Hotaru"));
+        assert_eq!(found("sumi editor").first().map(String::as_str), Some("Sumi"));
+        // "Foot Terminal" has an f and an i, but not in one word.
+        assert!(!found("fi").contains(&"Foot".to_owned()));
+    }
+
+    #[test]
+    fn words_start_after_punctuation() {
+        assert!(starts_a_word("Search › Go to Line…", "line"));
+        assert!(starts_a_word("Edit › Copy", "edit copy"));
+        assert!(starts_a_word("Edit › Copy", "Edit›Co"));
+        assert!(!starts_a_word("Format › Determine Encoding…", "term"));
+        assert!(!starts_a_word("Edit › Copy", ""));
     }
 
     #[test]
