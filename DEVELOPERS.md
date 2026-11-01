@@ -25,6 +25,33 @@ The initial import preserves component layouts and separate Cargo workspaces, an
 
 Sidestep (whose engine and native toolkit Sukumo continues), Upleft, Omperor, upstream forks, and Arch/Omarchy packaging stay outside Sekka. Add package definitions and pinned dependencies when the distro needs them.
 
+Hotaru's 218 compressed raw benchmark captures (94.84 MiB) are retained at
+Git revision `d9f0217cc944d5f41bd59715497f45cbd2cc5e5b`, outside the current
+source tree. `apps/hotaru/upstream/evidence.json` records each original path,
+byte size and SHA-256. Reports, source, executable fixtures and licenses remain.
+From a clone containing that revision, restore all captures with
+`python3 scripts/restore-hotaru-evidence.py`, or pass quoted path globs to
+restore a subset. Use `--destination DIR` for a separate directory. A shallow
+clone can first run
+`git fetch origin d9f0217cc944d5f41bd59715497f45cbd2cc5e5b`.
+The script verifies bytes before installing them, verifies existing files
+without overwriting them, and refuses symlink paths. Restored captures are
+ignored by Git; they are not part of a Git-backed flake snapshot.
+
+This reduces new source archives and snapshots, not existing Git history or
+full-clone storage. Do not use `export-ignore` or other archive exclusions:
+the installed lock requires local Git and GitHub sources to have the same
+NAR hash. Keep future bulk evidence outside Git with immutable locations,
+checksums and compact reports, as required by `AGENTS.md`.
+
+The [2026-11-01 source inventory](docs/test-results/source-archive-2026-11-01.json)
+records the remaining large groups and duplicate files. Original wallpapers,
+published screenshots and visual-test baselines need pinned asset/fixture
+inputs before removal; their current consumers are recorded in the inventory.
+The byte savings concern source transfer and snapshots, not a measured
+evaluation-time improvement. Run restoration regressions with
+`python3 -m unittest discover -s tests -p test_restore_hotaru_evidence.py`.
+
 ## Build and check
 
 Sekka's PipeWire service uses `sekka-pipewire-daemon`, with the X11 bell

@@ -7,3 +7,6 @@ __pycache__/
 
 **/target/
 /.wrangler/
+# Archived benchmark captures: see apps/hotaru/upstream/evidence.json.
+# Restoring them locally must not add them back to the flake source.
+/apps/hotaru/upstream/**/*.gz
