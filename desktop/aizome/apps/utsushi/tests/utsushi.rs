@@ -456,6 +456,30 @@ fn media_info_says_how_it_plays() {
 }
 
 #[test]
+fn timeline_is_aligned_and_seeks_at_the_bar_centre() {
+    let mut h = harness();
+    let w = window(&h);
+    play_without_subtitles(&mut h, "chaptered.mkv");
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    for fullscreen in [false, true] {
+        h.window_state(w, if fullscreen { FULL_SCREEN } else { WINDOWED });
+        for width in [640.0, 960.0, 1720.0] {
+            h.resize(w, Size::new(width, 600.0));
+            let track = h.find_id(w, "timeline").unwrap();
+            let volume = h.find_id(w, "volume").unwrap();
+            assert!((track.center().y - volume.center().y).abs() <= 1.0);
+            h.click(w, track.center());
+            let expected = h.program().duration() / 2.0;
+            until(&mut h, 2.0, |a| (a.pos - expected).abs() < 0.1);
+            assert_eq!(h.program().status, Status::Paused);
+        }
+    }
+    h.move_to(w, h.find_id(w, "timeline").unwrap().center());
+    assert_golden(&mut h, w, "tests/golden/timeline-hover.png", 1.0);
+}
+
+#[test]
 fn media_info_and_file_panel_cover_video_without_subtitles() {
     use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
 
