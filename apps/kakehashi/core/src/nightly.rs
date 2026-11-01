@@ -9,7 +9,7 @@ use anyhow::{Context, Result, bail, ensure};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 pub const NIGHTLY: &str = "https://downloads.sekka.computer/nightly";
@@ -141,31 +141,8 @@ pub fn download(
         if cancelled() {
             bail!(Cancelled);
         }
-        if let Some(mut response) = parallel::probe(&url, have, total)? {
-            // No range support: the response is a complete ISO, never an
-            // appendable range. Preserve the old sequential download behavior.
-            out.set_len(0)?;
-            out.seek(SeekFrom::Start(0))?;
-            hasher = Sha256::new();
-            let mut body = response.body_mut().as_reader();
-            let mut buffer = vec![0u8; 1 << 20];
-            let mut done = 0;
-            report(Fetch::Downloading { done, total });
-            loop {
-                if cancelled() {
-                    bail!(Cancelled);
-                }
-                let n = body.read(&mut buffer)?;
-                if n == 0 {
-                    break;
-                }
-                ensure!(done + n as u64 <= total, "the server sent more than the expected image size");
-                out.write_all(&buffer[..n])?;
-                hasher.update(&buffer[..n]);
-                done += n as u64;
-                report(Fetch::Downloading { done, total });
-            }
-            ensure!(done == total, "the download ended at {done} of {total} bytes; try again to resume it");
+        if let Some(response) = parallel::probe(&url, have, total, cancelled)? {
+            parallel::fallback(build, &url, response, &mut out, &mut hasher, report, cancelled)?;
         } else {
             parallel::transfer(build, &url, have, &mut out, &mut hasher, report, cancelled)?;
         }

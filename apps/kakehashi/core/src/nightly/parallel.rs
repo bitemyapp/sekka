@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail, ensure};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
@@ -16,6 +16,7 @@ const CHUNK: u64 = 16 * 1024 * 1024;
 const MAX_CONNECTIONS: usize = 32;
 const SAMPLE: Duration = Duration::from_secs(3);
 const SETTLE: Duration = Duration::from_secs(1);
+const RECHECK: Duration = Duration::from_secs(30);
 
 /// Try enough connections to get past startup noise, then require a 10% gain
 /// over the best measured rate. Two flat samples confirm diminishing returns.
@@ -81,7 +82,7 @@ impl Adaptive {
 
 type Response = ureq::http::Response<ureq::Body>;
 
-fn request(agent: &ureq::Agent, url: &str, start: u64, len: u64) -> Result<Response> {
+fn request(agent: &ureq::Agent, url: &str, start: u64, len: u64, timeout: Duration) -> Result<Response> {
     Ok(agent
         .get(url)
         .header("Range", &format!("bytes={start}-{}", start + len - 1))
@@ -90,13 +91,18 @@ fn request(agent: &ureq::Agent, url: &str, start: u64, len: u64) -> Result<Respo
         .config()
         // Bound shutdown even if a server stops sending bytes. This applies to
         // a small range, not the complete ISO or the sequential fallback.
-        .timeout_per_call(Some(Duration::from_secs(30)))
+        .timeout_per_call(Some(timeout))
+        .http_status_as_error(false)
         .build()
         .call()?)
 }
 
 fn validate(response: &Response, start: u64, len: u64, total: u64) -> Result<()> {
-    ensure!(response.status().as_u16() == 206, "the server stopped honoring download ranges; try again to resume");
+    ensure!(
+        response.status().as_u16() == 206,
+        "the server returned {} instead of a download range; try again to resume",
+        response.status()
+    );
     let expected = format!("bytes {start}-{}/{total}", start + len - 1);
     ensure!(
         response.headers().get("content-range").and_then(|v| v.to_str().ok()) == Some(expected.as_str()),
@@ -111,20 +117,140 @@ fn validate(response: &Response, start: u64, len: u64, total: u64) -> Result<()>
     Ok(())
 }
 
-/// A server that ignores Range supplies a full response for the existing
-/// sequential path. Never interpret that response as a piece of the ISO.
-pub(super) fn probe(url: &str, have: u64, total: u64) -> Result<Option<Response>> {
-    let mut response = request(&agent(), url, have, 1)?;
+/// A full response can be transient (including at a CDN). Only a validated
+/// partial response establishes range support; never append a 200 as a range.
+fn probe_once(client: &ureq::Agent, url: &str, have: u64, total: u64) -> Result<bool> {
+    let mut response = request(client, url, have, 1, Duration::from_secs(5))?;
+    if response.status().as_u16() != 206 || std::env::var_os("KAKEHASHI_DOWNLOAD_TRACE").is_some() {
+        // Keep enough evidence to diagnose an intermediary ignoring Range.
+        // Do not log URLs, cookies or arbitrary response headers.
+        let headers = response.headers();
+        eprintln!(
+            "download range probe at {have}: status={}, content-range={:?}, content-length={:?}, content-encoding={:?}, accept-ranges={:?}, cf-cache-status={:?}, cf-ray={:?}",
+            response.status(),
+            headers.get("content-range"),
+            headers.get("content-length"),
+            headers.get("content-encoding"),
+            headers.get("accept-ranges"),
+            headers.get("cf-cache-status"),
+            headers.get("cf-ray")
+        );
+    }
     if response.status().as_u16() == 200 {
-        // Do not retain the probe's 30-second deadline for a full ISO download.
-        drop(response);
-        return Ok(Some(agent().get(url).header("Accept-Encoding", "identity").call()?));
+        return Ok(false);
     }
     validate(&response, have, 1, total)?;
     let mut reader = response.body_mut().as_reader();
     reader.read_exact(&mut [0])?;
     ensure!(reader.read(&mut [0])? == 0, "invalid range probe length");
-    Ok(None)
+    Ok(true)
+}
+
+pub(super) fn probe(url: &str, have: u64, total: u64, cancelled: &dyn Fn() -> bool) -> Result<Option<Response>> {
+    let client = agent();
+    for attempt in 0..3 {
+        if cancelled() {
+            bail!(Cancelled);
+        }
+        match probe_once(&client, url, have, total) {
+            Ok(true) => return Ok(None),
+            Ok(false) if attempt == 2 => break,
+            Err(e) if attempt == 2 => return Err(e),
+            _ => backoff(attempt, cancelled)?,
+        }
+    }
+    if cancelled() {
+        bail!(Cancelled);
+    }
+    eprintln!(
+        "download range support unconfirmed after three probes; using one connection and rechecking range support"
+    );
+    // A full ISO must not inherit the short probe deadline.
+    Ok(Some(client.get(url).header("Accept-Encoding", "identity").call()?))
+}
+
+fn backoff(attempt: usize, cancelled: &dyn Fn() -> bool) -> Result<()> {
+    for _ in 0..(5 << attempt) {
+        if cancelled() {
+            bail!(Cancelled);
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    Ok(())
+}
+
+pub(super) fn fallback(
+    build: &Build,
+    url: &str,
+    response: Response,
+    out: &mut File,
+    hasher: &mut Sha256,
+    report: &mut dyn FnMut(Fetch),
+    cancelled: &dyn Fn() -> bool,
+) -> Result<()> {
+    fallback_with_interval(build, url, response, out, hasher, report, cancelled, RECHECK)
+}
+
+#[allow(clippy::too_many_arguments)] // Keep the recheck interval injectable for deterministic HTTP fixtures.
+fn fallback_with_interval(
+    build: &Build,
+    url: &str,
+    mut response: Response,
+    out: &mut File,
+    hasher: &mut Sha256,
+    report: &mut dyn FnMut(Fetch),
+    cancelled: &dyn Fn() -> bool,
+    interval: Duration,
+) -> Result<()> {
+    if cancelled() {
+        bail!(Cancelled);
+    }
+    ensure!(response.status().as_u16() == 200, "the server did not send a complete download");
+    // A full response starts at zero, never at the old partial file's end.
+    out.set_len(0)?;
+    out.seek(SeekFrom::Start(0))?;
+    *hasher = Sha256::new();
+    let mut body = response.body_mut().as_reader();
+    let mut buffer = vec![0u8; 1 << 20];
+    let total = build.bytes;
+    let mut done = 0;
+    let client = agent();
+    let mut checked = Instant::now();
+    report(Fetch::Downloading { done, total });
+    loop {
+        if cancelled() {
+            bail!(Cancelled);
+        }
+        let n = body.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        ensure!(done + n as u64 <= total, "the server sent more than the expected image size");
+        out.write_all(&buffer[..n])?;
+        hasher.update(&buffer[..n]);
+        done += n as u64;
+        report(Fetch::Downloading { done, total });
+        if done < total && checked.elapsed() >= interval {
+            if cancelled() {
+                bail!(Cancelled);
+            }
+            // A failed check must not destroy a working sequential transfer.
+            let recovered = probe_once(&client, url, done, total);
+            checked = Instant::now();
+            match recovered {
+                Ok(true) => {
+                    eprintln!("download range support recovered at byte {done}; resuming parallel download");
+                    drop(body);
+                    drop(response);
+                    return transfer(build, url, done, out, hasher, report, cancelled);
+                }
+                Ok(false) => {}
+                Err(e) => eprintln!("download range recheck failed; continuing on one connection: {e}"),
+            }
+        }
+    }
+    ensure!(done == total, "the download ended at {done} of {total} bytes; try again to resume it");
+    Ok(())
 }
 
 struct Pending {
@@ -151,12 +277,7 @@ fn range(
             Err(_) => {
                 // Retry only this uncommitted range. Poll during backoff so Stop
                 // does not start another connection after a transient failure.
-                for _ in 0..(5 << attempt) {
-                    if stop.load(Relaxed) {
-                        bail!(Cancelled);
-                    }
-                    std::thread::sleep(Duration::from_millis(50));
-                }
+                backoff(attempt, &|| stop.load(Relaxed))?;
             }
         }
     }
@@ -175,7 +296,7 @@ fn range_once(
     if stop.load(Relaxed) {
         bail!(Cancelled);
     }
-    let mut response = request(agent, url, start, len)?;
+    let mut response = request(agent, url, start, len, Duration::from_secs(30))?;
     validate(&response, start, len, total)?;
     let mut body = response.body_mut().as_reader();
     let mut data = vec![0; len as usize];
@@ -206,6 +327,7 @@ pub(super) fn transfer(
     transfer_with_chunk(build, url, have, out, hasher, report, cancelled, CHUNK)
 }
 
+#[allow(clippy::too_many_arguments)] // HTTP fixtures exercise the same transfer with smaller ranges.
 fn transfer_with_chunk(
     build: &Build,
     url: &str,

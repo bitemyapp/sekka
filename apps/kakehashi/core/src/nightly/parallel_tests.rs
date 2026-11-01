@@ -20,6 +20,11 @@ enum Mode {
     FailOnce,
     TruncateOnce,
     DelayFirst,
+    IgnoreProbes(usize),
+    FailProbeOnce,
+    WrongProbeOnce,
+    TruncateProbeOnce,
+    FailedRecheck,
 }
 
 struct Server {
@@ -104,18 +109,23 @@ fn respond(mut stream: TcpStream, data: &[u8], requests: &Mutex<Vec<(u64, u64)>>
         }
     }
     let (a, b) = requested.unwrap_or((0, data.len() as u64 - 1));
-    let count = {
+    let (count, probes) = {
         let mut requests = requests.lock().unwrap();
         requests.push((a, b));
-        requests.iter().filter(|r| **r == (a, b)).count()
+        (requests.iter().filter(|r| **r == (a, b)).count(), requests.iter().filter(|(a, b)| a == b).count())
     };
     let probe = a == b;
-    if matches!(mode, Mode::FailOnce) && !probe && count == 1 {
+    if (matches!(mode, Mode::FailOnce) && !probe && count == 1)
+        || (matches!(mode, Mode::FailProbeOnce) && probe && probes == 1)
+        || (matches!(mode, Mode::FailedRecheck) && probe && probes == 4)
+    {
         return stream.write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
     }
     let ignored = matches!(mode, Mode::Ignore)
         || (matches!(mode, Mode::IgnoreLater) && !probe)
-        || (matches!(mode, Mode::IgnoreOnce) && !probe && count == 1);
+        || (matches!(mode, Mode::IgnoreOnce) && !probe && count == 1)
+        || (matches!(mode, Mode::IgnoreProbes(n) if probes <= n) && probe)
+        || (matches!(mode, Mode::FailedRecheck) && probe && probes <= 3);
     let (start, end) = if ignored { (0, data.len() - 1) } else { (a as usize, b as usize) };
     if matches!(mode, Mode::DelayFirst) && a == 0 && !probe {
         std::thread::sleep(Duration::from_millis(200));
@@ -123,7 +133,9 @@ fn respond(mut stream: TcpStream, data: &[u8], requests: &Mutex<Vec<(u64, u64)>>
     if ignored || requested.is_none() {
         write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", data.len())?;
     } else {
-        let header_start = if matches!(mode, Mode::WrongRange) && !probe { start + 1 } else { start };
+        let wrong = (matches!(mode, Mode::WrongRange) && !probe)
+            || (matches!(mode, Mode::WrongProbeOnce) && probe && probes == 1);
+        let header_start = if wrong { start + 1 } else { start };
         let total = data.len() + usize::from(matches!(mode, Mode::WrongTotal) && !probe);
         write!(
             stream,
@@ -132,6 +144,24 @@ fn respond(mut stream: TcpStream, data: &[u8], requests: &Mutex<Vec<(u64, u64)>>
         )?;
     }
     let mut body = data[start..=end].to_vec();
+    if matches!(mode, Mode::TruncateProbeOnce) && probe && probes == 1 {
+        body.clear();
+    }
+    // Recovery fixtures cannot finish via the full-file response: they must
+    // validate range support and continue from the bytes already committed.
+    if requested.is_none() && matches!(mode, Mode::IgnoreProbes(_) | Mode::FailedRecheck) {
+        for next_probe in 4..=if matches!(mode, Mode::FailedRecheck) { 5 } else { 4 } {
+            stream.write_all(&data[(next_probe - 4) * 8192..(next_probe - 3) * 8192])?;
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while requests.lock().unwrap().iter().filter(|(a, b)| a == b).count() < next_probe {
+                if Instant::now() >= deadline {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+        return Ok(());
+    }
     if !probe {
         match mode {
             Mode::TruncateOnce if count == 1 => {
@@ -227,6 +257,130 @@ fn a_server_ignoring_ranges_restarts_without_appending_duplicate_bytes() {
     std::fs::write(dir.path().join("image.iso.part"), &server.data[..123]).unwrap();
     let path = download(&build, &server.url, dir.path(), &mut |_| {}, &|| false).unwrap();
     assert_eq!(std::fs::read(path).unwrap(), *server.data);
+}
+
+#[test]
+fn transient_probe_failures_keep_range_downloads_and_the_existing_prefix() {
+    for mode in [
+        Mode::IgnoreProbes(1),
+        Mode::IgnoreProbes(2),
+        Mode::FailProbeOnce,
+        Mode::WrongProbeOnce,
+        Mode::TruncateProbeOnce,
+    ] {
+        let server = Server::new(256 * 1024 + 37, mode);
+        let dir = tempfile::tempdir().unwrap();
+        let have = 12345;
+        std::fs::write(dir.path().join("image.iso.part"), &server.data[..have]).unwrap();
+        let path = download(&server.build(), &server.url, dir.path(), &mut |_| {}, &|| false).unwrap();
+        assert_eq!(std::fs::read(path).unwrap(), *server.data);
+        let requests = server.requests.lock().unwrap();
+        assert!(requests.iter().all(|(start, _)| *start >= have as u64));
+        assert_eq!(requests.last(), Some(&(have as u64, server.data.len() as u64 - 1)));
+        assert_eq!(requests.len(), if matches!(mode, Mode::IgnoreProbes(2)) { 4 } else { 3 });
+    }
+}
+
+#[test]
+fn cancelling_probe_backoff_keeps_the_existing_partial_file() {
+    let server = Server::new(256 * 1024 + 37, Mode::Ignore);
+    let dir = tempfile::tempdir().unwrap();
+    let part = dir.path().join("image.iso.part");
+    let prefix = &server.data[..12345];
+    std::fs::write(&part, prefix).unwrap();
+    let err = download(&server.build(), &server.url, dir.path(), &mut |_| {}, &|| {
+        !server.requests.lock().unwrap().is_empty()
+    })
+    .unwrap_err();
+    assert!(err.is::<Cancelled>(), "{err:#}");
+    assert_eq!(std::fs::read(part).unwrap(), prefix);
+    assert_eq!(server.requests.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn sequential_fallback_returns_to_ranges_without_restarting_or_double_hashing() {
+    for mode in [Mode::IgnoreProbes(3), Mode::FailedRecheck] {
+        let server = Server::new(256 * 1024 + 37, mode);
+        let build = server.build();
+        let url = build.url(&server.url);
+        let response = probe(&url, 0, build.bytes, &|| false).unwrap().unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("part");
+        let mut out = File::create(&path).unwrap();
+        let mut hasher = Sha256::new();
+        let mut previous = 0;
+        fallback_with_interval(
+            &build,
+            &url,
+            response,
+            &mut out,
+            &mut hasher,
+            &mut |p| {
+                if let Fetch::Downloading { done, .. } = p {
+                    assert!(done >= previous);
+                    previous = done;
+                }
+            },
+            &|| false,
+            Duration::ZERO,
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(path).unwrap(), *server.data);
+        assert_eq!(hex(&hasher.finalize()), build.sha256);
+        let requests = server.requests.lock().unwrap();
+        assert_eq!(&requests[..3], &[(0, 0); 3]);
+        assert_eq!(requests[3], (0, build.bytes - 1));
+        let resumed = requests[requests.len() - 2].0;
+        assert!(resumed > 0 && resumed <= 64 * 1024);
+        assert_eq!(requests.last(), Some(&(resumed, build.bytes - 1)));
+        assert_eq!(requests.len(), if matches!(mode, Mode::FailedRecheck) { 7 } else { 6 });
+    }
+}
+
+#[test]
+fn continued_range_refusals_do_not_interrupt_the_sequential_download() {
+    let server = Server::new(2 * 1024 * 1024 + 37, Mode::Ignore);
+    let build = server.build();
+    let url = build.url(&server.url);
+    let response = probe(&url, 0, build.bytes, &|| false).unwrap().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("part");
+    let mut out = File::create(&path).unwrap();
+    let mut hasher = Sha256::new();
+    fallback_with_interval(&build, &url, response, &mut out, &mut hasher, &mut |_| {}, &|| false, Duration::ZERO)
+        .unwrap();
+    assert_eq!(std::fs::read(path).unwrap(), *server.data);
+    assert_eq!(hex(&hasher.finalize()), build.sha256);
+    assert!(server.requests.lock().unwrap().len() > 4);
+}
+
+#[test]
+fn cancelling_during_recovery_preserves_the_sequential_prefix() {
+    let server = Server::new(256 * 1024 + 37, Mode::IgnoreProbes(3));
+    let build = server.build();
+    let url = build.url(&server.url);
+    let response = probe(&url, 0, build.bytes, &|| false).unwrap().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("part");
+    let mut out = File::create(&path).unwrap();
+    let mut hasher = Sha256::new();
+    let err = fallback_with_interval(
+        &build,
+        &url,
+        response,
+        &mut out,
+        &mut hasher,
+        &mut |_| {},
+        &|| server.requests.lock().unwrap().len() >= 5,
+        Duration::ZERO,
+    )
+    .unwrap_err();
+    assert!(err.is::<Cancelled>(), "{err:#}");
+    let prefix = std::fs::read(path).unwrap();
+    assert!(!prefix.is_empty());
+    assert_eq!(prefix, server.data[..prefix.len()]);
+    assert_eq!(hasher.finalize(), Sha256::digest(prefix));
+    assert_eq!(server.requests.lock().unwrap().len(), 5);
 }
 
 #[test]

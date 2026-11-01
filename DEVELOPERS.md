@@ -2665,14 +2665,24 @@ image buffers to 512 MiB, and only a contiguous prefix ever reaches `.part`,
 including after cancellation or a worker failure. Existing partial downloads
 remain compatible. Every range must match the requested offset, length and
 complete object size; the final SHA-256 still gates the rename to `.iso`.
-A server without range support uses a sequential download. Failed or invalid
-ranges are retried twice with cancellable backoff, without committing their
-bytes or making progress jump backwards.
-Range requests have a 30-second deadline, which also bounds waiting for a
-stalled connection when stopping. `KAKEHASHI_DOWNLOAD_TRACE=1` logs concurrency
-changes for profiling; it does not change download behavior. The local HTTP
-fixtures test out-of-order arrivals, cancellation/resume, corrupt and malformed
-responses, sequential fallback and the controller's growth/backoff limits.
+A failed, malformed or ignored initial range probe is retried twice with
+cancellable backoff before a full response selects sequential downloading.
+During sequential downloading, range support is checked again after each
+30 seconds of transfer. A validated partial response switches back to parallel
+requests at the exact committed offset, retaining the file and hash state;
+an unsuccessful recheck leaves the sequential response in use. Each probe has
+a five-second deadline. Unexpected probe statuses and fallback/recovery
+decisions are logged, with selected response headers including Cloudflare's
+cache status and Ray ID, so an ignored range can be investigated afterwards.
+URLs, cookies and arbitrary headers are not logged.
+Failed or invalid data ranges are retried twice with cancellable backoff,
+without committing their bytes or making progress jump backwards. These
+requests have a 30-second deadline, which also bounds waiting for a stalled
+connection when stopping. `KAKEHASHI_DOWNLOAD_TRACE=1` additionally logs
+successful probes and concurrency changes for profiling; it does not change
+download behavior. The local HTTP fixtures test out-of-order arrivals,
+cancellation/resume, corrupt and malformed responses, transient probe failures,
+sequential fallback and recovery, and the controller's growth/backoff limits.
 
 ```sh
 nix build .#kakehashi
