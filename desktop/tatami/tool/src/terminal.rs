@@ -90,17 +90,33 @@ pub enum Tui {
     Hold,
 }
 
+/// The app-id of a terminal application's window: org.tatami.<name>, with
+/// what Hotaru refuses in one (anything but ASCII letters, digits, dots,
+/// hyphens and underscores) made a hyphen.
+pub fn tui_class(program: &str) -> String {
+    let name: String = Path::new(program)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || "._-".contains(c) {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    format!("org.tatami.{}", if name.is_empty() { "tui" } else { &name })
+}
+
 /// A terminal application in a window with app-id org.tatami.<name>, as
 /// omarchy-launch-tui does; the window rules float the panel-like ones.
 pub fn tui(command: &[String], mode: Tui) {
     let Some(program) = command.first() else {
         return;
     };
-    let name = Path::new(program)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("tui");
-    let class = format!("org.tatami.{name}");
+    let class = tui_class(program);
     if mode == Tui::Focus
         && let Ok(clients) = hypr::json("clients")
         && let Some(address) = clients
@@ -172,6 +188,17 @@ mod tests {
         assert_eq!(parent_from_stat("123 (bash) S 77 123 123 0"), Some(77));
         assert_eq!(parent_from_stat("9 (a) b (c)) R 4 9 9"), Some(4));
         assert_eq!(parent_from_stat("garbage"), None);
+    }
+    #[test]
+    fn terminal_applications_get_an_app_id_hotaru_accepts() {
+        assert_eq!(tui_class("btop"), "org.tatami.btop");
+        assert_eq!(
+            tui_class("/run/current-system/sw/bin/nvim"),
+            "org.tatami.nvim"
+        );
+        assert_eq!(tui_class("my editor"), "org.tatami.my-editor");
+        assert_eq!(tui_class("g++"), "org.tatami.g--");
+        assert_eq!(tui_class("/"), "org.tatami.tui");
     }
     #[test]
     fn terminal_editors_open_in_a_terminal() {

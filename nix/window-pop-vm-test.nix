@@ -25,6 +25,7 @@ pkgs.testers.runNixOSTest {
       qemu.options = [ "-vga none -device virtio-gpu-pci,xres=1280,yres=800" ];
     };
     hardware.graphics.enable = true;
+    programs.ydotool.enable = true;
     environment.sessionVariables.LIBGL_ALWAYS_SOFTWARE = "1";
   };
   testScript = ''
@@ -147,6 +148,39 @@ pkgs.testers.runNixOSTest {
         machine.screenshot("hotaru-about-held")
         machine.send_key("q")
         wait(lambda: not clients())
+
+    with subtest("Super+C and Super+V copy and paste in Hotaru"):
+        # Tatami sends terminals Ctrl+Insert and Shift+Insert for these.
+        machine.wait_for_unit("ydotoold.service")
+        wayland = "export WAYLAND_DISPLAY=$(cd /run/user/1000 && ls wayland-[0-9] | head -n 1); "
+        def clipboard(primary=False):
+            return user(wayland + "wl-paste -n" + (" -p" if primary else "") + " 2>/dev/null || true")
+        machine.send_key("meta_l-ret")
+        wait(lambda: window() is not None)
+        machine.send_chars("clear; yes copyneedle | head -n 200\n")
+        time.sleep(2)
+        # A double click anywhere in the text takes one "copyneedle".
+        c = window()
+        x, y = c["at"][0] + 40, c["at"][1] + c["size"][1] // 2
+        user("hyprctl dispatch " + shlex.quote(f"hl.dsp.cursor.move({{ x = {x}, y = {y} }})"))
+        machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool mousemove -x 1 -y 0")
+        time.sleep(0.3)
+        machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool click -r 2 0xC0")
+        wait(lambda: clipboard(primary=True) == "copyneedle")
+        assert clipboard() != "copyneedle", "selecting alone leaves the clipboard"
+        machine.send_key("meta_l-c")
+        wait(lambda: clipboard() == "copyneedle")
+        user(wayland + "printf 'touch /home/demo/pasted-by-super-v' | wl-copy >/dev/null 2>&1")
+        wait(lambda: clipboard() == "touch /home/demo/pasted-by-super-v")
+        machine.send_key("meta_l-v")
+        # The paste arrives on its own time: press Return until it has run.
+        def pasted():
+            machine.send_key("ret")
+            return machine.execute("test -e /home/demo/pasted-by-super-v")[0] == 0
+        wait(pasted)
+        machine.screenshot("hotaru-clipboard")
+        machine.send_key("meta_l-w")
+        wait(lambda: window() is None)
 
     for scale in [1, 2]:
         if scale == 2:

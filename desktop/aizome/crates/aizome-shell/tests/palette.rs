@@ -67,11 +67,15 @@ fn app_results_activate_existing_windows_and_close_the_palette() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
-#[test]
-fn app_purposes_find_the_default_before_settings_and_other_terminals() {
+/// Shipped and third-party apps, with Hotaru, Hako, Sumi and Firefox the
+/// defaults, Foot used a hundred times, and the setting that chooses the
+/// terminal. Returns the folder to remove afterwards.
+fn with_default_apps(
+    h: &mut aizome_kit::testing::Harness<aizome_shell::shell::Shell>,
+    name: &str,
+) -> std::path::PathBuf {
     use aizome_sys::apps::{AppIndex, DefaultRole, Locale, XdgDirs};
-    let mut h = scene(false);
-    let root = std::env::temp_dir().join(format!("aizome-palette-discovery-{}", std::process::id()));
+    let root = std::env::temp_dir().join(format!("aizome-palette-{name}-{}", std::process::id()));
     let dirs = XdgDirs::rooted(&root);
     let apps = dirs.data_home.join("applications");
     std::fs::create_dir_all(&apps).unwrap();
@@ -117,11 +121,21 @@ fn app_purposes_find_the_default_before_settings_and_other_terminals() {
     for _ in 0..100 {
         h.program_mut().frecency.visit("app:foot");
     }
-    let mut terminal = aizome_shell::palette::model::SettingEntry::default();
-    terminal.id = "general.default-apps.terminal".into();
-    terminal.title = "General › Default Apps › Terminal".into();
-    terminal.keywords = vec!["terminal settings".into()];
+    let terminal = aizome_shell::palette::model::SettingEntry {
+        id: "general.default-apps.terminal".into(),
+        title: "General › Default Apps › Terminal".into(),
+        keywords: vec!["terminal settings".into()],
+        ..Default::default()
+    };
     h.program_mut().settings_list = vec![terminal];
+    root
+}
+
+#[test]
+fn app_purposes_find_the_default_before_settings_and_other_terminals() {
+    use aizome_sys::apps::DefaultRole;
+    let mut h = scene(false);
+    let root = with_default_apps(&mut h, "discovery");
     for (query, wanted) in [
         ("term", "org.aizome.Hotaru"),
         ("terminal", "org.aizome.Hotaru"),
@@ -164,6 +178,31 @@ fn app_purposes_find_the_default_before_settings_and_other_terminals() {
         h.program().palette.as_ref().unwrap().sections[0].rows[0].item.action,
         Action::FocusApp { app_id: "kitty".into() }
     );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn the_focused_apps_commands_stay_ahead_of_purposes() {
+    let mut h = scene(false);
+    let root = with_default_apps(&mut h, "commands");
+    // In the editor, "edit" and "file" are its menus before Sumi and Hako,
+    // and the default still heads the apps that follow.
+    for (query, app) in [("edit", "org.aizome.Sumi"), ("file", "org.aizome.Hako")] {
+        open(&mut h, query);
+        let sections = &h.program().palette.as_ref().unwrap().sections;
+        assert_eq!(sections[0].scope, Scope::Command, "query: {query}");
+        let apps = sections.iter().find(|s| s.scope == Scope::App).expect(query);
+        assert_eq!(apps.rows[0].item.action, Action::FocusApp { app_id: app.into() }, "query: {query}");
+        h.send(Msg::Palette(PaletteEvent::Ui(PaletteMsg::Close)));
+    }
+    // Commands that share only letters with a purpose, or that apps list
+    // as keywords (Hako's "copy"), keep their place.
+    for (query, command) in [("copy", "Copy"), ("co", "Copy"), ("fi", "Find…"), ("new", "New")] {
+        open(&mut h, query);
+        let first = &h.program().palette.as_ref().unwrap().sections[0];
+        assert_eq!((first.scope, first.rows[0].item.title.as_str()), (Scope::Command, command), "query: {query}");
+        h.send(Msg::Palette(PaletteEvent::Ui(PaletteMsg::Close)));
+    }
     std::fs::remove_dir_all(root).unwrap();
 }
 

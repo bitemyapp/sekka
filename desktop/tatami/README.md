@@ -47,7 +47,7 @@ happens on topic branches merged into `main`; releases use version tags.
 
 | Component | Configuration |
 |---|---|
-| Look | Tokyo Night throughout, JetBrainsMono Nerd Font, the Adwaita cursor. Window gaps 5/10, a 2px `#7aa2f7` border, square corners, no blur or shadow, v4 animations, inactive windows at 0.985/0.96 opacity. Da Nang at night as the background, one of 23 wallpapers chosen with Style › Background or Super+Ctrl+Space (Omarchy's own have unclear licenses) |
+| Look | Tokyo Night throughout but the terminal (see Known issues), JetBrainsMono Nerd Font, the Adwaita cursor. Window gaps 5/10, a 2px `#7aa2f7` border, square corners, no blur or shadow, v4 animations, inactive windows at 0.985/0.96 opacity. Da Nang at night as the background, one of 23 wallpapers chosen with Style › Background or Super+Ctrl+Space (Omarchy's own have unclear licenses) |
 | Bar | Waybar, 26px. NixOS logo (menu), workspaces 1–5, a centered "Monday 10:23" clock with screen-recording, night-light, do-not-disturb and stay-awake indicators, the month on hover and the weather beside it, then the tray (only while some application has an icon), Bluetooth, network, audio, display and battery, with the time left to empty or full on hover (right-click keeps it in the bar beside the percentage) |
 | Menu and launcher | Walker with Elephant. The v4 menu tree (Apps, Learn, Trigger, Setup, About, System) in v4's card style, with chevrons on submenus. Typing searches menu entries and applications together, applications by name, kind and keyword ("pack" finds Yukimi), each with its kind, such as Package Manager, under its name. Keybindings (Super+K) are listed in v4's order and format |
 | Notifications and OSD | Mako as v4's 380px accent-bordered cards; SwayOSD as v4's bottom card |
@@ -140,6 +140,11 @@ Not ported from Omarchy:
 
 ## Known issues
 
+- **The terminal doesn't look like Tatami yet.** Hotaru opens in its own
+  theme and font, not Tokyo Night and JetBrainsMono Nerd Font: it has no
+  Tokyo Night theme or padding setting yet. Its preferences
+  (`~/.config/aizome/hotaru.toml`) are the same file in Tatami and Aizome,
+  so a font chosen in one session applies in the other.
 - **Claude Desktop closes on `tatami reload` if an older Tatami started
   it.** The launcher used to start applications as its own children
   (`systemd-run --scope`), and Claude Desktop's NixOS sandbox

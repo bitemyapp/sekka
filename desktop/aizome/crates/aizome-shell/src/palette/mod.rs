@@ -408,11 +408,6 @@ impl Shell {
                     .unwrap_or_else(|| crate::apps::catalog::glyph_by_category(&a.categories));
                 let mut kw: Vec<String> = a.keywords.clone();
                 kw.extend(a.generic_name.clone());
-                if let Some(generic) = &a.generic_name {
-                    // Both words in "Sumi editor" or "Hotaru terminal"
-                    // must be searchable together, not in separate fields.
-                    kw.push(format!("{} {generic}", a.name));
-                }
                 let default_names: Vec<String> = defaults
                     .iter()
                     .filter(|(id, _)| *id == a.id)

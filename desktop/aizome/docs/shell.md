@@ -233,10 +233,12 @@ Results:
   frecency boosts, folders open in Hako and files with their default app.
 - **Apps**: desktop entries by name, generic name and keywords, including
   combined queries such as “Sumi editor”, regardless of capitalization.
-  Purpose searches such as “term”,
-  “terminal”, “files” or “browser” favor the chosen default app. Specific
-  app names still find other installed apps; “terminal settings” still
-  leads to settings.
+  Purpose searches such as “term”, “terminal”, “files” or “browser” (the
+  start of a purpose's name, three letters or more) favor the chosen
+  default app, ahead of settings, windows and files but not of the focused
+  app's commands when one of them starts a word with the query: “file” in
+  an editor is its File menu, then Hako. Specific app names still find
+  other installed apps; “terminal settings” still leads to settings.
 - **Settings**: every Settei pane and its main options ("Keyboard ›
   Remap Caps Lock"), opening Settei at that place. The list comes from
   `aizome-settei --list-settings --json` (cached), so it stays in step.
