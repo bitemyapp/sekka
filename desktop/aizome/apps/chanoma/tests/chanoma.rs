@@ -13,6 +13,8 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
+use aizome_chanoma::app::play::FilmItem;
+use aizome_chanoma::app::state::Subtitles as StateSubtitles;
 use aizome_chanoma::app::{Input, MenuKind, Modal, Screen};
 use aizome_chanoma::clock::ManualClock;
 use aizome_chanoma::pad::{Button, Dir, Family, PadEvent, PadInfo};
@@ -25,6 +27,7 @@ use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
 use aizome_kit::testing::Harness;
 use aizome_kit::theme::{Appearance, ThemeChoice};
 use aizome_kit::{Size, WindowKey};
+use aizome_media::CueBody;
 
 // A libretro core: a 160 × 120 picture, blue (green while B is held) with
 // a white square that moves right while Right is held; it counts frames,
@@ -253,6 +256,7 @@ fn config(dirs: Dirs, cores: PathBuf, clock: ManualClock) -> Config {
         // folder picker.
         home: root.join("home"),
         mounts: vec![root.join("media")],
+        mpris: false,
     }
 }
 
@@ -348,6 +352,11 @@ fn core_lock() -> MutexGuard<'static, ()> {
 
 fn exists(p: &Path) -> bool {
     p.is_file()
+}
+
+/// One of the engine's test media (a film with subtitles beside it, say).
+fn fixture(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../crates/aizome-media/tests/fixtures").join(name)
 }
 
 #[test]
@@ -531,6 +540,75 @@ fn a_game_plays_pauses_and_carries_on_where_it_was_left() {
     input(&mut h, Input::Dir(Dir::Down));
     input(&mut h, Input::Dir(Dir::Down));
     input(&mut h, Input::Ok);
+}
+
+#[test]
+fn a_film_shows_its_subtitles_and_keeps_the_choice_for_next_time() {
+    // The engine's two-second test card, with a SubRip file beside it.
+    let videos = std::env::temp_dir().join(format!("chanoma-test-film-{}", std::process::id())).join("Videos");
+    let (dirs, cores) = household("film", |s| s.video_folders = vec![videos.clone()]);
+    std::fs::create_dir_all(&videos).unwrap();
+    for f in ["clip.mp4", "clip.srt"] {
+        std::fs::copy(fixture(f), videos.join(f)).unwrap();
+    }
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    let open_film = |h: &mut Harness<Chanoma>| {
+        let row = h.program().home_view().shelves.iter().position(|s| s.title == "Films and shows").expect("films");
+        while h.program().focus.row < row {
+            input(h, Input::Dir(Dir::Down));
+        }
+        input(h, Input::Ok);
+        until(h, |a| a.screen == Screen::Film && a.film.as_ref().is_some_and(|f| f.info.is_some()));
+    };
+    open_film(&mut h);
+
+    // Its subtitles, found beside it, show as it plays; paused there.
+    until(&mut h, |a| a.film_subtitles().is_some());
+    input(&mut h, Input::Ok);
+    until(&mut h, |a| a.film.as_ref().is_some_and(|f| !f.playing));
+    let subs = h.program().film_subtitles().expect("still showing, paused");
+    assert!(matches!(&subs.cues[0].body, CueBody::Text { text, italic: true, .. } if text == "First line"));
+    shot(&mut h, "16-film-subtitles");
+
+    // The film's menu offers them (one sound track: no language to choose).
+    input(&mut h, Input::Back);
+    assert!(matches!(h.program().modal, Some(Modal::Menu { kind: MenuKind::Film, .. })));
+    let (items, words) = h.program().film_menu();
+    assert_eq!(items, [FilmItem::Keep, FilmItem::Subtitles, FilmItem::Stop]);
+    assert_eq!(words[1], "Subtitles: Track 1");
+    shot(&mut h, "17-film-menu");
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    assert!(matches!(h.program().modal, Some(Modal::Menu { kind: MenuKind::Subtitles, .. })));
+    assert_eq!(h.program().modal_focus, 1, "on the track showing");
+    shot(&mut h, "18-film-subtitles-menu");
+    // Back goes back to the film's menu; there again, Off.
+    input(&mut h, Input::Back);
+    assert!(matches!(h.program().modal, Some(Modal::Menu { kind: MenuKind::Film, .. })));
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    input(&mut h, Input::Dir(Dir::Up));
+    input(&mut h, Input::Ok);
+    assert!(h.program().modal.is_none());
+    until(&mut h, |a| a.film.as_ref().is_some_and(|f| f.subtitles.is_none()) && a.film_subtitles().is_none());
+    let kept = h.program().recent.languages.get(&videos.join("clip.mp4").to_string_lossy().into_owned()).cloned();
+    assert_eq!(kept.and_then(|l| l.subtitles), Some(StateSubtitles::Off), "kept for the film");
+
+    // The desktop's media controls play and pause it, and stop it.
+    h.send(Msg::Mpris(aizome_mpris::Action::Toggle));
+    until(&mut h, |a| a.film.as_ref().is_some_and(|f| f.playing));
+    h.send(Msg::Mpris(aizome_mpris::Action::Stop));
+    assert_eq!(h.program().screen, Screen::Home);
+
+    // Next time, it plays without them.
+    open_film(&mut h);
+    until(&mut h, |a| a.film.as_ref().is_some_and(|f| f.playing && f.subtitles.is_none()));
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_millis(1200) {
+        h.settle(Duration::from_millis(20), |_| false);
+        assert!(h.program().film_subtitles().is_none(), "subtitles off, as chosen");
+    }
 }
 
 #[test]

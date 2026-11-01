@@ -25,6 +25,9 @@ aizome-ipc.workspace = true
 aizome-sys.workspace = true
 # Films and episodes from the disk play through Utsushi's engine.
 aizome-media = { path = "../../crates/aizome-media" }
+# Films on the desktop's media controls and the media keys (MPRIS), as
+# Utsushi is.
+aizome-mpris = { path = "../../crates/aizome-mpris" }
 serde.workspace = true
 serde_json.workspace = true
 log.workspace = true
