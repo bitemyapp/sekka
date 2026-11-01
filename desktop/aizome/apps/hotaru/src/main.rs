@@ -6,7 +6,29 @@ use hotaru_io::PtyCommand;
 
 fn main() {
     let mut helper_args = std::env::args_os().skip(1);
-    if helper_args.next().as_deref() == Some(std::ffi::OsStr::new("--hotaru-resolve-link")) {
+    let helper = helper_args.next();
+    if helper.as_deref() == Some(std::ffi::OsStr::new("--print-working-directory")) {
+        use std::io::Write;
+        use std::os::unix::ffi::OsStrExt;
+        let pid = helper_args.next().and_then(|pid| pid.to_str()?.parse::<u32>().ok()).filter(|pid| *pid > 0);
+        let Some(pid) = pid.filter(|_| helper_args.next().is_none()) else {
+            eprintln!("--print-working-directory requires a Hotaru process ID");
+            std::process::exit(2);
+        };
+        match aizome_hotaru::directory::query(pid) {
+            Ok(path) => {
+                if std::io::stdout().write_all(path.as_os_str().as_bytes()).is_err() {
+                    std::process::exit(1);
+                }
+            }
+            Err(error) => {
+                eprintln!("Hotaru directory: {error}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+    if helper.as_deref() == Some(std::ffi::OsStr::new("--hotaru-resolve-link")) {
         if aizome_hotaru::resolve_link_helper(helper_args).is_err() {
             std::process::exit(2);
         }
@@ -23,7 +45,7 @@ fn main() {
         match arg.to_str() {
             Some("--help" | "-h") => {
                 println!(
-                    "Hotaru 蛍 — Aizome's terminal\n\nUsage: aizome-hotaru [--config-file FILE] [--working-directory DIR] [--new-window] [--app-id ID] [--hold] [-- COMMAND [ARG…]]"
+                    "Hotaru 蛍 — Aizome's terminal\n\nUsage: aizome-hotaru [--config-file FILE] [--working-directory DIR] [--new-window] [--app-id ID] [--hold] [-- COMMAND [ARG…]]\n       aizome-hotaru --print-working-directory PID"
                 );
                 return;
             }
@@ -96,6 +118,9 @@ fn main() {
         }
     };
     let mut app = Hotaru::new(command);
+    app.directory_server = aizome_hotaru::directory::Server::bind()
+        .map_err(|error| log::warn!("Could not expose pane directory: {error}"))
+        .ok();
     if let Some(app_id) = app_id {
         app.app_id = app_id;
     }

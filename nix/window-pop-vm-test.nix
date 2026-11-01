@@ -118,6 +118,15 @@ pkgs.testers.runNixOSTest {
             children = machine.succeed(f"pgrep -P {pid} || true").split()
             return [machine.succeed(f"readlink /proc/{p}/cwd").strip() for p in children]
         wait(lambda: "/home/demo/terminal space" in shell_cwd(first["pid"]))
+        # A newer background tab must not supply the focused tab's cwd.
+        machine.send_key("ctrl-shift-t")
+        wait(lambda: len(shell_cwd(first["pid"])) == 2)
+        machine.send_chars("cd /tmp\n")
+        wait(lambda: "/tmp" in shell_cwd(first["pid"]))
+        machine.send_key("ctrl-shift-tab")
+        machine.wait_until_succeeds(
+            "runuser -u demo -- sh -c " + shlex.quote(
+                f"test \"$(aizome-hotaru --print-working-directory {first['pid']})\" = '/home/demo/terminal space'"))
         machine.send_key("meta_l-ret")
         wait(lambda: len([c for c in clients() if c["class"] == "org.aizome.Hotaru"]) == 2)
         second = next(c for c in clients() if c["class"] == "org.aizome.Hotaru" and c["pid"] != first["pid"])

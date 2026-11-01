@@ -17,6 +17,7 @@ use crate::terminal_view::{Selection, colors_for, terminal_view};
 pub enum Msg {
     NewTab,
     Launch(PtyCommand),
+    QueryDirectory(std::sync::mpsc::Sender<Option<std::path::PathBuf>>),
     SelectTab(u64),
     CloseTab,
     Split(Axis),
@@ -177,6 +178,7 @@ pub struct Hotaru {
     command: PtyCommand,
     demo: bool,
     pub instance: Option<crate::instance::Instance>,
+    pub directory_server: Option<crate::directory::Server>,
     clipboard: Option<ClipboardWorker>,
     clipboard_token: u64,
     clipboard_cancel: Arc<AtomicBool>,
@@ -239,6 +241,7 @@ impl Hotaru {
             command,
             demo: false,
             instance: None,
+            directory_server: None,
             clipboard: None,
             clipboard_token: 0,
             clipboard_cancel: Arc::new(AtomicBool::new(false)),
@@ -1436,9 +1439,25 @@ impl Program for Hotaru {
         {
             log::warn!("Could not serve application instance: {e}");
         }
+        if let Some(server) = self.directory_server.take()
+            && let Err(e) = server.serve(cx.stream())
+        {
+            log::warn!("Could not serve pane directory: {e}");
+        }
     }
     fn update(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
         match msg {
+            Msg::QueryDirectory(reply) => {
+                // The UI selects the pane; its PTY worker does the /proc I/O.
+                if !self
+                    .active_pane()
+                    .filter(|pane| !pane.ended)
+                    .and_then(|pane| pane.session.as_ref())
+                    .is_some_and(|session| session.command(Command::Directory(reply.clone())).is_ok())
+                {
+                    let _ = reply.send(None);
+                }
+            }
             Msg::Action(action) => self.action(action, cx),
             Msg::SetTheme(theme) => {
                 self.settings.theme = theme;

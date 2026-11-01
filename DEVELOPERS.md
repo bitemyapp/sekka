@@ -1211,6 +1211,20 @@ module, checks and development shell, built with Sekka's Nixpkgs.
 `nix/components.nix` hands them to the rest of Sekka as `inputs.aizome`, as it
 does Tatami's and Yukimi's.
 
+Tatami asks `aizome-hotaru --print-working-directory PID` for the focused
+terminal pane's live directory before opening a terminal. The helper prints
+the raw path, without a trailing newline. Each Hotaru process exposes a Linux
+abstract socket named `aizome-hotaru.cwd.UID.PID`; both ends check peer
+credentials. The UI chooses the active tab and split, and the PTY worker reads
+its child process's directory. Socket I/O runs on a separate worker with bounded
+reply waits. This works without OSC 7 and avoids choosing a background tab by
+child PID order. A failed Hotaru query falls back to the user's home. For
+other terminals, Tatami inherits a directory only from a single shell child.
+
+The Hotaru `native` test `directory_query_follows_the_focused_tab_and_split_without_osc7`
+uses real PTYs and the query executable. `checks.x86_64-linux.window-pop-vm`
+covers Tatami's shortcut with a newer background tab in a different directory.
+
 ```sh
 nix build .#aizome .#aizome-fonts
 nix develop .#aizome

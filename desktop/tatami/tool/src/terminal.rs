@@ -24,6 +24,17 @@ pub fn is_shell(exe: &Path, etc_shells: &str) -> bool {
             .any(|shell| shell == name)
 }
 
+fn is_hotaru(exe: &Path) -> bool {
+    exe.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            matches!(
+                name.trim_start_matches('.').trim_end_matches("-wrapped"),
+                "hotaru" | "aizome-hotaru"
+            )
+        })
+}
+
 /// Children of a process, newest (highest PID) last.
 fn children(pid: i32) -> Vec<i32> {
     let mut found: Vec<i32> = fs::read_dir("/proc")
@@ -59,11 +70,26 @@ pub fn active_cwd() -> String {
     hypr::json("activewindow")
         .ok()
         .and_then(|window| hypr::active_window_pid(&window))
-        .and_then(|pid| children(pid).into_iter().last())
-        .and_then(|shell| {
-            let exe = fs::read_link(format!("/proc/{shell}/exe")).ok()?;
-            let cwd = fs::read_link(format!("/proc/{shell}/cwd")).ok()?;
-            (is_shell(&exe, &etc_shells) && cwd.is_dir()).then(|| cwd.display().to_string())
+        .and_then(|pid| {
+            // Hotaru knows which of its tabs/splits has focus. Child PID order
+            // cannot tell us that, and OSC 7 can be absent or out of date.
+            if fs::read_link(format!("/proc/{pid}/exe")).is_ok_and(|exe| is_hotaru(&exe)) {
+                return util::output(
+                    "aizome-hotaru",
+                    &["--print-working-directory", &pid.to_string()],
+                )
+                .ok()
+                .filter(|cwd| Path::new(cwd).is_absolute() && Path::new(cwd).is_dir());
+            }
+            // Other terminals: only an unambiguous shell is safe to inherit.
+            // In particular, a failed Hotaru query must not pick a random tab.
+            let mut shells = children(pid).into_iter().filter_map(|shell| {
+                let exe = fs::read_link(format!("/proc/{shell}/exe")).ok()?;
+                let cwd = fs::read_link(format!("/proc/{shell}/cwd")).ok()?;
+                (is_shell(&exe, &etc_shells) && cwd.is_dir()).then(|| cwd.display().to_string())
+            });
+            let cwd = shells.next()?;
+            shells.next().is_none().then_some(cwd)
         })
         .unwrap_or_else(util::home)
 }
@@ -166,6 +192,22 @@ mod tests {
         assert!(is_shell(Path::new("/nix/store/xyz/bin/.zsh-wrapped"), etc));
         assert!(!is_shell(Path::new("/nix/store/xyz-nvim/bin/nvim"), etc));
         assert!(!is_shell(Path::new("/"), etc));
+    }
+    #[test]
+    fn hotaru_queries_include_both_package_wrappers_and_tui_app_ids() {
+        // Use the executable, not the window class: a TUI has its own app ID.
+        for name in [
+            "hotaru",
+            "aizome-hotaru",
+            ".hotaru-wrapped",
+            ".aizome-hotaru-wrapped",
+        ] {
+            assert!(is_hotaru(&Path::new("/nix/store/package/bin").join(name)));
+        }
+        assert!(!is_hotaru(Path::new("/run/current-system/sw/bin/foot")));
+        assert!(!is_hotaru(Path::new(
+            "/run/current-system/sw/bin/tatami-activity"
+        )));
     }
     #[test]
     fn stat_parent_survives_odd_command_names() {
