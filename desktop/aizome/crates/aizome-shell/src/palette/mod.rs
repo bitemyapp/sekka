@@ -423,6 +423,7 @@ impl Shell {
                 item.boost = self.frecency.boost(&key);
                 item.app_names = a.generic_name.iter().cloned().collect();
                 item.default_names = default_names;
+                item.aizome = crate::apps::catalog::is_aizome(a);
                 out.push(item);
             }
         }

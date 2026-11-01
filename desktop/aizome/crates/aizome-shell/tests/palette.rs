@@ -67,12 +67,14 @@ fn app_results_activate_existing_windows_and_close_the_palette() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
-/// Shipped and third-party apps, with Hotaru, Hako, Sumi and Firefox the
-/// defaults, Foot used a hundred times, and the setting that chooses the
-/// terminal. Returns the folder to remove afterwards.
+/// Shipped and third-party apps, and `others` (desktop file ID, contents),
+/// with Hotaru, Hako, Sumi and Firefox the defaults, Foot used a hundred
+/// times, and the setting that chooses the terminal. Returns the folder to
+/// remove afterwards.
 fn with_default_apps(
     h: &mut aizome_kit::testing::Harness<aizome_shell::shell::Shell>,
     name: &str,
+    others: &[(&str, &str)],
 ) -> std::path::PathBuf {
     use aizome_sys::apps::{AppIndex, DefaultRole, Locale, XdgDirs};
     let root = std::env::temp_dir().join(format!("aizome-palette-{name}-{}", std::process::id()));
@@ -106,6 +108,9 @@ fn with_default_apps(
             "[Desktop Entry]\nType=Application\nName={name}\nGenericName={generic}\nExec={id}\nCategories={categories}\nMimeType={mime}\n"
         )).unwrap();
     }
+    for (id, entry) in others {
+        std::fs::write(apps.join(format!("{id}.desktop")), entry).unwrap();
+    }
     let mut index = AppIndex::load_with(dirs, Locale::default());
     for (role, id) in [
         (DefaultRole::Terminal, "org.aizome.Hotaru.desktop"),
@@ -135,7 +140,7 @@ fn with_default_apps(
 fn app_purposes_find_the_default_before_settings_and_other_terminals() {
     use aizome_sys::apps::DefaultRole;
     let mut h = scene(false);
-    let root = with_default_apps(&mut h, "discovery");
+    let root = with_default_apps(&mut h, "discovery", &[]);
     for (query, wanted) in [
         ("term", "org.aizome.Hotaru"),
         ("terminal", "org.aizome.Hotaru"),
@@ -184,7 +189,7 @@ fn app_purposes_find_the_default_before_settings_and_other_terminals() {
 #[test]
 fn the_focused_apps_commands_stay_ahead_of_purposes() {
     let mut h = scene(false);
-    let root = with_default_apps(&mut h, "commands");
+    let root = with_default_apps(&mut h, "commands", &[]);
     // In the editor, "edit" and "file" are its menus before Sumi and Hako,
     // and the default still heads the apps that follow.
     for (query, app) in [("edit", "org.aizome.Sumi"), ("file", "org.aizome.Hako")] {
@@ -201,6 +206,41 @@ fn the_focused_apps_commands_stay_ahead_of_purposes() {
         open(&mut h, query);
         let first = &h.program().palette.as_ref().unwrap().sections[0];
         assert_eq!((first.scope, first.rows[0].item.title.as_str()), (Scope::Command, command), "query: {query}");
+        h.send(Msg::Palette(PaletteEvent::Ui(PaletteMsg::Close)));
+    }
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+/// GNOME 50's Files and Calculator, as nixpkgs ships their entries: named
+/// for what they are, with no generic name.
+const GNOME: [(&str, &str); 2] = [
+    (
+        "org.gnome.Nautilus",
+        "[Desktop Entry]\nType=Application\nName=Files\nKeywords=folder;manager;explore;disk;filesystem;nautilus;\nExec=nautilus --new-window %U\nDBusActivatable=true\nCategories=GNOME;GTK;Utility;Core;FileManager;\n",
+    ),
+    (
+        "org.gnome.Calculator",
+        "[Desktop Entry]\nType=Application\nName=Calculator\nKeywords=calculation;arithmetic;scientific;financial;\nExec=gnome-calculator\nCategories=GNOME;GTK;Utility;Calculator;\n",
+    ),
+];
+
+#[test]
+fn aizomes_own_apps_come_before_other_desktops_apps_of_their_kind() {
+    let mut h = scene(false);
+    let root = with_default_apps(&mut h, "own", &GNOME);
+    // Under All, and in Apps alone short of a purpose's three letters.
+    for (scope, query, wanted) in [
+        (None, "files", "org.aizome.Hako"),
+        (None, "calculator", "org.aizome.Soroban"),
+        (None, "calc", "org.aizome.Soroban"),
+        (Some(Scope::App), "fi", "org.aizome.Hako"),
+        (Some(Scope::App), "ca", "org.aizome.Soroban"),
+        (None, "nautilus", "org.gnome.Nautilus"),
+    ] {
+        h.send(Msg::Run(Action::Palette { scope, query: query.into() }));
+        let palette = h.program().palette.as_ref().unwrap();
+        let item = &palette.sections[0].rows[0].item;
+        assert_eq!(item.action, Action::FocusApp { app_id: wanted.into() }, "query: {query}");
         h.send(Msg::Palette(PaletteEvent::Ui(PaletteMsg::Close)));
     }
     std::fs::remove_dir_all(root).unwrap();

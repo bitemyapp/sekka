@@ -237,7 +237,11 @@ pub fn type_ahead(menu: &Menu, query: &str) -> Vec<(Flat, Vec<std::ops::Range<us
     let flat: Vec<Flat> = menu.flatten().into_iter().filter(|f| f.entry.enabled).collect();
     let candidates: Vec<aizome_search::Candidate> = flat
         .iter()
-        .map(|f| aizome_search::Candidate { title: f.entry.label.clone(), keywords: vec![f.trail_label()], boost: 0 })
+        .map(|f| aizome_search::Candidate {
+            title: f.entry.label.clone(),
+            keywords: vec![f.trail_label()],
+            ..Default::default()
+        })
         .collect();
     let mut q = aizome_search::Query::new(query);
     aizome_search::rank(&mut q, &candidates, 40).into_iter().map(|r| (flat[r.index].clone(), r.ranges)).collect()

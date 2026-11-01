@@ -27,6 +27,8 @@ pub struct Item {
     pub app_names: Vec<String>,
     /// Purposes for which this application is the user's current default.
     pub default_names: Vec<String>,
+    /// One of Aizome's own apps ([`is_aizome`](crate::apps::catalog::is_aizome)).
+    pub aizome: bool,
     /// Its frecency key (`cmd:…`, `app:…`, `file:…`), if picks are counted.
     pub key: Option<String>,
     pub action: Action,
@@ -47,6 +49,7 @@ impl Item {
             keywords: Vec::new(),
             app_names: Vec::new(),
             default_names: Vec::new(),
+            aizome: false,
             key: None,
             action,
             mono: false,
@@ -191,15 +194,11 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
                 .map(|i| Row { item: i.clone(), ranges: name_ranges(i, q), score: i.boost })
                 .collect()
         } else {
-            let pool: Vec<&Item> = items.iter().filter(|i| i.scope == scope).collect();
-            let candidates: Vec<Candidate> = pool
-                .iter()
-                .map(|i| Candidate {
-                    title: i.title.clone(),
-                    keywords: keywords_of(i, q),
-                    boost: i.boost + exactness(&i.title, q) + app_discovery_boost(i, q),
-                })
-                .collect();
+            let mut pool: Vec<&Item> = items.iter().filter(|i| i.scope == scope).collect();
+            // Between equal matches Aizome's own apps come first, as in the
+            // Toolchest.
+            pool.sort_by_key(|i| !i.aizome);
+            let candidates: Vec<Candidate> = pool.iter().map(|i| candidate(i, q)).collect();
             rank(&mut query, &candidates, limit)
                 .into_iter()
                 .map(|rk| Row { item: pool[rk.index].clone(), ranges: rk.ranges, score: rk.score })
@@ -214,9 +213,10 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
         out.push(Section { scope, head, sub, rows });
     }
     // With something typed, the section holding the best match leads. A
-    // purpose's lift carries Apps past settings, windows and files, but not
-    // past the focused app's commands when one of them starts a word with
-    // the query: "file" in an editor is its File menu before Hako.
+    // purpose's lift, and an Aizome app's kind counting as its name, carry
+    // Apps past settings, windows and files, but not past the focused app's
+    // commands when one of them starts a word with the query: "file" in an
+    // editor is its File menu before Hako.
     if !q.is_empty() && r.scope.is_none() {
         let answer = out.first().is_some_and(|s| s.scope == Scope::Answer) as usize;
         let best = |s: &Section| s.rows.iter().map(|r| r.score).max().unwrap_or(0);
@@ -227,11 +227,13 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
                     && s.rows.iter().any(|r| starts_a_word(&format!("{} {}", r.item.trail, r.item.title), q))
             })
             .map(best);
-        let standing = |s: &Section| match commands {
-            Some(commands) if s.scope == Scope::App => {
-                let unlifted = s.rows.iter().map(|r| r.score - app_discovery_boost(&r.item, q)).max().unwrap_or(0);
-                unlifted.max(best(s).min(commands))
-            }
+        let apps = commands.and_then(|commands| {
+            let s = out.iter().find(|s| s.scope == Scope::App)?;
+            let plain = s.rows.iter().map(|r| unlifted(&mut query, &r.item, q)).max().unwrap_or(0);
+            Some(plain.max(best(s).min(commands)))
+        });
+        let standing = |s: &Section| match apps {
+            Some(apps) if s.scope == Scope::App => apps,
             _ => best(s),
         };
         out[answer..].sort_by(|a, b| standing(b).cmp(&standing(a)).then(order_of(a.scope).cmp(&order_of(b.scope))));
@@ -241,6 +243,34 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
 
 fn order_of(s: Scope) -> usize {
     ORDER.iter().position(|x| *x == s).unwrap_or(ORDER.len())
+}
+
+/// `i` as [`rank`] takes it, for the query `q`.
+fn candidate(i: &Item, q: &str) -> Candidate {
+    let aliases = aliases_of(i);
+    let exact = std::iter::once(&i.title).chain(&aliases).map(|n| exactness(n, q)).max().unwrap_or(0);
+    Candidate {
+        title: i.title.clone(),
+        keywords: keywords_of(i, q),
+        boost: i.boost + exact + app_discovery_boost(i, q),
+        aliases,
+    }
+}
+
+/// `i`'s score without what its purposes give it: no lift, and an Aizome
+/// app's kind only a keyword, as any other app's is.
+fn unlifted(query: &mut Query, i: &Item, q: &str) -> i64 {
+    let plain = Candidate { aliases: Vec::new(), boost: i.boost + exactness(&i.title, q), ..candidate(i, q) };
+    rank(query, &[plain], 1).first().map_or(0, |r| r.score)
+}
+
+/// Names an item goes by as much as its title. Aizome's apps are named for
+/// themselves and say what they are in their generic name (Hako, "Files"),
+/// where GNOME's are named for what they are (Nautilus is "Files"), so an
+/// Aizome app's kind counts as its name: "files" finds Hako as strongly as
+/// GNOME's Files.
+fn aliases_of(i: &Item) -> Vec<String> {
+    if i.aizome { i.app_names.clone() } else { Vec::new() }
 }
 
 fn keywords_of(i: &Item, q: &str) -> Vec<String> {
@@ -608,6 +638,65 @@ mod tests {
         // A whole purpose word no command starts still finds the app.
         assert_eq!(first(&sections(&ranking("files", None), &items, &[])), (Scope::App, "Hako"));
         assert_eq!(first(&sections(&ranking("play", None), &items, &[])), (Scope::Command, "Play"));
+    }
+
+    /// GNOME's Files and Calculator, named for what they are, listed before
+    /// Hako and Soroban, as the index's alphabetical order has them.
+    fn other_desktops_and_aizome() -> Vec<Item> {
+        let mut hako = app("Hako", "Files", &[]);
+        hako.aizome = true;
+        let mut soroban = app("Soroban", "Calculator", &[]);
+        soroban.aizome = true;
+        vec![
+            Item::new(Scope::App, "Files", Icon::Folder, Action::None)
+                .keywords(vec!["folder".into(), "nautilus".into()]),
+            Item::new(Scope::App, "Calculator", Icon::Calculator, Action::None).keywords(vec!["arithmetic".into()]),
+            hako,
+            soroban,
+        ]
+    }
+
+    #[test]
+    fn aizomes_own_apps_answer_to_their_kind_and_lead_their_equals() {
+        let items = other_desktops_and_aizome();
+        let leader = |q: &str, items: &[Item]| first(&sections(&ranking(q, Some(Scope::App)), items, &[])).1.to_owned();
+        // Short of a purpose's three letters too.
+        for (q, wanted) in
+            [("files", "Hako"), ("file", "Hako"), ("fi", "Hako"), ("calculator", "Soroban"), ("ca", "Soroban")]
+        {
+            assert_eq!(leader(q, &items), wanted, "query: {q}");
+        }
+        // The kind isn't highlighted in the name.
+        assert!(sections(&ranking("fi", Some(Scope::App)), &items, &[])[0].rows[0].ranges.is_empty());
+        // Asked for by name, the others are found.
+        assert_eq!(leader("nautilus", &items), "Files");
+        // Between equals, a habit still decides: two picks of GNOME's Files.
+        let mut used = items.clone();
+        used[0].boost = 26;
+        assert_eq!(leader("fi", &used), "Files");
+    }
+
+    #[test]
+    fn an_aizome_apps_kind_is_a_purpose_before_the_focused_apps_commands() {
+        let own = ["Hotaru", "Hako", "Sumi", "Shiori", "Utsushi"];
+        let items: Vec<Item> = editor_commands()
+            .into_iter()
+            .chain(desktop())
+            .map(|mut i| {
+                i.aizome = own.contains(&i.title.as_str());
+                i.boost = 0;
+                i
+            })
+            .collect();
+        for (q, command, app) in
+            [("file", "New", "Hako"), ("edit", "Copy", "Sumi"), ("term", "Open Terminal Here", "Hotaru")]
+        {
+            let s = sections(&ranking(q, None), &items, &[]);
+            assert_eq!(first(&s), (Scope::Command, command), "query: {q}");
+            let apps = s.iter().position(|s| s.scope == Scope::App).unwrap();
+            assert_eq!(s[apps].rows[0].item.title, app, "query: {q}");
+        }
+        assert_eq!(first(&sections(&ranking("files", None), &items, &[])), (Scope::App, "Hako"));
     }
 
     #[test]
