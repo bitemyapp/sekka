@@ -141,6 +141,8 @@ let
         # (docs/kit.md).
         fonts = pkgs.callPackage ./aizome-fonts.nix { inherit archivo; };
         hotaruFonts = pkgs.callPackage ./hotaru-fonts.nix { };
+        # Chanoma, the television (programs.aizome.chanoma).
+        chanoma = aizome.chanoma;
         default = aizome;
       }
     );
@@ -182,6 +184,10 @@ let
       # the displays' turning off; paused or gone, it doesn't
       # (vm-idle-inhibit-test.nix).
       idle-inhibit = import ./vm-idle-inhibit-test.nix { inherit pkgs self; };
+      # Chanoma with a virtual controller alone: found and held, a game
+      # opened, played and paused from it, kept where it was left
+      # (vm-chanoma-test.nix).
+      chanoma = import ./vm-chanoma-test.nix { inherit pkgs self; };
       standard-menu = import ./vm-standard-menu-test.nix { inherit pkgs self; };
       tokei-reorder = import ./vm-tokei-reorder-test.nix { inherit pkgs self; };
       loop-images = import ./vm-loop-images-test.nix { inherit pkgs self; };

@@ -37,7 +37,8 @@ Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban (Calculator), Tenki
 (Weather), Tansu (Disks), Kura (Disk Usage), Myaku (Activity), Nisshi (Logs),
 Shashin (Images), Shiori (Documents), Utsushi (Media Player) and Koe
 (Dictation), with Hotaru, Aizome's own terminal
-([its README](apps/hotaru/README.md)). foot stays installed and can replace it
+([its README](apps/hotaru/README.md)). Chanoma (TV), the family
+television, comes where it's turned on ([docs/chanoma.md](docs/chanoma.md)). foot stays installed and can replace it
 in Settei's Default Apps. See [docs/apps.md](docs/apps.md).
 
 ## Using it
