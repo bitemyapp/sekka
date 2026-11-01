@@ -50,7 +50,10 @@ pkgs.testers.runNixOSTest {
         ];
       };
       hardware.graphics.enable = true;
-      environment.systemPackages = [ pkgs.libsecret ];
+      environment.systemPackages = [
+        pkgs.libsecret
+        pkgs.foot
+      ]; # Explicit input-probe fixture.
     };
   testScript = ''
     import shlex

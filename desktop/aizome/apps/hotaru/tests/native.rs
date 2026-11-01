@@ -1299,6 +1299,100 @@ fn shell(script: &str) -> PtyCommand {
 }
 
 #[test]
+fn directory_query_follows_the_focused_tab_and_split_without_osc7() {
+    use std::os::unix::ffi::OsStrExt;
+    let root = std::env::temp_dir().join(format!("hotaru-focused-directory-{}", std::process::id()));
+    let first = root.join("first tab");
+    let second = root.join("second\n日本語 tab");
+    let split = root.join("split directory");
+    for directory in [&first, &second, &split] {
+        std::fs::create_dir_all(directory).unwrap();
+    }
+    let command = |directory: &std::path::Path| {
+        let mut command = PtyCommand::new("/bin/sh");
+        command.cwd = Some(root.clone());
+        // No shell integration: the cached launch directory remains `root`.
+        // The first input changes directory again without an OSC 7 report.
+        command.args = [
+            "-c".into(),
+            "cd -- \"$1\"; printf READY; read unused; cd -- \"$2\"; printf MOVED; read unused".into(),
+            "sh".into(),
+            directory.as_os_str().to_owned(),
+            split.as_os_str().to_owned(),
+        ]
+        .into();
+        command
+    };
+    let mut app = Hotaru::new(command(&first));
+    app.directory_server = Some(aizome_hotaru::directory::Server::bind().unwrap());
+    let mut h = Harness::new(app);
+    let ready = |h: &mut Harness<Hotaru>, text: &str| {
+        assert!(
+            h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().snapshot.plain_text().contains(text))
+        );
+    };
+    let query = |h: &mut Harness<Hotaru>| {
+        let task = std::thread::spawn(|| {
+            std::process::Command::new(env!("CARGO_BIN_EXE_aizome-hotaru"))
+                .args(["--print-working-directory", &std::process::id().to_string()])
+                .output()
+                .unwrap()
+        });
+        assert!(h.settle(Duration::from_secs(5), |_| task.is_finished()));
+        task.join().unwrap()
+    };
+    let check = |h: &mut Harness<Hotaru>, directory: &std::path::Path| {
+        let output = query(h);
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        assert_eq!(output.stdout, directory.as_os_str().as_bytes());
+    };
+    ready(&mut h, "READY");
+    let first_tab = h.program().active;
+    let first_pane = h.program().active_pane().unwrap().id;
+    h.send(Msg::Launch(command(&second)));
+    ready(&mut h, "READY");
+    let second_tab = h.program().active;
+    check(&mut h, &second);
+    h.send(Msg::SelectTab(first_tab));
+    check(&mut h, &first);
+    h.send(Msg::Split(Axis::Right));
+    ready(&mut h, "READY");
+    let split_pane = h.program().active_pane().unwrap().id;
+    h.send(Msg::Input(split_pane, b"\n".to_vec()));
+    ready(&mut h, "MOVED");
+    check(&mut h, &split);
+    h.send(Msg::FocusPane(first_pane));
+    check(&mut h, &first);
+    h.send(Msg::FocusPane(split_pane));
+    h.send(Msg::ClosePane);
+    check(&mut h, &first);
+    h.send(Msg::SelectTab(second_tab));
+    check(&mut h, &second);
+    h.send(Msg::CloseTab);
+    check(&mut h, &first);
+    h.send(Msg::CloseTab);
+    assert!(!query(&mut h).status.success(), "a closed pane cannot supply a directory");
+    drop(h);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn invocation_hold_keeps_output_without_changing_saved_preferences() {
+    let mut app = Hotaru::new(shell("printf 'finished successfully'"));
+    app.hold = true;
+    app.app_id = "org.tatami.fastfetch".into();
+    assert_eq!(aizome_kit::Program::info(&app).app_id, "org.tatami.fastfetch");
+    let mut h = Harness::new(app);
+    assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().is_some_and(|p| p.ended)));
+    assert!(!h.program().settings.wait_after_command);
+    let pane = h.program().active_pane().unwrap();
+    assert!(pane.snapshot.plain_text().contains("finished successfully"));
+    let id = pane.id;
+    h.send(Msg::Key(id, Arc::new(hotaru_core::input::KeyEvent::new(hotaru_core::input::Key::Character('q')))));
+    assert!(h.windows().is_empty());
+}
+
+#[test]
 fn an_ended_shell_closes_its_pane_then_its_tab_then_the_window() {
     use aizome_hotaru::settings::Action;
     let mut h = Harness::new(Hotaru::new(shell("read line")));

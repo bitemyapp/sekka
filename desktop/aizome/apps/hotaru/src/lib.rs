@@ -1,6 +1,7 @@
 pub mod app;
 mod automatic_links;
 mod clipboard;
+pub mod directory;
 mod font;
 pub mod input;
 pub mod instance;

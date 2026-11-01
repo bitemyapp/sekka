@@ -398,12 +398,27 @@ impl Shell {
         }
         // Apps.
         if let Some(index) = &self.apps {
+            let defaults: Vec<_> = aizome_sys::apps::DefaultRole::ALL
+                .into_iter()
+                .filter_map(|role| index.role_default(role).map(|id| (id, role)))
+                .collect();
             for a in index.apps() {
                 let glyph = crate::apps::catalog::glyph_for(a.app_id())
                     .map(|g| g.0)
                     .unwrap_or_else(|| crate::apps::catalog::glyph_by_category(&a.categories));
                 let mut kw: Vec<String> = a.keywords.clone();
                 kw.extend(a.generic_name.clone());
+                if let Some(generic) = &a.generic_name {
+                    // Both words in "Sumi editor" or "Hotaru terminal"
+                    // must be searchable together, not in separate fields.
+                    kw.push(format!("{} {generic}", a.name));
+                }
+                let default_names: Vec<String> = defaults
+                    .iter()
+                    .filter(|(id, _)| *id == a.id)
+                    .flat_map(|(_, role)| model::role_names(*role).iter().map(|name| (*name).to_owned()))
+                    .collect();
+                kw.extend(default_names.iter().cloned());
                 let key = format!("app:{}", a.app_id());
                 let mut item =
                     Item::new(Scope::App, a.name.clone(), glyph, Action::FocusApp { app_id: a.app_id().to_owned() })
@@ -411,6 +426,8 @@ impl Shell {
                         .keywords(kw)
                         .key(key.clone());
                 item.boost = self.frecency.boost(&key);
+                item.app_names = a.generic_name.iter().cloned().collect();
+                item.default_names = default_names;
                 out.push(item);
             }
         }

@@ -216,6 +216,8 @@ pkgs.testers.runNixOSTest {
       };
 
       environment.systemPackages = [
+        # Explicit compatibility fixture; Foot is not a desktop default.
+        pkgs.foot
         pkgs.jq
         pkgs.wireplumber
         pkgs.pulseaudio

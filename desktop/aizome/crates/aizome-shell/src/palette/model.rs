@@ -23,6 +23,10 @@ pub struct Item {
     pub glyph: Icon,
     /// Matched but not shown.
     pub keywords: Vec<String>,
+    /// Familiar names for an application's purpose, such as "Text Editor".
+    pub app_names: Vec<String>,
+    /// Purposes for which this application is the user's current default.
+    pub default_names: Vec<String>,
     /// Its frecency key (`cmd:…`, `app:…`, `file:…`), if picks are counted.
     pub key: Option<String>,
     pub action: Action,
@@ -41,6 +45,8 @@ impl Item {
             shortcut: None,
             glyph,
             keywords: Vec::new(),
+            app_names: Vec::new(),
+            default_names: Vec::new(),
             key: None,
             action,
             mono: false,
@@ -167,7 +173,9 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
         });
     }
     let limit = if r.scope.is_some() { 60 } else { r.per_section.max(1) };
-    let mut query = Query::new(q);
+    // App and command discovery should not disappear when Caps Lock is on.
+    // Files arrive from their own path search and retain its case rules.
+    let mut query = Query::new(&q.to_lowercase());
     for scope in ORDER.iter().copied().filter(|s| *s != Scope::Answer) {
         if r.scope.is_some_and(|only| only != scope) {
             continue;
@@ -189,7 +197,7 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
                 .map(|i| Candidate {
                     title: i.title.clone(),
                     keywords: keywords_of(i),
-                    boost: i.boost + exactness(&i.title, q),
+                    boost: i.boost + exactness(&i.title, q) + app_discovery_boost(i, q),
                 })
                 .collect();
             rank(&mut query, &candidates, limit)
@@ -227,6 +235,42 @@ fn keywords_of(i: &Item) -> Vec<String> {
         k.push(format!("{} {}", i.trail, i.title));
     }
     k
+}
+
+/// Asking for an app's purpose should launch the app before offering to
+/// configure it. Only literal purpose prefixes get this lift: "terminal
+/// settings" remains a settings query, and "kitty" still finds kitty.
+fn app_discovery_boost(item: &Item, query: &str) -> i64 {
+    if item.scope != Scope::App || query.chars().count() < 2 {
+        return 0;
+    }
+    let query = query.to_lowercase();
+    let starts_word = |name: &String| {
+        let name = name.to_lowercase();
+        name.match_indices(&query).any(|(at, _)| at == 0 || name[..at].ends_with(char::is_whitespace))
+    };
+    let purpose = item.app_names.iter().any(starts_word);
+    let preferred = item.default_names.iter().any(starts_word);
+    i64::from(purpose) * 180 + i64::from(preferred) * 360
+}
+
+/// Searchable purposes, shared by every app chosen for a role rather than
+/// hard-coded to today's default programs.
+pub fn role_names(role: aizome_sys::apps::DefaultRole) -> &'static [&'static str] {
+    use aizome_sys::apps::DefaultRole::*;
+    match role {
+        Browser => &["web browser", "browser", "internet"],
+        Mail => &["mail", "email"],
+        Terminal => &["terminal", "shell", "console", "command line"],
+        FileManager => &["files", "file manager", "folders"],
+        TextEditor => &["text editor", "editor"],
+        ImageViewer => &["images", "image viewer", "photos", "pictures"],
+        VideoPlayer => &["videos", "video player", "media player"],
+        MusicPlayer => &["music", "music player", "audio player"],
+        PdfViewer => &["pdf", "pdf viewer", "documents"],
+        Calendar => &["calendar"],
+        ArchiveManager => &["archives", "archive manager"],
+    }
 }
 
 /// Where a file's name matched (the index matched it; highlight again).

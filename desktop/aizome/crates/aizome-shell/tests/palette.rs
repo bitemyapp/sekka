@@ -68,6 +68,106 @@ fn app_results_activate_existing_windows_and_close_the_palette() {
 }
 
 #[test]
+fn app_purposes_find_the_default_before_settings_and_other_terminals() {
+    use aizome_sys::apps::{AppIndex, DefaultRole, Locale, XdgDirs};
+    let mut h = scene(false);
+    let root = std::env::temp_dir().join(format!("aizome-palette-discovery-{}", std::process::id()));
+    let dirs = XdgDirs::rooted(&root);
+    let apps = dirs.data_home.join("applications");
+    std::fs::create_dir_all(&apps).unwrap();
+    // Exercise shipped metadata, not a hand-written approximation of it.
+    for (app, name) in [
+        ("hotaru", "Hotaru"),
+        ("hako", "Hako"),
+        ("sumi", "Sumi"),
+        ("settei", "Settei"),
+        ("soroban", "Soroban"),
+        ("nisshi", "Nisshi"),
+    ] {
+        let file = format!("org.aizome.{name}.desktop");
+        std::fs::copy(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../apps/{app}/data/{file}")),
+            apps.join(file),
+        )
+        .unwrap();
+    }
+    for (id, name, generic, categories, mime) in [
+        ("foot", "Foot", "Terminal", "System;TerminalEmulator;", ""),
+        ("footclient", "Foot Client", "Terminal", "System;TerminalEmulator;", ""),
+        ("foot-server", "Foot Server", "Terminal", "System;TerminalEmulator;", ""),
+        ("kitty", "kitty", "Terminal", "System;TerminalEmulator;", ""),
+        ("firefox", "Firefox", "Web Browser", "Network;WebBrowser;", "x-scheme-handler/https;"),
+    ] {
+        std::fs::write(apps.join(format!("{id}.desktop")), format!(
+            "[Desktop Entry]\nType=Application\nName={name}\nGenericName={generic}\nExec={id}\nCategories={categories}\nMimeType={mime}\n"
+        )).unwrap();
+    }
+    let mut index = AppIndex::load_with(dirs, Locale::default());
+    for (role, id) in [
+        (DefaultRole::Terminal, "org.aizome.Hotaru.desktop"),
+        (DefaultRole::FileManager, "org.aizome.Hako.desktop"),
+        (DefaultRole::TextEditor, "org.aizome.Sumi.desktop"),
+        (DefaultRole::Browser, "firefox.desktop"),
+    ] {
+        index.set_role_default(role, id).unwrap();
+    }
+    h.program_mut().apps = Some(std::sync::Arc::new(index));
+    // A previously used alternative must not bury the chosen default for
+    // a purpose query. An explicit app name must still find that app.
+    for _ in 0..100 {
+        h.program_mut().frecency.visit("app:foot");
+    }
+    let mut terminal = aizome_shell::palette::model::SettingEntry::default();
+    terminal.id = "general.default-apps.terminal".into();
+    terminal.title = "General › Default Apps › Terminal".into();
+    terminal.keywords = vec!["terminal settings".into()];
+    h.program_mut().settings_list = vec![terminal];
+    for (query, wanted) in [
+        ("term", "org.aizome.Hotaru"),
+        ("terminal", "org.aizome.Hotaru"),
+        ("TERM", "org.aizome.Hotaru"),
+        ("shell", "org.aizome.Hotaru"),
+        ("console", "org.aizome.Hotaru"),
+        ("command line", "org.aizome.Hotaru"),
+        ("hotaru terminal", "org.aizome.Hotaru"),
+        ("foot", "foot"),
+        ("kitty", "kitty"),
+        ("files", "org.aizome.Hako"),
+        ("folders", "org.aizome.Hako"),
+        ("text editor", "org.aizome.Sumi"),
+        ("sumi editor", "org.aizome.Sumi"),
+        ("browser", "firefox"),
+        ("calculator", "org.aizome.Soroban"),
+        ("logs", "org.aizome.Nisshi"),
+        ("settings", "org.aizome.Settei"),
+    ] {
+        let p = open(&mut h, query);
+        let palette = h.program().palette.as_ref().unwrap();
+        assert_eq!(palette.selected, 0);
+        assert_eq!(palette.scroll, 0.0);
+        let item = &palette.sections[0].rows[0].item;
+        assert_eq!(item.action, Action::FocusApp { app_id: wanted.into() }, "query: {query}");
+        assert!(h.texts(p).contains(&item.title), "the first app is drawn without scrolling: {query}");
+        if wanted == "org.aizome.Hotaru" {
+            assert_eq!(item.glyph, aizome_kit::Icon::SquareTerminal);
+        }
+        h.send(Msg::Palette(PaletteEvent::Ui(PaletteMsg::Close)));
+    }
+    h.send(Msg::Run(Action::Palette { scope: None, query: "terminal settings".into() }));
+    assert_eq!(h.program().palette.as_ref().unwrap().sections[0].scope, Scope::Setting);
+    h.send(Msg::Palette(PaletteEvent::Ui(PaletteMsg::Close)));
+    let mut index = std::sync::Arc::try_unwrap(h.program_mut().apps.take().unwrap()).unwrap();
+    index.set_role_default(DefaultRole::Terminal, "kitty.desktop").unwrap();
+    h.program_mut().apps = Some(std::sync::Arc::new(index));
+    h.send(Msg::Run(Action::Palette { scope: None, query: "terminal".into() }));
+    assert_eq!(
+        h.program().palette.as_ref().unwrap().sections[0].rows[0].item.action,
+        Action::FocusApp { app_id: "kitty".into() }
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn keys_move_scope_run_and_close() {
     let mut h = scene(false);
     let p = open(&mut h, "");

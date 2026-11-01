@@ -55,6 +55,8 @@ pkgs.testers.runNixOSTest {
       # No bluetooth controller or printers in the VM; their services still
       # run and report nothing, which is what the widgets must handle.
       environment.systemPackages = [
+        # Explicit compatibility fixture; Foot is not a desktop default.
+        pkgs.foot
         pkgs.wtype
         # ffprobe, for the screen recording.
         pkgs.ffmpeg

@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! Terminals and terminal applications in foot, Omarchy 4's terminal. foot
-//! finds the Tatami configuration through XDG_CONFIG_DIRS, which the
-//! session prepends with /etc/xdg/tatami; a user's own ~/.config/foot
-//! still takes precedence.
+//! Hotaru terminals and terminal applications, with independent windows
+//! for the desktop's shortcuts and application-specific window rules.
 use crate::{hypr, util};
 use std::{fs, path::Path};
 
@@ -24,6 +22,17 @@ pub fn is_shell(exe: &Path, etc_shells: &str) -> bool {
             .filter(|line| !line.trim_start().starts_with('#'))
             .filter_map(|line| Path::new(line.trim()).file_name()?.to_str())
             .any(|shell| shell == name)
+}
+
+fn is_hotaru(exe: &Path) -> bool {
+    exe.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            matches!(
+                name.trim_start_matches('.').trim_end_matches("-wrapped"),
+                "hotaru" | "aizome-hotaru"
+            )
+        })
 }
 
 /// Children of a process, newest (highest PID) last.
@@ -61,24 +70,39 @@ pub fn active_cwd() -> String {
     hypr::json("activewindow")
         .ok()
         .and_then(|window| hypr::active_window_pid(&window))
-        .and_then(|pid| children(pid).into_iter().last())
-        .and_then(|shell| {
-            let exe = fs::read_link(format!("/proc/{shell}/exe")).ok()?;
-            let cwd = fs::read_link(format!("/proc/{shell}/cwd")).ok()?;
-            (is_shell(&exe, &etc_shells) && cwd.is_dir()).then(|| cwd.display().to_string())
+        .and_then(|pid| {
+            // Hotaru knows which of its tabs/splits has focus. Child PID order
+            // cannot tell us that, and OSC 7 can be absent or out of date.
+            if fs::read_link(format!("/proc/{pid}/exe")).is_ok_and(|exe| is_hotaru(&exe)) {
+                return util::output(
+                    "aizome-hotaru",
+                    &["--print-working-directory", &pid.to_string()],
+                )
+                .ok()
+                .filter(|cwd| Path::new(cwd).is_absolute() && Path::new(cwd).is_dir());
+            }
+            // Other terminals: only an unambiguous shell is safe to inherit.
+            // In particular, a failed Hotaru query must not pick a random tab.
+            let mut shells = children(pid).into_iter().filter_map(|shell| {
+                let exe = fs::read_link(format!("/proc/{shell}/exe")).ok()?;
+                let cwd = fs::read_link(format!("/proc/{shell}/cwd")).ok()?;
+                (is_shell(&exe, &etc_shells) && cwd.is_dir()).then(|| cwd.display().to_string())
+            });
+            let cwd = shells.next()?;
+            shells.next().is_none().then_some(cwd)
         })
         .unwrap_or_else(util::home)
 }
 
 /// Open a terminal in the focused terminal's directory.
 pub fn terminal(command: &[String]) {
-    let cwd = format!("--working-directory={}", active_cwd());
-    let mut args = vec![cwd.as_str()];
+    let cwd = active_cwd();
+    let mut args = vec!["--new-window", "--working-directory", cwd.as_str()];
     if !command.is_empty() {
         args.push("--");
         args.extend(command.iter().map(String::as_str));
     }
-    util::launch("foot", &args);
+    util::launch("aizome-hotaru", &args);
 }
 
 /// How a terminal application opens.
@@ -117,14 +141,13 @@ pub fn tui(command: &[String], mode: Tui) {
         ));
         return;
     }
-    let app_id = format!("--app-id={class}");
-    let mut args = vec![app_id.as_str()];
+    let mut args = vec!["--app-id", class.as_str()];
     if mode == Tui::Hold {
         args.push("--hold");
     }
     args.push("--");
     args.extend(command.iter().map(String::as_str));
-    util::launch("foot", &args);
+    util::launch("aizome-hotaru", &args);
 }
 
 /// Terminal editors open in a terminal, others in their own window.
@@ -169,6 +192,22 @@ mod tests {
         assert!(is_shell(Path::new("/nix/store/xyz/bin/.zsh-wrapped"), etc));
         assert!(!is_shell(Path::new("/nix/store/xyz-nvim/bin/nvim"), etc));
         assert!(!is_shell(Path::new("/"), etc));
+    }
+    #[test]
+    fn hotaru_queries_include_both_package_wrappers_and_tui_app_ids() {
+        // Use the executable, not the window class: a TUI has its own app ID.
+        for name in [
+            "hotaru",
+            "aizome-hotaru",
+            ".hotaru-wrapped",
+            ".aizome-hotaru-wrapped",
+        ] {
+            assert!(is_hotaru(&Path::new("/nix/store/package/bin").join(name)));
+        }
+        assert!(!is_hotaru(Path::new("/run/current-system/sw/bin/foot")));
+        assert!(!is_hotaru(Path::new(
+            "/run/current-system/sw/bin/tatami-activity"
+        )));
     }
     #[test]
     fn stat_parent_survives_odd_command_names() {

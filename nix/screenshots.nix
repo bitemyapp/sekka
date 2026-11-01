@@ -252,7 +252,9 @@ pkgs.testers.runNixOSTest {
     capture(tatami, "activity-memory", settle=10, window=alone("org.tatami.Activity"))
     working()
     user(tatami, "pkill -u demo -f '[t]atami-activity' || true")
-    user(tatami, "pkill -x foot || true")
+    for client in windows():
+        if client["class"] == "org.aizome.Hotaru":
+            user(tatami, f"kill {client['pid']}")
     wait_window("org.tatami.Activity", gone=True)
     # The Tatami menu over an empty desktop.
     time.sleep(2)

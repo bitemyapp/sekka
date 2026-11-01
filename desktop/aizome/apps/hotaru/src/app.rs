@@ -17,6 +17,7 @@ use crate::terminal_view::{Selection, colors_for, terminal_view};
 pub enum Msg {
     NewTab,
     Launch(PtyCommand),
+    QueryDirectory(std::sync::mpsc::Sender<Option<std::path::PathBuf>>),
     SelectTab(u64),
     CloseTab,
     Split(Axis),
@@ -161,6 +162,10 @@ pub struct Tab {
 }
 
 pub struct Hotaru {
+    /// A separate terminal application's Wayland ID, when requested by its desktop.
+    pub app_id: String,
+    /// Invocation-only hold; never written into the user's preferences.
+    pub hold: bool,
     pub tabs: Vec<Tab>,
     pub panes: Vec<Pane>,
     pub active: u64,
@@ -174,6 +179,7 @@ pub struct Hotaru {
     command: PtyCommand,
     demo: bool,
     pub instance: Option<crate::instance::Instance>,
+    pub directory_server: Option<crate::directory::Server>,
     clipboard: Option<ClipboardWorker>,
     clipboard_token: u64,
     clipboard_cancel: Arc<AtomicBool>,
@@ -222,6 +228,8 @@ pub struct Hotaru {
 impl Hotaru {
     pub fn new(command: PtyCommand) -> Self {
         Self {
+            app_id: "org.aizome.Hotaru".into(),
+            hold: false,
             tabs: Vec::new(),
             panes: Vec::new(),
             active: 0,
@@ -234,6 +242,7 @@ impl Hotaru {
             command,
             demo: false,
             instance: None,
+            directory_server: None,
             clipboard: None,
             clipboard_token: 0,
             clipboard_cancel: Arc::new(AtomicBool::new(false)),
@@ -1401,7 +1410,7 @@ impl Hotaru {
 impl Program for Hotaru {
     type Msg = Msg;
     fn info(&self) -> AppInfo {
-        AppInfo::new("org.aizome.Hotaru", "Hotaru", "Terminal")
+        AppInfo::new(self.app_id.clone(), "Hotaru", "Terminal")
             .icon(Icon::from_name("terminal").unwrap_or(Icon::Search))
     }
     fn launched(&mut self, cx: &mut Cx<Msg>) {
@@ -1432,9 +1441,25 @@ impl Program for Hotaru {
         {
             log::warn!("Could not serve application instance: {e}");
         }
+        if let Some(server) = self.directory_server.take()
+            && let Err(e) = server.serve(cx.stream())
+        {
+            log::warn!("Could not serve pane directory: {e}");
+        }
     }
     fn update(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
         match msg {
+            Msg::QueryDirectory(reply) => {
+                // The UI selects the pane; its PTY worker does the /proc I/O.
+                if !self
+                    .active_pane()
+                    .filter(|pane| !pane.ended)
+                    .and_then(|pane| pane.session.as_ref())
+                    .is_some_and(|session| session.command(Command::Directory(reply.clone())).is_ok())
+                {
+                    let _ = reply.send(None);
+                }
+            }
             Msg::Action(action) => self.action(action, cx),
             Msg::SetTheme(theme) => {
                 self.settings.theme = theme;
@@ -1919,7 +1944,7 @@ impl Program for Hotaru {
             Msg::Exited(id, status, abnormal) => {
                 // As Control-D at the prompt: the pane goes, and with the
                 // last of them, its tab and then the window.
-                if !abnormal && !self.settings.wait_after_command {
+                if !abnormal && !self.settings.wait_after_command && !self.hold {
                     self.remove_pane(id, cx);
                 } else if let Some(tab) = self.panes.iter_mut().find(|t| t.id == id) {
                     tab.status = if abnormal {

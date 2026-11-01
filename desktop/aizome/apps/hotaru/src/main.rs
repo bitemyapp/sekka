@@ -6,7 +6,29 @@ use hotaru_io::PtyCommand;
 
 fn main() {
     let mut helper_args = std::env::args_os().skip(1);
-    if helper_args.next().as_deref() == Some(std::ffi::OsStr::new("--hotaru-resolve-link")) {
+    let helper = helper_args.next();
+    if helper.as_deref() == Some(std::ffi::OsStr::new("--print-working-directory")) {
+        use std::io::Write;
+        use std::os::unix::ffi::OsStrExt;
+        let pid = helper_args.next().and_then(|pid| pid.to_str()?.parse::<u32>().ok()).filter(|pid| *pid > 0);
+        let Some(pid) = pid.filter(|_| helper_args.next().is_none()) else {
+            eprintln!("--print-working-directory requires a Hotaru process ID");
+            std::process::exit(2);
+        };
+        match aizome_hotaru::directory::query(pid) {
+            Ok(path) => {
+                if std::io::stdout().write_all(path.as_os_str().as_bytes()).is_err() {
+                    std::process::exit(1);
+                }
+            }
+            Err(error) => {
+                eprintln!("Hotaru directory: {error}");
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
+    if helper.as_deref() == Some(std::ffi::OsStr::new("--hotaru-resolve-link")) {
         if aizome_hotaru::resolve_link_helper(helper_args).is_err() {
             std::process::exit(2);
         }
@@ -15,12 +37,15 @@ fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
     let mut command = PtyCommand::shell();
     let mut settings_path = aizome_hotaru::settings::default_path();
+    let mut app_id = None;
+    let mut new_window = false;
+    let mut hold = false;
     let mut args = std::env::args_os().skip(1);
     while let Some(arg) = args.next() {
         match arg.to_str() {
             Some("--help" | "-h") => {
                 println!(
-                    "Hotaru 蛍 — Aizome's terminal\n\nUsage: aizome-hotaru [--config-file FILE] [--working-directory DIR] [-- COMMAND [ARG…]]"
+                    "Hotaru 蛍 — Aizome's terminal\n\nUsage: aizome-hotaru [--config-file FILE] [--working-directory DIR] [--new-window] [--app-id ID] [--hold] [-- COMMAND [ARG…]]\n       aizome-hotaru --print-working-directory PID"
                 );
                 return;
             }
@@ -41,6 +66,20 @@ fn main() {
                     std::process::exit(2);
                 };
                 settings_path = Some(PathBuf::from(path));
+            }
+            Some("--new-window") => new_window = true,
+            Some("--hold") => hold = true,
+            Some("--app-id") => {
+                let id = args.next().and_then(|id| id.into_string().ok());
+                let Some(id) = id.filter(|id| {
+                    !id.is_empty() && id.bytes().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
+                }) else {
+                    eprintln!(
+                        "--app-id requires an application ID containing letters, digits, dots, hyphens or underscores"
+                    );
+                    std::process::exit(2);
+                };
+                app_id = Some(id);
             }
             Some("--" | "-e") => {
                 let Some(program) = args.next() else {
@@ -63,15 +102,28 @@ fn main() {
     } else {
         command.cwd = std::env::current_dir().ok();
     }
-    let instance = match aizome_hotaru::instance::claim(&command) {
-        Ok(aizome_hotaru::instance::Claim::Forwarded) => return,
-        Ok(aizome_hotaru::instance::Claim::First(instance)) => Some(instance),
-        Err(e) => {
-            log::warn!("Could not join Hotaru's running instance: {e}");
-            None
+    // A desktop's TUI launch must not become a tab in an unrelated shell:
+    // its window ID and lifetime belong to this invocation. Keep ordinary
+    // Hotaru launches using the existing per-user tab handoff.
+    let instance = if new_window || app_id.is_some() || hold {
+        None
+    } else {
+        match aizome_hotaru::instance::claim(&command) {
+            Ok(aizome_hotaru::instance::Claim::Forwarded) => return,
+            Ok(aizome_hotaru::instance::Claim::First(instance)) => Some(instance),
+            Err(e) => {
+                log::warn!("Could not join Hotaru's running instance: {e}");
+                None
+            }
         }
     };
     let mut app = Hotaru::new(command);
+    app.directory_server = aizome_hotaru::directory::Server::bind()
+        .map_err(|error| log::warn!("Could not expose pane directory: {error}"))
+        .ok();
+    if let Some(app_id) = app_id {
+        app.app_id = app_id;
+    }
     if let Some(path) = &settings_path {
         match aizome_hotaru::settings::Settings::load(path) {
             Ok(settings) => app.settings = settings,
@@ -84,6 +136,7 @@ fn main() {
         app.settings_managed = path.is_symlink();
     }
     app.settings_path = settings_path;
+    app.hold = hold;
     app.instance = instance;
     aizome_kit::run(app);
 }

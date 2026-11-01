@@ -294,7 +294,7 @@ with subtest("Network settings, DNS, notifications, terminal and displays still 
     until(
         "terminal opens",
         lambda: any(
-            "foot" in w.get("class", "")
+            w.get("class") == "org.aizome.Hotaru"
             for w in json.loads(alice("hyprctl -j clients"))
         ),
     )

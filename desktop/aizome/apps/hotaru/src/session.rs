@@ -36,6 +36,7 @@ pub enum Command {
     ResizePixels { cols: usize, rows: usize, width: u16, height: u16 },
     Scroll(i32),
     CopyAll(u64),
+    Directory(mpsc::Sender<Option<std::path::PathBuf>>),
     Search(SearchControl),
     Colors(Arc<TerminalColors>),
     // The cursor programs get until they ask for another, and whether it blinks.
@@ -628,6 +629,12 @@ fn run(
                 }
                 Ok(Command::CopyAll(token)) => {
                     tx.send(Msg::CopySnapshot(token, id, Arc::new(terminal.content_snapshot())));
+                }
+                Ok(Command::Directory(reply)) => {
+                    let directory = (!notified_exit)
+                        .then(|| std::fs::read_link(format!("/proc/{}/cwd", pty.child_id())).ok())
+                        .flatten();
+                    let _ = reply.send(directory);
                 }
                 Ok(Command::Clear) => {
                     // Control-L asks the shell to clear and draw its prompt.

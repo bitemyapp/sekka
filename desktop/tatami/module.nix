@@ -10,6 +10,7 @@
   config,
   lib,
   pkgs,
+  tatamiHotaru,
   ...
 }:
 let
@@ -452,11 +453,11 @@ in
     services.power-profiles-daemon.enable = lib.mkDefault true;
     services.udisks2.enable = lib.mkDefault true;
     hardware.bluetooth.enable = lib.mkDefault true;
-    # Terminal applications open in foot, Omarchy 4's terminal, in Hyprland
+    # Terminal applications open in Hotaru in Hyprland
     # sessions; other desktops keep their own terminal.
     xdg.terminal-exec = {
       enable = true;
-      settings.Hyprland = [ "foot.desktop" ];
+      settings.Hyprland = [ "org.aizome.Hotaru.desktop" ];
     };
     # Dark GTK applications with Yaru icons, as Omarchy's Tokyo Night theme
     # sets them, in this session only. uwsm reads /etc/xdg/uwsm/env-tatami when
@@ -505,7 +506,14 @@ in
       wallpapers
       # The weather beside the clock.
       pkgs.curl
-      pkgs.foot
+      # The full Aizome package already carries the same terminal. Avoid
+      # two different packages claiming its executable and desktop entry.
+      (
+        if lib.attrByPath [ "programs" "aizome" "enable" ] false config then
+          config.programs.aizome.package
+        else
+          tatamiHotaru
+      )
       pkgs.walker
       # walker finds its backend through PATH.
       elephant
@@ -529,7 +537,7 @@ in
       pkgs.wireplumber
       # A system monitor in the terminal, beside Activity. bottom's own
       # desktop entry and icon list it in the launcher, which opens it in
-      # foot until it exits.
+      # Hotaru until it exits.
       pkgs.bottom
       pkgs.fastfetch
       pkgs.nautilus

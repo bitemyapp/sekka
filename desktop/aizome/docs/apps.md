@@ -29,8 +29,9 @@ the Toolchest, the palette and the Deskbar show beside it and search by.
 Also part of the session, not separate apps: the Toolchest, the command
 palette, notifications, the lock screen and the polkit dialog (all in
 `aizome-shell`), and the file chooser other apps open and save with
-(`aizome-portal`, below). The terminal is Hotaru (`apps/hotaru`); foot stays
-installed, themed by Aizome's module, as a choice in Settei's Default Apps.
+(`aizome-portal`, below). The default terminal is Hotaru (`apps/hotaru`).
+Foot is optional: installing it makes it available in Settei's Default Apps,
+with Aizome's theme integration.
 
 ## Conventions
 

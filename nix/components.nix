@@ -16,7 +16,10 @@ rec {
   aizome = import ../desktop/aizome/nix { inherit nixpkgs; };
   tatami = {
     outPath = ../desktop/tatami;
-    nixosModules.default = ../desktop/tatami/module.nix;
+    nixosModules.default = { pkgs, ... }: {
+      imports = [ ../desktop/tatami/module.nix ];
+      _module.args.tatamiHotaru = aizome.packages.${pkgs.stdenv.hostPlatform.system}.hotaru;
+    };
     packages.${system} = {
       tatami = pkgs.callPackage ../desktop/tatami/tool/package.nix { };
       displays = pkgs.callPackage ../desktop/tatami/displays/package.nix { };
