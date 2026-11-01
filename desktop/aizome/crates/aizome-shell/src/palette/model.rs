@@ -332,8 +332,10 @@ pub fn parse_settings(json: &str) -> Option<Vec<SettingEntry>> {
 
 pub fn setting_item(s: &SettingEntry) -> Item {
     let pane = s.pane.clone().unwrap_or_else(|| s.id.split(['.', '/', ':']).next().unwrap_or(&s.id).to_owned());
-    let anchor =
-        (s.pane.is_some() && s.id != pane || s.pane.is_none() && s.id.contains(['.', '/', ':'])).then(|| s.id.clone());
+    // The option in its pane: `caps-lock` of `keyboard.caps-lock`.
+    let anchor = (s.id != pane).then(|| {
+        s.id.strip_prefix(pane.as_str()).and_then(|e| e.strip_prefix(['.', '/', ':'])).unwrap_or(&s.id).to_owned()
+    });
     let title = if s.path.is_empty() { s.title.clone() } else { s.path.clone() };
     Item::new(Scope::Setting, title, Icon::Settings, Action::Settings { pane, anchor })
         .trail("Settings")
@@ -470,14 +472,24 @@ mod tests {
     #[test]
     fn settings_lists_parse_and_open_their_place() {
         let json = r#"[{"id":"keyboard","title":"Keyboard","path":"Keyboard","keywords":["layout"]},
-                       {"id":"keyboard.caps","title":"Remap Caps Lock","path":"Keyboard › Remap Caps Lock","pane":"keyboard"}]"#;
+                       {"id":"keyboard.caps","title":"Remap Caps Lock","path":"Keyboard › Remap Caps Lock","pane":"keyboard"},
+                       {"id":"keyboard.shortcuts","pane":"keyboard","entry":"shortcuts","kind":"option",
+                        "title":"Keyboard shortcuts","path":"Keyboard › Keyboard shortcuts",
+                        "command":["aizome-settei","--pane","keyboard.shortcuts"]}]"#;
         let list = parse_settings(json).unwrap();
-        assert_eq!(list.len(), 2);
+        assert_eq!(list.len(), 3);
         let caps = setting_item(&list[1]);
         assert_eq!(caps.title, "Keyboard › Remap Caps Lock");
-        assert_eq!(caps.action, Action::Settings { pane: "keyboard".into(), anchor: Some("keyboard.caps".into()) });
+        assert_eq!(caps.action, Action::Settings { pane: "keyboard".into(), anchor: Some("caps".into()) });
         let pane = setting_item(&list[0]);
         assert_eq!(pane.action, Action::Settings { pane: "keyboard".into(), anchor: None });
+        // An option opens with the command Settei lists for it, not only
+        // its pane.
+        let Action::Settings { pane, anchor } = setting_item(&list[2]).action else { panic!("a setting") };
+        assert_eq!(
+            crate::launch::settings(&pane, anchor.as_deref()),
+            crate::launch::Launch::Argv(vec!["aizome-settei".into(), "--pane".into(), "keyboard.shortcuts".into()])
+        );
         assert!(parse_settings(r#"{"settings":[]}"#).unwrap().is_empty());
         assert!(builtin_settings().iter().any(|s| s.id == "network"));
     }
