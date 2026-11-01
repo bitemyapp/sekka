@@ -216,8 +216,7 @@ pkgs.testers.runNixOSTest {
         machine.screenshot("activity")
 
     with subtest("The application inspector resumes every process it paused"):
-        terminal = str(next(c["pid"] for c in json.loads(user("hyprctl -j clients"))
-                            if c["class"] == "org.aizome.Hotaru"))
+        terminal = str(next(c["pid"] for c in clients() if c["class"] == "org.aizome.Hotaru"))
         busy = machine.succeed("pgrep -x yes").strip()
         # Include the terminal's shell without assuming the fixture user's shell.
         pids = sorted({terminal, busy, *machine.succeed("pgrep -P " + terminal).split()})

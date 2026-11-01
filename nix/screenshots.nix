@@ -252,10 +252,13 @@ pkgs.testers.runNixOSTest {
     capture(tatami, "activity-memory", settle=10, window=alone("org.tatami.Activity"))
     working()
     user(tatami, "pkill -u demo -f '[t]atami-activity' || true")
-    for client in windows():
-        if client["class"] == "org.aizome.Hotaru":
-            user(tatami, f"kill {client['pid']}")
+    # By the pid Hyprland reports: Hotaru's process name depends on its
+    # package (aizome-hotaru, or .hotaru-wrapped behind the standalone
+    # package's wrapper).
+    for pid in {c["pid"] for c in windows() if c["class"] == "org.aizome.Hotaru"}:
+        user(tatami, f"kill {pid} || true")
     wait_window("org.tatami.Activity", gone=True)
+    wait_window("org.aizome.Hotaru", gone=True)
     # The Tatami menu over an empty desktop.
     time.sleep(2)
     tatami.send_key("meta_l-spc")

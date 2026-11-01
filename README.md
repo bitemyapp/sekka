@@ -82,8 +82,9 @@ implement synchronized output (DEC mode 2026), in-band resize (2048), the
 Kitty graphics protocol, DEC modes 1039 and 1045, or DECSASD. For programs
 that need them, install an alternative such as Foot, then choose it in
 Settei, under General → Default Apps → Terminal. Upgrading from a Sekka
-without Hotaru switches foot to Hotaru once; if you had chosen another
-terminal, it stays.
+without Hotaru switches foot to Hotaru once. Sekka no longer installs foot:
+if you chose it, terminals open in Hotaru until you install it again.
+Another terminal you chose stays.
 
 [![Aizome with Sumi beside Files and Hotaru stacked in one tab group](docs/images/sekka/aizome-desktop.png)](docs/images/sekka/aizome-desktop.png)
 
