@@ -235,6 +235,9 @@ in
     # input (the flake's nixosModules.desktops, or the media's reference
     # systems).
     programs.yukimi.enable = lib.mkDefault (selected != [ ]);
+    # Keep update evaluation's memory/CPU use bounded on large machines.
+    # Users may override this, or use null to keep Nix's global setting.
+    programs.yukimi.evaluationCores = lib.mkDefault 8;
     # What Yukimi may change of these after installing: the desktops, the
     # default one and the login screen, to the values the installer offers.
     programs.yukimi.choices =
