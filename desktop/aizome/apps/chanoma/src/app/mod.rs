@@ -23,7 +23,7 @@ pub mod time;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use aizome_kit::MsgSender;
@@ -48,6 +48,19 @@ pub const GAME: aizome_kit::video::VideoId = 1;
 pub const FILM: aizome_kit::video::VideoId = 2;
 /// Pictures kept before those far from the screen go.
 const ART_KEPT: usize = 200;
+/// Chanoma's films on the desktop's media controls: it opens nothing it's
+/// sent (kids see what grown-ups chose), plays at one speed, and leaving
+/// takes the PIN.
+const MPRIS: aizome_mpris::Identity = aizome_mpris::Identity {
+    bus: "chanoma",
+    name: "Chanoma",
+    desktop_entry: APP_ID,
+    uri_schemes: &[],
+    mime_types: &[],
+    can_quit: false,
+    can_raise: true,
+    rates: (1.0, 1.0),
+};
 /// The strip along the top of the screen over a page, in points: thin
 /// enough to miss, but the pointer stops there pushed up against the edge.
 const EDGE_H: f64 = 2.0;
@@ -102,6 +115,10 @@ pub enum Msg {
     Game(crate::retro::Event),
     Browser(crate::browser::Event),
     Film(aizome_media::Event),
+    /// What a film's subtitles show changes now.
+    CueTick,
+    /// The desktop's media controls (a media key) ask something of the film.
+    Mpris(aizome_mpris::Action),
     Bluetooth,
     Paired(String, Result<(), String>),
     /// A folder's folders read, for the picker's reading.
@@ -181,6 +198,9 @@ pub enum MenuKind {
     Game,
     /// Over a film.
     Film,
+    /// From the film's menu: its subtitles, or its sound's language.
+    Subtitles,
+    Audio,
     /// Over a page in the browser (on the overlay).
     Page,
     /// Time's up, for a grown-up: give more, or carry on as a grown-up.
@@ -221,6 +241,8 @@ pub struct Config {
     /// plugged in appear in.
     pub home: PathBuf,
     pub mounts: Vec<PathBuf>,
+    /// Films on the desktop's media controls (the session bus).
+    pub mpris: bool,
 }
 
 impl Config {
@@ -251,6 +273,7 @@ impl Config {
                     PathBuf::from("/mnt"),
                 ]
             },
+            mpris: true,
         }
     }
 }
@@ -299,6 +322,13 @@ pub struct Chanoma {
     pub game: Option<play::Game>,
     pub page: Option<play::Page>,
     pub film: Option<play::Film>,
+    /// Films on the desktop's media controls, which read the playing
+    /// film's clock (none between films), count the films played, and
+    /// set their volume.
+    pub mpris: Option<aizome_mpris::Mpris>,
+    pub film_clock: Arc<Mutex<Option<Arc<aizome_media::clock::Clock>>>>,
+    pub film_items: u64,
+    pub film_volume: f32,
     pub gate: Gate,
     /// Warnings given today: 1 at five minutes, 2 at one.
     pub warned: u8,
@@ -369,6 +399,10 @@ impl Chanoma {
             game: None,
             page: None,
             film: None,
+            mpris: None,
+            film_clock: Arc::default(),
+            film_items: 0,
+            film_volume: 1.0,
             gate: Gate::Open { left: None },
             warned: 0,
             last_tick: None,
@@ -776,6 +810,8 @@ impl Chanoma {
 
     pub fn open_menu(&mut self, kind: MenuKind, cx: &mut Cx<Msg>) {
         use ui::menu::Menu;
+        // Where the focus starts: the first item, or the track playing.
+        let mut focus = 0;
         let menu = match kind {
             MenuKind::Game => {
                 let title = self.game.as_ref().map_or_else(String::new, |g| g.title.clone());
@@ -784,7 +820,14 @@ impl Chanoma {
             }
             MenuKind::Film => {
                 let title = self.film.as_ref().map_or_else(String::new, |f| f.title.clone());
-                Menu::new(title, &["Keep watching", "Stop watching"])
+                let (_, words) = self.film_menu();
+                Menu::new(title, &words.iter().map(String::as_str).collect::<Vec<_>>())
+            }
+            MenuKind::Subtitles | MenuKind::Audio => {
+                let (words, now) = self.track_choices(kind == MenuKind::Subtitles);
+                focus = now;
+                let title = if kind == MenuKind::Subtitles { "Subtitles" } else { "Language" };
+                Menu::new(title, &words.iter().map(String::as_str).collect::<Vec<_>>())
             }
             MenuKind::Page => {
                 let title = self.page.as_ref().map_or_else(String::new, |p| p.name.clone());
@@ -805,7 +848,7 @@ impl Chanoma {
         };
         log::info!("chanoma: the {kind:?} menu");
         self.modal = Some(Modal::Menu { menu, kind });
-        self.modal_focus = 0;
+        self.modal_focus = focus;
         self.bar_until = None;
         self.sync_hud(cx);
     }
@@ -836,6 +879,10 @@ impl Chanoma {
                         self.close_modal(cx);
                         self.grownup = None;
                     }
+                    // From the subtitles or the language, back to the film's menu.
+                    Input::Back if matches!(kind, MenuKind::Subtitles | MenuKind::Audio) => {
+                        self.open_menu(MenuKind::Film, cx);
+                    }
                     Input::Back | Input::Home => self.close_modal(cx),
                     Input::Ok => {
                         let choice = self.modal_focus;
@@ -862,11 +909,10 @@ impl Chanoma {
                 self.modal = None;
                 self.stop_game(true, cx);
             }
-            (MenuKind::Film, 0) | (MenuKind::Page, 0) => self.close_modal(cx),
-            (MenuKind::Film, _) => {
-                self.modal = None;
-                self.stop_film(cx);
-            }
+            (MenuKind::Page, 0) => self.close_modal(cx),
+            (MenuKind::Film, c) => self.film_menu_chosen(c, cx),
+            (MenuKind::Subtitles, c) => self.track_chosen(true, c, cx),
+            (MenuKind::Audio, c) => self.track_chosen(false, c, cx),
             (MenuKind::Page, _) => {
                 self.modal = None;
                 self.close_page(cx);
@@ -1247,6 +1293,7 @@ impl Chanoma {
             || self.toast.is_some()
             || self.bar_until.is_some()
             || (self.screen == Screen::Film && self.film.as_ref().is_some_and(|f| f.bar))
+            || (self.screen == Screen::Film && self.film_subtitles().is_some())
     }
 
     /// The stage canvas's id. Its place in the view changes when a picture
@@ -1318,9 +1365,11 @@ impl Chanoma {
                         && self.toast.is_none()
                         && self.bar_until.is_none()
                         && let Some(f) = f
+                        && f.bar
                     {
                         scene = self.film_scene(f);
                     }
+                    let scene = scene.with_subtitles(self.film_subtitles());
                     layers.push(over_video(self.stage(scene)));
                 } else {
                     // Nothing drawn, but there: for the keyboard, and for the
@@ -1518,6 +1567,18 @@ impl Program for Chanoma {
             self.shared = pads.shared.clone();
             self.pads = Some(pads);
         }
+        if self.config.mpris {
+            let (t, clock) = (tx.clone(), self.film_clock.clone());
+            let now = move || clock.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map_or(0.0, |c| c.now());
+            self.mpris = Some(aizome_mpris::Mpris::start(
+                MPRIS,
+                move |a| {
+                    t.send(Msg::Mpris(a));
+                },
+                now,
+            ));
+            self.publish_film();
+        }
         self.outputs_changed(cx);
         if self.config.scan {
             self.rescan(cx);
@@ -1589,6 +1650,8 @@ impl Program for Chanoma {
             Msg::Game(e) => self.game_event(e, cx),
             Msg::Browser(e) => self.browser_event(e, cx),
             Msg::Film(e) => self.film_event(e, cx),
+            Msg::CueTick => self.schedule_cues(cx),
+            Msg::Mpris(a) => self.on_mpris(a, cx),
             Msg::Bluetooth => self.bluetooth_changed(cx),
             Msg::Paired(device, r) => self.paired(device, r, cx),
             Msg::Listed(reading, listing) => self.listed(reading, listing),

@@ -403,7 +403,7 @@ impl Chanoma {
                         .videos
                         .iter()
                         .position(|v| {
-                            self.recent.positions.get(&v.path).is_none_or(|(p, d)| *d <= 0.0 || *p < d - 30.0)
+                            self.recent.positions.get(&v.path).is_none_or(|(p, d)| !aizome_media::finished(*p, *d))
                         })
                         .unwrap_or(0);
                     self.go(Screen::Episodes(i), cx);

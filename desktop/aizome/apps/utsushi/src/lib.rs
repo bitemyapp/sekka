@@ -9,7 +9,6 @@
 
 pub mod app;
 pub mod instance;
-pub mod mpris;
 pub mod picture;
 pub mod store;
 pub mod ui;

@@ -24,7 +24,7 @@ log.workspace = true
 env_logger.workspace = true
 # Desktop media controls and the media keys (MPRIS), as Uta and the shell
 # speak it.
-zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }
+aizome-mpris = { path = "../../crates/aizome-mpris" }
 # A picture taken from the video, as PNG for the clipboard (offered
 # through the engine's clipboard, as Shashin does) or a file.
 image = { version = "0.25", default-features = false, features = ["png"] }
