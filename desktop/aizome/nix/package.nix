@@ -67,6 +67,7 @@
   tzdata,
   workspace,
   yukimi,
+  sdl_gamecontrollerdb,
   version ? "0.1.0",
   rev ? null,
 }:
@@ -253,6 +254,7 @@ let
         ${testEnvironment}
         ${test} --no-run -p aizome-kit --lib
         ${test} --no-run -p aizome-sys -p aizome-shell -p aizome-hako --lib
+        ${test} --no-run -p aizome-chanoma --lib
         ${cargo}/bin/cargo test --offline --target ${target} --release --no-run -p aizome-comp-process-tests --lib
         runHook postCheck
       '';
@@ -266,6 +268,12 @@ rustPlatform.buildRustPackage (
   // {
     pname = "aizome";
     src = source;
+    # Chanoma, the television, only where it's turned on
+    # (programs.aizome.chanoma).
+    outputs = [
+      "out"
+      "chanoma"
+    ];
 
     preBuild = workspace.sameEnvironment + workspace.restoreTarget dependencies;
     # Only Aizome's own crates may compile here (workspace.nix).
@@ -289,6 +297,9 @@ rustPlatform.buildRustPackage (
       # shipped shell on process outcomes and its failure/details interface.
       # One run: dependencies built once for all three packages.
       ${test} -p aizome-sys -p aizome-shell -p aizome-hako --lib --test file_manager
+      # Chanoma: its rules, controllers and frontend, and whole evenings
+      # played through a core of its tests' own (tests/chanoma.rs).
+      ${test} -p aizome-chanoma --lib --test chanoma
       runHook postCheck
     '';
 
@@ -365,15 +376,24 @@ rustPlatform.buildRustPackage (
       ln -s ${yukimi}/bin/aizome-yukimi $out/bin/aizome-yukimi
       ln -sf ${yukimi}/share/applications/org.aizome.Yukimi.desktop $out/share/applications/
       ln -sf ${yukimi}/share/icons/hicolor/scalable/apps/org.aizome.Yukimi.svg $out/share/icons/hicolor/scalable/apps/
+      mkdir -p $chanoma/bin $chanoma/share/applications $chanoma/share/icons/hicolor/scalable/apps
+      mv $out/bin/aizome-chanoma $chanoma/bin/
+      mv $out/share/applications/org.aizome.Chanoma.desktop $chanoma/share/applications/
+      mv $out/share/icons/hicolor/scalable/apps/org.aizome.Chanoma.svg $chanoma/share/icons/hicolor/scalable/apps/
       runHook postInstall
     '';
 
     postFixup = ''
-      for bin in $out/bin/*; do
+      for bin in $out/bin/* $chanoma/bin/*; do
         if [ ! -L "$bin" ] && isELF "$bin"; then
           patchelf --add-rpath ${lib.makeLibraryPath runtimeLibs} "$bin"
         fi
       done
+      # SDL's controller database, for the buttons of controllers whose
+      # drivers name them their own way (apps/chanoma/src/pad/mapping.rs).
+      wrapProgram $chanoma/bin/aizome-chanoma \
+        --set-default AIZOME_FONT_DIR ${fonts} \
+        --set-default CHANOMA_GAMECONTROLLERDB ${sdl_gamecontrollerdb}/share/gamecontrollerdb.txt
       wrapProgram $out/bin/aizome-hotaru \
         --set-default AIZOME_FONT_DIR ${fonts} \
         --set-default HOTARU_FONT_DIR ${hotaruFonts} \
