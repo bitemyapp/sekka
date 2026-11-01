@@ -74,10 +74,47 @@ pub unsafe fn text(p: *const libc::c_char) -> Option<String> {
     (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
 }
 
-/// What FFmpeg says, to the log, at warnings and up.
+/// Route FFmpeg diagnostics through Rust's logger. In particular, H.264
+/// recovery points after seeking an open GOP can report missing references
+/// without failing a decode. Keep these library diagnostics available at
+/// debug level; operation failures still travel through Result/Event::Failed.
 pub fn quiet() {
-    // SAFETY: setting a level.
-    unsafe { ff::av_log_set_level(if log::log_enabled!(log::Level::Debug) { 32 } else { 16 }) };
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| {
+        // SAFETY: installs a process-lifetime, thread-safe C callback.
+        unsafe { aizome_ffmpeg_install_log() };
+    });
+}
+
+unsafe extern "C" {
+    fn aizome_ffmpeg_install_log();
+}
+
+fn diagnostic_level(level: c_int) -> log::Level {
+    if level <= ff::AV_LOG_FATAL {
+        log::Level::Error
+    } else if level <= ff::AV_LOG_INFO {
+        log::Level::Debug
+    } else {
+        log::Level::Trace
+    }
+}
+
+#[unsafe(no_mangle)]
+extern "C" fn aizome_ffmpeg_log_enabled(level: c_int) -> c_int {
+    // No Rust panic may cross the decoder's C callback boundary.
+    std::panic::catch_unwind(|| log::log_enabled!(target: "aizome_media::ffmpeg", diagnostic_level(level)) as c_int)
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+unsafe extern "C" fn aizome_ffmpeg_log(level: c_int, message: *const libc::c_char, length: usize) {
+    let _ = std::panic::catch_unwind(|| {
+        // SAFETY: the C bridge lends its local buffer for exactly length bytes.
+        let bytes = unsafe { std::slice::from_raw_parts(message.cast::<u8>(), length) };
+        let text = String::from_utf8_lossy(bytes);
+        log::log!(target: "aizome_media::ffmpeg", diagnostic_level(level), "{}", text.trim_end());
+    });
 }
 
 /// A channel layout, freed when dropped.
