@@ -380,6 +380,11 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// Whether `path` is a video Chanoma plays, by its extension.
+pub fn is_video(path: &Path) -> bool {
+    path.extension().is_some_and(|e| VIDEO_EXTENSIONS.contains(&e.to_string_lossy().to_ascii_lowercase().as_str()))
+}
+
 /// A picture for `path`'s stem in its own folder or a pictures folder
 /// beside it (`media`, `boxart`, `Named_Boxarts`, `images`, `covers`).
 fn art_for(path: &Path, root: &Path) -> Option<PathBuf> {
@@ -486,13 +491,7 @@ pub fn scan_videos(folders: &[PathBuf]) -> Vec<Shelf> {
     for root in folders {
         let mut files = Vec::new();
         walk(root, 0, &mut files);
-        let videos: Vec<PathBuf> = files
-            .into_iter()
-            .filter(|p| {
-                p.extension()
-                    .is_some_and(|e| VIDEO_EXTENSIONS.contains(&e.to_string_lossy().to_ascii_lowercase().as_str()))
-            })
-            .collect();
+        let videos: Vec<PathBuf> = files.into_iter().filter(|p| is_video(p)).collect();
         // Grouped by their folder just under the root.
         let mut groups: std::collections::BTreeMap<PathBuf, Vec<PathBuf>> = Default::default();
         for v in videos {

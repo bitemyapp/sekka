@@ -1112,7 +1112,11 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   without one, Select and Start held for a second) always brings up a
   menu with the way back: over a game it pauses it; over a service, a
   film, a menu, Home. Without a controller a banner says how to wake
-  one; a game whose player 1 goes away pauses until they're back.
+  one; a game whose player 1 goes away pauses until they're back. A
+  keyboard and a mouse always find the way home too: Home or F1 (even
+  over a service's page, which never hears them) and Esc; the hints along
+  the foot are buttons to click; and the pointer brings a bar with *Home*
+  down from the top of the screen over a game, a film or a page.
 - **Games** play through libretro cores that Chanoma drives itself (the
   emulators RetroArch uses, without its menus): the NES, Super NES, Game
   Boy, Game Boy Color and Advance, Mega Drive, Master System and Game Gear,
@@ -1146,7 +1150,11 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   against today's time, and the settings open: limits for weekdays and for
   the weekend, bedtime and waking, more time today; which services kids
   see; games folders, and which games kids may play (new ones wait for a
-  grown-up's say, unless set to show at once); videos folders; pairing
+  grown-up's say, unless set to show at once); videos folders (chosen with
+  the controller in a picker of Chanoma's own: places down the left,
+  drives plugged in among them; a folder's folders on the right, each
+  saying what's in it; and how many games, films and shows Chanoma would
+  find in the one showing); pairing
   controllers and setting up the buttons of one Chanoma doesn't know; the
   PIN; leaving Chanoma. Grown-up mode locks itself after a while untouched
   (never in the middle of a film or game).

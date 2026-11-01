@@ -57,7 +57,7 @@ const KEY_GAP: f64 = 16.0;
 const STRIP_H: f64 = 84.0;
 const HEIGHT: f64 = 770.0;
 
-fn frame() -> Rect {
+pub fn frame() -> Rect {
     let w = 3.0 * KEY_W + 2.0 * KEY_GAP + 2.0 * 72.0;
     let top = ((H - HEIGHT) / 2.0).round();
     Rect::new((W / 2.0 - w / 2.0).round(), top, (W / 2.0 + w / 2.0).round(), top + HEIGHT)

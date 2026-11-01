@@ -544,13 +544,7 @@ impl Chanoma {
                     self.rescan(cx);
                 }
             }
-            Act::AddFolder(kind) => {
-                let title = match kind {
-                    FolderKind::Games => "Choose the games folder",
-                    FolderKind::Videos => "Choose a videos folder",
-                };
-                cx.open_panel(self.window, FileDialog::new().title(title).directories(), move |p| Msg::Folder(kind, p));
-            }
+            Act::AddFolder(kind) => self.open_picker(kind, cx),
             Act::Rescan => {
                 self.rescan(cx);
                 self.toast("Looking…", cx);
@@ -574,19 +568,29 @@ impl Chanoma {
         }
     }
 
-    pub fn folder_chosen(&mut self, kind: FolderKind, paths: Option<Vec<PathBuf>>, cx: &mut Cx<Msg>) {
-        let Some(paths) = paths else { return };
+    pub fn folder_chosen(&mut self, kind: FolderKind, dir: PathBuf, cx: &mut Cx<Msg>) {
         let folders = match kind {
             FolderKind::Games => &mut self.settings.game_folders,
             FolderKind::Videos => &mut self.settings.video_folders,
         };
-        for p in paths {
-            if !folders.contains(&p) {
-                folders.push(p);
-            }
+        if !folders.contains(&dir) {
+            folders.push(dir);
+            self.save_settings();
+            self.rescan(cx);
         }
-        self.save_settings();
-        self.rescan(cx);
+    }
+
+    /// Back from choosing a folder: the focus on *Add a … folder* (the
+    /// folder added is the row above it now).
+    pub fn settings_on_add(&mut self, kind: FolderKind) {
+        let section = match kind {
+            FolderKind::Games => 2,
+            FolderKind::Videos => 3,
+        };
+        let row = self.section_rows(section).iter().position(|(_, a)| *a == Act::AddFolder(kind)).unwrap_or(0);
+        self.grownups = State { section, row, in_list: true, first: 0 };
+        self.grownups.first = self.grownups_page().first;
+        self.focus = self.grownups.focus();
     }
 
     pub fn add_site(&mut self, cx: &mut Cx<Msg>) {
