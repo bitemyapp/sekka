@@ -729,26 +729,6 @@ pub fn file_path(url: &str) -> Option<PathBuf> {
     Some(PathBuf::from(std::ffi::OsString::from_vec(out)))
 }
 
-/// What's playing as a URL, for the desktop's media controls: an address
-/// as it was given, a file as a `file://` URL escaped as GLib escapes it
-/// (spaces, `#` and `%` included).
-pub fn url_of(path: &std::path::Path) -> String {
-    use std::os::unix::ffi::OsStrExt;
-    let bytes = path.as_os_str().as_bytes();
-    if !bytes.starts_with(b"/") && path.to_string_lossy().contains("://") {
-        return path.to_string_lossy().into_owned();
-    }
-    let mut s = String::from("file://");
-    for &b in bytes {
-        if b.is_ascii_alphanumeric() || b"!$&'()*+,-./:=@_~".contains(&b) {
-            s.push(b as char);
-        } else {
-            s.push_str(&format!("%{b:02X}"));
-        }
-    }
-    s
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -769,11 +749,9 @@ mod tests {
     }
 
     #[test]
-    fn what_plays_is_a_url_the_media_controls_can_read() {
+    fn the_media_controls_url_comes_back_to_the_file() {
         let film = PathBuf::from("/home/u/My Film #2 (100%).mkv");
-        assert_eq!(url_of(&film), "file:///home/u/My%20Film%20%232%20(100%25).mkv");
-        assert_eq!(file_path(&url_of(&film)), Some(film));
-        assert_eq!(url_of(&PathBuf::from("/m/\u{6620}.flac")), "file:///m/%E6%98%A0.flac");
-        assert_eq!(url_of(&PathBuf::from("https://example.org/a.mp4")), "https://example.org/a.mp4");
+        // The media controls' URL (aizome_mpris::url_of) comes back to the file.
+        assert_eq!(file_path(&aizome_mpris::url_of(&film)), Some(film));
     }
 }

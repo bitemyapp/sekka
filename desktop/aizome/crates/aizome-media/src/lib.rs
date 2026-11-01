@@ -17,19 +17,25 @@
 //!
 //! [`Player`] is the interface: commands in, [`Event`]s out, the position
 //! read from its clock whenever it's wanted.
+//!
+//! Apps that play through it share what it plays ([`files`]: by name, and
+//! where to carry on a film left part-way) and the subtitles' cues as
+//! they come ([`Cues`]).
 
 pub mod audio;
 pub mod av;
 pub mod clock;
+pub mod files;
 pub mod pipewire;
 pub mod player;
 pub mod subs;
 pub mod video;
 
+pub use files::{AUDIO_EXTENSIONS, VIDEO_EXTENSIONS, finished, is_audio, is_playable, is_video, resume_point};
 pub use pipewire::StreamKind;
 pub use player::{
     AudioChoice, Chapter, Event, FramePath, MediaInfo, Options, Pipeline, PlayState, Player, Stats, Track, VideoInfo,
     language_name,
 };
-pub use subs::{Cue, CueBody};
+pub use subs::{Cue, CueBody, Cues};
 pub use video::Picture;

@@ -1,14 +1,17 @@
 //! What plays: a game (a core on its own thread, its picture through the
 //! window's video), a service (a page in the browser, driven through the
-//! compositor) and a film or an episode (Utsushi's engine).
+//! compositor) and a film or an episode (Utsushi's engine, its subtitles
+//! and languages chosen in the film's menu, and on the desktop's media
+//! controls as Utsushi is).
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use aizome_kit::Cx;
-use aizome_media::{AudioChoice, Event as FilmEvent, Options, PlayState, Player, StreamKind};
+use aizome_kit::{Cx, TimerHandle};
+use aizome_media::{AudioChoice, Cues, Event as FilmEvent, MediaInfo, Options, PlayState, Player, StreamKind, Track};
 
-use super::state::Item;
+use super::state::{Item, Languages, Pick, Subtitles};
 use super::{Chanoma, FILM, GAME, Input, Modal, Msg, Screen};
 use crate::browser::{self, Action, Browser};
 use crate::pad::{Button, Dir, Family};
@@ -49,6 +52,28 @@ pub struct Film {
     /// The bar shows over the picture.
     pub bar: bool,
     pub saved_at: Instant,
+    /// What it holds, once open: its sound and subtitle tracks.
+    pub info: Option<Arc<MediaInfo>>,
+    /// The tracks playing.
+    pub audio: Option<usize>,
+    pub subtitles: Option<usize>,
+    /// The subtitles' cues, and the timer for when what shows changes.
+    pub cues: Cues,
+    pub cue_timer: Option<TimerHandle>,
+    /// Whose languages it keeps: its show's (folder) or its own (file).
+    pub key: String,
+    /// What the desktop's media controls know it by, and its seeks.
+    pub item: u64,
+    pub seeks: u64,
+}
+
+/// What the film's menu holds, after Keep watching.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FilmItem {
+    Keep,
+    Subtitles,
+    Language,
+    Stop,
 }
 
 /// How long the film's bar stays after a press.
@@ -349,6 +374,9 @@ impl Chanoma {
             Some(f) => {
                 let pos = f.player.position();
                 self.recent.set_position(&f.path, pos, f.duration);
+                if let Some(t) = f.cue_timer {
+                    cx.cancel(t);
+                }
                 f.player
             }
             None => {
@@ -364,11 +392,14 @@ impl Chanoma {
                     })
                 };
                 let tx = self.sender.clone();
-                Player::new(Options { sink, audio, hardware: true, caps: None }, move |e| {
+                let player = Player::new(Options { sink, audio, hardware: true, caps: None }, move |e| {
                     if let Some(t) = &tx {
                         t.send(Msg::Film(e));
                     }
-                })
+                });
+                // As the desktop's media controls last set it.
+                player.set_volume(self.film_volume, false);
+                player
             }
         };
         let start = self.recent.resume_at(path).unwrap_or(0.0);
@@ -376,6 +407,14 @@ impl Chanoma {
         let duration = self.recent.positions.get(path).map_or(0.0, |p| p.1);
         self.recent.touch(Item::Video { path: path.to_owned(), position: start, duration });
         self.recent.save(&self.config.dirs);
+        // A show's episodes share its languages; a film keeps its own.
+        let episodes = shelf.is_some_and(|i| self.library.shelves[i].videos.len() > 1);
+        let key = match path.parent() {
+            Some(folder) if episodes => folder.to_string_lossy().into_owned(),
+            _ => path.to_string_lossy().into_owned(),
+        };
+        *self.film_clock.lock().unwrap_or_else(|e| e.into_inner()) = Some(player.clock());
+        self.film_items += 1;
         self.film = Some(Film {
             path: path.to_owned(),
             title,
@@ -387,9 +426,18 @@ impl Chanoma {
             controls_until: Some(Instant::now() + BAR_STAYS),
             bar: true,
             saved_at: Instant::now(),
+            info: None,
+            audio: None,
+            subtitles: None,
+            cues: Cues::default(),
+            cue_timer: None,
+            key,
+            item: self.film_items,
+            seeks: 0,
         });
         self.go(Screen::Film, cx);
         cx.hide_cursor_until_moved();
+        self.publish_film();
     }
 
     pub fn film_event(&mut self, e: FilmEvent, cx: &mut Cx<Msg>) {
@@ -398,11 +446,33 @@ impl Chanoma {
             FilmEvent::Opened(info) => {
                 f.duration = info.duration.unwrap_or(0.0);
                 f.display = info.video.as_ref().map(|v| v.display);
+                f.info = Some(info);
+                self.apply_languages();
+                self.publish_film();
             }
-            FilmEvent::State(PlayState::Playing) => f.playing = true,
+            FilmEvent::Selected { audio, subtitles } => {
+                f.audio = audio;
+                f.subtitles = subtitles;
+            }
+            FilmEvent::Cues(cues) => {
+                f.cues.add(cues);
+                self.schedule_cues(cx);
+            }
+            FilmEvent::ClearCues => f.cues.clear(),
+            FilmEvent::Seeked(_) => {
+                f.seeks += 1;
+                self.schedule_cues(cx);
+                self.publish_film();
+            }
+            FilmEvent::State(PlayState::Playing) => {
+                f.playing = true;
+                self.schedule_cues(cx);
+                self.publish_film();
+            }
             FilmEvent::State(PlayState::Paused) => {
                 f.playing = false;
                 f.bar = true;
+                self.publish_film();
             }
             FilmEvent::State(PlayState::Ended) => {
                 f.playing = false;
@@ -467,9 +537,191 @@ impl Chanoma {
                 self.recent.set_position(&f.path, pos, dur);
             }
             self.recent.save(&self.config.dirs);
+            if let Some(t) = f.cue_timer {
+                cx.cancel(t);
+            }
             f.player.close();
         }
+        *self.film_clock.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        self.publish_film();
         self.after_activity(cx);
+    }
+
+    // Subtitles and languages.
+
+    /// Ask to draw again when what the subtitles show next changes.
+    pub fn schedule_cues(&mut self, cx: &mut Cx<Msg>) {
+        let Some(f) = &mut self.film else { return };
+        if let Some(t) = f.cue_timer.take() {
+            cx.cancel(t);
+        }
+        if !f.playing {
+            return;
+        }
+        let pos = f.player.position();
+        if let Some(next) = f.cues.next_change(pos) {
+            f.cue_timer = Some(cx.after(Duration::from_secs_f64(next - pos + 0.002), Msg::CueTick));
+        }
+    }
+
+    /// The subtitles showing now, for the scene.
+    pub fn film_subtitles(&self) -> Option<ui::Subtitles> {
+        let f = self.film.as_ref()?;
+        let cues: Vec<aizome_media::Cue> = f.cues.at(f.player.position()).into_iter().cloned().collect();
+        (!cues.is_empty()).then(|| ui::Subtitles { picture: f.display.unwrap_or((16.0, 9.0)), cues })
+    }
+
+    /// The film's menu: Keep watching, the subtitles and the language
+    /// where there's a choice, Stop watching; and its words.
+    pub fn film_menu(&self) -> (Vec<FilmItem>, Vec<String>) {
+        let mut items = vec![(FilmItem::Keep, "Keep watching".to_owned())];
+        if let Some(f) = &self.film
+            && let Some(info) = &f.info
+        {
+            if !info.subtitles.is_empty() {
+                let now = f.subtitles.map_or_else(|| "Off".to_owned(), |i| track_name(&info.subtitles, i));
+                items.push((FilmItem::Subtitles, format!("Subtitles: {now}")));
+            }
+            if info.audio.len() > 1 {
+                let now = f.audio.map_or_else(String::new, |i| track_name(&info.audio, i));
+                items.push((FilmItem::Language, format!("Language: {now}")));
+            }
+        }
+        items.push((FilmItem::Stop, "Stop watching".to_owned()));
+        items.into_iter().unzip()
+    }
+
+    /// A choice from the film's menu.
+    pub fn film_menu_chosen(&mut self, choice: usize, cx: &mut Cx<Msg>) {
+        match self.film_menu().0.get(choice) {
+            Some(FilmItem::Keep) | None => self.close_modal(cx),
+            Some(FilmItem::Subtitles) => self.open_menu(super::MenuKind::Subtitles, cx),
+            Some(FilmItem::Language) => self.open_menu(super::MenuKind::Audio, cx),
+            Some(FilmItem::Stop) => {
+                self.modal = None;
+                self.stop_film(cx);
+            }
+        }
+    }
+
+    /// The choices for the subtitles (Off, then each track) or the sound
+    /// (each track), and which is playing.
+    pub fn track_choices(&self, subtitles: bool) -> (Vec<String>, usize) {
+        let Some(f) = &self.film else { return (Vec::new(), 0) };
+        let Some(info) = &f.info else { return (Vec::new(), 0) };
+        let names = |tracks: &[Track]| (0..tracks.len()).map(|i| track_name(tracks, i)).collect::<Vec<_>>();
+        if subtitles {
+            let mut v = vec!["Off".to_owned()];
+            v.extend(names(&info.subtitles));
+            (v, f.subtitles.map_or(0, |i| i + 1))
+        } else {
+            (names(&info.audio), f.audio.unwrap_or(0))
+        }
+    }
+
+    /// A track chosen: played, and kept for the show (or the film).
+    pub fn track_chosen(&mut self, subtitles: bool, choice: usize, cx: &mut Cx<Msg>) {
+        self.modal = None;
+        if let Some(f) = &self.film
+            && let Some(info) = &f.info
+        {
+            let kept = self.recent.languages.entry(f.key.clone()).or_default();
+            if subtitles {
+                let track = choice.checked_sub(1).filter(|i| *i < info.subtitles.len());
+                f.player.select_subtitles(track);
+                kept.subtitles = Some(match track {
+                    Some(i) => Subtitles::On(Pick::of(&info.subtitles, i)),
+                    None => Subtitles::Off,
+                });
+            } else if choice < info.audio.len() {
+                f.player.select_audio(Some(choice));
+                kept.audio = Some(Pick::of(&info.audio, choice));
+            }
+            self.recent.save(&self.config.dirs);
+        }
+        self.close_modal(cx);
+    }
+
+    /// The film just opened: the languages chosen for its show before,
+    /// where it has them.
+    fn apply_languages(&mut self) {
+        let Some(f) = &self.film else { return };
+        let Some(info) = &f.info else { return };
+        let Some(kept) = self.recent.languages.get(&f.key) else { return };
+        let Languages { audio, subtitles } = kept;
+        if let Some(i) = audio.as_ref().and_then(|p| p.find(&info.audio)) {
+            f.player.select_audio(Some(i));
+        }
+        match subtitles {
+            Some(Subtitles::Off) => f.player.select_subtitles(None),
+            Some(Subtitles::On(p)) => {
+                if let Some(i) = p.find(&info.subtitles) {
+                    f.player.select_subtitles(Some(i));
+                }
+            }
+            None => {}
+        }
+    }
+
+    // The desktop's media controls.
+
+    /// Tell the desktop's media controls (the menu bar's, a keyboard's or
+    /// a remote's media keys) what plays: the film, or nothing.
+    pub fn publish_film(&self) {
+        let Some(m) = &self.mpris else { return };
+        let Some(f) = &self.film else {
+            m.publish(aizome_mpris::State::default());
+            return;
+        };
+        let poster = f.shelf.and_then(|i| self.library.shelves.get(i)?.poster.clone());
+        m.publish(aizome_mpris::State {
+            item: f.item,
+            title: f.title.clone(),
+            url: Some(aizome_mpris::url_of(&f.path)),
+            art: poster.as_deref().map(aizome_mpris::url_of),
+            status: if f.playing { "Playing" } else { "Paused" },
+            position: f.player.position(),
+            duration: f.duration,
+            volume: f64::from(self.film_volume),
+            can_next: self.neighbour_episode(true).is_some(),
+            can_previous: self.neighbour_episode(false).is_some(),
+            can_seek: f.info.as_ref().is_some_and(|i| i.seekable),
+            seeks: f.seeks,
+            ..aizome_mpris::State::default()
+        });
+    }
+
+    /// What the desktop's media controls ask of the film.
+    pub fn on_mpris(&mut self, a: aizome_mpris::Action, cx: &mut Cx<Msg>) {
+        use aizome_mpris::Action;
+        if a == Action::Raise {
+            return cx.activate(self.window);
+        }
+        let Some(f) = &self.film else { return };
+        match a {
+            Action::Play => f.player.play(),
+            Action::Pause => f.player.pause(),
+            Action::Toggle if f.playing => f.player.pause(),
+            Action::Toggle => f.player.play(),
+            Action::Seek(t) => f.player.seek(t, false),
+            Action::Volume(v) => {
+                self.film_volume = v as f32;
+                f.player.set_volume(self.film_volume, false);
+                self.publish_film();
+            }
+            Action::Next | Action::Previous => {
+                if let Some(n) = self.neighbour_episode(a == Action::Next) {
+                    self.play_video(&n, cx);
+                }
+            }
+            Action::Stop => {
+                self.modal = None;
+                self.stop_film(cx);
+            }
+            // One speed, no repeating, nothing opened from outside, and
+            // leaving takes the PIN.
+            Action::Rate(_) | Action::Loop(_) | Action::Open(_) | Action::Quit | Action::Raise => {}
+        }
     }
 
     /// The bar over a film: its name, where it is, and whether it plays.
@@ -529,4 +781,10 @@ pub fn clock(secs: f64) -> String {
     } else {
         format!("{}:{:02}", s / 60, s % 60)
     }
+}
+
+/// A track as the menus name it, the engine's way: its language or title,
+/// how many channels, whether forced ("English · 5.1"), else "Track 2".
+fn track_name(tracks: &[Track], i: usize) -> String {
+    tracks.get(i).map_or_else(String::new, |t| t.label(i + 1))
 }

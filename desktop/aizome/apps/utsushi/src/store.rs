@@ -102,19 +102,18 @@ impl Store {
     }
 
     /// Where to start `path`: where it was left, unless that was near its
-    /// start or its end (or it's short).
+    /// start or its end (or it's short), as the engine says
+    /// ([`aizome_media::resume_point`]).
     pub fn resume_at(&self, path: &Path) -> Option<f64> {
         let left = self.positions.get(&key(path))?;
-        let long = left.duration >= 5.0 * 60.0;
-        let useful = left.position >= 30.0 && left.position < left.duration - 30.0_f64.max(left.duration * 0.05);
-        (long && useful).then_some(left.position)
+        aizome_media::resume_point(left.position, left.duration)
     }
 
     /// Remember where `path` was left; a film watched to its end (or barely
     /// begun) is forgotten.
     pub fn leave(&mut self, path: &Path, position: f64, duration: f64) {
         let k = key(path);
-        if duration < 5.0 * 60.0 || position < 30.0 || position >= duration - 30.0_f64.max(duration * 0.05) {
+        if aizome_media::resume_point(position, duration).is_none() {
             if self.positions.remove(&k).is_none() {
                 return;
             }

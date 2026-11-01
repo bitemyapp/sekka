@@ -953,15 +953,21 @@ rest); folders play their files in Hako's natural order.
   Timing or the next item.
 - **Where it was**: a film over five minutes long opens where it was
   left (with Start Over for a few seconds), unless that was in its first
-  or last thirty seconds. Open Recent keeps twenty items.
-- **The desktop**: MPRIS (`org.mpris.MediaPlayer2.utsushi`) for the menu
-  bar's media widget and the media keys; one instance, later launches
+  thirty seconds or its last (half a minute, or the last twentieth of a
+  long one: the engine's `resume_point`, which Chanoma follows too).
+  Open Recent keeps twenty items.
+- **The desktop**: MPRIS (`org.mpris.MediaPlayer2.utsushi`, served by
+  `crates/aizome-mpris`, shared with Chanoma) for the menu bar's media
+  widget and the media keys; one instance, later launches
   handing their files over; Media Info (❖I) says what the file is and how
   it's being played.
 
 **Why it's light.** The engine is `crates/aizome-media` (FFmpeg through
 `ffmpeg-sys-next`, PipeWire through `pipewire-rs`); the window shows its
-frames through the kit's video element (`docs/kit.md`, Video).
+frames through the kit's video element (`docs/kit.md`, Video). Chanoma
+plays through it too, and both take from it what it plays (`files`: by
+name, and where to carry on) and the subtitles' cues as they come
+(`Cues`).
 
 - Video decodes on the GPU through VA-API where the codec and driver
   allow (H.264, HEVC, VP9 and AV1 on recent Intel and AMD), on the
@@ -1143,7 +1149,14 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   show (with its `poster.jpg`), a lone video a film. They play through
   Utsushi's engine; the confirm button plays and pauses, left and right
   skip ten seconds, the shoulders go to the previous or next episode, and
-  the next plays by itself. Where each was left is kept.
+  the next plays by itself. Where each was left is kept, and a film
+  carries on where Utsushi would carry it on. Back is the film's menu:
+  its subtitles (a subtitle file beside it counts) and its language,
+  where it has more than one, chosen there and kept for the show's next
+  episodes and the next time. Subtitles show in large type on a dark
+  band, under the picture where there's room. The media keys and the
+  menu bar's media controls play, pause, skip and stop a film, as they
+  do Utsushi's.
 - **Grown-ups** unlock with the PIN (four to eight digits; three wrong
   ones are free, then the pad waits, longer each time, and a restart
   doesn't reset that). In grown-up mode everything shows, nothing counts

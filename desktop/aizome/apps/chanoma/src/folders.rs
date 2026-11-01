@@ -187,7 +187,7 @@ fn look_into(dir: &Path) -> Option<Inside> {
             n.folders += 1;
         } else if library::system_of(&path, root).is_some() {
             n.games += 1;
-        } else if library::is_video(&path) {
+        } else if aizome_media::is_video(&path) {
             n.videos += 1;
         } else {
             n.other += 1;

@@ -260,6 +260,46 @@ pub fn settle(cues: &mut Vec<Cue>) {
     cues.retain(|c| c.body != CueBody::Clear);
 }
 
+/// The cues of the subtitle track showing, as the player sends them
+/// ([`Event::Cues`](crate::Event::Cues), [`Event::ClearCues`](crate::Event::ClearCues)):
+/// each batch added once (an embedded track's come again after a seek
+/// back), [settled](settle) with those before.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Cues {
+    cues: Vec<Cue>,
+}
+
+impl Cues {
+    pub fn add(&mut self, mut new: Vec<Cue>) {
+        new.retain(|c| !self.cues.iter().any(|o| o.start == c.start && o.body == c.body));
+        self.cues.extend(new);
+        settle(&mut self.cues);
+    }
+
+    pub fn clear(&mut self) {
+        self.cues.clear();
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.cues.is_empty()
+    }
+
+    /// Those showing `at` seconds in.
+    pub fn at(&self, at: f64) -> Vec<&Cue> {
+        self.cues.iter().filter(|c| c.start <= at + 1e-3 && at < c.end).collect()
+    }
+
+    /// When what shows next changes after `at` seconds: a cue's start or
+    /// end. Asked to draw again then.
+    pub fn next_change(&self, at: f64) -> Option<f64> {
+        self.cues
+            .iter()
+            .flat_map(|c| [c.start, c.end])
+            .filter(|t| *t > at + 1e-3 && t.is_finite())
+            .min_by(f64::total_cmp)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -292,6 +332,28 @@ mod tests {
         settle(&mut cues);
         assert_eq!(cues.len(), 2);
         assert_eq!((cues[0].start, cues[0].end), (1.0, 3.0));
+    }
+
+    #[test]
+    fn cues_come_in_batches_and_show_in_turn() {
+        let text = |s: &str| CueBody::Text { text: s.into(), italic: false, top: false };
+        let cue = |id, start, end, body| Cue { id, start, end, body };
+        let mut cues = Cues::default();
+        cues.add(vec![cue(1, 1.0, f64::INFINITY, text("a"))]);
+        assert_eq!(cues.at(50.0).len(), 1, "open-ended until another comes");
+        assert_eq!(cues.next_change(0.0), Some(1.0));
+        // The next batch ends it, and the same cue read again after a seek
+        // back isn't kept twice.
+        cues.add(vec![cue(9, 1.0, f64::INFINITY, text("a")), cue(2, 3.0, 3.0, CueBody::Clear)]);
+        cues.add(vec![cue(3, 5.0, 6.0, text("b"))]);
+        assert_eq!(cues.at(2.0).len(), 1);
+        assert!(cues.at(4.0).is_empty(), "cleared at 3");
+        assert_eq!(cues.at(5.5)[0].body, text("b"));
+        assert_eq!(cues.next_change(1.5), Some(3.0));
+        assert_eq!(cues.next_change(5.5), Some(6.0));
+        assert_eq!(cues.next_change(6.0), None);
+        cues.clear();
+        assert!(cues.is_empty());
     }
 
     #[test]
