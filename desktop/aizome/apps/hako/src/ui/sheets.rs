@@ -191,7 +191,16 @@ fn quick_look(h: &Hako, key: WindowKey, e: &Entry) -> Element<Msg> {
         ]
         .spacing(8.0)
         .width(Length::Fill),
-        container(shown).center().fill(Tone::Sunk).border(Edge::Line).width(Length::Fill).height(420.0).clip(),
+        // A different file needs fresh content state, including the image's
+        // scaled-pixel cache even when two screenshots have the same size.
+        container(shown)
+            .key(("quick-look", e.path.clone()))
+            .center()
+            .fill(Tone::Sunk)
+            .border(Edge::Line)
+            .width(Length::Fill)
+            .height(420.0)
+            .clip(),
     ]
     .spacing(10.0)
     .width(Length::Fill);

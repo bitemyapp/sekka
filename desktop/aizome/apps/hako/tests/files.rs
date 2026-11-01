@@ -501,6 +501,61 @@ fn quick_look_and_get_info() {
 }
 
 #[test]
+fn quick_look_repaints_same_sized_pictures_when_paging() {
+    use aizome_kit::widget::SemanticRole;
+
+    let s = Sandbox::new("quick-look-pictures");
+    let pictures = s.dir("home/Pictures");
+    let red = [220, 30, 40, 255];
+    let blue = [20, 60, 230, 255];
+    for (name, color) in [("a.png", red), ("b.png", blue)] {
+        aizome_kit::testing::write_png(&pictures.join(name), 800, 600, &color.repeat(800 * 600)).unwrap();
+    }
+
+    for layout in [Layout::Column, Layout::List, Layout::Icons] {
+        let (mut h, w) = open(&s, "Pictures/a.png", layout);
+        h.key(w, Key::Character(" ".into()), Modifiers::NONE);
+        for (arrow, name, color) in [
+            (None, "a.png", red),
+            (Some(NamedKey::ArrowRight), "b.png", blue),
+            (Some(NamedKey::ArrowLeft), "a.png", red),
+            (Some(NamedKey::ArrowDown), "b.png", blue),
+            (Some(NamedKey::ArrowUp), "a.png", red),
+        ] {
+            if let Some(arrow) = arrow {
+                h.named(w, arrow, Modifiers::NONE);
+            }
+            assert_eq!(selected(&h, w), [name]);
+            let path = pictures.join(name);
+            assert!(
+                h.program()
+                    .sheets
+                    .values()
+                    .any(|s| { matches!(s, Sheet::QuickLook { entry, .. } if entry.path == path) })
+            );
+            assert!(wait_for(&mut h, |p| { p.previews.get(&path).is_some_and(|p| p.full && p.image.is_some()) }));
+            let picture = h
+                .semantics(w)
+                .into_iter()
+                .filter(|(s, _)| s.role == SemanticRole::Image)
+                .map(|(_, r)| r)
+                .max_by(|a, b| a.area().total_cmp(&b.area()))
+                .expect("Quick Look's picture");
+            let center = picture.center();
+            // A real frame must repaint the picture, not just the filename.
+            assert!(h.take_damage(w).iter().any(|r| r.contains(center)), "{layout:?}: {name}");
+            // The second paint fills the widget's scaled-image cache. Check
+            // the visible pixels as well as the selected path and caption.
+            for _ in 0..2 {
+                let (width, _, pixels) = h.render_rgba(w, 1.0);
+                let offset = (center.y as usize * width as usize + center.x as usize) * 4;
+                assert_eq!(&pixels[offset..offset + 4], &color, "{layout:?}: {name}");
+            }
+        }
+    }
+}
+
+#[test]
 fn live_updates_follow_the_disk() {
     let s = Sandbox::new("live");
     populate(&s);
