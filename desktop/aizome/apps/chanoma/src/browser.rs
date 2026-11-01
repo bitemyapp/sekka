@@ -10,6 +10,10 @@
 //!   pointer and the confirm button clicks, the right stick scrolls; on a
 //!   television interface the confirm button is Return. Back is Escape, or
 //!   held, the browser's Back.
+//! - **Home on the keyboard** (or F1, or a remote's Home) is Chanoma's, not
+//!   the page's: the compositor keeps it for Chanoma while the browser's
+//!   window has the keyboard ([`keep_home`]), as no app hears keys meant
+//!   for another's window.
 //! - **Ending it** asks its window to close, then stops the browser if it
 //!   hasn't gone in a few seconds.
 
@@ -93,6 +97,8 @@ pub enum Event {
     Shown(WindowId),
     /// It has gone (closed, crashed, or never started).
     Gone,
+    /// Home pressed on the keyboard over the page.
+    Home,
 }
 
 /// What a press means on a page.
@@ -316,7 +322,7 @@ impl Browser {
         agent: Option<&str>,
         drive: Drive,
         pads: Arc<Shared>,
-        events: impl Fn(Event) + Send + 'static,
+        events: impl Fn(Event) + Clone + Send + 'static,
     ) -> std::io::Result<Browser> {
         std::fs::create_dir_all(profile)?;
         let child = Command::new(browser)
@@ -405,7 +411,21 @@ fn watch(
     child: Arc<Mutex<Child>>,
     window: Arc<Mutex<Option<WindowId>>>,
     stop: Arc<AtomicBool>,
-    events: impl Fn(Event),
+    events: impl Fn(Event) + Clone + Send + 'static,
+) {
+    // Set as this ends: the Home key is let go.
+    let over = Arc::new(AtomicBool::new(false));
+    follow(pid, child, window, &stop, &over, events);
+    over.store(true, Ordering::Release);
+}
+
+fn follow(
+    pid: i32,
+    child: Arc<Mutex<Child>>,
+    window: Arc<Mutex<Option<WindowId>>>,
+    stop: &Arc<AtomicBool>,
+    over: &Arc<AtomicBool>,
+    events: impl Fn(Event) + Clone + Send + 'static,
 ) {
     let mut client: Option<aizome_ipc::Client> = None;
     let mut shown: Option<WindowId> = None;
@@ -439,6 +459,10 @@ fn watch(
                             let _ = c.request(&Request::Fullscreen { id: Some(w.id), state: Some(true) });
                         }
                         let _ = c.request(&Request::Focus { id: w.id });
+                        let (id, s, o, e) = (w.id, stop.clone(), over.clone(), events.clone());
+                        let _ = std::thread::Builder::new()
+                            .name("chanoma-home-key".into())
+                            .spawn(move || keep_home(id, &s, &o, e));
                         events(Event::Shown(w.id));
                     }
                 }
@@ -461,6 +485,55 @@ fn watch(
             return;
         }
         std::thread::sleep(Duration::from_millis(300));
+    }
+}
+
+/// The keys that are Chanoma's Home over a page: Home (what Chanoma's own
+/// screens take for the Home button), F1, and a remote's Home.
+pub const HOME_KEYS: [&str; 3] = ["home", "f1", "homepage"];
+
+/// What the compositor tags the Home keys it keeps with.
+const HOME_TAG: &str = "chanoma-home";
+
+/// Keep the Home keys while the browser's `window` has the keyboard: the
+/// compositor tells of each press here, and the page hears nothing of
+/// them. Until the browser ends (`over`) or is closed (`stop`).
+fn keep_home(window: WindowId, stop: &AtomicBool, over: &AtomicBool, events: impl Fn(Event)) {
+    let mut keys = match aizome_ipc::Client::connect().and_then(|c| c.events()) {
+        Ok(k) => k,
+        Err(e) => {
+            log::warn!("chanoma: no Home key over the page: the compositor can't be reached ({e})");
+            return;
+        }
+    };
+    let ask = Request::CatchKeys {
+        tag: HOME_TAG.into(),
+        keys: HOME_KEYS.iter().map(|k| (*k).to_owned()).collect(),
+        windows: vec![window],
+    };
+    match keys.request(&ask) {
+        Ok(Response::Ok) => log::info!("chanoma: Home on the keyboard is kept over window {window}"),
+        r => {
+            log::warn!("chanoma: the compositor keeps no keys over the page: {r:?}");
+            return;
+        }
+    }
+    // Waits a little at a time, to see when to stop.
+    let _ = keys.stream().set_read_timeout(Some(Duration::from_millis(250)));
+    while !stop.load(Ordering::Acquire) && !over.load(Ordering::Acquire) {
+        match keys.next() {
+            Some(Ok(aizome_ipc::Event::KeyCaught { tag, code, .. })) if tag == HOME_TAG => {
+                log::info!("chanoma: key {code} over the page");
+                events(Event::Home);
+            }
+            Some(Ok(_)) => {}
+            Some(Err(e))
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut | std::io::ErrorKind::InvalidData
+                ) => {}
+            Some(Err(_)) | None => return,
+        }
     }
 }
 

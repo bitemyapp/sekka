@@ -17,6 +17,7 @@
 pub mod home;
 pub mod look;
 pub mod menu;
+pub mod picker;
 pub mod pinpad;
 pub mod screens;
 pub mod settings;
@@ -119,6 +120,26 @@ pub struct Chrome {
     pub banner: Option<String>,
 }
 
+impl Chrome {
+    /// The hint at a design point: a click there presses its button.
+    pub fn hint_at(&self, p: Point) -> Option<Button> {
+        if (p.y - FOOT_Y).abs() > 40.0 {
+            return None;
+        }
+        // The fonts are the same in every theme, so any measures them.
+        let theme = Theme::night();
+        let mut x = MARGIN;
+        for (b, what) in &self.hints {
+            let w = hint_width(&theme, self.family, *b, what);
+            if p.x >= x - 20.0 && p.x < x + w + 20.0 {
+                return Some(*b);
+            }
+            x += w + HINT_GAP;
+        }
+        None
+    }
+}
+
 /// What's over a screen.
 #[derive(Clone, Debug, PartialEq, Hash)]
 pub enum Overlay {
@@ -128,6 +149,9 @@ pub enum Overlay {
     Toast(String, Note),
     /// A film's bar: what plays and how far through (thousandths).
     Bar(String, u16),
+    /// The bar the pointer brings down over a page, a game or a film:
+    /// the way home for a mouse.
+    Top(TopBar),
 }
 
 /// A screen.
@@ -136,6 +160,8 @@ pub enum View {
     Home(home::Home),
     Grid(home::Grid),
     Settings(settings::Page),
+    /// Choosing a folder.
+    Picker(picker::Picker),
     Message(screens::Message),
     /// Nothing but the overlay, over a picture (a game, a film, a page).
     Clear,
@@ -182,13 +208,17 @@ impl Scene {
             modal_focus.hash(&mut h);
         }
         // Screens whose focus isn't drawn as parts redraw with it.
-        if !matches!(view, View::Home(_) | View::Grid(_) | View::Settings(_)) {
+        if !matches!(view, View::Home(_) | View::Grid(_) | View::Settings(_) | View::Picker(_)) {
             focus.hash(&mut h);
         }
         if let View::Settings(p) = &view {
             // The side list and the rows: which one has the focus decides
             // how both look.
             p.in_list(focus).hash(&mut h);
+        }
+        if let View::Picker(p) = &view {
+            // The places scroll with the focus.
+            p.side_first(focus).hash(&mut h);
         }
         Scene { view, chrome, overlay, focus, modal_focus, art, art_rev, content: h.finish() }
     }
@@ -203,24 +233,38 @@ impl Scene {
             View::Home(h) => h.parts(self.focus, &fit),
             View::Grid(g) => g.parts(self.focus, &fit),
             View::Settings(p) => p.parts(self.focus, &fit),
+            View::Picker(p) => p.parts(self.focus, &fit),
             _ => Vec::new(),
         }
     }
 
     /// What's at a window point.
     pub fn hit(&self, size: Size, p: Point) -> Option<Target> {
-        let d = Fit::of_size(size).to_design(p);
+        let fit = Fit::of_size(size);
+        let d = fit.to_design(p);
+        // A click beside a menu or the pad puts it away.
+        let outside = |frame: Rect| (!frame.contains(d)).then_some(Target::Outside);
         match &self.overlay {
-            Some(Overlay::Pin(_)) => return pinpad::hit(d).map(Target::Key),
-            Some(Overlay::Menu(m)) => return m.hit(d).map(Target::Item),
+            Some(Overlay::Pin(_)) => return pinpad::hit(d).map(Target::Key).or_else(|| outside(pinpad::frame())),
+            Some(Overlay::Menu(m)) => return m.hit(d).map(Target::Item).or_else(|| outside(m.frame())),
+            Some(Overlay::Top(_)) => {
+                let top = fit.visible(Rect::from_origin_size(Point::ZERO, size)).y0;
+                if d.y < top + TOP_BAR_H {
+                    return top_home(top).contains(d).then_some(Target::Hint(Button::Guide));
+                }
+            }
             _ => {}
+        }
+        if let Some(b) = self.chrome.as_ref().and_then(|c| c.hint_at(d)) {
+            return Some(Target::Hint(b));
         }
         match &self.view {
             View::Home(h) => h.hit(self.focus, d).map(|(row, col)| Target::Tile(row, col)),
             View::Grid(g) => g.hit(self.focus, d).map(Target::Item),
             View::Settings(p) => p.hit(self.focus, d),
+            View::Picker(p) => p.hit(self.focus, d),
             View::Message(m) => m.hit(d).map(Target::Item),
-            View::Clear => None,
+            View::Clear => Some(Target::Picture),
         }
     }
 
@@ -236,6 +280,7 @@ impl Scene {
                 View::Home(h) => h.paint(c, theme, self.focus, &self.art),
                 View::Grid(g) => g.paint(c, theme, self.focus, &self.art),
                 View::Settings(p) => p.paint(c, theme, self.focus),
+                View::Picker(p) => p.paint(c, theme, self.focus),
                 View::Message(m) => m.paint(c, theme, self.focus),
                 View::Clear => {}
             }
@@ -256,7 +301,7 @@ impl Scene {
                                 self.chrome.as_ref().map_or((Family::Generic, Button::South), |c| (c.family, c.ok));
                             m.paint(c, theme, Focus { row: self.modal_focus, col: 0 }, family, ok)
                         }
-                        Overlay::Toast(..) | Overlay::Bar(..) => {}
+                        Overlay::Toast(..) | Overlay::Bar(..) | Overlay::Top(_) => {}
                     }
                 });
             }
@@ -267,6 +312,11 @@ impl Scene {
             Some(Overlay::Bar(label, progress)) => c.saved(|c| {
                 fit.apply(c);
                 film_bar(c, theme, label, *progress);
+            }),
+            Some(Overlay::Top(t)) => c.saved(|c| {
+                let v = fit.visible(b);
+                fit.apply(c);
+                top_bar(c, theme, t, v);
             }),
             None => {}
         }
@@ -286,6 +336,13 @@ pub enum Target {
     Item(usize),
     Section(usize),
     Key(usize),
+    /// A hint at the foot, as pressing its button would; the bar's Home
+    /// is [`Button::Guide`]'s.
+    Hint(Button),
+    /// Beside a menu or the PIN pad.
+    Outside,
+    /// A game's or a film's picture (or a page's, under the bar).
+    Picture,
 }
 
 /// A film's bar along the foot: its name and how far through, on a
@@ -306,6 +363,45 @@ pub fn film_bar(c: &mut Canvas, theme: &Theme, label: &str, progress: u16) {
     }
 }
 
+/// The bar the pointer brings down: Home, what shows, and the clock.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TopBar {
+    pub title: String,
+    pub clock: String,
+}
+
+/// The bar's height.
+pub const TOP_BAR_H: f64 = 152.0;
+
+/// Whether a window point is in the bar's band along the top.
+pub fn in_top_bar(size: Size, p: Point) -> bool {
+    let fit = Fit::of_size(size);
+    fit.to_design(p).y < fit.visible(Rect::from_origin_size(Point::ZERO, size)).y0 + TOP_BAR_H
+}
+
+/// The bar's Home button, the bar's top at `top`.
+pub fn top_home(top: f64) -> Rect {
+    Rect::new(MARGIN, top + 36.0, MARGIN + 240.0, top + 116.0)
+}
+
+/// The bar along the top of `v` (the window, in the design's points): a
+/// floating panel, Home lit at its left as a default button is.
+pub fn top_bar(c: &mut Canvas, theme: &Theme, t: &TopBar, v: Rect) {
+    floating(c, theme, Rect::new(v.x0, v.y0, v.x1, v.y0 + TOP_BAR_H));
+    let home = top_home(v.y0);
+    let y = home.center().y;
+    lit(c, theme, home);
+    icon(c, Icon::House, Point::new(home.x0 + 52.0, y), 40.0, theme.on_selection());
+    text_mid(c, theme, "Home", home.x0 + 92.0, y, font(TITLE, SEMIBOLD), theme.on_selection());
+    let mut right = W - MARGIN;
+    if !t.clock.is_empty() {
+        right -= text_right(c, theme, &t.clock, right, y, mono(TITLE, MEDIUM), theme.text()) + 48.0;
+    }
+    let spec = font(TITLE, SEMIBOLD);
+    let title = fit_text(theme, &t.title, right - home.x1 - 48.0, spec);
+    text_mid(c, theme, &title, home.x1 + 48.0, y, spec, theme.text2());
+}
+
 /// What a note is about, for its icon and rail.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Note {
@@ -314,6 +410,8 @@ pub enum Note {
     GrownUp,
     Kids,
     Controller,
+    /// The way back.
+    Home,
 }
 
 /// A note at the top, over whatever shows: a floating panel with a rail
@@ -326,6 +424,7 @@ pub fn toast(c: &mut Canvas, theme: &Theme, t: &str, note: Note) {
         Note::GrownUp => (Icon::LockOpen, theme.focus()),
         Note::Kids => (Icon::Lock, theme.role(Role::Success)),
         Note::Controller => (Icon::Gamepad2, theme.text2()),
+        Note::Home => (Icon::House, theme.text2()),
     };
     let w = (RAIL + 32.0 + 36.0 + 20.0 + size.width + 40.0).round();
     let r = Rect::new((W / 2.0 - w / 2.0).round(), 36.0, (W / 2.0 + w / 2.0).round(), 116.0);
@@ -373,5 +472,42 @@ pub fn paint_chrome(c: &mut Canvas, theme: &Theme, ch: &Chrome) {
     let mut x = MARGIN;
     for (b, what) in &ch.hints {
         x = hint(c, theme, ch.family, *b, what, x, FOOT_Y);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scene(overlay: Option<Overlay>, hints: Vec<(Button, String)>) -> Scene {
+        let chrome = Chrome { hints, family: Family::Xbox, ..Chrome::default() };
+        Scene::new(View::Clear, Some(chrome), overlay, Focus::default(), 0, Rc::new(HashMap::new()), 0)
+    }
+
+    #[test]
+    fn a_click_finds_the_way_home_whatever_shows() {
+        let size = Size::new(W, H);
+        // The hints along the foot are buttons.
+        let s = scene(None, vec![(Button::South, "Choose".into()), (Button::East, "Back".into())]);
+        assert_eq!(s.hit(size, Point::new(MARGIN + 10.0, FOOT_Y)), Some(Target::Hint(Button::South)));
+        let back = MARGIN + hint_width(&Theme::night(), Family::Xbox, Button::South, "Choose") + HINT_GAP + 10.0;
+        assert_eq!(s.hit(size, Point::new(back, FOOT_Y)), Some(Target::Hint(Button::East)));
+        assert_eq!(s.hit(size, Point::new(back, FOOT_Y - 120.0)), Some(Target::Picture), "over a picture");
+        // The bar's Home, at the window's top however the design sits in it.
+        let top = TopBar { title: "Netflix".into(), clock: "17:00".into() };
+        let bar = scene(Some(Overlay::Top(top)), Vec::new());
+        assert_eq!(bar.hit(size, Point::new(200.0, 76.0)), Some(Target::Hint(Button::Guide)));
+        assert_eq!(bar.hit(size, Point::new(1200.0, 76.0)), None, "the rest of the bar");
+        assert_eq!(bar.hit(size, Point::new(1200.0, 600.0)), Some(Target::Picture), "under it");
+        // A 16:10 window: the design sits 60 points down, the bar doesn't.
+        let tall = Size::new(1920.0, 1200.0);
+        assert_eq!(bar.hit(tall, Point::new(200.0, 76.0)), Some(Target::Hint(Button::Guide)));
+        assert!(in_top_bar(tall, Point::new(500.0, 140.0)) && !in_top_bar(tall, Point::new(500.0, 400.0)));
+        // Beside a menu puts it away; on it, not.
+        let menu = menu::Menu::new("Netflix", &["Keep watching", "Go home"]);
+        let frame = menu.frame();
+        let m = scene(Some(Overlay::Menu(menu)), Vec::new());
+        assert_eq!(m.hit(size, Point::new(40.0, 540.0)), Some(Target::Outside));
+        assert_ne!(m.hit(size, Point::new(frame.center().x, frame.y0 + 10.0)), Some(Target::Outside));
     }
 }

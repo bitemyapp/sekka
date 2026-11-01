@@ -40,7 +40,7 @@ impl Menu {
         self
     }
 
-    fn frame(&self) -> Rect {
+    pub fn frame(&self) -> Rect {
         let h = STRIP_H + self.items.len() as f64 * ITEM_H + 2.0 * EDGE;
         let top = ((H - h) / 2.0).round();
         Rect::new(W / 2.0 - WIDTH / 2.0, top, W / 2.0 + WIDTH / 2.0, top + h)
