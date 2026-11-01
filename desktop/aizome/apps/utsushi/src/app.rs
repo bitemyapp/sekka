@@ -101,6 +101,7 @@ pub enum Msg {
     Tick,
     CueTick,
     ShowInfo,
+    AudioDevice(Option<String>),
     InfoTick,
     /// `UTSUSHI_STATS=1`: the pipeline and frame counts to the log, every
     /// five seconds (for measuring).
@@ -168,6 +169,7 @@ pub struct Utsushi {
     pub speed: f64,
     pub repeat: Repeat,
     pub audio_track: Option<usize>,
+    pub audio_devices: Vec<aizome_media::pipewire::AudioDevice>,
     pub sub_track: Option<usize>,
     /// The subtitle track's cues, in order, and the time they're shown at.
     pub cues: Vec<Cue>,
@@ -238,6 +240,7 @@ impl Utsushi {
             speed: 1.0,
             repeat: Repeat::Off,
             audio_track: None,
+            audio_devices: Vec::new(),
             sub_track: None,
             cues: Vec::new(),
             cue_pos: 0.0,
@@ -543,6 +546,7 @@ impl Utsushi {
 
     fn on_player(&mut self, e: Event, cx: &mut Cx<Msg>) {
         match e {
+            Event::AudioDevices(devices) => self.audio_devices = devices,
             Event::Opened(info) => {
                 let first = self.info.as_ref().is_none_or(|i| i.url != info.url);
                 if let (true, Some(bytes)) = (first, info.cover.clone()) {
@@ -755,6 +759,7 @@ impl Program for Utsushi {
             ptx.send(Msg::Player(PlayerEvent(e)));
         });
         player.set_volume(self.volume, self.muted);
+        player.set_audio_device(self.store.prefs.audio_device.clone());
         self.player = Some(player);
         if !self.null_audio {
             let mtx = tx.clone();
@@ -1009,6 +1014,15 @@ impl Program for Utsushi {
                 if self.sheet.is_none() && self.info.is_some() {
                     self.sheet = Some(cx.show_sheet(self.window));
                     self.info_timer = Some(cx.every(Duration::from_secs(1), Msg::InfoTick));
+                }
+            }
+            Msg::AudioDevice(name) => {
+                if let Some(player) = self.player() {
+                    player.set_audio_device(name.clone());
+                }
+                if self.store.prefs.audio_device != name {
+                    self.store.prefs.audio_device = name;
+                    self.store.save_prefs();
                 }
             }
             Msg::InfoTick => {}

@@ -258,6 +258,9 @@ impl Ring {
 
 /// Where decoded audio goes.
 pub trait Output: Send {
+    /// Preferred PipeWire node name for the next stream; None follows the
+    /// session default. Outputs without device selection may ignore it.
+    fn set_device(&mut self, _device: Option<&str>) {}
     /// Start a stream of `format` taking from `ring`, stopped: the clock
     /// follows it once it plays.
     fn open(&mut self, ring: Arc<Ring>, clock: Arc<Clock>, media: &str) -> Result<(), String>;

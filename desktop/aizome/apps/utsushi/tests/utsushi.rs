@@ -478,6 +478,45 @@ fn media_info_and_file_panel_cover_video_without_subtitles() {
 }
 
 #[test]
+fn output_selection_keeps_position_pause_and_preferences() {
+    use aizome_kit::sidestep_ui::{Key, Modifiers, NamedKey};
+    use aizome_media::pipewire::AudioDevice;
+    use aizome_utsushi::app::PlayerEvent;
+
+    let mut h = harness();
+    let w = window(&h);
+    h.send(Msg::AudioDevice(Some("test-speakers".into())));
+    h.send(Msg::Open(vec![fixture("chaptered.mkv")]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing);
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    let pos = h.program().player.as_ref().unwrap().position();
+    h.send(Msg::Player(PlayerEvent(aizome_media::Event::AudioDevices(vec![
+        AudioDevice { name: "test-speakers".into(), description: "Speakers".into() },
+        AudioDevice { name: "test-headphones".into(), description: "Headphones".into() },
+    ]))));
+    h.click(w, h.find_id(w, "tracks").unwrap().center());
+    let menu = h.popups(w)[0].0;
+    for key in [NamedKey::End, NamedKey::ArrowUp, NamedKey::ArrowRight] {
+        h.popup_keyboard(menu, Key::Named(key), Modifiers::NONE);
+    }
+    let outputs = h.popups(w).last().unwrap().0;
+    assert_ne!(outputs, menu, "the Output Device submenu opened");
+    h.popup_keyboard(outputs, Key::Named(NamedKey::End), Modifiers::NONE);
+    h.popup_keyboard(outputs, Key::Named(NamedKey::Enter), Modifiers::NONE);
+    std::thread::sleep(Duration::from_millis(100));
+    h.send_all(std::iter::empty());
+    assert_eq!(h.program().status, Status::Paused);
+    assert!((h.program().player.as_ref().unwrap().position() - pos).abs() < 0.05);
+    let prefs = aizome_utsushi::store::Store::load(h.program().state_dir.clone()).prefs;
+    assert_eq!(prefs.audio_device.as_deref(), Some("test-headphones"));
+    h.send(Msg::AudioDevice(None));
+    assert!(h.program().store.prefs.audio_device.is_none());
+    h.send(Msg::Toggle);
+    until(&mut h, 2.0, |a| a.status == Status::Playing);
+}
+
+#[test]
 fn a_folder_plays_in_order_and_goes_on_to_the_next() {
     let mut h = harness();
     let dir = std::env::temp_dir().join(format!("utsushi-folder-{}", std::process::id()));

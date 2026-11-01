@@ -254,6 +254,24 @@ User `mpv.conf` and command-line preferences override those defaults.
 in an Aizome VM using the shipped config and checks both override routes.
 This component test does not replace playback through the exact ISO's normal UI.
 
+### Utsushi audio routing
+
+Utsushi's output selector enumerates PipeWire Audio/Sink nodes and stores
+`node.name` rather than temporary IDs. It recreates only its stream with
+`target.object`, retaining the decoded ring and audible position, then
+restores volume and play/pause state. It does not change the session default.
+The routing regression runs against private PipeWire and D-Bus instances,
+two null sinks and WirePlumber's policy-only profile (no hardware monitors):
+
+```sh
+nix develop .#aizome -c bash desktop/aizome/crates/aizome-media/tests/pipewire-output.sh
+```
+
+It checks real links while playing, switching while paused, retained volume
+and mute, the next item, returning to System Default and unplug fallback. The ordinary headless
+tests cover the UI/state and old preference files. These are component
+tests, not measurements of Bluetooth/USB hardware or ISO qualification.
+
 ### Aizome and IBus
 
 A fresh Aizome session inherits `services.xserver.xkb` through the session's
