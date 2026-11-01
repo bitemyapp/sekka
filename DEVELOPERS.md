@@ -52,6 +52,17 @@ nix build .#iso --no-update-lock-file --out-link result-iso
 
 The ISO is under `result-iso/iso/`. `nix build .#installed-lock` exposes the lock shipped to the installed machine. `nix fmt` formats Nix files supplied to it.
 
+### Aizome media defaults
+
+Aizome's audio/video MIME defaults come from Utsushi's desktop entry, so
+adding a supported format cannot leave it assigned to another player by
+accident. `nix build .#checks.x86_64-linux.aizome-media-defaults` compares the
+live and standalone Aizome module's generated list, resolves every advertised
+format with isolated XDG directories, checks user overrides and another
+desktop's defaults, and dispatches video/music paths through `xdg-open` to
+test launch recorders. It is a configuration and dispatch check, not playback
+or ISO qualification.
+
 ### Googlebook live media
 
 Googlebook image construction is temporarily disabled in the root flake.
