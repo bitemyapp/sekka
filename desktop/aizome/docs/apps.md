@@ -958,6 +958,11 @@ rest); folders play their files in Hako's natural order.
   handing their files over; Media Info (❖I) says what the file is and how
   it's being played.
 
+Utsushi is Aizome's default for all the video and music formats it advertises,
+including WMV, 3GPP2, OGM, AIFF, Monkey's Audio, WavPack and WMA. Your own
+Open With/default-application choices take priority, and other desktop
+sessions keep their defaults.
+
 **Why it's light.** The engine is `crates/aizome-media` (FFmpeg through
 `ffmpeg-sys-next`, PipeWire through `pipewire-rs`); the window shows its
 frames through the kit's video element (`docs/kit.md`, Video).
