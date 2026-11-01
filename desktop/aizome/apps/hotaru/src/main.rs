@@ -48,15 +48,13 @@ fn main() {
             Some("--new-window") => new_window = true,
             Some("--hold") => hold = true,
             Some("--app-id") => {
-                let id = args.next().and_then(|id| id.into_string().ok());
-                let Some(id) = id.filter(|id| {
-                    !id.is_empty() && id.bytes().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
-                }) else {
+                let id = args.next().map(|id| id.to_string_lossy().into_owned()).unwrap_or_default();
+                if id.is_empty() || !id.bytes().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c)) {
                     eprintln!(
-                        "--app-id requires an application ID containing letters, digits, dots, hyphens or underscores"
+                        "--app-id {id:?}: an application ID may contain only ASCII letters, digits, dots, hyphens and underscores"
                     );
                     std::process::exit(2);
-                };
+                }
                 app_id = Some(id);
             }
             Some("--" | "-e") => {
