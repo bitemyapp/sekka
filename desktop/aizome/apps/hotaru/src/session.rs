@@ -9,6 +9,7 @@ use hotaru_io::{Pty, PtyCommand, PtySize};
 use std::collections::VecDeque;
 use std::io;
 use std::os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
@@ -24,6 +25,7 @@ const ABNORMAL_EXIT: Duration = Duration::from_millis(250);
 const PASTE_EVENT: usize = 6 * 1024;
 
 pub enum Command {
+    WorkingDirectory(mpsc::Sender<Option<PathBuf>>),
     Input(Arc<[u8]>),
     Key(Arc<hotaru_core::input::KeyEvent>),
     Mouse(crate::input::MouseInput),
@@ -96,10 +98,34 @@ impl Shared {
     }
 }
 impl Session {
-    pub fn spawn(id: u64, command: PtyCommand, defaults: Defaults, tx: MsgSender<Msg>) -> io::Result<Self> {
+    pub fn spawn(
+        id: u64,
+        mut command: PtyCommand,
+        defaults: Defaults,
+        tx: MsgSender<Msg>,
+        inherit_from: Option<&Session>,
+    ) -> io::Result<Self> {
         let (session, receiver) = Self::channel()?;
         let worker = session.shared.clone();
+        // Capture the source session before the UI focuses the new pane. The
+        // lookup and bounded wait both stay off the interface thread.
+        let directory = inherit_from.and_then(|source| {
+            let (reply, directory) = mpsc::channel();
+            source.command(Command::WorkingDirectory(reply)).ok()?;
+            Some(directory)
+        });
         std::thread::Builder::new().name(format!("hotaru-pty-{id}")).spawn(move || {
+            if let Some(directory) = directory
+                && let Ok(Some(path)) = directory.recv_timeout(Duration::from_secs(1))
+            {
+                command.cwd = Some(path);
+            }
+            if worker.stopping.load(Ordering::Acquire) {
+                return;
+            }
+            if let Some(path) = &command.cwd {
+                tx.send(Msg::StartupDirectory(id, path.clone()));
+            }
             if let Err(e) = run(id, command, defaults, tx.clone(), receiver, worker.clone()) {
                 tx.send(Msg::Failed(id, e.to_string()));
             }
@@ -518,6 +544,9 @@ fn run(
             match commands.try_recv() {
                 Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
                 Err(mpsc::TryRecvError::Empty) => break,
+                Ok(Command::WorkingDirectory(reply)) => {
+                    let _ = reply.send(pty.working_directory().ok().flatten());
+                }
                 Ok(Command::Input(bytes)) => {
                     if eof || hung_up {
                         shared.input_bytes.fetch_sub(bytes.len(), Ordering::AcqRel);

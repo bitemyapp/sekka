@@ -60,6 +60,7 @@ pub enum Msg {
     FontFailed(u64, u64, String),
     Title(u64, String),
     WorkingDirectory(u64, std::path::PathBuf),
+    StartupDirectory(u64, std::path::PathBuf),
     /// The program ended: its status, and whether it failed as it started.
     Exited(u64, String, bool),
     Failed(u64, String),
@@ -352,19 +353,20 @@ impl Hotaru {
         if command.integrate_shell {
             command.program = self.settings.shell_program();
         }
-        if inherit_cwd
-            && command.integrate_shell
-            && let Some(directory) = self.active_pane().and_then(|pane| pane.working_directory.clone())
-        {
+        let source = self.active_pane().filter(|_| inherit_cwd);
+        if let Some(directory) = source.and_then(|pane| pane.working_directory.clone()) {
             command.cwd = Some(directory);
         }
+        // A validated shell report also works for nested shells. Without one,
+        // ask the focused pane's PTY owner for its live local shell directory.
+        let inherit_from = source.filter(|pane| pane.link_directory.is_none()).and_then(|pane| pane.session.as_ref());
         command.integrate_shell &= self.settings.shell_integration;
         let working_directory = command.cwd.clone();
         let (session, status) = if self.demo {
             (None, "Preview".into())
         } else {
             let defaults = Defaults { colors, scrollback: self.settings.scrollback, cursor };
-            match Session::spawn(id, command, defaults, cx.stream()) {
+            match Session::spawn(id, command, defaults, cx.stream(), inherit_from) {
                 Ok(session) => (Some(session), "Shell".into()),
                 Err(e) => (None, format!("Could not start shell: {e}")),
             }
@@ -1890,6 +1892,11 @@ impl Program for Hotaru {
                     // Keep the failure visible even while the pointer remains
                     // over the clicked link. A later new hover can show a target.
                     pane.hovered_link = None;
+                }
+            }
+            Msg::StartupDirectory(id, directory) => {
+                if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
+                    pane.working_directory = Some(directory);
                 }
             }
             Msg::WorkingDirectory(id, directory) => {

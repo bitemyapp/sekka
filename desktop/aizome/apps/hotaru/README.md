@@ -126,7 +126,8 @@ strange state, including any escape sequence it was partway through.
 
 Packaged sessions use Hotaru's private terminfo entry. Default Bash, Zsh and
 Fish shells can report their working directory without changing user dotfiles;
-new tabs and splits inherit an accepted local directory. Explicit commands
+new tabs and splits start in the focused pane's directory, including when
+shell integration is disabled or unavailable. Explicit commands
 keep their arguments and startup behavior. See the [shell integration notes](../../../../apps/hotaru/docs/shell-integration.md)
 for startup details and the after-config fallback for Zsh frameworks that
 replace prompt hooks.
