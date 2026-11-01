@@ -84,7 +84,9 @@ emulator cores, kept just where they were left. A grown-up's PIN decides
 which services and games the kids see and for how long each day, with a
 bedtime; when time runs out the game is saved and a friendly screen says
 goodnight. It wears the desktop's own look, made large enough to read from
-the sofa, so it's as much at home with the grown-ups. So far it has been tested in a virtual machine with a virtual
+the sofa, so it's as much at home with the grown-ups. A keyboard and
+mouse work too, with a way back to Home from anywhere, a streaming page
+included. So far it has been tested in a virtual machine with a virtual
 controller and with real emulator cores, not yet with a physical
 controller, Netflix-style services or a television; links inside a service
 can still lead elsewhere on the web, and consoles that need 3D hardware

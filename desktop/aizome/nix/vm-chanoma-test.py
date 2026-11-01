@@ -5,8 +5,11 @@ Chanoma starts with the session; the controller is found and held from
 other readers; Home's tiles open a game; the game hears the controller
 (its screen goes dark while Right is held, read from the compositor's own
 screenshot); the Home button pauses it under a menu; stopping keeps where
-it was left; the controller going and coming back is player 1 again. This
-fixture renders in software (shared-memory frames, no VA-API).
+it was left; the controller going and coming back is player 1 again. A
+page in the browser has a way home without the controller too: Home or F1
+on a keyboard (which the compositor keeps from the page) and the bar the
+pointer brings down from the top of the screen. This fixture renders in
+software (shared-memory frames, no VA-API).
 """
 
 import hashlib
@@ -207,6 +210,60 @@ with subtest("a page in the browser, driven by the controller"):
     pad("tap down")
     pad("tap south")
     until("home again, the browser closed", lambda: logged("chanoma: Home", 2) and browser() is None, timeout=30)
+
+
+def count(text):
+    return journal().count(text)
+
+
+def open_test_site():
+    # First in Keep playing since it last showed.
+    pad("tap south")
+    until(
+        "the page opens",
+        lambda: (w := browser()) and w["fullscreen"] and w["focused"] and "Chanoma test page" in w["title"],
+        timeout=60,
+    )
+
+
+with subtest("a page has a way home by keyboard, and by mouse"):
+    open_test_site()
+    menus, homes = count("the Page menu"), count("chanoma: Home")
+    # Home on a keyboard is Chanoma's, not the page's (the compositor keeps
+    # it): the menu over the page, which has the keys while it shows.
+    until("Chanoma keeps Home over the page", lambda: count("Home on the keyboard is kept over window") >= 2)
+    user("aizomectl input key home")
+    until("Home on the keyboard opens the menu", lambda: count("the Page menu") > menus)
+    user("aizomectl input key escape")
+    time.sleep(1)
+    assert "key" not in browser()["title"], browser()["title"]
+    # Put away, the page has the keys again.
+    user("aizomectl input key a")
+    until("the page has the keys again", lambda: "key a" in browser()["title"])
+    # F1 too; then Down and Return: home.
+    user("aizomectl input key f1")
+    until("F1 opens the menu", lambda: count("the Page menu") > menus + 1)
+    user("aizomectl input key down")
+    user("aizomectl input key return")
+    until("home by keyboard", lambda: count("chanoma: Home") > homes and browser() is None, timeout=30)
+
+    open_test_site()
+    menus, homes = count("the Page menu"), count("chanoma: Home")
+    until("Chanoma is ready over the page", lambda: count("Home on the keyboard is kept over window") >= 3)
+    time.sleep(1)
+    # The pointer pushed up to the top (from the middle, as a hand moves
+    # it) brings the bar down; its Home (at the left: the 1920 × 1080
+    # design is at two thirds here, 40 points down) is the menu, and the
+    # menu's Go home goes home.
+    user("aizomectl input move 640 300")
+    user("aizomectl input move 640 0")
+    until("the bar comes down", lambda: logged("the bar over the page"))
+    user("aizomectl input move 144 50")
+    user("aizomectl input click")
+    until("the bar's Home opens the menu", lambda: count("the Page menu") > menus)
+    user("aizomectl input move 640 456")
+    user("aizomectl input click")
+    until("home by mouse", lambda: count("chanoma: Home") > homes and browser() is None, timeout=30)
 
 
 with subtest("leaving with the session keeps a game too"):

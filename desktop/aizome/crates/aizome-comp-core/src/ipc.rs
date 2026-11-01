@@ -227,6 +227,26 @@ impl State {
                     }
                     Response::Ok
                 }
+                // The connection's too, kept while it stays open; asked
+                // again, in place of what it asked before.
+                Ok(Request::CatchKeys { tag, keys, windows }) => {
+                    let codes: Result<Vec<u32>, String> = keys.iter().map(|k| crate::requests::key_code(k)).collect();
+                    match codes {
+                        _ if !self.az.ipc.is_subscribed(id) => {
+                            Response::error("subscribe first: the keys caught come to the connection that asks")
+                        }
+                        Err(e) => Response::error(e),
+                        Ok(keys) if keys.is_empty() || windows.is_empty() => {
+                            self.az.keyboards.catch_over.remove(&id);
+                            Response::Ok
+                        }
+                        Ok(keys) => {
+                            let over = crate::keyboards::CatchOver { tag, keys, windows };
+                            self.az.keyboards.catch_over.insert(id, over);
+                            Response::Ok
+                        }
+                    }
+                }
                 Ok(req) => {
                     debug!("IPC {req:?}");
                     self.handle_request(req)

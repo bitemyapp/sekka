@@ -43,6 +43,7 @@ explicitly (and Chanoma also looks in NixOS's profiles).
 | `browser.rs` | Services in Chrome: profiles, kiosk flags, the window followed through the compositor's IPC, input through it |
 | `rules.rs` | The PIN, wrong-PIN lockout, what kids may open, daily limits, bedtime, grants |
 | `library.rs` | Systems, cores, games and videos found in folders |
+| `folders.rs` | Choosing a folder: the places to start from, a folder's folders and what's in each, what Chanoma would find in one |
 | `app/` | The program: screens, input, home shelves, playing, settings, time |
 | `ui/` | What's drawn: a 1920 × 1080 stage scaled to the screen |
 
@@ -94,6 +95,37 @@ second is Home on controllers without one.
 Games read the controllers' state from shared atomics the thread keeps
 current, not through messages.
 
+### The way home
+
+Wherever Chanoma is, and whatever is in hand, there's a way back to Home:
+
+| | Controller | Keyboard | Mouse |
+|---|---|---|---|
+| Chanoma's screens | Back, Home | Esc, Home or F1 | the hints along the foot are buttons (*Back*, *Home*), as are a screen's own (*Cancel*, *Back home*) |
+| A menu or the PIN pad | Back | Esc | a click beside it |
+| A game or a film | Home: its menu | Esc, Home or F1: its menu | moving it brings a bar down from the top, *Home* at its left; a click on the picture is the menu too |
+| A page in the browser | Home: the menu over the page | Home or F1, kept from the page | the pointer pushed up to the top of the screen brings the bar down |
+
+A controller always reaches Chanoma, as it reads them itself. A keyboard
+and a mouse belong to the window under them, which over a page is the
+browser's, so there:
+
+- **Home and F1** (and a remote's Home, `KEY_HOMEPAGE`) are kept for
+  Chanoma by the compositor while the browser's window has the keyboard
+  (the IPC's `catch-keys`, asked on a subscribed connection once the
+  window shows): the page never hears them, and Chanoma hears of each.
+  With Ctrl, Alt or ❖ held they go to the page as ever.
+- **The menu over the page** takes the keyboard while it shows (an
+  exclusive layer surface), so the arrows, Return and Esc answer it;
+  put away, the page has the keys again.
+- **The bar** comes down when the pointer reaches a strip two points
+  high along the top of the screen (a layer surface of its own, nothing
+  drawn). It stays while the pointer is in it and goes as the pointer
+  moves back down to the page.
+- When the page shows, a note over it says how to come back: *Press Home
+  on the controller to come back*, or without a controller, *Press Home,
+  or move the pointer to the top, to come back*.
+
 ### Games
 
 Chanoma loads libretro cores with `dlopen` and drives them itself
@@ -143,10 +175,12 @@ process (pop-ups), and reports when the window or the process goes.
 Input goes through the IPC's `synthesize`: keys and clicks from button
 presses, and pointer motion and scrolling from the sticks on a thread
 polling the shared controller state (every 8 ms while a stick leans).
-The overlay over the page (the Home menu, time warnings) is a layer
+The overlay over the page (the Home menu, the bar, notes) is a layer
 surface on the overlay layer, which Aizome draws above a focused
-full-screen window; it takes no keyboard focus, and only the menu takes
-the pointer.
+full-screen window, open only while one of them shows; a note lets the
+pointer through, and only the menu takes the keyboard (The way home,
+above). The strip along the top that brings the bar down is another,
+open while the page shows.
 
 ### Rules
 
@@ -162,6 +196,48 @@ into `usage.json` (written every 30 seconds while it counts). The gate
 is open with the least of today's limit (plus grants) and the time until
 bedtime left. A grant tops today up from what's been used, so a grant
 after time ran out is all play, and lifts bedtime that long.
+
+### Choosing folders
+
+The kit's file panel wants a pointer and a keyboard, so the settings'
+*Add a games folder* and *Add a videos folder* (and Home's *Add games*)
+open a picker of Chanoma's own (`folders.rs`, `app/picker.rs`,
+`ui/picker.rs`), laid out as the settings are:
+
+- **Places** down the left: home, the usual folders in it that exist
+  (`Games`, `ROMs`, `Videos`, `Movies`, `Downloads`), each drive under
+  `/run/media/$USER`, `/media/$USER`, `/media` and `/mnt`, and the whole
+  computer. An empty folder there is a drive's mount point while it's
+  out, and is left out. The places are read again every second while the
+  picker shows, so a stick plugged in appears. A drive pulled out from
+  under the folder showing goes back home.
+- **The list** on the right: where the folder is, in words ("Home ›
+  ROMs › snes"); then the choice, *Use this folder*, with what Chanoma
+  would find there; then the folder's own folders, hidden ones left out,
+  in natural order, each with a word on what's directly in it ("12 games
+  · 3 folders").
+- **What's found** is the library's own reading (`scan_games` or
+  `scan_videos`, five folders deep and at most 20,000 files), so the
+  count is what Home will show, cores included ("38 games for 4 systems,
+  and 2 without an emulator").
+- **Off the interface thread:** folders are read there, one reading per
+  folder shown. Each answer carries its reading's number, and an older
+  one is dropped. A folder of more than 400 folders isn't looked into
+  folder by folder.
+
+The controller:
+
+| Button | In the list | Among the places |
+|---|---|---|
+| Up, down | move | move (the list follows) |
+| Confirm, right | open the folder (the first row: use this one) | into the list |
+| Back | up a folder, the focus on the one left (from `/`, to the places) | put the picker away |
+| Left | to the places | |
+| Top face button (Y, △; Tab) or Start | use the folder showing | use the folder showing |
+| Shoulders | a page up or down | |
+
+Choosing returns to the settings with the focus on *Add a … folder*, not
+on the folder just added, so pressing again doesn't remove it.
 
 ## Checking it
 
@@ -187,7 +263,19 @@ CHANOMA_TEST_CORES=<folder of *_libretro.so> \
   sink enlarged, the controller reaching the core, pausing under the Home
   menu, its state and picture kept, *Keep playing*, carrying on); time
   running out mid-game, with the warning, the game kept, the closed
-  screen, and a grown-up's grant; bedtime.
+  screen, and a grown-up's grant; bedtime; a games folder chosen with the
+  controller alone (the places, a folder's folders with what's in each,
+  what Chanoma finds there, up again to the folder left, a drive among
+  the places, the top button using it, the settings back on *Add a games
+  folder*, the new game read, and the picker put away unchanged); the way
+  home without a controller, over a game (Esc, a click beside the menu,
+  the bar the pointer brings and its *Home*, a click on the picture) and
+  over a page, with a stand-in browser (the *Home* hint clicked, Esc, the
+  note saying how to come back, the strip along the top bringing the bar,
+  the menu taking the keyboard and giving it back, the bar going as the
+  pointer returns to the page, and the compositor's word of Home on the
+  keyboard leading home). The unit tests add where clicks land: the
+  hints, the bar's *Home* in a 16:10 window, beside a menu.
 - **Real cores** (`tests/cores.rs`, opt-in): every system's cores from
   nixpkgs load and list the extensions Chanoma sends them; gambatte,
   SameBoy and mGBA play a Game Boy game the test writes, whose screen
@@ -209,6 +297,11 @@ CHANOMA_TEST_CORES=<folder of *_libretro.so> \
   - a page added as a website opened in Chromium full screen, where the
     confirm button clicks, the arrows are keys and the stick moves the
     pointer, then the overlay's menu over the page and the way home;
+  - the same page without the controller: Home on the keyboard opening
+    the menu without the page hearing it (nor Esc, which puts the menu
+    away), the page having the keys again after, F1 and the menu's keys
+    going home; then the pointer pushed to the top bringing the bar, its
+    *Home* clicked, and the menu's *Go home* clicked;
   - stopping the unit mid-game, as logging out does, keeping it.
 - **Live** on the X1 Carbon, under a headless Aizome compositor of its
   own beside the desktop (release build, gambatte, generated videos):
@@ -233,5 +326,5 @@ before calling any of it tested on hardware.
   Widevine.
 - No hardware-rendered cores; no disc swapping for multi-disc games; no
   touch screens (the DS).
-- Settings that need typing (a website's address, choosing folders other
-  than `~/Games`, `~/ROMs` and `~/Videos`) need a keyboard and a mouse.
+- Adding a website needs a keyboard and a mouse (its address is typed).
+  Choosing folders doesn't: see Choosing folders above.

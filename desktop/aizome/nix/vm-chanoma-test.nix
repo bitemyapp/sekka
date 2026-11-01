@@ -5,8 +5,10 @@
 # controller alone opens a game from Home, plays it (holding Right turns
 # the game's screen dark through the real compositor), pauses it with the
 # Home button, and stops it, keeping where it was left. The controller
-# going and coming back keeps its player number. The VM renders in
-# software, so the game's frames take the shared-memory path.
+# going and coming back keeps its player number. A page in the browser
+# also goes home by a keyboard's Home key (kept from the page by the
+# compositor) and by the pointer, through the bar along the top. The VM
+# renders in software, so the game's frames take the shared-memory path.
 {
   pkgs,
   self,

@@ -20,10 +20,11 @@ use aizome_chanoma::retro::ffi::*;
 use aizome_chanoma::rules::{PinHash, Settings};
 use aizome_chanoma::store::Dirs;
 use aizome_chanoma::{Chanoma, Config, Msg};
-use aizome_kit::Size;
+use aizome_kit::layout::Point;
 use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
 use aizome_kit::testing::Harness;
 use aizome_kit::theme::{Appearance, ThemeChoice};
+use aizome_kit::{Size, WindowKey};
 
 // A libretro core: a 160 × 120 picture, blue (green while B is held) with
 // a white square that moves right while Right is held; it counts frames,
@@ -233,6 +234,7 @@ fn household(name: &str, settings: impl FnOnce(&mut Settings)) -> (Dirs, PathBuf
 }
 
 fn config(dirs: Dirs, cores: PathBuf, clock: ManualClock) -> Config {
+    let root = cores.parent().unwrap().to_path_buf();
     Config {
         dirs,
         clock: Box::new(clock),
@@ -247,6 +249,10 @@ fn config(dirs: Dirs, cores: PathBuf, clock: ManualClock) -> Config {
         core_override: Some(test_core()),
         signals: false,
         h24: true,
+        // Beside the cores: a home and a folder drives appear in, for the
+        // folder picker.
+        home: root.join("home"),
+        mounts: vec![root.join("media")],
     }
 }
 
@@ -317,10 +323,14 @@ fn type_pin(h: &mut Harness<Chanoma>, pin: &str) {
 }
 
 fn shot(h: &mut Harness<Chanoma>, name: &str) {
+    let w = h.window();
+    shot_of(h, w, name);
+}
+
+fn shot_of(h: &mut Harness<Chanoma>, w: WindowKey, name: &str) {
     if let Some(dir) = std::env::var_os("CHANOMA_SHOTS") {
         let dir = PathBuf::from(dir);
         std::fs::create_dir_all(&dir).unwrap();
-        let w = h.window();
         // In Night, and in Day and High contrast beside it: Aizome's apps
         // must look finished in each.
         for (suffix, theme) in
@@ -468,6 +478,25 @@ fn a_game_plays_pauses_and_carries_on_where_it_was_left() {
     assert!(matches!(h.program().modal, Some(Modal::Menu { kind: MenuKind::Game, .. })), "F1 opens the menu");
     h.named(w, NamedKey::Escape, Modifiers::NONE);
     assert!(h.program().modal.is_none(), "Escape closes it");
+    // Escape alone opens it too, and a click beside it puts it away.
+    let game_menu = |h: &Harness<Chanoma>| matches!(h.program().modal, Some(Modal::Menu { kind: MenuKind::Game, .. }));
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert!(game_menu(&h), "Escape opens the menu");
+    h.click(w, Point::new(40.0, 540.0));
+    assert!(h.program().modal.is_none(), "a click beside the menu");
+    // The pointer moving brings the bar down; its Home is the menu.
+    h.move_to(w, Point::new(960.0, 540.0));
+    assert!(h.program().bar_until.is_some(), "the bar comes with the pointer");
+    shot(&mut h, "08-game-bar");
+    h.click(w, Point::new(200.0, 76.0));
+    assert!(game_menu(&h), "the bar's Home");
+    assert!(h.program().bar_until.is_none(), "the menu in its place");
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    // A click on the game: the menu.
+    h.click(w, Point::new(960.0, 700.0));
+    assert!(game_menu(&h), "a click on the picture");
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert!(h.program().modal.is_none());
     // Home pauses it under the menu.
     press(&mut h, Button::Guide);
     assert!(matches!(h.program().modal, Some(Modal::Menu { kind: MenuKind::Game, .. })));
@@ -502,6 +531,81 @@ fn a_game_plays_pauses_and_carries_on_where_it_was_left() {
     input(&mut h, Input::Dir(Dir::Down));
     input(&mut h, Input::Dir(Dir::Down));
     input(&mut h, Input::Ok);
+}
+
+#[test]
+fn a_page_always_has_a_way_home_by_keyboard_and_mouse() {
+    // A stand-in for the browser: it stays until it's stopped and shows no
+    // window (there's no compositor here), so the page showing is told by
+    // hand, as the compositor's word on the Home key is.
+    let browser = std::env::temp_dir().join(format!("chanoma-test-page-{}", std::process::id())).join("browser");
+    let (dirs, cores) = household("page", |s| {
+        s.services = vec!["pbs-kids".into()];
+        s.browser = Some(browser.display().to_string());
+    });
+    std::fs::write(&browser, "#!/bin/sh\nexec sleep 60\n").unwrap();
+    std::fs::set_permissions(&browser, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    let page_menu = |h: &Harness<Chanoma>| matches!(h.program().modal, Some(Modal::Menu { kind: MenuKind::Page, .. }));
+    // PBS KIDS, the first tile.
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::Watching);
+    shot(&mut h, "10-page-opening");
+
+    // Chanoma's own screen, till the page shows: its Home hint is a
+    // button for the mouse, and Escape is the menu too.
+    let w = h.window();
+    h.click(w, Point::new(110.0, 1016.0));
+    assert!(page_menu(&h), "the Home hint, clicked");
+    h.click(w, Point::new(40.0, 540.0));
+    assert!(h.program().modal.is_none(), "a click beside the menu");
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert!(page_menu(&h), "Escape");
+    h.named(w, NamedKey::Escape, Modifiers::NONE);
+    assert!(h.program().modal.is_none());
+
+    // The page shows: how to come back is said over it, and a strip along
+    // the top waits for the pointer.
+    h.send(Msg::Browser(aizome_chanoma::browser::Event::Shown(7)));
+    assert_eq!(h.program().toast.as_ref().map(|t| t.0.as_str()), Some("Press Home on the controller to come back"));
+    let edge = h.program().edge.expect("the strip along the top");
+    h.resize(edge, Size::new(1920.0, 2.0));
+    let over = |h: &mut Harness<Chanoma>| {
+        let hud = h.program().hud.expect("the overlay");
+        h.resize(hud, Size::new(1920.0, 1080.0));
+        hud
+    };
+    // The pointer pushed up to the top brings the bar down; its Home is
+    // the menu, which has the keyboard.
+    h.move_to(edge, Point::new(900.0, 1.0));
+    assert!(h.program().bar_until.is_some(), "the bar");
+    let hud = over(&mut h);
+    shot_of(&mut h, hud, "11-page-bar");
+    h.click(hud, Point::new(200.0, 76.0));
+    assert!(page_menu(&h), "the bar's Home");
+    assert!(h.program().hud_menu, "the menu has the keys");
+    let hud = over(&mut h);
+    h.named(hud, NamedKey::Escape, Modifiers::NONE);
+    assert!(h.program().modal.is_none(), "Escape in the menu over the page");
+    assert!(!h.program().hud_menu, "and the page has the keys again");
+    // Down from the bar to the page, the bar goes.
+    h.move_to(edge, Point::new(900.0, 1.0));
+    let hud = over(&mut h);
+    h.move_to(hud, Point::new(900.0, 600.0));
+    assert!(h.program().bar_until.is_none(), "the pointer back on the page");
+
+    // Home on the keyboard over the page, which the compositor keeps for
+    // Chanoma: the menu; Down and Return go home.
+    h.send(Msg::Browser(aizome_chanoma::browser::Event::Home));
+    assert!(page_menu(&h), "Home on the keyboard");
+    let hud = over(&mut h);
+    shot_of(&mut h, hud, "12-page-menu");
+    h.named(hud, NamedKey::ArrowDown, Modifiers::NONE);
+    h.named(hud, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(h.program().screen, Screen::Home);
+    let a = h.program();
+    assert!(a.page.is_none() && a.edge.is_none() && a.hud.is_none(), "the page and what was over it, gone");
 }
 
 #[test]
@@ -550,4 +654,100 @@ fn bedtime_closes_up_for_the_night() {
     let mut h = harness(config(dirs, cores, clock));
     assert_eq!(h.program().screen, Screen::Closed);
     shot(&mut h, "13-bedtime");
+}
+
+#[test]
+fn a_games_folder_is_chosen_with_the_controller_alone() {
+    let (dirs, cores) = household("picker", |_| {});
+    let root = cores.parent().unwrap().to_path_buf();
+    let home = root.join("home");
+    std::fs::create_dir_all(home.join("ROMs/Super Nintendo")).unwrap();
+    std::fs::write(home.join("ROMs/Super Nintendo/Pocket Quest (USA).sfc"), b"CHANOMA test game").unwrap();
+    std::fs::create_dir_all(home.join("ROMs/.cache")).unwrap();
+    std::fs::create_dir_all(home.join("Videos")).unwrap();
+    let stick = root.join("media/STICK");
+    std::fs::create_dir_all(stick.join("snes")).unwrap();
+    std::fs::write(stick.join("snes/Stick Game.sfc"), b"CHANOMA test game").unwrap();
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+
+    // In: the grown-ups' door, the PIN, then Settings.
+    let shelves = h.program().home_view().shelves.len();
+    for _ in 1..shelves {
+        input(&mut h, Input::Dir(Dir::Down));
+    }
+    input(&mut h, Input::Ok);
+    type_pin(&mut h, PIN);
+    until(&mut h, |a| a.is_grownup());
+    let f = h.program().focus;
+    assert_eq!(h.program().home_view().shelves[f.row].tiles[f.col].label, "Settings");
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    // Games, into its rows, down to adding a folder.
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Dir(Dir::Right));
+    let focused = |a: &Chanoma| a.grownups_page().rows[a.grownups.row].label.clone();
+    for _ in 0..4 {
+        if focused(h.program()) == "Add a games folder…" {
+            break;
+        }
+        input(&mut h, Input::Dir(Dir::Down));
+    }
+    assert_eq!(focused(h.program()), "Add a games folder…");
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::Folders);
+    let read = |a: &Chanoma| a.picker.as_ref().is_some_and(|p| p.listing.is_some() && p.found.is_some());
+    until(&mut h, read);
+
+    // Home: the places, and its folders with the first one ready.
+    let view = h.program().picker_view();
+    let places: Vec<&str> = view.places.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(places, ["Home", "ROMs", "Videos", "STICK", "This computer"]);
+    assert_eq!(view.crumbs, ["Home"]);
+    let aizome_chanoma::ui::picker::Body::Folders(rows) = &view.body else { panic!("{:?}", view.body) };
+    assert_eq!(rows.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["ROMs", "Videos"]);
+    assert_eq!(rows[0].1, "1 folder");
+    assert_eq!(h.program().focus, aizome_chanoma::ui::Focus { row: 1, col: 1 });
+    shot(&mut h, "14-folders-home");
+
+    // Into ROMs: what Chanoma would find there, counted as it reads it.
+    input(&mut h, Input::Ok);
+    until(&mut h, read);
+    let view = h.program().picker_view();
+    assert_eq!(view.crumbs, ["Home", "ROMs"]);
+    assert_eq!(view.found, Some(("1 game for 1 system".to_owned(), true)));
+    let aizome_chanoma::ui::picker::Body::Folders(rows) = &view.body else { panic!("{:?}", view.body) };
+    assert_eq!(rows, &[("Super Nintendo".to_owned(), "1 game".to_owned())], "the hidden folder isn't shown");
+    shot(&mut h, "15-folders-roms");
+
+    // Back goes up, the focus on the folder left.
+    input(&mut h, Input::Back);
+    until(&mut h, read);
+    let p = h.program().picker.as_ref().unwrap();
+    assert_eq!((p.dir.clone(), p.row), (home.clone(), 1));
+
+    // Left to the places; down to the stick, which shows as the focus
+    // reaches it; and the top button uses it.
+    input(&mut h, Input::Dir(Dir::Left));
+    for _ in 0..3 {
+        input(&mut h, Input::Dir(Dir::Down));
+    }
+    until(&mut h, read);
+    let p = h.program().picker.as_ref().unwrap();
+    assert_eq!(p.dir, stick);
+    assert_eq!(h.program().picker_view().found, Some(("1 game for 1 system".to_owned(), true)));
+    press(&mut h, Button::North);
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    assert!(h.program().settings.game_folders.contains(&stick));
+    assert_eq!(focused(h.program()), "Add a games folder…", "back where it was, not on the folder added");
+    until(&mut h, |a| a.library.games.iter().any(|g| g.title == "Stick Game"));
+
+    // Opened again and put away: nothing changes.
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::Folders);
+    input(&mut h, Input::Dir(Dir::Left));
+    input(&mut h, Input::Back);
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    assert_eq!(h.program().settings.game_folders.len(), 2);
 }

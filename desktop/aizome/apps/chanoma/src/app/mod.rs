@@ -14,6 +14,7 @@
 //! untouched (not in the middle of a film), or when asked.
 
 pub mod grownups;
+pub mod picker;
 pub mod play;
 pub mod rows;
 pub mod state;
@@ -47,6 +48,15 @@ pub const GAME: aizome_kit::video::VideoId = 1;
 pub const FILM: aizome_kit::video::VideoId = 2;
 /// Pictures kept before those far from the screen go.
 const ART_KEPT: usize = 200;
+/// The strip along the top of the screen over a page, in points: thin
+/// enough to miss, but the pointer stops there pushed up against the edge.
+const EDGE_H: f64 = 2.0;
+/// The overlay's canvas, for the keyboard.
+const HUD: &str = "hud";
+/// How long the bar stays over a game or a film once the pointer stops.
+const BAR_SHOWS: Duration = Duration::from_secs(3);
+/// And over a page, with the pointer resting in it.
+const BAR_SHOWS_OVER_PAGE: Duration = Duration::from_secs(8);
 
 /// What menus hear, from a controller or the keyboard.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -63,6 +73,9 @@ pub enum Input {
     Next,
     Digit(u8),
     Erase,
+    /// The top face button (Y on an Xbox controller, △, Tab): a screen's
+    /// other action (using the folder showing).
+    Alt,
 }
 
 #[derive(Clone, Debug)]
@@ -70,6 +83,15 @@ pub enum Msg {
     Pad(PadEvent),
     Input(Input),
     Click(Target),
+    /// The pointer moved over Chanoma: in the bar's band at the top, or
+    /// under it.
+    Moved {
+        in_bar: bool,
+    },
+    /// The pointer left the overlay over a page.
+    Left,
+    /// The pointer reached the top of the screen over a page.
+    Edge,
     Tick,
     Scanned(Arc<Library>),
     Art(PathBuf, Option<Image>),
@@ -82,7 +104,10 @@ pub enum Msg {
     Film(aizome_media::Event),
     Bluetooth,
     Paired(String, Result<(), String>),
-    Folder(grownups::FolderKind, Option<Vec<PathBuf>>),
+    /// A folder's folders read, for the picker's reading.
+    Listed(u64, Result<Vec<crate::folders::Entry>, String>),
+    /// What's in the folder the picker shows, found.
+    Found(u64, crate::folders::Found),
     SiteName(String),
     SiteUrl(String),
     SiteAdd,
@@ -113,6 +138,8 @@ pub enum Screen {
     Closed,
     Pairing,
     SetUpPad,
+    /// Choosing a games or videos folder.
+    Folders,
     /// Something went wrong: what.
     Problem(String, String),
 }
@@ -190,6 +217,10 @@ pub struct Config {
     /// Clocks count 24 hours, as the menu bar's does unless it's set to
     /// twelve.
     pub h24: bool,
+    /// Where folders are chosen from: home, and the folders drives
+    /// plugged in appear in.
+    pub home: PathBuf,
+    pub mounts: Vec<PathBuf>,
 }
 
 impl Config {
@@ -210,6 +241,16 @@ impl Config {
             core_override: None,
             signals: false,
             h24: aizome_config::Settings::load_or_default().menubar_settings().clock == aizome_config::ClockFormat::H24,
+            home: std::env::var_os("HOME").map_or_else(|| PathBuf::from("/"), PathBuf::from),
+            mounts: {
+                let user = std::env::var("USER").unwrap_or_default();
+                vec![
+                    PathBuf::from(format!("/run/media/{user}")),
+                    PathBuf::from(format!("/media/{user}")),
+                    PathBuf::from("/media"),
+                    PathBuf::from("/mnt"),
+                ]
+            },
         }
     }
 }
@@ -231,6 +272,13 @@ pub struct Chanoma {
     pub window: WindowKey,
     /// The overlay over a page in the browser.
     pub hud: Option<WindowKey>,
+    /// Whether the overlay has the menu (and the keyboard), as last set.
+    pub hud_menu: bool,
+    /// The strip along the top of the screen over a page: the pointer
+    /// reaching it brings the bar down.
+    pub edge: Option<WindowKey>,
+    /// Until when the bar shows (the pointer's way home), while it does.
+    pub bar_until: Option<Instant>,
     /// The display's height in pixels.
     pub lines: u32,
     pub screen: Screen,
@@ -265,6 +313,8 @@ pub struct Chanoma {
     pub art_asked: HashSet<PathBuf>,
     pub sender: Option<MsgSender<Msg>>,
     pub pairing: Option<grownups::Pairing>,
+    /// Choosing a folder.
+    pub picker: Option<picker::Picker>,
     pub setup: Option<grownups::PadSetUp>,
     pub site: Option<(WindowKey, String, String)>,
     /// The one-instance socket, served once the program runs.
@@ -300,6 +350,9 @@ impl Chanoma {
             family: Family::Generic,
             window: WindowKey::default(),
             hud: None,
+            hud_menu: false,
+            edge: None,
+            bar_until: None,
             lines: 1080,
             screen,
             focus: Focus::default(),
@@ -328,6 +381,7 @@ impl Chanoma {
             art_asked: HashSet::new(),
             sender: None,
             pairing: None,
+            picker: None,
             setup: None,
             site: None,
             instance: None,
@@ -378,6 +432,7 @@ impl Chanoma {
         }
         self.screen = screen;
         self.focus = Focus::default();
+        self.bar_until = None;
         match &self.screen {
             Screen::Home => {
                 self.focus = Focus { row: self.home_row, col: self.home_cols.get(self.home_row).copied().unwrap_or(0) };
@@ -404,7 +459,8 @@ impl Chanoma {
     pub fn lock(&mut self, cx: &mut Cx<Msg>) {
         self.grownup = None;
         self.toast_note(ui::Note::Kids, "Kids' mode", cx);
-        if matches!(self.screen, Screen::GrownUps | Screen::Pairing | Screen::SetUpPad) {
+        if matches!(self.screen, Screen::GrownUps | Screen::Pairing | Screen::SetUpPad | Screen::Folders) {
+            self.picker = None;
             self.leave_grownups(cx);
             self.go(Screen::Home, cx);
         }
@@ -447,18 +503,39 @@ impl Chanoma {
         }
     }
 
-    /// Open, close or redraw the overlay over a page in the browser.
+    /// Open, close or change what's over a page in the browser: the strip
+    /// along the top that brings the bar down, while the page shows, and
+    /// the overlay with the bar, the menu or a note.
     pub fn sync_hud(&mut self, cx: &mut Cx<Msg>) {
-        let wanted = self.screen == Screen::Watching
-            && self.page.as_ref().is_some_and(|p| p.shown)
-            && (matches!(self.modal, Some(Modal::Menu { kind: MenuKind::Page, .. })) || self.toast.is_some());
+        let page = self.screen == Screen::Watching && self.page.as_ref().is_some_and(|p| p.shown);
+        let menu = matches!(self.modal, Some(Modal::Menu { kind: MenuKind::Page, .. }));
+        let bar = self.bar_until.is_some() && self.modal.is_none();
+        match (page, self.edge) {
+            (true, None) => {
+                let mut opts = LayerOptions::new(Layer::Overlay, "chanoma-edge");
+                opts.anchors = Anchors::TOP | Anchors::LEFT | Anchors::RIGHT;
+                opts.exclusive_zone = -1;
+                opts.keyboard = KeyboardInteractivity::None;
+                self.edge = Some(cx.open_window(WindowSpec::layer(opts, 0.0, EDGE_H)));
+            }
+            (false, Some(w)) => {
+                cx.close_window(w);
+                self.edge = None;
+            }
+            _ => {}
+        }
+        let wanted = page && (menu || bar || self.toast.is_some());
         match (wanted, self.hud) {
             (true, None) => {
                 let mut opts = LayerOptions::new(Layer::Overlay, "chanoma");
                 opts.anchors = Anchors::ALL;
                 opts.exclusive_zone = -1;
-                opts.keyboard = KeyboardInteractivity::None;
+                opts.keyboard = if menu { KeyboardInteractivity::Exclusive } else { KeyboardInteractivity::None };
                 self.hud = Some(cx.open_window(WindowSpec::layer(opts, 0.0, 0.0)));
+                self.hud_menu = menu;
+                if menu {
+                    cx.focus(HUD);
+                }
             }
             (false, Some(w)) => {
                 cx.close_window(w);
@@ -467,9 +544,78 @@ impl Chanoma {
             _ => {}
         }
         if let Some(w) = self.hud {
-            // A toast alone lets the pointer through to the page.
-            let menu = matches!(self.modal, Some(Modal::Menu { kind: MenuKind::Page, .. }));
-            cx.set_input_region(w, if menu { None } else { Some(Vec::new()) });
+            // A note alone lets the pointer through to the page.
+            cx.set_input_region(w, if menu || bar { None } else { Some(Vec::new()) });
+            // The menu takes the keys from the page while it shows, so a
+            // keyboard can answer it.
+            if menu != self.hud_menu {
+                self.hud_menu = menu;
+                let keys = if menu { KeyboardInteractivity::Exclusive } else { KeyboardInteractivity::None };
+                cx.set_layer_keyboard(w, keys);
+                if menu {
+                    cx.focus(HUD);
+                }
+            }
+        }
+    }
+
+    /// The pointer moved over Chanoma. Over a game or a film the bar comes
+    /// down for a while; over a page, it stays while the pointer is in it
+    /// and goes as the pointer leaves it for the page.
+    fn pointer_moved(&mut self, in_bar: bool, cx: &mut Cx<Msg>) {
+        if self.modal.is_some() {
+            return;
+        }
+        match self.screen {
+            Screen::Playing | Screen::Film => self.bar_until = Some(Instant::now() + BAR_SHOWS),
+            Screen::Watching if self.bar_until.is_some() => {
+                self.bar_until = in_bar.then(|| Instant::now() + BAR_SHOWS_OVER_PAGE);
+                self.sync_hud(cx);
+            }
+            _ => {}
+        }
+    }
+
+    /// The pointer reached the top of the screen over a page.
+    fn edge_reached(&mut self, cx: &mut Cx<Msg>) {
+        if self.screen == Screen::Watching && self.modal.is_none() {
+            if self.bar_until.is_none() {
+                log::info!("chanoma: the bar over the page");
+            }
+            self.bar_until = Some(Instant::now() + BAR_SHOWS_OVER_PAGE);
+            self.sync_hud(cx);
+        }
+    }
+
+    /// The bar's time up: it goes, and over a picture the pointer with it
+    /// until it moves.
+    pub fn bar_tick(&mut self, cx: &mut Cx<Msg>) {
+        if self.bar_until.is_some_and(|t| Instant::now() >= t) {
+            self.bar_until = None;
+            if matches!(self.screen, Screen::Playing | Screen::Film) {
+                cx.hide_cursor_until_moved();
+            }
+            self.sync_hud(cx);
+        }
+    }
+
+    /// What the bar says: what shows, and the time.
+    fn top_bar(&self) -> ui::TopBar {
+        let title = match self.screen {
+            Screen::Playing => self.game.as_ref().map(|g| g.title.clone()),
+            Screen::Film => self.film.as_ref().map(|f| f.title.clone()),
+            Screen::Watching => self.page.as_ref().map(|p| p.name.clone()),
+            _ => None,
+        };
+        ui::TopBar { title: title.unwrap_or_default(), clock: self.local.time_label(self.config.h24) }
+    }
+
+    /// How the way back is told, for what's in hand.
+    fn way_back(&self) -> &'static str {
+        if self.controllers.is_empty() {
+            "Press Home, or move the pointer to the top, to come back"
+        } else {
+            "Press Home on the controller to come back"
         }
     }
 
@@ -532,20 +678,7 @@ impl Chanoma {
                 if !pressed {
                     return;
                 }
-                let input = if button == self.ok_button(family) {
-                    Some(Input::Ok)
-                } else if button == self.back_button(family) {
-                    Some(Input::Back)
-                } else {
-                    match button {
-                        Button::Guide => Some(Input::Home),
-                        Button::Start => Some(Input::Menu),
-                        Button::L1 => Some(Input::Prev),
-                        Button::R1 => Some(Input::Next),
-                        _ => None,
-                    }
-                };
-                match (self.screen.clone(), input) {
+                match (self.screen.clone(), self.button_input(button, family)) {
                     // A game takes every button but Home.
                     (Screen::Playing, Some(Input::Home)) if self.modal.is_none() => self.open_menu(MenuKind::Game, cx),
                     (Screen::Playing, _) if self.modal.is_none() => {}
@@ -553,6 +686,25 @@ impl Chanoma {
                     _ => {}
                 }
             }
+        }
+    }
+
+    /// What button `b` of a controller of `family` says to menus (and a
+    /// hint clicked, its button).
+    fn button_input(&self, b: Button, family: Family) -> Option<Input> {
+        if b == self.ok_button(family) {
+            return Some(Input::Ok);
+        }
+        if b == self.back_button(family) {
+            return Some(Input::Back);
+        }
+        match b {
+            Button::Guide => Some(Input::Home),
+            Button::Start => Some(Input::Menu),
+            Button::L1 => Some(Input::Prev),
+            Button::R1 => Some(Input::Next),
+            Button::North => Some(Input::Alt),
+            _ => None,
         }
     }
 
@@ -580,13 +732,18 @@ impl Chanoma {
             Screen::Games => self.games_input(i, cx),
             Screen::Episodes(s) => self.episodes_input(s, i, cx),
             Screen::Starting(_) => {}
-            Screen::Playing => {}
-            Screen::Watching => {}
+            // A controller's buttons are the game's and the page's, so
+            // Back here is Esc on the keyboard (or a click): the menu, with
+            // the way home.
+            Screen::Playing if i == Input::Back => self.open_menu(MenuKind::Game, cx),
+            Screen::Watching if i == Input::Back => self.open_menu(MenuKind::Page, cx),
+            Screen::Playing | Screen::Watching => {}
             Screen::Film => self.film_input(i, cx),
             Screen::GrownUps => self.grownups_input(i, cx),
             Screen::Closed => self.closed_input(i, cx),
             Screen::Pairing => self.pairing_input(i, cx),
             Screen::SetUpPad => self.setup_input(i, cx),
+            Screen::Folders => self.picker_input(i, cx),
             Screen::Problem(..) => {
                 if matches!(i, Input::Ok | Input::Back) {
                     self.go(Screen::Home, cx);
@@ -603,7 +760,8 @@ impl Chanoma {
             Screen::Film => self.open_menu(MenuKind::Film, cx),
             Screen::SetUpPad => self.cancel_setup(cx),
             Screen::Pairing => self.stop_pairing(cx),
-            Screen::GrownUps => {
+            Screen::GrownUps | Screen::Folders => {
+                self.picker = None;
                 self.leave_grownups(cx);
                 self.go(Screen::Home, cx);
             }
@@ -648,6 +806,7 @@ impl Chanoma {
         log::info!("chanoma: the {kind:?} menu");
         self.modal = Some(Modal::Menu { menu, kind });
         self.modal_focus = 0;
+        self.bar_until = None;
         self.sync_hud(cx);
     }
 
@@ -925,6 +1084,7 @@ impl Chanoma {
             Key::Named(NamedKey::Menu) => Input::Menu,
             Key::Named(NamedKey::PageUp) => Input::Prev,
             Key::Named(NamedKey::PageDown) => Input::Next,
+            Key::Named(NamedKey::Tab) => Input::Alt,
             Key::Character(c) if c == " " => Input::Ok,
             Key::Character(c) if c.len() == 1 && c.as_bytes()[0].is_ascii_digit() => {
                 Input::Digit(c.as_bytes()[0] - b'0')
@@ -944,7 +1104,26 @@ impl Chanoma {
                 self.modal_focus = i;
                 self.modal_input(Input::Ok, cx);
             }
+            (Target::Outside, true) => self.modal_input(Input::Back, cx),
             (_, true) => {}
+            (Target::Hint(b), false) => {
+                if let Some(i) = self.button_input(b, self.family) {
+                    self.input(i, cx);
+                }
+            }
+            // A click on a game or a film: its menu, as Home would. On a
+            // page, under the bar: the bar goes.
+            (Target::Picture, false) => match self.screen {
+                Screen::Playing | Screen::Film => self.input(Input::Home, cx),
+                Screen::Watching => {
+                    self.bar_until = None;
+                    self.sync_hud(cx);
+                }
+                _ => {}
+            },
+            (Target::Outside, false) => {}
+            (Target::Section(i), false) if self.screen == Screen::Folders => self.picker_click(Some(i), None, cx),
+            (Target::Item(i), false) if self.screen == Screen::Folders => self.picker_click(None, Some(i), cx),
             (Target::Tile(row, col), false) => {
                 self.focus = Focus { row, col };
                 self.remember_home_focus();
@@ -1053,6 +1232,7 @@ impl Chanoma {
                 }))
             }
             Some(Modal::Menu { menu, .. }) => Some(Overlay::Menu(menu.clone())),
+            None if self.bar_until.is_some() => Some(Overlay::Top(self.top_bar())),
             None => self.toast.as_ref().map(|(t, n, _)| Overlay::Toast(t.clone(), *n)),
         }
     }
@@ -1065,6 +1245,7 @@ impl Chanoma {
     fn over_picture(&self) -> bool {
         self.modal.is_some()
             || self.toast.is_some()
+            || self.bar_until.is_some()
             || (self.screen == Screen::Film && self.film.as_ref().is_some_and(|f| f.bar))
     }
 
@@ -1094,6 +1275,10 @@ impl Chanoma {
             .on_event(|e, size, s: &Scene| match e {
                 WEvent::Key(k) => Chanoma::key(k).map(Msg::Input),
                 WEvent::PointerDown { pos, .. } => s.hit(size, *pos).map(Msg::Click),
+                // Over a game or a film: the bar comes down.
+                WEvent::PointerMove { pos, .. } if s.view == View::Clear => {
+                    Some(Msg::Moved { in_bar: ui::in_top_bar(size, *pos) })
+                }
                 _ => None,
             })
             .focusable()
@@ -1114,7 +1299,9 @@ impl Chanoma {
                     let chrome = Chrome { family: self.family, ok: self.ok_button(self.family), ..Chrome::default() };
                     layers.push(over_video(self.stage(self.scene(View::Clear, Some(chrome)))));
                 } else {
-                    layers.push(self.stage(self.scene(View::Clear, None)).width(1.0).height(1.0));
+                    // Nothing drawn, but there: for the keyboard, and for the
+                    // pointer, which brings the bar down.
+                    layers.push(self.stage(self.scene(View::Clear, None)));
                 }
                 stack(layers).into()
             }
@@ -1129,13 +1316,16 @@ impl Chanoma {
                     let mut scene = self.scene(View::Clear, Some(chrome));
                     if self.modal.is_none()
                         && self.toast.is_none()
+                        && self.bar_until.is_none()
                         && let Some(f) = f
                     {
                         scene = self.film_scene(f);
                     }
                     layers.push(over_video(self.stage(scene)));
                 } else {
-                    layers.push(self.stage(self.scene(View::Clear, None)).width(1.0).height(1.0));
+                    // Nothing drawn, but there: for the keyboard, and for the
+                    // pointer, which brings the bar down.
+                    layers.push(self.stage(self.scene(View::Clear, None)));
                 }
                 stack(layers).into()
             }
@@ -1172,9 +1362,10 @@ impl Chanoma {
                 let m = ui::screens::Message::new(
                     ui::screens::Art::Waiting,
                     format!("Opening {name}…"),
-                    "Press the Home button to come back here.",
+                    format!("{}.", self.way_back()),
                 );
-                self.stage(self.scene(View::Message(m), Some(self.chrome(Vec::new()))))
+                let hints = vec![(Button::Guide, "Home".to_owned())];
+                self.stage(self.scene(View::Message(m), Some(self.chrome(hints))))
             }
             Screen::GrownUps => {
                 let p = self.grownups_page();
@@ -1184,6 +1375,10 @@ impl Chanoma {
             Screen::Closed => {
                 let m = self.closed_message();
                 self.stage(self.scene(View::Message(m), Some(self.chrome(self.hints("Ask a grown-up", None)))))
+            }
+            Screen::Folders => {
+                let view = View::Picker(self.picker_view());
+                self.stage(self.scene(view, Some(self.chrome_titled(self.picker_hints()))))
             }
             Screen::Pairing => {
                 let m = self.pairing_message();
@@ -1203,9 +1398,30 @@ impl Chanoma {
         }
     }
 
+    /// Over a page: the bar, the menu or a note. It has the keyboard while
+    /// the menu shows.
     fn hud_view(&self) -> Element<Msg> {
         let chrome = Chrome { family: self.family, ok: self.ok_button(self.family), ..Chrome::default() };
-        canvas(self.scene(View::Clear, Some(chrome)), |c, b, s: &Scene, theme| s.paint(c, b, theme)).into()
+        canvas(self.scene(View::Clear, Some(chrome)), |c, b, s: &Scene, theme| s.paint(c, b, theme))
+            .on_event(|e, size, s: &Scene| match e {
+                WEvent::Key(k) => Chanoma::key(k).map(Msg::Input),
+                WEvent::PointerDown { pos, .. } => s.hit(size, *pos).map(Msg::Click),
+                WEvent::PointerMove { pos, .. } => Some(Msg::Moved { in_bar: ui::in_top_bar(size, *pos) }),
+                WEvent::PointerLeave => Some(Msg::Left),
+                _ => None,
+            })
+            .focusable()
+            .focus_ring(FocusRing::Never)
+            .id(HUD)
+            .into()
+    }
+
+    /// The strip along the top over a page: nothing to see, but the
+    /// pointer reaching it brings the bar down.
+    fn edge_view(&self) -> Element<Msg> {
+        canvas((), |_, _, _: &(), _| {})
+            .on_event(|e, _, _: &()| matches!(e, WEvent::PointerMove { .. }).then_some(Msg::Edge))
+            .into()
     }
 
     fn site_view(&self) -> Element<Msg> {
@@ -1348,6 +1564,13 @@ impl Program for Chanoma {
                 self.input(i, cx);
             }
             Msg::Click(t) => self.click(t, cx),
+            Msg::Moved { in_bar } => self.pointer_moved(in_bar, cx),
+            Msg::Left => {
+                if self.screen == Screen::Watching && self.bar_until.take().is_some() {
+                    self.sync_hud(cx);
+                }
+            }
+            Msg::Edge => self.edge_reached(cx),
             Msg::Tick => self.tick(cx),
             Msg::Scanned(lib) => {
                 self.library = lib;
@@ -1368,7 +1591,8 @@ impl Program for Chanoma {
             Msg::Film(e) => self.film_event(e, cx),
             Msg::Bluetooth => self.bluetooth_changed(cx),
             Msg::Paired(device, r) => self.paired(device, r, cx),
-            Msg::Folder(kind, paths) => self.folder_chosen(kind, paths, cx),
+            Msg::Listed(reading, listing) => self.listed(reading, listing),
+            Msg::Found(reading, found) => self.found(reading, found),
             Msg::SiteName(s) => {
                 if let Some(site) = &mut self.site {
                     site.1 = s;
@@ -1401,6 +1625,9 @@ impl Program for Chanoma {
     fn view(&self, window: WindowKey) -> Element<Msg> {
         if Some(window) == self.hud {
             return self.hud_view();
+        }
+        if Some(window) == self.edge {
+            return self.edge_view();
         }
         if self.site.as_ref().is_some_and(|s| s.0 == window) {
             return self.site_view();
