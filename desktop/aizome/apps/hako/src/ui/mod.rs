@@ -25,7 +25,7 @@ pub use app::{Hako, Msg, Options, Request};
 /// Run Hako with the command line's requests, or hand them to the Hako
 /// already running.
 pub fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
     if args.iter().any(|a| a == "--help" || a == "-h") {
         println!(
             "Usage: aizome-hako [PATH…]\n       aizome-hako --select FILE\n\nOpens Hako (Files) at each folder, or with each file selected in its folder."

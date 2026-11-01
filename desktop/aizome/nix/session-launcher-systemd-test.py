@@ -27,6 +27,10 @@ def state():
     return ctl('show', '-p', 'ActiveState', '--value', 'aizome.service').stdout.strip()
 
 
+def file_manager_state():
+    return ctl('show', '-p', 'ActiveState', '--value', 'aizome-file-manager.service').stdout.strip()
+
+
 def until(predicate):
     deadline = time.monotonic() + 10
     while not predicate():
@@ -47,6 +51,7 @@ def terminated(process, sig=signal.SIGTERM, group=False):
     (os.killpg if group else os.kill)(process.pid, sig)
     assert process.wait(timeout=5) == 128 + sig
     until(lambda: state() == 'inactive')
+    until(lambda: file_manager_state() == 'inactive')
     environment = ctl('show-environment').stdout
     assert 'XDG_SESSION_DESKTOP=' not in environment, environment
 
@@ -54,10 +59,33 @@ def terminated(process, sig=signal.SIGTERM, group=False):
 def relogin(name):
     process = start(name)
     until(lambda: state() == 'active')
+    until(lambda: file_manager_state() == 'active')
+    until(lambda: ctl('is-active', 'xdg-desktop-autostart.target', check=False).returncode == 0)
+    # The bus owner must be ready before autostarted browsers run.
+    ready = int(ctl('show', '-p', 'ActiveEnterTimestampMonotonic', '--value',
+                    'aizome-file-manager.service').stdout)
+    autostart = int(ctl('show', '-p', 'ActiveEnterTimestampMonotonic', '--value',
+                       'xdg-desktop-autostart.target').stdout)
+    assert 0 < ready <= autostart, (ready, autostart)
     terminated(process, group=True)
 
 
 try:
+    # Another desktop's graphical session, once started, has not started
+    # Hako's provider, and Aizome's activation files leave FileManager1 to
+    # other file managers. The portal backend's own file shows they're read.
+    subprocess.run(['systemd-run', '--user', '--unit=other-desktop',
+                    '--property=BindsTo=graphical-session.target', 'sleep', 'infinity'],
+                   env=ENV, check=True)
+    until(lambda: ctl('is-active', 'graphical-session.target', check=False).returncode == 0)
+    until(lambda: 'No jobs running.' in ctl('list-jobs').stdout)
+    names = subprocess.run(['busctl', '--user', 'call', 'org.freedesktop.DBus', '/org/freedesktop/DBus',
+                            'org.freedesktop.DBus', 'ListActivatableNames'],
+                           env=ENV, check=True, text=True, capture_output=True).stdout
+    assert '"org.freedesktop.impl.portal.desktop.aizome"' in names, names
+    assert '"org.freedesktop.FileManager1"' not in names, names
+    assert file_manager_state() == 'inactive'
+    ctl('start', 'aizome-shutdown.target')
     # Before StartUnit has even been sent: a completed shutdown target
     # cannot stop a start submitted later. The client must already be gone.
     for name, sig, group in [('pending-term', signal.SIGTERM, False),
