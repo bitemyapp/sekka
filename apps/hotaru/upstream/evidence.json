@@ -1,0 +1,1096 @@
+{
+  "version": 1,
+  "revision": "d9f0217cc944d5f41bd59715497f45cbd2cc5e5b",
+  "files": [
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/direct-ghostty-12rows/host-observations.jsonl.gz",
+      "bytes": 335114,
+      "sha256": "dcba05b503ed3fad1c573a376014c2cc10e2c0ce9b4dace0bd95710615e338ec"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/direct-ghostty-12rows/summary.json.gz",
+      "bytes": 44256,
+      "sha256": "a7985356487021f17b63ccc432ea3b371f34b81bb3f70596f01811f643ea3d30"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/direct-ghostty-80rows/host-observations.jsonl.gz",
+      "bytes": 4095004,
+      "sha256": "9cdbcfc07a4f62e64bc7591b2afd141e6b1386c0dc7ba88566c4de8fb190cbc4"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/direct-ghostty-80rows/summary.json.gz",
+      "bytes": 44497,
+      "sha256": "b32316084ed07678a6a2e538589a8f6a5107f1c26e4caf102ce048972b30b171"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/local/preflight-1-blocked.json.gz",
+      "bytes": 14201,
+      "sha256": "8f792aa1f9237eb9d113d8998cc7b1d15ed80aee4615ce84a5b9c8548337cb65"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/local/summary.json.gz",
+      "bytes": 57023,
+      "sha256": "a49d9498ebf0554d14a8d68c92ceda22d9e450c669bd5ae455b9a9672331ee9c"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/native/per-core-mpstat.log.gz",
+      "bytes": 7521,
+      "sha256": "be6c4454f5b0e78ba77bc337857a9ea75a68c5bd66494f5e83104751391f1b8b"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/native/summary.json.gz",
+      "bytes": 2968159,
+      "sha256": "95a1c6f184b2ff7c93981175b3216f798325455e2e49fac3247b02fc3b3b9245"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-ascii.callgrind.gz",
+      "bytes": 37900,
+      "sha256": "9866b9399876aec164a681165e57b08fd841e3445f5d7c612fc5d4c68943055f"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-ascii.json.gz",
+      "bytes": 204,
+      "sha256": "53326d01c94e06cbe5df074c9c92893127597e00bfd95579c8eb5b08ef64a45f"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-ascii.log.gz",
+      "bytes": 407,
+      "sha256": "e8c0e5f435d769f0a4db4433601c3ad4b5352debf0defd6f1734a9bc7910a172"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-cursor.callgrind.gz",
+      "bytes": 38849,
+      "sha256": "70294f85e3f14f65564a720df976de34e1f986aca72a6b5e658ef8da8229ddbb"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-cursor.json.gz",
+      "bytes": 203,
+      "sha256": "d52c5e091bc1dd7af3daee2db4060318012ac4ecf553af5e29e54db1bbb20399"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-cursor.log.gz",
+      "bytes": 408,
+      "sha256": "1d73ac1e97f46192280f40c7f85634bdf077832c0c58a983049764b0052582e4"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-short-invalid-leads.callgrind.gz",
+      "bytes": 38451,
+      "sha256": "75e4906277b60948c6508e739c8542966c562f7f6f667ea0f9b4cea95bc8bc39"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-short-invalid-leads.json.gz",
+      "bytes": 203,
+      "sha256": "0380df4fd2ab95e0ec971e7e6cfc81e0154be3bfb41ab77f466e19a37af49f31"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-short-invalid-leads.log.gz",
+      "bytes": 419,
+      "sha256": "37a85551c9335da982f44e163e56ee39fa40a3b0c7e5fd975e472e2bd3355c5d"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-short-invalid-suffix.callgrind.gz",
+      "bytes": 39566,
+      "sha256": "93a2df8bfb5814bd5c7b793a21777d21139d318387de91c855c0fa5a38127f18"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-short-invalid-suffix.json.gz",
+      "bytes": 203,
+      "sha256": "78312c423d72f5c8297d58bb34723eb36c1dfc5654679e42cb9d3d8537331439"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-short-invalid-suffix.log.gz",
+      "bytes": 418,
+      "sha256": "f17c124d5551fb4d705218896e80b4ca0406f4718e912a0f38074312d7cfd2e8"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-styled.callgrind.gz",
+      "bytes": 38996,
+      "sha256": "972133225cc65072e53798a3c447bfe6e2f54802d5b7f24e09e5a310d90dd53f"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-styled.json.gz",
+      "bytes": 205,
+      "sha256": "fe00757126dea3c2b6a851a68673b98fe5e94c6a1bde1776e81330ac62e14d94"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-styled.log.gz",
+      "bytes": 408,
+      "sha256": "b688063467be7c6849186e5e3b2f811a4cbf62fce5609b1e2361bc72742ee3b1"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-unicode.callgrind.gz",
+      "bytes": 42744,
+      "sha256": "40d7f25298bf605473e4ab5768d8d98b0152ae2599983da1851fb09fd74f2bc5"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-unicode.json.gz",
+      "bytes": 203,
+      "sha256": "85c8feef8ded2b3643d866c9f532c3a14b909e5ea956c9ecba960e5bbd65f95d"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/baseline-unicode.log.gz",
+      "bytes": 408,
+      "sha256": "6bd46e85b4263c73c669272838f3e95daf2c5196716dcd0fdca1e56dd53ad1fa"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-ascii.callgrind.gz",
+      "bytes": 38217,
+      "sha256": "3762515f943118c9db66c1c435fdea5608d934376ed7b50a3f48be0a05861900"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-ascii.json.gz",
+      "bytes": 203,
+      "sha256": "04da1f80a73f4c4d03b181d5ba7cdba4fca2a366f361aa438fffe6cc766ab1ab"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-ascii.log.gz",
+      "bytes": 399,
+      "sha256": "d3e7c820bbaf5194340f6e769a6f6763b73d5df4ba45a34dee1d1e502111c9d7"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-cursor.callgrind.gz",
+      "bytes": 39136,
+      "sha256": "bf3750385ebef045b996acb3355fd82d8b8e169b09075d380741dd0b924f5d1f"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-cursor.json.gz",
+      "bytes": 204,
+      "sha256": "698f001eba417196523ed47072c7bbe0d00683a9cc180e5a9206e36010d1204a"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-cursor.log.gz",
+      "bytes": 402,
+      "sha256": "9fd7dabed793a9147b5b63f1e2779e94e92772d383d84943455247605cee59f8"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-short-invalid-leads.callgrind.gz",
+      "bytes": 38730,
+      "sha256": "ec9053344beb382a5ed59da585dd8c35b506e35132ccc077ef4e54e547068118"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-short-invalid-leads.json.gz",
+      "bytes": 203,
+      "sha256": "3e3f300fdc497b8f86f708e7f15d962dd52f4d3c933b535fede22433fae8a789"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-short-invalid-leads.log.gz",
+      "bytes": 407,
+      "sha256": "4c9e143c475a3be55eea9900841ceabc750178fd1e8bb9389f903c935b7e1372"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-short-invalid-suffix.callgrind.gz",
+      "bytes": 39741,
+      "sha256": "f0117e183c66e7580cc644ebd8c07610de605eda5608ee696ba42405db127686"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-short-invalid-suffix.json.gz",
+      "bytes": 202,
+      "sha256": "8639608febda1abf1b0f6ce98e65616c2dd114980d367e73ea1d3a04caaffb40"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-short-invalid-suffix.log.gz",
+      "bytes": 408,
+      "sha256": "90d357ab2c6ae91c6d5d5d53c6bd6355599e2e5af23025596954487db8d691a5"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-styled.callgrind.gz",
+      "bytes": 38855,
+      "sha256": "081dd477e9fb49b13aa1b9cd498a87017f0b39c637b30a7318fb0a7d982a153e"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-styled.json.gz",
+      "bytes": 205,
+      "sha256": "79ed0189f39e7c1a73231c3884d5aa612bd2c97613d95c94abc7c00ae24c9fc6"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-styled.log.gz",
+      "bytes": 402,
+      "sha256": "5d1ba04754f15aef003f584308a24d17ad70922859e20bfc7ccc6a5a664db66f"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-unicode.callgrind.gz",
+      "bytes": 42906,
+      "sha256": "af25b58643e54f8d652335f392fdeb08f91b3f30c41d8dd1c612ba8379c79df5"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-unicode.json.gz",
+      "bytes": 203,
+      "sha256": "d9a595e1347c0fcf6e75f3d272a6623021b2a6a49e36eb71166bb6669335274a"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/candidate-unicode.log.gz",
+      "bytes": 400,
+      "sha256": "ea2ac643e0e98dbdef4c7dd7081b4501409829f719a95bd397d103a9bf72a7ac"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/short-invalid-leads.vt.gz",
+      "bytes": 802,
+      "sha256": "5a083b7342884d12ba3c368af5a5d0acc6742955fb9c8856a0daecccbe206032"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/short-invalid-suffix.vt.gz",
+      "bytes": 811,
+      "sha256": "7766448babfc10fd260ed05cf29b625940b9000abfe43313319fe9ba8d732367"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/profiles/summary.json.gz",
+      "bytes": 2281,
+      "sha256": "f3498bbcde0ca7e0c2ceee4595c4f4d55a7a5ea9ab5ed4e64032a66dfa8d3f4e"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/reference-cursor.json.gz",
+      "bytes": 7645,
+      "sha256": "b1a131c901f3b8c551b01874a2415a0d7e04be079e94ca4b2dcf9496e14b8991"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/reference-differential.json.gz",
+      "bytes": 9331,
+      "sha256": "3f15ae05de7f0452804243c31acc011f87d9472273946234a6a207367b0d0925"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-cell-store/reference-vt-controls.json.gz",
+      "bytes": 57446,
+      "sha256": "4c7a70aeea133836baf0ab015412e31ed71496ff6027f2ef7a97d8232e6d2736"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/cached-lookahead/native-raw.json.gz",
+      "bytes": 10728301,
+      "sha256": "f6e5590f747b1bc5a2044ffee006caaf24c9da869544740dc3287a15db949ace"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/cached-lookahead/per-core-mpstat.log.gz",
+      "bytes": 51266,
+      "sha256": "9c55f422927614831864abb946142d525931482962f6dcb4cd5904e4e6093e40"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/cached-lookahead/reference-ascii-subruns.json.gz",
+      "bytes": 45992,
+      "sha256": "b85e24e005aaf3a974e7662119facf4f8d9b0029acea87c4be3606e9c8d77f6b"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/cached-lookahead/reference-cursor.json.gz",
+      "bytes": 7645,
+      "sha256": "b1a131c901f3b8c551b01874a2415a0d7e04be079e94ca4b2dcf9496e14b8991"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/cached-lookahead/reference-previous.json.gz",
+      "bytes": 9333,
+      "sha256": "b958dec9a057d86782e9616d1dc9d64ffee097b5c1aef1c13c3d49fbf9959772"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/cached-lookahead/reference-vt.json.gz",
+      "bytes": 57445,
+      "sha256": "6c7ab3a417f913681cdc3da915f57dc488207aa3bd680ea4b7803926e4f48254"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-feed_inner.asm.gz",
+      "bytes": 6782,
+      "sha256": "301ffab2405b011f36804ca36d871e8a87b242b7a3cc42164cc0a0b8e1f7809d"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-long-dense-error-prefix.callgrind.gz",
+      "bytes": 39317,
+      "sha256": "83fe27f3948697618e48d2fa6769992d9b5d39c7af6b23ef07bb2e42e80de2a9"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-long-dense-error-prefix.inclusive-no.txt.gz",
+      "bytes": 13699,
+      "sha256": "d981a78c575db655f7e9e0826336ecdae9ad4f454980d7467ca18d8c4324e59b"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-long-dense-error-prefix.inclusive-yes.txt.gz",
+      "bytes": 14545,
+      "sha256": "65708d8574aa8c284a808f616fc4548ec3f8dcdd82b6fe88c7478dd770105155"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-long-dense-error-prefix.json.gz",
+      "bytes": 199,
+      "sha256": "23db819818f8dedd1aa325f837bd7b7b898471ab4320c0f97dc9e595acf8c549"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-long-dense-error-prefix.log.gz",
+      "bytes": 408,
+      "sha256": "50ebdb819a88ac0130f6a74d3d2881c7c25699bcc6b0532b17b6870a540aaf0e"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-print_ascii.asm.gz",
+      "bytes": 5181,
+      "sha256": "beddb5ab3ac906926cbdaf7ac44e1d88ef6ede0a114475e28a35a60444f7872e"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-print_utf8.asm.gz",
+      "bytes": 10534,
+      "sha256": "c4c817566ecc16768ebdb4f8a21d6a1ad03a0b273b63885e5717453bc1ab4656"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-short-invalid-leads.callgrind.gz",
+      "bytes": 38179,
+      "sha256": "9a558d0d6a66674d95b124b19db22b33eb8d5526e8a9422eb28c5179d3e3fb58"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-short-invalid-leads.inclusive-no.txt.gz",
+      "bytes": 13085,
+      "sha256": "dd8667c09b4760f146f64bd59c7b165e715d2f9817d3bbcfb83a61d57509952f"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-short-invalid-leads.inclusive-yes.txt.gz",
+      "bytes": 13592,
+      "sha256": "77e59ec48b2002a69f9c06b5604a9dea248a8b53e7899e9430dbfcedcb3ac3c5"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-short-invalid-leads.json.gz",
+      "bytes": 202,
+      "sha256": "41437d4ba5744c70f2428f2d87e423553b763c4b246afac7b7d05f5ffa3a270d"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-short-invalid-leads.log.gz",
+      "bytes": 415,
+      "sha256": "37e27fe205ff0209e538e8e37ecd901a7f98a15ff6cba010cd429b325d25e212"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-unicode.callgrind.gz",
+      "bytes": 40864,
+      "sha256": "be61fc2f5edf52de8551434921cb6cebcd1e244995810089e86d48e078c3a7bf"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-unicode.inclusive-no.txt.gz",
+      "bytes": 13934,
+      "sha256": "def19b1db6a73d42d779df20c0952a00a45b4c0581af1efe6443eba14b3b51ee"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-unicode.inclusive-yes.txt.gz",
+      "bytes": 14668,
+      "sha256": "dd4dfed51ce385e4e52af7f19167605370e8ff4322696a07cb04ee7198e2ecf3"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-unicode.json.gz",
+      "bytes": 199,
+      "sha256": "757cb0406fce83e6abc58c3511c6fc1ed772a27bafbdfa58010ca33c61a0b31d"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/baseline-unicode.log.gz",
+      "bytes": 406,
+      "sha256": "2a3fa7addaa57c4bc073cc4422c2a6c98b92b86bb831f4c23a424f57a6704f00"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-feed_inner.asm.gz",
+      "bytes": 6816,
+      "sha256": "686c750d73088d3dcb6b861b3a8b3f41c453706dca6bc0f9038f124fe9c6a350"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-long-dense-error-prefix.callgrind.gz",
+      "bytes": 39402,
+      "sha256": "0af7ade3fefbf8511b5926e7f39a646f058e8204c299d97a43d3fd145f28b4ce"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-long-dense-error-prefix.inclusive-no.txt.gz",
+      "bytes": 13677,
+      "sha256": "978e315bacb600ee8644ff674bbd10345b07757a160e23e791c47c6bf2f52bf9"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-long-dense-error-prefix.inclusive-yes.txt.gz",
+      "bytes": 14660,
+      "sha256": "83968b4328c9c24e2ba40127c56b76222eb62568a827d40ff315f40439634bbd"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-long-dense-error-prefix.json.gz",
+      "bytes": 200,
+      "sha256": "2141c0f7a84ae1bb9cc0825c50b02c1cbf0398dba4e3eab50b30c78705956422"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-long-dense-error-prefix.log.gz",
+      "bytes": 402,
+      "sha256": "54dc2711aab1f9cac8ccb40f0d6a50d73ca4da0bc91509b42dc8e535619c0409"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-print_ascii.asm.gz",
+      "bytes": 5160,
+      "sha256": "9707ab89620181e0ed5fa9a8a331a13d69fbb2a1aaf39177363a0523eb9469f1"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-print_prefix_before_error.asm.gz",
+      "bytes": 1624,
+      "sha256": "c466e3b4755378938856cad30d55dd68e1b88e52ee344e454916d509533c1e85"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-print_utf8.asm.gz",
+      "bytes": 10554,
+      "sha256": "a7bf74327735911ff2f220bd7530a5ca5bba148315c7009780d0c854f1e5e3d3"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-short-invalid-leads.callgrind.gz",
+      "bytes": 38278,
+      "sha256": "57f5b924a46e998f1b383eff9aa21a09d7293a9347f6b723bc3e2e41804c6847"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-short-invalid-leads.inclusive-no.txt.gz",
+      "bytes": 13038,
+      "sha256": "e3dfdc9eded1fc572deeb257ab6fe9c3c0d3d3bd4407c1a1c151cb9c4c07791f"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-short-invalid-leads.inclusive-yes.txt.gz",
+      "bytes": 13660,
+      "sha256": "a06b5a296d7df6f854c07ba1a7320e3ca7bfe82daeec39b90d70949297cdbe1c"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-short-invalid-leads.json.gz",
+      "bytes": 203,
+      "sha256": "678ece1d225af1e2dfd5b9e6ba38b775d27c50f3a2d8deb4b08ccaae98b3416d"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-short-invalid-leads.log.gz",
+      "bytes": 409,
+      "sha256": "c6bb7675e2e8cdfeae2e1ec20eb33627d865c6317f47aa3c200d0e228955d2a5"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-unicode.callgrind.gz",
+      "bytes": 40711,
+      "sha256": "662513e115b00d1ca5bb84baa664aa835511e8b93cccf8cc3362829f2490e569"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-unicode.inclusive-no.txt.gz",
+      "bytes": 13908,
+      "sha256": "e9261c2e438053ecd1310564c78de41cf89f2ce8b178e450760047d2e4dcaf40"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-unicode.inclusive-yes.txt.gz",
+      "bytes": 14790,
+      "sha256": "d20106244c430bcfe1ff71745ec7089df257f1543328663bc982a93720b85056"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-unicode.json.gz",
+      "bytes": 200,
+      "sha256": "fc360623f958fc4b5efeafdad86a51bbae8662709f27dc81d417adebabee2eb5"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix-attribution/profiles/candidate-unicode.log.gz",
+      "bytes": 397,
+      "sha256": "d34a81d6ec0bd4e8cdad4b8b8fad8c4e01ba1d18461fd19e7727311a0aef1865"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix/native-raw.json.gz",
+      "bytes": 11459089,
+      "sha256": "091ba8719c5fe5357a5104711db769fdeac9f409c4d932ace8390530ab0515a7"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix/per-core-mpstat.log.gz",
+      "bytes": 32475,
+      "sha256": "9efa3bc6668b286b91e7b2b62a7ca9a1138a061638ec9f6abf85a43733d1c39e"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix/reference-ascii-subruns.json.gz",
+      "bytes": 46115,
+      "sha256": "5746245b04d0e17698ad54431ba044d5186de595b01494650d21b4f4d32660b1"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix/reference-cursor.json.gz",
+      "bytes": 7645,
+      "sha256": "b1a131c901f3b8c551b01874a2415a0d7e04be079e94ca4b2dcf9496e14b8991"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix/reference-previous.json.gz",
+      "bytes": 9337,
+      "sha256": "15c28421cee2e1c8e745e80c77add42b65951c6bfee2e74162f234f4a3a98dc8"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/error-prefix/reference-vt.json.gz",
+      "bytes": 57451,
+      "sha256": "6afa6671dfe079d6ac07cc8755f45b30ec5a484db08c9ab91767d39e9cf7a521"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/native-raw.json.gz",
+      "bytes": 10532048,
+      "sha256": "35306dc5e6cb8812ea2bca0469dda174844dc4c304989e1f3e47025ad29c489f"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/per-core-mpstat.log.gz",
+      "bytes": 28780,
+      "sha256": "1522ca09380b529149aade0d1074747513514f274bd4c7c23526db67853275d4"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/reference-ascii-subruns.json.gz",
+      "bytes": 45996,
+      "sha256": "da314c7ac7149df60bfa91fcb47db3971eda19c5571fdfc6bfd3388a45884b0e"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/reference-cursor.json.gz",
+      "bytes": 7645,
+      "sha256": "b1a131c901f3b8c551b01874a2415a0d7e04be079e94ca4b2dcf9496e14b8991"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/reference-previous.json.gz",
+      "bytes": 9332,
+      "sha256": "41a8457c548c02c3f4ec5a743d87d969909d966ce8a9ef4ef8228a896d8dd506"
+    },
+    {
+      "path": "apps/hotaru/upstream/ascii-subruns/reference-vt.json.gz",
+      "bytes": 57445,
+      "sha256": "34b29866abb5de50130249a82a074949444acc8a297ba3840d591b829c310296"
+    },
+    {
+      "path": "apps/hotaru/upstream/frame-cadence/raw-traces.tar.gz",
+      "bytes": 4263232,
+      "sha256": "0a7e70efbaef02019529dfe4be72dccedd6442c824a4d623e85b02174a817bbc"
+    },
+    {
+      "path": "apps/hotaru/upstream/gpu-buffer/admission/native-scenes.json.gz",
+      "bytes": 1511,
+      "sha256": "f7df35400b74527189f4d7941ebdb34c30e10882df8d0b3e0fb1a312a397d092"
+    },
+    {
+      "path": "apps/hotaru/upstream/gpu-buffer/remote-profile/raw/final-attempt.json.gz",
+      "bytes": 24986,
+      "sha256": "eb1f35e99001605034a348cfae2a9f301c330ee75ac90e9ce01be16de3e19474"
+    },
+    {
+      "path": "apps/hotaru/upstream/gpu-buffer/remote-profile/raw/final-skip.json.gz",
+      "bytes": 22613,
+      "sha256": "3dd7551c1e3c776c415ea0248527f953a6096d0fdd2a96f51b5a6024a70ad388"
+    },
+    {
+      "path": "apps/hotaru/upstream/gpu-buffer/remote-profile/raw/preparation-after.json.gz",
+      "bytes": 7249,
+      "sha256": "1d26ede9d5dadb04d47d220f7e79be4f83443f97463d6f2e0c7ba30b8767b6ac"
+    },
+    {
+      "path": "apps/hotaru/upstream/gpu-buffer/remote-profile/raw/preparation-before.json.gz",
+      "bytes": 7405,
+      "sha256": "c7de1e5a4161c6706984e305559af0272cd925e99883b1b97fbbd7041e30990c"
+    },
+    {
+      "path": "apps/hotaru/upstream/gui-gpu-2026-10-30/laptop/startup.tar.gz",
+      "bytes": 1972039,
+      "sha256": "f5a23e1b74df472518a35569ac984187bf72888ec00f3a952645e504f4976dca"
+    },
+    {
+      "path": "apps/hotaru/upstream/gui-gpu-2026-10-30/laptop/steady.tar.gz",
+      "bytes": 3241004,
+      "sha256": "bceab24ff5c8478ca871096dea1a811dc0cb9bdcf7e79b54614b97c012320b6b"
+    },
+    {
+      "path": "apps/hotaru/upstream/gui-gpu-2026-10-30/laptop/throughput.tar.gz",
+      "bytes": 2032132,
+      "sha256": "5cc8fc78478650b699fe28cbc84508e4da54a74c6301b5af57fe2d512e63af2f"
+    },
+    {
+      "path": "apps/hotaru/upstream/gui-gpu-2026-10-30/wx/startup.tar.gz",
+      "bytes": 1978463,
+      "sha256": "c50c71a8d9d1650094b8f4f91807dfe0e9da550ab2a10e58777434b8e7fb8260"
+    },
+    {
+      "path": "apps/hotaru/upstream/gui-gpu-2026-10-30/wx/steady.tar.gz",
+      "bytes": 3293731,
+      "sha256": "f8d2a0280cd8568b2295a3a51f745f32d2f9a572d34f9ba45146911c18dc9d2e"
+    },
+    {
+      "path": "apps/hotaru/upstream/gui-gpu-2026-10-30/wx/throughput.tar.gz",
+      "bytes": 2051338,
+      "sha256": "21415ef022f1d4fed79b3707eb93a16252f3b23edc49a1ff3f1c9cf18eb22ff6"
+    },
+    {
+      "path": "apps/hotaru/upstream/gui-pilot-clipboard/startup.tar.gz",
+      "bytes": 2066773,
+      "sha256": "8025dcde9bf109ba21ac96adab3a4605fe2d42a4228c4303d4ab9fc88734d1d2"
+    },
+    {
+      "path": "apps/hotaru/upstream/gui-pilot-clipboard/steady.tar.gz",
+      "bytes": 3367925,
+      "sha256": "007fc45525947ad8bb39a7ad27678134140e0f6b42e377d6f7bb1999b97c8d52"
+    },
+    {
+      "path": "apps/hotaru/upstream/gui-pilot-sprites/startup-1.tar.gz",
+      "bytes": 1915358,
+      "sha256": "8013dcc78a1eceffe973d038858d522b2a288e5347603dd62a0ff25461127ac2"
+    },
+    {
+      "path": "apps/hotaru/upstream/gui-pilot-sprites/steady-1.tar.gz",
+      "bytes": 1632906,
+      "sha256": "95a92c60c1da799e2bb1b53e08dfe98c1e7beeb15701607d6a3bdd2869913389"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/diagnostic-build.json.gz",
+      "bytes": 5316,
+      "sha256": "9af0347b39912451bee547e50b62cd6dd8cee7d20a10583ecfbceb80cfc33da4"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/native-source-build.json.gz",
+      "bytes": 5315,
+      "sha256": "e4393999e0105852859bb193308b90d627905835d02d06f42804c814b0b1c425"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/ghostty-legacy-short-interior-error.callgrind.gz",
+      "bytes": 23609,
+      "sha256": "466e572dd03b2b701e63df915ed612de53ead77b45fe3d21f6c51b9c00fdeb17"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/ghostty-legacy-short-interior-error.json.gz",
+      "bytes": 20,
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/ghostty-legacy-short-interior-error.log.gz",
+      "bytes": 1076,
+      "sha256": "2cd0f8039dcf30c83c4708b61aff548fa4d69b58bce6a348dacb05cea312cf4d"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/ghostty-legacy-short-invalid-suffix.callgrind.gz",
+      "bytes": 23610,
+      "sha256": "c492f9efb6a35ec68aaafb8fe08e658a772ac01837f02db90a8c5dd7859af4e5"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/ghostty-legacy-short-invalid-suffix.json.gz",
+      "bytes": 20,
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/ghostty-legacy-short-invalid-suffix.log.gz",
+      "bytes": 1078,
+      "sha256": "b33da80e13f5f102d9211dbada161aabefe8b206cbfb673a481b2140092404ef"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/ghostty-unicode-short-interior-error.callgrind.gz",
+      "bytes": 23598,
+      "sha256": "a3bfa375b69cba761d0ac3040d60cabcb7f3a4ada1bca35de0acbd47e990370e"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/ghostty-unicode-short-interior-error.json.gz",
+      "bytes": 20,
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/ghostty-unicode-short-interior-error.log.gz",
+      "bytes": 1076,
+      "sha256": "0d136f5825139fb1625337cf6372fb0ba3c221738064ac58f2df03a10b492dfb"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/ghostty-unicode-short-invalid-suffix.callgrind.gz",
+      "bytes": 23601,
+      "sha256": "8cb72b6bf3faec55b583fc9c0644d040ad3df8422c1e425c095a755fee87ef30"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/ghostty-unicode-short-invalid-suffix.json.gz",
+      "bytes": 20,
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/ghostty-unicode-short-invalid-suffix.log.gz",
+      "bytes": 1078,
+      "sha256": "cd07217a4f17504f13d3db7e26e26c08faf5f0a683e850026c6c233a92cf16b5"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-legacy-short-interior-error.callgrind.gz",
+      "bytes": 39500,
+      "sha256": "1389db673d86e8864e1a75018cbe36c15f57bfb91b7ea55d559e225ca5deea3d"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-legacy-short-interior-error.inclusive-no.txt.gz",
+      "bytes": 2784,
+      "sha256": "9a23504e90506b986041b725a1d5bb1eb402a017bca8fbb13074997ba47cbe27"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-legacy-short-interior-error.inclusive-yes.txt.gz",
+      "bytes": 1968,
+      "sha256": "8e0f31df2ae454c092ebca742e680669895be7e935db8204e16c538b8e0f94cc"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-legacy-short-interior-error.json.gz",
+      "bytes": 202,
+      "sha256": "ac12312d4e66016fe373d7e97952c6fd3103196467405998625954564944e568"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-legacy-short-interior-error.log.gz",
+      "bytes": 419,
+      "sha256": "a8f77805556c693cda5deae37f32017ff70857d79c3d126dbd33545059377e24"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-legacy-short-invalid-suffix.callgrind.gz",
+      "bytes": 39408,
+      "sha256": "2323ad54e7c5000adefa4b81980d04aa3d291c5bdac2d900dd593a69c5a4b276"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-legacy-short-invalid-suffix.inclusive-no.txt.gz",
+      "bytes": 2577,
+      "sha256": "8e0e597eeb5a858e5e3433bca6a2c6f35c6a834ca41b2596792573941047a12d"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-legacy-short-invalid-suffix.inclusive-yes.txt.gz",
+      "bytes": 1838,
+      "sha256": "30320104bd7b4ff914984572903ab29c2b6501dff17faec75181cf303832c627"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-legacy-short-invalid-suffix.json.gz",
+      "bytes": 202,
+      "sha256": "3eea2dda0bc0f4ce4bb86d992ff12f8e4290d49ea98e2b2a3f1ba1330a677618"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-legacy-short-invalid-suffix.log.gz",
+      "bytes": 421,
+      "sha256": "7423fe810c972507ac37a27580edb57d9fc9d94cbd59e075ed154b53fa076d7a"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-unicode-short-interior-error.callgrind.gz",
+      "bytes": 39595,
+      "sha256": "e8fb6925c8b1c6de39b3ad5b9db677df142b20777dbee85f2d8deb371585a75b"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-unicode-short-interior-error.inclusive-no.txt.gz",
+      "bytes": 2819,
+      "sha256": "7e89e3af3f090b63c9817a604ad8e605789ee2689c5f69baf459418ccb663ec3"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-unicode-short-interior-error.inclusive-yes.txt.gz",
+      "bytes": 1896,
+      "sha256": "27a848096a923f5709305c5ad38c9ab49af6f65d6e648c37b1dd7f69fc1f22c8"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-unicode-short-interior-error.json.gz",
+      "bytes": 201,
+      "sha256": "380c2362fbd1a0ac250c60b0c6de94fa039b1cb471baaade5861092378e685eb"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-unicode-short-interior-error.log.gz",
+      "bytes": 419,
+      "sha256": "79e46045c4dd90a57a0b29e93c10aef65c7211f40f1785bd8cfe2461a5e7d6cd"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-unicode-short-invalid-suffix.callgrind.gz",
+      "bytes": 39534,
+      "sha256": "5a2ca05a65081df333a6e49294b894d26af62e51b522fbc0ab4c6cc8868fefc5"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-unicode-short-invalid-suffix.inclusive-no.txt.gz",
+      "bytes": 2619,
+      "sha256": "ef2609d1b0d7c6309261b5319ced8160e55ab4cae5888850aedc5abce4b5c7db"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-unicode-short-invalid-suffix.inclusive-yes.txt.gz",
+      "bytes": 1823,
+      "sha256": "52e19c2a657b785dd74fe9fa595da6082a196c0387fa12e26f3c74c81ee067cf"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-unicode-short-invalid-suffix.json.gz",
+      "bytes": 203,
+      "sha256": "bf5f0474d497a97e0cdb5d48fc36c34a4c4cb1e67d73b2a2a0c50fdb0cd4fd14"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/hotaru-unicode-short-invalid-suffix.log.gz",
+      "bytes": 422,
+      "sha256": "076378e6cd32ace04367d8f578775573360f2d1aeb8ce569fc0af1d074daa9cd"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/profiles/summary.json.gz",
+      "bytes": 8898,
+      "sha256": "c9312b08ea16f30944a81e3e99884ee017ee82d92117cfb9346673f479571c98"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-diagnostic-build.json.gz",
+      "bytes": 314352,
+      "sha256": "4190e2b27c6b1166ff3c38af0573a8532fe9b056375152202663d6837c81b56d"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-legacy-short-interior-error.callgrind.gz",
+      "bytes": 36075,
+      "sha256": "2eb9a0a20edf8460dcb5f2e36d7c456ac605aa661d11d98946213d17ef695db8"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-legacy-short-interior-error.inclusive-no.txt.gz",
+      "bytes": 1711,
+      "sha256": "837c261790dbaa806846fd418eeb5958b5c139ba391710ee45126c9d3e7d06ee"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-legacy-short-interior-error.inclusive-yes.txt.gz",
+      "bytes": 1741,
+      "sha256": "d7a6a056c64879fc68da35041e2f3107d80b36c468424c8c18bdd54e1b25a507"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-legacy-short-interior-error.json.gz",
+      "bytes": 204,
+      "sha256": "1d0028ca3efa75bd0cb7a67cd94d3424a3021e41b6ef8a64d2c96046c98a381f"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-legacy-short-interior-error.log.gz",
+      "bytes": 423,
+      "sha256": "eceb67e1361f43ba15a2a54a6b434e3700c25ca23bb0afd78277e215c99f737c"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-legacy-short-invalid-suffix.callgrind.gz",
+      "bytes": 36012,
+      "sha256": "ddf47d08d44f9bd562125d89a1b07d43ab14ed120858afbe2bd679369f9cb950"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-legacy-short-invalid-suffix.inclusive-no.txt.gz",
+      "bytes": 1853,
+      "sha256": "fcac87e7b54f480a3b578a61f073fe86f3bfe4bb3877be0133ecf5d7eaf7811d"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-legacy-short-invalid-suffix.inclusive-yes.txt.gz",
+      "bytes": 1829,
+      "sha256": "b3aace78b30d89eadcbff6fd449c6a9924da940e531050fcbb4863a3bdcc185a"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-legacy-short-invalid-suffix.json.gz",
+      "bytes": 206,
+      "sha256": "ada646afc78e0e15ce94537be59514ff1aa4f21f9530a6b4231134b28a1a8039"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-legacy-short-invalid-suffix.log.gz",
+      "bytes": 424,
+      "sha256": "833312df42c03f2e8dc5a318fa03162bf3e97f612fa693858a220f1ab3dca8ff"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-unicode-short-interior-error.callgrind.gz",
+      "bytes": 36145,
+      "sha256": "49d2d153f699eb23103c9dbb011fbcb25728a155a9d2a5ca9cb5748b32e9c089"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-unicode-short-interior-error.inclusive-no.txt.gz",
+      "bytes": 1725,
+      "sha256": "94ae617d75c39446d15fb214e717eff313bdde946d2886124bf56ef3d92294a5"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-unicode-short-interior-error.inclusive-yes.txt.gz",
+      "bytes": 1757,
+      "sha256": "bbc6f37032a3f1ce0b660dddea4ef39fe77016ef8a4297127dff28e9ac1077f1"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-unicode-short-interior-error.json.gz",
+      "bytes": 207,
+      "sha256": "f6b5da4d4cf30f48b1a84012bf6da466fb857d217afe66fb44b73b00561e6fb5"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-unicode-short-interior-error.log.gz",
+      "bytes": 423,
+      "sha256": "caa84e6643c56000282e1dd2641be143e274300751519f4e53d63413b4d5992a"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-unicode-short-invalid-suffix.callgrind.gz",
+      "bytes": 36186,
+      "sha256": "a28c452b205984aaa3661efb4ca69b06e7179760e9f46e3ae6258a6a22ade430"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-unicode-short-invalid-suffix.inclusive-no.txt.gz",
+      "bytes": 1871,
+      "sha256": "4f20081fad89816401a46b70ad98fa0912059a677a7a5d851fcebfc65200dc0e"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-unicode-short-invalid-suffix.inclusive-yes.txt.gz",
+      "bytes": 1820,
+      "sha256": "a2cff568e43cfe6feb25384b5b99e1c0ffbd357cdc58bdbca37e9bdbb6f2690c"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-unicode-short-invalid-suffix.json.gz",
+      "bytes": 205,
+      "sha256": "35a682d037a0e6561ed3a2bd081bcc79bacde2bffd9befde7b61b7d3d7a4e311"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/ghostty-unicode-short-invalid-suffix.log.gz",
+      "bytes": 425,
+      "sha256": "d2057d67f56c47b58b674c479026edde126aa0b8cbe2174706e30f5c0f8a3b48"
+    },
+    {
+      "path": "apps/hotaru/upstream/malformed-attribution/reference-v3/summary.json.gz",
+      "bytes": 315592,
+      "sha256": "e7117aa0113599e5470af9ac727e84938caef7c8aa660d02f211003c2e2478f8"
+    },
+    {
+      "path": "apps/hotaru/upstream/native-auto-links/evidence.tar.gz",
+      "bytes": 918615,
+      "sha256": "60deb95cae9a3c649eb6065a0b8837463280cf2e796cd708de33e1b4af89ef75"
+    },
+    {
+      "path": "apps/hotaru/upstream/pty-reader/laptop/loaded-ab.tar.gz",
+      "bytes": 43739,
+      "sha256": "b121cecbf1359b82096d1867ef629e4e8c2d03491690b4073c410d71054ed09f"
+    },
+    {
+      "path": "apps/hotaru/upstream/pty-reader/laptop/rotation.tar.gz",
+      "bytes": 78097,
+      "sha256": "6a75cd276c428fe09aaa2ad84ae8b3465010b88cf8a1b5f90794fe5e4c1a969d"
+    },
+    {
+      "path": "apps/hotaru/upstream/pty-reader/wx/ab.tar.gz",
+      "bytes": 49629,
+      "sha256": "c0c83516f273a95329dae11636b08fc2f80b0d74db2767286c91a6947f53117e"
+    },
+    {
+      "path": "apps/hotaru/upstream/pty-reader/wx/latency.tar.gz",
+      "bytes": 186863,
+      "sha256": "c664f51d30ce86ba0cec1047b6edef2a8e565ac28fbe2d0792f0c9b5c6a19022"
+    },
+    {
+      "path": "apps/hotaru/upstream/region-frames/raw.tar.gz",
+      "bytes": 3256627,
+      "sha256": "3129d5c9a25d6939657b739050743b7f7854be9215942ff8cde40d0772115cce"
+    },
+    {
+      "path": "apps/hotaru/upstream/semantic-prompts/decaln-audit/after/result.json.gz",
+      "bytes": 14031,
+      "sha256": "6474f31015273b38febc04e22e344d7978dfef319dea1651a0b7dba4c9256a77"
+    },
+    {
+      "path": "apps/hotaru/upstream/semantic-prompts/decaln-audit/before/result.json.gz",
+      "bytes": 17652,
+      "sha256": "caed06b1f343aae3b52740799f590053ae7be1a8a7eaf957c1c263e97d26efd9"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/complete-tail/direct-ghostty/per-core-mpstat.log.gz",
+      "bytes": 25484,
+      "sha256": "83079d191e542b9db1765611f93a0611c072f1fed0c1c5b5a24ff76240445678"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/complete-tail/direct-ghostty/raw-summary.json.gz",
+      "bytes": 9790052,
+      "sha256": "5f00de671b4f03236bff059bc8419e83db9e87f8e3c0f37f869362049bcc0872"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/complete-tail/native-summary.json.gz",
+      "bytes": 6886376,
+      "sha256": "f9e015845862f454892eede27df291f7f3895fa7b4159d75fc4890b62510f17f"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/complete-tail/per-core-mpstat.log.gz",
+      "bytes": 17052,
+      "sha256": "654292456530e426593715e56cbb5ec5d7b07d8f20a8da2d887f6496278a8c15"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/complete-tail/reference-cursor.json.gz",
+      "bytes": 7645,
+      "sha256": "b1a131c901f3b8c551b01874a2415a0d7e04be079e94ca4b2dcf9496e14b8991"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/complete-tail/reference-previous.json.gz",
+      "bytes": 9341,
+      "sha256": "49df13fcf34f9675148d59ee92c6f30225df0a488182009e766ea2829a9e5838"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/complete-tail/reference-vt.json.gz",
+      "bytes": 57454,
+      "sha256": "c1d7468589011a4a8e05740976c831b332fd3c9e99dd64ae3ea10b6ce96529d3"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/error-translation/native-summary.json.gz",
+      "bytes": 2965435,
+      "sha256": "21c29f87fa3c71b6d895e12aa3765f7dae74d5bc175909b19ad4bcf302820a2d"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/error-translation/per-core-mpstat.log.gz",
+      "bytes": 7600,
+      "sha256": "e1ba109bd2a9d072e18db7edbf78fc2d5917d225f3a06dd392e6ba293b63f779"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/error-translation/reference-cursor.json.gz",
+      "bytes": 7645,
+      "sha256": "b1a131c901f3b8c551b01874a2415a0d7e04be079e94ca4b2dcf9496e14b8991"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/error-translation/reference-previous.json.gz",
+      "bytes": 9338,
+      "sha256": "172bc5a00a9df75bfe4bddda024d1fbd7e64ad4d007c0274f05e67f4f279bc8c"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/error-translation/reference-vt.json.gz",
+      "bytes": 57451,
+      "sha256": "ff4b04d569ae5cce8916cc20c49ec776b60e9bca2ef18a749a02632bb473361c"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/native/per-core-mpstat.log.gz",
+      "bytes": 7552,
+      "sha256": "39c197ab90e000396d8b47b26f84e42606e5bb0d094b464abe15ec3c485da8b5"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/native/summary.json.gz",
+      "bytes": 2984577,
+      "sha256": "23d1191c8f7f5b2dced1b46b0ceae887b539dfc6a5544bb534f16d94f85b9d03"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/profiles/baseline-ascii.callgrind.gz",
+      "bytes": 38386,
+      "sha256": "8daca89fffebb812f55bb485d62813c119e5e382e7cecd984e00390ecc5a7a25"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/profiles/baseline-cursor.callgrind.gz",
+      "bytes": 39281,
+      "sha256": "d96cbef7a318c8477453ac66890ddb27ebfe5eb574152e924e8144269588288e"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/profiles/baseline-short-invalid-leads.callgrind.gz",
+      "bytes": 38466,
+      "sha256": "99e5c89e7e65b894bf02e9a745fe577bd07600a8b1048c9c41deb3eb3134496e"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/profiles/baseline-short-invalid-suffix.callgrind.gz",
+      "bytes": 39577,
+      "sha256": "47bbb940898439a4626e4c01ffc8dab4ccde7be392d645de393955c2703dc4bd"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/profiles/baseline-styled.callgrind.gz",
+      "bytes": 39093,
+      "sha256": "ed4e5b98b9559b831cd685feb55cb6608fb860755343a8d9a0d37b67c5ccd853"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/profiles/baseline-unicode.callgrind.gz",
+      "bytes": 42729,
+      "sha256": "1ae4afc57d51d7c50842ae458f82b25d6af30a3d765cb19884cc4dc716a4bb32"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/profiles/candidate-ascii.callgrind.gz",
+      "bytes": 38063,
+      "sha256": "b21767830723dcb647ab7092649ddf54342324a7a5181c296531212efa136d01"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/profiles/candidate-cursor.callgrind.gz",
+      "bytes": 39220,
+      "sha256": "9a94e04838ab1d88172ee4c19510c1b093aea0a52163e2933873c5722c85684d"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/profiles/candidate-short-invalid-leads.callgrind.gz",
+      "bytes": 38527,
+      "sha256": "f192a992eadf507dd107b47e5b636df08855a49427bbe00ce8443bb5c0ef424c"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/profiles/candidate-short-invalid-suffix.callgrind.gz",
+      "bytes": 39887,
+      "sha256": "1c16270def5e7ec463a6ffc1f9f29c6e10785b14f1b1974b19358e3160abd4f4"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/profiles/candidate-styled.callgrind.gz",
+      "bytes": 39011,
+      "sha256": "7b0dabe1c754ac8c789dc00be739e84c30b744c10c544b0e9883ab620d554ee9"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/profiles/candidate-unicode.callgrind.gz",
+      "bytes": 43692,
+      "sha256": "d366e109152c31739ce5ece3b1282a505ea428123b9bfd68d214873f8f20746a"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/profiles/short-invalid-leads.vt.gz",
+      "bytes": 802,
+      "sha256": "5a083b7342884d12ba3c368af5a5d0acc6742955fb9c8856a0daecccbe206032"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/profiles/short-invalid-suffix.vt.gz",
+      "bytes": 811,
+      "sha256": "7766448babfc10fd260ed05cf29b625940b9000abfe43313319fe9ba8d732367"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/reference-cursor.json.gz",
+      "bytes": 7645,
+      "sha256": "b1a131c901f3b8c551b01874a2415a0d7e04be079e94ca4b2dcf9496e14b8991"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/reference-differential.json.gz",
+      "bytes": 9338,
+      "sha256": "c232d5199ae6c5b7ab668a6a610a38dd03cefd5fc353d1c7713338910a91ffd4"
+    },
+    {
+      "path": "apps/hotaru/upstream/short-utf8/reference-vt-controls.json.gz",
+      "bytes": 57448,
+      "sha256": "bdfcc2c92f32d46e2d90e132df50d71d43ea3bd1303ea2034df02613bcadde5e"
+    },
+    {
+      "path": "apps/hotaru/upstream/usable-checkpoint/evidence.tar.gz",
+      "bytes": 755780,
+      "sha256": "37495700648850af0e99e3770f7e2deba3a227797008c809603b747746435f73"
+    }
+  ]
+}

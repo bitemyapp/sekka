@@ -305,6 +305,7 @@
         };
       };
       checks.${system} = {
+        hotaru-evidence = import ./nix/hotaru-evidence-test.nix { inherit pkgs; };
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit
             pkgs
