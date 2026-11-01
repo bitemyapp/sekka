@@ -11,7 +11,7 @@ use crate::panes::{Axis, Direction, PaneTree};
 use crate::preferences::{Notice, Page};
 use crate::session::{Command, Defaults, Session};
 use crate::settings::{self, Access, Action, Bindings, Settings};
-use crate::terminal_view::{Selection, colors_for, terminal_view};
+use crate::terminal_view::{TextSelection, colors_for, terminal_view};
 
 /// Messages for a window name it, or a pane of it. Menu commands and
 /// shortcuts (`Action`) are for the front window, and become messages
@@ -87,11 +87,13 @@ pub enum Msg {
     Resize(u64, usize, usize),
     ResizePixels(u64, usize, usize, u16, u16),
     Scroll(u64, i32),
-    Select(u64, Selection),
+    Select(u64, TextSelection),
     Copy(WindowKey),
     CopyScreen(WindowKey),
     CopyAll(WindowKey),
     CopySnapshot(u64, u64, Arc<ContentSnapshot>),
+    /// All of a pane's content, captured for a selection past its screen.
+    Captured(u64, u64, Arc<ContentSnapshot>),
     CopyReady(u64, u64, PreparedClipboard),
     CopyFailed(u64, u64, String),
     PasteReady(u64, u64, ClipboardRead, Option<Arc<str>>),
@@ -134,7 +136,7 @@ pub struct Pane {
     link_directory: Option<std::path::PathBuf>,
     pub snapshot: Arc<Snapshot>,
     pub session: Option<Session>,
-    pub selection: Option<Selection>,
+    pub selection: Option<TextSelection>,
     pub status: String,
     pub(crate) hovered_link: Option<crate::links::Link>,
     pub ended: bool,
@@ -207,6 +209,8 @@ pub struct Hotaru {
     pub instance: Option<crate::instance::Instance>,
     clipboard: Option<ClipboardWorker>,
     clipboard_token: u64,
+    /// A copy waiting for a capture of the content its selection covers.
+    clipboard_capture: Option<(u64, TextSelection)>,
     clipboard_cancel: Arc<AtomicBool>,
     clipboard_format: settings::CopyFormat,
     clipboard_read: Option<ClipboardRead>,
@@ -240,6 +244,8 @@ pub struct Hotaru {
     /// The primary selection and programs' clipboard requests (OSC 52).
     selections: Option<crate::selections::Worker>,
     primary_token: u64,
+    /// The primary selection, waiting for a capture as a copy can.
+    primary_capture: Option<(u64, TextSelection)>,
     primary_cancel: Arc<AtomicBool>,
     /// A program's clipboard request being asked about.
     asking: Option<crate::selections::Question>,
@@ -262,6 +268,7 @@ impl Hotaru {
             instance: None,
             clipboard: None,
             clipboard_token: 0,
+            clipboard_capture: None,
             clipboard_cancel: Arc::new(AtomicBool::new(false)),
             clipboard_format: settings::CopyFormat::Mixed,
             clipboard_read: None,
@@ -289,6 +296,7 @@ impl Hotaru {
             open_after_save: false,
             selections: None,
             primary_token: 0,
+            primary_capture: None,
             primary_cancel: Arc::new(AtomicBool::new(false)),
             asking: None,
             ask_token: 0,
@@ -811,7 +819,7 @@ impl Hotaru {
                     snapshot: pane.snapshot.clone(),
                     config,
                     scale: pane.font_scale,
-                    selection: pane.selection,
+                    selection: pane.selection.as_ref().and_then(|selection| selection.visible(&pane.snapshot)),
                     search: search.and_then(|caches| caches[usize::from(pane.snapshot.modes.alternate_screen)].clone()),
                 });
             }
@@ -992,7 +1000,7 @@ impl Hotaru {
         let Some(tab) = self.pane_in(w) else { return };
         let found = selected.then(|| self.window(w).and_then(|window| window.find_state.copy.clone())).flatten();
         let selection = if selected && found.is_none() {
-            let Some(selection) = tab.selection.filter(|s| !s.is_empty()) else { return };
+            let Some(selection) = tab.selection.clone().filter(|s| !s.is_empty()) else { return };
             Some(selection)
         } else {
             None
@@ -1003,6 +1011,15 @@ impl Hotaru {
         } else {
             tab.snapshot.clone()
         };
+        // A selection past the screen copies from a capture of all content.
+        if let Some(selection) = selection.as_ref().filter(|selection| !selection.shown_whole(&snapshot)) {
+            let selection = selection.clone();
+            let token = self.clipboard_request();
+            self.clipboard_capture = Some((token, selection));
+            self.send(pane, Command::Capture(token));
+            return;
+        }
+        let selection = selection.and_then(|selection| selection.visible(&snapshot));
         let source = if let Some((results, index)) = found {
             CopySource::Search { results, index }
         } else {
@@ -1027,17 +1044,29 @@ impl Hotaru {
             return;
         }
         let Some(pane) = self.panes.iter().find(|pane| pane.id == id) else { return };
-        let Some(selection) = pane.selection.filter(|s| !s.is_empty()) else { return };
+        let Some(selection) = pane.selection.clone().filter(|s| !s.is_empty()) else { return };
         let snapshot = pane.rendered.as_ref().map_or_else(|| pane.snapshot.clone(), |frame| frame.snapshot.clone());
         self.primary_cancel.store(true, Ordering::Release);
         self.primary_cancel = Arc::new(AtomicBool::new(false));
         self.primary_token = self.primary_token.wrapping_add(1);
+        self.primary_capture = None;
+        // A selection past the screen is offered from a capture of all content.
+        if !selection.shown_whole(&snapshot) {
+            self.primary_capture = Some((self.primary_token, selection));
+            self.send(id, Command::Capture(self.primary_token));
+            return;
+        }
+        let selection = selection.visible(&snapshot);
         let job = crate::selections::Job::Primary {
             token: self.primary_token,
             pane: id,
-            source: CopySource::Viewport { snapshot, selection: Some(selection) },
+            source: CopySource::Viewport { snapshot, selection },
             cancel: self.primary_cancel.clone(),
         };
+        self.submit_primary(job);
+    }
+
+    fn submit_primary(&self, job: crate::selections::Job) {
         if let Some(worker) = &self.selections {
             // Behind a full queue of reads, this selection isn't offered.
             worker.submit(job);
@@ -1262,7 +1291,7 @@ impl Hotaru {
                     pane.id,
                     pane.snapshot.clone(),
                     (window.font_size, self.settings.font_weight),
-                    pane.selection,
+                    pane.selection.as_ref(),
                     self.bindings.clone(),
                     pane.rendered.clone(),
                     pane.input_activity,
@@ -1422,7 +1451,7 @@ impl Hotaru {
 
     fn find_selection(&mut self, w: WindowKey, cx: &mut Cx<Msg>) {
         let Some(pane) = self.pane_in(w) else { return };
-        let Some(selection) = pane.selection.filter(|selection| !selection.is_empty()) else { return };
+        let Some(selection) = pane.selection.as_ref().filter(|selection| !selection.is_empty()) else { return };
         let text = selection.text(pane.displayed_snapshot().unwrap_or(&pane.snapshot));
         let needle: String = text.trim_end_matches(['\r', '\n']).chars().take(4096).collect();
         if needle.trim().is_empty() {
@@ -1599,7 +1628,7 @@ impl Hotaru {
                 .item(MenuItem::new("Copy Link", Msg::CopyLink(link.target.clone())))
                 .separator();
         }
-        let selected = pane.selection.is_some_and(|s| !s.is_empty());
+        let selected = pane.selection.as_ref().is_some_and(|s| !s.is_empty());
         let alone = self.window(pane.window).is_some_and(|w| w.tabs.iter().any(|tab| tab.tree.leaves() == [pane.id]));
         menu.item(self.item("Copy", Action::Copy).enabled(selected))
             .item(self.item("Paste", Action::Paste))
@@ -1923,6 +1952,10 @@ impl Program for Hotaru {
                     if (tab.snapshot.cols, tab.snapshot.rows) != (frame.cols, frame.rows) {
                         tab.selection = None;
                         tab.font_epoch = tab.font_epoch.wrapping_add(1);
+                    }
+                    // A reflow, reset or other screen ends the text the selection was on.
+                    if tab.selection.as_ref().is_some_and(|selection| selection.epoch != frame.position.epoch) {
+                        tab.selection = None;
                     }
                     search_changed = tab.snapshot.generation != frame.generation
                         || tab.snapshot.position.epoch != frame.position.epoch
@@ -2291,9 +2324,7 @@ impl Program for Hotaru {
                 self.send(id, Command::ResizePixels { cols, rows, width, height })
             }
             Msg::Scroll(id, lines) => {
-                if let Some(tab) = self.panes.iter_mut().find(|t| t.id == id) {
-                    tab.selection = None;
-                }
+                // The selection stays on its text as the text scrolls.
                 self.send(id, Command::Scroll(lines));
                 self.shape_pane(id, true);
             }
@@ -2332,6 +2363,34 @@ impl Program for Hotaru {
                         format: self.clipboard_format,
                         cancel: self.clipboard_cancel.clone(),
                     });
+                }
+            }
+            Msg::Captured(token, pane, snapshot) => {
+                if self.panes.iter().any(|candidate| candidate.id == pane) {
+                    if let Some((_, selection)) =
+                        self.clipboard_capture.take_if(|(wanted, _)| *wanted == token && token == self.clipboard_token)
+                        && let Some((start, end)) = selection.in_content(&snapshot)
+                        && let Some(worker) = &self.clipboard
+                    {
+                        worker.submit(Job::Copy {
+                            token,
+                            pane,
+                            source: CopySource::Selected { snapshot: snapshot.clone(), start, end },
+                            format: self.clipboard_format,
+                            cancel: self.clipboard_cancel.clone(),
+                        });
+                    }
+                    if let Some((_, selection)) =
+                        self.primary_capture.take_if(|(wanted, _)| *wanted == token && token == self.primary_token)
+                        && let Some((start, end)) = selection.in_content(&snapshot)
+                    {
+                        self.submit_primary(crate::selections::Job::Primary {
+                            token,
+                            pane,
+                            source: CopySource::Selected { snapshot, start, end },
+                            cancel: self.primary_cancel.clone(),
+                        });
+                    }
                 }
             }
             Msg::CopyReady(token, pane, prepared) => {
@@ -2608,8 +2667,8 @@ impl Program for Hotaru {
     fn menus(&self) -> MenuBar<Msg> {
         let front = self.front();
         let selected = front.is_some_and(|w| w.find_state.copy.is_some())
-            || self.active_pane().is_some_and(|t| t.selection.is_some_and(|s| !s.is_empty()));
-        let selection = self.active_pane().is_some_and(|t| t.selection.is_some_and(|s| !s.is_empty()));
+            || self.active_pane().is_some_and(|t| t.selection.as_ref().is_some_and(|s| !s.is_empty()));
+        let selection = self.active_pane().is_some_and(|t| t.selection.as_ref().is_some_and(|s| !s.is_empty()));
         let tab = self.active_tab();
         let split = tab.is_some_and(|tab| matches!(tab.tree, PaneTree::Split { .. }));
         let zoomed = tab.is_some_and(|tab| tab.zoomed);

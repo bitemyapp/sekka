@@ -1784,3 +1784,89 @@ fn closing_a_window_leaves_the_others_and_settings_reach_every_window() {
     h.send(Msg::NewTab(first));
     assert_eq!(tab_count(&h, first), 2);
 }
+
+/// Wait until the clipboard holds text that `done` accepts.
+fn clipboard_until(h: &mut Harness<Hotaru>, done: impl Fn(&str) -> bool) -> Option<String> {
+    let until = Instant::now() + Duration::from_secs(5);
+    while !h.platform.clipboard.as_deref().is_some_and(&done) && Instant::now() < until {
+        h.advance(Duration::from_millis(1));
+        h.settle(Duration::from_millis(10), |_| false);
+    }
+    h.platform.clipboard.clone()
+}
+
+#[test]
+fn a_selection_stays_on_its_text_as_output_scrolls_the_screen() {
+    use aizome_kit::Vec2;
+    use aizome_kit::sidestep_ui::PointerButton;
+    let mut h = Harness::new(Hotaru::preview());
+    let win = h.window();
+    let id = h.program().active_pane().unwrap().id;
+    let mut term = Terminal::new(80, 24, 100);
+    for i in 0..20 {
+        term.feed(format!("row {i:02}\r\n").as_bytes());
+    }
+    h.send(Msg::Frame(id, Arc::new(term.snapshot())));
+    settle_frame(&mut h);
+    let metrics = h.program().active_pane().unwrap().font_metrics().unwrap();
+    let origin = h.find_id(win, &format!("terminal-{id}")).unwrap().origin() + Vec2::new(10., 10.);
+    let at = |col: f64, row: f64| origin + Vec2::new(col * metrics.cell_width(), (row + 0.5) * metrics.cell_height());
+    h.press(win, at(0.0, 10.0), PointerButton::Left, 1);
+    h.move_to(win, at(6.0, 12.0));
+    h.release(win, at(6.0, 12.0), PointerButton::Left);
+    // Five more rows scroll the text up two screen rows.
+    for i in 20..25 {
+        term.feed(format!("row {i:02}\r\n").as_bytes());
+    }
+    h.send(Msg::Frame(id, Arc::new(term.snapshot())));
+    settle_frame(&mut h);
+    // A wheel scroll keeps the selection too.
+    h.scroll(win, at(3.0, 3.0), Vec2::new(0.0, -metrics.cell_height() * 2.0));
+    assert!(h.program().active_pane().unwrap().selection.is_some(), "scrolling keeps the selection");
+    h.send(Msg::Copy(win));
+    let copied = clipboard_until(&mut h, |text| text.starts_with("row"));
+    assert_eq!(copied.as_deref(), Some("row 10\nrow 11\nrow 12"), "the selection stays on the text it covered");
+}
+
+#[test]
+fn a_selection_drag_past_the_top_scrolls_and_copies_from_history() {
+    use aizome_kit::Vec2;
+    use aizome_kit::sidestep_ui::PointerButton;
+    let mut command = PtyCommand::new("/bin/sh");
+    command.args =
+        vec!["-c".into(), "i=0; while [ $i -lt 100 ]; do printf 'Line %03d\\n' \"$i\"; i=$((i + 1)); done".into()];
+    let mut h = Harness::new(keeping(command));
+    assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().ended));
+    settle_frame(&mut h);
+    let win = h.window();
+    let pane = h.program().active_pane().unwrap();
+    let metrics = pane.font_metrics().unwrap();
+    let top = pane.snapshot.position.first_row;
+    let rect = h.find_id(win, &format!("terminal-{}", pane.id)).unwrap();
+    assert!(top > 50, "the output scrolled most of the lines into history");
+    let origin = rect.origin() + Vec2::new(10., 10.);
+    let at = |col: f64, row: f64| origin + Vec2::new(col * metrics.cell_width(), (row + 0.5) * metrics.cell_height());
+    // The drag begins on the screen's third row and goes above the pane.
+    h.press(win, at(0.0, 2.0), PointerButton::Left, 1);
+    let above = rect.origin() + Vec2::new(10., -20.);
+    h.move_to(win, above);
+    let until = Instant::now() + Duration::from_secs(10);
+    while h.program().active_pane().unwrap().snapshot.position.first_row > 0 && Instant::now() < until {
+        h.advance(Duration::from_millis(50));
+        h.settle(Duration::from_millis(5), |_| false);
+    }
+    assert_eq!(h.program().active_pane().unwrap().snapshot.position.first_row, 0, "the drag scrolled to the top");
+    h.advance(Duration::from_millis(50));
+    h.settle(Duration::from_millis(20), |_| false);
+    h.release(win, above, PointerButton::Left);
+    h.send(Msg::Copy(win));
+    let last = format!("Line {:03}", top + 1);
+    let copied = clipboard_until(&mut h, |text| text.contains(&last)).unwrap_or_default();
+    assert!(copied.starts_with("Line 000\n"), "copied from the oldest line: {copied:.40}");
+    assert!(
+        copied.ends_with(&last),
+        "copied through the row where the drag began: {}",
+        &copied[copied.len().saturating_sub(40)..]
+    );
+    assert!(!copied.contains(&format!("Line {:03}", top + 2)));
+}

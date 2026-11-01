@@ -14,7 +14,9 @@ use aizome_kit::widget::{
     Widget,
 };
 use hotaru_core::input as vt;
-use hotaru_core::{Color as TerminalColor, Rgb, Snapshot, TerminalColors, attrs};
+use hotaru_core::{
+    Color as TerminalColor, ContentEpoch, ContentPosition, ContentSnapshot, Rgb, Snapshot, TerminalColors, attrs,
+};
 
 use crate::app::Msg;
 use crate::input;
@@ -22,6 +24,9 @@ use crate::settings::Bindings;
 
 const PAD: f64 = 10.0;
 const CURSOR_TIMER: u32 = 0;
+/// While a selection drag is above or below the text, it scrolls this often.
+const DRAG_TIMER: u32 = 1;
+const DRAG_INTERVAL: Duration = Duration::from_millis(50);
 const SCROLL_FRAME_BYTES: usize = 8 * 1024 * 1024;
 const CURSOR_INTERVAL: Duration = Duration::from_millis(600);
 
@@ -133,12 +138,102 @@ impl Selection {
     }
 }
 
+/// A point in the pane's text. `row` counts from the first row of the
+/// content epoch, so it names the same text while output and scrolling move it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct TextPoint {
+    pub row: u64,
+    pub col: usize,
+}
+
+impl TextPoint {
+    /// The text at `cell` of a snapshot at `position`.
+    pub fn at(cell: CellPoint, position: &ContentPosition) -> Self {
+        Self { row: position.origin + position.first_row as u64 + cell.row as u64, col: cell.col }
+    }
+}
+
+/// A selection held on the pane's text, not on the screen: new output and
+/// scrolling move it with the text it covers.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TextSelection {
+    pub epoch: ContentEpoch,
+    pub anchor: TextPoint,
+    pub end: TextPoint,
+}
+
+impl TextSelection {
+    /// `selection` as it shows on a snapshot at `position`.
+    pub fn on(selection: Selection, position: &ContentPosition) -> Self {
+        Self {
+            epoch: position.epoch.clone(),
+            anchor: TextPoint::at(selection.anchor, position),
+            end: TextPoint::at(selection.end, position),
+        }
+    }
+    pub fn is_empty(&self) -> bool {
+        self.anchor == self.end
+    }
+    fn ordered(&self) -> (TextPoint, TextPoint) {
+        if self.anchor <= self.end { (self.anchor, self.end) } else { (self.end, self.anchor) }
+    }
+    /// The first text row `snapshot` shows.
+    fn top(snapshot: &Snapshot) -> u64 {
+        snapshot.position.origin + snapshot.position.first_row as u64
+    }
+    /// The part of the selection that `snapshot` shows, in its screen rows.
+    /// None when none of it shows, or the snapshot shows other text.
+    pub fn visible(&self, snapshot: &Snapshot) -> Option<Selection> {
+        if self.epoch != snapshot.position.epoch || snapshot.rows == 0 {
+            return None;
+        }
+        let top = Self::top(snapshot);
+        let bottom = top + snapshot.rows as u64; // Exclusive.
+        let (start, end) = self.ordered();
+        let start = if start.row < top { TextPoint { row: top, col: 0 } } else { start };
+        let end = if end.row >= bottom { TextPoint { row: bottom - 1, col: snapshot.cols } } else { end };
+        if start >= end {
+            return None;
+        }
+        let cell = |point: TextPoint| CellPoint { row: (point.row - top) as usize, col: point.col };
+        Some(Selection { anchor: cell(start), end: cell(end) })
+    }
+    /// Whether `snapshot` shows all of the selection.
+    pub fn shown_whole(&self, snapshot: &Snapshot) -> bool {
+        let top = Self::top(snapshot);
+        let (start, end) = self.ordered();
+        self.epoch == snapshot.position.epoch && start.row >= top && end.row < top + snapshot.rows as u64
+    }
+    /// The selection's endpoints in a capture of all the content, where row
+    /// zero is the oldest row the capture keeps. None when the capture is
+    /// other text, or keeps none of the selection.
+    pub fn in_content(&self, content: &ContentSnapshot) -> Option<((usize, usize), (usize, usize))> {
+        if self.epoch != content.position.epoch || content.rows == 0 {
+            return None;
+        }
+        let origin = content.position.origin;
+        let last = origin + content.rows as u64 - 1;
+        let (start, end) = self.ordered();
+        if end.row < origin || start.row > last {
+            return None;
+        }
+        let start = if start.row < origin { (0, 0) } else { ((start.row - origin) as usize, start.col) };
+        let end =
+            if end.row > last { (content.rows - 1, content.cols) } else { ((end.row - origin) as usize, end.col) };
+        Some((start, end))
+    }
+    /// The selected text that `snapshot` shows.
+    pub fn text(&self, snapshot: &Snapshot) -> String {
+        self.visible(snapshot).map(|selection| selection.text(snapshot)).unwrap_or_default()
+    }
+}
+
 #[allow(clippy::too_many_arguments)] // The terminal's immutable view inputs travel together.
 pub fn terminal_view(
     id: u64,
     snapshot: Arc<Snapshot>,
     font: (f64, u16),
-    selection: Option<Selection>,
+    selection: Option<&TextSelection>,
     bindings: Arc<Bindings>,
     rendered: Option<Arc<crate::font::Frame>>,
     input_activity: u64,
@@ -146,6 +241,8 @@ pub fn terminal_view(
     menu: Menu<Msg>,
 ) -> Element<Msg> {
     let snapshot = rendered.as_ref().map_or(snapshot, |frame| frame.snapshot.clone());
+    let selected = selection.is_some_and(|selection| !selection.is_empty());
+    let selection = selection.and_then(|selection| selection.visible(&snapshot));
     let (font_size, font_weight) = font;
     Element::new(
         TerminalView {
@@ -154,6 +251,7 @@ pub fn terminal_view(
             font_size,
             font_weight,
             selection,
+            selected,
             bindings,
             rendered,
             input_activity,
@@ -169,7 +267,10 @@ struct TerminalView {
     snapshot: Arc<Snapshot>,
     font_size: f64,
     font_weight: u16,
+    /// The part of the pane's selection this snapshot shows.
     selection: Option<Selection>,
+    /// Whether the pane has a selection, shown or not.
+    selected: bool,
     bindings: Arc<Bindings>,
     rendered: Option<Arc<crate::font::Frame>>,
     input_activity: u64,
@@ -242,7 +343,10 @@ struct ViewState {
     scale_pending: bool,
     font_epoch: Option<u64>,
     font_metrics: Option<aizome_kit::sidestep_ui::grid::Metrics>,
-    drag: Option<CellPoint>,
+    /// Where a selection drag began, on the text.
+    drag: Option<TextPoint>,
+    /// Where the pointer is during a selection drag.
+    drag_pointer: Option<Point>,
     preedit: String,
     scroll_fraction: f64,
     resize_pending: bool,
@@ -518,6 +622,26 @@ impl TerminalView {
                 .min(self.snapshot.rows.saturating_sub(1)),
             col: (((pos.x - state.padding).max(0.0) / state.cell_width.max(1.0)).round() as usize)
                 .min(self.snapshot.cols),
+        }
+    }
+    /// A selection drag's end moves to `pos`, on the text this view shows.
+    fn drag_to(&self, cx: &mut EventCx, pos: Point) {
+        let st = cx.state::<ViewState>();
+        let Some(anchor) = st.drag else { return };
+        let end = TextPoint::at(self.point(pos, st), &self.snapshot.position);
+        let selection = TextSelection { epoch: self.snapshot.position.epoch.clone(), anchor, end };
+        emit(cx, Msg::Select(self.id, selection));
+    }
+    /// The lines a selection drag at `pos` scrolls: back into the history
+    /// above the text, forward below it, none where it can't go further.
+    fn drag_scroll(&self, state: &ViewState, pos: Point) -> i32 {
+        let position = &self.snapshot.position;
+        if pos.y < state.padding && position.first_row > 0 {
+            1
+        } else if pos.y >= state.size.height - state.padding && position.first_row < position.history_rows {
+            -1
+        } else {
+            0
         }
     }
     /// The cell under `pos`, where `point` is the edge between cells nearest it.
@@ -1024,6 +1148,17 @@ impl Widget for TerminalView {
     }
     fn event(&mut self, cx: &mut EventCx, event: &Event) -> Status {
         match event {
+            Event::Timer(DRAG_TIMER) => {
+                let st = cx.state::<ViewState>();
+                let Some(pos) = st.drag.and(st.drag_pointer) else { return Status::Handled };
+                // The end follows the pointer onto the text the last scroll showed.
+                self.drag_to(cx, pos);
+                let lines = self.drag_scroll(cx.state::<ViewState>(), pos);
+                if lines != 0 {
+                    emit(cx, Msg::Scroll(self.id, lines));
+                    cx.set_timer(DRAG_TIMER, DRAG_INTERVAL);
+                }
+            }
             Event::Timer(CURSOR_TIMER) => {
                 let focused = cx.has_keyboard_focus();
                 let state = cx.state::<ViewState>();
@@ -1141,6 +1276,7 @@ impl Widget for TerminalView {
                 {
                     let st = cx.state::<ViewState>();
                     st.drag = None;
+                    st.drag_pointer = None;
                     st.link_press = Some(crate::links::Press { link, position: (pos.x, pos.y), cancelled: false });
                     cx.request_focus();
                     cx.capture_pointer();
@@ -1164,7 +1300,8 @@ impl Widget for TerminalView {
                     _ => None,
                 };
                 if select && picked.is_none() {
-                    st.drag = Some(p);
+                    st.drag = Some(TextPoint::at(p, &self.snapshot.position));
+                    st.drag_pointer = Some(*pos);
                 }
                 cx.request_focus();
                 cx.capture_pointer();
@@ -1172,11 +1309,12 @@ impl Widget for TerminalView {
                 if !mods.shift() {
                     emit(cx, Msg::Mouse(self.id, pointer));
                 }
+                let position = &self.snapshot.position;
                 if let Some(selection) = picked {
-                    emit(cx, Msg::Select(self.id, selection));
+                    emit(cx, Msg::Select(self.id, TextSelection::on(selection, position)));
                     emit(cx, Msg::Selected(self.id));
                 } else if select {
-                    emit(cx, Msg::Select(self.id, Selection { anchor: p, end: p }));
+                    emit(cx, Msg::Select(self.id, TextSelection::on(Selection { anchor: p, end: p }, position)));
                 }
             }
             Event::PointerMove { pos, mods, .. } => {
@@ -1187,12 +1325,19 @@ impl Widget for TerminalView {
                     return Status::Handled;
                 }
                 let pointer = self.mouse_input(st, *pos, *mods, vt::MouseAction::Motion, st.buttons.last().copied());
-                let selection = st.drag.map(|anchor| Selection { anchor, end: self.point(*pos, st) });
+                let dragging = st.drag.is_some();
+                if dragging {
+                    st.drag_pointer = Some(*pos);
+                }
                 if !mods.shift() {
                     emit(cx, Msg::Mouse(self.id, pointer));
                 }
-                if let Some(selection) = selection {
-                    emit(cx, Msg::Select(self.id, selection));
+                if dragging {
+                    self.drag_to(cx, *pos);
+                    // Past the top or bottom of the text, the drag scrolls.
+                    if self.drag_scroll(cx.state::<ViewState>(), *pos) != 0 {
+                        cx.set_timer(DRAG_TIMER, DRAG_INTERVAL);
+                    }
                 }
             }
             Event::PointerUp { pos, button, mods, .. } => {
@@ -1211,7 +1356,9 @@ impl Widget for TerminalView {
                 let button = input::mouse_button(*button);
                 st.buttons.retain(|held| Some(*held) != button);
                 let dragged = st.drag.take().is_some();
+                st.drag_pointer = None;
                 let pointer = self.mouse_input(st, *pos, *mods, vt::MouseAction::Release, button);
+                cx.cancel_timer(DRAG_TIMER);
                 if !mods.shift() {
                     emit(cx, Msg::Mouse(self.id, pointer));
                 }
@@ -1235,6 +1382,10 @@ impl Widget for TerminalView {
                 let lines = st.scroll_fraction.trunc() as i32;
                 st.scroll_fraction -= f64::from(lines);
                 let pointer = self.mouse_input(st, *pos, *mods, vt::MouseAction::Press, None);
+                if lines != 0 && st.drag.is_some() {
+                    // A selection drag's end follows the text the wheel shows.
+                    cx.set_timer(DRAG_TIMER, DRAG_INTERVAL);
+                }
                 if lines != 0 {
                     if mods.shift() {
                         emit(cx, Msg::Scroll(self.id, lines));
@@ -1281,7 +1432,7 @@ impl Widget for TerminalView {
     }
     fn can(&self, _state: StateView, command: EditCommand) -> bool {
         match command {
-            EditCommand::Copy => self.selection.is_some_and(|s| !s.is_empty()),
+            EditCommand::Copy => self.selected,
             EditCommand::Paste | EditCommand::Find => true,
             _ => false,
         }
@@ -1907,5 +2058,55 @@ mod sprite_paint_tests {
             "old overhang must be erased even when prior retention was rejected"
         );
         assert_eq!(h.render_rgba(w, 1.0), initial);
+    }
+}
+
+#[cfg(test)]
+mod text_selection_tests {
+    use super::*;
+
+    fn lines(terminal: &mut hotaru_core::Terminal, range: std::ops::Range<usize>) {
+        for i in range {
+            terminal.feed(format!("row {i:02}\r\n").as_bytes());
+        }
+    }
+
+    #[test]
+    fn a_selection_stays_on_its_text_as_output_scrolls_it() {
+        let mut terminal = hotaru_core::Terminal::new(20, 10, 100);
+        lines(&mut terminal, 0..8);
+        let before = terminal.snapshot();
+        let shown = Selection { anchor: CellPoint { row: 2, col: 0 }, end: CellPoint { row: 4, col: 6 } };
+        let selection = TextSelection::on(shown, &before.position);
+        assert_eq!(selection.text(&before), "row 02\nrow 03\nrow 04");
+        // Four more rows scroll the text up three screen rows.
+        lines(&mut terminal, 8..12);
+        let after = terminal.snapshot();
+        let moved = selection.visible(&after).unwrap();
+        assert_eq!((moved.anchor.row, moved.end.row), (0, 1));
+        assert_eq!(moved.text(&after), "row 03\nrow 04", "the part still on the screen");
+        assert!(!selection.shown_whole(&after));
+        // All of it is in a capture of the content, history included.
+        let content = terminal.content_snapshot();
+        let (start, end) = selection.in_content(&content).unwrap();
+        assert_eq!((start, end), ((2, 0), (4, 6)));
+        // Scrolled back, the screen shows all of it again.
+        let back = terminal.snapshot_scrolled(1);
+        assert!(selection.shown_whole(&back));
+        assert_eq!(selection.text(&back), "row 02\nrow 03\nrow 04");
+    }
+
+    #[test]
+    fn a_selection_off_the_screen_or_on_other_text_shows_nothing() {
+        let mut terminal = hotaru_core::Terminal::new(20, 4, 100);
+        lines(&mut terminal, 0..2);
+        let before = terminal.snapshot();
+        let shown = Selection { anchor: CellPoint { row: 0, col: 0 }, end: CellPoint { row: 0, col: 6 } };
+        let selection = TextSelection::on(shown, &before.position);
+        lines(&mut terminal, 2..10);
+        assert!(selection.visible(&terminal.snapshot()).is_none());
+        terminal.reset();
+        assert!(selection.visible(&terminal.snapshot()).is_none());
+        assert!(selection.in_content(&terminal.content_snapshot()).is_none());
     }
 }
