@@ -305,7 +305,6 @@
         };
       };
       checks.${system} = {
-        pr-ci = import ./nix/pr-ci-test.nix { inherit pkgs; };
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit
             pkgs
@@ -344,6 +343,7 @@
           inherit pkgs;
           runner = self.packages.${system}.runner;
         };
+        pr-ci = import ./nix/pr-ci-test.nix { inherit pkgs; };
         session-environment = import ./nix/session-environment-vm-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
