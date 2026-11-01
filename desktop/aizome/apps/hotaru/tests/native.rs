@@ -1729,6 +1729,10 @@ fn control_and_shift_insert_copy_and_paste_the_clipboard() {
     assert!(pump(&mut h, |h| h.platform.primary.as_deref() == Some("world")));
     assert!(h.platform.clipboard.is_none());
     assert!(h.program().active_pane().unwrap().selection.is_some(), "the selection holds");
+    // Super reaches the pane on its own as ❖C begins, and keeps the selection.
+    use hotaru_core::input::{Key, KeyEvent, ModifierKey};
+    h.send(Msg::Key(id, Arc::new(KeyEvent::new(Key::Modifier(ModifierKey::SuperLeft)))));
+    assert!(h.program().active_pane().unwrap().selection.is_some(), "a modifier alone keeps the selection");
     h.named(win, NamedKey::Insert, Modifiers::CONTROL);
     assert!(pump(&mut h, |h| h.platform.clipboard.as_deref() == Some("world")));
     // ⇧Insert pastes the clipboard rather than the primary selection.
@@ -1737,6 +1741,10 @@ fn control_and_shift_insert_copy_and_paste_the_clipboard() {
     assert!(h.settle(Duration::from_secs(5), |app| {
         app.active_pane().unwrap().snapshot.plain_text().contains("from the clipboard")
     }));
+    // A key that types still lets the selection go.
+    assert!(h.program().active_pane().unwrap().selection.is_some());
+    h.send(Msg::Key(id, Arc::new(KeyEvent::new(Key::Character('x')))));
+    assert!(h.program().active_pane().unwrap().selection.is_none());
 }
 
 #[test]

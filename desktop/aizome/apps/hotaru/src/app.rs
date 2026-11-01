@@ -1962,16 +1962,18 @@ impl Program for Hotaru {
                 self.shape_pane(id, true);
             }
             Msg::Key(id, event) => {
+                // A modifier alone, held for ⌃⇧C or Tatami's ❖C, keeps the
+                // selection for the copy it begins.
+                let modifier = matches!(event.key, hotaru_core::input::Key::Modifier(_));
                 let mut ended = false;
                 if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
-                    pane.selection = None;
+                    if !modifier {
+                        pane.selection = None;
+                    }
                     ended = pane.ended;
                 }
                 // A kept pane whose program ended closes on any key.
-                if ended
-                    && event.action == hotaru_core::input::KeyAction::Press
-                    && !matches!(event.key, hotaru_core::input::Key::Modifier(_))
-                {
+                if ended && event.action == hotaru_core::input::KeyAction::Press && !modifier {
                     self.remove_pane(id, cx);
                     return;
                 }
