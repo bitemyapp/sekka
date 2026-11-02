@@ -12,12 +12,13 @@ first throughput run gave every terminal zero scrollback. Mitchell Hashimoto,
 Ghostty's author, pointed out that zero scrollback turns off much of
 libghostty-vt's fast path for output on the normal screen (where these
 corpora are written), and that Hotaru gets slower as its history grows, so
-those figures favoured Hotaru twice over. Hotaru's and Ghostty's throughput
-is now measured again with Ghostty's default history in both, against the
-Ghostty release Sekka installs (1.4.0) and Ghostty's main branch at
-`0b1729e`: see [Throughput with history](#throughput-with-history). The other
-four terminals' throughput is still the zero-scrollback run, so it can't be
-compared directly with those figures. Nothing else here depends on history:
+those figures favoured Hotaru twice over. Throughput is now measured again
+with history in every terminal: Ghostty with its defaults (50 MB), Hotaru
+with the same 50 MB, and the four terminals whose history is counted only in
+lines with 1,000,000 lines, Hotaru's row limit. Ghostty's main branch at
+`0b1729e` joins the release Sekka installs (1.4.0). See
+[Throughput with history](#throughput-with-history); the zero-scrollback
+figures are kept, labelled as such. Nothing else here depends on history:
 startup, typing latency, the paced streams (which scroll inside a scroll
 region, so no line reaches history) and idle never fill it.
 
@@ -46,39 +47,48 @@ Bold is the best in its row (the no-scrollback output rows aren't marked:
 see above). Medians; the sections below give the spread, the number of
 trials and the other measurements.
 
-With Ghostty's default history in both (50 MB), Hotaru against the Ghostty
-release and Ghostty's main branch (six rounds; [details](#throughput-with-history)):
+With history in every terminal (50 MB for Hotaru and Ghostty, 1,000,000
+lines for the rest; six rounds each; [details](#throughput-with-history)):
 
-| | Hotaru | Ghostty 1.4.0 | Ghostty main `0b1729e` |
-|---|---:|---:|---:|
-| ASCII output | 705 MiB/s | 720 MiB/s | **794 MiB/s** |
-| Styled output | 301 MiB/s | 271 MiB/s | **346 MiB/s** |
-| Unicode output | 165 MiB/s | 72 MiB/s | **251 MiB/s** |
-| Cursor/erase output | 126 MiB/s | 22 MiB/s | **181 MiB/s** |
-| Energy for 64 MiB of ASCII, over idle | **2.8 J** | 3.4 J | 2.9 J |
-| Memory (PSS) after the four floods | **94 MiB** | 109 MiB | 120 MiB |
+| | Hotaru | Ghostty 1.4.0 | Ghostty main `0b1729e` | gnome-terminal | Konsole | Console | foot |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| ASCII output, MiB/s | 705 | 720 | **794** | 230 | 3.3 | 232 | 146 |
+| Styled output, MiB/s | 301 | 271 | **346** | 156 | 0.7 | 163 | 334 |
+| Unicode output, MiB/s | 165 | 72 | **251** | 88 | 0.6 | 88 | 151 |
+| Cursor/erase output, MiB/s | 126 | 22 | **181** | 25 | 90 | 24 | 104 |
+| Energy for 64 MiB of ASCII, over idle | **2.8 J** | 3.4 J | 2.9 J | 4.3 J | 376 J | 4.2 J | 5.4 J |
+| Memory (PSS) after the four floods | 94 MiB | 109 MiB | 120 MiB | **38 MiB** | 942 MiB | 69 MiB | 1,523 MiB |
 
 ## What it shows
 
 - **Hotaru starts fastest.** Its first frame shows 50 ms after launch:
   foot's comes a frame later, gnome-terminal's, Konsole's and Console's
   at 130 ms, Ghostty's at 178 ms, with warm caches all round.
-- **With history, Ghostty's main branch reads every corpus fastest.** At
-  Ghostty's default 50 MB of history, Ghostty main reads 794, 346, 251 and
-  181 MiB/s (ASCII, styled, Unicode, cursor/erase) and Hotaru 705, 301, 165
-  and 126, so Hotaru reaches 66–89% of main's speed. Against the Ghostty
-  release Sekka installs (1.4.0), Hotaru is about even on ASCII (705
-  against 720) and ahead on the rest, most of all on cursor/erase output
-  (126 against 22 MiB/s) and Unicode (165 against 72), the cases Ghostty
-  has since been fixed for. Its energy for ASCII is about main's (2.8 J
-  against 2.9), and it holds the least memory after the floods (94 MiB,
-  against 109 and 120).
+- **With history, Ghostty's main branch reads every corpus fastest, and
+  Hotaru is next on Unicode and cursor/erase output.** Ghostty main reads
+  794, 346, 251 and 181 MiB/s (ASCII, styled, Unicode, cursor/erase);
+  Hotaru 705, 301, 165 and 126, which is 66–89% of main's speed. Hotaru
+  is third on ASCII, behind both Ghostty builds, and third on styled text,
+  behind Ghostty main and foot (334). Against the Ghostty release Sekka
+  installs (1.4.0), Hotaru is about even on ASCII and ahead on the rest,
+  most of all on cursor/erase output (126 against 22) and Unicode (165
+  against 72), the cases Ghostty has since been fixed for.
+- **History costs the others more.** gnome-terminal and Console read ASCII
+  at about 230 MiB/s with history (407 and 418 without), and cursor/erase
+  output at about 25 MiB/s (89 and 95 without), since clearing the screen
+  sends its lines to their history. foot reads ASCII at 146 MiB/s (441
+  without). Konsole, keeping 1,000,000 lines in its fixed-size history, is
+  busy on the CPU for the whole flood and reads ASCII at 3.3 MiB/s and
+  Unicode at 0.6 (74 and 93 without); its file-backed "unlimited" history
+  wasn't measured.
+- **Memory with full history follows how each keeps it.** The VTE
+  terminals keep history in compressed files on disk and hold 38 and 69 MiB;
+  Hotaru (94 MiB) and Ghostty (109 and 120) keep 50 MB in memory, partly
+  compressed; Konsole holds 942 MiB and foot 1,523 MiB for their 1,000,000
+  uncompressed lines.
 - **Zero scrollback flattered Hotaru.** Without history it read ASCII at
   1,047 MiB/s; with 50 MB it reads 705. Its other three corpora changed
   less (styled 348 → 301, Unicode 188 → 165, cursor/erase 127 → 126).
-  Without scrollback, foot read styled text fastest of the six and Ghostty,
-  gnome-terminal and Console read Unicode faster than Hotaru; those four
-  weren't measured again with history.
 - **Hotaru loses on typing latency, by about a frame.** foot,
   gnome-terminal and Console show a keystroke at the next frame (11.6–11.8
   ms at the median), Konsole about half a frame later (21.2 ms), Hotaru
@@ -158,7 +168,12 @@ left out, so both builds kept their defaults (`scrollback-limit-bytes =
 and Hotaru had `scrollback = 1000000`, the most rows it allows, with its
 50 MB byte limit as it is. Each counts its 50 MB in its own way: both limit
 the uncompressed history as it holds it, not the bytes written. The other
-settings are the matched ones.
+four count history only in lines, and had the same 1,000,000 lines as
+Hotaru's row limit, at least as much as 50 MB holds in Ghostty:
+gnome-terminal `scrollback-lines = 1000000`, Console `scrollback-lines =
+int64 1000000`, Konsole `HistoryMode=1` (fixed size) with `HistorySize =
+1000000`, foot `[scrollback] lines = 1000000`. The other settings are the
+matched ones.
 
 The matched cells are 11×24 except VTE's. Hotaru and Konsole draw 24-pixel
 rows at 14 points; Ghostty draws 25 and foot 26, and both have a supported
@@ -414,13 +429,15 @@ fraction of a second shows only a handful of frames meanwhile.
 
 ### Throughput with history
 
-The same floods, the same corpora and the same method, for Hotaru, Ghostty
-1.4.0 and Ghostty main, each with Ghostty's default 50 MB of history
-(Configuration, above): six alternating rounds, 18 trials, all accepted,
-measured between 16:41 and 16:49. The four corpora run one after another in
-the same terminal, ASCII first, and 64 MiB of ASCII fills 50 MB of history,
-so most of each flood runs with full history being trimmed as it goes.
-Medians (range).
+The same floods, the same corpora and the same method, every terminal with
+history (Configuration, above): Hotaru, Ghostty 1.4.0 and Ghostty main in
+six alternating rounds between 16:41 and 16:49 (18 trials), then
+gnome-terminal, Konsole, Console and foot in six alternating rounds between
+17:05 and 17:38 (24 trials), all accepted. The four corpora run one after
+another in the same terminal, ASCII first; 64 MiB of ASCII is about
+1.2 million lines, which fills 50 MB or 1,000,000 lines of history, so most
+of each flood runs with full history being trimmed as it goes. Medians
+(range).
 
 | | Hotaru | Ghostty 1.4.0 | Ghostty main |
 |---|---:|---:|---:|
@@ -443,9 +460,43 @@ Medians (range).
 | PSS after the floods, MiB | **94.5** | 109.2 | 120.4 |
 | RSS after the floods, MiB | **101.1** | 174.2 | 174.9 |
 
+The other four, with 1,000,000 lines:
+
+| | gnome-terminal | Konsole | Console | foot |
+|---|---:|---:|---:|---:|
+| **ascii** time, ms | 279 (249–292) | 19,496 (17,181–20,749) | **276** (257–298) | 439 (435–461) |
+| MiB/s | 230 | 3.3 | **232** | 146 |
+| energy over idle, J | 4.3 (4.0–4.9) | 376 (238–437) | **4.2** (3.2–5.9) | 5.4 (2.9–8.2) |
+| terminal CPU, ms | 281 | 19,495 | 291 | 455 |
+| **styled** time, ms | 411 (391–460) | 94,955 (86,258–102,992) | 393 (369–424) | **191** (184–195) |
+| MiB/s | 156 | 0.7 | 163 | **334** |
+| energy over idle, J | 6.2 (5.0–7.4) | 2,000 (1,675–2,488) | 6.2 (4.7–6.7) | **3.7** (2.0–4.6) |
+| terminal CPU, ms | 431 | 94,829 | 432 | 196 |
+| **unicode** time, ms | 728 (720–800) | 115,315 (101,460–121,776) | 725 (711–796) | **423** (406–429) |
+| MiB/s | 88 | 0.6 | 88 | **151** |
+| energy over idle, J | 11.1 (7.2–13.3) | 2,112 (1,616–2,353) | 10.0 (5.8–15.5) | **6.2** (4.8–8.3) |
+| terminal CPU, ms | 762 | 115,155 | 772 | 436 |
+| **cursor** time, ms | 2,538 (2,458–2,614) | 708 (702–728) | 2,620 (2,587–2,647) | **618** (603–634) |
+| MiB/s | 25 | 90 | 24 | **104** |
+| energy over idle, J | 30.7 (26.3–44.4) | 10.3 (5.9–12.9) | 27.0 (20.9–35.7) | **8.9** (7.3–12.5) |
+| terminal CPU, ms | 2,457 | 704 | 2,450 | 631 |
+| PSS after the floods, MiB | **38.2** | 942.5 | 69.4 | 1,522.9 |
+| RSS after the floods, MiB | **68.4** | 979.9 | 120.3 | 1,533.1 |
+
+Konsole's terminal CPU equals its flood time: with a fixed history of
+1,000,000 lines it is busy the whole while, and slower on each corpus as the
+history fills (its cursor/erase corpus, which doesn't add lines, is as fast
+as without history). Konsole's own default is 1,000 lines; its "unlimited"
+history, kept in a file, wasn't measured. VTE (gnome-terminal and Console)
+keeps history in compressed files on disk, which is why it holds so little
+memory with it; its cursor/erase throughput falls from about 90 to 25 MiB/s
+with history, because clearing the screen moves the screen's lines into
+history.
+
 (GPU is the terminal's and sway's together; Hotaru's is sway's composing.)
 With history, every terminal reads ASCII more slowly than without it:
-Hotaru 1,047 → 705 MiB/s, Ghostty 1.4.0 1,018 → 720. Ghostty 1.4.0 also
+Hotaru 1,047 → 705 MiB/s, Ghostty 1.4.0 1,018 → 720, gnome-terminal
+407 → 230, Console 418 → 232, foot 441 → 146, Konsole 74 → 3.3. Ghostty 1.4.0 also
 reads Unicode far more slowly with history (215 → 72 MiB/s); Ghostty main
 doesn't share that. Hotaru's other corpora change by at most 14%. These
 are whole terminals on screen: reading, parsing, keeping history and
@@ -636,6 +687,9 @@ CALIBRATION=$WORK/calibration-main APPS=ghostty-main GHOSTTY_MAIN=$PWD/ghostty-m
 SCROLLBACK=ghostty-default CALIBRATION=$WORK/calibration-history DATA=$WORK/data-history \
   APPS=hotaru,ghostty,ghostty-main GHOSTTY_MAIN=$PWD/ghostty-main/bin/ghostty \
   tests/performance/terminals/run.sh throughput 6 0 -a
+#   and the other four (their calibration added from $WORK/calibration):
+SCROLLBACK=ghostty-default CALIBRATION=$WORK/calibration-history DATA=$WORK/data-history \
+  APPS=gnome-terminal,konsole,kgx,foot tests/performance/terminals/run.sh throughput 6 0 -b
 tests/performance/terminals/run.sh energy 2 0 -a
 tests/performance/terminals/run.sh energy 1 2 -b
 tests/performance/terminals/run.sh idle-default 1 0 -a
@@ -687,9 +741,10 @@ cc -O2 -std=c11 -Wall -Wextra -Werror -I$WORK/observer tests/performance/termina
   calibration runs: each trial's result, power samples, frame and fixture
   logs, application and compositor logs, the tools as they ran, and the
   final capture of each terminal's first round.
-- the throughput run with history: `throughput-history.tar.xz` (its raw
-  trials), `summary-history.json` and `summary-history.md` (its tables),
-  `calibration-history.json` (the calibration it used) and
+- the throughput runs with history: `throughput-history-a.tar.xz` (Hotaru
+  and both Ghostty builds) and `throughput-history-b.tar.xz` (the other
+  four), `summary-history.json` and `summary-history.md` (both together),
+  `calibration-history.json` (the calibration they used) and
   `calibration-ghostty-main.tar.xz` (Ghostty main's calibration runs).
 
 132 trials ran, in four lock holds between 04:31 and 09:14 local time;

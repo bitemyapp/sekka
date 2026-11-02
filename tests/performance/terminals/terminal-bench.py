@@ -505,11 +505,20 @@ class Power:
 # harness configuration (IBM Plex Mono 14 pt, cursor blink off, zero
 # scrollback, opaque); `default` is the package's own defaults in an empty
 # home, as a person first meets it. `--scrollback ghostty-default` keeps the
-# matched configuration but gives Hotaru and Ghostty Ghostty's default
-# history: Ghostty's own defaults (50 MB, unlimited lines) and Hotaru's
-# 50 MB byte limit with its row limit at the most it allows (1,000,000). Zero
+# matched configuration but gives every terminal history: Ghostty its own
+# defaults (50 MB, unlimited lines), Hotaru its 50 MB byte limit with its row
+# limit at the most it allows (1,000,000), and the others, whose history is
+# counted in lines only, the same 1,000,000 lines (HISTORY_LINES). Zero
 # scrollback turns off much of libghostty-vt's fast path for output on the
 # primary screen, so throughput there should be measured with history.
+
+HISTORY_LINES = 1_000_000
+
+
+def history_lines(args):
+    """Lines of history in the matched configuration."""
+    return 0 if args.scrollback == "zero" else HISTORY_LINES
+
 
 class Adapter:
     gtk4 = False
@@ -534,7 +543,7 @@ class Hotaru(Adapter):
             return {}, [str(self.binary), "--", *child]
         # Hotaru's history keeps at most `scrollback` rows and 50 MB
         # (hotaru-core's DEFAULT_HISTORY_BYTES), whichever comes first.
-        rows = 0 if self.args.scrollback == "zero" else 1_000_000
+        rows = history_lines(self.args)
         text = (f'font_size = {self.args.font_size}\nscrollback = {rows}\ntheme = "night"\nshell_integration = false\n'
                 'cursor_blink = false\n')
         (runtime / "hotaru.toml").write_text(text)
@@ -570,7 +579,7 @@ class Foot(Adapter):
             return {}, [str(self.binary), "--", *child]
         # foot's line height from the font's rounded metrics is 26 px; its
         # supported override gives the 24 px rows Hotaru, Ghostty and Konsole draw.
-        text = (f"font=IBM Plex Mono:size={self.args.font_size:g}\nline-height=24px\n\n[scrollback]\nlines=0\n\n[cursor]\nblink=no\n\n"
+        text = (f"font=IBM Plex Mono:size={self.args.font_size:g}\nline-height=24px\n\n[scrollback]\nlines={history_lines(self.args)}\n\n[cursor]\nblink=no\n\n"
                 "[colors-dark]\nalpha=1.0\n")
         (runtime / "foot.ini").write_text(text)
         return {"foot.ini": text}, [str(self.binary), "--config", str(runtime / "foot.ini"), "--", *child]
@@ -584,7 +593,10 @@ class Konsole(Adapter):
             return {}, [str(self.binary), "-e", *child]
         profile = ("[General]\nName=Bench\nParent=FALLBACK/\n\n"
                    f"[Appearance]\nFont=IBM Plex Mono,{self.args.font_size:g},-1,5,400,0,0,0,0,0,0,0,0,0,0,1\n\n"
-                   "[Scrolling]\nHistoryMode=0\n\n[Terminal Features]\nBlinkingCursorEnabled=false\n")
+                   # HistoryMode 0 keeps none, 1 keeps HistorySize lines.
+                   + ("[Scrolling]\nHistoryMode=0\n\n" if self.args.scrollback == "zero"
+                      else f"[Scrolling]\nHistoryMode=1\nHistorySize={history_lines(self.args)}\n\n")
+                   + "[Terminal Features]\nBlinkingCursorEnabled=false\n")
         rc = "[Desktop Entry]\nDefaultProfile=Bench.profile\n"
         (runtime / "data/konsole").mkdir(parents=True, exist_ok=True)
         (runtime / "data/konsole/Bench.profile").write_text(profile)
@@ -610,7 +622,7 @@ class GnomeTerminal(Adapter):
             return None
         return (f"[org/gnome/terminal/legacy/profiles:/:{GNOME_TERMINAL_PROFILE}]\n"
                 f"font='IBM Plex Mono {self.args.font_size:g}'\nuse-system-font=false\ncursor-blink-mode='off'\n"
-                "scrollback-lines=0\nscrollback-unlimited=false\nuse-transparent-background=false\naudible-bell=false\n")
+                f"scrollback-lines={history_lines(self.args)}\nscrollback-unlimited=false\nuse-transparent-background=false\naudible-bell=false\n")
 
 
 class Kgx(Adapter):
@@ -626,7 +638,7 @@ class Kgx(Adapter):
             return None
         # Console has no blink setting of its own: VTE follows the desktop's.
         return (f"[org/gnome/Console]\ncustom-font='IBM Plex Mono {self.args.font_size:g}'\nuse-system-font=false\n"
-                "scrollback-lines=int64 0\nignore-scrollback-limit=false\ntransparency=false\naudible-bell=false\n\n"
+                f"scrollback-lines=int64 {history_lines(self.args)}\nignore-scrollback-limit=false\ntransparency=false\naudible-bell=false\n\n"
                 "[org/gnome/desktop/interface]\ncursor-blink=false\n")
 
 
@@ -1175,7 +1187,7 @@ def main():
     parser.add_argument("--throughput-repeat", type=int, default=8)
     parser.add_argument("--throughput-pre-seconds", type=float, default=4)
     parser.add_argument("--scrollback", choices=("zero", "ghostty-default"), default="zero",
-                        help="history in the matched configuration (Hotaru and Ghostty; the others keep zero)")
+                        help="history in the matched configuration (see the adapters' comment)")
     parser.add_argument("--cols", type=int, default=120); parser.add_argument("--rows", type=int, default=40)
     parser.add_argument("--font-size", type=float, default=14.0)
     parser.add_argument("--window-width", type=int, default=1400); parser.add_argument("--window-height", type=int, default=1080)

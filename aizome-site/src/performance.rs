@@ -386,47 +386,65 @@ fn terminals() -> String {
         other("Console", 11.6, "0.70 frames; p99 20.3 ms"),
         other("foot", 11.8, "0.71 frames; p99 20.1 ms"),
     ];
-    // Throughput with Ghostty's default 50 MB of history in both (six rounds).
+    // Throughput with history in every terminal: 50 MB for Hotaru and
+    // Ghostty, 1,000,000 lines for the rest (six rounds each).
     let ascii = [
         ours("Hotaru", 705.0, "64 MiB in 91 ms; 2.8 J over idle"),
         other("Ghostty 1.4.0", 720.0, "89 ms; 3.4 J"),
         other("Ghostty main", 794.0, "81 ms; 2.9 J; built from 0b1729e"),
+        other("gnome-terminal", 230.0, "279 ms; 4.3 J"),
+        other("Konsole", 3.3, "19.5 s; 376 J"),
+        other("Console", 232.0, "276 ms; 4.2 J"),
+        other("foot", 146.0, "439 ms; 5.4 J"),
     ];
     let styled = [
         ours("Hotaru", 301.0, "213 ms; 4.8 J over idle"),
         other("Ghostty 1.4.0", 271.0, "236 ms; 5.6 J"),
         other("Ghostty main", 346.0, "185 ms; 5.6 J"),
+        other("gnome-terminal", 156.0, "411 ms; 6.2 J"),
+        other("Konsole", 0.7, "95 s; 2,000 J"),
+        other("Console", 163.0, "393 ms; 6.2 J"),
+        other("foot", 334.0, "191 ms; 3.7 J"),
     ];
     let unicode = [
         ours("Hotaru", 165.0, "389 ms; 7.4 J over idle"),
         other("Ghostty 1.4.0", 72.0, "893 ms; 16.8 J"),
         other("Ghostty main", 251.0, "255 ms; 7.0 J"),
+        other("gnome-terminal", 88.0, "728 ms; 11.1 J"),
+        other("Konsole", 0.6, "115 s; 2,112 J"),
+        other("Console", 88.0, "725 ms; 10.0 J"),
+        other("foot", 151.0, "423 ms; 6.2 J"),
     ];
     let cursor = [
         ours("Hotaru", 126.0, "507 ms; 9.6 J over idle"),
         other("Ghostty 1.4.0", 22.0, "2,886 ms; 36.7 J"),
         other("Ghostty main", 181.0, "353 ms; 8.9 J"),
+        other("gnome-terminal", 25.0, "2,538 ms; 30.7 J"),
+        other("Konsole", 90.0, "708 ms; 10.3 J"),
+        other("Console", 24.0, "2,620 ms; 27.0 J"),
+        other("foot", 104.0, "618 ms; 8.9 J"),
     ];
     format!(
         r#"<p class="headline">Hotaru starts faster than any of them, but Ghostty's current code reads output faster, and Hotaru shows keystrokes a frame later than the quickest terminals.</p>
 <p>We compared Hotaru, Aizome's terminal, with Ghostty, GNOME's two terminals (gnome-terminal and Console), KDE's Konsole, and foot. Each one ran in its own headless sway session on the Radeon at 60 Hz, using the same font and size, a 120 × 40 grid and a cursor that doesn't blink. The program running inside each terminal draws numbered marker rows, and a frame only counts once the captured screen shows the complete update. Every trial started on an idle machine, with the terminals taking turns.</p>
 <div class="charts">{start}{key}</div>
 <p>Hotaru gets on screen one frame ahead of foot and 80–128 ms ahead of everything else. It does lose on typing latency, though. It shows each keystroke about a frame later than foot or the VTE-based terminals. Input reaches the program in every terminal within a third of a millisecond, so Hotaru's extra frame is spent between the program's response and the frame on screen. That fits with the toolkit waiting for the compositor's frame callbacks before it draws, but these tests don't prove it.</p>
-<p>For throughput, we first ran every terminal with no scrollback. Mitchell Hashimoto, Ghostty's author, pointed out that this switches off much of Ghostty's fast path for ordinary output, and that Hotaru slows down as its history fills up, so that run flattered Hotaru twice over. We measured Hotaru and Ghostty again with Ghostty's default 50 MB of history in both, against the Ghostty release Sekka ships (1.4.0) and Ghostty's main branch as of 2 November (<code>0b1729e</code>). The other four terminals weren't run again, so they aren't in these charts.</p>
+<p>For throughput, we first ran every terminal with no scrollback. Mitchell Hashimoto, Ghostty's author, pointed out that this switches off much of Ghostty's fast path for ordinary output, and that Hotaru slows down as its history fills up, so that run flattered Hotaru twice over. So we measured everything again with history turned on. Ghostty kept its default of 50 MB and Hotaru got the same 50 MB. The other four only let you set history in lines, so each got 1,000,000 lines, the same as Hotaru's row limit and at least as much as Ghostty's 50 MB holds. We included both the Ghostty release Sekka ships (1.4.0) and Ghostty's main branch as of 2 November (<code>0b1729e</code>).</p>
 <div class="charts">{ascii}{styled}{unicode}{cursor}</div>
-<p>With history, Ghostty's main branch is the fastest on all four kinds of output, and Hotaru manages 66–89% of its speed, falling furthest behind on Unicode. Against the 1.4.0 release, Hotaru is about even on plain text, a little ahead on styled text, and well ahead on Unicode and cursor-heavy output, both of which Ghostty has sped up since that release. Hotaru also holds the least memory once its history is full, 94 MiB against 109 MiB for Ghostty 1.4.0 and 120 MiB for main. History cost Hotaru the most on plain text, which it read at 1,047 MiB/s with no scrollback and 705 MiB/s with 50 MB.</p>
+<p>With history, Ghostty's main branch is the fastest on all four kinds of output, and Hotaru manages 66–89% of its speed. Hotaru comes next on Unicode and cursor-heavy output, and third on plain and styled text, behind the two Ghostty builds and behind main and foot respectively. Against the 1.4.0 release, Hotaru is about even on plain text, a little ahead on styled text, and well ahead on Unicode and cursor-heavy output, both of which Ghostty has sped up since that release. History hit the others harder. gnome-terminal and Console fell to about 230 MiB/s on plain text and 25 on cursor-heavy output, and foot to 146 on plain text. Konsole, which keeps its 1,000,000 lines in a fixed-size history, spent the whole flood busy on the CPU and managed 3 MiB/s or less on everything but cursor-heavy output.</p>
+<p>How much memory a full history takes depends on where each terminal keeps it. The VTE-based terminals write theirs to compressed files on disk and held 38 and 69 MiB. Hotaru (94 MiB) and Ghostty (109 and 120 MiB) keep their 50 MB in memory, partly compressed, and Konsole and foot held 942 MiB and 1.5 GiB for their million uncompressed lines. History cost Hotaru the most on plain text, which it read at 1,047 MiB/s with no scrollback and 705 MiB/s with history.</p>
 <p>Sitting idle with a steady cursor, Hotaru wakes once a second. foot, gnome-terminal and Konsole don't wake at all, while Ghostty wakes 28 times a second and keeps the GPU busy for 4.3 ms of every second even though nothing changes. With default settings, Hotaru's cursor blinks forever, whereas GNOME's terminals stop blinking after ten seconds. At startup Hotaru uses 47 MiB of memory, about the same as Console and two thirds of what Konsole uses, while foot needs just 7. Its CPU-drawn buffers also cost the compositor more. Scrolling a row at 60 Hz took sway 91 ms of CPU time per 120 updates with Hotaru, compared with 43 ms with Ghostty. {doc}</p>"#,
         start = chart("term-start", "Launch to first frame, ms (lower is better)", "ms", 1, &start,
             "Ten fresh launches each, with warm caches, timed until the first captured frame that shows the whole first screen."),
         key = chart("term-key", "Keystroke to screen, median, ms (lower is better)", "ms", 1, &key,
             "1,000 presses each. A virtual keyboard presses a key, the program responds by updating one cell, and the clock stops at the captured frame that shows the change."),
-        ascii = chart("term-ascii", "Plain text with 50 MB of history, MiB/s (higher is better)", "MiB/s", 0, &ascii,
-            "64 MiB of ASCII text written into the terminal as fast as it can read it, over six rounds. Energy is measured at the CPU socket, above idle."),
-        styled = chart("term-styled", "Styled text with 50 MB of history, MiB/s (higher is better)", "MiB/s", 0, &styled,
+        ascii = chart("term-ascii", "Plain text with history, MiB/s (higher is better)", "MiB/s", 1, &ascii,
+            "64 MiB of ASCII text written into the terminal as fast as it can read it, six rounds each. History is 50 MB for Hotaru and Ghostty and 1,000,000 lines for the others. Energy is measured at the CPU socket, above idle."),
+        styled = chart("term-styled", "Styled text with history, MiB/s (higher is better)", "MiB/s", 1, &styled,
             "64 MiB of coloured, bold and underlined log lines."),
-        unicode = chart("term-unicode", "Unicode text with 50 MB of history, MiB/s (higher is better)", "MiB/s", 0, &unicode,
+        unicode = chart("term-unicode", "Unicode text with history, MiB/s (higher is better)", "MiB/s", 1, &unicode,
             "64 MiB of CJK, accented letters and emoji."),
-        cursor = chart("term-cursor", "Cursor-heavy output with 50 MB of history, MiB/s (higher is better)", "MiB/s", 0, &cursor,
+        cursor = chart("term-cursor", "Cursor-heavy output with history, MiB/s (higher is better)", "MiB/s", 1, &cursor,
             "64 MiB of cursor movement, erasing and short writes, like what a full-screen program sends."),
         doc = doc("terminals.md", "Full results, the exact settings and how they were measured."),
     )

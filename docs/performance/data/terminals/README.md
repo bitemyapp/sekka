@@ -28,13 +28,15 @@ headless sway on the integrated Radeon).
   (not measurements: they ran beside other builds), without captures or
   caches.
 
-- `throughput-history.tar.xz`, `summary-history.json`, `summary-history.md`
-  — the throughput floods measured again for Hotaru, Ghostty 1.4.0 and
-  Ghostty main (`0b1729e`) with Ghostty's default 50 MB of history in each
-  (`--scrollback ghostty-default`): 18 trials, all accepted, summarised on
-  their own. `calibration-history.json` is the calibration that run used
-  (Hotaru's and Ghostty's from `calibration.json`, Ghostty main's from
-  `calibration-ghostty-main.tar.xz`).
+- `throughput-history-a.tar.xz`, `throughput-history-b.tar.xz`,
+  `summary-history.json`, `summary-history.md` — the throughput floods
+  measured again with history in every terminal (`--scrollback
+  ghostty-default`): Hotaru, Ghostty 1.4.0 and Ghostty main (`0b1729e`)
+  with 50 MB, then gnome-terminal, Konsole, Console and foot with
+  1,000,000 lines; 42 trials, all accepted, summarised together and apart
+  from the zero-scrollback run. `calibration-history.json` is the
+  calibration they used: the six terminals' from `calibration.json`,
+  Ghostty main's from `calibration-ghostty-main.tar.xz`.
 
 132 measured trials, all accepted, in the first run. Unpack with `tar xJf PHASE.tar.xz`;
 `tests/performance/terminals/terminal-summary.py DIR OUT` rebuilds
