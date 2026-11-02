@@ -7,9 +7,11 @@
 # Home button, and stops it, keeping where it was left. The controller
 # going and coming back keeps its player number. A page in the browser
 # also goes home by a keyboard's Home key (kept from the page by the
-# compositor) and by the pointer, through the bar along the top, and stays
-# on its site: a link or a script elsewhere leaves it where it was. The VM
-# renders in software, so the game's frames take the shared-memory path.
+# compositor) and by the pointer, through the bar along the top, stays on
+# its site (a link or a script elsewhere leaves it where it was), and takes
+# typing from Chanoma's keyboard. The PIN is pressed with the controller's
+# buttons. The VM renders in software, so the game's frames take the
+# shared-memory path.
 {
   pkgs,
   self,
@@ -41,14 +43,17 @@ let
   '';
   # A page for the controller to drive in the browser: it says in its
   # title what reached it. Its link and its O key go elsewhere (localhost
-  # isn't 127.0.0.1), its I key to its own site's other page.
+  # isn't 127.0.0.1), its I key to its own site's other page; its search
+  # box (along the top) says what's typed, and sends it as `?q=`.
   page = pkgs.writeTextDir "index.html" ''
     <!doctype html>
     <title>Chanoma test page</title>
     <style>
       body { margin: 0; background: #fff; } button { position: fixed; inset: 25%; font-size: 4em; }
       a { position: fixed; left: 0; bottom: 0; width: 20%; height: 15%; font-size: 2em; }
+      input { position: fixed; left: 25%; top: 6%; width: 50%; height: 10%; font-size: 2em; }
     </style>
+    <form action="/"><input id="q" name="q" placeholder="Search"></form>
     <button id="b">Press me</button>
     <a href="http://localhost:8000/elsewhere">Elsewhere</a>
     <script>
@@ -56,8 +61,12 @@ let
       // Told the browser is steered, a sign-in page would refuse it.
       if (navigator.webdriver) document.title += " (automated)";
       if (location.search == "?inside") document.title += " inside";
+      if (location.search.startsWith("?q=")) document.title += " searched " + location.search.slice(3);
+      const q = document.getElementById("q");
+      q.oninput = () => { document.title = "typed " + q.value; };
       document.getElementById("b").onclick = () => { document.title = "clicked"; };
       document.onkeydown = (e) => {
+        if (e.target == q) return;
         if (e.key == "o") location.href = "http://localhost:8000/elsewhere";
         else if (e.key == "i") location.href = "/?inside";
         else document.title = "key " + e.key;
@@ -94,7 +103,9 @@ let
             ui.write(e.EV_ABS, a, 32768)
         ui.syn()
         return ui
-    names = {"south": e.BTN_SOUTH, "east": e.BTN_EAST, "guide": e.BTN_MODE, "start": e.BTN_START}
+    # As Microsoft's controllers report them: X, the left button, is BTN_X.
+    names = {"south": e.BTN_SOUTH, "east": e.BTN_EAST, "guide": e.BTN_MODE, "start": e.BTN_START,
+             "x": e.BTN_X, "y": e.BTN_Y, "lb": e.BTN_TL, "rb": e.BTN_TR, "select": e.BTN_SELECT}
     def lean(ui, x, y):
         ui.write(e.EV_ABS, e.ABS_X, x)
         ui.write(e.EV_ABS, e.ABS_Y, y)

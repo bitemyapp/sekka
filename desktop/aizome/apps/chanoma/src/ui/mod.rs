@@ -15,6 +15,7 @@
 //! menu or a minute turning over the clock draws it all.
 
 pub mod home;
+pub mod keyboard;
 pub mod look;
 pub mod menu;
 pub mod picker;
@@ -153,6 +154,8 @@ pub enum Overlay {
     /// The bar the pointer brings down over a page, a game or a film:
     /// the way home for a mouse.
     Top(TopBar),
+    /// Chanoma's keyboard over a page.
+    Keyboard(keyboard::Keyboard),
 }
 
 /// A screen.
@@ -258,8 +261,13 @@ impl Scene {
         // A click beside a menu or the pad puts it away.
         let outside = |frame: Rect| (!frame.contains(d)).then_some(Target::Outside);
         match &self.overlay {
-            Some(Overlay::Pin(_)) => return pinpad::hit(d).map(Target::Key).or_else(|| outside(pinpad::frame())),
+            Some(Overlay::Pin(p)) => {
+                return pinpad::hit(d, p.done).map(Target::Key).or_else(|| outside(pinpad::frame()));
+            }
             Some(Overlay::Menu(m)) => return m.hit(d).map(Target::Item).or_else(|| outside(m.frame())),
+            Some(Overlay::Keyboard(k)) => {
+                return k.hit(d).map(Target::Key).or_else(|| outside(keyboard::Keyboard::frame()));
+            }
             Some(Overlay::Top(_)) => {
                 let top = fit.visible(Rect::from_origin_size(Point::ZERO, size)).y0;
                 if d.y < top + TOP_BAR_H {
@@ -316,16 +324,21 @@ impl Scene {
                 c.saved(|c| {
                     fit.apply(c);
                     match o {
-                        Overlay::Pin(p) => p.paint(c, theme, Focus { row: self.modal_focus, col: 0 }),
+                        Overlay::Pin(p) => p.paint(c, theme),
                         Overlay::Menu(m) => {
                             let (family, ok) =
                                 self.chrome.as_ref().map_or((Family::Generic, Button::South), |c| (c.family, c.ok));
                             m.paint(c, theme, Focus { row: self.modal_focus, col: 0 }, family, ok)
                         }
-                        Overlay::Toast(..) | Overlay::Bar(..) | Overlay::Top(_) => {}
+                        Overlay::Toast(..) | Overlay::Bar(..) | Overlay::Top(_) | Overlay::Keyboard(_) => {}
                     }
                 });
             }
+            // The page above stays as it is: what's typed shows there too.
+            Some(Overlay::Keyboard(k)) => c.saved(|c| {
+                fit.apply(c);
+                k.paint(c, theme);
+            }),
             Some(Overlay::Toast(t, note)) => c.saved(|c| {
                 fit.apply(c);
                 toast(c, theme, t, *note);

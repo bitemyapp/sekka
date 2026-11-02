@@ -12,6 +12,7 @@ use aizome_kit::{Cx, TimerHandle};
 use aizome_media::{AudioChoice, Cues, Event as FilmEvent, MediaInfo, Options, PlayState, Player, StreamKind, Track};
 
 use super::state::{Item, Languages, Pick, Subtitles};
+use super::typing::{Typing, Why};
 use super::{Chanoma, FILM, GAME, Input, Modal, Msg, Screen};
 use crate::browser::{self, Action, Browser};
 use crate::pad::{Button, Dir, Family};
@@ -36,6 +37,17 @@ pub struct Page {
     /// Its window shows.
     pub shown: bool,
     pub drive: Drive,
+    /// Chanoma's keyboard comes up for its text boxes.
+    pub keyboard: bool,
+    /// The keyboard, while it's up.
+    pub typing: Option<Typing>,
+    /// The text box that had the page's keyboard when last asked.
+    pub field: Option<crate::devtools::Field>,
+    /// Why the page is being asked what has its keyboard.
+    pub asked: Option<Why>,
+    /// Select and Start while held: whether the other went down too.
+    pub select: Option<bool>,
+    pub start: Option<bool>,
 }
 
 /// A film or episode playing.
@@ -235,7 +247,8 @@ impl Chanoma {
             return;
         }
         let agent = s.tv_agent.then_some(services::TV_AGENT);
-        self.open_page(s.id, s.name, s.url, Sites::of(s), agent, s.drive, Item::Service { id: id.to_owned() }, cx);
+        let item = Item::Service { id: id.to_owned() };
+        self.open_page(s.id, s.name, s.url, Sites::of(s), agent, s.drive, s.keyboard, item, cx);
     }
 
     pub fn open_site(&mut self, i: usize, cx: &mut Cx<Msg>) {
@@ -243,7 +256,8 @@ impl Chanoma {
         let profile =
             format!("site-{}", c.url.bytes().fold(0u32, |a, b| a.wrapping_mul(31).wrapping_add(u32::from(b))));
         let sites = Sites::new(&c.url, &[]);
-        self.open_page(&profile, &c.name, &c.url, sites, None, Drive::Pointer, Item::Site { url: c.url.clone() }, cx);
+        let item = Item::Site { url: c.url.clone() };
+        self.open_page(&profile, &c.name, &c.url, sites, None, Drive::Pointer, true, item, cx);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -255,6 +269,7 @@ impl Chanoma {
         sites: Sites,
         agent: Option<&str>,
         drive: Drive,
+        keyboard: bool,
         item: Item,
         cx: &mut Cx<Msg>,
     ) {
@@ -283,7 +298,18 @@ impl Chanoma {
             }
         }) {
             Ok(b) => {
-                self.page = Some(Page { name: name.to_owned(), browser: b, shown: false, drive });
+                self.page = Some(Page {
+                    name: name.to_owned(),
+                    browser: b,
+                    shown: false,
+                    drive,
+                    keyboard,
+                    typing: None,
+                    field: None,
+                    asked: None,
+                    select: None,
+                    start: None,
+                });
                 self.recent.touch(item);
                 self.recent.save(&self.config.dirs);
                 self.go(Screen::Watching, cx);
@@ -336,14 +362,41 @@ impl Chanoma {
                     );
                 }
             }
+            browser::Event::Focused(f) => self.page_focused(f, cx),
         }
     }
 
-    /// A button while a page shows: what it does there.
-    pub fn page_button(&mut self, b: Button, family: Family, pressed: bool) {
-        let Some(p) = &self.page else { return };
+    /// A button while a page shows: what it does there. Select and Start
+    /// count when they're let go alone (held together, they're Home).
+    pub fn page_button(&mut self, b: Button, family: Family, pressed: bool, cx: &mut Cx<Msg>) {
         let ok = self.ok_button(family);
         let back = self.back_button(family);
+        let Some(p) = &mut self.page else { return };
+        let alone = match b {
+            Button::Select | Button::Start => {
+                let (this, other) =
+                    if b == Button::Select { (&mut p.select, &mut p.start) } else { (&mut p.start, &mut p.select) };
+                if pressed {
+                    *this = Some(other.is_some());
+                    if other.is_some() {
+                        *other = Some(true);
+                    }
+                    false
+                } else {
+                    this.take() == Some(false)
+                }
+            }
+            _ => false,
+        };
+        if p.typing.is_some() {
+            return self.keyboard_button(b, family, pressed, alone, cx);
+        }
+        // A text box moved to with the shoulder buttons: choosing it brings
+        // the keyboard up, rather than pressing Return in it.
+        if p.keyboard && b == ok && pressed && !p.browser.bridge.pointing() && p.field.is_some() {
+            let field = p.field.clone();
+            return self.open_keyboard(false, field, cx);
+        }
         let action = if b == ok {
             Some(Action::Ok)
         } else if b == back {
@@ -354,7 +407,9 @@ impl Chanoma {
                 Button::Down => Some(Action::Down),
                 Button::Left => Some(Action::Left),
                 Button::Right => Some(Action::Right),
-                Button::Start | Button::West => Some(Action::PlayPause),
+                Button::West => Some(Action::PlayPause),
+                Button::Start if alone => Some(Action::PlayPause),
+                Button::Select if alone && p.keyboard => return self.open_keyboard(true, None, cx),
                 Button::North => Some(Action::FullScreen),
                 Button::R1 => Some(Action::NextControl),
                 Button::L1 => Some(Action::PreviousControl),
@@ -362,7 +417,13 @@ impl Chanoma {
             }
         };
         if let Some(a) = action {
-            p.browser.bridge.act(a, pressed);
+            // Start alone is known as it's let go: it presses then.
+            p.browser.bridge.act(a, pressed || alone);
+        }
+        if b == ok && !pressed {
+            self.ask_page_soon(Why::Chose(Instant::now()), cx);
+        } else if matches!(b, Button::L1 | Button::R1) && pressed {
+            self.ask_page_soon(Why::Moved, cx);
         }
     }
 

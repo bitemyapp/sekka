@@ -3,7 +3,7 @@
 //! The PIN is kept as a salted PBKDF2-HMAC-SHA-256 hash. Wrong PINs cost
 //! time: three are free, then each locks the pad for longer (half a
 //! minute, doubling, up to a quarter of an hour), and the count survives
-//! restarts. A four-digit PIN can't resist someone who can read the
+//! restarts. A four-press PIN can't resist someone who can read the
 //! settings file and run code; it keeps out kids with a controller, which
 //! is what it's for. On a television set up for kids there is no
 //! terminal to run code from.
@@ -56,7 +56,8 @@ impl PinHash {
     }
 }
 
-/// Whether `pin` is one a grown-up may choose: four to eight digits.
+/// Whether `pin` is one a grown-up may choose: four to eight presses,
+/// kept as the digits of their buttons' places (`ui::pinpad::BUTTONS`).
 pub fn valid_pin(pin: &str) -> bool {
     (4..=8).contains(&pin.len()) && pin.bytes().all(|b| b.is_ascii_digit())
 }
@@ -214,8 +215,8 @@ pub struct CustomService {
 #[serde(default)]
 pub struct Settings {
     pub pin: Option<PinHash>,
-    /// How many digits the PIN has, so the pad checks it once that many
-    /// are typed (a four-digit PIN keeps no secret in its length).
+    /// How many presses the PIN has, so the pad checks it once that many
+    /// are pressed (a four-press PIN keeps no secret in its length).
     pub pin_length: Option<u8>,
     /// The services kids see, by id, in order.
     pub services: Vec<String>,

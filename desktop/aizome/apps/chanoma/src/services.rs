@@ -39,6 +39,9 @@ pub struct Service {
     pub drive: Drive,
     /// Ask for its television interface (a TV's user agent).
     pub tv_agent: bool,
+    /// Chanoma's keyboard comes up for its text boxes. A television
+    /// interface has its own, which the arrows work.
+    pub keyboard: bool,
 }
 
 /// A browser on a television, as YouTube's TV interface recognises one.
@@ -58,6 +61,7 @@ const fn service(id: &'static str, name: &'static str, url: &'static str, color:
         account: true,
         drive: Drive::Pointer,
         tv_agent: false,
+        keyboard: true,
     }
 }
 
@@ -81,6 +85,7 @@ pub const CATALOG: &[Service] = &[
         account: false,
         drive: Drive::Tv,
         tv_agent: true,
+        keyboard: false,
         sites: &["accounts.google.com"],
         ..service("youtube", "YouTube", "https://www.youtube.com/tv", 0x202020, 0xffffff)
     },
@@ -199,6 +204,9 @@ mod tests {
         assert!(CATALOG.iter().all(|s| s.url.starts_with("https://")));
         for s in CATALOG {
             assert!(Sites::of(s).allows(s.url), "{}", s.id);
+            // Chanoma's keyboard where nothing else types: a television
+            // interface has its own.
+            assert_eq!(s.keyboard, s.drive == Drive::Pointer, "{}", s.id);
         }
     }
 

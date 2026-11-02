@@ -17,10 +17,13 @@ use aizome_chanoma::app::play::FilmItem;
 use aizome_chanoma::app::state::Subtitles as StateSubtitles;
 use aizome_chanoma::app::{Input, MenuKind, Modal, Screen};
 use aizome_chanoma::clock::ManualClock;
+use aizome_chanoma::devtools::{Field, Focused};
 use aizome_chanoma::pad::{Button, Dir, Family, PadEvent, PadInfo};
 use aizome_chanoma::retro::ffi::*;
 use aizome_chanoma::rules::{PinHash, Settings};
 use aizome_chanoma::store::Dirs;
+use aizome_chanoma::ui::keyboard::{Key, Shift};
+use aizome_chanoma::ui::pinpad::BUTTONS;
 use aizome_chanoma::{Chanoma, Config, Msg};
 use aizome_kit::layout::Point;
 use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
@@ -300,29 +303,25 @@ fn press(h: &mut Harness<Chanoma>, b: Button) {
     }
 }
 
-/// Move the PIN pad's focus to key `target` with the arrows.
-fn pad_to(h: &mut Harness<Chanoma>, target: usize) {
-    for _ in 0..8 {
-        let f = h.program().modal_focus;
-        let dir = if f / 3 > target / 3 {
-            Dir::Up
-        } else if f / 3 < target / 3 {
-            Dir::Down
-        } else if f % 3 > target % 3 {
-            Dir::Left
-        } else if f % 3 < target % 3 {
-            Dir::Right
-        } else {
-            return;
-        };
-        input(h, Input::Dir(dir));
+fn press_on(h: &mut Harness<Chanoma>, id: u32, b: Button) {
+    for pressed in [true, false] {
+        h.send(Msg::Pad(PadEvent::Button { id, slot: id as usize - 1, button: b, pressed }));
     }
-    panic!("couldn't reach key {target}");
 }
 
+/// Press a PIN on the controller: each digit is the legend's button in
+/// that place (1 is Up).
 fn type_pin(h: &mut Harness<Chanoma>, pin: &str) {
     for d in pin.bytes() {
-        input(h, Input::Digit(d - b'0'));
+        press(h, BUTTONS[usize::from(d - b'1')]);
+    }
+}
+
+/// The presses typed on the PIN pad so far.
+fn typed(h: &Harness<Chanoma>) -> usize {
+    match &h.program().modal {
+        Some(Modal::Pin { pin, .. }) => pin.typed.len(),
+        _ => panic!("the pad isn't there"),
     }
 }
 
@@ -369,21 +368,34 @@ fn the_first_setup_chooses_a_pin_then_hands_over_to_the_kids() {
     shot(&mut h, "01-welcome");
     input(&mut h, Input::Ok);
     assert!(matches!(h.program().modal, Some(Modal::Pin { .. })));
+    // Five presses of the legend's buttons, a slip taken back with Delete
+    // (B), then Done (A).
+    type_pin(&mut h, "1357");
+    press(&mut h, Button::Up);
+    assert_eq!(typed(&h), 5);
+    press(&mut h, Button::East);
+    assert_eq!(typed(&h), 4);
     shot(&mut h, "02-choose-pin");
-    type_pin(&mut h, "13579");
-    input(&mut h, Input::Ok);
-    // The controller alone: the arrows to each key, then OK. Another PIN
-    // than the first: they don't match.
-    for key in [0, 2, 4, 6, 7, 11] {
-        pad_to(&mut h, key);
-        input(&mut h, Input::Ok);
+    // The stick, a trigger and Start aren't a PIN's: nothing's typed.
+    h.send(Msg::Pad(PadEvent::Nav { id: 1, slot: 0, dir: Dir::Left, repeat: false }));
+    for b in [Button::L2, Button::Start, Button::Select] {
+        press(&mut h, b);
     }
+    assert_eq!(typed(&h), 4);
+    type_pin(&mut h, "2");
+    press(&mut h, Button::South);
+    // Again on the keyboard (the arrows, Page Up and Down, Tab, Space),
+    // but another PIN: they don't match.
+    for i in [Input::Dir(Dir::Up), Input::Prev, Input::Next, Input::Alt, Input::Space] {
+        input(&mut h, i);
+    }
+    input(&mut h, Input::Ok);
     let Some(Modal::Pin { pin, .. }) = &h.program().modal else { panic!("the pad went") };
     assert_eq!(pin.error.as_deref(), Some("They didn't match. Try again"));
-    type_pin(&mut h, "13579");
-    input(&mut h, Input::Ok);
-    type_pin(&mut h, "13579");
-    input(&mut h, Input::Ok);
+    type_pin(&mut h, "13572");
+    press(&mut h, Button::South);
+    type_pin(&mut h, "13572");
+    press(&mut h, Button::South);
     until(&mut h, |a| a.screen == Screen::GrownUps);
     assert!(h.program().is_grownup());
     assert_eq!(h.program().settings.pin_length, Some(5));
@@ -400,7 +412,7 @@ fn the_first_setup_chooses_a_pin_then_hands_over_to_the_kids() {
     assert_eq!(h.program().screen, Screen::Home);
     assert!(!h.program().is_grownup());
     let saved: Settings = aizome_chanoma::store::read(&dirs.settings());
-    assert!(saved.setup_done && saved.pin.as_ref().is_some_and(|p| p.verify("13579")));
+    assert!(saved.setup_done && saved.pin.as_ref().is_some_and(|p| p.verify("13572")));
 }
 
 #[test]
@@ -421,7 +433,7 @@ fn home_shows_what_kids_may_have_and_grown_ups_see_the_rest() {
     input(&mut h, Input::Dir(Dir::Down));
     input(&mut h, Input::Ok);
     assert!(matches!(h.program().modal, Some(Modal::Pin { .. })));
-    shot(&mut h, "05-pin");
+    shot(&mut h, "05-pin-keyboard");
     type_pin(&mut h, PIN);
     until(&mut h, |a| a.is_grownup());
     assert!(h.program().modal.is_none());
@@ -429,6 +441,45 @@ fn home_shows_what_kids_may_have_and_grown_ups_see_the_rest() {
     assert!(shelves[0].tiles.len() > 5, "every service shows to a grown-up");
     assert!(shelves[0].tiles.iter().any(|t| t.sub == "Grown-ups only"));
     shot(&mut h, "06-home-grownup");
+}
+
+#[test]
+fn a_pin_is_the_same_presses_on_any_controller() {
+    // The PIN was made on the Xbox controller (Down, Right, RB, X); a
+    // Nintendo one, its yes and no the other way round, presses it too.
+    let (dirs, cores) = household("pin-pads", |_| {});
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    let switch = PadInfo {
+        id: 2,
+        slot: 1,
+        name: "Nintendo Switch Pro Controller".into(),
+        family: Family::Nintendo,
+        bluetooth: true,
+        guid: String::new(),
+        battery: None,
+        source: aizome_chanoma::pad::mapping::Source::Database,
+        rumble: false,
+    };
+    h.send(Msg::Pad(PadEvent::Connected(switch)));
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    // A slip: B, the bottom button, is no on a Nintendo controller, so it
+    // takes the press back (A, the right one, would be Done).
+    press_on(&mut h, 2, Button::Down);
+    press_on(&mut h, 2, Button::Up);
+    press_on(&mut h, 2, Button::South);
+    assert_eq!(typed(&h), 1);
+    assert_eq!(h.program().family, Family::Nintendo, "the legend shows the controller in hand");
+    shot(&mut h, "05-pin-nintendo");
+    for b in [Button::Right, Button::R1] {
+        press_on(&mut h, 2, b);
+    }
+    // The Xbox controller's X is where the Nintendo one's Y is: the last.
+    press_on(&mut h, 1, Button::West);
+    until(&mut h, |a| a.is_grownup());
+    assert!(h.program().modal.is_none());
 }
 
 #[test]
@@ -441,13 +492,13 @@ fn wrong_pins_wait_longer_each_time() {
     input(&mut h, Input::Dir(Dir::Down));
     input(&mut h, Input::Ok);
     for _ in 0..3 {
-        type_pin(&mut h, "0000");
+        type_pin(&mut h, "1111");
         until(&mut h, |a| matches!(&a.modal, Some(Modal::Pin { pin, .. }) if !pin.checking));
     }
     let now = h.program().now_secs();
     assert_eq!(h.program().lockout.wait(now), Some(30));
     shot(&mut h, "07-pin-locked");
-    // While it waits, digits do nothing.
+    // While it waits, presses do nothing.
     type_pin(&mut h, PIN);
     assert!(!h.program().is_grownup());
     // The wait survives a restart.
@@ -697,6 +748,122 @@ fn a_page_always_has_a_way_home_by_keyboard_and_mouse() {
     h.send(Msg::Browser(aizome_chanoma::browser::Event::Unkept));
     assert!(h.program().page.is_none());
     assert!(matches!(&h.program().screen, Screen::Problem(t, _) if t == "PBS KIDS Video didn't open"));
+}
+
+fn hold(h: &mut Harness<Chanoma>, b: Button, pressed: bool) {
+    h.send(Msg::Pad(PadEvent::Button { id: 1, slot: 0, button: b, pressed }));
+}
+
+fn typing(h: &Harness<Chanoma>) -> Option<&aizome_chanoma::app::typing::Typing> {
+    h.program().page.as_ref().and_then(|p| p.typing.as_ref())
+}
+
+fn focused(h: &mut Harness<Chanoma>, f: Focused) {
+    h.send(Msg::Browser(aizome_chanoma::browser::Event::Focused(f)));
+}
+
+fn search_box(text: &str) -> Focused {
+    Focused::Field(Field {
+        label: "Search".into(),
+        text: text.into(),
+        length: text.chars().count(),
+        caret: text.chars().count(),
+        secret: false,
+    })
+}
+
+#[test]
+fn a_box_chosen_on_a_page_brings_chanomas_keyboard_but_not_on_youtube() {
+    let browser = std::env::temp_dir().join(format!("chanoma-test-typing-{}", std::process::id())).join("browser");
+    let (dirs, cores) = household("typing", |s| {
+        s.services = vec!["pbs-kids".into(), "youtube".into()];
+        s.browser = Some(browser.display().to_string());
+    });
+    std::fs::write(&browser, "#!/bin/sh\nexec sleep 60\n").unwrap();
+    std::fs::set_permissions(&browser, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    input(&mut h, Input::Ok);
+    h.send(Msg::Browser(aizome_chanoma::browser::Event::Shown(7)));
+    assert!(h.program().page.as_ref().is_some_and(|p| p.keyboard));
+
+    // A click (A) on the page lands on a search box, the page says: the
+    // keyboard comes up, the sticks Chanoma's.
+    press(&mut h, Button::South);
+    focused(&mut h, search_box(""));
+    assert!(typing(&h).is_some(), "the keyboard over the page");
+    let hud = h.program().hud.expect("the overlay");
+    h.resize(hud, Size::new(1920.0, 1080.0));
+    assert!(!h.program().hud_menu, "the page keeps the keyboard's typing");
+    // The arrows (or the stick) between the keys; LT for capitals.
+    h.send(Msg::Pad(PadEvent::Nav { id: 1, slot: 0, dir: Dir::Right, repeat: false }));
+    assert_eq!(typing(&h).unwrap().keys.key(), Key::Char('w'));
+    press(&mut h, Button::L2);
+    assert_eq!(typing(&h).unwrap().keys.shift, Shift::Once);
+    press(&mut h, Button::South);
+    assert_eq!(typing(&h).unwrap().keys.shift, Shift::Off, "a capital, then small letters");
+    focused(&mut h, search_box("W"));
+    assert_eq!(typing(&h).unwrap().keys.field.as_ref().map(|f| f.text.as_str()), Some("W"));
+    shot_of(&mut h, hud, "13-page-keyboard");
+    // A key clicked with a mouse types too.
+    let k = typing(&h).unwrap().keys.clone();
+    h.click(hud, k.rect(2, 0).center());
+    assert_eq!(typing(&h).unwrap().keys.key(), Key::Char('a'));
+    // B puts it away.
+    press(&mut h, Button::East);
+    assert!(typing(&h).is_none());
+
+    // Select (alone) brings it up by hand; with no box yet it stays, till
+    // a box has had the keyboard and lets it go (the search sent).
+    press(&mut h, Button::Select);
+    assert!(typing(&h).is_some_and(|t| t.by_hand));
+    focused(&mut h, Focused::Elsewhere);
+    assert!(typing(&h).is_some());
+    focused(&mut h, search_box("cats"));
+    focused(&mut h, Focused::Elsewhere);
+    assert!(typing(&h).is_none(), "the box let it go");
+    // Select and Start held together are Home: neither the keyboard nor
+    // Enter.
+    hold(&mut h, Button::Select, true);
+    hold(&mut h, Button::Start, true);
+    hold(&mut h, Button::Start, false);
+    hold(&mut h, Button::Select, false);
+    assert!(typing(&h).is_none());
+    // Start alone over the keyboard is Enter, and it goes.
+    press(&mut h, Button::Select);
+    press(&mut h, Button::Start);
+    assert!(typing(&h).is_none(), "Enter sends it");
+
+    // Moved to a box with RB, as a keyboard's Tab: A brings the keyboard
+    // rather than Return.
+    press(&mut h, Button::R1);
+    focused(&mut h, search_box(""));
+    assert!(typing(&h).is_none());
+    press(&mut h, Button::South);
+    assert!(typing(&h).is_some(), "A on the box moved to");
+    // Home: the page's menu, the keyboard put away.
+    press(&mut h, Button::Guide);
+    assert!(matches!(h.program().modal, Some(Modal::Menu { kind: MenuKind::Page, .. })));
+    assert!(typing(&h).is_none());
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::Home);
+
+    // YouTube's television interface has a keyboard of its own: Chanoma's
+    // doesn't come.
+    let shelves = h.program().home_view().shelves;
+    let (row, col) = shelves
+        .iter()
+        .enumerate()
+        .find_map(|(r, s)| s.tiles.iter().position(|t| t.label == "YouTube").map(|c| (r, c)))
+        .expect("YouTube on Home");
+    h.send(Msg::Click(aizome_chanoma::ui::Target::Tile(row, col)));
+    assert_eq!(h.program().page.as_ref().map(|p| p.name.as_str()), Some("YouTube"));
+    h.send(Msg::Browser(aizome_chanoma::browser::Event::Shown(8)));
+    press(&mut h, Button::South);
+    focused(&mut h, search_box(""));
+    press(&mut h, Button::Select);
+    assert!(typing(&h).is_none());
 }
 
 #[test]

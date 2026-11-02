@@ -19,6 +19,7 @@ pub mod play;
 pub mod rows;
 pub mod state;
 pub mod time;
+pub mod typing;
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -84,8 +85,10 @@ pub enum Input {
     /// The shoulder buttons.
     Prev,
     Next,
-    Digit(u8),
+    /// Backspace: Back, but on the PIN pad.
     Erase,
+    /// The space bar: OK, but on the PIN pad (the left face button).
+    Space,
     /// The top face button (Y on an Xbox controller, △, Tab): a screen's
     /// other action (using the folder showing).
     Alt,
@@ -130,6 +133,8 @@ pub enum Msg {
     SiteAdd,
     SiteCancel,
     Outputs,
+    /// Ask the page what has its keyboard (for Chanoma's).
+    AskPage,
     /// Another launch: come forward.
     Activate,
     Quit,
@@ -351,6 +356,8 @@ pub struct Chanoma {
     pub instance: Option<std::os::unix::net::UnixListener>,
     /// The stage id the keyboard was last given to.
     pub stage_asked: &'static str,
+    /// Asks the page what has its keyboard while Chanoma's is up.
+    pub keyboard_watch: Option<aizome_kit::TimerHandle>,
 }
 
 impl Chanoma {
@@ -420,6 +427,7 @@ impl Chanoma {
             site: None,
             instance: None,
             stage_asked: "",
+            keyboard_watch: None,
             config,
         }
     }
@@ -492,6 +500,7 @@ impl Chanoma {
 
     pub fn lock(&mut self, cx: &mut Cx<Msg>) {
         self.grownup = None;
+        log::info!("chanoma: kids' mode");
         self.toast_note(ui::Note::Kids, "Kids' mode", cx);
         if matches!(self.screen, Screen::GrownUps | Screen::Pairing | Screen::SetUpPad | Screen::Folders) {
             self.picker = None;
@@ -503,6 +512,7 @@ impl Chanoma {
 
     pub fn unlock(&mut self, cx: &mut Cx<Msg>) {
         self.grownup = Some(Instant::now());
+        log::info!("chanoma: grown-up mode");
         self.toast_note(ui::Note::GrownUp, "Grown-up mode", cx);
         let _ = cx;
     }
@@ -558,7 +568,8 @@ impl Chanoma {
             }
             _ => {}
         }
-        let wanted = page && (menu || bar || self.toast.is_some());
+        let typing = self.is_typing();
+        let wanted = page && (menu || bar || typing || self.toast.is_some());
         match (wanted, self.hud) {
             (true, None) => {
                 let mut opts = LayerOptions::new(Layer::Overlay, "chanoma");
@@ -579,7 +590,7 @@ impl Chanoma {
         }
         if let Some(w) = self.hud {
             // A note alone lets the pointer through to the page.
-            cx.set_input_region(w, if menu || bar { None } else { Some(Vec::new()) });
+            cx.set_input_region(w, if menu || bar || typing { None } else { Some(Vec::new()) });
             // The menu takes the keys from the page while it shows, so a
             // keyboard can answer it.
             if menu != self.hud_menu {
@@ -689,8 +700,15 @@ impl Chanoma {
                     return;
                 }
                 self.family = self.family_of(id);
+                // A PIN's arrows are the direction pad's presses, once
+                // each: not the stick, nor a press held.
+                if matches!(self.modal, Some(Modal::Pin { .. })) {
+                    return;
+                }
                 match self.screen {
-                    // The game and the page take the arrows themselves.
+                    // The game and the page take the arrows themselves, but
+                    // for Chanoma's keyboard over the page.
+                    Screen::Watching if self.modal.is_none() && self.is_typing() => self.keyboard_nav(dir),
                     Screen::Playing | Screen::Watching | Screen::Film if self.modal.is_none() => {
                         if self.screen == Screen::Film {
                             self.input(Input::Dir(dir), cx);
@@ -706,11 +724,14 @@ impl Chanoma {
                 let family = self.family_of(id);
                 self.family = family;
                 if self.screen == Screen::Watching && self.modal.is_none() && button != Button::Guide {
-                    self.page_button(button, family, pressed);
+                    self.page_button(button, family, pressed, cx);
                     return;
                 }
                 if !pressed {
                     return;
+                }
+                if matches!(self.modal, Some(Modal::Pin { .. })) {
+                    return self.pin_button(button, family, cx);
                 }
                 match (self.screen.clone(), self.button_input(button, family)) {
                     // A game takes every button but Home.
@@ -749,8 +770,13 @@ impl Chanoma {
     /// An input for whatever has the focus.
     pub fn input(&mut self, i: Input, cx: &mut Cx<Msg>) {
         self.touched();
-        // Backspace is Back but on the PIN pad.
-        let i = if i == Input::Erase && !matches!(self.modal, Some(Modal::Pin { .. })) { Input::Back } else { i };
+        // Backspace is Back and the space bar OK, but on the PIN pad.
+        let i = match i {
+            _ if matches!(self.modal, Some(Modal::Pin { .. })) => i,
+            Input::Erase => Input::Back,
+            Input::Space => Input::Ok,
+            _ => i,
+        };
         if self.site.is_some() {
             return;
         }
@@ -831,8 +857,11 @@ impl Chanoma {
             }
             MenuKind::Page => {
                 let title = self.page.as_ref().map_or_else(String::new, |p| p.name.clone());
-                if let Some(p) = &self.page {
+                self.close_keyboard(cx);
+                if let Some(p) = &mut self.page {
                     p.browser.bridge.release_all();
+                    // Select and Start held for Home are let go under the menu.
+                    (p.select, p.start) = (None, None);
                 }
                 Menu::new(title, &["Keep watching", "Go home"])
             }
@@ -940,6 +969,7 @@ impl Chanoma {
     // The PIN.
 
     pub fn ask_pin(&mut self, after: AfterPin, cx: &mut Cx<Msg>) {
+        log::info!("chanoma: the PIN pad");
         self.modal = Some(Modal::Pin { pin: PinState::default(), after });
         self.modal_focus = 0;
         self.sync_hud(cx);
@@ -951,66 +981,87 @@ impl Chanoma {
         let _ = cx;
     }
 
+    /// The keyboard on the PIN pad: the legend's keys (the arrows, Page Up
+    /// and Down, Tab and Space), Backspace, Return, and Esc.
     fn pin_input(&mut self, i: Input, cx: &mut Cx<Msg>) {
-        let Some(Modal::Pin { pin, .. }) = &self.modal else { return };
-        if pin.checking || self.lockout.wait(self.now_secs()).is_some() {
-            if i == Input::Back {
-                self.close_modal(cx);
-            }
-            return;
-        }
+        use ui::pinpad::Key;
         let key = match i {
-            Input::Dir(d) => {
-                self.modal_focus = ui::pinpad::step(self.modal_focus, d);
-                return;
-            }
-            Input::Ok => ui::pinpad::KEYS[self.modal_focus.min(11)],
-            Input::Digit(d) => {
-                // Typed on a keyboard: Return then says OK.
-                self.modal_focus = 11;
-                ui::pinpad::Key::Digit(d)
-            }
-            Input::Erase => ui::pinpad::Key::Erase,
-            Input::Back => {
-                let empty = pin.typed.is_empty();
-                if empty {
-                    if self.screen == Screen::Welcome || (pin.new && !self.settings.setup_done) {
-                        self.modal = None;
-                    } else {
-                        self.close_modal(cx);
-                    }
-                    return;
-                }
-                ui::pinpad::Key::Erase
-            }
+            Input::Dir(Dir::Up) => Key::Press(Button::Up),
+            Input::Dir(Dir::Down) => Key::Press(Button::Down),
+            Input::Dir(Dir::Left) => Key::Press(Button::Left),
+            Input::Dir(Dir::Right) => Key::Press(Button::Right),
+            Input::Prev => Key::Press(Button::L1),
+            Input::Next => Key::Press(Button::R1),
+            Input::Alt => Key::Press(Button::North),
+            Input::Space => Key::Press(Button::West),
+            Input::Erase => Key::Delete,
+            Input::Ok => Key::Done,
+            Input::Back => return self.pin_back(cx),
             _ => return,
         };
         self.pin_key(key, cx);
     }
 
+    /// A controller's button on the PIN pad: one of the legend's is a
+    /// press, wherever the controller is from; yes is Done, no is Delete.
+    fn pin_button(&mut self, b: Button, family: Family, cx: &mut Cx<Msg>) {
+        use ui::pinpad::Key;
+        if b == self.ok_button(family) {
+            self.pin_key(Key::Done, cx);
+        } else if b == self.back_button(family) {
+            self.pin_back(cx);
+        } else if ui::pinpad::digit(b).is_some() {
+            self.pin_key(Key::Press(b), cx);
+        }
+    }
+
+    /// Back on the pad: a press taken back, or with none, the pad put away.
+    fn pin_back(&mut self, cx: &mut Cx<Msg>) {
+        let locked = self.lockout.wait(self.now_secs()).is_some();
+        let Some(Modal::Pin { pin, .. }) = &self.modal else { return };
+        if !pin.typed.is_empty() && !pin.checking && !locked {
+            return self.pin_key(ui::pinpad::Key::Delete, cx);
+        }
+        if self.screen == Screen::Welcome || (pin.new && !self.settings.setup_done) {
+            self.modal = None;
+        } else {
+            self.close_modal(cx);
+        }
+    }
+
     pub fn pin_key(&mut self, key: ui::pinpad::Key, cx: &mut Cx<Msg>) {
+        use ui::pinpad::Key;
         let stored_len = self.pin_length();
+        let locked = self.lockout.wait(self.now_secs()).is_some();
         let Some(Modal::Pin { pin, .. }) = &mut self.modal else { return };
+        if pin.checking || locked {
+            return;
+        }
         pin.error = None;
         match key {
-            ui::pinpad::Key::Digit(d) => {
-                if pin.typed.len() < 8 {
-                    pin.typed.push(char::from(b'0' + d));
+            Key::Press(b) => {
+                if let Some(d) = ui::pinpad::digit(b)
+                    && pin.typed.len() < 8
+                {
+                    pin.typed.push(d);
                 }
             }
-            ui::pinpad::Key::Erase => {
+            Key::Delete => {
                 pin.typed.pop();
             }
-            ui::pinpad::Key::Done => {}
+            Key::Done => {}
         }
-        let done = key == ui::pinpad::Key::Done || (!pin.new && stored_len == Some(pin.typed.len()));
+        let done = match stored_len {
+            Some(n) if !pin.new => pin.typed.len() == n,
+            _ => key == Key::Done,
+        };
         if !done {
             return;
         }
         if pin.new {
             let typed = pin.typed.clone();
             if !crate::rules::valid_pin(&typed) {
-                pin.error = Some("Four to eight digits".into());
+                pin.error = Some("Four to eight presses".into());
                 return;
             }
             match pin.first.clone() {
@@ -1131,10 +1182,7 @@ impl Chanoma {
             Key::Named(NamedKey::PageUp) => Input::Prev,
             Key::Named(NamedKey::PageDown) => Input::Next,
             Key::Named(NamedKey::Tab) => Input::Alt,
-            Key::Character(c) if c == " " => Input::Ok,
-            Key::Character(c) if c.len() == 1 && c.as_bytes()[0].is_ascii_digit() => {
-                Input::Digit(c.as_bytes()[0] - b'0')
-            }
+            Key::Character(c) if c == " " => Input::Space,
             _ => return None,
         })
     }
@@ -1142,10 +1190,7 @@ impl Chanoma {
     fn click(&mut self, t: Target, cx: &mut Cx<Msg>) {
         self.touched();
         match (t, self.modal.is_some()) {
-            (Target::Key(k), true) => {
-                self.modal_focus = k;
-                self.pin_input(Input::Ok, cx);
-            }
+            (Target::Key(k), true) => self.pin_key(ui::pinpad::key_at(k), cx),
             (Target::Item(i), true) => {
                 self.modal_focus = i;
                 self.modal_input(Input::Ok, cx);
@@ -1167,7 +1212,8 @@ impl Chanoma {
                 }
                 _ => {}
             },
-            (Target::Outside, false) => {}
+            // Beside the keyboard over a page: it goes.
+            (Target::Outside, false) => self.close_keyboard(cx),
             (Target::Section(i), false) if self.screen == Screen::Folders => self.picker_click(Some(i), None, cx),
             (Target::Item(i), false) if self.screen == Screen::Folders => self.picker_click(None, Some(i), cx),
             (Target::Tile(row, col), false) => {
@@ -1191,7 +1237,7 @@ impl Chanoma {
                 self.grownups.set_focus(self.focus);
                 self.input(Input::Ok, cx);
             }
-            (Target::Key(_), false) => {}
+            (Target::Key(k), false) => self.keyboard_click(k, cx),
         }
     }
 
@@ -1260,13 +1306,16 @@ impl Chanoma {
             Some(Modal::Pin { pin, .. }) => {
                 let (title, prompt) = if pin.new {
                     if pin.first.is_some() {
-                        ("Type it again", "The same PIN, to be sure")
+                        ("Press it again", "The same buttons, to be sure")
                     } else {
-                        ("Choose a PIN", "Four to eight digits, for grown-ups only")
+                        ("Choose a PIN", "Four to eight presses of these buttons. Nobody sees which")
                     }
                 } else {
-                    ("Grown-ups only", "Type the PIN")
+                    ("Grown-ups only", "Press the PIN's buttons")
                 };
+                // The legend in the buttons of the controller pressed last
+                // (a keyboard's keys if it was a keyboard).
+                let family = self.family;
                 Some(Overlay::Pin(ui::pinpad::Pad {
                     title: title.into(),
                     prompt: prompt.into(),
@@ -1275,9 +1324,28 @@ impl Chanoma {
                     error: pin.error.clone(),
                     wait: self.lockout.wait(self.now_secs()),
                     checking: pin.checking,
+                    family,
+                    ok: self.ok_button(family),
+                    back: self.back_button(family),
+                    done: pin.new || self.pin_length().is_none(),
                 }))
             }
             Some(Modal::Menu { menu, .. }) => Some(Overlay::Menu(menu.clone())),
+            None if self.screen == Screen::Watching && self.is_typing() => {
+                let t = self.page.as_ref().and_then(|p| p.typing.as_ref())?;
+                // The hints in the controller's buttons, though a keyboard
+                // was used last (it types into the page, not here).
+                let family = match self.family {
+                    Family::Keyboard => self.controllers.first().map_or(Family::Generic, |p| p.family),
+                    f => f,
+                };
+                Some(Overlay::Keyboard(ui::keyboard::Keyboard {
+                    family,
+                    ok: self.ok_button(family),
+                    back: self.back_button(family),
+                    ..t.keys.clone()
+                }))
+            }
             None if self.bar_until.is_some() => Some(Overlay::Top(self.top_bar())),
             None => self.toast.as_ref().map(|(t, n, _)| Overlay::Toast(t.clone(), *n)),
         }
@@ -1673,6 +1741,7 @@ impl Program for Chanoma {
                 }
             }
             Msg::Outputs => self.outputs_changed(cx),
+            Msg::AskPage => self.ask_page(cx),
             Msg::Activate => cx.activate(self.window),
             Msg::Quit => {
                 self.shutdown();

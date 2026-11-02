@@ -8,9 +8,12 @@ screenshot); the Home button pauses it under a menu; stopping keeps where
 it was left; the controller going and coming back is player 1 again. A
 page in the browser has a way home without the controller too: Home or F1
 on a keyboard (which the compositor keeps from the page) and the bar the
-pointer brings down from the top of the screen; and it stays on its site,
-a link or a script elsewhere refused with the page left where it was. This
-fixture renders in software (shared-memory frames, no VA-API).
+pointer brings down from the top of the screen; it stays on its site, a
+link or a script elsewhere refused with the page left where it was; and a
+box chosen on it brings Chanoma's keyboard, which the controller types
+with. The PIN is pressed on the controller, the pad the same whichever
+button went. This fixture renders in software (shared-memory frames, no
+VA-API).
 """
 
 import hashlib
@@ -217,6 +220,21 @@ def count(text):
     return journal().count(text)
 
 
+def titled(start, description, but=None):
+    """Wait for the page's title (the window's, which the browser may add
+    to) to start with `start` (and not `but`), saying what it was if not."""
+
+    def check():
+        title = browser()["title"]
+        return title.startswith(start) and not (but and title.startswith(but))
+
+    try:
+        until(description, check)
+    except AssertionError:
+        print("\n".join(l for l in journal().splitlines() if "keyboard" in l or "DevTools" in l or "page" in l)[-3000:])
+        raise AssertionError(f"{description}: the page's title is {browser()['title']!r}")
+
+
 def open_test_site():
     # First in Keep playing since it last showed.
     pad("tap south")
@@ -295,6 +313,46 @@ with subtest("a page stays on its site"):
     until("home again", lambda: count("chanoma: Home") > homes and browser() is None, timeout=30)
 
 
+with subtest("the controller types into the page with Chanoma's keyboard"):
+    open_test_site()
+    menus, homes = count("the Page menu"), count("chanoma: Home")
+    until("Chanoma is ready over the page", lambda: count("Home on the keyboard is kept over window") >= 5)
+    time.sleep(1)
+    # The pointer on the search box (put there by the mouse, as the stick
+    # would), then A: a box chosen, and the keyboard comes up.
+    user("aizomectl input move 640 300")
+    user("aizomectl input move 640 90")
+    pad("tap south")
+    until("the keyboard comes up over the page", lambda: logged("the keyboard over the page"))
+    time.sleep(1)
+    machine.screenshot("page-keyboard")
+    # A types the key it's on (q, the first letter); X takes it back.
+    pad("tap south")
+    titled("typed q", "q typed into the page")
+    pad("tap x")
+    titled("typed", "and taken back", but="typed q")
+    # Down to a, along to h, A; up to y, along to i, A.
+    pad("tap down")
+    for _ in range(5):
+        pad("tap right")
+    pad("tap south")
+    pad("tap up")
+    for _ in range(2):
+        pad("tap right")
+    pad("tap south")
+    titled("typed hi", "hi typed into the page")
+    # Start is Enter: the search goes, and the keyboard with it.
+    pad("tap start")
+    until("the search sent", lambda: "searched hi" in browser()["title"])
+    until("the keyboard put away", lambda: logged("the keyboard put away"))
+    machine.succeed("journalctl -u chanoma-test-page --no-pager | grep -q 'GET /?q=hi '")
+    pad("tap guide")
+    until("the menu over the page", lambda: count("the Page menu") > menus)
+    pad("tap down")
+    pad("tap south")
+    until("home again", lambda: count("chanoma: Home") > homes and browser() is None, timeout=30)
+
+
 with subtest("leaving with the session keeps a game too"):
     # Start it again from Keep playing (after the page there), then stop
     # Chanoma as logging out does.
@@ -310,3 +368,45 @@ with subtest("leaving with the session keeps a game too"):
         f"stat -c %Y '/home/alice/.local/share/aizome/chanoma/states/{GAME_KEY.replace('/', '~')}.state'"
     ).strip()
     assert int(after) > int(before), (before, after)
+
+
+def pad_shot():
+    """A digest of the PIN pad as the compositor captures it (the 1920 ×
+    1080 design at two thirds, 40 points down)."""
+    user("aizomectl screenshot /tmp/chanoma-pin.png")
+    return machine.succeed(
+        "python3 -c "
+        + shlex.quote(
+            "import hashlib; from PIL import Image; "
+            "im = Image.open('/tmp/chanoma-pin.png').convert('RGB').crop((267, 200, 1013, 600)); "
+            "print(hashlib.sha256(im.tobytes()).hexdigest())"
+        )
+    ).strip()
+
+
+with subtest("the PIN is the controller's buttons, and nobody sees which"):
+    user("systemctl --user start aizome-chanoma")
+    until("Chanoma back full screen", lambda: (w := window()) and w["fullscreen"])
+    until("with the controller", lambda: logged("is player 1", 3))
+    time.sleep(1)
+    # Down to the last shelf (More: Grown-ups), then A: the PIN pad.
+    for _ in range(4):
+        pad("tap down")
+    pad("tap south")
+    until("the PIN pad", lambda: logged("the PIN pad"))
+    time.sleep(1)
+    # A press; then it taken back with B and another pressed instead: the
+    # pad looks the same whichever button went.
+    pad("tap down")
+    time.sleep(0.5)
+    first = pad_shot()
+    pad("tap east")
+    pad("tap up")
+    time.sleep(0.5)
+    machine.screenshot("pin-pad")
+    assert pad_shot() == first, "the pad shows which button went"
+    # Taken back again, then the PIN, 2468: Down, Right, RB and X.
+    pad("tap east")
+    for b in ("down", "right", "rb", "x"):
+        pad(f"tap {b}")
+    until("grown-up mode", lambda: logged("chanoma: grown-up mode"))
