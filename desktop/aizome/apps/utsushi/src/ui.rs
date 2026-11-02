@@ -511,7 +511,8 @@ pub fn audio_outputs(app: &Utsushi) -> Menu<Msg> {
             .checked(selected == Some(device.name.as_str())));
     }
     if let Some(name) = selected.filter(|name| !app.audio_devices.iter().any(|d| d.name == *name)) {
-        menu = menu.item(MenuItem::new(format!("{name} (disconnected)"), Msg::AudioDevice(Some(name.into())))
+        let description = app.store.prefs.audio_device_description.as_deref().unwrap_or("Selected output");
+        menu = menu.item(MenuItem::new(format!("{description} (disconnected)"), Msg::AudioDevice(Some(name.into())))
             .checked(true).enabled(false));
     }
     menu

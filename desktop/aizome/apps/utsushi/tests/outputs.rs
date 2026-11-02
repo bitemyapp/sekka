@@ -42,7 +42,7 @@ fn wait(mut f: impl FnMut() -> bool) {
     }
 }
 
-fn volume_is(muted: bool) -> bool {
+fn volume_is(volume: f64, muted: bool) -> bool {
     dump()
         .iter()
         .find(|o| o["info"]["props"]["node.name"] == "utsushioutputtest")
@@ -52,7 +52,7 @@ fn volume_is(muted: bool) -> bool {
                 p["mute"].as_bool() == Some(muted)
                     && p["channelVolumes"].as_array().is_some_and(|channels| {
                         !channels.is_empty()
-                            && channels.iter().all(|v| v.as_f64().is_some_and(|v| (v - 0.35_f64.powi(3)).abs() < 0.001))
+                            && channels.iter().all(|v| v.as_f64().is_some_and(|v| (v - volume.powi(3)).abs() < 0.001))
                     })
             })
         })
@@ -99,12 +99,41 @@ fn changing_outputs_routes_only_this_stream_and_preserves_playback() {
     player.open(media.clone(), 0.0, true);
     events_until(&|e| matches!(e, Event::State(PlayState::Playing)));
     wait(|| linked("utsushi-test-a"));
-    wait(|| volume_is(false));
+    wait(|| volume_is(0.35, false));
     wait(|| player.position() > 0.2);
+    // Changes made in the desktop mixer must survive ordinary playback
+    // transitions, including changes made while the stream is inactive.
+    let id = node(&dump(), "utsushioutputtest").unwrap();
+    let set_controls = |props: &str| {
+        let result = Command::new("pw-cli").args(["set-param", &id.to_string(), "Props", props]).output().unwrap();
+        assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+    };
+    set_controls("{ mute: true, channelVolumes: [ 0.125, 0.125 ] }");
+    wait(|| volume_is(0.5, true));
+    player.pause();
+    events_until(&|e| matches!(e, Event::State(PlayState::Paused)));
+    std::thread::sleep(Duration::from_millis(250));
+    assert!(volume_is(0.5, true), "pausing overwrote the desktop mixer's volume or mute");
+    player.play();
+    events_until(&|e| matches!(e, Event::State(PlayState::Playing)));
+    let resumed = player.position();
+    wait(|| player.position() > resumed + 0.1);
+    assert!(volume_is(0.5, true), "resuming overwrote the desktop mixer's volume or mute");
+    player.pause();
+    events_until(&|e| matches!(e, Event::State(PlayState::Paused)));
+    set_controls("{ mute: false, channelVolumes: [ 0.008, 0.008 ] }");
+    wait(|| volume_is(0.2, false));
+    player.play();
+    events_until(&|e| matches!(e, Event::State(PlayState::Playing)));
+    let resumed = player.position();
+    wait(|| player.position() > resumed + 0.1);
+    assert!(volume_is(0.2, false), "resuming overwrote controls changed while paused");
+    player.set_volume(0.35, false);
+    wait(|| volume_is(0.35, false));
     let before = player.position();
     player.set_audio_device(Some("utsushi-test-b".into()));
     wait(|| linked("utsushi-test-b"));
-    wait(|| volume_is(false));
+    wait(|| volume_is(0.35, false));
     wait(|| player.position() > before + 0.1);
     assert!(!linked("utsushi-test-a"));
     player.pause();
@@ -114,13 +143,13 @@ fn changing_outputs_routes_only_this_stream_and_preserves_playback() {
     player.set_audio_device(Some("utsushi-test-a".into()));
     events_until(&|e| matches!(e, Event::Pipeline(p) if p.audio_output.ends_with("utsushi-test-a")));
     std::thread::sleep(Duration::from_millis(250));
-    wait(|| volume_is(true));
+    wait(|| volume_is(0.35, true));
     assert!((player.position() - paused).abs() < 0.03, "switching resumed or sought paused playback");
     player.play();
     wait(|| linked("utsushi-test-a"));
     wait(|| player.position() > paused + 0.1);
     player.set_volume(0.35, false);
-    wait(|| volume_is(false));
+    wait(|| volume_is(0.35, false));
     player.set_audio_device(Some("utsushi-test-b".into()));
     wait(|| linked("utsushi-test-b"));
     // The preference applies to the next item too.

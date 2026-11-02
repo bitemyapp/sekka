@@ -546,7 +546,15 @@ impl Utsushi {
 
     fn on_player(&mut self, e: Event, cx: &mut Cx<Msg>) {
         match e {
-            Event::AudioDevices(devices) => self.audio_devices = devices,
+            Event::AudioDevices(devices) => {
+                if let Some(device) = devices.iter().find(|d| Some(&d.name) == self.store.prefs.audio_device.as_ref())
+                    && self.store.prefs.audio_device_description.as_ref() != Some(&device.description)
+                {
+                    self.store.prefs.audio_device_description = Some(device.description.clone());
+                    self.store.save_prefs();
+                }
+                self.audio_devices = devices;
+            }
             Event::Opened(info) => {
                 let first = self.info.as_ref().is_none_or(|i| i.url != info.url);
                 if let (true, Some(bytes)) = (first, info.cover.clone()) {
@@ -1021,6 +1029,8 @@ impl Program for Utsushi {
                     player.set_audio_device(name.clone());
                 }
                 if self.store.prefs.audio_device != name {
+                    self.store.prefs.audio_device_description = self.audio_devices.iter()
+                        .find(|d| Some(&d.name) == name.as_ref()).map(|d| d.description.clone());
                     self.store.prefs.audio_device = name;
                     self.store.save_prefs();
                 }

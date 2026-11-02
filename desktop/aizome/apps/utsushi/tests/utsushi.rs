@@ -486,6 +486,8 @@ fn output_selection_keeps_position_pause_and_preferences() {
     let mut h = harness();
     let w = window(&h);
     h.send(Msg::AudioDevice(Some("test-speakers".into())));
+    let missing = aizome_utsushi::ui::audio_outputs(h.program());
+    assert_eq!(missing.spec().actions().last().unwrap().label, "Selected output (disconnected)");
     h.send(Msg::Open(vec![fixture("chaptered.mkv")]));
     until(&mut h, 5.0, |a| a.status == Status::Playing);
     h.send(Msg::Pause);
@@ -495,6 +497,7 @@ fn output_selection_keeps_position_pause_and_preferences() {
         AudioDevice { name: "test-speakers".into(), description: "Speakers".into() },
         AudioDevice { name: "test-headphones".into(), description: "Headphones".into() },
     ]))));
+    assert_eq!(h.program().store.prefs.audio_device_description.as_deref(), Some("Speakers"));
     h.click(w, h.find_id(w, "tracks").unwrap().center());
     let menu = h.popups(w)[0].0;
     for key in [NamedKey::End, NamedKey::ArrowUp, NamedKey::ArrowRight] {
@@ -510,8 +513,24 @@ fn output_selection_keeps_position_pause_and_preferences() {
     assert!((h.program().player.as_ref().unwrap().position() - pos).abs() < 0.05);
     let prefs = aizome_utsushi::store::Store::load(h.program().state_dir.clone()).prefs;
     assert_eq!(prefs.audio_device.as_deref(), Some("test-headphones"));
+    assert_eq!(prefs.audio_device_description.as_deref(), Some("Headphones"));
+    h.send(Msg::Player(PlayerEvent(aizome_media::Event::AudioDevices(vec![]))));
+    let missing = aizome_utsushi::ui::audio_outputs(h.program());
+    let item = missing.spec().actions().last().copied().unwrap();
+    assert_eq!(item.label, "Headphones (disconnected)");
+    assert!(item.checked && !item.enabled);
+    let mut reopened = Utsushi::new();
+    reopened.store = aizome_utsushi::store::Store::load(h.program().state_dir.clone());
+    let missing = aizome_utsushi::ui::audio_outputs(&reopened);
+    assert_eq!(missing.spec().actions().last().unwrap().label, "Headphones (disconnected)");
+    h.send(Msg::Player(PlayerEvent(aizome_media::Event::AudioDevices(vec![
+        AudioDevice { name: "test-headphones".into(), description: "USB Headphones".into() },
+    ]))));
+    let prefs = aizome_utsushi::store::Store::load(h.program().state_dir.clone()).prefs;
+    assert_eq!(prefs.audio_device_description.as_deref(), Some("USB Headphones"));
     h.send(Msg::AudioDevice(None));
     assert!(h.program().store.prefs.audio_device.is_none());
+    assert!(h.program().store.prefs.audio_device_description.is_none());
     h.send(Msg::Toggle);
     until(&mut h, 2.0, |a| a.status == Status::Playing);
 }

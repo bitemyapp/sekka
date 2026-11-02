@@ -359,12 +359,17 @@ fn open(core: &pw::core::CoreRc, ring: Arc<Ring>, clock: Arc<Clock>, media: &str
     let stride = (channels as usize) * std::mem::size_of::<f32>();
     let volume = std::rc::Rc::new(std::cell::Cell::new((1.0, false)));
     let ready_volume = volume.clone();
+    let volume_initialized = std::cell::Cell::new(false);
     let listener = stream
         .add_local_listener::<()>()
         .state_changed(move |stream, _, _, state| {
             // Commands can arrive before the new stream's controls exist.
-            // Reapply once connected, including a stream opened paused.
-            if matches!(state, pw::stream::StreamState::Paused | pw::stream::StreamState::Streaming) {
+            // Reapply only at the first connection, including a stream
+            // opened paused. Later pause/resume transitions must preserve
+            // volume and mute changes made through the desktop mixer.
+            if matches!(state, pw::stream::StreamState::Paused | pw::stream::StreamState::Streaming)
+                && !volume_initialized.replace(true)
+            {
                 apply_volume(stream, channels, ready_volume.get());
             }
         })
