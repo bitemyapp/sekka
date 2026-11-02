@@ -2118,13 +2118,13 @@ mod tests {
     #[test]
     fn opening_a_settings_pane_raises_the_existing_window_and_forwards_the_pane() {
         let (mut h, requests) = running_settings();
-        h.send(Msg::Run(Action::Settings { pane: "keyboard".into(), anchor: Some("keyboard.caps".into()) }));
+        h.send(Msg::Run(Action::Settings { pane: "keyboard".into(), anchor: Some("caps-lock".into()) }));
         assert_eq!(requests.try_recv().unwrap().0, Request::Focus { id: 42 });
         assert!(
             h.program()
                 .launches
                 .values()
-                .any(|(launch, _)| { *launch == crate::launch::settings("keyboard", Some("keyboard.caps")) })
+                .any(|(launch, _)| { *launch == crate::launch::settings("keyboard", Some("caps-lock")) })
         );
     }
 

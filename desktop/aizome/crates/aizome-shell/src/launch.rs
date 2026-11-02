@@ -47,14 +47,14 @@ pub fn reveal_path(index: Option<&AppIndex>, path: &Path) -> Launch {
     Launch::Argv(vec!["xdg-open".into(), dir.to_string_lossy().into_owned()])
 }
 
-/// Settei at a pane (and a place in it).
+/// Settei at a pane (and a place in it): `--pane keyboard.shortcuts`, as
+/// Settei's `--list-settings` gives each option's command.
 pub fn settings(pane: &str, anchor: Option<&str>) -> Launch {
-    let mut argv = vec!["aizome-settei".to_owned(), "--pane".to_owned(), pane.to_owned()];
-    if let Some(a) = anchor {
-        argv.push("--option".into());
-        argv.push(a.to_owned());
-    }
-    Launch::Argv(argv)
+    let target = match anchor {
+        Some(a) => format!("{pane}.{a}"),
+        None => pane.to_owned(),
+    };
+    Launch::Argv(vec!["aizome-settei".to_owned(), "--pane".to_owned(), target])
 }
 
 /// Settei's keyboard setup, with keyboard `name` (`vendor:product` `id`)
@@ -186,14 +186,12 @@ mod tests {
     #[test]
     fn settings_open_at_a_place() {
         assert_eq!(
-            settings("keyboard", Some("keyboard.caps")),
-            Launch::Argv(vec![
-                "aizome-settei".into(),
-                "--pane".into(),
-                "keyboard".into(),
-                "--option".into(),
-                "keyboard.caps".into()
-            ])
+            settings("keyboard", Some("shortcuts")),
+            Launch::Argv(vec!["aizome-settei".into(), "--pane".into(), "keyboard.shortcuts".into()])
+        );
+        assert_eq!(
+            settings("keyboard", None),
+            Launch::Argv(vec!["aizome-settei".into(), "--pane".into(), "keyboard".into()])
         );
         // Settei reads `--keyboard` as “Name (vendor:product)”.
         assert_eq!(

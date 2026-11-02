@@ -62,7 +62,8 @@ pub enum Action {
     OpenUrl {
         url: String,
     },
-    /// Open Settei at a pane (and a place in it).
+    /// Open Settei at a pane (and a place in it: an option's id in its
+    /// pane, `caps-lock`).
     Settings {
         pane: String,
         anchor: Option<String>,
