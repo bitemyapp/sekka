@@ -1150,9 +1150,8 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   letterboxed to the console's shape; sound plays with short latency;
   controllers rumble where the game asks.
 - **Services** open full screen in Google Chrome (or Chromium), each in a
-  browser profile of its own, so a grown-up signs in once (with a keyboard,
-  in grown-up mode) and kids never see a sign-in, an address bar or a
-  tab. The controller drives the page: the left stick moves the pointer
+  browser profile of its own, so a grown-up signs in once (in grown-up
+  mode) and kids never see a sign-in, an address bar or a tab. The controller drives the page: the left stick moves the pointer
   and the confirm button clicks, the right stick scrolls, the arrows are
   arrow keys (seeking in players), Back is Escape (held, the browser's
   Back), X or Start plays and pauses, Y is full screen, the shoulders move
@@ -1163,6 +1162,16 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   note says that's outside the service (a website a grown-up added stays
   on its own site). In grown-up mode, where a grown-up signs in, a page
   goes anywhere until kids' mode comes back.
+- **Chanoma's keyboard** comes up along the foot of the screen when the
+  controller chooses a text box on a service's page (a search, a
+  sign-in), or with Select. What's in the box shows above its keys
+  (dots for a password), as the box may be under it. The arrows or the
+  stick move between keys and the confirm button types one; X deletes, Y
+  is a space, the shoulders move along what's typed, LT is capitals, RT
+  the symbols, and Start is Enter, which sends it and puts the keyboard
+  away; B puts it away too. YouTube's television interface has a keyboard
+  of its own, which the arrows work, so Chanoma's doesn't come there. A
+  box inside another site's frame on a page (some sign-ins) takes Select.
 - **Films and shows** from the videos folders: a folder of episodes is a
   show (with its `poster.jpg`), a lone video a film. They play through
   Utsushi's engine; the confirm button plays and pauses, left and right
@@ -1175,10 +1184,17 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   band, under the picture where there's room. The media keys and the
   menu bar's media controls play, pause, skip and stop a film, as they
   do Utsushi's.
-- **Grown-ups** unlock with the PIN (four to eight digits; three wrong
-  ones are free, then the pad waits, longer each time, and a restart
-  doesn't reset that). In grown-up mode everything shows, nothing counts
-  against today's time, and the settings open: limits for weekdays and for
+- **Grown-ups** unlock with the PIN, pressed on the controller as a
+  console's passcode is: four to eight presses of the arrows, the
+  shoulders and the top and left face buttons. Each press shows as the
+  same dot and nothing lights, so a kid watching sees that a button went
+  but not which; the no button takes the last press back. A PIN is the
+  buttons' places, so it's the same presses on any controller (Xbox's Y
+  is Nintendo's X: the pad marks where each is), and on a keyboard it's
+  the arrows, Page Up and Down, Tab and Space. Three wrong ones are free,
+  then the pad waits, longer each time, and a restart doesn't reset that.
+  In grown-up mode everything shows, nothing counts against today's time,
+  and the settings open: limits for weekdays and for
   the weekend, bedtime and waking, more time today; which services kids
   see; games folders, and which games kids may play (new ones wait for a
   grown-up's say, unless set to show at once); videos folders (chosen with
