@@ -68,6 +68,59 @@ fn app_results_activate_existing_windows_and_close_the_palette() {
 }
 
 #[test]
+fn a_purpose_finds_the_terminal_chosen_in_settei() {
+    use aizome_sys::apps::{AppIndex, DefaultRole, Locale, XdgDirs};
+    let mut h = scene(false);
+    let root = std::env::temp_dir().join(format!("aizome-palette-purpose-{}", std::process::id()));
+    let dirs = XdgDirs::rooted(&root);
+    let apps = dirs.data_home.join("applications");
+    std::fs::create_dir_all(&apps).unwrap();
+    // Hotaru's shipped entry, not an approximation of it.
+    std::fs::copy(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/hotaru/data/org.aizome.Hotaru.desktop"),
+        apps.join("org.aizome.Hotaru.desktop"),
+    )
+    .unwrap();
+    for (id, name) in
+        [("foot", "Foot"), ("footclient", "Foot Client"), ("foot-server", "Foot Server"), ("kitty", "kitty")]
+    {
+        std::fs::write(
+            apps.join(format!("{id}.desktop")),
+            format!(
+                "[Desktop Entry]\nType=Application\nName={name}\nGenericName=Terminal\nExec={id}\nCategories=System;TerminalEmulator;\n"
+            ),
+        )
+        .unwrap();
+    }
+    let mut index = AppIndex::load_with(dirs, Locale::default());
+    index.set_role_default(DefaultRole::Terminal, "org.aizome.Hotaru.desktop").unwrap();
+    h.program_mut().apps = Some(std::sync::Arc::new(index));
+    // A terminal used before Hotaru was the default.
+    for _ in 0..100 {
+        h.program_mut().frecency.visit("app:foot");
+    }
+    let found = |h: &mut aizome_kit::testing::Harness<aizome_shell::shell::Shell>, query: &str| {
+        let p = open(h, query);
+        let item = h.program().palette.as_ref().unwrap().sections[0].rows[0].item.clone();
+        assert!(h.texts(p).contains(&item.title), "the first row is drawn: {query}");
+        h.send(Msg::Palette(PaletteEvent::Ui(PaletteMsg::Close)));
+        item
+    };
+    for query in ["term", "terminal"] {
+        let item = found(&mut h, query);
+        assert_eq!(item.action, Action::FocusApp { app_id: "org.aizome.Hotaru".into() }, "query: {query}");
+        assert_eq!(item.glyph, aizome_kit::Icon::SquareTerminal);
+    }
+    assert_eq!(found(&mut h, "foot").action, Action::FocusApp { app_id: "foot".into() });
+    // The lift follows the choice, not Hotaru.
+    let mut index = std::sync::Arc::try_unwrap(h.program_mut().apps.take().unwrap()).unwrap();
+    index.set_role_default(DefaultRole::Terminal, "kitty.desktop").unwrap();
+    h.program_mut().apps = Some(std::sync::Arc::new(index));
+    assert_eq!(found(&mut h, "terminal").action, Action::FocusApp { app_id: "kitty".into() });
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn keys_move_scope_run_and_close() {
     let mut h = scene(false);
     let p = open(&mut h, "");

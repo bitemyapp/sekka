@@ -102,9 +102,8 @@ pub fn glyph_for(app_id: &str) -> Option<(Icon, Hue)> {
         "shiori" => (Icon::BookOpen, Hue::Amber),
         "utsushi" => (Icon::Film, Hue::Red),
         "annai" => (Icon::Compass, Hue::Amber),
-        "foot" | "footclient" | "alacritty" | "kitty" | "wezterm" | "ghostty" | "konsole" | "terminal" | "xterm" => {
-            (Icon::SquareTerminal, Hue::Green)
-        }
+        "hotaru" | "foot" | "footclient" | "alacritty" | "kitty" | "wezterm" | "ghostty" | "konsole" | "terminal"
+        | "xterm" => (Icon::SquareTerminal, Hue::Green),
         "firefox" | "chromium" | "chromium-browser" | "google-chrome" | "brave-browser" | "epiphany" | "librewolf" => {
             (Icon::Globe, Hue::Cyan)
         }

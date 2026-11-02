@@ -23,6 +23,9 @@ pub struct Item {
     pub glyph: Icon,
     /// Matched but not shown.
     pub keywords: Vec<String>,
+    /// An app's purposes in Settei's Default Apps ("Terminal", "Text
+    /// editor") for which it's the chosen app.
+    pub purposes: Vec<&'static str>,
     /// Its frecency key (`cmd:…`, `app:…`, `file:…`), if picks are counted.
     pub key: Option<String>,
     pub action: Action,
@@ -41,6 +44,7 @@ impl Item {
             shortcut: None,
             glyph,
             keywords: Vec::new(),
+            purposes: Vec::new(),
             key: None,
             action,
             mono: false,
@@ -189,7 +193,7 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
                 .map(|i| Candidate {
                     title: i.title.clone(),
                     keywords: keywords_of(i),
-                    boost: i.boost + exactness(&i.title, q),
+                    boost: i.boost + exactness(&i.title, q) + purpose_lift(i, q),
                 })
                 .collect();
             rank(&mut query, &candidates, limit)
@@ -205,15 +209,43 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
             (scope == Scope::Command).then(|| r.app_name.map(|a| format!("{} MENUS", a.to_uppercase()))).flatten();
         out.push(Section { scope, head, sub, rows });
     }
-    // With something typed, the section holding the best match leads.
+    // With something typed, the section holding the best match leads. A
+    // purpose's lift takes Apps past other sections, but not past the
+    // focused app's commands: "file" in an editor is its File menu first.
     if !q.is_empty() && r.scope.is_none() {
         let answer = out.first().is_some_and(|s| s.scope == Scope::Answer) as usize;
-        out[answer..].sort_by(|a, b| {
-            let best = |s: &Section| s.rows.iter().map(|r| r.score).max().unwrap_or(0);
-            best(b).cmp(&best(a)).then(order_of(a.scope).cmp(&order_of(b.scope)))
-        });
+        let best = |s: &Section| s.rows.iter().map(|r| r.score).max().unwrap_or(0);
+        let commands = out.iter().find(|s| s.scope == Scope::Command).map(best);
+        let standing = |s: &Section| match commands {
+            Some(commands) if s.scope == Scope::App => {
+                let unlifted = s.rows.iter().map(|r| r.score - purpose_lift(&r.item, q)).max().unwrap_or(0);
+                unlifted.max(best(s).min(commands))
+            }
+            _ => best(s),
+        };
+        out[answer..].sort_by(|a, b| standing(b).cmp(&standing(a)).then(order_of(a.scope).cmp(&order_of(b.scope))));
     }
     out
+}
+
+/// More than a habit's frecency (about 110 for a hundred picks) and a
+/// keyword's discount against a setting's title together.
+const PURPOSE_LIFT: i64 = 240;
+
+/// Asking for a purpose opens the app chosen for it: "term" and "terminal"
+/// find the default terminal before another used more often, and before
+/// the setting that chooses it. The query must start a word of the
+/// purpose's name, from three letters: "te" and "fi" rank as before.
+fn purpose_lift(i: &Item, q: &str) -> i64 {
+    let q = q.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+    if i.scope != Scope::App || q.chars().count() < 3 {
+        return 0;
+    }
+    let starts_a_word = |purpose: &&str| {
+        let purpose = purpose.to_lowercase();
+        purpose.match_indices(&q).any(|(at, _)| at == 0 || purpose[..at].ends_with(' '))
+    };
+    if i.purposes.iter().any(starts_a_word) { PURPOSE_LIFT } else { 0 }
 }
 
 fn order_of(s: Scope) -> usize {
@@ -402,6 +434,102 @@ mod tests {
         assert!(!s[0].rows[0].ranges.is_empty());
         let s = sections(&ranking("calc", None), &items(), &[]);
         assert_eq!(s[0].scope, Scope::App, "a keyword finds Soroban");
+    }
+
+    /// An app as the shell lists it, chosen in Settei for `purposes`.
+    fn app(name: &str, generic: &str, keywords: &[&str], purposes: &[&'static str]) -> Item {
+        let keywords = keywords.iter().map(|k| k.to_string()).chain([generic.to_owned()]).collect();
+        let mut i = Item::new(Scope::App, name, Icon::AppWindow, Action::None).trail(generic).keywords(keywords);
+        i.purposes = purposes.to_vec();
+        i
+    }
+
+    /// Apps whose purposes overlap, as their desktop entries describe
+    /// them, and the setting that chooses the terminal.
+    fn desktop() -> Vec<Item> {
+        let mut foot = app("Foot", "Terminal", &["shell", "prompt", "command", "commandline"], &[]);
+        // About a hundred picks.
+        foot.boost = 110;
+        vec![
+            app("Hotaru", "Terminal", &["terminal", "shell", "console", "command line", "hotaru"], &["Terminal"]),
+            foot,
+            app("Foot Server", "Terminal", &["shell", "prompt", "command", "commandline"], &[]),
+            app("kitty", "Terminal", &["shell", "prompt", "terminal"], &[]),
+            app("Hako", "Files", &["files", "file manager", "folders", "browser", "documents"], &["Files"]),
+            app("Sumi", "Text Editor", &["text editor", "editor", "text"], &["Text editor"]),
+            app("Firefox", "Web Browser", &["internet", "www"], &["Web browser"]),
+            setting_item(&SettingEntry {
+                id: "general.default-terminal".into(),
+                title: "Terminal".into(),
+                path: "General › Default Apps › Terminal".into(),
+                keywords: vec!["shell".into(), "foot".into(), "console".into()],
+                pane: Some("general".into()),
+                entry: Some("default-terminal".into()),
+            }),
+        ]
+    }
+
+    fn first(s: &[Section]) -> (Scope, &str) {
+        (s[0].scope, s[0].rows[0].item.title.as_str())
+    }
+
+    #[test]
+    fn a_purpose_finds_its_chosen_app_first() {
+        for (q, wanted) in [
+            ("ter", "Hotaru"),
+            ("term", "Hotaru"),
+            ("Term", "Hotaru"),
+            ("terminal", "Hotaru"),
+            ("files", "Hako"),
+            ("text editor", "Sumi"),
+            ("editor", "Sumi"),
+            ("browser", "Firefox"),
+        ] {
+            let s = sections(&ranking(q, None), &desktop(), &[]);
+            assert_eq!(first(&s), (Scope::App, wanted), "query: {q}");
+        }
+        // Ahead of the setting, while the other terminals keep their order.
+        let s = sections(&ranking("terminal", None), &desktop(), &[]);
+        assert_eq!(s[0].rows[1].item.title, "Foot");
+        assert_eq!(s[1].scope, Scope::Setting);
+    }
+
+    #[test]
+    fn other_words_rank_as_they_would_without_the_lift() {
+        let chosen: Vec<Item> = items().into_iter().chain(desktop()).collect();
+        let plain: Vec<Item> = chosen
+            .iter()
+            .cloned()
+            .map(|mut i| {
+                i.purposes.clear();
+                i
+            })
+            .collect();
+        let order = |s: Vec<Section>| -> Vec<(Scope, Vec<(String, i64)>)> {
+            s.into_iter().map(|s| (s.scope, s.rows.into_iter().map(|r| (r.item.title, r.score)).collect())).collect()
+        };
+        // Too short, not the start of a word, or more than a purpose.
+        for q in ["te", "fi", "rminal", "itor", "foot", "kitty", "hotaru", "terminal settings", "find rep"] {
+            assert_eq!(
+                order(sections(&ranking(q, None), &chosen, &[])),
+                order(sections(&ranking(q, None), &plain, &[])),
+                "query: {q}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_focused_apps_commands_stay_ahead_of_the_lift() {
+        let editor = [cmd("New", "File"), cmd("Open…", "File"), cmd("Copy", "Edit"), cmd("Find…", "Edit")];
+        let all: Vec<Item> = editor.into_iter().chain(desktop()).collect();
+        for (q, app) in [("file", "Hako"), ("edit", "Sumi")] {
+            let s = sections(&ranking(q, None), &all, &[]);
+            assert_eq!(s[0].scope, Scope::Command, "query: {q}");
+            // Then the chosen app, ahead of the others.
+            assert_eq!((s[1].scope, s[1].rows[0].item.title.as_str()), (Scope::App, app), "query: {q}");
+        }
+        // Commands that don't match leave Apps in the lead.
+        assert_eq!(first(&sections(&ranking("terminal", None), &all, &[])), (Scope::App, "Hotaru"));
     }
 
     #[test]
