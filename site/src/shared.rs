@@ -12,11 +12,13 @@ pub const NIGHTLY: &str = "https://downloads.sekka.computer/nightly";
 pub const BUILDS_TTL: u32 = 300;
 
 /// Every page's headers. _headers gives them to static files; the worker,
-/// whose responses Pages leaves alone, sets them itself.
+/// whose responses Pages leaves alone, sets them itself. The home page's
+/// video is a Wasm program (`wasm-unsafe-eval` lets the site's own scripts
+/// compile it) that its script fetches, with its soundtrack, from the site.
 pub const HEADERS: &[(&str, &str)] = &[
     (
         "Content-Security-Policy",
-        "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     ),
     ("Referrer-Policy", "no-referrer"),
     ("X-Content-Type-Options", "nosniff"),

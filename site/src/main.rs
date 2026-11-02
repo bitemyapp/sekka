@@ -1,8 +1,9 @@
 //! Builds sekka.computer: static HTML and CSS from the brand tokens, logos
-//! and screenshots in this repository. The only JavaScript browsers get is
-//! theme.js, which remembers the bar's Night/Day switch. The one
-//! piece of server-side code, the download worker (site/download-worker),
-//! is built apart and runs for /download/ alone (_routes.json).
+//! and screenshots in this repository. Browsers get two scripts: theme.js,
+//! which remembers the bar's Night/Day switch, and video.js, which plays the
+//! home page's video (site/video/). The one piece of server-side code, the
+//! download worker (site/download-worker), is built apart and runs for
+//! /download/ alone (_routes.json).
 
 mod brand;
 mod color;
@@ -19,7 +20,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const USAGE: &str = "Usage: sekka-site --repo DIR --out DIR --revision REV --date YYYY-MM-DD \
---mono TTF --mono-license TXT --sans TTF --sans-italic TTF --sans-license TXT --cjk TTC";
+--mono TTF --mono-license TXT --sans TTF --sans-italic TTF --sans-license TXT --cjk TTC \
+--shots DIR";
 
 pub struct Site {
     pub tokens: tokens::Tokens,
@@ -29,6 +31,9 @@ pub struct Site {
     pub date: String,
     repo: PathBuf,
     images: HashMap<&'static str, &'static str>,
+    /// The screenshots the video draws, by the names it asks for them by
+    /// ("01-desktop-night.png"), and their published paths.
+    shots: Vec<(String, String)>,
     /// Published path ("images/yukimi.png") to the URL it is served at.
     assets: BTreeMap<String, String>,
 }
@@ -54,6 +59,16 @@ const IMAGES: [(&str, &str); 14] = [
         "docs/images/sekka/activity-memory.png",
     ),
 ];
+
+/// The Sekka × Aizome video on YouTube, for browsers that can't draw it.
+const VIDEO: &str = "https://www.youtube.com/watch?v=jF4OwL1GbxY";
+/// What the home page shows in the video's place until it is played: the
+/// video's frame 1284 (21.4 s), rendered by its `frame` command.
+const VIDEO_POSTER: (&str, &str) = ("hype-video.png", "docs/images/sekka/hype-video.png");
+/// The video for the browser, built by web/build.sh in sekka-aizome-hype
+/// (DEVELOPERS.md, Website): its program, compiled to Wasm, with the JS
+/// that loads it, its soundtrack as Opus and as AAC, and its fonts' licence.
+const VIDEO_FILES: [&str; 5] = ["hype.js", "hype.wasm", "score.webm", "score.m4a", "OFL.txt"];
 
 const BRAND_FILES: [(&str, &str); 8] = [
     (
@@ -170,6 +185,68 @@ impl Site {
             caption = html::esc(caption),
         ))
     }
+
+    /// The video, drawn by the browser: video.js loads it once the page has
+    /// loaded, and shows the controls. Until it plays, its still; without
+    /// script, the still and the link to YouTube.
+    pub fn video(&self, title: &str, caption: &str, class: &str) -> Result<String> {
+        let (name, source) = VIDEO_POSTER;
+        let (w, h) = png_size(&self.repo.join(source))?;
+        let mut images = serde_json::Map::new();
+        for (name, path) in &self.shots {
+            images.insert(name.clone(), self.asset(path)?.into());
+        }
+        let file = |name: &str| self.asset(&format!("video/{name}"));
+        let icon = |class: &str, path: &str| {
+            format!(
+                r#"<svg class="player-icon {class}" viewBox="0 0 12 12" aria-hidden="true">{path}</svg>"#
+            )
+        };
+        let play = icon(
+            "icon-play",
+            r#"<path d="M3 1.5v9l7.5-4.5z" fill="currentColor"/>"#,
+        );
+        let pause = icon(
+            "icon-pause",
+            r#"<path d="M2.5 1.5H5v9H2.5zM7 1.5h2.5v9H7z" fill="currentColor"/>"#,
+        );
+        let speaker = r#"<path d="M1 4.25h2.25L6.5 1.5v9L3.25 7.75H1z" fill="currentColor"/>"#;
+        let sound = icon(
+            "icon-sound",
+            &format!(
+                r#"{speaker}<path d="M8 4a2.5 2.5 0 0 1 0 4M9.5 2.25a5 5 0 0 1 0 7.5" fill="none" stroke="currentColor" stroke-width="1.25"/>"#
+            ),
+        );
+        let silent = icon(
+            "icon-muted",
+            &format!(
+                r#"{speaker}<path d="M8 4.5l3 3M11 4.5l-3 3" fill="none" stroke="currentColor" stroke-width="1.25"/>"#
+            ),
+        );
+        let corners = |d: &str| {
+            format!(r#"<path d="{d}" fill="none" stroke="currentColor" stroke-width="1.5"/>"#)
+        };
+        let enter = icon(
+            "icon-enter",
+            &corners("M1 4.5V1h3.5M7.5 1H11v3.5M11 7.5V11H7.5M4.5 11H1V7.5"),
+        );
+        let exit = icon(
+            "icon-exit",
+            &corners("M4.5 1v3.5H1M11 4.5H7.5V1M7.5 11V7.5H11M1 7.5h3.5V11"),
+        );
+        Ok(format!(
+            r#"<figure class="win shot video {class}"><div class="player" data-state="poster" role="region" aria-label="{title}" tabindex="-1" data-module-src="{module}" data-wasm-src="{wasm}" data-opus-src="{opus}" data-aac-src="{aac}" data-images="{images}"><div class="player-screen" aria-hidden="true"><img class="player-poster" src="{poster}" width="{w}" height="{h}" alt="" loading="eager" fetchpriority="high" decoding="async"></div><button class="button player-big" type="button" hidden>{play}<span class="player-big-label">Play</span><span class="visually-hidden"> {title}</span></button><div class="player-bar" hidden><button class="player-button player-toggle" type="button" aria-label="Play">{play}{pause}</button><span class="player-time" aria-hidden="true"></span><input class="player-seek" type="range" min="0" max="0" step="1" value="0" aria-label="Seek" disabled><button class="player-button player-mute" type="button" aria-label="Mute">{sound}{silent}</button><input class="player-volume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume"><button class="player-button player-full" type="button" aria-label="Full screen">{enter}{exit}</button></div><p class="player-note" hidden>This browser couldn't draw the video. <a href="{VIDEO}">Watch it on YouTube</a>.</p></div><figcaption>{caption} <a href="{VIDEO}">Watch on YouTube</a></figcaption></figure><script type="module" src="{script}"></script>"#,
+            title = html::esc(title),
+            module = file("hype.js")?,
+            wasm = file("hype.wasm")?,
+            opus = file("score.webm")?,
+            aac = file("score.m4a")?,
+            images = html::esc(&serde_json::Value::Object(images).to_string()),
+            poster = self.asset(&format!("images/{name}"))?,
+            caption = html::esc(caption),
+            script = self.asset("video.js")?,
+        ))
+    }
 }
 
 struct Args {
@@ -183,6 +260,7 @@ struct Args {
     sans_italic: PathBuf,
     sans_license: PathBuf,
     cjk: PathBuf,
+    shots: PathBuf,
 }
 
 fn args() -> Result<Args> {
@@ -213,6 +291,7 @@ fn args() -> Result<Args> {
         sans_italic: take("sans-italic")?.into(),
         sans_license: take("sans-license")?.into(),
         cjk: take("cjk")?.into(),
+        shots: take("shots")?.into(),
     })
 }
 
@@ -334,7 +413,7 @@ fn main() -> Result<()> {
     fs::create_dir_all(out)?;
 
     let mut assets = BTreeMap::new();
-    for (name, source) in IMAGES {
+    for (name, source) in IMAGES.into_iter().chain([VIDEO_POSTER]) {
         publish_file(
             &a.repo.join(source),
             out,
@@ -367,6 +446,33 @@ fn main() -> Result<()> {
     ] {
         publish_file(from, out, path, &mut assets)?;
     }
+    for name in VIDEO_FILES {
+        publish_file(
+            &a.repo.join("site/video").join(name),
+            out,
+            &format!("video/{name}"),
+            &mut assets,
+        )?;
+    }
+    // The video's screenshots, as WebP (nix/site.nix), under the names of
+    // the PNGs they were made from.
+    let mut shots = Vec::new();
+    let mut entries = fs::read_dir(&a.shots)
+        .with_context(|| format!("reading {}", a.shots.display()))?
+        .collect::<std::io::Result<Vec<_>>>()?;
+    entries.sort_by_key(|e| e.file_name());
+    for entry in entries {
+        let file = entry
+            .file_name()
+            .into_string()
+            .map_err(|f| anyhow::anyhow!("{f:?} isn't UTF-8"))?;
+        let stem = file
+            .strip_suffix(".webp")
+            .with_context(|| format!("{file} in --shots isn't a WebP"))?;
+        let path = format!("video/{file}");
+        publish_file(&entry.path(), out, &path, &mut assets)?;
+        shots.push((format!("{stem}.png"), path));
+    }
 
     let tokens = tokens::Tokens::load(&a.repo.join("docs/brand/tokens.json"))?;
     let mut site = Site {
@@ -375,6 +481,7 @@ fn main() -> Result<()> {
         revision: a.revision.clone(),
         date: a.date.clone(),
         images: IMAGES.into_iter().collect(),
+        shots,
         repo: a.repo.clone(),
         assets,
         tokens,
@@ -393,11 +500,15 @@ fn main() -> Result<()> {
     // hours, which could pair new pages with old styles.
     let name = publish(out, "site.css", css.as_bytes(), &mut site.assets)?;
     written.push((name, css));
-    // The bar's Night/Day switch, the one script browsers get, hashed as
-    // the stylesheet is.
-    let script = include_str!("../theme.js");
-    let name = publish(out, "theme.js", script.as_bytes(), &mut site.assets)?;
-    written.push((name, script.to_owned()));
+    // The bar's Night/Day switch, and the home page's video, hashed as the
+    // stylesheet is.
+    for (path, script) in [
+        ("theme.js", include_str!("../theme.js")),
+        ("video.js", include_str!("../video.js")),
+    ] {
+        let name = publish(out, path, script.as_bytes(), &mut site.assets)?;
+        written.push((name, script.to_owned()));
+    }
 
     let pages = [
         pages::home(&site)?,

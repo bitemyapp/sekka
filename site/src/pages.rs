@@ -47,11 +47,10 @@ pub fn home(site: &Site) -> Result<Page> {
         lockup = site
             .brand
             .inline("sekka-lockup-night.svg", "hero-lockup", "Sekka 雪花")?,
-        shot = site.shot(
-            "aizome-desktop.png",
-            "The Aizome desktop: Sumi editing a Markdown file, Files and Hotaru, Aizome's terminal, running fastfetch, stacked in one tab group beside it, the menu bar along the top, and a notification filed under Tenki in the Deskbar.",
-            "Aizome: Sumi, with Files and Hotaru, its terminal, stacked in one tab group, in a test VM built from Sekka's own modules.",
-            "win hero-shot",
+        shot = site.video(
+            "Sekka and Aizome in 70 seconds",
+            "Sekka and Aizome in 70 seconds, drawn by your browser from this site's own files.",
+            "hero-shot",
         )?,
     )?;
 
@@ -1113,7 +1112,7 @@ pub fn status(site: &Site) -> Result<Page> {
   <article class="win">
     <h2>Privacy</h2>
     <ul class="facts">
-      <li>This site sets no cookies and sends no analytics to your browser. Its one script remembers whether you chose Night or Day, in your browser's local storage, and sends it nowhere. Cloudflare serves it and sees requests, as any host would. The download page lists the nightly builds as Cloudflare serves it.</li>
+      <li>This site sets no cookies and sends no analytics to your browser. One of its two scripts remembers whether you chose Night or Day, in your browser's local storage, and sends it nowhere. The other plays the video on the home page: once the page has loaded, it fetches the video's program, soundtrack and screenshots from this site, and it keeps nothing. Cloudflare serves it and sees requests, as any host would. The download page lists the nightly builds as Cloudflare serves it.</li>
       <li>Tatami's weather asks wttr.in and Open-Meteo; wttr.in locates you by IP address unless you set a place in Setup › Weather.</li>
       <li>Genkan's GitHub step is optional. It reads your public SSH keys and sets your Git identity.</li>
       <li>Sekka's own packages download from cache.sekka.computer, on Cloudflare R2. Only free software is published there.</li>
@@ -1180,14 +1179,16 @@ pub fn fonts(site: &Site) -> Result<Page> {
             r#"<section class="win focus page-head"><div>
   <p class="eyebrow">Fonts</p>
   <h1>The fonts this site serves.</h1>
-  <p class="lead">Both are served from this site, never from a font service, and both are under the SIL Open Font License 1.1.</p>
+  <p class="lead">They are served from this site, never from a font service, and all are under the SIL Open Font License 1.1.</p>
 </div></section>
 <section class="tiles">
   <article class="win"><h2 class="type-display">JetBrains Mono</h2><p>Tatami's face, by JetBrains. <a href="{mono}">License</a></p></article>
   <article class="win"><h2>Atkinson Hyperlegible Next</h2><p>By the Braille Institute. <a href="{sans}">License</a></p></article>
 </section>
 <section class="win"><p>The kanji are outlines drawn from Noto Serif CJK JP, also under the SIL Open Font License.</p></section>
+<section class="win"><p>The video on the home page carries its own fonts inside its program, and your browser draws its frames with them: Archivo, IBM Plex Mono, JetBrains Mono, Noto Sans Symbols 2 and Noto Serif JP. <a href="{video}">Their copyright notices and license</a>.</p></section>
 "#,
+            video = site.asset("video/OFL.txt")?,
             mono = site.asset("fonts/JetBrainsMono-OFL.txt")?,
             sans = site.asset("fonts/AtkinsonHyperlegibleNext-OFL.txt")?,
         ),
