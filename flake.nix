@@ -74,6 +74,8 @@
       avahiPkgs = pkgs.extend avahiOverlay;
       pipewireOverlay = import ./nix/overlays/pipewire.nix;
       pipewirePkgs = pkgs.extend pipewireOverlay;
+      libsecretOverlay = import ./nix/overlays/libsecret.nix;
+      libsecretPkgs = pkgs.extend libsecretOverlay;
       tools = import ./nix/tools.nix { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
       publishNightly = import ./nix/publish-nightly.nix { inherit pkgs; };
@@ -136,6 +138,7 @@
         xappOverlay
         avahiOverlay
         pipewireOverlay
+        libsecretOverlay
       ];
       nixosModules = {
         default = inputs.calamares.nixosModules.default;
@@ -344,6 +347,14 @@
           runner = self.packages.${system}.runner;
         };
         pr-ci = import ./nix/pr-ci-test.nix { inherit pkgs; };
+        ci-cache = import ./nix/ci-cache-test.nix {
+          inherit pkgs;
+          nixPackage = runnerNix;
+        };
+        libsecret-dh = import ./nix/libsecret-dh-test.nix {
+          inherit pkgs;
+          patched = libsecretPkgs.libsecret;
+        };
         session-environment = import ./nix/session-environment-vm-test.nix {
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;

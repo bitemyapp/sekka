@@ -38,6 +38,8 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
+          sparse-checkout: /scripts/check-pr-trust.py
+          sparse-checkout-cone-mode: false
       - name: Check current repository permissions and merge identity
         id: trust
         env:
@@ -67,11 +69,18 @@ jobs:
       contents: read
     env:
       GC_INITIAL_HEAP_SIZE: "34359738368"
+      NIX_CONFIG: |
+        experimental-features = nix-command flakes
+        max-jobs = 32
+        cores = 16
+        eval-cores = 8
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
+          sparse-checkout: /scripts/check-pr-trust.py
+          sparse-checkout-cone-mode: false
       - name: Recheck trust after waiting for the builder
         id: recheck
         env:
@@ -102,11 +111,11 @@ jobs:
             in pkgs.runCommand "kvm-${toString builtins.currentTime}" { requiredSystemFeatures = [ "kvm" ]; } "exec 3<>/dev/kvm && touch $out"
           '
       - name: Build Uta
-        run: nix build --no-update-lock-file --print-build-logs --no-link .#uta
+        run: python3 scripts/ci-retain.py pr uta build --no-update-lock-file --print-build-logs .#uta
       - name: Build and test components
         run: |
           set -euo pipefail
-          nix flake check --no-update-lock-file --print-build-logs
+          python3 scripts/ci-retain.py pr checks flake check --no-update-lock-file --print-build-logs
           git diff --exit-code
 
   result:

@@ -14,6 +14,9 @@
   ...
 }:
 let
+  # Also fixes systems whose installed flake predates this backport. The
+  # public applicationPkgs argument and independently locked source remain.
+  appPkgs = applicationPkgs.extend (import ../../../../nix/overlays/libsecret.nix);
   catalog = builtins.fromJSON (builtins.readFile ./applications.json);
   # Choices the catalog no longer offers, which systems that chose them keep
   # in calamares.applications: fish comes with Aizome now, and turns on
@@ -30,25 +33,25 @@ let
   # Chromium and Electron apps use GNOME Keyring in every desktop but Plasma.
   withKeyring = import ./keyring.nix {
     inherit lib;
-    pkgs = applicationPkgs;
+    pkgs = appPkgs;
   };
   packagesFor =
     app:
     if (app.source or "nixpkgs") == "omp" then
       [ ompPackage ]
     else
-      map (
-        name: withKeyring app (sources.${app.source or "nixpkgs"} or applicationPkgs).${name}
-      ) app.packages;
+      map (name: withKeyring app (sources.${app.source or "nixpkgs"} or appPkgs).${name}) app.packages;
   packages = lib.unique (lib.concatMap packagesFor selected);
   # Development build tools, Lazygit and the GitHub CLI each bring Git.
   withGit = builtins.any (app: builtins.elem "git" app.packages) selected;
   # nixpkgs names Zed's Linux CLI `zeditor`, while Zed's docs and most user
   # workflows invoke it as `zed`. Expose the expected command whenever the
   # editor is selected in the installer.
-  zedCli = lib.optional (has "zed") (pkgs.writeShellScriptBin "zed" ''
-    exec ${applicationPkgs.zed-editor}/bin/zeditor "$@"
-  '');
+  zedCli = lib.optional (has "zed") (
+    pkgs.writeShellScriptBin "zed" ''
+      exec ${appPkgs.zed-editor}/bin/zeditor "$@"
+    ''
+  );
   launchers = map (
     app:
     pkgs.makeDesktopItem {
@@ -169,25 +172,25 @@ in
       // lib.optionalAttrs (has "libreoffice") office;
     programs.firefox = lib.mkIf (has "firefox") {
       enable = true;
-      package = applicationPkgs.firefox;
+      package = appPkgs.firefox;
     };
     programs.steam = lib.mkIf (has "steam") {
       enable = true;
-      package = applicationPkgs.steam;
+      package = appPkgs.steam;
     };
     # Git LFS comes with Git. Its filter in /etc/gitconfig is what
     # `git lfs install` would set per account: without it, LFS files clone as
     # pointer files. Git LFS adds each repository's hooks itself.
     programs.git = lib.mkIf withGit {
       enable = true;
-      package = lib.mkDefault applicationPkgs.git;
+      package = lib.mkDefault appPkgs.git;
       lfs = {
         enable = true;
-        package = lib.mkDefault applicationPkgs.git-lfs;
+        package = lib.mkDefault appPkgs.git-lfs;
       };
     };
     virtualisation.docker = lib.mkIf (has "docker") {
-      package = applicationPkgs.docker;
+      package = appPkgs.docker;
       rootless = {
         enable = true;
         setSocketVariable = true;

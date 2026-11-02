@@ -67,73 +67,91 @@ pkgs.testers.runNixOSTest {
     };
   };
   testScript = ''
+    import shlex
+
+    def media_command(command):
+        return ("nsenter --mount=/proc/$(systemctl show live-media-fixture.service "
+                "-p MainPID --value)/ns/mnt -- sh -c " + shlex.quote(command))
+
+    def succeed(machine, command):
+        return machine.succeed(media_command(command))
+
+    def fail(machine, command):
+        return machine.fail(media_command(command))
+
     def fixture(machine):
         machine.start()
         machine.wait_for_unit("multi-user.target")
-        # /nix/store has its own bind; removing this name leaves the VM store
-        # usable and avoids hiding a second mount beneath the fixture mount.
-        machine.succeed("while mountpoint -q /nix/.ro-store; do umount /nix/.ro-store || exit 1; done")
-        machine.succeed("mkdir -p /run/store-fixture /run/media-fixture /iso")
-        machine.succeed("echo fixture > /run/store-fixture/marker")
-        machine.succeed("mksquashfs /run/store-fixture /run/media-fixture/nix-store.squashfs -noappend -processors 1")
-        machine.succeed("xorriso -as mkisofs -quiet -o /run/media.iso /run/media-fixture")
+        # Keep these real kernel mounts private to the fixture. Unmounting
+        # the VM's original /nix/.ro-store in PID 1's namespace makes systemd
+        # asynchronously stop nix-store.mount and nix-daemon.socket; a later
+        # remount then races systemd's teardown. The probe reads its own mount
+        # namespace, exactly as it does on installation media.
+        machine.succeed("systemd-run --unit=live-media-fixture -p PrivateMounts=yes sleep infinity")
+        machine.wait_for_unit("live-media-fixture.service")
+        succeed(machine, "while mountpoint -q /nix/.ro-store; do umount /nix/.ro-store || exit 1; done")
+        succeed(machine, "mkdir -p /run/store-fixture /run/media-fixture /iso")
+        succeed(machine, "echo fixture > /run/store-fixture/marker")
+        succeed(machine, "mksquashfs /run/store-fixture /run/media-fixture/nix-store.squashfs -noappend -processors 1")
+        succeed(machine, "xorriso -as mkisofs -quiet -o /run/media.iso /run/media-fixture")
 
     def iso(machine):
-        machine.succeed("mount -t iso9660 -o loop,ro /run/media.iso /iso")
+        succeed(machine, "mount -t iso9660 -o loop,ro /run/media.iso /iso")
 
     def ram_media(machine):
-        machine.succeed("mount -t tmpfs tmpfs /iso")
-        machine.succeed("cp /run/media-fixture/nix-store.squashfs /iso/")
+        succeed(machine, "mount -t tmpfs tmpfs /iso")
+        succeed(machine, "cp /run/media-fixture/nix-store.squashfs /iso/")
         # The VM's /nix/store remains a separate bind of the original store.
-        machine.succeed("mount -t squashfs -o loop,ro /iso/nix-store.squashfs /nix/.ro-store")
+        succeed(machine, "mount -t squashfs -o loop,ro /iso/nix-store.squashfs /nix/.ro-store")
 
     with subtest("ordinary read-only ISO remains accepted"):
         fixture(ram)
-        assert ram.succeed("findmnt -n -o FSTYPE --mountpoint /").strip() == "tmpfs"
+        assert succeed(ram, "findmnt -n -o FSTYPE --mountpoint /").strip() == "tmpfs"
         iso(ram)
-        ram.succeed("live-guard-probe")
-        error = ram.fail("su - alice -c live-guard-probe 2>&1")
+        succeed(ram, "live-guard-probe")
+        error = fail(ram, "su - alice -c live-guard-probe 2>&1")
         assert "requires root" in error, error
-        ram.succeed("umount /iso")
+        succeed(ram, "umount /iso")
 
     with subtest("genuine RAM media with its read-only squashfs is accepted"):
         ram_media(ram)
-        print(ram.succeed("findmnt -J --mountpoint /iso"))
-        print(ram.succeed("findmnt -J --mountpoint /nix/.ro-store"))
-        ram.succeed("live-guard-probe")
+        print(succeed(ram, "findmnt -J --mountpoint /iso"))
+        print(succeed(ram, "findmnt -J --mountpoint /nix/.ro-store"))
+        succeed(ram, "live-guard-probe")
 
     with subtest("a tmpfs with an absent or unrelated store image is refused"):
-        ram.succeed("umount /nix/.ro-store")
-        ram.fail("live-guard-probe")
-        ram.succeed("mount -t squashfs -o loop,ro /run/media-fixture/nix-store.squashfs /nix/.ro-store")
-        error = ram.fail("live-guard-probe 2>&1")
+        succeed(ram, "umount /nix/.ro-store")
+        fail(ram, "live-guard-probe")
+        succeed(ram, "mount -t squashfs -o loop,ro /run/media-fixture/nix-store.squashfs /nix/.ro-store")
+        error = fail(ram, "live-guard-probe 2>&1")
         assert "not backed by /iso/nix-store.squashfs" in error, error
-        ram.succeed("umount /nix/.ro-store")
-        ram.succeed("mount -t squashfs -o loop,ro /iso/nix-store.squashfs /nix/.ro-store")
-        ram.succeed("live-guard-probe")
-        ram.succeed("mv /iso/nix-store.squashfs /iso/unrelated.squashfs")
-        error = ram.fail("live-guard-probe 2>&1")
+        succeed(ram, "umount /nix/.ro-store")
+        succeed(ram, "mount -t squashfs -o loop,ro /iso/nix-store.squashfs /nix/.ro-store")
+        succeed(ram, "live-guard-probe")
+        succeed(ram, "mv /iso/nix-store.squashfs /iso/unrelated.squashfs")
+        error = fail(ram, "live-guard-probe 2>&1")
         assert "not backed by /iso/nix-store.squashfs" in error, error
-        ram.succeed("mv /iso/unrelated.squashfs /iso/nix-store.squashfs")
-        ram.succeed("live-guard-probe")
+        succeed(ram, "mv /iso/unrelated.squashfs /iso/nix-store.squashfs")
+        succeed(ram, "live-guard-probe")
+        ram.succeed("mountpoint -q /nix/.ro-store && systemctl is-active nix-daemon.socket")
         ram.shutdown()
 
     with subtest("temporary-root hosts without copytoram cannot use the RAM exception"):
         fixture(ordinary)
         ram_media(ordinary)
-        error = ordinary.fail("live-guard-probe 2>&1")
+        error = fail(ordinary, "live-guard-probe 2>&1")
         assert "only supported after a copytoram boot" in error, error
         ordinary.shutdown()
 
     with subtest("an installed root is refused with optical or RAM media attached"):
         fixture(installed)
-        assert installed.succeed("findmnt -n -o FSTYPE --mountpoint /").strip() == "ext4"
+        assert succeed(installed, "findmnt -n -o FSTYPE --mountpoint /").strip() == "ext4"
         iso(installed)
-        error = installed.fail("live-guard-probe 2>&1")
+        error = fail(installed, "live-guard-probe 2>&1")
         assert "root is not temporary" in error, error
-        installed.succeed("umount /iso")
+        succeed(installed, "umount /iso")
         ram_media(installed)
-        error = installed.fail("live-guard-probe 2>&1")
+        error = fail(installed, "live-guard-probe 2>&1")
         assert "root is not temporary" in error, error
         installed.shutdown()
   '';
