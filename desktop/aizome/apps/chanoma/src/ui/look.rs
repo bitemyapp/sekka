@@ -356,6 +356,7 @@ fn is_cap(family: Family, b: Button) -> bool {
     family == Family::Keyboard
         || match b {
             Button::South | Button::East | Button::West | Button::North | Button::Guide => false,
+            Button::Up | Button::Down | Button::Left | Button::Right => false,
             Button::Start | Button::Select => family == Family::Nintendo,
             _ => true,
         }
@@ -384,8 +385,14 @@ pub fn button_glyph(c: &mut Canvas, theme: &Theme, family: Family, b: Button, at
         let cap = Rect::new(cap.x0.round(), cap.y0.round(), cap.x1.round(), cap.y1.round());
         c.fill_rect(cap, theme.raised());
         border(c, cap, theme.line2(), edge);
-        text_centred(c, theme, cap_label(family, b), at, mono(r * 0.8, MEDIUM), theme.text());
+        match arrow(b) {
+            Some(i) => icon(c, i, at, r * 1.05, theme.text()),
+            None => text_centred(c, theme, cap_label(family, b), at, mono(r * 0.8, MEDIUM), theme.text()),
+        }
         return;
+    }
+    if arrow(b).is_some() {
+        return dpad(c, theme, b, at, r, edge);
     }
     c.fill(&Circle::new(at, r), theme.raised());
     c.stroke(&Circle::new(at, r - edge / 2.0), &StrokeStyle::new(edge), theme.line2());
@@ -444,6 +451,46 @@ pub fn button_glyph(c: &mut Canvas, theme: &Theme, family: Family, b: Button, at
         Button::Select => icon(c, Icon::Copy, at, r * 1.05, theme.text()),
         _ => icon(c, Icon::House, at, r * 1.1, theme.text()),
     }
+}
+
+/// An arrow's icon, for a keyboard's arrow keys.
+fn arrow(b: Button) -> Option<Icon> {
+    match b {
+        Button::Up => Some(Icon::ArrowUp),
+        Button::Down => Some(Icon::ArrowDown),
+        Button::Left => Some(Icon::ArrowLeft),
+        Button::Right => Some(Icon::ArrowRight),
+        _ => None,
+    }
+}
+
+/// The direction pad, a cross with the arm meant filled: the same on
+/// every controller.
+fn dpad(c: &mut Canvas, theme: &Theme, b: Button, at: Point, r: f64, edge: f64) {
+    let a = r / 1.5;
+    let (h, l) = (a / 2.0, 1.5 * a);
+    let corners =
+        [(-h, -l), (h, -l), (h, -h), (l, -h), (l, h), (h, h), (h, l), (-h, l), (-h, h), (-l, h), (-l, -h), (-h, -h)];
+    let mut cross = BezPath::new();
+    for (i, (x, y)) in corners.into_iter().enumerate() {
+        let p = (at.x + x, at.y + y);
+        if i == 0 {
+            cross.move_to(p);
+        } else {
+            cross.line_to(p);
+        }
+    }
+    cross.close_path();
+    c.fill(&cross, theme.raised());
+    c.stroke(&cross, &StrokeStyle::new(edge), theme.line2());
+    let (dx, dy) = match b {
+        Button::Up => (0.0, -1.0),
+        Button::Down => (0.0, 1.0),
+        Button::Left => (-1.0, 0.0),
+        _ => (1.0, 0.0),
+    };
+    let arm = Rect::from_center_size(at + Vec2::new(dx * a, dy * a), (a - 2.0 * edge, a - 2.0 * edge));
+    c.fill_rect(arm, theme.focus());
 }
 
 /// The room between hints along the foot.

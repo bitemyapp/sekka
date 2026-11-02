@@ -41,8 +41,8 @@ explicitly (and Chanoma also looks in NixOS's profiles).
 | `pad/` | Controllers from `/dev/input`: hot-plug through inotify, the exclusive grab, player slots, mappings, menu navigation with repeat, batteries, rumble |
 | `retro/` | The libretro frontend: the C interface, the host (callbacks, environment, core options), video, sound, and a session thread per game |
 | `browser.rs` | Services in Chrome: profiles, kiosk flags, the window followed through the compositor's IPC, input through it |
-| `devtools.rs` | Services kept to their sites, over the browser's DevTools pipe |
-| `services.rs` | The services, and the sites each one's pages may go to |
+| `devtools.rs` | Services kept to their sites, and Chanoma's keyboard asking and typing on their pages, over the browser's DevTools pipe |
+| `services.rs` | The services, the sites each one's pages may go to, and which need Chanoma's keyboard |
 | `rules.rs` | The PIN, wrong-PIN lockout, what kids may open, daily limits, bedtime, grants |
 | `library.rs` | Systems, cores, games and videos found in folders |
 | `folders.rs` | Choosing a folder: the places to start from, a folder's folders and what's in each, what Chanoma would find in one |
@@ -65,7 +65,8 @@ room reads as a laptop's screen at arm's length does at twice the size.
 The menus are the kit's titled menus (a dark title strip, engraved rows);
 the settings follow Settei's side list; the PIN pad and the one-thing
 screens follow the lock screen. The clock follows the menu bar's 24- or
-12-hour setting, read at start.
+12-hour setting, read at start. Chanoma's keyboard over a page is a
+floating panel along the foot of the screen, its keys square faces.
 
 ### Controllers
 
@@ -104,7 +105,7 @@ Wherever Chanoma is, and whatever is in hand, there's a way back to Home:
 | | Controller | Keyboard | Mouse |
 |---|---|---|---|
 | Chanoma's screens | Back, Home | Esc, Home or F1 | the hints along the foot are buttons (*Back*, *Home*), as are a screen's own (*Cancel*, *Back home*) |
-| A menu or the PIN pad | Back | Esc | a click beside it |
+| A menu or the PIN pad | Back (on the pad, once its presses are taken back) | Esc | a click beside it |
 | A game or a film | Home: its menu | Esc, Home or F1: its menu | moving it brings a bar down from the top, *Home* at its left; a click on the picture is the menu too |
 | A page in the browser | Home: the menu over the page | Home or F1, kept from the page | the pointer pushed up to the top of the screen brings the bar down |
 
@@ -237,6 +238,57 @@ and neither fits:
   (`--load-extension`; checked on 156, where Chromium still does), and
   DRM services need Google Chrome.
 
+### Chanoma's keyboard
+
+A service's text boxes (a search, a sign-in) get Chanoma's own keyboard
+(`ui/keyboard.rs`, `app/typing.rs`) where nothing else types: every
+service but YouTube, whose television interface has a keyboard of its
+own that the arrows work (`Service::keyboard`), and every website a
+grown-up adds.
+
+- **When it comes up.** 300 ms after the confirm button is let go on such
+  a page (a click where the pointer is), or after the shoulders move
+  between its controls, Chanoma asks the page what has its keyboard. A
+  text box chosen that way (within 2 seconds) brings the keyboard up; a
+  box moved to with the shoulders brings it up when the confirm button is
+  pressed on it, rather than Return. A mouse's clicks don't ask: whoever
+  has a mouse has a keyboard, as a rule. Select brings it up by hand, for
+  a box the page can't tell of (below).
+- **Asking the page** goes over the DevTools pipe (`Ask::Focused`): a
+  world of Chanoma's own in the page (`Page.createIsolatedWorld`, made
+  again when the page's document changes) evaluates a short probe of
+  `document.activeElement`, through open shadow roots and into frames from
+  the page's own process. It says the box's label (its `aria-label`,
+  placeholder, label, title or name), what's in it and where the caret is,
+  or for a password only how long it is; or that a frame from another
+  site has the keyboard; or nothing that types. The page's scripts can't
+  see that world, and the page's runtime isn't enabled for DevTools:
+  `Runtime.enable` is what pages that look for automation notice, and a
+  binding the page calls would need it (without it, a binding never reached
+  a new document in Chromium or Chrome 156). So the page is asked,
+  not listened to: after a choice, after each key typed, and every 700 ms
+  while the keyboard is up.
+- **Typing** goes over the pipe too, as the browser's own input, to
+  whatever has its keyboard, a box in a frame from another site included:
+  `Input.insertText` for what's typed, whatever the keyboard layout, and
+  `Input.dispatchKeyEvent` for Backspace, Return and the caret's arrows.
+  One path keeps them in order.
+- **On the keyboard** the arrows or the stick move between keys (the
+  sticks no longer move the page's pointer); the confirm button presses
+  one; X deletes, Y is a space, the shoulders move the caret, LT is Shift
+  (pressed twice, capitals stay), RT the symbols; Start is Enter, which
+  sends what's typed and puts the keyboard away; Back, Select or a click
+  beside it puts it away too. Keys are buttons for a mouse. Above the keys
+  is what's in the box, as the box may be under the keyboard. The overlay
+  doesn't take the keyboard, so a real keyboard still types into the page.
+- **It goes by itself** when the box lets the keyboard go (a search sent,
+  another page), unless it was brought up by hand before a box had it.
+  Home brings the page's menu, the keyboard put away.
+- **Select and Start** on a page count when they're let go, alone: held
+  together, they're Home on a controller without one, and would
+  otherwise have brought the keyboard up or pressed Enter (and Start
+  played or paused the page) on the way.
+
 ### Films and shows
 
 Films play through Utsushi's engine (`aizome-media`'s `Player`), into
@@ -292,7 +344,28 @@ Chanoma whenever what shows changes.
 
 ### Rules
 
-The PIN is kept as PBKDF2-HMAC-SHA-256 with a random salt and 150,000
+The PIN is four to eight presses of the controller's buttons, as a
+console's passcode is (`ui/pinpad.rs`). Each press is the same dot in
+its cell, and nothing in the legend lights, so someone watching sees that
+a button went but not which. The legend is the buttons a PIN is made of:
+the four arrows, the shoulders, and the top and left face buttons. They're
+named by place, as every button is here, so a PIN made on one controller
+is the same presses on any other, whoever made it; the legend draws each
+in the prints of the controller pressed last, with a mark under the face
+buttons saying which place they are (Xbox's Y is Nintendo's X). Left out:
+the yes and no buttons, which Nintendo's controllers swap (they're Done
+and Delete), the triggers, which some pads lack and others press only
+part way, and the sticks. The arrows count as presses of the direction
+pad only, once each, never the stick or a press held. Delete (the no
+button, Backspace, or the pad's Delete clicked) takes the last press back,
+and with none, puts the pad away. A keyboard presses them with the arrows,
+Page Up and Page Down, Tab and Space, the keys Chanoma's hints show for
+those buttons, and the legend shows those keys when a keyboard was last
+used. A PIN is kept as the digits of its buttons' places in the legend
+(1 is Up), so a PIN made of digits 1 to 8 before PINs were buttons is
+still the same; one with a 9 or a 0 needs `--reset-pin`.
+
+It's kept as PBKDF2-HMAC-SHA-256 with a random salt and 150,000
 rounds (about a tenth of a second, checked off the interface thread).
 Three wrong PINs are free; then the pad waits 30 seconds, doubling each
 time up to 15 minutes, and the count is kept in `lockout.json`. This keeps
@@ -369,14 +442,20 @@ CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
   language chosen found again in the next episode (by name, `en` as
   `eng`; by place without one; none rather than another language), and
   the sites a page may be on (subdomains; not look-alikes, a user before
-  the host, the rest of Google, or what isn't the web). What
+  the host, the rest of Google, or what isn't the web), which services get
+  Chanoma's keyboard, the PIN's buttons (none of yes, no, the triggers
+  or Start) and where clicks on its pad land, and the keyboard's rows,
+  moving between its keys, Shift and its symbols. What
   plays, where a film carries on and the subtitles' cues are
   `aizome-media`'s, tested there; serving the media controls is
   `aizome-mpris`'s, tested there against a private `dbus-daemon` (what a
   player says, and which asks reach it).
 - **Headless** (`tests/chanoma.rs`, also in the package's check): the
-  first setup by controller and keyboard; Home for kids and grown-ups;
-  wrong PINs and their wait, surviving a restart; a game played through a
+  first setup, its PIN pressed on the controller (a slip taken back with
+  B; the stick, a trigger, Start and Select pressing nothing) and again on
+  the keyboard; Home for kids and grown-ups; a PIN made on an Xbox
+  controller pressed on a Nintendo one, its B taking a press back; wrong
+  PINs and their wait, surviving a restart; a game played through a
   libretro core written in the test (frames reaching the window's video
   sink enlarged, the controller reaching the core, pausing under the Home
   menu, its state and picture kept, *Keep playing*, carrying on); time
@@ -394,7 +473,12 @@ CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
   pointer returns to the page, and the compositor's word of Home on the
   keyboard leading home; kept to its service in kids' mode, a link out
   said to be outside; a browser that can't be kept ending on a screen
-  saying so); a film, the engine's test card with a SubRip
+  saying so); Chanoma's keyboard over a page, with the page's answers
+  told by hand (a box chosen with A bringing it, the stick moving between
+  keys, Shift for a letter, what's in the box shown, a key clicked, B
+  putting it away; Select bringing it by hand and the box letting it go;
+  Select and Start together doing neither; Start as Enter; a box moved
+  to with RB; Home; and none on YouTube's television interface); a film, the engine's test card with a SubRip
   file beside it (its subtitles showing as it plays, in italics where the
   file says; the film's menu offering them and no language for one sound
   track; the subtitles' menu on the track showing, Back to the film's
@@ -418,7 +502,14 @@ CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
   and refuses it again, and the pipe closing ends the browser. On
   2026-11-01 it passed with nixpkgs' Chromium 156.0.8078.73 and Google
   Chrome 156.0.8078.79 (7.7 s each), and failed as it should with the
-  refusing turned off.
+  refusing turned off. A second page has boxes for Chanoma's keyboard:
+  asked, it says nothing types, then the search box the page gives the
+  keyboard (its label, empty); typing `héllo`, Backspace, the caret left
+  and `X` leave `hélXl` with the caret before the last letter; Return
+  sends it; the password box after says only how long it is; and a frame
+  from another site says only that it's a frame. Nothing is added to the
+  page's own world meanwhile. On 2026-11-01 both passed with the same two
+  browsers (7.8 s and 7.9 s).
 - **In a VM** (`nix build .#aizome-checks.chanoma`): the packaged app in an
   Aizome session, started by the module's autostart, with a uinput
   controller that looks like Microsoft's Bluetooth one and nothing else.
@@ -442,7 +533,19 @@ CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
     and a script going there both refused, the page as it was and the
     server never asked, the site's own other page opening, and the page
     not told the browser is steered;
-  - stopping the unit mid-game, as logging out does, keeping it.
+  - the page's search box clicked with A, bringing Chanoma's keyboard; A
+    typing `q` into the page and X taking it back; the arrows to `h` and
+    `i`, typed; Start sending `hi` (the server asked for `/?q=hi`) and
+    putting the keyboard away;
+  - stopping the unit mid-game, as logging out does, keeping it;
+  - Chanoma started again, the PIN pressed on the controller from Home's
+    grown-ups' door: the pad the same, as the compositor captures it,
+    after one press of Down as after one of Up (the first taken back
+    with B), and Down, Right, RB, X opening grown-up mode.
+
+  On 2026-11-01 every step passed (the script in 65.9 s), keeping three
+  screenshots in its output: the keyboard over the page, the PIN pad after
+  a press, and the page left where it was after a link elsewhere.
 - **Live** on the X1 Carbon, under a headless Aizome compositor of its
   own beside the desktop (release build, gambatte, generated videos):
   Home, a game shown through the compositor at the Game Boy's shape, the
@@ -470,11 +573,23 @@ before calling any of it tested on hardware.
 - Links to other programs (`mailto:`, an app's own scheme) aren't web
   pages, so this doesn't refuse them; what Chrome does with one in kiosk
   mode hasn't been tried.
+- Chanoma's keyboard comes up by itself only for a box in the page or a
+  frame from its own process: a box in a frame from another site (Apple's
+  sign-in is one), or behind a closed shadow root, takes Select (typing
+  reaches it all the same, but what's in it doesn't show). Its keys are
+  English letters and ASCII symbols, with no accents or other scripts,
+  and no input method for Japanese or Chinese. A page's own suggestions
+  under its box are reached by putting the keyboard away. It hasn't been
+  tried on a service's real sign-in or search.
+- A PIN needs the arrows, both shoulders and the top and left face
+  buttons: a controller without them (an NES-style pad) can't press
+  every PIN.
 - DRM-protected services need Google Chrome; nixpkgs' Chromium has no
   Widevine.
 - No hardware-rendered cores; no disc swapping for multi-disc games; no
   touch screens (the DS).
-- Adding a website needs a keyboard and a mouse (its address is typed).
+- Adding a website needs a keyboard and a mouse: its address is typed
+  in a dialog of the kit's, where Chanoma's keyboard doesn't come.
   Choosing folders doesn't: see Choosing folders above.
 - Subtitles lose ASS styling (italics and top placement are kept), as in
   Utsushi. A subtitle file beside a film with no language in its name is

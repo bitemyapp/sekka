@@ -29,7 +29,7 @@ use std::time::{Duration, Instant};
 
 use aizome_ipc::{Request, Response, Synthetic, WindowId};
 
-use crate::devtools::{self, Told};
+use crate::devtools::{self, Ask, Asker, Focused, Told};
 use crate::pad::{Axis, SLOTS, Shared};
 use crate::services::{Drive, Sites};
 
@@ -114,6 +114,8 @@ pub enum Event {
     /// The browser can't be kept to the service's sites (it doesn't answer
     /// on its DevTools pipe), so it shows nothing.
     Unkept,
+    /// What has the page's keyboard, as asked ([`Browser::ask`]).
+    Focused(Focused),
 }
 
 /// What a press means on a page.
@@ -139,6 +141,8 @@ pub struct Bridge {
     /// The pointer moved since the keyboard was last used to move between
     /// a page's controls.
     pointing: Arc<AtomicBool>,
+    /// The sticks are Chanoma's (its keyboard is up): they move nothing.
+    held: Arc<AtomicBool>,
     back_down: Mutex<Option<Instant>>,
     drive: Drive,
 }
@@ -160,9 +164,11 @@ impl Bridge {
         let stop = Arc::new(AtomicBool::new(false));
         // On an ordinary page the confirm button clicks from the start.
         let pointing = Arc::new(AtomicBool::new(drive == Drive::Pointer));
-        let (s, p) = (stop.clone(), pointing.clone());
-        let _ = std::thread::Builder::new().name("chanoma-bridge".into()).spawn(move || bridge(rx, s, p, pads, drive));
-        Bridge { tx, stop, pointing, back_down: Mutex::new(None), drive }
+        let held = Arc::new(AtomicBool::new(false));
+        let (s, p, h) = (stop.clone(), pointing.clone(), held.clone());
+        let _ =
+            std::thread::Builder::new().name("chanoma-bridge".into()).spawn(move || bridge(rx, s, p, h, pads, drive));
+        Bridge { tx, stop, pointing, held, back_down: Mutex::new(None), drive }
     }
 
     fn send(&self, events: Vec<Synthetic>) {
@@ -211,6 +217,18 @@ impl Bridge {
         }
     }
 
+    /// Whether the confirm button clicks where the pointer is (rather than
+    /// pressing Return on the control the keyboard moved to).
+    pub fn pointing(&self) -> bool {
+        self.drive == Drive::Pointer && self.pointing.load(Ordering::Acquire)
+    }
+
+    /// The sticks move nothing on the page while `on` (Chanoma's keyboard
+    /// takes them).
+    pub fn hold(&self, on: bool) {
+        self.held.store(on, Ordering::Release);
+    }
+
     /// Let go of everything held (a menu opened over the page).
     pub fn release_all(&self) {
         *self.back_down.lock().unwrap_or_else(|e| e.into_inner()) = None;
@@ -245,6 +263,7 @@ fn bridge(
     rx: mpsc::Receiver<Vec<Synthetic>>,
     stop: Arc<AtomicBool>,
     pointing: Arc<AtomicBool>,
+    held: Arc<AtomicBool>,
     pads: Arc<Shared>,
     drive: Drive,
 ) {
@@ -279,7 +298,9 @@ fn bridge(
         let now = Instant::now();
         let dt = now.duration_since(last).as_secs_f64().min(0.05);
         last = now;
-        if drive == Drive::Pointer {
+        if held.load(Ordering::Acquire) {
+            scroll_left = (0.0, 0.0);
+        } else if drive == Drive::Pointer {
             let (mut dx, mut dy, mut sx, mut sy) = (0.0, 0.0, 0.0, 0.0);
             for s in (0..SLOTS).filter(|s| pads.connected(*s)) {
                 dx += curve(pads.axis(s, Axis::LeftX));
@@ -326,6 +347,7 @@ pub struct Browser {
     stop: Arc<AtomicBool>,
     /// Kept to the service's sites (kids' mode).
     kept: Arc<AtomicBool>,
+    asker: Asker,
 }
 
 impl Browser {
@@ -352,23 +374,36 @@ impl Browser {
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null());
         let (child, pipe) = devtools::spawn(&mut command)?;
+        let (asker, asked) = devtools::asking()?;
         let pid = child.id() as i32;
         let child = Arc::new(Mutex::new(child));
         let window = Arc::new(Mutex::new(None));
         let stop = Arc::new(AtomicBool::new(false));
+        // Nothing it says once it's being ended reaches Chanoma: a page
+        // opened after it hears nothing of this one's closing.
+        let events = {
+            let stopped = stop.clone();
+            move |e: Event| {
+                if !stopped.load(Ordering::Acquire) {
+                    events(e);
+                }
+            }
+        };
         let kept = Arc::new(AtomicBool::new(kept));
         let (k, s, e, url) = (kept.clone(), stop.clone(), events.clone(), url.to_owned());
         let _ = std::thread::Builder::new().name("chanoma-devtools".into()).spawn(move || {
-            devtools::keep(pipe, sites, url, &k, &s, |told| {
+            devtools::keep(pipe, sites, url, asked, &k, &s, |told| {
                 e(match told {
                     Told::Outside(host) => Event::Outside(host),
                     Told::Unanswered => Event::Unkept,
+                    Told::Focused(f) => Event::Focused(f),
                 })
             })
         });
         let (c, w, s) = (child.clone(), window.clone(), stop.clone());
         let _ = std::thread::Builder::new().name("chanoma-browser".into()).spawn(move || watch(pid, c, w, s, events));
-        Ok(Browser { child, pid, service: service.into(), bridge: Bridge::new(drive, pads), window, stop, kept })
+        let bridge = Bridge::new(drive, pads);
+        Ok(Browser { child, pid, service: service.into(), bridge, window, stop, kept, asker })
     }
 
     /// Keep the page to the service's sites (kids' mode), or let it go
@@ -380,6 +415,12 @@ impl Browser {
     /// Whether the page is kept to the service's sites.
     pub fn is_kept(&self) -> bool {
         self.kept.load(Ordering::Acquire)
+    }
+
+    /// Ask the page something over its DevTools pipe, for Chanoma's
+    /// keyboard (what has its keyboard comes back as [`Event::Focused`]).
+    pub fn ask(&self, a: Ask) {
+        self.asker.ask(a);
     }
 
     /// Its window, once shown.
