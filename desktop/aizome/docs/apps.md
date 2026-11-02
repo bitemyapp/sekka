@@ -1158,7 +1158,11 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   Back), X or Start plays and pauses, Y is full screen, the shoulders move
   between a page's controls. YouTube opens its television interface,
   driven with the arrows. Windows a page opens are closed. Grown-ups can
-  add any website.
+  add any website. In kids' mode a page stays on its service: a link or
+  a button that would go anywhere else leaves the page where it is, and a
+  note says that's outside the service (a website a grown-up added stays
+  on its own site). In grown-up mode, where a grown-up signs in, a page
+  goes anywhere until kids' mode comes back.
 - **Films and shows** from the videos folders: a folder of episodes is a
   show (with its `poster.jpg`), a lone video a film. They play through
   Utsushi's engine; the confirm button plays and pauses, left and right

@@ -5,6 +5,9 @@
 //!   separate from the grown-ups' own browsing.
 //! - **Full screen, nothing else**: kiosk mode, no address bar, tabs or
 //!   menus. A window the page opens (a pop-up) is closed at once.
+//! - **Kept to the service's sites** in kids' mode, over the browser's
+//!   DevTools pipe ([`crate::devtools`]): a link elsewhere leaves the page
+//!   where it is, and Chanoma says it's outside.
 //! - **The controller drives it** through the compositor ([`Bridge`]):
 //!   arrows are arrow keys; on ordinary pages the left stick moves the
 //!   pointer and the confirm button clicks, the right stick scrolls; on a
@@ -26,8 +29,9 @@ use std::time::{Duration, Instant};
 
 use aizome_ipc::{Request, Response, Synthetic, WindowId};
 
+use crate::devtools::{self, Told};
 use crate::pad::{Axis, SLOTS, Shared};
-use crate::services::Drive;
+use crate::services::{Drive, Sites};
 
 /// Browsers looked for, best first.
 const BROWSERS: &[&str] = &["google-chrome-stable", "google-chrome", "chromium", "chromium-browser"];
@@ -67,8 +71,9 @@ fn which(name: &str) -> Option<PathBuf> {
     search_path().into_iter().map(|d| d.join(name)).find(|p| p.is_file())
 }
 
-/// The browser's arguments for `url` with its profile at `profile`.
-pub fn arguments(profile: &Path, url: &str, agent: Option<&str>) -> Vec<String> {
+/// The browser's arguments, with its profile at `profile`. It opens blank:
+/// the service is opened over its DevTools pipe once it can be kept.
+pub fn arguments(profile: &Path, agent: Option<&str>) -> Vec<String> {
     let mut args = vec![
         format!("--user-data-dir={}", profile.display()),
         "--kiosk".into(),
@@ -82,11 +87,15 @@ pub fn arguments(profile: &Path, url: &str, agent: Option<&str>) -> Vec<String> 
         // No keyring to unlock: sign-ins are kept in the profile.
         "--password-store=basic".into(),
         "--ozone-platform-hint=auto".into(),
+        // Steered over a pipe only Chanoma holds, without telling pages so:
+        // a sign-in page refuses a browser that says it's automated.
+        "--remote-debugging-pipe".into(),
+        "--disable-blink-features=AutomationControlled".into(),
     ];
     if let Some(a) = agent {
         args.push(format!("--user-agent={a}"));
     }
-    args.push(url.into());
+    args.push("about:blank".into());
     args
 }
 
@@ -99,6 +108,12 @@ pub enum Event {
     Gone,
     /// Home pressed on the keyboard over the page.
     Home,
+    /// The page tried to go to this host, outside the service's sites: it
+    /// stays where it was.
+    Outside(String),
+    /// The browser can't be kept to the service's sites (it doesn't answer
+    /// on its DevTools pipe), so it shows nothing.
+    Unkept,
 }
 
 /// What a press means on a page.
@@ -309,35 +324,62 @@ pub struct Browser {
     pub bridge: Bridge,
     window: Arc<Mutex<Option<WindowId>>>,
     stop: Arc<AtomicBool>,
+    /// Kept to the service's sites (kids' mode).
+    kept: Arc<AtomicBool>,
 }
 
 impl Browser {
-    /// Start `browser` on `url` with the profile at `profile`.
+    /// Start `browser` on `url` with the profile at `profile`, kept to
+    /// `sites` while `kept`.
     #[allow(clippy::too_many_arguments)]
     pub fn open(
         browser: &Path,
         profile: &Path,
         service: &str,
         url: &str,
+        sites: Sites,
+        kept: bool,
         agent: Option<&str>,
         drive: Drive,
         pads: Arc<Shared>,
         events: impl Fn(Event) + Clone + Send + 'static,
     ) -> std::io::Result<Browser> {
         std::fs::create_dir_all(profile)?;
-        let child = Command::new(browser)
-            .args(arguments(profile, url, agent))
+        let mut command = Command::new(browser);
+        command
+            .args(arguments(profile, agent))
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()?;
+            .stderr(std::process::Stdio::null());
+        let (child, pipe) = devtools::spawn(&mut command)?;
         let pid = child.id() as i32;
         let child = Arc::new(Mutex::new(child));
         let window = Arc::new(Mutex::new(None));
         let stop = Arc::new(AtomicBool::new(false));
+        let kept = Arc::new(AtomicBool::new(kept));
+        let (k, s, e, url) = (kept.clone(), stop.clone(), events.clone(), url.to_owned());
+        let _ = std::thread::Builder::new().name("chanoma-devtools".into()).spawn(move || {
+            devtools::keep(pipe, sites, url, &k, &s, |told| {
+                e(match told {
+                    Told::Outside(host) => Event::Outside(host),
+                    Told::Unanswered => Event::Unkept,
+                })
+            })
+        });
         let (c, w, s) = (child.clone(), window.clone(), stop.clone());
         let _ = std::thread::Builder::new().name("chanoma-browser".into()).spawn(move || watch(pid, c, w, s, events));
-        Ok(Browser { child, pid, service: service.into(), bridge: Bridge::new(drive, pads), window, stop })
+        Ok(Browser { child, pid, service: service.into(), bridge: Bridge::new(drive, pads), window, stop, kept })
+    }
+
+    /// Keep the page to the service's sites (kids' mode), or let it go
+    /// anywhere (grown-up mode).
+    pub fn keep_to_sites(&self, on: bool) {
+        self.kept.store(on, Ordering::Release);
+    }
+
+    /// Whether the page is kept to the service's sites.
+    pub fn is_kept(&self) -> bool {
+        self.kept.load(Ordering::Acquire)
     }
 
     /// Its window, once shown.
@@ -542,13 +584,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_browser_opens_the_service_full_screen_in_its_own_profile() {
-        let args = arguments(Path::new("/data/browser/netflix"), "https://www.netflix.com/browse", None);
+    fn the_browser_opens_full_screen_in_its_own_profile_steered_from_here() {
+        let args = arguments(Path::new("/data/browser/netflix"), None);
         assert_eq!(args.first().map(String::as_str), Some("--user-data-dir=/data/browser/netflix"));
         assert!(args.iter().any(|a| a == "--kiosk"));
         assert!(args.iter().any(|a| a == "--password-store=basic"));
-        assert_eq!(args.last().map(String::as_str), Some("https://www.netflix.com/browse"));
-        let tv = arguments(Path::new("/p"), "https://www.youtube.com/tv", Some(crate::services::TV_AGENT));
+        assert!(args.iter().any(|a| a == "--remote-debugging-pipe"));
+        assert!(!args.iter().any(|a| a.starts_with("--remote-debugging-port")));
+        // Blank until the service is opened over the pipe.
+        assert_eq!(args.last().map(String::as_str), Some("about:blank"));
+        let tv = arguments(Path::new("/p"), Some(crate::services::TV_AGENT));
         assert!(tv.iter().any(|a| a.starts_with("--user-agent=Mozilla/5.0 (SMART-TV")));
     }
 
