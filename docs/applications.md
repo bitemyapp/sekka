@@ -26,7 +26,7 @@ pins were selected on 2026-10-04:
 | [oh-my-pi upstream](https://github.com/can1357/oh-my-pi) | v18.6.1, `2a2c6dcbbb558c0f8145f67f28b3370984f2bf60` | oh-my-pi |
 | [bitemyapp/superluminal-nix-linux](https://github.com/bitemyapp/superluminal-nix-linux) | `eacbc06314c5c590e2cc74d95d082911759b59f0` (1.0.7705.679-alpha), added 2026-10-16 | Superluminal |
 | [bitemyapp/tracy-flake](https://github.com/bitemyapp/tracy-flake), forked from [Quince-Pie/tracy-flake](https://github.com/Quince-Pie/tracy-flake) | `1f0bf6eaee8e965848274caa7f4ab6d2ff877f97` (0.14.1), added 2026-10-16 | Tracy Profiler |
-| [bitemyapp/uta](https://github.com/bitemyapp/uta) | `a70e8f6fda8f4744ee8bfc27d93657176d9860ff`, updated 2026-10-28 | Uta for YouTube Music, with RustyPipe |
+| [bitemyapp/uta](https://github.com/bitemyapp/uta) | `6361f84b89754ef776faec91ead3b184a1019261`, updated 2026-11-01 | Uta for YouTube Music, with RustyPipe |
 
 The AI definitions use upstream release artifacts or source and adapt them for
 NixOS. The ChatGPT and Claude entries package their official Linux applications;

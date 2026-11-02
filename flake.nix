@@ -25,7 +25,7 @@
   # checks and hold back every other input. Re-pin as DEVELOPERS.md (Aizome)
   # describes: from a sekka branch of bitemyapp/uta, never its main.
   inputs.uta = {
-    url = "github:bitemyapp/uta/a70e8f6fda8f4744ee8bfc27d93657176d9860ff";
+    url = "github:bitemyapp/uta/6361f84b89754ef776faec91ead3b184a1019261";
     flake = false;
   };
 
