@@ -15,6 +15,20 @@ use crate::terminal_view::Selection;
 
 const COPY_LIMIT: usize = 128 * 1024 * 1024;
 
+/// Describe the captured offer, not whatever owns the clipboard later.
+pub(crate) fn paste_failure(read: &ClipboardRead) -> &'static str {
+    let types = read.types();
+    if types.is_empty() {
+        "Clipboard is empty."
+    } else if types.iter().any(|mime| hotaru_core::kitty_clipboard::is_text_mime(mime)) {
+        "Clipboard text could not be read within the paste size or time limit."
+    } else if types.iter().any(|mime| mime.starts_with("image/")) {
+        "Clipboard image has no text to paste."
+    } else {
+        "Clipboard has no plain text to paste."
+    }
+}
+
 pub enum CopySource {
     Viewport { snapshot: Arc<Snapshot>, selection: Option<Selection> },
     Content(Arc<ContentSnapshot>),
