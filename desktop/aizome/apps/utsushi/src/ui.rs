@@ -530,7 +530,8 @@ pub fn menus(app: &Utsushi) -> MenuBar<Msg> {
         .item(MenuItem::new("Media Info", Msg::ShowInfo).shortcut(Shortcut::cmd('I')).enabled(have))
         .item(MenuItem::new("Show in Hako", Msg::ShowInHako).shortcut(Shortcut::cmd('R').alt()).enabled(app.current_path().is_some()))
         .separator()
-        .item(MenuItem::new("Close", Msg::Close).shortcut(Shortcut::cmd('W')).enabled(have || app.status == Status::Failed));
+        .item(MenuItem::new("Close", Msg::Close).shortcut(Shortcut::cmd('W'))
+            .enabled(have || app.status == Status::Failed || app.statistics.is_some()));
     let mut repeat = Menu::new("Repeat");
     for (label, r) in [("Off", Repeat::Off), ("This Item", Repeat::One), ("All", Repeat::All)] {
         repeat = repeat.item(MenuItem::new(label, Msg::Repeat(r)).checked(app.repeat == r));

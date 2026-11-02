@@ -479,6 +479,42 @@ fn statistics_refresh_without_blocking_playback_and_close_independently() {
 }
 
 #[test]
+fn close_shortcut_targets_statistics_without_closing_media() {
+    let mut h = harness();
+    let w = window(&h);
+    play_without_subtitles(&mut h, "chaptered.mkv");
+    for paused in [false, true] {
+        if paused {
+            h.send(Msg::Pause);
+            until(&mut h, 2.0, |a| a.status == Status::Paused);
+        }
+        let status = h.program().status;
+        let queue = h.program().queue.clone();
+        h.send(Msg::ShowStats);
+        let stats = h.program().statistics.unwrap();
+        h.focus_window(w, false);
+        h.focus_window(stats, true);
+        h.command(stats, 'w');
+        assert!(h.program().statistics.is_none(), "Close should close the focused statistics window");
+        assert_eq!(h.program().status, status);
+        assert_eq!(h.program().queue, queue);
+        assert!(h.program().info.is_some());
+        assert!(h.is_shown(w));
+    }
+    h.send(Msg::ShowStats);
+    let stats = h.program().statistics.unwrap();
+    h.focus_window(stats, false);
+    h.focus_window(w, true);
+    h.command(w, 'w');
+    assert_eq!(h.program().status, Status::Empty, "Close in the player still closes its media");
+    assert_eq!(h.program().statistics, Some(stats));
+    h.focus_window(w, false);
+    h.focus_window(stats, true);
+    h.command(stats, 'w');
+    assert!(h.program().statistics.is_none(), "statistics can close even after media has closed");
+}
+
+#[test]
 fn media_info_says_how_it_plays() {
     let mut h = harness();
     let w = window(&h);
