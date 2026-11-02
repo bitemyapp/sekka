@@ -11,6 +11,16 @@ spec.loader.exec_module(bench)
 
 
 class BatteryTests(unittest.TestCase):
+    def test_mirrored_order_is_balanced_without_overwriting_runs(self):
+        players = ["utsushi", "vlc", "mpv"]
+        runs = bench.schedule(players, [2435], players + players[::-1])
+        self.assertEqual([r["player"] for r in runs], ["utsushi", "vlc", "mpv", "mpv", "vlc", "utsushi"])
+        self.assertEqual(len({(r["run"], r["player"]) for r in runs}), 6)
+        for player in players:
+            self.assertEqual(sum(r["run"] for r in runs if r["player"] == player) / 2, 3.5)
+        with self.assertRaises(ValueError):
+            bench.schedule(players, [600, 2400], players)
+
     def test_irregular_intervals_use_time_weighted_power(self):
         samples = [dict(elapsed_s=t, battery=dict(energy_wh=50 - 10 * t / 3600,
                                                 full_wh=60, power_w=p))

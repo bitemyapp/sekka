@@ -1,5 +1,9 @@
 # Fullscreen movie playback battery measurements — 2 November 2026
 
+A later [short mirrored comparison](player-battery-mirrored-2026-11-02.md)
+uses the identical 41:00–42:00 interval in all six runs, in U–V–M–M–V–U order.
+The original experiment below is retained in full.
+
 This experiment compares the installed Utsushi, VLC and mpv on a ThinkPad X1
 Carbon Gen 14 running Sekka/Aizome. It measures **whole-laptop battery power**
 while playing the same local 1080p movie, with the user's other applications

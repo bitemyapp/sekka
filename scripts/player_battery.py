@@ -144,6 +144,17 @@ def estimate(samples):
                 power_energy_disagreement_pct=100 * abs(endpoint_w - mean_w) / mean_w)
 
 
+def schedule(players, starts, sequence=None):
+    """Explicit order allows mirrored/ABBA runs without reusing evidence directories."""
+    if sequence:
+        if len(starts) != 1:
+            raise ValueError("An explicit sequence requires exactly one seek point")
+        return [dict(run=i + 1, player=name, start_s=starts[0]) for i, name in enumerate(sequence)]
+    return [dict(run=i + 1, player=name, start_s=start)
+            for i, start in enumerate(starts)
+            for name in players[i % len(players):] + players[:i % len(players)]]
+
+
 class Playback:
     def __init__(self, name, media, directory, temporary):
         self.name, self.directory = name, directory
@@ -236,6 +247,17 @@ class Playback:
                     "SetPosition", "ox", track, str(int(seconds * 1e6)))
             command("busctl", "--user", "set-property", self.service, MPRIS, PLAYER, "Volume", "d", "1.0")
 
+    def wait_for_position(self, target):
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            pos = self.mpv("get_property", "time-pos") if self.name.startswith("mpv") else self.prop("Position") / 1e6
+            if pos >= target:
+                if pos > target + 0.75:
+                    raise RuntimeError(f"Missed requested movie interval: {pos:.3f} > {target:.3f}")
+                return
+            time.sleep(min(0.1, target - pos))
+        raise RuntimeError("Playback did not reach requested measurement start")
+
     def state(self):
         window = next((w for w in ipc("windows")["windows"] if w["id"] == self.window), None)
         if not window or not window["fullscreen"] or not window["focused"] or window["hidden"] or window["minimised"]:
@@ -280,6 +302,9 @@ def sample(root, started):
 
 
 def run(args):
+    runs = schedule(args.players, args.starts, args.sequence)
+    if args.sequence:
+        args.players = list(dict.fromkeys(args.sequence))
     args.output.mkdir(parents=True, exist_ok=False)
     initial_brightness = brightness()
     initial_display = display_state()
@@ -294,15 +319,18 @@ def run(args):
     video = next(s for s in probe["streams"] if s["codec_type"] == "video")
     if int(video["width"]) < 1920 or int(video["height"]) < 1080 or float(probe["format"]["duration"]) < 5400:
         raise RuntimeError("Movie must be at least 1920x1080 and 90 minutes")
-    if max(args.starts) + args.warmup + args.seconds >= float(probe["format"]["duration"]):
+    measurement_start = args.measure_at if args.measure_at is not None else max(args.starts) + args.warmup + 4
+    if measurement_start + args.seconds >= float(probe["format"]["duration"]):
         raise RuntimeError("Segment exceeds movie duration")
     digest = hashlib.file_digest(args.media.open("rb"), "sha256").hexdigest()
     save(args.output / "media.json", probe)
-    manifest = dict(protocol=1, started_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    manifest = dict(protocol=2, started_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                     media=str(args.media), sha256=digest, battery=initial_battery,
                     brightness=initial_brightness, displays=initial_display, audio=initial_audio,
                     system=os.path.realpath("/run/current-system"), kernel=os.uname().release,
                     compositor=ipc("version"), players=args.players, starts=args.starts,
+                    schedule=runs, measure_at_s=args.measure_at,
+                    harness_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                     warmup_s=args.warmup, measurement_s=args.seconds, interval_s=args.interval,
                     binaries={p: os.path.realpath(command("which", p)) for p in ("aizome-utsushi", "vlc", "mpv")},
                     versions={p: command(p, "--version") for p in ("vlc", "mpv")},
@@ -312,8 +340,10 @@ def run(args):
     save(args.output / "manifest.json", manifest)
     summaries = []
     try:
-        for round_index, start in enumerate(args.starts):
-            order = args.players[round_index % len(args.players):] + args.players[:round_index % len(args.players)]
+        starts = [r["start_s"] for r in runs] if args.sequence else args.starts
+        for round_index, start in enumerate(starts):
+            order = ([args.sequence[round_index]] if args.sequence else
+                     args.players[round_index % len(args.players):] + args.players[:round_index % len(args.players)])
             for name in order:
                 directory = args.output / f"{round_index + 1:02d}-{name}"
                 directory.mkdir()
@@ -335,7 +365,11 @@ def run(args):
                         ipc("screenshot", path=str(directory / "fullscreen-before.png"), output=before["window"]["output"], clipboard=False)
                         # Let the one-time screenshot/encoding finish before the measured interval.
                         time.sleep(3)
+                        if args.measure_at is not None:
+                            playback.wait_for_position(args.measure_at)
                         before = playback.state()
+                        if args.measure_at is not None and abs(before["position_s"] - args.measure_at) > 0.75:
+                            raise RuntimeError("Measurement did not start within 750 ms of requested movie position")
                         save(directory / "before.json", dict(argv=playback.argv, **before))
                         started = time.monotonic()
                         previous_cpu, previous_time = processes(), started
@@ -388,6 +422,9 @@ def main():
     p.add_argument("--battery", type=Path, default=Path("/sys/class/power_supply/BAT0"))
     p.add_argument("--ffprobe", default="ffprobe")
     p.add_argument("--players", nargs="+", choices=["utsushi", "vlc", "mpv", "mpv-auto"], default=["utsushi", "vlc", "mpv"])
+    p.add_argument("--sequence", nargs="+", choices=["utsushi", "vlc", "mpv", "mpv-auto"],
+                   help="Explicit player order; requires exactly one --starts value")
+    p.add_argument("--measure-at", type=float, help="Align measurement to this movie position in seconds (within 750 ms)")
     p.add_argument("--starts", nargs="+", type=float, default=[600, 2400, 4200])
     p.add_argument("--warmup", type=float, default=60)
     p.add_argument("--seconds", type=float, default=120)
@@ -398,6 +435,11 @@ def main():
         p.error("Durations must be positive and finite; interval cannot exceed measurement")
     if not all(math.isfinite(v) and v >= 0 for v in args.starts):
         p.error("Start times must be finite and nonnegative")
+    if args.sequence and len(args.starts) != 1:
+        p.error("--sequence requires exactly one --starts value")
+    if args.measure_at is not None and (not math.isfinite(args.measure_at) or
+            any(not 4 <= args.measure_at - start - args.warmup <= 25 for start in args.starts)):
+        p.error("--measure-at must be 4–25 seconds after seek point plus warmup, allowing screenshot and alignment")
     args.media, args.output = args.media.resolve(), args.output.resolve()
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     run(args)

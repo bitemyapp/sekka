@@ -1,0 +1,63 @@
+{
+  "argv": [
+    "mpv",
+    "--fullscreen",
+    "--no-save-position-on-quit",
+    "--volume=100",
+    "--input-ipc-server=/run/user/1000/player-battery-nuiuo91g/mpv.sock",
+    "/home/callen/Videos/player-battery-benchmark/NightOfTheLivingDead_PS3.mp4"
+  ],
+  "window": {
+    "id": 89,
+    "app_id": "mpv",
+    "pid": 763499,
+    "fullscreen": true,
+    "focused": true,
+    "geometry": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900
+    },
+    "output": "eDP-1"
+  },
+  "position_s": 2460.040896,
+  "player": {
+    "time-pos": 2460.040896,
+    "pause": false,
+    "speed": 1.0,
+    "volume": 100.0,
+    "mute": false,
+    "hwdec-current": "no",
+    "video-codec": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+    "video-params": {
+      "pixelformat": "yuv420p",
+      "average-bpp": 12,
+      "w": 1920,
+      "h": 1080,
+      "dw": 1920,
+      "dh": 1080,
+      "crop-x": 0,
+      "crop-y": 0,
+      "crop-w": 1920,
+      "crop-h": 1080,
+      "aspect": 1.777778,
+      "aspect-name": "16:9",
+      "par": 1.0,
+      "sar": 1.777778,
+      "sar-name": "16:9",
+      "colormatrix": "bt.709",
+      "colorlevels": "limited",
+      "primaries": "bt.709",
+      "gamma": "bt.1886",
+      "sig-peak": 0.0,
+      "light": "display",
+      "chroma-location": "mpeg2/4/h264",
+      "stereo-in": "mono",
+      "rotate": 0,
+      "alpha": "none"
+    },
+    "frame-drop-count": 0,
+    "decoder-frame-drop-count": 0
+  }
+}

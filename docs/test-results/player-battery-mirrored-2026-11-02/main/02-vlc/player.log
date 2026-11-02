@@ -1,0 +1,8 @@
+[0000606a35009590] main libvlc: Running vlc with the default interface. Use 'cvlc' to use vlc without interface.
+Gtk-Message: 15:22:01.152: Failed to load module "colorreload-gtk-module"
+[0000738bb8028820] gl gl: Initialized libplacebo v5.264.1 (API v264)
+libva info: VA-API version 1.24.0
+libva info: Trying to open /run/opengl-driver/lib/dri/iHD_drv_video.so
+libva info: Found init function __vaDriverInit_1_24
+libva info: va_openDriver() returns 0
+[0000738bc923f670] avcodec decoder: Using Intel iHD driver for Intel(R) Gen Graphics - 26.3.5 () for hardware decoding

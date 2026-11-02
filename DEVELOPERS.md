@@ -1208,6 +1208,9 @@ from the raw samples. See the [protocol and hardware results](docs/test-results/
 for the 1080p input, preserved settings, reproduction commands and limits of
 short-sample battery-life projections. Run the numerical checks with
 `python3 -m unittest discover -s tests -p test_player_battery.py`.
+The [short mirrored comparison](docs/test-results/player-battery-mirrored-2026-11-02.md)
+uses `--sequence` and `--measure-at` to compare the same movie minute in
+Utsushi–VLC–mpv–mpv–VLC–Utsushi order, in under nine minutes.
 
 Aizome's source is in `desktop/aizome`, a Cargo workspace of its own with its
 NixOS module, VM checks and documentation (`desktop/aizome/docs/`). It moved
