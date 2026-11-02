@@ -7,6 +7,20 @@ how soon a keystroke shows, how much output it reads per second, what it
 costs at rest and while typing, in CPU, wake-ups, GPU time, socket energy
 and memory.
 
+**Throughput measured again with history (2 November 2026, afternoon).** The
+first throughput run gave every terminal zero scrollback. Mitchell Hashimoto,
+Ghostty's author, pointed out that zero scrollback turns off much of
+libghostty-vt's fast path for output on the normal screen (where these
+corpora are written), and that Hotaru gets slower as its history grows, so
+those figures favoured Hotaru twice over. Hotaru's and Ghostty's throughput
+is now measured again with Ghostty's default history in both, against the
+Ghostty release Sekka installs (1.4.0) and Ghostty's main branch at
+`0b1729e`: see [Throughput with history](#throughput-with-history). The other
+four terminals' throughput is still the zero-scrollback run, so it can't be
+compared directly with those figures. Nothing else here depends on history:
+startup, typing latency, the paced streams (which scroll inside a scroll
+region, so no line reaches history) and idle never fill it.
+
 Measured on runnymede on 2 November 2026 ([the machine](README.md#the-machine)),
 every terminal in its own private headless sway on the processor's
 integrated Radeon. These are component measurements on one machine and one
@@ -19,35 +33,52 @@ or photon is involved.
 |---|---:|---:|---:|---:|---:|---:|
 | Launch → first frame | **50 ms** | 178 ms | 130 ms | 130 ms | 130 ms | 66 ms |
 | Key → frame, p50 / p99 | 26.8 / 35.6 ms | 30.0 / 38.0 ms | **11.6** / 20.2 ms | 21.2 / 29.9 ms | **11.6** / 20.3 ms | 11.8 / **20.1** ms |
-| ASCII output | **1,047 MiB/s** | 1,018 MiB/s | 407 MiB/s | 74 MiB/s | 418 MiB/s | 441 MiB/s |
-| Styled output | 348 MiB/s | 258 MiB/s | 216 MiB/s | 86 MiB/s | 256 MiB/s | **431 MiB/s** |
-| Unicode output | 188 MiB/s | **215 MiB/s** | 198 MiB/s | 93 MiB/s | 193 MiB/s | 171 MiB/s |
-| Cursor/erase output | **127 MiB/s** | 22 MiB/s | 89 MiB/s | 90 MiB/s | 95 MiB/s | 99 MiB/s |
-| Energy for 64 MiB of ASCII, over idle | **2.0 J** | 2.5 J | 2.9 J | 12.3 J | 2.4 J | 2.9 J |
+| ASCII output, no scrollback | 1,047 MiB/s | 1,018 MiB/s | 407 MiB/s | 74 MiB/s | 418 MiB/s | 441 MiB/s |
+| Styled output, no scrollback | 348 MiB/s | 258 MiB/s | 216 MiB/s | 86 MiB/s | 256 MiB/s | 431 MiB/s |
+| Unicode output, no scrollback | 188 MiB/s | 215 MiB/s | 198 MiB/s | 93 MiB/s | 193 MiB/s | 171 MiB/s |
+| Cursor/erase output, no scrollback | 127 MiB/s | 22 MiB/s | 89 MiB/s | 90 MiB/s | 95 MiB/s | 99 MiB/s |
+| Energy for 64 MiB of ASCII over idle, no scrollback | 2.0 J | 2.5 J | 2.9 J | 12.3 J | 2.4 J | 2.9 J |
 | Idle wake-ups/s, blink off | 1.0 | 28.5 | **0** | **0** | 2.6 | **0** |
 | Idle wake-ups/s, out of the box | 7.7 (blinks) | 28.5 (blinks) | 0.5 | **0** | 4.6 | **0** |
 | Memory (PSS) after start | 47 MiB | 98 MiB + 103 MiB GPU | 21 MiB | 72 MiB | 48 MiB + 36 MiB GPU | **7 MiB** |
 
-Bold is the best in its row. Medians; the sections below give the spread,
-the number of trials and the other measurements.
+Bold is the best in its row (the no-scrollback output rows aren't marked:
+see above). Medians; the sections below give the spread, the number of
+trials and the other measurements.
+
+With Ghostty's default history in both (50 MB), Hotaru against the Ghostty
+release and Ghostty's main branch (six rounds; [details](#throughput-with-history)):
+
+| | Hotaru | Ghostty 1.4.0 | Ghostty main `0b1729e` |
+|---|---:|---:|---:|
+| ASCII output | 705 MiB/s | 720 MiB/s | **794 MiB/s** |
+| Styled output | 301 MiB/s | 271 MiB/s | **346 MiB/s** |
+| Unicode output | 165 MiB/s | 72 MiB/s | **251 MiB/s** |
+| Cursor/erase output | 126 MiB/s | 22 MiB/s | **181 MiB/s** |
+| Energy for 64 MiB of ASCII, over idle | **2.8 J** | 3.4 J | 2.9 J |
+| Memory (PSS) after the four floods | **94 MiB** | 109 MiB | 120 MiB |
 
 ## What it shows
 
 - **Hotaru starts fastest.** Its first frame shows 50 ms after launch:
   foot's comes a frame later, gnome-terminal's, Konsole's and Console's
   at 130 ms, Ghostty's at 178 ms, with warm caches all round.
-- **Hotaru reads plain and cursor-heavy output fastest, and Ghostty's
-  slowest case is Hotaru's strength.** 64 MiB of ASCII take Hotaru 61 ms
-  (Ghostty 63 ms, the rest 145–859 ms) and the least energy of any; the
-  cursor/erase corpus takes Hotaru 506 ms, everyone else 647–717 ms and
-  Ghostty 2.9 s.
-- **Hotaru loses on Unicode, and to foot on styled text.** foot reads
-  styled text faster (149 ms against 184, for 3.1 J against 4.3), and
-  Ghostty, gnome-terminal and Console read the Unicode corpus faster
-  (298–332 ms against 341), the VTE pair for less energy (5.5 J against
-  7.2). Hotaru reads and parses on two threads at once, so its floods draw
-  more power (36–42 W against 31–35 W for the VTE terminals, Konsole and
-  foot).
+- **With history, Ghostty's main branch reads every corpus fastest.** At
+  Ghostty's default 50 MB of history, Ghostty main reads 794, 346, 251 and
+  181 MiB/s (ASCII, styled, Unicode, cursor/erase) and Hotaru 705, 301, 165
+  and 126, so Hotaru reaches 66–89% of main's speed. Against the Ghostty
+  release Sekka installs (1.4.0), Hotaru is about even on ASCII (705
+  against 720) and ahead on the rest, most of all on cursor/erase output
+  (126 against 22 MiB/s) and Unicode (165 against 72), the cases Ghostty
+  has since been fixed for. Its energy for ASCII is about main's (2.8 J
+  against 2.9), and it holds the least memory after the floods (94 MiB,
+  against 109 and 120).
+- **Zero scrollback flattered Hotaru.** Without history it read ASCII at
+  1,047 MiB/s; with 50 MB it reads 705. Its other three corpora changed
+  less (styled 348 → 301, Unicode 188 → 165, cursor/erase 127 → 126).
+  Without scrollback, foot read styled text fastest of the six and Ghostty,
+  gnome-terminal and Console read Unicode faster than Hotaru; those four
+  weren't measured again with history.
 - **Hotaru loses on typing latency, by about a frame.** foot,
   gnome-terminal and Console show a keystroke at the next frame (11.6–11.8
   ms at the median), Konsole about half a frame later (21.2 ms), Hotaru
@@ -84,6 +115,7 @@ Sekka system installs.
 |---|---|---|---|---|
 | Hotaru | 0.1.0, Sekka `d7ecbac` (`.#hotaru`) | `d8hm9pp1g9l43awvhz0mxrl27ma8vzn3-hotaru-0.1.0` | on the CPU (Sukumo/Sidestep), shared-memory buffers; maps no GL or Vulkan driver | `hotaru` |
 | Ghostty | 1.4.0 | `pda6j5833xwmiqh8w8bpsccs22hxqlk3-ghostty-1.4.0` | OpenGL 4.6 on the Radeon; GTK 4.22 presents through its GL renderer (Ghostty turns GTK's Vulkan off) | `ghostty` |
+| Ghostty main (throughput with history only) | 1.4.1-dev `0b1729e` (ghostty-org/ghostty main, 2 November 2026), its flake's `ghostty-releasefast` | `iqhwwkk4hh74jkkk0pjp367z3qir6hw8-ghostty-1.4.1-dev+0b1729e-nix` | as Ghostty 1.4.0 | `ghostty` |
 | gnome-terminal | 3.60.0 (GTK 3.24, VTE 0.84) | `2ywzyfkrx3nb53vv7irashipdif8zrfv-gnome-terminal-3.60.0` | Cairo on the CPU (GTK 3), shared-memory buffers | `gnome-terminal-server`, which the bus starts, plus the short-lived `gnome-terminal` client |
 | Konsole | 26.08.2 (Qt 6.12, KF 6.31) | `9kf88zx0zhvilvlrrf9na9dsmax8m13z-konsole-26.08.2` | QPainter on the CPU, shared-memory buffers | `konsole` |
 | GNOME Console (kgx) | 50.0 (GTK 4.22, libadwaita 1.9, VTE 0.84) | `gf6hqh7idil1qhfg1hc8dncjfz30bsq2-gnome-console-50.0` | GTK's Vulkan renderer (GskVulkanRenderer) on the Radeon, through RADV | `kgx` |
@@ -91,7 +123,9 @@ Sekka system installs.
 
 Ghostty here is the Nixpkgs 1.4.0 release, not the pinned `1.4.1-dev`
 reference the [earlier Hotaru comparisons](../../apps/hotaru/docs/gpu-comparison-2026-10-30.md)
-built, which isn't in this machine's store.
+built, which isn't in this machine's store. The throughput run with history
+adds Ghostty's main branch, built from its own flake at `0b1729e` in
+ReleaseFast, the same optimisation as the Nixpkgs release.
 
 The GPU column is what the terminals did, checked in every trial: the
 libraries each process mapped, the DRM devices it held, GTK's own line
@@ -111,12 +145,20 @@ Two configurations:
 
 | Terminal | Matched configuration | Cell | Scrollback (matched / default) | Blinking (default) |
 |---|---|---|---|---|
-| Hotaru | `hotaru.toml`: `font_size = 14.0`, `scrollback = 0`, `theme = "night"`, `shell_integration = false`, `cursor_blink = false` | 11×24 | 0 / 10,000 lines | yes, every 600 ms, no timeout |
-| Ghostty | `font-family = IBM Plex Mono`, `font-size = 14`, `scrollback-limit-bytes = 0`, `scrollback-limit-lines = 0`, `cursor-style-blink = false`, `background-opacity = 1`, `adjust-cell-height = -1`, `gtk-single-instance = false`, `shell-integration = none` | 11×24 (25 without the adjustment) | 0 / 10 MB | yes |
+| Hotaru | `hotaru.toml`: `font_size = 14.0`, `scrollback = 0`, `theme = "night"`, `shell_integration = false`, `cursor_blink = false` | 11×24 | 0 / 10,000 lines or 50 MB, whichever comes first | yes, every 600 ms, no timeout |
+| Ghostty | `font-family = IBM Plex Mono`, `font-size = 14`, `scrollback-limit-bytes = 0`, `scrollback-limit-lines = 0`, `cursor-style-blink = false`, `background-opacity = 1`, `adjust-cell-height = -1`, `gtk-single-instance = false`, `shell-integration = none` | 11×24 (25 without the adjustment) | 0 / 50 MB, unlimited lines | yes |
 | gnome-terminal | default profile (dconf): `font = 'IBM Plex Mono 14'`, `use-system-font = false`, `cursor-blink-mode = 'off'`, `scrollback-lines = 0`, `scrollback-unlimited = false`, `use-transparent-background = false`, `audible-bell = false` | **11×26** | 0 / 10,000 lines | follows GNOME: 1.2 s period, stops after 10 s idle |
 | Konsole | profile `Bench.profile` (default in `konsolerc`): `Font=IBM Plex Mono,14`, `HistoryMode=0`, `BlinkingCursorEnabled=false` | 11×24 | none / 1,000 lines | no |
 | Console (kgx) | dconf: `custom-font = 'IBM Plex Mono 14'`, `use-system-font = false`, `scrollback-lines = 0`; `org.gnome.desktop.interface cursor-blink = false` (Console has no blink setting of its own) | **11×26** | 0 / 10,000 lines | follows GNOME: 1.2 s period, stops after 10 s idle |
 | foot | `font=IBM Plex Mono:size=14`, `line-height=24px`, `[scrollback] lines=0`, `[cursor] blink=no`, `alpha=1.0` | 11×24 (26 without `line-height`) | 0 / 1,000 lines | no |
+
+For the throughput run with history, Ghostty's two scrollback lines were
+left out, so both builds kept their defaults (`scrollback-limit-bytes =
+50000000`, `scrollback-limit-lines = unlimited`, scrollback compression on),
+and Hotaru had `scrollback = 1000000`, the most rows it allows, with its
+50 MB byte limit as it is. Each counts its 50 MB in its own way: both limit
+the uncompressed history as it holds it, not the bytes written. The other
+settings are the matched ones.
 
 The matched cells are 11×24 except VTE's. Hotaru and Konsole draw 24-pixel
 rows at 14 points; Ghostty draws 25 and foot 26, and both have a supported
@@ -331,9 +373,10 @@ Ghostty and Console hand sway finished GPU buffers. foot spends the most
 CPU of its own: it wakes its render worker threads (one per CPU the
 machine has, 16 here) for every frame.
 
-### Throughput
+### Throughput without scrollback
 
-Four alternating rounds; each corpus is 64 MiB written into the PTY as
+All six in the matched configuration, with zero scrollback. Four
+alternating rounds; each corpus is 64 MiB written into the PTY as
 fast as the terminal reads it. *Time* is how long the terminal took to
 take it all; *to final frame* adds the frame showing the closing marker.
 Energy is the socket's, from the first byte to that frame; *over idle*
@@ -368,6 +411,45 @@ CPU and GPU time over the same windows (medians):
 sway's medians stayed under 12 ms of CPU and 16 ms of GPU in every
 flood: with the observer stopped, a terminal that reads 64 MiB in a
 fraction of a second shows only a handful of frames meanwhile.
+
+### Throughput with history
+
+The same floods, the same corpora and the same method, for Hotaru, Ghostty
+1.4.0 and Ghostty main, each with Ghostty's default 50 MB of history
+(Configuration, above): six alternating rounds, 18 trials, all accepted,
+measured between 16:41 and 16:49. The four corpora run one after another in
+the same terminal, ASCII first, and 64 MiB of ASCII fills 50 MB of history,
+so most of each flood runs with full history being trimmed as it goes.
+Medians (range).
+
+| | Hotaru | Ghostty 1.4.0 | Ghostty main |
+|---|---:|---:|---:|
+| **ascii** time, ms | 91 (84–100) | 89 (78–90) | **81** (74–85) |
+| MiB/s | 705 | 720 | **794** |
+| energy over idle, J | **2.8** (2.3–3.1) | 3.4 (2.5–4.2) | 2.9 (2.4–3.3) |
+| terminal CPU / GPU, ms | 151 / 7 | 162 / 69 | 151 / 63 |
+| **styled** time, ms | 213 (207–231) | 236 (227–249) | **185** (170–209) |
+| MiB/s | 301 | 271 | **346** |
+| energy over idle, J | **4.8** (3.8–5.7) | 5.6 (4.1–7.3) | 5.6 (4.8–6.0) |
+| terminal CPU / GPU, ms | 286 / 5 | 338 / 179 | 278 / 138 |
+| **unicode** time, ms | 389 (380–398) | 893 (854–939) | **255** (252–265) |
+| MiB/s | 165 | 72 | **251** |
+| energy over idle, J | 7.4 (6.6–8.6) | 16.8 (13.8–26.4) | **7.0** (5.7–8.6) |
+| terminal CPU / GPU, ms | 479 / 6 | 1,118 / 501 | 371 / 184 |
+| **cursor** time, ms | 507 (505–520) | 2,886 (2,873–2,980) | **353** (344–362) |
+| MiB/s | 126 | 22 | **181** |
+| energy over idle, J | 9.6 (6.5–10.1) | 36.7 (3.3–45.9) | **8.9** (7.6–9.5) |
+| terminal CPU / GPU, ms | 597 / 6 | 3,118 / 1,145 | 468 / 243 |
+| PSS after the floods, MiB | **94.5** | 109.2 | 120.4 |
+| RSS after the floods, MiB | **101.1** | 174.2 | 174.9 |
+
+(GPU is the terminal's and sway's together; Hotaru's is sway's composing.)
+With history, every terminal reads ASCII more slowly than without it:
+Hotaru 1,047 → 705 MiB/s, Ghostty 1.4.0 1,018 → 720. Ghostty 1.4.0 also
+reads Unicode far more slowly with history (215 → 72 MiB/s); Ghostty main
+doesn't share that. Hotaru's other corpora change by at most 14%. These
+are whole terminals on screen: reading, parsing, keeping history and
+drawing, not the VT library alone.
 
 ### At rest and typing
 
@@ -443,7 +525,9 @@ What the columns say:
 ### Memory
 
 After startup (2 s after the grid reached 120×40, ten trials) and after the
-four floods (four trials), matched configuration with zero scrollback.
+four floods (four trials), matched configuration with zero scrollback (for
+memory after the floods with 50 MB of history, see
+[Throughput with history](#throughput-with-history)).
 *GPU memory* is what the amdgpu driver charges the terminal's own DRM
 client (VRAM plus GTT; on an integrated GPU both are system RAM). sway
 holds its own copies of every client's buffers as textures; that column
@@ -516,7 +600,7 @@ by 1–4 MiB, foot by 5 MiB.
   the terminal's buffers are its own, given separately. With zero
   scrollback, memory after throughput says nothing about history; with
   their default scrollback (10,000 lines for Hotaru, gnome-terminal and
-  Console, 10 MB for Ghostty, 1,000 lines for Konsole and foot) they would
+  Console, 50 MB for Ghostty, 1,000 lines for Konsole and foot) they would
   hold more.
 - **Packaged builds.** Ghostty is Nixpkgs' 1.4.0 release (a ReleaseFast
   build: `optimize=fast` in its log), not the pinned development reference
@@ -542,6 +626,16 @@ tests/performance/terminals/run.sh calibrate
 tests/performance/terminals/run.sh startup 10
 tests/performance/terminals/run.sh steady 2
 tests/performance/terminals/run.sh throughput 4
+# Throughput with history: Ghostty main built, calibrated on its own, merged
+# with the others' calibration, and the floods with Ghostty's defaults.
+nix build github:ghostty-org/ghostty/0b1729e945978fca4bcd6165d8ac408bf675a7f2#ghostty-releasefast --out-link ghostty-main
+CALIBRATION=$WORK/calibration-main APPS=ghostty-main GHOSTTY_MAIN=$PWD/ghostty-main/bin/ghostty \
+  tests/performance/terminals/run.sh calibrate
+#   then $WORK/calibration-history/calibration.json: hotaru and ghostty from
+#   $WORK/calibration, ghostty-main from $WORK/calibration-main
+SCROLLBACK=ghostty-default CALIBRATION=$WORK/calibration-history DATA=$WORK/data-history \
+  APPS=hotaru,ghostty,ghostty-main GHOSTTY_MAIN=$PWD/ghostty-main/bin/ghostty \
+  tests/performance/terminals/run.sh throughput 6 0 -a
 tests/performance/terminals/run.sh energy 2 0 -a
 tests/performance/terminals/run.sh energy 1 2 -b
 tests/performance/terminals/run.sh idle-default 1 0 -a
@@ -551,6 +645,7 @@ tests/performance/terminals/run.sh idle-default 2 1 -b
 # subjects' identities.
 source $WORK/shell-env.sh
 python3 tests/performance/terminals/terminal-summary.py $WORK/data docs/performance/data/terminals
+python3 tests/performance/terminals/terminal-summary.py $WORK/data-history /tmp/history  # summary-history.*
 python3 tests/performance/terminals/record-env.py docs/performance/data/terminals/environment.json
 ```
 
@@ -592,6 +687,10 @@ cc -O2 -std=c11 -Wall -Wextra -Werror -I$WORK/observer tests/performance/termina
   calibration runs: each trial's result, power samples, frame and fixture
   logs, application and compositor logs, the tools as they ran, and the
   final capture of each terminal's first round.
+- the throughput run with history: `throughput-history.tar.xz` (its raw
+  trials), `summary-history.json` and `summary-history.md` (its tables),
+  `calibration-history.json` (the calibration it used) and
+  `calibration-ghostty-main.tar.xz` (Ghostty main's calibration runs).
 
 132 trials ran, in four lock holds between 04:31 and 09:14 local time;
 all 132 were accepted, and every one started on a quiet machine (load

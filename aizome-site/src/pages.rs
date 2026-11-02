@@ -141,7 +141,7 @@ pub fn home(site: &Site) -> Result<Page> {
         (
             "idea-fast",
             "Fast by construction",
-            "Integer scaling, opaque surfaces, redraws of only what changed, and a 4 ms budget for every frame of the desktop and its apps. Its apps show a window in 19 ms; left alone, the desktop draws one frame a minute, for its clock.",
+            "Integer scaling, opaque surfaces, redraws of only what changed, and a 4 ms budget for every frame of the desktop and its apps. Apps show their window in about 19 ms, and an idle desktop draws just one frame a minute, for the clock.",
             "/performance/",
             "Measured against GNOME and KDE",
         ),
@@ -892,7 +892,7 @@ pub fn design(site: &Site) -> Result<Page> {
 <tr><th scope="row">Myaku: a new reading of 600 processes</th><td>2.61</td><td>2.99</td></tr>
 <tr><th scope="row">The login screen: typing a password</th><td>0.06</td><td>0.07</td></tr>
 </tbody></table></div>
-<p>The same desktop measured against GNOME, KDE Plasma and the programs people use beside it, with the data: <a href="/performance/">Performance</a>.</p>"#,
+<p>To see how this holds up against GNOME, KDE Plasma and other common programs, with all the data, have a look at the <a href="/performance/">Performance</a> page.</p>"#,
     );
     Ok(Page {
         path: "/design/".into(),

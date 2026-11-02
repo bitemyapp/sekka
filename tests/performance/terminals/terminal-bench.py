@@ -504,7 +504,12 @@ class Power:
 # Adapters: how each terminal is configured and started. `matched` is the
 # harness configuration (IBM Plex Mono 14 pt, cursor blink off, zero
 # scrollback, opaque); `default` is the package's own defaults in an empty
-# home, as a person first meets it.
+# home, as a person first meets it. `--scrollback ghostty-default` keeps the
+# matched configuration but gives Hotaru and Ghostty Ghostty's default
+# history: Ghostty's own defaults (50 MB, unlimited lines) and Hotaru's
+# 50 MB byte limit with its row limit at the most it allows (1,000,000). Zero
+# scrollback turns off much of libghostty-vt's fast path for output on the
+# primary screen, so throughput there should be measured with history.
 
 class Adapter:
     gtk4 = False
@@ -527,7 +532,10 @@ class Hotaru(Adapter):
     def setup(self, runtime, mode, child):
         if mode == "default":
             return {}, [str(self.binary), "--", *child]
-        text = (f'font_size = {self.args.font_size}\nscrollback = 0\ntheme = "night"\nshell_integration = false\n'
+        # Hotaru's history keeps at most `scrollback` rows and 50 MB
+        # (hotaru-core's DEFAULT_HISTORY_BYTES), whichever comes first.
+        rows = 0 if self.args.scrollback == "zero" else 1_000_000
+        text = (f'font_size = {self.args.font_size}\nscrollback = {rows}\ntheme = "night"\nshell_integration = false\n'
                 'cursor_blink = false\n')
         (runtime / "hotaru.toml").write_text(text)
         return {"hotaru.toml": text}, [str(self.binary), "--config-file", str(runtime / "hotaru.toml"), "--", *child]
@@ -544,7 +552,10 @@ class Ghostty(Adapter):
     def setup(self, runtime, mode, child):
         if mode == "default":
             return {}, [str(self.binary), "-e", *child]
-        text = ("gtk-single-instance = false\nshell-integration = none\nscrollback-limit-bytes = 0\nscrollback-limit-lines = 0\n"
+        # Without the two scrollback lines Ghostty keeps its defaults:
+        # 50 MB (scrollback-limit-bytes) and unlimited lines.
+        history = ("scrollback-limit-bytes = 0\nscrollback-limit-lines = 0\n" if self.args.scrollback == "zero" else "")
+        text = ("gtk-single-instance = false\nshell-integration = none\n" + history +
                 f"font-family = IBM Plex Mono\nfont-size = {self.args.font_size}\ncursor-style-blink = false\nbackground-opacity = 1\n"
                 "adjust-cell-height = -1\n")
         (runtime / "ghostty.conf").write_text(text)
@@ -645,8 +656,10 @@ class Kitty(Adapter):
         return {"kitty.conf": text}, [str(self.binary), "--config", str(runtime / "kitty.conf"), *child]
 
 
-ADAPTERS = {"hotaru": Hotaru, "ghostty": Ghostty, "gnome-terminal": GnomeTerminal, "konsole": Konsole, "kgx": Kgx,
-            "foot": Foot, "alacritty": Alacritty, "kitty": Kitty}
+# `ghostty-main` is the same adapter for a second Ghostty build (its main
+# branch), measured beside the release.
+ADAPTERS = {"hotaru": Hotaru, "ghostty": Ghostty, "ghostty-main": Ghostty, "gnome-terminal": GnomeTerminal, "konsole": Konsole,
+            "kgx": Kgx, "foot": Foot, "alacritty": Alacritty, "kitty": Kitty}
 
 
 def gpu_evidence(pids):
@@ -1161,6 +1174,8 @@ def main():
     parser.add_argument("--throughput", action="append", default=[], type=Path, metavar="CORPUS")
     parser.add_argument("--throughput-repeat", type=int, default=8)
     parser.add_argument("--throughput-pre-seconds", type=float, default=4)
+    parser.add_argument("--scrollback", choices=("zero", "ghostty-default"), default="zero",
+                        help="history in the matched configuration (Hotaru and Ghostty; the others keep zero)")
     parser.add_argument("--cols", type=int, default=120); parser.add_argument("--rows", type=int, default=40)
     parser.add_argument("--font-size", type=float, default=14.0)
     parser.add_argument("--window-width", type=int, default=1400); parser.add_argument("--window-height", type=int, default=1080)

@@ -58,10 +58,16 @@ binaries=(--binary "hotaru=$TERMBENCH_HOTARU" --binary "ghostty=$TERMBENCH_GHOST
           --binary "gnome-terminal=$TERMBENCH_GNOME_TERMINAL/bin/gnome-terminal" --binary "konsole=$TERMBENCH_KONSOLE"
           --binary "kgx=$TERMBENCH_KGX" --binary "foot=$TERMBENCH_FOOT" --binary "alacritty=$TERMBENCH_ALACRITTY"
           --binary "kitty=$TERMBENCH_KITTY")
+# A second Ghostty build (its main branch), and the history the matched
+# configuration gives Hotaru and Ghostty (SCROLLBACK=ghostty-default).
+[ -n "${GHOSTTY_MAIN:-}" ] && binaries+=(--binary "ghostty-main=$GHOSTTY_MAIN")
+common+=(--scrollback "${SCROLLBACK:-zero}")
 
+# CALIBRATION names the calibration directory (one per set of terminals).
+cal=${CALIBRATION:-$WORK/calibration}
 if [ "$phase" = calibrate ]; then
-  rm -rf "$WORK/calibration"
-  locked build python3 "$here/terminal-matrix.py" --phase calibrate --output "$WORK/calibration" \
+  rm -rf "$cal"
+  locked build python3 "$here/terminal-matrix.py" --phase calibrate --output "$cal" \
     "${common[@]}" "${binaries[@]}"
 fi
 
@@ -69,8 +75,10 @@ extra=()
 if [ "$phase" = throughput ]; then
   for c in ascii styled unicode cursor; do extra+=(--corpus "$WORK/corpora/$c.vt"); done
 fi
-out="$WORK/data/$phase$suffix"
+# DATA names the data root (one per configuration: the summary pools every
+# run of a phase under it).
+out="${DATA:-$WORK/data}/$phase$suffix"
 locked measure bash -c '
   echo "load before: $(cat /proc/loadavg)"
   exec "$@"' _ python3 "$here/terminal-matrix.py" --phase "$phase" --output "$out" \
-  --calibration "$WORK/calibration/calibration.json" "${common[@]}" --rounds "$rounds" --start-round "$start" "${extra[@]}"
+  --calibration "$cal/calibration.json" "${common[@]}" --rounds "$rounds" --start-round "$start" "${extra[@]}"

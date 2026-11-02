@@ -1,0 +1,359 @@
+{
+ "apps": {
+  "hotaru": {
+   "binary": "/nix/store/d8hm9pp1g9l43awvhz0mxrl27ma8vzn3-hotaru-0.1.0/bin/hotaru",
+   "window": [
+    1349,
+    1077
+   ],
+   "cell": [
+    11,
+    24
+   ],
+   "grid": [
+    120,
+    40
+   ],
+   "window_rect": {
+    "x": 20,
+    "y": 20,
+    "width": 1349,
+    "height": 1077
+   },
+   "cache_template": "/tmp/claude-1000/perf/terminals/calibration/cache/hotaru",
+   "terminal_processes": {
+    "258747": {
+     "comm": ".hotaru-wrapped",
+     "exe": "/nix/store/d8hm9pp1g9l43awvhz0mxrl27ma8vzn3-hotaru-0.1.0/bin/.hotaru-wrapped"
+    }
+   },
+   "terminal_executables_sha256": [
+    "bfc93beeb5a69bea24e33b387ebd8ae2e05ecc3699c60d06b9d96c5c02a641bb"
+   ],
+   "gpu": {
+    "compositor_log": [
+     "[render/egl.c:374] EGL vendor: Mesa Project",
+     "[render/gles2/renderer.c:538] Creating GLES2 renderer",
+     "[render/gles2/renderer.c:539] Using OpenGL ES 3.2 Mesa 26.2.6",
+     "[render/gles2/renderer.c:540] GL vendor: AMD",
+     "[render/gles2/renderer.c:541] GL renderer: AMD Ryzen 7 9800X3D 8-Core Processor (radeonsi, raphael_mendocino, ACO, DRM 3.64, 7.3.0)"
+    ],
+    "application": {
+     "258747": {
+      "comm": ".hotaru-wrapped",
+      "libraries": [],
+      "devices": []
+     }
+    },
+    "renderer_log": []
+   },
+   "configuration": {
+    "hotaru.toml": "font_size = 14.0\nscrollback = 0\ntheme = \"night\"\nshell_integration = false\ncursor_blink = false\n"
+   },
+   "dconf_keyfile": null,
+   "fonts": {
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-Italic-VF.ttf": "305d13b4eb80e62f7d517f78d7c045250d977552a420f2dbed906f314e761305",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-VF.ttf": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Bold.ttf": "74e5eedcfa4596497d34e19023cabdabd3a8c852b903007a5654a59591a72ffb",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Italic.ttf": "a55368deb953f594ac18336a1029009ed820e2d9abbb57ad601f61e22bec072b",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Medium.ttf": "98fbd727aae340b236955879dabed4d991aac9e8e90b3b2a67ce4a59221cc97c",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Regular.ttf": "7c6fbddca4b700be918f5f6183d9bd4464fa427fe435f0b480d77fe2bb8c5a43",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-SemiBold.ttf": "f04d7c488ddf7d1fa99f2574efc3406ea4cbe17bb1af3a1ab960f84d0c96a172",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/NotoSansSymbols2-Regular.otf": "9b0f186fea27f311018800fb3a01d44d59331dbcccf518d2dadcae894eb017c0",
+    "/nix/store/kyb5klpmdywnir1dzngx1lcsfjqh67g3-hotaru-fonts/NotoColorEmoji.ttf": "3a44421dc3ce672f80fa0d4fdf7da5b583494ab4517178747f5fa6f287db5c1d",
+    "/nix/store/kyb5klpmdywnir1dzngx1lcsfjqh67g3-hotaru-fonts/NotoSansCJK-Regular.ttc": "b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a"
+   },
+   "cache_files": [
+    "mesa_shader_cache/1a/6bd4938f058c34bdb21f97e1b00bac1846805e7c5bf49550f395c2bd235f00",
+    "mesa_shader_cache/45/32804a80c2688ec4cc32741bf8e397425af6572ddc4be9a5e1cd80553faadc",
+    "mesa_shader_cache/49/1cf7b02a19a51bf4c65e00371fa10e8d0900445e20b159d77eb7e27b4c7ed9",
+    "mesa_shader_cache/4f/090497bf399d2e59c6e7e54a4a9c765c2ba4104f120241550e45eb492ccb09",
+    "mesa_shader_cache/70/58860648e979412e86d6a9d3d989cff1d05df37243c0683c0a59eed7293d0d",
+    "mesa_shader_cache/8e/36c9d8afb9559c7aa068f86104f292aa32a30ea572570c7425e0230ed8e784",
+    "mesa_shader_cache/cf/628433a27d6e4c3d0713f63ea5efee95eb5d2b9d58a040a0c4dbb2f593712f",
+    "mesa_shader_cache/d3/61e6d13f904ee5e8293234526cd6525a376b2319cc3ea8c0f945ec70d4ca12",
+    "mesa_shader_cache/d7/2a42ba29db4cf9087162c8e852e8ea91384755ceed343bea60834342595274",
+    "mesa_shader_cache/e8/6e3615bfef0ddf59d3874c6b40868426de1a81596fad5524332fe8c3726732",
+    "mesa_shader_cache/e9/01af735e4e5ade0cf909bf111f435a89a80b8bdacc7cc9bedbd8702e51a9d5",
+    "mesa_shader_cache/ec/8780cb7379f8021d8f982751a36b267259906ad4aeb382f8b760c2607abfd1",
+    "mesa_shader_cache/f3/c25f83cf7b05f14ec00f310ce4d0adb985d448865886e93d1aa38025b17e36",
+    "mesa_shader_cache/f7/f5422bab93a0898264880c69f925710f4c22727ced0dfe9e9c8211b8f9b642",
+    "mesa_shader_cache/fb/d779b5230aa3f8d9cd6a96699e2b4310d23a0a1463df7451b88e5dc96184a6",
+    "mesa_shader_cache/index",
+    "mesa_shader_cache/marker"
+   ]
+  },
+  "ghostty": {
+   "binary": "/nix/store/pda6j5833xwmiqh8w8bpsccs22hxqlk3-ghostty-1.4.0/bin/ghostty",
+   "window": [
+    1331,
+    984
+   ],
+   "cell": [
+    11,
+    24
+   ],
+   "grid": [
+    120,
+    40
+   ],
+   "window_rect": {
+    "x": 20,
+    "y": 20,
+    "width": 1331,
+    "height": 984
+   },
+   "cache_template": "/tmp/claude-1000/perf/terminals/calibration/cache/ghostty",
+   "terminal_processes": {
+    "258898": {
+     "comm": ".ghostty-wrappe",
+     "exe": "/nix/store/pda6j5833xwmiqh8w8bpsccs22hxqlk3-ghostty-1.4.0/bin/.ghostty-wrapped"
+    }
+   },
+   "terminal_executables_sha256": [
+    "40c626ce258b144ef3a7d3a39b5c6c21ab8c6fe6c9842fbac22d8d7100971520"
+   ],
+   "gpu": {
+    "compositor_log": [
+     "[render/egl.c:374] EGL vendor: Mesa Project",
+     "[render/gles2/renderer.c:538] Creating GLES2 renderer",
+     "[render/gles2/renderer.c:539] Using OpenGL ES 3.2 Mesa 26.2.6",
+     "[render/gles2/renderer.c:540] GL vendor: AMD",
+     "[render/gles2/renderer.c:541] GL renderer: AMD Ryzen 7 9800X3D 8-Core Processor (radeonsi, raphael_mendocino, ACO, DRM 3.64, 7.3.0)"
+    ],
+    "application": {
+     "258898": {
+      "comm": ".ghostty-wrappe",
+      "libraries": [
+       "libEGL.so.1.1.0",
+       "libEGL_mesa.so.0.0.0",
+       "libGLESv2.so.2.1.0",
+       "libGLX.so.0.0.0",
+       "libgallium-26.2.6.so",
+       "libgbm.so.1.0.0",
+       "libvulkan.so.1.4.363"
+      ],
+      "devices": [
+       "/dev/dri/renderD128"
+      ]
+     }
+    },
+    "renderer_log": [
+     "info: renderer=renderer.generic.Renderer(renderer.OpenGL)",
+     "Not using Vulkan: Vulkan support disabled via GDK_DISABLE",
+     "Using renderer 'GskGLRenderer' for surface 'GdkWaylandToplevel'",
+     "info(opengl): EGL vendor=Mesa Project",
+     "info(opengl): loaded OpenGL 4.6"
+    ]
+   },
+   "configuration": {
+    "ghostty.conf": "gtk-single-instance = false\nshell-integration = none\nscrollback-limit-bytes = 0\nscrollback-limit-lines = 0\nfont-family = IBM Plex Mono\nfont-size = 14.0\ncursor-style-blink = false\nbackground-opacity = 1\nadjust-cell-height = -1\n"
+   },
+   "dconf_keyfile": null,
+   "fonts": {
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-Italic-VF.ttf": "305d13b4eb80e62f7d517f78d7c045250d977552a420f2dbed906f314e761305",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-VF.ttf": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Bold.ttf": "74e5eedcfa4596497d34e19023cabdabd3a8c852b903007a5654a59591a72ffb",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Italic.ttf": "a55368deb953f594ac18336a1029009ed820e2d9abbb57ad601f61e22bec072b",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Medium.ttf": "98fbd727aae340b236955879dabed4d991aac9e8e90b3b2a67ce4a59221cc97c",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Regular.ttf": "7c6fbddca4b700be918f5f6183d9bd4464fa427fe435f0b480d77fe2bb8c5a43",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-SemiBold.ttf": "f04d7c488ddf7d1fa99f2574efc3406ea4cbe17bb1af3a1ab960f84d0c96a172",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/NotoSansSymbols2-Regular.otf": "9b0f186fea27f311018800fb3a01d44d59331dbcccf518d2dadcae894eb017c0",
+    "/nix/store/kyb5klpmdywnir1dzngx1lcsfjqh67g3-hotaru-fonts/NotoColorEmoji.ttf": "3a44421dc3ce672f80fa0d4fdf7da5b583494ab4517178747f5fa6f287db5c1d",
+    "/nix/store/kyb5klpmdywnir1dzngx1lcsfjqh67g3-hotaru-fonts/NotoSansCJK-Regular.ttc": "b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a"
+   },
+   "cache_files": [
+    "mesa_shader_cache/05/efae5bffe6937c5120117b7598097e2ba7b51aa08a0b4df88ffb9405938873",
+    "mesa_shader_cache/0f/172e05c6cae0fabb6ac01f662a325ac00a389a0fbcddab1adc535962b8a97f",
+    "mesa_shader_cache/1a/6bd4938f058c34bdb21f97e1b00bac1846805e7c5bf49550f395c2bd235f00",
+    "mesa_shader_cache/22/c44a7e7ed7678dcbb1b36de212cbcc0c036f1a4fa6b26ddf1395c03dccb7ba",
+    "mesa_shader_cache/26/2c3383016eb30922744f97689ca443be3748b6052fd755fc836748e5b76cf5",
+    "mesa_shader_cache/2c/e71e8a40539258ebe66fc0a80abf46c2495a216f0cd94accb3e3b05f648513",
+    "mesa_shader_cache/2d/ee6ed53cc5b2525095c2eb6a5a3f925383c2bb010ff0e41a50160142fb26c0",
+    "mesa_shader_cache/30/fcd650c732fdd5d12d1930414047ed38084f52ba3e480e30af9b3ffdbc574d",
+    "mesa_shader_cache/31/595d3d5ee12b3c4a3ee04dd718f2dfee69d8b054eaa52003d0c50d0ed68c96",
+    "mesa_shader_cache/31/9e68e2db58a1d5b7437fb4e1830205cdbfc87d1500e4c0819df371de4f49c2",
+    "mesa_shader_cache/39/4939cb65596a675784c14e6b254c8652447dd5d07db5e42434959d03293d17",
+    "mesa_shader_cache/3b/14de8bd2a7f2777ff5538b86dc951d65b22d1647043b55c56ecfe32be13d90",
+    "mesa_shader_cache/45/32804a80c2688ec4cc32741bf8e397425af6572ddc4be9a5e1cd80553faadc",
+    "mesa_shader_cache/46/717e4fd45134723c68bd78e0ed7d0c36bcc3bb253c401d806a15a2417c149b",
+    "mesa_shader_cache/49/1cf7b02a19a51bf4c65e00371fa10e8d0900445e20b159d77eb7e27b4c7ed9",
+    "mesa_shader_cache/4f/090497bf399d2e59c6e7e54a4a9c765c2ba4104f120241550e45eb492ccb09",
+    "mesa_shader_cache/54/d7adffc155adcf6b1b89b9194d5cc86755e6a5e4a69fdc48c8e35319a4526b",
+    "mesa_shader_cache/57/64d78042655994c5ec408cef8050006c445955cfa2fe7229467400765f8d90",
+    "mesa_shader_cache/5c/61cbc27b9f202f72df6ce5099123e94f480f7492a1f3a1c2fffa361a9c66a5",
+    "mesa_shader_cache/63/21b78bac7b43eef9346fe128f8eefaad7836e758c4a9dcb3b666ccffdc7bb2",
+    "mesa_shader_cache/70/58860648e979412e86d6a9d3d989cff1d05df37243c0683c0a59eed7293d0d",
+    "mesa_shader_cache/80/203fef52e5663d482080f6f805b9565afa6e93bb4c44d49a700e2da5f88973",
+    "mesa_shader_cache/82/0dabc72f60fac299b4076c1d62bf006fddd8437a775a8a1db7ae684cd1cdd7",
+    "mesa_shader_cache/87/b82c10b60517735be28b7844e2e4c9f11c33a3e92d2cd57cf644688d8b26cd",
+    "mesa_shader_cache/8e/36c9d8afb9559c7aa068f86104f292aa32a30ea572570c7425e0230ed8e784",
+    "mesa_shader_cache/97/e351e8b5652ce5fefafd8c88f3dace9c1e3d3156fe8113348fd1ebd2483ba6",
+    "mesa_shader_cache/9c/32974782b5880fdb911e22e4943a0d12ba318a9e132d53fbd7ce608d41eb35",
+    "mesa_shader_cache/9c/36ce5cd60927accbee77c9ce99678206cc34f21643241a05aa59c4a52aacdb",
+    "mesa_shader_cache/a4/7c80304104e951ceaabec35ea0a20d045eb414bdd2ef06b2509829c8f37f2d",
+    "mesa_shader_cache/a5/117307b616e5caed9741508aabf8308ac6a141f6ea66f7bee4267cdf9ddad3",
+    "mesa_shader_cache/a6/a13fa89347c2ac3a32a8ef368d9033d2d0d8ef1108dca1728c14ff88f4656d",
+    "mesa_shader_cache/a9/58fcb0240c4dab8308c131a37c192871df5f23bd2e79a5bc67a47992242e08",
+    "mesa_shader_cache/af/ab24039fd2b691b38116904c500c2de11c0a50ded38183c570e1ab06b6ee4c",
+    "mesa_shader_cache/b4/ca733616edbacc043b110b59df760d8ef0c97a84e64bf7d94a4267359f27bf",
+    "mesa_shader_cache/bf/f020dc0718fc5ed3380168d51a5c0b9401ab67c0989e9c2d02b6518cfb2747",
+    "mesa_shader_cache/cf/628433a27d6e4c3d0713f63ea5efee95eb5d2b9d58a040a0c4dbb2f593712f",
+    "mesa_shader_cache/d3/2020af0138ec983f8e9e815ce3443da2b70bdd6ac2a7630f80d184395d4343",
+    "mesa_shader_cache/d3/61e6d13f904ee5e8293234526cd6525a376b2319cc3ea8c0f945ec70d4ca12",
+    "mesa_shader_cache/d7/2a42ba29db4cf9087162c8e852e8ea91384755ceed343bea60834342595274",
+    "mesa_shader_cache/dd/5daf9acc11cf4ccb464f76528f502ef2867234c70a470c40fb8092ee775842",
+    "mesa_shader_cache/e8/6e3615bfef0ddf59d3874c6b40868426de1a81596fad5524332fe8c3726732",
+    "mesa_shader_cache/e9/01af735e4e5ade0cf909bf111f435a89a80b8bdacc7cc9bedbd8702e51a9d5",
+    "mesa_shader_cache/ec/8780cb7379f8021d8f982751a36b267259906ad4aeb382f8b760c2607abfd1",
+    "mesa_shader_cache/ee/7c2b4b9e413eaa4d4f28b57c9cc66bafea89442ddd35994cd61e927d4e0e02",
+    "mesa_shader_cache/ef/18ee595a1afaa8586a62004e784ccb87da3d8f31997bbd0f716ccb7fa301e6",
+    "mesa_shader_cache/f0/c2dafba62eb175fc228181a60ee937f21d334b0e1a8edeac599a87c0b72b62",
+    "mesa_shader_cache/f3/c25f83cf7b05f14ec00f310ce4d0adb985d448865886e93d1aa38025b17e36",
+    "mesa_shader_cache/f6/99012a40f803c374ff9f1a42d4ef17a431ae23eb03c6235c35bd8a83718d0a",
+    "mesa_shader_cache/f7/f5422bab93a0898264880c69f925710f4c22727ced0dfe9e9c8211b8f9b642",
+    "mesa_shader_cache/fb/d779b5230aa3f8d9cd6a96699e2b4310d23a0a1463df7451b88e5dc96184a6",
+    "mesa_shader_cache/fe/800481b1a41bd95099e98df6fc252311091ea0b78ea51e9ada00a279d26a09",
+    "mesa_shader_cache/index",
+    "mesa_shader_cache/marker"
+   ]
+  },
+  "ghostty-main": {
+   "binary": "/nix/store/iqhwwkk4hh74jkkk0pjp367z3qir6hw8-ghostty-1.4.1-dev+0b1729e-nix/bin/ghostty",
+   "window": [
+    1331,
+    987
+   ],
+   "cell": [
+    11,
+    24
+   ],
+   "grid": [
+    120,
+    40
+   ],
+   "window_rect": {
+    "x": 20,
+    "y": 20,
+    "width": 1331,
+    "height": 987
+   },
+   "cache_template": "/tmp/claude-1000/perf/terminals/calibration-main/cache/ghostty-main",
+   "terminal_processes": {
+    "1234021": {
+     "comm": ".ghostty-wrappe",
+     "exe": "/nix/store/iqhwwkk4hh74jkkk0pjp367z3qir6hw8-ghostty-1.4.1-dev+0b1729e-nix/bin/.ghostty-wrapped"
+    }
+   },
+   "terminal_executables_sha256": [
+    "e579e349bff749f8ea8710a489d96cd087ec69df39255df58a2f0dc18d4687fc"
+   ],
+   "gpu": {
+    "compositor_log": [
+     "[render/egl.c:374] EGL vendor: Mesa Project",
+     "[render/gles2/renderer.c:538] Creating GLES2 renderer",
+     "[render/gles2/renderer.c:539] Using OpenGL ES 3.2 Mesa 26.2.6",
+     "[render/gles2/renderer.c:540] GL vendor: AMD",
+     "[render/gles2/renderer.c:541] GL renderer: AMD Ryzen 7 9800X3D 8-Core Processor (radeonsi, raphael_mendocino, ACO, DRM 3.64, 7.3.0)"
+    ],
+    "application": {
+     "1234021": {
+      "comm": ".ghostty-wrappe",
+      "libraries": [
+       "libEGL.so.1.1.0",
+       "libEGL_mesa.so.0.0.0",
+       "libGLESv2.so.2.1.0",
+       "libGLX.so.0.0.0",
+       "libgallium-26.2.6.so",
+       "libgbm.so.1.0.0",
+       "libvulkan.so.1.4.357"
+      ],
+      "devices": [
+       "/dev/dri/renderD128"
+      ]
+     }
+    },
+    "renderer_log": [
+     "info: renderer=renderer.generic.Renderer(renderer.OpenGL)",
+     "Not using Vulkan: Vulkan support disabled via GDK_DISABLE",
+     "Using renderer 'GskGLRenderer' for surface 'GdkWaylandToplevel'",
+     "info(opengl): EGL vendor=Mesa Project",
+     "info(opengl): loaded OpenGL 4.6"
+    ]
+   },
+   "configuration": {
+    "ghostty.conf": "gtk-single-instance = false\nshell-integration = none\nscrollback-limit-bytes = 0\nscrollback-limit-lines = 0\nfont-family = IBM Plex Mono\nfont-size = 14.0\ncursor-style-blink = false\nbackground-opacity = 1\nadjust-cell-height = -1\n"
+   },
+   "dconf_keyfile": null,
+   "fonts": {
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-Italic-VF.ttf": "305d13b4eb80e62f7d517f78d7c045250d977552a420f2dbed906f314e761305",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/Archivo-VF.ttf": "0e094a7d3c7c4c25cf1310c4b30014f1dae9332220b1c2c88f4fa996f0b05053",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Bold.ttf": "74e5eedcfa4596497d34e19023cabdabd3a8c852b903007a5654a59591a72ffb",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Italic.ttf": "a55368deb953f594ac18336a1029009ed820e2d9abbb57ad601f61e22bec072b",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Medium.ttf": "98fbd727aae340b236955879dabed4d991aac9e8e90b3b2a67ce4a59221cc97c",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-Regular.ttf": "7c6fbddca4b700be918f5f6183d9bd4464fa427fe435f0b480d77fe2bb8c5a43",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/IBMPlexMono-SemiBold.ttf": "f04d7c488ddf7d1fa99f2574efc3406ea4cbe17bb1af3a1ab960f84d0c96a172",
+    "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts/NotoSansSymbols2-Regular.otf": "9b0f186fea27f311018800fb3a01d44d59331dbcccf518d2dadcae894eb017c0",
+    "/nix/store/kyb5klpmdywnir1dzngx1lcsfjqh67g3-hotaru-fonts/NotoColorEmoji.ttf": "3a44421dc3ce672f80fa0d4fdf7da5b583494ab4517178747f5fa6f287db5c1d",
+    "/nix/store/kyb5klpmdywnir1dzngx1lcsfjqh67g3-hotaru-fonts/NotoSansCJK-Regular.ttc": "b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a"
+   },
+   "cache_files": [
+    "mesa_shader_cache/05/efae5bffe6937c5120117b7598097e2ba7b51aa08a0b4df88ffb9405938873",
+    "mesa_shader_cache/0f/172e05c6cae0fabb6ac01f662a325ac00a389a0fbcddab1adc535962b8a97f",
+    "mesa_shader_cache/1a/6bd4938f058c34bdb21f97e1b00bac1846805e7c5bf49550f395c2bd235f00",
+    "mesa_shader_cache/22/c44a7e7ed7678dcbb1b36de212cbcc0c036f1a4fa6b26ddf1395c03dccb7ba",
+    "mesa_shader_cache/26/2c3383016eb30922744f97689ca443be3748b6052fd755fc836748e5b76cf5",
+    "mesa_shader_cache/2c/e71e8a40539258ebe66fc0a80abf46c2495a216f0cd94accb3e3b05f648513",
+    "mesa_shader_cache/2d/ee6ed53cc5b2525095c2eb6a5a3f925383c2bb010ff0e41a50160142fb26c0",
+    "mesa_shader_cache/30/fcd650c732fdd5d12d1930414047ed38084f52ba3e480e30af9b3ffdbc574d",
+    "mesa_shader_cache/31/595d3d5ee12b3c4a3ee04dd718f2dfee69d8b054eaa52003d0c50d0ed68c96",
+    "mesa_shader_cache/31/9e68e2db58a1d5b7437fb4e1830205cdbfc87d1500e4c0819df371de4f49c2",
+    "mesa_shader_cache/39/4939cb65596a675784c14e6b254c8652447dd5d07db5e42434959d03293d17",
+    "mesa_shader_cache/3b/14de8bd2a7f2777ff5538b86dc951d65b22d1647043b55c56ecfe32be13d90",
+    "mesa_shader_cache/45/32804a80c2688ec4cc32741bf8e397425af6572ddc4be9a5e1cd80553faadc",
+    "mesa_shader_cache/46/717e4fd45134723c68bd78e0ed7d0c36bcc3bb253c401d806a15a2417c149b",
+    "mesa_shader_cache/49/1cf7b02a19a51bf4c65e00371fa10e8d0900445e20b159d77eb7e27b4c7ed9",
+    "mesa_shader_cache/4f/090497bf399d2e59c6e7e54a4a9c765c2ba4104f120241550e45eb492ccb09",
+    "mesa_shader_cache/54/d7adffc155adcf6b1b89b9194d5cc86755e6a5e4a69fdc48c8e35319a4526b",
+    "mesa_shader_cache/57/64d78042655994c5ec408cef8050006c445955cfa2fe7229467400765f8d90",
+    "mesa_shader_cache/5c/61cbc27b9f202f72df6ce5099123e94f480f7492a1f3a1c2fffa361a9c66a5",
+    "mesa_shader_cache/63/21b78bac7b43eef9346fe128f8eefaad7836e758c4a9dcb3b666ccffdc7bb2",
+    "mesa_shader_cache/70/58860648e979412e86d6a9d3d989cff1d05df37243c0683c0a59eed7293d0d",
+    "mesa_shader_cache/80/203fef52e5663d482080f6f805b9565afa6e93bb4c44d49a700e2da5f88973",
+    "mesa_shader_cache/82/0dabc72f60fac299b4076c1d62bf006fddd8437a775a8a1db7ae684cd1cdd7",
+    "mesa_shader_cache/87/b82c10b60517735be28b7844e2e4c9f11c33a3e92d2cd57cf644688d8b26cd",
+    "mesa_shader_cache/8e/36c9d8afb9559c7aa068f86104f292aa32a30ea572570c7425e0230ed8e784",
+    "mesa_shader_cache/97/e351e8b5652ce5fefafd8c88f3dace9c1e3d3156fe8113348fd1ebd2483ba6",
+    "mesa_shader_cache/9c/32974782b5880fdb911e22e4943a0d12ba318a9e132d53fbd7ce608d41eb35",
+    "mesa_shader_cache/9c/36ce5cd60927accbee77c9ce99678206cc34f21643241a05aa59c4a52aacdb",
+    "mesa_shader_cache/a4/7c80304104e951ceaabec35ea0a20d045eb414bdd2ef06b2509829c8f37f2d",
+    "mesa_shader_cache/a5/117307b616e5caed9741508aabf8308ac6a141f6ea66f7bee4267cdf9ddad3",
+    "mesa_shader_cache/a6/a13fa89347c2ac3a32a8ef368d9033d2d0d8ef1108dca1728c14ff88f4656d",
+    "mesa_shader_cache/a9/58fcb0240c4dab8308c131a37c192871df5f23bd2e79a5bc67a47992242e08",
+    "mesa_shader_cache/af/ab24039fd2b691b38116904c500c2de11c0a50ded38183c570e1ab06b6ee4c",
+    "mesa_shader_cache/b4/ca733616edbacc043b110b59df760d8ef0c97a84e64bf7d94a4267359f27bf",
+    "mesa_shader_cache/bf/f020dc0718fc5ed3380168d51a5c0b9401ab67c0989e9c2d02b6518cfb2747",
+    "mesa_shader_cache/cf/628433a27d6e4c3d0713f63ea5efee95eb5d2b9d58a040a0c4dbb2f593712f",
+    "mesa_shader_cache/d3/2020af0138ec983f8e9e815ce3443da2b70bdd6ac2a7630f80d184395d4343",
+    "mesa_shader_cache/d3/61e6d13f904ee5e8293234526cd6525a376b2319cc3ea8c0f945ec70d4ca12",
+    "mesa_shader_cache/d7/2a42ba29db4cf9087162c8e852e8ea91384755ceed343bea60834342595274",
+    "mesa_shader_cache/dd/5daf9acc11cf4ccb464f76528f502ef2867234c70a470c40fb8092ee775842",
+    "mesa_shader_cache/e8/6e3615bfef0ddf59d3874c6b40868426de1a81596fad5524332fe8c3726732",
+    "mesa_shader_cache/e9/01af735e4e5ade0cf909bf111f435a89a80b8bdacc7cc9bedbd8702e51a9d5",
+    "mesa_shader_cache/ec/8780cb7379f8021d8f982751a36b267259906ad4aeb382f8b760c2607abfd1",
+    "mesa_shader_cache/ee/7c2b4b9e413eaa4d4f28b57c9cc66bafea89442ddd35994cd61e927d4e0e02",
+    "mesa_shader_cache/ef/18ee595a1afaa8586a62004e784ccb87da3d8f31997bbd0f716ccb7fa301e6",
+    "mesa_shader_cache/f0/c2dafba62eb175fc228181a60ee937f21d334b0e1a8edeac599a87c0b72b62",
+    "mesa_shader_cache/f3/c25f83cf7b05f14ec00f310ce4d0adb985d448865886e93d1aa38025b17e36",
+    "mesa_shader_cache/f6/99012a40f803c374ff9f1a42d4ef17a431ae23eb03c6235c35bd8a83718d0a",
+    "mesa_shader_cache/f7/f5422bab93a0898264880c69f925710f4c22727ced0dfe9e9c8211b8f9b642",
+    "mesa_shader_cache/fb/d779b5230aa3f8d9cd6a96699e2b4310d23a0a1463df7451b88e5dc96184a6",
+    "mesa_shader_cache/fe/800481b1a41bd95099e98df6fc252311091ea0b78ea51e9ada00a279d26a09",
+    "mesa_shader_cache/index",
+    "mesa_shader_cache/marker"
+   ]
+  }
+ },
+ "host": "runnymede",
+ "note": "hotaru and ghostty from calibration/ (2 November 2026, 04:xx); ghostty-main from calibration-main/"
+}

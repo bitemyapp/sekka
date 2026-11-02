@@ -218,6 +218,7 @@ def main():
     parser.add_argument("--fontconfig-cache", type=Path, required=True)
     parser.add_argument("--corpus", action="append", default=[], type=Path)
     parser.add_argument("--throughput-repeat", type=int, default=8)
+    parser.add_argument("--scrollback", choices=("zero", "ghostty-default"), default="zero")
     parser.add_argument("--keys", type=int, default=500); parser.add_argument("--frames", type=int, default=120)
     parser.add_argument("--idle-seconds", type=float, default=60); parser.add_argument("--typing-seconds", type=float, default=60)
     parser.add_argument("--baseline-seconds", type=float, default=20); parser.add_argument("--baseline-post-seconds", type=float, default=10)
@@ -261,7 +262,7 @@ def main():
         else:
             width, height = args.initial_window.split("x")
             command += [binaries[app], "--window-width", width, "--window-height", height]
-        command += ["--runtime-dir", f"/tmp/tb.{app}",
+        command += ["--scrollback", args.scrollback, "--runtime-dir", f"/tmp/tb.{app}",
                     "--observer", str(args.observer), "--font-dir", str(args.font_dir), "--fallback-dir", str(args.fallback_dir),
                     "--fontconfig-cache", str(args.fontconfig_cache)]
         for name, value in roles.items():

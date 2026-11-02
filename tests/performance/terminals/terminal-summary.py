@@ -215,7 +215,7 @@ def med(s, digits=1, spread=True):
     return fmt(s["median"], digits)
 
 
-ORDER = ("hotaru", "ghostty", "gnome-terminal", "konsole", "kgx", "foot", "alacritty", "kitty")
+ORDER = ("hotaru", "ghostty", "ghostty-main", "gnome-terminal", "konsole", "kgx", "foot", "alacritty", "kitty")
 LABELS = {"hotaru": "Hotaru", "ghostty": "Ghostty", "gnome-terminal": "gnome-terminal", "konsole": "Konsole",
           "kgx": "Console (kgx)", "foot": "foot", "alacritty": "Alacritty", "kitty": "kitty"}
 
