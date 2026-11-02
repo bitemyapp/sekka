@@ -1,0 +1,2342 @@
+{
+ "runs": [
+  "r1",
+  "r2",
+  "r3"
+ ],
+ "engines": {
+  "pdfium": {
+   "pages_drawn": 1195,
+   "ms_per_page": {
+    "p50": 1.45,
+    "p90": 7.8,
+    "p99": 80.86,
+    "max": 1588.14,
+    "mean": 7.54
+   },
+   "total_ms_all_pages_drawn": 9006.0,
+   "files_not_ok": {
+    "refused": {
+     "REDHAT-1531897-0.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "bug1020226.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "bug1250079.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "bug1606566.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "bug1782186.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "bug1980958.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "crypt_filters.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue15893_reduced.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue21579.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue3371.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue6010_1.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue6010_2.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue9105_other.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "poppler-742-0-fuzzed.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "pr6531_1.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "pr6531_2.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "print_protection.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "saslprep-r6.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ]
+    },
+    "crash": {
+     "jpx_numcomps.pdf": [
+      "r1:-5",
+      "r2:-5",
+      "r3:-5"
+     ]
+    },
+    "timeout": {
+     "tiling-pattern-tiny-steps-large.pdf": [
+      "r1:124",
+      "r2:124",
+      "r3:124"
+     ],
+     "tiling-pattern-tiny-steps.pdf": [
+      "r1:124",
+      "r2:124",
+      "r3:124"
+     ]
+    }
+   },
+   "files_with_pages_that_failed": [
+    "Pages-tree-refs.pdf",
+    "issue19517.pdf",
+    "poppler-937-0-fuzzed.pdf"
+   ],
+   "peak_rss_mib_per_process": {
+    "max": 175.7,
+    "median": 18.6,
+    "p90": 23.2,
+    "median_of_files_opened": 18.6,
+    "max_without_issue19517_and_bomb_giant": 175.7
+   }
+  },
+  "hayro-fork": {
+   "pages_drawn": 1208,
+   "ms_per_page": {
+    "p50": 1.1,
+    "p90": 5.62,
+    "p99": 43.5,
+    "max": 6023.72,
+    "mean": 8.53
+   },
+   "total_ms_all_pages_drawn": 10304.0,
+   "files_not_ok": {
+    "refused": {
+     "Brotli-Prototype-FileA.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "REDHAT-1531897-0.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "bug1020226.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "bug1782186.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue15590.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue15893_reduced.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue21579.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue3371.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue6010_1.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue6010_2.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue9105_other.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "poppler-742-0-fuzzed.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "poppler-937-0-fuzzed.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "pr6531_1.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "print_protection.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "saslprep-r6.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ]
+    }
+   },
+   "files_with_pages_that_failed": [],
+   "peak_rss_mib_per_process": {
+    "max": 8341.1,
+    "median": 18.5,
+    "p90": 18.8,
+    "median_of_files_opened": 18.5,
+    "max_without_issue19517_and_bomb_giant": 171.1
+   },
+   "against_pdfium_pages_both_drew": {
+    "pages": 1193,
+    "total_ms": 4263.0,
+    "pdfium_total_ms": 9005.0,
+    "ratio": 0.473,
+    "under_5_s_in_both": {
+     "pages": 1193,
+     "ratio": 0.473
+    },
+    "faster_than_pdfium_on": 1057,
+    "behind_pdfium_on": 135,
+    "behind_by_ms_in_all": 94.0,
+    "per_page_time_over_pdfium": {
+     "p10": 0.42,
+     "p50": 0.72,
+     "p90": 1.02,
+     "p99": 1.67
+    }
+   }
+  },
+  "hayro-upstream": {
+   "pages_drawn": 1206,
+   "ms_per_page": {
+    "p50": 1.24,
+    "p90": 8.16,
+    "p99": 102.82,
+    "max": 6140.06,
+    "mean": 12.95
+   },
+   "total_ms_all_pages_drawn": 15615.0,
+   "files_not_ok": {
+    "refused": {
+     "Brotli-Prototype-FileA.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "REDHAT-1531897-0.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "auth-event-ef-open.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "bug1020226.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "bug1782186.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "encrypted-attachment.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue15590.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue15893_reduced.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue21579.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue3371.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue6010_1.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue6010_2.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue9105_other.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "poppler-742-0-fuzzed.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "poppler-937-0-fuzzed.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "pr6531_1.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "print_protection.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "saslprep-r6.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ]
+    }
+   },
+   "files_with_pages_that_failed": [],
+   "peak_rss_mib_per_process": {
+    "max": 8340.3,
+    "median": 18.4,
+    "p90": 19.1,
+    "median_of_files_opened": 18.4,
+    "max_without_issue19517_and_bomb_giant": 497.5
+   },
+   "against_pdfium_pages_both_drew": {
+    "pages": 1191,
+    "total_ms": 9454.0,
+    "pdfium_total_ms": 9002.0,
+    "ratio": 1.05,
+    "under_5_s_in_both": {
+     "pages": 1191,
+     "ratio": 1.05
+    },
+    "faster_than_pdfium_on": 896,
+    "behind_pdfium_on": 293,
+    "behind_by_ms_in_all": 3081.0,
+    "per_page_time_over_pdfium": {
+     "p10": 0.55,
+     "p50": 0.84,
+     "p90": 1.39,
+     "p99": 13.56
+    }
+   }
+  },
+  "mupdf": {
+   "pages_drawn": 1193,
+   "ms_per_page": {
+    "p50": 3.02,
+    "p90": 15.01,
+    "p99": 116.07,
+    "max": 10616.71,
+    "mean": 18.27
+   },
+   "total_ms_all_pages_drawn": 21792.0,
+   "files_not_ok": {
+    "refused": {
+     "auth-event-ef-open.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "bug1782186.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "crypt_filters.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "encrypted-attachment.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue15893_reduced.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue21579.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue3371.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue6010_1.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue6010_2.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "poppler-67295-0.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "poppler-742-0-fuzzed.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "poppler-85140-0.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "pr6531_1.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "pr6531_2.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "print_protection.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "saslprep-r6.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ]
+    },
+    "crash": {
+     "bug_jpx.pdf": [
+      "r1:-6",
+      "r2:-6",
+      "r3:-6"
+     ]
+    },
+    "timeout": {
+     "tiling-pattern-tiny-steps-large.pdf": [
+      "r1:124",
+      "r2:124",
+      "r3:124"
+     ]
+    }
+   },
+   "files_with_pages_that_failed": [
+    "Pages-tree-refs.pdf",
+    "issue19517.pdf"
+   ],
+   "peak_rss_mib_per_process": {
+    "max": 120.6,
+    "median": 18.5,
+    "p90": 26.4,
+    "median_of_files_opened": 18.5,
+    "max_without_issue19517_and_bomb_giant": 120.6
+   },
+   "against_pdfium_pages_both_drew": {
+    "pages": 1183,
+    "total_ms": 11054.0,
+    "pdfium_total_ms": 8961.0,
+    "ratio": 1.234,
+    "under_5_s_in_both": {
+     "pages": 1183,
+     "ratio": 1.234
+    },
+    "faster_than_pdfium_on": 282,
+    "behind_pdfium_on": 900,
+    "behind_by_ms_in_all": 6144.0,
+    "per_page_time_over_pdfium": {
+     "p10": 0.62,
+     "p50": 2.02,
+     "p90": 6.73,
+     "p99": 26.99
+    }
+   }
+  },
+  "poppler-splash": {
+   "pages_drawn": 1198,
+   "ms_per_page": {
+    "p50": 5.36,
+    "p90": 25.42,
+    "p99": 162.72,
+    "max": 7239.35,
+    "mean": 24.12
+   },
+   "total_ms_all_pages_drawn": 28892.0,
+   "files_not_ok": {
+    "refused": {
+     "REDHAT-1531897-0.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "bug1020226.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "bug1980958.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue15893_reduced.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue21579.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue3371.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue6010_1.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue6010_2.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue9105_other.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "pr6531_1.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "print_protection.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "saslprep-r6.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ]
+    },
+    "crash": {
+     "bug_jpx.pdf": [
+      "r1:-8",
+      "r2:-8",
+      "r3:-8"
+     ]
+    },
+    "timeout": {
+     "bomb_giant.pdf": [
+      "r1:124",
+      "r2:124",
+      "r3:124"
+     ],
+     "tiling-pattern-tiny-steps-large.pdf": [
+      "r1:124",
+      "r2:124",
+      "r3:124"
+     ],
+     "tiling-pattern-tiny-steps.pdf": [
+      "r1:124",
+      "r2:124",
+      "r3:124"
+     ]
+    }
+   },
+   "files_with_pages_that_failed": [
+    "Pages-tree-refs.pdf",
+    "bug1978317.pdf",
+    "issue19484_1.pdf",
+    "issue19484_2.pdf",
+    "poppler-742-0-fuzzed.pdf",
+    "poppler-937-0-fuzzed.pdf"
+   ],
+   "peak_rss_mib_per_process": {
+    "max": 4117.2,
+    "median": 27.5,
+    "p90": 40.2,
+    "median_of_files_opened": 29.5,
+    "max_without_issue19517_and_bomb_giant": 294.5
+   },
+   "against_pdfium_pages_both_drew": {
+    "pages": 1186,
+    "total_ms": 21396.0,
+    "pdfium_total_ms": 8705.0,
+    "ratio": 2.458,
+    "under_5_s_in_both": {
+     "pages": 1186,
+     "ratio": 2.458
+    },
+    "faster_than_pdfium_on": 40,
+    "behind_pdfium_on": 1146,
+    "behind_by_ms_in_all": 13438.0,
+    "per_page_time_over_pdfium": {
+     "p10": 1.44,
+     "p50": 3.08,
+     "p90": 9.42,
+     "p99": 29.34
+    }
+   }
+  },
+  "poppler-cairo": {
+   "pages_drawn": 1196,
+   "ms_per_page": {
+    "p50": 2.26,
+    "p90": 13.59,
+    "p99": 117.44,
+    "max": 916.94,
+    "mean": 9.64
+   },
+   "total_ms_all_pages_drawn": 11527.0,
+   "files_not_ok": {
+    "refused": {
+     "REDHAT-1531897-0.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "bug1020226.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "bug1980958.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue15893_reduced.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue21579.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue3371.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue6010_1.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue6010_2.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "issue9105_other.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "pr6531_1.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "print_protection.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ],
+     "saslprep-r6.pdf": [
+      "r1:0",
+      "r2:0",
+      "r3:0"
+     ]
+    },
+    "crash": {
+     "ContentStreamCycleType3insideType3.pdf": [
+      "r1:-11",
+      "r2:-11",
+      "r3:-11"
+     ],
+     "bug_jpx.pdf": [
+      "r1:-11",
+      "r2:-11",
+      "r3:-11"
+     ]
+    },
+    "timeout": {
+     "bomb_giant.pdf": [
+      "r1:124",
+      "r2:124",
+      "r3:124"
+     ],
+     "tiling-pattern-tiny-steps-large.pdf": [
+      "r1:124",
+      "r2:124",
+      "r3:124"
+     ],
+     "tiling-pattern-tiny-steps.pdf": [
+      "r1:124",
+      "r2:124",
+      "r3:124"
+     ]
+    }
+   },
+   "files_with_pages_that_failed": [
+    "Pages-tree-refs.pdf",
+    "bug1978317.pdf",
+    "issue19484_1.pdf",
+    "issue19484_2.pdf",
+    "issue19517.pdf",
+    "issue19634.pdf",
+    "poppler-742-0-fuzzed.pdf",
+    "poppler-937-0-fuzzed.pdf"
+   ],
+   "peak_rss_mib_per_process": {
+    "max": 4323.3,
+    "median": 28.7,
+    "p90": 37.1,
+    "median_of_files_opened": 28.8,
+    "max_without_issue19517_and_bomb_giant": 145.0
+   },
+   "against_pdfium_pages_both_drew": {
+    "pages": 1185,
+    "total_ms": 11382.0,
+    "pdfium_total_ms": 8703.0,
+    "ratio": 1.308,
+    "under_5_s_in_both": {
+     "pages": 1185,
+     "ratio": 1.308
+    },
+    "faster_than_pdfium_on": 308,
+    "behind_pdfium_on": 874,
+    "behind_by_ms_in_all": 5678.0,
+    "per_page_time_over_pdfium": {
+     "p10": 0.78,
+     "p50": 1.37,
+     "p90": 6.95,
+     "p99": 23.18
+    }
+   }
+  }
+ },
+ "common_set": {
+  "pages_all_engines_drew": 1179,
+  "engines": {
+   "pdfium": {
+    "total_ms": 8697.0,
+    "ratio_to_pdfium": 1.0,
+    "faster_than_pdfium_on": null,
+    "p50": 1.45,
+    "p90": 7.78,
+    "p99": 79.62,
+    "max": 1588.14,
+    "total_ms_by_run": {
+     "r1": 8724.0,
+     "r2": 8707.0,
+     "r3": 8711.0
+    }
+   },
+   "hayro-fork": {
+    "total_ms": 4167.0,
+    "ratio_to_pdfium": 0.479,
+    "faster_than_pdfium_on": 1045,
+    "p50": 1.1,
+    "p90": 5.61,
+    "p99": 37.69,
+    "max": 705.54,
+    "total_ms_by_run": {
+     "r1": 4162.0,
+     "r2": 4178.0,
+     "r3": 4192.0
+    }
+   },
+   "hayro-upstream": {
+    "total_ms": 9357.0,
+    "ratio_to_pdfium": 1.076,
+    "faster_than_pdfium_on": 886,
+    "p50": 1.24,
+    "p90": 8.16,
+    "p99": 101.49,
+    "max": 2808.24,
+    "total_ms_by_run": {
+     "r1": 9153.0,
+     "r2": 9354.0,
+     "r3": 9382.0
+    }
+   },
+   "mupdf": {
+    "total_ms": 10978.0,
+    "ratio_to_pdfium": 1.262,
+    "faster_than_pdfium_on": 281,
+    "p50": 3.02,
+    "p90": 14.65,
+    "p99": 110.78,
+    "max": 1969.25,
+    "total_ms_by_run": {
+     "r1": 11005.0,
+     "r2": 11019.0,
+     "r3": 11099.0
+    }
+   },
+   "poppler-splash": {
+    "total_ms": 21347.0,
+    "ratio_to_pdfium": 2.455,
+    "faster_than_pdfium_on": 40,
+    "p50": 5.32,
+    "p90": 25.06,
+    "p99": 143.55,
+    "max": 4861.34,
+    "total_ms_by_run": {
+     "r1": 21337.0,
+     "r2": 21333.0,
+     "r3": 21428.0
+    }
+   },
+   "poppler-cairo": {
+    "total_ms": 11367.0,
+    "ratio_to_pdfium": 1.307,
+    "faster_than_pdfium_on": 306,
+    "p50": 2.25,
+    "p90": 13.4,
+    "p99": 117.81,
+    "max": 916.94,
+    "total_ms_by_run": {
+     "r1": 11364.0,
+     "r2": 11531.0,
+     "r3": 11378.0
+    }
+   }
+  }
+ },
+ "named_pages": [
+  {
+   "file": "issue2948.pdf",
+   "page": 0,
+   "what": "free-form mesh",
+   "pdfium": 5.1,
+   "hayro-fork": 11.15,
+   "hayro-upstream": 247.68,
+   "mupdf": 7.02,
+   "poppler-splash": 45.25,
+   "poppler-cairo": 262.09
+  },
+  {
+   "file": "personwithdog.pdf",
+   "page": 0,
+   "what": "CMYK patch mesh",
+   "pdfium": 54.98,
+   "hayro-fork": 56.79,
+   "hayro-upstream": 182.43,
+   "mupdf": 57.18,
+   "poppler-splash": 62.7,
+   "poppler-cairo": 10.0
+  },
+  {
+   "file": "issue6231_1.pdf",
+   "page": 0,
+   "what": "mesh coloured by a stitching function",
+   "pdfium": 3.02,
+   "hayro-fork": 5.63,
+   "hayro-upstream": 25.32,
+   "mupdf": 7.64,
+   "poppler-splash": 23.02,
+   "poppler-cairo": 10.03
+  },
+  {
+   "file": "bug1755507.pdf",
+   "page": 0,
+   "what": "a JPEG under a soft mask",
+   "pdfium": 6.89,
+   "hayro-fork": 13.48,
+   "hayro-upstream": 39.49,
+   "mupdf": 95.63,
+   "poppler-splash": 251.04,
+   "poppler-cairo": 66.35
+  },
+  {
+   "file": "issue18032.pdf",
+   "page": 0,
+   "what": "soft mask",
+   "pdfium": 3.72,
+   "hayro-fork": 6.04,
+   "hayro-upstream": 78.31,
+   "mupdf": 70.78,
+   "poppler-splash": 258.43,
+   "poppler-cairo": 17.56
+  },
+  {
+   "file": "issue12798_page1_reduced.pdf",
+   "page": 0,
+   "what": "nested transparency groups",
+   "pdfium": 3.88,
+   "hayro-fork": 6.89,
+   "hayro-upstream": 27.01,
+   "mupdf": 59.82,
+   "poppler-splash": 132.27,
+   "poppler-cairo": 31.51
+  },
+  {
+   "file": "issue5044.pdf",
+   "page": 0,
+   "what": "soft masks and groups",
+   "pdfium": 1.76,
+   "hayro-fork": 3.21,
+   "hayro-upstream": 8.45,
+   "mupdf": 23.34,
+   "poppler-splash": 14.2,
+   "poppler-cairo": 9.15
+  },
+  {
+   "file": "issue18894.pdf",
+   "page": 0,
+   "what": "soft mask",
+   "pdfium": 1.84,
+   "hayro-fork": 2.99,
+   "hayro-upstream": 3.78,
+   "mupdf": 17.14,
+   "poppler-splash": 71.03,
+   "poppler-cairo": 3.55
+  },
+  {
+   "file": "issue10339_reduced.pdf",
+   "page": 0,
+   "what": "Lab colour space set-up",
+   "pdfium": 0.44,
+   "hayro-fork": 1.05,
+   "hayro-upstream": 2.85,
+   "mupdf": 3.23,
+   "poppler-splash": 0.91,
+   "poppler-cairo": 0.34
+  },
+  {
+   "file": "issue2761.pdf",
+   "page": 0,
+   "what": "Lab colour space set-up",
+   "pdfium": 1.55,
+   "hayro-fork": 1.96,
+   "hayro-upstream": 5.85,
+   "mupdf": 5.91,
+   "poppler-splash": 4.24,
+   "poppler-cairo": 2.34
+  },
+  {
+   "file": "issue16316.pdf",
+   "page": 0,
+   "what": "Type 1 font parsing",
+   "pdfium": 2.19,
+   "hayro-fork": 3.55,
+   "hayro-upstream": 4.11,
+   "mupdf": 7.96,
+   "poppler-splash": 11.72,
+   "poppler-cairo": 3.46
+  },
+  {
+   "file": "issue8092.pdf",
+   "page": 0,
+   "what": "shadings through gradient tables",
+   "pdfium": 5.44,
+   "hayro-fork": 8.92,
+   "hayro-upstream": 36.69,
+   "mupdf": 9.84,
+   "poppler-splash": 29.65,
+   "poppler-cairo": 14.53
+  },
+  {
+   "file": "large_jpeg_downscale.pdf",
+   "page": 0,
+   "what": "JPEG decoding",
+   "pdfium": 13.78,
+   "hayro-fork": 16.26,
+   "hayro-upstream": 37.77,
+   "mupdf": 14.62,
+   "poppler-splash": 33.64,
+   "poppler-cairo": 48.28
+  },
+  {
+   "file": "radial_gradients.pdf",
+   "page": 2,
+   "what": "radial gradients",
+   "pdfium": 9.45,
+   "hayro-fork": 13.64,
+   "hayro-upstream": 27.07,
+   "mupdf": 6.75,
+   "poppler-splash": 38.63,
+   "poppler-cairo": 64.72
+  },
+  {
+   "file": "radial_gradients.pdf",
+   "page": 4,
+   "what": "radial gradients",
+   "pdfium": 9.73,
+   "hayro-fork": 14.3,
+   "hayro-upstream": 27.57,
+   "mupdf": 7.31,
+   "poppler-splash": 39.41,
+   "poppler-cairo": 68.34
+  },
+  {
+   "file": "issue918.pdf",
+   "page": 0,
+   "what": "Type 3 image glyphs",
+   "pdfium": 4.0,
+   "hayro-fork": 6.25,
+   "hayro-upstream": 16.37,
+   "mupdf": 6.3,
+   "poppler-splash": 6.01,
+   "poppler-cairo": 23.92
+  },
+  {
+   "file": "function_based_shading.pdf",
+   "page": 0,
+   "what": "PostScript function shading",
+   "pdfium": 42.36,
+   "hayro-fork": 43.85,
+   "hayro-upstream": 85.92,
+   "mupdf": 100.5,
+   "poppler-splash": 69.14,
+   "poppler-cairo": 13.83
+  },
+  {
+   "file": "vertical_rotated_fallback_glyphs.pdf",
+   "page": 0,
+   "what": "predefined CJK CMaps",
+   "pdfium": 1.1,
+   "hayro-fork": 0.62,
+   "hayro-upstream": 9.73,
+   "mupdf": 5.26,
+   "poppler-splash": 125.51,
+   "poppler-cairo": 135.13
+  },
+  {
+   "file": "tracemonkey.pdf",
+   "page": 2,
+   "what": "text (pdf.js's tracemonkey paper)",
+   "pdfium": 2.95,
+   "hayro-fork": 3.63,
+   "hayro-upstream": 3.09,
+   "mupdf": 1.92,
+   "poppler-splash": 12.94,
+   "poppler-cairo": 5.24
+  }
+ ],
+ "hayro_fork_furthest_behind_pdfium": [
+  {
+   "file": "bug1755507.pdf",
+   "page": 0,
+   "hayro_fork_ms": 13.48,
+   "pdfium_ms": 6.89,
+   "hayro_upstream_ms": 39.49
+  },
+  {
+   "file": "issue2948.pdf",
+   "page": 0,
+   "hayro_fork_ms": 11.15,
+   "pdfium_ms": 5.1,
+   "hayro_upstream_ms": 247.68
+  },
+  {
+   "file": "radial_gradients.pdf",
+   "page": 4,
+   "hayro_fork_ms": 14.3,
+   "pdfium_ms": 9.73,
+   "hayro_upstream_ms": 27.57
+  },
+  {
+   "file": "radial_gradients.pdf",
+   "page": 2,
+   "hayro_fork_ms": 13.64,
+   "pdfium_ms": 9.45,
+   "hayro_upstream_ms": 27.07
+  },
+  {
+   "file": "issue8092.pdf",
+   "page": 0,
+   "hayro_fork_ms": 8.92,
+   "pdfium_ms": 5.44,
+   "hayro_upstream_ms": 36.69
+  },
+  {
+   "file": "issue5481.pdf",
+   "page": 2,
+   "hayro_fork_ms": 101.94,
+   "pdfium_ms": 98.84,
+   "hayro_upstream_ms": 101.07
+  },
+  {
+   "file": "issue12798_page1_reduced.pdf",
+   "page": 0,
+   "hayro_fork_ms": 6.89,
+   "pdfium_ms": 3.88,
+   "hayro_upstream_ms": 27.01
+  },
+  {
+   "file": "radial_gradients.pdf",
+   "page": 3,
+   "hayro_fork_ms": 12.55,
+   "pdfium_ms": 9.82,
+   "hayro_upstream_ms": 22.58
+  },
+  {
+   "file": "issue6231_1.pdf",
+   "page": 0,
+   "hayro_fork_ms": 5.63,
+   "pdfium_ms": 3.02,
+   "hayro_upstream_ms": 25.32
+  },
+  {
+   "file": "large_jpeg_downscale.pdf",
+   "page": 0,
+   "hayro_fork_ms": 16.26,
+   "pdfium_ms": 13.78,
+   "hayro_upstream_ms": 37.77
+  },
+  {
+   "file": "issue18032.pdf",
+   "page": 0,
+   "hayro_fork_ms": 6.04,
+   "pdfium_ms": 3.72,
+   "hayro_upstream_ms": 78.31
+  },
+  {
+   "file": "issue918.pdf",
+   "page": 0,
+   "hayro_fork_ms": 6.25,
+   "pdfium_ms": 4.0,
+   "hayro_upstream_ms": 16.37
+  },
+  {
+   "file": "personwithdog.pdf",
+   "page": 0,
+   "hayro_fork_ms": 56.79,
+   "pdfium_ms": 54.98,
+   "hayro_upstream_ms": 182.43
+  },
+  {
+   "file": "tracemonkey_annotation_on_page_8.pdf",
+   "page": 2,
+   "hayro_fork_ms": 4.61,
+   "pdfium_ms": 2.93,
+   "hayro_upstream_ms": 3.46
+  },
+  {
+   "file": "issue18911.pdf",
+   "page": 2,
+   "hayro_fork_ms": 4.67,
+   "pdfium_ms": 3.0,
+   "hayro_upstream_ms": 3.2
+  },
+  {
+   "file": "tracemonkey_with_annotations.pdf",
+   "page": 2,
+   "hayro_fork_ms": 4.57,
+   "pdfium_ms": 2.95,
+   "hayro_upstream_ms": 3.18
+  },
+  {
+   "file": "tracemonkey_with_editable_annotations.pdf",
+   "page": 2,
+   "hayro_fork_ms": 4.54,
+   "pdfium_ms": 2.93,
+   "hayro_upstream_ms": 3.21
+  },
+  {
+   "file": "bug1992868.pdf",
+   "page": 2,
+   "hayro_fork_ms": 4.57,
+   "pdfium_ms": 3.0,
+   "hayro_upstream_ms": 3.09
+  },
+  {
+   "file": "tracemonkey_freetext.pdf",
+   "page": 2,
+   "hayro_fork_ms": 4.48,
+   "pdfium_ms": 2.96,
+   "hayro_upstream_ms": 3.43
+  },
+  {
+   "file": "function_based_shading.pdf",
+   "page": 0,
+   "hayro_fork_ms": 43.85,
+   "pdfium_ms": 42.36,
+   "hayro_upstream_ms": 85.92
+  },
+  {
+   "file": "issue12337.pdf",
+   "page": 2,
+   "hayro_fork_ms": 4.5,
+   "pdfium_ms": 3.02,
+   "hayro_upstream_ms": 3.03
+  },
+  {
+   "file": "issue5044.pdf",
+   "page": 0,
+   "hayro_fork_ms": 3.21,
+   "pdfium_ms": 1.76,
+   "hayro_upstream_ms": 8.45
+  },
+  {
+   "file": "comments.pdf",
+   "page": 2,
+   "hayro_fork_ms": 4.82,
+   "pdfium_ms": 3.4,
+   "hayro_upstream_ms": 3.32
+  },
+  {
+   "file": "issue19239.pdf",
+   "page": 2,
+   "hayro_fork_ms": 4.43,
+   "pdfium_ms": 3.01,
+   "hayro_upstream_ms": 3.23
+  },
+  {
+   "file": "issue4379.pdf",
+   "page": 0,
+   "hayro_fork_ms": 6.32,
+   "pdfium_ms": 4.93,
+   "hayro_upstream_ms": 3.42
+  }
+ ],
+ "hayro_fork_furthest_ahead_of_pdfium": [
+  {
+   "file": "issue16263.pdf",
+   "page": 0,
+   "hayro_fork_ms": 113.59,
+   "pdfium_ms": 1588.14
+  },
+  {
+   "file": "22060_A1_01_Plans.pdf",
+   "page": 0,
+   "hayro_fork_ms": 105.63,
+   "pdfium_ms": 863.31
+  },
+  {
+   "file": "function_based_shading_cmyk.pdf",
+   "page": 1,
+   "hayro_fork_ms": 705.54,
+   "pdfium_ms": 1171.3
+  },
+  {
+   "file": "bug1978317.pdf",
+   "page": 0,
+   "hayro_fork_ms": 56.59,
+   "pdfium_ms": 258.61
+  },
+  {
+   "file": "bug1721218_reduced.pdf",
+   "page": 0,
+   "hayro_fork_ms": 38.81,
+   "pdfium_ms": 219.13
+  },
+  {
+   "file": "issue1905.pdf",
+   "page": 0,
+   "hayro_fork_ms": 49.35,
+   "pdfium_ms": 155.13
+  },
+  {
+   "file": "images.pdf",
+   "page": 0,
+   "hayro_fork_ms": 25.86,
+   "pdfium_ms": 128.38
+  },
+  {
+   "file": "issue5481.pdf",
+   "page": 1,
+   "hayro_fork_ms": 3.81,
+   "pdfium_ms": 101.51
+  },
+  {
+   "file": "issue12963.pdf",
+   "page": 0,
+   "hayro_fork_ms": 16.85,
+   "pdfium_ms": 77.77
+  },
+  {
+   "file": "issue13931.pdf",
+   "page": 0,
+   "hayro_fork_ms": 21.78,
+   "pdfium_ms": 79.72
+  }
+ ],
+ "energy": {
+  "common_files": {
+   "hayro-fork": {
+    "rounds": [
+     {
+      "round": "e2",
+      "energy_j": 383.121,
+      "duration_s": 6.905,
+      "mean_w": 55.485,
+      "idle_w": 18.19,
+      "over_idle_j": 257.5,
+      "busy_cpu_s": 28.86
+     },
+     {
+      "round": "e3",
+      "energy_j": 386.496,
+      "duration_s": 6.887,
+      "mean_w": 56.116,
+      "idle_w": 19.18,
+      "over_idle_j": 254.4,
+      "busy_cpu_s": 28.45
+     },
+     {
+      "round": "e4",
+      "energy_j": 390.373,
+      "duration_s": 6.882,
+      "mean_w": 56.722,
+      "idle_w": 20.06,
+      "over_idle_j": 252.3,
+      "busy_cpu_s": 28.29
+     }
+    ],
+    "median_energy_j": 386.5,
+    "median_over_idle_j": 254.4,
+    "median_over_null_j": 319.8,
+    "median_duration_s": 6.89,
+    "median_mean_w": 56.1,
+    "median_busy_cpu_s": 28.4
+   },
+   "hayro-upstream": {
+    "rounds": [
+     {
+      "round": "e2",
+      "energy_j": 718.068,
+      "duration_s": 13.926,
+      "mean_w": 51.563,
+      "idle_w": 18.19,
+      "over_idle_j": 464.8,
+      "busy_cpu_s": 54.27
+     },
+     {
+      "round": "e3",
+      "energy_j": 744.743,
+      "duration_s": 13.922,
+      "mean_w": 53.493,
+      "idle_w": 19.18,
+      "over_idle_j": 477.7,
+      "busy_cpu_s": 54.35
+     },
+     {
+      "round": "e4",
+      "energy_j": 751.36,
+      "duration_s": 13.979,
+      "mean_w": 53.748,
+      "idle_w": 20.06,
+      "over_idle_j": 470.9,
+      "busy_cpu_s": 53.83
+     }
+    ],
+    "median_energy_j": 744.7,
+    "median_over_idle_j": 470.9,
+    "median_over_null_j": 678.0,
+    "median_duration_s": 13.93,
+    "median_mean_w": 53.5,
+    "median_busy_cpu_s": 54.3
+   },
+   "mupdf": {
+    "rounds": [
+     {
+      "round": "e2",
+      "energy_j": 949.655,
+      "duration_s": 16.73,
+      "mean_w": 56.763,
+      "idle_w": 18.19,
+      "over_idle_j": 645.3,
+      "busy_cpu_s": 68.85
+     },
+     {
+      "round": "e3",
+      "energy_j": 976.206,
+      "duration_s": 16.739,
+      "mean_w": 58.319,
+      "idle_w": 19.18,
+      "over_idle_j": 655.1,
+      "busy_cpu_s": 69.15
+     },
+     {
+      "round": "e4",
+      "energy_j": 981.625,
+      "duration_s": 16.722,
+      "mean_w": 58.704,
+      "idle_w": 20.06,
+      "over_idle_j": 646.1,
+      "busy_cpu_s": 69.1
+     }
+    ],
+    "median_energy_j": 976.2,
+    "median_over_idle_j": 646.1,
+    "median_over_null_j": 909.5,
+    "median_duration_s": 16.73,
+    "median_mean_w": 58.3,
+    "median_busy_cpu_s": 69.1
+   },
+   "null": {
+    "rounds": [
+     {
+      "round": "e2",
+      "energy_j": 65.139,
+      "duration_s": 1.168,
+      "mean_w": 55.776,
+      "idle_w": 18.19,
+      "over_idle_j": 43.9,
+      "busy_cpu_s": 4.97
+     },
+     {
+      "round": "e3",
+      "energy_j": 66.712,
+      "duration_s": 1.188,
+      "mean_w": 56.151,
+      "idle_w": 19.18,
+      "over_idle_j": 43.9,
+      "busy_cpu_s": 4.97
+     },
+     {
+      "round": "e4",
+      "energy_j": 68.747,
+      "duration_s": 1.168,
+      "mean_w": 58.837,
+      "idle_w": 20.06,
+      "over_idle_j": 45.3,
+      "busy_cpu_s": 4.8
+     }
+    ],
+    "median_energy_j": 66.7,
+    "median_over_idle_j": 43.9,
+    "median_over_null_j": null,
+    "median_duration_s": 1.17,
+    "median_mean_w": 56.2,
+    "median_busy_cpu_s": 5.0
+   },
+   "pdfium": {
+    "rounds": [
+     {
+      "round": "e2",
+      "energy_j": 819.044,
+      "duration_s": 14.93,
+      "mean_w": 54.861,
+      "idle_w": 18.19,
+      "over_idle_j": 547.5,
+      "busy_cpu_s": 61.92
+     },
+     {
+      "round": "e3",
+      "energy_j": 833.02,
+      "duration_s": 14.965,
+      "mean_w": 55.666,
+      "idle_w": 19.18,
+      "over_idle_j": 546.0,
+      "busy_cpu_s": 62.47
+     },
+     {
+      "round": "e4",
+      "energy_j": 836.276,
+      "duration_s": 14.903,
+      "mean_w": 56.113,
+      "idle_w": 20.06,
+      "over_idle_j": 537.3,
+      "busy_cpu_s": 61.4
+     }
+    ],
+    "median_energy_j": 833.0,
+    "median_over_idle_j": 546.0,
+    "median_over_null_j": 766.3,
+    "median_duration_s": 14.93,
+    "median_mean_w": 55.7,
+    "median_busy_cpu_s": 61.9
+   },
+   "poppler-cairo": {
+    "rounds": [
+     {
+      "round": "e2",
+      "energy_j": 1240.904,
+      "duration_s": 21.745,
+      "mean_w": 57.067,
+      "idle_w": 18.19,
+      "over_idle_j": 845.4,
+      "busy_cpu_s": 89.67
+     },
+     {
+      "round": "e3",
+      "energy_j": 1279.415,
+      "duration_s": 21.783,
+      "mean_w": 58.736,
+      "idle_w": 19.18,
+      "over_idle_j": 861.6,
+      "busy_cpu_s": 89.26
+     },
+     {
+      "round": "e4",
+      "energy_j": 1272.912,
+      "duration_s": 21.718,
+      "mean_w": 58.611,
+      "idle_w": 20.06,
+      "over_idle_j": 837.2,
+      "busy_cpu_s": 88.94
+     }
+    ],
+    "median_energy_j": 1272.9,
+    "median_over_idle_j": 845.4,
+    "median_over_null_j": 1206.2,
+    "median_duration_s": 21.75,
+    "median_mean_w": 58.6,
+    "median_busy_cpu_s": 89.3
+   },
+   "poppler-splash": {
+    "rounds": [
+     {
+      "round": "e2",
+      "energy_j": 1944.217,
+      "duration_s": 33.898,
+      "mean_w": 57.354,
+      "idle_w": 18.19,
+      "over_idle_j": 1327.6,
+      "busy_cpu_s": 135.8
+     },
+     {
+      "round": "e3",
+      "energy_j": 2019.525,
+      "duration_s": 33.914,
+      "mean_w": 59.548,
+      "idle_w": 19.18,
+      "over_idle_j": 1369.0,
+      "busy_cpu_s": 135.4
+     },
+     {
+      "round": "e4",
+      "energy_j": 1998.352,
+      "duration_s": 33.858,
+      "mean_w": 59.021,
+      "idle_w": 20.06,
+      "over_idle_j": 1319.0,
+      "busy_cpu_s": 134.31
+     }
+    ],
+    "median_energy_j": 1998.4,
+    "median_over_idle_j": 1327.6,
+    "median_over_null_j": 1931.6,
+    "median_duration_s": 33.9,
+    "median_mean_w": 59.0,
+    "median_busy_cpu_s": 135.4
+   }
+  },
+  "pdfjs_rounds": {
+   "pdfium": {
+    "rounds": [
+     {
+      "round": "j1",
+      "energy_j": 1500.007,
+      "duration_s": 33.08,
+      "mean_w": 45.345,
+      "idle_w": 18.47,
+      "over_idle_j": 889.0,
+      "busy_cpu_s": 76.16
+     },
+     {
+      "round": "j2",
+      "energy_j": 1541.018,
+      "duration_s": 33.063,
+      "mean_w": 46.608,
+      "idle_w": 18.98,
+      "over_idle_j": 913.4,
+      "busy_cpu_s": 75.92
+     },
+     {
+      "round": "j3",
+      "energy_j": 1528.117,
+      "duration_s": 33.057,
+      "mean_w": 46.227,
+      "idle_w": 19.2,
+      "over_idle_j": 893.3,
+      "busy_cpu_s": 75.04
+     }
+    ],
+    "median_energy_j": 1528.1,
+    "median_over_idle_j": 893.3,
+    "median_over_null_j": null,
+    "median_duration_s": 33.06,
+    "median_mean_w": 46.2,
+    "median_busy_cpu_s": 75.9
+   },
+   "pdfjs": {
+    "rounds": [
+     {
+      "round": "j1",
+      "energy_j": 2727.493,
+      "duration_s": 51.704,
+      "mean_w": 52.752,
+      "idle_w": 18.47,
+      "over_idle_j": 1772.5,
+      "busy_cpu_s": 213.36
+     },
+     {
+      "round": "j2",
+      "energy_j": 2719.984,
+      "duration_s": 51.774,
+      "mean_w": 52.536,
+      "idle_w": 18.98,
+      "over_idle_j": 1737.1,
+      "busy_cpu_s": 215.91
+     },
+     {
+      "round": "j3",
+      "energy_j": 2691.619,
+      "duration_s": 51.676,
+      "mean_w": 52.086,
+      "idle_w": 19.2,
+      "over_idle_j": 1699.2,
+      "busy_cpu_s": 213.82
+     }
+    ],
+    "median_energy_j": 2720.0,
+    "median_over_idle_j": 1737.1,
+    "median_over_null_j": null,
+    "median_duration_s": 51.7,
+    "median_mean_w": 52.5,
+    "median_busy_cpu_s": 213.8
+   }
+  },
+  "common_files_once_pilot": {
+   "hayro-fork": {
+    "rounds": [
+     {
+      "round": "p1",
+      "energy_j": 77.02,
+      "duration_s": 1.411,
+      "mean_w": 54.58,
+      "idle_w": 18.77,
+      "over_idle_j": 50.5,
+      "busy_cpu_s": 5.9
+     }
+    ],
+    "median_energy_j": 77.0,
+    "median_over_idle_j": 50.5,
+    "median_over_null_j": 62.8,
+    "median_duration_s": 1.41,
+    "median_mean_w": 54.6,
+    "median_busy_cpu_s": 5.9
+   },
+   "hayro-upstream": {
+    "rounds": [
+     {
+      "round": "p1",
+      "energy_j": 157.818,
+      "duration_s": 3.415,
+      "mean_w": 46.216,
+      "idle_w": 18.77,
+      "over_idle_j": 93.7,
+      "busy_cpu_s": 11.07
+     }
+    ],
+    "median_energy_j": 157.8,
+    "median_over_idle_j": 93.7,
+    "median_over_null_j": 143.6,
+    "median_duration_s": 3.42,
+    "median_mean_w": 46.2,
+    "median_busy_cpu_s": 11.1
+   },
+   "mupdf": {
+    "rounds": [
+     {
+      "round": "p1",
+      "energy_j": 193.141,
+      "duration_s": 3.421,
+      "mean_w": 56.451,
+      "idle_w": 18.77,
+      "over_idle_j": 128.9,
+      "busy_cpu_s": 13.76
+     }
+    ],
+    "median_energy_j": 193.1,
+    "median_over_idle_j": 128.9,
+    "median_over_null_j": 178.9,
+    "median_duration_s": 3.42,
+    "median_mean_w": 56.5,
+    "median_busy_cpu_s": 13.8
+   },
+   "null": {
+    "rounds": [
+     {
+      "round": "p1",
+      "energy_j": 14.226,
+      "duration_s": 0.264,
+      "mean_w": 53.805,
+      "idle_w": 18.77,
+      "over_idle_j": 9.3,
+      "busy_cpu_s": 1.1
+     }
+    ],
+    "median_energy_j": 14.2,
+    "median_over_idle_j": 9.3,
+    "median_over_null_j": null,
+    "median_duration_s": 0.26,
+    "median_mean_w": 53.8,
+    "median_busy_cpu_s": 1.1
+   },
+   "pdfium": {
+    "rounds": [
+     {
+      "round": "p1",
+      "energy_j": 164.157,
+      "duration_s": 3.015,
+      "mean_w": 54.454,
+      "idle_w": 18.77,
+      "over_idle_j": 107.6,
+      "busy_cpu_s": 12.43
+     }
+    ],
+    "median_energy_j": 164.2,
+    "median_over_idle_j": 107.6,
+    "median_over_null_j": 149.9,
+    "median_duration_s": 3.02,
+    "median_mean_w": 54.5,
+    "median_busy_cpu_s": 12.4
+   },
+   "poppler-cairo": {
+    "rounds": [
+     {
+      "round": "p1",
+      "energy_j": 250.516,
+      "duration_s": 4.416,
+      "mean_w": 56.725,
+      "idle_w": 18.77,
+      "over_idle_j": 167.6,
+      "busy_cpu_s": 17.9
+     }
+    ],
+    "median_energy_j": 250.5,
+    "median_over_idle_j": 167.6,
+    "median_over_null_j": 236.3,
+    "median_duration_s": 4.42,
+    "median_mean_w": 56.7,
+    "median_busy_cpu_s": 17.9
+   },
+   "poppler-splash": {
+    "rounds": [
+     {
+      "round": "p1",
+      "energy_j": 405.245,
+      "duration_s": 7.646,
+      "mean_w": 53.003,
+      "idle_w": 18.77,
+      "over_idle_j": 261.7,
+      "busy_cpu_s": 27.39
+     }
+    ],
+    "median_energy_j": 405.2,
+    "median_over_idle_j": 261.7,
+    "median_over_null_j": 391.0,
+    "median_duration_s": 7.65,
+    "median_mean_w": 53.0,
+    "median_busy_cpu_s": 27.4
+   }
+  },
+  "whole_corpus": {
+   "hayro-fork": {
+    "rounds": [
+     {
+      "round": "r1",
+      "energy_j": 240.308,
+      "duration_s": 6.734,
+      "mean_w": 35.686,
+      "idle_w": 18.7,
+      "over_idle_j": 114.4,
+      "busy_cpu_s": 12.72
+     },
+     {
+      "round": "r2",
+      "energy_j": 246.366,
+      "duration_s": 6.922,
+      "mean_w": 35.59,
+      "idle_w": 18.68,
+      "over_idle_j": 117.0,
+      "busy_cpu_s": 13.06
+     },
+     {
+      "round": "r3",
+      "energy_j": 252.946,
+      "duration_s": 7.131,
+      "mean_w": 35.473,
+      "idle_w": 19.04,
+      "over_idle_j": 117.2,
+      "busy_cpu_s": 13.64
+     }
+    ],
+    "median_energy_j": 246.4,
+    "median_over_idle_j": 117.0,
+    "median_over_null_j": null,
+    "median_duration_s": 6.92,
+    "median_mean_w": 35.6,
+    "median_busy_cpu_s": 13.1
+   },
+   "hayro-upstream": {
+    "rounds": [
+     {
+      "round": "r1",
+      "energy_j": 293.417,
+      "duration_s": 7.376,
+      "mean_w": 39.781,
+      "idle_w": 18.7,
+      "over_idle_j": 155.5,
+      "busy_cpu_s": 18.76
+     },
+     {
+      "round": "r2",
+      "energy_j": 298.183,
+      "duration_s": 7.457,
+      "mean_w": 39.988,
+      "idle_w": 18.68,
+      "over_idle_j": 158.9,
+      "busy_cpu_s": 18.67
+     },
+     {
+      "round": "r3",
+      "energy_j": 302.247,
+      "duration_s": 7.679,
+      "mean_w": 39.359,
+      "idle_w": 19.04,
+      "over_idle_j": 156.1,
+      "busy_cpu_s": 18.98
+     }
+    ],
+    "median_energy_j": 298.2,
+    "median_over_idle_j": 156.1,
+    "median_over_null_j": null,
+    "median_duration_s": 7.46,
+    "median_mean_w": 39.8,
+    "median_busy_cpu_s": 18.8
+   },
+   "mupdf": {
+    "rounds": [
+     {
+      "round": "r1",
+      "energy_j": 1191.587,
+      "duration_s": 33.397,
+      "mean_w": 35.679,
+      "idle_w": 18.7,
+      "over_idle_j": 567.0,
+      "busy_cpu_s": 59.42
+     },
+     {
+      "round": "r2",
+      "energy_j": 1181.221,
+      "duration_s": 33.401,
+      "mean_w": 35.365,
+      "idle_w": 18.68,
+      "over_idle_j": 557.1,
+      "busy_cpu_s": 59.37
+     },
+     {
+      "round": "r3",
+      "energy_j": 1197.801,
+      "duration_s": 33.432,
+      "mean_w": 35.828,
+      "idle_w": 19.04,
+      "over_idle_j": 561.4,
+      "busy_cpu_s": 59.14
+     }
+    ],
+    "median_energy_j": 1191.6,
+    "median_over_idle_j": 561.4,
+    "median_over_null_j": null,
+    "median_duration_s": 33.4,
+    "median_mean_w": 35.7,
+    "median_busy_cpu_s": 59.4
+   },
+   "pdfium": {
+    "rounds": [
+     {
+      "round": "r1",
+      "energy_j": 1502.436,
+      "duration_s": 33.091,
+      "mean_w": 45.403,
+      "idle_w": 18.7,
+      "over_idle_j": 883.6,
+      "busy_cpu_s": 77.62
+     },
+     {
+      "round": "r2",
+      "energy_j": 1514.448,
+      "duration_s": 33.069,
+      "mean_w": 45.797,
+      "idle_w": 18.68,
+      "over_idle_j": 896.6,
+      "busy_cpu_s": 76.91
+     },
+     {
+      "round": "r3",
+      "energy_j": 1510.786,
+      "duration_s": 33.091,
+      "mean_w": 45.655,
+      "idle_w": 19.04,
+      "over_idle_j": 880.8,
+      "busy_cpu_s": 77.24
+     }
+    ],
+    "median_energy_j": 1510.8,
+    "median_over_idle_j": 883.6,
+    "median_over_null_j": null,
+    "median_duration_s": 33.09,
+    "median_mean_w": 45.7,
+    "median_busy_cpu_s": 77.2
+   },
+   "poppler-cairo": {
+    "rounds": [
+     {
+      "round": "r1",
+      "energy_j": 2091.997,
+      "duration_s": 36.969,
+      "mean_w": 56.588,
+      "idle_w": 18.7,
+      "over_idle_j": 1400.6,
+      "busy_cpu_s": 135.28
+     },
+     {
+      "round": "r2",
+      "energy_j": 2099.228,
+      "duration_s": 37.099,
+      "mean_w": 56.585,
+      "idle_w": 18.68,
+      "over_idle_j": 1406.1,
+      "busy_cpu_s": 138.67
+     },
+     {
+      "round": "r3",
+      "energy_j": 2110.86,
+      "duration_s": 37.01,
+      "mean_w": 57.036,
+      "idle_w": 19.04,
+      "over_idle_j": 1406.3,
+      "busy_cpu_s": 136.58
+     }
+    ],
+    "median_energy_j": 2099.2,
+    "median_over_idle_j": 1406.1,
+    "median_over_null_j": null,
+    "median_duration_s": 37.01,
+    "median_mean_w": 56.6,
+    "median_busy_cpu_s": 136.6
+   },
+   "poppler-splash": {
+    "rounds": [
+     {
+      "round": "r1",
+      "energy_j": 2084.037,
+      "duration_s": 40.331,
+      "mean_w": 51.674,
+      "idle_w": 18.7,
+      "over_idle_j": 1329.8,
+      "busy_cpu_s": 128.97
+     },
+     {
+      "round": "r2",
+      "energy_j": 2095.633,
+      "duration_s": 40.316,
+      "mean_w": 51.981,
+      "idle_w": 18.68,
+      "over_idle_j": 1342.3,
+      "busy_cpu_s": 130.36
+     },
+     {
+      "round": "r3",
+      "energy_j": 2099.245,
+      "duration_s": 40.383,
+      "mean_w": 51.984,
+      "idle_w": 19.04,
+      "over_idle_j": 1330.5,
+      "busy_cpu_s": 130.42
+     }
+    ],
+    "median_energy_j": 2095.6,
+    "median_over_idle_j": 1330.5,
+    "median_over_null_j": null,
+    "median_duration_s": 40.33,
+    "median_mean_w": 52.0,
+    "median_busy_cpu_s": 130.4
+   }
+  }
+ },
+ "idle_w_by_round": {
+  "e2": 18.19,
+  "e3": 19.18,
+  "e4": 20.06,
+  "j1": 18.47,
+  "j2": 18.98,
+  "j3": 19.2,
+  "p1": 18.77,
+  "r1": 18.7,
+  "r2": 18.68,
+  "r3": 19.04
+ },
+ "pdfjs": {
+  "pages_drawn": 1208,
+  "ms_per_page": {
+   "p50": 27.7,
+   "p90": 104.67,
+   "p99": 367.78,
+   "max": 8970.39
+  },
+  "pdfium_in_the_same_rounds_ms_per_page": {
+   "p50": 1.46,
+   "p90": 7.71,
+   "p99": 81.0
+  },
+  "against_pdfium_pages_both_drew": {
+   "pages": 1192,
+   "total_ms": 67014.0,
+   "pdfium_total_ms": 7403.0,
+   "ratio": 9.052,
+   "faster_than_pdfium_on": 2
+  },
+  "on_the_common_set": {
+   "pages": 1177,
+   "total_ms": 65519.0
+  },
+  "files_not_ok": {
+   "refused": [
+    "REDHAT-1531897-0.pdf",
+    "bug1020226.pdf",
+    "bug1782186.pdf",
+    "encrypted-attachment.pdf",
+    "issue15893_reduced.pdf",
+    "issue21579.pdf",
+    "issue3371.pdf",
+    "issue6010_1.pdf",
+    "issue6010_2.pdf",
+    "poppler-395-0-fuzzed.pdf",
+    "pr6531_1.pdf",
+    "pr6531_2.pdf",
+    "print_protection.pdf",
+    "saslprep-r6.pdf"
+   ],
+   "timeout": [
+    "issue16263.pdf"
+   ]
+  },
+  "pdfium_total_r_rounds_vs_j_rounds_on_shared_pages": 1.002
+ },
+ "agreement_with_pdfium": {
+  "hayro-fork": {
+   "pages_both_drew": 1193,
+   "size_mismatch": 4,
+   "too_large_to_compare": 0,
+   "compared": 1189,
+   "pixels_differing_by_over_48": {
+    "none": 154,
+    "under_0.1%": 456,
+    "0.1-1%": 433,
+    "1-5%": 239,
+    "over_5%": 61
+   },
+   "median_fraction": 0.2725
+  },
+  "hayro-upstream": {
+   "pages_both_drew": 1191,
+   "size_mismatch": 4,
+   "too_large_to_compare": 0,
+   "compared": 1187,
+   "pixels_differing_by_over_48": {
+    "none": 152,
+    "under_0.1%": 442,
+    "0.1-1%": 394,
+    "1-5%": 312,
+    "over_5%": 39
+   },
+   "median_fraction": 0.3327
+  },
+  "mupdf": {
+   "pages_both_drew": 1183,
+   "size_mismatch": 5,
+   "too_large_to_compare": 0,
+   "compared": 1178,
+   "pixels_differing_by_over_48": {
+    "none": 248,
+    "under_0.1%": 526,
+    "0.1-1%": 301,
+    "1-5%": 265,
+    "over_5%": 86
+   },
+   "median_fraction": 0.1875
+  },
+  "poppler-splash": {
+   "pages_both_drew": 1186,
+   "size_mismatch": 0,
+   "too_large_to_compare": 0,
+   "compared": 1186,
+   "pixels_differing_by_over_48": {
+    "none": 126,
+    "under_0.1%": 459,
+    "0.1-1%": 351,
+    "1-5%": 252,
+    "over_5%": 124
+   },
+   "median_fraction": 0.1916
+  },
+  "poppler-cairo": {
+   "pages_both_drew": 1185,
+   "size_mismatch": 0,
+   "too_large_to_compare": 0,
+   "compared": 1185,
+   "pixels_differing_by_over_48": {
+    "none": 255,
+    "under_0.1%": 523,
+    "0.1-1%": 311,
+    "1-5%": 227,
+    "over_5%": 124
+   },
+   "median_fraction": 0.1805
+  },
+  "pdfjs": {
+   "pages_both_drew": 1192,
+   "size_mismatch": 5,
+   "too_large_to_compare": 0,
+   "compared": 1187,
+   "pixels_differing_by_over_48": {
+    "none": 141,
+    "under_0.1%": 436,
+    "0.1-1%": 438,
+    "1-5%": 226,
+    "over_5%": 87
+   },
+   "median_fraction": 0.32
+  }
+ },
+ "agreement_fork_with_upstream": {
+  "pages_both_drew": 1206,
+  "compared": 1205,
+  "identical": 406,
+  "pixels_differing_by_over_48": {
+   "under_0.1%": 768,
+   "0.1-1%": 259,
+   "1-5%": 176,
+   "over_5%": 2
+  }
+ },
+ "load_averages": [
+  "2026-11-02T02:27:02-06:00 round 1 start load 0.63 5.21 5.47",
+  "2026-11-02T02:27:22-06:00 round 1 pdfium start load 0.45 4.87 5.35",
+  "2026-11-02T02:27:55-06:00 round 1 pdfium end load 1.06 4.60 5.25",
+  "2026-11-02T02:27:55-06:00 round 1 hayro-fork start load 1.06 4.60 5.25",
+  "2026-11-02T02:28:02-06:00 round 1 hayro-fork end load 1.27 4.53 5.22",
+  "2026-11-02T02:28:02-06:00 round 1 hayro-upstream start load 1.27 4.53 5.22",
+  "2026-11-02T02:28:09-06:00 round 1 hayro-upstream end load 1.25 4.47 5.19",
+  "2026-11-02T02:28:09-06:00 round 1 mupdf start load 1.25 4.47 5.19",
+  "2026-11-02T02:28:42-06:00 round 1 mupdf end load 1.55 4.20 5.08",
+  "2026-11-02T02:28:42-06:00 round 1 poppler-splash start load 1.55 4.20 5.08",
+  "2026-11-02T02:29:23-06:00 round 1 poppler-splash end load 2.26 4.06 4.99",
+  "2026-11-02T02:29:23-06:00 round 1 poppler-cairo start load 2.26 4.06 4.99",
+  "2026-11-02T02:30:00-06:00 round 1 poppler-cairo end load 2.80 4.01 4.94",
+  "2026-11-02T02:30:20-06:00 round 1 end load 2.06 3.76 4.84",
+  "2026-11-02T02:50:07-06:00 round r2 start (corpus.txt) load 1.00 1.76 2.20",
+  "2026-11-02T02:50:27-06:00 round r2 mupdf start load 0.79 1.65 2.15",
+  "2026-11-02T02:51:00-06:00 round r2 mupdf end load 0.98 1.62 2.13",
+  "2026-11-02T02:51:00-06:00 round r2 poppler-splash start load 0.98 1.62 2.13",
+  "2026-11-02T02:51:40-06:00 round r2 poppler-splash end load 1.96 1.80 2.17",
+  "2026-11-02T02:51:40-06:00 round r2 poppler-cairo start load 1.96 1.80 2.17",
+  "2026-11-02T02:52:18-06:00 round r2 poppler-cairo end load 2.73 2.03 2.23",
+  "2026-11-02T02:52:18-06:00 round r2 pdfium start load 2.73 2.03 2.23",
+  "2026-11-02T02:52:51-06:00 round r2 pdfium end load 2.44 2.03 2.22",
+  "2026-11-02T02:52:51-06:00 round r2 hayro-fork start load 2.44 2.03 2.22",
+  "2026-11-02T02:52:58-06:00 round r2 hayro-fork end load 2.52 2.06 2.23",
+  "2026-11-02T02:52:58-06:00 round r2 hayro-upstream start load 2.52 2.06 2.23",
+  "2026-11-02T02:53:05-06:00 round r2 hayro-upstream end load 2.39 2.04 2.23",
+  "2026-11-02T02:53:25-06:00 round r2 end load 1.87 1.94 2.19",
+  "2026-11-02T03:19:18-06:00 round r3 start (corpus.txt) load 0.55 1.33 1.34",
+  "2026-11-02T03:19:38-06:00 round r3 poppler-cairo start load 0.46 1.26 1.32",
+  "2026-11-02T03:20:15-06:00 round r3 poppler-cairo end load 1.79 1.51 1.40",
+  "2026-11-02T03:20:15-06:00 round r3 hayro-upstream start load 1.79 1.51 1.40",
+  "2026-11-02T03:20:23-06:00 round r3 hayro-upstream end load 1.82 1.53 1.41",
+  "2026-11-02T03:20:23-06:00 round r3 hayro-fork start load 1.82 1.53 1.41",
+  "2026-11-02T03:20:30-06:00 round r3 hayro-fork end load 1.75 1.52 1.41",
+  "2026-11-02T03:20:30-06:00 round r3 poppler-splash start load 1.75 1.52 1.41",
+  "2026-11-02T03:21:10-06:00 round r3 poppler-splash end load 2.35 1.72 1.48",
+  "2026-11-02T03:21:10-06:00 round r3 mupdf start load 2.35 1.72 1.48",
+  "2026-11-02T03:21:44-06:00 round r3 mupdf end load 2.01 1.72 1.49",
+  "2026-11-02T03:21:44-06:00 round r3 pdfium start load 2.01 1.72 1.49",
+  "2026-11-02T03:22:17-06:00 round r3 pdfium end load 2.00 1.74 1.51",
+  "2026-11-02T03:22:37-06:00 round r3 end load 1.43 1.63 1.47",
+  "2026-11-02T04:30:26-06:00 round e1 start (corpus-common.txt) load 0.01 0.05 0.10",
+  "2026-11-02T04:30:46-06:00 round e1 null start load 0.13 0.08 0.11",
+  "2026-11-02T04:30:47-06:00 round e1 null end load 0.13 0.08 0.11",
+  "2026-11-02T04:30:47-06:00 round e1 pdfium start load 0.13 0.08 0.11",
+  "2026-11-02T04:30:50-06:00 round e1 pdfium end load 0.44 0.15 0.13",
+  "2026-11-02T04:30:50-06:00 round e1 hayro-fork start load 0.44 0.15 0.13",
+  "2026-11-02T04:30:51-06:00 round e1 hayro-fork end load 0.44 0.15 0.13",
+  "2026-11-02T04:30:51-06:00 round e1 hayro-upstream start load 0.44 0.15 0.13",
+  "2026-11-02T04:30:55-06:00 round e1 hayro-upstream end load 0.80 0.23 0.15",
+  "2026-11-02T04:30:55-06:00 round e1 mupdf start load 0.80 0.23 0.15",
+  "2026-11-02T04:30:58-06:00 round e1 mupdf end load 0.82 0.24 0.16",
+  "2026-11-02T04:30:58-06:00 round e1 poppler-splash start load 0.82 0.24 0.16",
+  "2026-11-02T04:31:06-06:00 round e1 poppler-splash end load 1.08 0.30 0.18",
+  "2026-11-02T04:31:06-06:00 round e1 poppler-cairo start load 1.08 0.30 0.18",
+  "2026-11-02T04:31:10-06:00 round e1 poppler-cairo end load 1.39 0.38 0.21",
+  "2026-11-02T04:31:30-06:00 round e1 end load 1.13 0.39 0.21",
+  "2026-11-02T06:47:22-06:00 round e2 start (corpus-common.txt) load 0.23 0.17 0.20",
+  "2026-11-02T06:47:42-06:00 round e2 mupdf start load 0.23 0.17 0.20",
+  "2026-11-02T06:47:59-06:00 round e2 mupdf end load 1.13 0.38 0.26",
+  "2026-11-02T06:47:59-06:00 round e2 poppler-splash start load 1.13 0.38 0.26",
+  "2026-11-02T06:48:33-06:00 round e2 poppler-splash end load 2.58 0.83 0.42",
+  "2026-11-02T06:48:33-06:00 round e2 poppler-cairo start load 2.58 0.83 0.42",
+  "2026-11-02T06:48:55-06:00 round e2 poppler-cairo end load 3.40 1.16 0.54",
+  "2026-11-02T06:48:55-06:00 round e2 null start load 3.40 1.16 0.54",
+  "2026-11-02T06:48:56-06:00 round e2 null end load 3.40 1.16 0.54",
+  "2026-11-02T06:48:56-06:00 round e2 pdfium start load 3.40 1.16 0.54",
+  "2026-11-02T06:49:11-06:00 round e2 pdfium end load 3.60 1.32 0.60",
+  "2026-11-02T06:49:11-06:00 round e2 hayro-fork start load 3.60 1.32 0.60",
+  "2026-11-02T06:49:18-06:00 round e2 hayro-fork end load 3.63 1.36 0.62",
+  "2026-11-02T06:49:18-06:00 round e2 hayro-upstream start load 3.63 1.36 0.62",
+  "2026-11-02T06:49:32-06:00 round e2 hayro-upstream end load 3.63 1.48 0.67",
+  "2026-11-02T06:49:52-06:00 round e2 end load 2.60 1.38 0.66",
+  "2026-11-02T09:15:41-06:00 round e3 start (corpus-common.txt) load 1.36 1.00 0.52",
+  "2026-11-02T09:16:01-06:00 round e3 poppler-cairo start load 1.04 0.95 0.52",
+  "2026-11-02T09:16:23-06:00 round e3 poppler-cairo end load 2.17 1.22 0.62",
+  "2026-11-02T09:16:23-06:00 round e3 hayro-upstream start load 2.17 1.22 0.62",
+  "2026-11-02T09:16:37-06:00 round e3 hayro-upstream end load 2.55 1.35 0.67",
+  "2026-11-02T09:16:37-06:00 round e3 hayro-fork start load 2.55 1.35 0.67",
+  "2026-11-02T09:16:44-06:00 round e3 hayro-fork end load 2.82 1.43 0.70",
+  "2026-11-02T09:16:44-06:00 round e3 poppler-splash start load 2.82 1.43 0.70",
+  "2026-11-02T09:17:18-06:00 round e3 poppler-splash end load 3.35 1.71 0.82",
+  "2026-11-02T09:17:18-06:00 round e3 mupdf start load 3.35 1.71 0.82",
+  "2026-11-02T09:17:35-06:00 round e3 mupdf end load 3.64 1.86 0.88",
+  "2026-11-02T09:17:35-06:00 round e3 pdfium start load 3.64 1.86 0.88",
+  "2026-11-02T09:17:50-06:00 round e3 pdfium end load 3.79 1.98 0.94",
+  "2026-11-02T09:17:50-06:00 round e3 null start load 3.79 1.98 0.94",
+  "2026-11-02T09:17:51-06:00 round e3 null end load 3.79 1.98 0.94",
+  "2026-11-02T09:18:11-06:00 round e3 end load 2.71 1.85 0.92",
+  "2026-11-02T09:18:11-06:00 realworld round 1 load 2.71 1.85 0.92",
+  "2026-11-02T09:18:13-06:00 realworld round 2 load 2.58 1.84 0.92",
+  "2026-11-02T09:18:15-06:00 realworld round 3 load 2.58 1.84 0.92",
+  "2026-11-02T09:18:17-06:00 realworld round 4 load 2.69 1.87 0.94",
+  "2026-11-02T09:18:19-06:00 realworld round 5 load 2.69 1.87 0.94",
+  "2026-11-02T09:18:21-06:00 realworld end load 2.69 1.87 0.94",
+  "2026-11-02T09:19:01-06:00 round j1 start (corpus.txt) load 1.38 1.64 0.89",
+  "2026-11-02T09:19:21-06:00 round j1 pdfjs start load 1.05 1.55 0.88",
+  "2026-11-02T09:20:12-06:00 round j1 pdfjs end load 4.56 2.44 1.22",
+  "2026-11-02T09:20:12-06:00 round j1 pdfium start load 4.56 2.44 1.22",
+  "2026-11-02T09:20:45-06:00 round j1 pdfium end load 3.63 2.41 1.26",
+  "2026-11-02T09:21:05-06:00 round j1 end load 2.67 2.27 1.23",
+  "2026-11-02T09:21:55-06:00 round j2 start (corpus.txt) load 1.37 1.98 1.19",
+  "2026-11-02T09:22:05-06:00 round j2 pdfium start load 1.16 1.91 1.18",
+  "2026-11-02T09:22:38-06:00 round j2 pdfium end load 1.73 1.99 1.23",
+  "2026-11-02T09:22:38-06:00 round j2 pdfjs start load 1.73 1.99 1.23",
+  "2026-11-02T09:23:30-06:00 round j2 pdfjs end load 4.43 2.70 1.51",
+  "2026-11-02T09:23:40-06:00 round j2 end load 3.75 2.61 1.50",
+  "2026-11-02T09:24:40-06:00 round j3 start (corpus.txt) load 1.38 2.13 1.40",
+  "2026-11-02T09:24:50-06:00 round j3 pdfjs start load 1.16 2.06 1.38",
+  "2026-11-02T09:25:42-06:00 round j3 pdfjs end load 5.12 2.97 1.73",
+  "2026-11-02T09:25:42-06:00 round j3 pdfium start load 5.12 2.97 1.73",
+  "2026-11-02T09:26:15-06:00 round j3 pdfium end load 3.89 2.87 1.74",
+  "2026-11-02T09:26:25-06:00 round j3 end load 3.29 2.78 1.72",
+  "2026-11-02T09:27:15-06:00 shiori run 1 start load 1.43 2.35 1.63",
+  "2026-11-02T09:27:16-06:00 shiori run 1 end load 2.19 2.49 1.68",
+  "2026-11-02T09:27:16-06:00 shiori run 2 start load 2.19 2.49 1.68",
+  "2026-11-02T09:27:18-06:00 shiori run 2 end load 2.19 2.49 1.68",
+  "2026-11-02T09:27:18-06:00 shiori run 3 start load 2.19 2.49 1.68",
+  "2026-11-02T09:27:19-06:00 shiori run 3 end load 2.19 2.49 1.68",
+  "2026-11-02T09:27:49-06:00 round e4 start (corpus-common.txt) load 1.33 2.25 1.62",
+  "2026-11-02T09:28:09-06:00 round e4 hayro-fork start load 1.03 2.12 1.59",
+  "2026-11-02T09:28:16-06:00 round e4 hayro-fork end load 1.35 2.17 1.61",
+  "2026-11-02T09:28:16-06:00 round e4 null start load 1.35 2.17 1.61",
+  "2026-11-02T09:28:17-06:00 round e4 null end load 1.56 2.20 1.63",
+  "2026-11-02T09:28:17-06:00 round e4 poppler-cairo start load 1.56 2.20 1.63",
+  "2026-11-02T09:28:39-06:00 round e4 poppler-cairo end load 2.38 2.35 1.69",
+  "2026-11-02T09:28:39-06:00 round e4 pdfium start load 2.38 2.35 1.69",
+  "2026-11-02T09:28:54-06:00 round e4 pdfium end load 2.82 2.45 1.73",
+  "2026-11-02T09:28:54-06:00 round e4 poppler-splash start load 2.82 2.45 1.73",
+  "2026-11-02T09:29:28-06:00 round e4 poppler-splash end load 3.10 2.57 1.80",
+  "2026-11-02T09:29:28-06:00 round e4 hayro-upstream start load 3.10 2.57 1.80",
+  "2026-11-02T09:29:42-06:00 round e4 hayro-upstream end load 2.92 2.56 1.81",
+  "2026-11-02T09:29:42-06:00 round e4 mupdf start load 2.92 2.56 1.81",
+  "2026-11-02T09:29:59-06:00 round e4 mupdf end load 3.31 2.66 1.86",
+  "2026-11-02T09:30:19-06:00 round e4 end load 2.37 2.49 1.81"
+ ]
+}

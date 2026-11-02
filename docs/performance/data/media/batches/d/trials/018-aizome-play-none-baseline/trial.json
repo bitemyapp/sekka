@@ -1,0 +1,157 @@
+{
+ "tag": "018-aizome-play-none-baseline",
+ "spec": {
+  "subject": "baseline",
+  "clip": null,
+  "round": 1
+ },
+ "started": "2026-11-02T05:21:30-0600",
+ "quiet": {
+  "busy_cores_before": 0.14,
+  "waited_s": 2.0,
+  "loadavg": [
+   "0.51",
+   "0.27",
+   "0.27"
+  ]
+ },
+ "session_up_s": null,
+ "roles": {
+  "compositor": [
+   {
+    "pid": 350936,
+    "comm": "aizome",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome"
+   }
+  ],
+  "shell": [
+   {
+    "pid": 350949,
+    "comm": "aizome-shell",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome-shell"
+   }
+  ],
+  "dbus": [
+   {
+    "pid": 350935,
+    "comm": "dbus-daemon",
+    "exe": "/nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2/bin/dbus-daemon"
+   }
+  ]
+ },
+ "player_stats_before": null,
+ "compositor_stats": [
+  {
+   "name": "HEADLESS-1",
+   "frames_rendered": 1,
+   "frames_skipped": 0,
+   "cpu_us": {
+    "p50": 207.0,
+    "p95": 207.0,
+    "p99": 207.0,
+    "max": 207.0,
+    "mean": 207.0
+   },
+   "gpu_us": {
+    "p50": 938.0,
+    "p95": 938.0,
+    "p99": 938.0,
+    "max": 938.0,
+    "mean": 938.0
+   },
+   "samples": 1
+  }
+ ],
+ "player_stats_after": null,
+ "power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 10,
+  "duration_s": 60.012,
+  "samples": 5829,
+  "energy_j": 1086.086,
+  "mean_w": 18.098,
+  "p10_w": 17.0,
+  "p50_w": 18.0,
+  "p90_w": 20.0,
+  "max_w": 59.0,
+  "system_busy_cpu_s": 8.01,
+  "exit": 0
+ },
+ "cpu": {
+  "compositor": {
+   "cpu_s": 0.0087,
+   "cpu_pct": 0.015,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 410,
+   "invol_switches": 1,
+   "switches_per_s": 6.8,
+   "wakeups_per_s": 6.8
+  },
+  "shell": {
+   "cpu_s": 0.0508,
+   "cpu_pct": 0.085,
+   "cpu_ticks_s": 0.05,
+   "vol_switches": 3113,
+   "invol_switches": 21,
+   "switches_per_s": 52.2,
+   "wakeups_per_s": 51.9
+  },
+  "dbus": {
+   "cpu_s": 0.0,
+   "cpu_pct": 0.0,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 0,
+   "invol_switches": 0,
+   "switches_per_s": 0.0,
+   "wakeups_per_s": 0.0
+  }
+ },
+ "gpu": {
+  "compositor": {
+   "engine_ns": {
+    "gfx": 944459,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "shell": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "dbus": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  }
+ },
+ "igpu": {
+  "busy_pct_mean": 0.0,
+  "busy_samples": 601,
+  "sclk_mhz_mean": 600.0,
+  "tctl_c_mean": 40.9
+ },
+ "compositor_memory": {
+  "rss_kib": 120364,
+  "pss_kib": 82153,
+  "pss_anon_kib": 23504,
+  "pss_file_kib": 58453,
+  "pss_shmem_kib": 196,
+  "swap_kib": 0
+ },
+ "player_switches_by_thread": {},
+ "ok": true,
+ "loadavg_after": [
+  "0.17",
+  "0.21",
+  "0.25"
+ ]
+}

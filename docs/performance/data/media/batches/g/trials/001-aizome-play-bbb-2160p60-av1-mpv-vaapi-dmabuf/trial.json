@@ -1,0 +1,377 @@
+{
+ "tag": "001-aizome-play-bbb-2160p60-av1-mpv-vaapi-dmabuf",
+ "spec": {
+  "subject": "mpv-vaapi-dmabuf",
+  "clip": "bbb-2160p60-av1.webm",
+  "ensure_fullscreen": true,
+  "round": 0
+ },
+ "started": "2026-11-02T15:02:37-0600",
+ "quiet": {
+  "busy_cores_before": 0.305,
+  "waited_s": 2.0,
+  "loadavg": [
+   "0.41",
+   "0.78",
+   "0.66"
+  ]
+ },
+ "session_up_s": null,
+ "window_after_s": 0.103,
+ "fullscreen_by_compositor": true,
+ "windows": [
+  {
+   "id": 1,
+   "app_id": "mpv",
+   "pid": 941793,
+   "fullscreen": true,
+   "geometry": {
+    "x": 0,
+    "y": 0,
+    "w": 1920,
+    "h": 1080
+   },
+   "title": "Big Buck Bunny, Sunflower version - mpv"
+  }
+ ],
+ "roles": {
+  "compositor": [
+   {
+    "pid": 941620,
+    "comm": "aizome",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome"
+   }
+  ],
+  "shell": [
+   {
+    "pid": 941634,
+    "comm": "aizome-shell",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome-shell"
+   }
+  ],
+  "dbus": [
+   {
+    "pid": 941619,
+    "comm": "dbus-daemon",
+    "exe": "/nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2/bin/dbus-daemon"
+   }
+  ],
+  "player": [
+   {
+    "pid": 941793,
+    "comm": "mpv",
+    "exe": "/nix/store/rw9wq87v2amzk0vz7d23pacms850gpww-mpv-0.41.0/bin/mpv"
+   }
+  ]
+ },
+ "player_stats_before": {
+  "frame-drop-count": 0,
+  "decoder-frame-drop-count": 0,
+  "vo-delayed-frame-count": 0,
+  "mistimed-frame-count": null,
+  "playback-time": 6.033,
+  "estimated-vf-fps": 60.000002,
+  "hwdec-current": "vaapi",
+  "current-vo": "dmabuf-wayland",
+  "current-gpu-context": null,
+  "video-params/pixelformat": "vaapi",
+  "video-params/hw-pixelformat": "nv12",
+  "video-out-params/w": 3840,
+  "video-out-params/h": 2160,
+  "display-fps": 60.0,
+  "current-ao": "null",
+  "audio-params/samplerate": 48000,
+  "pause": false,
+  "fullscreen": true
+ },
+ "compositor_stats": [
+  {
+   "name": "HEADLESS-1",
+   "frames_rendered": 3244,
+   "frames_skipped": 0,
+   "cpu_us": {
+    "p50": 79.0,
+    "p95": 105.0,
+    "p99": 269.0,
+    "max": 666.0,
+    "mean": 80.83168927250308
+   },
+   "gpu_us": {
+    "p50": 1744.0,
+    "p95": 1853.0,
+    "p99": 1943.0,
+    "max": 2073.0,
+    "mean": 1728.5194204685574
+   },
+   "samples": 3244
+  }
+ ],
+ "player_stats_after": {
+  "frame-drop-count": 0,
+  "decoder-frame-drop-count": 0,
+  "vo-delayed-frame-count": 0,
+  "mistimed-frame-count": null,
+  "playback-time": 66.05,
+  "estimated-vf-fps": 60.000002,
+  "hwdec-current": "vaapi",
+  "current-vo": "dmabuf-wayland",
+  "current-gpu-context": null,
+  "video-params/pixelformat": "vaapi",
+  "video-params/hw-pixelformat": "nv12",
+  "video-out-params/w": 3840,
+  "video-out-params/h": 2160,
+  "display-fps": 60.0,
+  "current-ao": "null",
+  "audio-params/samplerate": 48000,
+  "pause": false,
+  "fullscreen": true
+ },
+ "power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 10,
+  "duration_s": 60.002,
+  "samples": 5875,
+  "energy_j": 1531.568,
+  "mean_w": 25.525,
+  "p10_w": 19.0,
+  "p50_w": 24.0,
+  "p90_w": 34.0,
+  "max_w": 97.0,
+  "system_busy_cpu_s": 21.1,
+  "exit": 0
+ },
+ "cpu": {
+  "compositor": {
+   "cpu_s": 0.5135,
+   "cpu_pct": 0.856,
+   "cpu_ticks_s": 0.52,
+   "vol_switches": 19445,
+   "invol_switches": 125,
+   "switches_per_s": 326.2,
+   "wakeups_per_s": 324.1
+  },
+  "shell": {
+   "cpu_s": 0.0348,
+   "cpu_pct": 0.058,
+   "cpu_ticks_s": 0.04,
+   "vol_switches": 3386,
+   "invol_switches": 66,
+   "switches_per_s": 57.5,
+   "wakeups_per_s": 56.4
+  },
+  "dbus": {
+   "cpu_s": 0.0,
+   "cpu_pct": 0.0,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 0,
+   "invol_switches": 0,
+   "switches_per_s": 0.0,
+   "wakeups_per_s": 0.0
+  },
+  "player": {
+   "cpu_s": 0.7808,
+   "cpu_pct": 1.301,
+   "cpu_ticks_s": 0.78,
+   "vol_switches": 48617,
+   "invol_switches": 286,
+   "switches_per_s": 815.0,
+   "wakeups_per_s": 810.3
+  }
+ },
+ "gpu": {
+  "compositor": {
+   "engine_ns": {
+    "gfx": 5553909720,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "shell": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "dbus": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "player": {
+   "engine_ns": {
+    "compute": 0,
+    "dec": 21953987175
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  }
+ },
+ "igpu": {
+  "busy_pct_mean": 8.11,
+  "busy_samples": 601,
+  "sclk_mhz_mean": 743.8,
+  "tctl_c_mean": 46.96
+ },
+ "player_memory": {
+  "rss_kib": 141472,
+  "pss_kib": 80526,
+  "pss_anon_kib": 57476,
+  "pss_file_kib": 23042,
+  "pss_shmem_kib": 8,
+  "swap_kib": 0
+ },
+ "player_threads": {
+  "941793": {
+   "941793": "mpv",
+   "941795": "terminal/input",
+   "941796": "lua/osc",
+   "941797": "lua/ytdl_hook",
+   "941798": "lua/stats",
+   "941799": "lua/console",
+   "941801": "lua/select",
+   "941802": "lua/positioning",
+   "941803": "lua/commands",
+   "941804": "lua/context_men",
+   "941805": "mpv",
+   "941806": "ipc/socket",
+   "941808": "demux",
+   "941809": "worker",
+   "941810": "vo",
+   "941812": "mpv:cs0",
+   "941813": "mpv:disk$0",
+   "941814": "mpv:sh0",
+   "941815": "mpv:sh_opt0",
+   "941816": "mpv:traceq0",
+   "941817": "ao"
+  }
+ },
+ "player_alive": true,
+ "compositor_memory": {
+  "rss_kib": 122536,
+  "pss_kib": 69022,
+  "pss_anon_kib": 24004,
+  "pss_file_kib": 44754,
+  "pss_shmem_kib": 264,
+  "swap_kib": 0
+ },
+ "player_switches_by_thread": {
+  "mpv": [
+   16606,
+   155,
+   384.9
+  ],
+  "terminal/input": [
+   60,
+   1,
+   0.4
+  ],
+  "lua/osc": [
+   6301,
+   50,
+   142.6
+  ],
+  "lua/ytdl_hook": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/stats": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/console": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/select": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/positioning": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/commands": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/context_men": [
+   0,
+   0,
+   0.0
+  ],
+  "ipc/socket": [
+   0,
+   0,
+   0.0
+  ],
+  "demux": [
+   6576,
+   6,
+   33.3
+  ],
+  "worker": [
+   0,
+   0,
+   0.0
+  ],
+  "vo": [
+   13037,
+   33,
+   123.6
+  ],
+  "mpv:cs0": [
+   3602,
+   40,
+   82.7
+  ],
+  "mpv:disk$0": [
+   0,
+   0,
+   0.0
+  ],
+  "mpv:sh0": [
+   0,
+   0,
+   0.0
+  ],
+  "mpv:sh_opt0": [
+   0,
+   0,
+   0.0
+  ],
+  "mpv:traceq0": [
+   0,
+   0,
+   0.0
+  ],
+  "ao": [
+   2435,
+   1,
+   13.3
+  ]
+ },
+ "ok": true,
+ "loadavg_after": [
+  "0.86",
+  "0.85",
+  "0.69"
+ ]
+}

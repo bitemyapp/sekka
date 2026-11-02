@@ -1,0 +1,151 @@
+{
+ "manifest_entries": {
+  "custom": 335,
+  "pdfjs": 679,
+  "pdfbox": 454,
+  "pdfium": 127,
+  "corpus": 41
+ },
+ "manifest_ignored": {
+  "pdfjs": 22,
+  "pdfbox": 25,
+  "pdfium": 26
+ },
+ "by_suite": {
+  "other": {
+   "load": {
+    "tests_run": 128,
+    "passed": 128,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   },
+   "text": {
+    "tests_run": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   },
+   "visibility": {
+    "tests_run": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   },
+   "write": {
+    "tests_run": 30,
+    "passed": 21,
+    "failed": 9,
+    "skipped": 0,
+    "other": {}
+   }
+  },
+  "raster": {
+   "custom": {
+    "tests_run": 334,
+    "passed": 205,
+    "failed": 129,
+    "skipped": 0,
+    "other": {},
+    "ignored_in_manifest": 0,
+    "failed_graded_worst_page": {
+     "none_over_48": 79,
+     "under_0.1%_over_48": 46,
+     "reference image unavailable (404)": 4
+    }
+   },
+   "corpus": {
+    "tests_run": 41,
+    "passed": 16,
+    "failed": 25,
+    "skipped": 0,
+    "other": {},
+    "ignored_in_manifest": 0,
+    "failed_graded_worst_page": {
+     "none_over_48": 10,
+     "under_0.1%_over_48": 13,
+     "0.1-1%_over_48": 2
+    }
+   },
+   "pdfbox": {
+    "tests_run": 429,
+    "passed": 130,
+    "failed": 299,
+    "skipped": 0,
+    "other": {},
+    "ignored_in_manifest": 25,
+    "failed_graded_worst_page": {
+     "none_over_48": 163,
+     "under_0.1%_over_48": 124,
+     "0.1-1%_over_48": 2,
+     "1-5%_over_48": 1,
+     "reference image unavailable (404)": 9
+    }
+   },
+   "pdfium": {
+    "tests_run": 101,
+    "passed": 58,
+    "failed": 43,
+    "skipped": 0,
+    "other": {},
+    "ignored_in_manifest": 26,
+    "failed_graded_worst_page": {
+     "none_over_48": 26,
+     "under_0.1%_over_48": 15,
+     "0.1-1%_over_48": 1,
+     "reference image unavailable (404)": 1
+    }
+   },
+   "pdfjs": {
+    "tests_run": 658,
+    "passed": 264,
+    "failed": 394,
+    "skipped": 0,
+    "other": {},
+    "ignored_in_manifest": 22,
+    "failed_graded_worst_page": {
+     "none_over_48": 261,
+     "under_0.1%_over_48": 124,
+     "reference image unavailable (404)": 9
+    }
+   }
+  },
+  "svg": {
+   "custom": {
+    "tests_run": 39,
+    "passed": 39,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   },
+   "pdfbox": {
+    "tests_run": 7,
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   },
+   "pdfium": {
+    "tests_run": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   },
+   "pdfjs": {
+    "tests_run": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   }
+  }
+ },
+ "total": {
+  "passed": 880,
+  "failed": 899
+ },
+ "ignored_total": 73
+}

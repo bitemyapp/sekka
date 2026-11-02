@@ -1,0 +1,9 @@
+aizome=/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0
+mpv=/nix/store/ndqxyws873ri6h0g0ggg78y09yx3h1f0-mpv-with-scripts-0.41.0
+vlc=/nix/store/kjirqf9xqmzav2k3wl7wf9fmnqis9mb3-vlc-3.0.24
+sway=/nix/store/yl8mwqqr3xj01i6daa82r0kwlasvk2hk-sway-1.12
+xwayland_satellite=/nix/store/q6k3hsmwr7wb8xinn3cypmkylkd5al6v-xwayland-satellite-0.8.3
+dbus=/nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2
+pipewire=/nix/store/wfi1i34azyilqvh1q74fbr0p5rc78fmq-pipewire-1.6.9
+python=/nix/store/xahxrjs30p3mw0a42bqg9ikgkikskw8m-python3-3.14.8/bin/python3
+commit=d7ecbacd02916c1f67cf9ffcee69e431a318024a

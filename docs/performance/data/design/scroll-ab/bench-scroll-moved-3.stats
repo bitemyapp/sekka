@@ -1,0 +1,8 @@
+sidestep frame stats (5.0 s): window 1: 215 frames, µs p50/p95/max: record 33/37/838, rasterize 417/488/1834, present 26/28/196, total 477/555/2602; damage 60%
+sidestep frame stats (5.0 s): offscreen: 39 frames, µs p50/p95/max: record 2/13/15, rasterize 16/43/44, present 0/0/0, total 19/51/60; damage 100%
+sidestep frame stats (5.0 s): window 1: 249 frames, µs p50/p95/max: record 20/36/141, rasterize 198/462/497, present 9/27/31, total 224/526/594; damage 67%
+sidestep frame stats (5.0 s): window 1: 250 frames, µs p50/p95/max: record 18/36/49, rasterize 199/452/570, present 9/27/45, total 227/515/633; damage 67%
+sidestep frame stats (5.0 s): window 1: 249 frames, µs p50/p95/max: record 18/37/54, rasterize 212/470/526, present 9/27/51, total 238/531/588; damage 67%
+sidestep frame stats (5.0 s): window 1: 250 frames, µs p50/p95/max: record 20/38/56, rasterize 196/448/697, present 9/27/48, total 224/512/760; damage 67%
+sidestep frame stats (5.0 s): window 1: 249 frames, µs p50/p95/max: record 20/38/63, rasterize 196/445/525, present 9/27/42, total 226/510/588; damage 67%
+sidestep frame stats (5.0 s): window 1: 249 frames, µs p50/p95/max: record 20/40/55, rasterize 198/450/482, present 7/27/30, total 226/517/549; damage 67%

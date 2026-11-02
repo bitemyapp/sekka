@@ -1,0 +1,39 @@
+{
+ "rounds": 3,
+ "trials": [
+  {
+   "subject": "baseline",
+   "clip": null
+  },
+  {
+   "subject": "utsushi",
+   "clip": "tos-1080p24-h264.mp4",
+   "ensure_fullscreen": true
+  },
+  {
+   "subject": "mpv-vaapi-dmabuf",
+   "clip": "tos-1080p24-h264.mp4",
+   "ensure_fullscreen": true
+  },
+  {
+   "subject": "utsushi",
+   "clip": "bbb-2160p30-hevc10.mp4",
+   "ensure_fullscreen": true
+  },
+  {
+   "subject": "mpv-vaapi-dmabuf",
+   "clip": "bbb-2160p30-hevc10.mp4",
+   "ensure_fullscreen": true
+  },
+  {
+   "subject": "utsushi",
+   "clip": "bbb-2160p60-av1.webm",
+   "ensure_fullscreen": true
+  },
+  {
+   "subject": "mpv-vaapi-dmabuf",
+   "clip": "bbb-2160p60-av1.webm",
+   "ensure_fullscreen": true
+  }
+ ]
+}

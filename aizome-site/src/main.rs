@@ -3,10 +3,12 @@
 //! get is theme.js, which remembers the menu bar's Night/Day switch.
 
 mod apps;
+mod chart;
 mod color;
 mod glyphs;
 mod html;
 mod pages;
+mod performance;
 mod theme;
 
 use anyhow::{Context, Result, bail};
@@ -612,6 +614,7 @@ fn main() -> Result<()> {
     pages.extend([
         pages::keys(&site)?,
         pages::design(&site)?,
+        performance::page(&site)?,
         pages::install(&site)?,
         pages::fonts(&site)?,
     ]);

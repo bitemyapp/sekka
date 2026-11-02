@@ -1,0 +1,616 @@
+{
+ "date": "2026-11-02T06:20:38-0600",
+ "host": "runnymede",
+ "kernel": "7.3.0",
+ "aizome": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin",
+ "settle_s": 30.0,
+ "render_node": "/dev/dri/renderD128",
+ "runs": [
+  {
+   "output": "1920x1080@1",
+   "idle_s": 60.0,
+   "processes": [
+    {
+     "comm": "aizome",
+     "threads": 12,
+     "cpu_ms_per_s": 0.167,
+     "cpu_sched_ms_per_s": 0.1745,
+     "switches_per_s": 6.9,
+     "pss_kib": 68317,
+     "rss_kib": 120604,
+     "pss_anon_kib": 23384,
+     "pss_file_kib": 44801,
+     "pss_shmem_kib": 132
+    },
+    {
+     "comm": ".xwayland-satel",
+     "threads": 2,
+     "cpu_ms_per_s": 0.0,
+     "cpu_sched_ms_per_s": 0.0,
+     "switches_per_s": 0.0,
+     "pss_kib": 2847,
+     "rss_kib": 7044,
+     "pss_anon_kib": 780,
+     "pss_file_kib": 2067,
+     "pss_shmem_kib": 0
+    },
+    {
+     "comm": "aizome-shell",
+     "threads": 52,
+     "cpu_ms_per_s": 0.833,
+     "cpu_sched_ms_per_s": 0.9811,
+     "switches_per_s": 52.82,
+     "pss_kib": 65184,
+     "rss_kib": 74332,
+     "pss_anon_kib": 43484,
+     "pss_file_kib": 20272,
+     "pss_shmem_kib": 1428
+    },
+    {
+     "comm": "Xwayland",
+     "threads": 8,
+     "cpu_ms_per_s": 0.0,
+     "cpu_sched_ms_per_s": 0.0,
+     "switches_per_s": 0.0,
+     "pss_kib": 45296,
+     "rss_kib": 94584,
+     "pss_anon_kib": 22664,
+     "pss_file_kib": 22588,
+     "pss_shmem_kib": 44
+    }
+   ],
+   "frame_stats": {
+    "response": "stats",
+    "stats": {
+     "renderer": "gles",
+     "backend": "headless",
+     "outputs": [
+      {
+       "name": "HEADLESS-1",
+       "frames_rendered": 1,
+       "frames_skipped": 0,
+       "cpu_us": {
+        "p50": 230.0,
+        "p95": 230.0,
+        "p99": 230.0,
+        "max": 230.0,
+        "mean": 230.0
+       },
+       "gpu_us": {
+        "p50": 970.0,
+        "p95": 970.0,
+        "p99": 970.0,
+        "max": 970.0,
+        "mean": 970.0
+       },
+       "samples": 1
+      }
+     ],
+     "renderer_setting": "auto",
+     "renderer_after_restart": false,
+     "logic": {
+      "build": "0.1.0+99a10a69a575a5f0",
+      "path": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/../lib/aizome/libaizome_comp_logic.so",
+      "loaded_at": 1793622038,
+      "healthy": true,
+      "reloads": 0,
+      "rollbacks": 0,
+      "last_error": null,
+      "core_abi": "ccf6992e52754e4c03eb4efefc123c3dd9a72f2f78559baa358253f8ad269f7e"
+     }
+    }
+   },
+   "load": [
+    "0.18",
+    "0.61",
+    "0.59"
+   ],
+   "rep": 0
+  },
+  {
+   "output": "3840x2160@2",
+   "idle_s": 60.0,
+   "processes": [
+    {
+     "comm": "aizome",
+     "threads": 13,
+     "cpu_ms_per_s": 0.167,
+     "cpu_sched_ms_per_s": 0.1838,
+     "switches_per_s": 6.87,
+     "pss_kib": 69454,
+     "rss_kib": 121784,
+     "pss_anon_kib": 24112,
+     "pss_file_kib": 44718,
+     "pss_shmem_kib": 624
+    },
+    {
+     "comm": ".xwayland-satel",
+     "threads": 2,
+     "cpu_ms_per_s": 0.0,
+     "cpu_sched_ms_per_s": 0.0,
+     "switches_per_s": 0.0,
+     "pss_kib": 2858,
+     "rss_kib": 7044,
+     "pss_anon_kib": 784,
+     "pss_file_kib": 2074,
+     "pss_shmem_kib": 0
+    },
+    {
+     "comm": "aizome-shell",
+     "threads": 52,
+     "cpu_ms_per_s": 1.0,
+     "cpu_sched_ms_per_s": 1.0265,
+     "switches_per_s": 52.83,
+     "pss_kib": 82329,
+     "rss_kib": 91692,
+     "pss_anon_kib": 56756,
+     "pss_file_kib": 19969,
+     "pss_shmem_kib": 5604
+    },
+    {
+     "comm": "Xwayland",
+     "threads": 8,
+     "cpu_ms_per_s": 0.0,
+     "cpu_sched_ms_per_s": 0.0,
+     "switches_per_s": 0.0,
+     "pss_kib": 45162,
+     "rss_kib": 94368,
+     "pss_anon_kib": 22544,
+     "pss_file_kib": 22574,
+     "pss_shmem_kib": 44
+    }
+   ],
+   "frame_stats": {
+    "response": "stats",
+    "stats": {
+     "renderer": "gles",
+     "backend": "headless",
+     "outputs": [
+      {
+       "name": "HEADLESS-1",
+       "frames_rendered": 1,
+       "frames_skipped": 0,
+       "cpu_us": {
+        "p50": 194.0,
+        "p95": 194.0,
+        "p99": 194.0,
+        "max": 194.0,
+        "mean": 194.0
+       },
+       "gpu_us": {
+        "p50": 635.0,
+        "p95": 635.0,
+        "p99": 635.0,
+        "max": 635.0,
+        "mean": 635.0
+       },
+       "samples": 1
+      }
+     ],
+     "renderer_setting": "auto",
+     "renderer_after_restart": false,
+     "logic": {
+      "build": "0.1.0+99a10a69a575a5f0",
+      "path": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/../lib/aizome/libaizome_comp_logic.so",
+      "loaded_at": 1793622129,
+      "healthy": true,
+      "reloads": 0,
+      "rollbacks": 0,
+      "last_error": null,
+      "core_abi": "ccf6992e52754e4c03eb4efefc123c3dd9a72f2f78559baa358253f8ad269f7e"
+     }
+    }
+   },
+   "load": [
+    "0.11",
+    "0.45",
+    "0.53"
+   ],
+   "rep": 0
+  },
+  {
+   "output": "1920x1080@1",
+   "idle_s": 60.0,
+   "processes": [
+    {
+     "comm": "aizome",
+     "threads": 14,
+     "cpu_ms_per_s": 0.333,
+     "cpu_sched_ms_per_s": 0.194,
+     "switches_per_s": 7.23,
+     "pss_kib": 68442,
+     "rss_kib": 120676,
+     "pss_anon_kib": 23568,
+     "pss_file_kib": 44742,
+     "pss_shmem_kib": 132
+    },
+    {
+     "comm": ".xwayland-satel",
+     "threads": 2,
+     "cpu_ms_per_s": 0.0,
+     "cpu_sched_ms_per_s": 0.0,
+     "switches_per_s": 0.0,
+     "pss_kib": 2946,
+     "rss_kib": 7164,
+     "pss_anon_kib": 784,
+     "pss_file_kib": 2162,
+     "pss_shmem_kib": 0
+    },
+    {
+     "comm": "aizome-shell",
+     "threads": 52,
+     "cpu_ms_per_s": 1.0,
+     "cpu_sched_ms_per_s": 0.9978,
+     "switches_per_s": 52.48,
+     "pss_kib": 61620,
+     "rss_kib": 70776,
+     "pss_anon_kib": 39736,
+     "pss_file_kib": 20456,
+     "pss_shmem_kib": 1428
+    },
+    {
+     "comm": "Xwayland",
+     "threads": 8,
+     "cpu_ms_per_s": 0.0,
+     "cpu_sched_ms_per_s": 0.0,
+     "switches_per_s": 0.0,
+     "pss_kib": 45254,
+     "rss_kib": 94492,
+     "pss_anon_kib": 22576,
+     "pss_file_kib": 22634,
+     "pss_shmem_kib": 44
+    }
+   ],
+   "frame_stats": {
+    "response": "stats",
+    "stats": {
+     "renderer": "gles",
+     "backend": "headless",
+     "outputs": [
+      {
+       "name": "HEADLESS-1",
+       "frames_rendered": 4,
+       "frames_skipped": 0,
+       "cpu_us": {
+        "p50": 219.0,
+        "p95": 229.0,
+        "p99": 229.0,
+        "max": 229.0,
+        "mean": 218.0
+       },
+       "gpu_us": {
+        "p50": 965.0,
+        "p95": 996.0,
+        "p99": 996.0,
+        "max": 996.0,
+        "mean": 975.0
+       },
+       "samples": 4
+      }
+     ],
+     "renderer_setting": "auto",
+     "renderer_after_restart": false,
+     "logic": {
+      "build": "0.1.0+99a10a69a575a5f0",
+      "path": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/../lib/aizome/libaizome_comp_logic.so",
+      "loaded_at": 1793622220,
+      "healthy": true,
+      "reloads": 0,
+      "rollbacks": 0,
+      "last_error": null,
+      "core_abi": "ccf6992e52754e4c03eb4efefc123c3dd9a72f2f78559baa358253f8ad269f7e"
+     }
+    }
+   },
+   "load": [
+    "0.02",
+    "0.33",
+    "0.48"
+   ],
+   "rep": 1
+  },
+  {
+   "output": "3840x2160@2",
+   "idle_s": 60.0,
+   "processes": [
+    {
+     "comm": "aizome",
+     "threads": 12,
+     "cpu_ms_per_s": 0.167,
+     "cpu_sched_ms_per_s": 0.1926,
+     "switches_per_s": 6.87,
+     "pss_kib": 69322,
+     "rss_kib": 121492,
+     "pss_anon_kib": 23988,
+     "pss_file_kib": 44710,
+     "pss_shmem_kib": 624
+    },
+    {
+     "comm": ".xwayland-satel",
+     "threads": 2,
+     "cpu_ms_per_s": 0.0,
+     "cpu_sched_ms_per_s": 0.0,
+     "switches_per_s": 0.0,
+     "pss_kib": 2940,
+     "rss_kib": 7152,
+     "pss_anon_kib": 784,
+     "pss_file_kib": 2156,
+     "pss_shmem_kib": 0
+    },
+    {
+     "comm": "aizome-shell",
+     "threads": 52,
+     "cpu_ms_per_s": 1.0,
+     "cpu_sched_ms_per_s": 1.0832,
+     "switches_per_s": 57.13,
+     "pss_kib": 82610,
+     "rss_kib": 91932,
+     "pss_anon_kib": 56840,
+     "pss_file_kib": 20166,
+     "pss_shmem_kib": 5604
+    },
+    {
+     "comm": "Xwayland",
+     "threads": 8,
+     "cpu_ms_per_s": 0.0,
+     "cpu_sched_ms_per_s": 0.0,
+     "switches_per_s": 0.0,
+     "pss_kib": 45261,
+     "rss_kib": 94436,
+     "pss_anon_kib": 22636,
+     "pss_file_kib": 22581,
+     "pss_shmem_kib": 44
+    }
+   ],
+   "frame_stats": {
+    "response": "stats",
+    "stats": {
+     "renderer": "gles",
+     "backend": "headless",
+     "outputs": [
+      {
+       "name": "HEADLESS-1",
+       "frames_rendered": 1,
+       "frames_skipped": 0,
+       "cpu_us": {
+        "p50": 189.0,
+        "p95": 189.0,
+        "p99": 189.0,
+        "max": 189.0,
+        "mean": 189.0
+       },
+       "gpu_us": {
+        "p50": 858.0,
+        "p95": 858.0,
+        "p99": 858.0,
+        "max": 858.0,
+        "mean": 858.0
+       },
+       "samples": 1
+      }
+     ],
+     "renderer_setting": "auto",
+     "renderer_after_restart": false,
+     "logic": {
+      "build": "0.1.0+99a10a69a575a5f0",
+      "path": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/../lib/aizome/libaizome_comp_logic.so",
+      "loaded_at": 1793622311,
+      "healthy": true,
+      "reloads": 0,
+      "rollbacks": 0,
+      "last_error": null,
+      "core_abi": "ccf6992e52754e4c03eb4efefc123c3dd9a72f2f78559baa358253f8ad269f7e"
+     }
+    }
+   },
+   "load": [
+    "0.02",
+    "0.25",
+    "0.44"
+   ],
+   "rep": 1
+  },
+  {
+   "output": "1920x1080@1",
+   "idle_s": 60.0,
+   "processes": [
+    {
+     "comm": "aizome",
+     "threads": 12,
+     "cpu_ms_per_s": 0.167,
+     "cpu_sched_ms_per_s": 0.1857,
+     "switches_per_s": 6.87,
+     "pss_kib": 68240,
+     "rss_kib": 120340,
+     "pss_anon_kib": 23372,
+     "pss_file_kib": 44672,
+     "pss_shmem_kib": 196
+    },
+    {
+     "comm": ".xwayland-satel",
+     "threads": 2,
+     "cpu_ms_per_s": 0.0,
+     "cpu_sched_ms_per_s": 0.0,
+     "switches_per_s": 0.0,
+     "pss_kib": 2772,
+     "rss_kib": 6988,
+     "pss_anon_kib": 780,
+     "pss_file_kib": 1992,
+     "pss_shmem_kib": 0
+    },
+    {
+     "comm": "aizome-shell",
+     "threads": 52,
+     "cpu_ms_per_s": 1.167,
+     "cpu_sched_ms_per_s": 0.9967,
+     "switches_per_s": 53.8,
+     "pss_kib": 61928,
+     "rss_kib": 71232,
+     "pss_anon_kib": 40344,
+     "pss_file_kib": 20156,
+     "pss_shmem_kib": 1428
+    },
+    {
+     "comm": "Xwayland",
+     "threads": 8,
+     "cpu_ms_per_s": 0.0,
+     "cpu_sched_ms_per_s": 0.0,
+     "switches_per_s": 0.0,
+     "pss_kib": 45221,
+     "rss_kib": 94336,
+     "pss_anon_kib": 22616,
+     "pss_file_kib": 22561,
+     "pss_shmem_kib": 44
+    }
+   ],
+   "frame_stats": {
+    "response": "stats",
+    "stats": {
+     "renderer": "gles",
+     "backend": "headless",
+     "outputs": [
+      {
+       "name": "HEADLESS-1",
+       "frames_rendered": 1,
+       "frames_skipped": 0,
+       "cpu_us": {
+        "p50": 214.0,
+        "p95": 214.0,
+        "p99": 214.0,
+        "max": 214.0,
+        "mean": 214.0
+       },
+       "gpu_us": {
+        "p50": 977.0,
+        "p95": 977.0,
+        "p99": 977.0,
+        "max": 977.0,
+        "mean": 977.0
+       },
+       "samples": 1
+      }
+     ],
+     "renderer_setting": "auto",
+     "renderer_after_restart": false,
+     "logic": {
+      "build": "0.1.0+99a10a69a575a5f0",
+      "path": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/../lib/aizome/libaizome_comp_logic.so",
+      "loaded_at": 1793622402,
+      "healthy": true,
+      "reloads": 0,
+      "rollbacks": 0,
+      "last_error": null,
+      "core_abi": "ccf6992e52754e4c03eb4efefc123c3dd9a72f2f78559baa358253f8ad269f7e"
+     }
+    }
+   },
+   "load": [
+    "0.04",
+    "0.21",
+    "0.40"
+   ],
+   "rep": 2
+  },
+  {
+   "output": "3840x2160@2",
+   "idle_s": 60.0,
+   "processes": [
+    {
+     "comm": "aizome",
+     "threads": 13,
+     "cpu_ms_per_s": 0.167,
+     "cpu_sched_ms_per_s": 0.1875,
+     "switches_per_s": 6.9,
+     "pss_kib": 69470,
+     "rss_kib": 121800,
+     "pss_anon_kib": 24148,
+     "pss_file_kib": 44698,
+     "pss_shmem_kib": 624
+    },
+    {
+     "comm": ".xwayland-satel",
+     "threads": 2,
+     "cpu_ms_per_s": 0.0,
+     "cpu_sched_ms_per_s": 0.0,
+     "switches_per_s": 0.0,
+     "pss_kib": 2840,
+     "rss_kib": 7060,
+     "pss_anon_kib": 780,
+     "pss_file_kib": 2060,
+     "pss_shmem_kib": 0
+    },
+    {
+     "comm": "aizome-shell",
+     "threads": 52,
+     "cpu_ms_per_s": 1.0,
+     "cpu_sched_ms_per_s": 1.0296,
+     "switches_per_s": 52.1,
+     "pss_kib": 81441,
+     "rss_kib": 90724,
+     "pss_anon_kib": 55492,
+     "pss_file_kib": 20345,
+     "pss_shmem_kib": 5604
+    },
+    {
+     "comm": "Xwayland",
+     "threads": 8,
+     "cpu_ms_per_s": 0.0,
+     "cpu_sched_ms_per_s": 0.0,
+     "switches_per_s": 0.0,
+     "pss_kib": 45239,
+     "rss_kib": 94520,
+     "pss_anon_kib": 22620,
+     "pss_file_kib": 22575,
+     "pss_shmem_kib": 44
+    }
+   ],
+   "frame_stats": {
+    "response": "stats",
+    "stats": {
+     "renderer": "gles",
+     "backend": "headless",
+     "outputs": [
+      {
+       "name": "HEADLESS-1",
+       "frames_rendered": 1,
+       "frames_skipped": 0,
+       "cpu_us": {
+        "p50": 210.0,
+        "p95": 210.0,
+        "p99": 210.0,
+        "max": 210.0,
+        "mean": 210.0
+       },
+       "gpu_us": {
+        "p50": 507.0,
+        "p95": 507.0,
+        "p99": 507.0,
+        "max": 507.0,
+        "mean": 507.0
+       },
+       "samples": 1
+      }
+     ],
+     "renderer_setting": "auto",
+     "renderer_after_restart": false,
+     "logic": {
+      "build": "0.1.0+99a10a69a575a5f0",
+      "path": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/../lib/aizome/libaizome_comp_logic.so",
+      "loaded_at": 1793622493,
+      "healthy": true,
+      "reloads": 0,
+      "rollbacks": 0,
+      "last_error": null,
+      "core_abi": "ccf6992e52754e4c03eb4efefc123c3dd9a72f2f78559baa358253f8ad269f7e"
+     }
+    }
+   },
+   "load": [
+    "0.01",
+    "0.15",
+    "0.36"
+   ],
+   "rep": 2
+  }
+ ]
+}

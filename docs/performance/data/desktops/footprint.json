@@ -1,0 +1,7 @@
+{
+  "baseline_bytes": 3554972128,
+  "common_to_all_desktops_bytes": 3326862920, "common_paths": 332,
+  "aizome": {"total_bytes": 8487033304, "added_over_baseline_bytes": 4952821128, "own_bytes": 1625958208, "own_paths": 273},
+  "gnome": {"total_bytes": 8520261504, "added_over_baseline_bytes": 4986039696, "own_bytes": 1659176776, "own_paths": 323},
+  "plasma": {"total_bytes": 10779992152, "added_over_baseline_bytes": 7245707896, "own_bytes": 3918844976, "own_paths": 558}
+}

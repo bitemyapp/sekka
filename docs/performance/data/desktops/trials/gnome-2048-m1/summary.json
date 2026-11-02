@@ -1,0 +1,935 @@
+{
+ "variant": "gnome",
+ "tag": "m1",
+ "mem_mib": 2048,
+ "start": "2026-11-02T14:34:02-0600",
+ "loadavg_start": [
+  "0.20",
+  "0.48",
+  "0.45"
+ ],
+ "host_idle_power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 100,
+  "duration_s": 30.001,
+  "samples": 300,
+  "energy_j": 653.333,
+  "mean_w": 21.777,
+  "p10_w": 17.0,
+  "p50_w": 21.0,
+  "p90_w": 28.0,
+  "max_w": 71.0,
+  "system_busy_cpu_s": 8.76,
+  "exit": 0
+ },
+ "boot": {
+  "settled_s": 7.3602,
+  "last_change_s": 7.3602,
+  "first_match_s": 7.3602,
+  "timeout": false,
+  "systemd": {
+   "kernel": 0.199,
+   "initrd": 2.741,
+   "userspace": 2.331,
+   "target_reached_userspace": 2.329
+  },
+  "units_host_s": {
+   "display-manager.service": 5.569,
+   "multi-user.target": 5.293,
+   "graphical.target": 5.569
+  }
+ },
+ "login": {
+  "settled_s": 2.036,
+  "last_change_s": 2.036,
+  "first_change_s": 1.6358,
+  "first_match_s": 2.036,
+  "timeout": false,
+  "journal": {
+   "pam_service": "gdm-password]",
+   "pam_session_opened_s": 43.713,
+   "units": {
+    "gnome-session-manager@gnome.service": 0.197,
+    "gnome-session.target": 1.082,
+    "graphical-session.target": 1.082
+   },
+   "last_user_unit_started_s": 12.067,
+   "enter_to_pam_s": 0.029
+  }
+ },
+ "memory": {
+  "greeter": {
+   "used_mib": 616.4,
+   "memtotal_mib": 1962.2,
+   "available_mib": 1345.7,
+   "anon_mib": 294.4,
+   "shmem_mib": 39.4,
+   "cached_mib": 711.2,
+   "swap_used_mib": 3.9,
+   "zswap_pool_mib": 1.5,
+   "zswapped_mib": 3.2,
+   "memory_pressure_some_total_us": 16785,
+   "pswpout": 0,
+   "zswpout": 969,
+   "pss_mib": {
+    "system": 92.2,
+    "greeter": 440.0
+   },
+   "pss_total_mib": 532.2,
+   "swap_pss_mib": {
+    "system": 3.2,
+    "greeter": 0.0
+   },
+   "processes": 72,
+   "top_units_mib": {
+    "greeter:org.gnome.Shell@gdm.service": 253.1,
+    "greeter:org.gnome.SettingsDaemon.XSettings.service": 21.1,
+    "greeter:xdg-desktop-portal-gnome.service": 17.1,
+    "greeter:wireplumber.service": 16.7,
+    "greeter:dbus-:1.1-org.gnome.Settings.GlobalShortcutsProvider@0.service": 15.6,
+    "greeter:sekka-agent-workloads.service": 14.1,
+    "greeter:dbus-:1.1-org.gnome.Shell.Notifications@0.service": 12.9,
+    "greeter:dbus-:1.1-org.gnome.ScreenSaver@0.service": 12.9,
+    "greeter:xdg-desktop-portal-gtk.service": 12.1,
+    "system:NetworkManager.service": 10.8,
+    "system:cups-browsed.service": 8.3,
+    "system:ananicy-cpp.service": 7.6,
+    "system:ModemManager.service": 6.8,
+    "greeter:init.scope": 6.4,
+    "system:systemd-udevd.service": 6.3,
+    "greeter:xdg-desktop-portal.service": 6.3,
+    "system:systemd (PID 1)": 6.2,
+    "greeter:pipewire.service": 6.1,
+    "greeter:org.freedesktop.IBus.session.GNOME.service": 6.0,
+    "greeter:session-c1.scope": 5.0,
+    "system:dbus-broker.service": 4.9,
+    "system:systemd-journald.service": 4.4,
+    "system:geoclue.service": 4.3,
+    "system:colord.service": 4.2,
+    "system:cups.service": 4.1,
+    "system:polkit.service": 3.4,
+    "greeter:dbus-:1.1-org.freedesktop.secrets@0.service": 3.4,
+    "greeter:org.gnome.SettingsDaemon.MediaKeys.service": 3.2,
+    "system:wpa_supplicant.service": 3.1,
+    "greeter:pipewire-pulse.service": 3.1
+   },
+   "top_processes": [
+    {
+     "comm": ".gnome-shell-wr",
+     "group": "greeter",
+     "unit": "org.gnome.Shell@gdm.service",
+     "pss_mib": 187.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".mutter-x11-fra",
+     "group": "greeter",
+     "unit": "org.gnome.Shell@gdm.service",
+     "pss_mib": 44.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "Xwayland",
+     "group": "greeter",
+     "unit": "org.gnome.Shell@gdm.service",
+     "pss_mib": 21.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".ibus-x11-wrapp",
+     "group": "greeter",
+     "unit": "org.gnome.SettingsDaemon.XSettings.service",
+     "pss_mib": 18.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "greeter",
+     "unit": "xdg-desktop-portal-gnome.service",
+     "pss_mib": 17.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wireplumber",
+     "group": "greeter",
+     "unit": "wireplumber.service",
+     "pss_mib": 16.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".gnome-control-",
+     "group": "greeter",
+     "unit": "dbus-:1.1-org.gnome.Settings.GlobalShortcutsProvider@0.service",
+     "pss_mib": 15.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "python3",
+     "group": "greeter",
+     "unit": "sekka-agent-workloads.service",
+     "pss_mib": 14.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".org.gnome.Shel",
+     "group": "greeter",
+     "unit": "dbus-:1.1-org.gnome.Shell.Notifications@0.service",
+     "pss_mib": 12.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".org.gnome.Scre",
+     "group": "greeter",
+     "unit": "dbus-:1.1-org.gnome.ScreenSaver@0.service",
+     "pss_mib": 12.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "greeter",
+     "unit": "xdg-desktop-portal-gtk.service",
+     "pss_mib": 12.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 10.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "cups-browsed",
+     "group": "system",
+     "unit": "cups-browsed.service",
+     "pss_mib": 8.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "ananicy-cpp",
+     "group": "system",
+     "unit": "ananicy-cpp.service",
+     "pss_mib": 7.6,
+     "swap_pss_mib": 3.2
+    },
+    {
+     "comm": "ModemManager",
+     "group": "system",
+     "unit": "ModemManager.service",
+     "pss_mib": 6.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-udevd",
+     "group": "system",
+     "unit": "systemd-udevd.service",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "greeter",
+     "unit": "xdg-desktop-portal.service",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd",
+     "group": "system",
+     "unit": "systemd (PID 1)",
+     "pss_mib": 6.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "pipewire",
+     "group": "greeter",
+     "unit": "pipewire.service",
+     "pss_mib": 6.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd",
+     "group": "greeter",
+     "unit": "init.scope",
+     "pss_mib": 4.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-journal",
+     "group": "system",
+     "unit": "systemd-journald.service",
+     "pss_mib": 4.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".geoclue-wrappe",
+     "group": "system",
+     "unit": "geoclue.service",
+     "pss_mib": 4.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".colord-wrapped",
+     "group": "system",
+     "unit": "colord.service",
+     "pss_mib": 4.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".ibus-daemon-wr",
+     "group": "greeter",
+     "unit": "org.freedesktop.IBus.session.GNOME.service",
+     "pss_mib": 4.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "polkitd",
+     "group": "system",
+     "unit": "polkit.service",
+     "pss_mib": 3.4,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  },
+  "desktop60": {
+   "used_mib": 863.0,
+   "memtotal_mib": 1962.2,
+   "available_mib": 1099.2,
+   "anon_mib": 499.5,
+   "shmem_mib": 37.9,
+   "cached_mib": 1018.5,
+   "swap_used_mib": 3.9,
+   "zswap_pool_mib": 1.5,
+   "zswapped_mib": 3.1,
+   "memory_pressure_some_total_us": 18232,
+   "pswpout": 0,
+   "zswpout": 969,
+   "pss_mib": {
+    "system": 91.1,
+    "session": 704.8
+   },
+   "pss_total_mib": 795.9,
+   "swap_pss_mib": {
+    "system": 3.1,
+    "session": 0.0
+   },
+   "processes": 98,
+   "top_units_mib": {
+    "session:org.gnome.Shell@user.service": 366.7,
+    "session:evolution-alarm-notify.service": 36.4,
+    "session:evolution-source-registry.service": 26.3,
+    "session:org.freedesktop.IBus.session.GNOME.service": 23.8,
+    "session:org.gnome.SettingsDaemon.XSettings.service": 20.0,
+    "session:wireplumber.service": 16.5,
+    "session:xdg-desktop-portal-gnome.service": 14.9,
+    "session:evolution-addressbook-factory.service": 14.8,
+    "session:dbus-:1.1-org.gnome.Settings.GlobalShortcutsProvider@0.service": 14.4,
+    "session:sekka-agent-workloads.service": 14.1,
+    "session:dbus-:1.1-org.gnome.ScreenSaver@0.service": 12.7,
+    "session:dbus-:1.1-org.gnome.Shell.Notifications@0.service": 12.4,
+    "session:evolution-calendar-factory.service": 12.3,
+    "system:NetworkManager.service": 10.5,
+    "session:localsearch-3.service": 10.4,
+    "session:xdg-desktop-portal-gtk.service": 8.8,
+    "session:session-2.scope": 8.1,
+    "session:dbus-:1.1-org.gnome.Shell.CalendarServer@0.service": 7.9,
+    "session:dbus-:1.1-org.gnome.OnlineAccounts@0.service": 7.8,
+    "system:cups-browsed.service": 7.3,
+    "system:ananicy-cpp.service": 7.3,
+    "system:ModemManager.service": 6.7,
+    "system:udisks2.service": 6.7,
+    "session:init.scope": 6.4,
+    "system:systemd-udevd.service": 6.3,
+    "session:xdg-desktop-portal.service": 6.2,
+    "system:systemd (PID 1)": 6.2,
+    "session:pipewire.service": 5.8,
+    "system:dbus-broker.service": 5.1,
+    "system:cups.service": 3.7
+   },
+   "top_processes": [
+    {
+     "comm": ".gnome-shell-wr",
+     "group": "session",
+     "unit": "org.gnome.Shell@user.service",
+     "pss_mib": 302.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".mutter-x11-fra",
+     "group": "session",
+     "unit": "org.gnome.Shell@user.service",
+     "pss_mib": 42.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".evolution-alar",
+     "group": "session",
+     "unit": "evolution-alarm-notify.service",
+     "pss_mib": 36.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".evolution-sour",
+     "group": "session",
+     "unit": "evolution-source-registry.service",
+     "pss_mib": 26.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "Xwayland",
+     "group": "session",
+     "unit": "org.gnome.Shell@user.service",
+     "pss_mib": 21.0,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".ibus-extension",
+     "group": "session",
+     "unit": "org.freedesktop.IBus.session.GNOME.service",
+     "pss_mib": 17.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".ibus-x11-wrapp",
+     "group": "session",
+     "unit": "org.gnome.SettingsDaemon.XSettings.service",
+     "pss_mib": 17.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wireplumber",
+     "group": "session",
+     "unit": "wireplumber.service",
+     "pss_mib": 16.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal-gnome.service",
+     "pss_mib": 14.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".evolution-addr",
+     "group": "session",
+     "unit": "evolution-addressbook-factory.service",
+     "pss_mib": 14.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".gnome-control-",
+     "group": "session",
+     "unit": "dbus-:1.1-org.gnome.Settings.GlobalShortcutsProvider@0.service",
+     "pss_mib": 14.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "python3",
+     "group": "session",
+     "unit": "sekka-agent-workloads.service",
+     "pss_mib": 14.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".org.gnome.Scre",
+     "group": "session",
+     "unit": "dbus-:1.1-org.gnome.ScreenSaver@0.service",
+     "pss_mib": 12.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".org.gnome.Shel",
+     "group": "session",
+     "unit": "dbus-:1.1-org.gnome.Shell.Notifications@0.service",
+     "pss_mib": 12.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".evolution-cale",
+     "group": "session",
+     "unit": "evolution-calendar-factory.service",
+     "pss_mib": 12.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 10.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".localsearch-3-",
+     "group": "session",
+     "unit": "localsearch-3.service",
+     "pss_mib": 10.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal-gtk.service",
+     "pss_mib": 8.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".gnome-shell-ca",
+     "group": "session",
+     "unit": "dbus-:1.1-org.gnome.Shell.CalendarServer@0.service",
+     "pss_mib": 7.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".goa-daemon-wra",
+     "group": "session",
+     "unit": "dbus-:1.1-org.gnome.OnlineAccounts@0.service",
+     "pss_mib": 7.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "cups-browsed",
+     "group": "system",
+     "unit": "cups-browsed.service",
+     "pss_mib": 7.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "ananicy-cpp",
+     "group": "system",
+     "unit": "ananicy-cpp.service",
+     "pss_mib": 7.3,
+     "swap_pss_mib": 3.1
+    },
+    {
+     "comm": "ModemManager",
+     "group": "system",
+     "unit": "ModemManager.service",
+     "pss_mib": 6.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "udisksd",
+     "group": "system",
+     "unit": "udisks2.service",
+     "pss_mib": 6.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-udevd",
+     "group": "system",
+     "unit": "systemd-udevd.service",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  },
+  "desktop190": {
+   "used_mib": 849.0,
+   "memtotal_mib": 1962.2,
+   "available_mib": 1113.2,
+   "anon_mib": 486.0,
+   "shmem_mib": 37.9,
+   "cached_mib": 1018.7,
+   "swap_used_mib": 3.9,
+   "zswap_pool_mib": 1.5,
+   "zswapped_mib": 3.1,
+   "memory_pressure_some_total_us": 18232,
+   "pswpout": 0,
+   "zswpout": 969,
+   "pss_mib": {
+    "system": 91.3,
+    "session": 691.0
+   },
+   "pss_total_mib": 782.3,
+   "swap_pss_mib": {
+    "system": 3.1,
+    "session": 0.0
+   },
+   "processes": 98,
+   "top_units_mib": {
+    "session:org.gnome.Shell@user.service": 363.9,
+    "session:evolution-alarm-notify.service": 36.6,
+    "session:evolution-source-registry.service": 26.4,
+    "session:org.freedesktop.IBus.session.GNOME.service": 23.8,
+    "session:org.gnome.SettingsDaemon.XSettings.service": 20.0,
+    "session:wireplumber.service": 16.5,
+    "session:xdg-desktop-portal-gnome.service": 16.3,
+    "session:evolution-addressbook-factory.service": 14.9,
+    "session:sekka-agent-workloads.service": 14.1,
+    "session:dbus-:1.1-org.gnome.ScreenSaver@0.service": 12.7,
+    "session:dbus-:1.1-org.gnome.Shell.Notifications@0.service": 12.4,
+    "session:evolution-calendar-factory.service": 12.3,
+    "system:NetworkManager.service": 10.6,
+    "session:localsearch-3.service": 10.5,
+    "session:xdg-desktop-portal-gtk.service": 8.9,
+    "session:dbus-:1.1-org.gnome.OnlineAccounts@0.service": 8.2,
+    "session:session-2.scope": 8.1,
+    "session:dbus-:1.1-org.gnome.Shell.CalendarServer@0.service": 8.0,
+    "system:cups-browsed.service": 7.4,
+    "system:ananicy-cpp.service": 7.3,
+    "system:ModemManager.service": 6.7,
+    "system:udisks2.service": 6.7,
+    "session:init.scope": 6.4,
+    "system:systemd-udevd.service": 6.3,
+    "session:xdg-desktop-portal.service": 6.3,
+    "system:systemd (PID 1)": 6.2,
+    "session:pipewire.service": 5.8,
+    "system:dbus-broker.service": 5.1,
+    "system:cups.service": 3.7,
+    "system:polkit.service": 3.6
+   },
+   "top_processes": [
+    {
+     "comm": ".gnome-shell-wr",
+     "group": "session",
+     "unit": "org.gnome.Shell@user.service",
+     "pss_mib": 298.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".mutter-x11-fra",
+     "group": "session",
+     "unit": "org.gnome.Shell@user.service",
+     "pss_mib": 44.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".evolution-alar",
+     "group": "session",
+     "unit": "evolution-alarm-notify.service",
+     "pss_mib": 36.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".evolution-sour",
+     "group": "session",
+     "unit": "evolution-source-registry.service",
+     "pss_mib": 26.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "Xwayland",
+     "group": "session",
+     "unit": "org.gnome.Shell@user.service",
+     "pss_mib": 21.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".ibus-extension",
+     "group": "session",
+     "unit": "org.freedesktop.IBus.session.GNOME.service",
+     "pss_mib": 17.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".ibus-x11-wrapp",
+     "group": "session",
+     "unit": "org.gnome.SettingsDaemon.XSettings.service",
+     "pss_mib": 17.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wireplumber",
+     "group": "session",
+     "unit": "wireplumber.service",
+     "pss_mib": 16.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal-gnome.service",
+     "pss_mib": 16.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".evolution-addr",
+     "group": "session",
+     "unit": "evolution-addressbook-factory.service",
+     "pss_mib": 14.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "python3",
+     "group": "session",
+     "unit": "sekka-agent-workloads.service",
+     "pss_mib": 14.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".org.gnome.Scre",
+     "group": "session",
+     "unit": "dbus-:1.1-org.gnome.ScreenSaver@0.service",
+     "pss_mib": 12.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".org.gnome.Shel",
+     "group": "session",
+     "unit": "dbus-:1.1-org.gnome.Shell.Notifications@0.service",
+     "pss_mib": 12.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".evolution-cale",
+     "group": "session",
+     "unit": "evolution-calendar-factory.service",
+     "pss_mib": 12.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 10.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".localsearch-3-",
+     "group": "session",
+     "unit": "localsearch-3.service",
+     "pss_mib": 10.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal-gtk.service",
+     "pss_mib": 8.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".goa-daemon-wra",
+     "group": "session",
+     "unit": "dbus-:1.1-org.gnome.OnlineAccounts@0.service",
+     "pss_mib": 8.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".gnome-shell-ca",
+     "group": "session",
+     "unit": "dbus-:1.1-org.gnome.Shell.CalendarServer@0.service",
+     "pss_mib": 8.0,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "cups-browsed",
+     "group": "system",
+     "unit": "cups-browsed.service",
+     "pss_mib": 7.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "ananicy-cpp",
+     "group": "system",
+     "unit": "ananicy-cpp.service",
+     "pss_mib": 7.3,
+     "swap_pss_mib": 3.1
+    },
+    {
+     "comm": "ModemManager",
+     "group": "system",
+     "unit": "ModemManager.service",
+     "pss_mib": 6.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "udisksd",
+     "group": "system",
+     "unit": "udisks2.service",
+     "pss_mib": 6.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-udevd",
+     "group": "system",
+     "unit": "systemd-udevd.service",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal.service",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  }
+ },
+ "idle": {
+  "window_s": 120.0,
+  "guest_busy_pct": 0.1,
+  "guest_busy_pct_of_one_vcpu": 0.21,
+  "ctxt_per_s": 82.4,
+  "intr_per_s": 101.5,
+  "forks_per_s": 0.07,
+  "task_wakeups_per_s": 42.5,
+  "qemu_cpu_pct_of_core": 0.78,
+  "qemu_vcpu_pct_of_core": 0.39,
+  "ppt_mean_w": 20.965,
+  "ppt_energy_j": 2515.878,
+  "host_busy_cpu_s": 15.62,
+  "top_wakers": [
+   {
+    "comm": "ananicy-cpp",
+    "cgroup": "/system.slice/ananicy-cpp.service",
+    "voluntary_per_s": 13.31,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "kworker/u8:3-events_unbound",
+    "cgroup": "/",
+    "voluntary_per_s": 4.83,
+    "involuntary_per_s": 0.01,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/u8:2-events_unbound",
+    "cgroup": "/",
+    "voluntary_per_s": 4.46,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/0:3-events",
+    "cgroup": "/",
+    "voluntary_per_s": 3.94,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/1:0-events",
+    "cgroup": "/",
+    "voluntary_per_s": 3.17,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/u8:1-events_power_efficient",
+    "cgroup": "/",
+    "voluntary_per_s": 1.65,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": ".gnome-shell-wr",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/org.gnome.Shell@user.service",
+    "voluntary_per_s": 1.33,
+    "involuntary_per_s": 0.1,
+    "cpu_pct": 0.033
+   },
+   {
+    "comm": "psimon",
+    "cgroup": "/",
+    "voluntary_per_s": 1.43,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": ".gvfs-afc-volum",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/gvfs-afc-volume-monitor.service",
+    "voluntary_per_s": 0.99,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "systemd-oomd",
+    "cgroup": "/system.slice/systemd-oomd.service",
+    "voluntary_per_s": 0.8,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.042
+   },
+   {
+    "comm": "python3",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/background.slice/sekka-agent-workloads.service",
+    "voluntary_per_s": 0.5,
+    "involuntary_per_s": 0.01,
+    "cpu_pct": 0.1
+   },
+   {
+    "comm": "rcuog/0",
+    "cgroup": "/",
+    "voluntary_per_s": 0.47,
+    "involuntary_per_s": 0.01,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "rcu_preempt",
+    "cgroup": "/",
+    "voluntary_per_s": 0.44,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "systemd-timesyn",
+    "cgroup": "/system.slice/systemd-timesyncd.service",
+    "voluntary_per_s": 0.4,
+    "involuntary_per_s": 0.02,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "rtkit-daemon",
+    "cgroup": "/system.slice/rtkit-daemon.service",
+    "voluntary_per_s": 0.28,
+    "involuntary_per_s": 0.07,
+    "cpu_pct": 0.0
+   }
+  ],
+  "top_cpu": [
+   {
+    "comm": "python3",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/background.slice/sekka-agent-workloads.service",
+    "cpu_pct": 0.1
+   },
+   {
+    "comm": "systemd-oomd",
+    "cgroup": "/system.slice/systemd-oomd.service",
+    "cpu_pct": 0.042
+   },
+   {
+    "comm": ".gnome-shell-wr",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/org.gnome.Shell@user.service",
+    "cpu_pct": 0.033
+   },
+   {
+    "comm": "ananicy-cpp",
+    "cgroup": "/system.slice/ananicy-cpp.service",
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "systemd",
+    "cgroup": "/init.scope",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/0:1-rcu_gp",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/1:2-cgroup_release",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/0:0H-kblockd",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/1:3-cgroup_free",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "power-profiles-",
+    "cgroup": "/system.slice/power-profiles-daemon.service",
+    "cpu_pct": 0.0
+   }
+  ],
+  "ppt_over_host_idle_w": -0.81
+ }
+}

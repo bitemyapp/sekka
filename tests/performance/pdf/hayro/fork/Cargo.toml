@@ -1,0 +1,35 @@
+# hayro as Shiori draws with it: bitemyapp/hayro at the revision
+# desktop/aizome/apps/shiori/Cargo.toml pins (branch aizome-perf), with
+# hayro-syntax's `unsafe` feature and the moxcms and zune-core forks the
+# Aizome workspace patches in. Cargo.lock started as a copy of
+# desktop/aizome/Cargo.lock, so every shared crate is at Shiori's version.
+[package]
+name = "pdfbench-hayro-fork"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "pdfbench-hayro-fork"
+path = "../main.rs"
+
+[dependencies]
+hayro = { git = "https://github.com/bitemyapp/hayro", rev = "a2e9e62bdeb6872745ee6f0c811760ba31d441e9" }
+hayro-syntax = { git = "https://github.com/bitemyapp/hayro", rev = "a2e9e62bdeb6872745ee6f0c811760ba31d441e9", features = ["unsafe"] }
+
+[patch.crates-io]
+moxcms = { git = "https://github.com/bitemyapp/moxcms", rev = "b63298023362c19b0ea5499c2c8d35802fc1adac" }
+zune-core = { git = "https://github.com/bitemyapp/zune-image", branch = "scaled-idct" }
+
+# As the Aizome workspace's release profile.
+[profile.release]
+debug = "line-tables-only"
+lto = false
+codegen-units = 4
+
+[workspace]
+
+# PDFium's pixel tests (pdfium_pixel_tests.py); not part of the timed runs.
+[[bin]]
+name = "pdfbench-hayro-fork-pixel"
+path = "../pixel_tests.rs"

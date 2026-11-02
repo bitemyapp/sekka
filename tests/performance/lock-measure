@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Run a measurement exclusively: no other measurement or gated build runs meanwhile.
+# Usage: lock-measure CMD [ARGS...]
+set -euo pipefail
+D=${PERF_LOCK_DIR:-${TMPDIR:-/tmp}/aizome-perf}
+mkdir -p "$D"
+# -o: the command doesn't inherit the locks, so nothing it leaves running
+# (a compositor its cleanup missed) can hold them after it exits.
+exec flock -o "$D/turnstile.lock" flock -o -x "$D/bench.lock" "$@"

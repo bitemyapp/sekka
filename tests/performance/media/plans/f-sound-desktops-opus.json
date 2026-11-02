@@ -1,0 +1,71 @@
+{
+ "rounds": 3,
+ "trials": [
+  {
+   "subject": "baseline",
+   "clip": null,
+   "mode": "playsound",
+   "sound": true
+  },
+  {
+   "subject": "utsushi",
+   "clip": "tos-1080p24-h264.mp4",
+   "mode": "playsound",
+   "sound": true
+  },
+  {
+   "subject": "mpv-vaapi-dmabuf",
+   "clip": "tos-1080p24-h264.mp4",
+   "mode": "playsound",
+   "sound": true
+  },
+  {
+   "subject": "mpv-default",
+   "clip": "tos-1080p24-h264.mp4",
+   "mode": "playsound",
+   "sound": true
+  },
+  {
+   "subject": "vlc-default",
+   "clip": "tos-1080p24-h264.mp4",
+   "mode": "playsound",
+   "sound": true
+  },
+  {
+   "subject": "showtime",
+   "clip": "tos-1080p24-h264.mp4",
+   "mode": "playsound",
+   "sound": true
+  },
+  {
+   "subject": "haruna",
+   "clip": "tos-1080p24-h264.mp4",
+   "mode": "playsound",
+   "sound": true
+  },
+  {
+   "subject": "baseline",
+   "clip": null,
+   "mode": "audio",
+   "sound": true
+  },
+  {
+   "subject": "utsushi",
+   "clip": "bbb-music.opus",
+   "mode": "audio",
+   "sound": true
+  },
+  {
+   "subject": "mpv-default",
+   "clip": "bbb-music.opus",
+   "mode": "audio",
+   "sound": true
+  },
+  {
+   "subject": "vlc-default",
+   "clip": "bbb-music.opus",
+   "mode": "audio",
+   "sound": true
+  }
+ ]
+}

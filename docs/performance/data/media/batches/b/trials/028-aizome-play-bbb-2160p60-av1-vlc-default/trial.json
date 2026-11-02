@@ -1,0 +1,405 @@
+{
+ "tag": "028-aizome-play-bbb-2160p60-av1-vlc-default",
+ "spec": {
+  "subject": "vlc-default",
+  "clip": "bbb-2160p60-av1.webm",
+  "round": 2
+ },
+ "started": "2026-11-02T08:34:05-0600",
+ "quiet": {
+  "busy_cores_before": 0.14,
+  "waited_s": 2.0,
+  "loadavg": [
+   "0.95",
+   "0.43",
+   "0.44"
+  ]
+ },
+ "session_up_s": null,
+ "window_after_s": 0.103,
+ "windows": [
+  {
+   "id": 1,
+   "app_id": "vlc",
+   "pid": 540999,
+   "fullscreen": true,
+   "geometry": {
+    "x": 0,
+    "y": 0,
+    "w": 1920,
+    "h": 1080
+   },
+   "title": "Big Buck Bunny, Sunflower version - VLC media player"
+  }
+ ],
+ "roles": {
+  "compositor": [
+   {
+    "pid": 540890,
+    "comm": "aizome",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome"
+   }
+  ],
+  "shell": [
+   {
+    "pid": 540903,
+    "comm": "aizome-shell",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome-shell"
+   }
+  ],
+  "xwayland": [
+   {
+    "pid": 540999,
+    "comm": ".xwayland-satel",
+    "exe": "/nix/store/q6k3hsmwr7wb8xinn3cypmkylkd5al6v-xwayland-satellite-0.8.3/bin/.xwayland-satellite-wrapped"
+   },
+   {
+    "pid": 541000,
+    "comm": "Xwayland",
+    "exe": "/nix/store/jwq2z1dhg11zldcyrq7bkmzlqv5lzij4-xwayland-24.1.14/bin/Xwayland"
+   }
+  ],
+  "dbus": [
+   {
+    "pid": 540889,
+    "comm": "dbus-daemon",
+    "exe": "/nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2/bin/dbus-daemon"
+   }
+  ],
+  "player": [
+   {
+    "pid": 541043,
+    "comm": ".vlc-wrapped",
+    "exe": "/nix/store/kjirqf9xqmzav2k3wl7wf9fmnqis9mb3-vlc-3.0.24/bin/.vlc-wrapped"
+   }
+  ]
+ },
+ "player_stats_before": {
+  "displayed": 264,
+  "lost": 22,
+  "video_decoded": 623,
+  "audio_played": 295,
+  "audio_lost": 0,
+  "audio_decoded": 590,
+  "position": 5
+ },
+ "compositor_stats": [
+  {
+   "name": "HEADLESS-1",
+   "frames_rendered": 3291,
+   "frames_skipped": 0,
+   "cpu_us": {
+    "p50": 71.0,
+    "p95": 116.0,
+    "p99": 219.0,
+    "max": 729.0,
+    "mean": 77.31965967790946
+   },
+   "gpu_us": {
+    "p50": 1443.0,
+    "p95": 1643.0,
+    "p99": 1746.0,
+    "max": 2113.0,
+    "mean": 1463.8301428137345
+   },
+   "samples": 3291
+  }
+ ],
+ "player_stats_after": {
+  "displayed": 3624,
+  "lost": 337,
+  "video_decoded": 7973,
+  "audio_played": 3358,
+  "audio_lost": 0,
+  "audio_decoded": 6716,
+  "position": 66
+ },
+ "power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 10,
+  "duration_s": 60.004,
+  "samples": 5866,
+  "energy_j": 1550.573,
+  "mean_w": 25.841,
+  "p10_w": 17.0,
+  "p50_w": 21.0,
+  "p90_w": 44.0,
+  "max_w": 93.0,
+  "system_busy_cpu_s": 39.23,
+  "exit": 0
+ },
+ "cpu": {
+  "compositor": {
+   "cpu_s": 0.4256,
+   "cpu_pct": 0.709,
+   "cpu_ticks_s": 0.43,
+   "vol_switches": 16898,
+   "invol_switches": 179,
+   "switches_per_s": 284.6,
+   "wakeups_per_s": 281.6
+  },
+  "shell": {
+   "cpu_s": 0.0473,
+   "cpu_pct": 0.079,
+   "cpu_ticks_s": 0.05,
+   "vol_switches": 3437,
+   "invol_switches": 36,
+   "switches_per_s": 57.9,
+   "wakeups_per_s": 57.3
+  },
+  "xwayland": {
+   "cpu_s": 0.1809,
+   "cpu_pct": 0.301,
+   "cpu_ticks_s": 0.18,
+   "vol_switches": 19942,
+   "invol_switches": 66,
+   "switches_per_s": 333.4,
+   "wakeups_per_s": 332.3
+  },
+  "dbus": {
+   "cpu_s": 0.0012,
+   "cpu_pct": 0.002,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 46,
+   "invol_switches": 0,
+   "switches_per_s": 0.8,
+   "wakeups_per_s": 0.8
+  },
+  "player": {
+   "cpu_s": 30.8744,
+   "cpu_pct": 51.454,
+   "cpu_ticks_s": 30.88,
+   "vol_switches": 667572,
+   "invol_switches": 4287,
+   "switches_per_s": 11196.9,
+   "wakeups_per_s": 11125.5
+  }
+ },
+ "gpu": {
+  "compositor": {
+   "engine_ns": {
+    "gfx": 4756894341,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "shell": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "xwayland": {
+   "engine_ns": {
+    "gfx": 0,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "dbus": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "player": {
+   "engine_ns": {
+    "gfx": 9742344777,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  }
+ },
+ "igpu": {
+  "busy_pct_mean": 26.11,
+  "busy_samples": 601,
+  "sclk_mhz_mean": 1049.9,
+  "tctl_c_mean": 41.85
+ },
+ "player_memory": {
+  "rss_kib": 759740,
+  "pss_kib": 689528,
+  "pss_anon_kib": 619072,
+  "pss_file_kib": 62350,
+  "pss_shmem_kib": 8106,
+  "swap_kib": 0
+ },
+ "player_threads": {
+  "541043": {
+   "541043": ".vlc-wrapped",
+   "541045": ".vlc-wrapped",
+   "541046": ".vlc-wrapped",
+   "541047": ".vlc-wrapped",
+   "541052": ".vlc-wrapped",
+   "541053": "QDBusConnection",
+   "541054": "QXcbEventQueue",
+   "541057": "[pango] fontcon",
+   "541060": "vlc:cs0",
+   "541061": "vlc:disk$0",
+   "541062": "vlc:sh0",
+   "541063": "vlc:sh_opt0",
+   "541065": "pool-spawner",
+   "541066": "gmain",
+   "541067": "gdbus",
+   "541072": ".vlc-wrapped",
+   "541073": "vlc:disk$0",
+   "541074": "vlc:sh0",
+   "541075": "vlc:sh_opt0",
+   "541076": ".vlc-wrapped",
+   "541081": "dav1d-worker",
+   "541082": "dav1d-worker",
+   "541083": "dav1d-worker",
+   "541084": "dav1d-worker",
+   "541085": "dav1d-worker",
+   "541086": "dav1d-worker",
+   "541087": ".vlc-wrapped",
+   "541088": ".vlc-wrapped",
+   "541090": ".vlc-wrapped",
+   "541091": ".vlc-wrapped",
+   "541092": "vlc:disk$0",
+   "541093": "vlc:sh0",
+   "541094": "vlc:sh_opt0",
+   "541095": "vlc:traceq0",
+   "541096": "vlc:gdrv0",
+   "541097": "vlc:gl0",
+   "541098": "vlc:traceq0",
+   "541099": "vlc:traceq0",
+   "541100": "vlc:sh1"
+  }
+ },
+ "player_alive": true,
+ "compositor_memory": {
+  "rss_kib": 122016,
+  "pss_kib": 64706,
+  "pss_anon_kib": 23744,
+  "pss_file_kib": 40640,
+  "pss_shmem_kib": 322,
+  "swap_kib": 0
+ },
+ "player_switches_by_thread": {
+  ".vlc-wrapped": [
+   25647,
+   1219,
+   8448.1
+  ],
+  "QDBusConnection": [
+   0,
+   0,
+   0.0
+  ],
+  "QXcbEventQueue": [
+   0,
+   0,
+   0.0
+  ],
+  "[pango] fontcon": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:cs0": [
+   6583,
+   27,
+   107.4
+  ],
+  "vlc:disk$0": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:sh0": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:sh_opt0": [
+   0,
+   0,
+   0.0
+  ],
+  "pool-spawner": [
+   0,
+   0,
+   0.0
+  ],
+  "gmain": [
+   0,
+   0,
+   0.0
+  ],
+  "gdbus": [
+   0,
+   0,
+   0.0
+  ],
+  "541068": [
+   0,
+   0,
+   0.0
+  ],
+  "541069": [
+   0,
+   0,
+   0.0
+  ],
+  "541070": [
+   0,
+   0,
+   0.0
+  ],
+  "541071": [
+   0,
+   0,
+   0.0
+  ],
+  "dav1d-worker": [
+   635342,
+   3041,
+   22318.9
+  ],
+  "vlc:traceq0": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:gdrv0": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:gl0": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:sh1": [
+   0,
+   0,
+   0.0
+  ]
+ },
+ "ok": true,
+ "loadavg_after": [
+  "0.98",
+  "0.54",
+  "0.47"
+ ]
+}

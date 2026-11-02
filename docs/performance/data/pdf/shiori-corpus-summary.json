@@ -1,0 +1,36 @@
+{
+ "runs": 3,
+ "files": 1012,
+ "completed_in_every_run": 995,
+ "per_file_ms_completed": {
+  "p50": 3.0,
+  "p90": 7.0,
+  "p99": 51.4,
+  "max": 282.0
+ },
+ "total_s_completed": 5.42,
+ "not_completed": {
+  "open-failed": [
+   "Brotli-Prototype-FileA.pdf: open-failed Format(\"it's damaged, or not a PDF\")",
+   "REDHAT-1531897-0.pdf: open-failed Format(\"it's damaged, or not a PDF\")",
+   "bug1020226.pdf: open-failed Format(\"it's damaged, or not a PDF\")",
+   "bug1782186.pdf: open-failed Password { tried: false }",
+   "issue15590.pdf: open-failed Format(\"it's damaged, or not a PDF\")",
+   "issue15893_reduced.pdf: open-failed Format(\"it's damaged, or not a PDF\")",
+   "issue21579.pdf: open-failed Password { tried: false }",
+   "issue3371.pdf: open-failed Password { tried: false }",
+   "issue6010_1.pdf: open-failed Password { tried: false }",
+   "issue6010_2.pdf: open-failed Password { tried: false }",
+   "issue9105_other.pdf: open-failed Format(\"it's damaged, or not a PDF\")",
+   "poppler-742-0-fuzzed.pdf: open-failed Format(\"it's damaged, or not a PDF\")",
+   "poppler-937-0-fuzzed.pdf: open-failed Format(\"it's damaged, or not a PDF\")",
+   "pr6531_1.pdf: open-failed Password { tried: false }",
+   "print_protection.pdf: open-failed Password { tried: false }",
+   "saslprep-r6.pdf: open-failed Password { tried: false }"
+  ],
+  "0 pages": [
+   "poppler-85140-0.pdf: 0 pages"
+  ]
+ },
+ "outcomes_differ_between_runs": []
+}

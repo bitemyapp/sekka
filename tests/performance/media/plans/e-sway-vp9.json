@@ -1,0 +1,53 @@
+{
+ "rounds": 3,
+ "trials": [
+  {
+   "subject": "baseline",
+   "clip": null,
+   "compositor": "sway"
+  },
+  {
+   "subject": "utsushi",
+   "clip": "tos-1080p24-h264.mp4",
+   "compositor": "sway"
+  },
+  {
+   "subject": "mpv-vaapi-dmabuf",
+   "clip": "tos-1080p24-h264.mp4",
+   "compositor": "sway"
+  },
+  {
+   "subject": "vlc-default",
+   "clip": "tos-1080p24-h264.mp4",
+   "compositor": "sway"
+  },
+  {
+   "subject": "baseline",
+   "clip": null
+  },
+  {
+   "subject": "utsushi",
+   "clip": "tos-1080p24-vp9.webm"
+  },
+  {
+   "subject": "mpv-vaapi-dmabuf",
+   "clip": "tos-1080p24-vp9.webm"
+  },
+  {
+   "subject": "mpv-default",
+   "clip": "tos-1080p24-vp9.webm"
+  },
+  {
+   "subject": "vlc-default",
+   "clip": "tos-1080p24-vp9.webm"
+  },
+  {
+   "subject": "utsushi",
+   "clip": "tos-1080p24-av1.webm"
+  },
+  {
+   "subject": "vlc-default",
+   "clip": "tos-1080p24-av1.webm"
+  }
+ ]
+}

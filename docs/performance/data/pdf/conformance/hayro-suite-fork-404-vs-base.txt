@@ -1,0 +1,24 @@
+# The fork's raster tests whose reference images can no longer be downloaded, drawn by the fork and by its base 8558a8a5 (cargo test -- --store --exact ...), compared page by page: test, % of pixels on its worst page whose largest channel difference exceeds 48, the largest difference.
+issue_typst_7269 0.027 66
+pdfbox_1915_13 0.0 174
+pdfbox_2171 0.002 51
+pdfbox_3500 0.0 47
+pdfbox_3622 0.001 145
+pdfbox_488 0.0 44
+pdfbox_5296 0.016 105
+pdfbox_5310 0.0 34
+pdfbox_5802 0.0 51
+pdfbox_5952 0.003 57
+pdfium_40643674 0.009 57
+pdfjs_High_Pressure_Measurement_WP_001287 0.17 67
+pdfjs_bug1703683 0.0 2
+pdfjs_bug1795263 0.0 48
+pdfjs_issue11473 0.0 29
+pdfjs_issue16127 0.0 35
+pdfjs_issue16444 0.158 125
+pdfjs_issue18466 0.0 28
+pdfjs_issue6231_1 0.0 36
+pdfjs_issue6737 0.073 198
+pdftc_100l_0138 0.0 33
+pdftc_100l_1731 0.0 49
+pdftc_900k_0007_page_4 0.0 47

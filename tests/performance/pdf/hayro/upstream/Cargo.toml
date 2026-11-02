@@ -1,0 +1,28 @@
+# hayro upstream (LaurenzV/hayro main) at the revision measured, with the same
+# features as the fork's build (hayro's defaults, hayro-syntax's `unsafe`)
+# and the same release profile.
+[package]
+name = "pdfbench-hayro-upstream"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "pdfbench-hayro-upstream"
+path = "../main.rs"
+
+[dependencies]
+hayro = { git = "https://github.com/LaurenzV/hayro", rev = "04a801ded77c2018af0dfde88f03277d241d26e9" }
+hayro-syntax = { git = "https://github.com/LaurenzV/hayro", rev = "04a801ded77c2018af0dfde88f03277d241d26e9", features = ["unsafe"] }
+
+[profile.release]
+debug = "line-tables-only"
+lto = false
+codegen-units = 4
+
+[workspace]
+
+# PDFium's pixel tests (conformance/pdfium_pixel_tests.py); not part of the timed runs.
+[[bin]]
+name = "pdfbench-hayro-upstream-pixel"
+path = "../pixel_tests.rs"

@@ -1,0 +1,219 @@
+{
+ "tag": "032-aizome-pause-none-baseline",
+ "spec": {
+  "subject": "baseline",
+  "clip": null,
+  "mode": "pause",
+  "sound": true,
+  "window_s": 30,
+  "round": 2
+ },
+ "started": "2026-11-02T04:25:00-0600",
+ "quiet": {
+  "busy_cores_before": 0.115,
+  "waited_s": 2.0,
+  "loadavg": [
+   "0.07",
+   "0.13",
+   "0.15"
+  ]
+ },
+ "session_up_s": null,
+ "roles": {
+  "compositor": [
+   {
+    "pid": 292950,
+    "comm": "aizome",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome"
+   }
+  ],
+  "shell": [
+   {
+    "pid": 292962,
+    "comm": "aizome-shell",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome-shell"
+   }
+  ],
+  "dbus": [
+   {
+    "pid": 292949,
+    "comm": "dbus-daemon",
+    "exe": "/nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2/bin/dbus-daemon"
+   }
+  ],
+  "pw:pipewire": [
+   {
+    "pid": 2310,
+    "comm": "pipewire",
+    "exe": "/nix/store/n8ksprmibzglf09aavw7mcl4n9767axm-pipewire-1.6.9/bin/pipewire"
+   }
+  ],
+  "pw:pipewire-pulse": [
+   {
+    "pid": 2311,
+    "comm": "pipewire-pulse",
+    "exe": "/nix/store/n8ksprmibzglf09aavw7mcl4n9767axm-pipewire-1.6.9/bin/pipewire"
+   }
+  ],
+  "pw:wireplumber": [
+   {
+    "pid": 2312,
+    "comm": "wireplumber",
+    "exe": "/nix/store/dryjzhq5m2jah4rg5rri6fg8yjrv6y8i-wireplumber-0.5.18/bin/wireplumber"
+   }
+  ]
+ },
+ "player_stats_before": null,
+ "compositor_stats": [
+  {
+   "name": "HEADLESS-1",
+   "frames_rendered": 0,
+   "frames_skipped": 0,
+   "cpu_us": {
+    "p50": 0.0,
+    "p95": 0.0,
+    "p99": 0.0,
+    "max": 0.0,
+    "mean": 0.0
+   },
+   "gpu_us": null,
+   "samples": 0
+  }
+ ],
+ "player_stats_after": null,
+ "power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 10,
+  "duration_s": 30.003,
+  "samples": 2916,
+  "energy_j": 545.018,
+  "mean_w": 18.165,
+  "p10_w": 17.0,
+  "p50_w": 18.0,
+  "p90_w": 20.0,
+  "max_w": 36.0,
+  "system_busy_cpu_s": 4.2,
+  "exit": 0
+ },
+ "cpu": {
+  "compositor": {
+   "cpu_s": 0.0044,
+   "cpu_pct": 0.015,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 201,
+   "invol_switches": 0,
+   "switches_per_s": 6.7,
+   "wakeups_per_s": 6.7
+  },
+  "shell": {
+   "cpu_s": 0.0262,
+   "cpu_pct": 0.087,
+   "cpu_ticks_s": 0.02,
+   "vol_switches": 1656,
+   "invol_switches": 30,
+   "switches_per_s": 56.2,
+   "wakeups_per_s": 55.2
+  },
+  "dbus": {
+   "cpu_s": 0.0,
+   "cpu_pct": 0.0,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 0,
+   "invol_switches": 0,
+   "switches_per_s": 0.0,
+   "wakeups_per_s": 0.0
+  },
+  "pw:pipewire": {
+   "cpu_s": 0.0,
+   "cpu_pct": 0.0,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 0,
+   "invol_switches": 0,
+   "switches_per_s": 0.0,
+   "wakeups_per_s": 0.0
+  },
+  "pw:pipewire-pulse": {
+   "cpu_s": 0.0,
+   "cpu_pct": 0.0,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 0,
+   "invol_switches": 0,
+   "switches_per_s": 0.0,
+   "wakeups_per_s": 0.0
+  },
+  "pw:wireplumber": {
+   "cpu_s": 0.0,
+   "cpu_pct": 0.0,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 0,
+   "invol_switches": 0,
+   "switches_per_s": 0.0,
+   "wakeups_per_s": 0.0
+  }
+ },
+ "gpu": {
+  "compositor": {
+   "engine_ns": {
+    "gfx": 0,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "shell": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "dbus": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "pw:pipewire": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "pw:pipewire-pulse": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "pw:wireplumber": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  }
+ },
+ "igpu": {
+  "busy_pct_mean": 0.0,
+  "busy_samples": 301,
+  "sclk_mhz_mean": 600.0
+ },
+ "compositor_memory": {
+  "rss_kib": 120396,
+  "pss_kib": 82048,
+  "pss_anon_kib": 23372,
+  "pss_file_kib": 58468,
+  "pss_shmem_kib": 208,
+  "swap_kib": 0
+ },
+ "player_switches_by_thread": {},
+ "ok": true,
+ "loadavg_after": [
+  "0.04",
+  "0.11",
+  "0.14"
+ ]
+}

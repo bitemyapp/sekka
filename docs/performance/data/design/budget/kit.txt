@@ -1,0 +1,130 @@
+# cargo test --release -p aizome-kit --test perf -- --ignored --nocapture --test-threads 1
+# 2026-11-02T07:24:05-06:00; load 24.24 9.27 3.61; AIZOME_FONT_DIR=b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts
+Using saved setting for 'extra-substituters = https://cache.sekka.computer https://cache.numtide.com?priority=55' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = cache.sekka.computer-1:JJsOkmRt3iCwjvJrol8x2a7euU+kMV7iHaDSFzofA+Y= niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=' from ~/.local/share/nix/trusted-settings.json.
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+copying path '/nix/store/zk3da6mr6l2nihqra94nn6h26cfb6bfs-ffmpeg-9.0.2-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/yxzfyllyg8ghjpywdv8z9489d32mjq4x-wayland-1.26.0-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/6vckl9z0k08nadkalhw777i9wwjki4cj-clang-21.1.8-lib' from 'https://cache.nixos.org'...
+copying path '/nix/store/sw7grjplsgbrn881pdxhcl05mijsfj93-libsecret-0.21.7-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/1sf33724ai5nydnck9ndwrd785faarsy-just-1.58.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/10y1l1vdmldglcdpr3sfkgzqvcp1al67-rust-analyzer-unwrapped-2026-10-26' from 'https://cache.nixos.org'...
+copying path '/nix/store/mv3d5izxzch9splhhp63nj6k0j572j6q-rust-lib-src' from 'https://cache.nixos.org'...
+copying path '/nix/store/mabgbkgz9pyaw5pdzmwmp3rb9n1hsd5j-mold-unwrapped-3.0.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/9dsg7mbd3v3l0dcr6sx2wz2bjbks72zp-libcap-2.78-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/9d5hldsjq3zz3s7rk3m357948vmcl1qh-clippy-1.99.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/l8a9m498a7vbpd3i04hwjmbbml2lwjzr-libpulseaudio-17.0-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/nif3bbb67gxbjd5gnysrvqr5aj45w0fv-seatd-0.9.3-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/zazxxaxz9ym0v9cyfkm2mwianzip8c6z-seatd-0.9.3-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/ni76h2hpjsa7j93whs86cbymnwbn7kdv-rust-analyzer-2026-10-26' from 'https://cache.nixos.org'...
+copying path '/nix/store/c761q93rp3m4qyg71w2d5dwynha1kr97-mold-unwrapped-wrapper-3.0.0' from 'https://cache.nixos.org'...
+building '/nix/store/64j7p6wj4lslxg4dsbw094pizhnnkgpf-hotaru-development-terminfo.drv'...
+copying path '/nix/store/wra7pnc8v3vk7xl597kq79bbmvncxz8j-clang-21.1.8' from 'https://cache.nixos.org'...
+copying path '/nix/store/i52d7j6ma8bh4ggg4r2hl4af7bychdpa-clang-wrapper-21.1.8' from 'https://cache.nixos.org'...
+copying path '/nix/store/bd4k8ccmaqawip2azms7l9ajwcrzz19q-rust-bindgen-hook' from 'https://cache.nixos.org'...
+building '/nix/store/vgwwdbm2m6l25i0mzcn3z32lrknpacb4-nix-shell-env.drv'...
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+   Compiling log v0.4.34
+   Compiling syn v3.0.9
+   Compiling syn v2.0.119
+   Compiling strict-num v0.1.1
+   Compiling winnow v1.0.4
+   Compiling kurbo v0.13.1
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling thiserror-impl v1.0.69
+   Compiling zerocopy-derive v0.8.63
+   Compiling synstructure v0.14.0
+   Compiling thiserror v1.0.69
+   Compiling calloop v0.13.0
+   Compiling zerofrom-derive v0.1.8
+   Compiling yoke-derive v0.8.4
+   Compiling zerovec-derive v0.11.6
+   Compiling bytemuck_derive v1.12.1
+   Compiling displaydoc v0.2.7
+   Compiling linearize-derive v0.2.2
+   Compiling thiserror-impl v2.0.21
+   Compiling serde_derive v1.0.229
+   Compiling kbvm-proc v0.3.0
+   Compiling zerocopy v0.8.63
+   Compiling calloop-wayland-source v0.3.0
+   Compiling smithay-client-toolkit v0.19.2
+   Compiling linearize v0.1.8
+   Compiling zerofrom v0.1.8
+   Compiling yoke v0.8.3
+   Compiling bytemuck v1.25.2
+   Compiling thiserror v2.0.21
+   Compiling kbvm v0.2.0
+   Compiling zerovec v0.11.8
+   Compiling zerotrie v0.2.5
+   Compiling font-types v0.12.7
+   Compiling tiny-skia-path v0.12.0
+   Compiling read-fonts v0.41.0
+   Compiling tiny-skia v0.12.0
+   Compiling tinystr v0.8.4
+   Compiling potential_utf v0.1.6
+   Compiling serde v1.0.229
+   Compiling icu_collections v2.3.0
+   Compiling icu_locale_core v2.3.0
+   Compiling aizome-theme v0.1.0 (/home/callen/work/sekka-performance-page/desktop/aizome/crates/aizome-theme)
+   Compiling aizome-shell-proto v0.1.0 (/home/callen/work/sekka-performance-page/desktop/aizome/crates/aizome-shell-proto)
+   Compiling aizome-config v0.1.0 (/home/callen/work/sekka-performance-page/desktop/aizome/crates/aizome-config)
+   Compiling icu_provider v2.3.1
+   Compiling icu_properties v2.3.0
+   Compiling icu_locale_fallback v2.3.0
+   Compiling icu_normalizer v2.3.0
+   Compiling icu_segmenter v2.3.0
+   Compiling half v2.7.1
+   Compiling tiff v0.11.3
+   Compiling parley_data v0.11.1
+   Compiling image v0.25.10
+   Compiling skrifa v0.44.0
+   Compiling fontique v0.11.1
+   Compiling harfrust v0.12.0
+   Compiling swash v0.2.10
+   Compiling parley v0.11.1
+   Compiling sidestep-engine v0.0.1 (/home/callen/work/sekka-performance-page/desktop/aizome/sukumo/crates/sidestep-engine)
+   Compiling sidestep-ui v0.0.1 (/home/callen/work/sekka-performance-page/desktop/aizome/sukumo/crates/sidestep-ui)
+   Compiling aizome-kit v0.1.0 (/home/callen/work/sekka-performance-page/desktop/aizome/crates/aizome-kit)
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/aizome-kit/src/urls.rs:184:14
+    |
+184 |             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < LIMIT).then_some(n + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+184 -             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < LIMIT).then_some(n + 1))
+184 +             .try_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < LIMIT).then_some(n + 1))
+    |
+
+warning: `aizome-kit` (lib) generated 1 warning (run `cargo fix --lib -p aizome-kit` to apply 1 suggestion)
+    Finished `release` profile [optimized + debuginfo] target(s) in 32.81s
+     Running tests/perf.rs (/tmp/claude-1000/perf/design-comp-target/release/deps/perf-f15d7acee36b285d)
+
+running 1 test
+test interactions_stay_within_four_milliseconds ... | Interaction | p50 ms | p95 ms | max ms |
+|---|---|---|---|
+    handling 1 µs, drawing 8 µs, damage 4193 pt² a frame (means)
+| Hover a button (settings pane, ~200 widgets) | 0.01 | 0.01 | 0.08 |
+    handling 31 µs, drawing 3 µs, damage 1267 pt² a frame (means)
+| Toggle a switch (update, view, layout, diff) | 0.03 | 0.04 | 0.06 |
+    handling 37 µs, drawing 23 µs, damage 36150 pt² a frame (means)
+| Type a character in a text field | 0.06 | 0.07 | 0.18 |
+    handling 80 µs, drawing 167 µs, damage 75960 pt² a frame (means)
+| Type a character in a 2,000-line editor | 0.22 | 0.37 | 1.75 |
+    handling 68 µs, drawing 50 µs, damage 68400 pt² a frame (means)
+| Scroll a 10,000-row list one notch (rows moved, the strip drawn) | 0.12 | 0.16 | 0.30 |
+    handling 53 µs, drawing 38 µs, damage 69120 pt² a frame (means)
+| Move a 10,000-row list's selection by a row | 0.09 | 0.11 | 0.13 |
+| (Offscreen buffer for a whole 2880 × 1800 frame: allocation and copy only) | 0.13 | 2.75 | 3.35 |
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+

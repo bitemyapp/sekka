@@ -1,0 +1,15 @@
+renderer gles, output 3840x2160@2
+recovery: open, cold         frames    1 skipped   0  cpu p50 1.429 p95 1.429 p99 1.429 max 1.429 mean 1.429 ms  gpu p50 0.026 p99 0.026
+idle (2s)                    frames    0 skipped   0  cpu p50 0.000 p95 0.000 p99 0.000 max 0.000 mean 0.000 ms
+move a window (240 steps)    frames  226 skipped   0  cpu p50 0.481 p95 0.531 p99 2.064 max 2.170 mean 0.467 ms  gpu p50 0.043 p99 0.104
+animating client (3s)        frames  175 skipped   0  cpu p50 0.356 p95 0.378 p99 0.383 max 2.036 mean 0.300 ms  gpu p50 0.050 p99 0.177
+desk switches (12, sliding)  frames   27 skipped   1  cpu p50 0.445 p95 0.522 p99 0.599 max 0.599 mean 0.399 ms  gpu p50 0.330 p99 1.834
+overview open/close (8)      frames   31 skipped   0  cpu p50 0.931 p95 2.336 p99 2.825 max 2.825 mean 0.998 ms  gpu p50 0.266 p99 2.421
+10 windows, one moving       frames  109 skipped   0  cpu p50 0.666 p95 0.769 p99 2.164 max 2.205 mean 0.686 ms  gpu p50 0.415 p99 2.689
+recovery: open/close (8)     frames   16 skipped   7  cpu p50 0.700 p95 2.687 p99 2.687 max 2.687 mean 0.870 ms  gpu p50 0.450 p99 1.332
+recovery: list updating (5s) frames    0 skipped   5  cpu p50 0.000 p95 0.000 p99 0.000 max 0.000 mean 0.000 ms
+recovery: keys moving (20)   frames    3 skipped   1  cpu p50 0.814 p95 0.871 p99 0.871 max 0.871 mean 0.678 ms  gpu p50 0.590 p99 0.773
+frost: window moving under (Full) frames  209 skipped   0  cpu p50 0.741 p95 0.884 p99 2.335 max 2.474 mean 0.713 ms  gpu p50 0.331 p99 2.617
+frost: client drawing under (Full) frames  172 skipped   0  cpu p50 0.613 p95 0.648 p99 2.210 max 2.260 mean 0.542 ms  gpu p50 0.097 p99 0.168
+full-screen client (3s)      frames  176 skipped   0  cpu p50 0.126 p95 0.315 p99 0.482 max 2.004 mean 0.200 ms  gpu p50 0.041 p99 0.126
+recovery over it (3s)        frames    2 skipped   4  cpu p50 0.469 p95 0.626 p99 0.626 max 0.626 mean 0.547 ms  gpu p50 0.084 p99 0.361

@@ -15,7 +15,7 @@ use std::fmt::Write;
 
 /// A page's opening window: its tab names the page, and the frame holds
 /// the page's one h1.
-fn head(tab: &str, body: &str, class: &str) -> String {
+pub(crate) fn head(tab: &str, body: &str, class: &str) -> String {
     format!(
         r#"<section class="window focus page-head {class}"><div class="tab" aria-hidden="true">{}</div><div class="frame">{body}</div></section>"#,
         esc(tab)
@@ -141,9 +141,9 @@ pub fn home(site: &Site) -> Result<Page> {
         (
             "idea-fast",
             "Fast by construction",
-            "Integer scaling, opaque surfaces, redraws of only what changed, and a 4 ms budget for every frame of the desktop and its apps. The GPU composites, with a software fallback that looks the same.",
-            "/design/#fast",
-            "The numbers",
+            "Integer scaling, opaque surfaces, redraws of only what changed, and a 4 ms budget for every frame of the desktop and its apps. Its apps show a window in 19 ms; left alone, the desktop draws one frame a minute, for its clock.",
+            "/performance/",
+            "Measured against GNOME and KDE",
         ),
     ] {
         b += &win(
@@ -891,7 +891,8 @@ pub fn design(site: &Site) -> Result<Page> {
 <tr><th scope="row">Hako: ↓ in a column of 10,000 files</th><td>2.28</td><td>2.44</td></tr>
 <tr><th scope="row">Myaku: a new reading of 600 processes</th><td>2.61</td><td>2.99</td></tr>
 <tr><th scope="row">The login screen: typing a password</th><td>0.06</td><td>0.07</td></tr>
-</tbody></table></div>"#,
+</tbody></table></div>
+<p>The same desktop measured against GNOME, KDE Plasma and the programs people use beside it, with the data: <a href="/performance/">Performance</a>.</p>"#,
     );
     Ok(Page {
         path: "/design/".into(),

@@ -340,6 +340,44 @@ code { font-size: 0.88em; color: var(--text); overflow-wrap: anywhere; }
 .numbers td, .numbers thead th:not(:first-child) { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .numbers td:last-child, .numbers th:last-child { padding-right: 0; }
 
+/* Performance: bar charts drawn when the site is built (chart.rs). Aizome's
+   bars are amber, the others its quieter text colour; the labels and values
+   are text colours. */
+.chart { margin: 1.6em 0 0; min-width: 0; }
+.chart-title { font-weight: 650; margin: 0 0 0.5em; }
+.chart-scroll { overflow-x: auto; }
+.chart-svg { display: block; width: 100%; min-width: 0; max-width: 760px; height: auto; }
+.chart-label { fill: var(--text2); font-family: var(--sans); font-size: 14px; }
+.chart-label-ours { fill: var(--text); font-weight: 700; }
+.chart-value { fill: var(--text2); font-family: var(--mono); font-size: 13px; }
+.bar-ours { fill: var(--amber); }
+.bar-other { fill: var(--text3); fill-opacity: 0.7; }
+.chart-base { stroke: var(--line2); stroke-width: 1; }
+.chart-hit { fill: transparent; }
+.chart-row:hover .chart-hit { fill: var(--raised); }
+.chart-caption { color: var(--text3); font-size: 0.85rem; margin: 0.6em 0 0; max-width: 80ch; }
+.chart-table { margin-top: 0.4em; font-size: 0.9rem; }
+.chart-table summary { cursor: pointer; color: var(--blue); width: max-content; }
+.chart-table .numbers { margin-top: 0.4em; }
+.chart-note { white-space: normal !important; text-align: left !important; font-family: var(--sans) !important; color: var(--text3); font-size: 0.85rem; }
+.charts { display: grid; gap: 0 var(--pad); grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); }
+.charts + p, .chart + p, .table-wrap + p { margin-top: 1.4em; }
+.decisions { margin: 1.2em 0 0; padding-left: 1.4em; display: grid; gap: 0.8em; max-width: 80ch; }
+.decisions li::marker { color: var(--text3); font-family: var(--mono); }
+.costs { margin: 1.2em 0 0; padding-left: 1.2em; display: grid; gap: 0.7em; max-width: 80ch; }
+.costs li::marker { color: var(--text3); }
+.multiples { grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 0 calc(var(--pad) * 0.75); }
+.multiples .chart { margin-top: 0.6em; }
+.multiples .chart-title { font-weight: 600; font-size: 0.92rem; color: var(--text2); margin-bottom: 0.2em; }
+.multiples + .table-wrap, .charts + .table-wrap { margin-top: 1.2em; }
+.apps-table tr.ours td.app-name { font-weight: 700; color: var(--text); }
+.apps-table td.app-name { text-align: left; font-family: var(--sans); }
+.stats { list-style: none; margin: 1.6em 0 0; padding: 0; display: grid; gap: 1px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); background: var(--line); border: 1px solid var(--line); }
+.stat { background: var(--surface); padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.stat-value { font-size: clamp(1.6rem, 1.3rem + 1vw, 2.1rem); font-weight: 650; line-height: 1.1; color: var(--text); }
+.stat-label { font-size: 0.88rem; color: var(--text2); }
+.stat-label a { color: var(--blue); }
+
 /* Home */
 .hero > .frame { padding: clamp(24px, 4vw, 56px); }
 .lockup {

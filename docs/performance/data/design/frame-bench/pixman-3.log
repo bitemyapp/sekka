@@ -1,0 +1,22 @@
+Using saved setting for 'extra-substituters = https://cache.sekka.computer https://cache.numtide.com?priority=55' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = cache.sekka.computer-1:JJsOkmRt3iCwjvJrol8x2a7euU+kMV7iHaDSFzofA+Y= niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=' from ~/.local/share/nix/trusted-settings.json.
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+[2m2026-11-02T16:52:19.907075Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:52:19.909478Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:52:19.909706Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:52:19.909767Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:52:19.909902Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:52:19.909953Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:52:19.910072Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:52:19.910118Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:52:19.910231Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:52:19.910283Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:52:19.910443Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:52:19.910492Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese

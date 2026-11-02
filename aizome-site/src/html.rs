@@ -33,14 +33,16 @@ pub enum Menu {
     Apps,
     Keys,
     Design,
+    Performance,
     Install,
 }
 
-pub const MENUS: [(Menu, &str, &str); 5] = [
+pub const MENUS: [(Menu, &str, &str); 6] = [
     (Menu::Desktop, "/desktop/", "Desktop"),
     (Menu::Apps, "/apps/", "Apps"),
     (Menu::Keys, "/keys/", "Keys"),
     (Menu::Design, "/design/", "Design"),
+    (Menu::Performance, "/performance/", "Performance"),
     (Menu::Install, "/install/", "Install"),
 ];
 

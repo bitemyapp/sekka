@@ -1,0 +1,12 @@
+{"demo":"bench-scroll","mode":"moved","rep":1,"seconds":30,"cpu_ticks":127,"clk_tck":100,"load":"1.48 0.96 0.66"}
+{"demo":"bench-scroll","mode":"redraw","rep":1,"seconds":30,"cpu_ticks":253,"clk_tck":100,"load":"0.76 0.84 0.63"}
+{"demo":"bench-scroll-editor","mode":"moved","rep":1,"seconds":30,"cpu_ticks":172,"clk_tck":100,"load":"0.44 0.75 0.61"}
+{"demo":"bench-scroll-editor","mode":"redraw","rep":1,"seconds":30,"cpu_ticks":253,"clk_tck":100,"load":"0.60 0.76 0.62"}
+{"demo":"bench-scroll","mode":"moved","rep":2,"seconds":30,"cpu_ticks":150,"clk_tck":100,"load":"0.31 0.66 0.59"}
+{"demo":"bench-scroll","mode":"redraw","rep":2,"seconds":30,"cpu_ticks":273,"clk_tck":100,"load":"0.23 0.59 0.57"}
+{"demo":"bench-scroll-editor","mode":"moved","rep":2,"seconds":30,"cpu_ticks":156,"clk_tck":100,"load":"0.39 0.60 0.57"}
+{"demo":"bench-scroll-editor","mode":"redraw","rep":2,"seconds":30,"cpu_ticks":282,"clk_tck":100,"load":"0.31 0.55 0.56"}
+{"demo":"bench-scroll","mode":"moved","rep":3,"seconds":30,"cpu_ticks":152,"clk_tck":100,"load":"0.30 0.52 0.54"}
+{"demo":"bench-scroll","mode":"redraw","rep":3,"seconds":30,"cpu_ticks":259,"clk_tck":100,"load":"0.15 0.45 0.52"}
+{"demo":"bench-scroll-editor","mode":"moved","rep":3,"seconds":30,"cpu_ticks":147,"clk_tck":100,"load":"0.13 0.41 0.50"}
+{"demo":"bench-scroll-editor","mode":"redraw","rep":3,"seconds":30,"cpu_ticks":298,"clk_tck":100,"load":"0.07 0.36 0.48"}

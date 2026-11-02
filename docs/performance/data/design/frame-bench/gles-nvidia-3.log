@@ -1,0 +1,22 @@
+Using saved setting for 'extra-substituters = https://cache.sekka.computer https://cache.numtide.com?priority=55' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = cache.sekka.computer-1:JJsOkmRt3iCwjvJrol8x2a7euU+kMV7iHaDSFzofA+Y= niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=' from ~/.local/share/nix/trusted-settings.json.
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+[2m2026-11-02T16:51:28.885795Z[0m [33m WARN[0m [2msmithay::backend::drm::device::fd[0m[2m:[0m Unable to become drm master, assuming unprivileged mode
+[2m2026-11-02T16:51:29.033354Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:51:29.035758Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:51:29.035981Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:51:29.036041Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:51:29.036172Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:51:29.036224Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:51:29.036341Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:51:29.036387Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:51:29.036501Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:51:29.036552Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:51:29.036723Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese
+[2m2026-11-02T16:51:29.036776Z[0m [33m WARN[0m [2micu_provider::error[0m[2m:[0m ICU4X data error: No segmentation model for complex script: Chinese/Japanese

@@ -1,0 +1,139 @@
+{
+ "date": "2026-11-02T06:31:47-0600",
+ "note": "A second snapshot of the same live session four hours after live-session.json (the compositor and shell had not restarted): their CPU time, memory and the shell's anonymous mappings over 8 MiB. No window titles or identities.",
+ "stats": {
+  "response": "stats",
+  "stats": {
+   "renderer": "gles",
+   "backend": "udev",
+   "outputs": [
+    {
+     "name": "DP-4",
+     "frames_rendered": 146990,
+     "frames_skipped": 111,
+     "cpu_us": {
+      "p50": 545.0,
+      "p95": 673.0,
+      "p99": 1262.0,
+      "max": 2722.0,
+      "mean": 493.3447265625
+     },
+     "gpu_us": null,
+     "samples": 4096
+    }
+   ],
+   "renderer_setting": "auto",
+   "renderer_after_restart": false,
+   "logic": {
+    "build": "0.1.0+99a10a69a575a5f0",
+    "path": "/nix/store/w32wnmm79spnqnsjnl38pb3qygjnl4vj-aizome-0.1.0/bin/../lib/aizome/libaizome_comp_logic.so",
+    "loaded_at": 1793605463,
+    "healthy": true,
+    "reloads": 0,
+    "rollbacks": 0,
+    "last_error": null,
+    "core_abi": "ccf6992e52754e4c03eb4efefc123c3dd9a72f2f78559baa358253f8ad269f7e"
+   }
+  }
+ },
+ "processes": [
+  {
+   "comm": "aizome",
+   "elapsed_s": 17244,
+   "cpu_s": 91.93,
+   "threads": 16,
+   "pss_kib": 295275,
+   "pss_anon_kib": 53472,
+   "pss_file_kib": 149819,
+   "pss_shmem_kib": 91984,
+   "rss_kib": 448656,
+   "anon_mappings_over_8_mib": [
+    {
+     "mapping": "[heap]",
+     "anon_kib": 35672
+    }
+   ]
+  },
+  {
+   "comm": "aizome-shell",
+   "elapsed_s": 17244,
+   "cpu_s": 45.79,
+   "threads": 65,
+   "pss_kib": 772210,
+   "pss_anon_kib": 710272,
+   "pss_file_kib": 22788,
+   "pss_shmem_kib": 39150,
+   "rss_kib": 819344,
+   "anon_mappings_over_8_mib": [
+    {
+     "mapping": "[heap]",
+     "anon_kib": 70380
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 64860
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 63908
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 59588
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 57568
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 57196
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 56808
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 56728
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 55784
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 32404
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 27536
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 21356
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 18568
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 17564
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 15736
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 15672
+    },
+    {
+     "mapping": "anonymous",
+     "anon_kib": 15000
+    }
+   ]
+  }
+ ]
+}

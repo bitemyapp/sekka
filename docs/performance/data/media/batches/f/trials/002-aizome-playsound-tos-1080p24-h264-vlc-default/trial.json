@@ -1,0 +1,526 @@
+{
+ "tag": "002-aizome-playsound-tos-1080p24-h264-vlc-default",
+ "spec": {
+  "subject": "vlc-default",
+  "clip": "tos-1080p24-h264.mp4",
+  "mode": "playsound",
+  "sound": true,
+  "round": 0
+ },
+ "started": "2026-11-02T13:38:17-0600",
+ "quiet": {
+  "busy_cores_before": 0.19,
+  "waited_s": 2.0,
+  "loadavg": [
+   "0.31",
+   "0.60",
+   "0.57"
+  ]
+ },
+ "session_up_s": null,
+ "window_after_s": 0.102,
+ "audio_route": {
+  "nodes": [
+   94
+  ],
+  "targets": [
+   "perf-null"
+  ]
+ },
+ "windows": [
+  {
+   "id": 1,
+   "app_id": "vlc",
+   "pid": 896770,
+   "fullscreen": true,
+   "geometry": {
+    "x": 0,
+    "y": 0,
+    "w": 1920,
+    "h": 1080
+   },
+   "title": "tos-1080p24-h264.mp4 - VLC media player"
+  }
+ ],
+ "audio_route_before_window": {
+  "nodes": [
+   94
+  ],
+  "targets": [
+   "perf-null"
+  ]
+ },
+ "roles": {
+  "compositor": [
+   {
+    "pid": 896661,
+    "comm": "aizome",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome"
+   }
+  ],
+  "shell": [
+   {
+    "pid": 896674,
+    "comm": "aizome-shell",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome-shell"
+   }
+  ],
+  "xwayland": [
+   {
+    "pid": 896770,
+    "comm": ".xwayland-satel",
+    "exe": "/nix/store/q6k3hsmwr7wb8xinn3cypmkylkd5al6v-xwayland-satellite-0.8.3/bin/.xwayland-satellite-wrapped"
+   },
+   {
+    "pid": 896771,
+    "comm": "Xwayland",
+    "exe": "/nix/store/jwq2z1dhg11zldcyrq7bkmzlqv5lzij4-xwayland-24.1.14/bin/Xwayland"
+   }
+  ],
+  "dbus": [
+   {
+    "pid": 896660,
+    "comm": "dbus-daemon",
+    "exe": "/nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2/bin/dbus-daemon"
+   }
+  ],
+  "player": [
+   {
+    "pid": 896812,
+    "comm": ".vlc-wrapped",
+    "exe": "/nix/store/kjirqf9xqmzav2k3wl7wf9fmnqis9mb3-vlc-3.0.24/bin/.vlc-wrapped"
+   }
+  ],
+  "pw:pipewire": [
+   {
+    "pid": 2310,
+    "comm": "pipewire",
+    "exe": "/nix/store/n8ksprmibzglf09aavw7mcl4n9767axm-pipewire-1.6.9/bin/pipewire"
+   }
+  ],
+  "pw:pipewire-pulse": [
+   {
+    "pid": 2311,
+    "comm": "pipewire-pulse",
+    "exe": "/nix/store/n8ksprmibzglf09aavw7mcl4n9767axm-pipewire-1.6.9/bin/pipewire"
+   }
+  ],
+  "pw:wireplumber": [
+   {
+    "pid": 2312,
+    "comm": "wireplumber",
+    "exe": "/nix/store/dryjzhq5m2jah4rg5rri6fg8yjrv6y8i-wireplumber-0.5.18/bin/wireplumber"
+   }
+  ]
+ },
+ "player_stats_before": {
+  "displayed": 142,
+  "lost": 0,
+  "video_decoded": 337,
+  "audio_played": 302,
+  "audio_lost": 0,
+  "audio_decoded": 605,
+  "position": 6
+ },
+ "compositor_stats": [
+  {
+   "name": "HEADLESS-1",
+   "frames_rendered": 1441,
+   "frames_skipped": 1,
+   "cpu_us": {
+    "p50": 86.0,
+    "p95": 206.0,
+    "p99": 221.0,
+    "max": 262.0,
+    "mean": 117.96530187369882
+   },
+   "gpu_us": {
+    "p50": 389.0,
+    "p95": 577.0,
+    "p99": 607.0,
+    "max": 629.0,
+    "mean": 405.06315058986814
+   },
+   "samples": 1441
+  }
+ ],
+ "player_stats_after": {
+  "displayed": 1600,
+  "lost": 0,
+  "video_decoded": 3263,
+  "audio_played": 2928,
+  "audio_lost": 0,
+  "audio_decoded": 5857,
+  "position": 67
+ },
+ "power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 10,
+  "duration_s": 60.011,
+  "samples": 5858,
+  "energy_j": 1165.52,
+  "mean_w": 19.422,
+  "p10_w": 17.0,
+  "p50_w": 18.0,
+  "p90_w": 23.0,
+  "max_w": 71.0,
+  "system_busy_cpu_s": 11.7,
+  "exit": 0
+ },
+ "cpu": {
+  "compositor": {
+   "cpu_s": 0.3086,
+   "cpu_pct": 0.514,
+   "cpu_ticks_s": 0.31,
+   "vol_switches": 7641,
+   "invol_switches": 85,
+   "switches_per_s": 128.7,
+   "wakeups_per_s": 127.3
+  },
+  "shell": {
+   "cpu_s": 0.0435,
+   "cpu_pct": 0.073,
+   "cpu_ticks_s": 0.04,
+   "vol_switches": 3420,
+   "invol_switches": 46,
+   "switches_per_s": 57.8,
+   "wakeups_per_s": 57.0
+  },
+  "xwayland": {
+   "cpu_s": 0.1377,
+   "cpu_pct": 0.229,
+   "cpu_ticks_s": 0.14,
+   "vol_switches": 5963,
+   "invol_switches": 20,
+   "switches_per_s": 99.7,
+   "wakeups_per_s": 99.4
+  },
+  "dbus": {
+   "cpu_s": 0.0011,
+   "cpu_pct": 0.002,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 46,
+   "invol_switches": 0,
+   "switches_per_s": 0.8,
+   "wakeups_per_s": 0.8
+  },
+  "player": {
+   "cpu_s": 0.7933,
+   "cpu_pct": 1.322,
+   "cpu_ticks_s": 0.79,
+   "vol_switches": 19905,
+   "invol_switches": 355,
+   "switches_per_s": 337.6,
+   "wakeups_per_s": 331.7
+  },
+  "pw:pipewire": {
+   "cpu_s": 0.0489,
+   "cpu_pct": 0.082,
+   "cpu_ticks_s": 0.06,
+   "vol_switches": 7315,
+   "invol_switches": 1,
+   "switches_per_s": 121.9,
+   "wakeups_per_s": 121.9
+  },
+  "pw:pipewire-pulse": {
+   "cpu_s": 0.2185,
+   "cpu_pct": 0.364,
+   "cpu_ticks_s": 0.22,
+   "vol_switches": 10288,
+   "invol_switches": 136,
+   "switches_per_s": 173.7,
+   "wakeups_per_s": 171.4
+  },
+  "pw:wireplumber": {
+   "cpu_s": 0.0104,
+   "cpu_pct": 0.017,
+   "cpu_ticks_s": 0.01,
+   "vol_switches": 22,
+   "invol_switches": 1,
+   "switches_per_s": 0.4,
+   "wakeups_per_s": 0.4
+  }
+ },
+ "gpu": {
+  "compositor": {
+   "engine_ns": {
+    "gfx": 565796201,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "shell": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "xwayland": {
+   "engine_ns": {
+    "gfx": 0,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "dbus": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "player": {
+   "engine_ns": {
+    "gfx": 2268027513,
+    "compute": 0,
+    "dec": 1722923854
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "pw:pipewire": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "pw:pipewire-pulse": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "pw:wireplumber": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  }
+ },
+ "igpu": {
+  "busy_pct_mean": 1.21,
+  "busy_samples": 601,
+  "sclk_mhz_mean": 600.0,
+  "tctl_c_mean": 44.62
+ },
+ "player_memory": {
+  "rss_kib": 216564,
+  "pss_kib": 135742,
+  "pss_anon_kib": 77708,
+  "pss_file_kib": 50984,
+  "pss_shmem_kib": 7050,
+  "swap_kib": 0
+ },
+ "player_threads": {
+  "896812": {
+   "896812": ".vlc-wrapped",
+   "896814": "threaded-ml",
+   "896815": ".vlc-wrapped",
+   "896816": ".vlc-wrapped",
+   "896817": ".vlc-wrapped",
+   "896820": ".vlc-wrapped",
+   "896821": "QDBusConnection",
+   "896822": "QXcbEventQueue",
+   "896825": "[pango] fontcon",
+   "896826": "vlc:cs0",
+   "896827": "vlc:disk$0",
+   "896828": "vlc:sh0",
+   "896829": "vlc:sh_opt0",
+   "896830": "pool-spawner",
+   "896831": "gmain",
+   "896832": "gdbus",
+   "896838": ".vlc-wrapped",
+   "896839": "vlc:disk$0",
+   "896840": "vlc:sh0",
+   "896841": "vlc:sh_opt0",
+   "896842": ".vlc-wrapped",
+   "896846": "av:h264:df0",
+   "896847": "av:h264:df1",
+   "896848": "av:h264:df2",
+   "896849": "av:h264:df3",
+   "896850": "av:h264:df4",
+   "896851": "av:h264:df5",
+   "896852": ".vlc-wrapped",
+   "896853": ".vlc-wrapped",
+   "896855": "av:h264:df0",
+   "896856": "av:h264:df0",
+   "896857": "vlc:disk$0",
+   "896858": "vlc:sh0",
+   "896859": "vlc:sh_opt0",
+   "896860": "vlc:traceq0",
+   "896861": "vlc:gdrv0",
+   "896862": "vlc:gl0",
+   "896863": "vlc:traceq0",
+   "896864": "vlc:traceq0",
+   "896865": "vlc:disk$0",
+   "896866": "vlc:sh0",
+   "896867": "vlc:sh_opt0",
+   "896868": "vlc:traceq0",
+   "896869": "vlc:traceq0",
+   "896870": "vlc:sh1"
+  }
+ },
+ "player_alive": true,
+ "compositor_memory": {
+  "rss_kib": 121944,
+  "pss_kib": 60349,
+  "pss_anon_kib": 23636,
+  "pss_file_kib": 36393,
+  "pss_shmem_kib": 320,
+  "swap_kib": 0
+ },
+ "player_switches_by_thread": {
+  ".vlc-wrapped": [
+   2373,
+   117,
+   333.5
+  ],
+  "threaded-ml": [
+   4075,
+   82,
+   44.2
+  ],
+  "QDBusConnection": [
+   0,
+   0,
+   0.0
+  ],
+  "QXcbEventQueue": [
+   0,
+   0,
+   0.0
+  ],
+  "[pango] fontcon": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:cs0": [
+   2882,
+   57,
+   86.4
+  ],
+  "vlc:disk$0": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:sh0": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:sh_opt0": [
+   0,
+   0,
+   0.0
+  ],
+  "pool-spawner": [
+   0,
+   0,
+   0.0
+  ],
+  "gmain": [
+   0,
+   0,
+   0.0
+  ],
+  "gdbus": [
+   0,
+   0,
+   0.0
+  ],
+  "896834": [
+   0,
+   0,
+   0.0
+  ],
+  "896835": [
+   0,
+   0,
+   0.0
+  ],
+  "896836": [
+   0,
+   0,
+   0.0
+  ],
+  "896837": [
+   0,
+   0,
+   0.0
+  ],
+  "av:h264:df0": [
+   6491,
+   31,
+   225.3
+  ],
+  "av:h264:df1": [
+   962,
+   2,
+   16.6
+  ],
+  "av:h264:df2": [
+   962,
+   43,
+   34.3
+  ],
+  "av:h264:df3": [
+   720,
+   18,
+   20.0
+  ],
+  "av:h264:df4": [
+   720,
+   4,
+   18.6
+  ],
+  "av:h264:df5": [
+   720,
+   1,
+   14.4
+  ],
+  "vlc:traceq0": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:gdrv0": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:gl0": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:sh1": [
+   0,
+   0,
+   0.0
+  ]
+ },
+ "ok": true,
+ "loadavg_after": [
+  "0.21",
+  "0.51",
+  "0.54"
+ ]
+}

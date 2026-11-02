@@ -1,0 +1,491 @@
+{
+ "tag": "017-aizome-play-bbb-2160p30-hevc10-mpv-sekka",
+ "spec": {
+  "subject": "mpv-sekka",
+  "clip": "bbb-2160p30-hevc10.mp4",
+  "round": 1
+ },
+ "started": "2026-11-02T05:20:18-0600",
+ "quiet": {
+  "busy_cores_before": 0.125,
+  "waited_s": 2.0,
+  "loadavg": [
+   "0.04",
+   "0.12",
+   "0.22"
+  ]
+ },
+ "session_up_s": null,
+ "window_after_s": 0.257,
+ "windows": [
+  {
+   "id": 1,
+   "app_id": "mpv",
+   "pid": 350615,
+   "fullscreen": true,
+   "geometry": {
+    "x": 0,
+    "y": 0,
+    "w": 1920,
+    "h": 1080
+   },
+   "title": "Big Buck Bunny, Sunflower version - mpv"
+  }
+ ],
+ "roles": {
+  "compositor": [
+   {
+    "pid": 350471,
+    "comm": "aizome",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome"
+   }
+  ],
+  "shell": [
+   {
+    "pid": 350484,
+    "comm": "aizome-shell",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome-shell"
+   }
+  ],
+  "dbus": [
+   {
+    "pid": 350470,
+    "comm": "dbus-daemon",
+    "exe": "/nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2/bin/dbus-daemon"
+   }
+  ],
+  "player": [
+   {
+    "pid": 350615,
+    "comm": "mpv",
+    "exe": "/nix/store/rw9wq87v2amzk0vz7d23pacms850gpww-mpv-0.41.0/bin/mpv"
+   }
+  ]
+ },
+ "player_stats_before": {
+  "frame-drop-count": 0,
+  "decoder-frame-drop-count": 0,
+  "vo-delayed-frame-count": 0,
+  "mistimed-frame-count": null,
+  "playback-time": 5.066667,
+  "estimated-vf-fps": 30.0,
+  "hwdec-current": "no",
+  "current-vo": "gpu-next",
+  "current-gpu-context": "wayland",
+  "video-params/pixelformat": "yuv420p10",
+  "video-params/hw-pixelformat": null,
+  "video-out-params/w": 3840,
+  "video-out-params/h": 2160,
+  "display-fps": 60.0,
+  "current-ao": "null",
+  "audio-params/samplerate": 48000,
+  "pause": false,
+  "fullscreen": true
+ },
+ "compositor_stats": [
+  {
+   "name": "HEADLESS-1",
+   "frames_rendered": 1800,
+   "frames_skipped": 23,
+   "cpu_us": {
+    "p50": 98.0,
+    "p95": 248.0,
+    "p99": 293.0,
+    "max": 612.0,
+    "mean": 112.88555555555556
+   },
+   "gpu_us": {
+    "p50": 675.0,
+    "p95": 703.0,
+    "p99": 717.0,
+    "max": 755.0,
+    "mean": 665.9988888888889
+   },
+   "samples": 1800
+  }
+ ],
+ "player_stats_after": {
+  "frame-drop-count": 0,
+  "decoder-frame-drop-count": 0,
+  "vo-delayed-frame-count": 0,
+  "mistimed-frame-count": null,
+  "playback-time": 65.066667,
+  "estimated-vf-fps": 30.0,
+  "hwdec-current": "no",
+  "current-vo": "gpu-next",
+  "current-gpu-context": "wayland",
+  "video-params/pixelformat": "yuv420p10",
+  "video-params/hw-pixelformat": null,
+  "video-out-params/w": 3840,
+  "video-out-params/h": 2160,
+  "display-fps": 60.0,
+  "current-ao": "null",
+  "audio-params/samplerate": 48000,
+  "pause": false,
+  "fullscreen": true
+ },
+ "power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 10,
+  "duration_s": 60.003,
+  "samples": 5856,
+  "energy_j": 1694.825,
+  "mean_w": 28.246,
+  "p10_w": 17.0,
+  "p50_w": 28.0,
+  "p90_w": 38.0,
+  "max_w": 53.0,
+  "system_busy_cpu_s": 36.69,
+  "exit": 0
+ },
+ "cpu": {
+  "compositor": {
+   "cpu_s": 0.3659,
+   "cpu_pct": 0.61,
+   "cpu_ticks_s": 0.37,
+   "vol_switches": 9447,
+   "invol_switches": 190,
+   "switches_per_s": 160.6,
+   "wakeups_per_s": 157.4
+  },
+  "shell": {
+   "cpu_s": 0.0458,
+   "cpu_pct": 0.076,
+   "cpu_ticks_s": 0.04,
+   "vol_switches": 3224,
+   "invol_switches": 33,
+   "switches_per_s": 54.3,
+   "wakeups_per_s": 53.7
+  },
+  "dbus": {
+   "cpu_s": 0.0,
+   "cpu_pct": 0.0,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 0,
+   "invol_switches": 0,
+   "switches_per_s": 0.0,
+   "wakeups_per_s": 0.0
+  },
+  "player": {
+   "cpu_s": 28.4757,
+   "cpu_pct": 47.457,
+   "cpu_ticks_s": 28.47,
+   "vol_switches": 56666,
+   "invol_switches": 1699,
+   "switches_per_s": 972.7,
+   "wakeups_per_s": 944.4
+  }
+ },
+ "gpu": {
+  "compositor": {
+   "engine_ns": {
+    "gfx": 1158746497,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "shell": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "dbus": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "player": {
+   "engine_ns": {
+    "gfx": 31136623235,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  }
+ },
+ "igpu": {
+  "busy_pct_mean": 55.73,
+  "busy_samples": 601,
+  "sclk_mhz_mean": 1537.1,
+  "tctl_c_mean": 41.84
+ },
+ "player_memory": {
+  "rss_kib": 1068432,
+  "pss_kib": 1012618,
+  "pss_anon_kib": 963884,
+  "pss_file_kib": 48726,
+  "pss_shmem_kib": 8,
+  "swap_kib": 0
+ },
+ "player_threads": {
+  "350615": {
+   "350615": "mpv",
+   "350617": "terminal/input",
+   "350618": "lua/osc",
+   "350619": "lua/ytdl_hook",
+   "350620": "lua/stats",
+   "350621": "lua/console",
+   "350623": "lua/select",
+   "350624": "lua/positioning",
+   "350625": "lua/commands",
+   "350626": "lua/context_men",
+   "350627": "mpv",
+   "350628": "ipc/socket",
+   "350630": "demux",
+   "350631": "worker",
+   "350632": "vo",
+   "350634": "mpv:cs0",
+   "350635": "mpv:disk$0",
+   "350636": "mpv:sh0",
+   "350637": "mpv:sh_opt0",
+   "350638": "mpv:traceq0",
+   "350639": "mpv:gdrv0",
+   "350640": "mpv:gl0",
+   "350641": "av:hevc:df0",
+   "350642": "av:hevc:df1",
+   "350643": "av:hevc:df2",
+   "350644": "av:hevc:df3",
+   "350645": "av:hevc:df4",
+   "350646": "av:hevc:df5",
+   "350647": "av:hevc:df6",
+   "350648": "av:hevc:df7",
+   "350649": "av:hevc:df8",
+   "350650": "av:hevc:df9",
+   "350651": "av:hevc:df10",
+   "350652": "av:hevc:df11",
+   "350653": "av:hevc:df12",
+   "350654": "av:hevc:df13",
+   "350655": "av:hevc:df14",
+   "350656": "av:hevc:df15",
+   "350659": "ao",
+   "350660": "mpv:traceq0",
+   "350661": "mpv:sh1",
+   "350663": "mpv:traceq0"
+  }
+ },
+ "player_alive": true,
+ "compositor_memory": {
+  "rss_kib": 122224,
+  "pss_kib": 69887,
+  "pss_anon_kib": 23696,
+  "pss_file_kib": 45831,
+  "pss_shmem_kib": 360,
+  "swap_kib": 0
+ },
+ "player_switches_by_thread": {
+  "mpv": [
+   9599,
+   66,
+   200.8
+  ],
+  "terminal/input": [
+   60,
+   0,
+   0.4
+  ],
+  "lua/osc": [
+   3394,
+   47,
+   96.6
+  ],
+  "lua/ytdl_hook": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/stats": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/console": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/select": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/positioning": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/commands": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/context_men": [
+   0,
+   0,
+   0.0
+  ],
+  "ipc/socket": [
+   0,
+   0,
+   0.0
+  ],
+  "demux": [
+   4644,
+   5,
+   41.3
+  ],
+  "worker": [
+   0,
+   0,
+   0.0
+  ],
+  "vo": [
+   14760,
+   455,
+   1488.3
+  ],
+  "mpv:cs0": [
+   11756,
+   132,
+   278.4
+  ],
+  "mpv:disk$0": [
+   0,
+   0,
+   0.0
+  ],
+  "mpv:sh0": [
+   0,
+   0,
+   0.0
+  ],
+  "mpv:sh_opt0": [
+   0,
+   0,
+   0.0
+  ],
+  "mpv:traceq0": [
+   0,
+   0,
+   0.0
+  ],
+  "mpv:gdrv0": [
+   3742,
+   3,
+   14.9
+  ],
+  "mpv:gl0": [
+   3600,
+   4,
+   17.2
+  ],
+  "av:hevc:df0": [
+   168,
+   55,
+   1609.1
+  ],
+  "av:hevc:df1": [
+   155,
+   71,
+   1576.4
+  ],
+  "av:hevc:df2": [
+   159,
+   60,
+   1716.6
+  ],
+  "av:hevc:df3": [
+   158,
+   55,
+   1733.0
+  ],
+  "av:hevc:df4": [
+   172,
+   77,
+   1702.2
+  ],
+  "av:hevc:df5": [
+   173,
+   28,
+   1586.2
+  ],
+  "av:hevc:df6": [
+   168,
+   80,
+   1611.4
+  ],
+  "av:hevc:df7": [
+   157,
+   67,
+   1581.3
+  ],
+  "av:hevc:df8": [
+   154,
+   73,
+   1725.7
+  ],
+  "av:hevc:df9": [
+   173,
+   55,
+   1510.7
+  ],
+  "av:hevc:df10": [
+   141,
+   65,
+   1604.6
+  ],
+  "av:hevc:df11": [
+   172,
+   75,
+   1759.4
+  ],
+  "av:hevc:df12": [
+   182,
+   62,
+   1631.7
+  ],
+  "av:hevc:df13": [
+   168,
+   56,
+   1751.1
+  ],
+  "av:hevc:df14": [
+   193,
+   52,
+   1610.0
+  ],
+  "av:hevc:df15": [
+   190,
+   53,
+   1612.0
+  ],
+  "ao": [
+   2428,
+   3,
+   16.4
+  ],
+  "mpv:sh1": [
+   0,
+   0,
+   0.0
+  ]
+ },
+ "ok": true,
+ "loadavg_after": [
+  "0.51",
+  "0.27",
+  "0.27"
+ ]
+}

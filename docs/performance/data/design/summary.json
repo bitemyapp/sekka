@@ -1,0 +1,1698 @@
+{
+ "docs/performance/data/design/hello-windows.json": {
+  "date": "2026-11-02T02:30:21-0600",
+  "load_before": [
+   "2.06",
+   "3.76",
+   "4.84"
+  ],
+  "load_after": [
+   "0.11",
+   "0.34",
+   "1.84"
+  ],
+  "reps": 10,
+  "idle_s": 15.0,
+  "programs": {
+   "kit": {
+    "runs": 10,
+    "gpu_driver_libs": [],
+    "app_id": "org.aizome.HelloBench",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 480,
+     "height": 200
+    },
+    "first_frame_ms": {
+     "median": 19.049999999999997,
+     "min": 18.27,
+     "max": 19.68
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 18.83,
+     "min": 18.38,
+     "max": 19.39
+    },
+    "pss_kib": {
+     "median": 12.42724609375,
+     "min": 12.2001953125,
+     "max": 12.5791015625
+    },
+    "pss_anon_kib": {
+     "median": 4.669921875,
+     "min": 4.66015625,
+     "max": 4.6796875
+    },
+    "rss_kib": {
+     "median": 19.041015625,
+     "min": 18.796875,
+     "max": 19.16796875
+    },
+    "threads": {
+     "median": 5.0,
+     "min": 5.0,
+     "max": 5.0
+    },
+    "shared_objects": {
+     "median": 13.0,
+     "min": 13.0,
+     "max": 13.0
+    },
+    "idle_switches_per_s": {
+     "median": 1.0,
+     "min": 0.93,
+     "max": 1.0
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.0184,
+     "min": 0.014,
+     "max": 0.0214
+    }
+   },
+   "gtk4": {
+    "runs": 10,
+    "gpu_driver_libs": [
+     "libgallium-26.2.6.so",
+     "libvulkan_dzn.so",
+     "libvulkan_lvp.so",
+     "libvulkan_radeon.so"
+    ],
+    "app_id": "org.example.HelloGtk",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 480,
+     "height": 200
+    },
+    "first_frame_ms": {
+     "median": 92.74000000000001,
+     "min": 90.92,
+     "max": 93.8
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 93.475,
+     "min": 91.79,
+     "max": 94.18
+    },
+    "pss_kib": {
+     "median": 40.5166015625,
+     "min": 40.4287109375,
+     "max": 40.5908203125
+    },
+    "pss_anon_kib": {
+     "median": 16.830078125,
+     "min": 16.796875,
+     "max": 16.84765625
+    },
+    "rss_kib": {
+     "median": 88.3828125,
+     "min": 88.25,
+     "max": 88.609375
+    },
+    "threads": {
+     "median": 10.0,
+     "min": 7.0,
+     "max": 10.0
+    },
+    "shared_objects": {
+     "median": 131.0,
+     "min": 131.0,
+     "max": 131.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.13
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.0021,
+     "min": 0.0008,
+     "max": 0.0246
+    }
+   },
+   "adw": {
+    "runs": 10,
+    "gpu_driver_libs": [
+     "libgallium-26.2.6.so",
+     "libvulkan_dzn.so",
+     "libvulkan_lvp.so",
+     "libvulkan_radeon.so"
+    ],
+    "app_id": "org.example.HelloAdw",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 480,
+     "height": 200
+    },
+    "first_frame_ms": {
+     "median": 115.38,
+     "min": 114.03,
+     "max": 116.07
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 115.57,
+     "min": 114.33,
+     "max": 116.05
+    },
+    "pss_kib": {
+     "median": 46.05419921875,
+     "min": 45.9150390625,
+     "max": 46.1513671875
+    },
+    "pss_anon_kib": {
+     "median": 19.3515625,
+     "min": 19.34375,
+     "max": 19.36328125
+    },
+    "rss_kib": {
+     "median": 97.384765625,
+     "min": 97.12890625,
+     "max": 97.50390625
+    },
+    "threads": {
+     "median": 11.0,
+     "min": 11.0,
+     "max": 11.0
+    },
+    "shared_objects": {
+     "median": 152.0,
+     "min": 152.0,
+     "max": 152.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.07
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.0021,
+     "min": 0.0004,
+     "max": 0.0219
+    }
+   },
+   "qtwidgets": {
+    "runs": 10,
+    "gpu_driver_libs": [],
+    "app_id": "",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 480,
+     "height": 200
+    },
+    "first_frame_ms": {
+     "median": 42.769999999999996,
+     "min": 42.39,
+     "max": 46.82
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 45.215,
+     "min": 44.95,
+     "max": 49.13
+    },
+    "pss_kib": {
+     "median": 37.68017578125,
+     "min": 37.5517578125,
+     "max": 37.931640625
+    },
+    "pss_anon_kib": {
+     "median": 11.5859375,
+     "min": 11.58203125,
+     "max": 11.59375
+    },
+    "rss_kib": {
+     "median": 64.931640625,
+     "min": 64.74609375,
+     "max": 65.24609375
+    },
+    "threads": {
+     "median": 8.0,
+     "min": 8.0,
+     "max": 8.0
+    },
+    "shared_objects": {
+     "median": 98.0,
+     "min": 98.0,
+     "max": 98.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.07,
+     "min": 0.07,
+     "max": 0.07
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.0035,
+     "min": 0.0029,
+     "max": 0.0038
+    }
+   },
+   "qtquick": {
+    "runs": 10,
+    "gpu_driver_libs": [
+     "libgallium-26.2.6.so"
+    ],
+    "app_id": "",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 480,
+     "height": 200
+    },
+    "first_frame_ms": {
+     "median": 86.51,
+     "min": 85.43,
+     "max": 87.98
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 88.795,
+     "min": 87.95,
+     "max": 90.56
+    },
+    "pss_kib": {
+     "median": 92.439453125,
+     "min": 92.3984375,
+     "max": 92.5810546875
+    },
+    "pss_anon_kib": {
+     "median": 36.84765625,
+     "min": 36.8125,
+     "max": 36.8671875
+    },
+    "rss_kib": {
+     "median": 158.806640625,
+     "min": 158.6640625,
+     "max": 158.97265625
+    },
+    "threads": {
+     "median": 22.0,
+     "min": 22.0,
+     "max": 22.0
+    },
+    "shared_objects": {
+     "median": 156.0,
+     "min": 156.0,
+     "max": 156.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.07,
+     "min": 0.07,
+     "max": 0.07
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.0032500000000000003,
+     "min": 0.0025,
+     "max": 0.0037
+    }
+   }
+  },
+  "errors": []
+ },
+ "docs/performance/data/design/small-apps.json": {
+  "date": "2026-11-02T03:00:01-0600",
+  "load_before": [
+   "0.24",
+   "1.86",
+   "2.37"
+  ],
+  "load_after": [
+   "0.17",
+   "0.22",
+   "0.93"
+  ],
+  "reps": 6,
+  "idle_s": 15.0,
+  "programs": {
+   "soroban": {
+    "runs": 6,
+    "gpu_driver_libs": [],
+    "app_id": "org.aizome.Soroban",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 460,
+     "height": 418
+    },
+    "first_frame_ms": {
+     "median": 19.03,
+     "min": 18.41,
+     "max": 19.3
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 19.385,
+     "min": 18.9,
+     "max": 19.9
+    },
+    "pss_kib": {
+     "median": 14.341796875,
+     "min": 14.068359375,
+     "max": 14.4921875
+    },
+    "pss_anon_kib": {
+     "median": 4.984375,
+     "min": 4.98046875,
+     "max": 5.0
+    },
+    "rss_kib": {
+     "median": 21.3671875,
+     "min": 21.171875,
+     "max": 21.53125
+    },
+    "threads": {
+     "median": 6.0,
+     "min": 6.0,
+     "max": 6.0
+    },
+    "shared_objects": {
+     "median": 13.0,
+     "min": 13.0,
+     "max": 13.0
+    },
+    "idle_switches_per_s": {
+     "median": 1.0,
+     "min": 0.93,
+     "max": 1.0
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.019799999999999998,
+     "min": 0.0177,
+     "max": 0.0224
+    }
+   },
+   "gnome-calculator": {
+    "runs": 6,
+    "gpu_driver_libs": [
+     "libgallium-26.2.6.so",
+     "libvulkan_dzn.so",
+     "libvulkan_lvp.so",
+     "libvulkan_radeon.so"
+    ],
+    "app_id": "org.gnome.Calculator",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 360,
+     "height": 616
+    },
+    "first_frame_ms": {
+     "median": 152.97,
+     "min": 151.84,
+     "max": 156.73
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 153.91,
+     "min": 151.68,
+     "max": 157.31
+    },
+    "pss_kib": {
+     "median": 61.0,
+     "min": 60.9091796875,
+     "max": 61.248046875
+    },
+    "pss_anon_kib": {
+     "median": 25.072265625,
+     "min": 25.03515625,
+     "max": 25.09375
+    },
+    "rss_kib": {
+     "median": 112.595703125,
+     "min": 112.35546875,
+     "max": 112.80859375
+    },
+    "threads": {
+     "median": 12.0,
+     "min": 9.0,
+     "max": 12.0
+    },
+    "shared_objects": {
+     "median": 156.0,
+     "min": 156.0,
+     "max": 156.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.0
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.0
+    }
+   },
+   "kcalc": {
+    "runs": 6,
+    "gpu_driver_libs": [],
+    "app_id": "org.kde.kcalc",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 640,
+     "height": 480
+    },
+    "first_frame_ms": {
+     "median": 65.78999999999999,
+     "min": 64.81,
+     "max": 65.98
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 68.28999999999999,
+     "min": 67.46,
+     "max": 68.5
+    },
+    "pss_kib": {
+     "median": 56.009765625,
+     "min": 55.9658203125,
+     "max": 56.09375
+    },
+    "pss_anon_kib": {
+     "median": 14.841796875,
+     "min": 14.83203125,
+     "max": 14.86328125
+    },
+    "rss_kib": {
+     "median": 87.51953125,
+     "min": 87.19921875,
+     "max": 87.59375
+    },
+    "threads": {
+     "median": 12.0,
+     "min": 12.0,
+     "max": 13.0
+    },
+    "shared_objects": {
+     "median": 151.0,
+     "min": 151.0,
+     "max": 151.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.07,
+     "min": 0.07,
+     "max": 0.07
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.0032500000000000003,
+     "min": 0.0029,
+     "max": 0.0038
+    }
+   },
+   "tokei": {
+    "runs": 6,
+    "gpu_driver_libs": [],
+    "app_id": "org.aizome.Tokei",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 560,
+     "height": 620
+    },
+    "first_frame_ms": {
+     "median": 19.225,
+     "min": 18.84,
+     "max": 19.71
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 18.285,
+     "min": 18.07,
+     "max": 18.7
+    },
+    "pss_kib": {
+     "median": 16.24755859375,
+     "min": 16.126953125,
+     "max": 16.37890625
+    },
+    "pss_anon_kib": {
+     "median": 5.505859375,
+     "min": 5.48046875,
+     "max": 5.515625
+    },
+    "rss_kib": {
+     "median": 23.55859375,
+     "min": 23.46484375,
+     "max": 23.75390625
+    },
+    "threads": {
+     "median": 9.0,
+     "min": 9.0,
+     "max": 9.0
+    },
+    "shared_objects": {
+     "median": 13.0,
+     "min": 13.0,
+     "max": 13.0
+    },
+    "idle_switches_per_s": {
+     "median": 5.035,
+     "min": 4.93,
+     "max": 5.27
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.36495,
+     "min": 0.3384,
+     "max": 0.3729
+    }
+   },
+   "gnome-clocks": {
+    "runs": 6,
+    "gpu_driver_libs": [
+     "libgallium-26.2.6.so",
+     "libvulkan_dzn.so",
+     "libvulkan_lvp.so",
+     "libvulkan_radeon.so"
+    ],
+    "app_id": "org.gnome.clocks",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 870,
+     "height": 690
+    },
+    "first_frame_ms": {
+     "median": 145.48000000000002,
+     "min": 143.62,
+     "max": 147.54
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 149.22500000000002,
+     "min": 147.62,
+     "max": 150.87
+    },
+    "pss_kib": {
+     "median": 59.2626953125,
+     "min": 59.0966796875,
+     "max": 59.4462890625
+    },
+    "pss_anon_kib": {
+     "median": 24.244140625,
+     "min": 24.21875,
+     "max": 24.421875
+    },
+    "rss_kib": {
+     "median": 112.6953125,
+     "min": 112.33984375,
+     "max": 112.95703125
+    },
+    "threads": {
+     "median": 11.0,
+     "min": 11.0,
+     "max": 11.0
+    },
+    "shared_objects": {
+     "median": 162.0,
+     "min": 162.0,
+     "max": 162.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.0
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.0
+    }
+   },
+   "sumi": {
+    "runs": 6,
+    "gpu_driver_libs": [],
+    "app_id": "org.aizome.Sumi",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 698,
+     "height": 516
+    },
+    "first_frame_ms": {
+     "median": 19.034999999999997,
+     "min": 18.95,
+     "max": 19.28
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 18.494999999999997,
+     "min": 18.21,
+     "max": 18.66
+    },
+    "pss_kib": {
+     "median": 16.271484375,
+     "min": 16.1484375,
+     "max": 16.5537109375
+    },
+    "pss_anon_kib": {
+     "median": 5.58203125,
+     "min": 5.578125,
+     "max": 5.58984375
+    },
+    "rss_kib": {
+     "median": 23.544921875,
+     "min": 23.375,
+     "max": 23.83984375
+    },
+    "threads": {
+     "median": 10.0,
+     "min": 10.0,
+     "max": 10.0
+    },
+    "shared_objects": {
+     "median": 13.0,
+     "min": 13.0,
+     "max": 13.0
+    },
+    "idle_switches_per_s": {
+     "median": 8.53,
+     "min": 8.47,
+     "max": 8.67
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.31715,
+     "min": 0.3039,
+     "max": 0.3256
+    }
+   },
+   "gnome-text-editor": {
+    "runs": 6,
+    "gpu_driver_libs": [
+     "libgallium-26.2.6.so",
+     "libvulkan_dzn.so",
+     "libvulkan_lvp.so",
+     "libvulkan_radeon.so"
+    ],
+    "app_id": "org.gnome.TextEditor",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 700,
+     "height": 520
+    },
+    "first_frame_ms": {
+     "median": 157.745,
+     "min": 156.83,
+     "max": 159.24
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 158.45499999999998,
+     "min": 157.38,
+     "max": 160.6
+    },
+    "pss_kib": {
+     "median": 67.4609375,
+     "min": 67.2041015625,
+     "max": 67.5390625
+    },
+    "pss_anon_kib": {
+     "median": 26.515625,
+     "min": 26.453125,
+     "max": 26.5546875
+    },
+    "rss_kib": {
+     "median": 120.875,
+     "min": 120.45703125,
+     "max": 121.0546875
+    },
+    "threads": {
+     "median": 13.0,
+     "min": 13.0,
+     "max": 13.0
+    },
+    "shared_objects": {
+     "median": 171.0,
+     "min": 171.0,
+     "max": 171.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.0
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.0061,
+     "min": 0.0,
+     "max": 0.0206
+    }
+   },
+   "kwrite": {
+    "runs": 6,
+    "gpu_driver_libs": [],
+    "app_id": "org.kde.kwrite",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 640,
+     "height": 480
+    },
+    "first_frame_ms": {
+     "median": 106.85,
+     "min": 106.14,
+     "max": 107.11
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 100.77,
+     "min": 99.56,
+     "max": 101.52
+    },
+    "pss_kib": {
+     "median": 77.92578125,
+     "min": 77.6611328125,
+     "max": 78.107421875
+    },
+    "pss_anon_kib": {
+     "median": 21.322265625,
+     "min": 21.30859375,
+     "max": 21.3515625
+    },
+    "rss_kib": {
+     "median": 112.318359375,
+     "min": 111.921875,
+     "max": 112.6171875
+    },
+    "threads": {
+     "median": 14.0,
+     "min": 14.0,
+     "max": 15.0
+    },
+    "shared_objects": {
+     "median": 194.0,
+     "min": 194.0,
+     "max": 194.0
+    },
+    "idle_switches_per_s": {
+     "median": 12.0,
+     "min": 11.8,
+     "max": 12.27
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 1.2554,
+     "min": 1.2391,
+     "max": 1.2672
+    }
+   }
+  },
+  "errors": []
+ },
+ "docs/performance/data/design/document-apps.json": {
+  "date": "2026-11-02T06:29:45-0600",
+  "load_before": [
+   "0.01",
+   "0.15",
+   "0.36"
+  ],
+  "load_after": [
+   "0.23",
+   "0.17",
+   "0.20"
+  ],
+  "reps": 6,
+  "idle_s": 15.0,
+  "programs": {
+   "shashin": {
+    "runs": 6,
+    "gpu_driver_libs": [],
+    "app_id": "org.aizome.Shashin",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 960,
+     "height": 640
+    },
+    "first_frame_ms": {
+     "median": 18.975,
+     "min": 18.93,
+     "max": 19.09
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 21.299999999999997,
+     "min": 21.23,
+     "max": 21.93
+    },
+    "pss_kib": {
+     "median": 117.40087890625,
+     "min": 117.134765625,
+     "max": 117.5087890625
+    },
+    "pss_anon_kib": {
+     "median": 105.173828125,
+     "min": 105.16796875,
+     "max": 105.18359375
+    },
+    "rss_kib": {
+     "median": 125.32421875,
+     "min": 125.08984375,
+     "max": 125.3984375
+    },
+    "threads": {
+     "median": 18.0,
+     "min": 18.0,
+     "max": 18.0
+    },
+    "shared_objects": {
+     "median": 13.0,
+     "min": 13.0,
+     "max": 13.0
+    },
+    "idle_switches_per_s": {
+     "median": 1.0,
+     "min": 1.0,
+     "max": 1.0
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.02305,
+     "min": 0.0177,
+     "max": 0.0243
+    }
+   },
+   "loupe": {
+    "runs": 6,
+    "gpu_driver_libs": [
+     "libgallium-26.2.6.so",
+     "libvulkan_dzn.so",
+     "libvulkan_lvp.so",
+     "libvulkan_radeon.so"
+    ],
+    "app_id": "org.gnome.Loupe",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1115,
+     "height": 790
+    },
+    "first_frame_ms": {
+     "median": 152.91500000000002,
+     "min": 150.98,
+     "max": 154.55
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 228.435,
+     "min": 226.4,
+     "max": 229.48
+    },
+    "pss_kib": {
+     "median": 135.7314453125,
+     "min": 135.509765625,
+     "max": 136.126953125
+    },
+    "pss_anon_kib": {
+     "median": 28.0234375,
+     "min": 27.93359375,
+     "max": 28.16796875
+    },
+    "rss_kib": {
+     "median": 197.17578125,
+     "min": 196.78125,
+     "max": 197.62890625
+    },
+    "threads": {
+     "median": 34.0,
+     "min": 31.0,
+     "max": 34.0
+    },
+    "shared_objects": {
+     "median": 158.0,
+     "min": 158.0,
+     "max": 158.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.0
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.0
+    }
+   },
+   "gwenview": {
+    "runs": 6,
+    "gpu_driver_libs": [],
+    "app_id": "org.kde.gwenview",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 640,
+     "height": 480
+    },
+    "first_frame_ms": {
+     "median": 109.125,
+     "min": 108.75,
+     "max": 109.85
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 115.925,
+     "min": 115.41,
+     "max": 116.55
+    },
+    "pss_kib": {
+     "median": 192.30859375,
+     "min": 192.0048828125,
+     "max": 192.48828125
+    },
+    "pss_anon_kib": {
+     "median": 133.349609375,
+     "min": 133.33984375,
+     "max": 133.359375
+    },
+    "rss_kib": {
+     "median": 237.025390625,
+     "min": 236.5859375,
+     "max": 237.3828125
+    },
+    "threads": {
+     "median": 19.0,
+     "min": 19.0,
+     "max": 19.0
+    },
+    "shared_objects": {
+     "median": 219.0,
+     "min": 219.0,
+     "max": 219.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.07,
+     "min": 0.07,
+     "max": 0.13
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.0036,
+     "min": 0.003,
+     "max": 0.0039
+    }
+   },
+   "shiori": {
+    "runs": 6,
+    "gpu_driver_libs": [],
+    "app_id": "org.aizome.Shiori",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 900,
+     "height": 760
+    },
+    "first_frame_ms": {
+     "median": 19.205,
+     "min": 18.88,
+     "max": 19.86
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 21.92,
+     "min": 21.38,
+     "max": 22.76
+    },
+    "pss_kib": {
+     "median": 69.46923828125,
+     "min": 68.9130859375,
+     "max": 69.673828125
+    },
+    "pss_anon_kib": {
+     "median": 55.046875,
+     "min": 54.33984375,
+     "max": 55.0859375
+    },
+    "rss_kib": {
+     "median": 83.896484375,
+     "min": 83.55859375,
+     "max": 84.40234375
+    },
+    "threads": {
+     "median": 15.0,
+     "min": 15.0,
+     "max": 15.0
+    },
+    "shared_objects": {
+     "median": 13.0,
+     "min": 13.0,
+     "max": 13.0
+    },
+    "idle_switches_per_s": {
+     "median": 5.635,
+     "min": 5.6,
+     "max": 5.67
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.31085,
+     "min": 0.3018,
+     "max": 0.3277
+    }
+   },
+   "papers": {
+    "runs": 6,
+    "gpu_driver_libs": [
+     "libgallium-26.2.6.so",
+     "libvulkan_dzn.so",
+     "libvulkan_lvp.so",
+     "libvulkan_radeon.so"
+    ],
+    "app_id": "org.gnome.Papers",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 600,
+     "height": 600
+    },
+    "first_frame_ms": {
+     "median": 148.89499999999998,
+     "min": 148.12,
+     "max": 150.96
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 158.36,
+     "min": 158.04,
+     "max": 158.92
+    },
+    "pss_kib": {
+     "median": 128.8271484375,
+     "min": 128.6064453125,
+     "max": 129.048828125
+    },
+    "pss_anon_kib": {
+     "median": 87.748046875,
+     "min": 87.7109375,
+     "max": 87.76171875
+    },
+    "rss_kib": {
+     "median": 185.599609375,
+     "min": 185.26171875,
+     "max": 185.81640625
+    },
+    "threads": {
+     "median": 12.0,
+     "min": 12.0,
+     "max": 12.0
+    },
+    "shared_objects": {
+     "median": 172.0,
+     "min": 172.0,
+     "max": 172.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.0
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.0
+    }
+   },
+   "okular": {
+    "runs": 6,
+    "gpu_driver_libs": [],
+    "app_id": "org.kde.okular",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1152,
+     "height": 700
+    },
+    "first_frame_ms": {
+     "median": 186.17,
+     "min": 184.73,
+     "max": 186.48
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 179.085,
+     "min": 177.93,
+     "max": 179.67
+    },
+    "pss_kib": {
+     "median": 150.32666015625,
+     "min": 148.76953125,
+     "max": 166.771484375
+    },
+    "pss_anon_kib": {
+     "median": 86.11328125,
+     "min": 85.3671875,
+     "max": 103.06640625
+    },
+    "rss_kib": {
+     "median": 190.236328125,
+     "min": 187.1015625,
+     "max": 205.10546875
+    },
+    "threads": {
+     "median": 15.0,
+     "min": 14.0,
+     "max": 16.0
+    },
+    "shared_objects": {
+     "median": 210.0,
+     "min": 210.0,
+     "max": 210.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.565,
+     "min": 0.53,
+     "max": 0.67
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.07365,
+     "min": 0.0725,
+     "max": 0.0824
+    }
+   },
+   "hako": {
+    "runs": 6,
+    "gpu_driver_libs": [],
+    "app_id": "org.aizome.Hako",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 980,
+     "height": 600
+    },
+    "first_frame_ms": {
+     "median": 19.375,
+     "min": 19.3,
+     "max": 20.04
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 24.205,
+     "min": 22.67,
+     "max": 26.7
+    },
+    "pss_kib": {
+     "median": 36.783203125,
+     "min": 36.3984375,
+     "max": 37.2998046875
+    },
+    "pss_anon_kib": {
+     "median": 22.376953125,
+     "min": 22.06640625,
+     "max": 22.6640625
+    },
+    "rss_kib": {
+     "median": 44.611328125,
+     "min": 44.21484375,
+     "max": 45.0390625
+    },
+    "threads": {
+     "median": 21.0,
+     "min": 21.0,
+     "max": 21.0
+    },
+    "shared_objects": {
+     "median": 13.0,
+     "min": 13.0,
+     "max": 13.0
+    },
+    "idle_switches_per_s": {
+     "median": 8.600000000000001,
+     "min": 8.0,
+     "max": 10.2
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.69065,
+     "min": 0.1421,
+     "max": 2.26
+    }
+   },
+   "nautilus": {
+    "runs": 6,
+    "gpu_driver_libs": [
+     "libgallium-26.2.6.so",
+     "libvulkan_dzn.so",
+     "libvulkan_lvp.so",
+     "libvulkan_radeon.so"
+    ],
+    "app_id": "org.gnome.Nautilus",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 890,
+     "height": 550
+    },
+    "first_frame_ms": {
+     "median": 170.76999999999998,
+     "min": 167.71,
+     "max": 176.57
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 160.635,
+     "min": 159.88,
+     "max": 161.19
+    },
+    "pss_kib": {
+     "median": 97.505859375,
+     "min": 97.4609375,
+     "max": 108.7919921875
+    },
+    "pss_anon_kib": {
+     "median": 60.865234375,
+     "min": 60.8203125,
+     "max": 66.53515625
+    },
+    "rss_kib": {
+     "median": 158.69140625,
+     "min": 158.6171875,
+     "max": 170.265625
+    },
+    "threads": {
+     "median": 12.0,
+     "min": 12.0,
+     "max": 12.0
+    },
+    "shared_objects": {
+     "median": 179.0,
+     "min": 179.0,
+     "max": 179.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.0
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.0
+    }
+   },
+   "dolphin": {
+    "runs": 6,
+    "gpu_driver_libs": [],
+    "app_id": "org.kde.dolphin",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 760,
+     "height": 550
+    },
+    "first_frame_ms": {
+     "median": 113.61,
+     "min": 113.07,
+     "max": 113.87
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 111.535,
+     "min": 111.24,
+     "max": 112.19
+    },
+    "pss_kib": {
+     "median": 70.71533203125,
+     "min": 69.8251953125,
+     "max": 70.87109375
+    },
+    "pss_anon_kib": {
+     "median": 24.216796875,
+     "min": 24.15234375,
+     "max": 24.25390625
+    },
+    "rss_kib": {
+     "median": 128.30078125,
+     "min": 126.68359375,
+     "max": 128.68359375
+    },
+    "threads": {
+     "median": 36.0,
+     "min": 35.0,
+     "max": 36.0
+    },
+    "shared_objects": {
+     "median": 213.0,
+     "min": 213.0,
+     "max": 213.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.07,
+     "min": 0.07,
+     "max": 0.33
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.00435,
+     "min": 0.0042,
+     "max": 0.0198
+    }
+   }
+  },
+  "errors": []
+ },
+ "docs/performance/data/design/monitors.json": {
+  "date": "2026-11-02T10:53:12-0600",
+  "load_before": [
+   "0.21",
+   "0.42",
+   "0.37"
+  ],
+  "load_after": [
+   "0.14",
+   "0.13",
+   "0.21"
+  ],
+  "reps": 6,
+  "idle_s": 30.0,
+  "programs": {
+   "myaku": {
+    "runs": 6,
+    "gpu_driver_libs": [],
+    "app_id": "org.aizome.Myaku",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 720
+    },
+    "first_frame_ms": {
+     "median": 18.925,
+     "min": 18.52,
+     "max": 19.45
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 20.03,
+     "min": 18.72,
+     "max": 21.29
+    },
+    "pss_kib": {
+     "median": 43.734375,
+     "min": 43.470703125,
+     "max": 44.2900390625
+    },
+    "pss_anon_kib": {
+     "median": 30.08203125,
+     "min": 29.94921875,
+     "max": 30.56640625
+    },
+    "rss_kib": {
+     "median": 53.84375,
+     "min": 53.6328125,
+     "max": 54.40234375
+    },
+    "threads": {
+     "median": 11.0,
+     "min": 11.0,
+     "max": 11.0
+    },
+    "shared_objects": {
+     "median": 17.0,
+     "min": 17.0,
+     "max": 17.0
+    },
+    "idle_switches_per_s": {
+     "median": 12.934999999999999,
+     "min": 12.5,
+     "max": 14.57
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 23.05055,
+     "min": 21.3604,
+     "max": 23.8648
+    }
+   },
+   "gnome-system-monitor": {
+    "runs": 6,
+    "gpu_driver_libs": [
+     "libgallium-26.2.6.so",
+     "libvulkan_dzn.so",
+     "libvulkan_lvp.so",
+     "libvulkan_radeon.so"
+    ],
+    "app_id": "org.gnome.SystemMonitor",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 800,
+     "height": 720
+    },
+    "first_frame_ms": {
+     "median": 190.29,
+     "min": 189.29,
+     "max": 192.37
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 189.64,
+     "min": 188.37,
+     "max": 191.7
+    },
+    "pss_kib": {
+     "median": 68.1484375,
+     "min": 67.875,
+     "max": 68.384765625
+    },
+    "pss_anon_kib": {
+     "median": 32.58984375,
+     "min": 32.40625,
+     "max": 32.92578125
+    },
+    "rss_kib": {
+     "median": 130.09765625,
+     "min": 129.98046875,
+     "max": 130.34765625
+    },
+    "threads": {
+     "median": 11.0,
+     "min": 8.0,
+     "max": 11.0
+    },
+    "shared_objects": {
+     "median": 163.0,
+     "min": 163.0,
+     "max": 163.0
+    },
+    "idle_switches_per_s": {
+     "median": 47.650000000000006,
+     "min": 46.5,
+     "max": 52.7
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 17.6943,
+     "min": 17.1286,
+     "max": 18.6466
+    }
+   },
+   "plasma-systemmonitor": {
+    "runs": 6,
+    "gpu_driver_libs": [
+     "libgallium-26.2.6.so"
+    ],
+    "app_id": "org.kde.plasma-systemmonitor",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 990,
+     "height": 702
+    },
+    "first_frame_ms": {
+     "median": 200.85,
+     "min": 198.9,
+     "max": 204.22
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 205.985,
+     "min": 204.31,
+     "max": 208.89
+    },
+    "pss_kib": {
+     "median": 186.73388671875,
+     "min": 185.9599609375,
+     "max": 187.1923828125
+    },
+    "pss_anon_kib": {
+     "median": 89.8515625,
+     "min": 89.00390625,
+     "max": 90.3671875
+    },
+    "rss_kib": {
+     "median": 263.1640625,
+     "min": 262.48828125,
+     "max": 263.609375
+    },
+    "threads": {
+     "median": 26.0,
+     "min": 25.0,
+     "max": 27.0
+    },
+    "shared_objects": {
+     "median": 258.0,
+     "min": 258.0,
+     "max": 258.0
+    },
+    "idle_switches_per_s": {
+     "median": 105.08,
+     "min": 98.7,
+     "max": 106.7
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 12.9616,
+     "min": 12.3718,
+     "max": 14.0139
+    }
+   },
+   "kura": {
+    "runs": 6,
+    "gpu_driver_libs": [],
+    "app_id": "org.aizome.Kura",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 700
+    },
+    "first_frame_ms": {
+     "median": 19.155,
+     "min": 18.62,
+     "max": 19.44
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 19.765,
+     "min": 19.57,
+     "max": 19.95
+    },
+    "pss_kib": {
+     "median": 15.5185546875,
+     "min": 15.4375,
+     "max": 15.5947265625
+    },
+    "pss_anon_kib": {
+     "median": 5.275390625,
+     "min": 5.25390625,
+     "max": 5.2890625
+    },
+    "rss_kib": {
+     "median": 23.693359375,
+     "min": 23.58203125,
+     "max": 23.8125
+    },
+    "threads": {
+     "median": 17.0,
+     "min": 17.0,
+     "max": 17.0
+    },
+    "shared_objects": {
+     "median": 13.0,
+     "min": 13.0,
+     "max": 13.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.985,
+     "min": 0.97,
+     "max": 1.0
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.01885,
+     "min": 0.0162,
+     "max": 0.0216
+    }
+   },
+   "baobab": {
+    "runs": 6,
+    "gpu_driver_libs": [
+     "libgallium-26.2.6.so",
+     "libvulkan_dzn.so",
+     "libvulkan_lvp.so",
+     "libvulkan_radeon.so"
+    ],
+    "app_id": "org.gnome.baobab",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 960,
+     "height": 600
+    },
+    "first_frame_ms": {
+     "median": 158.93,
+     "min": 156.93,
+     "max": 161.66
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 136.96499999999997,
+     "min": 135.9,
+     "max": 138.3
+    },
+    "pss_kib": {
+     "median": 44.279296875,
+     "min": 44.2353515625,
+     "max": 44.3896484375
+    },
+    "pss_anon_kib": {
+     "median": 22.658203125,
+     "min": 22.6328125,
+     "max": 22.7421875
+    },
+    "rss_kib": {
+     "median": 104.966796875,
+     "min": 104.60546875,
+     "max": 105.07421875
+    },
+    "threads": {
+     "median": 13.0,
+     "min": 13.0,
+     "max": 15.0
+    },
+    "shared_objects": {
+     "median": 153.0,
+     "min": 153.0,
+     "max": 153.0
+    },
+    "idle_switches_per_s": {
+     "median": 5.68,
+     "min": 5.5,
+     "max": 5.8
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.2768,
+     "min": 0.2662,
+     "max": 0.2807
+    }
+   },
+   "filelight": {
+    "runs": 6,
+    "gpu_driver_libs": [
+     "libgallium-26.2.6.so"
+    ],
+    "app_id": "org.kde.filelight",
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 720,
+     "height": 540
+    },
+    "first_frame_ms": {
+     "median": 163.71499999999997,
+     "min": 163.24,
+     "max": 166.26
+    },
+    "cpu_to_first_frame_sched_ms": {
+     "median": 168.64499999999998,
+     "min": 168.15,
+     "max": 170.28
+    },
+    "pss_kib": {
+     "median": 129.025390625,
+     "min": 128.8603515625,
+     "max": 129.103515625
+    },
+    "pss_anon_kib": {
+     "median": 50.47265625,
+     "min": 50.453125,
+     "max": 50.5234375
+    },
+    "rss_kib": {
+     "median": 203.5546875,
+     "min": 203.37890625,
+     "max": 203.78515625
+    },
+    "threads": {
+     "median": 23.0,
+     "min": 23.0,
+     "max": 24.0
+    },
+    "shared_objects": {
+     "median": 226.0,
+     "min": 226.0,
+     "max": 226.0
+    },
+    "idle_switches_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.0
+    },
+    "idle_cpu_sched_ms_per_s": {
+     "median": 0.0,
+     "min": 0.0,
+     "max": 0.0
+    }
+   }
+  },
+  "errors": []
+ }
+}

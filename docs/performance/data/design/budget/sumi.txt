@@ -1,0 +1,55 @@
+# cargo test --release -p aizome-sumi --test sumi typing_and_scrolling_fit_the_frame_budget -- --nocapture --test-threads 1
+# 2026-11-02T10:45:32-06:00; load 2.09 0.67 0.38; AIZOME_FONT_DIR=b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts
+Using saved setting for 'extra-substituters = https://cache.sekka.computer https://cache.numtide.com?priority=55' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = cache.sekka.computer-1:JJsOkmRt3iCwjvJrol8x2a7euU+kMV7iHaDSFzofA+Y= niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=' from ~/.local/share/nix/trusted-settings.json.
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+   Compiling calloop v0.13.0
+   Compiling icu_provider v2.3.1
+   Compiling tiny-skia v0.12.0
+   Compiling kbvm v0.2.0
+   Compiling jiff-core v0.1.1
+   Compiling aizome-shell-proto v0.1.0 (/home/callen/work/sekka-performance-page/desktop/aizome/crates/aizome-shell-proto)
+   Compiling aizome-config v0.1.0 (/home/callen/work/sekka-performance-page/desktop/aizome/crates/aizome-config)
+   Compiling aizome-search v0.1.0 (/home/callen/work/sekka-performance-page/desktop/aizome/crates/aizome-search)
+   Compiling icu_locale_fallback v2.3.0
+   Compiling icu_properties v2.3.0
+   Compiling icu_normalizer v2.3.0
+   Compiling calloop-wayland-source v0.3.0
+   Compiling icu_segmenter v2.3.0
+   Compiling smithay-client-toolkit v0.19.2
+   Compiling jiff v0.2.38
+   Compiling parley_data v0.11.1
+   Compiling parley v0.11.1
+   Compiling env_logger v0.11.11
+   Compiling sidestep-engine v0.0.1 (/home/callen/work/sekka-performance-page/desktop/aizome/sukumo/crates/sidestep-engine)
+   Compiling sidestep-ui v0.0.1 (/home/callen/work/sekka-performance-page/desktop/aizome/sukumo/crates/sidestep-ui)
+   Compiling aizome-kit v0.1.0 (/home/callen/work/sekka-performance-page/desktop/aizome/crates/aizome-kit)
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/aizome-kit/src/urls.rs:184:14
+    |
+184 |             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < LIMIT).then_some(n + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+184 -             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < LIMIT).then_some(n + 1))
+184 +             .try_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < LIMIT).then_some(n + 1))
+    |
+
+   Compiling aizome-sumi v0.1.0 (/home/callen/work/sekka-performance-page/desktop/aizome/apps/sumi)
+warning: `aizome-kit` (lib) generated 1 warning (run `cargo fix --lib -p aizome-kit` to apply 1 suggestion)
+    Finished `release` profile [optimized + debuginfo] target(s) in 22.60s
+     Running tests/sumi.rs (/tmp/claude-1000/perf/design-comp-target/release/deps/sumi-777b4f78f89b8e89)
+
+running 1 test
+test typing_and_scrolling_fit_the_frame_budget ... sumi typing: p50 383.78µs p95 469.07µs max 805.81µs (n=185); scrolling: p50 330.78µs p95 403.12µs max 550.71µs (n=60) at 2x
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 1.08s
+

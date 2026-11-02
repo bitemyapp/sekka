@@ -1,0 +1,449 @@
+{
+ "tag": "008-aizome-audio-bbb-music-vlc-default",
+ "spec": {
+  "subject": "vlc-default",
+  "clip": "bbb-music.mp3",
+  "mode": "audio",
+  "sound": true,
+  "round": 0
+ },
+ "started": "2026-11-02T05:09:30-0600",
+ "quiet": {
+  "busy_cores_before": 0.135,
+  "waited_s": 2.0,
+  "loadavg": [
+   "0.14",
+   "0.36",
+   "0.37"
+  ]
+ },
+ "session_up_s": null,
+ "window_after_s": 0.102,
+ "audio_route": {
+  "nodes": [
+   65
+  ],
+  "targets": [
+   "perf-null"
+  ]
+ },
+ "windows": [
+  {
+   "id": 1,
+   "app_id": "vlc",
+   "pid": 346462,
+   "fullscreen": false,
+   "geometry": {
+    "x": 542,
+    "y": 354,
+    "w": 600,
+    "h": 420
+   },
+   "title": "Blender Foundation 2008, Janus Bager Kristensen 2013 - Big Buck Bunny, Sunflower version - VLC media player"
+  }
+ ],
+ "audio_route_before_window": {
+  "nodes": [
+   65
+  ],
+  "targets": [
+   "perf-null"
+  ]
+ },
+ "roles": {
+  "compositor": [
+   {
+    "pid": 346354,
+    "comm": "aizome",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome"
+   }
+  ],
+  "shell": [
+   {
+    "pid": 346366,
+    "comm": "aizome-shell",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome-shell"
+   }
+  ],
+  "xwayland": [
+   {
+    "pid": 346462,
+    "comm": ".xwayland-satel",
+    "exe": "/nix/store/q6k3hsmwr7wb8xinn3cypmkylkd5al6v-xwayland-satellite-0.8.3/bin/.xwayland-satellite-wrapped"
+   },
+   {
+    "pid": 346463,
+    "comm": "Xwayland",
+    "exe": "/nix/store/jwq2z1dhg11zldcyrq7bkmzlqv5lzij4-xwayland-24.1.14/bin/Xwayland"
+   }
+  ],
+  "dbus": [
+   {
+    "pid": 346353,
+    "comm": "dbus-daemon",
+    "exe": "/nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2/bin/dbus-daemon"
+   }
+  ],
+  "player": [
+   {
+    "pid": 346504,
+    "comm": ".vlc-wrapped",
+    "exe": "/nix/store/kjirqf9xqmzav2k3wl7wf9fmnqis9mb3-vlc-3.0.24/bin/.vlc-wrapped"
+   }
+  ],
+  "pw:pipewire": [
+   {
+    "pid": 2310,
+    "comm": "pipewire",
+    "exe": "/nix/store/n8ksprmibzglf09aavw7mcl4n9767axm-pipewire-1.6.9/bin/pipewire"
+   }
+  ],
+  "pw:pipewire-pulse": [
+   {
+    "pid": 2311,
+    "comm": "pipewire-pulse",
+    "exe": "/nix/store/n8ksprmibzglf09aavw7mcl4n9767axm-pipewire-1.6.9/bin/pipewire"
+   }
+  ],
+  "pw:wireplumber": [
+   {
+    "pid": 2312,
+    "comm": "wireplumber",
+    "exe": "/nix/store/dryjzhq5m2jah4rg5rri6fg8yjrv6y8i-wireplumber-0.5.18/bin/wireplumber"
+   }
+  ]
+ },
+ "player_stats_before": {
+  "displayed": 0,
+  "lost": 0,
+  "video_decoded": 0,
+  "audio_played": 268,
+  "audio_lost": 0,
+  "audio_decoded": 537,
+  "position": 6
+ },
+ "compositor_stats": [
+  {
+   "name": "HEADLESS-1",
+   "frames_rendered": 224,
+   "frames_skipped": 0,
+   "cpu_us": {
+    "p50": 222.0,
+    "p95": 239.0,
+    "p99": 261.0,
+    "max": 266.0,
+    "mean": 221.91517857142856
+   },
+   "gpu_us": {
+    "p50": 113.0,
+    "p95": 128.0,
+    "p99": 135.0,
+    "max": 150.0,
+    "mean": 110.18303571428572
+   },
+   "samples": 224
+  }
+ ],
+ "player_stats_after": {
+  "displayed": 0,
+  "lost": 0,
+  "video_decoded": 0,
+  "audio_played": 2609,
+  "audio_lost": 0,
+  "audio_decoded": 5219,
+  "position": 67
+ },
+ "power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 10,
+  "duration_s": 60.012,
+  "samples": 5845,
+  "energy_j": 1099.842,
+  "mean_w": 18.327,
+  "p10_w": 17.0,
+  "p50_w": 18.0,
+  "p90_w": 20.0,
+  "max_w": 53.0,
+  "system_busy_cpu_s": 8.67,
+  "exit": 0
+ },
+ "cpu": {
+  "compositor": {
+   "cpu_s": 0.0948,
+   "cpu_pct": 0.158,
+   "cpu_ticks_s": 0.1,
+   "vol_switches": 1547,
+   "invol_switches": 15,
+   "switches_per_s": 26.0,
+   "wakeups_per_s": 25.8
+  },
+  "shell": {
+   "cpu_s": 0.0481,
+   "cpu_pct": 0.08,
+   "cpu_ticks_s": 0.05,
+   "vol_switches": 3090,
+   "invol_switches": 24,
+   "switches_per_s": 51.9,
+   "wakeups_per_s": 51.5
+  },
+  "xwayland": {
+   "cpu_s": 0.0868,
+   "cpu_pct": 0.145,
+   "cpu_ticks_s": 0.08,
+   "vol_switches": 1591,
+   "invol_switches": 34,
+   "switches_per_s": 27.1,
+   "wakeups_per_s": 26.5
+  },
+  "dbus": {
+   "cpu_s": 0.0,
+   "cpu_pct": 0.0,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 0,
+   "invol_switches": 0,
+   "switches_per_s": 0.0,
+   "wakeups_per_s": 0.0
+  },
+  "player": {
+   "cpu_s": 0.5828,
+   "cpu_pct": 0.971,
+   "cpu_ticks_s": 0.58,
+   "vol_switches": 7350,
+   "invol_switches": 148,
+   "switches_per_s": 124.9,
+   "wakeups_per_s": 122.5
+  },
+  "pw:pipewire": {
+   "cpu_s": 0.0684,
+   "cpu_pct": 0.114,
+   "cpu_ticks_s": 0.07,
+   "vol_switches": 5626,
+   "invol_switches": 0,
+   "switches_per_s": 93.7,
+   "wakeups_per_s": 93.7
+  },
+  "pw:pipewire-pulse": {
+   "cpu_s": 0.1788,
+   "cpu_pct": 0.298,
+   "cpu_ticks_s": 0.18,
+   "vol_switches": 8019,
+   "invol_switches": 5,
+   "switches_per_s": 133.7,
+   "wakeups_per_s": 133.6
+  },
+  "pw:wireplumber": {
+   "cpu_s": 0.0,
+   "cpu_pct": 0.0,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 0,
+   "invol_switches": 0,
+   "switches_per_s": 0.0,
+   "wakeups_per_s": 0.0
+  }
+ },
+ "gpu": {
+  "compositor": {
+   "engine_ns": {
+    "gfx": 21653628,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "shell": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "xwayland": {
+   "engine_ns": {
+    "gfx": 216387987,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "dbus": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "player": {
+   "engine_ns": {},
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "pw:pipewire": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "pw:pipewire-pulse": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "pw:wireplumber": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  }
+ },
+ "igpu": {
+  "busy_pct_mean": 0.43,
+  "busy_samples": 601,
+  "sclk_mhz_mean": 600.0,
+  "tctl_c_mean": 40.99
+ },
+ "player_memory": {
+  "rss_kib": 130152,
+  "pss_kib": 71347,
+  "pss_anon_kib": 23356,
+  "pss_file_kib": 47497,
+  "pss_shmem_kib": 494,
+  "swap_kib": 0
+ },
+ "player_threads": {
+  "346504": {
+   "346504": ".vlc-wrapped",
+   "346506": "threaded-ml",
+   "346507": ".vlc-wrapped",
+   "346508": ".vlc-wrapped",
+   "346509": ".vlc-wrapped",
+   "346512": ".vlc-wrapped",
+   "346513": "QDBusConnection",
+   "346514": "QXcbEventQueue",
+   "346517": "[pango] fontcon",
+   "346518": "vlc:cs0",
+   "346519": "vlc:disk$0",
+   "346520": "vlc:sh0",
+   "346521": "vlc:sh_opt0",
+   "346523": "pool-spawner",
+   "346524": "gmain",
+   "346525": "gdbus",
+   "346530": ".vlc-wrapped",
+   "346531": "vlc:disk$0",
+   "346532": "vlc:sh0",
+   "346533": "vlc:sh_opt0",
+   "346534": ".vlc-wrapped",
+   "346540": ".vlc-wrapped"
+  }
+ },
+ "player_alive": true,
+ "compositor_memory": {
+  "rss_kib": 121928,
+  "pss_kib": 66847,
+  "pss_anon_kib": 23552,
+  "pss_file_kib": 42973,
+  "pss_shmem_kib": 322,
+  "swap_kib": 0
+ },
+ "player_switches_by_thread": {
+  ".vlc-wrapped": [
+   3334,
+   134,
+   484.7
+  ],
+  "threaded-ml": [
+   3793,
+   12,
+   95.6
+  ],
+  "QDBusConnection": [
+   0,
+   0,
+   0.0
+  ],
+  "QXcbEventQueue": [
+   223,
+   2,
+   2.5
+  ],
+  "[pango] fontcon": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:cs0": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:disk$0": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:sh0": [
+   0,
+   0,
+   0.0
+  ],
+  "vlc:sh_opt0": [
+   0,
+   0,
+   0.0
+  ],
+  "pool-spawner": [
+   0,
+   0,
+   0.0
+  ],
+  "gmain": [
+   0,
+   0,
+   0.0
+  ],
+  "gdbus": [
+   0,
+   0,
+   0.0
+  ],
+  "346526": [
+   0,
+   0,
+   0.0
+  ],
+  "346527": [
+   0,
+   0,
+   0.0
+  ],
+  "346528": [
+   0,
+   0,
+   0.0
+  ],
+  "346529": [
+   0,
+   0,
+   0.0
+  ]
+ },
+ "ok": true,
+ "loadavg_after": [
+  "0.04",
+  "0.28",
+  "0.34"
+ ]
+}

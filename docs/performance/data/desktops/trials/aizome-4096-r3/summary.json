@@ -1,0 +1,1719 @@
+{
+ "variant": "aizome",
+ "tag": "r3",
+ "mem_mib": 4096,
+ "start": "2026-11-02T13:25:07-0600",
+ "loadavg_start": [
+  "0.17",
+  "0.35",
+  "0.55"
+ ],
+ "host_idle_power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 100,
+  "duration_s": 30.0,
+  "samples": 300,
+  "energy_j": 559.53,
+  "mean_w": 18.651,
+  "p10_w": 17.0,
+  "p50_w": 18.0,
+  "p90_w": 22.0,
+  "max_w": 47.0,
+  "system_busy_cpu_s": 5.27,
+  "exit": 0
+ },
+ "boot": {
+  "settled_s": 6.2692,
+  "last_change_s": 6.2692,
+  "first_match_s": 6.2692,
+  "timeout": false,
+  "systemd": {
+   "kernel": 0.202,
+   "initrd": 2.733,
+   "userspace": 2.114,
+   "target_reached_userspace": 2.062
+  },
+  "units_host_s": {
+   "display-manager.service": 5.306,
+   "multi-user.target": 5.308,
+   "graphical.target": 5.308
+  }
+ },
+ "login": {
+  "settled_s": 1.2343,
+  "last_change_s": 1.2343,
+  "first_change_s": 0.634,
+  "first_match_s": 1.2343,
+  "timeout": false,
+  "journal": {
+   "pam_service": "greetd",
+   "pam_session_opened_s": 40.54,
+   "units": {
+    "aizome.service": 0.205,
+    "graphical-session.target": 0.437,
+    "aizome-session.target": 0.533
+   },
+   "last_user_unit_started_s": 10.094,
+   "enter_to_pam_s": 0.103
+  }
+ },
+ "memory": {
+  "greeter": {
+   "used_mib": 531.1,
+   "memtotal_mib": 3910.4,
+   "available_mib": 3379.3,
+   "anon_mib": 94.5,
+   "shmem_mib": 43.7,
+   "cached_mib": 611.5,
+   "swap_used_mib": 1.3,
+   "zswap_pool_mib": 0.9,
+   "zswapped_mib": 1.2,
+   "memory_pressure_some_total_us": 6061,
+   "pswpout": 0,
+   "zswpout": 333,
+   "pss_mib": {
+    "system": 84.5,
+    "greeter": 160.4
+   },
+   "pss_total_mib": 244.9,
+   "swap_pss_mib": {
+    "system": 1.2,
+    "greeter": 0.0
+   },
+   "processes": 29,
+   "top_units_mib": {
+    "greeter:session-1.scope": 136.4,
+    "system:NetworkManager.service": 14.6,
+    "greeter:sekka-agent-workloads.service": 14.1,
+    "system:cups-browsed.service": 11.5,
+    "system:ananicy-cpp.service": 10.8,
+    "system:systemd (PID 1)": 6.5,
+    "system:systemd-udevd.service": 6.4,
+    "greeter:init.scope": 6.2,
+    "system:cups.service": 5.1,
+    "system:greetd.service": 4.7,
+    "system:dbus-broker.service": 4.3,
+    "system:wpa_supplicant.service": 3.6,
+    "greeter:gcr-ssh-agent.service": 3.6,
+    "system:systemd-journald.service": 3.5,
+    "system:polkit.service": 2.5,
+    "system:accounts-daemon.service": 2.1,
+    "system:systemd-timesyncd.service": 2.1,
+    "system:systemd-logind.service": 2.0,
+    "system:nscd.service": 1.8,
+    "system:systemd-oomd.service": 1.3,
+    "system:avahi-daemon.service": 1.1,
+    "system:serial-getty@ttyS0.service": 0.5
+   },
+   "top_processes": [
+    {
+     "comm": "aizome",
+     "group": "greeter",
+     "unit": "session-1.scope",
+     "pss_mib": 78.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-greeter",
+     "group": "greeter",
+     "unit": "session-1.scope",
+     "pss_mib": 51.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 14.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "python3",
+     "group": "greeter",
+     "unit": "sekka-agent-workloads.service",
+     "pss_mib": 14.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "cups-browsed",
+     "group": "system",
+     "unit": "cups-browsed.service",
+     "pss_mib": 11.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "ananicy-cpp",
+     "group": "system",
+     "unit": "ananicy-cpp.service",
+     "pss_mib": 10.8,
+     "swap_pss_mib": 1.2
+    },
+    {
+     "comm": "systemd",
+     "group": "system",
+     "unit": "systemd (PID 1)",
+     "pss_mib": 6.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-udevd",
+     "group": "system",
+     "unit": "systemd-udevd.service",
+     "pss_mib": 6.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd",
+     "group": "greeter",
+     "unit": "init.scope",
+     "pss_mib": 4.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "greetd",
+     "group": "greeter",
+     "unit": "session-1.scope",
+     "pss_mib": 4.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "greetd",
+     "group": "system",
+     "unit": "greetd.service",
+     "pss_mib": 3.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wpa_supplicant",
+     "group": "system",
+     "unit": "wpa_supplicant.service",
+     "pss_mib": 3.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "gcr-ssh-agent",
+     "group": "greeter",
+     "unit": "gcr-ssh-agent.service",
+     "pss_mib": 3.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-journal",
+     "group": "system",
+     "unit": "systemd-journald.service",
+     "pss_mib": 3.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "cupsd",
+     "group": "system",
+     "unit": "cups.service",
+     "pss_mib": 3.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "dbus-broker-lau",
+     "group": "system",
+     "unit": "dbus-broker.service",
+     "pss_mib": 2.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "polkitd",
+     "group": "system",
+     "unit": "polkit.service",
+     "pss_mib": 2.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "accounts-daemon",
+     "group": "system",
+     "unit": "accounts-daemon.service",
+     "pss_mib": 2.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-timesyn",
+     "group": "system",
+     "unit": "systemd-timesyncd.service",
+     "pss_mib": 2.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-logind",
+     "group": "system",
+     "unit": "systemd-logind.service",
+     "pss_mib": 2.0,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "nsncd",
+     "group": "system",
+     "unit": "nscd.service",
+     "pss_mib": 1.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "dbus-broker",
+     "group": "system",
+     "unit": "dbus-broker.service",
+     "pss_mib": 1.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "dbus",
+     "group": "system",
+     "unit": "cups.service",
+     "pss_mib": 1.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "(sd-pam)",
+     "group": "greeter",
+     "unit": "init.scope",
+     "pss_mib": 1.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".gnome-keyring-",
+     "group": "greeter",
+     "unit": "session-1.scope",
+     "pss_mib": 1.6,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  },
+  "desktop60": {
+   "used_mib": 588.5,
+   "memtotal_mib": 3910.4,
+   "available_mib": 3321.9,
+   "anon_mib": 146.0,
+   "shmem_mib": 46.3,
+   "cached_mib": 1033.1,
+   "swap_used_mib": 2.4,
+   "zswap_pool_mib": 1.0,
+   "zswapped_mib": 2.3,
+   "memory_pressure_some_total_us": 13220,
+   "pswpout": 0,
+   "zswpout": 621,
+   "pss_mib": {
+    "system": 85.4,
+    "session": 276.4
+   },
+   "pss_total_mib": 361.8,
+   "swap_pss_mib": {
+    "system": 2.3,
+    "session": 0.0
+   },
+   "processes": 55,
+   "top_units_mib": {
+    "session:aizome.service": 154.1,
+    "session:wireplumber.service": 17.9,
+    "session:xdg-desktop-portal-gtk.service": 16.8,
+    "session:sekka-agent-workloads.service": 14.1,
+    "session:session-3.scope": 12.0,
+    "system:NetworkManager.service": 11.9,
+    "system:ananicy-cpp.service": 9.3,
+    "system:cups-browsed.service": 9.3,
+    "system:udisks2.service": 7.8,
+    "session:xdg-desktop-portal.service": 6.9,
+    "session:aizome-koyomi-agent.service": 6.7,
+    "session:pipewire.service": 6.5,
+    "session:aizome-network-agent.service": 6.5,
+    "session:init.scope": 6.5,
+    "system:systemd (PID 1)": 6.3,
+    "system:systemd-udevd.service": 6.2,
+    "session:aizome-file-manager.service": 5.3,
+    "session:aizome-portal.service": 5.1,
+    "system:cups.service": 4.5,
+    "system:dbus-broker.service": 4.2,
+    "session:gvfs-daemon.service": 3.7,
+    "system:wpa_supplicant.service": 3.3,
+    "system:upower.service": 3.3,
+    "system:polkit.service": 3.3,
+    "session:pipewire-pulse.service": 3.0,
+    "system:systemd-journald.service": 2.7,
+    "session:gcr-ssh-agent.service": 2.5,
+    "system:nscd.service": 2.1,
+    "session:xdg-desktop-portal-wlr.service": 2.1,
+    "system:systemd-logind.service": 2.1
+   },
+   "top_processes": [
+    {
+     "comm": "aizome",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 61.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-shell",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 58.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "Xwayland",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 29.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wireplumber",
+     "group": "session",
+     "unit": "wireplumber.service",
+     "pss_mib": 17.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal-gtk.service",
+     "pss_mib": 16.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "python3",
+     "group": "session",
+     "unit": "sekka-agent-workloads.service",
+     "pss_mib": 14.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 11.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "ananicy-cpp",
+     "group": "system",
+     "unit": "ananicy-cpp.service",
+     "pss_mib": 9.3,
+     "swap_pss_mib": 2.3
+    },
+    {
+     "comm": "cups-browsed",
+     "group": "system",
+     "unit": "cups-browsed.service",
+     "pss_mib": 9.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "udisksd",
+     "group": "system",
+     "unit": "udisks2.service",
+     "pss_mib": 7.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal.service",
+     "pss_mib": 6.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-koyomi",
+     "group": "session",
+     "unit": "aizome-koyomi-agent.service",
+     "pss_mib": 6.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "pipewire",
+     "group": "session",
+     "unit": "pipewire.service",
+     "pss_mib": 6.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-network-",
+     "group": "session",
+     "unit": "aizome-network-agent.service",
+     "pss_mib": 6.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd",
+     "group": "system",
+     "unit": "systemd (PID 1)",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "greetd",
+     "group": "session",
+     "unit": "session-3.scope",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-udevd",
+     "group": "system",
+     "unit": "systemd-udevd.service",
+     "pss_mib": 6.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-hako",
+     "group": "session",
+     "unit": "aizome-file-manager.service",
+     "pss_mib": 5.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-portal",
+     "group": "session",
+     "unit": "aizome-portal.service",
+     "pss_mib": 5.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd",
+     "group": "session",
+     "unit": "init.scope",
+     "pss_mib": 4.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xwayland-satel",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 4.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wpa_supplicant",
+     "group": "system",
+     "unit": "wpa_supplicant.service",
+     "pss_mib": 3.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".gnome-keyring-",
+     "group": "session",
+     "unit": "session-3.scope",
+     "pss_mib": 3.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "upowerd",
+     "group": "system",
+     "unit": "upower.service",
+     "pss_mib": 3.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "polkitd",
+     "group": "system",
+     "unit": "polkit.service",
+     "pss_mib": 3.3,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  },
+  "desktop190": {
+   "used_mib": 580.1,
+   "memtotal_mib": 3910.4,
+   "available_mib": 3330.3,
+   "anon_mib": 146.0,
+   "shmem_mib": 46.3,
+   "cached_mib": 1033.1,
+   "swap_used_mib": 2.4,
+   "zswap_pool_mib": 1.0,
+   "zswapped_mib": 2.3,
+   "memory_pressure_some_total_us": 13220,
+   "pswpout": 0,
+   "zswpout": 621,
+   "pss_mib": {
+    "system": 85.4,
+    "session": 276.4
+   },
+   "pss_total_mib": 361.8,
+   "swap_pss_mib": {
+    "system": 2.3,
+    "session": 0.0
+   },
+   "processes": 55,
+   "top_units_mib": {
+    "session:aizome.service": 154.1,
+    "session:wireplumber.service": 17.9,
+    "session:xdg-desktop-portal-gtk.service": 16.8,
+    "session:sekka-agent-workloads.service": 14.1,
+    "session:session-3.scope": 12.0,
+    "system:NetworkManager.service": 11.9,
+    "system:ananicy-cpp.service": 9.3,
+    "system:cups-browsed.service": 9.3,
+    "system:udisks2.service": 7.8,
+    "session:xdg-desktop-portal.service": 6.9,
+    "session:aizome-koyomi-agent.service": 6.7,
+    "session:pipewire.service": 6.5,
+    "session:aizome-network-agent.service": 6.5,
+    "session:init.scope": 6.5,
+    "system:systemd (PID 1)": 6.3,
+    "system:systemd-udevd.service": 6.2,
+    "session:aizome-file-manager.service": 5.3,
+    "session:aizome-portal.service": 5.1,
+    "system:cups.service": 4.5,
+    "system:dbus-broker.service": 4.2,
+    "session:gvfs-daemon.service": 3.7,
+    "system:wpa_supplicant.service": 3.3,
+    "system:upower.service": 3.3,
+    "system:polkit.service": 3.3,
+    "session:pipewire-pulse.service": 3.0,
+    "system:systemd-journald.service": 2.7,
+    "session:gcr-ssh-agent.service": 2.5,
+    "system:nscd.service": 2.1,
+    "session:xdg-desktop-portal-wlr.service": 2.1,
+    "system:systemd-logind.service": 2.1
+   },
+   "top_processes": [
+    {
+     "comm": "aizome",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 61.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-shell",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 58.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "Xwayland",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 29.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wireplumber",
+     "group": "session",
+     "unit": "wireplumber.service",
+     "pss_mib": 17.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal-gtk.service",
+     "pss_mib": 16.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "python3",
+     "group": "session",
+     "unit": "sekka-agent-workloads.service",
+     "pss_mib": 14.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 11.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "ananicy-cpp",
+     "group": "system",
+     "unit": "ananicy-cpp.service",
+     "pss_mib": 9.3,
+     "swap_pss_mib": 2.3
+    },
+    {
+     "comm": "cups-browsed",
+     "group": "system",
+     "unit": "cups-browsed.service",
+     "pss_mib": 9.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "udisksd",
+     "group": "system",
+     "unit": "udisks2.service",
+     "pss_mib": 7.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal.service",
+     "pss_mib": 6.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-koyomi",
+     "group": "session",
+     "unit": "aizome-koyomi-agent.service",
+     "pss_mib": 6.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "pipewire",
+     "group": "session",
+     "unit": "pipewire.service",
+     "pss_mib": 6.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-network-",
+     "group": "session",
+     "unit": "aizome-network-agent.service",
+     "pss_mib": 6.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd",
+     "group": "system",
+     "unit": "systemd (PID 1)",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "greetd",
+     "group": "session",
+     "unit": "session-3.scope",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-udevd",
+     "group": "system",
+     "unit": "systemd-udevd.service",
+     "pss_mib": 6.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-hako",
+     "group": "session",
+     "unit": "aizome-file-manager.service",
+     "pss_mib": 5.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-portal",
+     "group": "session",
+     "unit": "aizome-portal.service",
+     "pss_mib": 5.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd",
+     "group": "session",
+     "unit": "init.scope",
+     "pss_mib": 4.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xwayland-satel",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 4.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wpa_supplicant",
+     "group": "system",
+     "unit": "wpa_supplicant.service",
+     "pss_mib": 3.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".gnome-keyring-",
+     "group": "session",
+     "unit": "session-3.scope",
+     "pss_mib": 3.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "upowerd",
+     "group": "system",
+     "unit": "upower.service",
+     "pss_mib": 3.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "polkitd",
+     "group": "system",
+     "unit": "polkit.service",
+     "pss_mib": 3.3,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  }
+ },
+ "idle": {
+  "window_s": 120.0,
+  "guest_busy_pct": 0.09,
+  "guest_busy_pct_of_one_vcpu": 0.17,
+  "ctxt_per_s": 188.0,
+  "intr_per_s": 193.5,
+  "forks_per_s": 0.07,
+  "task_wakeups_per_s": 100.1,
+  "qemu_cpu_pct_of_core": 0.89,
+  "qemu_vcpu_pct_of_core": 0.48,
+  "ppt_mean_w": 21.025,
+  "ppt_energy_j": 2523.024,
+  "host_busy_cpu_s": 15.55,
+  "top_wakers": [
+   {
+    "comm": "aizome-shell",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/aizome.service",
+    "voluntary_per_s": 47.07,
+    "involuntary_per_s": 0.06,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "ananicy-cpp",
+    "cgroup": "/system.slice/ananicy-cpp.service",
+    "voluntary_per_s": 13.3,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "aizome",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/aizome.service",
+    "voluntary_per_s": 6.76,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/u8:2-events_unbound",
+    "cgroup": "/",
+    "voluntary_per_s": 4.83,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/0:3-events",
+    "cgroup": "/",
+    "voluntary_per_s": 4.41,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/u8:1-events_power_efficient",
+    "cgroup": "/",
+    "voluntary_per_s": 3.64,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/1:2-events",
+    "cgroup": "/",
+    "voluntary_per_s": 2.98,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/u8:3-events_power_efficient",
+    "cgroup": "/",
+    "voluntary_per_s": 2.33,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "aizome-koyomi",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/aizome-koyomi-agent.service",
+    "voluntary_per_s": 2.04,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "aizome-network-",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/aizome-network-agent.service",
+    "voluntary_per_s": 2.01,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "aizome-portal",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/aizome-portal.service",
+    "voluntary_per_s": 2.01,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "aizome-hako",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/aizome-file-manager.service",
+    "voluntary_per_s": 2.0,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "psimon",
+    "cgroup": "/",
+    "voluntary_per_s": 1.43,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "systemd-oomd",
+    "cgroup": "/system.slice/systemd-oomd.service",
+    "voluntary_per_s": 0.8,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "python3",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/background.slice/sekka-agent-workloads.service",
+    "voluntary_per_s": 0.5,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.058
+   }
+  ],
+  "top_cpu": [
+   {
+    "comm": "python3",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/background.slice/sekka-agent-workloads.service",
+    "cpu_pct": 0.058
+   },
+   {
+    "comm": "systemd-oomd",
+    "cgroup": "/system.slice/systemd-oomd.service",
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "ananicy-cpp",
+    "cgroup": "/system.slice/ananicy-cpp.service",
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "kworker/u8:1-events_power_efficient",
+    "cgroup": "/",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "aizome",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/aizome.service",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/u8:2-events_unbound",
+    "cgroup": "/",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "systemd",
+    "cgroup": "/init.scope",
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/0:1-cgroup_release",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/0:0H-kblockd",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/u8:0-flush-253:0",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   }
+  ],
+  "ppt_over_host_idle_w": 2.37
+ },
+ "responsiveness": {
+  "latency-idle": {
+   "presses_injected": 220,
+   "presses_received": 220,
+   "presented": 220,
+   "not_presented": 0,
+   "timestamp_mismatches": 0,
+   "refresh_ms": 13.334,
+   "header": "# clock_id=1 width=800 height=600 mode=latency",
+   "key_to_present_ms": {
+    "p50": 6.78,
+    "p95": 13.14,
+    "p99": 13.56,
+    "max": 13.68,
+    "mean": 6.97
+   },
+   "key_to_present_frames": {
+    "p50": 0.51,
+    "p95": 0.99,
+    "p99": 1.02,
+    "max": 1.03,
+    "mean": 0.52
+   },
+   "key_to_client_ms": {
+    "p50": 0.08,
+    "p95": 0.1,
+    "p99": 0.28,
+    "max": 0.32,
+    "mean": 0.08
+   },
+   "commit_to_present_ms": {
+    "p50": 6.7,
+    "p95": 13.06,
+    "p99": 13.47,
+    "max": 13.52,
+    "mean": 6.88
+   },
+   "raw_ms": [
+    1.958,
+    2.557,
+    6.15,
+    13.557,
+    2.984,
+    13.409,
+    13.382,
+    1.003,
+    6.398,
+    1.418,
+    11.843,
+    6.682,
+    1.271,
+    3.027,
+    2.997,
+    1.947,
+    7.871,
+    2.564,
+    10.934,
+    9.699,
+    7.076,
+    7.137,
+    12.703,
+    5.775,
+    3.521,
+    12.165,
+    0.583,
+    1.32,
+    3.553,
+    0.581,
+    5.199,
+    11.756,
+    7.898,
+    11.3,
+    7.093,
+    1.177,
+    13.555,
+    7.848,
+    1.417,
+    1.037,
+    2.201,
+    4.724,
+    11.022,
+    1.943,
+    4.692,
+    6.097,
+    4.463,
+    8.316,
+    12.951,
+    4.859,
+    6.005,
+    6.504,
+    6.995,
+    8.871,
+    0.954,
+    11.006,
+    3.349,
+    9.017,
+    1.646,
+    8.057,
+    5.91,
+    1.638,
+    9.764,
+    2.252,
+    13.234,
+    2.325,
+    0.757,
+    9.269,
+    4.483,
+    8.336,
+    1.588,
+    9.823,
+    1.336,
+    9.419,
+    3.727,
+    9.865,
+    1.191,
+    5.689,
+    10.851,
+    5.328,
+    10.238,
+    1.687,
+    8.471,
+    12.361,
+    4.16,
+    11.555,
+    7.355,
+    3.327,
+    11.567,
+    11.837,
+    9.391,
+    0.637,
+    8.455,
+    12.632,
+    8.216,
+    8.849,
+    10.613,
+    13.136,
+    4.105,
+    12.926,
+    4.472,
+    10.596,
+    9.463,
+    4.353,
+    0.375,
+    5.399,
+    1.595,
+    0.828,
+    5.538,
+    5.38,
+    10.911,
+    5.723,
+    5.496,
+    13.006,
+    6.884,
+    10.312,
+    7.071,
+    8.578,
+    3.149,
+    6.624,
+    3.528,
+    4.175,
+    7.412,
+    7.322,
+    7.322,
+    1.303,
+    13.679,
+    0.405,
+    8.745,
+    10.602,
+    1.499,
+    13.24,
+    6.398,
+    4.679,
+    6.473,
+    7.501,
+    6.002,
+    12.472,
+    11.107,
+    12.83,
+    0.927,
+    13.6,
+    8.616,
+    8.365,
+    10.487,
+    11.201,
+    9.54,
+    6.911,
+    4.281,
+    5.67,
+    1.643,
+    7.766,
+    8.337,
+    6.051,
+    10.541,
+    6.232,
+    6.424,
+    5.153,
+    12.917,
+    6.646,
+    5.738,
+    12.921,
+    13.544,
+    0.968,
+    4.942,
+    2.528,
+    2.846,
+    3.858,
+    3.121,
+    10.673,
+    11.91,
+    11.166,
+    13.351,
+    4.757,
+    2.277,
+    5.089,
+    5.705,
+    10.049,
+    5.376,
+    1.841,
+    6.095,
+    9.227,
+    6.974,
+    10.264,
+    6.279,
+    7.019,
+    4.508,
+    12.555,
+    10.55,
+    10.96,
+    7.9,
+    13.473,
+    6.268,
+    12.312,
+    3.804,
+    12.434,
+    11.226,
+    11.513,
+    2.997,
+    12.892,
+    2.527,
+    7.022,
+    11.278,
+    11.587,
+    5.973,
+    2.881,
+    4.471,
+    11.28,
+    11.048,
+    6.464,
+    4.91,
+    7.383,
+    1.041,
+    9.018,
+    9.971,
+    11.482,
+    2.046,
+    8.959,
+    0.342,
+    10.702
+   ]
+  },
+  "latency-load": {
+   "presses_injected": 220,
+   "presses_received": 220,
+   "presented": 220,
+   "not_presented": 0,
+   "timestamp_mismatches": 0,
+   "refresh_ms": 13.334,
+   "header": "# clock_id=1 width=800 height=600 mode=latency",
+   "key_to_present_ms": {
+    "p50": 7.29,
+    "p95": 13.08,
+    "p99": 13.83,
+    "max": 15.1,
+    "mean": 6.99
+   },
+   "key_to_present_frames": {
+    "p50": 0.55,
+    "p95": 0.98,
+    "p99": 1.04,
+    "max": 1.13,
+    "mean": 0.52
+   },
+   "key_to_client_ms": {
+    "p50": 0.05,
+    "p95": 0.12,
+    "p99": 1.32,
+    "max": 1.67,
+    "mean": 0.09
+   },
+   "commit_to_present_ms": {
+    "p50": 7.23,
+    "p95": 13.02,
+    "p99": 13.6,
+    "max": 14.52,
+    "mean": 6.9
+   },
+   "raw_ms": [
+    9.084,
+    5.372,
+    11.97,
+    10.205,
+    9.102,
+    12.264,
+    10.308,
+    2.907,
+    6.603,
+    10.196,
+    2.18,
+    2.463,
+    7.369,
+    4.254,
+    1.103,
+    4.218,
+    13.273,
+    11.928,
+    5.57,
+    7.978,
+    10.783,
+    6.265,
+    9.296,
+    1.383,
+    9.195,
+    8.195,
+    3.116,
+    7.835,
+    1.584,
+    12.425,
+    1.239,
+    7.157,
+    9.757,
+    13.52,
+    13.456,
+    13.373,
+    5.172,
+    0.924,
+    2.073,
+    10.588,
+    5.434,
+    10.202,
+    13.412,
+    12.642,
+    10.644,
+    8.439,
+    9.299,
+    2.311,
+    12.656,
+    2.422,
+    6.032,
+    2.621,
+    9.729,
+    1.501,
+    12.371,
+    12.689,
+    12.832,
+    5.218,
+    9.03,
+    2.712,
+    4.714,
+    6.271,
+    0.488,
+    3.698,
+    7.714,
+    15.103,
+    12.064,
+    5.729,
+    4.584,
+    2.245,
+    12.516,
+    3.77,
+    1.921,
+    0.783,
+    1.532,
+    9.62,
+    7.451,
+    2.929,
+    12.821,
+    3.266,
+    1.815,
+    1.364,
+    9.968,
+    1.395,
+    1.192,
+    7.85,
+    8.225,
+    8.696,
+    5.939,
+    7.498,
+    13.89,
+    8.656,
+    8.14,
+    4.19,
+    10.744,
+    10.929,
+    0.402,
+    3.519,
+    8.807,
+    5.553,
+    2.171,
+    0.579,
+    12.287,
+    5.189,
+    1.91,
+    13.033,
+    9.423,
+    12.479,
+    2.598,
+    2.945,
+    5.834,
+    2.943,
+    1.088,
+    11.597,
+    8.71,
+    4.539,
+    6.849,
+    2.637,
+    9.884,
+    4.576,
+    11.715,
+    8.726,
+    10.117,
+    0.993,
+    3.738,
+    10.165,
+    11.561,
+    10.975,
+    2.948,
+    5.381,
+    1.747,
+    0.698,
+    13.479,
+    7.279,
+    9.008,
+    13.565,
+    0.656,
+    7.566,
+    10.026,
+    9.321,
+    3.367,
+    7.416,
+    2.583,
+    4.352,
+    1.71,
+    5.769,
+    2.615,
+    9.656,
+    8.044,
+    9.147,
+    10.447,
+    11.637,
+    4.724,
+    5.155,
+    10.94,
+    4.693,
+    11.797,
+    4.055,
+    10.528,
+    4.721,
+    11.177,
+    9.139,
+    12.192,
+    13.515,
+    1.745,
+    1.688,
+    1.428,
+    12.641,
+    5.212,
+    7.298,
+    2.788,
+    11.078,
+    14.565,
+    2.382,
+    11.826,
+    11.183,
+    12.981,
+    1.074,
+    6.537,
+    2.711,
+    3.767,
+    9.71,
+    5.642,
+    7.722,
+    11.141,
+    6.88,
+    3.109,
+    8.288,
+    9.441,
+    7.301,
+    5.681,
+    8.644,
+    5.147,
+    4.72,
+    4.349,
+    1.027,
+    12.913,
+    11.672,
+    5.023,
+    7.777,
+    9.28,
+    6.691,
+    3.15,
+    3.715,
+    1.951,
+    3.035,
+    1.658,
+    10.58,
+    11.246,
+    10.931,
+    1.22,
+    12.196,
+    0.608,
+    11.962,
+    7.97,
+    11.804,
+    4.117,
+    5.084,
+    13.071,
+    3.44
+   ]
+  },
+  "pacing-idle": {
+   "commits": 2252,
+   "presented": 2252,
+   "discarded": 0,
+   "no_buffer": 0,
+   "duration_s": 30.01,
+   "fps": 75.0,
+   "refresh_ms": 13.334,
+   "interval_ms": {
+    "p50": 13.33,
+    "p95": 13.33,
+    "p99": 13.33,
+    "max": 13.33
+   },
+   "late_intervals": 0,
+   "late_pct": 0.0,
+   "missed_refreshes": 0,
+   "missed_pct": 0.0
+  },
+  "pacing-load": {
+   "commits": 2252,
+   "presented": 2252,
+   "discarded": 0,
+   "no_buffer": 0,
+   "duration_s": 30.01,
+   "fps": 75.0,
+   "refresh_ms": 13.334,
+   "interval_ms": {
+    "p50": 13.33,
+    "p95": 13.33,
+    "p99": 13.33,
+    "max": 13.33
+   },
+   "late_intervals": 0,
+   "late_pct": 0.0,
+   "missed_refreshes": 0,
+   "missed_pct": 0.0
+  },
+  "probe_status": {
+   "latency_idle": "ready clock=1 size=800x600 focused=1 presentation=1 map_ms=5.2",
+   "pacing_idle": "ready clock=1 size=800x600 focused=1 presentation=1 map_ms=5.1",
+   "latency_load": "ready clock=1 size=800x600 focused=1 presentation=1 map_ms=7.6",
+   "pacing_load": "ready clock=1 size=800x600 focused=1 presentation=1 map_ms=9.9"
+  }
+ },
+ "apps": {
+  "terminal": {
+   "title": "Hotaru",
+   "argv": [
+    "aizome-hotaru"
+   ],
+   "cold_settled_s": 0.1656,
+   "cold_first_change_s": 0.1119,
+   "cold_pss_mib": 57.0,
+   "cold_other_new_pss_mib": 0.0,
+   "warm_settled_s": [
+    0.2224,
+    0.1678,
+    0.2183,
+    0.1712,
+    0.1734
+   ],
+   "warm_first_change_s": [
+    0.1168,
+    0.1137,
+    0.1128,
+    0.1175,
+    0.1189
+   ],
+   "warm_pss_mib": [
+    57.0,
+    56.9,
+    57.1,
+    57.0,
+    57.1
+   ],
+   "timeouts": 0
+  },
+  "files": {
+   "title": "Hako",
+   "argv": [
+    "aizome-hako"
+   ],
+   "cold_settled_s": 0.1156,
+   "cold_first_change_s": 0.1156,
+   "cold_pss_mib": 20.6,
+   "cold_other_new_pss_mib": 0.0,
+   "warm_settled_s": [
+    0.116,
+    0.1164,
+    0.1131,
+    0.1156,
+    0.1166
+   ],
+   "warm_first_change_s": [
+    0.116,
+    0.1164,
+    0.1131,
+    0.1156,
+    0.1166
+   ],
+   "warm_pss_mib": [
+    22.5,
+    22.9,
+    22.8,
+    23.0,
+    22.5
+   ],
+   "timeouts": 0
+  },
+  "settings": {
+   "title": "Settei",
+   "argv": [
+    "aizome-settei"
+   ],
+   "cold_settled_s": 0.1203,
+   "cold_first_change_s": 0.1203,
+   "cold_pss_mib": 25.4,
+   "cold_other_new_pss_mib": 0.0,
+   "warm_settled_s": [
+    0.1702,
+    0.1153,
+    0.1139,
+    0.173,
+    0.117
+   ],
+   "warm_first_change_s": [
+    0.1172,
+    0.1153,
+    0.1139,
+    0.1194,
+    0.117
+   ],
+   "warm_pss_mib": [
+    25.6,
+    23.5,
+    25.7,
+    26.1,
+    25.6
+   ],
+   "timeouts": 0
+  },
+  "editor": {
+   "title": "Sumi",
+   "argv": [
+    "aizome-sumi"
+   ],
+   "cold_settled_s": 0.1118,
+   "cold_first_change_s": 0.1118,
+   "cold_pss_mib": 16.4,
+   "cold_other_new_pss_mib": 0.0,
+   "warm_settled_s": [
+    0.1181,
+    0.1113,
+    0.1166,
+    0.1141,
+    0.1142
+   ],
+   "warm_first_change_s": [
+    0.1181,
+    0.1113,
+    0.1166,
+    0.1141,
+    0.1142
+   ],
+   "warm_pss_mib": [
+    16.2,
+    16.5,
+    16.2,
+    16.2,
+    16.1
+   ],
+   "timeouts": 0
+  },
+  "calculator": {
+   "title": "Soroban",
+   "argv": [
+    "aizome-soroban"
+   ],
+   "cold_settled_s": 0.1213,
+   "cold_first_change_s": 0.1213,
+   "cold_pss_mib": 15.1,
+   "cold_other_new_pss_mib": 0.0,
+   "warm_settled_s": [
+    0.1148,
+    0.1109,
+    0.1132,
+    0.1138,
+    0.1173
+   ],
+   "warm_first_change_s": [
+    0.1148,
+    0.1109,
+    0.1132,
+    0.1138,
+    0.1173
+   ],
+   "warm_pss_mib": [
+    14.5,
+    14.8,
+    14.7,
+    14.8,
+    14.6
+   ],
+   "timeouts": 0
+  },
+  "image": {
+   "title": "Shashin",
+   "argv": [
+    "aizome-shashin",
+    "/run/current-system/sw/share/backgrounds/tatami/hintersee.jpg"
+   ],
+   "cold_settled_s": 0.3217,
+   "cold_first_change_s": 0.1137,
+   "cold_pss_mib": 325.8,
+   "cold_other_new_pss_mib": 0.0,
+   "warm_settled_s": [
+    0.3203,
+    0.3229,
+    0.3215,
+    0.278,
+    0.3217
+   ],
+   "warm_first_change_s": [
+    0.1146,
+    0.1168,
+    0.1156,
+    0.1205,
+    0.1143
+   ],
+   "warm_pss_mib": [
+    325.6,
+    325.7,
+    326.8,
+    326.0,
+    326.1
+   ],
+   "timeouts": 0
+  },
+  "pdf": {
+   "title": "Shiori",
+   "argv": [
+    "aizome-shiori",
+    "/home/demo/Documents/fixture.pdf"
+   ],
+   "cold_settled_s": 0.1156,
+   "cold_first_change_s": 0.1156,
+   "cold_pss_mib": 38.5,
+   "cold_other_new_pss_mib": 0.0,
+   "warm_settled_s": [
+    0.1143,
+    0.117,
+    0.1151,
+    0.1217,
+    0.1717
+   ],
+   "warm_first_change_s": [
+    0.1143,
+    0.117,
+    0.1151,
+    0.1217,
+    0.1169
+   ],
+   "warm_pss_mib": [
+    38.6,
+    38.5,
+    38.4,
+    37.1,
+    36.8
+   ],
+   "timeouts": 0
+  }
+ }
+}

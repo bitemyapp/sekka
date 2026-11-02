@@ -1,0 +1,1 @@
+Stopped after one round: the idle floor moved by several watts with the user's activity (baseline 25.2 W, above the players' trials). Its power is unusable; its window, CPU, wakeup and GPU records show what changes when mpv's dmabuf-wayland window is put full screen by the compositor (nothing measurable).

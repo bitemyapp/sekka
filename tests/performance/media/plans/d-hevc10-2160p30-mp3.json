@@ -1,0 +1,57 @@
+{
+ "rounds": 3,
+ "trials": [
+  {
+   "subject": "baseline",
+   "clip": null
+  },
+  {
+   "subject": "utsushi",
+   "clip": "bbb-2160p30-hevc10.mp4"
+  },
+  {
+   "subject": "mpv-default",
+   "clip": "bbb-2160p30-hevc10.mp4"
+  },
+  {
+   "subject": "mpv-vaapi-gpunext",
+   "clip": "bbb-2160p30-hevc10.mp4"
+  },
+  {
+   "subject": "mpv-vaapi-dmabuf",
+   "clip": "bbb-2160p30-hevc10.mp4"
+  },
+  {
+   "subject": "vlc-default",
+   "clip": "bbb-2160p30-hevc10.mp4"
+  },
+  {
+   "subject": "mpv-sekka",
+   "clip": "bbb-2160p30-hevc10.mp4"
+  },
+  {
+   "subject": "baseline",
+   "clip": null,
+   "mode": "audio",
+   "sound": true
+  },
+  {
+   "subject": "utsushi",
+   "clip": "bbb-music.mp3",
+   "mode": "audio",
+   "sound": true
+  },
+  {
+   "subject": "mpv-default",
+   "clip": "bbb-music.mp3",
+   "mode": "audio",
+   "sound": true
+  },
+  {
+   "subject": "vlc-default",
+   "clip": "bbb-music.mp3",
+   "mode": "audio",
+   "sound": true
+  }
+ ]
+}

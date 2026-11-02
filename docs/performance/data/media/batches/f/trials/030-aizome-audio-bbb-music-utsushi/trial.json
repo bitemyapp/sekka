@@ -1,0 +1,411 @@
+{
+ "tag": "030-aizome-audio-bbb-music-utsushi",
+ "spec": {
+  "subject": "utsushi",
+  "clip": "bbb-music.opus",
+  "mode": "audio",
+  "sound": true,
+  "round": 2
+ },
+ "started": "2026-11-02T14:11:57-0600",
+ "quiet": {
+  "busy_cores_before": 0.59,
+  "waited_s": 2.0,
+  "loadavg": [
+   "0.06",
+   "0.16",
+   "0.20"
+  ]
+ },
+ "session_up_s": null,
+ "window_after_s": 0.052,
+ "audio_route": {
+  "nodes": [
+   94
+  ],
+  "targets": [
+   "perf-null"
+  ]
+ },
+ "windows": [
+  {
+   "id": 1,
+   "app_id": "org.aizome.Utsushi",
+   "pid": 909410,
+   "fullscreen": false,
+   "geometry": {
+    "x": 362,
+    "y": 264,
+    "w": 960,
+    "h": 600
+   },
+   "title": "bbb-music"
+  }
+ ],
+ "audio_route_before_window": {
+  "nodes": [
+   94
+  ],
+  "targets": [
+   "perf-null"
+  ]
+ },
+ "roles": {
+  "compositor": [
+   {
+    "pid": 909267,
+    "comm": "aizome",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome"
+   }
+  ],
+  "shell": [
+   {
+    "pid": 909279,
+    "comm": "aizome-shell",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome-shell"
+   }
+  ],
+  "dbus": [
+   {
+    "pid": 909254,
+    "comm": "dbus-daemon",
+    "exe": "/nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2/bin/dbus-daemon"
+   }
+  ],
+  "player": [
+   {
+    "pid": 909410,
+    "comm": "aizome-utsushi",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome-utsushi"
+   }
+  ],
+  "pw:pipewire": [
+   {
+    "pid": 2310,
+    "comm": "pipewire",
+    "exe": "/nix/store/n8ksprmibzglf09aavw7mcl4n9767axm-pipewire-1.6.9/bin/pipewire"
+   }
+  ],
+  "pw:pipewire-pulse": [
+   {
+    "pid": 2311,
+    "comm": "pipewire-pulse",
+    "exe": "/nix/store/n8ksprmibzglf09aavw7mcl4n9767axm-pipewire-1.6.9/bin/pipewire"
+   }
+  ],
+  "pw:wireplumber": [
+   {
+    "pid": 2312,
+    "comm": "wireplumber",
+    "exe": "/nix/store/dryjzhq5m2jah4rg5rri6fg8yjrv6y8i-wireplumber-0.5.18/bin/wireplumber"
+   }
+  ]
+ },
+ "player_stats_before": {
+  "shown": 0,
+  "dropped": 0,
+  "decoded": 0,
+  "presented": 0,
+  "discarded": 0,
+  "suspensions": 0,
+  "path": "None",
+  "video_decoder": null,
+  "audio_output": "PipeWire, 48000 Hz, 2 channels, 170 ms cycles",
+  "gpu": false,
+  "position": 5.0,
+  "lines": 1
+ },
+ "compositor_stats": [
+  {
+   "name": "HEADLESS-1",
+   "frames_rendered": 72,
+   "frames_skipped": 0,
+   "cpu_us": {
+    "p50": 247.0,
+    "p95": 270.0,
+    "p99": 287.0,
+    "max": 287.0,
+    "mean": 249.26388888888889
+   },
+   "gpu_us": {
+    "p50": 988.0,
+    "p95": 1198.0,
+    "p99": 1286.0,
+    "max": 1286.0,
+    "mean": 1004.0555555555557
+   },
+   "samples": 72
+  }
+ ],
+ "player_stats_after": {
+  "shown": 0,
+  "dropped": 0,
+  "decoded": 0,
+  "presented": 0,
+  "discarded": 0,
+  "suspensions": 0,
+  "path": "None",
+  "video_decoder": null,
+  "audio_output": "PipeWire, 48000 Hz, 2 channels, 170 ms cycles",
+  "gpu": false,
+  "position": 65.0,
+  "lines": 13
+ },
+ "power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 10,
+  "duration_s": 60.008,
+  "samples": 5881,
+  "energy_j": 1298.859,
+  "mean_w": 21.645,
+  "p10_w": 17.0,
+  "p50_w": 19.0,
+  "p90_w": 28.0,
+  "max_w": 56.0,
+  "system_busy_cpu_s": 29.37,
+  "exit": 0
+ },
+ "cpu": {
+  "compositor": {
+   "cpu_s": 0.042,
+   "cpu_pct": 0.07,
+   "cpu_ticks_s": 0.04,
+   "vol_switches": 780,
+   "invol_switches": 20,
+   "switches_per_s": 13.3,
+   "wakeups_per_s": 13.0
+  },
+  "shell": {
+   "cpu_s": 0.0479,
+   "cpu_pct": 0.08,
+   "cpu_ticks_s": 0.05,
+   "vol_switches": 3354,
+   "invol_switches": 45,
+   "switches_per_s": 56.6,
+   "wakeups_per_s": 55.9
+  },
+  "dbus": {
+   "cpu_s": 0.0,
+   "cpu_pct": 0.0,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 0,
+   "invol_switches": 0,
+   "switches_per_s": 0.0,
+   "wakeups_per_s": 0.0
+  },
+  "player": {
+   "cpu_s": 0.1178,
+   "cpu_pct": 0.196,
+   "cpu_ticks_s": 0.11,
+   "vol_switches": 873,
+   "invol_switches": 10,
+   "switches_per_s": 14.7,
+   "wakeups_per_s": 14.5
+  },
+  "pw:pipewire": {
+   "cpu_s": 0.0094,
+   "cpu_pct": 0.016,
+   "cpu_ticks_s": 0.01,
+   "vol_switches": 704,
+   "invol_switches": 0,
+   "switches_per_s": 11.7,
+   "wakeups_per_s": 11.7
+  },
+  "pw:pipewire-pulse": {
+   "cpu_s": 0.1112,
+   "cpu_pct": 0.185,
+   "cpu_ticks_s": 0.11,
+   "vol_switches": 1440,
+   "invol_switches": 16,
+   "switches_per_s": 24.3,
+   "wakeups_per_s": 24.0
+  },
+  "pw:wireplumber": {
+   "cpu_s": 0.0,
+   "cpu_pct": 0.0,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 0,
+   "invol_switches": 0,
+   "switches_per_s": 0.0,
+   "wakeups_per_s": 0.0
+  }
+ },
+ "gpu": {
+  "compositor": {
+   "engine_ns": {
+    "gfx": 70463354,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "shell": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "dbus": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "player": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "pw:pipewire": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "pw:pipewire-pulse": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "pw:wireplumber": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  }
+ },
+ "igpu": {
+  "busy_pct_mean": 0.0,
+  "busy_samples": 601,
+  "sclk_mhz_mean": 600.0,
+  "tctl_c_mean": 44.13
+ },
+ "player_memory": {
+  "rss_kib": 61608,
+  "pss_kib": 35611,
+  "pss_anon_kib": 14260,
+  "pss_file_kib": 20146,
+  "pss_shmem_kib": 1205,
+  "swap_kib": 0
+ },
+ "player_threads": {
+  "909410": {
+   "909410": "aizome-utsushi",
+   "909412": "sidestep-settin",
+   "909413": "sidestep-render",
+   "909414": "aizome-config-w",
+   "909416": "aizome-shell",
+   "909419": "aizome-media-au",
+   "909420": "module-rt",
+   "909421": "aizome-media",
+   "909422": "utsushi-mpris",
+   "909423": "instance",
+   "909424": "blocking-1",
+   "909425": "async-io",
+   "909426": "zbus::Connectio",
+   "909427": "data-loop.0",
+   "909428": "sidestep-raster",
+   "909429": "sidestep-raster",
+   "909430": "sidestep-raster"
+  }
+ },
+ "player_alive": true,
+ "compositor_memory": {
+  "rss_kib": 124776,
+  "pss_kib": 74148,
+  "pss_anon_kib": 23552,
+  "pss_file_kib": 49162,
+  "pss_shmem_kib": 1434,
+  "swap_kib": 0
+ },
+ "player_switches_by_thread": {
+  "aizome-utsushi": [
+   132,
+   1,
+   18.9
+  ],
+  "sidestep-settin": [
+   0,
+   0,
+   0.0
+  ],
+  "sidestep-render": [
+   150,
+   2,
+   6.5
+  ],
+  "aizome-config-w": [
+   60,
+   0,
+   0.8
+  ],
+  "aizome-shell": [
+   0,
+   0,
+   0.0
+  ],
+  "aizome-media-au": [
+   0,
+   0,
+   0.0
+  ],
+  "module-rt": [
+   0,
+   0,
+   0.0
+  ],
+  "aizome-media": [
+   59,
+   7,
+   78.2
+  ],
+  "utsushi-mpris": [
+   0,
+   0,
+   0.0
+  ],
+  "instance": [
+   0,
+   0,
+   0.0
+  ],
+  "blocking-1": [
+   120,
+   0,
+   0.8
+  ],
+  "async-io": [
+   0,
+   0,
+   0.0
+  ],
+  "zbus::Connectio": [
+   0,
+   0,
+   0.0
+  ],
+  "data-loop.0": [
+   352,
+   0,
+   12.5
+  ],
+  "sidestep-raster": [
+   0,
+   0,
+   0.0
+  ]
+ },
+ "ok": true,
+ "loadavg_after": [
+  "0.21",
+  "0.20",
+  "0.21"
+ ]
+}
