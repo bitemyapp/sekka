@@ -90,6 +90,7 @@ pub enum Msg {
     CopyReady(u64, u64, PreparedClipboard),
     CopyFailed(u64, u64, String),
     PasteReady(u64, u64, ClipboardRead, Option<Arc<str>>),
+    ClearPasteNotice(u64, u64),
     Paste,
     /// A pointer selection in the pane is finished: with copy on select,
     /// it becomes the primary selection.
@@ -129,6 +130,9 @@ pub struct Pane {
     pub session: Option<Session>,
     pub selection: Option<Selection>,
     pub status: String,
+    // Expiration or input may dismiss only this paste's warning, never a
+    // newer paste or another failure that has since replaced the status.
+    paste_notice: Option<(u64, &'static str)>,
     pub(crate) hovered_link: Option<crate::links::Link>,
     pub ended: bool,
     pub bell: bool,
@@ -141,6 +145,14 @@ pub struct Pane {
 }
 
 impl Pane {
+    fn clear_paste_notice(&mut self) {
+        if let Some((_, notice)) = self.paste_notice.take()
+            && self.status == notice
+        {
+            self.status.clear();
+        }
+    }
+
     pub fn displayed_snapshot(&self) -> Option<&Arc<Snapshot>> {
         self.rendered.as_ref().map(|frame| &frame.snapshot)
     }
@@ -380,6 +392,7 @@ impl Hotaru {
             session,
             selection: None,
             status,
+            paste_notice: None,
             hovered_link: None,
             ended: false,
             bell: false,
@@ -591,6 +604,7 @@ impl Hotaru {
             _ => false,
         };
         if input && let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
+            pane.clear_paste_notice();
             pane.input_activity = pane.input_activity.wrapping_add(1);
         }
         if let Some(tab) = self.panes.iter_mut().find(|t| t.id == id)
@@ -1997,6 +2011,9 @@ impl Program for Hotaru {
                 }
             }
             Msg::PastePrimary(id) => {
+                if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
+                    pane.clear_paste_notice();
+                }
                 // A newer paste, or paste event, replaces one still reading.
                 let token = self.clipboard_request();
                 let read = cx.primary_read();
@@ -2097,6 +2114,9 @@ impl Program for Hotaru {
             }
             Msg::Paste => {
                 let Some(id) = self.active_pane().map(|pane| pane.id) else { return };
+                if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
+                    pane.clear_paste_notice();
+                }
                 let token = self.clipboard_request();
                 let read = cx.clipboard_read();
                 if self.paste_event(id, false, &read) {
@@ -2115,7 +2135,10 @@ impl Program for Hotaru {
                     if let Some(text) = text {
                         self.send(tab, Command::Paste(text));
                     } else if let Some(target) = self.panes.iter_mut().find(|t| t.id == tab) {
-                        target.status = "Clipboard text unavailable, too large, or timed out.".into();
+                        let notice = crate::clipboard::paste_failure(&read);
+                        target.status = notice.into();
+                        target.paste_notice = Some((token, notice));
+                        cx.after(std::time::Duration::from_secs(5), Msg::ClearPasteNotice(tab, token));
                     }
                     if self.active_pane().is_some_and(|pane| pane.id == tab) {
                         self.focus_active(cx);
@@ -2123,6 +2146,13 @@ impl Program for Hotaru {
                 }
                 if token == self.clipboard_token {
                     self.clipboard_read = None;
+                }
+            }
+            Msg::ClearPasteNotice(id, token) => {
+                if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id)
+                    && pane.paste_notice.is_some_and(|(current, _)| current == token)
+                {
+                    pane.clear_paste_notice();
                 }
             }
             Msg::Find => {

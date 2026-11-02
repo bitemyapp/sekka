@@ -1377,6 +1377,122 @@ fn programs_write_the_clipboard_and_primary_selection_and_asking_waits_for_an_an
     assert_eq!(h.platform.clipboard.as_deref(), Some("mine"));
 }
 
+#[test]
+fn paste_notice_expires_without_another_clipboard_operation() {
+    let mut h = Harness::new(Hotaru::preview());
+    h.send(Msg::Paste);
+    assert!(h.settle(Duration::from_secs(2), |app| app.active_pane().unwrap().status.starts_with("Clipboard")));
+    assert_eq!(h.program().active_pane().unwrap().status, "Clipboard is empty.");
+    let win = h.window();
+    assert!(h.texts(win).iter().any(|text| text.starts_with("Clipboard")));
+    h.advance(Duration::from_secs(6));
+    assert!(!h.program().active_pane().unwrap().status.starts_with("Clipboard"));
+    assert!(!h.texts(win).iter().any(|text| text.starts_with("Clipboard")));
+}
+
+#[test]
+fn paste_notice_clears_on_input_and_successful_paste() {
+    use aizome_kit::sidestep_ui::{Key, Modifiers};
+    let mut command = PtyCommand::new(std::env::current_exe().unwrap());
+    command.args = ["--ignored", "--exact", "paste_shortcut_child", "--nocapture", "--test-threads=1"]
+        .into_iter()
+        .map(Into::into)
+        .collect();
+    command.env.push(("HOTARU_PASTE_CHILD".into(), "1".into()));
+    let mut h = Harness::new(keeping(command));
+    assert!(h.settle(Duration::from_secs(5), |app| {
+        app.active_pane().unwrap().snapshot.plain_text().contains("PASTE-READY")
+    }));
+    h.platform.clipboard_data =
+        Some(aizome_kit::PreparedClipboard::new(None, vec![("image/png".into(), Arc::from(&b"png"[..]))]).unwrap());
+    h.send(Msg::Paste);
+    assert!(h.settle(Duration::from_secs(2), |app| app.active_pane().unwrap().status.starts_with("Clipboard")));
+    assert_eq!(h.program().active_pane().unwrap().status, "Clipboard image has no text to paste.");
+    // Ctrl+V belongs to the child program, including Claude's image paste.
+    // Supply physical/layout metadata as the real Wayland keyboard does.
+    let key = aizome_kit::sidestep_ui::KeyEvent {
+        key: Key::Character("v".into()),
+        text: None,
+        pressed: true,
+        repeat: false,
+        code: 47,
+        modifiers: Modifiers::CONTROL,
+        composing: None,
+        native: aizome_kit::sidestep_ui::KeyMetadata {
+            keysym: b'v' as u32,
+            text: "v".into(),
+            unshifted: Some('v'),
+            consumed_modifiers: Modifiers::NONE,
+        },
+    };
+    assert!(h.program().bindings().action(&key).is_none());
+    let id = h.program().active_pane().unwrap().id;
+    h.send(Msg::Key(id, Arc::new(aizome_hotaru::input::key_event(&key))));
+    assert!(!h.program().active_pane().unwrap().status.starts_with("Clipboard"));
+    h.send(Msg::Paste);
+    assert!(h.settle(Duration::from_secs(2), |app| app.active_pane().unwrap().status.starts_with("Clipboard")));
+    h.platform.clipboard_data = Some(
+        aizome_kit::PreparedClipboard::new(
+            Some("recovered".into()),
+            vec![("image/png".into(), Arc::from(&b"png"[..]))],
+        )
+        .unwrap(),
+    );
+    h.platform.clipboard = Some("recovered".into());
+    h.send(Msg::Paste);
+    assert!(
+        h.settle(Duration::from_secs(2), |app| {
+            app.active_pane().unwrap().snapshot.plain_text().contains("PASTE-OK")
+        }),
+        "{}; {}",
+        h.program().active_pane().unwrap().status,
+        h.program().active_pane().unwrap().snapshot.plain_text()
+    );
+    assert!(!h.program().active_pane().unwrap().status.starts_with("Clipboard"));
+}
+
+#[test]
+fn paste_notice_timer_preserves_newer_notices_and_other_pane_errors() {
+    let mut h = Harness::new(Hotaru::preview());
+    h.send(Msg::Paste);
+    assert!(h.settle(Duration::from_secs(2), |app| app.active_pane().unwrap().status.starts_with("Clipboard")));
+    h.advance(Duration::from_secs(3));
+    h.send(Msg::Paste);
+    assert!(h.settle(Duration::from_secs(2), |app| app.active_pane().unwrap().status.starts_with("Clipboard")));
+    h.advance(Duration::from_secs(3));
+    assert!(h.program().active_pane().unwrap().status.starts_with("Clipboard"), "older timer cleared newer warning");
+    let id = h.program().active_pane().unwrap().id;
+    h.send(Msg::Notice(id, "A different failure".into()));
+    h.advance(Duration::from_secs(6));
+    h.send(Msg::Input(id, b"x".to_vec()));
+    assert_eq!(h.program().active_pane().unwrap().status, "A different failure");
+}
+
+#[test]
+#[ignore]
+fn paste_shortcut_child() {
+    if std::env::var_os("HOTARU_PASTE_CHILD").is_none() {
+        return;
+    }
+    use std::io::{Read, Write};
+    let mut attributes = std::mem::MaybeUninit::<libc::termios>::uninit();
+    // SAFETY: this isolated child owns its PTY and initializes termios before use.
+    unsafe {
+        assert_eq!(libc::tcgetattr(0, attributes.as_mut_ptr()), 0);
+        let mut attributes = attributes.assume_init();
+        libc::cfmakeraw(&mut attributes);
+        assert_eq!(libc::tcsetattr(0, libc::TCSANOW, &attributes), 0);
+    }
+    std::io::stdout().write_all(b"PASTE-READY\r\n").unwrap();
+    std::io::stdout().flush().unwrap();
+    let expected = b"\x16recovered";
+    let mut actual = vec![0; expected.len()];
+    std::io::stdin().read_exact(&mut actual).unwrap();
+    assert_eq!(actual, expected, "Ctrl+V must reach the program; terminal paste must send the text once");
+    std::io::stdout().write_all(b"\r\nPASTE-OK\r\n").unwrap();
+    std::io::stdout().flush().unwrap();
+}
+
 fn osc52_reader(selection: &str) -> Hotaru {
     let mut command = PtyCommand::new(std::env::current_exe().unwrap());
     command.args = ["--ignored", "--exact", "osc52_read_child", "--nocapture", "--test-threads=1"]
