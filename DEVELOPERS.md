@@ -2345,12 +2345,18 @@ GitHub limits individual release assets to 2 GiB. `scripts/prepare-release.py` k
 
 ### Nightly builds
 
-`.github/workflows/nightly.yml` runs at 4 AM `America/Chicago` and from its
-**Run workflow** button (Actions, "Check and cache nightly Sekka"), on `main` only:
+`.github/workflows/nightly.yml` is scheduled for 4:17 AM `America/Chicago`.
+It also runs from its **Run workflow** button (Actions, "Check and cache
+nightly Sekka"), on `main` only:
 
 ```sh
 gh workflow run nightly.yml --ref main
 ```
+
+The minute avoids GitHub's documented start-of-hour scheduling peak while
+keeping the job near 4 AM Central through daylight saving changes.
+[Scheduled delivery remains best-effort](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule);
+GitHub can delay or drop scheduled runs under load.
 
 The job runs on the builder. It first brings every input in `flake.lock` up
 to date (`nix flake update`) and commits that, if anything moved, on top of

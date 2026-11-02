@@ -2,8 +2,9 @@ name: Check and cache nightly Sekka
 
 on:
   schedule:
-    # 4 AM in Chicago, through daylight saving changes.
-    - cron: '0 4 * * *'
+    # 4:17 AM in Chicago, through daylight saving changes. Avoid GitHub's
+    # top-of-hour scheduling peak; scheduled delivery is still best-effort.
+    - cron: '17 4 * * *'
       timezone: America/Chicago
   workflow_dispatch:
 
