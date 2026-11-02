@@ -231,10 +231,17 @@ Results:
   `$XDG_CACHE_HOME/aizome/files.idx`, refreshed in the background when older
   than 10 minutes and at idle), recent files first when the query is empty,
   frecency boosts, folders open in Hako and files with their default app.
-- **Apps**: desktop entries by name, generic name and keywords. A query
-  that starts a word of a Default Apps purpose in Settei (“term”, “files”,
-  “editor”, “browser”) puts the app chosen for it first, ahead of other
-  apps and settings but not the focused app's own commands.
+- **Apps**: desktop entries by name, generic name and keywords. From three
+  letters, a query that starts a word of a Default Apps purpose in Settei
+  (“term”, “files”, “editor”, “browser”, “pdf documents”) finds the chosen
+  app even when its desktop entry doesn't contain those words. Capitals
+  and extra whitespace don't change that choice. The chosen app heads
+  Apps regardless of other apps' usage history, and Apps precedes Settings,
+  Windows and Files. The Commands section still precedes Apps when
+  ordinary matching would put it there. The remaining sections keep their order.
+  Short queries, explicit app names and longer requests such as “terminal
+  settings” use ordinary matching. Choosing the Files or Settings scope
+  still searches only that scope.
 - **Settings**: every Settei pane and its main options ("Keyboard ›
   Remap Caps Lock"), opening Settei at that place. The list comes from
   `aizome-settei --list-settings --json` (cached), so it stays in step.

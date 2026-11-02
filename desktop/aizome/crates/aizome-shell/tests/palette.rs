@@ -7,9 +7,72 @@ use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
 use aizome_search::Scope;
 use aizome_shell::actions::Action;
 use aizome_shell::palette::PaletteEvent;
+use aizome_shell::palette::model::SettingEntry;
 use aizome_shell::palette::view::PaletteMsg;
 use aizome_shell::shell::Msg;
+use aizome_sys::apps::{AppIndex, DefaultRole, Locale, XdgDirs};
 use common::*;
+
+/// Private desktop entries and defaults; never the session's configuration.
+struct DefaultApps {
+    root: std::path::PathBuf,
+    dirs: XdgDirs,
+}
+
+impl DefaultApps {
+    fn new(name: &str) -> Self {
+        let root = std::env::temp_dir().join(format!("aizome-palette-{name}-{}", std::process::id()));
+        let dirs = XdgDirs::rooted(&root);
+        std::fs::create_dir_all(dirs.data_home.join("applications")).unwrap();
+        Self { root, dirs }
+    }
+
+    fn write(&self, id: &str, contents: &str) {
+        std::fs::write(self.dirs.data_home.join("applications").join(id), contents).unwrap();
+    }
+
+    fn shipped(&self, app: &str, id: &str) {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../apps/{app}/data/{id}"));
+        self.write(id, &std::fs::read_to_string(path).unwrap());
+    }
+
+    fn load(&self) -> AppIndex {
+        AppIndex::load_with(self.dirs.clone(), Locale::untranslated())
+    }
+}
+
+impl Drop for DefaultApps {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+fn default_settings(h: &mut aizome_kit::testing::Harness<aizome_shell::shell::Shell>) {
+    h.program_mut().settings_list = DefaultRole::ALL
+        .into_iter()
+        .map(|role| SettingEntry {
+            id: format!("general.{role:?}"),
+            title: role.label().into(),
+            path: format!("General › Default Apps › {}", role.label()),
+            pane: Some("general".into()),
+            ..Default::default()
+        })
+        .collect();
+}
+
+fn first_app(
+    h: &mut aizome_kit::testing::Harness<aizome_shell::shell::Shell>,
+    query: &str,
+    id: &str,
+) -> aizome_kit::WindowKey {
+    let p = open(h, query);
+    let state = h.program().palette.as_ref().unwrap();
+    assert_eq!(state.selected, 0);
+    let item = &state.sections[0].rows[0].item;
+    assert_eq!(item.action, Action::FocusApp { app_id: id.into() }, "query: {query}");
+    assert!(h.texts(p).contains(&item.title), "the selected app is visible: {query}");
+    p
+}
 
 fn open(h: &mut aizome_kit::testing::Harness<aizome_shell::shell::Shell>, query: &str) -> aizome_kit::WindowKey {
     h.send(Msg::Run(Action::Palette { scope: None, query: String::new() }));
@@ -81,9 +144,13 @@ fn a_purpose_finds_the_terminal_chosen_in_settei() {
         apps.join("org.aizome.Hotaru.desktop"),
     )
     .unwrap();
-    for (id, name) in
-        [("foot", "Foot"), ("footclient", "Foot Client"), ("foot-server", "Foot Server"), ("kitty", "kitty")]
-    {
+    for (id, name) in [
+        ("foot", "Foot"),
+        ("footclient", "Foot Client"),
+        ("foot-server", "Foot Server"),
+        ("kitty", "kitty"),
+        ("other-terminal", "Terminal"),
+    ] {
         std::fs::write(
             apps.join(format!("{id}.desktop")),
             format!(
@@ -95,9 +162,11 @@ fn a_purpose_finds_the_terminal_chosen_in_settei() {
     let mut index = AppIndex::load_with(dirs, Locale::default());
     index.set_role_default(DefaultRole::Terminal, "org.aizome.Hotaru.desktop").unwrap();
     h.program_mut().apps = Some(std::sync::Arc::new(index));
+    default_settings(&mut h);
     // A terminal used before Hotaru was the default.
     for _ in 0..100 {
         h.program_mut().frecency.visit("app:foot");
+        h.program_mut().frecency.visit("app:other-terminal");
     }
     let found = |h: &mut aizome_kit::testing::Harness<aizome_shell::shell::Shell>, query: &str| {
         let p = open(h, query);
@@ -106,18 +175,181 @@ fn a_purpose_finds_the_terminal_chosen_in_settei() {
         h.send(Msg::Palette(PaletteEvent::Ui(PaletteMsg::Close)));
         item
     };
-    for query in ["term", "terminal"] {
+    for query in ["ter", "term", "terminal", "TERMINAL", " Terminal "] {
         let item = found(&mut h, query);
         assert_eq!(item.action, Action::FocusApp { app_id: "org.aizome.Hotaru".into() }, "query: {query}");
         assert_eq!(item.glyph, aizome_kit::Icon::SquareTerminal);
     }
     assert_eq!(found(&mut h, "foot").action, Action::FocusApp { app_id: "foot".into() });
-    // The lift follows the choice, not Hotaru.
+    // The priority follows the choice, not Hotaru.
     let mut index = std::sync::Arc::try_unwrap(h.program_mut().apps.take().unwrap()).unwrap();
     index.set_role_default(DefaultRole::Terminal, "kitty.desktop").unwrap();
     h.program_mut().apps = Some(std::sync::Arc::new(index));
     assert_eq!(found(&mut h, "terminal").action, Action::FocusApp { app_id: "kitty".into() });
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn all_settei_roles_find_apps_whose_names_and_keywords_do_not_describe_the_role() {
+    let fixture = DefaultApps::new("all-roles");
+    for (n, role) in DefaultRole::ALL.into_iter().enumerate() {
+        fixture.write(&format!("chosen-{n}.desktop"), &format!(
+            "[Desktop Entry]\nType=Application\nName=選んだアプリ{n}\nExec=chosen-{n}\nCategories=TerminalEmulator;\nMimeType={};\n",
+            role.primary_mime_type().unwrap_or("")
+        ));
+    }
+    let mut index = fixture.load();
+    for (n, role) in DefaultRole::ALL.into_iter().enumerate() {
+        index.set_role_default(role, &format!("chosen-{n}.desktop")).unwrap();
+    }
+    let mut h = scene(true);
+    default_settings(&mut h);
+    h.send(Msg::Apps(aizome_shell::shell::AppsLoaded(std::sync::Arc::new(fixture.load()))));
+    for (n, role) in DefaultRole::ALL.into_iter().enumerate() {
+        for query in [role.label().to_lowercase(), role.label().to_uppercase()] {
+            let id = format!("chosen-{n}");
+            let p = open(&mut h, &query);
+            // This scene has a "Move to Desk > Mail" command, which keeps
+            // its precedence under All. Explicitly choosing Apps always
+            // selects the app chosen for the purpose.
+            h.send(Msg::Palette(PaletteEvent::Ui(PaletteMsg::Scope(Some(Scope::App)))));
+            let state = h.program().palette.as_ref().unwrap();
+            assert_eq!(state.selected, 0);
+            let item = &state.sections[0].rows[0].item;
+            assert_eq!(item.action, Action::FocusApp { app_id: id.clone() }, "query: {query}");
+            assert!(h.texts(p).contains(&item.title), "chosen app drawn: {query}");
+            let before = h.program().frecency.score(&format!("app:{id}"));
+            h.named(p, NamedKey::Enter, Modifiers::NONE);
+            assert!(h.program().palette.is_none(), "Enter closes the palette: {role:?}");
+            assert!(
+                h.program().frecency.score(&format!("app:{id}")) > before + 0.9,
+                "Enter activates the chosen app: {role:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn pdf_documents_and_media_roles_find_realistic_desktop_entries() {
+    let fixture = DefaultApps::new("documents-and-media");
+    fixture.shipped("shiori", "org.aizome.Shiori.desktop");
+    // The unlocalised searchable fields of mpv's desktop entry. Its
+    // purpose words are absent, and "pdf"/"documents" are separate in Shiori.
+    fixture.write("mpv.desktop", "[Desktop Entry]\nType=Application\nName=mpv Media Player\nGenericName=Multimedia player\nKeywords=mpv;media;player;video;audio;tv;\nExec=mpv %U\nMimeType=video/mp4;audio/mpeg;\n");
+    let mut index = fixture.load();
+    for (role, id) in [
+        (DefaultRole::PdfViewer, "org.aizome.Shiori.desktop"),
+        (DefaultRole::VideoPlayer, "mpv.desktop"),
+        (DefaultRole::MusicPlayer, "mpv.desktop"),
+    ] {
+        index.set_role_default(role, id).unwrap();
+    }
+    let mut h = scene(false);
+    default_settings(&mut h);
+    h.send(Msg::Apps(aizome_shell::shell::AppsLoaded(std::sync::Arc::new(fixture.load()))));
+    for (q, id) in [
+        ("pdf documents", "org.aizome.Shiori"),
+        ("PDF  documents", "org.aizome.Shiori"),
+        ("documents", "org.aizome.Shiori"),
+        ("videos", "mpv"),
+        ("music", "mpv"),
+    ] {
+        let p = first_app(&mut h, q, id);
+        if q == "music" {
+            h.save_png(p, shots().join("palette-purpose-music.png"), 2.0);
+        }
+        let apps = &h.program().palette.as_ref().unwrap().sections[0].rows;
+        assert_eq!(apps.iter().filter(|r| r.item.action == Action::FocusApp { app_id: id.into() }).count(), 1);
+        h.send(Msg::Palette(PaletteEvent::Ui(PaletteMsg::Close)));
+    }
+}
+
+#[test]
+fn a_default_change_and_removal_refresh_the_prepared_palette() {
+    use aizome_shell::palette::AHEAD_AFTER;
+    use aizome_shell::shell::AppsLoaded;
+    use std::sync::Arc;
+    let fixture = DefaultApps::new("default-refresh");
+    fixture.shipped("hotaru", "org.aizome.Hotaru.desktop");
+    fixture.write(
+        "kitty.desktop",
+        "[Desktop Entry]\nType=Application\nName=kitty\nExec=kitty\nCategories=TerminalEmulator;\n",
+    );
+    let mut h = scene(false);
+    h.send(Msg::Apps(AppsLoaded(Arc::new(fixture.load()))));
+    h.send(Msg::WarmPalette);
+    h.advance(AHEAD_AFTER);
+    first_app(&mut h, "terminal", "org.aizome.Hotaru");
+    h.send(Msg::Palette(PaletteEvent::Ui(PaletteMsg::Close)));
+    fixture.load().set_role_default(DefaultRole::Terminal, "kitty.desktop").unwrap();
+    // As when the index watcher notices Settei's saved defaults.
+    h.send(Msg::Apps(AppsLoaded(Arc::new(fixture.load()))));
+    h.advance(AHEAD_AFTER);
+    first_app(&mut h, "terminal", "kitty");
+    h.send(Msg::Palette(PaletteEvent::Ui(PaletteMsg::Close)));
+    std::fs::remove_file(fixture.dirs.data_home.join("applications/kitty.desktop")).unwrap();
+    h.send(Msg::Apps(AppsLoaded(Arc::new(fixture.load()))));
+    h.advance(AHEAD_AFTER);
+    first_app(&mut h, "terminal", "org.aizome.Hotaru");
+    h.send(Msg::Palette(PaletteEvent::Ui(PaletteMsg::Close)));
+    std::fs::remove_file(fixture.dirs.data_home.join("applications/org.aizome.Hotaru.desktop")).unwrap();
+    h.send(Msg::Apps(AppsLoaded(Arc::new(fixture.load()))));
+    h.send(Msg::Run(Action::Palette { scope: Some(Scope::App), query: "terminal".into() }));
+    assert!(h.program().palette.as_ref().unwrap().sections.is_empty(), "no stale or nonexistent default");
+}
+
+#[test]
+fn file_commands_stay_first_and_the_chosen_file_manager_still_beats_settings() {
+    let fixture = DefaultApps::new("file-commands");
+    fixture.shipped("hako", "org.aizome.Hako.desktop");
+    let mut h = scene(false);
+    default_settings(&mut h);
+    h.send(Msg::Apps(aizome_shell::shell::AppsLoaded(std::sync::Arc::new(fixture.load()))));
+    let p = open(&mut h, "file");
+    let state = h.program().palette.as_ref().unwrap();
+    assert_eq!(state.sections[0].scope, Scope::Command);
+    assert_eq!(state.sections[1].scope, Scope::App);
+    assert_eq!(state.sections[1].rows[0].item.action, Action::FocusApp { app_id: "org.aizome.Hako".into() });
+    assert!(state.sections.iter().skip(2).any(|s| s.scope == Scope::Setting));
+    h.save_png(p, shots().join("palette-purpose-file-commands.png"), 2.0);
+    // Apps-only lets someone explicitly choose the file manager instead.
+    h.send(Msg::Palette(PaletteEvent::Ui(PaletteMsg::Scope(Some(Scope::App)))));
+    assert_eq!(h.program().palette.as_ref().unwrap().sections[0].rows[0].item.title, "Hako");
+    h.named(p, NamedKey::Enter, Modifiers::NONE);
+    assert!(h.program().frecency.score("app:org.aizome.Hako") > 0.9);
+}
+
+#[test]
+fn typing_and_backspacing_switch_between_purpose_priority_and_ordinary_search() {
+    let fixture = DefaultApps::new("purpose-typing");
+    fixture.shipped("hotaru", "org.aizome.Hotaru.desktop");
+    fixture.write(
+        "other.desktop",
+        "[Desktop Entry]\nType=Application\nName=Terminal\nExec=other\nCategories=TerminalEmulator;\n",
+    );
+    let mut h = scene(false);
+    h.send(Msg::Apps(aizome_shell::shell::AppsLoaded(std::sync::Arc::new(fixture.load()))));
+    for _ in 0..100 {
+        h.program_mut().frecency.visit("app:other");
+    }
+    h.send(Msg::Run(Action::Palette { scope: Some(Scope::App), query: String::new() }));
+    let p = window_titled(&h, "Palette");
+    let first_title = |h: &aizome_kit::testing::Harness<aizome_shell::shell::Shell>| {
+        h.program().palette.as_ref().unwrap().sections[0].rows[0].item.title.clone()
+    };
+    h.type_text(p, "t");
+    h.type_text(p, "e");
+    assert_eq!(first_title(&h), "Terminal", "two letters use ordinary matching and history");
+    h.named(p, NamedKey::ArrowDown, Modifiers::NONE);
+    assert_eq!(h.program().palette.as_ref().unwrap().selected, 1);
+    h.type_text(p, "r");
+    assert_eq!(first_title(&h), "Hotaru", "three letters recognise the purpose");
+    assert_eq!(h.program().palette.as_ref().unwrap().selected, 0, "editing selects the new best result");
+    h.named(p, NamedKey::Backspace, Modifiers::NONE);
+    assert_eq!(first_title(&h), "Terminal", "backspacing restores ordinary order");
+    h.type_text(p, "rminal settings");
+    assert_eq!(h.program().palette.as_ref().unwrap().query, "terminal settings");
+    assert!(h.program().palette.as_ref().unwrap().sections.is_empty(), "a longer request doesn't force an app result");
 }
 
 #[test]
