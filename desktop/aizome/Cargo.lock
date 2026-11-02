@@ -401,6 +401,7 @@ dependencies = [
  "aizome-sys",
  "aizome-theme",
  "env_logger",
+ "jiff",
  "libc",
  "log",
  "serde",

@@ -15,6 +15,7 @@ use aizome_kit::sidestep_ui::PointerButton;
 use aizome_kit::widget::{Event, EventCx, LayoutCx, PaintCx, SemanticRole, Semantics, Status, Widget};
 use aizome_kit::{TimerHandle, column, draw, row};
 use aizome_sys::datetime::{TimeDate, TimeDateState, Zone};
+use jiff::{Timestamp, tz::Offset};
 
 use super::Msg as G;
 use crate::form;
@@ -144,30 +145,16 @@ fn fallback_zones() -> Vec<Zone> {
     ]
 }
 
-const WEEKDAYS: [&str; 7] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const MONTHS: [&str; 12] = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-];
-
-/// "Saturday 17 October 2026" and the hours, minutes and seconds of a
-/// local time (`now` plus the offset).
-pub fn broken(local: i64) -> (String, u32, u32, u32) {
-    let days = local.div_euclid(86400);
-    let secs = local.rem_euclid(86400) as u32;
-    let (y, m, d) = tz::civil_from_days(days);
-    let date = format!("{} {d} {} {y}", WEEKDAYS[tz::weekday(days) as usize], MONTHS[(m - 1) as usize]);
-    (date, secs / 3600, (secs / 60) % 60, secs % 60)
+/// "Saturday 17 October 2026" and the local hours, minutes and seconds
+/// at Unix time `now`, with an offset east of UTC in seconds.
+pub fn broken(now: i64, offset: i32) -> Option<(String, u32, u32, u32)> {
+    let local = Offset::from_seconds(offset).ok()?.to_datetime(Timestamp::from_second(now).ok()?);
+    Some((
+        local.strftime("%A %-d %B %Y").to_string(),
+        local.hour() as u32,
+        local.minute() as u32,
+        local.second() as u32,
+    ))
 }
 
 /// The clock as the menu bar would show it.
@@ -308,7 +295,9 @@ impl State {
         let h24 = menubar.clock == ClockFormat::H24;
         let zone = self.zones.as_ref().and_then(|zs| zs.iter().find(|z| z.id == s.timezone)).cloned();
         let offset = self.offset_of(&s.timezone).unwrap_or(0);
-        let (date, h, m, sec) = broken(self.now + i64::from(offset));
+        let (date, time) = broken(self.now, offset)
+            .map(|(date, h, m, sec)| (date, clock_text(h, m, sec, h24, menubar.clock_seconds)))
+            .unwrap_or_else(|| (String::new(), "Time unavailable".into()));
         let place = match &zone {
             Some(z) => {
                 let country = z.country_names.first().cloned().unwrap_or_default();
@@ -317,7 +306,7 @@ impl State {
             None => s.timezone.clone(),
         };
         let clock = column![
-            text(clock_text(h, m, sec, h24, menubar.clock_seconds)).mono().size(34.0).weight(600.0).tabular(),
+            text(time).mono().size(34.0).weight(600.0).tabular(),
             text(date).role(Role::Text2),
             text(format!("{place} · {}", tz::describe(offset))).size(12.0).role(Role::Text3),
         ]
@@ -553,7 +542,27 @@ impl Widget for ZoneMap {
 
 #[cfg(test)]
 mod tests {
-    use super::units_managed;
+    use super::{SAMPLE_NOW, broken, clock_text, units_managed};
+
+    #[test]
+    fn preview_clock_keeps_its_date_and_formats() {
+        let (date, h, m, s) = broken(SAMPLE_NOW, 9 * 3600).unwrap();
+        assert_eq!(date, "Saturday 17 October 2026");
+        assert_eq!((h, m, s), (10, 9, 0));
+        assert_eq!(clock_text(h, m, s, true, false), "10:09");
+        assert_eq!(clock_text(h, m, s, false, true), "10:09:00 AM");
+        assert_eq!(broken(SAMPLE_NOW, -5 * 3600), Some(("Friday 16 October 2026".into(), 20, 9, 0)));
+    }
+
+    #[test]
+    fn calendar_conversion_handles_epoch_leap_day_and_invalid_instants() {
+        assert_eq!(broken(-1, 0), Some(("Wednesday 31 December 1969".into(), 23, 59, 59)));
+        let leap: jiff::Timestamp = "2000-02-29T23:45:00Z".parse().unwrap();
+        assert_eq!(broken(leap.as_second(), 0), Some(("Tuesday 29 February 2000".into(), 23, 45, 0)));
+        assert_eq!(broken(leap.as_second(), 20700), Some(("Wednesday 1 March 2000".into(), 5, 30, 0)));
+        assert_eq!(broken(i64::MAX, 0), None);
+        assert_eq!(broken(0, i32::MAX), None);
+    }
 
     #[test]
     fn units_in_the_store_are_the_configurations() {
