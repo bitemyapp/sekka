@@ -53,6 +53,46 @@ fn the_deskbar_folds_into_the_bar() {
 }
 
 #[test]
+fn the_deskbar_key_hides_and_shows_the_deskbar() {
+    use aizome_ipc::Event;
+    use aizome_shell::ipc::IpcEvent;
+    let key =
+        || Msg::Ipc(IpcEvent::Event(Event::Binding { action: "toggle-deskbar".into(), pointer: None, output: None }));
+    let mut h = scene(false);
+    h.send(key());
+    assert!(h.program().deskbar_cfg.collapsed);
+    assert!(h.program().settings.deskbar_settings().collapsed, "the fold is saved");
+    assert!(h.windows().iter().all(|k| h.title(*k) != "Deskbar"));
+    h.send(key());
+    assert!(!h.program().deskbar_cfg.collapsed);
+    assert!(!h.program().settings.deskbar_settings().collapsed);
+    assert!(h.windows().iter().any(|k| h.title(*k) == "Deskbar"));
+}
+
+#[test]
+fn the_deskbar_key_folds_an_auto_hidden_deskbar_for_good() {
+    use aizome_ipc::Event;
+    use aizome_shell::ipc::IpcEvent;
+    let key =
+        || Msg::Ipc(IpcEvent::Event(Event::Binding { action: "toggle-deskbar".into(), pointer: None, output: None }));
+    let mut h = scene(false);
+    let mut config = h.program().settings.deskbar_settings();
+    config.auto_hide = true;
+    h.program_mut().settings.set_shell_section("deskbar", &config);
+    h.send(Msg::SettingsChanged);
+    assert!(h.program().deskbar.is_none(), "auto-hide keeps it out of sight");
+    // Out of sight for now is not folded: the key folds it.
+    h.send(key());
+    assert!(h.program().deskbar_cfg.collapsed);
+    assert!(h.program().deskbar.is_none());
+    // Again: unfolded, shown as the menu bar's control shows it.
+    h.send(key());
+    assert!(!h.program().deskbar_cfg.collapsed);
+    assert!(h.program().deskbar_visible());
+    assert!(h.windows().iter().any(|k| h.title(*k) == "Deskbar"));
+}
+
+#[test]
 fn the_bar_has_controls_to_hide_and_show_the_deskbar() {
     let mut h = scene(false);
     let bar = window_titled(&h, "Menu bar");

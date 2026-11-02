@@ -130,6 +130,7 @@ pub const SHELL_ACTIONS: &[&str] = &[
     "palette",
     "toolchest",
     "menu-bar",
+    "toggle-deskbar",
     "power-key",
     "bell",
     "lock",
@@ -239,6 +240,7 @@ pub fn defaults() -> Vec<(&'static str, String)> {
         ("Ctrl+Shift+Super+Left", "take-to-previous-desk".into()),
         ("Ctrl+Shift+Super+Right", "take-to-next-desk".into()),
         ("Ctrl+Super+Up", "overview".into()),
+        ("Ctrl+Super+Down", "toggle-deskbar".into()),
         ("Alt+Super+Up", "fill".into()),
         ("Alt+Super+Down", "minimise".into()),
         ("Alt+Super+Left", "split-left".into()),
@@ -391,6 +393,14 @@ mod tests {
         let ctrl_logo = Mods { ctrl: true, logo: true, ..Default::default() };
         assert_eq!(b.find(ctrl_logo, &[Keysym::new(keysyms::KEY_3)]), Some(&Action::GoToDesk(3)));
         assert_eq!(b.find(logo, &[Keysym::new(keysyms::KEY_space)]), Some(&Action::Shell("palette".into())));
+        assert_eq!(
+            b.find(ctrl_logo, &[Keysym::new(keysyms::KEY_Down)]),
+            Some(&Action::Shell("toggle-deskbar".into())),
+            "⌃❖↓ hides and shows the Deskbar"
+        );
+        let mut unbound = std::collections::BTreeMap::new();
+        unbound.insert("Ctrl+Super+Down".to_string(), "none".to_string());
+        assert_eq!(Bindings::new(&unbound).find(ctrl_logo, &[Keysym::new(keysyms::KEY_Down)]), None);
         assert!(Action::parse("go-to-desk-7") == Some(Action::GoToDesk(7)));
         // ❖⇧[ arrives as braceleft with bracketleft, the key's own symbol,
         // first (as the core passes them).

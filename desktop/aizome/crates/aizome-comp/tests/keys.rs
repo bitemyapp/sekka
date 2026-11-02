@@ -128,6 +128,40 @@ fn system_chords_stay_with_the_system_and_shell_ones_go_to_subscribers() {
 }
 
 #[test]
+fn holding_ctrl_super_down_toggles_the_deskbar_once() {
+    let c = Compositor::start(Options::default());
+    let a = c.client(Spec::new("org.example.editor", 0x2222cc));
+    c.wait_window("org.example.editor");
+    a.wait_seen("keyboard focus", |s| s.keyboard_focus);
+    let mut events = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+    events.stream().set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    let key = |key: &str, pressed| Synthetic::Key { key: key.into(), pressed };
+    c.ok(Request::Synthesize { events: vec![key("ctrl", true), key("super", true), key("down", true)] });
+    // Held well past the default 600 ms repeat delay.
+    std::thread::sleep(Duration::from_millis(1500));
+    c.ok(Request::Synthesize { events: vec![key("down", false), key("super", false), key("ctrl", false)] });
+    // ❖Space after it: every binding before the palette's came from the hold.
+    chord(&c, "super+space");
+    let mut got = Vec::new();
+    for e in events.by_ref() {
+        match e {
+            Ok(Event::Binding { action, .. }) => {
+                let last = action == "palette";
+                got.push(action);
+                if last {
+                    break;
+                }
+            }
+            Ok(_) => {}
+            Err(_) => break,
+        }
+    }
+    assert_eq!(got, ["toggle-deskbar", "palette"], "one toggle for one press, however long it's held");
+    let s = a.seen();
+    assert!(!s.keys.iter().any(|(k, _)| *k == 108), "↓ stayed with the system: {:?}", s.keys);
+}
+
+#[test]
 fn super_shift_brackets_switch_a_groups_tabs_and_ctrl_carries_them() {
     let c = Compositor::start(Options::default());
     let a = c.client(Spec::new("org.example.a", 0x2222cc));

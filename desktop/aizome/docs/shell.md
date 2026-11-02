@@ -268,7 +268,8 @@ keys), so the palette learns.
 At the top right under the bar by default (C2-Desktop): `chrome`, 232pt,
 hard shadow. It can stand at the left instead, and be narrower or wider
 (below). The menu bar's Hide Deskbar control collapses it; the
-`N apps ⌄` control brings it back.
+`N apps ⌄` control brings it back. ⌃❖↓ (`toggle-deskbar`) does either,
+from the keyboard.
 
 ### Where it stands, and how wide
 
