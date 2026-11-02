@@ -1,0 +1,18 @@
+{
+  "player": "mpv",
+  "round": 1,
+  "segment_start_s": 600,
+  "measured_movie_start_s": 662.995646,
+  "seconds": 119.99426883300475,
+  "samples": 61,
+  "mean_power_w": 8.746391165580144,
+  "endpoint_power_w": 8.100386872248972,
+  "slope_power_w": 8.400357471868775,
+  "energy_used_wh": 0.269999999999996,
+  "full_wh": 58.02,
+  "projected_full_minutes": 398.01558541077367,
+  "start_energy_wh": 43.76,
+  "end_energy_wh": 43.49,
+  "projected_run_start_minutes": 300.19238224018363,
+  "power_energy_disagreement_pct": 7.3859524585797915
+}
