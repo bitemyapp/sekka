@@ -16,7 +16,7 @@ use super::{Chanoma, FILM, GAME, Input, Modal, Msg, Screen};
 use crate::browser::{self, Action, Browser};
 use crate::pad::{Button, Dir, Family};
 use crate::retro::{CoreSource, Event as GameEvent, Launch, Session};
-use crate::services::{self, Drive};
+use crate::services::{self, Drive, Sites};
 use crate::ui::{self, Chrome, Overlay, Scene, View};
 
 /// A game being played.
@@ -235,14 +235,15 @@ impl Chanoma {
             return;
         }
         let agent = s.tv_agent.then_some(services::TV_AGENT);
-        self.open_page(s.id, s.name, s.url, agent, s.drive, Item::Service { id: id.to_owned() }, cx);
+        self.open_page(s.id, s.name, s.url, Sites::of(s), agent, s.drive, Item::Service { id: id.to_owned() }, cx);
     }
 
     pub fn open_site(&mut self, i: usize, cx: &mut Cx<Msg>) {
         let Some(c) = self.settings.custom_services.get(i).cloned() else { return };
         let profile =
             format!("site-{}", c.url.bytes().fold(0u32, |a, b| a.wrapping_mul(31).wrapping_add(u32::from(b))));
-        self.open_page(&profile, &c.name, &c.url, None, Drive::Pointer, Item::Site { url: c.url.clone() }, cx);
+        let sites = Sites::new(&c.url, &[]);
+        self.open_page(&profile, &c.name, &c.url, sites, None, Drive::Pointer, Item::Site { url: c.url.clone() }, cx);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -251,6 +252,7 @@ impl Chanoma {
         profile: &str,
         name: &str,
         url: &str,
+        sites: Sites,
         agent: Option<&str>,
         drive: Drive,
         item: Item,
@@ -274,7 +276,8 @@ impl Chanoma {
         }
         let tx = self.sender.clone();
         let dir = self.config.dirs.browser().join(profile);
-        match Browser::open(&exe, &dir, profile, url, agent, drive, self.shared.clone(), move |e| {
+        let kept = !self.is_grownup();
+        match Browser::open(&exe, &dir, profile, url, sites, kept, agent, drive, self.shared.clone(), move |e| {
             if let Some(t) = &tx {
                 t.send(Msg::Browser(e));
             }
@@ -309,6 +312,29 @@ impl Chanoma {
             browser::Event::Home => {
                 self.family = Family::Keyboard;
                 self.input(Input::Home, cx);
+            }
+            // A link out of the service: the page stays where it was.
+            browser::Event::Outside(_) => {
+                if let Some(p) = &self.page {
+                    let text = format!("That's outside {}", p.name);
+                    self.toast_note(ui::Note::Outside, text, cx);
+                }
+            }
+            // It couldn't be kept to the service, so it shows nothing.
+            browser::Event::Unkept => {
+                if let Some(p) = self.page.take() {
+                    p.browser.close();
+                    self.modal = None;
+                    self.go(
+                        Screen::Problem(
+                            format!("{} didn't open", p.name),
+                            "Chanoma keeps a service's pages to the service, through the browser, and this browser \
+                             didn't let it. Google Chrome and Chromium do."
+                                .into(),
+                        ),
+                        cx,
+                    );
+                }
             }
         }
     }

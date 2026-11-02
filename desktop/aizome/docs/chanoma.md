@@ -41,6 +41,8 @@ explicitly (and Chanoma also looks in NixOS's profiles).
 | `pad/` | Controllers from `/dev/input`: hot-plug through inotify, the exclusive grab, player slots, mappings, menu navigation with repeat, batteries, rumble |
 | `retro/` | The libretro frontend: the C interface, the host (callbacks, environment, core options), video, sound, and a session thread per game |
 | `browser.rs` | Services in Chrome: profiles, kiosk flags, the window followed through the compositor's IPC, input through it |
+| `devtools.rs` | Services kept to their sites, over the browser's DevTools pipe |
+| `services.rs` | The services, and the sites each one's pages may go to |
 | `rules.rs` | The PIN, wrong-PIN lockout, what kids may open, daily limits, bedtime, grants |
 | `library.rs` | Systems, cores, games and videos found in folders |
 | `folders.rs` | Choosing a folder: the places to start from, a folder's folders and what's in each, what Chanoma would find in one |
@@ -182,6 +184,59 @@ pointer through, and only the menu takes the keyboard (The way home,
 above). The strip along the top that brings the bar down is another,
 open while the page shows.
 
+### Kept to the service
+
+In kids' mode a service's pages stay on its sites: its address's site
+(the host, less a `www.`) and its subdomains, and the few others it
+passes through (`Service::sites`: Google's sign-in for YouTube Kids,
+which goes through it as it opens, and for YouTube; `max.com` and
+`hbomax.com` for Max, whose address now leads to HBO Max). The lists
+come from following each address in Google Chrome 156 on 2026-11-01,
+signed out. A website a grown-up added stays on its own host's site.
+Everything else on the web is outside, including the rest of Google.
+
+The browser starts blank with `--remote-debugging-pipe`, and
+`devtools.rs` steers it over the pipe on its descriptors 3 and 4, put
+there before it starts. Only Chanoma holds the other ends. There's no
+port anything else on the machine could reach, and the browser closes
+itself when the pipe does, so Chanoma ending can't leave a page loose.
+Over the pipe:
+
+- every page target is auto-attached waiting for the debugger, enables
+  `Fetch` for documents, and only then runs; the first is then sent to
+  the service, so nothing has loaded unasked;
+- a page's own document (its frame id is the page's target id) from
+  outside its sites is failed as `Aborted`. Chrome commits nothing for an
+  aborted navigation, so the page stays where it was and its history is
+  unchanged: links, redirects (each hop is asked about), forms, scripts,
+  and a frame's link to the top alike. Chanoma's note says *That's
+  outside …*. Frames' own documents load from anywhere (players, sign-in
+  boxes);
+- behind that, a page whose address ends up outside anyway (a page a
+  service worker or the back-forward cache answered, which never asks;
+  a file opened from the keyboard) goes back to its last place on its
+  sites in its history, or to the service's start, and is left blank if
+  it keeps leaving by itself;
+- any other page (a tab, a pop-up) is closed as it starts, and
+  downloads are refused;
+- in grown-up mode nothing is refused, since signing in can pass through
+  other sites (Prime Video's through Amazon's). Kids' mode coming back
+  keeps the page again, taking it back if it's outside by then. Chanoma
+  sets this after every message it handles.
+
+`--disable-blink-features=AutomationControlled` keeps the pipe from
+showing in `navigator.webdriver`, which the pipe alone sets; Google's
+sign-in refuses a browser that says it's automated. A browser that
+doesn't answer on the pipe within 30 seconds (one that isn't Chromium's)
+is closed, with a screen saying why. There are two other ways to do it,
+and neither fits:
+- Chrome's enterprise policies (`URLBlocklist`, `URLAllowlist`) are
+  machine-wide, need root, and would fence in the grown-ups' own Chrome
+  too.
+- An extension: Google Chrome doesn't load one from the command line
+  (`--load-extension`; checked on 156, where Chromium still does), and
+  DRM services need Google Chrome.
+
 ### Films and shows
 
 Films play through Utsushi's engine (`aizome-media`'s `Player`), into
@@ -299,6 +354,8 @@ cargo test -p aizome-chanoma                                   # unit and headle
 CHANOMA_SHOTS=/tmp/shots cargo test -p aizome-chanoma --test chanoma   # with pictures
 CHANOMA_TEST_CORES=<folder of *_libretro.so> \
   cargo test -p aizome-chanoma --test cores -- --ignored --nocapture
+CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
+  cargo test -p aizome-chanoma --test devtools                 # a page kept, in a real browser
 ```
 
 - **Unit tests** cover the PIN hash (against RFC 7914's PBKDF2 vector),
@@ -310,7 +367,9 @@ CHANOMA_TEST_CORES=<folder of *_libretro.so> \
   enlargement, core options, game and video scanning (systems by folder
   and extension, cue sheets' tracks, box art, shows), layouts, and a
   language chosen found again in the next episode (by name, `en` as
-  `eng`; by place without one; none rather than another language). What
+  `eng`; by place without one; none rather than another language), and
+  the sites a page may be on (subdomains; not look-alikes, a user before
+  the host, the rest of Google, or what isn't the web). What
   plays, where a film carries on and the subtitles' cues are
   `aizome-media`'s, tested there; serving the media controls is
   `aizome-mpris`'s, tested there against a private `dbus-daemon` (what a
@@ -333,7 +392,9 @@ CHANOMA_TEST_CORES=<folder of *_libretro.so> \
   note saying how to come back, the strip along the top bringing the bar,
   the menu taking the keyboard and giving it back, the bar going as the
   pointer returns to the page, and the compositor's word of Home on the
-  keyboard leading home); a film, the engine's test card with a SubRip
+  keyboard leading home; kept to its service in kids' mode, a link out
+  said to be outside; a browser that can't be kept ending on a screen
+  saying so); a film, the engine's test card with a SubRip
   file beside it (its subtitles showing as it plays, in italics where the
   file says; the film's menu offering them and no language for one sound
   track; the subtitles' menu on the track showing, Back to the film's
@@ -347,6 +408,17 @@ CHANOMA_TEST_CORES=<folder of *_libretro.so> \
   controller state, and carry on from their saved state. On 2026-10-31
   with nixpkgs' cores of that date: all three passed (mean brightness
   249–252 untouched, 3 with Right held).
+- **A real browser** (`tests/devtools.rs`, opt-in): the browser started
+  and kept as Chanoma does, with no display (`--ozone-platform=headless`),
+  on a site of 127.0.0.1 with elsewhere at localhost, served by the test,
+  which hears every request. A page tries a script, a server redirect, a
+  form and a pop-up out, and stays after each; elsewhere is never asked,
+  but for a frame inside the page, which loads; `navigator.webdriver` is
+  false. Then grown-up mode lets the page go, kids' mode takes it back
+  and refuses it again, and the pipe closing ends the browser. On
+  2026-11-01 it passed with nixpkgs' Chromium 156.0.8078.73 and Google
+  Chrome 156.0.8078.79 (7.7 s each), and failed as it should with the
+  refusing turned off.
 - **In a VM** (`nix build .#aizome-checks.chanoma`): the packaged app in an
   Aizome session, started by the module's autostart, with a uinput
   controller that looks like Microsoft's Bluetooth one and nothing else.
@@ -366,6 +438,10 @@ CHANOMA_TEST_CORES=<folder of *_libretro.so> \
     away), the page having the keys again after, F1 and the menu's keys
     going home; then the pointer pushed to the top bringing the bar, its
     *Home* clicked, and the menu's *Go home* clicked;
+  - the page kept to its site (127.0.0.1): its link to localhost clicked
+    and a script going there both refused, the page as it was and the
+    server never asked, the site's own other page opening, and the page
+    not told the browser is steered;
   - stopping the unit mid-game, as logging out does, keeping it.
 - **Live** on the X1 Carbon, under a headless Aizome compositor of its
   own beside the desktop (release build, gambatte, generated videos):
@@ -383,9 +459,17 @@ before calling any of it tested on hardware.
 
 ## Limits
 
-- Within a service, its own links can lead elsewhere on the web: kiosk
-  mode hides the address bar but doesn't fence a page in. Chrome's
-  enterprise policies (`URLAllowlist`) would, machine-wide.
+- The services' sites come from their addresses followed signed out.
+  Signed in, a service may pass through a site that isn't on its list,
+  which would show as *That's outside …* where it shouldn't (until it's
+  added to `Service::sites`); no service has been tried signed in with
+  the lock.
+- In grown-up mode a page goes anywhere, and grown-up mode doesn't lock
+  itself under a page: a page handed to a kid in grown-up mode isn't
+  kept until kids' mode comes back.
+- Links to other programs (`mailto:`, an app's own scheme) aren't web
+  pages, so this doesn't refuse them; what Chrome does with one in kiosk
+  mode hasn't been tried.
 - DRM-protected services need Google Chrome; nixpkgs' Chromium has no
   Widevine.
 - No hardware-rendered cores; no disc swapping for multi-disc games; no

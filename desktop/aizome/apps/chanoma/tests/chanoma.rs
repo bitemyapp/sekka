@@ -647,6 +647,11 @@ fn a_page_always_has_a_way_home_by_keyboard_and_mouse() {
     // the top waits for the pointer.
     h.send(Msg::Browser(aizome_chanoma::browser::Event::Shown(7)));
     assert_eq!(h.program().toast.as_ref().map(|t| t.0.as_str()), Some("Press Home on the controller to come back"));
+    // Kept to the service in kids' mode: a link elsewhere stays, said so.
+    assert!(h.program().page.as_ref().is_some_and(|p| p.browser.is_kept()));
+    h.send(Msg::Browser(aizome_chanoma::browser::Event::Outside("www.example.com".into())));
+    assert_eq!(h.program().toast.as_ref().map(|t| t.0.as_str()), Some("That's outside PBS KIDS Video"));
+    assert_eq!(h.program().screen, Screen::Watching);
     let edge = h.program().edge.expect("the strip along the top");
     h.resize(edge, Size::new(1920.0, 2.0));
     let over = |h: &mut Harness<Chanoma>| {
@@ -684,6 +689,14 @@ fn a_page_always_has_a_way_home_by_keyboard_and_mouse() {
     assert_eq!(h.program().screen, Screen::Home);
     let a = h.program();
     assert!(a.page.is_none() && a.edge.is_none() && a.hud.is_none(), "the page and what was over it, gone");
+
+    // Again from Keep playing, in a browser that can't be kept to the
+    // service: it's ended, and the screen says why.
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::Watching);
+    h.send(Msg::Browser(aizome_chanoma::browser::Event::Unkept));
+    assert!(h.program().page.is_none());
+    assert!(matches!(&h.program().screen, Screen::Problem(t, _) if t == "PBS KIDS Video didn't open"));
 }
 
 #[test]

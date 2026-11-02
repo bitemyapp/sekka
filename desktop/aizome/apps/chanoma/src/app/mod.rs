@@ -1683,6 +1683,10 @@ impl Program for Chanoma {
         if self.site.is_none() {
             self.refocus(cx);
         }
+        // A page goes anywhere only in grown-up mode.
+        if let Some(p) = &self.page {
+            p.browser.keep_to_sites(!self.is_grownup());
+        }
     }
 
     fn view(&self, window: WindowKey) -> Element<Msg> {
