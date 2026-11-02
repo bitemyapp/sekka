@@ -105,7 +105,7 @@ pkgs.testers.runNixOSTest {
   testScript =
     { nodes, ... }:
     ''
-      import shlex, time
+      import re, shlex, time
       from datetime import timedelta
 
       WAIT = timedelta(minutes=3)
@@ -115,6 +115,30 @@ pkgs.testers.runNixOSTest {
 
       def asked(m):
           m.wait_for_text("[Pp]assphrase for", timeout=WAIT)
+
+      def passphrase_view(variants, graphical):
+          # Text can wrap or be split into separate OCR blocks. The prompt
+          # exists in both views, so it alone cannot prove Esc changed view.
+          prompt = any(
+              re.search(r"\bpassphrase\b", text, re.IGNORECASE)
+              and re.search(r"\bcryptroot\b", text, re.IGNORECASE)
+              for text in variants
+          )
+          # An absence check must consider every reading of the same frame:
+          # one OCR variant missing the logo must not admit the splash as text.
+          branded = any(re.search(r"\bsekka\b", text, re.IGNORECASE) for text in variants)
+          return bool(prompt) and branded == graphical
+
+      def wait_for_passphrase_view(m, graphical):
+          view = "graphical" if graphical else "text"
+          deadline = time.monotonic() + WAIT.total_seconds()
+          with m.nested(f"waiting for the {view} passphrase view"):
+              while True:
+                  variants = m.get_screen_text_variants()
+                  if passphrase_view(variants, graphical):
+                      return
+                  assert time.monotonic() < deadline, f"No {view} passphrase view; last OCR: {variants}"
+                  time.sleep(1)
 
       def splash_up(m):
           m.wait_until_succeeds("plymouth --ping", timeout=WAIT)
@@ -270,12 +294,15 @@ pkgs.testers.runNixOSTest {
               machine.send_key("caps_lock")
 
           with subtest(f"{firmware}: Esc shows the question as text and comes back"):
+              wait_for_passphrase_view(machine, graphical=True)
               machine.send_key("esc")
-              # Plymouth's text view: systemd's lines, which the splash never shows.
-              machine.wait_for_text("Found device|[Cc]ryptography", timeout=WAIT)
+              # Boot messages can scroll off the console. Check the question
+              # and the disappearance of the graphical branding instead.
+              wait_for_passphrase_view(machine, graphical=False)
               machine.screenshot(f"{firmware}-10-details")
               machine.send_key("esc")
-              machine.wait_for_text("sekka", timeout=WAIT)
+              wait_for_passphrase_view(machine, graphical=True)
+              machine.screenshot(f"{firmware}-10-graphical-again")
 
           with subtest(f"{firmware}: the right one opens both, nothing goes on asking, and the restart left root clean"):
               machine.send_chars(PASSPHRASE + "\n")

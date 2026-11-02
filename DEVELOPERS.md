@@ -2147,6 +2147,12 @@ opening without asking, no question left up, and an encrypted root left clean.
 The harness supplies the bootloader and Nix store, so this isn't a full
 installation.
 
+The initrd Esc check recognizes the passphrase prompt in both views, requires
+the graphical Sekka branding to disappear in the text view, then verifies the
+graphical prompt returns. Absence is checked across all OCR variants of one
+frame. It does not depend on particular boot-log lines remaining visible:
+kernel/device messages can scroll those lines off the text console.
+
 ## Programs built for other distributions
 
 Installed systems enable nix-ld (`programs.nix-ld.enable`, with
