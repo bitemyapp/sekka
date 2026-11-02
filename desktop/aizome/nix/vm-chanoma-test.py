@@ -8,8 +8,9 @@ screenshot); the Home button pauses it under a menu; stopping keeps where
 it was left; the controller going and coming back is player 1 again. A
 page in the browser has a way home without the controller too: Home or F1
 on a keyboard (which the compositor keeps from the page) and the bar the
-pointer brings down from the top of the screen. This fixture renders in
-software (shared-memory frames, no VA-API).
+pointer brings down from the top of the screen; and it stays on its site,
+a link or a script elsewhere refused with the page left where it was. This
+fixture renders in software (shared-memory frames, no VA-API).
 """
 
 import hashlib
@@ -264,6 +265,34 @@ with subtest("a page has a way home by keyboard, and by mouse"):
     user("aizomectl input move 640 456")
     user("aizomectl input click")
     until("home by mouse", lambda: count("chanoma: Home") > homes and browser() is None, timeout=30)
+
+
+with subtest("a page stays on its site"):
+    open_test_site()
+    refused, menus, homes = count("is outside"), count("the Page menu"), count("chanoma: Home")
+    until("Chanoma is ready over the page", lambda: count("Home on the keyboard is kept over window") >= 4)
+    # Pages aren't told the browser is steered.
+    assert "(automated)" not in browser()["title"], browser()["title"]
+    # The link elsewhere, clicked (at the bottom left), then a script
+    # going there: both refused, and the page stays as it was.
+    user("aizomectl input move 640 400")
+    user("aizomectl input move 100 740")
+    user("aizomectl input click")
+    until("the link elsewhere is refused", lambda: count("is outside") > refused)
+    machine.screenshot("page-outside")
+    user("aizomectl input key o")
+    until("the script going elsewhere is refused", lambda: count("is outside") > refused + 1)
+    time.sleep(1)
+    assert browser()["title"].startswith("Chanoma test page"), browser()["title"]
+    machine.fail("journalctl -u chanoma-test-page --no-pager | grep -q elsewhere")
+    # Its own site's pages, as ever.
+    user("aizomectl input key i")
+    until("the site's own other page", lambda: "inside" in browser()["title"])
+    user("aizomectl input key home")
+    until("the menu over the page", lambda: count("the Page menu") > menus)
+    user("aizomectl input key down")
+    user("aizomectl input key return")
+    until("home again", lambda: count("chanoma: Home") > homes and browser() is None, timeout=30)
 
 
 with subtest("leaving with the session keeps a game too"):

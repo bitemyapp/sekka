@@ -6,7 +6,8 @@
 //!   exclusively while Chanoma runs.
 //! - [`retro`]: games, through libretro cores Chanoma drives itself.
 //! - [`browser`]: services, full screen in a browser the controller drives
-//!   through the compositor.
+//!   through the compositor; [`devtools`] keeps its pages to the
+//!   service's sites.
 //! - [`rules`]: the PIN, what kids may open, and for how long.
 //! - [`folders`]: choosing a games or videos folder from the sofa.
 //! - [`app`] and [`ui`]: the program and what it draws.
@@ -14,6 +15,7 @@
 pub mod app;
 pub mod browser;
 pub mod clock;
+pub mod devtools;
 pub mod folders;
 pub mod instance;
 pub mod library;

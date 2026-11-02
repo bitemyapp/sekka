@@ -7,7 +7,8 @@
 # Home button, and stops it, keeping where it was left. The controller
 # going and coming back keeps its player number. A page in the browser
 # also goes home by a keyboard's Home key (kept from the page by the
-# compositor) and by the pointer, through the bar along the top. The VM
+# compositor) and by the pointer, through the bar along the top, and stays
+# on its site: a link or a script elsewhere leaves it where it was. The VM
 # renders in software, so the game's frames take the shared-memory path.
 {
   pkgs,
@@ -39,16 +40,28 @@ let
     EOF
   '';
   # A page for the controller to drive in the browser: it says in its
-  # title what reached it.
+  # title what reached it. Its link and its O key go elsewhere (localhost
+  # isn't 127.0.0.1), its I key to its own site's other page.
   page = pkgs.writeTextDir "index.html" ''
     <!doctype html>
     <title>Chanoma test page</title>
-    <style>body { margin: 0; background: #fff; } button { position: fixed; inset: 25%; font-size: 4em; }</style>
+    <style>
+      body { margin: 0; background: #fff; } button { position: fixed; inset: 25%; font-size: 4em; }
+      a { position: fixed; left: 0; bottom: 0; width: 20%; height: 15%; font-size: 2em; }
+    </style>
     <button id="b">Press me</button>
+    <a href="http://localhost:8000/elsewhere">Elsewhere</a>
     <script>
       let moved = 0;
+      // Told the browser is steered, a sign-in page would refuse it.
+      if (navigator.webdriver) document.title += " (automated)";
+      if (location.search == "?inside") document.title += " inside";
       document.getElementById("b").onclick = () => { document.title = "clicked"; };
-      document.onkeydown = (e) => { document.title = "key " + e.key; };
+      document.onkeydown = (e) => {
+        if (e.key == "o") location.href = "http://localhost:8000/elsewhere";
+        else if (e.key == "i") location.href = "/?inside";
+        else document.title = "key " + e.key;
+      };
       document.onmousemove = () => { if (++moved > 3) document.title = "moved"; };
     </script>
   '';
