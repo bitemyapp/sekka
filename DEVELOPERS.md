@@ -1272,6 +1272,10 @@ The launcher holds a per-user runtime lock through startup and cleanup, and
 refuses active, activating or deactivating services left by older launchers.
 A rejected duplicate login never installs cleanup traps. See the
 [orphaned-session incident](docs/incidents/2026-10-28-aizome-orphaned-session.md).
+The [session lifecycle review](docs/aizome-session-lifecycle.md) records the
+effective logind policy, the distinction between service uniqueness and
+launcher ownership, remaining cleanup and supervision issues, and the
+requirements for a replacement.
 
 `nix build .#aizome-checks.session-launcher .#aizome-checks.session-launcher-systemd .#aizome-checks.greeter -L`
 checks the launcher with isolated service stand-ins, startup/cancellation
