@@ -586,7 +586,7 @@ pub fn menus(app: &Utsushi) -> MenuBar<Msg> {
         .item(
             MenuItem::new("Close", Msg::Close)
                 .shortcut(Shortcut::cmd('W'))
-                .enabled(have || app.status == Status::Failed),
+                .enabled(have || app.status == Status::Failed || app.statistics.is_some()),
         );
     let mut repeat = Menu::new("Repeat");
     for (label, r) in [("Off", Repeat::Off), ("This Item", Repeat::One), ("All", Repeat::All)] {

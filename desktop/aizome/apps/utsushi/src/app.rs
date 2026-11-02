@@ -1122,6 +1122,9 @@ impl Program for Utsushi {
                 }
             }
             Msg::ClearRecent => self.store.clear_recent(),
+            Msg::Close if self.statistics.is_some() && cx.key_window() == self.statistics => {
+                cx.send(Msg::CloseStats);
+            }
             Msg::Close => {
                 self.leave();
                 if let Some(p) = self.player() {
