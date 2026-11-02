@@ -55,6 +55,9 @@ pub use aizome_comp_core::{Rect, State, WinId};
 /// `test-panic` action, which panics.
 pub const VARIANT: Option<&str> = option_env!("AIZOME_LOGIC_VARIANT");
 
+// The instrumented variant detects lifecycle calls into damaged state.
+pub(crate) static TEST_PANICKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// What logic modules use everywhere.
 pub mod prelude {
     pub use crate::actions::Actions;
@@ -202,7 +205,9 @@ impl Lg for LogicHost {
 /// Gives the core a fresh state box (from `init`).
 fn install(host: &mut LogicHost, logic: Logic) {
     let p = Box::into_raw(Box::new(logic)) as *mut ();
-    host.set_raw(p, mark());
+    // SAFETY: this library owns the fresh Logic box, and the core retains
+    // the library until process exit. Accessors check our mark.
+    unsafe { host.set_raw(p, mark()) };
 }
 
 /// Takes the state box back (from `release`).

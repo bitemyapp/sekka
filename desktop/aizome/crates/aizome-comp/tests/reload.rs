@@ -295,6 +295,11 @@ fn reloading_the_logic_keeps_every_client_and_the_desktop() {
     assert!(s.logic.last_error.as_deref().is_some_and(|e| e.contains("panics on purpose")), "{:?}", s.logic);
     c.settle();
     assert_eq!(desktop(&c.windows()), before, "the rollback keeps the desktop");
+    assert!(
+        !c.log_text().contains("poisoned state was revisited"),
+        "recovery called into damaged state: {}",
+        c.log_text()
+    );
     let shot_c = c.screenshot();
     keep(&shot_c, "reload-rolled-back");
     assert_eq!(red_pixels(&shot_c), 0, "the plain logic draws again");
@@ -560,10 +565,7 @@ fn pid_alive(pid: u32) -> bool {
 
 #[test]
 fn restarting_the_shell_keeps_apps_and_notifications() {
-    let Some(bus) = private_bus() else {
-        eprintln!("no dbus-daemon; skipping the shell restart test");
-        return;
-    };
+    let bus = private_bus().expect("dbus-daemon is required for the shell restart regression");
     let sb = shell_build();
     let shell_bin = sb.shell.to_string_lossy().into_owned();
     let env = [

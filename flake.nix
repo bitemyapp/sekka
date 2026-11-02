@@ -364,6 +364,11 @@
         hyprlauncher-software = import ./nix/hyprlauncher-software-test.nix { pkgs = hyprlandPkgs; };
         aizome-ibus = import ./nix/aizome-ibus-test.nix { inherit pkgs inputs; };
         aizome-ibus-policy = import ./nix/aizome-ibus-policy-test.nix { inherit pkgs inputs; };
+        aizome-robustness = import ./nix/aizome-robustness-test.nix {
+          inherit pkgs;
+          aizome = inputs.aizome.packages.${system}.aizome;
+          fonts = inputs.aizome.packages.${system}.fonts;
+        };
         # Aizome's toolkit's own tests, under a headless sway
         # (desktop/aizome/sukumo).
         sukumo = import ./nix/sukumo-test.nix {

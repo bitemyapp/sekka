@@ -17,9 +17,13 @@ use aizome_sys::statusnotifier::StatusNotifier;
 use crate::menubar::{NetGlyph, Tray};
 use crate::systray::panels::{Media, MediaVerb};
 
+type ActionPoll = Box<dyn Fn() -> Option<aizome_sys::Result<()>> + Send>;
+
 /// The services, when the shell runs for real (none in tests).
 #[derive(Default)]
 pub struct Sys {
+    /// Pending requests; completed results are consumed after every update.
+    actions: std::sync::Mutex<Vec<(String, ActionPoll)>>,
     pub network: Option<Network>,
     pub audio: Option<Audio>,
     pub bluetooth: Option<Bluetooth>,
@@ -41,6 +45,7 @@ impl Sys {
     pub fn start(wake: impl Fn() + Send + Sync + Clone + 'static) -> Sys {
         let w = || Wake::new(wake.clone());
         Sys {
+            actions: Default::default(),
             network: Some(Network::new(w())),
             audio: Some(Audio::new(w())),
             bluetooth: Some(Bluetooth::new(w())),
@@ -52,6 +57,29 @@ impl Sys {
             mpris: Some(Mpris::new(w())),
             status: Some(StatusNotifier::new(w())),
         }
+    }
+
+    pub fn observe<T: Send + 'static>(&self, action: impl Into<String>, task: aizome_sys::Task<T>) {
+        self.actions
+            .lock()
+            .expect("shell action tracker")
+            .push((action.into(), Box::new(move || task.take().map(|result| result.map(|_| ())))));
+    }
+
+    pub fn action_errors(&self) -> Vec<(String, String)> {
+        // Slider motion can finish several identical failures in one update.
+        // Report each control once, but consume every task's result.
+        let mut errors = std::collections::BTreeMap::new();
+        self.actions.lock().expect("shell action tracker").retain(|(action, poll)| match poll() {
+            None => true,
+            Some(result) => {
+                if let Err(error) = result {
+                    errors.insert(action.clone(), error.to_string());
+                }
+                false
+            }
+        });
+        errors.into_iter().collect()
     }
 
     /// What the sound panel shows of the player playing (or the one that
@@ -71,11 +99,12 @@ impl Sys {
     /// ⏮ ⏯ ⏭ on that player.
     pub fn media_control(&self, verb: MediaVerb) {
         let Some(m) = &self.mpris else { return };
-        let _ = match verb {
+        let task = match verb {
             MediaVerb::Previous => m.media_previous(),
             MediaVerb::PlayPause => m.media_play_pause(),
             MediaVerb::Next => m.media_next(),
         };
+        self.observe("Control media playback", task);
     }
 
     /// The processes playing sound now (streams that aren't paused),
@@ -143,6 +172,27 @@ impl Sys {
             }
         }
         t
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aizome_sys::{Error, Task};
+
+    #[test]
+    fn reports_failures_once_even_when_a_later_request_succeeds() {
+        let sys = Sys::default();
+        sys.observe("Set volume", Task::<()>::ready(Err(Error::Failed("old volume".into()))));
+        sys.observe("Set volume", Task::ready(Ok(0.5f32)));
+        sys.observe("Connect headphones", Task::<()>::ready(Err(Error::Failed("connection refused".into()))));
+        let errors = sys.action_errors();
+        assert_eq!(errors.len(), 2);
+        assert_eq!(errors[0].0, "Connect headphones");
+        assert!(errors[0].1.contains("connection refused"));
+        assert_eq!(errors[1].0, "Set volume");
+        assert!(errors[1].1.contains("old volume"));
+        assert!(sys.action_errors().is_empty());
     }
 }
 

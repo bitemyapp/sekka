@@ -107,10 +107,12 @@ logind's sleep delay or lock for logind (`docs/shell.md`, "Real and
 headless sessions"): `scripts/headless-session` and the tests leave the
 developer's session alone.
 
-Under `aizome.service` it feeds systemd's watchdog (`WatchdogSec=10s`)
+Under `aizome.service` it feeds systemd's watchdog (`WatchdogSec=30s`)
 from its main loop; a loop stalled that long is stopped (SIGABRT, with a
 core dump) and `aizome-session` starts it again, and a watcher thread logs
-the main thread's backtrace to `~/.local/state/aizome/stall.log` first.
+the main thread's kernel stack, wait channel and syscall to
+`~/.local/state/aizome/stall.log` first. User-space backtraces come from an
+external debugger or the watchdog's core dump.
 The service weighs `CPUWeight=1000`/`IOWeight=1000` within
 `session.slice`. See `docs/recovery.md`.
 

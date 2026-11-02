@@ -11,7 +11,7 @@
 //! text out does. Jobs carry only Rust data (text, attributes, options), no
 //! Objective-C objects.
 
-use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
@@ -33,8 +33,8 @@ struct Batch<J, R> {
 enum Slot<J, R> {
     Waiting(J),
     Taken,
-    /// The job, and its result (none if laying it out panicked).
-    Done(J, Option<R>),
+    /// Preserve a worker's panic until every job in the batch has finished.
+    Done(J, std::thread::Result<R>),
 }
 
 /// A batch a worker can help with, whatever its jobs are.
@@ -50,7 +50,10 @@ impl<J: Send, R: Send> Work for Batch<J, R> {
             let Some(slot) = self.slots.get(index) else { return };
             let Slot::Waiting(job) = std::mem::replace(&mut *lock(slot), Slot::Taken) else { continue };
             // A panic here must not leave the caller waiting.
-            let result = catch_unwind(AssertUnwindSafe(|| super::with_ctx(|ctx| (self.lay_out)(ctx, &job)))).ok();
+            let result = catch_unwind(AssertUnwindSafe(|| super::with_ctx(|ctx| (self.lay_out)(ctx, &job))));
+            if result.is_err() {
+                super::discard_ctx();
+            }
             *lock(slot) = Slot::Done(job, result);
             let mut done = lock(&self.done);
             *done += 1;
@@ -82,9 +85,10 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 }
 
 /// Lay `jobs` out with `lay_out`, in parallel if there are other cores to
-/// help, and hand them back with their results, in order (`None` where
-/// laying one out panicked).
-pub fn map<J: Send + 'static, R: Send + 'static>(jobs: Vec<J>, lay_out: fn(&mut Ctx, &J) -> R) -> Vec<(J, Option<R>)> {
+/// help, and hand them back with their results, in order. After all jobs
+/// finish, rethrow a failed layout on the caller, just as a synchronous
+/// layout does. Never cache empty text as a successful result.
+pub fn map<J: Send + 'static, R: Send + 'static>(jobs: Vec<J>, lay_out: fn(&mut Ctx, &J) -> R) -> Vec<(J, R)> {
     let count = jobs.len();
     let batch = Arc::new(Batch {
         slots: jobs.into_iter().map(|job| Mutex::new(Slot::Waiting(job))).collect(),
@@ -106,19 +110,47 @@ pub fn map<J: Send + 'static, R: Send + 'static>(jobs: Vec<J>, lay_out: fn(&mut 
     batch
         .slots
         .iter()
-        .filter_map(|slot| match std::mem::replace(&mut *lock(slot), Slot::Taken) {
-            Slot::Done(job, result) => Some((job, result)),
-            _ => None,
+        .map(|slot| match std::mem::replace(&mut *lock(slot), Slot::Taken) {
+            Slot::Done(job, Ok(result)) => (job, result),
+            Slot::Done(_, Err(panic)) => resume_unwind(panic),
+            _ => unreachable!("all text jobs completed before collecting their results"),
         })
         .collect()
 }
 
 /// Lay `jobs` out, in parallel if there are other cores to help, and hand
-/// them back with their layouts, in order (a job whose layout panicked is
-/// drawn empty).
+/// them back with their layouts, in order.
 pub fn run(jobs: Vec<Job>) -> Vec<(Job, TextLayout)> {
     map(jobs, |ctx, job| compute(ctx, &job.text, &job.attrs, &job.runs, &job.opts))
-        .into_iter()
-        .map(|(job, layout)| (job, layout.unwrap_or_default()))
-        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_batch_finishes_then_propagates_the_original_panic() {
+        let completed = Arc::new(AtomicUsize::new(0));
+        let jobs = (0..32).map(|i| (i, completed.clone())).collect();
+        let result = catch_unwind(|| {
+            map(jobs, |_, (i, completed)| {
+                completed.fetch_add(1, Ordering::SeqCst);
+                assert_ne!(*i, 7, "layout fixture failure");
+                *i
+            })
+        });
+        let panic = result.expect_err("a layout failure must reach the caller");
+        let message = panic
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| panic.downcast_ref::<&str>().copied())
+            .unwrap();
+        assert!(message.contains("layout fixture failure"));
+        assert_eq!(completed.load(Ordering::SeqCst), 32, "no jobs remain when the caller unwinds");
+        assert_eq!(
+            map(vec![1, 2, 3], |_, n| n * 2),
+            vec![(1, 2), (2, 4), (3, 6)],
+            "the pool remains usable after failed jobs"
+        );
+    }
 }

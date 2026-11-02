@@ -249,6 +249,10 @@ fn wm_request(st: &mut State, req: Request) -> Result<Option<Response>, String> 
             Response::Ok
         }
         Request::Action { action } if action == "test-panic" && crate::VARIANT.is_some() => {
+            // A panic can interrupt a mutation. Recovery must use the last
+            // healthy snapshot, never serialize this deliberately damaged model.
+            st.lg.m().wm = crate::wm::Model::new([("damaged".into(), None)]);
+            crate::TEST_PANICKED.store(true, std::sync::atomic::Ordering::Relaxed);
             panic!("the test variant panics on purpose")
         }
         Request::Action { action } => {

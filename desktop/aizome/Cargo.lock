@@ -449,6 +449,7 @@ dependencies = [
  "serde",
  "serde_json",
  "zbus",
+ "zeroize",
 ]
 
 [[package]]

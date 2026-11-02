@@ -9,9 +9,8 @@
 //!   close, which can't be helped.
 //! - **A stall watcher thread.** The loop beats on every iteration. When it
 //!   hasn't for [`STALL_LOG`], the thread logs that the loop is stalled;
-//!   before systemd's deadline it captures where the main thread is (its
-//!   backtrace, taken by a signal handler on that thread, and the kernel's
-//!   `wchan` and `syscall` for it), logs it, and keeps a record in
+//!   before systemd's deadline it reads the kernel's `wchan`, `syscall`
+//!   and stack for the main thread, logs them, and keeps a record in
 //!   `$XDG_STATE_HOME/aizome/stall.log`. A marker beside it says a stall
 //!   was in progress; if the loop comes back the marker goes, and if the
 //!   compositor was killed instead, the next one finds it and the
@@ -20,8 +19,8 @@
 
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
@@ -39,8 +38,6 @@ const NOTICE_WITHIN: Duration = Duration::from_secs(600);
 /// Milliseconds since `EPOCH` at the loop's last beat.
 static BEAT: AtomicU64 = AtomicU64::new(0);
 static EPOCH: OnceLock<Instant> = OnceLock::new();
-static CAPTURED: AtomicBool = AtomicBool::new(false);
-static BACKTRACE: Mutex<Option<std::backtrace::Backtrace>> = Mutex::new(None);
 
 fn now_ms() -> u64 {
     EPOCH.get_or_init(Instant::now).elapsed().as_millis() as u64
@@ -77,11 +74,13 @@ pub fn start(state: &mut State) {
     }
     // Capture before systemd's deadline, leaving it time to finish.
     let capture_at = deadline.map(|d| d.mul_f64(0.6).max(STALL_LOG)).unwrap_or(CAPTURE_WITHOUT_SYSTEMD);
-    install_handler();
-    let _ = std::thread::Builder::new()
+    if let Err(e) = std::thread::Builder::new()
         .name("aizome-watchdog".into())
         .stack_size(512 * 1024)
-        .spawn(move || watch(capture_at, deadline));
+        .spawn(move || watch(capture_at, deadline))
+    {
+        warn!("couldn't start the stall watcher: {e}");
+    }
 }
 
 fn watch(capture_at: Duration, deadline: Option<Duration>) {
@@ -119,30 +118,19 @@ fn watch(capture_at: Duration, deadline: Option<Duration>) {
     }
 }
 
-/// Where the main thread is: its backtrace (from a signal handler on it)
-/// and what the kernel says it waits on.
+/// Observe the main thread from this watcher without interrupting it.
+/// Allocating/unwinding in a signal handler could deadlock a transiently
+/// stalled thread. A userspace backtrace belongs to an external debugger
+/// or systemd's core dump after the watchdog expires.
 fn capture(quiet: Duration, deadline: Option<Duration>) -> String {
     let pid = std::process::id() as i32;
     // The main thread's id is the process's.
     let tid = pid;
-    let wchan = std::fs::read_to_string(format!("/proc/self/task/{tid}/wchan")).unwrap_or_default();
-    let syscall = std::fs::read_to_string(format!("/proc/self/task/{tid}/syscall")).unwrap_or_default();
-    let stat = std::fs::read_to_string(format!("/proc/self/task/{tid}/stat")).unwrap_or_default();
+    let wchan = probe(format!("/proc/self/task/{tid}/wchan"));
+    let syscall = probe(format!("/proc/self/task/{tid}/syscall"));
+    let stack = probe(format!("/proc/self/task/{tid}/stack"));
+    let stat = probe(format!("/proc/self/task/{tid}/stat"));
     let state = stat.rsplit(')').next().and_then(|s| s.split_whitespace().next()).unwrap_or("?").to_string();
-    CAPTURED.store(false, Ordering::SeqCst);
-    // Safety: tgkill to our own main thread with a signal we handle.
-    unsafe {
-        libc::syscall(libc::SYS_tgkill, pid, tid, signal());
-    }
-    let waited = Instant::now();
-    while !CAPTURED.load(Ordering::SeqCst) && waited.elapsed() < Duration::from_millis(800) {
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    let bt = BACKTRACE.lock().ok().and_then(|mut b| b.take());
-    let trace = match bt {
-        Some(bt) => format!("{bt}"),
-        None => "(the main thread didn't answer the signal; it may be stuck in the kernel)\n".to_string(),
-    };
     let killed = match deadline {
         Some(d) => format!("systemd stops Aizome at {:.0} s and starts it again", d.as_secs_f64()),
         None => "no watchdog is watching (not under systemd)".to_string(),
@@ -150,35 +138,18 @@ fn capture(quiet: Duration, deadline: Option<Duration>) -> String {
     format!(
         "Aizome's main loop has been stalled for {:.1} s ({killed}).\n\
          main thread: state {state}, waiting in {}, syscall {}\n\
-         backtrace:\n{trace}",
+         kernel stack:\n{stack}\n\
+         Userspace backtrace: use an external debugger, or coredumpctl after a watchdog abort.\n",
         quiet.as_secs_f64(),
         if wchan.trim().is_empty() { "?" } else { wchan.trim() },
         syscall.trim(),
     )
 }
 
-fn signal() -> libc::c_int {
-    libc::SIGRTMIN() + 3
-}
-
-extern "C" fn on_signal(_: libc::c_int) {
-    // On the main thread, interrupted wherever it is. Taking a backtrace
-    // allocates, which isn't strictly safe here; the thread is stuck and
-    // about to be killed, and the watcher only waits a moment for it.
-    if let Ok(mut slot) = BACKTRACE.try_lock() {
-        *slot = Some(std::backtrace::Backtrace::force_capture());
-    }
-    CAPTURED.store(true, Ordering::SeqCst);
-}
-
-fn install_handler() {
-    // Safety: a zeroed sigaction with a handler of the right signature.
-    unsafe {
-        let mut sa: libc::sigaction = std::mem::zeroed();
-        sa.sa_sigaction = on_signal as *const () as usize;
-        sa.sa_flags = libc::SA_RESTART;
-        libc::sigemptyset(&mut sa.sa_mask);
-        libc::sigaction(signal(), &sa, std::ptr::null_mut());
+fn probe(path: impl AsRef<std::path::Path>) -> String {
+    match std::fs::read_to_string(path) {
+        Ok(text) => text.trim().to_owned(),
+        Err(e) => format!("[unavailable: {e}]"),
     }
 }
 
@@ -265,14 +236,11 @@ fn stamp(t: SystemTime) -> String {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn a_signal_captures_this_threads_backtrace() {
-        super::install_handler();
-        // Safety: raising a handled signal on this thread.
-        unsafe {
-            libc::raise(super::signal());
-        }
-        assert!(super::CAPTURED.load(std::sync::atomic::Ordering::SeqCst));
-        let bt = super::BACKTRACE.lock().unwrap().take().expect("a backtrace");
-        assert!(format!("{bt}").contains("a_signal_captures_this_threads_backtrace"), "{bt}");
+    fn the_watcher_collects_diagnostics_without_main_thread_cooperation() {
+        let report = std::thread::spawn(|| super::capture(std::time::Duration::from_secs(6), None)).join().unwrap();
+        assert!(report.contains("main thread: state"), "{report}");
+        assert!(report.contains("kernel stack:"), "{report}");
+        assert!(report.contains("no watchdog is watching"), "{report}");
+        assert!(super::probe("/proc/self/aizome-no-such-probe").starts_with("[unavailable:"));
     }
 }

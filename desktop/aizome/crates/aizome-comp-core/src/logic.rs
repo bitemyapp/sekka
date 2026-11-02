@@ -258,6 +258,9 @@ pub struct LogicHost {
     pub(crate) pending_reload: Option<crate::requests::ReloadArgs>,
     /// Calls into the logic on the stack now.
     depth: u32,
+    /// Libraries cannot be unloaded while callbacks may still refer to
+    /// them. Bound retained mappings, including failed entry/init attempts.
+    retained_libraries: usize,
 }
 
 impl Default for LogicHost {
@@ -278,6 +281,7 @@ impl Default for LogicHost {
             last_error: None,
             pending_reload: None,
             depth: 0,
+            retained_libraries: 0,
         }
     }
 }
@@ -290,7 +294,12 @@ impl LogicHost {
     }
 
     /// Where the logic keeps its state (from its `init`).
-    pub fn set_raw(&mut self, state: *mut (), owner: usize) {
+    ///
+    /// # Safety
+    /// `state` must be an exclusively owned, live allocation of the type
+    /// identified by `owner`, compatible with that library's accessors and
+    /// release hook. The library must stay mapped while it can be accessed.
+    pub unsafe fn set_raw(&mut self, state: *mut (), owner: usize) {
         self.state = state;
         self.owner = owner;
     }
@@ -365,7 +374,7 @@ impl State {
     pub fn load_logic(&mut self, path: &Path, _reload: bool) -> Result<Outcome, String> {
         let started = Instant::now();
         let next_gen = self.lg.generation + 1;
-        let vt = open(path, next_gen)?;
+        let vt = open(path, &mut self.lg.retained_libraries)?;
         let loaded = Loaded { vt, path: path.to_path_buf(), loaded_at: SystemTime::now() };
 
         // The running logic lets go and hands over its state.
@@ -398,7 +407,8 @@ impl State {
                 }
             }
             self.after_logic_change();
-            let e = format!("{}: the new logic failed to start ({e}); kept the one running", path.display());
+            let action = if self.lg.healthy() { "restored the previous logic" } else { "using the recovery path" };
+            let e = format!("{}: the new logic failed to start ({e}); {action}", path.display());
             self.lg.last_error = Some(e.clone());
             return Err(e);
         }
@@ -419,23 +429,39 @@ impl State {
     /// Returns what it saved.
     fn stop_logic(&mut self) -> Option<Vec<u8>> {
         let vt = self.lg.vt?;
-        let healthy = self.lg.poisoned.is_none();
-        let _ = catch_unwind(AssertUnwindSafe(|| (vt.quiesce)(self)));
-        self.end_logic_grabs();
-        let saved = match catch_unwind(AssertUnwindSafe(|| (vt.save)(self))) {
-            Ok(Ok(bytes)) => Some(bytes),
-            Ok(Err(e)) => {
-                warn!("the compositor logic couldn't save its state: {e}");
-                None
+        let healthy = if self.lg.poisoned.is_none() {
+            match catch_unwind(AssertUnwindSafe(|| (vt.quiesce)(self))) {
+                Ok(()) => true,
+                Err(p) => {
+                    warn!("the compositor logic panicked while stopping: {}", panic_message(&p));
+                    false
+                }
             }
-            Err(p) => {
-                warn!("the compositor logic panicked saving its state: {}", panic_message(&p));
-                None
-            }
+        } else {
+            false
         };
-        // A poisoned logic's state may be inconsistent; what it saved is
-        // still the best there is, else what the last good one saved.
-        let saved = saved.or_else(|| (!healthy).then(|| self.lg.last_saved.clone()).flatten());
+        self.end_logic_grabs();
+        self.az.cursor_override = None;
+        // Never run save/quiesce on already-poisoned state. A snapshot from
+        // the last healthy handoff is older but has not been half-mutated
+        // by the failing hook; without one, init reconstructs the desktop
+        // from the core's surviving windows.
+        let saved = if healthy {
+            match catch_unwind(AssertUnwindSafe(|| (vt.save)(self))) {
+                Ok(Ok(bytes)) => Some(bytes),
+                Ok(Err(e)) => {
+                    warn!("the compositor logic couldn't save its state: {e}");
+                    None
+                }
+                Err(p) => {
+                    warn!("the compositor logic panicked saving its state: {}", panic_message(&p));
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        let saved = saved.or_else(|| self.lg.last_saved.clone());
         self.discard_logic();
         saved
     }
@@ -495,7 +521,7 @@ impl State {
 
         // The logic before the last reload, if this one came in by a
         // reload; else this one again, unless it keeps failing.
-        let (next, what) = match self.lg.previous.take() {
+        let (next, mut what) = match self.lg.previous.take() {
             Some(prev) => (Some(prev), "rolled back to the logic that ran before"),
             None if self.lg.panics.len() < 3 => (failed, "restarted it"),
             None => (None, "set it aside: the session runs on the recovery path until a reload"),
@@ -514,11 +540,12 @@ impl State {
                     self.discard_logic();
                     self.lg.vt = None;
                     self.lg.current = None;
+                    what = "couldn't restart the window manager; using the recovery path until a reload";
                 }
             }
         }
         self.after_logic_change();
-        let body = format!("{message}\nAizome {what}. Your windows are as they were.");
+        let body = format!("{message}\nAizome {what}. Your apps are still open; the window layout may have changed.");
         error!("compositor logic {build} panicked; {what}");
         self.az.ipc.emit(&Event::LogicFailed { message: message.clone(), action: what.into() });
         self.notify("Aizome's window manager failed", &body);
@@ -581,7 +608,14 @@ pub const fn abi_marker() -> [u8; 81] {
 
 /// Opens a logic library: checks its fingerprint, loads a private copy and
 /// finds its table.
-fn open(path: &Path, generation: u64) -> Result<&'static LogicVTable, String> {
+const MAX_RETAINED_LIBRARIES: usize = 64;
+
+fn open(path: &Path, retained: &mut usize) -> Result<&'static LogicVTable, String> {
+    if *retained >= MAX_RETAINED_LIBRARIES {
+        return Err(format!(
+            "{MAX_RETAINED_LIBRARIES} compositor logic libraries are retained; log out and in before reloading again"
+        ));
+    }
     let abi = read_abi(path)?;
     if abi != ABI {
         return Err(format!(
@@ -593,7 +627,7 @@ fn open(path: &Path, generation: u64) -> Result<&'static LogicVTable, String> {
             &ABI[..12]
         ));
     }
-    let copy = private_copy(path, generation)?;
+    let copy = private_copy(path, *retained as u64)?;
     // Safety: the library's initialisers are Rust's (none) and its
     // dependencies' (the core's, already run); RTLD_NOW resolves every
     // symbol now, so a mismatch fails here and not on a call.
@@ -627,6 +661,7 @@ fn open(path: &Path, generation: u64) -> Result<&'static LogicVTable, String> {
     };
     // Never closed: code and data it hands out may outlive it.
     std::mem::forget(lib);
+    *retained += 1;
     let vt = catch_unwind(entry).map_err(|p| format!("{}: {}", path.display(), panic_message(&p)))?;
     if vt.abi != ABI || (vt.state_type)() != TypeId::of::<State>() {
         return Err(format!("{}: built against another compositor core", path.display()));
@@ -761,4 +796,17 @@ pub fn build_info() -> serde_json::Value {
         "sources": crate::build::SOURCES,
         "version": env!("CARGO_PKG_VERSION"),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retained_library_limit_refuses_before_opening_another_file() {
+        let mut retained = MAX_RETAINED_LIBRARIES;
+        let error = open(Path::new("/does-not-exist/libaizome.so"), &mut retained).err().expect("reload limit");
+        assert!(error.contains("log out and in"), "{error}");
+        assert_eq!(retained, MAX_RETAINED_LIBRARIES);
+    }
 }
