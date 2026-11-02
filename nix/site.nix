@@ -1,6 +1,7 @@
 # sekka.computer: static pages built by the Rust generator in site/ from the
 # brand tokens, logos and screenshots in this repository, with the fonts it
-# serves taken from this Nixpkgs, and the download worker
+# serves taken from this Nixpkgs, the home page's video (site/video/), and
+# the download worker
 # (site/download-worker), which Pages runs for /download/ as _worker.js. The
 # output is the directory to deploy, with Wrangler (DEVELOPERS.md).
 {
@@ -21,6 +22,7 @@ let
         ../site/src
         ../site/style.css
         ../site/theme.js
+        ../site/video.js
       ];
     };
     cargoLock.lockFile = ../site/Cargo.lock;
@@ -108,10 +110,33 @@ let
       ../docs/brand/logos
       ../docs/brand/family
       ../docs/images/sekka
+      ../site/video
       ../desktop/aizome/icons/apps
       ../desktop/aizome/apps/hotaru/data/org.aizome.Hotaru.svg
     ];
   };
+  # The screenshots the video draws, as WebP: 1.3 MB where the PNGs are
+  # 6.5 MB, at their own size. The video asks for them by their PNG names.
+  shots =
+    let
+      names = [
+        "01-desktop-night"
+        "03-palette"
+        "07-day"
+        "13-full-effects"
+      ];
+      dir = ../desktop/aizome/docs/screenshots;
+      source = lib.fileset.toSource {
+        root = dir;
+        fileset = lib.fileset.unions (map (name: dir + "/${name}.png") names);
+      };
+    in
+    pkgs.runCommand "sekka-video-shots" { nativeBuildInputs = [ pkgs.libwebp ]; } ''
+      mkdir $out
+      for name in ${lib.escapeShellArgs names}; do
+        cwebp -quiet -q 85 -sharp_yuv -metadata none ${source}/$name.png -o $out/$name.webp
+      done
+    '';
   mono = pkgs.jetbrains-mono;
   sans = pkgs.atkinson-hyperlegible-next;
 in
@@ -126,7 +151,8 @@ pkgs.runCommand "sekka-site" { } ''
     --sans "${sans}/share/fonts/truetype/AtkinsonHyperlegibleNext[wght].ttf" \
     --sans-italic "${sans}/share/fonts/truetype/AtkinsonHyperlegibleNext-Italic[wght].ttf" \
     --sans-license ${sans.src}/OFL.txt \
-    --cjk ${pkgs.noto-fonts-cjk-serif}/share/fonts/opentype/noto-cjk/NotoSerifCJK-VF.otf.ttc
+    --cjk ${pkgs.noto-fonts-cjk-serif}/share/fonts/opentype/noto-cjk/NotoSerifCJK-VF.otf.ttc \
+    --shots ${shots}
   # Pages runs _worker.js/index.js, which loads the module beside it.
   mkdir $out/_worker.js
   cp ${worker}/index.js ${worker}/index.wasm $out/_worker.js/

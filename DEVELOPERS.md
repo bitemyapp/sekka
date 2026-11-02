@@ -2791,7 +2791,7 @@ has not yet written a physical drive.
 ## Website
 
 `site/` is a separate Cargo workspace whose program writes sekka.computer:
-static HTML and CSS, with one small script for browsers, built from `docs/brand/tokens.json`,
+static HTML and CSS, with two scripts for browsers, built from `docs/brand/tokens.json`,
 the brand SVGs, and screenshots copied byte for byte. Each caption repeats the
 provenance recorded in `docs/screenshots.md`. The design page's contrast
 ratios are computed from the tokens when the site is built. Kanji are outlined
@@ -2805,8 +2805,36 @@ Day on. It is a checkbox, so it works without script on the page it is on;
 `site/theme.js`, loaded in each page's head so a remembered Day is drawn
 from the start, keeps the choice in `localStorage` (`sekka-theme`) and sets
 `data-theme` on the root element, which the stylesheet reads as it reads the
-checkbox. That script is the only one, and the content security policy
-allows scripts from the site alone.
+checkbox. The other script plays the home page's video, and the content
+security policy allows scripts from the site alone.
+
+The home page's video, Sekka and Aizome in 70 seconds, is drawn by the
+visitor's browser rather than streamed. Its own program, the fframes video in
+[sekka-aizome-hype](https://github.com/bitemyapp/sekka-aizome-hype), is built
+for Wasm and writes each frame as SVG; `site/video.js` puts the frame that
+the soundtrack's clock says is due on the page (Web Audio's
+`getOutputTimestamp`, so the picture keeps to the sound as heard). Its fonts
+are inside the program, and the script gives the browser the same files, so
+the text has the widths the frames were laid out with; they are registered
+as `hype-<family>` so they can't stand in for the site's own JetBrains Mono.
+Its four screenshots are `desktop/aizome/docs/screenshots/{01-desktop-night,03-palette,07-day,13-full-effects}.png`,
+made WebP at their own size when the site is built (`nix/site.nix`). Until it
+plays, the page shows its frame 1284 (`docs/images/sekka/hype-video.png`,
+rendered by its `frame` command). Nothing of it is fetched until the page has
+loaded and the browser is idle, or the pointer comes over it; with Save Data
+on, until Play. It never plays by itself. Without script, or where it can't
+be drawn, the still and a link to the video on YouTube stand in its place.
+The content security policy allows `wasm-unsafe-eval`, so the site's scripts
+may compile Wasm, and `connect-src 'self'`, so they may fetch it and the
+soundtrack.
+
+`site/video/` holds what the program's `web/build.sh` writes, copied as
+built from its `web/dist/`: `hype.wasm` and `hype.js`, its JS glue with the
+fonts each family falls back to (worked out from every frame's text), and the
+soundtrack at the video's gain as Opus (`score.webm`) and AAC (`score.m4a`,
+for browsers that can't decode Opus). `OFL.txt` is the fonts' copyright
+notices and licence, linked from `/fonts/`. To change the video, run
+`web/build.sh` there and copy `web/dist/` over `site/video/`.
 
 The stylesheet, images, logos, fonts and licence texts are published under
 names that include a hash of their bytes (`images/yukimi.<hash>.png`), and
@@ -2875,8 +2903,8 @@ Only Wrangler uploads the worker's Wasm as a module. The dashboard's upload
 publishes `_worker.js/` as plain files, and the download page then shows its
 fallback. Pages applies `_headers` (the content security policy) to static
 files and serves `404.html`. The pages promise no cookies or analytics, and
-no script but their own theme switch, so leave off the Cloudflare features
-that add them:
+no scripts but their own, so leave off the Cloudflare features that add
+them:
 Web Analytics, Rocket Loader, Email Address Obfuscation and Bot Fight Mode.
 
 Everything the site claims comes from this repository's READMEs and docs.

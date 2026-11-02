@@ -3,6 +3,12 @@
 README and website images are original PNG captures with links to the full
 files. They are not upscaled, composited, or generated illustrations.
 
+The one exception is the video at the top of sekka.computer's home page, Sekka
+and Aizome in 70 seconds, which is a motion graphic and says so. It is drawn,
+not captured, and shows four of the gallery's screenshots
+(`desktop/aizome/docs/screenshots/`) inside its frames, re-encoded as WebP at
+their own size. Its still, `images/sekka/hype-video.png`, is its frame 1284.
+
 The [application-startup review images](test-results/application-startup/README.md)
 were captured on 2026-10-29 for PR #144. Four are original 1280 × 800 `grim`
 captures of the actual shell and integrated Koe under a private headless

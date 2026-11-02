@@ -214,6 +214,62 @@ kbd {
 .button:hover { background: var(--surface); color: var(--accent); }
 .page-head .cta { margin-top: 1.25em; }
 
+/* The home page's video, drawn by the browser (video.js): its still until it
+   plays, Play in the corner the still leaves empty, and a bar of controls
+   that stays out of the way while it plays. */
+.player { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: #16161e; user-select: none; -webkit-user-select: none; }
+.player:focus { outline: none; }
+.player-screen { position: absolute; inset: 0; }
+.player .player-poster { display: block; width: 100%; height: 100%; object-fit: contain; }
+.player-screen svg { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; }
+.player-big {
+  position: absolute; right: 5%; bottom: calc(5% + 2.75rem);
+  display: inline-flex; align-items: center; gap: 0.6em; padding: 0.6em 1.2em;
+  font-family: var(--font-mono); font-weight: 800; font-size: clamp(0.7rem, 2.4vw, 1.05rem); cursor: pointer;
+}
+.player-big[aria-busy="true"] { cursor: progress; }
+.player-big .player-icon { width: 0.75em; height: 0.75em; }
+.player-bar {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; gap: 0.5rem; height: 2.75rem; padding: 0 0.5rem;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  border-top: var(--border-width) solid var(--border-inactive);
+  font-family: var(--font-mono); font-size: 0.8rem; color: var(--text);
+  transition: opacity 0.2s;
+}
+.player-button {
+  flex: none; display: grid; place-items: center; width: 2.25rem; height: 2.25rem; padding: 0;
+  background: none; border: 0; color: var(--text); cursor: pointer;
+}
+.player-button:hover { color: var(--accent); }
+.player-icon { display: block; width: 1rem; height: 1rem; }
+.player-time { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.player-seek { flex: 1; min-width: 4rem; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.player-volume { flex: none; width: 5rem; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.player-seek:disabled { cursor: default; }
+.video figcaption a, .player-note a { display: inline; }
+.player-note {
+  position: absolute; left: 0; right: 0; bottom: 0; margin: 0; max-width: none; padding: 0.75em 1em;
+  background: var(--surface); border-top: var(--border-width) solid var(--border-inactive); font-size: 0.9rem;
+}
+/* One icon of each pair, as the video stands. */
+.player[data-state="playing"] .icon-play, .player-toggle .icon-pause { display: none; }
+.player[data-state="playing"] .player-toggle .icon-pause { display: block; }
+.player-muted .icon-sound, .icon-muted { display: none; }
+.player-muted .icon-muted { display: block; }
+.icon-exit, .player:fullscreen .icon-enter { display: none; }
+.player:fullscreen .icon-exit { display: block; }
+/* The bar shows on its still when the pointer or keyboard comes to it, and
+   while it plays when the pointer moves. */
+.player[data-state="poster"]:not(:hover) .player-bar:not(:has(:focus-visible)),
+.player[data-state="loading"]:not(:hover) .player-bar:not(:has(:focus-visible)),
+.player[data-state="playing"]:not(.player-awake) .player-bar:not(:has(:focus-visible)) { opacity: 0; pointer-events: none; }
+.player[data-state="playing"]:not(.player-awake) { cursor: none; }
+.player:fullscreen { aspect-ratio: auto; width: 100%; height: 100%; background: #000; }
+.player [hidden] { display: none; }
+@media (pointer: coarse) { .player-volume { display: none; } }
+@media (prefers-reduced-motion: reduce) { .player-bar { transition: none; } }
+
 /* A closing call to action: a focused window with its button at the right. */
 .cta-band { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--pad); }
 .cta-band > div { flex: 1 1 30em; min-width: 0; }

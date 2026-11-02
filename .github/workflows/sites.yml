@@ -57,6 +57,10 @@ jobs:
             sources: >-
               site nix/site.nix docs/brand docs/images/sekka
               desktop/aizome/icons/apps desktop/aizome/apps/hotaru/data
+              desktop/aizome/docs/screenshots/01-desktop-night.png
+              desktop/aizome/docs/screenshots/03-palette.png
+              desktop/aizome/docs/screenshots/07-day.png
+              desktop/aizome/docs/screenshots/13-full-effects.png
           - site: aizome.computer
             package: aizome-site
             project: aizome
