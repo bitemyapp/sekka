@@ -2,6 +2,7 @@ pub mod app;
 mod automatic_links;
 mod clipboard;
 mod font;
+pub mod go_to_tab;
 pub mod input;
 pub mod instance;
 mod link_resolver;
@@ -17,6 +18,7 @@ mod search;
 mod selections;
 mod session;
 pub mod settings;
+mod tab_strip;
 mod terminal_view;
 
 #[cfg(not(target_os = "linux"))]

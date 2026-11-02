@@ -9,7 +9,10 @@ repository.workspace = true
 
 [dependencies]
 hotaru-link-regex = { path = "../../crates/hotaru-link-regex" }
+aizome-face.workspace = true
 aizome-kit.workspace = true
+aizome-search.workspace = true
+aizome-theme.workspace = true
 hotaru-sprites = { path = "../../../../apps/hotaru/crates/hotaru-sprites" }
 hotaru-core = { path = "../../../../apps/hotaru/crates/hotaru-core" }
 hotaru-io = { path = "../../../../apps/hotaru/crates/hotaru-io" }
