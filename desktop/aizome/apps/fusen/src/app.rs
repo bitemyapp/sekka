@@ -1,4 +1,4 @@
-//! Fuse                .push(MenuItem::new(f.clone(), Msg::MoveTo(f.clone())).key(f).checked(note.is_some_and(|n| n.folder == *f)));, the program: the notes, the main window, the stickies, and what
+//! Fusen, the program: the notes, the main window, the stickies, and what
 //! each message does.
 
 use std::collections::{BTreeMap, HashMap};
@@ -1081,8 +1081,9 @@ impl Program for Fusen {
             MenuItem::new("Notes", Msg::MoveTo(String::new())).checked(note.is_some_and(|n| n.folder.is_empty())),
         );
         for f in &self.folders {
-            move_to
-                .push(MenuItem::new(f.clone(), Msg::MoveTo(f.clone())).checked(note.is_some_and(|n| n.folder == *f)));
+            move_to.push(
+                MenuItem::new(f.clone(), Msg::MoveTo(f.clone())).key(f).checked(note.is_some_and(|n| n.folder == *f)),
+            );
         }
         let file = Menu::new("File")
             .item(MenuItem::new("New Note", Msg::New).shortcut(Shortcut::cmd('N')))

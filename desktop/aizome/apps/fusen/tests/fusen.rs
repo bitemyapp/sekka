@@ -9,7 +9,7 @@ use std::time::{Duration, Instant, SystemTime};
 use aizome_fusen::app::{Fusen, Msg, Places, Request};
 use aizome_fusen::notes::NoteColor;
 use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
-use aizome_kit::testing::{Harness, assert_golden};
+use aizome_kit::testing::{FakeShell, Harness, assert_golden, menu_item};
 use aizome_kit::theme::{Appearance, ThemeChoice};
 use aizome_kit::{Point, WindowKey};
 
@@ -97,6 +97,36 @@ fn notes_come_from_the_folder_newest_first() {
     h.send(Msg::Search("pixel".into()));
     let shown: Vec<&str> = h.program().shown().iter().map(|n| n.title.as_str()).collect();
     assert_eq!(shown, ["Tiles at fractional scale"], "search looks in the text too");
+}
+
+#[test]
+fn stale_folder_menu_does_not_move_a_note_into_a_recreated_folder() {
+    let dir = scratch("folder-menu");
+    fill(&dir);
+    let folder = dir.join("Notes/Archive");
+    std::fs::create_dir(&folder).unwrap();
+    let mut shell = FakeShell::new();
+    let mut h = shell.launch(app(&dir, Request::default()));
+    open(&mut h);
+    let note = id_of(&h, "Groceries");
+    h.advance(Duration::from_millis(50));
+    let stale = menu_item(&shell.menus(), "Archive").id;
+
+    std::fs::remove_dir(&folder).unwrap();
+    h.send(Msg::Rescan);
+    h.advance(Duration::from_millis(50));
+    shell.menus();
+    std::fs::create_dir(&folder).unwrap();
+    h.send(Msg::Rescan);
+    h.advance(Duration::from_millis(50));
+    let current = menu_item(&shell.menus(), "Archive").id;
+
+    shell.activate(&mut h, stale);
+    assert_eq!(h.program().note(note).unwrap().folder, "", "the old folder's action must be ignored");
+    assert!(dir.join("Notes/Groceries.md").is_file());
+    shell.activate(&mut h, current);
+    assert_eq!(h.program().note(note).unwrap().folder, "Archive");
+    assert!(folder.join("Groceries.md").is_file());
 }
 
 #[test]

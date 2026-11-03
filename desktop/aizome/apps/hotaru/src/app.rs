@@ -1,4 +1,5 @@
 use crate::ids::{PaneId, RequestId, SplitId, TabId};
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -13,6 +14,8 @@ use crate::preferences::{Notice, Page};
 use crate::session::{Command, Defaults, Session};
 use crate::settings::{self, Access, Action, Bindings, Settings};
 use crate::terminal_view::{Selection, colors_for, terminal_view};
+
+const TAB_MENU_TITLE_LIMIT: NonZeroUsize = NonZeroUsize::new(48).unwrap();
 
 #[derive(Clone)]
 pub enum Msg {
@@ -2625,7 +2628,7 @@ impl Program for Hotaru {
         for (index, tab) in self.tabs.iter().enumerate() {
             let title =
                 self.panes.iter().find(|pane| pane.id == tab.active).map_or("Shell", |pane| pane.title.as_str());
-            let title = aizome_kit::text::clip(title, 48);
+            let title = aizome_kit::text::clip(title, TAB_MENU_TITLE_LIMIT);
             window = window.item(
                 self.keyed(
                     MenuItem::new(title, Msg::SelectTab(tab.id))
