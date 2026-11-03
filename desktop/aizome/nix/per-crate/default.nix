@@ -76,9 +76,22 @@ in
   compositor = members.aizome-comp.build;
   # The hot-swapped logic library, which links the same core.
   logic = members.aizome-comp-logic.build;
+  # The heaviest build scripts outside the compositor: whisper.cpp through
+  # CMake (Koe, with ../package.nix's features), FFmpeg and PipeWire
+  # bindings (aizome-media).
+  koe = members.aizome-koe.build.override {
+    features = [
+      "default"
+      "openblas"
+      "vulkan"
+    ];
+  };
+  media = members.aizome-media.build;
   # Every workspace member, each crate its own derivation: the whole of
   # what ../package.nix compiles (evaluated for its cost, not built).
   workspace = cargoNix.allWorkspaceMembers;
   # The same two packages in one derivation and one Cargo run.
-  monolithic = (pkgs.callPackage ./monolithic.nix { inherit src yukimiSrc hotaruSrc; }).overrideAttrs salted;
+  monolithic =
+    (pkgs.callPackage ./monolithic.nix { inherit src yukimiSrc hotaruSrc; }).overrideAttrs
+      salted;
 }
