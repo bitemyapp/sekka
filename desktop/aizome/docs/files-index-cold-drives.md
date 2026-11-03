@@ -85,7 +85,8 @@ shares.
    - It doesn't help the first look at a drive on a computer, which has no
      ranges yet.
    - How much it gains depends on how many reads the drive takes at once:
-     a lot over UAS, less over the older one-command-at-a-time USB storage.
+     a lot over UAS, less over the older USB storage protocol, which takes
+     one command at a time.
 4. **Read the folders without the driver.** Read exFAT (whose
    specification has been public since 2019) from the partition in user
    space, read only: the folders of one depth all at once with
