@@ -41,6 +41,9 @@ export XDG_STATE_HOME="$media_test_dir/state"
 export XDG_CONFIG_DIRS="$media_test_dir/system-config"
 export AIZOME_MEDIA_TEST_PIPEWIRE=1
 export AIZOME_MEDIA_TEST_AUDIO="$media_test_dir/tone.wav"
+export AIZOME_MEDIA_TEST_VIDEO="$media_test_dir/video.mkv"
+export SIDESTEP_BACKEND=null
+export AIZOME_MEDIA_HWDEC=0
 mkdir -p "$XDG_RUNTIME_DIR" "$XDG_CONFIG_HOME/pipewire/pipewire.conf.d" "$XDG_STATE_HOME"
 chmod 700 "$XDG_RUNTIME_DIR"
 cat > "$XDG_CONFIG_HOME/pipewire/pipewire.conf.d/91-test.conf" <<'EOF'
@@ -68,6 +71,7 @@ context.objects = [
 ]
 EOF
 ffmpeg -nostdin -hide_banner -loglevel error -f lavfi -i "sine=frequency=440:sample_rate=48000:duration=30" -ac 2 "$AIZOME_MEDIA_TEST_AUDIO"
+ffmpeg -nostdin -hide_banner -loglevel error -f lavfi -i "testsrc2=size=160x90:rate=10:duration=30" -i "$AIZOME_MEDIA_TEST_AUDIO" -c:v mpeg4 -q:v 8 -c:a copy -shortest "$AIZOME_MEDIA_TEST_VIDEO"
 pipewire > "$media_test_dir/pipewire.log" 2>&1 &
 media_pipewire_pid=$!
 for _ in {1..100}; do

@@ -259,10 +259,23 @@ This component test does not replace playback through the exact ISO's normal UI.
 Utsushi's output selector enumerates PipeWire Audio/Sink nodes and stores
 `node.name` rather than temporary IDs. It recreates only its stream with
 `target.object`, retaining the decoded ring and audible position, then
-restores volume and play/pause state. Volume is restored when the stream
-first connects; later pause/resume transitions preserve desktop mixer changes.
+restores the effective stream controls and play/pause state. PipeWire Props
+notifications retain external mixer changes, including mute and channel
+balance, across pause/resume, output selection and subsequent items.
 The saved friendly output name remains visible after disconnection or restart.
-It does not change the session default.
+The menu and playback diagnostics distinguish that preference from the
+observed graph destination. It does not change the session default.
+
+Losing the active sink or its active device route pauses audio, video and
+the playback clock, clears playback intent and shows a nonmodal explanation.
+Fallback, reconnection and selecting an output leave it paused until Play.
+Requested moves in Utsushi, the mixer or the system default preserve playback;
+removing an unrelated output does nothing. Link teardown alone is not loss.
+The backend remembers the last linked destination during link replacement
+and checks device Route/EnumRoute availability together at a core round trip.
+WirePlumber's MPRIS Pause remains idempotent alongside the backend pause.
+A real output failure never switches to a silent null clock; null audio is
+an explicit test option.
 The routing regression runs against private PipeWire and D-Bus instances,
 two null sinks and WirePlumber's policy-only profile (no hardware monitors):
 
@@ -270,11 +283,13 @@ two null sinks and WirePlumber's policy-only profile (no hardware monitors):
 nix develop .#aizome -c bash desktop/aizome/crates/aizome-media/tests/pipewire-output.sh
 ```
 
-It checks real links while playing, switching while paused, retained volume
-and mute, external mixer changes across pause/resume, the next item,
-returning to System Default and unplug fallback. The ordinary headless
-tests cover the UI/state and old preference files. These are component
-tests, not measurements of Bluetooth/USB hardware or ISO qualification.
+It checks real links, external controls and channel balance, next-item
+routing, requested mixer/default moves, active versus unrelated removal,
+fallback and reconnection. The full Utsushi harness runs its real MPRIS
+service and verifies paused video/clock, duplicate Pause, the explanation
+and saved preferences. Serialized SPA route tests cover wired-route loss
+without sink removal and notification ordering. These are component tests;
+physical jack, Bluetooth/USB hardware and ISO validation remain separate.
 
 ### Aizome and IBus
 

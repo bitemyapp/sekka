@@ -13,6 +13,9 @@
 //! the desktop's volume controls show it; its volume is a stream volume
 //! PipeWire applies.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
@@ -22,6 +25,28 @@ use pw::spa;
 use crate::audio::{Output, Ring, amplitude, fill};
 use crate::av::ChannelLayout;
 use crate::clock::Clock;
+
+mod routing;
+use routing::{Routes, Routing};
+
+pub enum OutputEvent {
+    Devices(Vec<AudioDevice>),
+    Routed(Vec<AudioDevice>),
+    Volume(f32, bool),
+    Lost,
+}
+
+#[derive(Clone)]
+struct Controls {
+    channels: Vec<f32>,
+    muted: bool,
+}
+
+impl Default for Controls {
+    fn default() -> Self {
+        Self { channels: vec![1.0], muted: false }
+    }
+}
 
 /// An output advertised by PipeWire. Names survive reconnects; numeric
 /// registry IDs do not, so preferences and target.object use the name.
@@ -58,29 +83,32 @@ pub struct PipeWireOutput {
     kind: StreamKind,
     describe: Arc<Mutex<String>>,
     device: Option<String>,
+    lost: Arc<AtomicBool>,
 }
 
 impl PipeWireOutput {
     /// Connect to PipeWire (on a thread of its own): an error where it
     /// can't.
     pub fn connect(kind: StreamKind) -> Result<PipeWireOutput, String> {
-        Self::connect_with_devices(kind, |_| {})
+        Self::connect_with_events(kind, |_| {})
     }
 
-    pub fn connect_with_devices(
+    pub fn connect_with_events(
         kind: StreamKind,
-        devices: impl Fn(Vec<AudioDevice>) + Send + Sync + 'static,
+        events: impl Fn(OutputEvent) + Send + Sync + 'static,
     ) -> Result<PipeWireOutput, String> {
         let (tx, rx) = pw::channel::channel::<Cmd>();
         let (ready_tx, ready_rx) = mpsc::channel();
         let describe = Arc::new(Mutex::new(String::from("PipeWire")));
         let d = describe.clone();
+        let lost = Arc::new(AtomicBool::new(false));
+        let l = lost.clone();
         let thread = std::thread::Builder::new()
             .name("aizome-media-audio".into())
-            .spawn(move || run(rx, ready_tx, d, Arc::new(devices)))
+            .spawn(move || run(rx, ready_tx, d, l, Arc::new(events)))
             .map_err(|e| e.to_string())?;
         match ready_rx.recv() {
-            Ok(Ok(())) => Ok(PipeWireOutput { tx, thread: Some(thread), kind, describe, device: None }),
+            Ok(Ok(())) => Ok(PipeWireOutput { tx, thread: Some(thread), kind, describe, device: None, lost }),
             Ok(Err(e)) => {
                 let _ = thread.join();
                 Err(e)
@@ -88,10 +116,13 @@ impl PipeWireOutput {
             Err(_) => Err("PipeWire's thread stopped".into()),
         }
     }
-
 }
 
 impl Output for PipeWireOutput {
+    fn take_loss(&mut self) -> bool {
+        self.lost.swap(false, Ordering::AcqRel)
+    }
+
     fn set_device(&mut self, device: Option<&str>) {
         self.device = device.map(str::to_owned);
     }
@@ -154,14 +185,29 @@ struct Playing {
     clock: Arc<Clock>,
     channels: u32,
     active: bool,
-    volume: std::rc::Rc<std::cell::Cell<(f32, bool)>>,
+}
+
+#[derive(Clone)]
+struct StreamContext {
+    controls: Rc<RefCell<Controls>>,
+    events: Arc<dyn Fn(OutputEvent) + Send + Sync>,
+    routing: Rc<RefCell<Routing>>,
+    report: Rc<dyn Fn()>,
+    loss: Rc<dyn Fn()>,
+}
+
+struct WatchedDevice {
+    _device: Rc<pw::device::Device>,
+    _params: pw::device::DeviceListener,
+    _done: pw::core::Listener,
 }
 
 fn run(
     rx: pw::channel::Receiver<Cmd>,
     ready: mpsc::Sender<Result<(), String>>,
     describe: Arc<Mutex<String>>,
-    devices: Arc<dyn Fn(Vec<AudioDevice>) + Send + Sync>,
+    lost: Arc<AtomicBool>,
+    events: Arc<dyn Fn(OutputEvent) + Send + Sync>,
 ) {
     pw::init();
     let setup = || -> Result<(pw::main_loop::MainLoopRc, pw::core::CoreRc), pw::Error> {
@@ -184,47 +230,212 @@ fn run(
             return;
         }
     };
-    let outputs = std::rc::Rc::new(std::cell::RefCell::new(std::collections::BTreeMap::<u32, AudioDevice>::new()));
-    let added = outputs.clone();
-    let removed = outputs.clone();
-    let changed = devices.clone();
-    let _registry_listener = registry.add_listener_local()
+    let current: Rc<RefCell<Option<Playing>>> = Default::default();
+    let routing = Rc::new(RefCell::new(Routing::default()));
+    let controls = Rc::new(RefCell::new(Controls::default()));
+    let preference = Rc::new(RefCell::new(None::<String>));
+    let format = Rc::new(RefCell::new(String::from("PipeWire")));
+    let report: Rc<dyn Fn()> = {
+        let routing = routing.clone();
+        let describe = describe.clone();
+        let events = events.clone();
+        let preference = preference.clone();
+        let format = format.clone();
+        let last = RefCell::new(None);
+        Rc::new(move || {
+            let routing = routing.borrow();
+            let actual = routing.devices();
+            let label = if actual.is_empty() {
+                "unavailable".into()
+            } else {
+                actual.iter().map(|d| d.description.as_str()).collect::<Vec<_>>().join(", ")
+            };
+            let preference = preference.borrow();
+            let preferred = match preference.as_ref() {
+                None => "System Default",
+                Some(name) => routing
+                    .sinks
+                    .values()
+                    .find(|d| &d.name == name)
+                    .map_or("Saved output (unavailable)", |d| d.description.as_str()),
+            };
+            let description = format!("{} · current output: {label} · preferred output: {preferred}", format.borrow());
+            if last.borrow().as_ref() != Some(&description) {
+                *last.borrow_mut() = Some(description.clone());
+                *describe.lock().unwrap_or_else(|e| e.into_inner()) = description;
+                events(OutputEvent::Routed(actual));
+            }
+        })
+    };
+    let loss: Rc<dyn Fn()> = {
+        let current = current.clone();
+        let lost = lost.clone();
+        let events = events.clone();
+        Rc::new(move || {
+            if let Some(p) = current.borrow_mut().as_mut() {
+                // Stop in this loop, before policy can link a fallback.
+                // The controller clears want_play and updates video/UI.
+                set_playing(p, false);
+                if !lost.swap(true, Ordering::AcqRel) {
+                    events(OutputEvent::Lost);
+                }
+            }
+        })
+    };
+    let cards: Rc<RefCell<std::collections::BTreeMap<u32, WatchedDevice>>> = Default::default();
+    let added = routing.clone();
+    let removed = routing.clone();
+    let changed = events.clone();
+    let removed_events = events.clone();
+    let add_report = report.clone();
+    let remove_report = report.clone();
+    let remove_loss = loss.clone();
+    let add_loss = loss.clone();
+    let add_cards = cards.clone();
+    let remove_cards = cards.clone();
+    let reg = registry.clone();
+    let card_core = core.clone();
+    let _registry_listener = registry
+        .add_listener_local()
         .global(move |object| {
+            let Some(props) = object.props else { return };
+            if object.type_ == pw::types::ObjectType::Device {
+                let Ok(device) = reg.bind::<pw::device::Device, _>(object) else { return };
+                let device = Rc::new(device);
+                let weak = Rc::downgrade(&device);
+                let routes = Rc::new(RefCell::new(Routes::default()));
+                let pending = Rc::new(std::cell::Cell::new(None));
+                let r = routes.clone();
+                let p = pending.clone();
+                let c = card_core.clone();
+                let listener = device
+                    .add_listener_local()
+                    .param(move |_, kind, _, _, pod| {
+                        if let Some(pod) = pod {
+                            r.borrow_mut().param(kind, pod);
+                            // Read availability afresh when policy changes
+                            // the active route. A round trip alone would not
+                            // cover an availability event delivered later.
+                            if kind == spa::param::ParamType::Route
+                                && let Some(device) = weak.upgrade()
+                            {
+                                device.enum_params(0, Some(spa::param::ParamType::EnumRoute), 0, u32::MAX);
+                            }
+                            p.set(c.sync(0).ok());
+                        }
+                    })
+                    .register();
+                let graph = added.clone();
+                let loss = add_loss.clone();
+                let id = object.id;
+                let done = card_core
+                    .add_listener_local()
+                    .done(move |_, seq| {
+                        if pending.get() != Some(seq) {
+                            return;
+                        }
+                        pending.set(None);
+                        let unavailable = routes.borrow_mut().commit();
+                        let graph = graph.borrow();
+                        let affected = graph.actual.iter().any(|sink| {
+                            graph
+                                .cards
+                                .get(sink)
+                                .is_some_and(|(card, device)| *card == id && unavailable.contains(device))
+                        });
+                        drop(graph);
+                        if affected {
+                            loss();
+                        }
+                    })
+                    .register();
+                device.subscribe_params(&[spa::param::ParamType::EnumRoute, spa::param::ParamType::Route]);
+                add_cards
+                    .borrow_mut()
+                    .insert(object.id, WatchedDevice { _device: device, _params: listener, _done: done });
+                return;
+            }
+            if object.type_ == pw::types::ObjectType::Link {
+                if let (Some(from), Some(to)) = (
+                    props.get("link.output.node").and_then(|v| v.parse().ok()),
+                    props.get("link.input.node").and_then(|v| v.parse().ok()),
+                ) {
+                    let mut graph = added.borrow_mut();
+                    graph.links.insert(object.id, (from, to));
+                    graph.linked();
+                    drop(graph);
+                    add_report();
+                }
+                return;
+            }
             if object.type_ != pw::types::ObjectType::Node {
                 return;
             }
-            let Some(props) = object.props else { return };
             if props.get("media.class") != Some("Audio/Sink") {
                 return;
             }
             let Some(name) = props.get("node.name") else { return };
             let description = props.get("node.description").or_else(|| props.get("node.nick")).unwrap_or(name);
-            added.borrow_mut().insert(object.id, AudioDevice { name: name.into(), description: description.into() });
-            publish_devices(&added.borrow(), &changed);
+            let mut graph = added.borrow_mut();
+            graph.sinks.insert(object.id, AudioDevice { name: name.into(), description: description.into() });
+            if let (Some(card), Some(device)) = (
+                props.get("device.id").and_then(|v| v.parse().ok()),
+                props.get("card.profile.device").and_then(|v| v.parse().ok()),
+            ) {
+                graph.cards.insert(object.id, (card, device));
+            }
+            graph.linked();
+            publish_devices(&graph.sinks, &changed);
+            drop(graph);
+            add_report();
         })
         .global_remove(move |id| {
-            if removed.borrow_mut().remove(&id).is_some() {
-                publish_devices(&removed.borrow(), &devices);
+            remove_cards.borrow_mut().remove(&id);
+            let mut graph = removed.borrow_mut();
+            let was_sink = graph.sinks.contains_key(&id);
+            let affected = graph.remove(id);
+            if was_sink {
+                publish_devices(&graph.sinks, &removed_events);
+            }
+            drop(graph);
+            if affected {
+                remove_loss();
+            }
+            remove_report();
+        })
+        .register();
+    let core_loss = loss.clone();
+    let _core_listener = core
+        .add_listener_local()
+        .error(move |id, _, _, _| {
+            if id == pw::core::PW_ID_CORE {
+                core_loss();
             }
         })
         .register();
     let _ = ready.send(Ok(()));
-    let current: std::rc::Rc<std::cell::RefCell<Option<Playing>>> = Default::default();
     let ml = mainloop.clone();
     let cur = current.clone();
+    let context =
+        StreamContext { controls: controls.clone(), events, routing: routing.clone(), report: report.clone(), loss };
     let _attached = rx.attach(mainloop.loop_(), move |cmd| match cmd {
         Cmd::Open { ring, clock, media, kind, device, reply } => {
+            routing.borrow_mut().reset();
+            *preference.borrow_mut() = device.clone();
+            let f = ring.format;
+            *format.borrow_mut() = format!(
+                "PipeWire, {} Hz, {} channel{}, {} ms cycles",
+                f.rate,
+                f.channels,
+                if f.channels == 1 { "" } else { "s" },
+                (kind.latency * 1000.0).round()
+            );
             close(&cur);
-            let r = open(&core, ring, clock, &media, &kind, device.as_deref());
+            let r = open(&core, ring, clock, &media, &kind, device.as_deref(), &context);
             match r {
                 Ok(p) => {
-                    let f = p.ring.format;
                     *describe.lock().unwrap_or_else(|e| e.into_inner()) = format!(
-                        "PipeWire, {} Hz, {} channel{}, {} ms cycles · requested output: {}",
-                        f.rate,
-                        f.channels,
-                        if f.channels == 1 { "" } else { "s" },
-                        (kind.latency * 1000.0).round(),
+                        "PipeWire · connecting · preferred output: {}",
                         device.as_deref().unwrap_or("System Default")
                     );
                     *cur.borrow_mut() = Some(p);
@@ -237,7 +448,7 @@ fn run(
         }
         Cmd::Playing(on, reply) => {
             if let Some(p) = cur.borrow_mut().as_mut() {
-                set_playing(p, on);
+                set_playing(p, on && !lost.load(Ordering::Acquire));
             }
             let _ = reply.send(());
         }
@@ -247,13 +458,15 @@ fn run(
             }
         }
         Cmd::Volume(v, muted) => {
+            *controls.borrow_mut() = Controls { channels: vec![amplitude(v)], muted };
             if let Some(p) = cur.borrow_mut().as_mut() {
-                p.volume.set((v, muted));
-                apply_volume(&p.stream, p.channels, p.volume.get());
+                apply_volume(&p.stream, p.channels, &controls.borrow());
             }
         }
         Cmd::Close(reply) => {
+            routing.borrow_mut().reset();
             close(&cur);
+            report();
             let _ = reply.send(());
         }
         Cmd::Quit => {
@@ -266,11 +479,11 @@ fn run(
 
 fn publish_devices(
     outputs: &std::collections::BTreeMap<u32, AudioDevice>,
-    changed: &Arc<dyn Fn(Vec<AudioDevice>) + Send + Sync>,
+    changed: &Arc<dyn Fn(OutputEvent) + Send + Sync>,
 ) {
     let mut list: Vec<_> = outputs.values().cloned().collect();
     list.sort_by(|a, b| a.description.cmp(&b.description).then_with(|| a.name.cmp(&b.name)));
-    changed(list);
+    changed(OutputEvent::Devices(list));
 }
 
 fn close(cur: &std::rc::Rc<std::cell::RefCell<Option<Playing>>>) {
@@ -328,7 +541,16 @@ pub fn quantum(secs: f64, rate: u32) -> u32 {
     (frames.log2().round().exp2() as u32).clamp(64, 8192)
 }
 
-fn open(core: &pw::core::CoreRc, ring: Arc<Ring>, clock: Arc<Clock>, media: &str, kind: &StreamKind, device: Option<&str>) -> Result<Playing, String> {
+fn open(
+    core: &pw::core::CoreRc,
+    ring: Arc<Ring>,
+    clock: Arc<Clock>,
+    media: &str,
+    kind: &StreamKind,
+    device: Option<&str>,
+    context: &StreamContext,
+) -> Result<Playing, String> {
+    let StreamContext { controls, events, routing, report, loss } = context.clone();
     let fmt = ring.format;
     let channels = fmt.channels.clamp(1, 8);
     let latency = format!("{}/{}", quantum(kind.latency, fmt.rate), fmt.rate);
@@ -357,12 +579,16 @@ fn open(core: &pw::core::CoreRc, ring: Arc<Ring>, clock: Arc<Clock>, media: &str
     let r = ring.clone();
     let c = clock.clone();
     let stride = (channels as usize) * std::mem::size_of::<f32>();
-    let volume = std::rc::Rc::new(std::cell::Cell::new((1.0, false)));
-    let ready_volume = volume.clone();
-    let volume_initialized = std::cell::Cell::new(false);
+    let ready_volume = controls.clone();
+    let volume_initialized = Rc::new(std::cell::Cell::new(false));
+    let initialized = volume_initialized.clone();
     let listener = stream
         .add_local_listener::<()>()
         .state_changed(move |stream, _, _, state| {
+            if matches!(state, pw::stream::StreamState::Error(_)) {
+                loss();
+                return;
+            }
             // Commands can arrive before the new stream's controls exist.
             // Reapply only at the first connection, including a stream
             // opened paused. Later pause/resume transitions must preserve
@@ -370,8 +596,41 @@ fn open(core: &pw::core::CoreRc, ring: Arc<Ring>, clock: Arc<Clock>, media: &str
             if matches!(state, pw::stream::StreamState::Paused | pw::stream::StreamState::Streaming)
                 && !volume_initialized.replace(true)
             {
-                apply_volume(stream, channels, ready_volume.get());
+                let volume = ready_volume.borrow().clone();
+                apply_volume(stream, channels, &volume);
+                let mut graph = routing.borrow_mut();
+                graph.stream = Some(stream.node_id());
+                graph.linked();
+                drop(graph);
+                report();
             }
+        })
+        .param_changed(move |_, _, id, pod| {
+            if id != spa::sys::SPA_PARAM_Props || !initialized.get() {
+                return;
+            }
+            let Some(pod) = pod else { return };
+            use spa::pod::Value;
+            let Ok((_, Value::Object(object))) =
+                spa::pod::deserialize::PodDeserializer::deserialize_any_from(pod.as_bytes())
+            else {
+                return;
+            };
+            let mut controls = controls.borrow_mut();
+            for p in object.properties {
+                match p.value {
+                    Value::Bool(muted) if p.key == spa::sys::SPA_PROP_mute => controls.muted = muted,
+                    Value::ValueArray(spa::pod::ValueArray::Float(channels))
+                        if p.key == spa::sys::SPA_PROP_channelVolumes
+                            && !channels.is_empty()
+                            && channels.iter().all(|v| v.is_finite() && *v >= 0.0) =>
+                    {
+                        controls.channels = channels
+                    }
+                    _ => (),
+                }
+            }
+            events(OutputEvent::Volume(controls.channels.iter().copied().fold(0.0, f32::max).cbrt(), controls.muted));
         })
         .process(move |stream, _| {
             // SAFETY: a buffer dequeued is ours until queued; its first
@@ -442,10 +701,10 @@ fn open(core: &pw::core::CoreRc, ring: Arc<Ring>, clock: Arc<Clock>, media: &str
             &mut params,
         )
         .map_err(|e| e.to_string())?;
-    Ok(Playing { stream, _listener: listener, ring, clock, channels, active: false, volume })
+    Ok(Playing { stream, _listener: listener, ring, clock, channels, active: false })
 }
 
-fn apply_volume(stream: &pw::stream::Stream, channels: u32, (v, muted): (f32, bool)) {
+fn apply_volume(stream: &pw::stream::Stream, channels: u32, controls: &Controls) {
     use spa::pod::{Object, Property, Value, ValueArray};
     // Send Props directly: an inactive stream may not have advertised
     // its controls yet. This also avoids pipewire-rs 0.10.1's variadic
@@ -454,11 +713,20 @@ fn apply_volume(stream: &pw::stream::Stream, channels: u32, (v, muted): (f32, bo
         type_: spa::sys::SPA_TYPE_OBJECT_Props,
         id: spa::sys::SPA_PARAM_Props,
         properties: vec![
-            Property::new(spa::sys::SPA_PROP_channelVolumes, Value::ValueArray(ValueArray::Float(vec![amplitude(v); channels as usize]))),
-            Property::new(spa::sys::SPA_PROP_mute, Value::Bool(muted)),
+            Property::new(
+                spa::sys::SPA_PROP_channelVolumes,
+                Value::ValueArray(ValueArray::Float(if controls.channels.len() == channels as usize {
+                    controls.channels.clone()
+                } else {
+                    vec![controls.channels.iter().copied().fold(0.0, f32::max); channels as usize]
+                })),
+            ),
+            Property::new(spa::sys::SPA_PROP_mute, Value::Bool(controls.muted)),
         ],
     });
-    let Ok((bytes, _)) = spa::pod::serialize::PodSerializer::serialize(std::io::Cursor::new(Vec::new()), &props) else { return };
+    let Ok((bytes, _)) = spa::pod::serialize::PodSerializer::serialize(std::io::Cursor::new(Vec::new()), &props) else {
+        return;
+    };
     let bytes = bytes.into_inner();
     let Some(pod) = spa::pod::Pod::from_bytes(&bytes) else { return };
     // SAFETY: called on the stream's main loop; the serialized pod lives

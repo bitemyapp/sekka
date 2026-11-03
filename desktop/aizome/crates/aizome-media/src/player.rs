@@ -225,6 +225,11 @@ pub struct Pipeline {
 pub enum Event {
     /// Available PipeWire outputs, including hotplug changes.
     AudioDevices(Vec<crate::pipewire::AudioDevice>),
+    /// Actual graph destinations, independent of the saved preference.
+    AudioRouted(Vec<crate::pipewire::AudioDevice>),
+    AudioVolume(f32, bool),
+    /// Playback stays paused until explicitly resumed, even after recovery.
+    AudioOutputLost,
     Opened(Arc<MediaInfo>),
     /// It couldn't be opened or played.
     Failed(String),
@@ -651,6 +656,7 @@ struct Session {
 }
 
 struct Ctl {
+    audio_events: mpsc::Receiver<crate::pipewire::OutputEvent>,
     rx: mpsc::Receiver<Command>,
     wake: Arc<Wake>,
     clock: Arc<Clock>,
@@ -662,20 +668,16 @@ struct Ctl {
     hardware: bool,
     hw_device: *mut ff::AVBufferRef,
     output: Box<dyn Output>,
-    /// What plays the current item's audio when the output can't (it
-    /// couldn't open, or nothing takes its sound).
-    silent: Option<NullOutput>,
     output_name: String,
     /// How the open media is being played, as last told.
     pipeline: Pipeline,
     session: Option<Session>,
     want_play: bool,
     speed: f64,
-    volume: (f32, bool),
     visible: bool,
     /// When playing last started: if the audio output takes nothing for
     /// a while after, nothing plays sound (no device), and the player
-    /// plays on without it.
+    /// pauses until the user resumes.
     started_at: Option<std::time::Instant>,
 }
 
@@ -692,21 +694,26 @@ impl Ctl {
         seeks: Arc<Seeks>,
         events: Arc<dyn Fn(Event) + Send + Sync>,
     ) -> Ctl {
+        let (audio_tx, audio_events) = mpsc::channel();
         let output: Box<dyn Output> = match options.audio {
-            AudioChoice::PipeWire(kind) => match crate::pipewire::PipeWireOutput::connect_with_devices(kind, {
-                let events = events.clone();
-                move |devices| events(Event::AudioDevices(devices))
+            AudioChoice::PipeWire(kind) => match crate::pipewire::PipeWireOutput::connect_with_events(kind, {
+                let wake = wake.clone();
+                move |event| {
+                    let _ = audio_tx.send(event);
+                    wake.wake();
+                }
             }) {
                 Ok(o) => Box::new(o),
                 Err(e) => {
                     log::warn!("no sound: {e}");
-                    Box::new(NullOutput::new())
+                    Box::new(crate::audio::UnavailableOutput(e))
                 }
             },
             AudioChoice::Null => Box::new(NullOutput::new()),
         };
         let hardware = options.hardware && std::env::var("AIZOME_MEDIA_HWDEC").map_or(true, |v| v != "0");
         Ctl {
+            audio_events,
             rx,
             wake,
             clock,
@@ -719,12 +726,10 @@ impl Ctl {
             hw_device: std::ptr::null_mut(),
             output_name: output.describe(),
             output,
-            silent: None,
             pipeline: Pipeline::default(),
             session: None,
             want_play: false,
             speed: 1.0,
-            volume: (1.0, false),
             visible: true,
             started_at: None,
         }
@@ -736,10 +741,7 @@ impl Ctl {
 
     /// The output playing the current item's audio.
     fn out(&mut self) -> &mut dyn Output {
-        match &mut self.silent {
-            Some(n) => n,
-            None => self.output.as_mut(),
-        }
+        self.output.as_mut()
     }
 
     fn run(mut self) {
@@ -749,7 +751,9 @@ impl Ctl {
             self.caps = sidestep_ui::video::caps(Duration::from_secs(2));
         }
         loop {
+            self.audio_events();
             while let Ok(cmd) = self.rx.try_recv() {
+                self.audio_events();
                 if !self.command(cmd) {
                     self.close();
                     // SAFETY: a device reference made here, or null.
@@ -796,8 +800,7 @@ impl Ctl {
                 }
             }
             Command::Volume(v, m) => {
-                self.volume = (v, m);
-                self.out().set_volume(v, m);
+                self.output.set_volume(v, m);
             }
             Command::Audio(i) => self.select_audio(i),
             Command::AudioDevice(name) => self.select_device(name.as_deref()),
@@ -970,15 +973,10 @@ impl Ctl {
         } else {
             self.output.set_stream(0.170, "Music");
         }
-        self.silent = None;
         if let Err(e) = self.output.open(ring.clone(), self.clock.clone(), &media) {
             log::warn!("no sound: {e}");
-            let mut null = NullOutput::new();
-            null.open(ring, self.clock.clone(), &media)?;
-            self.silent = Some(null);
+            self.output_lost();
         }
-        let (v, m) = self.volume;
-        self.out().set_volume(v, m);
         Ok(())
     }
 
@@ -1019,18 +1017,12 @@ impl Ctl {
         // and paused playback work too.
         self.out().set_playing(false);
         self.output.close();
-        self.silent = None;
         if let Err(e) = self.output.open(ring.clone(), self.clock.clone(), &media) {
             log::warn!("audio output: {e}");
-            let mut null = NullOutput::new();
-            if let Err(e) = null.open(ring, self.clock.clone(), &media) {
-                self.emit(Event::Failed(e));
-                return;
-            }
-            self.silent = Some(null);
+            self.output_lost();
+            return;
         }
-        let (volume, muted) = self.volume;
-        self.out().set_volume(volume, muted);
+        self.audio_events();
         self.pipeline.audio_output = self.out().describe();
         self.emit(Event::Pipeline(self.pipeline.clone()));
         if self.want_play && started {
@@ -1048,7 +1040,6 @@ impl Ctl {
         s.audio = None;
         s.audio_track = None;
         self.output.close();
-        self.silent = None;
         if let Some(i) = i
             && let Err(e) = self.start_audio(i)
         {
@@ -1100,7 +1091,6 @@ impl Ctl {
         if let Some(s) = self.session.take() {
             self.out().set_playing(false);
             self.output.close();
-            self.silent = None;
             if let Some(v) = s.video {
                 self.video.send(video::Cmd::Stop);
                 let _ = v.thread.join();
@@ -1132,6 +1122,10 @@ impl Ctl {
 
     /// Start (or restart) what plays.
     fn resume(&mut self) {
+        self.audio_events();
+        if !self.want_play {
+            return;
+        }
         let Some(s) = self.session.as_mut() else { return };
         s.started = true;
         self.started_at = Some(std::time::Instant::now());
@@ -1147,13 +1141,10 @@ impl Ctl {
 
     fn pause(&mut self) {
         self.want_play = false;
+        self.started_at = None;
         let Some(s) = self.session.as_ref() else { return };
         if s.audio.is_some() {
-            // The fields, not `out()`: the session stays borrowed.
-            match &mut self.silent {
-                Some(n) => n.set_playing(false),
-                None => self.output.set_playing(false),
-            }
+            self.output.set_playing(false);
         } else {
             let pos = self.clock.now();
             self.clock.stop_at(pos);
@@ -1204,10 +1195,7 @@ impl Ctl {
             a.rebase = true;
             a.ring.flush(to, speed, true);
         }
-        match &mut self.silent {
-            Some(n) => n.flush(),
-            None => self.output.flush(),
-        }
+        self.output.flush();
         if let Some(sp) = &mut s.subs {
             sp.decoder.flush();
             sp.skip_until = f64::NEG_INFINITY;
@@ -1245,9 +1233,10 @@ impl Ctl {
             self.video.send(video::Cmd::Step);
         } else {
             let pts = f64::from_bits(self.video.last_pts.load(Ordering::Acquire));
-            let dur = self.session.as_ref().map_or(1.0 / 30.0, |s| {
-                s.info.video.as_ref().and_then(|v| v.fps).map_or(1.0 / 30.0, |f| 1.0 / f)
-            });
+            let dur = self
+                .session
+                .as_ref()
+                .map_or(1.0 / 30.0, |s| s.info.video.as_ref().and_then(|v| v.fps).map_or(1.0 / 30.0, |f| 1.0 / f));
             self.seek(pts - dur, true);
             if let Some(s) = self.session.as_mut() {
                 s.stepped = true;
@@ -1255,21 +1244,33 @@ impl Ctl {
         }
     }
 
-    /// The audio output takes nothing: play on through the null output,
-    /// which keeps time as a device would.
-    fn silent(&mut self) {
-        log::warn!("nothing plays sound: playing on without it");
-        let Some(ring) = self.session.as_ref().and_then(|s| s.audio.as_ref()).map(|a| a.ring.clone()) else { return };
-        self.out().set_playing(false);
-        self.output.close();
-        let mut null = NullOutput::new();
-        let media = self.session.as_ref().map(|s| s.info.title.clone()).unwrap_or_default();
-        if null.open(ring, self.clock.clone(), &media).is_ok() {
-            null.set_playing(true);
+    fn audio_events(&mut self) {
+        if self.output.take_loss() {
+            self.output_lost();
         }
-        // For this item: the next opens the real output again.
-        self.silent = Some(null);
-        self.started_at = Some(std::time::Instant::now());
+        while let Ok(event) = self.audio_events.try_recv() {
+            use crate::pipewire::OutputEvent;
+            match event {
+                OutputEvent::Devices(devices) => self.emit(Event::AudioDevices(devices)),
+                OutputEvent::Routed(devices) => {
+                    self.emit(Event::AudioRouted(devices));
+                    self.pipeline.audio_output = self.output.describe();
+                    self.emit(Event::Pipeline(self.pipeline.clone()));
+                }
+                OutputEvent::Volume(v, m) => {
+                    self.emit(Event::AudioVolume(v, m));
+                }
+                OutputEvent::Lost => (), // The atomic latch above owns the pause.
+            }
+        }
+    }
+
+    fn output_lost(&mut self) {
+        self.pause();
+        // A failed stream can already be inactive; still stop the clock.
+        self.clock.stop_at(self.clock.now());
+        self.video.poke();
+        self.emit(Event::AudioOutputLost);
         self.pipeline.audio_output = self.out().describe();
         self.emit(Event::Pipeline(self.pipeline.clone()));
     }
@@ -1400,21 +1401,24 @@ impl Ctl {
         if start_now {
             self.resume();
         }
-        // Playing, audio waiting, and the clock not running: nothing takes
-        // the sound (no device). Play on without it.
+        // Do not conceal failure of a real output with a silent clock.
         let stalled = self.want_play
-            && self.session.as_ref().is_some_and(|s| s.started && s.audio.as_ref().is_some_and(|a| a.ring.buffered() > 0))
+            && self
+                .session
+                .as_ref()
+                .is_some_and(|s| s.started && s.audio.as_ref().is_some_and(|a| a.ring.buffered() > 0))
             && !self.clock.running()
             && self.started_at.is_some_and(|t| t.elapsed() > Duration::from_millis(1500));
         if stalled {
-            self.silent();
+            self.output_lost();
         }
         let s = self.session.as_mut()?;
         // The end.
         if s.eof && !s.ended {
-            let audio_done = s.audio.as_ref().is_none_or(|a| {
-                a.packets.is_empty() && a.pending.is_empty() && a.drained && a.ring.buffered() == 0
-            });
+            let audio_done = s
+                .audio
+                .as_ref()
+                .is_none_or(|a| a.packets.is_empty() && a.pending.is_empty() && a.drained && a.ring.buffered() == 0);
             let video_done = s.video.is_none() || self.video.drained.load(Ordering::Acquire) || suspended;
             if let Some(a) = &s.audio
                 && a.packets.is_empty()

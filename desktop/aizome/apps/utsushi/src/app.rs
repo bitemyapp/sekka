@@ -170,6 +170,8 @@ pub struct Utsushi {
     pub repeat: Repeat,
     pub audio_track: Option<usize>,
     pub audio_devices: Vec<aizome_media::pipewire::AudioDevice>,
+    pub audio_routed: Vec<aizome_media::pipewire::AudioDevice>,
+    pub audio_output_lost: bool,
     pub sub_track: Option<usize>,
     /// The subtitle track's cues, in order, and the time they're shown at.
     pub cues: Vec<Cue>,
@@ -241,6 +243,8 @@ impl Utsushi {
             repeat: Repeat::Off,
             audio_track: None,
             audio_devices: Vec::new(),
+            audio_routed: Vec::new(),
+            audio_output_lost: false,
             sub_track: None,
             cues: Vec::new(),
             cue_pos: 0.0,
@@ -320,6 +324,7 @@ impl Utsushi {
         self.item += 1;
         self.info = None;
         self.error = None;
+        self.audio_output_lost = false;
         self.cover = None;
         self.cues.clear();
         self.cue_pos = 0.0;
@@ -546,6 +551,16 @@ impl Utsushi {
 
     fn on_player(&mut self, e: Event, cx: &mut Cx<Msg>) {
         match e {
+            Event::AudioOutputLost => {
+                self.audio_output_lost = true;
+                self.controls = true;
+            }
+            Event::AudioRouted(devices) => self.audio_routed = devices,
+            Event::AudioVolume(volume, muted) => {
+                self.volume = volume;
+                self.muted = muted;
+                self.publish();
+            }
             Event::AudioDevices(devices) => {
                 if let Some(device) = devices.iter().find(|d| Some(&d.name) == self.store.prefs.audio_device.as_ref())
                     && self.store.prefs.audio_device_description.as_ref() != Some(&device.description)
@@ -583,6 +598,9 @@ impl Utsushi {
                 self.publish();
             }
             Event::State(s) => {
+                if s == PlayState::Playing {
+                    self.audio_output_lost = false;
+                }
                 self.status = match s {
                     PlayState::Playing => Status::Playing,
                     PlayState::Paused => Status::Paused,
