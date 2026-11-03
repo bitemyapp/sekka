@@ -1,5 +1,12 @@
 //! Cold scrollback blocks. Captures share immutable resident or compressed blocks;
 //! eviction keeps a private logical prefix and never changes a captured view.
+//!
+//! Once history is full, every line evicts the oldest row and the screen
+//! recycles it. That row is a separate allocation last touched a whole history
+//! ago, reached only through its slot and then its header, so each line would
+//! wait on a chain of cache misses that lengthens as history outgrows each
+//! cache. Eviction is strictly in order, so history fetches the rows the next
+//! lines will evict while the parser works on this one.
 use crate::hyperlink::{Hyperlink, LinkIdentity, LinkRef};
 use crate::{Row, RowRef};
 use std::collections::{HashMap, VecDeque};
@@ -15,6 +22,10 @@ const ARCHIVE_MAGIC: &[u8; 4] = b"HHR3";
 // Covers a full resident handle array, block/entry headers and amortized deque
 // capacity even when only one logical row remains after prefix eviction.
 const BLOCK_OVERHEAD: usize = 1024;
+// Rows ahead of eviction whose header, then (once that has arrived) whose
+// cells and styles are fetched. A few lines' work covers a memory access.
+const PREFETCH_HEADER: usize = 12;
+const PREFETCH_STORAGE: usize = 6;
 pub const DEFAULT_HISTORY_BYTES: usize = 50_000_000;
 
 /// Both limits apply independently. Bytes charge uncompressed logical owned
@@ -376,9 +387,13 @@ impl History {
             rows.push(Some(row));
             entry.size_bound += size;
         } else {
+            // Reserve every slot now: growing by doubling reallocates five
+            // times per block, and BLOCK_OVERHEAD charges a full array anyway.
+            let mut rows = Vec::with_capacity(MAX_ROWS);
+            rows.push(Some(row));
             self.blocks.push_back(Entry {
                 block: Arc::new(Block {
-                    storage: Storage::Resident(vec![Some(row)]),
+                    storage: Storage::Resident(rows),
                     logical_bytes: charge + BLOCK_OVERHEAD,
                 }),
                 skip: 0,
@@ -396,7 +411,31 @@ impl History {
     pub fn pop_front_recycle(&mut self, cols: usize) -> Option<RowRef> {
         self.remove_front(true, cols)
     }
+    /// The resident row `ahead` rows after the next one eviction takes, if it
+    /// is in the oldest two blocks and both are resident.
+    #[inline]
+    fn upcoming(&self, ahead: usize) -> Option<&RowRef> {
+        let first = self.blocks.front()?;
+        let Storage::Resident(rows) = &first.block.storage else {
+            return None;
+        };
+        let at = first.skip + ahead;
+        if let Some(row) = rows.get(at) {
+            return row.as_ref();
+        }
+        let next = self.blocks.get(1)?;
+        let Storage::Resident(next_rows) = &next.block.storage else {
+            return None;
+        };
+        next_rows.get(next.skip + at - rows.len())?.as_ref()
+    }
     fn remove_front(&mut self, recycle: bool, cols: usize) -> Option<RowRef> {
+        if let Some(row) = self.upcoming(PREFETCH_HEADER) {
+            Row::prefetch_header(row);
+        }
+        if let Some(row) = self.upcoming(PREFETCH_STORAGE) {
+            row.prefetch_storage();
+        }
         let entry = self.blocks.front_mut()?;
         let index = entry.skip;
         let charge = match &entry.block.storage {
