@@ -1425,9 +1425,9 @@ nix develop .#aizome
 nix build .#aizome-checks.session -L
 ```
 
-File identification is shared through `crates/aizome-mime`, using the `gio`
-crate and GLib/GIO's shared-mime-info database. The development shell and
-package checks supply that database; the session module installs it. Hako
+File identification is shared through `crates/aizome-mime`, using the
+Rust-native `xdg-mime` crate and the shared-mime-info database. The development
+shell and package checks supply that database; the session module installs it. Hako
 uses name-only guesses for listings and resolves content on a worker before
 opening or previewing a file. Sumi's recent-file types, Utsushi's folder
 filtering, and portal MIME filters use the same API. Chooser globs use the
@@ -1435,8 +1435,8 @@ filtering, and portal MIME filters use the same API. Chooser globs use the
 
 `aizome-apps` retains desktop-entry indexing and association persistence,
 including desktop-specific precedence, atomic writes, comments and refusal
-to overwrite Nix-managed files. MIME keys are canonicalized through GIO;
-handler lookup tries each specific type before its ancestors. Settings'
+to overwrite Nix-managed files. MIME keys are canonicalized through the shared
+database; handler lookup tries each specific type before its ancestors. Settings'
 image/video/music roles expand the chosen app's advertised types instead
 of maintaining separate format tables. Containers shared by audio and video
 follow whichever of those roles was selected last.
@@ -1453,13 +1453,29 @@ nix build .#aizome-checks.mime-defaults --no-update-lock-file
 ```
 
 These are component checks, including generated MIME databases for aliases,
-case-sensitive patterns, conflicting weights and content disambiguation.
-GIO currently does not honor `glob-deleteall` across database directories;
-the explicitly ignored `glob_deleteall_removes_system_patterns` test records
-that upstream limitation and should be run when updating GLib. Compound
-extensions follow GIO's longest-suffix behavior even when a shorter suffix
-has greater weight. No private MIME parser compensates for either behavior.
-These checks do not certify an ISO or a desktop session on hardware.
+case-sensitive patterns, conflicting weights, content disambiguation, directory
+overrides and reloads. The `glob-deleteall` regression is required and passes.
+Filename matching follows the XDG recommended checking order: literal patterns
+first, then weight and pattern length. A higher-weight short suffix can beat a
+lower-weight compound suffix; equal weights prefer the longer pattern.
+
+The crate is pinned to our `xdg-mime-rs` fork while
+[the upstream patch series](https://github.com/ebassi/xdg-mime-rs/pull/39) is reviewed.
+It fixes filename and magic overrides, case handling, malformed-glob panics,
+magic nesting/priority/host byte order, absent-content handling and inheritance
+cycles. It also adds isolated database directories, reload detection and cached
+localized descriptions. Replace the fork pin with an upstream revision or
+release containing those changes when available; update `Cargo.lock` and
+`nix/cargo-output-hashes.nix` together and rerun the MIME tests.
+
+`aizome-mime` checks loaded database directories and index files for updates at
+most once every five seconds, and exposes `reload()` for immediate checks.
+Descriptions come from generated per-type XML with locale fallback. The backend
+uses the generated text/binary magic indexes rather than `mime.cache`; both are
+installed by shared-mime-info. Content reads are limited to 64 KiB and regular
+files; special files are identified from metadata. Failed reads retain a filename
+guess rather than claiming the file is empty. These checks do not certify an ISO
+or a desktop session on hardware.
 
 The shell observes application launch attempts through `aizome-sys`:
 process creation and exit are separate events, and only a compositor window

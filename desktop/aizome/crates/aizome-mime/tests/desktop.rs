@@ -54,11 +54,29 @@ fn chooser_patterns_match_unicode_and_classes() {
 }
 
 #[test]
-fn malformed_portal_values_do_not_panic_in_ffi_conversion() {
+fn malformed_portal_values_are_rejected() {
     let db = MimeDb::get();
     assert_eq!(db.canonical("text/plain\0extra").as_ref(), UNKNOWN);
     assert!(!db.equal("text/plain\0extra", "text/plain"));
     assert!(!db.matches("text/plain\0extra", "text/plain"));
     assert_eq!(db.by_name("bad\0.png"), None);
     assert_eq!(db.for_file(Path::new("bad\0.png"), true).as_ref(), UNKNOWN);
+    use std::os::unix::ffi::OsStringExt;
+    let name = std::ffi::OsString::from_vec(b"bad\xff.png".to_vec());
+    assert_eq!(db.for_file(Path::new(&name), false).as_ref(), "image/png");
+}
+
+#[test]
+fn symlinks_and_special_files_do_not_trigger_content_reads() {
+    use std::os::unix::{fs::symlink, net::UnixListener};
+    let db = MimeDb::get();
+    let tmp = tempfile::tempdir().unwrap();
+    let socket = tmp.path().join("socket.png");
+    let _listener = UnixListener::bind(&socket).unwrap();
+    assert_eq!(db.for_file(&socket, true).as_ref(), "inode/socket");
+    let dangling = tmp.path().join("dangling.png");
+    symlink(tmp.path().join("missing"), &dangling).unwrap();
+    assert_eq!(db.for_file(&dangling, true).as_ref(), aizome_mime::SYMLINK);
+    symlink(tmp.path(), tmp.path().join("directory-link")).unwrap();
+    assert_eq!(db.for_file(&tmp.path().join("directory-link"), true).as_ref(), DIRECTORY);
 }

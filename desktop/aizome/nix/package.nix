@@ -36,7 +36,6 @@
   fontconfig,
   freetype,
   dbus,
-  glib,
   shared-mime-info,
   libpulseaudio,
   libsecret,
@@ -155,7 +154,6 @@ rustPlatform.buildRustPackage {
     fontconfig
     freetype
     dbus
-    glib
     pam
     libpulseaudio
     libsecret

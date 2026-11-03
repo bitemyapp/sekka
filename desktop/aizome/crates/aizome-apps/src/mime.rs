@@ -427,7 +427,8 @@ impl AppIndex {
     }
 
     /// Only types mentioned by installed apps or association lists can
-    /// contribute a handler. GIO supplies the ancestry; ordering by the
+    /// contribute a handler. The shared MIME database supplies the ancestry;
+    /// ordering by the
     /// number of ancestors is a deterministic topological order, including
     /// multiple inheritance (a partial-order sort comparator is invalid).
     fn association_types(&self, mime: &str) -> Vec<String> {

@@ -36,7 +36,6 @@ let
       fontconfig
       freetype
       dbus
-      glib
       pam
       # aizome-sys talks to PipeWire through pipewire-pulse.
       libpulseaudio

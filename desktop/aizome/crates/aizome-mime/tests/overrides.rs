@@ -1,4 +1,4 @@
-//! Its own test process: GIO's MIME directories are process-wide.
+//! Isolated databases exercise XDG precedence without process-global state.
 //! The fixture is compiled by shared-mime-info, including its binary cache.
 use aizome_mime::MimeDb;
 use std::path::Path;
@@ -15,12 +15,10 @@ fn database(dir: &Path, types: &str) {
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 }
 
-static MIME_DIRS: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn fixture() -> tempfile::TempDir {
+fn fixture() -> (tempfile::TempDir, MimeDb) {
     let tmp = tempfile::tempdir().unwrap();
-    let system = tmp.path().join("system");
-    let user = tmp.path().join("user");
+    let system = tmp.path().join("system/mime");
+    let user = tmp.path().join("user/mime");
     database(
         &system,
         r#"
@@ -30,6 +28,9 @@ fn fixture() -> tempfile::TempDir {
       <mime-type type="application/x-aizome-heavy"><glob pattern="*.weighted" weight="80"/></mime-type>
       <mime-type type="text/x-aizome-case"><glob pattern="casecheck" case-sensitive="true"/></mime-type>
       <mime-type type="application/x-aizome-delete"><glob pattern="*.obsolete"/></mime-type>
+      <mime-type type="application/x-aizome-magic">
+        <magic priority="80"><match type="string" value="OLDMIME" offset="0"/></magic>
+      </mime-type>
       <mime-type type="application/x-aizome-parent"><sub-class-of type="text/plain"/></mime-type>
       <mime-type type="application/x-aizome-child">
         <alias type="application/x-aizome-alias"/>
@@ -50,20 +51,20 @@ fn fixture() -> tempfile::TempDir {
         &user,
         r#"
       <mime-type type="application/x-aizome-delete"><glob-deleteall/><glob pattern="*.retained"/></mime-type>
+      <mime-type type="application/x-aizome-magic"><magic-deleteall/>
+        <magic priority="80"><match type="string" value="NEWMIME" offset="0"/></magic>
+      </mime-type>
     "#,
     );
-    gio::content_type_set_mime_dirs(&[user.to_str().unwrap(), system.to_str().unwrap()]);
-    tmp
+    let db = MimeDb::from_data_directories(&[user.parent().unwrap(), system.parent().unwrap()]);
+    (tmp, db)
 }
 
 #[test]
 fn database_overrides_weights_case_aliases_and_ambiguous_names() {
-    let _guard = MIME_DIRS.lock().unwrap();
-    let tmp = fixture();
-    let db = MimeDb::get();
-    // GIO prefers a compound extension over its shorter suffix. Weight
-    // disambiguates competing matches for the same suffix.
-    assert_eq!(db.by_name("test.audit.gz").as_deref(), Some("application/x-aizome-long"));
+    let (tmp, db) = fixture();
+    // The recommended XDG checking order filters by weight, then length.
+    assert_eq!(db.by_name("test.audit.gz").as_deref(), Some("application/x-aizome-short"));
     assert_eq!(db.by_name("test.weighted").as_deref(), Some("application/x-aizome-heavy"));
     assert_eq!(db.by_name("casecheck").as_deref(), Some("text/x-aizome-case"));
     assert_eq!(db.by_name("CASECHECK"), None);
@@ -77,12 +78,30 @@ fn database_overrides_weights_case_aliases_and_ambiguous_names() {
     assert_eq!(db.for_file(&file, true).as_ref(), "application/x-aizome-second");
 }
 
-/// Tracks a limitation inherited from GIO, not a private parser to maintain.
-/// Run explicitly when updating GLib; remove the ignore when upstream fixes it.
 #[test]
-#[ignore = "GIO does not honor glob-deleteall across MIME database directories; see DEVELOPERS.md"]
 fn glob_deleteall_removes_system_patterns() {
-    let _guard = MIME_DIRS.lock().unwrap();
-    let _tmp = fixture();
-    assert_eq!(MimeDb::get().by_name("changes.obsolete"), None);
+    let (_tmp, db) = fixture();
+    assert_eq!(db.by_name("changes.obsolete"), None);
+}
+
+#[test]
+fn magic_deleteall_replaces_system_signatures() {
+    let (_tmp, db) = fixture();
+    assert_eq!(db.by_content(b"OLDMIME").as_ref(), "text/plain");
+    assert_eq!(db.by_content(b"NEWMIME").as_ref(), "application/x-aizome-magic");
+}
+
+#[test]
+fn reload_observes_compiled_updates_in_a_running_application() {
+    let (tmp, db) = fixture();
+    assert_eq!(db.by_name("changes.obsolete"), None);
+    database(
+        &tmp.path().join("user/mime"),
+        r#"
+      <mime-type type="application/x-aizome-delete"><glob-deleteall/><glob pattern="*.new"/></mime-type>
+    "#,
+    );
+    assert!(db.reload());
+    assert_eq!(db.by_name("changes.retained"), None);
+    assert_eq!(db.by_name("changes.new").as_deref(), Some("application/x-aizome-delete"));
 }
