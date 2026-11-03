@@ -433,7 +433,9 @@ impl History {
         if let Some(row) = self.upcoming(PREFETCH_HEADER) {
             Row::prefetch_header(row);
         }
-        if let Some(row) = self.upcoming(PREFETCH_STORAGE) {
+        // Dropping a row frees its cells and styles without reading them, so
+        // only a recycling eviction (a line scrolling off) fetches them.
+        if recycle && let Some(row) = self.upcoming(PREFETCH_STORAGE) {
             row.prefetch_storage();
         }
         let entry = self.blocks.front_mut()?;
@@ -1119,5 +1121,84 @@ mod tests {
                 .map(|index| encoded(&row(index)))
                 .collect::<Vec<_>>()
         );
+    }
+    #[test]
+    fn eviction_prefetches_the_rows_later_evictions_take() {
+        // A wrong guess only costs speed, which no other test would notice.
+        // Across block boundaries, an evicted prefix and captured blocks, each
+        // guess is the row that many evictions later; compressed blocks have
+        // no row to fetch.
+        let mut history = History::default();
+        let mut rows = Vec::new();
+        for index in 0..MAX_ROWS * 5 + 7 {
+            let row = row(index);
+            rows.push(RowRef::as_ptr(&row));
+            history.push_back(row);
+        }
+        // The idle worker compresses the oldest blocks.
+        let hot = history.len() - history.blocks[0].len() - history.blocks[1].len();
+        while history.compress_step(hot) {}
+        let blocks: Vec<(usize, bool)> = history
+            .blocks
+            .iter()
+            .map(|entry| {
+                (
+                    entry.len(),
+                    matches!(entry.block.storage, Storage::Resident(_)),
+                )
+            })
+            .collect();
+        // Every target is then in the evicted row's block or the next one.
+        assert!(
+            blocks.len() > 4
+                && blocks[..blocks.len() - 1]
+                    .iter()
+                    .all(|&(len, _)| len > PREFETCH_HEADER)
+        );
+        assert!(
+            blocks
+                .iter()
+                .map(|&(_, resident)| resident)
+                .take(3)
+                .eq([false, false, true])
+        );
+        let block_of = |row: usize| {
+            let mut end = 0;
+            blocks.iter().position(|&(len, _)| {
+                end += len;
+                row < end
+            })
+        };
+        let mut held = None;
+        let mut guessed = 0;
+        for evicted in 0..rows.len() {
+            if evicted == blocks[0].0 + blocks[1].0 + 9 {
+                held = Some(history.capture());
+            }
+            for ahead in [PREFETCH_STORAGE, PREFETCH_HEADER] {
+                let target = evicted + ahead;
+                let expected = match (block_of(evicted), block_of(target)) {
+                    (Some(front), Some(block))
+                        if block <= front + 1 && blocks[front].1 && blocks[block].1 =>
+                    {
+                        Some(rows[target])
+                    }
+                    _ => None,
+                };
+                assert_eq!(
+                    history.upcoming(ahead).map(RowRef::as_ptr),
+                    expected,
+                    "{ahead} rows after eviction {evicted}"
+                );
+                guessed += usize::from(expected.is_some());
+            }
+            let taken = history.pop_front_recycle(80).unwrap();
+            if blocks[block_of(evicted).unwrap()].1 {
+                assert_eq!(RowRef::as_ptr(&taken), rows[evicted]);
+            }
+        }
+        assert!(held.is_some());
+        let resident = blocks[2..].iter().map(|&(len, _)| len).sum::<usize>();
+        assert!(guessed > 2 * (resident - PREFETCH_HEADER));
     }
 }

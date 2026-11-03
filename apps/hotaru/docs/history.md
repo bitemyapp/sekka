@@ -185,10 +185,13 @@ with 10,000, 41,106 (50 MB) and 100,000 rows, `perf stat` counted 11.0, 11.2
 and 11.3 billion user instructions, but 2.0, 2.4 and 3.5 billion cycles.
 
 Eviction is strictly oldest first, so history knows which rows the next lines
-will reach. Each eviction prefetches the header of the row 12 places ahead
-and, once that has arrived, the cells and style table of the row 6 ahead
-(`prefetch.rs`: PREFETCHT0 on x86-64, nothing elsewhere or under Miri). The
-parser's work on the lines between covers the fetches. New resident blocks
+will reach. Each eviction prefetches the header of the row 12 places ahead.
+An eviction that recycles a row also prefetches the cells and style table of
+the row 6 ahead, whose header has arrived by then; dropping a row frees those
+without reading them (`prefetch.rs`: PREFETCHT0 on x86-64, nothing elsewhere
+or under Miri). The parser's work on the lines between covers the fetches. A
+test checks that each fetched row is the one that many evictions later
+takes. Compressed blocks keep no rows to fetch. New resident blocks
 also reserve their 64 row slots at once rather than reallocating five times as
 they fill. Which rows are kept, their charges, layouts and captures are
 unchanged. The same runs now take 2.0, 2.1 and 2.1 billion cycles.
