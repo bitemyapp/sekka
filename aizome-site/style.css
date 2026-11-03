@@ -362,6 +362,7 @@ code { font-size: 0.88em; color: var(--text); overflow-wrap: anywhere; }
 .chart-note { white-space: normal !important; text-align: left !important; font-family: var(--sans) !important; color: var(--text3); font-size: 0.85rem; }
 .charts { display: grid; gap: 0 var(--pad); grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); }
 .charts + p, .chart + p, .table-wrap + p, .stats + p { margin-top: 1.4em; }
+.costs + p, [aria-labelledby="method"] .cols + p { margin-top: 1.2em; }
 .decisions { margin: 1.2em 0 0; padding-left: 1.4em; display: grid; gap: 0.8em; max-width: 80ch; }
 .decisions li::marker { color: var(--text3); font-family: var(--mono); }
 .costs { margin: 1.2em 0 0; padding-left: 1.2em; display: grid; gap: 0.7em; max-width: 80ch; }
@@ -603,6 +604,11 @@ code { font-size: 0.88em; color: var(--text); overflow-wrap: anywhere; }
   .keytable tr:first-child { border-top: 0; }
   .keytable td { margin-top: 0.3em; white-space: normal; }
   .lost .frame { flex-direction: column; align-items: flex-start; }
+  /* Data tables: smaller figures, and row labels wide enough to read
+     (a wide table scrolls sideways in its .table-wrap). */
+  .numbers { font-size: 0.85rem; }
+  .numbers tbody th { min-width: 8.5em; }
+  .numbers th, .numbers td { padding-right: 0.55em; }
 }
 @media (max-width: 380px) {
   .sibling::before { display: none; }
