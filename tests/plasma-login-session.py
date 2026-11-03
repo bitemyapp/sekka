@@ -110,7 +110,9 @@ def verify_test_password(machine):
         crop = path.with_name(path.stem + "-field.png")
         subprocess.run(["@magick@", str(path), "-crop", "200x20+500+468", "+repage", "-bordercolor", "white", "-border", "10", str(crop)], check=True)
         text = subprocess.check_output(["@tesseract@", str(crop), "stdout", "--psm", "7"], text=True, timeout=OCR_TIMEOUT).strip()
-        if text == "demo":
+        # The focused field's blinking caret reads as a trailing "|" (or a
+        # letter like it) whenever it is shown; anything else is a typing error.
+        if re.fullmatch(r"demo\s*[|Il1!]?", text):
             return
         time.sleep(0.5)
     raise AssertionError(("test password field", text))
