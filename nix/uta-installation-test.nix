@@ -11,7 +11,7 @@ let
   catalog = applicationCatalog.catalog;
   entry = lib.findFirst (app: app.id == "uta") null catalog;
   selected = (applicationCatalog.evaluate [ "uta" ]).config;
-  empty = (applicationCatalog.evaluate [ ]).config;
+  empty = applicationCatalog.empty.config;
   preloaded = applicationCatalog.preloadedSystem.config;
   # Inspect the JSON values without turning every mentioned package into a
   # dependency of the parser; the report below retains Uta's real reference.

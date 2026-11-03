@@ -118,6 +118,19 @@
           ./modules/installer.nix
         ];
       };
+      # The installed systems the media carries (nix/reference-systems.nix),
+      # evaluated once for all the checks that inspect them: each evaluating
+      # its own copy repeated the same seven NixOS evaluations.
+      referenceSystems = import ./nix/reference-systems.nix {
+        inherit inputs applicationCatalog;
+        desktops = installer.config.respin.referenceDesktops;
+      };
+      # An installed system with Genkan's defaults and no desktop chosen.
+      installedDefault = nixpkgs.lib.nixosSystem {
+        inherit system;
+        inherit (applicationCatalog) specialArgs;
+        modules = [ inputs.calamares.nixosModules.default ];
+      };
       # Googlebook construction is temporarily disabled. Its module, builders
       # and fixture remain in source, without configuration/package/check outputs.
       etc = installer.config.environment.etc;
@@ -182,28 +195,25 @@
       # Aizome's own VM checks (desktop/aizome/nix), under the names its
       # flake gave them: `nix build .#aizome-checks.session`. Not among
       # `checks`, which CI runs, as they weren't in Aizome's repository.
-      legacyPackages.${system}.aizome-checks = inputs.aizome.checks.${system};
-      # The ISO's own checks, which the manual ISO workflow (and a release)
-      # runs with the image: `nix build .#iso-checks.desktop-references`.
-      # Not among `checks`: evaluating the media means evaluating every
-      # prebuilt desktop system, which alone took most of a CI evaluation.
-      legacyPackages.${system}.iso-checks = {
-        desktop-references = import ./nix/iso-desktop-references-test.nix {
-          inherit
-            pkgs
-            inputs
-            applicationCatalog
-            fixture
-            installer
-            ;
-        };
-        copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
-        store-integrity = import ./nix/iso-integrity-test.nix { inherit pkgs; };
-        copytoram-initrd = import ./nix/iso-copytoram-initrd-test.nix {
-          inherit pkgs installer;
-        };
-        application-cache = import ./nix/iso-application-cache-test.nix {
-          inherit pkgs applicationCatalog installer;
+      legacyPackages.${system} = {
+        aizome-checks = inputs.aizome.checks.${system};
+        # The ISO's own checks, which the manual ISO workflow (and a release)
+        # runs with the image: `nix build .#iso-checks.desktop-references`.
+        # Not among `checks`: evaluating the media means evaluating every
+        # prebuilt desktop system, which alone took most of a CI evaluation.
+        iso-checks = {
+          desktop-references = import ./nix/iso-desktop-references-test.nix {
+            inherit pkgs fixture installer;
+            references = referenceSystems;
+          };
+          copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
+          store-integrity = import ./nix/iso-integrity-test.nix { inherit pkgs; };
+          copytoram-initrd = import ./nix/iso-copytoram-initrd-test.nix {
+            inherit pkgs installer;
+          };
+          application-cache = import ./nix/iso-application-cache-test.nix {
+            inherit pkgs applicationCatalog installer;
+          };
         };
       };
       apps.${system} = {
@@ -336,12 +346,9 @@
       checks.${system} = {
         cargo-geiger = self.packages.${system}.cargo-geiger;
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
-          inherit
-            pkgs
-            inputs
-            installer
-            applicationCatalog
-            ;
+          inherit pkgs installer;
+          references = referenceSystems;
+          installed = installedDefault;
           patched = pipewirePkgs.sekka-pipewire-daemon;
         };
         pipewire-x11-disconnect = import ./nix/pipewire-x11-disconnect-test.nix {
@@ -349,12 +356,9 @@
           patched = pipewirePkgs.sekka-pipewire-daemon;
         };
         avahi-packages = import ./nix/avahi-packages-test.nix {
-          inherit
-            pkgs
-            inputs
-            installer
-            applicationCatalog
-            ;
+          inherit pkgs installer;
+          references = referenceSystems;
+          installed = installedDefault;
           patched = avahiPkgs.sekka-avahi-daemon;
         };
         avahi-startup = import ./nix/avahi-startup-test.nix {
@@ -390,6 +394,7 @@
             applicationCatalog
             installer
             ;
+          references = referenceSystems;
           patched = xappPkgs.xdg-desktop-portal-xapp;
         };
         xapp-settings = import ./nix/xapp-settings-test.nix {
@@ -420,6 +425,7 @@
         };
         hyprland-packages = import ./nix/hyprland-packages-test.nix {
           inherit pkgs inputs applicationCatalog;
+          references = referenceSystems;
           inherit (hyprlandPkgs)
             aquamarine
             hyprland
@@ -767,12 +773,7 @@
           inherit pkgs;
           # The live session, in each of its boot entries, and an installed
           # system.
-          systems = liveConfigs ++ [
-            (import ./nix/reference-systems.nix {
-              inherit inputs applicationCatalog;
-              desktops = [ "plasma" ];
-            }).systems.plasma.config
-          ];
+          systems = liveConfigs ++ [ referenceSystems.systems.plasma.config ];
         };
         activity-vm = import ./nix/activity-vm-test.nix {
           inherit pkgs;

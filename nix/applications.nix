@@ -41,6 +41,8 @@ let
       ];
     };
   all = evaluate (map (app: app.id) catalog);
+  # No application chosen; uta-installation checks the same system.
+  empty = evaluate [ ];
   # Catalog visibility and offline media contents are separate policies.
   # Download-only apps remain selectable and eligible for the binary cache.
   preloaded = builtins.filter (app: app.preload or true) catalog;
@@ -67,6 +69,7 @@ in
     packageList
     preloaded
     preloadedSystem
+    empty
     ;
   cache = preloadedSystem.config.system.build.installerApplications;
   # The generated per-choice matrix runs in separate evaluator processes.
@@ -75,7 +78,7 @@ in
     builtins.deepSeq
       (map (c: c.config.system.build.toplevel.drvPath) ([
         all
-        (evaluate [ ])
+        empty
       ]))
       (
         all.pkgs.writeText "application-catalog.json" (
