@@ -424,6 +424,28 @@ in
     # in the others. Without kwallet-pam no ksecretd starts at login, which
     # had stayed behind in every other desktop's sessions.
     services.gnome.gnome-keyring.enable = true;
+    # The keyring's PAM module starts its daemon at login, unlocked by the
+    # password, and the Secret Service in it starts on request. XDG autostart
+    # asked for it alongside the session's own services, so an early client
+    # (Aizome's network agent, the portal) sometimes asked first: D-Bus then
+    # started another daemon meanwhile, and the unlocked one crashed on a
+    # later call ("gkd_secret_service_get_pkcs11_session: assertion 'client'
+    # failed"), leaving a locked keyring. Ask it before the graphical session
+    # starts; the request returns once the Secret Service has its bus name.
+    systemd.user.services.gnome-keyring-secrets = {
+      description = "Secret Service of the login keyring";
+      wantedBy = [ "graphical-session-pre.target" ];
+      before = [ "graphical-session-pre.target" ];
+      partOf = [ "graphical-session-pre.target" ];
+      # Only the daemon the password unlocked; without one, the session's
+      # autostart entry and D-Bus start one as before.
+      unitConfig.ConditionPathExists = "%t/keyring/control";
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${config.security.wrapperDir}/gnome-keyring-daemon --start --components=secrets";
+      };
+    };
     environment.etc."xdg/kwalletrc" = lib.mkIf (has "plasma") {
       text = ''
         [KSecretD]
