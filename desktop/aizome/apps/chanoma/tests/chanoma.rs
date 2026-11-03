@@ -45,6 +45,10 @@ static FRAMES: AtomicU64 = AtomicU64::new(0);
 static X: AtomicU32 = AtomicU32::new(0);
 static HELD_B: AtomicBool = AtomicBool::new(false);
 static LOADED: AtomicBool = AtomicBool::new(false);
+/// Between `retro_init` and `retro_deinit`: a callback given outside that
+/// is lost, as cores that keep their callbacks in what `retro_init` makes
+/// (Mesen) lose them, or crash.
+static INITED: AtomicBool = AtomicBool::new(false);
 static mut SRAM: [u8; 32] = [0; 32];
 static OPTION: Mutex<String> = Mutex::new(String::new());
 
@@ -59,7 +63,9 @@ unsafe extern "C" fn set_environment(cb: retro_environment_t) {
     unsafe { cb(RETRO_ENVIRONMENT_SET_VARIABLES, vars.as_ptr() as *mut c_void) };
 }
 unsafe extern "C" fn set_video(cb: retro_video_refresh_t) {
-    *VIDEO.lock().unwrap() = Some(cb);
+    if INITED.load(Ordering::SeqCst) {
+        *VIDEO.lock().unwrap() = Some(cb);
+    }
 }
 unsafe extern "C" fn set_sample(_: retro_audio_sample_t) {}
 unsafe extern "C" fn set_batch(cb: retro_audio_sample_batch_t) {
@@ -70,10 +76,14 @@ unsafe extern "C" fn set_input(cb: retro_input_state_t) {
     *INPUT.lock().unwrap() = Some(cb);
 }
 unsafe extern "C" fn init() {
+    INITED.store(true, Ordering::SeqCst);
+    *VIDEO.lock().unwrap() = None;
     FRAMES.store(0, Ordering::SeqCst);
     X.store(0, Ordering::SeqCst);
 }
-unsafe extern "C" fn deinit() {}
+unsafe extern "C" fn deinit() {
+    INITED.store(false, Ordering::SeqCst);
+}
 unsafe extern "C" fn api_version() -> c_uint {
     RETRO_API_VERSION
 }

@@ -287,8 +287,9 @@ fn run(
     // SAFETY: the core's entry points in libretro's order.
     let mut info: ffi::retro_system_info = unsafe { std::mem::zeroed() };
     unsafe {
-        Host::connect(&api);
+        Host::connect_environment(&api);
         (api.init)();
+        Host::connect(&api);
         (api.get_system_info)(&mut info);
     }
     let core_name = info_string(info.library_name).unwrap_or_else(|| "a game core".into());
