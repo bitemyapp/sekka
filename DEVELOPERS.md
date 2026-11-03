@@ -1696,7 +1696,11 @@ keeps it and no generation link outside the set does. `yukimi_store::usage`
 measures those paths and the current garbage with `lstat`: `st_blocks` for
 every file, directory and symbolic link, each hard-linked inode once, and
 freed only when the set holds all its links but the store's own in
-`/nix/store/.links`. A generation's figure is what deleting it alone frees
+`/nix/store/.links`. On Linux Nix's optimiser links identical symbolic links
+as well as files, so in an optimised store a generation's `system-path` and
+`etc`, links like the running system's, cost it next to nothing; counting
+them as its own overestimated the VM check's first run by 111%. A
+generation's figure is what deleting it alone frees
 beyond the garbage; Clean Up's is the garbage plus what
 `nix-env --delete-generations <n>d` would delete (`generations::older_than`
 keeps the generation that was in use at the cutoff, as Nix does). The
