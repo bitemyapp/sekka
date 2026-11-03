@@ -429,6 +429,12 @@ impl Chanoma {
             _ => {
                 rows.push((Row::new("Leave Chanoma", Value::Action).detail("Back to the desktop"), Act::Leave));
                 rows.push((Row::new("Version", Value::Note(env!("CARGO_PKG_VERSION").into())), Act::None));
+                // The databases' licence asks for their credit.
+                rows.push((
+                    Row::new("Games' years, genres and players", Value::Note("libretro-database".into()))
+                        .detail("CC BY-SA 4.0, from the libretro project's contributors"),
+                    Act::None,
+                ));
             }
         }
         rows
@@ -485,6 +491,12 @@ impl Chanoma {
                     let mut detail = t.regions.join(", ");
                     if t.revision > 0 {
                         detail.push_str(if detail.is_empty() { "A revision" } else { ", a revision" });
+                    }
+                    if let Some(known) = g.info.as_ref().map(crate::metadata::Info::summary).filter(|s| !s.is_empty()) {
+                        if !detail.is_empty() {
+                            detail.push_str(" · ");
+                        }
+                        detail.push_str(&known);
                     }
                     let mut row = Row::new(g.title.clone(), Value::Switch(s.game_allowed(&g.key))).detail(detail);
                     if s.game_waiting(&g.key) {

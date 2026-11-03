@@ -249,6 +249,7 @@ fn config(dirs: Dirs, cores: PathBuf, clock: ManualClock) -> Config {
         silent: true,
         pin_rounds: 10,
         core_dirs: vec![cores],
+        metadata: None,
         database: None,
         fullscreen: false,
         scan: true,
@@ -1054,6 +1055,162 @@ impl TapParent for PathBuf {
         std::fs::create_dir_all(self.parent().unwrap()).unwrap();
         self
     }
+}
+
+/// A zip of `files`, stored, as a ROM set's are (deflated ones are tested
+/// beside the reader).
+fn zip_of(files: &[(&str, &[u8])]) -> Vec<u8> {
+    let (mut out, mut dir) = (Vec::new(), Vec::new());
+    for (name, data) in files {
+        let crc = crc32fast::hash(data);
+        let (n, len) = (name.len() as u16, data.len() as u32);
+        let offset = out.len() as u32;
+        out.extend(0x0403_4b50u32.to_le_bytes());
+        out.extend([20, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        out.extend(crc.to_le_bytes());
+        out.extend(len.to_le_bytes());
+        out.extend(len.to_le_bytes());
+        out.extend(n.to_le_bytes());
+        out.extend([0, 0]);
+        out.extend(name.as_bytes());
+        out.extend(*data);
+        dir.extend(0x0201_4b50u32.to_le_bytes());
+        dir.extend([20, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        dir.extend(crc.to_le_bytes());
+        dir.extend(len.to_le_bytes());
+        dir.extend(len.to_le_bytes());
+        dir.extend(n.to_le_bytes());
+        dir.extend([0; 12]);
+        dir.extend(offset.to_le_bytes());
+        dir.extend(name.as_bytes());
+    }
+    let (at, count) = (out.len() as u32, files.len() as u16);
+    out.extend(&dir);
+    out.extend(0x0605_4b50u32.to_le_bytes());
+    out.extend([0; 4]);
+    out.extend(count.to_le_bytes());
+    out.extend(count.to_le_bytes());
+    out.extend((dir.len() as u32).to_le_bytes());
+    out.extend(at.to_le_bytes());
+    out.extend([0, 0]);
+    out
+}
+
+/// A RetroArch database of games: each a name, a year, a genre, how many
+/// play, and a CRC.
+fn database(games: &[(&str, u16, &str, u8, u32)]) -> Vec<u8> {
+    let mut out = b"RARCHDB\0".to_vec();
+    out.extend([0; 8]);
+    let text = |out: &mut Vec<u8>, s: &[u8], tag: u8| {
+        out.extend([tag, s.len() as u8]);
+        out.extend(s);
+    };
+    for (name, year, genre, users, crc) in games {
+        out.push(0x85);
+        text(&mut out, b"name", 0xd9);
+        text(&mut out, name.as_bytes(), 0xd9);
+        text(&mut out, b"releaseyear", 0xd9);
+        out.push(0xcd);
+        out.extend(year.to_be_bytes());
+        text(&mut out, b"genre", 0xd9);
+        text(&mut out, genre.as_bytes(), 0xd9);
+        text(&mut out, b"users", 0xd9);
+        out.push(*users);
+        text(&mut out, b"crc", 0xd9);
+        text(&mut out, &crc.to_be_bytes(), 0xc4);
+    }
+    out.push(0xc0);
+    out
+}
+
+#[test]
+fn games_say_what_the_databases_know_and_two_controllers_bring_their_games() {
+    let _core = core_lock();
+    // Beside Test Quest: a zipped game, as sets come, and a file renamed
+    // out of the set's naming, found by its CRC.
+    let (dirs, cores) = household("known", |s| {
+        s.games_allowed.insert("snes/snes/Contra III - The Alien Wars (USA).zip".into());
+        s.games_allowed.insert("snes/snes/mystery.sfc".into());
+    });
+    let root = cores.parent().unwrap().to_path_buf();
+    let snes = root.join("Games/snes");
+    let contra: &[u8] = b"CHANOMA contra";
+    std::fs::write(
+        snes.join("Contra III - The Alien Wars (USA).zip"),
+        zip_of(&[("readme.txt", b"hi"), ("Contra III - The Alien Wars (USA).sfc", contra)]),
+    )
+    .unwrap();
+    let mario: &[u8] = b"CHANOMA mario";
+    std::fs::write(snes.join("mystery.sfc"), mario).unwrap();
+    let metadata = root.join("metadata");
+    std::fs::create_dir_all(&metadata).unwrap();
+    std::fs::write(
+        metadata.join("Nintendo - Super Nintendo Entertainment System.rdb"),
+        database(&[
+            ("Test Quest (USA)", 1994, "Action", 1, 1),
+            ("Contra III - The Alien Wars (USA)", 1992, "Shooter", 2, crc32fast::hash(contra)),
+            ("Super Mario World (USA)", 1990, "Platform", 2, crc32fast::hash(mario)),
+        ]),
+    )
+    .unwrap();
+    let mut config = config(dirs.clone(), cores, ManualClock::at(2026, 11, 2, 17, 0));
+    config.metadata = Some(metadata);
+    let mut h = harness(config);
+    let info = |h: &Harness<Chanoma>, title: &str| {
+        let g = h.program().library.games.iter().find(|g| g.title == title).unwrap_or_else(|| panic!("{title}"));
+        g.info.as_ref().map(aizome_chanoma::metadata::Info::summary).unwrap_or_default()
+    };
+    // By name, zipped or not; renamed, by what's in it.
+    assert_eq!(info(&h, "Test Quest"), "1994 · Action · 1 player");
+    assert_eq!(info(&h, "Contra III - The Alien Wars"), "1992 · Shooter · 2 players");
+    assert_eq!(info(&h, "mystery"), "1990 · Platform · 2 players");
+    let titles = |h: &Harness<Chanoma>| -> Vec<String> {
+        h.program().home_view().shelves.into_iter().map(|s| s.title).collect::<Vec<_>>()
+    };
+    assert!(!titles(&h).iter().any(|t| t.starts_with("For ")), "{:?}", titles(&h));
+    // On Games, a second controller: the games for two come before it,
+    // and the focus stays on Games.
+    input(&mut h, Input::Dir(Dir::Down));
+    let on = |h: &Harness<Chanoma>| titles(h)[h.program().focus.row].clone();
+    assert_eq!(on(&h), "Games");
+    let second = PadInfo {
+        id: 2,
+        slot: 1,
+        name: "Pro Controller".into(),
+        family: Family::Nintendo,
+        bluetooth: true,
+        guid: String::new(),
+        battery: Some((60, false)),
+        source: aizome_chanoma::pad::mapping::Source::Database,
+        rumble: true,
+    };
+    h.send(Msg::Pad(PadEvent::Connected(second)));
+    assert_eq!(on(&h), "Games", "{:?}", titles(&h));
+    let home = h.program().home_view();
+    let together = home.shelves.iter().find(|s| s.title == "For 2 players").expect("the games for two");
+    let names: Vec<&str> = together.tiles.iter().map(|t| t.label.as_str()).collect();
+    assert_eq!(names, ["Contra III - The Alien Wars", "mystery"]);
+    assert_eq!(together.tiles[0].more, "1992 · Shooter · 2 players");
+    input(&mut h, Input::Dir(Dir::Up));
+    shot(&mut h, "19-for-two-players");
+    // The zipped game plays: unpacked for the core, which gets its bytes.
+    input(&mut h, Input::Ok);
+    until(&mut h, |a| a.screen == Screen::Playing);
+    let start = Instant::now();
+    while !LOADED.load(Ordering::SeqCst) {
+        assert!(start.elapsed() < Duration::from_secs(10), "the zipped game didn't load");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let unpacked = dirs.unzipped().join(format!("{:08x}", crc32fast::hash(contra)));
+    assert_eq!(std::fs::read(unpacked.join("Contra III - The Alien Wars (USA).sfc")).unwrap(), contra);
+    press(&mut h, Button::Guide);
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::Home);
+    // The second controller gone: so is the shelf, and the focus stays.
+    h.send(Msg::Pad(PadEvent::Disconnected { id: 2, slot: 1 }));
+    assert!(!titles(&h).iter().any(|t| t.starts_with("For ")), "{:?}", titles(&h));
 }
 
 #[test]

@@ -8,6 +8,8 @@
 //! - `$XDG_DATA_HOME/aizome/chanoma/`: games' saves (`saves/`), where they
 //!   were left (`states/`), each service's browser profile (`browser/`)
 //!   and BIOS files cores ask for (`system/`).
+//! - `$XDG_CACHE_HOME/aizome/chanoma/unzipped/`: the last few zipped games
+//!   played, unpacked for their cores.
 //!
 //! Every file is written whole and renamed over the old one.
 
@@ -23,6 +25,8 @@ pub struct Dirs {
     pub data: PathBuf,
     /// The files index Aizome's apps share (`aizome_index`).
     pub index: PathBuf,
+    /// What can be made again: zipped games unpacked (`unzipped/`).
+    pub cache: PathBuf,
 }
 
 fn xdg(var: &str, fallback: &str) -> PathBuf {
@@ -51,6 +55,7 @@ impl Dirs {
             state: xdg("XDG_STATE_HOME", ".local/state").join("aizome/chanoma"),
             data: xdg("XDG_DATA_HOME", ".local/share").join("aizome/chanoma"),
             index: xdg("XDG_CACHE_HOME", ".cache").join("aizome/index/files.sqlite"),
+            cache: xdg("XDG_CACHE_HOME", ".cache").join("aizome/chanoma"),
         }
     }
 
@@ -61,6 +66,7 @@ impl Dirs {
             state: root.join("state"),
             data: root.join("data"),
             index: root.join("cache/index.sqlite"),
+            cache: root.join("cache/chanoma"),
         }
     }
 
@@ -82,6 +88,10 @@ impl Dirs {
 
     pub fn browser(&self) -> PathBuf {
         self.data.join("browser")
+    }
+
+    pub fn unzipped(&self) -> PathBuf {
+        self.cache.join("unzipped")
     }
 }
 

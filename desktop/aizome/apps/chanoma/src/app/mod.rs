@@ -236,6 +236,8 @@ pub struct Config {
     pub pin_rounds: u32,
     /// Where cores are looked for.
     pub core_dirs: Vec<PathBuf>,
+    /// Where the games' databases are (`$CHANOMA_METADATA`).
+    pub metadata: Option<PathBuf>,
     /// SDL's controller database.
     pub database: Option<PathBuf>,
     /// Open full screen.
@@ -268,6 +270,7 @@ impl Config {
             silent: false,
             pin_rounds: crate::rules::ROUNDS,
             core_dirs: crate::library::Cores::search_path(),
+            metadata: crate::metadata::dir(),
             database: std::env::var_os("CHANOMA_GAMECONTROLLERDB")
                 .map(PathBuf::from)
                 .or_else(|| std::env::var_os("SDL_GAMECONTROLLERCONFIG_FILE").map(PathBuf::from)),
@@ -683,6 +686,7 @@ impl Chanoma {
     fn pad(&mut self, e: PadEvent, cx: &mut Cx<Msg>) {
         match e {
             PadEvent::Connected(info) => {
+                let marks = self.home_marks();
                 let player_one = info.slot == 0;
                 self.controllers.retain(|p| p.id != info.id);
                 self.family = info.family;
@@ -695,9 +699,12 @@ impl Chanoma {
                 if let Some(p) = self.pairing.as_mut() {
                     p.connected += 1;
                 }
+                self.restore_home_marks(&marks);
             }
             PadEvent::Disconnected { id, slot } => {
+                let marks = self.home_marks();
                 self.controllers.retain(|p| p.id != id);
+                self.restore_home_marks(&marks);
                 // A game whose player 1 went: wait for them.
                 if self.screen == Screen::Playing && slot == 0 && self.modal.is_none() {
                     self.open_menu(MenuKind::NoController, cx);
@@ -1852,9 +1859,10 @@ impl Chanoma {
         let games = self.settings.game_folders.clone();
         let videos = self.settings.video_folders.clone();
         let cores = self.config.core_dirs.clone();
+        let metadata = self.config.metadata.clone();
         let dirs = self.config.dirs.clone();
         let scan = move |index: &mut aizome_index::Index, refresh: bool| {
-            Arc::new(crate::library::scan(index, &games, &videos, &cores, refresh))
+            Arc::new(crate::library::scan(index, &games, &videos, &cores, metadata.as_deref(), refresh))
         };
         match self.sender.clone() {
             Some(tx) => {

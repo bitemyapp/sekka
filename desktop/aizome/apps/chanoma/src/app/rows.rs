@@ -26,6 +26,8 @@ pub enum Act {
     Shelf(usize),
     Video(PathBuf),
     AllGames,
+    /// Every game the controllers connected can play together.
+    AllTogether,
     AllFilms,
     GrownUps,
     Settings,
@@ -63,6 +65,7 @@ impl Chanoma {
             look: TileLook::Picture { art, chip: Some(g.system.color), pixels },
             badge: waiting.then(|| "New".to_owned()),
             progress: None,
+            more: g.info.as_ref().map(crate::metadata::Info::summary).unwrap_or_default(),
         }
     }
 
@@ -73,6 +76,7 @@ impl Chanoma {
             look: TileLook::Brand { color: s.color, ink: s.ink },
             badge: None,
             progress: None,
+            more: String::new(),
         }
     }
 
@@ -115,6 +119,7 @@ impl Chanoma {
                                 look: TileLook::Brand { color, ink },
                                 badge: None,
                                 progress: None,
+                                more: String::new(),
                             },
                             Act::Site(i),
                         ));
@@ -151,6 +156,7 @@ impl Chanoma {
                             look: TileLook::Picture { art: shelf.poster.clone(), chip: None, pixels: false },
                             badge: None,
                             progress,
+                            more: String::new(),
                         },
                         Act::Video(path.clone()),
                     ));
@@ -179,6 +185,7 @@ impl Chanoma {
                     look: TileLook::Brand { color, ink },
                     badge: None,
                     progress: None,
+                    more: String::new(),
                 },
                 Act::Site(i),
             ));
@@ -207,6 +214,7 @@ impl Chanoma {
                             look: TileLook::Picture { art: s.poster.clone(), chip: None, pixels: false },
                             badge: None,
                             progress: None,
+                            more: String::new(),
                         },
                         Act::Shelf(i),
                     )
@@ -220,6 +228,7 @@ impl Chanoma {
                         look: TileLook::Symbol { symbol: Symbol::Film },
                         badge: None,
                         progress: None,
+                        more: String::new(),
                     },
                     Act::AllFilms,
                 ));
@@ -240,11 +249,38 @@ impl Chanoma {
                         look: TileLook::Symbol { symbol: Symbol::Grid },
                         badge: None,
                         progress: None,
+                        more: String::new(),
                     },
                     Act::AllGames,
                 ));
             }
             out.insert(games_at, shelf("Games", TileSize::Wide, tiles));
+            // With two controllers or more, the games that many can play
+            // together, before the rest.
+            if let Some(n) = self.together() {
+                let together: Vec<&Game> = games.iter().copied().filter(|g| plays_with(g, n)).collect();
+                if !together.is_empty() {
+                    let mut tiles: Vec<(Tile, Act)> = together
+                        .iter()
+                        .take(SHELF_GAMES)
+                        .map(|g| (self.game_tile(g, false), Act::Game(g.key.clone())))
+                        .collect();
+                    if together.len() > SHELF_GAMES {
+                        tiles.push((
+                            Tile {
+                                label: "All of them".into(),
+                                sub: format!("{}", together.len()),
+                                look: TileLook::Symbol { symbol: Symbol::Grid },
+                                badge: None,
+                                progress: None,
+                                more: String::new(),
+                            },
+                            Act::AllTogether,
+                        ));
+                    }
+                    out.insert(games_at, shelf(&format!("For {n} players"), TileSize::Wide, tiles));
+                }
+            }
         } else if grownup {
             out.insert(
                 games_at,
@@ -258,6 +294,7 @@ impl Chanoma {
                             look: TileLook::Symbol { symbol: Symbol::Plus },
                             badge: None,
                             progress: None,
+                            more: String::new(),
                         },
                         Act::AddGames,
                     )],
@@ -275,6 +312,7 @@ impl Chanoma {
                         look: TileLook::Symbol { symbol: Symbol::Gear },
                         badge: None,
                         progress: None,
+                        more: String::new(),
                     },
                     Act::Settings,
                 ),
@@ -285,6 +323,7 @@ impl Chanoma {
                         look: TileLook::Symbol { symbol: Symbol::Lock },
                         badge: None,
                         progress: None,
+                        more: String::new(),
                     },
                     Act::Lock,
                 ),
@@ -295,6 +334,7 @@ impl Chanoma {
                         look: TileLook::Symbol { symbol: Symbol::Door },
                         badge: None,
                         progress: None,
+                        more: String::new(),
                     },
                     Act::Leave,
                 ),
@@ -307,6 +347,7 @@ impl Chanoma {
                     look: TileLook::Symbol { symbol: Symbol::Lock },
                     badge: None,
                     progress: None,
+                    more: String::new(),
                 },
                 Act::GrownUps,
             )]
@@ -336,6 +377,35 @@ impl Chanoma {
         let len = shelves.get(self.focus.row).map_or(0, |(s, _)| s.tiles.len());
         self.focus.col = self.focus.col.min(len.saturating_sub(1));
         self.remember_home_focus();
+    }
+
+    /// Home's shelves' titles and where each was left (nothing off Home),
+    /// to put the focus back on its shelf after one comes or goes above it
+    /// (a second controller brings one).
+    pub fn home_marks(&self) -> Vec<(String, usize)> {
+        if self.screen != Screen::Home {
+            return Vec::new();
+        }
+        let at =
+            |i: usize| if i == self.focus.row { self.focus.col } else { self.home_cols.get(i).copied().unwrap_or(0) };
+        self.shelves().into_iter().enumerate().map(|(i, (s, _))| (s.title, at(i))).collect()
+    }
+
+    pub fn restore_home_marks(&mut self, marks: &[(String, usize)]) {
+        if marks.is_empty() || self.screen != Screen::Home {
+            return;
+        }
+        let titles: Vec<String> = self.shelves().into_iter().map(|(s, _)| s.title).collect();
+        if titles.iter().eq(marks.iter().map(|(t, _)| t)) {
+            return;
+        }
+        let focused = marks.get(self.focus.row).map(|(t, _)| t.clone());
+        self.home_cols = titles.iter().map(|t| marks.iter().find(|(m, _)| m == t).map_or(0, |(_, c)| *c)).collect();
+        if let Some(row) = focused.and_then(|f| titles.iter().position(|t| *t == f)) {
+            self.focus.row = row;
+            self.focus.col = self.home_cols[row];
+        }
+        self.clamp_home_focus();
     }
 
     pub fn remember_home_focus(&mut self) {
@@ -415,6 +485,11 @@ impl Chanoma {
                 self.games_tab = 0;
                 self.go(Screen::Games, cx);
             }
+            Act::AllTogether => {
+                self.games_focus = 0;
+                self.games_tab = self.game_tabs().iter().position(|t| matches!(t, GameTab::Together(_))).unwrap_or(0);
+                self.go(Screen::Games, cx);
+            }
             Act::AllFilms => {
                 self.episode_focus = 0;
                 self.go(Screen::Episodes(usize::MAX), cx);
@@ -430,18 +505,32 @@ impl Chanoma {
         }
     }
 
-    /// The systems with games here, for the grid's tabs.
-    fn game_tabs(&self) -> Vec<&'static crate::library::System> {
+    /// How many controllers are connected, when there's more than one.
+    pub fn together(&self) -> Option<usize> {
+        let n = self.controllers.len();
+        (n >= 2).then_some(n)
+    }
+
+    /// The grid's tabs: all, those the controllers connected can play
+    /// together, then each system with games here.
+    fn game_tabs(&self) -> Vec<GameTab> {
         let games = self.playable();
-        SYSTEMS.iter().filter(|s| games.iter().any(|g| g.system.id == s.id)).collect()
+        let mut tabs = vec![GameTab::All];
+        if let Some(n) = self.together()
+            && games.iter().any(|g| plays_with(g, n))
+        {
+            tabs.push(GameTab::Together(n));
+        }
+        tabs.extend(SYSTEMS.iter().filter(|s| games.iter().any(|g| g.system.id == s.id)).map(GameTab::System));
+        tabs
     }
 
     fn games_in_tab(&self) -> Vec<&Game> {
-        let tabs = self.game_tabs();
         let games = self.playable();
-        match self.games_tab.checked_sub(1).and_then(|i| tabs.get(i)) {
-            Some(sys) => games.into_iter().filter(|g| g.system.id == sys.id).collect(),
-            None => games,
+        match self.game_tabs().get(self.games_tab) {
+            Some(GameTab::Together(n)) => games.into_iter().filter(|g| plays_with(g, *n)).collect(),
+            Some(GameTab::System(sys)) => games.into_iter().filter(|g| g.system.id == sys.id).collect(),
+            _ => games,
         }
     }
 
@@ -451,7 +540,7 @@ impl Chanoma {
         let mut g = Grid {
             title: "Games".into(),
             subtitle: format!("{}", games.len()),
-            tabs: std::iter::once("All".to_owned()).chain(tabs.iter().map(|s| s.short.to_owned())).collect(),
+            tabs: tabs.iter().map(GameTab::label).collect(),
             tab: self.games_tab,
             size: TileSize::Wide,
             tiles: games.iter().map(|g| self.game_tile(g, false)).collect(),
@@ -467,7 +556,7 @@ impl Chanoma {
     pub fn games_input(&mut self, i: Input, cx: &mut Cx<Msg>) {
         let n = self.games_in_tab().len();
         let cols = home::across(TileSize::Wide);
-        let tabs = self.game_tabs().len() + 1;
+        let tabs = self.game_tabs().len();
         let f = &mut self.focus.col;
         match i {
             Input::Dir(Dir::Left) => *f = f.saturating_sub(1),
@@ -507,6 +596,7 @@ impl Chanoma {
                     look: TileLook::Picture { art: s.poster.clone(), chip: None, pixels: false },
                     badge: None,
                     progress: None,
+                    more: String::new(),
                 })
                 .collect();
             let mut g = Grid {
@@ -554,6 +644,7 @@ impl Chanoma {
                     look: TileLook::Picture { art: None, chip: None, pixels: false },
                     badge: None,
                     progress,
+                    more: String::new(),
                 }
             })
             .collect();
@@ -643,4 +734,29 @@ impl Chanoma {
         }
         out
     }
+}
+
+/// A tab of every game's grid.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum GameTab {
+    All,
+    /// The games this many can play together.
+    Together(usize),
+    System(&'static crate::library::System),
+}
+
+impl GameTab {
+    fn label(&self) -> String {
+        match self {
+            GameTab::All => "All".into(),
+            GameTab::Together(n) => format!("{n} players"),
+            GameTab::System(s) => s.short.into(),
+        }
+    }
+}
+
+/// Whether `n` can play `g` at once: its database says so, and Chanoma
+/// gives its system that many controllers.
+fn plays_with(g: &Game, n: usize) -> bool {
+    g.system.players >= n && g.info.as_ref().and_then(|i| i.players).is_some_and(|p| usize::from(p) >= n)
 }

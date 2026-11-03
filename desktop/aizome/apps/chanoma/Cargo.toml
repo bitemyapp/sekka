@@ -43,6 +43,10 @@ libloading.workspace = true
 pipewire = { version = "0.10.1", features = ["v1_2_0"] }
 # The PIN's hash (PBKDF2 over HMAC-SHA-256, written out here).
 sha2 = "0.10"
+# Zipped games: unpacked for their cores, and their CRCs checked (and
+# compared with the games' databases). Already built for the PNG decoder.
+miniz_oxide = "0.8"
+crc32fast = "1"
 # Box art and posters, decoded off the interface thread. The same version
 # and features as Shashin's, so nothing is built twice.
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "tiff", "ico"] }

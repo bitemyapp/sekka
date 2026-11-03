@@ -25,7 +25,7 @@ import time
 
 APP = "org.aizome.Chanoma"
 PIN = "2468"
-GAME_KEY = "gb/gb/Chanoma Test (World).gb"
+GAME_KEY = "gb/gb/Chanoma Test (World).zip"
 
 
 def user(command):
@@ -152,6 +152,11 @@ with subtest("the controller opens a game from Home"):
     # the cores' system folder as a game starts.
     bios = "/home/alice/.local/share/aizome/chanoma/system/openbios.bin"
     machine.succeed(f"test -L {bios} && test $(stat -L -c %s {bios}) = 524288")
+    # The game is zipped: unpacked for the core.
+    machine.succeed("test -s '/home/alice/.cache/aizome/chanoma/unzipped/'*'/Chanoma Test (World).gb'")
+    # The databases the module installs were read: the game named as the
+    # Game Boy's database names one is found there (the test game isn't).
+    assert logged("1 of 2 games found in the databases by name"), journal()
     time.sleep(2)
     # The picture's top left, clear of the logo the game boots with.
     box = (260, 60, 460, 260)
