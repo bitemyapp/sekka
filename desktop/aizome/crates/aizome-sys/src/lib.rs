@@ -66,6 +66,8 @@ pub mod mpris;
 pub mod network;
 pub mod notifications;
 mod oneshot;
+#[cfg(feature = "pam")]
+pub mod pam;
 pub mod polkit;
 pub mod power;
 pub mod printers;

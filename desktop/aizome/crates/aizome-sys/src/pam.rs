@@ -1,7 +1,8 @@
 //! Checking the user's password: PAM through a small FFI to libpam (the
 //! service `aizome` that the NixOS module defines), behind a trait so the
-//! lock screen can be tested with a stand-in. Authentication blocks, so it
-//! runs on a thread.
+//! shell's lock screen and Chanoma's forgotten PIN can be tested with a
+//! stand-in. Authentication blocks, so it runs on a thread. Behind the
+//! `pam` feature: only what asks for a password links libpam.
 
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
@@ -190,7 +191,7 @@ impl Authenticator for Pam {
     }
 }
 
-/// The user this shell runs for: login name and full name.
+/// The user the program runs for: login name and full name.
 pub fn current_user() -> (String, String) {
     // SAFETY: getpwuid_r writes into the buffers given.
     unsafe {

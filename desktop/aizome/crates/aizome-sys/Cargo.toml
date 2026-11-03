@@ -27,5 +27,9 @@ roxmltree = "0.21"
 libpulse-binding = "2.30"
 serde.workspace = true
 
+[features]
+# Checking passwords through PAM (pam.rs): links libpam.
+pam = []
+
 [dev-dependencies]
 aizome-apps = { workspace = true, features = ["test-util"] }
