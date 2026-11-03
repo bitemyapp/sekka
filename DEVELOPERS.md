@@ -1734,7 +1734,13 @@ generation 4 shares. After optimising and collecting garbage, it checks the
 helper's refusals, deletes 3 with `--collect-garbage` and 2 without (then
 cleans up), and compares the space `statvfs` sees come back with the
 estimate, as root and as an unprivileged user, along with the profile links,
-boot entries and kept configurations left.
+boot entries and kept configurations left. On 2026-11-03, on wx-workstation,
+generation 3 gave back 10,956,800 bytes and the estimate was 10,956,800, the
+same as root and as `demo`; Yukimi would have shown its 1,844,249,032-byte
+closure (+16,732%), and the NAR size of what only it had, 19,510,448 bytes,
+was +78% (its links and the files it shared with other generations are
+hard-linked in an optimised store). Generation 2, deleted and then cleaned
+up, gave back 8,847,360 bytes for an estimate of 8,859,648 (+0.14%).
 
 Shiori, Aizome's PDF reader (`desktop/aizome/apps/shiori`), draws pages, and
 reads their text, links and the outline, with hayro (Apache-2.0 OR MIT), a
