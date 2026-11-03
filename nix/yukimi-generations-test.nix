@@ -41,7 +41,12 @@ let
     { lib, ... }:
     {
       environment.etc."yukimi-test-generation".text = n;
-      environment.systemPackages = [
+      # A system profile of its own, thousands of symbolic links, as each
+      # real generation has.
+      environment.systemPackages = [ (payload n) ];
+      # Part of the generation's closure (the system profile links only some
+      # of a package's folders, not share/yukimi-test).
+      system.extraDependencies = [
         (payload n)
       ]
       ++ lib.optional (n == "3" || n == "4") shared
@@ -198,7 +203,7 @@ pkgs.testers.runNixOSTest {
           # The daemon tells anyone what running programs use.
           assert abs(as_user["disk"] - as_root["disk"]) < 64 * 1024, (as_user, as_root)
           # Before, Yukimi showed the generation's whole closure.
-          closure = int(machine.succeed("nix path-info -S /nix/var/nix/profiles/system-3-link").split()[1])
+          closure = int(machine.succeed("nix --extra-experimental-features nix-command path-info -S /nix/var/nix/profiles/system-3-link").split()[1])
           assert closure == as_root["closure"], (closure, as_root)
           before = used()
           report = json.loads(machine.succeed("yukimi-helper delete 3 --collect-garbage"))

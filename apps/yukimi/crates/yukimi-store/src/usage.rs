@@ -7,15 +7,18 @@
 //! than 60 bytes, as any link into the store is, takes a block of its own:
 //! a NixOS generation's `system-path` and `etc`, thousands of links, take
 //! several times their NAR size. With `auto-optimise-store` (or
-//! `nix-store --optimise`) identical files are one file, hard-linked from
-//! each path that has it and from `/nix/store/.links`; its blocks come back
-//! only when every path linking it goes, and garbage collection then removes
-//! the `.links` entry too.
+//! `nix-store --optimise`) identical files, and on Linux identical symbolic
+//! links too, are one inode, hard-linked from each path that has it and
+//! from `/nix/store/.links`; its blocks come back only when every path
+//! linking it goes, and garbage collection then removes the `.links` entry
+//! too. A generation's links are mostly the same as the next one's, so in an
+//! optimised store they cost it almost nothing of its own.
 //!
 //! [`Usage`] measures paths as the filesystem reports them (`st_blocks`).
-//! A file with more than one link is kept once, by inode, with the number
-//! of its links each path holds, so that removing a set of paths counts a
-//! shared file only when the set holds all of its links but the store's own.
+//! Anything but a directory with more than one link is kept once, by inode,
+//! with the number of its links each path holds, so that removing a set of
+//! paths counts it only when the set holds all of its links but the store's
+//! own.
 //!
 //! What it can't see: compression and sharing below the filesystem (Btrfs
 //! reports blocks before compression, and blocks a snapshot or reflink
@@ -40,15 +43,15 @@ pub struct Usage {
 /// One path, measured.
 #[derive(Clone, Debug, Default)]
 struct Measured {
-    /// Blocks only this path holds: its directories, symbolic links and
-    /// files with a single link.
+    /// Blocks only this path holds: its directories, and files and
+    /// symbolic links with a single link.
     own: u64,
-    /// Files with more than one link: each file's index in
-    /// [`Usage::files`], and how many of its links are in this path.
+    /// Files and symbolic links with more than one link: each one's index
+    /// in [`Usage::files`], and how many of its links are in this path.
     shared: Vec<(u32, u32)>,
 }
 
-/// A file with more than one link.
+/// A file or symbolic link with more than one link.
 #[derive(Clone, Copy, Debug)]
 struct Linked {
     bytes: u64,
@@ -96,7 +99,8 @@ impl Usage {
         inodes: &mut HashMap<(u64, u64), u32>,
     ) {
         let bytes = meta.blocks() * 512;
-        if meta.is_file() && meta.nlink() > 1 {
+        // Nix links identical symbolic links as it does files.
+        if !meta.is_dir() && meta.nlink() > 1 {
             let index = *inodes.entry((meta.dev(), meta.ino())).or_insert_with(|| {
                 self.files.push(Linked { bytes, links: meta.nlink() });
                 (self.files.len() - 1) as u32
@@ -214,6 +218,16 @@ mod tests {
         std::fs::write(links.join("shared"), vec![7u8; 100_000]).unwrap();
         std::fs::hard_link(links.join("shared"), a.join("shared")).unwrap();
         std::fs::hard_link(links.join("shared"), b.join("shared")).unwrap();
+        // b: a long link the same as one a live path has, which Nix's
+        // optimiser links as it does files: it stays while that path does.
+        let live_link = links.join("live-link");
+        std::os::unix::fs::symlink(
+            format!("{STORE_DIR}/{}-a-live-target-with-a-long-name", "y".repeat(32)),
+            &live_link,
+        )
+        .unwrap();
+        std::fs::hard_link(&live_link, b.join("ln")).unwrap();
+        std::fs::hard_link(&live_link, links.join("live-link-elsewhere")).unwrap();
         // c: a file linked twice inside it, and once from .links.
         std::fs::write(links.join("twice"), vec![1u8; 50_000]).unwrap();
         std::fs::hard_link(links.join("twice"), c.join("one")).unwrap();
@@ -225,6 +239,8 @@ mod tests {
         assert!(blocks(&a.join("small")) >= 10, "a block, not ten bytes");
         // Removing a alone leaves b's link: only what's a's own.
         assert_eq!(usage.freed([id(0)]), own_a);
+        // b's symbolic link is shared with a live path: b frees only itself.
+        assert_eq!(usage.freed([id(1)]), blocks(&b));
         // Removing a and b frees the shared file: .links goes with them.
         assert_eq!(usage.freed([id(0), id(1)]), own_a + blocks(&b) + shared);
         // c holds both of its file's links but the store's own.
