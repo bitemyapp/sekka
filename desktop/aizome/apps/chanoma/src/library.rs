@@ -211,6 +211,12 @@ fn folder_key(name: &str) -> String {
     name.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase()).collect()
 }
 
+/// The system a folder's name says (`snes`, `Super Nintendo`).
+pub fn system_named(name: &str) -> Option<&'static System> {
+    let key = folder_key(name);
+    SYSTEMS.iter().find(|s| s.folders.contains(&key.as_str()))
+}
+
 /// The system a file is for: its nearest folder that names one, else its
 /// extension (when only one system uses it).
 pub fn system_of(path: &Path, root: &Path) -> Option<&'static System> {
@@ -220,8 +226,7 @@ pub fn system_of(path: &Path, root: &Path) -> Option<&'static System> {
         if d == root || !d.starts_with(root) {
             break;
         }
-        let key = d.file_name().map(|n| folder_key(&n.to_string_lossy())).unwrap_or_default();
-        if let Some(s) = SYSTEMS.iter().find(|s| s.folders.contains(&key.as_str())) {
+        if let Some(s) = d.file_name().and_then(|n| system_named(&n.to_string_lossy())) {
             // A system's folder holds its games; other files there aren't.
             return s.takes(&ext).then_some(s);
         }
@@ -270,10 +275,13 @@ pub struct Game {
     pub title: String,
     pub path: PathBuf,
     pub system: &'static System,
-    /// Box art found beside it.
+    /// Box art found beside it (or that its folder's `gamelist.xml` names).
     pub art: Option<PathBuf>,
     /// What the databases say of it.
     pub info: Option<crate::metadata::Info>,
+    /// The name its database knows it by, when it's in one: its box art's
+    /// name in libretro-thumbnails.
+    pub known_as: Option<String>,
 }
 
 impl Game {
@@ -293,6 +301,9 @@ pub struct Video {
 /// A film, or a show's folder of episodes.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Shelf {
+    /// Its folder (a show, or a film in a folder of its own) or its file,
+    /// as kids' rules keep it.
+    pub key: String,
     pub title: String,
     /// One for a film; a show's episodes in order.
     pub videos: Vec<Video>,
@@ -369,6 +380,22 @@ pub struct Library {
     pub cores: Cores,
     /// Games found whose system has no core here.
     pub unplayable: usize,
+    /// What each folder holds, in the settings' order.
+    pub held: Vec<Held>,
+}
+
+/// What one of the folders holds.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Held {
+    pub folder: PathBuf,
+    /// Whether it's there: a drive's folder isn't while the drive is out.
+    pub here: bool,
+    pub games: usize,
+    pub systems: usize,
+    /// Games for systems with no core here.
+    pub unplayable: usize,
+    pub shows: usize,
+    pub films: usize,
 }
 
 const ART_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp"];
@@ -382,9 +409,16 @@ pub struct Read {
     pub pictures: HashSet<PathBuf>,
 }
 
-pub fn read(index: &mut Index, root: &Path, refresh: bool) -> Read {
+/// Hears how a look goes: the folder being read (as `folders` has it), and
+/// how many of the folders in it so far.
+pub type Progress<'a> = &'a dyn Fn(&Path, usize);
+
+/// `progress` hears how many folders have been looked at so far.
+pub fn read(index: &mut Index, root: &Path, refresh: bool, progress: &dyn Fn(usize)) -> Read {
     let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    if refresh && let Err(e) = index.refresh(&root, &Refresh::default()) {
+    let tell = |r: &aizome_index::Report| progress(r.folders);
+    let how = Refresh { progress: Some(&tell), ..Refresh::default() };
+    if refresh && let Err(e) = index.refresh(&root, &how) {
         log::warn!("chanoma: reading {}: {e}", root.display());
     }
     let mut files: Vec<PathBuf> = Vec::new();
@@ -422,54 +456,127 @@ fn art_for(path: &Path, root: &Path, pictures: &HashSet<PathBuf>) -> Option<Path
         d = here.parent();
     }
     for place in places {
-        for ext in ART_EXTENSIONS {
-            let p = place.join(format!("{stem}.{ext}"));
-            if pictures.contains(&p) {
-                return Some(p);
+        // As named, or as Batocera's scraper names its pictures (the box
+        // first).
+        for suffix in ["", "-thumb", "-boxart", "-box", "-cover", "-image"] {
+            for ext in ART_EXTENSIONS {
+                let p = place.join(format!("{stem}{suffix}.{ext}"));
+                if pictures.contains(&p) {
+                    return Some(p);
+                }
             }
         }
     }
     None
 }
 
-/// The games under `folders`, as the index has them (refreshed first
-/// when `refresh`).
-pub fn scan_games(index: &mut Index, folders: &[PathBuf], cores: &Cores, refresh: bool) -> (Vec<Game>, usize) {
+/// Each of `folders` read (refreshed first when `refresh`), with its place
+/// in `folders`: the deepest first, so a file in two (a folder added inside
+/// another) is the nearer one's alone, and keeps the key it had there.
+pub fn read_all(index: &mut Index, folders: &[PathBuf], refresh: bool, progress: Progress) -> Vec<(usize, Read)> {
+    let depth = |p: &PathBuf| p.canonicalize().unwrap_or_else(|_| p.clone()).components().count();
+    let mut order: Vec<usize> = (0..folders.len()).collect();
+    order.sort_by_key(|&i| std::cmp::Reverse(depth(&folders[i])));
+    let mut seen = HashSet::new();
+    order
+        .into_iter()
+        .map(|i| {
+            let mut r = read(index, &folders[i], refresh, &|n| progress(&folders[i], n));
+            r.files.retain(|f| seen.insert(f.clone()));
+            (i, r)
+        })
+        .collect()
+}
+
+/// Whether `path` is in a system's folder under `root` (or `root` is one):
+/// a collection of games, whose videos are its games' clips, not films.
+fn in_system_folder(path: &Path, root: &Path) -> bool {
+    path.ancestors()
+        .skip(1)
+        .take_while(|d| d.starts_with(root))
+        .any(|d| d.file_name().is_some_and(|n| system_named(&n.to_string_lossy()).is_some()))
+}
+
+/// What a disc's sheet may name: its tracks' images, or (a playlist) its
+/// discs' sheets.
+const DISC_PARTS: &[&str] = &["bin", "img", "iso", "chd", "cue", "ccd", "pbp", "ecm", "mdf", "m3u"];
+
+/// The games in folders read, each counted in its folder's `held`.
+fn games_of(reads: &[(usize, Read)], cores: &Cores, held: &mut [Held]) -> (Vec<Game>, usize) {
     let mut games = Vec::new();
     let mut unplayable = 0;
-    for folder in folders {
-        let Read { root, files, pictures } = read(index, folder, refresh);
-        let root = &root;
+    for (i, Read { root, files, pictures }) in reads {
         // A disc's tracks are named by its sheet: they aren't games of
         // their own.
-        let listed: std::collections::HashSet<PathBuf> = files
+        let sheets: Vec<(&PathBuf, Vec<PathBuf>)> = files
             .iter()
             .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("cue") || e.eq_ignore_ascii_case("m3u")))
-            .flat_map(|p| referenced(p))
+            .map(|p| (p, referenced(p)))
             .collect();
+        let listed: HashSet<&Path> = sheets.iter().flat_map(|(_, r)| r.iter().map(PathBuf::as_path)).collect();
+        // What EmulationStation's lists say the games' pictures are.
+        let listed_art: std::collections::HashMap<PathBuf, PathBuf> = files
+            .iter()
+            .filter(|p| p.file_name().is_some_and(|n| n.eq_ignore_ascii_case("gamelist.xml")))
+            .flat_map(|p| crate::art::gamelist(p))
+            .filter(|(_, picture)| pictures.contains(picture))
+            .collect();
+        let mut systems = HashSet::new();
         for path in files {
-            if listed.contains(&path) {
+            if listed.contains(path.as_path()) {
                 continue;
             }
-            let Some(system) = system_of(&path, root) else { continue };
+            let Some(system) = system_of(path, root) else { continue };
+            // A sheet known only by its extension is a disc's if it names
+            // one: an album's names its music, a playlist its videos.
+            if !in_system_folder(path, root)
+                && let Some((_, parts)) = sheets.iter().find(|(s, _)| *s == path)
+                && !parts.iter().any(|p| {
+                    p.extension()
+                        .is_some_and(|e| DISC_PARTS.contains(&e.to_string_lossy().to_ascii_lowercase().as_str()))
+                })
+            {
+                continue;
+            }
             if cores.for_system(system).is_none() {
                 unplayable += 1;
+                held[*i].unplayable += 1;
                 continue;
             }
-            let rel = path.strip_prefix(root).unwrap_or(&path).to_string_lossy().into_owned();
+            held[*i].games += 1;
+            systems.insert(system.id);
+            let rel = path.strip_prefix(root).unwrap_or(path).to_string_lossy().into_owned();
             games.push(Game {
                 key: format!("{}/{}", system.id, rel),
-                title: title_of(&path),
-                art: art_for(&path, root, &pictures),
+                title: title_of(path),
+                art: listed_art.get(path).cloned().or_else(|| art_for(path, root, pictures)),
                 info: None,
-                path,
+                known_as: None,
+                path: path.clone(),
                 system,
             });
         }
+        held[*i].systems = systems.len();
     }
     games.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()).then(a.key.cmp(&b.key)));
     games.dedup_by(|a, b| a.key == b.key);
     (games, unplayable)
+}
+
+/// What each folder read holds, found by `games_of` and `shelves_of`.
+fn held_of(folders: &[PathBuf], reads: &[(usize, Read)]) -> Vec<Held> {
+    let mut held: Vec<Held> = folders.iter().map(|f| Held { folder: f.clone(), ..Held::default() }).collect();
+    for (i, r) in reads {
+        held[*i].here = r.root.is_dir();
+    }
+    held
+}
+
+/// The games under `folders`, as the index has them (refreshed first
+/// when `refresh`).
+pub fn scan_games(index: &mut Index, folders: &[PathBuf], cores: &Cores, refresh: bool) -> (Vec<Game>, usize) {
+    let reads = read_all(index, folders, refresh, &|_, _| {});
+    games_of(&reads, cores, &mut held_of(folders, &reads))
 }
 
 /// A folder of games found on a drive (or at home), for a grown-up to add.
@@ -503,7 +610,7 @@ pub fn find_games(
                 log::warn!("chanoma: looking for games in {}: {e}", path.display());
             }
         }
-        let Read { root, files, .. } = read(index, path, false);
+        let Read { root, files, .. } = read(index, path, false, &|_| {});
         let mut counts: std::collections::BTreeMap<(PathBuf, &'static str), (usize, bool)> = Default::default();
         for f in &files {
             let Some(system) = system_of(f, &root) else { continue };
@@ -561,26 +668,81 @@ fn poster_in(dir: &Path, pictures: &HashSet<PathBuf>) -> Option<PathBuf> {
     None
 }
 
-/// Films and shows under `folders`: a folder of several videos is a show,
-/// a lone video (or a folder of one) a film. As the index has them
-/// (refreshed first when `refresh`).
-pub fn scan_videos(index: &mut Index, folders: &[PathBuf], refresh: bool) -> Vec<Shelf> {
+/// Folders that hold films and shows rather than being one: each video
+/// straight in one is a film of its own.
+const VIDEO_SHELVES: &[&str] = &[
+    "movies",
+    "movie",
+    "films",
+    "film",
+    "videos",
+    "video",
+    "tv",
+    "tvshows",
+    "shows",
+    "series",
+    "cartoons",
+    "anime",
+    "kids",
+    "documentaries",
+    "clips",
+    "media",
+    "downloads",
+    "homevideos",
+];
+
+/// A folder within a show, not a show of its own: a season, a disc,
+/// extras.
+fn within_a_show(name: &str) -> bool {
+    let key = folder_key(name);
+    if ["specials", "extras", "bonus", "featurettes"].contains(&key.as_str()) {
+        return true;
+    }
+    ["season", "series", "disc", "volume", "vol", "s"]
+        .iter()
+        .any(|p| key.strip_prefix(p).is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())))
+}
+
+/// The shelf a video under `root` is on: the folder it's in, past
+/// seasons and discs (a show, or a film in a folder of its own), or
+/// itself (a film), when that folder is `root` or holds films
+/// (`Movies`).
+fn shelf_of(video: &Path, root: &Path) -> PathBuf {
+    let mut dir = video.parent();
+    while let Some(d) = dir {
+        if d == root || !d.starts_with(root) {
+            break;
+        }
+        let name = d.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        if within_a_show(&name) {
+            dir = d.parent();
+            continue;
+        }
+        if VIDEO_SHELVES.contains(&folder_key(&name).as_str()) {
+            break;
+        }
+        return d.to_path_buf();
+    }
+    video.to_path_buf()
+}
+
+/// The films and shows in folders read, each counted in its folder's
+/// `held`. Videos in a collection of games (`roms/snes/videos`) are its
+/// games' clips, and left out.
+fn shelves_of(reads: &[(usize, Read)], held: &mut [Held]) -> Vec<Shelf> {
     let mut shelves: Vec<Shelf> = Vec::new();
-    for folder in folders {
-        let Read { root, files, pictures } = read(index, folder, refresh);
-        let root = &root;
-        let videos: Vec<PathBuf> = files.into_iter().filter(|p| aizome_media::is_video(p)).collect();
-        // Grouped by their folder just under the root.
+    for (i, Read { root, files, pictures }) in reads {
+        let videos = files.iter().filter(|p| aizome_media::is_video(p) && !in_system_folder(p, root)).cloned();
         let mut groups: std::collections::BTreeMap<PathBuf, Vec<PathBuf>> = Default::default();
         for v in videos {
-            let top = v.strip_prefix(root).ok().and_then(|r| r.components().next()).map(|c| root.join(c));
-            let key = match top {
-                Some(t) if t != v => t,
-                _ => v.clone(),
-            };
-            groups.entry(key).or_default().push(v);
+            groups.entry(shelf_of(&v, root)).or_default().push(v);
         }
         for (key, mut vids) in groups {
+            if vids.len() > 1 {
+                held[*i].shows += 1;
+            } else {
+                held[*i].films += 1;
+            }
             vids.sort_by(|a, b| natural(&a.to_string_lossy(), &b.to_string_lossy()));
             // A video by itself at the top is its own key; a folder's aren't.
             let folder = vids[0] != key;
@@ -590,9 +752,9 @@ pub fn scan_videos(index: &mut Index, folders: &[PathBuf], refresh: bool) -> Vec
                 title_of(&key)
             };
             let poster = if folder {
-                poster_in(&key, &pictures).or_else(|| art_for(&vids[0], root, &pictures))
+                poster_in(&key, pictures).or_else(|| art_for(&vids[0], root, pictures))
             } else {
-                art_for(&key, root, &pictures)
+                art_for(&key, root, pictures)
             };
             let several = vids.len() > 1;
             let videos = vids
@@ -602,11 +764,29 @@ pub fn scan_videos(index: &mut Index, folders: &[PathBuf], refresh: bool) -> Vec
                     Video { title: if several { episode_title(&title, &t) } else { t }, path: p.clone() }
                 })
                 .collect();
-            shelves.push(Shelf { title, videos, poster });
+            shelves.push(Shelf { key: key.to_string_lossy().into_owned(), title, videos, poster });
         }
     }
     shelves.sort_by(|a, b| natural(&a.title.to_lowercase(), &b.title.to_lowercase()));
     shelves
+}
+
+/// Films and shows under `folders`: a folder of several videos is a show,
+/// a lone video (or a folder of one) a film. As the index has them
+/// (refreshed first when `refresh`).
+pub fn scan_videos(index: &mut Index, folders: &[PathBuf], refresh: bool) -> Vec<Shelf> {
+    let reads = read_all(index, folders, refresh, &|_, _| {});
+    shelves_of(&reads, &mut held_of(folders, &reads))
+}
+
+/// What each of `folders` holds, counted as [`scan`] counts (refreshed
+/// first when `refresh`).
+pub fn held_in(index: &mut Index, folders: &[PathBuf], cores: &Cores, refresh: bool) -> Vec<Held> {
+    let reads = read_all(index, folders, refresh, &|_, _| {});
+    let mut held = held_of(folders, &reads);
+    games_of(&reads, cores, &mut held);
+    shelves_of(&reads, &mut held);
+    held
 }
 
 /// An episode's name within its show: without the show's name before it,
@@ -682,14 +862,16 @@ pub fn natural(a: &str, b: &str) -> std::cmp::Ordering {
 /// `metadata` (by what's in them too when `refresh`: [`crate::metadata`]).
 pub fn scan(
     index: &mut Index,
-    game_folders: &[PathBuf],
-    video_folders: &[PathBuf],
+    folders: &[PathBuf],
     core_dirs: &[PathBuf],
     metadata: Option<&Path>,
     refresh: bool,
+    progress: Progress,
 ) -> Library {
     let cores = Cores::scan(core_dirs);
-    let (mut games, unplayable) = scan_games(index, game_folders, &cores, refresh);
+    let reads = read_all(index, folders, refresh, progress);
+    let mut held = held_of(folders, &reads);
+    let (mut games, unplayable) = games_of(&reads, &cores, &mut held);
     if let Some(dir) = metadata {
         let began = std::time::Instant::now();
         let (by_name, by_content) = crate::metadata::describe(&mut games, index, dir, refresh);
@@ -699,8 +881,8 @@ pub fn scan(
             began.elapsed()
         );
     }
-    let shelves = scan_videos(index, video_folders, refresh);
-    Library { games, shelves, cores, unplayable }
+    let shelves = shelves_of(&reads, &mut held);
+    Library { games, shelves, cores, unplayable, held }
 }
 
 #[cfg(test)]
@@ -786,7 +968,7 @@ mod tests {
         }
         std::fs::write(games.join("PS1/Disc.cue"), "FILE \"Disc (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n")
             .unwrap();
-        let lib = scan(&mut index(&d), std::slice::from_ref(&games), &[], &[cores_dir], None, true);
+        let lib = scan(&mut index(&d), std::slice::from_ref(&games), &[cores_dir], None, true, &|_, _| {});
         let keys: Vec<&str> = lib.games.iter().map(|g| g.key.as_str()).collect();
         assert_eq!(keys, ["psx/PS1/Disc.cue", "snes/SNES/Kirby (USA).sfc", "gb/GB/Tetris.gb"]);
         assert_eq!(lib.games[1].title, "Kirby");

@@ -10,6 +10,9 @@
 //!   and BIOS files cores ask for (`system/`).
 //! - `$XDG_CACHE_HOME/aizome/chanoma/unzipped/`: the last few zipped games
 //!   played, unpacked for their cores.
+//! - `$XDG_CACHE_HOME/aizome/chanoma/art/`: games' box art fetched from
+//!   libretro-thumbnails, by system (`art/snes/Game (USA).png`), and a
+//!   `.none` beside where one wasn't found.
 //!
 //! Every file is written whole and renamed over the old one.
 
@@ -25,7 +28,8 @@ pub struct Dirs {
     pub data: PathBuf,
     /// The files index Aizome's apps share (`aizome_index`).
     pub index: PathBuf,
-    /// What can be made again: zipped games unpacked (`unzipped/`).
+    /// What can be made again: zipped games unpacked (`unzipped/`), box
+    /// art fetched (`art/`).
     pub cache: PathBuf,
 }
 
@@ -92,6 +96,11 @@ impl Dirs {
 
     pub fn unzipped(&self) -> PathBuf {
         self.cache.join("unzipped")
+    }
+
+    /// Box art fetched, by system.
+    pub fn art(&self) -> PathBuf {
+        self.cache.join("art")
     }
 }
 

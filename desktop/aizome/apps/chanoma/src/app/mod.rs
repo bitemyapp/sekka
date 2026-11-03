@@ -16,7 +16,9 @@
 pub mod grownups;
 pub mod picker;
 pub mod play;
+pub mod reset;
 pub mod rows;
+pub mod search;
 pub mod state;
 pub mod time;
 pub mod typing;
@@ -49,6 +51,10 @@ pub const GAME: aizome_kit::video::VideoId = 1;
 pub const FILM: aizome_kit::video::VideoId = 2;
 /// Pictures kept before those far from the screen go.
 const ART_KEPT: usize = 200;
+/// Box art fetched at once, at most.
+const FETCHING: usize = 4;
+/// How long box art isn't fetched after the server couldn't be reached.
+const OFFLINE_FOR: Duration = Duration::from_secs(120);
 /// Chanoma's films on the desktop's media controls: it opens nothing it's
 /// sent (kids see what grown-ups chose), plays at one speed, and leaving
 /// takes the PIN.
@@ -94,6 +100,8 @@ pub enum Input {
     /// The top face button (Y on an Xbox controller, △, Tab): a screen's
     /// other action (using the folder showing).
     Alt,
+    /// A letter or a mark typed on a keyboard (searching).
+    Typed(char),
 }
 
 #[derive(Clone, Debug)]
@@ -115,6 +123,8 @@ pub enum Msg {
     /// again.
     Scanned(Arc<Library>, bool),
     Art(PathBuf, Option<Image>),
+    /// Box art fetched (or not), and its picture if it was.
+    ArtFetched(PathBuf, crate::art::Fetched, Option<Image>),
     /// A PIN typed was checked: right or not.
     PinChecked(bool),
     /// A new PIN's hash, made off the interface thread.
@@ -128,10 +138,18 @@ pub enum Msg {
     Mpris(aizome_mpris::Action),
     Bluetooth,
     Paired(String, Result<(), String>),
-    /// A folder's folders read, for the picker's reading.
-    Listed(u64, Result<Vec<crate::folders::Entry>, String>),
-    /// What's in the folder the picker shows, found.
-    Found(u64, crate::folders::Found),
+    /// A folder's folders read, and what's directly in it, for the
+    /// picker's reading.
+    Listed(u64, Result<Vec<crate::folders::Entry>, String>, Option<crate::folders::Inside>),
+    /// What the files index already knew of the folder the picker shows.
+    Known(u64, Option<crate::library::Held>),
+    /// The folders that look like a collection, for the picker.
+    Suggested(Vec<crate::folders::Suggestion>),
+    /// The account's password checked, for a forgotten PIN: right or not.
+    SignedIn(bool),
+    /// Looking through a folder: it (as the settings have it), and how many
+    /// of the folders in it so far.
+    Looking(PathBuf, usize),
     /// Looking for games on the drives: where, and how many folders so far.
     Finding(String, usize),
     /// The folders of games found on the drives (`true`: looked again, done).
@@ -168,8 +186,12 @@ pub enum Screen {
     Closed,
     Pairing,
     SetUpPad,
-    /// Choosing a games or videos folder.
+    /// Adding a folder.
     Folders,
+    /// Looking for a game, a film or a show by name.
+    Search,
+    /// Signing in with the computer's account, the PIN forgotten.
+    Reset,
     /// Something went wrong: what.
     Problem(String, String),
 }
@@ -220,6 +242,17 @@ pub enum MenuKind {
     Time,
     /// The controller playing went away.
     NoController,
+    /// A grown-up asked to remove something: asked again.
+    Remove(Removal),
+}
+
+/// What a grown-up may remove from the settings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Removal {
+    /// One of the folders, by its place in them.
+    Folder(usize),
+    /// A website added, by its place.
+    Site(usize),
 }
 
 /// What the program runs with: real devices, or a test's stand-ins.
@@ -238,6 +271,9 @@ pub struct Config {
     pub core_dirs: Vec<PathBuf>,
     /// Where the games' databases are (`$CHANOMA_METADATA`).
     pub metadata: Option<PathBuf>,
+    /// Where box art is fetched (`art::THUMBNAILS`; `$CHANOMA_ART_URL`), if
+    /// anywhere.
+    pub art_url: Option<String>,
     /// SDL's controller database.
     pub database: Option<PathBuf>,
     /// Open full screen.
@@ -249,6 +285,10 @@ pub struct Config {
     pub core_override: Option<crate::retro::ffi::Api>,
     /// Stop tidily when asked by a signal (`signals::block` was called).
     pub signals: bool,
+    /// The computer's account Chanoma runs as (its login name and name),
+    /// and what checks its password, for a forgotten PIN.
+    pub account: (String, String),
+    pub authenticator: std::sync::Arc<dyn aizome_sys::pam::Authenticator>,
     /// Clocks count 24 hours, as the menu bar's does unless it's set to
     /// twelve.
     pub h24: bool,
@@ -271,6 +311,12 @@ impl Config {
             pin_rounds: crate::rules::ROUNDS,
             core_dirs: crate::library::Cores::search_path(),
             metadata: crate::metadata::dir(),
+            art_url: Some(
+                std::env::var("CHANOMA_ART_URL")
+                    .ok()
+                    .filter(|u| !u.is_empty())
+                    .unwrap_or_else(|| crate::art::THUMBNAILS.to_owned()),
+            ),
             database: std::env::var_os("CHANOMA_GAMECONTROLLERDB")
                 .map(PathBuf::from)
                 .or_else(|| std::env::var_os("SDL_GAMECONTROLLERCONFIG_FILE").map(PathBuf::from)),
@@ -278,6 +324,8 @@ impl Config {
             scan: true,
             core_override: None,
             signals: false,
+            account: aizome_sys::pam::current_user(),
+            authenticator: std::sync::Arc::new(aizome_sys::pam::Pam::new("aizome")),
             h24: aizome_config::Settings::load_or_default().menubar_settings().clock == aizome_config::ClockFormat::H24,
             home: std::env::var_os("HOME").map_or_else(|| PathBuf::from("/"), PathBuf::from),
             mounts: {
@@ -359,13 +407,24 @@ pub struct Chanoma {
     pub art: Rc<HashMap<PathBuf, Image>>,
     pub art_rev: u64,
     pub art_asked: HashSet<PathBuf>,
+    /// Box art being fetched, found missing, and when the server last
+    /// couldn't be reached; the agent fetching it.
+    pub art_fetching: HashSet<PathBuf>,
+    pub art_missing: HashSet<PathBuf>,
+    pub art_offline: Option<Instant>,
+    pub art_agent: Option<ureq::Agent>,
     pub sender: Option<MsgSender<Msg>>,
     pub pairing: Option<grownups::Pairing>,
     /// Choosing a folder.
     pub picker: Option<picker::Picker>,
+    pub search: Option<search::Search>,
+    pub reset: Option<reset::Reset>,
     pub setup: Option<grownups::PadSetUp>,
     /// Looking for games on the drives, and what was found.
     pub finding: Option<grownups::Finding>,
+    /// A folder being looked through (as the settings have it), and how
+    /// many of the folders in it so far.
+    pub looking: Option<(PathBuf, usize)>,
     pub site: Option<(WindowKey, String, String)>,
     /// The one-instance socket, served once the program runs.
     pub instance: Option<std::os::unix::net::UnixListener>,
@@ -378,6 +437,7 @@ pub struct Chanoma {
 impl Chanoma {
     pub fn new(config: Config) -> Chanoma {
         let mut settings: Settings = crate::store::read(&config.dirs.settings());
+        settings.merge_folders();
         if !settings.setup_done {
             default_folders(&mut settings);
         }
@@ -436,9 +496,16 @@ impl Chanoma {
             art: Rc::new(HashMap::new()),
             art_rev: 0,
             art_asked: HashSet::new(),
+            art_fetching: HashSet::new(),
+            art_missing: HashSet::new(),
+            art_offline: None,
+            art_agent: None,
             sender: None,
             pairing: None,
             picker: None,
+            search: None,
+            reset: None,
+            looking: None,
             setup: None,
             finding: None,
             site: None,
@@ -555,10 +622,36 @@ impl Chanoma {
             self.art_asked.retain(|k| near.contains(k));
             self.art_rev += 1;
         }
+        let fetched = self.config.dirs.art();
+        let online = self.art_offline.is_none_or(|t| t.elapsed() >= OFFLINE_FOR);
         for p in paths {
-            if self.art.contains_key(&p) || !self.art_asked.insert(p.clone()) {
+            if self.art.contains_key(&p) || self.art_asked.contains(&p) {
                 continue;
             }
+            // Box art not fetched yet: fetched first, a few at a time, then
+            // shown; the rest wait for the next look at what's wanted.
+            if p.starts_with(&fetched) && !p.is_file() {
+                let Some(base) = self.config.art_url.clone() else { continue };
+                if !online || self.art_fetching.len() >= FETCHING {
+                    continue;
+                }
+                self.art_fetching.insert(p.clone());
+                self.art_asked.insert(p.clone());
+                let agent = self.art_agent.get_or_insert_with(crate::art::agent).clone();
+                let h = height.max(160);
+                cx.spawn(move || {
+                    use crate::art::Fetched;
+                    let how = if crate::art::known_missing(&p) {
+                        Fetched::Missing
+                    } else {
+                        crate::art::fetch(&agent, &base, &p)
+                    };
+                    let img = (how == Fetched::Found).then(|| load_picture(&p, h)).flatten();
+                    Msg::ArtFetched(p, how, img)
+                });
+                continue;
+            }
+            self.art_asked.insert(p.clone());
             let path = p.clone();
             cx.spawn(move || Msg::Art(path.clone(), load_picture(&path, height.max(160))));
         }
@@ -780,6 +873,8 @@ impl Chanoma {
             Button::L1 => Some(Input::Prev),
             Button::R1 => Some(Input::Next),
             Button::North => Some(Input::Alt),
+            // Searching, the left face button takes a letter back.
+            Button::West if matches!(self.screen, Screen::Search | Screen::Reset) => Some(Input::Erase),
             _ => None,
         }
     }
@@ -794,6 +889,8 @@ impl Chanoma {
         // Backspace is Back and the space bar OK, but on the PIN pad.
         let i = match i {
             _ if matches!(self.modal, Some(Modal::Pin { .. })) => i,
+            // Searching, Backspace takes a letter back and the space bar types.
+            _ if matches!(self.screen, Screen::Search | Screen::Reset) => i,
             Input::Erase => Input::Back,
             Input::Space => Input::Ok,
             _ => i,
@@ -825,6 +922,8 @@ impl Chanoma {
             Screen::Pairing => self.pairing_input(i, cx),
             Screen::SetUpPad => self.setup_input(i, cx),
             Screen::Folders => self.picker_input(i, cx),
+            Screen::Search => self.search_input(i, cx),
+            Screen::Reset => self.reset_input(i, cx),
             Screen::Problem(..) => {
                 if matches!(i, Input::Ok | Input::Back) {
                     self.go(Screen::Home, cx);
@@ -895,6 +994,18 @@ impl Chanoma {
                 Menu::new("Where did your controller go?", &["Keep playing", "Stop playing"])
                     .with_subtitle("Turn it on again to carry on")
             }
+            // Keeping it comes first: a press too many keeps it.
+            MenuKind::Remove(what) => {
+                let (name, note) = match what {
+                    Removal::Folder(i) => {
+                        (self.settings.folders.get(i).map(|f| self.said(f).0).unwrap_or_default(), "Files stay put")
+                    }
+                    Removal::Site(i) => {
+                        (self.settings.custom_services.get(i).map(|c| c.name.clone()).unwrap_or_default(), "")
+                    }
+                };
+                Menu::new(format!("Remove {name}?"), &["Keep it", "Remove it from Chanoma"]).with_subtitle(note)
+            }
         };
         log::info!("chanoma: the {kind:?} menu");
         self.modal = Some(Modal::Menu { menu, kind });
@@ -960,6 +1071,14 @@ impl Chanoma {
                 self.stop_game(true, cx);
             }
             (MenuKind::Page, 0) => self.close_modal(cx),
+            (MenuKind::Remove(_), 0) => {
+                self.close_modal(cx);
+                self.focus = self.grownups.focus();
+            }
+            (MenuKind::Remove(what), _) => {
+                self.close_modal(cx);
+                self.remove(what, cx);
+            }
             (MenuKind::Film, c) => self.film_menu_chosen(c, cx),
             (MenuKind::Subtitles, c) => self.track_chosen(true, c, cx),
             (MenuKind::Audio, c) => self.track_chosen(false, c, cx),
@@ -1021,6 +1140,7 @@ impl Chanoma {
             },
             Input::Erase => Key::Delete,
             Input::Ok => Key::Done,
+            Input::Menu => Key::Forgot,
             Input::Back => return self.pin_back(cx),
             _ => return,
         };
@@ -1035,6 +1155,8 @@ impl Chanoma {
             self.pin_key(Key::Done, cx);
         } else if b == self.back_button(family) {
             self.pin_back(cx);
+        } else if b == Button::Start {
+            self.pin_key(Key::Forgot, cx);
         } else if ui::pinpad::digit(b).is_some() {
             self.pin_key(Key::Press(b), cx);
         }
@@ -1056,6 +1178,14 @@ impl Chanoma {
 
     pub fn pin_key(&mut self, key: ui::pinpad::Key, cx: &mut Cx<Msg>) {
         use ui::pinpad::Key;
+        // Forgetting is of a PIN asked for, not one being chosen.
+        if key == Key::Forgot {
+            let asked = matches!(&self.modal, Some(Modal::Pin { pin, .. }) if !pin.new) && self.settings.pin.is_some();
+            if asked {
+                self.forgot_pin(cx);
+            }
+            return;
+        }
         let stored_len = self.pin_length();
         let locked = self.lockout.wait(self.now_secs()).is_some();
         let Some(Modal::Pin { pin, .. }) = &mut self.modal else { return };
@@ -1074,7 +1204,7 @@ impl Chanoma {
             Key::Delete => {
                 pin.typed.pop();
             }
-            Key::Done => {}
+            Key::Done | Key::Forgot => {}
         }
         let done = match stored_len {
             Some(n) if !pin.new => pin.typed.len() == n,
@@ -1211,6 +1341,7 @@ impl Chanoma {
             Key::Character(c) if c.len() == 1 && c.as_bytes()[0].is_ascii_digit() => {
                 Input::Digit(c.as_bytes()[0] - b'0')
             }
+            Key::Character(c) if c.chars().count() == 1 => Input::Typed(c.chars().next()?),
             _ => return None,
         })
     }
@@ -1240,6 +1371,7 @@ impl Chanoma {
                 }
                 _ => {}
             },
+            (Target::Outside, false) if self.screen == Screen::Search => self.done_typing(cx),
             // Beside the keyboard over a page: it goes.
             (Target::Outside, false) => self.close_keyboard(cx),
             (Target::Section(i), false) if self.screen == Screen::Folders => self.picker_click(Some(i), None, cx),
@@ -1251,7 +1383,7 @@ impl Chanoma {
             }
             (Target::Item(i), false) => {
                 match self.screen {
-                    Screen::Games | Screen::Episodes(_) => self.focus.col = i,
+                    Screen::Games | Screen::Episodes(_) | Screen::Search => self.focus.col = i,
                     Screen::GrownUps => self.focus = Focus { row: i, col: 1 },
                     _ => self.focus.row = i,
                 }
@@ -1265,6 +1397,8 @@ impl Chanoma {
                 self.grownups.set_focus(self.focus);
                 self.input(Input::Ok, cx);
             }
+            (Target::Key(k), false) if self.screen == Screen::Search => self.search_click_key(k, cx),
+            (Target::Key(k), false) if self.screen == Screen::Reset => self.reset_click_key(k, cx),
             (Target::Key(k), false) => self.keyboard_click(k, cx),
         }
     }
@@ -1321,7 +1455,7 @@ impl Chanoma {
         Chrome { brand: false, ..self.chrome(hints) }
     }
 
-    fn hints(&self, ok: &str, back: Option<&str>) -> Vec<(Button, String)> {
+    pub(crate) fn hints(&self, ok: &str, back: Option<&str>) -> Vec<(Button, String)> {
         let mut h = vec![(self.ok_button(self.family), ok.to_owned())];
         if let Some(b) = back {
             h.push((self.back_button(self.family), b.to_owned()));
@@ -1356,6 +1490,7 @@ impl Chanoma {
                     ok: self.ok_button(family),
                     back: self.back_button(family),
                     done: pin.new || self.pin_length().is_none(),
+                    forgot: !pin.new && self.settings.pin.is_some(),
                 }))
             }
             Some(Modal::Menu { menu, .. }) => Some(Overlay::Menu(menu.clone())),
@@ -1374,6 +1509,10 @@ impl Chanoma {
                     ..t.keys.clone()
                 }))
             }
+            None if self.screen == Screen::Search && self.search.as_ref().is_some_and(|s| s.keys.is_some()) => {
+                self.search_keyboard().map(Overlay::Keyboard)
+            }
+            None if self.screen == Screen::Reset => self.reset_keyboard().map(Overlay::Keyboard),
             None if self.bar_until.is_some() => Some(Overlay::Top(self.top_bar())),
             None => self.toast.as_ref().map(|(t, n, _)| Overlay::Toast(t.clone(), *n)),
         }
@@ -1486,12 +1625,33 @@ impl Chanoma {
             Screen::Home => {
                 let home = self.home_view();
                 let mut hints = self.hints("Open", None);
+                hints.push((Button::North, "Search".into()));
                 if !self.is_grownup() {
                     hints.push((Button::Guide, "Home".into()));
                 }
                 self.stage(self.scene(View::Home(home), Some(self.chrome(hints))))
             }
-            Screen::Games => self.stage(self.scene(View::Grid(self.games_view()), Some(self.chrome_titled(none)))),
+            Screen::Games => {
+                let mut h = none.clone();
+                if self.game_tab_count() > 2 {
+                    h.push((Button::R1, "Next system".into()));
+                }
+                h.push((Button::North, "Search".into()));
+                self.stage(self.scene(View::Grid(self.games_view()), Some(self.chrome_titled(h))))
+            }
+            // The keyboard over the foot: no banner beside it.
+            Screen::Search => {
+                let mut ch = self.chrome_titled(self.search_hints());
+                if self.search.as_ref().is_some_and(|s| s.keys.is_some()) {
+                    ch.banner = None;
+                }
+                self.stage(self.scene(View::Grid(self.search_view()), Some(ch)))
+            }
+            Screen::Reset => {
+                let mut ch = self.chrome_titled(Vec::new());
+                ch.banner = None;
+                self.stage(self.scene(View::SignIn(self.reset_view()), Some(ch)))
+            }
             Screen::Episodes(s) => {
                 let g = self.episodes_view(*s);
                 self.stage(self.scene(View::Grid(g), Some(self.chrome_titled(self.hints("Watch", Some("Back"))))))
@@ -1593,18 +1753,15 @@ impl Chanoma {
     }
 }
 
-/// Before the first setup: the usual folders, where they're there (Videos,
-/// Games or ROMs in the home folder), so a grown-up needn't choose them
-/// with a mouse.
+/// Before the first setup: the usual folders, where they're there (Games
+/// or ROMs, and Videos, in the home folder), so a grown-up needn't choose
+/// them.
 fn default_folders(settings: &mut Settings) {
     let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else { return };
-    if settings.video_folders.is_empty() {
-        settings.video_folders.extend(["Videos"].iter().map(|d| home.join(d)).filter(|p| p.is_dir()));
-    }
-    if settings.game_folders.is_empty() {
-        settings
-            .game_folders
-            .extend(["Games", "ROMs", "roms"].iter().map(|d| home.join(d)).filter(|p| p.is_dir()).take(1));
+    if settings.folders.is_empty() {
+        let games = ["Games", "ROMs", "roms"].iter().map(|d| home.join(d)).find(|p| p.is_dir());
+        let videos = Some(home.join("Videos")).filter(|p| p.is_dir());
+        settings.folders.extend(games.into_iter().chain(videos));
     }
 }
 
@@ -1731,6 +1888,9 @@ impl Program for Chanoma {
             Msg::Tick => self.tick(cx),
             Msg::Scanned(lib, fresh) => {
                 self.library = lib;
+                if fresh {
+                    self.looking = None;
+                }
                 self.reshow();
                 self.scanned |= fresh;
                 self.clamp_home_focus();
@@ -1742,6 +1902,28 @@ impl Program for Chanoma {
                     self.art_rev += 1;
                 }
             }
+            Msg::ArtFetched(path, how, img) => {
+                use crate::art::Fetched;
+                self.art_fetching.remove(&path);
+                match how {
+                    Fetched::Missing => {
+                        self.art_missing.insert(path);
+                    }
+                    Fetched::Unreachable => {
+                        // Asked again once the server may be back.
+                        self.art_offline = Some(Instant::now());
+                        self.art_asked.remove(&path);
+                    }
+                    Fetched::Found => {
+                        if let Some(img) = img {
+                            Rc::make_mut(&mut self.art).insert(path, img);
+                        }
+                    }
+                }
+                self.art_rev += 1;
+                // The next ones wanted.
+                self.want_art(cx);
+            }
             Msg::PinChecked(ok) => self.pin_checked(ok, cx),
             Msg::PinMade(hash) => self.pin_made(hash, cx),
             Msg::Game(e) => self.game_event(e, cx),
@@ -1751,8 +1933,11 @@ impl Program for Chanoma {
             Msg::Mpris(a) => self.on_mpris(a, cx),
             Msg::Bluetooth => self.bluetooth_changed(cx),
             Msg::Paired(device, r) => self.paired(device, r, cx),
-            Msg::Listed(reading, listing) => self.listed(reading, listing),
-            Msg::Found(reading, found) => self.found(reading, found),
+            Msg::Listed(reading, listing, inside) => self.listed(reading, listing, inside),
+            Msg::Known(reading, known) => self.known(reading, known),
+            Msg::Suggested(s) => self.suggested(s, cx),
+            Msg::Looking(folder, n) => self.looking = Some((folder, n)),
+            Msg::SignedIn(ok) => self.signed_in(ok, cx),
             Msg::SiteName(s) => {
                 if let Some(site) = &mut self.site {
                     site.1 = s;
@@ -1856,23 +2041,26 @@ impl Chanoma {
     /// index knows at once, then what's there now (only folders that
     /// changed are read again).
     pub fn rescan(&mut self, cx: &mut Cx<Msg>) {
-        let games = self.settings.game_folders.clone();
-        let videos = self.settings.video_folders.clone();
+        let folders = self.settings.folders.clone();
         let cores = self.config.core_dirs.clone();
         let metadata = self.config.metadata.clone();
         let dirs = self.config.dirs.clone();
-        let scan = move |index: &mut aizome_index::Index, refresh: bool| {
-            Arc::new(crate::library::scan(index, &games, &videos, &cores, metadata.as_deref(), refresh))
+        let scan = move |index: &mut aizome_index::Index, refresh: bool, progress: &dyn Fn(&std::path::Path, usize)| {
+            Arc::new(crate::library::scan(index, &folders, &cores, metadata.as_deref(), refresh, progress))
         };
         match self.sender.clone() {
             Some(tx) => {
                 let _ = std::thread::Builder::new().name("chanoma-scan".into()).spawn(move || {
                     let mut index = dirs.open_index();
-                    tx.send(Msg::Scanned(scan(&mut index, false), false));
-                    tx.send(Msg::Scanned(scan(&mut index, true), true));
+                    tx.send(Msg::Scanned(scan(&mut index, false, &|_, _| {}), false));
+                    // How far each folder's look has got, for the settings.
+                    let tell = |f: &std::path::Path, n| {
+                        tx.send(Msg::Looking(f.to_path_buf(), n));
+                    };
+                    tx.send(Msg::Scanned(scan(&mut index, true, &tell), true));
                 });
             }
-            None => cx.spawn(move || Msg::Scanned(scan(&mut dirs.open_index(), true), true)),
+            None => cx.spawn(move || Msg::Scanned(scan(&mut dirs.open_index(), true, &|_, _| {}), true)),
         }
     }
 

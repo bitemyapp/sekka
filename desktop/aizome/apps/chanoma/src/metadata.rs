@@ -154,12 +154,18 @@ impl Catalog {
         self.names.get(name).filter(|i| !i.is_empty())
     }
 
-    fn by_crc(&self, crc: u32) -> Option<&Info> {
-        self.crcs.get(&crc).and_then(|n| self.by_name(n))
+    /// Whether a game of this name is in the databases, said of or not.
+    fn knows(&self, name: &str) -> bool {
+        self.names.contains_key(name)
     }
 
-    fn by_serial(&self, serial: &str) -> Option<&Info> {
-        self.serials.get(&serial_key(serial)).and_then(|n| self.by_name(n))
+    /// The name of the game with this CRC, or this disc serial.
+    fn name_by_crc(&self, crc: u32) -> Option<&str> {
+        self.crcs.get(&crc).map(String::as_str)
+    }
+
+    fn name_by_serial(&self, serial: &str) -> Option<&str> {
+        self.serials.get(&serial_key(serial)).map(String::as_str)
     }
 }
 
@@ -449,16 +455,23 @@ pub fn describe(games: &mut [Game], index: &Index, dir: &Path, read: bool) -> (u
             continue;
         }
         let stem = g.path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-        if let Some(i) = c.by_name(&stem) {
-            g.info = Some(i.clone());
-            by_name += 1;
+        if c.knows(&stem) {
+            if let Some(i) = c.by_name(&stem) {
+                g.info = Some(i.clone());
+                by_name += 1;
+            }
+            g.known_as = Some(stem);
             continue;
         }
         let Some(ids) = ids(index, &g.path, g.system.id == "psx", read) else { continue };
-        let found = ids.crcs.iter().find_map(|crc| c.by_crc(*crc)).or_else(|| c.by_serial(ids.serial.as_deref()?));
-        if let Some(i) = found {
-            g.info = Some(i.clone());
-            by_content += 1;
+        let name =
+            ids.crcs.iter().find_map(|crc| c.name_by_crc(*crc)).or_else(|| c.name_by_serial(ids.serial.as_deref()?));
+        if let Some(n) = name {
+            if let Some(i) = c.by_name(n) {
+                g.info = Some(i.clone());
+                by_content += 1;
+            }
+            g.known_as = Some(n.to_owned());
         }
     }
     (by_name, by_content)
@@ -565,8 +578,8 @@ pub(crate) mod tests {
         let crash = c.by_name("Crash Bandicoot (USA)").unwrap();
         assert_eq!(crash.summary(), "1996 · Action · 1 player");
         assert_eq!(crash.developer.as_deref(), Some("Naughty Dog"));
-        assert_eq!(c.by_crc(0xab9d_b689).unwrap().summary(), "2 players");
-        assert_eq!(c.by_serial("scus_949.00").unwrap(), crash);
+        assert_eq!(c.by_name(c.name_by_crc(0xab9d_b689).unwrap()).unwrap().summary(), "2 players");
+        assert_eq!(c.name_by_serial("scus_949.00").and_then(|n| c.by_name(n)).unwrap(), crash);
         assert_eq!(c.by_name("Nothing Known (USA)"), None, "named, but nothing said");
         assert!(Catalog::default().add(b"not a database").is_err());
     }

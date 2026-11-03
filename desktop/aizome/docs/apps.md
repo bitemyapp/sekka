@@ -1139,33 +1139,40 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   down from the top of the screen over a game, a film or a page.
 - **Games** play through libretro cores that Chanoma drives itself (the
   emulators RetroArch uses, without its menus): the NES, Super NES, Game
-  Boy, Game Boy Color and Advance, Mega Drive, Master System and Game Gear,
-  PC Engine, PlayStation, Atari 2600 and Lynx, Neo Geo Pocket and
-  WonderSwan. Games are found in the games folders by their system's
-  folder name (`snes`, `Super Nintendo`, `gba`…) or their extension, with
-  box art beside them (`Game.png`, or in `media/`, `boxart/` or
-  libretro-thumbnails' `Named_Boxarts/`). A game's own saves are kept as
-  they change; leaving it keeps exactly where it was, and the next start
-  carries on from there. The picture is enlarged with square pixels and
-  letterboxed to the console's shape; sound plays with short latency;
-  controllers rumble where the game asks. PlayStation games play with
-  OpenBIOS, a free stand-in for the console's own BIOS, which can't be
-  shipped: forty games checked against Sony's started and played alike,
-  some a few seconds slower to load. A BIOS dumped from a grown-up's own
-  console, put in `~/.local/share/aizome/chanoma/system`, comes first.
-  A big collection stays manageable: a whole system turned off with one
-  switch, demos, betas and prototypes left out, and each game shown once,
-  in the household's region's release, read from the tags in No-Intro's
-  and Redump's names. *Find games on your drives* lists the folders of
-  games at home and on every drive plugged in, each a switch. Folders are
-  read through Aizome's shared files index (`docs/files-index.md`), so a
-  second look reads only what changed; a slow drive's first look takes
-  minutes.
-  Games may be zipped, as cartridge sets come, in a folder named for
-  their system. Each game says its year, genre and how many can play
-  (from libretro-database's game databases, installed with Chanoma, found
-  by name or, for a renamed file, by what's in it), and with two
-  controllers on, Home offers the games two can play together.
+  Boy, Game Boy Color and Advance, Mega Drive, Master System and Game
+  Gear, PC Engine, PlayStation, Atari 2600 and Lynx, Neo Geo Pocket and
+  WonderSwan. Games are found in the folders by their system's folder
+  name (`snes`, `Super Nintendo`, `gba`…) or their extension. Each shows
+  its box: one beside it (`Game.png`, Batocera's `Game-thumb.png`, what
+  EmulationStation's `gamelist.xml` names, or in `media/`, `boxart/`,
+  `images/` or libretro-thumbnails' `Named_Boxarts/`), else one fetched
+  from libretro-thumbnails by the name its database knows it by and kept
+  (a switch turns that off), else where it was left, else a sprite of
+  squares in its system's colour made from its title. Y, or typing on a
+  keyboard, on Home or among the games searches the games, films and
+  shows the viewer may open, by the words of their names. A game's own
+  saves are kept as they change; leaving it keeps exactly where it was,
+  and the next start carries on from there. The picture is enlarged with
+  square pixels and letterboxed to the console's shape; sound plays with
+  short latency; controllers rumble where the game asks. PlayStation
+  games play with OpenBIOS, a free stand-in for the console's own BIOS,
+  which can't be shipped: forty games checked against Sony's started and
+  played alike, some a few seconds slower to load. A BIOS dumped from a
+  grown-up's own console, put in `~/.local/share/aizome/chanoma/system`,
+  comes first. A big collection stays manageable: a whole system turned
+  off with one switch, demos, betas and prototypes left out, and each
+  game shown once, in the household's region's release, read from the
+  tags in No-Intro's and Redump's names. *Search every drive for games*
+  lists the folders of games at home and on every drive plugged in, each
+  a switch. Folders are read through Aizome's shared files index
+  (`docs/files-index.md`), so a second look reads only what changed; a
+  slow drive's first look takes minutes, and happens once a folder is
+  added, not while browsing. Games may be zipped, as cartridge sets
+  come, in a folder named for their system. Each game says its year,
+  genre and how many can play (from libretro-database's game databases,
+  installed with Chanoma, found by name or, for a renamed file, by
+  what's in it), and with two controllers on, Home offers the games two
+  can play together.
 - **Services** open full screen in Google Chrome (or Chromium), each in a
   browser profile of its own, so a grown-up signs in once (in grown-up
   mode) and kids never see a sign-in, an address bar or a tab. The controller drives the page: the left stick moves the pointer
@@ -1189,40 +1196,49 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   away; B puts it away too. YouTube's television interface has a keyboard
   of its own, which the arrows work, so Chanoma's doesn't come there. A
   box inside another site's frame on a page (some sign-ins) takes Select.
-- **Films and shows** from the videos folders: a folder of episodes is a
-  show (with its `poster.jpg`), a lone video a film. They play through
-  Utsushi's engine; the confirm button plays and pauses, left and right
-  skip ten seconds, the shoulders go to the previous or next episode, and
-  the next plays by itself. Where each was left is kept, and a film
-  carries on where Utsushi would carry it on. Back is the film's menu:
-  its subtitles (a subtitle file beside it counts) and its language,
-  where it has more than one, chosen there and kept for the show's next
-  episodes and the next time. Subtitles show in large type on a dark
-  band, under the picture where there's room. The media keys and the
-  menu bar's media controls play, pause, skip and stop a film, as they
-  do Utsushi's.
+- **Films and shows** from the folders: a folder of episodes is a show
+  (with its `poster.jpg`, past its seasons' folders), a lone video a
+  film; videos in a system's folder (`roms/snes/videos`) are games'
+  clips, and left out. New ones show to kids at once, unless set to wait
+  for a grown-up; each film and show is a switch for kids. They play
+  through Utsushi's engine; the confirm button plays and pauses, left
+  and right skip ten seconds, the shoulders go to the previous or next
+  episode, and the next plays by itself. Where each was left is kept,
+  and a film carries on where Utsushi would carry it on. Back is the
+  film's menu: its subtitles (a subtitle file beside it counts) and its
+  language, where it has more than one, chosen there and kept for the
+  show's next episodes and the next time. Subtitles show in large type
+  on a dark band, under the picture where there's room. The media keys
+  and the menu bar's media controls play, pause, skip and stop a film,
+  as they do Utsushi's.
 - **Grown-ups** unlock with the PIN, pressed on the controller as a
   console's passcode is: four to eight presses of the arrows, the
   shoulders and the top and left face buttons. Each press shows as the
   same dot and nothing lights, so a kid watching sees that a button went
   but not which; the no button takes the last press back. A PIN is the
   buttons' places, so it's the same presses on any controller (Xbox's Y
-  is Nintendo's X: the pad marks where each is). Each button in the legend
-  is numbered 1 to 8, and on a keyboard those digits press them, as do
-  the arrows, Page Up and Down, Tab and Space. Three wrong ones are free,
-  then the pad waits, longer each time, and a restart doesn't reset that.
-  In grown-up mode everything shows, nothing counts against today's time,
-  and the settings open: limits for weekdays and for
-  the weekend, bedtime and waking, more time today; which services kids
-  see; games folders, which games show, and which kids may play, a system
-  at a time (new ones wait for a grown-up's say, unless set to show at
-  once); videos folders (chosen with the controller in a picker of Chanoma's own: places down the left,
-  drives plugged in among them; a folder's folders on the right, each
-  saying what's in it; and how many games, films and shows Chanoma would
-  find in the one showing); pairing
-  controllers and setting up the buttons of one Chanoma doesn't know; the
-  PIN; leaving Chanoma. Grown-up mode locks itself after a while untouched
-  (never in the middle of a film or game).
+  is Nintendo's X: the pad marks where each is). Each button in the
+  legend is numbered 1 to 8, and on a keyboard those digits press them,
+  as do the arrows, Page Up and Down, Tab and Space. Three wrong ones
+  are free, then the pad waits, longer each time, and a restart doesn't
+  reset that. A forgotten PIN is chosen again after signing in with the
+  password of the computer's account (*Forgot it?* on the pad, Start).
+  In grown-up mode everything shows, nothing counts against today's
+  time, and the settings open: limits for weekdays and for the weekend,
+  bedtime and waking, more time today; which services kids see; which
+  games show, and which kids may play, a system at a time (new ones wait
+  for a grown-up's say, unless set to show at once); the folders, one
+  list for games, films and shows, each saying what it holds, how far a
+  look through it has got, or that its drive is out (a folder is added
+  with the controller in a picker of Chanoma's own: it opens on
+  *Suggested*, the folders that look like a collection, a drive's `roms`
+  or a `Movies`, found from the top two levels of home and each drive,
+  so a drive just plugged in answers at once; or any folder is browsed
+  to, places down the left and a folder's folders on the right, each
+  saying what's directly in it); pairing controllers and setting up the
+  buttons of one Chanoma doesn't know; the PIN; leaving Chanoma.
+  Grown-up mode locks itself after a while untouched (never in the
+  middle of a film or game).
 - **Time** counts only while something plays. Five minutes before the
   end, and one, a note says so. At the end the game is kept where it was
   left and the service or film closed, and a friendly screen says that's

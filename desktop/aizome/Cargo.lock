@@ -81,9 +81,11 @@ dependencies = [
  "log",
  "miniz_oxide 0.8.9",
  "pipewire",
+ "roxmltree 0.21.1",
  "serde",
  "serde_json",
  "sha2",
+ "ureq",
 ]
 
 [[package]]

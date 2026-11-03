@@ -221,19 +221,34 @@ pub struct Settings {
     /// The services kids see, by id, in order.
     pub services: Vec<String>,
     pub custom_services: Vec<CustomService>,
+    /// The folders Chanoma looks through, for games, films and shows
+    /// alike, each to any depth.
+    pub folders: Vec<PathBuf>,
+    /// Games and videos folders, as they were kept apart before: read, and
+    /// moved into `folders` ([`Settings::merge_folders`]).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub game_folders: Vec<PathBuf>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub video_folders: Vec<PathBuf>,
     /// Games kids may play, by key (`games::Game::key`).
     pub games_allowed: BTreeSet<String>,
     /// Games kept from kids even when new games are allowed.
     pub games_hidden: BTreeSet<String>,
     pub new_games: NewGames,
+    /// Films and shows kids may watch, and those kept from them, by key
+    /// (`library::Shelf::key`); new ones show at once unless set to wait.
+    pub films_allowed: BTreeSet<String>,
+    pub films_hidden: BTreeSet<String>,
+    pub new_films: NewGames,
     /// Systems whose games don't show at all, by id (`library::System`).
     pub systems_off: BTreeSet<String>,
     /// Demos, betas, prototypes, bad dumps and hacks left out.
     pub hide_variants: bool,
     /// A game's regions and revisions shown as one ([`crate::collection`]).
     pub one_of_each: bool,
+    /// Games' box art fetched from libretro-thumbnails where none is
+    /// beside them.
+    pub fetch_art: bool,
     /// Which region's comes first.
     pub region: crate::collection::Region,
     pub limits: Limits,
@@ -253,14 +268,19 @@ impl Default for Settings {
             pin_length: None,
             services: vec!["pbs-kids".into(), "youtube-kids".into()],
             custom_services: Vec::new(),
+            folders: Vec::new(),
             game_folders: Vec::new(),
             video_folders: Vec::new(),
             games_allowed: BTreeSet::new(),
             games_hidden: BTreeSet::new(),
             new_games: NewGames::Ask,
+            films_allowed: BTreeSet::new(),
+            films_hidden: BTreeSet::new(),
+            new_films: NewGames::Allow,
             systems_off: BTreeSet::new(),
             hide_variants: true,
             one_of_each: true,
+            fetch_art: true,
             region: crate::collection::Region::Auto,
             limits: Limits::default(),
             relock_minutes: 15,
@@ -272,6 +292,16 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// Games and videos folders kept apart, as settings written before were,
+    /// moved into `folders`, each once.
+    pub fn merge_folders(&mut self) {
+        for f in self.game_folders.drain(..).chain(self.video_folders.drain(..)) {
+            if !self.folders.contains(&f) {
+                self.folders.push(f);
+            }
+        }
+    }
+
     /// Whether kids may play the game keyed `key`.
     pub fn game_allowed(&self, key: &str) -> bool {
         !self.games_hidden.contains(key) && (self.games_allowed.contains(key) || self.new_games == NewGames::Allow)
@@ -280,6 +310,16 @@ impl Settings {
     /// Whether the game keyed `key` waits for a grown-up's say.
     pub fn game_waiting(&self, key: &str) -> bool {
         self.new_games == NewGames::Ask && !self.games_allowed.contains(key) && !self.games_hidden.contains(key)
+    }
+
+    /// Whether kids may watch the film or show keyed `key`.
+    pub fn film_allowed(&self, key: &str) -> bool {
+        !self.films_hidden.contains(key) && (self.films_allowed.contains(key) || self.new_films == NewGames::Allow)
+    }
+
+    /// Whether the film or show keyed `key` waits for a grown-up's say.
+    pub fn film_waiting(&self, key: &str) -> bool {
+        self.new_films == NewGames::Ask && !self.films_allowed.contains(key) && !self.films_hidden.contains(key)
     }
 }
 

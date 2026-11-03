@@ -46,9 +46,10 @@ explicitly (and Chanoma also looks in NixOS's profiles).
 | `devtools.rs` | Services kept to their sites, and Chanoma's keyboard asking and typing on their pages, over the browser's DevTools pipe |
 | `services.rs` | The services, the sites each one's pages may go to, and which need Chanoma's keyboard |
 | `rules.rs` | The PIN, wrong-PIN lockout, what kids may open, daily limits, bedtime, grants |
-| `library.rs` | Systems, cores, games and videos found in folders |
-| `folders.rs` | Choosing a folder: the places to start from, a folder's folders and what's in each, what Chanoma would find in one |
-| `app/` | The program: screens, input, home shelves, playing, settings, time |
+| `library.rs` | Systems, cores, games and videos found in the folders, each read once, and what each holds |
+| `folders.rs` | Adding a folder: the places to start from, the folders that look like a collection, a folder's folders and what's directly in each, what the files index knows of one |
+| `art.rs` | Games' pictures beyond those beside them: what `gamelist.xml` names, and box art fetched from libretro-thumbnails and kept |
+| `app/` | The program: screens, input, home shelves, playing, settings, time, search, a forgotten PIN |
 | `ui/` | What's drawn: a 1920 × 1080 stage scaled to the screen |
 
 ### The look
@@ -145,6 +146,12 @@ pausing, saving and leaving are Chanoma's.
   Vulkan don't run (Nintendo 64, Dreamcast and later; the PlayStation
   plays through PCSX-ReARMed's software renderer).
   Logging is declined too (a C varargs callback).
+- **The callbacks** go in libretro's order: the environment before
+  `retro_init`, the rest after it, before the game loads. Given before,
+  Mesen (the NES's core) reached for its renderer, which `retro_init`
+  makes, and crashed Chanoma with it: every NES game left a black screen
+  (found in `docs/chanoma-user-review.md`). The tests' core loses a
+  callback given before `retro_init`, as Mesen does.
 - **The PlayStation's BIOS**: Sony's can't be shipped, so the module
   offers OpenBIOS (`nix/openbios.nix`), PCSX-Redux's free replacement
   (MIT, from its `nugget` repository), built from source with Nixpkgs'
@@ -319,6 +326,13 @@ Chanoma and Utsushi agree:
 - **Where a show starts.** A show's episodes start at the first one not
   `finished`.
 
+**Which ones kids see** (*Films and shows* in the settings): new ones
+show at once unless set to wait for a grown-up (`new_films`); each film
+and show is a switch, and all of them are, at once. Set to wait, what
+kids could watch stays theirs (`films_allowed`). Kids' Home, *Everything*
+and *Keep playing* hold only theirs. A film or show is known by its
+folder, or its file (`Shelf::key`).
+
 **Subtitles and languages.** The engine lists a film's sound and subtitle
 tracks: embedded ones, and subtitle files beside it (`film.srt`,
 `film.en.srt`). It picks the defaults: a track marked default or forced,
@@ -391,53 +405,117 @@ time up to 15 minutes, and the count is kept in `lockout.json`. This keeps
 out kids with a controller; it can't resist someone who can run code as
 the TV's user (who can read the hash, or `aizome-chanoma --reset-pin`).
 
+**Forgot it?** (Start on the pad, when the PIN is asked for) signs in
+with the password of the computer's account Chanoma runs as
+(`app/reset.rs`), typed on Chanoma's keyboard (dots in its box) or a
+real one, and checked through PAM: `aizome_sys::pam`, the lock screen's
+service `aizome`, moved from the shell to `aizome-sys` (its `pam`
+feature) to be shared. Right, it's grown-up mode and a new PIN to
+choose; wrong, it counts with wrong PINs. It's that account because PAM
+without privileges checks no other's password. Every Sekka account is a
+full one so far; once kids have accounts of their own, theirs mustn't
+reset the PIN this way, and `app/reset.rs` is where to say so.
+
 Time counts while a game, a service or a film is open in kids' mode,
 into `usage.json` (written every 30 seconds while it counts). The gate
 is open with the least of today's limit (plus grants) and the time until
 bedtime left. A grant tops today up from what's been used, so a grant
 after time ran out is all play, and lifts bedtime that long.
 
-### Choosing folders
+### Folders
 
-The kit's file panel wants a pointer and a keyboard, so the settings'
-*Add a games folder* and *Add a videos folder* (and Home's *Add games*)
-open a picker of Chanoma's own (`folders.rs`, `app/picker.rs`,
-`ui/picker.rs`), laid out as the settings are:
+Chanoma looks through one list of folders for everything it shows,
+games, films and shows alike, each to any depth (`Settings::folders`;
+settings written before kept games and videos folders apart, and are
+merged as they're read). *Settings › Folders* lists them, each with
+where it is ("On Extreme Pro", "In your home folder", said the same
+while its drive is out) and what it holds ("6509 games for 31 systems ·
+2 films"), how far a look through it has got ("Looking through it: 1204
+folders so far", from the files index's progress), or that its drive
+isn't plugged in. A folder opens a page to look again or remove it
+(which asks first, *Keep it* ready to press, as removing a website does;
+nothing on the disk is deleted). Games and Films and shows have *Your
+folders* and *Add a folder…* too.
 
+*Add a folder…*, and Home's *Add games*, open a picker of Chanoma's own
+(`folders.rs`, `app/picker.rs`, `ui/picker.rs`), as the kit's file panel
+wants a pointer and a keyboard. It's laid out as the settings are:
+
+- **Suggested** comes first: the folders that look like a collection,
+  each added with one press (right looks inside it first). Home's
+  folders, and each drive and the folders at its top, are listed once
+  each. A folder with folders named for systems (`snes`, `Super
+  Nintendo`), or three games of its own, or named for games (`roms`,
+  `Games`) with either, is games; one with three videos, or named for
+  them (`Movies`, `TV`) with videos in it or in its folders, is films and
+  shows. A folder named for games with neither is looked into a level
+  deeper (`Emulation/roms`, Batocera's `share/roms`). That's two or
+  three levels, never a whole drive, so a cold USB drive answers in a
+  moment where reading all of it takes minutes. The most systems come
+  first; folders already looked through aren't offered. With nothing to
+  offer, and nothing pressed yet, it goes to home.
 - **Places** down the left: home, the usual folders in it that exist
   (`Games`, `ROMs`, `Videos`, `Movies`, `Downloads`), each drive under
   `/run/media/$USER`, `/media/$USER`, `/media` and `/mnt`, and the whole
   computer. An empty folder there is a drive's mount point while it's
   out, and is left out. The places are read again every second while the
-  picker shows, so a stick plugged in appears. A drive pulled out from
-  under the folder showing goes back home.
+  picker shows, so a stick plugged in appears, and *Suggested* is looked
+  for again. A drive pulled out from under the folder showing goes back
+  home.
 - **The list** on the right: where the folder is, in words ("Home ›
-  ROMs › snes"); then the choice, *Use this folder*, with what Chanoma
-  would find there; then the folder's own folders, hidden ones left out,
-  in natural order, each with a word on what's directly in it ("12 games
-  · 3 folders").
-- **What's found** is the library's own reading (`scan_games` or
-  `scan_videos`, through the files index, below), so the
-  count is what Home will show, cores included ("38 games for 4 systems,
-  and 2 without an emulator").
+  ROMs › snes"); then the choice, *Add this folder*, with what's directly
+  in it ("Folders for 31 systems: Game Boy, Genesis, NES…") or what the
+  files index knows is in it as of its last look, or else that it's one
+  of the folders already, or inside one; then the folder's own folders,
+  hidden ones left out, in natural order, each with a word on what's
+  directly in it ("12 games · 3 folders"), *Added* on those looked
+  through already.
+- **Browsing reads no deeper than a folder's folders**: one listing for
+  the folder showing, and one for each of its folders (not in a folder of
+  more than 400). A folder is looked through to the bottom once it's
+  added, in the background, and nothing goes into the files index for a
+  folder passed by. Before, the choice counted what Chanoma would find,
+  which read all of a drive just to show its top.
+- **Adding** a folder inside one already is refused, with a toast saying
+  which holds it. One holding some already is added beside them, and a
+  file in both is the nearer folder's (`library::read_all` reads the
+  deepest first), so its games keep their keys, and with them what kids
+  may play and where they were left.
 - **Off the interface thread:** folders are read there, one reading per
   folder shown. Each answer carries its reading's number, and an older
-  one is dropped. A folder of more than 400 folders isn't looked into
-  folder by folder.
+  one is dropped.
 
 The controller:
 
-| Button | In the list | Among the places |
-|---|---|---|
-| Up, down | move | move (the list follows) |
-| Confirm, right | open the folder (the first row: use this one) | into the list |
-| Back | up a folder, the focus on the one left (from `/`, to the places) | put the picker away |
-| Left | to the places | |
-| Top face button (Y, △; Tab) or Start | use the folder showing | use the folder showing |
-| Shoulders | a page up or down | |
+| Button | In the list | Among the suggestions | Among the places |
+|---|---|---|---|
+| Up, down | move | move | move (the list follows) |
+| Confirm | open the folder (the first row: add this one) | add it | into the list |
+| Right | open the folder | look inside it | into the list |
+| Back | up a folder, the focus on the one left (from `/`, to the places) | to the places | put the picker away |
+| Left | to the places | to the places | |
+| Top face button (Y, △; Tab) or Start | add the folder showing | add it | add what's showing |
+| Shoulders | a page up or down | a page up or down | |
 
-Choosing returns to the settings with the focus on *Add a … folder*, not
-on the folder just added, so pressing again doesn't remove it.
+Adding goes back where the picker was opened, the focus on *Add a
+folder…*, so pressing again adds another; from Home's, to Home.
+
+What's found in a folder, whatever was added:
+
+- **Games** by their system's folder (`snes`) or their extension. A cue
+  sheet or playlist known only by its extension (not in a system's
+  folder) is a game's only if it names a disc image (`.bin`, `.chd`…),
+  not an album's music or a playlist of videos.
+- **Films and shows**, but not videos in a system's folder
+  (`roms/snes/videos`, as ES-DE scrapes them): those are games' clips. A
+  video's shelf is the folder it's in, past seasons, discs and extras
+  (`Season 1`, `S02`, `Disc 2`, `Extras`): several videos make a show,
+  one a film in a folder of its own. A video straight in the folder
+  added, or in one named for films and shows (`Movies`, `TV`, `Kids`), is
+  a film of its own.
+- **Each folder is read once** for both, from the files index
+  (`library::read_all`), counted per folder for the settings
+  (`library::Held`).
 
 ### A big collection
 
@@ -446,7 +524,7 @@ drive beside its backups. Games' settings handle that a system at a time
 (`collection.rs`, `app/grownups.rs`):
 
 - **Read through the files index** (`aizome-index`,
-  `docs/files-index.md`): games and videos folders are read to any depth,
+  `docs/files-index.md`): the folders are read to any depth,
   with no limit on files (before, five folders deep and 20,000 files,
   which on a drive whose backups come first alphabetically found only the
   backups). Home shows what the index knew at once, then looks again in
@@ -464,17 +542,17 @@ drive beside its backups. Games' settings handle that a system at a time
   extensions, else the largest. Stored and deflated files are read, the
   CRC checked; the eight played last stay unpacked. Saves and states go
   by the game's key, the zip's path, as for any game.
-- **Find games on your drives…** looks through home and each drive
-  plugged in (the picker's places) and lists the folders of games it
-  finds, by place and system, each with how many and where ("2 games in
-  roms › snes"). It shows what the index knew first, then each place as
-  it's read, with how many folders so far. A system's games count at the
-  nearest folder named for it (`roms/psx`, where each disc has a folder of
-  its own); others at their own folder if it holds three or more, so a
-  stray `.bin` in a backup isn't a collection. Each is a switch: on adds
-  it as a games folder, off takes it away. Files are counted by name, so
-  a disc both in a playlist and on its own counts twice here (not on
-  Home).
+- **Search every drive for games…** (in Folders) looks through home and
+  each drive plugged in (the picker's places) and lists the folders of
+  games it finds, by place and system, each with how many and where ("2
+  games in roms › snes"). It shows what the index knew first, then each
+  place as it's read, with how many folders so far. A system's games
+  count at the nearest folder named for it (`roms/psx`, where each disc
+  has a folder of its own); others at their own folder if it holds three
+  or more, so a stray `.bin` in a backup isn't a collection. Each is a
+  switch: on adds it as a folder, off takes it away. Files are counted
+  by name, so a disc both in a playlist and on its own counts twice here
+  (not on Home).
 - **Which games show**, before kids' rules, from the tags No-Intro's and
   Redump's names carry (`(USA)`, `(Rev 1)`, `(Beta)`, `[!]`), so a
   well-named set needs no database:
@@ -543,6 +621,47 @@ Ratings aren't used: libretro-database's are ESRB's, and few (6 of the
 PlayStation's 13,512 entries have one); there's no openly licensed source
 of review scores.
 
+### Pictures
+
+A game's tile shows the first of these there is:
+
+- **Its box beside it**: what its folder's `gamelist.xml` names
+  (EmulationStation's and Batocera's: its `thumbnail`, else its `image`,
+  else its `marquee`); else a picture named as it is (`Game.png`), or as
+  Batocera's scraper names them (`Game-thumb.png`, `-boxart`, `-box`,
+  `-cover`, `-image`), in its folder or a pictures folder beside it
+  (`media/`, `boxart/`, `images/`, `covers/`, libretro-thumbnails'
+  `Named_Boxarts/`). Only pictures the files index already has are
+  looked for.
+- **Its box from libretro-thumbnails** (`art.rs`), as RetroArch fetches
+  it: by the name its database knows it by (`Game::known_as`, found by
+  its name, CRC or disc serial, so a renamed game's too), from
+  `thumbnails.libretro.com/<database>/Named_Boxarts/<name>.png`, as its
+  tile comes near the screen, four at a time, and kept in
+  `$XDG_CACHE_HOME/aizome/chanoma/art/<system>/`. One that isn't there
+  leaves a `.none` beside where it would be, and isn't asked for again
+  for a week; with the server out of reach, none is asked for two
+  minutes. *Box art from the internet* in Games turns this off.
+- **Where it was left**, for a game played before.
+- **Its sprite**: eight by eight squares, mirrored as an invader is, in
+  its system's colour and a lighter one, made from its title, so a
+  game's releases share it and a kid can know it again without reading.
+  The system's name beside it gives way to its initials (GBA) where the
+  name and the corner's *New* don't both fit.
+
+### Search
+
+Y (the top face button, Tab) on Home or among the games opens search
+(`app/search.rs`), as does typing on a keyboard there: the games and the
+films and shows whoever's watching may open (kids, theirs alone), by
+name. Each word typed must start a word of the name or of its system's
+names (`snes mario`), or, three letters and more, be inside the name;
+accents go as typed (`pokemon` finds Pokémon). The name starting so comes
+first. Results change with each letter, above Chanoma's keyboard (on the
+controller: X takes a letter back, Y types a space); Start or Back puts
+the keyboard away to go through them, up from their first line brings
+it back, and Back from them goes back where search was opened.
+
 ## Checking it
 
 ```sh
@@ -586,11 +705,17 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   sink enlarged, the controller reaching the core, pausing under the Home
   menu, its state and picture kept, *Keep playing*, carrying on); time
   running out mid-game, with the warning, the game kept, the closed
-  screen, and a grown-up's grant; bedtime; a games folder chosen with the
-  controller alone (the places, a folder's folders with what's in each,
-  what Chanoma finds there, up again to the folder left, a drive among
-  the places, the top button using it, the settings back on *Add a games
-  folder*, the new game read, and the picker put away unchanged); the way
+  screen, and a grown-up's grant; bedtime; a folder added with the
+  controller alone (*Suggested* offering a drive's `roms` and home's
+  `ROMs`, the drive's first; one press adding it, the settings back on
+  *Add a folder…*, then its games and its film read but not its game's
+  clip, and its row saying so; offered no more; the places, a folder's
+  folders with what's directly in each, up again to the folder left, a
+  drive among the places with its folder marked *Added*, that folder and
+  one inside it not added again, and the picker put away unchanged; its
+  game's box named by the folder's `gamelist.xml`; its page's *Remove
+  roms* asking first, *Keep it* keeping it and *Remove it from Chanoma*
+  removing it); the way
   home without a controller, over a game (Esc, a click beside the menu,
   the bar the pointer brings and its *Home*, a click on the picture) and
   over a page, with a stand-in browser (the *Home* hint clicked, Esc, the
@@ -609,19 +734,32 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   file says; the film's menu offering them and no language for one sound
   track; the subtitles' menu on the track showing, Back to the film's
   menu, Off; kept, and the film opening again without them; the media
-  controls' play and stop). A big collection: a No-Intro-named set on a
-  games folder and a drive plugged in beside a backup, one of each game
+  controls' play and stop). A big collection: a No-Intro-named set in a
+  folder and a drive plugged in beside a backup, one of each game
   shown (no beta, no BIOS), the Systems page turning the Game Boy off with
   one switch, every region and then the beta shown and hidden again, a
   system's games all let in for kids and all kept out, the shoulders
-  jumping a letter, and *Find games on your drives* listing the drive's
+  jumping a letter, and *Search every drive for games*, reached from
+  Games' *Your folders*, listing the drive's
   SNES folder where it's named (not the backup's stray `.bin`) and adding
   it, its games joining one of each. What the databases know: a zipped
   game and a renamed one (found by its CRC) beside one found by name,
   each saying its year, genre and players; a second controller bringing
   *For 2 players* before Games with the focus kept on Games, the zipped
   game playing through the stand-in core from its unpacked file, and the
-  shelf going with the controller. The unit tests add where clicks land:
+  shelf going with the controller. A forgotten PIN chosen again with the
+  account's password (a stand-in for PAM): *Forgot it?* on Start, the
+  account named, a wrong password said and counted and not kept, the
+  right one typed on a keyboard with a slip taken back with X, then a
+  new PIN. Films and shows kept from kids one by one: a film switched
+  off, new ones set to wait, a film added waiting with *New*, and kids'
+  Home showing the show alone. Search: a kid typing at Home finding only
+  a film of theirs (not a game kept from them), Back and Back again; a
+  grown-up with the controller, Y opening it, A typing the keyboard's
+  first key, X taking it back, a name's words and its system's, Start
+  putting the keyboard away and up bringing it back. The test's core
+  loses a callback given before `retro_init`, as Mesen did, so the order
+  is checked by every game played. The unit tests add where clicks land:
   the hints, the bar's *Home* in a 16:10 window, beside a menu; the
   names' tags (regions, revisions, variants, a BIOS, discs and modes kept
   apart, dates) and the region a language puts first; Mac resource forks
@@ -629,7 +767,14 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   their CRC (a damaged one refused), unpacked, and the oldest cleared; a
   database is read and games found in it by name, CRC and serial; a disc
   image (written by the test) says its serial, from a cue sheet and a
-  playlist.
+  playlist. Folders say what's directly in them, and *Suggested* finds a
+  drive's `roms`, home's `Emulation/roms` and `Movies` (not a backup's
+  games, deeper); box art's names and addresses are libretro-thumbnails',
+  and one is fetched from a server of the test's own (found in the second
+  of two databases), a miss marked and an unreachable server not;
+  `gamelist.xml` says each game's picture, its box first; search ranks
+  a name's start, its words' starts and the system's names, accents as
+  typed; the PIN pad's foot holds *Forgot it?*.
 - **Real cores** (`tests/cores.rs`, opt-in): every system's cores from
   nixpkgs load and list the extensions Chanoma sends them; gambatte,
   SameBoy and mGBA play a Game Boy game the test writes, whose screen
@@ -742,6 +887,16 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   read, the second in 0.4 s. Before hidden files were left out, the same
   drive showed 201 Mac resource forks (`._Game.sfc`) as games.
 
+- **A test TV** (2026-11-02, on the X1 Carbon: a release build on a
+  headless Aizome compositor of its own, with a library of stand-ins named
+  from libretro-database and freely licensed homebrew games): the NES's
+  240p Test Suite starting in Mesen with the callbacks in order, where
+  before every NES game crashed Chanoma; box art fetched from
+  libretro-thumbnails for the stand-ins the databases know, sprites for
+  the rest; search finding 13 games for `zelda`, their boxes fetched as
+  they showed. Two end users' reviews of the build before are in
+  `docs/chanoma-user-review.md`.
+
 Not yet checked: a physical controller (Bluetooth pairing, and the
 mappings of real pads: Xbox, PlayStation, Switch Pro, 8BitDo), the
 Bluetooth pairing screen against BlueZ, DRM services (Netflix and the
@@ -750,6 +905,18 @@ before calling any of it tested on hardware.
 
 ## Limits
 
+- Box art is fetched by each game's name from thumbnails.libretro.com,
+  a server of the libretro project's, as its tile shows: it hears which
+  games are on the TV. *Box art from the internet* in Games turns that
+  off. A game the databases don't know has no name to fetch by, and shows
+  its sprite.
+- Search goes by names alone (not genres, years or players), and finds
+  only the games that show (one of each, no variants, systems on).
+- A forgotten PIN is reset with the password of the account Chanoma runs
+  as, and no other: PAM without privileges checks no other account's.
+  Sekka has no kids' accounts yet to keep from doing it.
+- Chanoma's keyboard says the shoulders move the caret, which they do
+  over a page, but not in search or signing in.
 - The services' sites come from their addresses followed signed out.
   Signed in, a service may pass through a site that isn't on its list,
   which would show as *That's outside …* where it shouldn't (until it's
@@ -799,13 +966,15 @@ before calling any of it tested on hardware.
 - *For N players* trusts the databases' player counts, which give the
   most a game takes (simultaneous or taking turns isn't said), and the
   controllers connected, not who's holding them.
-- *Find games on your drives* reads every folder of home and each drive
-  each time it's asked; a drive just plugged in takes minutes on a slow
-  USB stick or exFAT drive (`docs/files-index.md`), showing what it
-  found as it goes. Nothing finds games by itself when a drive appears.
+- *Search every drive for games* reads every folder of home and each
+  drive each time it's asked; a drive just plugged in takes minutes on a
+  slow USB stick or exFAT drive (`docs/files-index.md`), showing what it
+  found as it goes. *Suggested* reads two or three levels instead, so it
+  misses a collection deeper than that under a folder not named for
+  games. Nothing looks by itself when a drive appears.
 - Adding a website needs a keyboard and a mouse: its address is typed
   in a dialog of the kit's, where Chanoma's keyboard doesn't come.
-  Choosing folders doesn't: see Choosing folders above.
+  Adding folders doesn't: see Folders above.
 - Subtitles lose ASS styling (italics and top placement are kept), as in
   Utsushi. A subtitle file beside a film with no language in its name is
   called *Track 1*. There's no household language to start every film
