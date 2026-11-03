@@ -1,0 +1,15 @@
+[package]
+name = "aizome-mime"
+description = "Shared desktop file identification, MIME relationships and chooser patterns through GIO"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+gio = { version = "0.22", features = ["v2_60"] }
+glob = "0.3"
+
+[dev-dependencies]
+tempfile = "3"

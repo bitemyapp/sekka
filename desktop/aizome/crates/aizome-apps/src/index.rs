@@ -167,7 +167,8 @@ impl AppIndex {
             };
             self.by_id.insert(entry.id.clone(), index);
             for mime in &entry.mime_types {
-                let list = self.by_mime.entry(mime.to_ascii_lowercase()).or_default();
+                let mime = aizome_mime::MimeDb::get().canonical(mime).to_string();
+                let list = self.by_mime.entry(mime).or_default();
                 if !list.contains(&index) {
                     list.push(index);
                 }
@@ -245,6 +246,10 @@ impl AppIndex {
     /// Entries whose `MimeType` lists `mime` (lowercase).
     pub(crate) fn listing_mime(&self, mime: &str) -> &[usize] {
         self.by_mime.get(mime).map(Vec::as_slice).unwrap_or(&[])
+    }
+
+    pub(crate) fn listed_mime_types(&self) -> impl Iterator<Item = &str> {
+        self.by_mime.keys().map(String::as_str)
     }
 
     /// The directories and desktop names the index reads.

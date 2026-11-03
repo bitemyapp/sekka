@@ -1425,6 +1425,42 @@ nix develop .#aizome
 nix build .#aizome-checks.session -L
 ```
 
+File identification is shared through `crates/aizome-mime`, using the `gio`
+crate and GLib/GIO's shared-mime-info database. The development shell and
+package checks supply that database; the session module installs it. Hako
+uses name-only guesses for listings and resolves content on a worker before
+opening or previewing a file. Sumi's recent-file types, Utsushi's folder
+filtering, and portal MIME filters use the same API. Chooser globs use the
+`glob` crate, with compatibility for the chooser's `[^…]` spelling.
+
+`aizome-apps` retains desktop-entry indexing and association persistence,
+including desktop-specific precedence, atomic writes, comments and refusal
+to overwrite Nix-managed files. MIME keys are canonicalized through GIO;
+handler lookup tries each specific type before its ancestors. Settings'
+image/video/music roles expand the chosen app's advertised types instead
+of maintaining separate format tables. Containers shared by audio and video
+follow whichever of those roles was selected last.
+
+The apps' `.desktop` `MimeType` fields are the supported-format declarations.
+`nix/mime-defaults.nix` derives the Aizome session defaults from them, and
+Utsushi reads its own entry for MPRIS and folder filtering. Decoder support
+remains the application's responsibility. Update the declaration when that
+support changes; there is no second extension list to update.
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-mime -p aizome-apps
+nix build .#aizome-checks.mime-defaults --no-update-lock-file
+```
+
+These are component checks, including generated MIME databases for aliases,
+case-sensitive patterns, conflicting weights and content disambiguation.
+GIO currently does not honor `glob-deleteall` across database directories;
+the explicitly ignored `glob_deleteall_removes_system_patterns` test records
+that upstream limitation and should be run when updating GLib. Compound
+extensions follow GIO's longest-suffix behavior even when a shorter suffix
+has greater weight. No private MIME parser compensates for either behavior.
+These checks do not certify an ISO or a desktop session on hardware.
+
 The shell observes application launch attempts through `aizome-sys`:
 process creation and exit are separate events, and only a compositor window
 event confirms that a window opened. D-Bus acceptance and successful

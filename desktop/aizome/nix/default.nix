@@ -36,6 +36,7 @@ let
       fontconfig
       freetype
       dbus
+      glib
       pam
       # aizome-sys talks to PipeWire through pipewire-pulse.
       libpulseaudio
@@ -134,6 +135,7 @@ let
     # Boots a VM, logs into the Aizome session and checks the desktop is
     # up (vm-test.nix).
     checks = forAll (pkgs: {
+      mime-defaults = import ./mime-defaults-test.nix { inherit pkgs; };
       session-launcher = import ./session-launcher-test.nix { inherit pkgs; };
       session-launcher-systemd = import ./session-launcher-systemd-test.nix { inherit pkgs; };
       session = import ./vm-test.nix { inherit pkgs self; };
@@ -190,6 +192,7 @@ let
           rustfmt
           rust-analyzer
           pkg-config
+          shared-mime-info
           clang
           mold
           # Koe's whisper.cpp, built by whisper-rs-sys.
@@ -198,6 +201,9 @@ let
           rustPlatform.bindgenHook
         ];
         buildInputs = buildInputs pkgs;
+        shellHook = ''
+          export XDG_DATA_DIRS=${pkgs.shared-mime-info}/share:''${XDG_DATA_DIRS:-/usr/local/share:/usr/share}
+        '';
         # dlopen'd at run time: EGL/GL drivers, fontconfig, xkbcommon.
         LD_LIBRARY_PATH = lib.makeLibraryPath (buildInputs pkgs);
         # whisper-rs's own bindings, for the CPU build (the package's
@@ -207,8 +213,9 @@ let
         AIZOME_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.fonts}";
         HOTARU_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.hotaruFonts}";
         HOTARU_RESOURCES_DIR = "${../../../apps/hotaru/resources}";
-        HOTARU_TERMINFO_DIR = "${
-          pkgs.runCommand "hotaru-development-terminfo" { nativeBuildInputs = [ pkgs.ncurses ]; } ''
+        HOTARU_TERMINFO_DIR = "${pkgs.runCommand "hotaru-development-terminfo"
+          { nativeBuildInputs = [ pkgs.ncurses ]; }
+          ''
             mkdir -p $out
             tic -x -o $out ${../../../apps/hotaru/resources/hotaru.terminfo}
           ''

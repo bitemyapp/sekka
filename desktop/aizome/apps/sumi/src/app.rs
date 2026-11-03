@@ -368,13 +368,13 @@ impl Sumi {
 
     fn installed(&mut self, w: WindowKey, l: Loaded, cx: &mut Cx<Msg>) {
         let path = l.path.clone();
+        let mime = files::mime_type(&path, l.content.rope().chunks().next().unwrap_or("").as_bytes());
         let Some(d) = self.docs.get_mut(&w) else { return };
         d.install(l);
         d.untitled = 0;
         cx.set_title(w, d.title());
         cx.focus("editor");
-        let mime = files::mime_type(&path);
-        self.remember(&path, mime);
+        self.remember(&path, &mime);
         self.write_session();
     }
 
@@ -517,7 +517,7 @@ impl Sumi {
             return false;
         }
         let path = files::resolve(&path);
-        let mime = files::mime_type(&path);
+        let mime = files::mime_type(&path, &bytes);
         let Some(d) = self.docs.get_mut(&w) else { return false };
         let was_untitled = d.path.is_none();
         d.path = Some(path.clone());
@@ -537,7 +537,7 @@ impl Sumi {
         cx.set_title(w, d.title());
         self.store.remove_text(&d.id);
         d.autosaved = true;
-        self.remember(&path, mime);
+        self.remember(&path, &mime);
         self.write_session();
         if self.closing.remove(&w) {
             self.close_now(w, cx);

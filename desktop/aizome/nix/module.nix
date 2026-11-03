@@ -404,76 +404,7 @@ in
       # desktop-specific list (XDG_CURRENT_DESKTOP=Aizome) is read before
       # mimeapps.list, so other desktops keep their own defaults, and the
       # user's own choices (~/.config/mimeapps.list) still win.
-      "xdg/aizome-mimeapps.list".text =
-        let
-          entry = app: types: lib.concatMapStrings (type: "${type}=org.aizome.${app}.desktop;\n") types;
-        in
-        ''
-          [Default Applications]
-        ''
-        + entry "Shashin" [
-          "image/png"
-          "image/apng"
-          "image/jpeg"
-          "image/gif"
-          "image/webp"
-          "image/bmp"
-          "image/tiff"
-          "image/x-icon"
-          "image/vnd.microsoft.icon"
-          "image/svg+xml"
-        ]
-        + entry "Sumi" [
-          "text/plain"
-          "text/markdown"
-          "text/x-markdown"
-          "text/rust"
-          "text/x-python"
-          "text/x-nix"
-          "application/x-shellscript"
-          "application/toml"
-          "application/json"
-          "application/x-yaml"
-        ]
-        + entry "Shiori" [
-          "application/pdf"
-          "application/x-pdf"
-        ]
-        + entry "Utsushi" [
-          "video/mp4"
-          "video/x-matroska"
-          "video/webm"
-          "video/quicktime"
-          "video/x-msvideo"
-          "video/vnd.avi"
-          "video/mpeg"
-          "video/ogg"
-          "video/3gpp"
-          "video/mp2t"
-          "video/x-flv"
-          "video/x-m4v"
-          "video/av1"
-          "audio/mpeg"
-          "audio/mp4"
-          "audio/x-m4a"
-          "audio/aac"
-          "audio/flac"
-          "audio/x-flac"
-          "audio/ogg"
-          "audio/x-vorbis+ogg"
-          "audio/opus"
-          "audio/x-opus+ogg"
-          "audio/wav"
-          "audio/x-wav"
-          "audio/webm"
-          "audio/x-matroska"
-        ]
-        + entry "Hako" [ "inode/directory" ]
-        + entry "Koyomi" [ "text/calendar" ]
-        + entry "Tansu" [
-          "application/x-cd-image"
-          "application/x-raw-disk-image"
-        ];
+      "xdg/aizome-mimeapps.list".text = import ./mime-defaults.nix { inherit lib; };
       # The welcome tour, once, at the first Aizome login (it decides for
       # itself whether to show; OnlyShowIn=Aizome keeps it out of others).
       "xdg/autostart/org.aizome.Annai.Welcome.desktop".source =
