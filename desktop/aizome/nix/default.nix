@@ -16,6 +16,9 @@ let
     "aarch64-linux"
   ];
   forAll = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+  # The network agent's libsecret, with the Secret Service key fix that
+  # Nixpkgs' lacks until 0.21.8 (nix/libsecret-dh-padding.nix).
+  libsecretFor = pkgs: import ../../../nix/libsecret-dh-padding.nix { inherit (pkgs) lib libsecret; };
   # Libraries the compositor (smithay), the toolkit (Sukumo) and the
   # apps link against or load at run time.
   buildInputs =
@@ -36,7 +39,7 @@ let
       pam
       # aizome-sys talks to PipeWire through pipewire-pulse.
       libpulseaudio
-      libsecret
+      (libsecretFor pkgs)
       # aizome-media: FFmpeg demuxes and decodes (VA-API through its
       # hwcontext), PipeWire plays. The same FFmpeg as mpv's.
       ffmpeg
@@ -89,6 +92,7 @@ let
 
     packages = forAll (pkgs: rec {
       aizome = pkgs.callPackage ./package.nix {
+        libsecret = libsecretFor pkgs;
         inherit
           src
           yukimiSrc

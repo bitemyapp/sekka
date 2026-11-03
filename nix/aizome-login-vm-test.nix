@@ -50,7 +50,11 @@ pkgs.testers.runNixOSTest {
         ];
       };
       hardware.graphics.enable = true;
-      environment.systemPackages = [ pkgs.libsecret ];
+      # secret-tool, with the key fix the store and lookup below need
+      # (nix/libsecret-dh-padding.nix): without it about one run in 256 fails.
+      environment.systemPackages = [
+        (import ./libsecret-dh-padding.nix { inherit (pkgs) lib libsecret; })
+      ];
     };
   testScript = ''
     import shlex

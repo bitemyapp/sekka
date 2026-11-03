@@ -8,7 +8,10 @@
 pkgs.writeShellApplication {
   name = "sekka-push-cache";
   # Building and signing use the caller's own Nix and daemon.
-  runtimeInputs = [ pkgs.awscli2 ];
+  runtimeInputs = [
+    pkgs.awscli2
+    pkgs.python3
+  ];
   text = ''
     flake=''${1:-.}
     config=''${SEKKA_CACHE_CONFIG:-''${XDG_CONFIG_HOME:-$HOME/.config}/sekka-cache}
@@ -37,7 +40,11 @@ pkgs.writeShellApplication {
     # was built from (nix/uta.nix), goes beside it. Keep a failed build from
     # being hidden by process substitution.
     packages=(genkan tatami displays wallpapers yukimi kakehashi uta uta.source aquamarine hyprland tools installed-systems)
-    build_outputs=$(nix build --no-update-lock-file --no-link --print-out-paths "''${packages[@]/#/$flake#}")
+    if [[ -n ''${SEKKA_CI_ROOTS:-} ]]; then
+      build_outputs=$(python3 ${../scripts/ci-retain.py} main packages build --no-update-lock-file --print-out-paths "''${packages[@]/#/$flake#}")
+    else
+      build_outputs=$(nix build --no-update-lock-file --no-link --print-out-paths "''${packages[@]/#/$flake#}")
+    fi
     mapfile -t outputs <<< "$build_outputs"
 
     # Nix only adds a path to a binary cache that already holds its
