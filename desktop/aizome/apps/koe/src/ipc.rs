@@ -40,11 +40,12 @@ pub async fn write_json<W: AsyncWrite + Unpin, T: Serialize>(writer: &mut W, val
     Ok(())
 }
 pub async fn request(path: &Path, request: &Request) -> Result<Response> {
-    let timeout = if matches!(request.vocabulary, Some(crate::protocol::VocabularyRequest::ExportExamples { .. })) {
-        Duration::from_secs(120)
-    } else {
-        Duration::from_secs(5)
-    };
+    let timeout =
+        if matches!(request.vocabulary_command(), Some(crate::protocol::VocabularyRequest::ExportExamples { .. })) {
+            Duration::from_secs(120)
+        } else {
+            Duration::from_secs(5)
+        };
     exchange_with_timeout(path, request, timeout).await
 }
 pub async fn exchange<T: Serialize, R: DeserializeOwned>(path: &Path, value: &T) -> Result<R> {
