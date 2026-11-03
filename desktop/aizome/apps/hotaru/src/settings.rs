@@ -114,6 +114,7 @@ pub enum Action {
     #[serde(rename = "select-tab-8")]
     SelectTab8,
     LastTab,
+    GoToTab,
     Copy,
     Paste,
     CopyScreen,
@@ -175,6 +176,7 @@ impl Action {
                     (SelectTab7, "Tab 7"),
                     (SelectTab8, "Tab 8"),
                     (LastTab, "Last Tab"),
+                    (GoToTab, "Go to Tab…"),
                     (PreviousPane, "Previous Pane"),
                     (NextPane, "Next Pane"),
                     (FocusLeft, "Pane on the Left"),
@@ -652,6 +654,7 @@ fn defaults() -> Vec<(Shortcut, Action)> {
         ("super+pageup", PreviousTab),
         ("super+pagedown", NextTab),
         ("super+9", LastTab),
+        ("super+p", GoToTab),
         ("super+c", Copy),
         ("super+v", Paste),
         ("super+shift+c", CopyAll),

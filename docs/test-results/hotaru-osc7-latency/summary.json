@@ -1,0 +1,254 @@
+{
+  "metadata": {
+    "host": "ganymede",
+    "kernel": "Linux-7.3.0-x86_64-with-glibc2.44",
+    "blocks": 8,
+    "started_utc": "2026-11-03T04:35:16.705836+00:00",
+    "ended_utc": "2026-11-03T04:36:27.883783+00:00",
+    "load_average_before": [
+      2.03759765625,
+      1.9970703125,
+      1.2939453125
+    ],
+    "load_average_after": [
+      1.373046875,
+      1.81201171875,
+      1.27880859375
+    ],
+    "binary_sha256": {
+      "A": "413d1fbdea56b3adc555c3b5b5c84a02571b9f9c4f3191e7336f69e222bfbd2e",
+      "B": "4557f955a5f81cd1c54cbbd26a5bbe5bd238b7072a17dc0988e82159c07073ea"
+    },
+    "shell_versions": {
+      "bash": "GNU bash, version 5.3.20(1)-release (x86_64-pc-linux-gnu)",
+      "fish": "fish, version 4.9.3"
+    },
+    "font_directory": "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts",
+    "cpu": "Intel(R) Core(TM) Ultra 7 365",
+    "cpu_governor": "powersave",
+    "power_supplies": {
+      "ucsi-source-psy-USBC000:002": "Not charging",
+      "ucsi-source-psy-USBC000:003": "Not charging",
+      "ucsi-source-psy-USBC000:001": "Not charging",
+      "BAT0": "Discharging"
+    }
+  },
+  "summary": {
+    "bash-reports": {
+      "startup_us": {
+        "baseline_median": 47795.9105,
+        "candidate_median": 47777.0845,
+        "paired_block_mean_delta": -1039.3720000000012,
+        "paired_block_bootstrap_95_ci": [
+          -5346.008687500002,
+          3533.9540625
+        ],
+        "baseline_p95": 56008.229,
+        "candidate_p95": 52470.837
+      },
+      "startup_shaped_us": {
+        "baseline_median": 47928.289,
+        "candidate_median": 47894.5285,
+        "paired_block_mean_delta": -1127.966875,
+        "paired_block_bootstrap_95_ci": [
+          -5457.4678125,
+          3547.968437499999
+        ],
+        "baseline_p95": 56517.331,
+        "candidate_p95": 52685.643
+      },
+      "commands_us": {
+        "baseline_median": 8700.81925,
+        "candidate_median": 8670.79425,
+        "paired_block_mean_delta": -22.994625000000042,
+        "paired_block_bootstrap_95_ci": [
+          -50.373250000000326,
+          3.967218749998665
+        ],
+        "baseline_p95": 8917.502,
+        "candidate_p95": 8895.663
+      },
+      "commands_shaped_us": {
+        "baseline_median": 8897.7865,
+        "candidate_median": 8865.93175,
+        "paired_block_mean_delta": -19.425656249999975,
+        "paired_block_bootstrap_95_ci": [
+          -41.67256249999923,
+          2.7738437499995143
+        ],
+        "baseline_p95": 9161.288999999999,
+        "candidate_p95": 9179.253999999999
+      },
+      "commands_cpu_us": {
+        "baseline_median": 878.4042499999996,
+        "candidate_median": 892.8074999999972,
+        "paired_block_mean_delta": 13.076625000002196,
+        "paired_block_bootstrap_95_ci": [
+          -13.381343749997995,
+          39.93309375000513
+        ],
+        "baseline_p95": 1117.0120000000024,
+        "candidate_p95": 1167.046000000002
+      },
+      "palette_us": {
+        "baseline_median": 146.46925,
+        "candidate_median": 134.85425,
+        "paired_block_mean_delta": 8.545656249999992,
+        "paired_block_bootstrap_95_ci": [
+          -33.223906250000006,
+          57.125218749999995
+        ],
+        "baseline_p95": 647.4430000000001,
+        "candidate_p95": 672.073
+      },
+      "wrong_folders": {
+        "A": 0,
+        "B": 0
+      }
+    },
+    "bash-no-reports": {
+      "startup_us": {
+        "baseline_median": 47825.433000000005,
+        "candidate_median": 38389.7125,
+        "paired_block_mean_delta": -2910.941249999997,
+        "paired_block_bootstrap_95_ci": [
+          -7623.7284999999965,
+          1928.038875000003
+        ],
+        "baseline_p95": 52818.882999999994,
+        "candidate_p95": 50864.391
+      },
+      "startup_shaped_us": {
+        "baseline_median": 48015.86200000001,
+        "candidate_median": 38669.436499999996,
+        "paired_block_mean_delta": -2921.243125000002,
+        "paired_block_bootstrap_95_ci": [
+          -7769.873125000002,
+          1871.008249999998
+        ],
+        "baseline_p95": 53009.568,
+        "candidate_p95": 51066.747
+      },
+      "commands_us": {
+        "baseline_median": 8595.34,
+        "candidate_median": 8573.35575,
+        "paired_block_mean_delta": -22.07646875000023,
+        "paired_block_bootstrap_95_ci": [
+          -35.54631250000057,
+          -8.077624999999898
+        ],
+        "baseline_p95": 8820.749,
+        "candidate_p95": 8774.408
+      },
+      "commands_shaped_us": {
+        "baseline_median": 8806.7985,
+        "candidate_median": 8780.76875,
+        "paired_block_mean_delta": -24.35496874999899,
+        "paired_block_bootstrap_95_ci": [
+          -48.64921874999868,
+          0.47175000000083855
+        ],
+        "baseline_p95": 9055.176,
+        "candidate_p95": 9049.45
+      },
+      "commands_cpu_us": {
+        "baseline_median": 874.3662499999991,
+        "candidate_median": 844.5279999999966,
+        "paired_block_mean_delta": -20.578875000001517,
+        "paired_block_bootstrap_95_ci": [
+          -51.41209375000108,
+          9.306031249998568
+        ],
+        "baseline_p95": 1124.4780000000028,
+        "candidate_p95": 1124.4449999999924
+      },
+      "palette_us": {
+        "baseline_median": 165.38524999999998,
+        "candidate_median": 205.88299999999998,
+        "paired_block_mean_delta": 20.283093749999992,
+        "paired_block_bootstrap_95_ci": [
+          -23.488031249999995,
+          59.139968749999994
+        ],
+        "baseline_p95": 657.7170000000001,
+        "candidate_p95": 674.591
+      },
+      "wrong_folders": {
+        "A": 160,
+        "B": 0
+      }
+    },
+    "fish-reports": {
+      "startup_us": {
+        "baseline_median": 40785.8355,
+        "candidate_median": 34580.172,
+        "paired_block_mean_delta": -2310.1715000000017,
+        "paired_block_bootstrap_95_ci": [
+          -6863.397312499998,
+          1809.2786874999993
+        ],
+        "baseline_p95": 43064.6,
+        "candidate_p95": 43395.912000000004
+      },
+      "startup_shaped_us": {
+        "baseline_median": 42731.548500000004,
+        "candidate_median": 36356.3675,
+        "paired_block_mean_delta": -2018.3653125,
+        "paired_block_bootstrap_95_ci": [
+          -7557.5484375,
+          2877.1568124999994
+        ],
+        "baseline_p95": 48191.515,
+        "candidate_p95": 49831.674999999996
+      },
+      "commands_us": {
+        "baseline_median": 8359.39375,
+        "candidate_median": 8211.5115,
+        "paired_block_mean_delta": -54.96956249999994,
+        "paired_block_bootstrap_95_ci": [
+          -180.93021875,
+          73.79368750000003
+        ],
+        "baseline_p95": 8879.205,
+        "candidate_p95": 8853.329
+      },
+      "commands_shaped_us": {
+        "baseline_median": 8614.06825,
+        "candidate_median": 8476.949499999999,
+        "paired_block_mean_delta": -51.8839375,
+        "paired_block_bootstrap_95_ci": [
+          -165.17287500000043,
+          65.18478125000092
+        ],
+        "baseline_p95": 9159.255,
+        "candidate_p95": 9169.946
+      },
+      "commands_cpu_us": {
+        "baseline_median": 1282.0117500000015,
+        "candidate_median": 1259.1882499999956,
+        "paired_block_mean_delta": 4.861499999999751,
+        "paired_block_bootstrap_95_ci": [
+          -33.80018749999999,
+          36.486906249999265
+        ],
+        "baseline_p95": 1578.9660000000003,
+        "candidate_p95": 1578.3160000000062
+      },
+      "palette_us": {
+        "baseline_median": 188.56824999999998,
+        "candidate_median": 229.27300000000002,
+        "paired_block_mean_delta": 16.173031250000008,
+        "paired_block_bootstrap_95_ci": [
+          -19.14321875,
+          58.14765625000001
+        ],
+        "baseline_p95": 745.509,
+        "candidate_p95": 602.242
+      },
+      "wrong_folders": {
+        "A": 0,
+        "B": 0
+      }
+    }
+  }
+}

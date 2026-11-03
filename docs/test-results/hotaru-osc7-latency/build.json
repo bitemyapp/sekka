@@ -1,0 +1,14 @@
+{
+  "baseline_revision": "6c27fb0c40a5f19c730d6e599b6aca9708aabbff",
+  "candidate_revision": "c19b9789702c90e506ddaa43f99faa13ec64d89d",
+  "compiler": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "build_command": "nix develop .#aizome --no-update-lock-file -c env CARGO_TARGET_DIR=/home/callen/work/sekka/.work/pr250-cwd-target CARGO_BUILD_JOBS=4 CARGO_PROFILE_RELEASE_DEBUG=0 CARGO_INCREMENTAL=0 cargo build --locked --release --manifest-path desktop/aizome/Cargo.toml -p aizome-hotaru --example cwd_latency",
+  "baseline_method": "Same worktree and formatted measurement harness; app.rs and go_to_tab.rs restored to 6c27fb0 for the baseline build, then restored to the candidate for its build. No other production files changed.",
+  "source_sha256": {
+    "flake.lock": "32d0ec35f06c623fdb7b657f20077b2c39964a1722480c49dc172ae1412cef64",
+    "desktop/aizome/apps/hotaru/examples/cwd_latency.rs": "50ce63dfe5522a82f526eb8e25cc6a3813cd580c7e86a6ade37eb1448872fe4d",
+    "desktop/aizome/apps/hotaru/tests/cwd_latency.py": "055e39c12809962ff9eed27f0ae34490dae2af918a56d0291da7e743aec11e41",
+    "desktop/aizome/apps/hotaru/src/app.rs": "26536d78ebcaef001b7fd4f48d010f7a89de63174b3fada0e4b86e19701f92d8",
+    "desktop/aizome/apps/hotaru/src/go_to_tab.rs": "e613999aefcf41f63e62e6ec51ddb6b751f1c925363405476c4115206b2a2f23"
+  }
+}

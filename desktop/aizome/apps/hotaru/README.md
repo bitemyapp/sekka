@@ -110,6 +110,33 @@ also steps through tabs and panes and lists the tabs by title. Shift-drag
 selects text while a running program captures the mouse; Shift-wheel scrolls
 local history.
 
+Tabs are as wide as their titles, up to 240 points. When they no longer fit,
+the others narrow to share the room while the shown tab keeps its width when
+space permits. Inactive tabs leave off a part of the title most tabs share, such as a trailing
+"| project"; hovering a tab shows its whole title. Below a few words' width the
+tabs scroll sideways under the wheel, with the shown tab kept in sight. A count
+at each end says how many tabs are out of sight that way, in amber if one of
+them rang, and clicking it scrolls that way. The + button and the bar's other
+buttons stay put however many tabs there are. In a narrow window the shown tab
+also shrinks, leaving room for the counters and a clickable tab label.
+
+Window → Go to Tab… (❖P), or the list button beside +, opens a palette over the
+window drawn like the desktop's ❖Space palette. It finds a tab by its title,
+the program in front in it, its folder or the text on its screen. Titles,
+programs and folders match loosely, as the desktop palette matches; screen text
+matches as typed, once two characters are typed, and the match goes to the pane
+whose screen has it. ↑↓ choose, Return or a click goes there, and Escape, ❖P or a
+click beside it closes it. With nothing typed the tabs are listed as last shown,
+with the one before this selected, so ❖P then Return goes back. Beside the list,
+the chosen tab's screen shows around what matched. Screens are searched as they
+were when the palette opened, and only what each pane shows, not its
+scrollback. The program is the one in front on the pane's terminal, so a
+program over SSH shows as `ssh`.
+The folder follows the shell's accepted local directory reports. Until the
+first report arrives, the palette checks the local shell's current directory
+when opened; a late report takes over on the next opening. If neither is
+available, it uses the last known directory.
+
 When the shell or program in a pane ends, Control-D at the prompt for one,
 its pane closes, then its tab with its last pane, and the window with its last
 tab; the panes beside it and the tab in front stay as they were. A program that
@@ -219,6 +246,7 @@ panes is ⇧❖ and the arrows.
 | `close-pane`, `close-tab`, `zoom-pane` | ❖W, ⌃⇧W · ⌥❖W · ⇧❖↩ |
 | `previous-tab`, `next-tab` | ⇧❖[, ❖PgUp, ⌃⇧Tab, ⌃PgUp · ⇧❖], ❖PgDn, ⌃Tab, ⌃PgDn |
 | `select-tab-1` … `select-tab-8`, `last-tab` | ❖1 … ❖8 · ❖9 |
+| `go-to-tab` | ❖P |
 | `previous-pane`, `next-pane` | ❖[ · ❖] |
 | `focus-left/right/up/down` | ⇧❖←→↑↓, ⌃⌥←→↑↓ |
 | `copy`, `paste`, `copy-screen`, `copy-all` | ❖C, ⌃⇧C · ❖V, ⌃⇧V · none · ⇧❖C |
@@ -260,8 +288,8 @@ cargo build --manifest-path desktop/aizome/Cargo.toml -p aizome-hotaru --locked
 ```
 
 Tests cover native Night/Day rendering, explicit terminal colors, tabs and splits,
-the Settings window and shortcut recording, tab and pane navigation, zoom,
-panes closing as their programs end, OSC 52 policies and exact answers, word and
+Go to Tab, crowded tab bars, the Settings window and shortcut recording, tab and
+pane navigation, zoom, panes closing as their programs end, OSC 52 policies and exact answers, word and
 line selection into the primary selection, middle-click paste, the pane menu,
 dropped files,
 large asynchronous plain/HTML copies, cancellation and stale results, output delivery before shell exit,
@@ -304,7 +332,7 @@ verifies a failed opener's status, without launching external applications.
 `tests/wayland/settings.py BINARY EVIDENCE_DIRECTORY` drives the shortcuts and
 the Settings window through a real XKB keymap and a virtual pointer: ❖K clears
 history (checked through Copy All), ❖1, ❖2, ❖9, ⇧❖[, ⇧❖] (which type braces) and
-⌃Tab move between three tabs, ⇧❖↩ zooms a split, ❖, opens Settings, the Day card
+⌃Tab move between three tabs, ❖P and a typed title go to one, ⇧❖↩ zooms a split, ❖, opens Settings, the Day card
 is clicked and the terminal window beside it is checked by its pixels, ⌥❖R is
 recorded for New Tab and then opens one, ❖W in Settings leaves both panes, and
 ⇧❖, reloads an edited file into a new grid size. It saves screenshots, the

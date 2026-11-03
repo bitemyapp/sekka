@@ -979,6 +979,349 @@ fn tabs_keep_independent_terminal_snapshots() {
 }
 
 #[test]
+fn go_to_tab_finds_tabs_by_title_and_screen_and_goes_there() {
+    use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
+    use aizome_kit::widget::SemanticRole;
+    let mut h = Harness::new(Hotaru::preview());
+    let window = h.window();
+    h.advance(Duration::ZERO);
+    let first = h.program().active_pane().unwrap().id;
+    h.send(Msg::Title(first, "Review PR #221 | sekka".into()));
+    h.send(Msg::NewTab);
+    let second = h.program().active_pane().unwrap().id;
+    h.send(Msg::Title(second, "Check Uta audio quality | uta".into()));
+    let mut terminal = Terminal::new(80, 24, 0);
+    terminal.feed(b"$ nix build\r\nthe nightly build failed\r\n");
+    h.send(Msg::Frame(second, Arc::new(terminal.snapshot())));
+    h.send(Msg::NewTab);
+    let third = h.program().active_pane().unwrap().id;
+    let open = |h: &mut Harness<Hotaru>| {
+        h.command(window, 'p');
+        assert!(h.program().go_to_tab.is_some(), "❖P opens Go to Tab");
+        h.advance(Duration::ZERO);
+        assert_eq!(h.focused_name(window).as_deref(), Some("go-to-tab"));
+        assert!(h.settle(Duration::from_secs(5), |app| app.go_to_tab.as_ref().is_some_and(|p| p.facts.is_some())));
+    };
+    open(&mut h);
+    // Without a query, the tab shown before this one is selected.
+    let palette = h.program().go_to_tab.as_ref().unwrap();
+    assert_eq!(palette.rows.iter().map(|row| row.pane).collect::<Vec<_>>(), [third, second, first]);
+    assert_eq!(palette.rows[palette.selected].pane, second);
+    // Escape leaves everything as it was.
+    h.named(window, NamedKey::Escape, Modifiers::NONE);
+    assert!(h.program().go_to_tab.is_none());
+    assert_eq!(h.program().active_pane().unwrap().id, third);
+    // A phrase on another tab's screen finds it; Return goes there.
+    open(&mut h);
+    h.type_text(window, "nightly build");
+    let rows = &h.program().go_to_tab.as_ref().unwrap().rows;
+    assert_eq!(rows.iter().map(|row| (row.pane, row.line)).collect::<Vec<_>>(), [(second, Some(1))]);
+    h.named(window, NamedKey::Enter, Modifiers::NONE);
+    assert!(h.program().go_to_tab.is_none());
+    assert_eq!(h.program().active_pane().unwrap().id, second);
+    h.advance(Duration::from_millis(1));
+    assert_eq!(h.focused_name(window), Some(format!("terminal-{second}")));
+    // A title, fuzzily, and a click on its row; ❖P again closes it.
+    open(&mut h);
+    h.type_text(window, "rvw pr");
+    h.advance(Duration::from_millis(1));
+    let row = h
+        .semantics(window)
+        .into_iter()
+        .find(|(s, _)| s.role == SemanticRole::ListItem && s.label.as_deref() == Some("Review PR #221 | sekka"))
+        .map(|(_, r)| r)
+        .expect("the title's row");
+    h.click(window, row.center());
+    assert_eq!(h.program().active_pane().unwrap().id, first);
+    open(&mut h);
+    h.named(window, NamedKey::ArrowDown, Modifiers::NONE);
+    h.command(window, 'p');
+    assert!(h.program().go_to_tab.is_none());
+    assert_eq!(h.program().active_pane().unwrap().id, first);
+}
+
+#[test]
+fn go_to_tab_names_the_program_in_front_and_its_folder() {
+    let mut command = shell("cd /tmp && echo READY && exec sleep 30");
+    // main.rs supplies a startup directory even when none was passed on the CLI.
+    command.cwd = Some("/".into());
+    let mut h = Harness::new(Hotaru::new(command));
+    let window = h.window();
+    h.advance(Duration::ZERO);
+    assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().snapshot.plain_text().contains("READY")));
+    let pane = h.program().active_pane().unwrap().id;
+    // The shell may not have become sleep yet: look again until it has.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        h.command(window, 'p');
+        assert!(h.settle(Duration::from_secs(5), |app| app.go_to_tab.as_ref().is_some_and(|p| p.facts.is_some())));
+        let palette = h.program().go_to_tab.as_ref().unwrap();
+        let facts = palette.facts.as_deref().unwrap().iter().find(|facts| facts.pane == pane).unwrap();
+        assert_eq!(facts.folder.as_deref(), Some("/tmp"), "the shell's folder, without a report");
+        if facts.program.as_deref() == Some("sleep") {
+            assert_eq!(palette.rows[0].detail, "sleep · /tmp");
+            break;
+        }
+        assert!(Instant::now() < deadline, "the program in front is still {:?}", facts.program);
+        h.command(window, 'p');
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn go_to_tab_clipboard_commands_follow_the_focused_query() {
+    use aizome_hotaru::go_to_tab::Event;
+    use aizome_hotaru::settings::Action;
+    use aizome_kit::sidestep_ui::{Key, Modifiers};
+    for custom in [false, true] {
+        let mut app = Hotaru::new(shell(
+            "stty -echo; printf 'READY\\n'; while IFS= read -r line; do printf 'RECEIVED:%s\\n' \"$line\"; done",
+        ));
+        if custom {
+            app.settings.keybindings.insert("ctrl+shift+v".into(), Action::Paste);
+            app.settings.keybindings.insert("ctrl+shift+c".into(), Action::Copy);
+        }
+        let mut h = Harness::new(app);
+        let window = h.window();
+        let pane = h.program().active_pane().unwrap().id;
+        assert!(h.settle(Duration::from_secs(5), |app| {
+            app.active_pane().unwrap().snapshot.plain_text().contains("READY")
+        }));
+        h.command(window, 'p');
+        h.advance(Duration::ZERO);
+        assert_eq!(h.focused_name(window).as_deref(), Some("go-to-tab"));
+        let clipboard_key = |h: &mut Harness<Hotaru>, key: char| {
+            if custom {
+                h.key(window, Key::Character(key.to_string()), Modifiers::CONTROL | Modifiers::SHIFT);
+            } else {
+                h.command(window, key);
+            }
+        };
+        h.platform.clipboard = Some("query only\n".into());
+        clipboard_key(&mut h, 'v');
+        assert_eq!(h.program().go_to_tab.as_ref().unwrap().query, "query only");
+        assert_eq!(h.focused_name(window).as_deref(), Some("go-to-tab"));
+        h.command(window, 'a');
+        h.platform.clipboard = Some("replace me".into());
+        clipboard_key(&mut h, 'c');
+        assert_eq!(h.platform.clipboard.as_deref(), Some("query only"));
+        h.send(Msg::GoToTab(Event::Close));
+        // Paste still goes to the PTY after returning focus to the terminal.
+        // Its acknowledgement also establishes that no query paste preceded it.
+        h.platform.clipboard = Some("terminal only\n".into());
+        clipboard_key(&mut h, 'v');
+        assert!(h.settle(Duration::from_secs(5), |app| {
+            app.active_pane().unwrap().snapshot.plain_text().contains("RECEIVED:terminal only")
+        }));
+        assert!(!h.program().active_pane().unwrap().snapshot.plain_text().contains("RECEIVED:query only"));
+        h.send(Msg::Input(pane, vec![4]));
+        assert!(h.settle(Duration::from_secs(5), |app| app.panes.is_empty()));
+    }
+}
+
+/// Real PTY reports, including a first report after the palette has already
+/// used /proc. No startup timeout may permanently rule out OSC 7 reporting.
+fn go_to_tab_directory_reports(timing: &str) {
+    use aizome_hotaru::go_to_tab::Event;
+    let root = std::env::temp_dir().join(format!("hotaru-palette-cwd-{timing}-{}", std::process::id()));
+    let live = root.join("live");
+    let reported = root.join("reported");
+    for path in [&live, &reported] {
+        std::fs::create_dir_all(path).unwrap();
+    }
+    let mut command = shell(
+        "stty -echo; \
+         if test \"$HOTARU_TEST_REPORT\" = immediate; then \
+           printf '\\033]7;file://localhost%s\\007' \"$HOTARU_TEST_REPORTED\"; \
+         fi; \
+         printf 'READY\\n'; \
+         while IFS= read -r action; do \
+           case $action in \
+             cd) cd -- \"$HOTARU_TEST_LIVE\" || exit 1;; \
+             report) printf '\\033]7;file://localhost%s\\007' \"$HOTARU_TEST_REPORTED\";; \
+             clear) printf '\\033]7;\\007';; \
+           esac; \
+           printf 'ACK:%s\\n' \"$action\"; \
+         done",
+    );
+    command.cwd = Some(root.clone());
+    command.env.extend([
+        ("HOTARU_TEST_REPORT".into(), timing.into()),
+        ("HOTARU_TEST_REPORTED".into(), reported.as_os_str().into()),
+        ("HOTARU_TEST_LIVE".into(), live.as_os_str().into()),
+    ]);
+    let mut h = Harness::new(Hotaru::new(command));
+    h.advance(Duration::ZERO);
+    let pane = h.program().active_pane().unwrap().id;
+    assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().snapshot.plain_text().contains("READY")));
+    let folder = |h: &mut Harness<Hotaru>, expected: &std::path::Path| {
+        h.command(h.window(), 'p');
+        assert!(h.settle(Duration::from_secs(5), |app| app.go_to_tab.as_ref().is_some_and(|p| p.facts.is_some())));
+        let facts = h.program().go_to_tab.as_ref().unwrap().facts.as_ref().unwrap();
+        let actual = &facts.iter().find(|f| f.pane == pane).unwrap().folder;
+        assert_eq!(actual.as_deref(), expected.to_str(), "{timing}: palette's directory");
+        h.send(Msg::GoToTab(Event::Close));
+    };
+    let action = |h: &mut Harness<Hotaru>, action: &str| {
+        h.send(Msg::Input(pane, format!("{action}\n").into_bytes()));
+        let expected = format!("ACK:{action}");
+        assert!(h.settle(Duration::from_secs(5), |app| {
+            app.active_pane().unwrap().snapshot.plain_text().contains(&expected)
+        }));
+    };
+    folder(&mut h, if timing == "immediate" { &reported } else { &root });
+    action(&mut h, "cd");
+    // A valid report can describe a nested shell and must outrank the PTY
+    // owner's cwd; without one, the startup directory must not outrank /proc.
+    folder(&mut h, if timing == "immediate" { &reported } else { &live });
+    if timing == "delayed" {
+        action(&mut h, "report");
+        folder(&mut h, &reported);
+    }
+    if timing != "absent" {
+        action(&mut h, "clear");
+        folder(&mut h, &live);
+    }
+    h.send(Msg::Input(pane, vec![4]));
+    assert!(h.settle(Duration::from_secs(5), |app| app.panes.is_empty()));
+    drop(h);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn go_to_tab_prefers_an_immediate_osc7_report() {
+    go_to_tab_directory_reports("immediate");
+}
+
+#[test]
+fn go_to_tab_accepts_a_delayed_first_osc7_report() {
+    go_to_tab_directory_reports("delayed");
+}
+
+#[test]
+fn go_to_tab_tracks_cd_without_osc7_reports() {
+    go_to_tab_directory_reports("absent");
+}
+
+#[test]
+fn crowded_tabs_shrink_then_scroll_and_never_push_the_bar_buttons_out() {
+    use aizome_kit::{Point, Size, Vec2};
+    let mut h = Harness::new(Hotaru::preview());
+    let window = h.window();
+    h.resize(window, Size::new(900.0, 500.0));
+    for _ in 0..19 {
+        h.send(Msg::NewTab);
+    }
+    let panes: Vec<u64> = h.program().tabs.iter().map(|tab| tab.active).collect();
+    for (index, pane) in panes.iter().enumerate() {
+        h.send(Msg::Title(*pane, format!("Task {index} has a long title | sekka")));
+    }
+    h.advance(Duration::from_millis(1));
+    let width = h.size(window).width;
+    // The bar's buttons, named by their tooltips, are all in the window.
+    let button = |h: &Harness<Hotaru>, name: &str| {
+        let found =
+            h.semantics(window).into_iter().find(|(s, _)| s.label.as_deref().is_some_and(|l| l.starts_with(name)));
+        found.map(|(_, r)| r).unwrap_or_else(|| panic!("no {name} button"))
+    };
+    for name in ["New Tab", "Go to Tab", "Find"] {
+        let r = button(&h, name);
+        assert!(r.width() > 0.0 && r.x0 >= 0.0 && r.x1 <= width, "{name} at {r:?} in {width}");
+    }
+    // The shown tab keeps its whole title and stays in sight; the others
+    // leave off the part they share and narrow to the floor.
+    let shown = h.find(window, "Task 19 has a long title | sekka").expect("the shown tab is in sight");
+    let beside = h.find(window, "Task 18 has a long title").expect("its neighbour is in sight");
+    assert!(beside.width() < shown.width(), "{beside:?} beside {shown:?}");
+    assert!(h.find(window, "Task 0 has a long title").is_none(), "the first tabs are out of sight");
+    // The wheel scrolls the strip.
+    let y = shown.center().y;
+    h.scroll(window, Point::new(width / 3.0, y), Vec2::new(0.0, -10_000.0));
+    assert!(h.find(window, "Task 0 has a long title").is_some());
+    assert!(h.find(window, "Task 19 has a long title | sekka").is_none());
+    // Showing a tab out of sight brings it into sight.
+    h.command(window, '1');
+    let last = *panes.last().unwrap();
+    h.command(window, '9');
+    assert_eq!(h.program().active, last);
+    h.advance(Duration::from_millis(1));
+    assert!(h.find(window, "Task 19 has a long title | sekka").is_some());
+    // The count at the start scrolls back most of the strip's width.
+    h.click(window, Point::new(20.0, y));
+    assert!(h.find(window, "Task 19 has a long title | sekka").is_none());
+    assert_eq!(h.program().active, last, "a count isn't a tab");
+    h.click(window, button(&h, "New Tab").center());
+    assert_eq!(h.program().tabs.len(), 21);
+    h.advance(Duration::from_millis(1));
+    assert!(h.find(window, "Task 19 has a long title").is_some(), "the new tab brings the end into sight");
+}
+
+#[test]
+fn narrow_tabs_stay_visible_and_clickable_beside_the_counters() {
+    use aizome_kit::{Point, Size, Vec2};
+    for count in [1, 3, 20] {
+        let mut h = Harness::new(Hotaru::preview());
+        let window = h.window();
+        h.resize(window, Size::new(320.0, 400.0));
+        for _ in 1..count {
+            h.send(Msg::NewTab);
+        }
+        let panes: Vec<u64> = h.program().tabs.iter().map(|tab| tab.active).collect();
+        let titles: Vec<String> = (0..count).map(|i| format!("Tab {i} with a very long individual title")).collect();
+        for (&pane, title) in panes.iter().zip(&titles) {
+            h.send(Msg::Title(pane, title.clone()));
+        }
+        for index in [0, count / 2, count - 1] {
+            h.send(Msg::SelectTab(panes[index]));
+            h.advance(Duration::ZERO);
+            let tab = h.find(window, &titles[index]).expect("active tab remains visible");
+            let new = h
+                .semantics(window)
+                .into_iter()
+                .find(|(s, _)| s.label.as_deref().is_some_and(|s| s.starts_with("New Tab")))
+                .unwrap()
+                .1;
+            assert!(tab.x0 >= 0.0 && tab.x1 <= new.x0, "active tab {tab:?} overlaps the edges or toolbar at {new:?}");
+            // A counter must not intercept the active tab's click.
+            h.send(Msg::Find);
+            h.advance(Duration::ZERO);
+            assert_eq!(h.focused_name(window).as_deref(), Some("find"));
+            h.click(window, tab.center());
+            h.advance(Duration::ZERO);
+            assert_eq!(h.focused_name(window), Some(format!("terminal-{}", panes[index])));
+            h.send(Msg::CloseFind);
+        }
+        if let Some(directory) = std::env::var_os("HOTARU_SCREENSHOTS") {
+            settle_frame(&mut h);
+            h.save_png(window, std::path::PathBuf::from(directory).join(format!("hotaru-narrow-{count}.png")), 1.0);
+        }
+        // Fractional scroll positions must also leave clickable tab content,
+        // even when no complete tab fits between the two counters.
+        let y = h.find(window, titles.last().unwrap()).unwrap().center().y;
+        for delta in [-35.0, -60.0, -90.0, 30.0, 65.0] {
+            h.scroll(window, Point::new(120.0, y), Vec2::new(0.0, delta));
+            let target = (80..150)
+                .step_by(5)
+                .find_map(|x| {
+                    let point = Point::new(f64::from(x), y);
+                    titles
+                        .iter()
+                        .enumerate()
+                        .find_map(|(i, title)| h.find(window, title).filter(|r| r.contains(point)).map(|_| (i, point)))
+                })
+                .expect("a tab remains available between the counters");
+            h.send(Msg::Find);
+            h.advance(Duration::ZERO);
+            h.click(window, target.1);
+            h.advance(Duration::ZERO);
+            assert_eq!(h.program().active, panes[target.0]);
+            assert_eq!(h.focused_name(window), Some(format!("terminal-{}", panes[target.0])));
+            h.send(Msg::CloseFind);
+        }
+    }
+}
+
+#[test]
 fn night_and_day_views_render_with_native_chrome() {
     let mut h = Harness::new(Hotaru::preview());
     let window = h.window();

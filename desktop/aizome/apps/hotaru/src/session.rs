@@ -10,7 +10,7 @@ use std::collections::VecDeque;
 use std::io;
 use std::os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
@@ -69,6 +69,9 @@ struct Shared {
     frame_pending: AtomicBool,
     input_bytes: AtomicUsize,
     stopping: AtomicBool,
+    // The shell's process, while it runs (0 before and after), for what Go to
+    // Tab reads of it in /proc: the program in front and its directory.
+    child: AtomicU32,
     controls: Mutex<Controls>,
 }
 #[derive(Default)]
@@ -145,10 +148,16 @@ impl Session {
             frame_pending: AtomicBool::new(false),
             input_bytes: AtomicUsize::new(0),
             stopping: AtomicBool::new(false),
+            child: AtomicU32::new(0),
             controls: Mutex::new(Controls::default()),
         });
         let (sender, receiver) = mpsc::sync_channel(64);
         Ok((Self { tx: sender, shared }, receiver))
+    }
+    /// The shell's process ID while it runs.
+    pub fn process_id(&self) -> Option<u32> {
+        let pid = self.shared.child.load(Ordering::Acquire);
+        (pid != 0 && !self.shared.stopping.load(Ordering::Acquire)).then_some(pid)
     }
     pub fn command(&self, command: Command) -> Result<(), &'static str> {
         if self.shared.stopping.load(Ordering::Acquire) {
@@ -468,6 +477,7 @@ fn run(
     shared: Arc<Shared>,
 ) -> io::Result<()> {
     let mut pty = Pty::spawn(command, PtySize::default())?;
+    shared.child.store(pty.child_id(), Ordering::Release);
     let gather = Gather::spawn(id, &pty, shared.clone())?;
     let started = Instant::now();
     let clipboard = Arc::new(crate::selections::Bounds::default());
@@ -779,6 +789,8 @@ fn run(
             && !notified_exit
             && let Some(status) = pty.try_wait()?
         {
+            // Reaped: the number may go to another process.
+            shared.child.store(0, Ordering::Release);
             tx.send(Msg::Exited(id, status.to_string(), !status.success() && started.elapsed() < ABNORMAL_EXIT));
             notified_exit = true;
             // Retain history for copying/scrolling until the tab is closed.

@@ -20,6 +20,8 @@ from smoke import wait
 
 # Linux evdev codes.
 ESC, ONE, TWO, NINE, TAB, R, T, D, K, C, ENTER, LBRACKET, RBRACKET, COMMA = 1, 2, 3, 10, 15, 19, 20, 32, 37, 46, 28, 26, 27, 51
+P, A, B, MINUS = 25, 30, 48, 12
+TYPED = {"t": T, "a": A, "b": B, "-": MINUS, **{digit: code for digit, code in zip("1234567890", range(2, 12))}}
 
 
 def run(binary, evidence):
@@ -155,6 +157,17 @@ while True: time.sleep(1)
             keys(event)
             wait(f"tab {expected + 1} after {event}", lambda: terminal_title() == titles[expected])
         result["checks"]["tabs"] = {"order": [expected + 1 for _, expected in steps]}
+
+        # ❖P finds the second tab by its title, typed through the keymap, and goes
+        # there. Untyped, Return would go back to the third, shown before this one.
+        keys((P, "super"))
+        time.sleep(.3)
+        keys(*[(TYPED[c], "none") for c in titles[1]])
+        time.sleep(.3)
+        shot("go-to-tab")
+        keys((ENTER, "none"))
+        wait("tab 2 from Go to Tab", lambda: terminal_title() == titles[1])
+        result["checks"]["go_to_tab"] = {"typed": titles[1]}
 
         # ⇧❖↩ zooms a split pane and back.
         keys((D, "super"))

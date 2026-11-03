@@ -116,13 +116,19 @@ pub enum Msg {
     SearchNavigated(u64, u64, bool),
     CloseFind,
     FontSize(i8),
+    /// What Go to Tab's elements say.
+    GoToTab(crate::go_to_tab::Event),
+    /// What Go to Tab's thread gathered for the palette opened as `u64`.
+    GoToTabFacts(u64, Arc<[crate::go_to_tab::Facts]>),
+    /// Go to Tab's query takes the keyboard, once the view has built it.
+    GoToTabFocus,
     Theme(Arc<TerminalColors>),
 }
 
 pub struct Pane {
     pub id: u64,
     pub title: String,
-    /// Last bounded local directory reported by this shell via OSC 7.
+    /// Last known directory: the startup fallback or a validated OSC 7 report.
     pub working_directory: Option<std::path::PathBuf>,
     /// Automatic paths use only an accepted OSC 7 report, not launch guesses.
     link_directory: Option<std::path::PathBuf>,
@@ -229,6 +235,11 @@ pub struct Hotaru {
     focused_pane: Option<u64>,
     /// When a program's notification last reached the desktop.
     notified: Option<std::time::Instant>,
+    /// Go to Tab, while it's open, and the last gathering asked for.
+    pub go_to_tab: Option<crate::go_to_tab::Palette>,
+    go_to_tab_token: u64,
+    /// The tabs as last shown, the one in front first.
+    recent_tabs: Vec<u64>,
 }
 
 impl Hotaru {
@@ -281,6 +292,9 @@ impl Hotaru {
             ask_token: 0,
             focused_pane: None,
             notified: None,
+            go_to_tab: None,
+            go_to_tab_token: 0,
+            recent_tabs: Vec::new(),
         }
     }
 
@@ -1262,7 +1276,7 @@ impl Hotaru {
                     self.close_settings(cx);
                     return;
                 }
-                Action::NewTab | Action::SplitRight | Action::SplitDown => cx.activate(self.window),
+                Action::NewTab | Action::SplitRight | Action::SplitDown | Action::GoToTab => cx.activate(self.window),
                 _ => {}
             }
         }
@@ -1307,6 +1321,10 @@ impl Hotaru {
             }
             Action::LastTab => {
                 self.select_tab_at(None, cx);
+                return;
+            }
+            Action::GoToTab => {
+                self.toggle_go_to_tab(cx);
                 return;
             }
             Action::Copy => Msg::Copy,
@@ -1364,6 +1382,13 @@ impl Hotaru {
     /// waiting for a new one (which the menus mustn't take first).
     fn item(&self, label: &str, action: Action) -> MenuItem<Msg> {
         let item = MenuItem::new(label, Msg::Action(action));
+        // The kit gives editing roles to the focused widget before falling
+        // back to the app action. Search fields must never paste into a PTY.
+        let item = match action {
+            Action::Copy => item.role(MenuRole::Copy),
+            Action::Paste => item.role(MenuRole::Paste),
+            _ => item,
+        };
         match self.bindings.shortcut(action) {
             Some(shortcut) if self.recording.is_none() => item.shortcut(shortcut),
             _ => item,
@@ -1408,6 +1433,104 @@ impl Hotaru {
         match shortcut {
             Some(shortcut) if self.recording.is_none() => item.shortcut(shortcut),
             _ => item,
+        }
+    }
+
+    /// The keys that show the tab at `index`: ❖1 to ❖8, and ❖9 the last, as in Ghostty.
+    fn tab_shortcut(&self, index: usize) -> Option<Shortcut> {
+        match Action::SELECT_TAB.get(index) {
+            Some(action) => self.bindings.shortcut(*action),
+            None if index + 1 == self.tabs.len() => self.bindings.shortcut(Action::LastTab),
+            None => None,
+        }
+    }
+
+    /// Every pane Go to Tab may go to, by tab.
+    fn go_to_tab_candidates(&self) -> Vec<crate::go_to_tab::Candidate> {
+        let mut candidates = Vec::new();
+        for (index, tab) in self.tabs.iter().enumerate() {
+            let shortcut = self.tab_shortcut(index).map(|shortcut| shortcut.label());
+            let recency = self.recent_tabs.iter().position(|id| *id == tab.id).unwrap_or(usize::MAX);
+            let leaves = tab.tree.leaves();
+            for pane in leaves.iter().filter_map(|id| self.panes.iter().find(|pane| pane.id == *id)) {
+                candidates.push(crate::go_to_tab::Candidate {
+                    tab: tab.id,
+                    pane: pane.id,
+                    number: index + 1,
+                    panes: leaves.len(),
+                    title: pane.title.clone(),
+                    front: pane.id == tab.active,
+                    bell: pane.bell,
+                    current: tab.id == self.active,
+                    shortcut: shortcut.clone(),
+                    recency,
+                });
+            }
+        }
+        candidates
+    }
+
+    /// Open Go to Tab, or close it. Its titles are at hand; the panes'
+    /// screens, programs and folders are gathered on a thread meanwhile.
+    fn toggle_go_to_tab(&mut self, cx: &mut Cx<Msg>) {
+        if self.go_to_tab.take().is_some() {
+            self.focus_active(cx);
+            return;
+        }
+        self.go_to_tab_token = self.go_to_tab_token.wrapping_add(1);
+        let token = self.go_to_tab_token;
+        let mut palette = crate::go_to_tab::Palette::new(token, self.tabs.len());
+        palette.refresh(&self.go_to_tab_candidates(), true);
+        self.go_to_tab = Some(palette);
+        let sources: Vec<crate::go_to_tab::Source> = self
+            .panes
+            .iter()
+            .map(|pane| crate::go_to_tab::Source {
+                pane: pane.id,
+                pid: pane.session.as_ref().and_then(Session::process_id),
+                // None until a valid OSC 7 report arrives, however late that
+                // is. A startup guess must not suppress the live /proc lookup.
+                reported: pane.link_directory.clone(),
+                fallback: pane.working_directory.clone(),
+                snapshot: pane.snapshot.clone(),
+            })
+            .collect();
+        let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
+        cx.spawn(move || Msg::GoToTabFacts(token, crate::go_to_tab::gather(sources, home).into()));
+        // The query takes the keyboard once the view has built it.
+        cx.after(std::time::Duration::ZERO, Msg::GoToTabFocus);
+    }
+
+    fn go_to_tab_event(&mut self, event: crate::go_to_tab::Event, cx: &mut Cx<Msg>) {
+        use crate::go_to_tab::Event;
+        let candidates = if matches!(event, Event::Query(_)) { self.go_to_tab_candidates() } else { Vec::new() };
+        let Some(palette) = self.go_to_tab.as_mut() else { return };
+        let go = match event {
+            Event::Query(query) => {
+                palette.query = query;
+                palette.refresh(&candidates, true);
+                return;
+            }
+            Event::Move(by) => {
+                palette.step(by);
+                return;
+            }
+            Event::Scroll(points) => {
+                palette.scroll_by(points);
+                return;
+            }
+            Event::Click(index) => palette.rows.get(index).map(|row| row.pane),
+            Event::Go => palette.rows.get(palette.selected).map(|row| row.pane),
+            Event::Close => None,
+        };
+        self.go_to_tab = None;
+        match go {
+            Some(pane) => {
+                self.focus_pane(pane, cx);
+                // Another tab's panes are built with the next view.
+                self.focus_after_rebuild(cx);
+            }
+            None => self.focus_active(cx),
         }
     }
 }
@@ -1687,6 +1810,19 @@ impl Program for Hotaru {
                 }
             }
             Msg::CloseTab => self.close_tab(cx),
+            Msg::GoToTab(event) => self.go_to_tab_event(event, cx),
+            Msg::GoToTabFacts(token, facts) => {
+                let candidates = self.go_to_tab_candidates();
+                if let Some(palette) = self.go_to_tab.as_mut().filter(|palette| palette.token == token) {
+                    palette.facts = Some(facts);
+                    palette.refresh(&candidates, false);
+                }
+            }
+            Msg::GoToTabFocus => {
+                if self.go_to_tab.is_some() {
+                    cx.focus("go-to-tab");
+                }
+            }
             Msg::Frame(id, frame) => {
                 let mut search_changed = false;
                 let mut screen_changed = false;
@@ -2277,36 +2413,56 @@ impl Program for Hotaru {
         }) {
             self.cancel_automatic();
         }
+        if self.recent_tabs.first() != Some(&self.active) {
+            self.recent_tabs.retain(|id| *id != self.active && self.tabs.iter().any(|tab| tab.id == *id));
+            self.recent_tabs.insert(0, self.active);
+        }
         self.sync_search(cx);
     }
     fn view(&self, window: WindowKey) -> Element<Msg> {
         if Some(window) == self.settings_window {
             return crate::preferences::view(self);
         }
-        let mut tabs: Vec<Element<Msg>> = self
+        let titles: Vec<&str> = self
             .tabs
             .iter()
-            .map(|tab| {
-                let title =
-                    self.panes.iter().find(|pane| pane.id == tab.active).map_or("Shell", |pane| pane.title.as_str());
-                let bell = tab.tree.leaves().iter().any(|id| self.panes.iter().any(|pane| pane.id == *id && pane.bell));
-                button(if bell { format!("• {title}") } else { title.to_owned() })
+            .map(|tab| self.panes.iter().find(|pane| pane.id == tab.active).map_or("Shell", |pane| pane.title.as_str()))
+            .collect();
+        let bells: Vec<bool> = self
+            .tabs
+            .iter()
+            .map(|tab| tab.tree.leaves().iter().any(|id| self.panes.iter().any(|pane| pane.id == *id && pane.bell)))
+            .collect();
+        let shown = self.tabs.iter().position(|tab| tab.id == self.active).unwrap_or(0);
+        let tabs: Vec<Element<Msg>> = self
+            .tabs
+            .iter()
+            .zip(crate::tab_strip::labels(&titles, shown))
+            .zip(bells.iter().zip(&titles))
+            .map(|((tab, label), (bell, title))| {
+                button(if *bell { format!("• {label}") } else { label })
                     .toolbar()
                     .selected(tab.id == self.active)
                     .on_press(Msg::SelectTab(tab.id))
-                    .max_width(240.0)
+                    .max_width(crate::tab_strip::WIDEST)
+                    .tooltip(*title)
                     .key(tab.id)
                     .into()
             })
             .collect();
-        tabs.push(spacer().into());
-        tabs.push(
+        // The buttons come after the strip, which takes the room they leave:
+        // no number of tabs pushes them out of the window.
+        let top = vec![
+            crate::tab_strip::tab_strip(tabs, shown, bells),
             icon_button(Icon::Plus).toolbar().on_press(Msg::NewTab).tooltip(self.tip("New Tab", Action::NewTab)).into(),
-        );
-        tabs.push(
+            icon_button(Icon::LayoutList)
+                .toolbar()
+                .on_press(Msg::Action(Action::GoToTab))
+                .tooltip(self.tip("Go to Tab", Action::GoToTab))
+                .into(),
             icon_button(Icon::Search).toolbar().on_press(Msg::Find).tooltip(self.tip("Find", Action::Find)).into(),
-        );
-        let mut contents: Vec<Element<Msg>> = vec![toolbar(tabs)];
+        ];
+        let mut contents: Vec<Element<Msg>> = vec![toolbar(top)];
         if self.find {
             contents.push(
                 row![
@@ -2350,10 +2506,16 @@ impl Program for Hotaru {
             bar.push(status_text(format!("{} × {}", pane.snapshot.cols, pane.snapshot.rows)));
             contents.push(status_bar(bar));
         }
-        aizome_kit::widgets::layout::column(contents).width(Fill).height(Fill).into()
+        // Go to Tab over the window, which keeps its place under it.
+        let mut layers = vec![aizome_kit::widgets::layout::column(contents).width(Fill).height(Fill).into()];
+        if let Some(palette) = &self.go_to_tab {
+            layers.push(crate::go_to_tab::view(palette));
+        }
+        aizome_kit::widgets::layout::stack(layers).width(Fill).height(Fill).into()
     }
     fn menus(&self) -> MenuBar<Msg> {
-        let selected = self.find_state.copy.is_some()
+        let selected = self.go_to_tab.is_some()
+            || self.find_state.copy.is_some()
             || self.active_pane().is_some_and(|t| t.selection.is_some_and(|s| !s.is_empty()));
         let selection = self.active_pane().is_some_and(|t| t.selection.is_some_and(|s| !s.is_empty()));
         let tab = self.active_tab();
@@ -2448,26 +2610,22 @@ impl Program for Hotaru {
             .separator()
             .item(self.item("Previous Tab", Action::PreviousTab).enabled(several))
             .item(self.item("Next Tab", Action::NextTab).enabled(several))
+            .item(self.item("Go to Tab…", Action::GoToTab))
             .separator()
             .item(self.item("Zoom Pane", Action::ZoomPane).checked(zoomed).enabled(split))
             .item(self.item("Previous Pane", Action::PreviousPane).enabled(split))
             .item(self.item("Next Pane", Action::NextPane).enabled(split))
             .submenu(select_pane)
             .separator();
-        // The tabs by their titles, ❖1 to ❖8 and the last ❖9, as in Ghostty.
-        let last = self.tabs.len().saturating_sub(1);
+        // The tabs by their titles, with the keys that show them.
         for (index, tab) in self.tabs.iter().enumerate() {
             let title =
                 self.panes.iter().find(|pane| pane.id == tab.active).map_or("Shell", |pane| pane.title.as_str());
             let title: String = title.chars().take(48).collect();
-            let shortcut = match Action::SELECT_TAB.get(index) {
-                Some(action) => self.bindings.shortcut(*action),
-                None if index == last => self.bindings.shortcut(Action::LastTab),
-                None => None,
-            };
-            window = window.item(
-                self.keyed(MenuItem::new(title, Msg::SelectTab(tab.id)).checked(tab.id == self.active), shortcut),
-            );
+            window = window.item(self.keyed(
+                MenuItem::new(title, Msg::SelectTab(tab.id)).checked(tab.id == self.active),
+                self.tab_shortcut(index),
+            ));
         }
         let window = window
             .separator()
