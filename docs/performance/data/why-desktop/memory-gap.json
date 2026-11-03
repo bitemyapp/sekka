@@ -1,0 +1,324 @@
+{
+ "per_desktop": {
+  "aizome": {
+   "anon": {
+    "compositor+shell": 45.16796875,
+    "common": 41.3828125,
+    "input method": 0.0,
+    "pim+search": 0.0,
+    "desktop helpers": 4.828125,
+    "x11 support": 10.37109375
+   },
+   "pss": {
+    "compositor+shell": 120.0361328125,
+    "common": 96.7197265625,
+    "input method": 0.0,
+    "pim+search": 0.0,
+    "desktop helpers": 25.560546875,
+    "x11 support": 33.958984375
+   },
+   "used": 591.203125,
+   "shmem": 46.25390625,
+   "sunreclaim": 51.71875,
+   "pagetables": 9.08984375,
+   "kernelstack": 4.76171875,
+   "mapped": 220.24609375,
+   "anonpages": 146.1171875,
+   "names": {
+    "common": [
+     "(sd-pam)",
+     "agent",
+     "dbus-broker",
+     "dbus-broker-launch",
+     "dconf-service",
+     "fusermount3",
+     "gcr-ssh-agent",
+     "gnome-keyring-daemon",
+     "greetd",
+     "gvfsd",
+     "gvfsd-fuse",
+     "pipewire",
+     "pipewire-pulse",
+     "python3",
+     "sh",
+     "systemctl",
+     "systemd",
+     "wireplumber",
+     "xdg-desktop-portal",
+     "xdg-desktop-portal-gtk",
+     "xdg-document-portal",
+     "xdg-permission-store"
+    ],
+    "compositor+shell": [
+     "aizome",
+     "aizome-shell"
+    ],
+    "x11 support": [
+     "Xwayland",
+     "xwayland-satellite"
+    ],
+    "desktop helpers": [
+     "aizome-hako",
+     "aizome-koyomi",
+     "aizome-network-agent",
+     "aizome-portal",
+     "xdg-desktop-portal-wlr"
+    ]
+   }
+  },
+  "gnome": {
+   "anon": {
+    "compositor+shell": 220.41796875,
+    "common": 51.1796875,
+    "input method": 28.2421875,
+    "pim+search": 61.00390625,
+    "desktop helpers": 45.37890625,
+    "x11 support": 34.6328125
+   },
+   "pss": {
+    "compositor+shell": 300.943359375,
+    "common": 90.5673828125,
+    "input method": 41.9775390625,
+    "pim+search": 122.1318359375,
+    "desktop helpers": 75.986328125,
+    "x11 support": 65.5029296875
+   },
+   "used": 936.91796875,
+   "shmem": 37.99609375,
+   "sunreclaim": 67.5703125,
+   "pagetables": 18.21875,
+   "kernelstack": 7.87109375,
+   "mapped": 302.2890625,
+   "anonpages": 491.1953125,
+   "names": {
+    "desktop helpers": [
+     "gdm-password]",
+     "gdm-wayland-session",
+     "gjs",
+     "gsd-a11y-settings",
+     "gsd-color",
+     "gsd-datetime",
+     "gsd-disk-utility-notify",
+     "gsd-housekeeping",
+     "gsd-keyboard",
+     "gsd-media-keys",
+     "gsd-power",
+     "gsd-print-notifications",
+     "gsd-printer",
+     "gsd-rfkill",
+     "gsd-screensaver-proxy",
+     "gsd-sharing",
+     "gsd-smartcard",
+     "gsd-sound",
+     "gsd-usb-protection",
+     "gsd-wwan",
+     "gsd-xsettings",
+     "gvfsd-metadata",
+     "xdg-desktop-portal-gnome"
+    ],
+    "common": [
+     "(sd-pam)",
+     "at-spi-bus-launcher",
+     "at-spi2-registryd",
+     "dbus-broker",
+     "dbus-broker-launch",
+     "fusermount3",
+     "gcr-ssh-agent",
+     "gnome-keyring-daemon",
+     "gnome-session-ctl",
+     "gnome-session-init-worker",
+     "gnome-session-service",
+     "gvfs-afc-volume-monitor",
+     "gvfs-goa-volume-monitor",
+     "gvfs-gphoto2-volume-monitor",
+     "gvfs-mtp-volume-monitor",
+     "gvfs-udisks2-volume-monitor",
+     "gvfsd",
+     "gvfsd-fuse",
+     "pipewire",
+     "pipewire-pulse",
+     "python3",
+     "systemd",
+     "wireplumber",
+     "xdg-desktop-portal",
+     "xdg-desktop-portal-gtk",
+     "xdg-document-portal",
+     "xdg-permission-store"
+    ],
+    "compositor+shell": [
+     "gnome-shell"
+    ],
+    "pim+search": [
+     "evolution-addressbook-factory",
+     "evolution-alarm-notify",
+     "evolution-calendar-factory",
+     "evolution-source-registry",
+     "gnome-shell-calendar-server",
+     "goa-daemon",
+     "goa-identity-service",
+     "localsearch-3"
+    ],
+    "input method": [
+     "ibus-daemon",
+     "ibus-dconf",
+     "ibus-engine-simple",
+     "ibus-extension-gtk3",
+     "ibus-portal",
+     "ibus-x11"
+    ],
+    "x11 support": [
+     "Xwayland",
+     "mutter-x11-frames"
+    ]
+   }
+  },
+  "plasma": {
+   "anon": {
+    "compositor+shell": 337.1484375,
+    "common": 50.92578125,
+    "input method": 0.0,
+    "pim+search": 231.078125,
+    "desktop helpers": 78.98828125,
+    "x11 support": 13.4609375
+   },
+   "pss": {
+    "compositor+shell": 533.0986328125,
+    "common": 94.755859375,
+    "input method": 0.0,
+    "pim+search": 336.25,
+    "desktop helpers": 123.1376953125,
+    "x11 support": 28.748046875
+   },
+   "used": 1244.56640625,
+   "shmem": 72.1171875,
+   "sunreclaim": 69.68359375,
+   "pagetables": 23.35546875,
+   "kernelstack": 7.09375,
+   "mapped": 451.65234375,
+   "anonpages": 755.9609375,
+   "names": {
+    "common": [
+     "(sd-pam)",
+     "agent",
+     "at-spi-bus-launcher",
+     "at-spi2-registryd",
+     "dbus-broker",
+     "dbus-broker-launch",
+     "dconf-service",
+     "fusermount3",
+     "gcr-ssh-agent",
+     "gnome-keyring-daemon",
+     "pipewire",
+     "pipewire-pulse",
+     "plasmalogin-helper",
+     "python3",
+     "startplasma-wayland",
+     "systemd",
+     "wireplumber",
+     "xdg-desktop-portal",
+     "xdg-desktop-portal-gtk",
+     "xdg-document-portal",
+     "xdg-permission-store"
+    ],
+    "desktop helpers": [
+     "DiscoverNotifier",
+     "drkonqi-coredump-processor",
+     "gmenudbusmenuproxy",
+     "kaccess",
+     "kactivitymanagerd",
+     "kded6",
+     "kioworker",
+     "ksmserver",
+     "kunifiedpush-distributor",
+     "kwin_wayland_wrapper",
+     "org_kde_powerdevil",
+     "polkit-kde-authentication-agent-1",
+     "xdg-desktop-portal-kde"
+    ],
+    "compositor+shell": [
+     "kwin_wayland",
+     "plasmashell"
+    ],
+    "x11 support": [
+     "Xwayland",
+     "xembedsniproxy",
+     "xsettingsd"
+    ],
+    "pim+search": [
+     "akonadi_archivemail_agent",
+     "akonadi_birthdays_resource",
+     "akonadi_contacts_resource",
+     "akonadi_control",
+     "akonadi_followupreminder_agent",
+     "akonadi_ical_resource",
+     "akonadi_indexing_agent",
+     "akonadi_maildir_resource",
+     "akonadi_maildispatcher_agent",
+     "akonadi_mailfilter_agent",
+     "akonadi_mailmerge_agent",
+     "akonadi_migration_agent",
+     "akonadi_newmailnotifier_agent",
+     "akonadi_sendlater_agent",
+     "akonadi_unifiedmailbox_agent",
+     "akonadiserver",
+     "baloo_file",
+     "mariadbd"
+    ]
+   }
+  },
+  "baseline": {
+   "anon": {
+    "compositor+shell": 0.0,
+    "common": 0.0,
+    "input method": 0.0,
+    "pim+search": 0.0,
+    "desktop helpers": 0.0,
+    "x11 support": 0.0
+   },
+   "pss": {
+    "compositor+shell": 0.0,
+    "common": 0.0,
+    "input method": 0.0,
+    "pim+search": 0.0,
+    "desktop helpers": 0.0,
+    "x11 support": 0.0
+   },
+   "used": 370.015625,
+   "shmem": 11.62890625,
+   "sunreclaim": 39.453125,
+   "pagetables": 2.9765625,
+   "kernelstack": 1.875,
+   "mapped": 46.0859375,
+   "anonpages": 26.67578125,
+   "names": {}
+  }
+ },
+ "gap_over_aizome": {
+  "gnome": {
+   "anon: compositor+shell": 175.2,
+   "anon: pim+search": 61.0,
+   "anon: input method": 28.2,
+   "anon: x11 support": 24.3,
+   "anon: common": 9.8,
+   "anon: desktop helpers": 40.6,
+   "shared memory (meminfo Shmem)": -8.3,
+   "kernel: SUnreclaim + PageTables + KernelStack": 28.1,
+   "sum of the above": 358.9,
+   "measured gap in use (MemTotal - MemAvailable)": 345.7,
+   "file-backed mapped pages (not in use; reclaimable)": 82.0
+  },
+  "plasma": {
+   "anon: compositor+shell": 292.0,
+   "anon: pim+search": 231.1,
+   "anon: input method": 0.0,
+   "anon: x11 support": 3.1,
+   "anon: common": 9.5,
+   "anon: desktop helpers": 74.2,
+   "shared memory (meminfo Shmem)": 25.9,
+   "kernel: SUnreclaim + PageTables + KernelStack": 34.6,
+   "sum of the above": 670.4,
+   "measured gap in use (MemTotal - MemAvailable)": 653.4,
+   "file-backed mapped pages (not in use; reclaimable)": 231.4
+  }
+ }
+}

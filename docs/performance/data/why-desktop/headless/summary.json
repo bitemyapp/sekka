@@ -1,0 +1,217 @@
+{
+ "memory_by_mapping": {
+  "aizome/compositor": {
+   "icons and icon caches": 0.0,
+   "JS GC heap (1 MiB-aligned chunks)": 0.0,
+   "JS GC heap (Qt's QML engine, named memfd)": 0.0,
+   "anonymous executable (JIT code)": 0.0,
+   "malloc: main heap (brk)": 2.54,
+   "malloc: thread arenas": 0.01,
+   "shared memory (window buffers, wl_shm pools)": 0.46,
+   "fonts (files mapped)": 0.29,
+   "libraries: relocated data (private)": 1.73,
+   "thread stacks": 0.12,
+   "other files": 0.33,
+   "kernel-provided": 0.0,
+   "llvmpipe display buffers (memfd shared with the compositor)": 0.0,
+   "other anonymous mmap (large malloc blocks, engines' own heaps, driver buffers)": 8.08,
+   "caches, schemas, locale, resources": 0.0,
+   "executable": 0.02,
+   "libraries: code": 13.64,
+   "libraries: read-only data": 8.28,
+   "_total": 35.56,
+   "_anon": 12.49
+  },
+  "aizome/shell": {
+   "icons and icon caches": 0.0,
+   "JS GC heap (1 MiB-aligned chunks)": 0.0,
+   "JS GC heap (Qt's QML engine, named memfd)": 0.0,
+   "anonymous executable (JIT code)": 0.0,
+   "malloc: main heap (brk)": 3.9,
+   "malloc: thread arenas": 27.77,
+   "shared memory (window buffers, wl_shm pools)": 1.5,
+   "fonts (files mapped)": 0.56,
+   "libraries: relocated data (private)": 0.47,
+   "thread stacks": 0.14,
+   "other files": 0.33,
+   "kernel-provided": 0.0,
+   "llvmpipe display buffers (memfd shared with the compositor)": 0.0,
+   "other anonymous mmap (large malloc blocks, engines' own heaps, driver buffers)": 1.21,
+   "caches, schemas, locale, resources": 0.0,
+   "executable": 18.21,
+   "libraries: code": 0.23,
+   "libraries: read-only data": 0.33,
+   "_total": 54.7,
+   "_anon": 34.26
+  },
+  "gnome/compositor+shell": {
+   "icons and icon caches": 0.02,
+   "JS GC heap (1 MiB-aligned chunks)": 8.72,
+   "JS GC heap (Qt's QML engine, named memfd)": 0.0,
+   "anonymous executable (JIT code)": 0.4,
+   "malloc: main heap (brk)": 82.41,
+   "malloc: thread arenas": 10.77,
+   "shared memory (window buffers, wl_shm pools)": 0.0,
+   "fonts (files mapped)": 0.78,
+   "libraries: relocated data (private)": 8.94,
+   "thread stacks": 0.1,
+   "other files": 4.19,
+   "kernel-provided": 0.0,
+   "llvmpipe display buffers (memfd shared with the compositor)": 0.0,
+   "other anonymous mmap (large malloc blocks, engines' own heaps, driver buffers)": 128.36,
+   "caches, schemas, locale, resources": 1.32,
+   "executable": 0.03,
+   "libraries: code": 54.74,
+   "libraries: read-only data": 23.64,
+   "_total": 324.67,
+   "_anon": 239.72
+  },
+  "plasma/compositor": {
+   "icons and icon caches": 0.0,
+   "JS GC heap (1 MiB-aligned chunks)": 0.0,
+   "JS GC heap (Qt's QML engine, named memfd)": 0.57,
+   "anonymous executable (JIT code)": 0.22,
+   "malloc: main heap (brk)": 55.04,
+   "malloc: thread arenas": 7.08,
+   "shared memory (window buffers, wl_shm pools)": 0.05,
+   "fonts (files mapped)": 0.02,
+   "libraries: relocated data (private)": 11.22,
+   "thread stacks": 0.11,
+   "other files": 0.33,
+   "kernel-provided": 0.0,
+   "llvmpipe display buffers (memfd shared with the compositor)": 10.57,
+   "other anonymous mmap (large malloc blocks, engines' own heaps, driver buffers)": 23.03,
+   "caches, schemas, locale, resources": 4.73,
+   "executable": 1.76,
+   "libraries: code": 39.08,
+   "libraries: read-only data": 17.07,
+   "_total": 171.16,
+   "_anon": 97.38
+  },
+  "plasma/shell": {
+   "icons and icon caches": 0.0,
+   "JS GC heap (1 MiB-aligned chunks)": 0.0,
+   "JS GC heap (Qt's QML engine, named memfd)": 13.47,
+   "anonymous executable (JIT code)": 0.39,
+   "malloc: main heap (brk)": 97.17,
+   "malloc: thread arenas": 30.93,
+   "shared memory (window buffers, wl_shm pools)": 1.29,
+   "fonts (files mapped)": 0.24,
+   "libraries: relocated data (private)": 14.02,
+   "thread stacks": 0.13,
+   "other files": 0.38,
+   "kernel-provided": 0.0,
+   "llvmpipe display buffers (memfd shared with the compositor)": 10.57,
+   "other anonymous mmap (large malloc blocks, engines' own heaps, driver buffers)": 72.38,
+   "caches, schemas, locale, resources": 5.02,
+   "executable": 1.09,
+   "libraries: code": 52.62,
+   "libraries: read-only data": 29.58,
+   "_total": 329.64,
+   "_anon": 229.82
+  }
+ },
+ "wallpaper": {
+  "aizome vs no picture": {
+   "with_mib": 90.3,
+   "against_mib": 65.3,
+   "pss_delta_mib": 24.9,
+   "anon_delta_mib": 24.5
+  },
+  "gnome vs the same picture at 1920 \u00d7 1080": {
+   "with_mib": 324.7,
+   "against_mib": 245.8,
+   "pss_delta_mib": 78.9,
+   "anon_delta_mib": 78.4
+  },
+  "plasma vs Plasma's default look and feel and its wallpaper": {
+   "with_mib": 500.8,
+   "against_mib": 507.6,
+   "pss_delta_mib": -6.8,
+   "anon_delta_mib": -2.8
+  }
+ },
+ "session": {
+  "aizome": {
+   "compositor_shell": 90.3,
+   "other": 45.5
+  },
+  "gnome": {
+   "compositor_shell": 324.7,
+   "other": 170.1
+  },
+  "plasma": {
+   "compositor_shell": 500.8,
+   "other": 434.1
+  }
+ },
+ "work": {
+  "aizome/compositor": {
+   "idle_wakeups_per_s": 6.765000000000001,
+   "idle_cpu_ms_per_s": 0.1225,
+   "update_cpu_ms": 0.49594499999999997,
+   "update_wakeups": 2.4914312499999998,
+   "move_step_cpu_ms": 0.329679
+  },
+  "aizome/shell": {
+   "idle_wakeups_per_s": 47.73,
+   "idle_cpu_ms_per_s": 0.5175000000000001,
+   "update_cpu_ms": 0.10176879166666666,
+   "update_wakeups": 10.177802499999999,
+   "move_step_cpu_ms": 0.113316
+  },
+  "gnome/compositor+shell": {
+   "idle_wakeups_per_s": 2.035,
+   "idle_cpu_ms_per_s": 0.595,
+   "update_cpu_ms": 2.1011973333333334,
+   "update_wakeups": 6.092266666666667,
+   "move_step_cpu_ms": 2.206617
+  },
+  "plasma/compositor": {
+   "idle_wakeups_per_s": 0.215,
+   "idle_cpu_ms_per_s": 0.0315,
+   "update_cpu_ms": 2.3121641666666664,
+   "update_wakeups": 13.143801666666667,
+   "move_step_cpu_ms": 1.8195726333333333
+  },
+  "plasma/shell": {
+   "idle_wakeups_per_s": 3.635,
+   "idle_cpu_ms_per_s": 1.1705,
+   "update_cpu_ms": 0.3433691666666666,
+   "update_wakeups": 1.5247549999999999,
+   "move_step_cpu_ms": 0.07188141666666666
+  }
+ },
+ "by_thread": {
+  "aizome/updates": {
+   "aizome/main thread": 0.488
+  },
+  "aizome/move": {
+   "aizome/main thread": 0.329,
+   "aizome-shell/main thread": 0.094
+  },
+  "gnome/updates": {
+   "gnome-shell/main thread": 1.06,
+   "gnome-shell/llvmpipe-1": 0.7,
+   "gnome-shell/llvmpipe-0": 0.323
+  },
+  "gnome/move": {
+   "gnome-shell/llvmpipe-1": 1.077,
+   "gnome-shell/llvmpipe-0": 0.859,
+   "gnome-shell/main thread": 0.269
+  },
+  "plasma/updates": {
+   "kwin_wayland/llvmpipe-1": 1.004,
+   "kwin_wayland/llvmpipe-0": 0.796,
+   "kwin_wayland/main thread": 0.512,
+   "plasmashell/main thread": 0.208,
+   "plasmashell/llvmpipe-1": 0.061
+  },
+  "plasma/move": {
+   "kwin_wayland/llvmpipe-1": 0.984,
+   "kwin_wayland/llvmpipe-0": 0.677,
+   "kwin_wayland/main thread": 0.158,
+   "plasmashell/main thread": 0.047
+  }
+ }
+}

@@ -1,0 +1,92 @@
+=== idle (75137.000565,75167.014627, CLOCK_MONOTONIC s): samples by process, thread and shared object
+    34.65%  QSGRenderThread  libLLVM.so.21.1
+     9.45%  .plasmashell-wr  ld-linux-x86-64.so.2
+     6.30%  .plasmashell-wr  libQt6Core.so.6.12.0
+     5.51%  .xdg-desktop-po  ld-linux-x86-64.so.2
+     3.94%  .plasmashell-wr  libQt6Qml.so.6.12.0
+     3.94%  dbus-daemon      libdbus-1.so.3.38.3
+     3.15%  gdbus            libglib-2.0.so.0.8800.3
+     2.36%  .plasmashell-wr  libc.so.6
+     2.36%  dbus-daemon      dbus-daemon
+     2.36%  dbus-daemon      libc.so.6
+     1.57%  .plasmashell-wr  libglib-2.0.so.0.8800.3
+     1.57%  .xdg-desktop-po  libc.so.6
+     1.57%  QSGRenderThread  libgallium-26.2.6.so
+     1.57%  gdbus            libc.so.6
+=== idle: top symbols
+     3.94%  .plasmashell-wr  ld-linux-x86-64.so.2                   [.] strcmp
+     2.36%  .plasmashell-wr  ld-linux-x86-64.so.2                   [.] do_lookup_x
+     2.36%  .xdg-desktop-po  ld-linux-x86-64.so.2                   [.] strcmp
+     2.36%  dbus-daemon      libc.so.6                              [.] __strcmp_evex
+     1.57%  .plasmashell-wr  ld-linux-x86-64.so.2                   [.] _dl_close_worker
+     1.57%  .plasmashell-wr  libQt6Core.so.6.12.0                   [.] QObject::eventFilter(QObject*, QEvent*)
+     1.57%  .plasmashell-wr  libQt6Qml.so.6.12.0                    [.] QV4::Object::internalGet(QV4::PropertyKey, QV4::Value const*, bool*) const
+     1.57%  .xdg-desktop-po  ld-linux-x86-64.so.2                   [.] do_lookup_x
+     1.57%  QSGRenderThread  libLLVM.so.21.1                        [.] (anonymous namespace)::CodeGenPrepare::_run(llvm::Function&)
+     1.57%  QSGRenderThread  libLLVM.so.21.1                        [.] llvm::TargetLowering::SimplifyDemandedBits(llvm::SDValue, llvm::APInt const&, llvm::APInt const&, llvm::KnownBits&, llvm::TargetLowering::TargetLoweringOpt&, unsigned int, bool) const
+     1.57%  QSGRenderThread  libLLVM.so.21.1                        [.] llvm::TargetLowering::SimplifyDemandedVectorElts(llvm::SDValue, llvm::APInt const&, llvm::APInt&, llvm::APInt&, llvm::TargetLowering::TargetLoweringOpt&, unsigned int, bool) const
+     1.57%  dbus-daemon      dbus-daemon                            [.] get_recipients_from_list.part.0
+     1.57%  dbus-daemon      libdbus-1.so.3.38.3                    [.] _dbus_type_reader_get_current_type
+
+=== updates (75169.124673,75195.261744, CLOCK_MONOTONIC s): samples by process, thread and shared object
+    32.66%  llvmpipe-1       [JIT] tid 1832895
+    27.55%  llvmpipe-0       [JIT] tid 1832895
+     5.11%  .kwin_wayland-w  libc.so.6
+     5.11%  .kwin_wayland-w  libgallium-26.2.6.so
+     5.11%  .kwin_wayland-w  libkwin.so.6.8.2
+     3.10%  llvmpipe-1       libgallium-26.2.6.so
+     2.48%  llvmpipe-0       libgallium-26.2.6.so
+     1.86%  .plasmashell-wr  ld-linux-x86-64.so.2
+     1.86%  llvmpipe-1       [JIT] tid 1832927
+     1.55%  .plasmashell-wr  libQt6Qml.so.6.12.0
+     1.55%  llvmpipe-0       [JIT] tid 1832927
+=== updates: top symbols
+     6.97%  llvmpipe-1       [JIT] tid 1832895                [.] 0x00007f77a7bf2a4b
+     4.33%  llvmpipe-0       [JIT] tid 1832895                [.] 0x00007f77a7bf2a4b
+     3.87%  .kwin_wayland-w  libc.so.6                        [.] __memmove_avx512_unaligned_erms
+     2.17%  llvmpipe-1       [JIT] tid 1832895                [.] 0x00007f77a7bf2a98
+     2.01%  llvmpipe-0       [JIT] tid 1832895                [.] 0x00007f77a7bf2a71
+     1.70%  llvmpipe-1       libgallium-26.2.6.so             [.] shade_quads
+     1.55%  llvmpipe-1       [JIT] tid 1832895                [.] 0x00007f77a7bf2a8a
+     1.55%  llvmpipe-1       [JIT] tid 1832895                [.] 0x00007f77a7bf2bea
+     1.24%  llvmpipe-0       [JIT] tid 1832895                [.] 0x00007f77a7bf2a98
+     1.24%  llvmpipe-1       [JIT] tid 1832895                [.] 0x00007f77a7bf2a71
+     1.24%  llvmpipe-1       [JIT] tid 1832895                [.] 0x00007f77a7bf2c79
+     1.08%  llvmpipe-0       [JIT] tid 1832895                [.] 0x00007f77a7bf2a8a
+     1.08%  llvmpipe-0       [JIT] tid 1832895                [.] 0x00007f77a7bf2bf0
+     1.08%  llvmpipe-0       [JIT] tid 1832895                [.] 0x00007f77a7bf2c75
+     1.08%  llvmpipe-0       libgallium-26.2.6.so             [.] shade_quads
+     1.08%  llvmpipe-1       [JIT] tid 1832895                [.] 0x00007f77a7bf2bf0
+
+=== move (75196.26186,75202.569773, CLOCK_MONOTONIC s): samples by process, thread and shared object
+    46.18%  llvmpipe-1       [JIT] tid 1832895
+    35.54%  llvmpipe-0       [JIT] tid 1832895
+     3.17%  .kwin_wayland-w  libkwin.so.6.8.2
+     2.99%  llvmpipe-0       libgallium-26.2.6.so
+     2.99%  llvmpipe-1       libgallium-26.2.6.so
+=== move: top symbols
+     7.65%  llvmpipe-1       [JIT] tid 1832895              [.] 0x00007f77a7bf2a4b
+     5.32%  llvmpipe-0       [JIT] tid 1832895              [.] 0x00007f77a7bf2a4b
+     3.92%  llvmpipe-1       [JIT] tid 1832895              [.] 0x00007f77a7bf2a71
+     2.43%  llvmpipe-1       [JIT] tid 1832895              [.] 0x00007f77a7bf2a8a
+     2.15%  llvmpipe-0       [JIT] tid 1832895              [.] 0x00007f77a7bf2a71
+     1.87%  llvmpipe-1       [JIT] tid 1832895              [.] 0x00007f77a7bf2ae6
+     1.77%  llvmpipe-1       [JIT] tid 1832895              [.] 0x00007f77a7bf2bea
+     1.77%  llvmpipe-1       libgallium-26.2.6.so           [.] shade_quads
+     1.68%  llvmpipe-1       [JIT] tid 1832895              [.] 0x00007f77a7bf2a98
+     1.49%  llvmpipe-0       [JIT] tid 1832895              [.] 0x00007f77a7bf2a98
+     1.49%  llvmpipe-0       [JIT] tid 1832895              [.] 0x00007f77a7bf2bf0
+     1.49%  llvmpipe-0       libgallium-26.2.6.so           [.] shade_quads
+     1.31%  llvmpipe-0       [JIT] tid 1832895              [.] 0x00007f77a7bf2a8a
+     1.31%  llvmpipe-1       [JIT] tid 1832895              [.] 0x00007f77a7bf2bf0
+     1.21%  llvmpipe-1       [JIT] tid 1832895              [.] 0x00007f77a7bf2b9c
+     1.12%  llvmpipe-0       [JIT] tid 1832895              [.] 0x00007f77a7bf2bba
+     1.12%  llvmpipe-0       [JIT] tid 1832895              [.] 0x00007f77a7bf2bea
+     1.12%  llvmpipe-1       [JIT] tid 1832895              [.] 0x00007f77a7bf2b40
+     1.12%  llvmpipe-1       [JIT] tid 1832895              [.] 0x00007f77a7bf2c79
+     1.03%  llvmpipe-0       [JIT] tid 1832895              [.] 0x00007f77a7bf2ae6
+     0.93%  llvmpipe-0       [JIT] tid 1832895              [.] 0x00007f77a7bf2be6
+     0.84%  llvmpipe-1       [JIT] tid 1832895              [.] 0x00007f77a7bf2ba8
+     0.84%  llvmpipe-1       [JIT] tid 1832895              [.] 0x00007f77a7bf2c87
+     0.84%  llvmpipe-1       [vdso]                         [.] __vdso_clock_gettime
+

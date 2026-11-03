@@ -1,0 +1,278 @@
+{
+ "aizome": {
+  "session_cpu_ms_total_median": 600,
+  "session_cpu_ms_by_process": {
+   "aizome-shell": 280,
+   "systemd": 80,
+   "aizome": 70,
+   "python3": 60,
+   "wireplumber": 50,
+   "xdg-desktop-portal-gtk": 30,
+   "dbus-broker": 10,
+   "Xwayland": 10,
+   "xdg-desktop-portal": 10,
+   "pipewire": 10,
+   "(sd-pam)": 0,
+   "gcr-ssh-agent": 0,
+   "agent": 0,
+   "gnome-keyring-daemon": 0,
+   "sh": 0,
+   "dbus-broker-launch": 0,
+   "systemctl": 0,
+   "xwayland-satellite": 0,
+   "aizome-hako": 0,
+   "aizome-network-agent": 0,
+   "aizome-koyomi": 0,
+   "pipewire-pulse": 0,
+   "xdg-permission-store": 0,
+   "dconf-service": 0,
+   "xdg-document-portal": 0
+  },
+  "idle_wakeups_and_cpu_ms_per_s_by_process": {
+   "aizome-shell": [
+    47.1,
+    0.0
+   ],
+   "aizome": [
+    6.8,
+    0.083
+   ],
+   "aizome-koyomi": [
+    2.0,
+    0.0
+   ],
+   "aizome-network-agent": [
+    2.0,
+    0.0
+   ],
+   "aizome-hako": [
+    2.0,
+    0.0
+   ],
+   "aizome-portal": [
+    2.0,
+    0.0
+   ],
+   "python3": [
+    0.5,
+    0.583
+   ],
+   "xdg-desktop-portal": [
+    0.2,
+    0.0
+   ],
+   "xdg-desktop-portal-gtk": [
+    0.2,
+    0.0
+   ],
+   "systemd": [
+    0.1,
+    0.0
+   ],
+   "(sd-pam)": [
+    0.0,
+    0.0
+   ],
+   "gcr-ssh-agent": [
+    0.0,
+    0.0
+   ],
+   "agent": [
+    0.0,
+    0.0
+   ],
+   "gnome-keyring-daemon": [
+    0.0,
+    0.0
+   ],
+   "sh": [
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "gnome": {
+  "session_cpu_ms_total_median": 3140,
+  "session_cpu_ms_by_process": {
+   "ibus-extension-gtk3": 1350,
+   "gnome-shell": 1020,
+   "systemd": 120,
+   "evolution-source-registry": 90,
+   "python3": 80,
+   "evolution-alarm-notify": 70,
+   "mutter-x11-frames": 60,
+   "gjs": 50,
+   "dbus-broker": 40,
+   "wireplumber": 40,
+   "localsearch-3": 40,
+   "evolution-calendar-factory": 40,
+   "xdg-desktop-portal-gnome": 40,
+   "evolution-addressbook-factory": 30,
+   "Xwayland": 20,
+   "xdg-desktop-portal-gtk": 20,
+   "ibus-daemon": 10,
+   "xdg-desktop-portal": 10,
+   "goa-daemon": 10,
+   "ibus-x11": 10,
+   "gdm-password]": 0,
+   "(sd-pam)": 0,
+   "dbus-broker-launch": 0,
+   "gcr-ssh-agent": 0,
+   "gnome-keyring-daemon": 0
+  },
+  "idle_wakeups_and_cpu_ms_per_s_by_process": {
+   "gnome-shell": [
+    1.3,
+    0.333
+   ],
+   "gvfs-afc-volume-monitor": [
+    1.0,
+    0.0
+   ],
+   "python3": [
+    0.5,
+    1.0
+   ],
+   "evolution-alarm-notify": [
+    0.3,
+    0.0
+   ],
+   "xdg-desktop-portal-gtk": [
+    0.3,
+    0.0
+   ],
+   "gnome-session-service": [
+    0.2,
+    0.0
+   ],
+   "xdg-desktop-portal": [
+    0.2,
+    0.0
+   ],
+   "xdg-desktop-portal-gnome": [
+    0.2,
+    0.0
+   ],
+   "gsd-xsettings": [
+    0.2,
+    0.0
+   ],
+   "dbus-broker": [
+    0.2,
+    0.0
+   ],
+   "at-spi2-registryd": [
+    0.1,
+    0.0
+   ],
+   "gsd-power": [
+    0.1,
+    0.0
+   ],
+   "ibus-extension-gtk3": [
+    0.0,
+    0.0
+   ],
+   "localsearch-3": [
+    0.0,
+    0.0
+   ],
+   "gvfsd-metadata": [
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "plasma": {
+  "session_cpu_ms_total_median": 8380,
+  "session_cpu_ms_by_process": {
+   "kwin_wayland": 3940,
+   "plasmashell": 2100,
+   "mariadbd": 340,
+   "kded6": 220,
+   "systemd": 130,
+   "akonadi_control": 130,
+   "dbus-broker": 120,
+   "akonadi_archivemail_agent": 120,
+   "akonadi_mailfilter_agent": 120,
+   "akonadi_followupreminder_agent": 110,
+   "akonadi_sendlater_agent": 110,
+   "akonadi_unifiedmailbox_agent": 110,
+   "akonadi_mailmerge_agent": 100,
+   "python3": 70,
+   "akonadi_newmailnotifier_agent": 60,
+   "org_kde_powerdevil": 50,
+   "xdg-desktop-portal-kde": 50,
+   "akonadi_maildispatcher_agent": 50,
+   "akonadi_migration_agent": 50,
+   "wireplumber": 40,
+   "DiscoverNotifier": 40,
+   "kaccess": 30,
+   "polkit-kde-authentication-agent-1": 30,
+   "xdg-desktop-portal": 30,
+   "xdg-desktop-portal-gtk": 30
+  },
+  "idle_wakeups_and_cpu_ms_per_s_by_process": {
+   "org_kde_powerdevil": [
+    14.0,
+    0.083
+   ],
+   "mariadbd": [
+    3.3,
+    0.0
+   ],
+   "plasmashell": [
+    1.4,
+    0.25
+   ],
+   "python3": [
+    0.5,
+    0.917
+   ],
+   "kwin_wayland": [
+    0.3,
+    0.0
+   ],
+   "akonadiserver": [
+    0.3,
+    0.0
+   ],
+   "xdg-desktop-portal-gtk": [
+    0.3,
+    0.0
+   ],
+   "xdg-desktop-portal": [
+    0.2,
+    0.0
+   ],
+   "DiscoverNotifier": [
+    0.2,
+    0.0
+   ],
+   "dbus-broker": [
+    0.1,
+    0.0
+   ],
+   "akonadi_control": [
+    0.1,
+    0.0
+   ],
+   "at-spi2-registryd": [
+    0.1,
+    0.0
+   ],
+   "kded6": [
+    0.1,
+    0.0
+   ],
+   "baloo_file": [
+    0.0,
+    0.0
+   ],
+   "akonadi_archivemail_agent": [
+    0.0,
+    0.0
+   ]
+  }
+ }
+}

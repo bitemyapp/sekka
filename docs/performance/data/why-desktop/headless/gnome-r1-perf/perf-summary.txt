@@ -1,0 +1,79 @@
+=== idle (75024.994472,75055.002439, CLOCK_MONOTONIC s): samples by process, thread and shared object
+    53.85%  .gnome-shell-wr  libmozjs-140.so
+    23.08%  .gnome-shell-wr  libc.so.6
+     7.69%  .gnome-shell-wr  libglib-2.0.so.0.8800.3
+     3.85%  .gnome-control-  libc.so.6
+     3.85%  .gnome-shell-wr  libgjs.so.0.0.0
+     3.85%  JS Helper        libmozjs-140.so
+     3.85%  gdbus            libgobject-2.0.so.0.8800.3
+=== idle: top symbols
+    23.08%  .gnome-shell-wr  libc.so.6                   [.] int_mallinfo
+     7.69%  .gnome-shell-wr  libmozjs-140.so             [.] bool js::GCMarker::processMarkStackTop<0u>(JS::SliceBudget&)
+     7.69%  .gnome-shell-wr  libmozjs-140.so             [.] void js::GCMarker::eagerlyMarkChildren<0u>(js::Scope*)
+     3.85%  .gnome-control-  libc.so.6                   [.] __getpid
+     3.85%  .gnome-shell-wr  libgjs.so.0.0.0             [.] ObjectInstance::trace_impl(JSTracer*) [clone .localalias]
+     3.85%  .gnome-shell-wr  libglib-2.0.so.0.8800.3     [.] g_main_context_check_unlocked
+     3.85%  .gnome-shell-wr  libglib-2.0.so.0.8800.3     [.] g_main_context_prepare_unlocked
+     3.85%  .gnome-shell-wr  libmozjs-140.so             [.] bool js::gc::IsAboutToBeFinalizedInternal<JSString>(JSString*)
+     3.85%  .gnome-shell-wr  libmozjs-140.so             [.] js::GenericTracerImpl<js::gc::MarkingTracerT<0u> >::onObjectEdge(JSObject**, char const*)
+     3.85%  .gnome-shell-wr  libmozjs-140.so             [.] js::GenericTracerImpl<js::gc::MarkingTracerT<0u> >::onStringEdge(JSString**, char const*)
+     3.85%  .gnome-shell-wr  libmozjs-140.so             [.] js::NativeGetProperty(JSContext*, JS::Handle<js::NativeObject*>, JS::Handle<JS::Value>, JS::Handle<JS::PropertyKey>, JS::MutableHandle<JS::Value>)
+     3.85%  .gnome-shell-wr  libmozjs-140.so             [.] js::gc::BackgroundUnmarkTask::unmark()
+     3.85%  .gnome-shell-wr  libmozjs-140.so             [.] js::gc::MapAllocToTraceKind(js::gc::AllocKind)
+     3.85%  .gnome-shell-wr  libmozjs-140.so             [.] js::gc::MarkBitmap<8ul, 16384ul>::markIfUnmarked(void const*, js::gc::MarkColor)
+     3.85%  .gnome-shell-wr  libmozjs-140.so             [.] js::jit::BytecodeAnalysis::init(js::jit::TempAllocator&)
+     3.85%  .gnome-shell-wr  libmozjs-140.so             [.] void js::GCMarker::eagerlyMarkChildren<0u>(js::Shape*)
+     3.85%  .gnome-shell-wr  libmozjs-140.so             [.] void js::GCMarker::markAndTraverse<0u, JSString>(JSString*)
+     3.85%  JS Helper        libmozjs-140.so             [.] JS::Realm::traceWeakSavedStacks(JSTracer*)
+     3.85%  gdbus            libgobject-2.0.so.0.8800.3  [.] handler_unref_R.part.0
+
+=== updates (75057.107908,75082.699888, CLOCK_MONOTONIC s): samples by process, thread and shared object
+    26.56%  llvmpipe-1       [JIT] tid 1831705
+    23.44%  .gnome-shell-wr  libgallium-26.2.6.so
+    12.50%  llvmpipe-0       [JIT] tid 1831705
+     7.03%  .gnome-shell-wr  libLLVM.so.21.1
+     5.66%  llvmpipe-1       libgallium-26.2.6.so
+     3.91%  .gnome-shell-wr  libglib-2.0.so.0.8800.3
+     3.52%  .gnome-shell-wr  libmozjs-140.so
+     3.12%  .gnome-shell-wr  libc.so.6
+     2.15%  .gnome-shell-wr  libmutter-18.so.0.0.0
+     1.95%  .gnome-shell-wr  libgobject-2.0.so.0.8800.3
+     1.95%  .gnome-shell-wr  libmutter-clutter-18.so.0.0.0
+     1.95%  .gnome-shell-wr  libmutter-cogl-18.so.0.0.0
+     1.76%  llvmpipe-0       libgallium-26.2.6.so
+=== updates: top symbols
+    17.58%  .gnome-shell-wr  libgallium-26.2.6.so           [.] convert_ubyte
+     6.45%  llvmpipe-1       [JIT] tid 1831705              [.] 0x0000712aae0a57d2
+     3.71%  llvmpipe-0       [JIT] tid 1831705              [.] 0x0000712aae0a57d2
+     2.93%  llvmpipe-1       libgallium-26.2.6.so           [.] lp_rast_shade_tile
+     2.34%  llvmpipe-1       libgallium-26.2.6.so           [.] lp_rast_shade_quads_all
+     1.95%  llvmpipe-1       [JIT] tid 1831705              [.] 0x0000712aae0a57f0
+     1.56%  llvmpipe-1       [JIT] tid 1831705              [.] 0x0000712aae0a57fe
+     0.98%  llvmpipe-0       [JIT] tid 1831705              [.] 0x0000712a4e580a20
+     0.98%  llvmpipe-0       libgallium-26.2.6.so           [.] lp_rast_shade_quads_all
+     0.98%  llvmpipe-1       [JIT] tid 1831705              [.] 0x0000712aae0a57da
+     0.98%  llvmpipe-1       [JIT] tid 1831705              [.] 0x0000712aae0a581c
+     0.98%  llvmpipe-1       [JIT] tid 1831705              [.] 0x0000712aae0a5885
+
+=== move (75083.699994,75090.005512, CLOCK_MONOTONIC s): samples by process, thread and shared object
+    37.84%  llvmpipe-1       [JIT] tid 1831705
+    29.46%  llvmpipe-0       [JIT] tid 1831705
+    12.20%  llvmpipe-1       libgallium-26.2.6.so
+     7.86%  llvmpipe-0       libgallium-26.2.6.so
+     1.98%  .gnome-shell-wr  libgallium-26.2.6.so
+     1.54%  .gnome-shell-wr  libmutter-clutter-18.so.0.0.0
+=== move: top symbols
+     6.32%  llvmpipe-1       [JIT] tid 1831705                [.] 0x0000712aae0ac38c
+     5.36%  llvmpipe-1       libgallium-26.2.6.so             [.] lp_rast_shade_tile
+     5.07%  llvmpipe-0       [JIT] tid 1831705                [.] 0x0000712aae0ac38c
+     4.04%  llvmpipe-1       libgallium-26.2.6.so             [.] lp_rast_shade_quads_all
+     3.38%  llvmpipe-0       libgallium-26.2.6.so             [.] lp_rast_shade_tile
+     2.50%  llvmpipe-0       libgallium-26.2.6.so             [.] lp_rast_shade_quads_all
+     2.13%  llvmpipe-1       [JIT] tid 1831705                [.] 0x0000712a4e57d0c8
+     1.84%  llvmpipe-0       [JIT] tid 1831705                [.] 0x0000712a4e57d0c8
+     1.62%  llvmpipe-1       [JIT] tid 1831705                [.] 0x0000712a4e57d0ce
+     1.18%  llvmpipe-1       [JIT] tid 1831705                [.] 0x0000712a4e57d0f5
+     1.03%  llvmpipe-0       [JIT] tid 1831705                [.] 0x0000712a4e57d0ce
+     0.96%  llvmpipe-1       [JIT] tid 1831705                [.] 0x0000712a4e57147b
+     0.81%  llvmpipe-1       [JIT] tid 1831705                [.] 0x0000712aae0ac39a
+

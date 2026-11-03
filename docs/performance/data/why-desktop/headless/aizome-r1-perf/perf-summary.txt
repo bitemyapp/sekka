@@ -1,0 +1,72 @@
+=== idle (75297.878572,75327.884214, CLOCK_MONOTONIC s): samples by process, thread and shared object
+    27.78%  aizome           libaizome_comp_core.so
+    11.11%  aizome-sys audi  libc.so.6
+    11.11%  aizome-sys back  libc.so.6
+    11.11%  aizome-sys mpri  aizome-shell
+     5.56%  aizome           libc.so.6
+     5.56%  aizome-shell     aizome-shell
+     5.56%  aizome-shell     libc.so.6
+     5.56%  aizome-sys org.  aizome-shell
+     5.56%  aizome-sys org.  libc.so.6
+     5.56%  desktop-watch    aizome-shell
+     5.56%  meters           aizome-shell
+=== idle: top symbols
+     5.56%  aizome           libaizome_comp_core.so  [.] <core::cell::RefCell<smithay::wayland::fractional_scale::FractionalScaleState> as core::any::Any>::type_id
+     5.56%  aizome           libaizome_comp_core.so  [.] <smithay::desktop::wayland::popup::manager::PopupManager>::cleanup
+     5.56%  aizome           libaizome_comp_core.so  [.] <wayland_backend::rs::server_impl::handle::InnerHandle>::flush
+     5.56%  aizome           libaizome_comp_core.so  [.] aizome_comp_core::protocols::foreign_toplevel::refresh
+     5.56%  aizome           libaizome_comp_core.so  [.] aizome_comp_core::watchdog::beat
+     5.56%  aizome           libc.so.6               [.] getenv
+     5.56%  aizome-shell     aizome-shell            [.] <alloc::vec::into_iter::IntoIter<alloc::string::String> as core::iter::traits::iterator::Iterator>::fold::<(), core::iter::adapters::map::map_fold<alloc::string::String, aizome_shell::wm::DeskbarApp, (), <aizome_shell::wm::Wm>::deskbar::{closure#0}, core::iter::traits::iterator::Iterator::for_each::call<aizome_shell::wm::DeskbarApp, <alloc::vec::Vec<aizome_shell::wm::DeskbarApp>>::extend_trusted<core::iter::adapters::map::Map<alloc::vec::into_iter::IntoIter<alloc::string::String>, <aizome_shell::wm::Wm>::deskbar::{closure#0}>>::{closure#0}>::{closure#0}>::{closure#0}>
+     5.56%  aizome-shell     libc.so.6               [.] _int_malloc
+     5.56%  aizome-sys audi  libc.so.6               [.] __fopen_internal
+     5.56%  aizome-sys audi  libc.so.6               [.] pthread_mutex_destroy@@GLIBC_2.2.5
+     5.56%  aizome-sys back  libc.so.6               [.] __open64_nocancel
+     5.56%  aizome-sys back  libc.so.6               [.] malloc
+     5.56%  aizome-sys mpri  aizome-shell            [.] <std::sync::mpmc::list::Channel<zbus::message::Message>>::start_recv
+     5.56%  aizome-sys mpri  aizome-shell            [.] aizome_sys::mpris::follow
+     5.56%  aizome-sys org.  aizome-shell            [.] <std::sync::mpmc::list::Channel<core::option::Option<alloc::string::String>>>::recv::{closure#1}
+     5.56%  aizome-sys org.  libc.so.6               [.] __errno_location
+     5.56%  desktop-watch    aizome-shell            [.] <std::path::Path>::_join
+     5.56%  meters           aizome-shell            [.] <core::str::pattern::CharSearcher as core::str::pattern::Searcher>::next_match
+
+=== updates (75329.944173,75355.54878, CLOCK_MONOTONIC s): samples by process, thread and shared object
+    53.79%  aizome           libpixman-1.so.0.46.4
+    25.76%  aizome           libaizome_comp_core.so
+     7.58%  aizome           libc.so.6
+     3.03%  aizome-sys org.  aizome-shell
+     2.27%  aizome-sys audi  libc.so.6
+     1.52%  aizome           1-libaizome_comp_logic.so
+     1.52%  aizome           libstd-57c8aa98725e73dd.so
+     1.52%  aizome-sys org.  libc.so.6
+=== updates: top symbols
+    38.64%  aizome           libpixman-1.so.0.46.4       [.] store_scanline_a8b8g8r8
+     7.58%  aizome           libpixman-1.so.0.46.4       [.] sse2_fetch_x8r8g8b8
+     2.27%  aizome           libc.so.6                   [.] malloc
+     1.52%  aizome           libaizome_comp_core.so      [.] <smithay::desktop::wayland::popup::manager::PopupManager>::popups_for_surface
+     1.52%  aizome           libaizome_comp_core.so      [.] <smithay::utils::geometry::Rectangle<i32, smithay::utils::geometry::Physical>>::subtract_rects_many_in_place::<core::iter::adapters::copied::Copied<core::slice::iter::Iter<smithay::utils::geometry::Rectangle<i32, smithay::utils::geometry::Physical>>>>
+     1.52%  aizome           libaizome_comp_core.so      [.] aizome_comp_core::run
+     1.52%  aizome           libc.so.6                   [.] __memmove_avx512_unaligned_erms
+     1.52%  aizome           libpixman-1.so.0.46.4       [.] _pixman_iter_get_scanline_noop
+     1.52%  aizome           libpixman-1.so.0.46.4       [.] get_scanline_null
+     1.52%  aizome           libpixman-1.so.0.46.4       [.] pixman_image_set_transform
+
+=== move (75356.548908,75362.852348, CLOCK_MONOTONIC s): samples by process, thread and shared object
+    54.89%  aizome           libpixman-1.so.0.46.4
+    16.92%  aizome           libaizome_comp_core.so
+    12.41%  aizome-shell     aizome-shell
+     5.64%  aizome-shell     libc.so.6
+     4.51%  aizome           libc.so.6
+     2.26%  aizome           1-libaizome_comp_logic.so
+=== move: top symbols
+    40.98%  aizome           libpixman-1.so.0.46.4       [.] store_scanline_a8b8g8r8
+     7.14%  aizome           libpixman-1.so.0.46.4       [.] sse2_fetch_x8r8g8b8
+     3.38%  aizome-shell     libc.so.6                   [.] malloc
+     2.63%  aizome           libaizome_comp_core.so      [.] <smithay::utils::geometry::Rectangle<i32, smithay::utils::geometry::Physical>>::subtract_rects_many_in_place::<core::iter::adapters::copied::Copied<core::slice::iter::Iter<smithay::utils::geometry::Rectangle<i32, smithay::utils::geometry::Physical>>>>
+     2.63%  aizome           libc.so.6                   [.] __memmove_avx512_unaligned_erms
+     2.63%  aizome           libpixman-1.so.0.46.4       [.] sse2_composite_over_8888_8888
+     1.50%  aizome-shell     libc.so.6                   [.] cfree@GLIBC_2.2.5
+     1.13%  aizome           libaizome_comp_core.so      [.] <smithay::backend::renderer::damage::OutputDamageTracker>::render_output::<aizome_comp_core::render::OutputElement<smithay::backend::renderer::pixman::PixmanRenderer>, smithay::backend::renderer::pixman::PixmanRenderer, [f32; 4]>
+     1.13%  aizome           libc.so.6                   [.] _int_malloc
+     1.13%  aizome           libpixman-1.so.0.46.4       [.] general_composite_rect
+

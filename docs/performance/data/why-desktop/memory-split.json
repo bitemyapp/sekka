@@ -1,0 +1,1649 @@
+{
+ "aizome": {
+  "roles": {
+   "common": {
+    "pss": 96.7,
+    "anon": 41.4,
+    "file": 55.0,
+    "shmem": 0.3,
+    "rss": 232.9
+   },
+   "compositor+shell": {
+    "pss": 120.0,
+    "anon": 45.2,
+    "file": 65.2,
+    "shmem": 9.8,
+    "rss": 153.9
+   },
+   "x11": {
+    "pss": 34.0,
+    "anon": 10.4,
+    "file": 23.5,
+    "shmem": 0.0,
+    "rss": 59.3
+   },
+   "desktop-services": {
+    "pss": 25.6,
+    "anon": 4.8,
+    "file": 20.7,
+    "shmem": 0.0,
+    "rss": 44.1
+   }
+  },
+  "processes": [
+   {
+    "role": "compositor+shell",
+    "process": "aizome",
+    "pss": 61.9,
+    "anon": 10.7,
+    "file": 43.0,
+    "shmem": 8.3,
+    "rss": 88.4,
+    "n": 1
+   },
+   {
+    "role": "compositor+shell",
+    "process": "aizome-shell",
+    "pss": 58.2,
+    "anon": 34.5,
+    "file": 22.2,
+    "shmem": 1.5,
+    "rss": 65.5,
+    "n": 1
+   },
+   {
+    "role": "x11",
+    "process": "Xwayland",
+    "pss": 29.6,
+    "anon": 9.6,
+    "file": 19.9,
+    "shmem": 0.0,
+    "rss": 52.5,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "wireplumber",
+    "pss": 17.9,
+    "anon": 6.2,
+    "file": 11.6,
+    "shmem": 0.0,
+    "rss": 32.0,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "xdg-desktop-portal-gtk",
+    "pss": 16.8,
+    "anon": 5.7,
+    "file": 10.8,
+    "shmem": 0.3,
+    "rss": 29.2,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "python3",
+    "pss": 14.1,
+    "anon": 8.1,
+    "file": 6.0,
+    "shmem": 0.0,
+    "rss": 16.9,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "xdg-desktop-portal",
+    "pss": 6.9,
+    "anon": 3.1,
+    "file": 3.8,
+    "shmem": 0.0,
+    "rss": 19.0,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "aizome-koyomi",
+    "pss": 6.7,
+    "anon": 1.0,
+    "file": 5.6,
+    "shmem": 0.0,
+    "rss": 9.0,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "aizome-network-agent",
+    "pss": 6.5,
+    "anon": 1.4,
+    "file": 5.1,
+    "shmem": 0.0,
+    "rss": 13.0,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "pipewire",
+    "pss": 6.5,
+    "anon": 2.7,
+    "file": 3.7,
+    "shmem": 0.0,
+    "rss": 12.3,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "greetd",
+    "pss": 6.3,
+    "anon": 1.3,
+    "file": 5.0,
+    "shmem": 0.0,
+    "rss": 11.9,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "aizome-hako",
+    "pss": 5.3,
+    "anon": 0.8,
+    "file": 4.5,
+    "shmem": 0.0,
+    "rss": 7.5,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "aizome-portal",
+    "pss": 5.1,
+    "anon": 0.7,
+    "file": 4.3,
+    "shmem": 0.0,
+    "rss": 7.3,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "systemd",
+    "pss": 4.8,
+    "anon": 2.4,
+    "file": 2.4,
+    "shmem": 0.0,
+    "rss": 13.3,
+    "n": 1
+   },
+   {
+    "role": "x11",
+    "process": "xwayland-satellite",
+    "pss": 4.4,
+    "anon": 0.7,
+    "file": 3.6,
+    "shmem": 0.0,
+    "rss": 6.9,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gnome-keyring-daemon",
+    "pss": 3.4,
+    "anon": 1.0,
+    "file": 2.4,
+    "shmem": 0.0,
+    "rss": 7.4,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "pipewire-pulse",
+    "pss": 3.0,
+    "anon": 1.4,
+    "file": 1.6,
+    "shmem": 0.0,
+    "rss": 9.6,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gcr-ssh-agent",
+    "pss": 2.5,
+    "anon": 1.2,
+    "file": 1.3,
+    "shmem": 0.0,
+    "rss": 10.2,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gvfsd",
+    "pss": 2.4,
+    "anon": 1.2,
+    "file": 1.2,
+    "shmem": 0.0,
+    "rss": 11.0,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "xdg-desktop-portal-wlr",
+    "pss": 2.1,
+    "anon": 0.9,
+    "file": 1.3,
+    "shmem": 0.0,
+    "rss": 7.5,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "(sd-pam)",
+    "pss": 1.7,
+    "anon": 1.4,
+    "file": 0.3,
+    "shmem": 0.0,
+    "rss": 3.6,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "xdg-document-portal",
+    "pss": 1.4,
+    "anon": 0.7,
+    "file": 0.7,
+    "shmem": 0.0,
+    "rss": 7.8,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gvfsd-fuse",
+    "pss": 1.4,
+    "anon": 0.8,
+    "file": 0.6,
+    "shmem": 0.0,
+    "rss": 7.9,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "dbus-broker-launch",
+    "pss": 1.3,
+    "anon": 0.3,
+    "file": 1.0,
+    "shmem": 0.0,
+    "rss": 4.3,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "systemctl",
+    "pss": 1.3,
+    "anon": 0.6,
+    "file": 0.7,
+    "shmem": 0.0,
+    "rss": 6.0,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "agent",
+    "pss": 1.1,
+    "anon": 0.6,
+    "file": 0.5,
+    "shmem": 0.0,
+    "rss": 7.8,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "dconf-service",
+    "pss": 1.1,
+    "anon": 0.7,
+    "file": 0.4,
+    "shmem": 0.0,
+    "rss": 6.5,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "sh",
+    "pss": 1.0,
+    "anon": 0.6,
+    "file": 0.4,
+    "shmem": 0.0,
+    "rss": 4.3,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "xdg-permission-store",
+    "pss": 1.0,
+    "anon": 0.6,
+    "file": 0.4,
+    "shmem": 0.0,
+    "rss": 7.3,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "dbus-broker",
+    "pss": 0.7,
+    "anon": 0.6,
+    "file": 0.2,
+    "shmem": 0.0,
+    "rss": 2.6,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "fusermount3",
+    "pss": 0.2,
+    "anon": 0.1,
+    "file": 0.1,
+    "shmem": 0.0,
+    "rss": 2.2,
+    "n": 1
+   }
+  ],
+  "meminfo_over_baseline": {
+   "AnonPages": 119.4,
+   "Shmem": 34.6,
+   "Mapped": 174.2,
+   "Cached": 866.8,
+   "Buffers": 24.1,
+   "Slab": 40.1,
+   "SUnreclaim": 12.3,
+   "SReclaimable": 27.8,
+   "KernelStack": 2.9,
+   "PageTables": 6.1,
+   "VmallocUsed": 4.1,
+   "Percpu": 0.4,
+   "Unevictable": 26.5,
+   "Mlocked": 10.7
+  },
+  "used_over_baseline_mib": 221.2
+ },
+ "gnome": {
+  "roles": {
+   "desktop-services": {
+    "pss": 76.0,
+    "anon": 45.4,
+    "file": 30.7,
+    "shmem": 0.0,
+    "rss": 336.4
+   },
+   "common": {
+    "pss": 90.6,
+    "anon": 51.2,
+    "file": 39.1,
+    "shmem": 0.3,
+    "rss": 303.3
+   },
+   "compositor+shell": {
+    "pss": 300.9,
+    "anon": 220.4,
+    "file": 81.1,
+    "shmem": 0.0,
+    "rss": 376.7
+   },
+   "config-pim": {
+    "pss": 146.9,
+    "anon": 81.5,
+    "file": 64.8,
+    "shmem": 0.5,
+    "rss": 399.7
+   },
+   "x11": {
+    "pss": 82.7,
+    "anon": 42.4,
+    "file": 40.3,
+    "shmem": 0.0,
+    "rss": 210.6
+   }
+  },
+  "processes": [
+   {
+    "role": "compositor+shell",
+    "process": "gnome-shell",
+    "pss": 300.9,
+    "anon": 220.4,
+    "file": 81.1,
+    "shmem": 0.0,
+    "rss": 376.7,
+    "n": 1
+   },
+   {
+    "role": "x11",
+    "process": "mutter-x11-frames",
+    "pss": 44.4,
+    "anon": 24.6,
+    "file": 19.9,
+    "shmem": 0.0,
+    "rss": 101.8,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "evolution-alarm-notify",
+    "pss": 36.3,
+    "anon": 17.4,
+    "file": 18.5,
+    "shmem": 0.2,
+    "rss": 81.8,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "evolution-source-registry",
+    "pss": 26.4,
+    "anon": 12.6,
+    "file": 13.8,
+    "shmem": 0.0,
+    "rss": 65.3,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gjs",
+    "pss": 25.2,
+    "anon": 11.9,
+    "file": 13.4,
+    "shmem": 0.0,
+    "rss": 72.8,
+    "n": 2
+   },
+   {
+    "role": "x11",
+    "process": "Xwayland",
+    "pss": 21.1,
+    "anon": 10.0,
+    "file": 11.0,
+    "shmem": 0.0,
+    "rss": 53.0,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "ibus-extension-gtk3",
+    "pss": 17.7,
+    "anon": 14.5,
+    "file": 2.9,
+    "shmem": 0.2,
+    "rss": 36.6,
+    "n": 1
+   },
+   {
+    "role": "x11",
+    "process": "ibus-x11",
+    "pss": 17.2,
+    "anon": 7.8,
+    "file": 9.5,
+    "shmem": 0.0,
+    "rss": 55.8,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "wireplumber",
+    "pss": 16.6,
+    "anon": 6.3,
+    "file": 10.2,
+    "shmem": 0.0,
+    "rss": 31.9,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "xdg-desktop-portal-gnome",
+    "pss": 16.3,
+    "anon": 9.6,
+    "file": 6.8,
+    "shmem": 0.0,
+    "rss": 45.8,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "evolution-addressbook-factory",
+    "pss": 14.9,
+    "anon": 6.1,
+    "file": 8.8,
+    "shmem": 0.0,
+    "rss": 45.3,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "localsearch-3",
+    "pss": 14.2,
+    "anon": 10.4,
+    "file": 3.8,
+    "shmem": 0.0,
+    "rss": 27.8,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "python3",
+    "pss": 14.1,
+    "anon": 8.2,
+    "file": 5.9,
+    "shmem": 0.0,
+    "rss": 16.9,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "evolution-calendar-factory",
+    "pss": 12.4,
+    "anon": 5.5,
+    "file": 6.8,
+    "shmem": 0.0,
+    "rss": 40.1,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "xdg-desktop-portal-gtk",
+    "pss": 8.9,
+    "anon": 5.7,
+    "file": 2.9,
+    "shmem": 0.2,
+    "rss": 27.4,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "goa-daemon",
+    "pss": 8.2,
+    "anon": 4.7,
+    "file": 3.5,
+    "shmem": 0.0,
+    "rss": 33.0,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "gnome-shell-calendar-server",
+    "pss": 7.7,
+    "anon": 3.2,
+    "file": 4.5,
+    "shmem": 0.0,
+    "rss": 23.2,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "xdg-desktop-portal",
+    "pss": 6.2,
+    "anon": 3.4,
+    "file": 2.8,
+    "shmem": 0.0,
+    "rss": 19.6,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "pipewire",
+    "pss": 5.9,
+    "anon": 2.9,
+    "file": 3.0,
+    "shmem": 0.0,
+    "rss": 12.5,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "systemd",
+    "pss": 4.7,
+    "anon": 2.6,
+    "file": 2.1,
+    "shmem": 0.0,
+    "rss": 13.5,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gnome-keyring-daemon",
+    "pss": 4.6,
+    "anon": 1.8,
+    "file": 2.8,
+    "shmem": 0.0,
+    "rss": 16.6,
+    "n": 2
+   },
+   {
+    "role": "config-pim",
+    "process": "ibus-daemon",
+    "pss": 4.2,
+    "anon": 3.9,
+    "file": 0.3,
+    "shmem": 0.0,
+    "rss": 11.7,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gdm-password]",
+    "pss": 3.4,
+    "anon": 1.3,
+    "file": 2.1,
+    "shmem": 0.0,
+    "rss": 12.3,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "pipewire-pulse",
+    "pss": 3.0,
+    "anon": 1.6,
+    "file": 1.4,
+    "shmem": 0.0,
+    "rss": 9.7,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gvfs-udisks2-volume-monitor",
+    "pss": 3.0,
+    "anon": 1.9,
+    "file": 1.0,
+    "shmem": 0.0,
+    "rss": 15.6,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-media-keys",
+    "pss": 2.8,
+    "anon": 1.7,
+    "file": 1.1,
+    "shmem": 0.0,
+    "rss": 13.8,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-xsettings",
+    "pss": 2.8,
+    "anon": 2.3,
+    "file": 0.5,
+    "shmem": 0.0,
+    "rss": 12.9,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-sharing",
+    "pss": 2.7,
+    "anon": 1.6,
+    "file": 1.1,
+    "shmem": 0.0,
+    "rss": 13.9,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "dbus-broker",
+    "pss": 2.4,
+    "anon": 2.2,
+    "file": 0.2,
+    "shmem": 0.0,
+    "rss": 6.3,
+    "n": 2
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-smartcard",
+    "pss": 2.1,
+    "anon": 1.4,
+    "file": 0.7,
+    "shmem": 0.0,
+    "rss": 10.4,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "goa-identity-service",
+    "pss": 2.1,
+    "anon": 1.1,
+    "file": 1.0,
+    "shmem": 0.0,
+    "rss": 10.6,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "dbus-broker-launch",
+    "pss": 1.9,
+    "anon": 0.7,
+    "file": 1.2,
+    "shmem": 0.0,
+    "rss": 8.4,
+    "n": 2
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-print-notifications",
+    "pss": 1.9,
+    "anon": 1.5,
+    "file": 0.4,
+    "shmem": 0.0,
+    "rss": 12.9,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-wwan",
+    "pss": 1.9,
+    "anon": 1.2,
+    "file": 0.7,
+    "shmem": 0.0,
+    "rss": 11.4,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gcr-ssh-agent",
+    "pss": 1.8,
+    "anon": 1.2,
+    "file": 0.6,
+    "shmem": 0.0,
+    "rss": 10.2,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gnome-session-service",
+    "pss": 1.8,
+    "anon": 1.3,
+    "file": 0.5,
+    "shmem": 0.0,
+    "rss": 10.8,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "(sd-pam)",
+    "pss": 1.7,
+    "anon": 1.4,
+    "file": 0.3,
+    "shmem": 0.0,
+    "rss": 3.6,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gvfsd",
+    "pss": 1.7,
+    "anon": 1.2,
+    "file": 0.5,
+    "shmem": 0.0,
+    "rss": 11.1,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gvfs-afc-volume-monitor",
+    "pss": 1.7,
+    "anon": 1.2,
+    "file": 0.5,
+    "shmem": 0.0,
+    "rss": 9.7,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-datetime",
+    "pss": 1.5,
+    "anon": 1.1,
+    "file": 0.5,
+    "shmem": 0.0,
+    "rss": 11.4,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-disk-utility-notify",
+    "pss": 1.5,
+    "anon": 1.2,
+    "file": 0.3,
+    "shmem": 0.0,
+    "rss": 8.4,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-power",
+    "pss": 1.5,
+    "anon": 1.2,
+    "file": 0.4,
+    "shmem": 0.0,
+    "rss": 10.9,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-sound",
+    "pss": 1.5,
+    "anon": 1.1,
+    "file": 0.5,
+    "shmem": 0.0,
+    "rss": 10.7,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-printer",
+    "pss": 1.5,
+    "anon": 1.2,
+    "file": 0.3,
+    "shmem": 0.0,
+    "rss": 11.5,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gnome-session-init-worker",
+    "pss": 1.4,
+    "anon": 0.9,
+    "file": 0.5,
+    "shmem": 0.0,
+    "rss": 8.8,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gvfs-gphoto2-volume-monitor",
+    "pss": 1.4,
+    "anon": 0.9,
+    "file": 0.5,
+    "shmem": 0.0,
+    "rss": 8.5,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-housekeeping",
+    "pss": 1.3,
+    "anon": 1.0,
+    "file": 0.3,
+    "shmem": 0.0,
+    "rss": 10.0,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "at-spi2-registryd",
+    "pss": 1.2,
+    "anon": 0.9,
+    "file": 0.3,
+    "shmem": 0.0,
+    "rss": 8.0,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-color",
+    "pss": 1.2,
+    "anon": 0.8,
+    "file": 0.4,
+    "shmem": 0.0,
+    "rss": 9.6,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "xdg-document-portal",
+    "pss": 1.2,
+    "anon": 0.7,
+    "file": 0.5,
+    "shmem": 0.0,
+    "rss": 7.8,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gvfsd-fuse",
+    "pss": 1.1,
+    "anon": 0.8,
+    "file": 0.3,
+    "shmem": 0.0,
+    "rss": 7.9,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "at-spi-bus-launcher",
+    "pss": 1.1,
+    "anon": 0.9,
+    "file": 0.2,
+    "shmem": 0.0,
+    "rss": 8.3,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-a11y-settings",
+    "pss": 1.1,
+    "anon": 0.9,
+    "file": 0.2,
+    "shmem": 0.0,
+    "rss": 9.9,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-usb-protection",
+    "pss": 1.1,
+    "anon": 0.9,
+    "file": 0.2,
+    "shmem": 0.0,
+    "rss": 9.1,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-rfkill",
+    "pss": 1.0,
+    "anon": 0.8,
+    "file": 0.2,
+    "shmem": 0.0,
+    "rss": 8.5,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "ibus-dconf",
+    "pss": 1.0,
+    "anon": 0.7,
+    "file": 0.3,
+    "shmem": 0.0,
+    "rss": 8.0,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gvfs-mtp-volume-monitor",
+    "pss": 1.0,
+    "anon": 0.8,
+    "file": 0.2,
+    "shmem": 0.0,
+    "rss": 7.6,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gsd-keyboard",
+    "pss": 0.9,
+    "anon": 0.8,
+    "file": 0.2,
+    "shmem": 0.0,
+    "rss": 8.4,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "ibus-portal",
+    "pss": 0.9,
+    "anon": 0.7,
+    "file": 0.2,
+    "shmem": 0.0,
+    "rss": 8.2,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gvfs-goa-volume-monitor",
+    "pss": 0.9,
+    "anon": 0.6,
+    "file": 0.3,
+    "shmem": 0.0,
+    "rss": 7.2,
+    "n": 1
+   }
+  ],
+  "meminfo_over_baseline": {
+   "AnonPages": 464.5,
+   "Shmem": 26.4,
+   "Mapped": 256.2,
+   "Cached": 852.6,
+   "Buffers": 18.1,
+   "Slab": 48.4,
+   "SUnreclaim": 28.1,
+   "SReclaimable": 20.3,
+   "KernelStack": 6.0,
+   "PageTables": 15.2,
+   "VmallocUsed": 7.4,
+   "Percpu": 1.0,
+   "Unevictable": 23.9,
+   "Mlocked": 0.0
+  },
+  "used_over_baseline_mib": 566.9
+ },
+ "plasma": {
+  "roles": {
+   "common": {
+    "pss": 94.8,
+    "anon": 50.9,
+    "file": 43.5,
+    "shmem": 0.4,
+    "rss": 293.6
+   },
+   "x11": {
+    "pss": 31.6,
+    "anon": 15.8,
+    "file": 15.8,
+    "shmem": 0.0,
+    "rss": 110.7
+   },
+   "compositor+shell": {
+    "pss": 533.1,
+    "anon": 337.1,
+    "file": 177.5,
+    "shmem": 17.2,
+    "rss": 793.8
+   },
+   "desktop-services": {
+    "pss": 104.2,
+    "anon": 66.1,
+    "file": 38.1,
+    "shmem": 0.0,
+    "rss": 542.7
+   },
+   "config-pim": {
+    "pss": 352.3,
+    "anon": 241.7,
+    "file": 110.6,
+    "shmem": 0.0,
+    "rss": 1449.4
+   }
+  },
+  "processes": [
+   {
+    "role": "compositor+shell",
+    "process": "plasmashell",
+    "pss": 344.7,
+    "anon": 230.6,
+    "file": 103.7,
+    "shmem": 8.6,
+    "rss": 487.2,
+    "n": 1
+   },
+   {
+    "role": "compositor+shell",
+    "process": "kwin_wayland",
+    "pss": 189.0,
+    "anon": 106.6,
+    "file": 73.5,
+    "shmem": 8.6,
+    "rss": 307.4,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "mariadbd",
+    "pss": 75.1,
+    "anon": 53.4,
+    "file": 21.7,
+    "shmem": 0.0,
+    "rss": 84.0,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_mailfilter_agent",
+    "pss": 28.3,
+    "anon": 18.5,
+    "file": 9.8,
+    "shmem": 0.0,
+    "rss": 121.0,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "kded6",
+    "pss": 28.1,
+    "anon": 15.2,
+    "file": 12.9,
+    "shmem": 0.0,
+    "rss": 97.6,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_archivemail_agent",
+    "pss": 28.1,
+    "anon": 18.5,
+    "file": 9.6,
+    "shmem": 0.0,
+    "rss": 120.5,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_followupreminder_agent",
+    "pss": 27.6,
+    "anon": 18.4,
+    "file": 9.2,
+    "shmem": 0.0,
+    "rss": 119.3,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_unifiedmailbox_agent",
+    "pss": 27.5,
+    "anon": 18.3,
+    "file": 9.2,
+    "shmem": 0.0,
+    "rss": 118.9,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_sendlater_agent",
+    "pss": 27.2,
+    "anon": 18.2,
+    "file": 9.0,
+    "shmem": 0.0,
+    "rss": 118.1,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_mailmerge_agent",
+    "pss": 27.1,
+    "anon": 18.2,
+    "file": 8.9,
+    "shmem": 0.0,
+    "rss": 117.8,
+    "n": 1
+   },
+   {
+    "role": "x11",
+    "process": "Xwayland",
+    "pss": 23.7,
+    "anon": 10.1,
+    "file": 13.6,
+    "shmem": 0.0,
+    "rss": 53.0,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "wireplumber",
+    "pss": 15.0,
+    "anon": 6.2,
+    "file": 8.8,
+    "shmem": 0.0,
+    "rss": 31.6,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "xdg-desktop-portal-gtk",
+    "pss": 14.3,
+    "anon": 5.9,
+    "file": 8.1,
+    "shmem": 0.4,
+    "rss": 30.0,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "python3",
+    "pss": 14.1,
+    "anon": 8.2,
+    "file": 5.9,
+    "shmem": 0.0,
+    "rss": 16.9,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "org_kde_powerdevil",
+    "pss": 13.7,
+    "anon": 7.8,
+    "file": 5.9,
+    "shmem": 0.0,
+    "rss": 65.8,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadiserver",
+    "pss": 13.6,
+    "anon": 8.9,
+    "file": 4.6,
+    "shmem": 0.0,
+    "rss": 53.0,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "xdg-desktop-portal-kde",
+    "pss": 12.9,
+    "anon": 8.1,
+    "file": 4.7,
+    "shmem": 0.0,
+    "rss": 63.5,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_newmailnotifier_agent",
+    "pss": 12.6,
+    "anon": 8.9,
+    "file": 3.7,
+    "shmem": 0.0,
+    "rss": 74.8,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "DiscoverNotifier",
+    "pss": 11.6,
+    "anon": 7.5,
+    "file": 4.1,
+    "shmem": 0.0,
+    "rss": 62.4,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_maildispatcher_agent",
+    "pss": 11.2,
+    "anon": 8.3,
+    "file": 2.9,
+    "shmem": 0.0,
+    "rss": 67.4,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_migration_agent",
+    "pss": 10.6,
+    "anon": 7.8,
+    "file": 2.8,
+    "shmem": 0.0,
+    "rss": 64.8,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "kaccess",
+    "pss": 9.5,
+    "anon": 7.0,
+    "file": 2.5,
+    "shmem": 0.0,
+    "rss": 57.5,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "kioworker",
+    "pss": 9.4,
+    "anon": 6.7,
+    "file": 2.8,
+    "shmem": 0.0,
+    "rss": 64.5,
+    "n": 2
+   },
+   {
+    "role": "desktop-services",
+    "process": "polkit-kde-authentication-agent-1",
+    "pss": 9.3,
+    "anon": 7.0,
+    "file": 2.3,
+    "shmem": 0.0,
+    "rss": 58.1,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_control",
+    "pss": 9.3,
+    "anon": 7.0,
+    "file": 2.3,
+    "shmem": 0.0,
+    "rss": 55.6,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_indexing_agent",
+    "pss": 8.2,
+    "anon": 5.4,
+    "file": 2.8,
+    "shmem": 0.0,
+    "rss": 47.5,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "kactivitymanagerd",
+    "pss": 7.7,
+    "anon": 5.1,
+    "file": 2.7,
+    "shmem": 0.0,
+    "rss": 44.9,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "baloo_file",
+    "pss": 6.8,
+    "anon": 5.1,
+    "file": 1.7,
+    "shmem": 0.0,
+    "rss": 31.1,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_ical_resource",
+    "pss": 6.5,
+    "anon": 4.2,
+    "file": 2.3,
+    "shmem": 0.0,
+    "rss": 43.0,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "plasmalogin-helper",
+    "pss": 6.3,
+    "anon": 3.6,
+    "file": 2.7,
+    "shmem": 0.0,
+    "rss": 33.6,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "startplasma-wayland",
+    "pss": 6.2,
+    "anon": 4.7,
+    "file": 1.5,
+    "shmem": 0.0,
+    "rss": 40.9,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_maildir_resource",
+    "pss": 6.2,
+    "anon": 4.4,
+    "file": 1.8,
+    "shmem": 0.0,
+    "rss": 44.1,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "pipewire",
+    "pss": 6.1,
+    "anon": 3.1,
+    "file": 2.9,
+    "shmem": 0.0,
+    "rss": 12.8,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "xdg-desktop-portal",
+    "pss": 6.1,
+    "anon": 3.6,
+    "file": 2.5,
+    "shmem": 0.0,
+    "rss": 19.6,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "ksmserver",
+    "pss": 5.7,
+    "anon": 4.3,
+    "file": 1.4,
+    "shmem": 0.0,
+    "rss": 40.6,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_birthdays_resource",
+    "pss": 5.1,
+    "anon": 3.8,
+    "file": 1.3,
+    "shmem": 0.0,
+    "rss": 37.8,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "akonadi_contacts_resource",
+    "pss": 5.0,
+    "anon": 3.7,
+    "file": 1.3,
+    "shmem": 0.0,
+    "rss": 37.2,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "systemd",
+    "pss": 4.8,
+    "anon": 2.4,
+    "file": 2.4,
+    "shmem": 0.0,
+    "rss": 13.4,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "gmenudbusmenuproxy",
+    "pss": 4.6,
+    "anon": 3.0,
+    "file": 1.6,
+    "shmem": 0.0,
+    "rss": 30.7,
+    "n": 1
+   },
+   {
+    "role": "config-pim",
+    "process": "kunifiedpush-distributor",
+    "pss": 4.5,
+    "anon": 3.2,
+    "file": 1.3,
+    "shmem": 0.0,
+    "rss": 30.7,
+    "n": 1
+   },
+   {
+    "role": "x11",
+    "process": "xembedsniproxy",
+    "pss": 4.4,
+    "anon": 3.0,
+    "file": 1.4,
+    "shmem": 0.0,
+    "rss": 29.5,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "pipewire-pulse",
+    "pss": 3.7,
+    "anon": 2.2,
+    "file": 1.5,
+    "shmem": 0.0,
+    "rss": 10.4,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "gnome-keyring-daemon",
+    "pss": 3.3,
+    "anon": 1.0,
+    "file": 2.3,
+    "shmem": 0.0,
+    "rss": 7.5,
+    "n": 1
+   },
+   {
+    "role": "desktop-services",
+    "process": "drkonqi-coredump-processor",
+    "pss": 3.3,
+    "anon": 1.9,
+    "file": 1.4,
+    "shmem": 0.0,
+    "rss": 19.6,
+    "n": 1
+   },
+   {
+    "role": "x11",
+    "process": "kwin_wayland_wrapper",
+    "pss": 2.9,
+    "anon": 2.3,
+    "file": 0.6,
+    "shmem": 0.0,
+    "rss": 23.2,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "dbus-broker",
+    "pss": 2.7,
+    "anon": 2.5,
+    "file": 0.2,
+    "shmem": 0.0,
+    "rss": 6.5,
+    "n": 2
+   },
+   {
+    "role": "common",
+    "process": "gcr-ssh-agent",
+    "pss": 2.2,
+    "anon": 1.2,
+    "file": 1.0,
+    "shmem": 0.0,
+    "rss": 10.3,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "(sd-pam)",
+    "pss": 1.7,
+    "anon": 1.4,
+    "file": 0.3,
+    "shmem": 0.0,
+    "rss": 3.6,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "dbus-broker-launch",
+    "pss": 1.4,
+    "anon": 0.7,
+    "file": 0.7,
+    "shmem": 0.0,
+    "rss": 8.6,
+    "n": 2
+   },
+   {
+    "role": "common",
+    "process": "xdg-document-portal",
+    "pss": 1.4,
+    "anon": 0.7,
+    "file": 0.7,
+    "shmem": 0.0,
+    "rss": 7.8,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "at-spi-bus-launcher",
+    "pss": 1.3,
+    "anon": 0.9,
+    "file": 0.4,
+    "shmem": 0.0,
+    "rss": 8.2,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "at-spi2-registryd",
+    "pss": 1.3,
+    "anon": 0.9,
+    "file": 0.4,
+    "shmem": 0.0,
+    "rss": 8.1,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "dconf-service",
+    "pss": 1.0,
+    "anon": 0.7,
+    "file": 0.3,
+    "shmem": 0.0,
+    "rss": 6.5,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "agent",
+    "pss": 0.9,
+    "anon": 0.6,
+    "file": 0.3,
+    "shmem": 0.0,
+    "rss": 7.8,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "xdg-permission-store",
+    "pss": 0.9,
+    "anon": 0.6,
+    "file": 0.3,
+    "shmem": 0.0,
+    "rss": 7.3,
+    "n": 1
+   },
+   {
+    "role": "x11",
+    "process": "xsettingsd",
+    "pss": 0.6,
+    "anon": 0.4,
+    "file": 0.2,
+    "shmem": 0.0,
+    "rss": 5.0,
+    "n": 1
+   },
+   {
+    "role": "common",
+    "process": "fusermount3",
+    "pss": 0.2,
+    "anon": 0.1,
+    "file": 0.1,
+    "shmem": 0.0,
+    "rss": 2.2,
+    "n": 1
+   }
+  ],
+  "meminfo_over_baseline": {
+   "AnonPages": 729.3,
+   "Shmem": 60.5,
+   "Mapped": 405.6,
+   "Cached": 1295.8,
+   "Buffers": 26.7,
+   "Slab": 57.7,
+   "SUnreclaim": 30.2,
+   "SReclaimable": 27.1,
+   "KernelStack": 5.2,
+   "PageTables": 20.4,
+   "VmallocUsed": 6.5,
+   "Percpu": 0.6,
+   "Unevictable": 23.9,
+   "Mlocked": 0.0
+  },
+  "used_over_baseline_mib": 874.6
+ }
+}
