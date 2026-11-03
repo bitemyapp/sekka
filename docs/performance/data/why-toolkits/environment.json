@@ -1,0 +1,246 @@
+{
+ "kernel": "7.3.0",
+ "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+ "governor": "performance",
+ "epp": "performance",
+ "gpu_render_node": "/dev/dri/renderD128",
+ "gpu_vendor": "0x1002",
+ "mesa_egl_vendor": "/nix/store/j6846pd6a2i4bx16wcdn571sq7jznr71-mesa-26.2.6/share/glvnd/egl_vendor.d/50_mesa.json",
+ "radv_icd": "/nix/store/j6846pd6a2i4bx16wcdn571sq7jznr71-mesa-26.2.6/share/vulkan/icd.d/radeon_icd.x86_64.json",
+ "opengl_driver": "/nix/store/5dn4zscffxky60hc9awjdirksfvahkgg-graphics-drivers",
+ "fonts": "/nix/store/b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts",
+ "kit_binary": "/tmp/claude-1000/tk/bin/tk-kit",
+ "pins": {
+  "aizome": {
+   "path": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0",
+   "name": "aizome-0.1.0"
+  },
+  "aizome-flake": {
+   "path": "/nix/store/jjcb17q48sxdq13rw04lixk3z482jfqs-aizome-0.1.0",
+   "name": "aizome-0.1.0"
+  },
+  "aizome-sw": {
+   "path": "/nix/store/fjwys239if5fz2ag3icziazz34xk1663-system-path",
+   "name": "system-path"
+  },
+  "apps": {
+   "path": "/nix/store/i5g8c1x46pv9f58pcj35dkdin5fsrfip-why-toolkits-apps",
+   "name": "why-toolkits-apps"
+  },
+  "bwrap": {
+   "path": "/nix/store/mvj6y8k3xs35cj7kq937xi44q4hl3r93-bubblewrap-0.12.0",
+   "name": "bubblewrap-0.12.0"
+  },
+  "dbus": {
+   "path": "/nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2",
+   "name": "dbus-1.16.2"
+  },
+  "dbus-man": {
+   "path": "/nix/store/w3rq6xc8hnq9jkrh8v1v8s22jpc6fwnh-dbus-1.16.2-man",
+   "name": "dbus-1.16.2-man"
+  },
+  "dolphin": {
+   "path": "/nix/store/934jmz7x037wwd3zykmwpamfl9zjncdj-dolphin-26.08.2",
+   "name": "dolphin-26.08.2"
+  },
+  "foot": {
+   "path": "/nix/store/0gkg75w7bmwd7klmf23qy8m697abypvc-foot-1.28.0",
+   "name": "foot-1.28.0"
+  },
+  "gcc": {
+   "path": "/nix/store/r5ri78axx1qggkjq3vawywlzglg70b5w-gcc-wrapper-16.2.0",
+   "name": "gcc-wrapper-16.2.0"
+  },
+  "gcc-man": {
+   "path": "/nix/store/vvsb7b3ra3z82ayay5wlp7wn10ggj98w-gcc-16.2.0-man",
+   "name": "gcc-16.2.0-man"
+  },
+  "glib-bin-bin": {
+   "path": "/nix/store/cmzn9jsqdrm1y9ff9b2j65iy1dqzk7if-glib-2.88.3-bin",
+   "name": "glib-2.88.3-bin"
+  },
+  "gnome-shell": {
+   "path": "/nix/store/zx9li9d36gd1gkifjjb7ajkkpc656ms0-gnome-shell-50.4",
+   "name": "gnome-shell-50.4"
+  },
+  "gnome-sw": {
+   "path": "/nix/store/jhyrijmazxjqgd5anvm753mp8bkdg8gr-system-path",
+   "name": "system-path"
+  },
+  "gnome-text-editor": {
+   "path": "/nix/store/94r4v2l4r5lzmik62h7mnfi7bwvqnmfz-gnome-text-editor-50.1",
+   "name": "gnome-text-editor-50.1"
+  },
+  "grim": {
+   "path": "/nix/store/pcsy1cp83xdrcnqbyk9951vaj2ad2wky-grim-1.5.0",
+   "name": "grim-1.5.0"
+  },
+  "gtk4": {
+   "path": "/nix/store/3sm6476r2i5ixh3h7zxj66jx21ah0hm0-gtk4-4.22.4",
+   "name": "gtk4-4.22.4"
+  },
+  "gtk4-src": {
+   "path": "/nix/store/kf64y6s024nzcynaihhy12h82142g800-gtk-4.22.4.tar.xz",
+   "name": "gtk-4.22.4.tar.xz"
+  },
+  "jq-bin": {
+   "path": "/nix/store/9l0j15jg8634hkb6d4c9y95mpxl0nhrd-jq-1.8.2-bin",
+   "name": "jq-1.8.2-bin"
+  },
+  "jq-man": {
+   "path": "/nix/store/kyc6a29vbm7k4nh84bj17gxaljnic3a9-jq-1.8.2-man",
+   "name": "jq-1.8.2-man"
+  },
+  "kate": {
+   "path": "/nix/store/782fd5l1s9f3jris5xx3ksv1xxgpnynn-kate-26.08.2",
+   "name": "kate-26.08.2"
+  },
+  "kirigami": {
+   "path": "/nix/store/5d4445w3r2mpp32d712s444v84hk21y6-kirigami-wrapped-6.31.0",
+   "name": "kirigami-wrapped-6.31.0"
+  },
+  "kirigami-unwrapped": {
+   "path": "/nix/store/444cmx87qy38488kbnmafb942152f105-kirigami-6.31.0",
+   "name": "kirigami-6.31.0"
+  },
+  "kwin": {
+   "path": "/nix/store/kp026pi6wrd1inkmq3gbq1r53qxip7jx-kwin-6.8.2",
+   "name": "kwin-6.8.2"
+  },
+  "libadwaita": {
+   "path": "/nix/store/vm108gw2xqwl2yq0cfkpva3n8mlafphm-libadwaita-1.9.3",
+   "name": "libadwaita-1.9.3"
+  },
+  "mesa": {
+   "path": "/nix/store/j6846pd6a2i4bx16wcdn571sq7jznr71-mesa-26.2.6",
+   "name": "mesa-26.2.6"
+  },
+  "mutter": {
+   "path": "/nix/store/v9ihnj6zfyi1sr1gwa6s7ldd3rwz59s0-mutter-50.5",
+   "name": "mutter-50.5"
+  },
+  "nautilus": {
+   "path": "/nix/store/hknkrvcfzg9ck4h1bhlddm4p6ik0mlm1-nautilus-50.2.2",
+   "name": "nautilus-50.2.2"
+  },
+  "perf": {
+   "path": "/nix/store/bw8frr0nk26m740a2mwaw5yi06mgxakb-perf-linux-7.3.1",
+   "name": "perf-linux-7.3.1"
+  },
+  "pkg-config": {
+   "path": "/nix/store/s70gz6bvz74c36xigh5m2ab2cqli08cv-pkg-config-wrapper-0.29.2",
+   "name": "pkg-config-wrapper-0.29.2"
+  },
+  "pkg-config-man": {
+   "path": "/nix/store/qyqwjd1i7r6jchpb5k5b4g2ihpqiw3nd-pkg-config-0.29.2-man",
+   "name": "pkg-config-0.29.2-man"
+  },
+  "plasma-sw": {
+   "path": "/nix/store/q3qqdll27zp52n8iax57l30n0xbb5ckq-system-path",
+   "name": "system-path"
+  },
+  "plasma-wayland-protocols": {
+   "path": "/nix/store/bgimwpa0narbwpa90aplv6l5kg6dk4pc-plasma-wayland-protocols-1.23.0",
+   "name": "plasma-wayland-protocols-1.23.0"
+  },
+  "plasma-workspace": {
+   "path": "/nix/store/f2d0fs5cfsanship1fkaln0xrmmyn4db-plasma-workspace-6.8.2",
+   "name": "plasma-workspace-6.8.2"
+  },
+  "procps": {
+   "path": "/nix/store/y733samykhd49crbck70qzsl315zq3hw-procps-4.0.7",
+   "name": "procps-4.0.7"
+  },
+  "procps-man": {
+   "path": "/nix/store/4v6x7ihvq3smw2g983l5aqcyaw3xd131-procps-4.0.7-man",
+   "name": "procps-4.0.7-man"
+  },
+  "python3": {
+   "path": "/nix/store/xahxrjs30p3mw0a42bqg9ikgkikskw8m-python3-3.14.8",
+   "name": "python3-3.14.8"
+  },
+  "qtbase": {
+   "path": "/nix/store/h7wxgv3wpq6vm4367px3jdg7k4dhf1hz-qtbase-6.12.0",
+   "name": "qtbase-6.12.0"
+  },
+  "qtdeclarative": {
+   "path": "/nix/store/0jnxd2cwya279hyr7hmklbpdb0298lg1-qtdeclarative-6.12.0",
+   "name": "qtdeclarative-6.12.0"
+  },
+  "qtwayland": {
+   "path": "/nix/store/f00cz224s786izwk6sm0n01fy7j0rhzk-qtwayland-6.12.0",
+   "name": "qtwayland-6.12.0"
+  },
+  "qtwayland-src": {
+   "path": "/nix/store/0bb10kv0q8lfgnps1ngzpwic43dpl4vv-qtwayland-everywhere-src-6.12.0.tar.xz",
+   "name": "qtwayland-everywhere-src-6.12.0.tar.xz"
+  },
+  "socat": {
+   "path": "/nix/store/k562gy1wa1rwyhlp6ma2cp37zlc0mspl-socat-1.8.1.3",
+   "name": "socat-1.8.1.3"
+  },
+  "sway": {
+   "path": "/nix/store/x438l06y03ldc8jx4zix26g96445w09c-sway-1.12",
+   "name": "sway-1.12"
+  },
+  "sway-unwrapped": {
+   "path": "/nix/store/593cxw1573ki0xinvz668i93ki2fykfp-sway-unwrapped-1.12",
+   "name": "sway-unwrapped-1.12"
+  },
+  "util-linux-bin": {
+   "path": "/nix/store/2lgg8jqyzjp60svh7kmp39kqwnig31p2-util-linux-2.42.4-bin",
+   "name": "util-linux-2.42.4-bin"
+  },
+  "util-linux-man": {
+   "path": "/nix/store/q2ix5q2bj1s8r4r8azwzcnad4vvihcx6-util-linux-2.42.4-man",
+   "name": "util-linux-2.42.4-man"
+  },
+  "wayland": {
+   "path": "/nix/store/8vz293r6dqfci9p6m955yziz2agxx990-wayland-1.26.0",
+   "name": "wayland-1.26.0"
+  },
+  "wayland-dev-dev": {
+   "path": "/nix/store/yxzfyllyg8ghjpywdv8z9489d32mjq4x-wayland-1.26.0-dev",
+   "name": "wayland-1.26.0-dev"
+  },
+  "wayland-man": {
+   "path": "/nix/store/74088w75r53svk77xmxq376xvll6r22x-wayland-1.26.0-man",
+   "name": "wayland-1.26.0-man"
+  },
+  "wayland-protocols": {
+   "path": "/nix/store/4gslphcdzp6rcxq5n0zqjc5xjczyw32w-wayland-protocols-1.49",
+   "name": "wayland-protocols-1.49"
+  },
+  "wayland-scanner-bin": {
+   "path": "/nix/store/hdqa5pkvhfz2j48psb2d5axr81xc5gnq-wayland-scanner-1.26.0-bin",
+   "name": "wayland-scanner-1.26.0-bin"
+  },
+  "wlr-protocols": {
+   "path": "/nix/store/r3y4wiz2v2nkk55wnxqrxzg2wzchgmyn-wlr-protocols-0-unstable-2022-09-05",
+   "name": "wlr-protocols-0-unstable-2022-09-05"
+  },
+  "wlroots-src": {
+   "path": "/nix/store/r2zcb3d3dgmz09qjaqsy945inal2h41r-source",
+   "name": "source"
+  },
+  "xkbcommon": {
+   "path": "/nix/store/mp9krn4yrm1hwh657y1aa2jv0x97fbin-libxkbcommon-1.13.2",
+   "name": "libxkbcommon-1.13.2"
+  },
+  "xkbcommon-dev-dev": {
+   "path": "/nix/store/5pq7mhgzqn8qgv41ff6dj3c2rhkqgalx-libxkbcommon-1.13.2-dev",
+   "name": "libxkbcommon-1.13.2-dev"
+  },
+  "xz-bin": {
+   "path": "/nix/store/nflpm51il93hxh2rba6dvz59kaff0i7v-xz-5.8.4-bin",
+   "name": "xz-5.8.4-bin"
+  },
+  "xz-man": {
+   "path": "/nix/store/mjl9zilz8asw9abyjkrmz76srii74q3r-xz-5.8.4-man",
+   "name": "xz-5.8.4-man"
+  }
+ },
+ "kit_commit": "afa3d244b01b5172114409a5f4eeefce17f1a800",
+ "wlroots": "/nix/store/qr7fr413hvc0rqlnvgmrx9g9kznw472s-wlroots-0.20.2",
+ "mesa_driver_lib": "libgallium-26.2.6.so"
+}
