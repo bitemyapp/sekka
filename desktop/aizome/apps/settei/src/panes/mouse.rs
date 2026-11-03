@@ -41,7 +41,7 @@ pub fn speed_words(v: f64) -> &'static str {
 /// A slider with its ends named and a mono read-out.
 pub fn speed_slider<Msg: Clone + Send + 'static>(
     value: f64,
-    range: std::ops::RangeInclusive<f64>,
+    range: ValueRange,
     left: &str,
     right: &str,
     f: impl Fn(f64) -> Msg + 'static,
@@ -130,7 +130,7 @@ impl Pane for Mouse {
             vcx.section(
                 "Pointer",
                 vec![
-                    row("Pointer speed", speed_slider(p.speed, -1.0..=1.0, "Slow", "Fast", Msg::Speed))
+                    row("Pointer speed", speed_slider(p.speed, ValueRange::new(-1.0, 1.0).unwrap(), "Slow", "Fast", Msg::Speed))
                         .entry("speed")
                         .detail(speed_words(p.speed)),
                     row("Pointer acceleration", toggle(p.accel_profile == AccelProfile::Adaptive).on_toggle(Msg::Acceleration))
@@ -144,7 +144,7 @@ impl Pane for Mouse {
                     row("Natural scrolling", toggle(p.natural_scroll).on_toggle(Msg::Natural))
                         .entry("natural-scroll")
                         .help("Content follows the wheel, as it follows a finger on a trackpad."),
-                    row("Scrolling speed", speed_slider(scroll, 0.2..=3.0, "Slow", "Fast", Msg::ScrollSpeed))
+                    row("Scrolling speed", speed_slider(scroll, ValueRange::new(0.2, 3.0).unwrap(), "Slow", "Fast", Msg::ScrollSpeed))
                         .entry("scroll-speed")
                         .detail(format!("{scroll:.1}×")),
                 ],

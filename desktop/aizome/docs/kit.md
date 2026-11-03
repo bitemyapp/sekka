@@ -121,7 +121,7 @@ Every builder takes the common settings in any order with its own
 
 Lengths: `Shrink` (the content's size, the default), `Fill` (all the room
 there is; in a row or column, an equal share of what the others leave),
-`Length::FillPortion(n)`, and points (`.width(200.0)`).
+`Length::FillPortion(n)` with a `NonZeroU16` weight, and points (`.width(200.0)`).
 
 ### Layout
 
@@ -157,8 +157,8 @@ them, Space and Return work them, arrows move within them.
 | `button("Save")` | `.on_press(msg)`, `.primary()` (the selection fill), `.destructive()`, `.default()` (primary, answers Return in its sheet), `.cancel()` (answers Escape), `.icon(Icon)`, `.enabled(b)`, `.plain()`, `.compact()`, `.toolbar()` (both: a toolbar's B, I, </>), `.selected(b)` (pressed in), `.mono()`, `.weight(w)`, `.italic()`. `icon_button(Icon::Settings)`. |
 | `toggle(on).on_toggle(Msg::Wifi)` | A switch. |
 | `checkbox("Show hidden files", on).on_toggle(f)`, `radio("Night", value, Some(selected)).on_select(f)` | |
-| `slider(v, 0.0..=1.0)` | `.step(s)`, `.ticks(n)`, `.on_change(f)`, `.on_release(msg)`. Arrows, Page Up/Down, Home/End. |
-| `stepper(v).range(a..=b).step(s).suffix("pt").on_change(f)` | − value +. |
+| `slider(v, ValueRange::UNIT)` | `.step(s)`, `.ticks(n)`, `.on_change(f)`, `.on_release(msg)`. Arrows, Page Up/Down, Home/End. |
+| `stepper(v).range(bounds).step(increment).suffix("pt").on_change(f)` | − value +. |
 | `segmented(["Night", "Day", "Auto"], i).on_select(f)`, `segmented_icons([...], i)` | ← → change it. |
 | `dropdown(options, selected).on_select(f)` | A pop-up button opening a menu of choices (the board's "Markdown ⌄"); `.placeholder(t)`, `.compact()` for toolbars. |
 | `progress(f)`, `progress_indeterminate()`, `meter(values)` | The indeterminate bar ticks every 50 ms redrawing only itself, and stands still under reduced motion; meters are the menu bar's CPU bars (`.role(..)`, `.bar_width(..)`). |
@@ -696,3 +696,7 @@ label, value, checked, selected, range), its rectangle in the window's
 points and the part that shows. Widgets name parts that aren't elements
 through `Widget::parts` (a segmented control's segments). `Harness::inspected`
 gives the same list. Without the variable nothing is written.
+
+Numeric controls take `widgets::ValueRange` (finite, ordered bounds) and
+`widgets::PositiveStep` (a finite positive increment). Their `new` constructors
+return `Option`; validate dynamic input before building a control.

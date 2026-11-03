@@ -420,15 +420,25 @@ impl Keyboard {
                 vec![
                     form::row(
                         "Delay until repeat",
-                        crate::panes::mouse::speed_slider(-delay, -1000.0..=-150.0, "Long", "Short", |v| {
-                            Msg::Delay(-v)
-                        }),
+                        crate::panes::mouse::speed_slider(
+                            -delay,
+                            ValueRange::new(-1000.0, -150.0).unwrap(),
+                            "Long",
+                            "Short",
+                            |v| Msg::Delay(-v),
+                        ),
                     )
                     .entry("repeat-delay")
                     .detail(format!("{} ms", k.repeat_delay)),
                     form::row(
                         "Repeat rate",
-                        crate::panes::mouse::speed_slider(rate, 5.0..=60.0, "Slow", "Fast", Msg::Rate),
+                        crate::panes::mouse::speed_slider(
+                            rate,
+                            ValueRange::new(5.0, 60.0).unwrap(),
+                            "Slow",
+                            "Fast",
+                            Msg::Rate,
+                        ),
                     )
                     .entry("repeat-rate")
                     .detail(format!("{} a second", k.repeat_rate)),

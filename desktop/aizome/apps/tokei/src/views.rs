@@ -485,7 +485,11 @@ fn edit_alarm(app: &Tokei, a: &Alarm, index: Option<usize>, time: &str, error: O
         .spacing(8.0),
         row![
             label("Snooze"),
-            stepper(f64::from(a.snooze_minutes)).range(1.0..=60.0).step(1.0).suffix(" min").on_change(Msg::DraftSnooze)
+            stepper(f64::from(a.snooze_minutes))
+                .range(ValueRange::new(1.0, 60.0).unwrap())
+                .step(PositiveStep::new(1.0).unwrap())
+                .suffix(" min")
+                .on_change(Msg::DraftSnooze)
         ]
         .spacing(8.0),
         row![label(""), checkbox("Wake the computer from sleep", a.wake).on_toggle(Msg::DraftWake)].spacing(8.0),

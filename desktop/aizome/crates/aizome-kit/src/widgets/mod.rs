@@ -11,3 +11,5 @@ pub mod table;
 pub mod text_editor;
 pub mod text_field;
 pub mod video;
+
+pub use controls::{PositiveStep, ValueRange};

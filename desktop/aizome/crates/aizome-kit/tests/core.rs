@@ -75,8 +75,14 @@ fn rows_share_leftover_room_by_portion() {
         column![
             row![
                 container(text("a")).width(100.0).height(20.0).id("fixed"),
-                container(text("b")).width(Length::FillPortion(1)).height(20.0).id("one"),
-                container(text("c")).width(Length::FillPortion(3)).height(20.0).id("three"),
+                container(text("b"))
+                    .width(Length::FillPortion(std::num::NonZeroU16::new(1).unwrap()))
+                    .height(20.0)
+                    .id("one"),
+                container(text("c"))
+                    .width(Length::FillPortion(std::num::NonZeroU16::new(3).unwrap()))
+                    .height(20.0)
+                    .id("three"),
             ]
             .spacing(10.0)
             .padding(20.0)

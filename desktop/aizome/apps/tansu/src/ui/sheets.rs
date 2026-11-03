@@ -183,8 +183,8 @@ fn size_controls(
     let lo = (min / MIB).max(1) as f64;
     let hi = (max / MIB).max(1) as f64;
     let mut parts: Vec<Element<Msg>> = vec![
-        slider((size / MIB) as f64, lo..=hi.max(lo))
-            .step(1.0)
+        slider((size / MIB) as f64, ValueRange::new(lo, hi.max(lo)).expect("finite partition sizes"))
+            .step(PositiveStep::new(1.0).unwrap())
             .on_change(|v| s(SheetMsg::Size(v)))
             .width(Length::Fill)
             .into(),

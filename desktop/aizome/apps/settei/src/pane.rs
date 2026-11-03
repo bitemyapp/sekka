@@ -91,7 +91,7 @@
 //!     fn view(&self, vcx: &ViewCx) -> Element<Msg> {
 //!         let p = &vcx.settings().input.pointer;
 //!         vcx.section("Pointer", vec![
-//!             form::row("Pointer speed", slider(p.speed, -1.0..=1.0).on_change(Msg::Speed)).entry("speed"),
+//!             form::row("Pointer speed", slider(p.speed, ValueRange::new(-1.0, 1.0).unwrap()).on_change(Msg::Speed)).entry("speed"),
 //!         ])
 //!     }
 //! }

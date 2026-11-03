@@ -657,8 +657,8 @@ fn volume_control(io: Io, d: &AudioDevice) -> Element<Msg> {
             .on_press(Msg::Mute(io, index, !muted))
             .tooltip(if muted { "Unmute" } else { "Mute" })
             .label(if muted { "Unmute" } else { "Mute" }),
-        slider(d.volume as f64, 0.0..=max)
-            .step(0.01)
+        slider(d.volume as f64, ValueRange::new(0.0, max).expect("finite volume limit"))
+            .step(PositiveStep::new(0.01).unwrap())
             .on_change(move |v| Msg::Volume(io, index, v as f32))
             .enabled(!muted)
             .width(220.0),
@@ -704,8 +704,8 @@ fn devices(vcx: &ViewCx, state: &AudioState, io: Io, (level, peak): (f32, f32)) 
                     "Balance",
                     row![
                         text("L").mono().size(11.0).role(Role::Text3),
-                        slider(d.balance as f64, -1.0..=1.0)
-                            .step(0.02)
+                        slider(d.balance as f64, ValueRange::new(-1.0, 1.0).unwrap())
+                            .step(PositiveStep::new(0.02).unwrap())
                             .on_change(move |v| Msg::Balance(io, index, v as f32))
                             .width(200.0),
                         text("R").mono().size(11.0).role(Role::Text3),
@@ -800,8 +800,8 @@ fn app_row(state: &AudioState, s: &AudioStream, rec: bool) -> Row<Msg> {
             .label(if muted { "Unmute" } else { "Mute" }),
     );
     line = line.push(
-        slider(s.volume as f64, 0.0..=1.0)
-            .step(0.01)
+        slider(s.volume as f64, ValueRange::UNIT)
+            .step(PositiveStep::new(0.01).unwrap())
             .on_change(move |v| Msg::AppVolume(rec, index, v as f32))
             .enabled(s.volume_writable && !muted)
             .width(120.0),
@@ -845,8 +845,8 @@ fn alerts(p: &Sound, vcx: &ViewCx) -> Element<Msg> {
             "Alert volume",
             row![
                 icon(Icon::Volume1).size(14.0).role(Role::Text3),
-                slider(volume, 0.0..=1.0)
-                    .step(0.05)
+                slider(volume, ValueRange::UNIT)
+                    .step(PositiveStep::new(0.05).unwrap())
                     .on_change(|v| Msg::AlertVolume(v as f32))
                     .on_release(Msg::AlertVolumeSet)
                     .width(200.0),

@@ -229,12 +229,12 @@ impl Gallery {
                 radio("Auto", 2u8, Some(self.radio)).on_select(Msg::Radio),
                 space(16.0),
                 segmented(["Small", "Medium", "Large"], self.segment).on_select(Msg::Segment),
-                stepper(self.stepper).range(8.0..=72.0).suffix(" pt").on_change(Msg::Stepper),
+                stepper(self.stepper).range(ValueRange::new(8.0, 72.0).unwrap()).suffix(" pt").on_change(Msg::Stepper),
             ]
             .spacing(12.0),
             aizome_kit::row![
-                slider(self.slider, 0.0..=1.0).ticks(5).on_change(Msg::Slider).width(240.0),
-                slider(0.3, 0.0..=1.0).width(160.0)
+                slider(self.slider, ValueRange::UNIT).ticks(5).on_change(Msg::Slider).width(240.0),
+                slider(0.3, ValueRange::UNIT).width(160.0)
             ]
             .spacing(16.0),
             Self::heading("Progress and status"),
@@ -453,7 +453,7 @@ impl Gallery {
                             .into(),
                         aizome_kit::form_row(
                             "Volume",
-                            slider(self.slider, 0.0..=1.0).on_change(Msg::Slider).width(200.0)
+                            slider(self.slider, ValueRange::UNIT).on_change(Msg::Slider).width(200.0)
                         )
                         .icon(Icon::Volume2)
                         .into(),

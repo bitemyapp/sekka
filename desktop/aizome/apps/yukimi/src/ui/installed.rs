@@ -199,8 +199,12 @@ fn chosen(app: &Yukimi) -> Vec<Element<Msg>> {
 
 fn system_row(package: &SystemPackage) -> Element<Msg> {
     row![
-        text(package.name.clone()).weight(500.0).width(Length::FillPortion(3)),
-        text(package.version.clone()).mono().size(12.0).role(Role::Text3).width(Length::FillPortion(2)),
+        text(package.name.clone()).weight(500.0).width(Length::FillPortion(std::num::NonZeroU16::new(3).unwrap())),
+        text(package.version.clone())
+            .mono()
+            .size(12.0)
+            .role(Role::Text3)
+            .width(Length::FillPortion(std::num::NonZeroU16::new(2).unwrap())),
         mono(human_size(package.size)).width(72.0),
     ]
     .spacing(12.0)

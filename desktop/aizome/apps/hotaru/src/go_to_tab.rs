@@ -550,7 +550,7 @@ fn results(p: &Palette) -> Element<Msg> {
     let list = container(column(rows)).padding([offset, 0.0, 0.0, 0.0]).clip().width(Fill).height(room);
     around(list, [0.0, 0.0, 0.0, 0.0], Size::new(0.0, room), "go-to-tab-results", |_| {})
         .on_scroll(|delta| Msg::GoToTab(Event::Scroll(delta.y)))
-        .width(Length::FillPortion(3))
+        .width(Length::FillPortion(std::num::NonZeroU16::new(3).unwrap()))
         .into()
 }
 
@@ -619,7 +619,7 @@ fn detail(row: Option<&Row>, facts: Option<&Facts>, gathered: bool) -> Element<M
         cx.canvas.restore();
     })
     .text(label, SemanticRole::Group)
-    .width(Length::FillPortion(2))
+    .width(Length::FillPortion(std::num::NonZeroU16::new(2).unwrap()))
     .into()
 }
 

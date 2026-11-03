@@ -8,7 +8,6 @@
 //! arrows move within it.
 
 use std::marker::PhantomData;
-use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -889,14 +888,40 @@ impl Widget for Check {
     }
 }
 
+/// Ordered, finite bounds. Construction validates untrusted numeric input once.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ValueRange {
+    min: f64,
+    max: f64,
+}
+impl ValueRange {
+    pub const UNIT: Self = Self { min: 0.0, max: 1.0 };
+    pub const fn new(min: f64, max: f64) -> Option<Self> {
+        if min.is_finite() && max.is_finite() && min <= max { Some(Self { min, max }) } else { None }
+    }
+}
+
+/// A finite, strictly positive increment for a numeric control.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PositiveStep(f64);
+impl PositiveStep {
+    pub const ONE: Self = Self(1.0);
+    pub const fn new(value: f64) -> Option<Self> {
+        if value.is_finite() && value > 0.0 { Some(Self(value)) } else { None }
+    }
+    pub const fn get(self) -> f64 {
+        self.0
+    }
+}
+
 // Sliders.
 
-/// A slider: `slider(self.volume, 0.0..=1.0).step(0.05).on_change(Msg::Volume)`.
+/// A slider: `slider(self.volume, ValueRange::UNIT).step(PositiveStep::new(0.05).unwrap()).on_change(Msg::Volume)`.
 pub struct Slider<Msg> {
     pub(crate) common: Common,
     value: f64,
-    range: RangeInclusive<f64>,
-    step: Option<f64>,
+    range: ValueRange,
+    step: Option<PositiveStep>,
     ticks: usize,
     on_change: Option<MsgMap<f64>>,
     on_release: Option<MsgFn>,
@@ -906,7 +931,7 @@ pub struct Slider<Msg> {
 
 crate::builder!(Slider);
 
-pub fn slider<Msg>(value: f64, range: RangeInclusive<f64>) -> Slider<Msg> {
+pub fn slider<Msg>(value: f64, range: ValueRange) -> Slider<Msg> {
     Slider {
         common: Common::sized(Length::Fill, Length::Shrink),
         value,
@@ -935,7 +960,7 @@ impl<Msg: Clone + Send + 'static> Slider<Msg> {
 
 impl<Msg> Slider<Msg> {
     /// Values snap to multiples of `step` from the start.
-    pub fn step(mut self, step: f64) -> Self {
+    pub fn step(mut self, step: PositiveStep) -> Self {
         self.step = Some(step);
         self
     }
@@ -956,8 +981,8 @@ impl<Msg> From<Slider<Msg>> for Element<Msg> {
     fn from(s: Slider<Msg>) -> Element<Msg> {
         let w = SliderWidget {
             value: s.value,
-            min: *s.range.start(),
-            max: *s.range.end(),
+            min: s.range.min,
+            max: s.range.max,
             step: s.step,
             ticks: s.ticks,
             on_change: s.on_change,
@@ -972,7 +997,7 @@ struct SliderWidget {
     value: f64,
     min: f64,
     max: f64,
-    step: Option<f64>,
+    step: Option<PositiveStep>,
     ticks: usize,
     on_change: Option<MsgMap<f64>>,
     on_release: Option<MsgFn>,
@@ -987,24 +1012,36 @@ impl SliderWidget {
     }
 
     fn fraction(&self) -> f64 {
-        if self.max <= self.min { 0.0 } else { ((self.value - self.min) / (self.max - self.min)).clamp(0.0, 1.0) }
+        if self.max <= self.min {
+            0.0
+        } else {
+            let span = self.max - self.min;
+            let fraction = if span.is_finite() {
+                (self.value - self.min) / span
+            } else {
+                // Scale only when subtraction overflows; scaling tiny bounds
+                // would round a valid, nonempty range down to zero.
+                (self.value / 2.0 - self.min / 2.0) / (self.max / 2.0 - self.min / 2.0)
+            };
+            fraction.clamp(0.0, 1.0)
+        }
     }
 
     fn snap(&self, v: f64) -> f64 {
         let v = v.clamp(self.min, self.max);
         match self.step {
-            Some(s) if s > 0.0 => (self.min + ((v - self.min) / s).round() * s).clamp(self.min, self.max),
+            Some(s) => (self.min + ((v - self.min) / s.get()).round() * s.get()).clamp(self.min, self.max),
             _ => v,
         }
     }
 
     fn key_step(&self) -> f64 {
-        self.step.unwrap_or((self.max - self.min) / 100.0)
+        self.step.map_or(self.max / 100.0 - self.min / 100.0, PositiveStep::get)
     }
 
     fn at(&self, x: f64, width: f64) -> f64 {
         let t = ((x - THUMB.0 / 2.0) / (width - THUMB.0).max(1.0)).clamp(0.0, 1.0);
-        self.snap(self.min + t * (self.max - self.min))
+        self.snap(self.min * (1.0 - t) + self.max * t)
     }
 
     fn set(&self, cx: &mut EventCx, v: f64) {
@@ -1132,12 +1169,12 @@ impl Widget for SliderWidget {
 
 // Steppers.
 
-/// A number with − and + beside it: `stepper(self.size).range(8.0..=72.0).step(1.0).on_change(Msg::Size)`.
+/// A number with − and + beside it: `stepper(self.size).range(ValueRange::new(8.0, 72.0).unwrap()).step(PositiveStep::ONE).on_change(Msg::Size)`.
 pub struct Stepper<Msg> {
     pub(crate) common: Common,
     value: f64,
-    range: RangeInclusive<f64>,
-    step: f64,
+    range: ValueRange,
+    step: PositiveStep,
     decimals: usize,
     suffix: Option<Arc<str>>,
     on_change: Option<MsgMap<f64>>,
@@ -1151,8 +1188,8 @@ pub fn stepper<Msg>(value: f64) -> Stepper<Msg> {
     Stepper {
         common: Common::default(),
         value,
-        range: f64::MIN..=f64::MAX,
-        step: 1.0,
+        range: ValueRange { min: f64::MIN, max: f64::MAX },
+        step: PositiveStep::ONE,
         decimals: 0,
         suffix: None,
         on_change: None,
@@ -1169,14 +1206,14 @@ impl<Msg: Send + 'static> Stepper<Msg> {
 }
 
 impl<Msg> Stepper<Msg> {
-    pub fn range(mut self, r: RangeInclusive<f64>) -> Self {
+    pub fn range(mut self, r: ValueRange) -> Self {
         self.range = r;
         self
     }
 
-    pub fn step(mut self, s: f64) -> Self {
+    pub fn step(mut self, s: PositiveStep) -> Self {
         self.step = s;
-        let frac = format!("{s}");
+        let frac = format!("{}", s.get());
         self.decimals = frac.split_once('.').map_or(0, |(_, f)| f.len());
         self
     }
@@ -1197,8 +1234,8 @@ impl<Msg> From<Stepper<Msg>> for Element<Msg> {
     fn from(s: Stepper<Msg>) -> Element<Msg> {
         let w = StepperWidget {
             value: s.value,
-            min: *s.range.start(),
-            max: *s.range.end(),
+            min: s.range.min,
+            max: s.range.max,
             step: s.step,
             decimals: s.decimals,
             suffix: s.suffix,
@@ -1213,7 +1250,7 @@ struct StepperWidget {
     value: f64,
     min: f64,
     max: f64,
-    step: f64,
+    step: PositiveStep,
     decimals: usize,
     suffix: Option<Arc<str>>,
     on_change: Option<MsgMap<f64>>,
@@ -1342,7 +1379,7 @@ impl Widget for StepperWidget {
                 let z = self.zone(pos.x, s.width, s.height);
                 cx.state::<StepperState>().zone = z;
                 if z != 0 {
-                    self.bump(cx, self.step * f64::from(z));
+                    self.bump(cx, self.step.get() * f64::from(z));
                 }
                 Status::Handled
             }
@@ -1351,11 +1388,11 @@ impl Widget for StepperWidget {
                 Status::Handled
             }
             _ if is_key(event, NamedKey::ArrowUp) || is_key(event, NamedKey::ArrowRight) => {
-                self.bump(cx, self.step);
+                self.bump(cx, self.step.get());
                 Status::Handled
             }
             _ if is_key(event, NamedKey::ArrowDown) || is_key(event, NamedKey::ArrowLeft) => {
-                self.bump(cx, -self.step);
+                self.bump(cx, -self.step.get());
                 Status::Handled
             }
             _ => Status::Ignored,
@@ -2350,5 +2387,47 @@ impl Widget for ImageWidget {
 
     fn semantics(&self) -> Option<Semantics> {
         Some(Semantics { role: SemanticRole::Image, ..Default::default() })
+    }
+}
+
+#[cfg(test)]
+mod numeric_constraint_tests {
+    use super::*;
+
+    #[test]
+    fn slider_positions_cover_finite_ranges_without_overflow_or_underflow() {
+        for (min, max, value, expected) in [
+            (0.0, 1.0, 0.25, 0.25),
+            (-f64::MAX, f64::MAX, 0.0, 0.5),
+            (-f64::MAX, f64::MAX, f64::MAX, 1.0),
+            (0.0, f64::from_bits(1), f64::from_bits(1), 1.0),
+            (1.0, 1.0, 1.0, 0.0),
+        ] {
+            let range = ValueRange::new(min, max).unwrap();
+            let widget = SliderWidget {
+                value,
+                min: range.min,
+                max: range.max,
+                step: None,
+                ticks: 0,
+                on_change: None,
+                on_release: None,
+                enabled: true,
+            };
+            assert_eq!(widget.fraction(), expected, "range {min}..={max}, value {value}");
+        }
+    }
+
+    #[test]
+    fn invalid_bounds_and_increments_cannot_enter_controls() {
+        assert!(ValueRange::new(2.0, 1.0).is_none());
+        for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(ValueRange::new(invalid, 1.0).is_none());
+            assert!(ValueRange::new(0.0, invalid).is_none());
+            assert!(PositiveStep::new(invalid).is_none());
+        }
+        assert!(PositiveStep::new(0.0).is_none());
+        assert!(PositiveStep::new(-1.0).is_none());
+        assert!(ValueRange::new(1.0, 1.0).is_some());
     }
 }
