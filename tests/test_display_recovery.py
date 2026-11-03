@@ -57,6 +57,7 @@ class FakeHyprland:
         self.server.bind(str(root / 'run/user/1000/hypr/test/.socket.sock'))
         self.server.listen(16)
         self.server.settimeout(0.2)
+        self.handlers = []
         self.thread = threading.Thread(target=self.serve, daemon=True)
         self.thread.start()
 
@@ -64,6 +65,9 @@ class FakeHyprland:
         self.stop.set()
         self.thread.join(timeout=5)
         self.server.close()
+        # A request still being answered writes to the state folder.
+        for handler in self.handlers:
+            handler.join(timeout=5)
 
     def serve(self):
         while not self.stop.is_set():
@@ -71,7 +75,9 @@ class FakeHyprland:
                 connection, _ = self.server.accept()
             except socket.timeout:
                 continue
-            threading.Thread(target=self.handle, args=(connection,), daemon=True).start()
+            handler = threading.Thread(target=self.handle, args=(connection,), daemon=True)
+            self.handlers.append(handler)
+            handler.start()
 
     def log(self, call):
         with open(self.state / 'calls', 'a') as f:
@@ -164,6 +170,10 @@ class FakeHyprland:
 class Recovery(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='tatami-display-test-')
+        # Cleanups run last first: the watcher a test starts (see watch) and
+        # the fake Hyprland stop writing before their folder goes. tearDown
+        # would run before the watcher stopped.
+        self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         for folder in ['state', 'fake', 'bin', 'home/alice', 'run/user/1000/tatami',
                        'run/user/1000/hypr/test', 'nix/store', 'drm']:
@@ -185,10 +195,7 @@ class Recovery(unittest.TestCase):
         (self.runtime / 'monitors-off').write_text('eDP-1\n')
         (self.runtime / 'monitors.lua').write_text('hl.monitor({ output = "eDP-1", disabled = true })\n')
         self.hyprland = FakeHyprland(self.root)
-
-    def tearDown(self):
-        self.hyprland.close()
-        self.tmp.cleanup()
+        self.addCleanup(self.hyprland.close)
 
     def set_monitors(self, monitors):
         temporary = self.root / 'state/monitors.input'
