@@ -139,6 +139,37 @@ impl Page {
         self.rows.iter().position(|r| !r.heading).unwrap_or(0)
     }
 
+    /// From row `i`, the first row of the next letter (or of the one
+    /// before, or this one's start): the shoulder buttons through a long
+    /// list of games, as a phone's index runs down its side.
+    pub fn next_letter(&self, i: usize, forward: bool) -> usize {
+        let letter = |j: usize| -> Option<char> {
+            let r = self.rows.get(j).filter(|r| !r.heading)?;
+            let l = r.label.strip_prefix("The ").unwrap_or(&r.label);
+            l.chars().next().map(|c| if c.is_alphabetic() { c.to_ascii_uppercase() } else { '#' })
+        };
+        let Some(here) = letter(i) else { return i };
+        // The first row of the run of `l` that `j` is in.
+        let start = |mut j: usize, l: char| {
+            while j > 0 && letter(j - 1) == Some(l) {
+                j -= 1;
+            }
+            j
+        };
+        if forward {
+            (i + 1..self.rows.len()).find(|j| letter(*j).is_some_and(|l| l != here)).unwrap_or(i)
+        } else {
+            let s = start(i, here);
+            if s < i {
+                return s;
+            }
+            match (0..s).rev().find_map(|j| letter(j).map(|l| (j, l))) {
+                Some((j, l)) => start(j, l),
+                None => i,
+            }
+        }
+    }
+
     fn section_rect(&self, i: usize) -> Rect {
         let y = TOP + 20.0 + i as f64 * 78.0;
         Rect::new(MARGIN, y, MARGIN + SIDE_W, y + 68.0)

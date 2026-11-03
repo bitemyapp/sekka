@@ -10,11 +10,14 @@
 //!   service's sites.
 //! - [`rules`]: the PIN, what kids may open, and for how long.
 //! - [`folders`]: choosing a games or videos folder from the sofa.
+//! - [`library`] and [`collection`]: the games and videos found (through
+//!   the files index Aizome's apps share), and which of them show.
 //! - [`app`] and [`ui`]: the program and what it draws.
 
 pub mod app;
 pub mod browser;
 pub mod clock;
+pub mod collection;
 pub mod devtools;
 pub mod folders;
 pub mod instance;

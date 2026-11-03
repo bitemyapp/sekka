@@ -28,6 +28,9 @@ aizome-media = { path = "../../crates/aizome-media" }
 # Films on the desktop's media controls and the media keys (MPRIS), as
 # Utsushi is.
 aizome-mpris = { path = "../../crates/aizome-mpris" }
+# Finding games in big collections and on drives: the files index the apps
+# share, which reads again only folders that changed.
+aizome-index = { path = "../../crates/aizome-index" }
 serde.workspace = true
 serde_json.workspace = true
 log.workspace = true

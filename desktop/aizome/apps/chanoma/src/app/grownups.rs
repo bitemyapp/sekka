@@ -1,5 +1,12 @@
 //! The grown-ups' settings, pairing controllers and setting up their
 //! buttons.
+//!
+//! A big collection of games is managed from Games: folders added by hand
+//! or found on the drives (home and every drive plugged in, through the
+//! files index), whole systems turned off, variants left out and a game's
+//! regions shown as one ([`crate::collection`]), and kids' games chosen a
+//! system at a time, all at once or one by one, the shoulder buttons
+//! running down the list a letter at a time.
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -42,6 +49,31 @@ pub struct State {
     pub row: usize,
     pub in_list: bool,
     pub first: usize,
+    /// A page opened from a row (a system's games), and the row it was
+    /// opened from.
+    pub sub: Option<Sub>,
+    pub back_to: usize,
+}
+
+/// A page a section's row opens.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Sub {
+    /// Every system with games, each on or off.
+    Systems,
+    /// One system's games, for kids.
+    System(&'static str),
+    /// The folders of games found on the drives.
+    Found,
+}
+
+/// Looking for games on the drives.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Finding {
+    pub running: bool,
+    /// Where it's reading, and how many folders so far.
+    pub at: String,
+    pub folders: usize,
+    pub found: Vec<crate::library::FoundFolder>,
 }
 
 impl State {
@@ -81,6 +113,15 @@ enum Act {
     NewGames,
     Game(String),
     AllowAll,
+    Open(Sub),
+    FindGames,
+    UseFolder(PathBuf),
+    SystemOn(&'static str),
+    HideVariants,
+    OneOfEach,
+    Region,
+    KidsAll(&'static str),
+    KidsNone(&'static str),
     RemoveFolder(FolderKind, usize),
     AddFolder(FolderKind),
     Rescan,
@@ -267,24 +308,61 @@ impl Chanoma {
                         .detail("Sorted into a folder per system (snes, gba…) or by extension"),
                     Act::AddFolder(FolderKind::Games),
                 ));
+                rows.push((
+                    Row::new("Find games on your drives…", Value::Action)
+                        .detail("Looks through home and every drive plugged in"),
+                    Act::FindGames,
+                ));
                 rows.push((Row::new("Look again", Value::Action).detail(self.cores_note()), Act::Rescan));
+                rows.push((Row::heading("Which games show"), Act::None));
+                let systems = self.systems_found();
+                let on = systems.iter().filter(|(sys, _)| !s.systems_off.contains(sys.id)).count();
+                rows.push((
+                    Row::new("Systems", Value::Note(format!("{on} of {}", systems.len())))
+                        .detail("Turn a whole system off"),
+                    Act::Open(Sub::Systems),
+                ));
+                rows.push((
+                    Row::new("Hide demos, betas and prototypes", Value::Switch(s.hide_variants)),
+                    Act::HideVariants,
+                ));
+                rows.push((
+                    Row::new("One of each game", Value::Switch(s.one_of_each))
+                        .detail("A game's regions and revisions shown as one"),
+                    Act::OneOfEach,
+                ));
+                if s.one_of_each {
+                    rows.push((Row::new("Region first", Value::Choice(s.region.label().into())), Act::Region));
+                }
                 rows.push((Row::heading("Which games kids see"), Act::None));
                 let new = match s.new_games {
                     NewGames::Ask => "Wait for you",
                     NewGames::Allow => "Show at once",
                 };
                 rows.push((Row::new("New games", Value::Choice(new.into())), Act::NewGames));
-                let waiting = self.library.games.iter().filter(|g| s.game_waiting(&g.key)).count();
+                let waiting = self.shown_games().filter(|g| s.game_waiting(&g.key)).count();
                 if waiting > 0 {
                     rows.push((Row::new(format!("Allow all {waiting} new games"), Value::Action), Act::AllowAll));
                 }
-                for g in &self.library.games {
-                    let mut row =
-                        Row::new(g.title.clone(), Value::Switch(s.game_allowed(&g.key))).detail(g.system.name);
-                    if s.game_waiting(&g.key) {
-                        row = row.badge("New");
+                // A system at a time: thousands of games in one list
+                // would be no list at all.
+                let mut by_system: Vec<(&'static crate::library::System, usize, usize)> = Vec::new();
+                for g in self.shown_games() {
+                    let allowed = usize::from(s.game_allowed(&g.key));
+                    match by_system.iter_mut().find(|(sys, ..)| sys.id == g.system.id) {
+                        Some(e) => {
+                            e.1 += 1;
+                            e.2 += allowed;
+                        }
+                        None => by_system.push((g.system, 1, allowed)),
                     }
-                    rows.push((row, Act::Game(g.key.clone())));
+                }
+                by_system.sort_by_key(|(sys, ..)| sys.name);
+                for (sys, n, allowed) in by_system {
+                    rows.push((
+                        Row::new(sys.name, Value::Note(format!("{allowed} of {n}"))).detail("For kids"),
+                        Act::Open(Sub::System(sys.id)),
+                    ));
                 }
             }
             3 => {
@@ -356,6 +434,129 @@ impl Chanoma {
         rows
     }
 
+    /// The rows showing: a page opened from a row's, else the section's.
+    fn list_rows(&self) -> Vec<(Row, Act)> {
+        match &self.grownups.sub {
+            Some(sub) => self.sub_rows(sub),
+            None => self.section_rows(self.grownups.section),
+        }
+    }
+
+    /// Each system with games found (shown or not), and how many.
+    fn systems_found(&self) -> Vec<(&'static crate::library::System, usize)> {
+        let mut out: Vec<(&'static crate::library::System, usize)> = Vec::new();
+        for g in &self.library.games {
+            match out.iter_mut().find(|(s, _)| s.id == g.system.id) {
+                Some(e) => e.1 += 1,
+                None => out.push((g.system, 1)),
+            }
+        }
+        out.sort_by_key(|(s, _)| s.name);
+        out
+    }
+
+    fn sub_rows(&self, sub: &Sub) -> Vec<(Row, Act)> {
+        let s = &self.settings;
+        let games = |n: usize| if n == 1 { "1 game".to_owned() } else { format!("{n} games") };
+        let mut rows = Vec::new();
+        match sub {
+            Sub::Systems => {
+                rows.push((Row::heading("Systems with games"), Act::None));
+                for (sys, n) in self.systems_found() {
+                    rows.push((
+                        Row::new(sys.name, Value::Switch(!s.systems_off.contains(sys.id))).detail(games(n)),
+                        Act::SystemOn(sys.id),
+                    ));
+                }
+            }
+            Sub::System(id) => {
+                let here: Vec<&crate::library::Game> = self.shown_games().filter(|g| g.system.id == *id).collect();
+                let name = crate::library::SYSTEMS.iter().find(|x| x.id == *id).map_or("", |x| x.name);
+                rows.push((Row::heading(name), Act::None));
+                rows.push((Row::new(format!("Let kids play all {}", here.len()), Value::Action), Act::KidsAll(id)));
+                rows.push((Row::new(format!("Keep all {} from kids", here.len()), Value::Action), Act::KidsNone(id)));
+                rows.push((
+                    Row::heading(format!("{}, a letter at a time with the shoulder buttons", games(here.len()))),
+                    Act::None,
+                ));
+                for g in here {
+                    let stem = g.path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    let t = crate::collection::tags(&stem);
+                    let mut detail = t.regions.join(", ");
+                    if t.revision > 0 {
+                        detail.push_str(if detail.is_empty() { "A revision" } else { ", a revision" });
+                    }
+                    let mut row = Row::new(g.title.clone(), Value::Switch(s.game_allowed(&g.key))).detail(detail);
+                    if s.game_waiting(&g.key) {
+                        row = row.badge("New");
+                    }
+                    rows.push((row, Act::Game(g.key.clone())));
+                }
+            }
+            Sub::Found => {
+                let f = self.finding.clone().unwrap_or_default();
+                if f.running {
+                    let at = if f.at.is_empty() { "your drives".to_owned() } else { f.at.clone() };
+                    rows.push((Row::heading(format!("Looking in {at}… {} folders", f.folders)), Act::None));
+                }
+                let mut place = None;
+                for found in &f.found {
+                    if place != Some(&found.place) {
+                        place = Some(&found.place);
+                        rows.push((Row::heading(found.place.clone()), Act::None));
+                    }
+                    // Where it is, from the drive: its last two folders.
+                    let parts: Vec<String> =
+                        found.folder.iter().rev().take(2).map(|p| p.to_string_lossy().into_owned()).collect();
+                    let at: Vec<&str> = parts.iter().rev().map(String::as_str).collect();
+                    let added = s.game_folders.iter().any(|g| g.canonicalize().ok().as_ref() == Some(&found.folder));
+                    rows.push((
+                        Row::new(found.system.name, Value::Switch(added)).detail(format!(
+                            "{} in {}",
+                            games(found.games),
+                            at.join(" › ")
+                        )),
+                        Act::UseFolder(found.folder.clone()),
+                    ));
+                }
+                if !f.running && f.found.is_empty() {
+                    rows.push((Row::heading("No games found"), Act::None));
+                }
+            }
+        }
+        rows
+    }
+
+    /// Look for games at home and on every drive plugged in: what the
+    /// files index knows at once, then what's there now.
+    pub fn find_games(&mut self) {
+        if self.finding.as_ref().is_some_and(|f| f.running) {
+            return;
+        }
+        use crate::folders::PlaceKind;
+        let places: Vec<(String, PathBuf)> = crate::folders::places(&self.config.home, &self.config.mounts)
+            .into_iter()
+            .filter(|p| matches!(p.kind, PlaceKind::Home | PlaceKind::Drive))
+            .map(|p| (p.name, p.path))
+            .collect();
+        let found = self.finding.take().map(|f| f.found).unwrap_or_default();
+        self.finding = Some(Finding { running: true, found, ..Finding::default() });
+        let Some(tx) = self.sender.clone() else { return };
+        let dirs = self.config.dirs.clone();
+        log::info!("chanoma: looking for games in {} places", places.len());
+        let _ = std::thread::Builder::new().name("chanoma-find".into()).spawn(move || {
+            let mut index = dirs.open_index();
+            let known = crate::library::find_games(&mut index, &places, false, &|_, _| {});
+            if !known.is_empty() {
+                tx.send(Msg::GamesFound(known, false));
+            }
+            let fresh = crate::library::find_games(&mut index, &places, true, &|at, n| {
+                tx.send(Msg::Finding(at.to_owned(), n));
+            });
+            tx.send(Msg::GamesFound(fresh, true));
+        });
+    }
+
     fn cores_note(&self) -> String {
         let n = self.library.games.len();
         let cores = self.library.cores.found.len();
@@ -367,9 +568,19 @@ impl Chanoma {
     }
 
     pub fn grownups_page(&self) -> Page {
-        let rows: Vec<Row> = self.section_rows(self.grownups.section).into_iter().map(|(r, _)| r).collect();
+        let rows: Vec<Row> = self.list_rows().into_iter().map(|(r, _)| r).collect();
+        let title = match &self.grownups.sub {
+            Some(Sub::Systems) => "Games › Systems".into(),
+            Some(Sub::System(id)) => {
+                let name = crate::library::SYSTEMS.iter().find(|x| x.id == *id).map_or("", |x| x.short);
+                format!("Games › {name}")
+            }
+            Some(Sub::Found) => "Games › On your drives".into(),
+            None if self.settings.setup_done => "Settings".into(),
+            None => "Set up Chanoma".into(),
+        };
         let mut p = Page {
-            title: if self.settings.setup_done { "Settings".into() } else { "Set up Chanoma".into() },
+            title,
             sections: SECTIONS.iter().map(|s| (*s).to_owned()).collect(),
             icons: SECTION_ICONS.to_vec(),
             section: self.grownups.section,
@@ -408,23 +619,29 @@ impl Chanoma {
             self.focus = self.grownups.focus();
             return;
         }
-        let (section, row) = (self.grownups.section, self.grownups.row);
-        let rows = self.section_rows(section);
+        let row = self.grownups.row;
+        let rows = self.list_rows();
+        let sub = self.grownups.sub.is_some();
         match i {
             Input::Dir(Dir::Up) => {
                 let n = page.next(row, false);
-                if n == row {
-                    self.grownups.in_list = false;
-                } else {
+                if n != row {
                     self.grownups.row = n;
+                } else if !sub {
+                    self.grownups.in_list = false;
                 }
             }
             Input::Dir(Dir::Down) => self.grownups.row = page.next(row, true),
+            // A letter on or back through a long list.
+            Input::Prev | Input::Next => self.grownups.row = page.next_letter(row, i == Input::Next),
+            // Out of a page opened from a row, back on that row.
+            Input::Back if sub => self.close_sub(),
             Input::Back => self.grownups.in_list = false,
             Input::Dir(Dir::Left) | Input::Dir(Dir::Right) => {
                 let forward = i == Input::Dir(Dir::Right);
                 match rows.get(row).map(|(r, a)| (r.value.clone(), a.clone())) {
                     Some((Value::Choice(_), act)) => self.change(act, forward, cx),
+                    _ if !forward && sub => self.close_sub(),
                     _ if !forward => self.grownups.in_list = false,
                     _ => {}
                 }
@@ -444,10 +661,33 @@ impl Chanoma {
         }
     }
 
+    /// Back from a page opened from a row, to that row.
+    fn close_sub(&mut self) {
+        self.grownups.sub = None;
+        self.grownups.row = self.grownups.back_to;
+        self.grownups.first = 0;
+    }
+
+    /// Open a page from the row the focus is on.
+    fn open_sub(&mut self, sub: Sub) {
+        self.grownups.back_to = self.grownups.row;
+        self.grownups.sub = Some(sub);
+        self.grownups.first = 0;
+        self.grownups.row = self.grownups_page().first_row();
+    }
+
     /// Left or right on a choice.
     fn change(&mut self, act: Act, forward: bool, cx: &mut Cx<Msg>) {
         let l = &mut self.settings.limits;
         match act {
+            Act::Region => {
+                use crate::collection::Region;
+                let all = [Region::Auto, Region::Usa, Region::Europe, Region::Japan];
+                self.settings.region = cycle(&all, self.settings.region, forward);
+                self.save_settings();
+                self.reshow();
+                return;
+            }
             Act::Weekdays => {
                 let v = cycle(&LIMITS, l.daily[0], forward);
                 l.daily[..5].fill(v);
@@ -523,14 +763,61 @@ impl Chanoma {
                 self.save_settings();
             }
             Act::AllowAll => {
-                let keys: Vec<String> = self
-                    .library
-                    .games
-                    .iter()
-                    .filter(|g| self.settings.game_waiting(&g.key))
-                    .map(|g| g.key.clone())
-                    .collect();
+                // Those that show: not the variants left out.
+                let keys: Vec<String> =
+                    self.shown_games().filter(|g| self.settings.game_waiting(&g.key)).map(|g| g.key.clone()).collect();
                 self.settings.games_allowed.extend(keys);
+                self.save_settings();
+            }
+            Act::Open(sub) => self.open_sub(sub),
+            Act::FindGames => {
+                self.find_games();
+                self.open_sub(Sub::Found);
+            }
+            Act::UseFolder(folder) => {
+                let s = &mut self.settings;
+                match s.game_folders.iter().position(|g| g.canonicalize().ok().as_ref() == Some(&folder)) {
+                    Some(i) => {
+                        s.game_folders.remove(i);
+                    }
+                    None => s.game_folders.push(folder),
+                }
+                self.save_settings();
+                self.rescan(cx);
+            }
+            Act::SystemOn(id) => {
+                let off = &mut self.settings.systems_off;
+                if !off.remove(id) {
+                    off.insert(id.to_owned());
+                }
+                self.save_settings();
+                self.reshow();
+            }
+            Act::HideVariants => {
+                self.settings.hide_variants = !self.settings.hide_variants;
+                self.save_settings();
+                self.reshow();
+            }
+            Act::OneOfEach => {
+                self.settings.one_of_each = !self.settings.one_of_each;
+                self.save_settings();
+                self.reshow();
+            }
+            Act::Region => self.change(act, true, cx),
+            Act::KidsAll(id) | Act::KidsNone(id) => {
+                let all = matches!(act, Act::KidsAll(_));
+                let keys: Vec<String> =
+                    self.shown_games().filter(|g| g.system.id == id).map(|g| g.key.clone()).collect();
+                let s = &mut self.settings;
+                for k in keys {
+                    if all {
+                        s.games_hidden.remove(&k);
+                        s.games_allowed.insert(k);
+                    } else {
+                        s.games_allowed.remove(&k);
+                        s.games_hidden.insert(k);
+                    }
+                }
                 self.save_settings();
             }
             Act::RemoveFolder(kind, i) => {
@@ -588,7 +875,7 @@ impl Chanoma {
             FolderKind::Videos => 3,
         };
         let row = self.section_rows(section).iter().position(|(_, a)| *a == Act::AddFolder(kind)).unwrap_or(0);
-        self.grownups = State { section, row, in_list: true, first: 0 };
+        self.grownups = State { section, row, in_list: true, ..State::default() };
         self.grownups.first = self.grownups_page().first;
         self.focus = self.grownups.focus();
     }

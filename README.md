@@ -80,17 +80,19 @@ in detail.
 it's turned on (`programs.aizome.chanoma`). Kids use it with nothing but a
 Bluetooth game controller: streaming services open full screen in Chrome,
 films and shows play from your videos folder, and retro games play through
-emulator cores, kept just where they were left. A grown-up's PIN decides
-which services and games the kids see and for how long each day, with a
+emulator cores, kept just where they were left. Point it at a drive of
+games and it shows each game once, in your region's release, with a
+switch to put away a whole system. A grown-up's PIN decides which
+services and games the kids see and for how long each day, with a
 bedtime; when time runs out the game is saved and a friendly screen says
-goodnight. It wears the desktop's own look, made large enough to read from
-the sofa, so it's as much at home with the grown-ups. A keyboard and
+goodnight. It wears the desktop's own look, made large enough to read
+from the sofa, so it's as much at home with the grown-ups. A keyboard and
 mouse work too, with a way back to Home from anywhere, a streaming page
-included. So far it has been tested in a virtual machine with a virtual
-controller and with real emulator cores, not yet with a physical
-controller, Netflix-style services or a television; links inside a service
-can still lead elsewhere on the web, and consoles that need 3D hardware
-(the Nintendo 64 and later) aren't supported. See [docs/chanoma.md](desktop/aizome/docs/chanoma.md).
+included. So far it has been tested in a virtual machine
+with a virtual controller and with real emulator cores, not yet with a
+physical controller, Netflix-style services or a television, and consoles
+that need 3D hardware (the Nintendo 64 and later) aren't supported. See
+[docs/chanoma.md](desktop/aizome/docs/chanoma.md).
 
 **Super + Return** opens Hotaru 蛍, Aizome's own terminal, and programs that
 need a terminal open in it too. Hotaru draws with the processor. It doesn't

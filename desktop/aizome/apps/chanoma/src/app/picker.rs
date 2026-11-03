@@ -95,15 +95,27 @@ impl Chanoma {
         let (reading, kind) = (p.reading, p.kind);
         let d = dir.clone();
         cx.spawn(move || Msg::Listed(reading, folders::list(&d)));
-        cx.spawn(move || {
-            Msg::Found(
-                reading,
-                match kind {
-                    FolderKind::Games => folders::games_in(&dir, &cores),
-                    FolderKind::Videos => folders::videos_in(&dir),
-                },
-            )
-        });
+        // What the index knows of it at once (if it knows anything), then
+        // what's there now.
+        let dirs = self.config.dirs.clone();
+        let tx = self.sender.clone();
+        let found = move |index: &mut aizome_index::Index, refresh: bool| match kind {
+            FolderKind::Games => folders::games_in(index, &dir, &cores, refresh),
+            FolderKind::Videos => folders::videos_in(index, &dir, refresh),
+        };
+        match tx {
+            Some(tx) => {
+                let _ = std::thread::Builder::new().name("chanoma-found".into()).spawn(move || {
+                    let mut index = dirs.open_index();
+                    let known = found(&mut index, false);
+                    if known.any() {
+                        tx.send(Msg::Found(reading, known));
+                    }
+                    tx.send(Msg::Found(reading, found(&mut index, true)));
+                });
+            }
+            None => cx.spawn(move || Msg::Found(reading, found(&mut dirs.open_index(), true))),
+        }
         self.picker_focus();
     }
 

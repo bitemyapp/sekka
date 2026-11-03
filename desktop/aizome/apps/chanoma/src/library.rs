@@ -2,9 +2,15 @@
 //! known by its system's folder name or its file's extension), the cores
 //! that play them, and films and shows in the video folders.
 //!
-//! Folders are read on a worker thread; the result is one [`Library`].
+//! Folders are read on a worker thread, through the files index Aizome's
+//! apps share ([`aizome_index`]): a second look reads only folders that
+//! changed, and what was found shows before it does. The result is one
+//! [`Library`].
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+
+use aizome_index::{Index, Kind, Refresh};
 
 /// A games system Chanoma plays.
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -354,40 +360,42 @@ pub struct Library {
 }
 
 const ART_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp"];
-/// How deep folders are read.
-const DEPTH: usize = 5;
-/// How many files at most, so a mistaken folder (home) doesn't take all day.
-const LIMIT: usize = 20_000;
+/// What's in a folder, as the shared index has it ([`aizome_index`]),
+/// brought up to date first when `refresh` (only what changed is read
+/// again): its files' paths, and its pictures' for box art. A folder
+/// that isn't there (its drive is out) has nothing.
+pub struct Read {
+    pub root: PathBuf,
+    pub files: Vec<PathBuf>,
+    pub pictures: HashSet<PathBuf>,
+}
 
-fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
-    if depth > DEPTH || out.len() >= LIMIT {
-        return;
+pub fn read(index: &mut Index, root: &Path, refresh: bool) -> Read {
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    if refresh && let Err(e) = index.refresh(&root, &Refresh::default()) {
+        log::warn!("chanoma: reading {}: {e}", root.display());
     }
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
-    let mut entries: Vec<_> = entries.flatten().collect();
-    entries.sort_by_key(|e| e.file_name());
-    for e in entries {
-        let name = e.file_name();
-        if name.to_string_lossy().starts_with('.') {
+    let mut files: Vec<PathBuf> = Vec::new();
+    let mut pictures = HashSet::new();
+    for e in index.entries(&root).unwrap_or_default() {
+        // Hidden files aren't games: a Mac leaves `._Game.sfc` (its
+        // resource fork) beside every file it copies to a FAT drive.
+        if e.kind != Kind::File || e.path.file_name().is_some_and(|n| n.as_encoded_bytes().starts_with(b".")) {
             continue;
         }
-        let Ok(t) = e.file_type() else { continue };
-        let path = e.path();
-        // Followed links to folders too: folders kept elsewhere.
-        if t.is_dir() || (t.is_symlink() && path.is_dir()) {
-            walk(&path, depth + 1, out);
-        } else {
-            out.push(path);
+        if e.ext.as_deref().is_some_and(|x| ART_EXTENSIONS.contains(&x)) {
+            pictures.insert(e.path.clone());
         }
-        if out.len() >= LIMIT {
-            return;
-        }
+        files.push(e.path);
     }
+    files.sort();
+    Read { root, files, pictures }
 }
 
 /// A picture for `path`'s stem in its own folder or a pictures folder
-/// beside it (`media`, `boxart`, `Named_Boxarts`, `images`, `covers`).
-fn art_for(path: &Path, root: &Path) -> Option<PathBuf> {
+/// beside it (`media`, `boxart`, `Named_Boxarts`, `images`, `covers`),
+/// among the folder's `pictures` (nothing more is read for it).
+fn art_for(path: &Path, root: &Path, pictures: &HashSet<PathBuf>) -> Option<PathBuf> {
     let stem = path.file_stem()?.to_string_lossy().into_owned();
     let dir = path.parent()?;
     let mut places = vec![dir.to_path_buf()];
@@ -404,7 +412,7 @@ fn art_for(path: &Path, root: &Path) -> Option<PathBuf> {
     for place in places {
         for ext in ART_EXTENSIONS {
             let p = place.join(format!("{stem}.{ext}"));
-            if p.is_file() {
+            if pictures.contains(&p) {
                 return Some(p);
             }
         }
@@ -412,13 +420,14 @@ fn art_for(path: &Path, root: &Path) -> Option<PathBuf> {
     None
 }
 
-/// The games under `folders`.
-pub fn scan_games(folders: &[PathBuf], cores: &Cores) -> (Vec<Game>, usize) {
+/// The games under `folders`, as the index has them (refreshed first
+/// when `refresh`).
+pub fn scan_games(index: &mut Index, folders: &[PathBuf], cores: &Cores, refresh: bool) -> (Vec<Game>, usize) {
     let mut games = Vec::new();
     let mut unplayable = 0;
-    for root in folders {
-        let mut files = Vec::new();
-        walk(root, 0, &mut files);
+    for folder in folders {
+        let Read { root, files, pictures } = read(index, folder, refresh);
+        let root = &root;
         // A disc's tracks are named by its sheet: they aren't games of
         // their own.
         let listed: std::collections::HashSet<PathBuf> = files
@@ -439,7 +448,7 @@ pub fn scan_games(folders: &[PathBuf], cores: &Cores) -> (Vec<Game>, usize) {
             games.push(Game {
                 key: format!("{}/{}", system.id, rel),
                 title: title_of(&path),
-                art: art_for(&path, root),
+                art: art_for(&path, root, &pictures),
                 path,
                 system,
             });
@@ -448,6 +457,61 @@ pub fn scan_games(folders: &[PathBuf], cores: &Cores) -> (Vec<Game>, usize) {
     games.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()).then(a.key.cmp(&b.key)));
     games.dedup_by(|a, b| a.key == b.key);
     (games, unplayable)
+}
+
+/// A folder of games found on a drive (or at home), for a grown-up to add.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FoundFolder {
+    /// The drive's name ("Home" for home).
+    pub place: String,
+    pub folder: PathBuf,
+    pub system: &'static System,
+    pub games: usize,
+}
+
+/// The folders of games under `places` (named), as the files index has
+/// them, brought up to date first when `refresh` (`progress` hears which
+/// place and how many folders so far). A system's games are counted at
+/// the folder named for it (`roms/psx`, holding a folder a disc); others
+/// at their own folder, if it holds a few: a stray `.bin` isn't a
+/// collection.
+pub fn find_games(
+    index: &mut Index,
+    places: &[(String, PathBuf)],
+    refresh: bool,
+    progress: &dyn Fn(&str, usize),
+) -> Vec<FoundFolder> {
+    let mut out: Vec<FoundFolder> = Vec::new();
+    for (name, path) in places {
+        if refresh {
+            let tell = |r: &aizome_index::Report| progress(name, r.folders);
+            let how = Refresh { progress: Some(&tell), ..Refresh::default() };
+            if let Err(e) = index.refresh(path, &how) {
+                log::warn!("chanoma: looking for games in {}: {e}", path.display());
+            }
+        }
+        let Read { root, files, .. } = read(index, path, false);
+        let mut counts: std::collections::BTreeMap<(PathBuf, &'static str), (usize, bool)> = Default::default();
+        for f in &files {
+            let Some(system) = system_of(f, &root) else { continue };
+            // The nearest folder named for the system, else the game's own.
+            let named = f.ancestors().skip(1).take_while(|d| d.starts_with(&root) && *d != root).find(|d| {
+                d.file_name().is_some_and(|n| system.folders.contains(&folder_key(&n.to_string_lossy()).as_str()))
+            });
+            let folder = named.or(f.parent()).unwrap_or(&root).to_path_buf();
+            let c = counts.entry((folder, system.id)).or_insert((0, named.is_some()));
+            c.0 += 1;
+        }
+        for ((folder, id), (games, named)) in counts {
+            if !named && games < 3 {
+                continue;
+            }
+            let Some(system) = SYSTEMS.iter().find(|s| s.id == id) else { continue };
+            out.push(FoundFolder { place: name.clone(), folder, system, games });
+        }
+    }
+    out.sort_by(|a, b| a.place.cmp(&b.place).then(a.system.name.cmp(b.system.name)).then(a.folder.cmp(&b.folder)));
+    out
 }
 
 /// The files a cue sheet or playlist names, beside it.
@@ -472,11 +536,11 @@ fn referenced(sheet: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-fn poster_in(dir: &Path) -> Option<PathBuf> {
+fn poster_in(dir: &Path, pictures: &HashSet<PathBuf>) -> Option<PathBuf> {
     for name in ["poster", "folder", "cover", "show"] {
         for ext in ART_EXTENSIONS {
             let p = dir.join(format!("{name}.{ext}"));
-            if p.is_file() {
+            if pictures.contains(&p) {
                 return Some(p);
             }
         }
@@ -485,12 +549,13 @@ fn poster_in(dir: &Path) -> Option<PathBuf> {
 }
 
 /// Films and shows under `folders`: a folder of several videos is a show,
-/// a lone video (or a folder of one) a film.
-pub fn scan_videos(folders: &[PathBuf]) -> Vec<Shelf> {
+/// a lone video (or a folder of one) a film. As the index has them
+/// (refreshed first when `refresh`).
+pub fn scan_videos(index: &mut Index, folders: &[PathBuf], refresh: bool) -> Vec<Shelf> {
     let mut shelves: Vec<Shelf> = Vec::new();
-    for root in folders {
-        let mut files = Vec::new();
-        walk(root, 0, &mut files);
+    for folder in folders {
+        let Read { root, files, pictures } = read(index, folder, refresh);
+        let root = &root;
         let videos: Vec<PathBuf> = files.into_iter().filter(|p| aizome_media::is_video(p)).collect();
         // Grouped by their folder just under the root.
         let mut groups: std::collections::BTreeMap<PathBuf, Vec<PathBuf>> = Default::default();
@@ -504,13 +569,18 @@ pub fn scan_videos(folders: &[PathBuf]) -> Vec<Shelf> {
         }
         for (key, mut vids) in groups {
             vids.sort_by(|a, b| natural(&a.to_string_lossy(), &b.to_string_lossy()));
-            let folder = key.is_dir();
+            // A video by itself at the top is its own key; a folder's aren't.
+            let folder = vids[0] != key;
             let title = if folder {
                 clean(&key.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
             } else {
                 title_of(&key)
             };
-            let poster = if folder { poster_in(&key).or_else(|| art_for(&vids[0], root)) } else { art_for(&key, root) };
+            let poster = if folder {
+                poster_in(&key, &pictures).or_else(|| art_for(&vids[0], root, &pictures))
+            } else {
+                art_for(&key, root, &pictures)
+            };
             let several = vids.len() > 1;
             let videos = vids
                 .iter()
@@ -594,11 +664,18 @@ pub fn natural(a: &str, b: &str) -> std::cmp::Ordering {
     }
 }
 
-/// Read everything: cores, games and videos.
-pub fn scan(game_folders: &[PathBuf], video_folders: &[PathBuf], core_dirs: &[PathBuf]) -> Library {
+/// Everything to play and watch, as the shared index has it (brought up to
+/// date first when `refresh`).
+pub fn scan(
+    index: &mut Index,
+    game_folders: &[PathBuf],
+    video_folders: &[PathBuf],
+    core_dirs: &[PathBuf],
+    refresh: bool,
+) -> Library {
     let cores = Cores::scan(core_dirs);
-    let (games, unplayable) = scan_games(game_folders, &cores);
-    let shelves = scan_videos(video_folders);
+    let (games, unplayable) = scan_games(index, game_folders, &cores, refresh);
+    let shelves = scan_videos(index, video_folders, refresh);
     Library { games, shelves, cores, unplayable }
 }
 
@@ -650,7 +727,13 @@ mod tests {
         let d = std::env::temp_dir().join(format!("chanoma-library-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
-        d
+        // As the files index gives paths back.
+        d.canonicalize().unwrap()
+    }
+
+    /// A files index of the test's own.
+    fn index(d: &Path) -> Index {
+        Index::open_at(&d.join("index.sqlite")).unwrap()
     }
 
     #[test]
@@ -664,6 +747,8 @@ mod tests {
         let games = d.join("Games");
         for f in [
             "SNES/Kirby (USA).sfc",
+            // A Mac's resource fork, copied beside it: not a game.
+            "SNES/._Kirby (USA).sfc",
             "SNES/media/Kirby (USA).png",
             "GB/Tetris.gb",
             "PS1/Disc.cue",
@@ -677,7 +762,7 @@ mod tests {
         }
         std::fs::write(games.join("PS1/Disc.cue"), "FILE \"Disc (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n")
             .unwrap();
-        let lib = scan(std::slice::from_ref(&games), &[], &[cores_dir]);
+        let lib = scan(&mut index(&d), std::slice::from_ref(&games), &[], &[cores_dir], true);
         let keys: Vec<&str> = lib.games.iter().map(|g| g.key.as_str()).collect();
         assert_eq!(keys, ["psx/PS1/Disc.cue", "snes/SNES/Kirby (USA).sfc", "gb/GB/Tetris.gb"]);
         assert_eq!(lib.games[1].title, "Kirby");
@@ -702,7 +787,7 @@ mod tests {
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
             std::fs::write(&p, b"x").unwrap();
         }
-        let shelves = scan_videos(std::slice::from_ref(&d));
+        let shelves = scan_videos(&mut index(&tmp("videos-index")), std::slice::from_ref(&d), true);
         assert_eq!(shelves.len(), 2);
         assert_eq!(shelves[0].title, "Bluey");
         assert_eq!(shelves[0].videos.iter().map(|v| v.title.as_str()).collect::<Vec<_>>(), ["Episode 2", "Episode 10"]);
