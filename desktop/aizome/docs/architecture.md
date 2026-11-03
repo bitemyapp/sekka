@@ -199,7 +199,9 @@ sunrise and sunset: the shell writes what GeoClue says).
   does). The compositor imports its environment into systemd and D-Bus
   (`WAYLAND_DISPLAY`, `DISPLAY`, `XDG_CURRENT_DESKTOP=Aizome`, the IPC
   sockets), notifies systemd that it is ready, and starts
-  `aizome-session.target`, which binds `graphical-session.target`.
+  `aizome-session.target`, which binds `graphical-session.target`. Its
+  unit unsets those variables when it stops. If the launcher dies without
+  ending the session, `aizome-session-watch.service` ends it.
 - The compositor starts and keeps alive `aizome-shell` and
   `xwayland-satellite` (X11 apps).
 - Live reload (`docs/reload.md`): the compositor's logic swaps between

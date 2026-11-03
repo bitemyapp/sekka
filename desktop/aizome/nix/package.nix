@@ -261,6 +261,7 @@ rustPlatform.buildRustPackage {
       install -Dm644 "$unit" "$out/lib/systemd/user/$(basename "$unit")"
       substituteInPlace "$out/lib/systemd/user/$(basename "$unit")" \
         --replace-quiet @bindir@ "$out/bin" \
+        --replace-quiet @flock@ "${util-linux}/bin/flock" \
         --replace-quiet @systemctl@ "${systemd}/bin/systemctl"
     done
     install -Dm644 session/aizome-portals.conf $out/share/xdg-desktop-portal/aizome-portals.conf

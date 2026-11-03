@@ -1270,12 +1270,19 @@ signals immediately; cleanup terminates and reaps that client before stopping
 the session, including when it has not yet submitted its start request.
 The launcher holds a per-user runtime lock through startup and cleanup, and
 refuses active, activating or deactivating services left by older launchers.
-A rejected duplicate login never installs cleanup traps. See the
+A rejected duplicate login never installs cleanup traps. A launcher killed
+where no trap runs releases the lock with its death: `aizome-session-watch.service`,
+waiting on that lock in the user manager, then ends the session in its place
+(`aizome-session --end-session`). The launcher removes the variables it
+imported, and `aizome.service` removes the compositor's in `ExecStopPost=`,
+however the compositor stops; a unit test in `aizome-comp-core` keeps that list
+equal to what the compositor exports. Before a session, the launcher resets
+only the failed units bound to the session targets. See the
 [orphaned-session incident](docs/incidents/2026-10-28-aizome-orphaned-session.md).
 The [session lifecycle review](docs/aizome-session-lifecycle.md) records the
 effective logind policy, the distinction between service uniqueness and
-launcher ownership, remaining cleanup and supervision issues, and the
-requirements for a replacement.
+launcher ownership, how the session ends and who removes which variables, the
+remaining supervision issues, and the requirements for a replacement.
 
 `nix build .#aizome-checks.session-launcher .#aizome-checks.session-launcher-systemd .#aizome-checks.greeter -L`
 checks the launcher with isolated service stand-ins, startup/cancellation
@@ -1288,12 +1295,17 @@ inactive, and Aizome's D-Bus activation files, installed by both of the
 module's routes, must not make FileManager1 activatable. The module's own
 unit settings are not part of that fixture.
 The startup check gates requests both before submission and before compositor
-readiness, rejects overlapping launches and verifies subsequent login.
+readiness, rejects overlapping launches and verifies subsequent login. It also
+kills a running launcher with SIGKILL, and kills a launcher's process group
+while a compositor slow to stop holds its cleanup open; the watch must end each
+session, refusing a login meanwhile. After every session the user manager's
+environment must equal its environment before the first one, and a login must
+reset a failed unit bound to the session but not an unrelated one.
 The greeter VM keeps the user manager alive, checks that the old desktop
-and its environment end, and
-logs the same user back in. These are component checks; they do not qualify
-an ISO or physical suspend/resume. An uncatchable SIGKILL or a dead user
-manager cannot run the launcher's cleanup trap.
+ends and that the user manager's environment is back to its state before the
+first login, and logs the same user back in. These are component checks; they
+do not qualify an ISO or physical suspend/resume. A user manager that dies
+takes the session, and the watch, with it.
 
 `aizome-checks` holds the 24 VM checks Aizome's flake had, under the names it
 gave them. They are in `legacyPackages`, not `checks`, so `nix flake check` and

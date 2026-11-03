@@ -24,6 +24,11 @@ Type=notify
 # Found on the manager's PATH (on NixOS, /run/current-system/sw/bin and
 # the user's profile).
 ExecStart=/usr/bin/env aizome --backend udev
+# The variables the compositor exported leave the user manager with it,
+# however it stops: crashed, stopped by the watchdog or killed included.
+# The names are SessionEnv's (crates/aizome-comp-core/src/session.rs),
+# which a test keeps equal to these. aizome-session removes its own.
+ExecStopPost=-@systemctl@ --user unset-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE AIZOME_SOCKET AIZOME_SHELL_SOCKET AIZOME_SESSION DISPLAY
 # A crashed compositor ends the session; the display manager takes over.
 # (aizome-session restarts one the watchdog stopped.)
 Restart=no

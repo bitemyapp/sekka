@@ -3,9 +3,10 @@
 //! Once the Wayland socket and IPC are up, the compositor exports its
 //! environment to the systemd user manager and D-Bus activation, tells
 //! systemd it is ready (when started as `aizome.service`), and starts
-//! `aizome-session.target`. It runs `aizome-shell` and
-//! `xwayland-satellite` (when installed) and restarts them, backing off,
-//! if they die.
+//! `aizome-session.target`; `aizome.service` takes those variables out of
+//! the manager again when the compositor stops (`SessionEnv`). It runs
+//! `aizome-shell` and `xwayland-satellite` (when installed) and restarts
+//! them, backing off, if they die.
 
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -44,8 +45,8 @@ impl Supervised {
 #[derive(Default)]
 pub struct Children {
     pub supervised: Vec<Supervised>,
-    /// The environment every child gets on top of ours.
-    pub env: Vec<(String, String)>,
+    /// xwayland-satellite's display (`:N`), when the session has one.
+    pub x_display: Option<String>,
     /// A shell restart in progress.
     pub handover: Option<Handover>,
 }
@@ -69,21 +70,47 @@ impl Children {
     }
 }
 
+/// What the session tells everything it starts, and, under systemd, the
+/// user manager. `aizome.service` unsets every one of these names when the
+/// compositor stops, however it stops (`ExecStopPost=`), so the names live
+/// here and in the unit; a test keeps the two lists equal.
+struct SessionEnv<'a> {
+    wayland_display: &'a str,
+    x_display: Option<&'a str>,
+    ipc_socket: Option<&'a Path>,
+    shell_socket: &'a Path,
+    real: bool,
+}
+
+impl SessionEnv<'_> {
+    /// Every variable, `None` where this session has no value for it.
+    fn vars(&self) -> [(&'static str, Option<String>); 8] {
+        let path = |p: &Path| p.to_string_lossy().into_owned();
+        [
+            ("WAYLAND_DISPLAY", Some(self.wayland_display.to_owned())),
+            ("XDG_CURRENT_DESKTOP", Some("Aizome".to_owned())),
+            ("XDG_SESSION_DESKTOP", Some("aizome".to_owned())),
+            ("XDG_SESSION_TYPE", Some("wayland".to_owned())),
+            ("AIZOME_SOCKET", self.ipc_socket.map(path)),
+            ("AIZOME_SHELL_SOCKET", Some(path(self.shell_socket))),
+            ("AIZOME_SESSION", Some(if self.real { "1" } else { "0" }.to_owned())),
+            ("DISPLAY", self.x_display.map(str::to_owned)),
+        ]
+    }
+}
+
 /// The variables the session shares with everything it starts.
 pub fn session_env(az: &Aizome) -> Vec<(String, String)> {
-    let mut env = vec![
-        ("WAYLAND_DISPLAY".to_string(), az.socket_name.to_string_lossy().into_owned()),
-        ("XDG_CURRENT_DESKTOP".into(), "Aizome".into()),
-        ("XDG_SESSION_DESKTOP".into(), "aizome".into()),
-        ("XDG_SESSION_TYPE".into(), "wayland".into()),
-    ];
-    if let Some(p) = &az.ipc.path {
-        env.push(("AIZOME_SOCKET".into(), p.to_string_lossy().into_owned()));
-    }
-    let shell = aizome_ipc::runtime_dir().join(format!("aizome-shell.{}.sock", az.socket_name.to_string_lossy()));
-    env.push(("AIZOME_SHELL_SOCKET".into(), shell.to_string_lossy().into_owned()));
-    env.extend(az.children.env.iter().cloned());
-    env
+    let wayland_display = az.socket_name.to_string_lossy();
+    let shell_socket = aizome_ipc::runtime_dir().join(format!("aizome-shell.{wayland_display}.sock"));
+    let env = SessionEnv {
+        wayland_display: &wayland_display,
+        x_display: az.children.x_display.as_deref(),
+        ipc_socket: az.ipc.path.as_deref(),
+        shell_socket: &shell_socket,
+        real: real_session(&az.options),
+    };
+    env.vars().into_iter().filter_map(|(name, value)| Some((name.to_owned(), value?))).collect()
 }
 
 /// Runs a program detached from the compositor, with the session's
@@ -168,11 +195,9 @@ fn real_session(opts: &crate::cli::Options) -> bool {
 pub fn start(state: &mut State) {
     let opts = state.az.options.clone();
 
-    let real = real_session(&opts);
-    state.az.children.env.push(("AIZOME_SESSION".into(), if real { "1" } else { "0" }.into()));
     // Only someone's own session moves their terminal to Hotaru: a test or
     // nested run must not rewrite the person's lists.
-    if real {
+    if real_session(&opts) {
         crate::terminal::move_to_hotaru_once(state.az.settings.keys.legacy_terminal.clone());
     }
 
@@ -180,7 +205,7 @@ pub fn start(state: &mut State) {
         if let Some(bin) = which("xwayland-satellite") {
             if let Some(n) = free_x_display() {
                 let display = format!(":{n}");
-                state.az.children.env.push(("DISPLAY".into(), display.clone()));
+                state.az.children.x_display = Some(display.clone());
                 state
                     .az
                     .children
@@ -542,6 +567,8 @@ pub fn stop_children(az: &mut Aizome) {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::*;
 
     #[test]
@@ -551,5 +578,27 @@ mod tests {
         assert!(!real(&["--backend", "udev", "--no-session"]));
         assert!(!real(&["--backend", "headless"]));
         assert!(!real(&["--backend", "winit"]));
+    }
+
+    /// However the compositor stops, its unit takes every variable the
+    /// session exported back out of the user manager, and nothing else.
+    #[test]
+    fn the_service_unsets_exactly_what_the_session_exports() {
+        let unit = include_str!("../../../session/aizome.service");
+        let unset: BTreeSet<&str> = unit
+            .lines()
+            .filter_map(|line| line.strip_prefix("ExecStopPost="))
+            .filter_map(|command| command.split_once(" unset-environment "))
+            .flat_map(|(_, names)| names.split_whitespace())
+            .collect();
+        let every = SessionEnv {
+            wayland_display: "wayland-1",
+            x_display: Some(":1"),
+            ipc_socket: Some(Path::new("/run/user/1000/aizome.wayland-1.sock")),
+            shell_socket: Path::new("/run/user/1000/aizome-shell.wayland-1.sock"),
+            real: true,
+        };
+        let exported: BTreeSet<&str> = every.vars().into_iter().map(|(name, _)| name).collect();
+        assert_eq!(unset, exported);
     }
 }

@@ -82,7 +82,9 @@ without one). Once its Wayland socket and IPC are up the compositor:
 - imports `WAYLAND_DISPLAY`, `DISPLAY`, `XDG_CURRENT_DESKTOP=Aizome`,
   `XDG_SESSION_DESKTOP=aizome`, `XDG_SESSION_TYPE`, `AIZOME_SESSION`,
   `AIZOME_SOCKET` and `AIZOME_SHELL_SOCKET` into systemd and D-Bus
-  activation;
+  activation, which `aizome.service` unsets again when the compositor
+  stops, however it stops (`ExecStopPost=`; the names are `SessionEnv`'s
+  in `session.rs`, and a test keeps the unit's list equal to them);
 - tells systemd it's ready (`READY=1` on `$NOTIFY_SOCKET`) and starts
   `aizome-session.target` (bound to `graphical-session.target`);
 - starts `xwayland-satellite :N` (a free display, exported as `DISPLAY`)

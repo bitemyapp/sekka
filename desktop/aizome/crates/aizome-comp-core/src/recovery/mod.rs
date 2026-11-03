@@ -443,7 +443,7 @@ fn rows_signature(rows: &[Row]) -> Vec<(String, usize, bool, bool, bool)> {
 /// xwayland-satellite's process and display, while it runs.
 fn x11_info(state: &State) -> Option<procinfo::X11> {
     let satellite = state.az.children.pid_of("xwayland-satellite")? as i32;
-    let display = state.az.children.env.iter().find(|(k, _)| k == "DISPLAY").map(|(_, v)| v.clone())?;
+    let display = state.az.children.x_display.clone()?;
     Some(procinfo::X11 { satellite, display })
 }
 
