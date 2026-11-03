@@ -2715,14 +2715,19 @@ of two builds each: the 32 at a time the image allows. On a runner image
 without nix-fast-build the wrapper runs `nix flake check` instead. The nightly
 still evaluates every output, with `nix flake check --no-build`.
 
-Emulating a job on wx-workstation on 2026-11-03 (load 19–35 from other work),
-a run with every check already built took 36–39 seconds with nix-fast-build
-and 38–50 seconds with `nix flake check`, against 72–84 seconds before the
-ISO's checks moved out and the reference systems were shared (2026-11-02, load
-1–3). Retention added about a second: every derivation's inputs were already
-recorded. With one VM check to rebuild (128 seconds), the run took 140 seconds
-with nix-fast-build and 168 with `nix flake check`, which starts building only
-after evaluating everything.
+Emulating pull request jobs on wx-workstation on 2026-11-03, alternating
+between this setup and the one before it (main at 41fdd11d: `nix flake check`
+with eight evaluator threads, the ISO's checks, the monolithic Aizome build) at
+load 4–43 from other work:
+
+- With every check already built: 34–43 seconds, against 87–113 seconds.
+  Retention added about a second, every derivation's inputs already recorded.
+- With an in-place comment in `aizome-comp-logic`: 430 seconds, against 1,122.
+  Nine checks changed instead of 22, and Aizome's dependencies stayed built
+  (see [Aizome](#aizome)).
+- With one VM check to rebuild (128 seconds): 140 seconds with nix-fast-build,
+  168 with `nix flake check`, which starts building only after evaluating
+  everything.
 
 A job's container is on Docker's default network: it reaches the internet, the
 LAN and services on the host. The admission hook and pull request approval keep
