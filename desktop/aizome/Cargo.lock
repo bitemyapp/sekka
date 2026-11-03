@@ -66,6 +66,7 @@ name = "aizome-chanoma"
 version = "0.1.0"
 dependencies = [
  "aizome-config",
+ "aizome-index",
  "aizome-ipc",
  "aizome-kit",
  "aizome-media",
@@ -238,6 +239,15 @@ dependencies = [
  "serde",
  "serde_json",
  "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "aizome-index"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "log",
+ "rusqlite",
 ]
 
 [[package]]

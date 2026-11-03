@@ -1735,9 +1735,16 @@ source (`desktop/aizome/nix/openbios.nix`, the `psx-openbios`
 package). It reads controllers from evdev itself so that it can grab
 them, drives libretro cores in its own process, and opens streaming
 services in Chrome or Chromium driven through the compositor's IPC. The
-PIN keeps out kids with a controller, not someone with a terminal.
+PIN keeps out kids with a controller, not someone with a terminal. It
+reads games and videos folders through `aizome-index`
+(`desktop/aizome/crates/aizome-index`), a files index in one SQLite
+database under `$XDG_CACHE_HOME/aizome/index` that any Aizome app can
+share: a second look lists only folders whose modified time changed.
+Its design and measurements are in
+[the files index's notes](desktop/aizome/docs/files-index.md).
 
 ```sh
+cargo test -p aizome-index
 cargo test -p aizome-chanoma
 CHANOMA_TEST_CORES=<folder of *_libretro.so> \
   cargo test -p aizome-chanoma --test cores -- --ignored --nocapture
