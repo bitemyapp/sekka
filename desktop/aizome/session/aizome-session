@@ -9,8 +9,30 @@
 #   aizome.service (the compositor, which says when it is ready and then
 #   starts aizome-session.target, binding graphical-session.target) and
 #   waits for it to end; afterwards it tears the session's units down and
-#   takes the session's variables back out of the manager;
+#   takes the session's variables back out of the manager. Should it die
+#   without doing that, aizome-session-watch.service does it instead;
 # - without one, runs the compositor itself in a D-Bus session.
+
+# Ends the desktop: stops the session's units, aizome.service among them
+# (which takes the compositor's variables out of the manager as it stops),
+# then removes the variables the launcher imported, $vars.
+end_session() {
+  systemctl --user start --job-mode=replace-irreversibly aizome-shutdown.target
+  # shellcheck disable=SC2086
+  systemctl --user unset-environment $vars
+}
+
+# Run by aizome-session-watch.service when the launcher that started it
+# died without ending the session. The watch holds the session lock, as
+# that launcher did, and inherited the launcher's record of its variables
+# (AIZOME_ENVIRONMENT_KEYS, below) from the manager. The names are split
+# into words, never expanded as patterns.
+if [ "$1" = --end-session ]; then
+  set -f
+  vars="${AIZOME_ENVIRONMENT_KEYS#1 } AIZOME_ENVIRONMENT_KEYS AIZOME_ENVIRONMENT_FILE"
+  end_session
+  exit
+fi
 
 # A login shell's environment first (PATH, LANG and the rest), when started
 # by a display manager that gives none.
@@ -97,9 +119,15 @@ case "$state" in
         kill -KILL "$wait_pid" 2>/dev/null || :
         wait "$wait_pid" 2>/dev/null || :
       fi
-      systemctl --user start --job-mode=replace-irreversibly aizome-shutdown.target
-      # shellcheck disable=SC2086
-      systemctl --user unset-environment WAYLAND_DISPLAY DISPLAY AIZOME_SOCKET AIZOME_SHELL_SOCKET $vars
+      end_session
+      # Nothing is left for the watch. Stop it while the lock is still ours,
+      # or it would take the lock as we exit and end the session again,
+      # keeping the next login out meanwhile.
+      systemctl --user stop aizome-session-watch.service
+    }
+    # With no unit names, reset-failed would reset every user unit.
+    reset_failed() {
+      [ "$#" -eq 0 ] || systemctl --user reset-failed "$@"
     }
     wait_pid=
     pending_signal=0
@@ -107,11 +135,21 @@ case "$state" in
     trap 'exit 129' HUP
     trap 'exit 130' INT
     trap 'exit 143' TERM
-    systemctl --user reset-failed
+    # Let the session's own units (those bound to its targets) start again
+    # even if the last session's end left them failed, at a start limit,
+    # say, hit as their display went away. Other user services keep theirs.
+    # shellcheck disable=SC2046
+    reset_failed $(systemctl --user show --property=ConsistsOf,BoundBy --value \
+      graphical-session.target aizome-session.target)
     # shellcheck disable=SC2086
     systemctl --user import-environment $vars
     # shellcheck disable=SC2086
     dbus-update-activation-environment --systemd $vars 2>/dev/null
+    # Should this launcher die where no trap runs (SIGKILL, or a stop
+    # timeout during cleanup), the watch ends the session instead. It
+    # inherits our record of the variables from the manager, so it starts
+    # after the import.
+    systemctl --user restart aizome-session-watch.service
     # A compositor its watchdog stopped (its main loop stalled) starts
     # again, up to three times in a row; one that ran for five minutes
     # since resets the count. Anything else ends the session.

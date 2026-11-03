@@ -139,6 +139,16 @@ pkgs.testers.runNixOSTest {
         machine.wait_until_succeeds(f"pgrep -u {user} -x {program}", timeout=120)
         machine.wait_until_fails("pgrep -u greeter -x aizome-greeter", timeout=60)
 
+    def manager_environment(user):
+        uid = machine.succeed(f"id -u {user}").strip()
+        return set(machine.succeed(as_user(user,
+            f"XDG_RUNTIME_DIR=/run/user/{uid} systemctl --user show-environment")).splitlines())
+
+    # Each user's manager environment before their first login. An Aizome
+    # session must leave it as it found it: whatever the launcher and the
+    # compositor exported, removed again.
+    environments = {}
+
     def log_out(user, from_user_manager=False):
         uid = machine.succeed(f"id -u {user}").strip()
         session = machine.succeed(f"loginctl show-user {user} -p Display --value").strip()
@@ -157,11 +167,11 @@ pkgs.testers.runNixOSTest {
             f"XDG_RUNTIME_DIR=/run/user/{uid} systemctl --user is-active default.target"))
         machine.wait_until_fails(as_user(user,
             f"XDG_RUNTIME_DIR=/run/user/{uid} systemctl --user is-active graphical-session.target"))
-        environment = machine.succeed(as_user(user,
-            f"XDG_RUNTIME_DIR=/run/user/{uid} systemctl --user show-environment"))
-        for name in ("WAYLAND_DISPLAY", "DISPLAY", "AIZOME_SOCKET", "AIZOME_SHELL_SOCKET",
-                     "XDG_SESSION_DESKTOP", "AIZOME_ENVIRONMENT_KEYS"):
-            assert not any(line.startswith(name + "=") for line in environment.splitlines()), environment
+        machine.wait_until_succeeds(as_user(user,
+            f"XDG_RUNTIME_DIR=/run/user/{uid} systemctl --user show -p ActiveState --value "
+            "aizome-session-watch.service | grep -qx inactive"))
+        before, after = environments[user], manager_environment(user)
+        assert after == before, {"left": sorted(after - before), "lost": sorted(before - after)}
         machine.succeed(f"rm -f {INSPECT}/*.json")
 
     def key(k, n=1):
@@ -171,6 +181,9 @@ pkgs.testers.runNixOSTest {
 
     machine.start()
     machine.wait_for_unit("greetd.service")
+    # Alice lingers: her manager runs before her first login.
+    machine.wait_for_unit("user@1000.service")
+    environments["alice"] = manager_environment("alice")
 
     with subtest("with sway's wlr portal enabled too, the portal is Aizome's patched one"):
         # programs.sway enables NixOS's xdg.portal.wlr: its package gives the

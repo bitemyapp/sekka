@@ -42,9 +42,25 @@ case "$*" in
     touch "$TEST_DIR/cleanup-entered"
     while test -f "$TEST_DIR/hold-cleanup"; do sleep 0.01; done
     rm -f "$TEST_DIR/active" "$TEST_DIR/activating" ;;
-  '--user unset-environment '*) echo unset >> "$TEST_DIR/calls" ;;
+  '--user show --property=ConsistsOf,BoundBy --value graphical-session.target aizome-session.target')
+    printf '%s\n' "${TEST_SESSION_UNITS:-}" ;;
+  '--user reset-failed'*) shift 2; echo "$*" >> "$TEST_DIR/reset-failed" ;;
+  '--user import-environment '*) shift 2; echo "$*" > "$TEST_DIR/imported" ;;
+  '--user unset-environment '*)
+    echo unset >> "$TEST_DIR/calls"
+    shift 2; echo "$*" > "$TEST_DIR/unset" ;;
+  # The manager gives the watch its environment, the launcher's record in it.
+  '--user restart aizome-session-watch.service')
+    echo watch >> "$TEST_DIR/calls"
+    printf '%s' "$AIZOME_ENVIRONMENT_KEYS" > "$TEST_DIR/watch-keys" ;;
+  '--user stop aizome-session-watch.service') echo unwatch >> "$TEST_DIR/calls" ;;
 esac
 '''
+
+# A launch arms the watch before it starts the compositor. Its cleanup ends
+# the session, then disarms the watch while it still holds the lock.
+LAUNCH = ["watch"]
+END = ["shutdown", "unset", "unwatch"]
 
 
 class Launcher(unittest.TestCase):
@@ -96,15 +112,73 @@ class Launcher(unittest.TestCase):
             time.sleep(0.01)
 
     def calls(self):
-        path = self.root / "calls"
+        return self.lines("calls")
+
+    def lines(self, name):
+        path = self.root / name
         return path.read_text().splitlines() if path.exists() else []
+
+    def names(self, name):
+        return set((self.root / name).read_text().split())
+
+    def watch(self):
+        """aizome-session-watch.service's command, in the environment the
+        user manager would give it."""
+        keys = (self.root / "watch-keys").read_text()
+        process = subprocess.Popen(
+            ["flock", str(self.root / "aizome-session.lock"), "sh", str(LAUNCHER), "--end-session"],
+            env=dict(self.env, AIZOME_ENVIRONMENT_KEYS=keys), start_new_session=True)
+        self.processes.append(process)
+        return process
 
     def test_compositor_exit_preserves_status_and_cleans_up_once(self):
         process = self.start()
         self.ready()
         (self.root / "active").unlink()
         self.assertEqual(process.wait(timeout=3), 7)
-        self.assertEqual(self.calls(), ["start", "shutdown", "unset"])
+        self.assertEqual(self.calls(), LAUNCH + ["start"] + END)
+
+    def test_launcher_removes_exactly_the_variables_it_imported(self):
+        # The compositor's own variables are aizome.service's to remove.
+        process = self.start()
+        self.ready()
+        (self.root / "active").unlink()
+        self.assertEqual(process.wait(timeout=3), 7)
+        imported = self.names("imported")
+        self.assertTrue({"XDG_SESSION_DESKTOP", "TEST_DIR", "AIZOME_ENVIRONMENT_KEYS"} <= imported, imported)
+        self.assertEqual(self.names("unset"), imported)
+
+    def test_only_the_session_units_are_reset(self):
+        for units in ("aizome-portal.service aizome.service", ""):
+            with self.subTest(units=units):
+                (self.root / "reset-failed").unlink(missing_ok=True)
+                self.env["TEST_SESSION_UNITS"] = units
+                process = self.start()
+                self.ready()
+                (self.root / "active").unlink()
+                self.assertEqual(process.wait(timeout=3), 7)
+                (self.root / "ready").unlink()
+                # Never a bare reset-failed, which resets every user unit.
+                self.assertEqual(self.lines("reset-failed"), [units] if units else [])
+
+    def test_watch_ends_the_session_of_a_killed_launcher(self):
+        launcher = self.start()
+        self.ready()
+        watch = self.watch()
+        with self.assertRaises(subprocess.TimeoutExpired, msg="the watch must wait for the launcher's lock"):
+            watch.wait(timeout=0.3)
+        # SIGKILL: no trap runs, and the kernel releases the launcher's lock.
+        launcher.kill()
+        launcher.wait(timeout=3)
+        self.assertEqual(watch.wait(timeout=3), 0)
+        self.assertFalse((self.root / "active").exists())
+        self.assertEqual(self.calls(), LAUNCH + ["start", "shutdown", "unset"])
+        self.assertEqual(self.names("unset"), self.names("imported"))
+        (self.root / "ready").unlink()
+        next_login = self.start()
+        self.ready()
+        (self.root / "active").unlink()
+        self.assertEqual(next_login.wait(timeout=3), 7)
 
     def check_signal(self, sig, scope=False):
         process = self.start()
@@ -117,14 +191,14 @@ class Launcher(unittest.TestCase):
         # this catches traps deferred behind a foreground systemctl --wait.
         process.wait(timeout=3)
         self.assertFalse((self.root / "active").exists())
-        self.assertEqual(self.calls(), ["start", "shutdown", "unset"])
+        self.assertEqual(self.calls(), LAUNCH + ["start"] + END)
         self.assertEqual(process.returncode, 128 + sig)
         (self.root / "ready").unlink()
         next_login = self.start()
         self.ready()
         (self.root / "active").unlink()
         self.assertEqual(next_login.wait(timeout=3), 7)
-        self.assertEqual(self.calls(), ["start", "shutdown", "unset"] * 2)
+        self.assertEqual(self.calls(), (LAUNCH + ["start"] + END) * 2)
 
     def test_terminate_launcher(self):
         self.check_signal(signal.SIGTERM)
@@ -165,7 +239,7 @@ class Launcher(unittest.TestCase):
         self.assertEqual(process.wait(timeout=3), 128 + sig)
         self.assertFalse(Path(f"/proc/{child}").exists(), "start client must be reaped before exit")
         (self.root / "hold-start").unlink()
-        self.assertEqual(self.calls(), ["shutdown", "unset"])
+        self.assertEqual(self.calls(), LAUNCH + END)
         self.assertFalse((self.root / "active").exists())
         # The dead client cannot submit its start, or retain the lock, later.
         next_login = self.start()
@@ -197,7 +271,7 @@ class Launcher(unittest.TestCase):
                 process = self.start(launcher)
                 self.assertEqual(process.wait(timeout=3), 128 + sig)
                 self.assertFalse((self.root / "active").exists())
-        self.assertEqual(self.calls(), ["shutdown", "unset"] * 3)
+        self.assertEqual(self.calls(), (LAUNCH + END) * 3)
 
     def check_duplicate_gate(self, gate, entered):
         (self.root / gate).touch()
@@ -234,7 +308,7 @@ class Launcher(unittest.TestCase):
         self.env["TEST_RESULT"] = "watchdog"
         process = self.start()
         self.assertEqual(process.wait(timeout=3), 1)
-        self.assertEqual(self.calls(), ["start"] * 4 + ["shutdown", "unset"])
+        self.assertEqual(self.calls(), LAUNCH + ["start"] * 4 + END)
 
 
 if __name__ == "__main__":

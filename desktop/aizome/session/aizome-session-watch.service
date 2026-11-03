@@ -1,0 +1,24 @@
+# Ends the Aizome session if its launcher dies before ending it.
+#
+# aizome-session starts this once it holds the session lock and has
+# exported its variables, and stops it after ending the session itself.
+# A launcher killed where no trap runs (SIGKILL, or a stop timeout cutting
+# its cleanup short) can't do that, but the kernel releases its lock with
+# it: flock, waiting for the lock all along, then takes it, which keeps a
+# new login out until the session has ended, and runs the launcher's own
+# teardown. The variables to remove are the ones the launcher recorded in
+# AIZOME_ENVIRONMENT_KEYS, which this inherits from the manager.
+#
+# It is not part of the graphical session, whose shutdown it starts.
+[Unit]
+Description=End the Aizome session if its launcher dies
+Documentation=https://github.com/bitemyapp/sekka/tree/main/desktop/aizome
+# Each login restarts it; quick successive logins must not hit a limit.
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+ExecStart=@flock@ %t/aizome-session.lock @bindir@/aizome-session --end-session
+# Killed by something other than the launcher stopping it, it waits again.
+Restart=on-abnormal
+RestartSec=1
