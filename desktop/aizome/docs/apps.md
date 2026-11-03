@@ -1182,7 +1182,8 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   same dot and nothing lights, so a kid watching sees that a button went
   but not which; the no button takes the last press back. A PIN is the
   buttons' places, so it's the same presses on any controller (Xbox's Y
-  is Nintendo's X: the pad marks where each is), and on a keyboard it's
+  is Nintendo's X: the pad marks where each is). Each button in the legend
+  is numbered 1 to 8, and on a keyboard those digits press them, as do
   the arrows, Page Up and Down, Tab and Space. Three wrong ones are free,
   then the pad waits, longer each time, and a restart doesn't reset that.
   In grown-up mode everything shows, nothing counts against today's time,
