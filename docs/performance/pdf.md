@@ -566,6 +566,50 @@ and its own choices for them) rather than right answers; but some are plain
 gaps in hayro (appearance streams, knockout groups, the tiling and shading
 cases).
 
+### Which drawing is right
+
+PDFium's expected images aren't the spec, so each of the 50 was judged
+against ISO 32000-2, with MuPDF 1.27 and Poppler 26.09 rendered as
+tie-breakers rather than votes ([pdf-verdicts.md](pdf-verdicts.md), and the
+rows in
+[`conformance/pdfium-pixel-verdicts.tsv`](data/pdf/conformance/pdfium-pixel-verdicts.tsv)).
+Judged that way, 13 of the grouping above were misfiled; the verdicts use
+the corrected causes.
+
+| Verdict | Cases | High confidence |
+|---|---:|---:|
+| PDFium more correct | 19 | 9 |
+| The fork more correct | 6 | 5 |
+| Both acceptable | 24 | 8 |
+| Both wrong | 1 | 1 |
+
+- **Where PDFium is right, it's mostly recovering damaged files.** Three
+  cases are hayro discarding a whole cross-reference chain when the chain
+  revisits a section; three require an end-of-line straight after the
+  `stream` keyword; two end a stream at the first raw `endstream` bytes,
+  even inside a longer token; two stretch image data that disagrees with
+  the image's size instead of leaving the rest empty. Three are missing
+  appearance generation (`/NeedAppearances`, FreeText). The rest are one
+  case each: PostScript `round` in Type 4 functions, round caps on
+  degenerate subpaths, a short Indexed lookup table, one bad operand
+  ending a content stream, RunLength data without its end marker, `b`/`B`
+  not treated as a knockout group, and Indexed mesh shadings.
+- **Where the fork is right, PDFium has the bug:** pattern fills that
+  ignore alpha (PDFium's own commit says its expected image is wrong),
+  alpha applied twice in a Type 3 glyph, an image mask smoothed without
+  `/Interpolate`, an out-of-range palette index painted black instead of
+  clamped, a radial shading filled where no circle reaches (PDFium's own
+  Skia image leaves it white), and folded tensor patches missing about
+  45% of their area.
+- **"Both acceptable"** is mostly malformed input with no defined result
+  (19 of 24), including the 7 pages with no MediaBox, where hayro uses A4
+  and the others US Letter; the other 5 are implementation choices such as
+  font substitution and hinting.
+
+For a strict mode, most of the work is in hayro's recovery from damaged
+files, not its drawing; and in a few "both acceptable" cases (a direct
+content stream, corrupt images) PDFium's choice is the one to copy.
+
 ### What the conformance results support
 
 Neither suite is an exhaustive conformance suite, and Shiori's engine passes
@@ -585,6 +629,9 @@ neither entirely. What the numbers support:
   (upstream 45 and 130); the PDFium build itself matches 180 exactly and all
   182 within 1%. Those tests are about 200 small hand-made cases, not an
   exhaustive suite either.
+- Of the 50 the fork misses, judged against the spec, **PDFium is the more
+  correct in 19 and the fork in 6**; 24 have no single right answer and 1
+  is wrong in both ([Which drawing is right](#which-drawing-is-right)).
 
 A precise sentence: *Shiori's hayro is checked against hayro's regression
 suite of about 1,560 rendering tests, including 101 files from PDFium's bug
