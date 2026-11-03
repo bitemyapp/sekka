@@ -2362,10 +2362,9 @@ The job runs on the builder. It first brings every input in `flake.lock` up
 to date (`nix flake update`) and commits that, if anything moved, on top of
 `main`. Every run checks the candidate with `nix flake check`; it doesn't build
 `.#iso`, which no check uses and only qualification needs. Every check runs
-even after one fails, and the failed ones run once more, so a VM test losing a
-timing race once doesn't hold back upstream security fixes; a check that fails
-twice stops the update. The run's warning names the checks that needed the
-retry: they are flaky, and need fixing like any failure. Then, in this order
+even after one fails, and any failure stops the update. There is no automatic
+suite retry: a failing first attempt is evidence to fix, not a green result.
+Then, in this order
 and only if each step succeeded:
 
 1. `nix run .#push-cache` publishes Sekka's packages for that revision to
@@ -2512,8 +2511,10 @@ in this repository before testing it here.
 
 The workflow and trust script come from immutable main workflow source,
 using `pull_request_target`. The GitHub-hosted permission gate never loads
-PR code. It verifies the head and base parents of GitHub's merge commit;
-the isolated builder rechecks trust after queueing, then checks out only that
+PR code. Both permission gates initially check out only
+`scripts/check-pr-trust.py`, from the immutable workflow SHA. They verify the
+head and base parents of GitHub's merge commit. After queueing, the isolated
+builder rechecks trust, then expands the full checkout at exactly that merge
 SHA with credentials persistence disabled. Build jobs have a read-only
 token, no publishing environment or secrets, and publish no cache or ISO.
 Ordinary PR-owned workflows remain rejected by the runner's admission hook.
@@ -2528,7 +2529,8 @@ main: `gh workflow run pr.yml --ref main -f pr=233`. If the head or base
 changes while queued, dispatch again against the new merge.
 
 `nix build .#checks.x86_64-linux.pr-ci` exercises trust rejection, merge
-identity, API failures and runner admission, and lints the workflow. Enabling
+identity, API failures, runner admission, Git object reuse with private
+candidate state, and retention bounds, and lints all three build workflows. Enabling
 this workflow requires deploying the updated runner image below; the former
 admission hook rejects all pull-request events. Release publication remains
 manually disabled.
@@ -2547,8 +2549,9 @@ Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
 - Each job gets a fresh container, as uid 30500, with every capability
   dropped, `no-new-privileges`, a read-only root, and a tmpfs `/tmp` and
   throwaway volume for its home and workspace, both gone with the job. It sees
-  the host's Nix store read-only and the daemon's socket, and nothing else of
-  the host: no Docker socket, `/dev/kvm` or home directories. Its builds run
+  the host's Nix store read-only and the daemon's socket. Two dedicated cache
+  directories are also mounted: writable GC roots and read-only Git objects.
+  It sees no Docker socket, `/dev/kvm` or host home directories. Its builds run
   in the daemon's own sandbox as an untrusted user, which cannot add
   substituters or change trusted settings.
 - Before the first step, the runner's job-started hook admits
@@ -2577,16 +2580,62 @@ heap is 4 GiB. A 16 GiB heap improved individual checks, but the complete
 flake's live configurations outgrew it and resumed frequent collections,
 spending most of their CPU time in collector workers before builds began.
 The larger initial heap trades memory for fewer collections within the job
-container's 64 GiB allowance. It leaves collector/evaluator threads, build
-jobs, build cores and check coverage unchanged. This job environment setting
-takes effect on the next run without redeploying the runner or restarting
+container's 64 GiB allowance. All three build workflows and the runner image
+also set Determinate Nix's `eval-cores = 8`. This parallelizes evaluation of
+independent checks; it does not change build jobs, build cores or check coverage.
+The workflow settings explicitly keep `max-jobs = 32` and `cores = 16`, since a
+workflow's `NIX_CONFIG` replaces the image's value. These environment settings
+take effect on the next run without redeploying the runner or restarting
 the host's daemon.
 
 A job's container is on Docker's default network: it reaches the internet, the
 LAN and services on the host. The admission hook and pull request approval keep
 untrusted code from getting that far. Each build leaves its closure in the
-host's store, about 6 GiB for the ISO alone; the workflows keep no GC roots,
-and the daemon collects garbage when free space runs low.
+host's store. `scripts/ci-retain.py` runs the ordinary `nix build` or
+`nix flake check` with an out-link below `/nix/var/nix/gcroots/sekka-ci`, mounted
+at that same absolute path in the job and on the daemon's host. It retains the
+results plus existing outputs of their derivation closures: otherwise a VM
+check's tiny success marker would keep neither its VM image nor compiled
+build dependencies alive. This does not globally enable `keep-outputs`, skip
+checks, or treat a failed build as successful.
+
+Retention is separate for main and PR work, and for Uta, checks and published
+packages. Each group keeps two successful main generations or four successful
+PR generations, expiring after seven days; the newest successful main generation
+is kept until replaced. One incomplete/failed generation per group lasts at most
+one day. The immutable job-start hook and each build prune these bounds, so a
+cancelled job cannot leave roots indefinitely while the runner is in use.
+A lock serializes changes. Retention is bounded by age/count, not a byte quota:
+watch free space after input updates, which can change many build closures.
+The daemon still collects unrooted paths when free space runs low. Package
+publication uses the same wrapper to retain its outputs and build inputs.
+
+The supervisor maintains `/var/cache/sekka-ci-git/repository.git`, fetching only
+main between jobs. Jobs mount it read-only and seed a fresh, private Git
+repository using object alternates. `actions/checkout` still fetches the exact
+workflow/admitted merge SHA and cleans the workspace; refs, configuration,
+credentials and working files never persist between jobs. A failed cache refresh
+falls back to checkout fetching missing objects. No job may write the object cache.
+
+`checks.x86_64-linux.ci-cache` uses the actual runner client and an untrusted
+user in a disposable VM. It collects garbage, verifies results and compile-only
+dependencies survive, reuses checks with builds disabled, checks failure
+propagation, and verifies paths become collectable after removing the roots.
+`checks.x86_64-linux.pr-ci` exercises retention expiry and clean Git checkouts.
+
+The live-media guard fixture puts its mounts in a private guest mount namespace;
+systemd must not race the fixture by tearing down the VM's own `/nix/store`.
+Its installed/optical/RAM-media and non-root rejection cases remain. The encrypted
+splash fixture checks the visible password/log views, not transient boot log text.
+The Aizome login test still requires PAM unlocking and an encrypted secret
+store/read round trip. `nix/overlays/libsecret.nix` backports GNOME's
+[DH padding fix](https://github.com/GNOME/libsecret/commit/96a485819fd47c3a35b7a178909794a8ce41d2a7)
+to the system and application package sets and Aizome, rather than retrying the
+intermittent encryption failure. The backport stops at libsecret 0.21.8, which
+includes it. `checks.x86_64-linux.libsecret-dh` forces short shared secrets at the
+GnuTLS boundary and verifies their padding, with the original backend as a
+negative control. This library change requires a one-time rebuild of consumers;
+the login VM exercises the actual corrected runtime, not only the test client.
 
 The runner's Nix client comes from Sekka's pinned Determinate input, matching
 the host daemon's implementation. An upstream client cannot decode every build
@@ -2641,6 +2690,7 @@ docker run -d --name sekka-runner-supervisor --restart unless-stopped \
   --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /nix/store:/nix/store:ro \
+  -v /var/cache/sekka-ci-git:/var/cache/sekka-ci-git \
   -v "$HOME/.config/sekka-runner:/run/secrets:ro" \
   sekka-runner-supervisor:latest
 ```
@@ -2652,7 +2702,29 @@ and write (which registering runners needs) and no other permission, saved as
 `~/.config/sekka-runner/token` with mode 600. Replace the file when the token
 expires; the supervisor reads it before each registration.
 
-To update the runner, build and load again, then, while no job is running,
+For the first deployment of persistent CI caches, rerun the host setup script
+as the maintainer through `sudo`. It creates the GC-root directory owned by uid
+30500 and the Git cache owned by the invoking maintainer. Recreate the supervisor
+with the additional Git-cache mount above (a container restart cannot add a mount).
+Do this while idle; the running CI job and its registration must finish first.
+Before deployment, the new workflows still run their complete checks but emit a
+warning and use temporary roots, so cross-job retention is not yet active.
+The sparse permission gates and evaluation settings take effect without deployment.
+
+On wx-workstation on 2026-11-02 UTC, full flake evaluation of the same frozen
+source with the evaluation cache disabled took 222.55 seconds with one worker
+and 93.62 seconds with eight, using 34.8–34.9 GiB peak RSS in both cases. An
+earlier 16-worker trial was slower than eight (181 versus 102 seconds), so the
+default is eight. These are sequential samples on a shared workstation, not
+end-to-end CI guarantees. Inside the existing restricted job image as uid 30500,
+a primed, read-only Git cache took 0.018 seconds to seed, 0.388 seconds to fetch
+and prepare the sparse main gate, and 1.788 seconds to expand the full main tree.
+New PR objects still have to be fetched. The initial cleanup removed about
+519 GiB of inactive compiler artifacts and ten clean worktrees, taking free
+space from about 82 GiB to about 600 GiB before validation builds. The private
+deletion inventory stays on the workstation in `~/sekka-ci-audit/`.
+
+To update an already configured runner, build and load again, then, while no job is running,
 `docker stop sekka-runner-job` (the waiting runner, which would take the next
 job in the old image) and `docker restart sekka-runner-supervisor`. A restarted
 supervisor lets a running job finish first. To stop taking jobs,

@@ -5,8 +5,9 @@
 # A job runs in a fresh container, as an unprivileged user with every
 # capability dropped, a read-only root and no way to gain privileges. It sees
 # the host's Nix store read-only and its daemon's socket, so builds run in
-# the daemon's own sandbox as an untrusted user, and nothing else of the
-# host. The runner in it is registered for that one job (GitHub's
+# the daemon's own sandbox as an untrusted user. The only persistent job
+# mounts are bounded GC roots and read-only Git objects. The runner in it
+# is registered for that one job (GitHub's
 # just-in-time configuration) and the container and its workspace go with
 # the job.
 #
@@ -76,6 +77,8 @@ let
       kill -KILL -1
       exit 1
     fi
+    ${pkgs.python3}/bin/python3 ${../scripts/ci-retain.py} prune
+    ${pkgs.bash}/bin/bash ${../scripts/runner-git-cache.sh} seed
   '';
 
   # A job: the runner, registered for it alone, then gone with its container.
@@ -112,7 +115,8 @@ let
     # time made a nightly build its thousands of derivations in sequence:
     # up to 32 at once here, 16 cores each, on the 128-core builder.
     "NIX_REMOTE=daemon"
-    "NIX_CONFIG=experimental-features = nix-command flakes\nmax-jobs = 32\ncores = 16"
+    "NIX_CONFIG=experimental-features = nix-command flakes\nmax-jobs = 32\ncores = 16\neval-cores = 8"
+    "SEKKA_CI_ROOTS=/nix/var/nix/gcroots/sekka-ci"
     "ACTIONS_RUNNER_HOOK_JOB_STARTED=${admit}"
   ];
 
@@ -140,6 +144,7 @@ let
       coreutils
       curl
       jq
+      git
       docker-client
     ];
     text = ''
@@ -149,6 +154,11 @@ let
       while true; do
         # A job that outlived an earlier supervisor finishes first.
         docker wait sekka-runner-job >/dev/null 2>&1 || true
+        # The job sees these Git objects read-only. Refresh only between jobs,
+        # so pruning/repacking cannot invalidate an active clone's alternates.
+        if ! timeout 180 ${pkgs.bash}/bin/bash ${../scripts/runner-git-cache.sh} refresh; then
+          echo "Git object cache refresh failed; checkout will fetch missing objects."
+        fi
         if [ ! -r "$token" ]; then
           echo "No token at $token yet; checking again in a minute."
           sleep 60
@@ -182,6 +192,8 @@ let
           --mount type=volume,dst=/home/runner \
           --volume /nix/store:/nix/store:ro \
           --volume /nix/var/nix/daemon-socket:/nix/var/nix/daemon-socket:ro \
+          --mount type=bind,src=/nix/var/nix/gcroots/sekka-ci,dst=/nix/var/nix/gcroots/sekka-ci \
+          --mount type=bind,src=/var/cache/sekka-ci-git,dst=/var/cache/sekka-ci-git,readonly \
           --pids-limit 16384 \
           --memory 64g \
           --cpus 32 \

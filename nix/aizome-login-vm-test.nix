@@ -23,7 +23,7 @@ pkgs.testers.runNixOSTest {
   globalTimeout = 1200;
   node.pkgsReadOnly = false;
   nodes.machine =
-    { lib, ... }:
+    { lib, pkgs, ... }:
     {
       imports = [ desktopsModule ];
       calamares.desktops = [ "aizome" ];
@@ -50,7 +50,15 @@ pkgs.testers.runNixOSTest {
         ];
       };
       hardware.graphics.enable = true;
-      environment.systemPackages = [ pkgs.libsecret ];
+      # Resolve the client from this node's overlaid package set, just as
+      # applications do, rather than the outer test harness's Nixpkgs.
+      environment.systemPackages = [
+        (
+          assert
+            (pkgs.libsecret.sekkaDhPaddingFixed or false) || lib.versionAtLeast pkgs.libsecret.version "0.21.8";
+          pkgs.libsecret
+        )
+      ];
     };
   testScript = ''
     import shlex

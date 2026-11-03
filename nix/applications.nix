@@ -10,6 +10,7 @@ let
     applicationPkgs = import inputs.applications {
       inherit system;
       config.allowUnfree = true;
+      overlays = [ (import ./overlays/libsecret.nix) ];
     };
     aiPackages = inputs.ai-apps.packages.${system};
     ompPackage = inputs.omp.packages.${system}.omp;

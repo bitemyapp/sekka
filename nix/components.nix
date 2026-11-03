@@ -46,7 +46,7 @@ rec {
     tracy = tracy.packages.${system}.tracy;
     # With the session's fonts, which it draws with too.
     uta = import ./uta.nix {
-      pkgs = applications.legacyPackages.${system};
+      pkgs = applications.legacyPackages.${system}.extend (import ./overlays/libsecret.nix);
       inherit uta;
       inherit (aizome.packages.${system}) fonts;
     };

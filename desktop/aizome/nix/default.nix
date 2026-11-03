@@ -15,7 +15,11 @@ let
     "x86_64-linux"
     "aarch64-linux"
   ];
-  forAll = f: lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+  forAll =
+    f:
+    lib.genAttrs systems (
+      system: f (nixpkgs.legacyPackages.${system}.extend (import ../../../nix/overlays/libsecret.nix))
+    );
   # Libraries the compositor (smithay), the toolkit (Sukumo) and the
   # apps link against or load at run time.
   buildInputs =
