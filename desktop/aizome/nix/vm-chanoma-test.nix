@@ -3,7 +3,8 @@
 # Chanoma starts with the session (programs.aizome.chanoma.autostart),
 # finds the controller and holds it from everyone else, and the
 # controller alone opens a game from Home, plays it (holding Right turns
-# the game's screen dark through the real compositor), pauses it with the
+# the game's screen dark through the real compositor; the game is zipped,
+# and the games' databases name another), pauses it with the
 # Home button, and stops it, keeping where it was left. The controller
 # going and coming back keeps its player number. A page in the browser
 # also goes home by a keyboard's Home key (kept from the page by the
@@ -19,11 +20,13 @@
 }:
 let
   # A Game Boy game whose screen is white, or black while a direction is
-  # held (apps/chanoma/tests/cores.rs makes the same bytes).
+  # held (apps/chanoma/tests/cores.rs makes the same bytes), zipped, as
+  # cartridge sets come; and the same bytes named as the Game Boy's
+  # database names a game, for Chanoma to find there.
   game = pkgs.runCommand "chanoma-test-game" { nativeBuildInputs = [ pkgs.python3 ]; } ''
     mkdir -p "$out/gb"
-    python3 - "$out/gb/Chanoma Test (World).gb" <<'EOF'
-    import sys
+    python3 - "$out/gb" <<'EOF'
+    import sys, zipfile
     rom = bytearray(0x8000)
     rom[0x100:0x104] = bytes([0x00, 0xC3, 0x50, 0x01])
     rom[0x104:0x134] = bytes.fromhex(
@@ -38,7 +41,11 @@ let
             0xE6, 0x0F, 0x28, 0x06, 0x3E, 0x1B, 0xE0, 0x47, 0x18, 0xED, 0x3E, 0xE4, 0xE0, 0x47,
             0x18, 0xE7]
     rom[0x150:0x150 + len(code)] = bytes(code)
-    open(sys.argv[1], "wb").write(rom)
+    entry = zipfile.ZipInfo("Chanoma Test (World).gb", date_time=(1980, 1, 1, 0, 0, 0))
+    entry.compress_type = zipfile.ZIP_DEFLATED
+    with zipfile.ZipFile(sys.argv[1] + "/Chanoma Test (World).zip", "w") as z:
+        z.writestr(entry, bytes(rom))
+    open(sys.argv[1] + "/Tetris (World) (Rev 1).gb", "wb").write(rom)
     EOF
   '';
   # A page for the controller to drive in the browser: it says in its

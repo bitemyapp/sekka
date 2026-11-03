@@ -10,8 +10,10 @@
 //!   service's sites.
 //! - [`rules`]: the PIN, what kids may open, and for how long.
 //! - [`folders`]: choosing a games or videos folder from the sofa.
-//! - [`library`] and [`collection`]: the games and videos found (through
-//!   the files index Aizome's apps share), and which of them show.
+//! - [`library`], [`collection`] and [`metadata`]: the games and videos
+//!   found (through the files index Aizome's apps share), which of them
+//!   show, and what the games' databases say of them; [`zip`]: games kept
+//!   zipped.
 //! - [`app`] and [`ui`]: the program and what it draws.
 
 pub mod app;
@@ -22,6 +24,7 @@ pub mod devtools;
 pub mod folders;
 pub mod instance;
 pub mod library;
+pub mod metadata;
 pub mod pad;
 pub mod retro;
 pub mod rules;
@@ -29,6 +32,7 @@ pub mod services;
 pub mod signals;
 pub mod store;
 pub mod ui;
+pub mod zip;
 
 pub use app::{Chanoma, Config, Msg};
 

@@ -454,6 +454,16 @@ drive beside its backups. Games' settings handle that a system at a time
   second look takes a fraction of a second.
   Hidden files are left out: a Mac copying to a FAT drive leaves a
   4 KB `._Game.sfc` beside every file.
+- **Zipped games** (`zip.rs`), as cartridge sets come: a zip in a folder
+  named for a system that isn't a disc's is one of its games (a zip
+  elsewhere could be anything's, and isn't opened to see). A core takes a
+  file or its bytes, never a zip (RetroArch unpacks them itself), so the
+  game thread unpacks it before the core starts, into
+  `$XDG_CACHE_HOME/aizome/chanoma/unzipped/<crc>/`, as the file it
+  holds (cores go by its extension): the file with one of the system's
+  extensions, else the largest. Stored and deflated files are read, the
+  CRC checked; the eight played last stay unpacked. Saves and states go
+  by the game's key, the zip's path, as for any game.
 - **Find games on your drives…** looks through home and each drive
   plugged in (the picker's places) and lists the folders of games it
   finds, by place and system, each with how many and where ("2 games in
@@ -492,6 +502,47 @@ drive beside its backups. Games' settings handle that a system at a time
 What's hidden by these isn't forgotten: turning a switch back shows it
 with whatever kids' choice it had.
 
+### What's known of a game
+
+The module installs RetroArch's game databases for Chanoma's systems
+(`programs.aizome.chanoma.metadata`, the `chanoma-metadata` package,
+`nix/chanoma-metadata.nix`): the `rdb/` files of libretro-database (CC
+BY-SA 4.0, credited in the settings' Chanoma section), 17 files, 21 MB,
+fetched one by one at a pinned commit (the repository is close to a
+gigabyte), unchanged. `metadata.rs` reads them (`RARCHDB\0`, an offset,
+then a MessagePack map a game until a nil) when the library is read, and
+keeps what it says of the games found: the year, the genre, how many can
+play, who made it.
+
+- **By name first**: a set named as No-Intro and Redump name them has the
+  databases' names (a zip's name is its game's).
+- **Else by what's in the file**, worked out on the refreshing pass and
+  kept as a fact in the files index (forgotten when the file changes): a
+  zip's CRCs from its central directory (nothing unpacked); a
+  cartridge's CRC, and an NES game's without its 16-byte header (64 MiB at
+  most); for a PlayStation disc, the serial its `SYSTEM.CNF` boots
+  (`BOOT = cdrom:\SCUS_949.00;1` is `SCUS-94900`), read from the first
+  track named by its cue sheet (or a playlist's first disc), in
+  2,352-, 2,336- or 2,048-byte sectors. CHD and PBP discs aren't read.
+- A game named twice in a database (a release per disc or revision) takes
+  what any of its entries says.
+
+What it's for:
+
+- **Under the focused game** on Home and in the grid, after its system:
+  "1996 · Action · 1 player".
+- **For 2 players**: with two controllers or more connected, Home shows a
+  shelf of the games that many can play, before Games (and the grid a tab
+  of them): those the database says take that many, on a system Chanoma
+  gives that many controllers. Home's focus stays on its shelf as the
+  shelf comes and goes (`home_marks`).
+- **The grown-ups' list of a system's games** says the same beside each
+  game's regions.
+
+Ratings aren't used: libretro-database's are ESRB's, and few (6 of the
+PlayStation's 13,512 entries have one); there's no openly licensed source
+of review scores.
+
 ## Checking it
 
 ```sh
@@ -501,6 +552,8 @@ CHANOMA_TEST_CORES=<folder of *_libretro.so> \
   cargo test -p aizome-chanoma --test cores -- --ignored --nocapture
 CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
   cargo test -p aizome-chanoma --test devtools                 # a page kept, in a real browser
+cargo run --release -p aizome-chanoma --example library -- FOLDER… \
+  [--metadata DIR] [--db FILE]                                 # what's found, and known, timed
 ```
 
 - **Unit tests** cover the PIN hash (against RFC 7914's PBKDF2 vector),
@@ -563,11 +616,20 @@ CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
   system's games all let in for kids and all kept out, the shoulders
   jumping a letter, and *Find games on your drives* listing the drive's
   SNES folder where it's named (not the backup's stray `.bin`) and adding
-  it, its games joining one of each. The unit tests add where clicks
-  land: the hints, the bar's *Home* in a 16:10 window, beside a menu;
-  the names' tags (regions, revisions, variants, a BIOS, discs and modes
-  kept apart, dates) and the region a language puts first; Mac resource
-  forks not taken for games.
+  it, its games joining one of each. What the databases know: a zipped
+  game and a renamed one (found by its CRC) beside one found by name,
+  each saying its year, genre and players; a second controller bringing
+  *For 2 players* before Games with the focus kept on Games, the zipped
+  game playing through the stand-in core from its unpacked file, and the
+  shelf going with the controller. The unit tests add where clicks land:
+  the hints, the bar's *Home* in a 16:10 window, beside a menu; the
+  names' tags (regions, revisions, variants, a BIOS, discs and modes kept
+  apart, dates) and the region a language puts first; Mac resource forks
+  not taken for games. Zips are read stored and deflated, checked by
+  their CRC (a damaged one refused), unpacked, and the oldest cleared; a
+  database is read and games found in it by name, CRC and serial; a disc
+  image (written by the test) says its serial, from a cue sheet and a
+  playlist.
 - **Real cores** (`tests/cores.rs`, opt-in): every system's cores from
   nixpkgs load and list the extensions Chanoma sends them; gambatte,
   SameBoy and mGBA play a Game Boy game the test writes, whose screen
@@ -625,7 +687,10 @@ CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
   - a game opened from Home by the controller, and its picture, as the
     compositor captures it, darkening while Right is held (on
     2026-10-31: 103, then 39, then 103 again), and OpenBIOS linked into
-    the cores' system folder as it starts;
+    the cores' system folder as it starts; the game is zipped, and is
+    unpacked for gambatte, and the games' databases the module installs
+    are read (a copy of it named as the Game Boy's database names a game
+    is found there);
   - the Home button pausing it under the menu, and stopping keeping its
     state and picture;
   - the controller unplugged and back as player 1;
@@ -656,7 +721,9 @@ CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
   a press, and the page left where it was after a link elsewhere. On
   2026-11-02 it passed again with the BIOS step and the numbered PIN
   legend (65.3 s), the package's check phase running Chanoma's 60 unit
-  tests and 11 flows.
+  tests and 11 flows. Later that day it passed with the game zipped
+  (unpacked for gambatte; 103, then 39, then 103) and the databases read
+  (66.6 s), the check phase running Chanoma's 65 unit tests and 13 flows.
 - **Live** on the X1 Carbon, under a headless Aizome compositor of its
   own beside the desktop (release build, gambatte, generated videos):
   Home, a game shown through the compositor at the Game Boy's shape, the
@@ -664,6 +731,16 @@ CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
   was left, a show's episodes playing on by themselves and Home after,
   PBS KIDS loading in kiosk Chrome and Chanoma coming back when it
   closed, and SIGTERM mid-game keeping the state.
+- **A household's drive** (the `library` example, read only, its files
+  index in a scratch database): on 2026-11-02, the `roms` folder of a
+  USB drive (exFAT; folders for 214 systems, 89,803 files, cartridge sets
+  zipped) with the free cores (no Mega Drive or Game Gear core, whose
+  1,233 games were counted, not listed) and the databases of
+  `chanoma-metadata`: 6,509 games to play (before zips were read, about
+  360), 5,831 of them known to the databases (4,219 by name, 1,612 by
+  their zips' CRCs), the first look in 7.7 s with the drive recently
+  read, the second in 0.4 s. Before hidden files were left out, the same
+  drive showed 201 Mac resource forks (`._Game.sfc`) as games.
 
 Not yet checked: a physical controller (Bluetooth pairing, and the
 mappings of real pads: Xbox, PlayStation, Switch Pro, 8BitDo), the
@@ -708,6 +785,20 @@ before calling any of it tested on hardware.
   No-Intro or Redump name them (or a game renamed by hand) shows each
   file as a game of its own, and a name that doesn't say its region is
   ranked after those that do.
+- Zips are read only in a folder named for their system, stored or
+  deflated, under 4 GiB; 7-Zip and RAR aren't read, nor zipped discs.
+  Only the NES's header is taken off for a CRC: a renamed game in
+  another headered format (a Lynx `.lnx`) may not be found by it.
+- The databases know about nine in ten of a well-kept set and fewer of
+  the PlayStation's games (libretro-database has a year, genre and
+  players for about seven in ten of its entries); nothing is said of a
+  game they don't know. A renamed set's files are read once, on the first
+  refreshing look after they appear (minutes for thousands of games on a
+  slow drive, less for zips, whose CRCs are in their directories). No
+  ratings: the databases' are ESRB's, and rare.
+- *For N players* trusts the databases' player counts, which give the
+  most a game takes (simultaneous or taking turns isn't said), and the
+  controllers connected, not who's holding them.
 - *Find games on your drives* reads every folder of home and each drive
   each time it's asked; a drive just plugged in takes minutes on a slow
   USB stick or exFAT drive (`docs/files-index.md`), showing what it

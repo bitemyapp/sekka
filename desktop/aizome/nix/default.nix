@@ -129,6 +129,9 @@ let
       chanoma = aizome.chanoma;
       # A free PlayStation BIOS for its games (programs.aizome.chanoma.bios).
       psx-openbios = pkgs.callPackage ./openbios.nix { };
+      # What libretro-database knows of its games
+      # (programs.aizome.chanoma.metadata).
+      chanoma-metadata = pkgs.callPackage ./chanoma-metadata.nix { };
       default = aizome;
     });
 

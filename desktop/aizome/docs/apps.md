@@ -1153,6 +1153,11 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   read through Aizome's shared files index (`docs/files-index.md`), so a
   second look reads only what changed; a slow drive's first look takes
   minutes.
+  Games may be zipped, as cartridge sets come, in a folder named for
+  their system. Each game says its year, genre and how many can play
+  (from libretro-database's game databases, installed with Chanoma, found
+  by name or, for a renamed file, by what's in it), and with two
+  controllers on, Home offers the games two can play together.
 - **Services** open full screen in Google Chrome (or Chromium), each in a
   browser profile of its own, so a grown-up signs in once (in grown-up
   mode) and kids never see a sign-in, an address bar or a tab. The controller drives the page: the left stick moves the pointer

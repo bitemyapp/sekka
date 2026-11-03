@@ -57,6 +57,10 @@ pub struct Launch {
     pub screen_lines: u32,
     /// Play without sound.
     pub silent: bool,
+    /// Where a zipped game is unpacked for its core, and the extensions
+    /// of the system's games, to know which file in the zip is the game.
+    pub unpack_dir: PathBuf,
+    pub extensions: &'static [&'static str],
 }
 
 /// What the game says.
@@ -226,7 +230,7 @@ fn aspect(av: &ffi::retro_system_av_info) -> f64 {
 
 #[allow(clippy::too_many_arguments)]
 fn run(
-    launch: Launch,
+    mut launch: Launch,
     sink: Option<VideoSink>,
     pads: Arc<Shared>,
     live: Arc<AtomicBool>,
@@ -256,6 +260,14 @@ fn run(
         let _ = std::fs::create_dir_all(d);
     }
     offer_bios(&launch.bios, &launch.system_dir);
+    // A zipped game is unpacked first, as RetroArch does: a core takes a
+    // file or its bytes, never a zip. The last few stay unpacked.
+    if launch.game.extension().is_some_and(|e| e.eq_ignore_ascii_case("zip")) {
+        match crate::zip::unpack(&launch.game, launch.extensions, &launch.unpack_dir, 8) {
+            Ok(game) => launch.game = game,
+            Err(e) => return events(Event::Failed(format!("{}: {e}", launch.game.display()))),
+        }
+    }
     let mut host = Box::new(Host::new(Screen::new(sink), pads, live.clone()));
     host.system_dir = cstring(&launch.system_dir);
     host.save_dir = cstring(&launch.save_dir);
