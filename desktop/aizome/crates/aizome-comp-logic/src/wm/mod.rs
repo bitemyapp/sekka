@@ -302,6 +302,7 @@ impl Model {
     /// Removes a window. Returns where focus goes if it had it.
     pub fn remove(&mut self, id: WinId) -> Refocus {
         self.generation += 1;
+        let members = self.group_members(id);
         if self.wins.contains_key(&id) {
             self.leave_group(id);
         }
@@ -317,7 +318,11 @@ impl Model {
         }
         if self.focused == Some(id) {
             self.focused = None;
-            Refocus::To(self.next_focus(None))
+            // Keep focus on the tab leave_group selected, including when
+            // only one member remains and the group has dissolved. The
+            // window focus history can put another group ahead of it.
+            let next = members.into_iter().find(|w| self.is_shown(*w) && self.on_focused_screen(*w));
+            Refocus::To(next.or_else(|| self.next_focus(None)))
         } else {
             Refocus::Same
         }

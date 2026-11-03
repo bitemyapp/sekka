@@ -50,14 +50,22 @@ pkgs.testers.runNixOSTest {
             time.sleep(0.2)
         machine.screenshot("failure")
         raise AssertionError(json.dumps(dict(window=window(), monitor=monitor())))
-    def fits():
+    def fits(*, centered=False):
         c, m = window(), monitor()
         if not c: return False
         x, y = c["at"]; w, h = c["size"]
         left, top, right, bottom = m["reserved"]
-        return (m["x"] + left <= x and m["y"] + top <= y
-                and x + w <= m["x"] + m["width"] / m["scale"] - right
-                and y + h <= m["y"] + m["height"] / m["scale"] - bottom)
+        inside = (m["x"] + left <= x and m["y"] + top <= y
+                  and x + w <= m["x"] + m["width"] / m["scale"] - right
+                  and y + h <= m["y"] + m["height"] / m["scale"] - bottom)
+        if not inside or not centered:
+            return inside
+        # On a scale decrease, the old position already fits the larger
+        # workspace. Wait for Tatami's display watcher to recenter it before
+        # taking pointer coordinates; monitor scale changes arrive first.
+        cx = m["x"] + left + (m["width"] / m["scale"] - left - right - w) / 2
+        cy = m["y"] + top + (m["height"] / m["scale"] - top - bottom - h) / 2
+        return abs(x - cx) <= 1 and abs(y - cy) <= 1
     machine.start()
     machine.wait_for_unit("ydotoold.service")
     machine.wait_until_succeeds("test -S /run/user/1000/hypr/*/.socket.sock", timeout=180)
@@ -84,42 +92,39 @@ pkgs.testers.runNixOSTest {
     assert fits(), "Network reopened beyond usable workspace at scale1.25"
     assert changed_scale_fits, "Network exceeded usable workspace after changing to scale1.25"
 
-    from datetime import timedelta
+    import os, re, subprocess
+    from pathlib import Path
     def text(expected):
-        # One OCR pass took up to 10 seconds on a host loaded past 100:
-        # 15 seconds allowed one or two.
-        try:
-            machine.wait_for_text(expected, timeout=timedelta(seconds=60))
-        except Exception:
+        # The driver's legacy + LSTM engine and enlarged, posterized
+        # variants can miss large GTK labels even on a settled frame.
+        # Read the original pixels with LSTM, with a second segmentation
+        # for labels that sparse-text recognition misses.
+        deadline = time.monotonic() + 60
+        readings = []
+        with machine.nested(f"waiting for {expected} to appear on screen"):
+            while time.monotonic() < deadline:
+                machine.screenshot("text-check")
+                image = Path(machine.out_dir) / "text-check.png"
+                readings = []
+                for mode in ["11", "6"]:
+                    reading = subprocess.check_output([
+                        "${pkgs.tesseract.override { enableLanguages = [ "eng" ]; }}/bin/tesseract", str(image), "stdout",
+                        "--oem", "1", "--psm", mode,
+                    ], text=True, timeout=30, env={**os.environ, "OMP_THREAD_LIMIT": "1"})
+                    readings.append(reading)
+                    if re.search(expected, reading):
+                        return
+                time.sleep(0.5)
             machine.screenshot("text-failure")
-            raise
+            raise AssertionError(f"Missing {expected!r}; OCR read {readings!r}")
     def click(x, y):
         user("hyprctl dispatch " + shlex.quote(f"hl.dsp.cursor.move({{ x = {x}, y = {y} }})"))
         machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool mousemove -x 1 -y 0")
         time.sleep(0.3)
         machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool click 0xC0")
-    def placed():
-        # Where Tatami's display watcher puts a settings window, for a few
-        # seconds after the screens change or it opens: fitted to the usable
-        # area and centered (fit_geometry, desktop/tatami/tool/src/window.rs).
-        # It moves the window a while after the scale and fits() read right:
-        # one run clicked where Close had been at 1.25 (x 680 for 808), and
-        # the window stayed open.
-        c, m = window(), monitor()
-        if not c: return False
-        left, top, right, bottom = (max(r, 0) for r in m["reserved"])
-        area_w = max(int(m["width"] / m["scale"]) - left - right - 16, 1)
-        area_h = max(int(m["height"] / m["scale"]) - top - bottom - 16, 1)
-        w, h = c["size"]
-        x = m["x"] + left + 8 + (area_w - w) // 2
-        y = m["y"] + top + 8 + (area_h - h) // 2
-        return (w <= area_w and h <= area_h
-                and abs(c["at"][0] - x) <= 1 and abs(c["at"][1] - y) <= 1)
-    def placed_window():
-        wait_for(placed)
-        return window()
     def close_button():
-        c = placed_window()
+        wait_for(lambda: fits(centered=True))
+        c = window()
         click(c["at"][0] + c["size"][0] - 24, c["at"][1] + 24)
         wait_for(lambda: window() is None)
     def open_panel():
@@ -129,10 +134,10 @@ pkgs.testers.runNixOSTest {
         machine.send_chars("Network settings")
         text("Network settings")
         machine.send_key("ret")
-        wait_for(fits)
+        wait_for(lambda: fits(centered=True))
         time.sleep(2)
     def scroll_bottom():
-        c = placed_window()
+        c = window()
         x, y = c["at"][0] + c["size"][0] - 35, c["at"][1] + c["size"][1] - 45
         user("hyprctl dispatch " + shlex.quote(f"hl.dsp.cursor.move({{ x = {x}, y = {y} }})"))
         machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool mousemove -x 1 -y 0")
@@ -149,15 +154,15 @@ pkgs.testers.runNixOSTest {
     for scale in [1.6, 2]:
         machine.send_key("meta_l-slash")
         wait_for(lambda: abs(monitor()["scale"] - scale) < 0.001)
-        wait_for(fits)
+        wait_for(lambda: fits(centered=True))
     machine.screenshot("scale2")
     for scale in [2, 3.2]:
         if scale == 3.2:
             machine.send_key("meta_l-slash")
             wait_for(lambda: abs(monitor()["scale"] - scale) < 0.001)
-            wait_for(fits)
+            wait_for(lambda: fits(centered=True))
         text("Ethernet")
-        c = placed_window()
+        c = window()
         click(c["at"][0] + c["size"][0] / 2, c["at"][1] + 134)
         text(connection)
         scroll_bottom()
@@ -166,13 +171,9 @@ pkgs.testers.runNixOSTest {
         machine.screenshot("details-bottom-" + str(scale) + ".png")
         assert fits()
         # Header navigation stays reachable even with the page scrolled down.
-        c = placed_window()
+        c = window()
         click(c["at"][0] + 24, c["at"][1] + 24)
-        # Back on the list, its title. Not "Ethernet": while the overlay
-        # scrollbar shows, the driver's OCR misreads that row at scale 3.2
-        # in every variant, so a run read it or not by the scrollbar's timing
-        # (three runs in six failed with the list shown).
-        text("Network")
+        text("Ethernet")
         machine.screenshot("back-" + str(scale) + ".png")
         close_button()
         open_panel()
@@ -180,7 +181,7 @@ pkgs.testers.runNixOSTest {
     for scale in [2, 1.6, 1.25, 1]:
         machine.send_key("meta_l-alt-slash")
         wait_for(lambda: abs(monitor()["scale"] - scale) < 0.001)
-        wait_for(fits)
+        wait_for(lambda: fits(centered=True))
     close_button()
     open_panel()
     machine.screenshot("scale1-restored")

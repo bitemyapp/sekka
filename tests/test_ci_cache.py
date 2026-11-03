@@ -260,6 +260,9 @@ class GitCache(unittest.TestCase):
             (upstream / "scripts").mkdir()
             (upstream / "scripts/check-pr-trust.py").write_text("trusted main gate\n")
             (upstream / "payload").write_text("main payload\n")
+            (upstream / "flake.nix").write_text("{}\n")
+            (upstream / "nested/source").mkdir(parents=True)
+            (upstream / "nested/source/file").write_text("nested payload\n")
             run("git", "add", ".", cwd=upstream)
             run("git", "commit", "-m", "main", cwd=upstream)
             main = run("git", "rev-parse", "HEAD", cwd=upstream)
@@ -281,13 +284,23 @@ class GitCache(unittest.TestCase):
                 run("git", "reset", "--hard", "HEAD", cwd=workspace)
                 self.assertFalse((workspace / "payload").exists())
                 self.assertEqual((workspace / "scripts/check-pr-trust.py").read_text(), "trusted main gate\n")
+                # checkout v6's non-cone sparse setup writes the repository
+                # config, unlike the seed's sparse-checkout CLI, which uses
+                # config.worktree. Exercise both scopes, as the PR job does.
+                run("git", "config", "core.sparseCheckout", "true", cwd=workspace)
                 # Only after the immutable gate admits this exact SHA does
                 # checkout fetch and expand the candidate's source.
                 run("git", "fetch", "--no-tags", "--depth=1", "origin", candidate, cwd=workspace)
-                run("git", "sparse-checkout", "disable", cwd=workspace)
-                run("git", "checkout", "--detach", candidate, cwd=workspace)
+                # The second checkout explicitly selects every path. Its
+                # default sparse-disable path instead unsets worktreeConfig,
+                # exposing the first action's core.sparseCheckout=true and
+                # applying the old narrow patterns again at checkout.
+                (workspace / ".git/info/sparse-checkout").write_text("/*\n")
+                run("git", "checkout", "--detach", "--force", candidate, cwd=workspace)
                 self.assertEqual(run("git", "rev-parse", "HEAD", cwd=workspace), candidate)
                 self.assertEqual((workspace / "payload").read_text(), "candidate payload\n")
+                self.assertEqual((workspace / "flake.nix").read_text(), "{}\n")
+                self.assertEqual((workspace / "nested/source/file").read_text(), "nested payload\n")
                 (workspace / "payload").write_text("candidate mutation\n")
                 (workspace / "untracked").touch()
                 run("git", "add", ".", cwd=workspace)

@@ -21,6 +21,7 @@ class TrustGate(unittest.TestCase):
                    "base": {"sha": BASE, "ref": "main", "repo": {"full_name": gate.REPOSITORY}},
                    "mergeable": True, "merge_commit_sha": MERGE}
         self.roles = {"author": "write", "actor": "admin", "rerunner": "write"}
+        self.current_base = BASE
         self.parents = [BASE, HEAD]
         self.calls = []
 
@@ -30,6 +31,8 @@ class TrustGate(unittest.TestCase):
             return {"permission": self.roles[path.split("/")[1]]}
         if path == "pulls/233":
             return copy.deepcopy(self.pr)
+        if path == "git/ref/heads/main":
+            return {"object": {"sha": self.current_base}}
         if path == f"git/commits/{MERGE}":
             return {"parents": [{"sha": sha} for sha in self.parents]}
         self.fail(f"Unexpected API request: {path}")
@@ -80,6 +83,36 @@ class TrustGate(unittest.TestCase):
             self.parents = parents
             with self.assertRaises(gate.NotTrusted):
                 self.select()
+
+    def test_stale_pr_base_does_not_reject_a_merge_with_current_main(self):
+        self.pr["base"]["sha"] = "d" * 40
+        self.assertEqual(self.select(), {"head": HEAD, "base": BASE, "merge": MERGE})
+
+    def test_merge_with_stale_main_is_rejected_even_if_pr_metadata_matches(self):
+        self.current_base = "d" * 40
+        with self.assertRaises(gate.NotTrusted):
+            self.select()
+
+    def test_rechecks_main_while_waiting_for_an_updated_merge(self):
+        self.current_base = "d" * 40
+        def delayed(path):
+            if path == f"git/commits/{MERGE}" and self.calls.count(path) == 1:
+                self.parents = [self.current_base, HEAD]
+            return self.api(path)
+        selected = gate.select_merge(233, "actor", "rerunner", HEAD, get=delayed,
+                                     sleep=lambda _: None)
+        self.assertEqual(selected, {"head": HEAD, "base": self.current_base, "merge": MERGE})
+        self.assertEqual(self.calls.count("git/ref/heads/main"), 2)
+
+    def test_current_main_lookup_errors_fail_closed(self):
+        def failed(path):
+            if path == "git/ref/heads/main":
+                error = HTTPError("https://api.github.com", 403, "unavailable", {}, None)
+                self.addCleanup(error.close)
+                raise error
+            return self.api(path)
+        with self.assertRaises(HTTPError):
+            gate.select_merge(233, "actor", "rerunner", HEAD, get=failed)
 
     def test_waits_for_github_to_compute_merge(self):
         def delayed(path):
