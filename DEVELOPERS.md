@@ -223,6 +223,17 @@ Release publication settings are unrelated and remain unchanged.
 
 ## Build and check
 
+Its first stages are in the tree: `nix develop .#bazel` builds and tests
+Aizome's workspace with Bazel (`bazel build --config=dev //desktop/aizome/...`)
+on the root lock's toolchains and C libraries. Each Aizome, Hotaru, Yukimi
+and Sukumo crate has a generated `BUILD.bazel`, which Nix's package sources
+leave out. After changing a Cargo manifest, `desktop/aizome/Cargo.lock` or a
+crate annotation in `MODULE.bazel`, run `python3 build/bazel/repin.py` in
+that shell; `python3 build/bazel/generate.py --check` fails while the BUILD
+files are out of date. The plan's
+[implementation status](docs/bazel-build-plan.md#implementation-status) lists
+what is done, what differs from the Nix package, and what comes next.
+
 Sekka's PipeWire service uses `sekka-pipewire-daemon`, with the X11 bell
 disconnect fix in `nix/patches/pipewire-x11-bell-disconnect.patch`. Xlib can
 report a lost display more than once during logout. The fix makes removal of

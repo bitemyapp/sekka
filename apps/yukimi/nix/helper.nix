@@ -10,16 +10,24 @@ let
   # Content-addressed source: the same derivation wherever the checkout is.
   source = lib.fileset.toSource {
     root = ../../..;
-    fileset = lib.fileset.unions [
-      ../Cargo.toml
-      ../Cargo.lock
-      ../crates
-      ../yukimi-helper
-      # Completion detection uses the UI-independent Aizome IPC protocol.
-      ../../../desktop/aizome/Cargo.toml
-      ../../../desktop/aizome/crates/aizome-ipc
-      ../../../desktop/aizome/session/aizome-session
-    ];
+    fileset =
+      import ../../../nix/bazel/without-build-files.nix { inherit lib; }
+        [
+          ../crates
+          ../../../desktop/aizome/crates/aizome-ipc
+        ]
+        (
+          lib.fileset.unions [
+            ../Cargo.toml
+            ../Cargo.lock
+            ../crates
+            ../yukimi-helper
+            # Completion detection uses the UI-independent Aizome IPC protocol.
+            ../../../desktop/aizome/Cargo.toml
+            ../../../desktop/aizome/crates/aizome-ipc
+            ../../../desktop/aizome/session/aizome-session
+          ]
+        );
   };
 in
 rustPlatform.buildRustPackage {

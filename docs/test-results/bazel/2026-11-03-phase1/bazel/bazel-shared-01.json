@@ -1,0 +1,77 @@
+{
+ "source": {
+  "commit": "6a6b9e0e3ab75372712f1c59e56aaa0b98409dc3",
+  "patch_sha256": "48e0a95a9088f75d6e58bc6c6888170cd2ae0b2326891feb9c4b330b95270501"
+ },
+ "host": {
+  "hostname": "callen",
+  "nproc": 128,
+  "loadavg_before": [
+   14.52,
+   15.88,
+   11.99
+  ],
+  "loadavg_after": [
+   15.32,
+   15.96,
+   12.07
+  ]
+ },
+ "scenario": "shared",
+ "rep": 1,
+ "tool": "bazel",
+ "profile": "dev",
+ "jobs": 16,
+ "toolchain": {
+  "SEKKA_BAZEL_RUST_TOOLCHAIN": "/nix/store/w6rh05llxkdc8pljap560h1zyivh5px5-sekka-bazel-rust-toolchain",
+  "SEKKA_BAZEL_NATIVE_ENV": "/nix/store/9nwmybw8g9hj5drznwrghida4dqcq04x-sekka-bazel-native-env",
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28) (built from a source tarball)\nbinary: rustc\ncommit-hash: b940084d7eb6a299eb4bfeb8e34901bc051e7ac4\ncommit-date: 2026-09-28\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0\nLLVM version: 21.1.8\n"
+ },
+ "argv": [
+  "bazel",
+  "--output_user_root=/dev/shm/sekka-bazel-lab/phase1-6a6b9e0e-bazel/bazel",
+  "build",
+  "--config=dev",
+  "--config=wx-local",
+  "--jobs=16",
+  "--repository_cache=/dev/shm/sekka-bazel-lab/phase1-6a6b9e0e-bazel/repos",
+  "--build_event_json_file=/home/callen/sekka-work/bazel-lab/results/phase1-6a6b9e0e/bazel/logs/bazel-shared-01.bep.json",
+  "--profile=/home/callen/sekka-work/bazel-lab/results/phase1-6a6b9e0e/bazel/logs/bazel-shared-01.profile.gz",
+  "--target_pattern_file=/home/callen/sekka-work/bazel-lab/results/phase1-6a6b9e0e/bazel/targets.txt"
+ ],
+ "exit_status": 0,
+ "wall_seconds": 14.639,
+ "executed_actions": {
+  "Rustc": 54,
+  "RunfilesTree": 25,
+  "SolibSymlink": 2,
+  "Symlink": 2,
+  "CargoBuildScriptRun": 1,
+  "BazelWorkspaceStatusAction": 1
+ },
+ "runners": {
+  "total": 85,
+  "internal": 30,
+  "linux-sandbox": 55
+ },
+ "cache_hits": 0,
+ "cache_misses": 85,
+ "action_cpu_seconds": 9.73,
+ "action_cpu_reason": "Bazel's timingMetrics.cpuTimeInMs: the build's CPU time, server included",
+ "analysis_seconds": 0.096,
+ "execution_seconds": 14.304,
+ "actions_created": 0,
+ "download_bytes": null,
+ "download_bytes_reason": "local trial: nothing downloaded during the build",
+ "storage_peak_bytes": null,
+ "storage_peak_reason": "not sampled during the build in this run",
+ "correctness": {
+  "check": "sekka-bench-shared-0001 in libaizome_theme-2126108028.rlib",
+  "passed": true
+ },
+ "raw_logs": {
+  "bazel-shared-01.log": "d40cff0d0013f4efc5a0e605612e09c004e45933eb09211a85cb52fe756e62c4",
+  "bazel-shared-01.bep.json": "b7026494d45c1de898d6a974d2e99251929528e3088d4b2d63003abd1d1641a4",
+  "bazel-shared-01.profile.gz": "6977ffa2a0e18e50e876539e4efee800594d71027885bbb93459ec0fe5ec7b10"
+ }
+}

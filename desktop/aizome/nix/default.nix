@@ -45,42 +45,56 @@ let
       ffmpeg
       pipewire
     ];
+  # Bazel's BUILD files beside the crates aren't the package's sources.
+  withoutBuildFiles = import ../../../nix/bazel/without-build-files.nix { inherit lib; };
   # Only what the build reads: the workspace and the files the package
   # installs.
   src = lib.fileset.toSource {
     root = ../.;
-    fileset = lib.fileset.unions [
-      ../Cargo.toml
-      ../Cargo.lock
-      ../crates
-      ../icons
-      ../etc
-      ../scripts
-      # Sukumo, the toolkit: its workspace manifest, for what its crates
-      # inherit, and the crates.
-      ../sukumo/Cargo.toml
-      ../sukumo/crates
-      (lib.fileset.maybeMissing ../apps)
-      (lib.fileset.maybeMissing ../session)
-    ];
+    fileset = withoutBuildFiles [ ../. ] (
+      lib.fileset.unions [
+        ../Cargo.toml
+        ../Cargo.lock
+        ../crates
+        ../icons
+        ../etc
+        ../scripts
+        # Sukumo, the toolkit: its workspace manifest, for what its crates
+        # inherit, and the crates.
+        ../sukumo/Cargo.toml
+        ../sukumo/crates
+        (lib.fileset.maybeMissing ../apps)
+        (lib.fileset.maybeMissing ../session)
+      ]
+    );
   };
   # Only the shared backend and its workspace metadata, not the privileged
   # helper. Helper-only edits must not rebuild Aizome.
   yukimiSrc = lib.fileset.toSource {
     root = ../../../apps/yukimi;
-    fileset = lib.fileset.unions [
-      ../../../apps/yukimi/Cargo.toml
-      ../../../apps/yukimi/crates
-    ];
+    fileset = withoutBuildFiles [ ../../../apps/yukimi/crates ] (
+      lib.fileset.unions [
+        ../../../apps/yukimi/Cargo.toml
+        ../../../apps/yukimi/crates
+      ]
+    );
   };
   hotaruSrc = lib.fileset.toSource {
     root = ../../../apps/hotaru;
-    fileset = lib.fileset.unions [
-      ../../../apps/hotaru/Cargo.toml
-      ../../../apps/hotaru/crates
-      ../../../apps/hotaru/resources
-      ../../../apps/hotaru/vendor/simdutf8
-    ];
+    fileset =
+      withoutBuildFiles
+        [
+          ../../../apps/hotaru/crates
+          ../../../apps/hotaru/vendor/simdutf8
+        ]
+        (
+          lib.fileset.unions [
+            ../../../apps/hotaru/Cargo.toml
+            ../../../apps/hotaru/crates
+            ../../../apps/hotaru/resources
+            ../../../apps/hotaru/vendor/simdutf8
+          ]
+        );
   };
   ghosttyLicense = ../../../apps/hotaru/upstream/LICENSE.ghostty;
   uucodeLicense = ../../../apps/hotaru/upstream/LICENSE.uucode;

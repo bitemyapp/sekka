@@ -10,13 +10,15 @@ let
   root = ../desktop/aizome/sukumo;
   src = lib.fileset.toSource {
     inherit root;
-    fileset = lib.fileset.unions [
-      (root + "/Cargo.toml")
-      (root + "/Cargo.lock")
-      (root + "/crates")
-      (root + "/fixtures")
-      (root + "/scripts")
-    ];
+    fileset = import ./bazel/without-build-files.nix { inherit lib; } [ (root + "/crates") ] (
+      lib.fileset.unions [
+        (root + "/Cargo.toml")
+        (root + "/Cargo.lock")
+        (root + "/crates")
+        (root + "/fixtures")
+        (root + "/scripts")
+      ]
+    );
   };
   # Fonts for shaping, fallback and emoji, with fontconfig's own aliases:
   # the configuration makeFontsConf writes looks for them in /etc/fonts,

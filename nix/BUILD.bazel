@@ -1,0 +1,5 @@
+# Files nix/bazel/ imports, for Bazel's repository rules (build/bazel/nix.bzl).
+exports_files([
+    "libsecret-dh-padding.nix",
+    "patches/libsecret-gnutls-dh-padding.patch",
+])

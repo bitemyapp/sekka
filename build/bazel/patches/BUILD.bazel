@@ -1,0 +1,3 @@
+# Patches to crates.io crates for Bazel (MODULE.bazel's annotations). Each
+# keeps the crate's behaviour under Cargo.
+exports_files(glob(["*.patch"]))
