@@ -1,0 +1,13 @@
+load(":native.bzl", "native_env", "test_env")
+
+native_env(
+    name = "native",
+    visibility = ["//visibility:public"],
+)
+
+test_env(
+    name = "test_env",
+    visibility = ["//visibility:public"],
+)
+
+exports_files(["aizome-crates.lock.json"])

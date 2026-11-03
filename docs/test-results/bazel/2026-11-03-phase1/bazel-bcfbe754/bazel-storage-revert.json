@@ -1,0 +1,34 @@
+{
+  "generated": "2026-11-03T05:20:24-0600",
+  "roots": {
+    "worktree": {
+      "path": "/dev/shm/sekka-bazel-lab/phase1-bcfbe754-bazel/worktrees/bazel",
+      "allocated_bytes": 389234688,
+      "unique_allocated_bytes": 389234688,
+      "files": 5246,
+      "multiply_linked_files": 0,
+      "directories": 749,
+      "symlinks": 4
+    },
+    "bazel": {
+      "path": "/dev/shm/sekka-bazel-lab/phase1-bcfbe754-bazel/bazel",
+      "allocated_bytes": 3994697728,
+      "unique_allocated_bytes": 3994697728,
+      "files": 5144,
+      "multiply_linked_files": 0,
+      "directories": 18631,
+      "symlinks": 85194
+    },
+    "repos": {
+      "path": "/dev/shm/sekka-bazel-lab/phase1-bcfbe754-bazel/repos",
+      "allocated_bytes": 3606577152,
+      "unique_allocated_bytes": 3606577152,
+      "files": 56299,
+      "multiply_linked_files": 0,
+      "directories": 8574,
+      "symlinks": 393
+    }
+  },
+  "total_allocated_bytes": 7990509568,
+  "physical_allocated_bytes": 7990509568
+}

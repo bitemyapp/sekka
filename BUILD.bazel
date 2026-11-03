@@ -1,0 +1,3 @@
+# The root flake's lock: Bazel's Nixpkgs is its `nixpkgs` input
+# (nix/bazel/nixpkgs.nix).
+exports_files(["flake.lock"])

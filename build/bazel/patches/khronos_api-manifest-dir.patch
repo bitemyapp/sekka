@@ -1,0 +1,16 @@
+--- a/build.rs
++++ b/build.rs
+@@ -50,8 +50,11 @@
+             // really is an extension.
+             let ext_path = path.join("extension.xml");
+             if ext_path.is_file() {
+-                // Include the XML file, making sure to use an absolute path.
+-                writeln!(file, "&*include_bytes!({:?}),", ext_path.to_str().unwrap()).unwrap();
++                // Include the XML file through the manifest directory, which
++                // the crate's own compilation sees (under Bazel, unlike this
++                // script's working directory).
++                let relative = format!("/api_webgl/extensions/{}/extension.xml", ext_name);
++                writeln!(file, "&*include_bytes!(concat!(env!(\"CARGO_MANIFEST_DIR\"), {:?})),", relative).unwrap();
+             }
+         }
+     }

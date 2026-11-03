@@ -152,6 +152,9 @@
       };
       devShells.${system} = {
         kakehashi = kakehashi.shell;
+        # Bazel, for the build plan's workstation trials
+        # (docs/bazel-build-plan.md, nix/bazel/).
+        bazel = import ./nix/bazel/shell.nix { inherit pkgs; };
         # Aizome's workspace (desktop/aizome), which its `just` recipes and
         # aizome-dev enter.
         aizome = inputs.aizome.devShells.${system}.default;
@@ -371,6 +374,12 @@
         hyprlauncher-software = import ./nix/hyprlauncher-software-test.nix { pkgs = hyprlandPkgs; };
         aizome-ibus = import ./nix/aizome-ibus-test.nix { inherit pkgs inputs; };
         aizome-ibus-policy = import ./nix/aizome-ibus-policy-test.nix { inherit pkgs inputs; };
+        # Bazel's native environment matches Aizome's package
+        # (docs/bazel-build-plan.md, nix/bazel/inputs-test.nix).
+        bazel-native-inputs = import ./nix/bazel/inputs-test.nix {
+          inherit pkgs;
+          aizome = inputs.aizome.packages.${system}.aizome;
+        };
         # Aizome's toolkit's own tests, under a headless sway
         # (desktop/aizome/sukumo).
         sukumo = import ./nix/sukumo-test.nix {

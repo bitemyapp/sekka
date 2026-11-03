@@ -1,0 +1,2 @@
+# The Nix expressions Bazel's repository rules build (build/bazel/nix.bzl).
+exports_files(glob(["*.nix"]))

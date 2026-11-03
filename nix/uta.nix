@@ -13,15 +13,17 @@ let
   # from: changes to the rest of Aizome don't rebuild Uta.
   aizome = lib.fileset.toSource {
     root = ../desktop/aizome;
-    fileset = lib.fileset.unions [
-      ../desktop/aizome/Cargo.toml
-      ../desktop/aizome/crates/aizome-kit
-      ../desktop/aizome/crates/aizome-theme
-      ../desktop/aizome/crates/aizome-config
-      ../desktop/aizome/crates/aizome-shell-proto
-      ../desktop/aizome/sukumo/Cargo.toml
-      ../desktop/aizome/sukumo/crates
-    ];
+    fileset = import ./bazel/without-build-files.nix { inherit lib; } [ ../desktop/aizome ] (
+      lib.fileset.unions [
+        ../desktop/aizome/Cargo.toml
+        ../desktop/aizome/crates/aizome-kit
+        ../desktop/aizome/crates/aizome-theme
+        ../desktop/aizome/crates/aizome-config
+        ../desktop/aizome/crates/aizome-shell-proto
+        ../desktop/aizome/sukumo/Cargo.toml
+        ../desktop/aizome/sukumo/crates
+      ]
+    );
   };
   rev = uta.rev or "(not a Git revision)";
   package = pkgs.callPackage "${uta}/nix/package.nix" {
