@@ -4,17 +4,12 @@
   pkgs,
   inputs,
   applicationCatalog,
+  references,
   patched,
   installer,
 }:
 let
   inherit (pkgs) lib;
-  # The prebuilt systems on the media: Xfce's own, and every desktop together
-  # for a choice of several.
-  references = import ./reference-systems.nix {
-    inherit inputs applicationCatalog;
-    desktops = installer.config.respin.referenceDesktops;
-  };
   installed = inputs.nixpkgs.lib.nixosSystem {
     system = pkgs.stdenv.hostPlatform.system;
     inherit (applicationCatalog) specialArgs;

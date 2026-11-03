@@ -2,22 +2,13 @@
 # prebuilt systems that Genkan copies from the media.
 {
   pkgs,
-  inputs,
   installer,
-  applicationCatalog,
+  references,
+  installed,
   patched,
 }:
 let
   inherit (pkgs) lib;
-  references = import ./reference-systems.nix {
-    inherit inputs applicationCatalog;
-    desktops = installer.config.respin.referenceDesktops;
-  };
-  installed = inputs.nixpkgs.lib.nixosSystem {
-    system = pkgs.stdenv.hostPlatform.system;
-    inherit (applicationCatalog) specialArgs;
-    modules = [ inputs.calamares.nixosModules.default ];
-  };
   configurations = {
     installed-default = installed.config;
     live-default = installer.config;
