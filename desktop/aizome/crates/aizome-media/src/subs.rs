@@ -106,7 +106,8 @@ pub fn plain_text(s: &str) -> (String, bool) {
             _ => {}
         }
     }
-    let text = out.replace("\r\n", "\n").lines().map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n");
+    let text =
+        out.replace("\r\n", "\n").lines().map(str::trim).filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n");
     (text, italic)
 }
 
@@ -122,7 +123,7 @@ pub fn decode(dec: &mut Decoder, pkt: &Packet, frame: (u32, u32)) -> Vec<Cue> {
     let mut sub: ff::AVSubtitle = unsafe { std::mem::zeroed() };
     let mut got = 0;
     // SAFETY: valid decoder and packet; the subtitle is freed below.
-    let r = unsafe { ff::avcodec_decode_subtitle2(dec.ctx, &mut sub, &mut got, pkt.0) };
+    let r = unsafe { ff::avcodec_decode_subtitle2(dec.as_ptr(), &mut sub, &mut got, pkt.as_ptr()) };
     if r < 0 || got == 0 {
         return Vec::new();
     }
@@ -143,7 +144,8 @@ pub fn decode(dec: &mut Decoder, pkt: &Packet, frame: (u32, u32)) -> Vec<Cue> {
         if sub.num_rects == 0 {
             cues.push(Cue { id: next_id(), start, end: start, body: CueBody::Clear });
         }
-        let rects = if sub.rects.is_null() { &[][..] } else { std::slice::from_raw_parts(sub.rects, sub.num_rects as usize) };
+        let rects =
+            if sub.rects.is_null() { &[][..] } else { std::slice::from_raw_parts(sub.rects, sub.num_rects as usize) };
         for &r in rects {
             let r = &*r;
             let body = match r.type_ {
@@ -230,11 +232,10 @@ pub fn file_language(path: &Path, video: &Path) -> Option<String> {
 /// Read a subtitle file's cues, in order.
 pub fn read_file(path: &Path) -> Result<Vec<Cue>, String> {
     let mut input = Input::open(&path.to_string_lossy()).map_err(|e| e.to_string())?;
-    let Some(index) = input.streams().iter().position(|&s| av::media_type(unsafe { &*s }) == ff::AVMediaType::AVMEDIA_TYPE_SUBTITLE)
-    else {
+    let Some(index) = input.streams().position(|s| av::media_type(s) == ff::AVMediaType::AVMEDIA_TYPE_SUBTITLE) else {
         return Err("no subtitles in it".into());
     };
-    let mut dec = Decoder::open(input.stream(index).ok_or("no stream")?, |_| {}).map_err(|e| e.to_string())?;
+    let mut dec = Decoder::open(input.stream(index).ok_or("no stream")?, 0).map_err(|e| e.to_string())?;
     let mut pkt = Packet::new();
     let mut cues = Vec::new();
     while input.read(&mut pkt).map_err(|e| e.to_string())? {

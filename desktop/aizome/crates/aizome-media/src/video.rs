@@ -235,7 +235,8 @@ impl ShmPool {
             if libc::ftruncate(fd, size as libc::off_t) != 0 {
                 return None;
             }
-            let map = libc::mmap(std::ptr::null_mut(), size, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_SHARED, fd, 0);
+            let map =
+                libc::mmap(std::ptr::null_mut(), size, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_SHARED, fd, 0);
             if map == libc::MAP_FAILED {
                 return None;
             }
@@ -309,7 +310,7 @@ impl Scaler {
         // SAFETY: an empty frame pointing into the slot's memory (not
         // reference-counted: sws writes it, nobody frees it).
         unsafe {
-            let p = out.0;
+            let p = out.as_ptr();
             let o = &mut *p;
             o.format = ff::AVPixelFormat::AV_PIX_FMT_BGR0 as i32;
             o.width = width as i32;
@@ -318,7 +319,7 @@ impl Scaler {
             o.linesize[0] = stride as i32;
             o.colorspace = ff::AVColorSpace::AVCOL_SPC_RGB;
             o.color_range = ff::AVColorRange::AVCOL_RANGE_JPEG;
-            let r = ff::sws_scale_frame(self.ctx, p, src.0);
+            let r = ff::sws_scale_frame(self.ctx, p, src.as_ptr());
             o.data[0] = std::ptr::null_mut();
             r >= 0
         }
@@ -352,7 +353,7 @@ fn export(frame: &Frame) -> Option<Dmabuf> {
         let hw = &*((*f.hw_frames_ctx).data as *const ff::AVHWFramesContext);
         let mut mapped = Frame::new();
         mapped.get_mut().format = ff::AVPixelFormat::AV_PIX_FMT_DRM_PRIME as i32;
-        if ff::av_hwframe_map(mapped.0, frame.0, ff::AV_HWFRAME_MAP_READ as i32) < 0 {
+        if ff::av_hwframe_map(mapped.as_ptr(), frame.as_ptr(), ff::AV_HWFRAME_MAP_READ as i32) < 0 {
             return None;
         }
         let desc = &*(mapped.get().data[0] as *const ff::AVDRMFrameDescriptor);
@@ -376,13 +377,7 @@ fn export(frame: &Frame) -> Option<Dmabuf> {
                 planes.push(DmabufPlane { fd, offset: p.offset as u32, stride: p.pitch as u32 });
             }
         }
-        Some(Dmabuf {
-            width: hw.width as u32,
-            height: hw.height as u32,
-            fourcc,
-            modifier: modifier?,
-            planes,
-        })
+        Some(Dmabuf { width: hw.width as u32, height: hw.height as u32, fourcc, modifier: modifier?, planes })
     }
 }
 
@@ -390,9 +385,12 @@ fn export(frame: &Frame) -> Option<Dmabuf> {
 /// syncs it), without exporting what's known.
 fn sync_surface(frame: &Frame) -> bool {
     let mut mapped = Frame::new();
-    mapped.get_mut().format = ff::AVPixelFormat::AV_PIX_FMT_DRM_PRIME as i32;
+    // SAFETY: changing only the destination format on an empty frame.
+    unsafe {
+        mapped.get_mut().format = ff::AVPixelFormat::AV_PIX_FMT_DRM_PRIME as i32;
+    }
     // SAFETY: valid frames; the mapping is dropped at once.
-    unsafe { ff::av_hwframe_map(mapped.0, frame.0, ff::AV_HWFRAME_MAP_READ as i32) >= 0 }
+    unsafe { ff::av_hwframe_map(mapped.as_ptr(), frame.as_ptr(), ff::AV_HWFRAME_MAP_READ as i32) >= 0 }
 }
 
 /// How the thread shows its frames.
@@ -650,7 +648,7 @@ impl State {
             self.skipping = skip;
             // SAFETY: the decoder's own field, read at each packet.
             unsafe {
-                (*d.ctx).skip_frame =
+                (*d.as_ptr()).skip_frame =
                     if skip { ff::AVDiscard::AVDISCARD_NONREF } else { ff::AVDiscard::AVDISCARD_DEFAULT };
             }
         }
@@ -734,11 +732,11 @@ impl State {
         let sw = if hw {
             let s = Frame::new();
             // SAFETY: valid frames.
-            if unsafe { ff::av_hwframe_transfer_data(s.0, frame.0, 0) } < 0 {
+            if unsafe { ff::av_hwframe_transfer_data(s.as_ptr(), frame.as_ptr(), 0) } < 0 {
                 return None;
             }
             // SAFETY: both valid; copies times and colour.
-            unsafe { ff::av_frame_copy_props(s.0, frame.0) };
+            unsafe { ff::av_frame_copy_props(s.as_ptr(), frame.as_ptr()) };
             self.shared.stats.path.store(3, Ordering::Relaxed);
             s
         } else {
@@ -822,11 +820,11 @@ impl State {
         let src = if f.format == ff::AVPixelFormat::AV_PIX_FMT_VAAPI as i32 {
             let s = Frame::new();
             // SAFETY: valid frames.
-            if unsafe { ff::av_hwframe_transfer_data(s.0, frame.0, 0) } < 0 {
+            if unsafe { ff::av_hwframe_transfer_data(s.as_ptr(), frame.as_ptr(), 0) } < 0 {
                 return None;
             }
             // SAFETY: both valid; copies times and colour.
-            unsafe { ff::av_frame_copy_props(s.0, frame.0) };
+            unsafe { ff::av_frame_copy_props(s.as_ptr(), frame.as_ptr()) };
             s
         } else {
             frame
@@ -843,7 +841,7 @@ impl State {
             o.height = h;
             o.colorspace = ff::AVColorSpace::AVCOL_SPC_RGB;
             o.color_range = ff::AVColorRange::AVCOL_RANGE_JPEG;
-            if ff::av_frame_get_buffer(out.0, 0) < 0 {
+            if ff::av_frame_get_buffer(out.as_ptr(), 0) < 0 {
                 return None;
             }
             let mut ctx = ff::sws_alloc_context();
@@ -851,7 +849,7 @@ impl State {
                 return None;
             }
             (*ctx).flags = ff::SwsFlags::SWS_BICUBIC as u32;
-            let r = ff::sws_scale_frame(ctx, out.0, src.0);
+            let r = ff::sws_scale_frame(ctx, out.as_ptr(), src.as_ptr());
             ff::sws_free_context(&mut ctx);
             if r < 0 {
                 return None;

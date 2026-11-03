@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use pipewire as pw;
 use pw::spa;
 
-use crate::audio::{Output, Ring, amplitude, fill};
+use crate::audio::{Output, Playback, Ring, amplitude, fill};
 use crate::av::ChannelLayout;
 use crate::clock::Clock;
 
@@ -35,9 +35,15 @@ pub struct StreamKind {
 }
 
 enum Cmd {
-    Open { ring: Arc<Ring>, clock: Arc<Clock>, media: String, kind: StreamKind, reply: mpsc::Sender<Result<(), String>> },
+    Open {
+        ring: Arc<Ring>,
+        clock: Arc<Clock>,
+        media: String,
+        kind: StreamKind,
+        reply: mpsc::Sender<Result<(), String>>,
+    },
     Playing(bool, mpsc::Sender<()>),
-    Flush,
+    Flush(mpsc::Sender<()>),
     Volume(f32, bool),
     Close(mpsc::Sender<()>),
     Quit,
@@ -72,7 +78,6 @@ impl PipeWireOutput {
             Err(_) => Err("PipeWire's thread stopped".into()),
         }
     }
-
 }
 
 impl Output for PipeWireOutput {
@@ -98,7 +103,10 @@ impl Output for PipeWireOutput {
     }
 
     fn flush(&mut self) {
-        let _ = self.tx.send(Cmd::Flush);
+        let (reply, rx) = mpsc::channel();
+        if self.tx.send(Cmd::Flush(reply)).is_ok() {
+            let _ = rx.recv();
+        }
     }
 
     fn set_volume(&mut self, volume: f32, muted: bool) {
@@ -131,6 +139,7 @@ struct Playing {
     stream: pw::stream::StreamRc,
     _listener: pw::stream::StreamListener<()>,
     ring: Arc<Ring>,
+    playback: Playback,
     clock: Arc<Clock>,
     channels: u32,
     active: bool,
@@ -162,12 +171,12 @@ fn run(rx: pw::channel::Receiver<Cmd>, ready: mpsc::Sender<Result<(), String>>, 
             let r = open(&core, ring, clock, &media, &kind);
             match r {
                 Ok(p) => {
-                    let f = p.ring.format;
+                    let f = p.ring.format();
                     *describe.lock().unwrap_or_else(|e| e.into_inner()) = format!(
                         "PipeWire, {} Hz, {} channel{}, {} ms cycles",
-                        f.rate,
-                        f.channels,
-                        if f.channels == 1 { "" } else { "s" },
+                        f.rate(),
+                        f.channels(),
+                        if f.channels() == 1 { "" } else { "s" },
                         (kind.latency * 1000.0).round()
                     );
                     *cur.borrow_mut() = Some(p);
@@ -184,10 +193,15 @@ fn run(rx: pw::channel::Receiver<Cmd>, ready: mpsc::Sender<Result<(), String>>, 
             }
             let _ = reply.send(());
         }
-        Cmd::Flush => {
-            if let Some(p) = cur.borrow().as_ref() {
+        Cmd::Flush(reply) => {
+            if let Some(p) = cur.borrow_mut().as_mut() {
+                p.playback.pause().discard_pending();
                 let _ = p.stream.flush(false);
+                if p.active {
+                    p.playback.resume();
+                }
             }
+            let _ = reply.send(());
         }
         Cmd::Volume(v, muted) => {
             if let Some(p) = cur.borrow_mut().as_mut() {
@@ -262,10 +276,17 @@ pub fn quantum(secs: f64, rate: u32) -> u32 {
     (frames.log2().round().exp2() as u32).clamp(64, 8192)
 }
 
-fn open(core: &pw::core::CoreRc, ring: Arc<Ring>, clock: Arc<Clock>, media: &str, kind: &StreamKind) -> Result<Playing, String> {
-    let fmt = ring.format;
-    let channels = fmt.channels.clamp(1, 8);
-    let latency = format!("{}/{}", quantum(kind.latency, fmt.rate), fmt.rate);
+fn open(
+    core: &pw::core::CoreRc,
+    ring: Arc<Ring>,
+    clock: Arc<Clock>,
+    media: &str,
+    kind: &StreamKind,
+) -> Result<Playing, String> {
+    let fmt = ring.format();
+    let (mut consumer, playback) = ring.consumer()?;
+    let channels = fmt.channels();
+    let latency = format!("{}/{}", quantum(kind.latency, fmt.rate()), fmt.rate());
     let props = pw::properties::properties! {
         "media.type" => "Audio",
         "media.category" => "Playback",
@@ -279,7 +300,6 @@ fn open(core: &pw::core::CoreRc, ring: Arc<Ring>, clock: Arc<Clock>, media: &str
         "audio.channels" => channels.to_string().as_str(),
     };
     let stream = pw::stream::StreamRc::new(core.clone(), &kind.app_name, props).map_err(|e| e.to_string())?;
-    let r = ring.clone();
     let c = clock.clone();
     let stride = (channels as usize) * std::mem::size_of::<f32>();
     let listener = stream
@@ -309,12 +329,12 @@ fn open(core: &pw::core::CoreRc, ring: Arc<Ring>, clock: Arc<Clock>, media: &str
                         } else {
                             0.0
                         };
-                        let frames = delay * f64::from(fmt.rate) + (t.buffered() + t.queued()) as f64;
+                        let frames = delay * f64::from(fmt.rate()) + (t.buffered() + t.queued()) as f64;
                         (frames as u64, t.now().max(0) as u64)
                     }
                     Err(_) => (0, crate::clock::monotonic_now()),
                 };
-                fill(&r, &c, out, latency, now);
+                fill(&mut consumer, &c, out, latency, now);
                 let chunk = &mut *d.chunk;
                 chunk.offset = 0;
                 chunk.stride = stride as i32;
@@ -327,7 +347,7 @@ fn open(core: &pw::core::CoreRc, ring: Arc<Ring>, clock: Arc<Clock>, media: &str
         .map_err(|e| e.to_string())?;
     let mut info = spa::param::audio::AudioInfoRaw::new();
     info.set_format(spa::param::audio::AudioFormat::F32LE);
-    info.set_rate(fmt.rate);
+    info.set_rate(fmt.rate());
     info.set_channels(channels);
     info.set_position(positions(channels));
     let bytes: Vec<u8> = spa::pod::serialize::PodSerializer::serialize(
@@ -353,7 +373,8 @@ fn open(core: &pw::core::CoreRc, ring: Arc<Ring>, clock: Arc<Clock>, media: &str
             &mut params,
         )
         .map_err(|e| e.to_string())?;
-    let mut p = Playing { stream, _listener: listener, ring, clock, channels, active: false, volume: (1.0, false) };
+    let mut p =
+        Playing { stream, _listener: listener, ring, playback, clock, channels, active: false, volume: (1.0, false) };
     apply_volume(&mut p);
     Ok(p)
 }
@@ -372,20 +393,17 @@ fn set_playing(p: &mut Playing, on: bool) {
     }
     p.active = on;
     if on {
-        p.ring.halted.store(false, std::sync::atomic::Ordering::Release);
+        p.playback.resume();
         let _ = p.stream.set_active(true);
         return;
     }
     // Stop, then step back to what was being heard: what the graph held
     // goes, and plays again from the ring.
     let heard = p.clock.now();
-    p.ring.halted.store(true, std::sync::atomic::Ordering::SeqCst);
+    let mut stopped = p.playback.pause();
     let _ = p.stream.set_active(false);
-    while p.ring.busy.load(std::sync::atomic::Ordering::SeqCst) {
-        std::hint::spin_loop();
-    }
     let _ = p.stream.flush(false);
-    let to = p.ring.index_of(heard).map(|i| p.ring.rewind_to(i));
+    let to = p.ring.index_of(heard).map(|i| stopped.rewind_to(i));
     let pos = to.and_then(|i| p.ring.pts_of(i, true)).unwrap_or(heard);
     p.clock.stop_at(pos);
 }

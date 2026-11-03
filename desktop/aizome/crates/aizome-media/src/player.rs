@@ -21,11 +21,12 @@ use std::time::Duration;
 
 use sidestep_ui::video::{VideoCaps, VideoSink};
 
-use crate::audio::{Format, NullOutput, Output, Ring};
+use crate::audio::{Channels, Format, NullOutput, Output, Producer};
 use crate::av::{self, Decoder, Frame, Input, Packet, ff};
 use crate::clock::Clock;
 use crate::subs::{self, Cue};
 use crate::video;
+use std::num::NonZeroU32;
 
 /// The ring's fill: refilled below `LOW`, up to `HIGH` seconds.
 const HIGH: f64 = 2.0;
@@ -236,15 +237,26 @@ pub enum Event {
     ClearCues,
     Pipeline(Pipeline),
     /// The tracks playing changed.
-    Selected { audio: Option<usize>, subtitles: Option<usize> },
+    Selected {
+        audio: Option<usize>,
+        subtitles: Option<usize>,
+    },
 }
 
 enum Command {
-    Open { url: String, start: f64, play: bool },
+    Open {
+        url: String,
+        start: f64,
+        play: bool,
+    },
     Play,
     Pause,
     /// `n`: which seek of the [`Player`]'s, to say when it's done.
-    Seek { to: f64, precise: bool, n: u64 },
+    Seek {
+        to: f64,
+        precise: bool,
+        n: u64,
+    },
     Step(bool),
     Speed(f64),
     Volume(f32, bool),
@@ -466,7 +478,8 @@ impl Tempo {
         // SAFETY: the buffer was written and ended above.
         let layout = unsafe { av::text(layout.as_ptr()) }.unwrap_or_else(|| format!("{}c", f.ch_layout.nb_channels));
         // SAFETY: a sample format's name.
-        let fmt = unsafe { av::text(ff::av_get_sample_fmt_name(std::mem::transmute::<i32, ff::AVSampleFormat>(f.format))) }?;
+        let fmt =
+            unsafe { av::text(ff::av_get_sample_fmt_name(std::mem::transmute::<i32, ff::AVSampleFormat>(f.format))) }?;
         let args = std::ffi::CString::new(format!(
             "time_base=1/{r}:sample_rate={r}:sample_fmt={fmt}:channel_layout={layout}",
             r = f.sample_rate
@@ -481,9 +494,22 @@ impl Tempo {
             let mut t = Tempo { graph, src: std::ptr::null_mut(), sink: std::ptr::null_mut() };
             let abuffer = ff::avfilter_get_by_name(c"abuffer".as_ptr());
             let abuffersink = ff::avfilter_get_by_name(c"abuffersink".as_ptr());
-            if ff::avfilter_graph_create_filter(&mut t.src, abuffer, c"in".as_ptr(), args.as_ptr(), std::ptr::null_mut(), graph) < 0
-                || ff::avfilter_graph_create_filter(&mut t.sink, abuffersink, c"out".as_ptr(), std::ptr::null(), std::ptr::null_mut(), graph)
-                    < 0
+            if ff::avfilter_graph_create_filter(
+                &mut t.src,
+                abuffer,
+                c"in".as_ptr(),
+                args.as_ptr(),
+                std::ptr::null_mut(),
+                graph,
+            ) < 0
+                || ff::avfilter_graph_create_filter(
+                    &mut t.sink,
+                    abuffersink,
+                    c"out".as_ptr(),
+                    std::ptr::null(),
+                    std::ptr::null_mut(),
+                    graph,
+                ) < 0
             {
                 return None;
             }
@@ -493,7 +519,8 @@ impl Tempo {
             (*outputs).filter_ctx = t.src;
             (*inputs).name = ff::av_strdup(c"out".as_ptr());
             (*inputs).filter_ctx = t.sink;
-            let r = ff::avfilter_graph_parse_ptr(graph, chain.as_ptr(), &mut inputs, &mut outputs, std::ptr::null_mut());
+            let r =
+                ff::avfilter_graph_parse_ptr(graph, chain.as_ptr(), &mut inputs, &mut outputs, std::ptr::null_mut());
             ff::avfilter_inout_free(&mut inputs);
             ff::avfilter_inout_free(&mut outputs);
             if r < 0 || ff::avfilter_graph_config(graph, std::ptr::null_mut()) < 0 {
@@ -506,13 +533,13 @@ impl Tempo {
     fn push(&mut self, frame: &Frame) -> bool {
         // AV_BUFFERSRC_FLAG_KEEP_REF (8): the frame stays ours.
         // SAFETY: a valid graph and frame.
-        unsafe { ff::av_buffersrc_add_frame_flags(self.src, frame.0, 8) >= 0 }
+        unsafe { ff::av_buffersrc_add_frame_flags(self.src, frame.as_ptr(), 8) >= 0 }
     }
 
     fn pull(&mut self, out: &mut Frame) -> bool {
         out.unref();
         // SAFETY: a valid graph and frame.
-        unsafe { ff::av_buffersink_get_frame(self.sink, out.0) >= 0 }
+        unsafe { ff::av_buffersink_get_frame(self.sink, out.as_ptr()) >= 0 }
     }
 }
 
@@ -552,7 +579,7 @@ impl Resampler {
                 let out_layout = av::ChannelLayout::mixed(channels);
                 let r = ff::swr_alloc_set_opts2(
                     &mut self.swr,
-                    &out_layout.0,
+                    out_layout.as_ptr(),
                     ff::AVSampleFormat::AV_SAMPLE_FMT_FLT,
                     f.sample_rate,
                     &f.ch_layout,
@@ -593,7 +620,7 @@ struct AudioPart {
     decoder: Decoder,
     resampler: Resampler,
     tempo: Option<Tempo>,
-    ring: Arc<Ring>,
+    ring: Producer,
     packets: VecDeque<Packet>,
     /// Samples converted but not yet in the ring.
     pending: Vec<f32>,
@@ -885,7 +912,7 @@ impl Ctl {
             let decoder = open_video(stream, hw).map_err(|e| format!("Can't decode its video: {e}"))?;
             pipeline.video_decoder = Some(describe_video(&decoder));
             let stream_info = video::StreamInfo {
-                frame_duration: video::frame_duration(stream),
+                frame_duration: video::frame_duration(&stream),
                 pixel_aspect: av::ratio(stream.sample_aspect_ratio).unwrap_or(1.0),
             };
             {
@@ -929,18 +956,22 @@ impl Ctl {
         let Some(s) = self.session.as_mut() else { return Ok(()) };
         let Some(index) = s.info.audio.get(i).and_then(|t| t.stream) else { return Ok(()) };
         let stream = s.input.stream(index).ok_or("no audio stream")?;
-        let decoder = Decoder::open(stream, |c| c.thread_count = 1).map_err(|e| format!("Can't decode its audio: {e}"))?;
+        let decoder = Decoder::open(stream, 1).map_err(|e| format!("Can't decode its audio: {e}"))?;
         // SAFETY: an audio stream's parameters.
         let (rate, channels) = unsafe { ((*stream.codecpar).sample_rate, (*stream.codecpar).ch_layout.nb_channels) };
-        let format = Format { rate: rate.max(8000) as u32, channels: channels.clamp(1, 8) as u32 };
-        let ring = Arc::new(Ring::new(format));
+        let format = Format::new(
+            NonZeroU32::new(rate.max(8000) as u32).unwrap(),
+            Channels::new(channels.clamp(1, 8) as u32).unwrap(),
+        );
+        let producer = Producer::new(format);
+        let ring = producer.shared();
         let media = s.info.title.clone();
         s.audio = Some(AudioPart {
             index,
             decoder,
             resampler: Resampler::new(),
             tempo: None,
-            ring: ring.clone(),
+            ring: producer,
             packets: VecDeque::new(),
             pending: Vec::new(),
             next_pts: 0.0,
@@ -978,7 +1009,7 @@ impl Ctl {
         let Some(track) = i.and_then(|i| s.info.subtitles.get(i)).cloned() else { return };
         if let Some(index) = track.stream {
             if let Some(stream) = s.input.stream(index) {
-                match Decoder::open(stream, |_| {}) {
+                match Decoder::open(stream, 0) {
                     Ok(decoder) => s.subs = Some(SubPart { index, decoder, skip_until: f64::NEG_INFINITY }),
                     Err(e) => log::warn!("subtitles: {e}"),
                 }
@@ -1157,7 +1188,7 @@ impl Ctl {
             a.skip_until = if precise { to } else { f64::NEG_INFINITY };
             a.next_pts = to;
             a.rebase = true;
-            a.ring.flush(to, speed, true);
+            a.ring.flush(to, speed);
         }
         match &mut self.silent {
             Some(n) => n.flush(),
@@ -1200,9 +1231,10 @@ impl Ctl {
             self.video.send(video::Cmd::Step);
         } else {
             let pts = f64::from_bits(self.video.last_pts.load(Ordering::Acquire));
-            let dur = self.session.as_ref().map_or(1.0 / 30.0, |s| {
-                s.info.video.as_ref().and_then(|v| v.fps).map_or(1.0 / 30.0, |f| 1.0 / f)
-            });
+            let dur = self
+                .session
+                .as_ref()
+                .map_or(1.0 / 30.0, |s| s.info.video.as_ref().and_then(|v| v.fps).map_or(1.0 / 30.0, |f| 1.0 / f));
             self.seek(pts - dur, true);
             if let Some(s) = self.session.as_mut() {
                 s.stepped = true;
@@ -1214,7 +1246,7 @@ impl Ctl {
     /// which keeps time as a device would.
     fn silent(&mut self) {
         log::warn!("nothing plays sound: playing on without it");
-        let Some(ring) = self.session.as_ref().and_then(|s| s.audio.as_ref()).map(|a| a.ring.clone()) else { return };
+        let Some(ring) = self.session.as_ref().and_then(|s| s.audio.as_ref()).map(|a| a.ring.shared()) else { return };
         self.out().set_playing(false);
         self.output.close();
         let mut null = NullOutput::new();
@@ -1236,7 +1268,7 @@ impl Ctl {
         let Some(index) = s.video.as_ref().map(|v| v.index) else { return };
         let Some(stream) = s.input.stream(index) else { return };
         let info = video::StreamInfo {
-            frame_duration: video::frame_duration(stream),
+            frame_duration: video::frame_duration(&stream),
             pixel_aspect: av::ratio(stream.sample_aspect_ratio).unwrap_or(1.0),
         };
         match open_video(stream, None) {
@@ -1342,7 +1374,8 @@ impl Ctl {
         }
         // Start, once ready.
         let video_ready = s.video.is_none() || self.video.shown_generation.load(Ordering::Acquire) == s.generation;
-        let audio_ready = s.audio.as_ref().is_none_or(|a| a.ring.buffered_secs() >= PREROLL || (s.eof && a.packets.is_empty()));
+        let audio_ready =
+            s.audio.as_ref().is_none_or(|a| a.ring.buffered_secs() >= PREROLL || (s.eof && a.packets.is_empty()));
         if video_ready && audio_ready && !s.seeked_said {
             s.seeked_said = true;
             let from = s.from;
@@ -1358,7 +1391,10 @@ impl Ctl {
         // Playing, audio waiting, and the clock not running: nothing takes
         // the sound (no device). Play on without it.
         let stalled = self.want_play
-            && self.session.as_ref().is_some_and(|s| s.started && s.audio.as_ref().is_some_and(|a| a.ring.buffered() > 0))
+            && self
+                .session
+                .as_ref()
+                .is_some_and(|s| s.started && s.audio.as_ref().is_some_and(|a| a.ring.buffered() > 0))
             && !self.clock.running()
             && self.started_at.is_some_and(|t| t.elapsed() > Duration::from_millis(1500));
         if stalled {
@@ -1367,19 +1403,21 @@ impl Ctl {
         let s = self.session.as_mut()?;
         // The end.
         if s.eof && !s.ended {
-            let audio_done = s.audio.as_ref().is_none_or(|a| {
-                a.packets.is_empty() && a.pending.is_empty() && a.drained && a.ring.buffered() == 0
-            });
+            let audio_done = s
+                .audio
+                .as_ref()
+                .is_none_or(|a| a.packets.is_empty() && a.pending.is_empty() && a.drained && a.ring.buffered() == 0);
             let video_done = s.video.is_none() || self.video.drained.load(Ordering::Acquire) || suspended;
-            if let Some(a) = &s.audio
+            if let Some(a) = &mut s.audio
                 && a.packets.is_empty()
                 && a.pending.is_empty()
             {
-                a.ring.ended.store(true, Ordering::Release);
+                a.ring.finish();
             }
             let end = s.info.duration.unwrap_or(0.0);
             let heard_all = s.audio.is_none() || !self.clock.running() || self.clock.now() >= end - 0.05;
-            let past_video = s.audio.is_some() || self.clock.now() >= f64::from_bits(self.video.last_pts.load(Ordering::Acquire));
+            let past_video =
+                s.audio.is_some() || self.clock.now() >= f64::from_bits(self.video.last_pts.load(Ordering::Acquire));
             if audio_done && video_done && heard_all && past_video && s.started {
                 s.ended = true;
                 self.want_play = false;
@@ -1425,7 +1463,7 @@ fn packets_secs(a: &AudioPart) -> f64 {
 
 /// Decode audio packets into the ring until it holds `HIGH` seconds.
 fn decode_audio(a: &mut AudioPart, eof: bool, speed: f64) {
-    let channels = a.ring.format.channels as i32;
+    let channels = a.ring.format().channels() as i32;
     loop {
         if !a.pending.is_empty() {
             let pushed = a.ring.push(&a.pending);
@@ -1468,7 +1506,7 @@ fn decode_audio(a: &mut AudioPart, eof: bool, speed: f64) {
             }
             let start = pts + f64::from(from_sample) / rate;
             if a.rebase {
-                a.ring.flush(start, speed, false);
+                a.ring.flush(start, speed);
                 a.rebase = false;
             }
             let src = if from_sample > 0 { trimmed(&frame, from_sample) } else { None };
@@ -1514,11 +1552,11 @@ fn trimmed(frame: &Frame, n: i32) -> Option<Frame> {
         o.sample_rate = f.sample_rate;
         ff::av_channel_layout_copy(&mut o.ch_layout, &f.ch_layout);
         o.nb_samples = f.nb_samples - n;
-        if ff::av_frame_get_buffer(out.0, 0) < 0 {
+        if ff::av_frame_get_buffer(out.as_ptr(), 0) < 0 {
             return None;
         }
         if ff::av_samples_copy(
-            (*out.0).extended_data,
+            (*out.as_ptr()).extended_data,
             f.extended_data as *const *mut u8,
             0,
             n,
@@ -1529,7 +1567,7 @@ fn trimmed(frame: &Frame, n: i32) -> Option<Frame> {
         {
             return None;
         }
-        (*out.0).pts = ff::AV_NOPTS_VALUE;
+        (*out.as_ptr()).pts = ff::AV_NOPTS_VALUE;
     }
     Some(out)
 }
@@ -1564,7 +1602,7 @@ fn resync_video(s: &mut Session, shared: &video::Shared, pos: f64) {
 /// The media's best stream of a kind (never a cover picture).
 fn best_stream(input: &Input, kind: ff::AVMediaType) -> Option<usize> {
     // SAFETY: a valid input; no decoder asked for.
-    let i = unsafe { ff::av_find_best_stream(input.ctx, kind, -1, -1, std::ptr::null_mut(), 0) };
+    let i = unsafe { ff::av_find_best_stream(input.as_ptr(), kind, -1, -1, std::ptr::null_mut(), 0) };
     let i = usize::try_from(i).ok()?;
     let s = input.stream(i)?;
     (s.disposition & ff::AV_DISPOSITION_ATTACHED_PIC == 0).then_some(i)
@@ -1572,24 +1610,27 @@ fn best_stream(input: &Input, kind: ff::AVMediaType) -> Option<usize> {
 
 /// Open a video decoder: on the GPU through `hw` where the codec allows,
 /// else in software on several threads.
-fn open_video(stream: &ff::AVStream, hw: Option<*mut ff::AVBufferRef>) -> av::Result<Decoder> {
-    Decoder::open_with(stream, hw.is_some(), |c| {
-        match hw {
-            Some(dev) => {
-                // SAFETY: a new reference to the device for the context.
-                c.hw_device_ctx = unsafe { ff::av_buffer_ref(dev) };
-                c.get_format = Some(get_format);
-                // Frames on screen and queued, held past the decoder's own.
-                c.extra_hw_frames = 12;
-                // One thread: the GPU decodes; more only wake more.
-                c.thread_count = 1;
+fn open_video(stream: av::Stream<'_>, hw: Option<*mut ff::AVBufferRef>) -> av::Result<Decoder> {
+    // SAFETY: configure scalars and retain a reference to the live hardware device.
+    unsafe {
+        Decoder::open_with(stream, hw.is_some(), |c| {
+            match hw {
+                Some(dev) => {
+                    // SAFETY: a new reference to the device for the context.
+                    c.hw_device_ctx = ff::av_buffer_ref(dev);
+                    c.get_format = Some(get_format);
+                    // Frames on screen and queued, held past the decoder's own.
+                    c.extra_hw_frames = 12;
+                    // One thread: the GPU decodes; more only wake more.
+                    c.thread_count = 1;
+                }
+                None => {
+                    c.thread_count = 0;
+                    c.thread_type = 3;
+                }
             }
-            None => {
-                c.thread_count = 0;
-                c.thread_type = 3;
-            }
-        }
-    })
+        })
+    }
 }
 
 /// FFmpeg's choice of pixel format: VA-API surfaces where offered.
@@ -1673,7 +1714,8 @@ fn percent_decode(s: &str) -> String {
 fn media_info(input: &Input, url: &str, path: Option<PathBuf>) -> MediaInfo {
     let meta = input.metadata();
     let get = |keys: &[&str]| {
-        keys.iter().find_map(|k| meta.iter().find(|(m, _)| m.eq_ignore_ascii_case(k)).map(|(_, v)| v.trim().to_owned()))
+        keys.iter()
+            .find_map(|k| meta.iter().find(|(m, _)| m.eq_ignore_ascii_case(k)).map(|(_, v)| v.trim().to_owned()))
             .filter(|v| !v.is_empty())
     };
     let file_title = path
@@ -1702,9 +1744,8 @@ fn media_info(input: &Input, url: &str, path: Option<PathBuf>) -> MediaInfo {
         c.end -= start;
     }
     let best_video = best_stream(input, ff::AVMediaType::AVMEDIA_TYPE_VIDEO);
-    for (i, &s) in input.streams().iter().enumerate() {
+    for (i, s) in input.streams().enumerate() {
         // SAFETY: streams of an open input.
-        let s = unsafe { &*s };
         let par = unsafe { &*s.codecpar };
         let smeta = unsafe { av::dictionary(s.metadata) };
         let sget = |k: &str| smeta.iter().find(|(m, _)| m.eq_ignore_ascii_case(k)).map(|(_, v)| v.clone());
@@ -1713,14 +1754,19 @@ fn media_info(input: &Input, url: &str, path: Option<PathBuf>) -> MediaInfo {
             ff::AVMediaType::AVMEDIA_TYPE_VIDEO if disposition & ff::AV_DISPOSITION_ATTACHED_PIC != 0 => {
                 if info.cover.is_none() && !s.attached_pic.data.is_null() && s.attached_pic.size > 0 {
                     // SAFETY: the attached picture's bytes.
-                    let bytes = unsafe { std::slice::from_raw_parts(s.attached_pic.data, s.attached_pic.size as usize) };
+                    let bytes =
+                        unsafe { std::slice::from_raw_parts(s.attached_pic.data, s.attached_pic.size as usize) };
                     info.cover = Some(Arc::new(bytes.to_vec()));
                 }
             }
             ff::AVMediaType::AVMEDIA_TYPE_VIDEO if Some(i) == best_video => {
-                let sar = av::ratio(if s.sample_aspect_ratio.num > 0 { s.sample_aspect_ratio } else { par.sample_aspect_ratio })
-                    .filter(|r| *r > 0.0)
-                    .unwrap_or(1.0);
+                let sar = av::ratio(if s.sample_aspect_ratio.num > 0 {
+                    s.sample_aspect_ratio
+                } else {
+                    par.sample_aspect_ratio
+                })
+                .filter(|r| *r > 0.0)
+                .unwrap_or(1.0);
                 let (w, h) = (par.width.max(1) as u32, par.height.max(1) as u32);
                 // SAFETY: a pixel format's description, if any.
                 let depth = unsafe {

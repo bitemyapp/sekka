@@ -14,6 +14,7 @@
 //! what's being heard.
 
 use std::cell::UnsafeCell;
+use std::num::NonZeroU32;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -22,8 +23,126 @@ use crate::clock::{Anchor, Clock, monotonic_now};
 /// The audio the ring carries: f32, interleaved.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Format {
-    pub rate: u32,
-    pub channels: u32,
+    rate: NonZeroU32,
+    channels: Channels,
+}
+
+/// A channel count supported by both the mixer and the output.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Channels(u8);
+
+impl Channels {
+    pub const fn new(count: u32) -> Option<Self> {
+        if count >= 1 && count <= 8 { Some(Self(count as u8)) } else { None }
+    }
+    pub const fn get(self) -> u32 {
+        self.0 as u32
+    }
+}
+
+impl Format {
+    pub const fn new(rate: NonZeroU32, channels: Channels) -> Self {
+        Self { rate, channels }
+    }
+    pub const fn rate(self) -> u32 {
+        self.rate.get()
+    }
+    pub const fn channels(self) -> u32 {
+        self.channels.get()
+    }
+}
+
+/// The sole writer. Sharing the ring exposes observations, never write access.
+///
+/// ```compile_fail
+/// use aizome_media::audio::Producer;
+/// fn write(p: &Producer) { p.push(&[0.0]); }
+/// ```
+pub struct Producer {
+    ring: Arc<Ring>,
+}
+
+impl std::ops::Deref for Producer {
+    type Target = Ring;
+    fn deref(&self) -> &Ring {
+        &self.ring
+    }
+}
+
+impl Producer {
+    pub fn new(format: Format) -> Self {
+        Self { ring: Arc::new(Ring::new(format)) }
+    }
+    pub fn shared(&self) -> Arc<Ring> {
+        self.ring.clone()
+    }
+    pub fn push(&mut self, samples: &[f32]) -> usize {
+        self.ring.push(samples)
+    }
+    /// The consumer acknowledges the skip at its next cycle or stopped flush.
+    pub fn flush(&mut self, pts: f64, speed: f64) {
+        self.ring.flush(pts, speed);
+    }
+    pub fn finish(&mut self) {
+        self.ring.ended.store(true, Ordering::Release);
+    }
+}
+
+// Both halves retain the lease. A replacement output cannot start until the
+// old callback AND its controller have gone away.
+struct Lease {
+    ring: Arc<Ring>,
+}
+impl Drop for Lease {
+    fn drop(&mut self) {
+        self.ring.leased.store(false, Ordering::Release);
+    }
+}
+
+/// The sole reader, moved into the audio callback; intentionally not Clone.
+pub struct Consumer {
+    lease: Arc<Lease>,
+}
+/// The sole pause/resume controller, kept off the real-time thread.
+pub struct Playback {
+    lease: Arc<Lease>,
+}
+/// Proof that the callback cannot touch the samples or advance the read index.
+/// ```compile_fail
+/// use aizome_media::audio::Playback;
+/// fn invalid(p: &mut Playback) {
+///     let mut stopped = p.pause();
+///     p.resume();
+///     stopped.rewind_to(0);
+/// }
+/// ```
+pub struct Stopped<'a> {
+    playback: &'a mut Playback,
+}
+
+impl Playback {
+    pub fn pause(&mut self) -> Stopped<'_> {
+        let ring = &self.lease.ring;
+        ring.halted.store(true, Ordering::SeqCst);
+        while ring.busy.load(Ordering::SeqCst) {
+            std::hint::spin_loop();
+        }
+        Stopped { playback: self }
+    }
+    pub fn resume(&mut self) {
+        self.lease.ring.halted.store(false, Ordering::SeqCst);
+    }
+}
+impl Stopped<'_> {
+    pub fn rewind_to(&mut self, index: u64) -> u64 {
+        self.playback.lease.ring.rewind_to(index)
+    }
+    pub fn discard_pending(&mut self) {
+        let ring = &self.playback.lease.ring;
+        let skip = ring.skip_to.load(Ordering::Acquire);
+        ring.read.store(skip.max(ring.read.load(Ordering::Relaxed)), Ordering::Release);
+        ring.read_high.fetch_max(skip, Ordering::Release);
+    }
 }
 
 /// Seconds of audio the ring holds, and keeps behind the consumer.
@@ -32,7 +151,9 @@ const HISTORY_SECS: u64 = 1;
 
 pub struct Ring {
     data: Box<[UnsafeCell<f32>]>,
-    pub format: Format,
+    format: Format,
+    leased: AtomicBool,
+    read_high: AtomicU64,
     /// Frames.
     cap: u64,
     history: u64,
@@ -44,17 +165,20 @@ pub struct Ring {
     skip_to: AtomicU64,
     segments: Mutex<Vec<Segment>>,
     /// The consumer is in its callback.
-    pub busy: AtomicBool,
+    busy: AtomicBool,
     /// The consumer takes nothing and leaves the clock alone (paused: a
     /// cycle that runs after the stream stopped plays silence).
-    pub halted: AtomicBool,
+    halted: AtomicBool,
     /// The producer wrote everything (the end of the stream).
-    pub ended: AtomicBool,
+    ended: AtomicBool,
 }
 
 // SAFETY: the producer writes only frames in [write, read + cap - history)
 // and the consumer reads only frames in [read, write), so no sample is
 // written and read at once; indices are published with release/acquire.
+// Producer and Consumer are unique, with mutable operations. Playback can
+// change read only after halting the callback and waiting for it to finish.
+// Rewinds never go behind read_high - history, even after repeated pauses.
 unsafe impl Sync for Ring {}
 unsafe impl Send for Ring {}
 
@@ -66,13 +190,15 @@ struct Segment {
 }
 
 impl Ring {
-    pub fn new(format: Format) -> Ring {
-        let rate = u64::from(format.rate.max(1));
+    fn new(format: Format) -> Ring {
+        let rate = u64::from(format.rate());
         let cap = rate * CAPACITY_SECS;
-        let len = (cap * u64::from(format.channels.max(1))) as usize;
+        let len = (cap * u64::from(format.channels())) as usize;
         Ring {
             data: (0..len).map(|_| UnsafeCell::new(0.0)).collect(),
             format,
+            leased: AtomicBool::new(false),
+            read_high: AtomicU64::new(0),
             cap,
             history: rate * HISTORY_SECS,
             write: AtomicU64::new(0),
@@ -80,13 +206,28 @@ impl Ring {
             skip_to: AtomicU64::new(0),
             segments: Mutex::new(vec![Segment { start: 0, pts: 0.0, speed: 1.0 }]),
             busy: AtomicBool::new(false),
-            halted: AtomicBool::new(false),
+            halted: AtomicBool::new(true),
             ended: AtomicBool::new(false),
         }
     }
 
+    pub fn format(&self) -> Format {
+        self.format
+    }
+
+    /// Acquire the unique output pair. Closing an output releases its lease,
+    /// so fallback can reuse buffered samples without a second reader.
+    pub fn consumer(self: &Arc<Self>) -> Result<(Consumer, Playback), String> {
+        self.leased
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .map_err(|_| "audio ring already has an output".to_owned())?;
+        self.halted.store(true, Ordering::SeqCst);
+        let lease = Arc::new(Lease { ring: self.clone() });
+        Ok((Consumer { lease: lease.clone() }, Playback { lease }))
+    }
+
     fn channels(&self) -> usize {
-        self.format.channels.max(1) as usize
+        self.format.channels() as usize
     }
 
     /// Frames written and not yet taken (or skipped).
@@ -98,7 +239,7 @@ impl Ring {
 
     /// Seconds buffered.
     pub fn buffered_secs(&self) -> f64 {
-        self.buffered() as f64 / f64::from(self.format.rate.max(1))
+        self.buffered() as f64 / f64::from(self.format.rate())
     }
 
     /// Frames the producer may write now.
@@ -109,7 +250,7 @@ impl Ring {
     }
 
     /// Write interleaved samples, as many whole frames as fit: how many.
-    pub fn push(&self, samples: &[f32]) -> usize {
+    fn push(&self, samples: &[f32]) -> usize {
         let ch = self.channels();
         let frames = ((samples.len() / ch) as u64).min(self.space());
         let w = self.write.load(Ordering::Relaxed);
@@ -126,7 +267,7 @@ impl Ring {
 
     /// Take up to `out.len()` samples (whole frames) into `out`: how many
     /// frames, and the frame number of the first.
-    pub fn pop(&self, out: &mut [f32]) -> (usize, u64) {
+    fn pop(&self, out: &mut [f32]) -> (usize, u64) {
         let ch = self.channels();
         let skip = self.skip_to.load(Ordering::Acquire);
         let mut r = self.read.load(Ordering::Relaxed);
@@ -142,6 +283,7 @@ impl Ring {
                 out[f as usize * ch + c] = unsafe { *self.data[slot + c].get() };
             }
         }
+        self.read_high.store(self.read_high.load(Ordering::Relaxed).max(r + frames), Ordering::Release);
         self.read.store(r + frames, Ordering::Release);
         (frames as usize, r)
     }
@@ -156,14 +298,10 @@ impl Ring {
     }
 
     /// Drop what's buffered: what's written next starts at media time
-    /// `pts`, played at `speed`. With the consumer stopped (`idle`), the
-    /// space is free at once; else at its next take.
-    pub fn flush(&self, pts: f64, speed: f64, idle: bool) {
+    /// `pts`, played at `speed`; acknowledged at the next take.
+    fn flush(&self, pts: f64, speed: f64) {
         let w = self.write.load(Ordering::Relaxed);
         self.skip_to.store(w, Ordering::Release);
-        if idle {
-            self.read.store(w, Ordering::Release);
-        }
         self.ended.store(false, Ordering::Release);
         let mut segs = self.segments.lock().unwrap_or_else(|e| e.into_inner());
         segs.retain(|s| s.start < w);
@@ -181,7 +319,7 @@ impl Ring {
             self.segments.try_lock().ok()?
         };
         let s = segs.iter().rev().find(|s| s.start <= index)?;
-        Some(s.pts + (index - s.start) as f64 / f64::from(self.format.rate.max(1)) * s.speed)
+        Some(s.pts + (index - s.start) as f64 / f64::from(self.format.rate()) * s.speed)
     }
 
     /// The speed frame `index` plays at.
@@ -193,13 +331,13 @@ impl Ring {
     /// Step the consumer back to frame `index` (the consumer stopped):
     /// the frames from there play again. Only within the history and the
     /// current segment; returns where it went.
-    pub fn rewind_to(&self, index: u64) -> u64 {
+    fn rewind_to(&self, index: u64) -> u64 {
         let r = self.read_index();
         let start = {
             let segs = self.segments.lock().unwrap_or_else(|e| e.into_inner());
             segs.iter().rev().find(|s| s.start <= r).map_or(0, |s| s.start)
         };
-        let to = index.clamp(r.saturating_sub(self.history).max(start), r);
+        let to = index.clamp(self.read_high.load(Ordering::Acquire).saturating_sub(self.history).max(start).min(r), r);
         self.read.store(to, Ordering::Release);
         self.skip_to.store(to.min(self.skip_to.load(Ordering::Relaxed)), Ordering::Release);
         to
@@ -210,7 +348,7 @@ impl Ring {
         let r = self.read_index();
         let segs = self.segments.lock().unwrap_or_else(|e| e.into_inner());
         let s = segs.iter().rev().find(|s| s.start <= r)?;
-        let frames = ((pos - s.pts) / s.speed * f64::from(self.format.rate)).round();
+        let frames = ((pos - s.pts) / s.speed * f64::from(self.format.rate())).round();
         Some(s.start + frames.max(0.0) as u64)
     }
 }
@@ -220,20 +358,27 @@ impl Ring {
 /// the clock to what's heard. `latency` is the frames between the next
 /// frame written and the speaker; `now` the cycle's time. Returns the
 /// frames of audio (not silence) written.
-pub fn fill(ring: &Ring, clock: &Clock, out: &mut [f32], latency: u64, now: u64) -> usize {
+pub fn fill(consumer: &mut Consumer, clock: &Clock, out: &mut [f32], latency: u64, now: u64) -> usize {
+    let ring = &consumer.lease.ring;
     // Busy, then halted: whoever halts the ring and then waits while it's
     // busy sees this cycle, or this cycle sees the halt (sequentially
     // consistent, as neither may pass the other).
     ring.busy.store(true, Ordering::SeqCst);
+    struct ActiveRead<'a>(&'a AtomicBool);
+    impl Drop for ActiveRead<'_> {
+        fn drop(&mut self) {
+            self.0.store(false, Ordering::Release);
+        }
+    }
+    let _active = ActiveRead(&ring.busy);
     if ring.halted.load(Ordering::SeqCst) {
         out.fill(0.0);
-        ring.busy.store(false, Ordering::Release);
         return 0;
     }
     let (frames, first) = ring.pop(out);
-    let ch = ring.format.channels.max(1) as usize;
+    let ch = ring.format.channels() as usize;
     out[frames * ch..].fill(0.0);
-    let rate = f64::from(ring.format.rate.max(1));
+    let rate = f64::from(ring.format.rate());
     if let Some(pts) = ring.pts_of(first, false) {
         let speed = ring.speed_of_quick(first);
         // What's heard now is `latency` frames before the first written;
@@ -241,7 +386,6 @@ pub fn fill(ring: &Ring, clock: &Clock, out: &mut [f32], latency: u64, now: u64)
         let pos = pts - latency as f64 / rate * speed;
         clock.set(Anchor { pos, at: now, rate: if frames > 0 { speed } else { 0.0 } }, false);
     }
-    ring.busy.store(false, Ordering::Release);
     frames
 }
 
@@ -286,6 +430,7 @@ pub trait Output: Send {
 pub struct NullOutput {
     run: Option<Arc<NullRun>>,
     thread: Option<std::thread::JoinHandle<()>>,
+    playback: Option<Playback>,
 }
 
 struct NullRun {
@@ -299,7 +444,7 @@ struct NullRun {
 
 impl NullOutput {
     pub fn new() -> NullOutput {
-        NullOutput { run: None, thread: None }
+        NullOutput { run: None, thread: None, playback: None }
     }
 }
 
@@ -315,6 +460,7 @@ const NULL_CYCLE_MS: u64 = 50;
 impl Output for NullOutput {
     fn open(&mut self, ring: Arc<Ring>, clock: Arc<Clock>, _media: &str) -> Result<(), String> {
         self.close();
+        let (mut consumer, playback) = ring.consumer()?;
         let run = Arc::new(NullRun {
             ring,
             clock,
@@ -329,8 +475,8 @@ impl Output for NullOutput {
                 .name("aizome-media-null-audio".into())
                 .spawn(move || {
                     let fmt = r.ring.format;
-                    let frames = (u64::from(fmt.rate) * NULL_CYCLE_MS / 1000) as usize;
-                    let mut buf = vec![0.0f32; frames * fmt.channels.max(1) as usize];
+                    let frames = (u64::from(fmt.rate()) * NULL_CYCLE_MS / 1000) as usize;
+                    let mut buf = vec![0.0f32; frames * fmt.channels() as usize];
                     let cycle = std::time::Duration::from_millis(NULL_CYCLE_MS);
                     let mut next = std::time::Instant::now();
                     while !r.stop.load(Ordering::Acquire) {
@@ -340,7 +486,7 @@ impl Output for NullOutput {
                             next = std::time::Instant::now();
                             continue;
                         }
-                        fill(&r.ring, &r.clock, &mut buf, 0, monotonic_now());
+                        fill(&mut consumer, &r.clock, &mut buf, 0, monotonic_now());
                         next += cycle;
                         let now = std::time::Instant::now();
                         if next > now {
@@ -352,6 +498,7 @@ impl Output for NullOutput {
                 })
                 .map_err(|e| e.to_string())?,
         );
+        self.playback = Some(playback);
         self.run = Some(run);
         Ok(())
     }
@@ -362,10 +509,7 @@ impl Output for NullOutput {
             r.playing.store(false, Ordering::Release);
             // A cycle that already saw it playing takes nothing now, and
             // leaves the clock alone: stopped below, it stays stopped.
-            r.ring.halted.store(true, Ordering::SeqCst);
-            while r.ring.busy.load(Ordering::SeqCst) {
-                std::hint::spin_loop();
-            }
+            self.playback.as_mut().unwrap().pause();
             // Nothing is held past the ring: the clock stops at what's next.
             let i = r.ring.read_index();
             if let Some(pos) = r.ring.pts_of(i, true) {
@@ -376,13 +520,20 @@ impl Output for NullOutput {
         if playing {
             // Whatever halted the ring (a pause, or the output this one
             // stands in for) is over.
-            r.ring.halted.store(false, Ordering::SeqCst);
+            self.playback.as_mut().unwrap().resume();
         }
         r.playing.store(playing, Ordering::Release);
         r.cv.notify_all();
     }
 
-    fn flush(&mut self) {}
+    fn flush(&mut self) {
+        if let Some(p) = &mut self.playback {
+            p.pause().discard_pending();
+            if self.run.as_ref().is_some_and(|r| r.playing.load(Ordering::Acquire)) {
+                p.resume();
+            }
+        }
+    }
 
     fn set_volume(&mut self, _volume: f32, _muted: bool) {}
 
@@ -394,6 +545,7 @@ impl Output for NullOutput {
         if let Some(t) = self.thread.take() {
             let _ = t.join();
         }
+        self.playback = None;
     }
 
     fn describe(&self) -> String {
@@ -418,8 +570,8 @@ pub fn amplitude(volume: f32) -> f32 {
 mod tests {
     use super::*;
 
-    fn ring() -> Ring {
-        Ring::new(Format { rate: 100, channels: 2 })
+    fn ring() -> Arc<Ring> {
+        Arc::new(Ring::new(Format::new(NonZeroU32::new(100).unwrap(), Channels::new(2).unwrap())))
     }
 
     #[test]
@@ -449,11 +601,19 @@ mod tests {
     #[test]
     fn media_times_follow_segments() {
         let r = ring();
-        r.flush(10.0, 1.0, true);
+        r.flush(10.0, 1.0);
+        {
+            let (_, mut control) = r.consumer().unwrap();
+            control.pause().discard_pending();
+        }
         r.push(&vec![0.0; 2 * 50]);
         assert_eq!(r.pts_of(0, true), Some(10.0));
         assert_eq!(r.pts_of(25, true), Some(10.25));
-        r.flush(30.0, 2.0, true);
+        r.flush(30.0, 2.0);
+        {
+            let (_, mut control) = r.consumer().unwrap();
+            control.pause().discard_pending();
+        }
         assert_eq!(r.read_index(), 50);
         r.push(&[0.0; 2 * 10]);
         assert_eq!(r.pts_of(60, true), Some(30.2));
@@ -463,7 +623,11 @@ mod tests {
     #[test]
     fn pausing_steps_back_to_what_was_heard() {
         let r = ring();
-        r.flush(0.0, 1.0, true);
+        r.flush(0.0, 1.0);
+        {
+            let (_, mut control) = r.consumer().unwrap();
+            control.pause().discard_pending();
+        }
         r.push(&vec![0.5; 2 * 200]);
         let mut out = vec![0.0; 2 * 150];
         r.pop(&mut out);
@@ -471,8 +635,12 @@ mod tests {
         assert_eq!(r.rewind_to(110), 110);
         assert_eq!(r.buffered(), 90);
         // Never further back than the history, nor before the segment.
-        assert_eq!(r.rewind_to(0), 10);
-        r.flush(5.0, 1.0, true);
+        assert_eq!(r.rewind_to(0), 50);
+        r.flush(5.0, 1.0);
+        {
+            let (_, mut control) = r.consumer().unwrap();
+            control.pause().discard_pending();
+        }
         assert_eq!(r.rewind_to(0), 200);
     }
 
@@ -480,7 +648,7 @@ mod tests {
     fn a_flush_while_the_consumer_runs_skips_at_its_next_take() {
         let r = ring();
         r.push(&vec![1.0; 2 * 50]);
-        r.flush(3.0, 1.0, false);
+        r.flush(3.0, 1.0);
         assert_eq!(r.buffered(), 0);
         r.push(&[2.0, 2.0]);
         let mut out = vec![0.0; 2 * 10];
@@ -493,18 +661,24 @@ mod tests {
     fn the_callback_anchors_the_clock_to_what_is_heard() {
         let r = ring();
         let c = Clock::new();
-        r.flush(2.0, 1.0, true);
+        r.flush(2.0, 1.0);
+        {
+            let (_, mut control) = r.consumer().unwrap();
+            control.pause().discard_pending();
+        }
         r.push(&vec![0.0; 2 * 100]);
         let mut out = vec![1.0; 2 * 30];
+        let (mut consumer, mut control) = r.consumer().unwrap();
+        control.resume();
         // 20 frames between the first written and the speaker.
-        assert_eq!(fill(&r, &c, &mut out, 20, 1_000), 30);
+        assert_eq!(fill(&mut consumer, &c, &mut out, 20, 1_000), 30);
         let a = c.anchor();
         assert!((a.pos - 1.8).abs() < 1e-9, "{a:?}");
         assert_eq!((a.at, a.rate), (1_000, 1.0));
         // Run dry: silence, and the clock stops.
         r.pop(&mut vec![0.0; 2 * 100]);
         let mut out = vec![1.0; 2 * 10];
-        assert_eq!(fill(&r, &c, &mut out, 0, 2_000), 0);
+        assert_eq!(fill(&mut consumer, &c, &mut out, 0, 2_000), 0);
         assert!(out.iter().all(|s| *s == 0.0));
         assert_eq!(c.anchor().rate, 0.0);
     }
@@ -513,9 +687,13 @@ mod tests {
     fn the_null_output_plays_on_a_halted_ring_and_pausing_stops_its_clock() {
         // As when the player falls back to it from a sink that took
         // nothing: that output halted the ring as it stopped.
-        let r = Arc::new(Ring::new(Format { rate: 1000, channels: 2 }));
+        let r = Arc::new(Ring::new(Format::new(NonZeroU32::new(1000).unwrap(), Channels::new(2).unwrap())));
         let c = Arc::new(Clock::new());
-        r.flush(0.0, 1.0, true);
+        r.flush(0.0, 1.0);
+        {
+            let (_, mut control) = r.consumer().unwrap();
+            control.pause().discard_pending();
+        }
         r.push(&vec![0.0; 2 * 3000]);
         r.halted.store(true, Ordering::SeqCst);
         let mut n = NullOutput::new();
@@ -531,6 +709,75 @@ mod tests {
         assert!(!c.running());
         std::thread::sleep(std::time::Duration::from_millis(150));
         assert_eq!(c.now(), at, "paused, the clock stays");
+    }
+
+    #[test]
+    fn an_output_lease_is_unique_until_both_halves_are_dropped() {
+        let p = Producer::new(ring().format());
+        let shared = p.shared();
+        let (reader, control) = shared.consumer().unwrap();
+        assert!(shared.consumer().is_err());
+        drop(reader);
+        assert!(shared.consumer().is_err());
+        drop(control);
+        assert!(shared.consumer().is_ok());
+    }
+
+    #[test]
+    fn typed_endpoints_keep_samples_ordered_across_threads_and_wraparound() {
+        let mut producer = Producer::new(Format::new(NonZeroU32::new(64).unwrap(), Channels::new(1).unwrap()));
+        let (mut consumer, mut control) = producer.shared().consumer().unwrap();
+        control.resume();
+        let writer = std::thread::spawn(move || {
+            for i in 1..=20_000 {
+                while producer.push(&[i as f32]) == 0 {
+                    std::thread::yield_now();
+                }
+            }
+        });
+        let clock = Clock::new();
+        let mut expected = 1;
+        let mut samples = [0.0; 31];
+        while expected <= 20_000 {
+            let count = fill(&mut consumer, &clock, &mut samples, 0, 0);
+            for sample in &samples[..count] {
+                assert_eq!(*sample, expected as f32);
+                expected += 1;
+            }
+            if count == 0 {
+                std::thread::yield_now();
+            }
+        }
+        writer.join().unwrap();
+    }
+
+    #[test]
+    fn stopped_rewinds_cannot_walk_back_beyond_reserved_history() {
+        let mut producer = Producer::new(ring().format());
+        let shared = producer.shared();
+        let (mut consumer, mut control) = shared.consumer().unwrap();
+        producer.push(&vec![0.5; 400]);
+        control.resume();
+        assert_eq!(fill(&mut consumer, &Clock::new(), &mut [0.0; 300], 0, 0), 150);
+        let mut stopped = control.pause();
+        assert_eq!(stopped.rewind_to(110), 110);
+        assert_eq!(stopped.rewind_to(0), 50);
+        assert_eq!(stopped.rewind_to(0), 50);
+        producer.flush(10.0, 1.0);
+        stopped.discard_pending();
+        assert_eq!(shared.buffered(), 0);
+        producer.push(&[0.75, 0.75]);
+        control.resume();
+        let mut out = [0.0; 2];
+        assert_eq!(fill(&mut consumer, &Clock::new(), &mut out, 0, 0), 1);
+        assert_eq!(out, [0.75, 0.75]);
+    }
+
+    #[test]
+    fn formats_reject_unsupported_channel_counts() {
+        assert!(Channels::new(0).is_none());
+        assert!(Channels::new(9).is_none());
+        assert_eq!(Channels::new(8).unwrap().get(), 8);
     }
 
     #[test]
