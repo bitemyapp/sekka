@@ -434,7 +434,14 @@ fn home_shows_what_kids_may_have_and_grown_ups_see_the_rest() {
     input(&mut h, Input::Ok);
     assert!(matches!(h.program().modal, Some(Modal::Pin { .. })));
     shot(&mut h, "05-pin-keyboard");
-    type_pin(&mut h, PIN);
+    // Typed on the keyboard by the legend's numbers; 9 and 0 are none of
+    // its buttons.
+    input(&mut h, Input::Digit(9));
+    input(&mut h, Input::Digit(0));
+    assert_eq!(typed(&h), 0);
+    for d in PIN.bytes() {
+        input(&mut h, Input::Digit(d - b'0'));
+    }
     until(&mut h, |a| a.is_grownup());
     assert!(h.program().modal.is_none());
     let shelves = h.program().home_view().shelves;

@@ -358,12 +358,15 @@ and Delete), the triggers, which some pads lack and others press only
 part way, and the sticks. The arrows count as presses of the direction
 pad only, once each, never the stick or a press held. Delete (the no
 button, Backspace, or the pad's Delete clicked) takes the last press back,
-and with none, puts the pad away. A keyboard presses them with the arrows,
-Page Up and Page Down, Tab and Space, the keys Chanoma's hints show for
-those buttons, and the legend shows those keys when a keyboard was last
-used. A PIN is kept as the digits of its buttons' places in the legend
-(1 is Up), so a PIN made of digits 1 to 8 before PINs were buttons is
-still the same; one with a 9 or a 0 needs `--reset-pin`.
+and with none, puts the pad away. Each of the legend's buttons is
+numbered, 1 to 8, in its corner: a PIN is kept as those digits (1 is
+Up), so a PIN made of digits 1 to 8 before PINs were buttons is still
+the same, pressed by the numbers; one with a 9 or a 0 needs
+`--reset-pin`. The legend never changes as presses go in, so the numbers
+give nothing away. A keyboard presses them with those digits, or with the
+arrows, Page Up and Page Down, Tab and Space, the keys Chanoma's hints
+show for those buttons; the legend shows those keys when a keyboard was
+last used.
 
 It's kept as PBKDF2-HMAC-SHA-256 with a random salt and 150,000
 rounds (about a tenth of a second, checked off the interface thread).
@@ -453,7 +456,8 @@ CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
 - **Headless** (`tests/chanoma.rs`, also in the package's check): the
   first setup, its PIN pressed on the controller (a slip taken back with
   B; the stick, a trigger, Start and Select pressing nothing) and again on
-  the keyboard; Home for kids and grown-ups; a PIN made on an Xbox
+  the keyboard; Home for kids and grown-ups (the PIN typed by its numbers on
+  a keyboard, 9 and 0 typing nothing); a PIN made on an Xbox
   controller pressed on a Nintendo one, its B taking a press back; wrong
   PINs and their wait, surviving a restart; a game played through a
   libretro core written in the test (frames reaching the window's video
