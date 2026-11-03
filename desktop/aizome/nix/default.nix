@@ -90,43 +90,60 @@ let
     # What the checks build their systems with.
     inputs = { inherit nixpkgs; };
 
-    packages = forAll (pkgs: rec {
-      aizome = pkgs.callPackage ./package.nix {
-        libsecret = libsecretFor pkgs;
-        inherit
-          src
-          yukimiSrc
-          hotaruSrc
-          ghosttyLicense
-          uucodeLicense
-          unicodeLicense
-          version
-          rev
-          fonts
-          hotaruFonts
-          ;
-      };
-      hotaru = pkgs.callPackage ./hotaru.nix {
-        inherit
-          src
-          yukimiSrc
-          hotaruSrc
-          ghosttyLicense
-          uucodeLicense
-          unicodeLicense
-          fonts
-          hotaruFonts
-          version
-          ;
-      };
-      archivo = pkgs.callPackage ./fonts.nix { };
-      # The session's fonts (Archivo, and nixpkgs' IBM Plex Mono and Noto
-      # Sans Symbols 2) as files in one folder, for $AIZOME_FONT_DIR
-      # (docs/kit.md).
-      fonts = pkgs.callPackage ./aizome-fonts.nix { inherit archivo; };
-      hotaruFonts = pkgs.callPackage ./hotaru-fonts.nix { };
-      default = aizome;
-    });
+    packages = forAll (
+      pkgs:
+      let
+        # Sources and dependency builds that compile only what changed.
+        workspace = pkgs.callPackage ./workspace.nix { };
+      in
+      rec {
+        aizome = pkgs.callPackage ./package.nix {
+          libsecret = libsecretFor pkgs;
+          yukimi = aizome-yukimi;
+          inherit
+            src
+            yukimiSrc
+            hotaruSrc
+            ghosttyLicense
+            uucodeLicense
+            unicodeLicense
+            version
+            rev
+            fonts
+            hotaruFonts
+            workspace
+            ;
+        };
+        # Yukimi's app, every desktop's software manager, built alone.
+        aizome-yukimi = pkgs.callPackage ./yukimi.nix {
+          libsecret = libsecretFor pkgs;
+          inherit
+            fonts
+            hotaruFonts
+            version
+            workspace
+            ;
+        };
+        hotaru = pkgs.callPackage ./hotaru.nix {
+          inherit
+            workspace
+            ghosttyLicense
+            uucodeLicense
+            unicodeLicense
+            fonts
+            hotaruFonts
+            version
+            ;
+        };
+        archivo = pkgs.callPackage ./fonts.nix { };
+        # The session's fonts (Archivo, and nixpkgs' IBM Plex Mono and Noto
+        # Sans Symbols 2) as files in one folder, for $AIZOME_FONT_DIR
+        # (docs/kit.md).
+        fonts = pkgs.callPackage ./aizome-fonts.nix { inherit archivo; };
+        hotaruFonts = pkgs.callPackage ./hotaru-fonts.nix { };
+        default = aizome;
+      }
+    );
 
     nixosModules.default = import ./module.nix { inherit self; };
     nixosModules.aizome = self.nixosModules.default;
