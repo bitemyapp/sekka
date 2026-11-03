@@ -403,7 +403,6 @@
         };
         hyprlauncher-software = import ./nix/hyprlauncher-software-test.nix { pkgs = hyprlandPkgs; };
         aizome-ibus = import ./nix/aizome-ibus-test.nix { inherit pkgs inputs; };
-        aizome-ibus-policy = import ./nix/aizome-ibus-policy-test.nix { inherit pkgs inputs; };
         aizome-memory-policy = import ./nix/aizome-memory-policy-test.nix { inherit pkgs inputs; };
         # Aizome's toolkit's own tests, under a headless sway
         # (desktop/aizome/sukumo).
@@ -959,7 +958,9 @@
             ${tools}/bin/respin-tools check-config settings ${lts} ${latest}
             touch $out
           '';
-      };
+      }
+      # aizome-ibus-policy and one check per system it evaluates.
+      // import ./nix/aizome-ibus-policy-test.nix { inherit pkgs inputs; };
       formatter.${system} = pkgs.nixfmt;
     };
 }
