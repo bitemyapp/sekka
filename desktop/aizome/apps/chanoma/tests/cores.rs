@@ -91,6 +91,8 @@ fn play(core: &Path, rom: &Path, dir: &Path, resume: bool, held: u32) -> (f64, b
         prefer: Vec::new(),
         screen_lines: 1080,
         silent: true,
+        unpack_dir: dir.join("unzipped"),
+        extensions: &[],
     };
     let (tx, rx) = mpsc::channel();
     let session = Session::start(launch, None, pads, None, move |e| {
@@ -222,6 +224,8 @@ fn playstation_games_start_with_a_bios() {
                 prefer: Vec::new(),
                 screen_lines: 1080,
                 silent: true,
+                unpack_dir: here.join("unzipped"),
+                extensions: &[],
             };
             let (tx, rx) = mpsc::channel();
             let session = Session::start(launch, None, pads.clone(), None, move |e| {

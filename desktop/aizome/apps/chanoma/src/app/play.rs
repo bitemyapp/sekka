@@ -145,6 +145,8 @@ impl Chanoma {
             prefer: g.system.prefer.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect(),
             screen_lines: self.lines,
             silent: self.config.silent,
+            unpack_dir: dirs.unzipped(),
+            extensions: g.system.extensions,
         };
         self.start_launch(&g.key, &g.title, launch, cx);
     }

@@ -33,6 +33,16 @@ pub struct System {
     pub prefer: &'static [(&'static str, &'static str)],
 }
 
+impl System {
+    /// Whether a file with extension `ext` (lower case) in a folder named
+    /// for this system is one of its games: its own extensions, and zips,
+    /// as cartridge sets come (a disc isn't played zipped). A zip elsewhere
+    /// could be anything's, and isn't opened to see.
+    pub fn takes(&self, ext: &str) -> bool {
+        self.extensions.contains(&ext) || (ext == "zip" && self.id != "psx")
+    }
+}
+
 pub const SYSTEMS: &[System] = &[
     System {
         id: "nes",
@@ -213,7 +223,7 @@ pub fn system_of(path: &Path, root: &Path) -> Option<&'static System> {
         let key = d.file_name().map(|n| folder_key(&n.to_string_lossy())).unwrap_or_default();
         if let Some(s) = SYSTEMS.iter().find(|s| s.folders.contains(&key.as_str())) {
             // A system's folder holds its games; other files there aren't.
-            return s.extensions.contains(&ext.as_str()).then_some(s);
+            return s.takes(&ext).then_some(s);
         }
         dir = d.parent();
     }
@@ -262,6 +272,8 @@ pub struct Game {
     pub system: &'static System,
     /// Box art found beside it.
     pub art: Option<PathBuf>,
+    /// What the databases say of it.
+    pub info: Option<crate::metadata::Info>,
 }
 
 impl Game {
@@ -449,6 +461,7 @@ pub fn scan_games(index: &mut Index, folders: &[PathBuf], cores: &Cores, refresh
                 key: format!("{}/{}", system.id, rel),
                 title: title_of(&path),
                 art: art_for(&path, root, &pictures),
+                info: None,
                 path,
                 system,
             });
@@ -664,17 +677,28 @@ pub fn natural(a: &str, b: &str) -> std::cmp::Ordering {
     }
 }
 
-/// Everything to play and watch, as the shared index has it (brought up to
-/// date first when `refresh`).
+/// Everything to play and watch, as the shared index has it: brought up to
+/// date first when `refresh`, the games found in the databases in
+/// `metadata` (by what's in them too when `refresh`: [`crate::metadata`]).
 pub fn scan(
     index: &mut Index,
     game_folders: &[PathBuf],
     video_folders: &[PathBuf],
     core_dirs: &[PathBuf],
+    metadata: Option<&Path>,
     refresh: bool,
 ) -> Library {
     let cores = Cores::scan(core_dirs);
-    let (games, unplayable) = scan_games(index, game_folders, &cores, refresh);
+    let (mut games, unplayable) = scan_games(index, game_folders, &cores, refresh);
+    if let Some(dir) = metadata {
+        let began = std::time::Instant::now();
+        let (by_name, by_content) = crate::metadata::describe(&mut games, index, dir, refresh);
+        log::info!(
+            "chanoma: {by_name} of {} games found in the databases by name, {by_content} more by what's in them ({:.0?})",
+            games.len(),
+            began.elapsed()
+        );
+    }
     let shelves = scan_videos(index, video_folders, refresh);
     Library { games, shelves, cores, unplayable }
 }
@@ -762,7 +786,7 @@ mod tests {
         }
         std::fs::write(games.join("PS1/Disc.cue"), "FILE \"Disc (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n")
             .unwrap();
-        let lib = scan(&mut index(&d), std::slice::from_ref(&games), &[], &[cores_dir], true);
+        let lib = scan(&mut index(&d), std::slice::from_ref(&games), &[], &[cores_dir], None, true);
         let keys: Vec<&str> = lib.games.iter().map(|g| g.key.as_str()).collect();
         assert_eq!(keys, ["psx/PS1/Disc.cue", "snes/SNES/Kirby (USA).sfc", "gb/GB/Tetris.gb"]);
         assert_eq!(lib.games[1].title, "Kirby");

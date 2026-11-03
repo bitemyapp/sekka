@@ -199,6 +199,10 @@ let
     CHANOMA_CORES = "${chanomaCores}/lib/retroarch/cores";
     CHANOMA_BIOS = "${chanomaBios}/share/chanoma/bios";
   }
+  // lib.optionalAttrs (cfg.chanoma.enable && cfg.chanoma.metadata != null) {
+    # The games' databases: their years, genres and players.
+    CHANOMA_METADATA = "${cfg.chanoma.metadata}/share/chanoma/metadata";
+  }
   // lib.optionalAttrs (cfg.chanoma.enable && cfg.chanoma.browser != null) {
     # The browser it was given, found without a PATH (its autostarted
     # unit has only systemd's).
@@ -297,6 +301,19 @@ in
           there, which come first. The default is OpenBIOS, PCSX-Redux's
           free replacement for the PlayStation's: the console's own is
           Sony's and can't be shipped.
+        '';
+      };
+      metadata = lib.mkOption {
+        type = lib.types.nullOr lib.types.package;
+        default = self.packages.${system}.chanoma-metadata;
+        defaultText = lib.literalExpression "aizome.packages.\${system}.chanoma-metadata";
+        description = ''
+          Game databases, as `share/chanoma/metadata/<system>.rdb`:
+          RetroArch's, from libretro-database (CC BY-SA 4.0), which say
+          the year, genre and number of players of the games Chanoma
+          finds. Its shelves and settings show them, and with two
+          controllers, Home offers the games two can play. `null` leaves
+          them out.
         '';
       };
       browser = lib.mkOption {

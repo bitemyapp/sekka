@@ -162,4 +162,5 @@ Btrfs-shaped mountinfo; no Btrfs filesystem has been indexed).
   a coarser clock than its type suggests could hide a change made in the
   same tick as a listing.
 - Only Chanoma uses it: `refresh` and `entries` for its games and videos
-  folders. Nothing keeps facts yet.
+  folders, and facts for the CRCs and disc serials of games whose names
+  its databases don't know.

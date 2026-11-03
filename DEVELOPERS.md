@@ -2053,13 +2053,16 @@ Chanoma (`desktop/aizome/apps/chanoma`), the family television, is
 installed only where `programs.aizome.chanoma.enable` is set: the package
 builds it into a `chanoma` output of its own, and the module adds it with
 its libretro cores (unfree snes9x and Genesis Plus GX only where unfree
-packages are allowed) and OpenBIOS, a free PlayStation BIOS built from
+packages are allowed), OpenBIOS, a free PlayStation BIOS built from
 source (`desktop/aizome/nix/openbios.nix`, the `psx-openbios`
-package). It reads controllers from evdev itself so that it can grab
-them, drives libretro cores in its own process, and opens streaming
-services in Chrome or Chromium driven through the compositor's IPC. The
-PIN keeps out kids with a controller, not someone with a terminal. It
-reads games and videos folders through `aizome-index`
+package), and libretro-database's game databases for its systems (CC
+BY-SA 4.0, fetched file by file at a pinned commit:
+`desktop/aizome/nix/chanoma-metadata.nix`). It reads controllers from
+evdev itself so that it can grab them, drives libretro cores in its own
+process (unpacking zipped games for them), and opens streaming services
+in Chrome or Chromium driven through the compositor's IPC. The PIN keeps
+out kids with a controller, not someone with a terminal. It reads games
+and videos folders through `aizome-index`
 (`desktop/aizome/crates/aizome-index`), a files index in one SQLite
 database under `$XDG_CACHE_HOME/aizome/index` that any Aizome app can
 share: a second look lists only folders whose modified time changed.

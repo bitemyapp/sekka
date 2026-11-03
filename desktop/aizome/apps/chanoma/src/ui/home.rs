@@ -94,6 +94,9 @@ pub struct Tile {
     pub badge: Option<String>,
     /// How far through, in thousandths.
     pub progress: Option<u16>,
+    /// After `sub` under the focused tile: what's known of a game
+    /// ("1996 · Action · 2 players").
+    pub more: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -434,11 +437,16 @@ pub fn paint_tile(c: &mut Canvas, theme: &Theme, t: &Tile, r: Rect, focused: boo
         ring(c, theme, r);
         // Under it, on one line, what the tile doesn't already say: a
         // picture's name, and what it is after, quieter (a game without a
-        // picture has both on it).
+        // picture has both on it), then what's known of it.
         let pictured = matches!(&t.look, TileLook::Picture { art: Some(p), .. } if art.contains_key(p));
         let lettered = matches!(&t.look, TileLook::Picture { chip: Some(_), .. }) && !pictured;
         let label = if pictured { t.label.as_str() } else { "" };
-        let sub = if lettered { "" } else { t.sub.as_str() };
+        let sub = match (lettered, t.more.is_empty()) {
+            (true, _) => t.more.clone(),
+            (false, true) => t.sub.clone(),
+            (false, false) => format!("{} · {}", t.sub, t.more),
+        };
+        let sub = sub.as_str();
         if !label.is_empty() || !sub.is_empty() {
             let y = r.y1 + RING + 30.0;
             let room = r.width() + 300.0;
