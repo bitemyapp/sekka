@@ -228,6 +228,14 @@ pub struct Settings {
     /// Games kept from kids even when new games are allowed.
     pub games_hidden: BTreeSet<String>,
     pub new_games: NewGames,
+    /// Systems whose games don't show at all, by id (`library::System`).
+    pub systems_off: BTreeSet<String>,
+    /// Demos, betas, prototypes, bad dumps and hacks left out.
+    pub hide_variants: bool,
+    /// A game's regions and revisions shown as one ([`crate::collection`]).
+    pub one_of_each: bool,
+    /// Which region's comes first.
+    pub region: crate::collection::Region,
     pub limits: Limits,
     /// Minutes untouched before grown-up mode locks again.
     pub relock_minutes: u32,
@@ -250,6 +258,10 @@ impl Default for Settings {
             games_allowed: BTreeSet::new(),
             games_hidden: BTreeSet::new(),
             new_games: NewGames::Ask,
+            systems_off: BTreeSet::new(),
+            hide_variants: true,
+            one_of_each: true,
+            region: crate::collection::Region::Auto,
             limits: Limits::default(),
             relock_minutes: 15,
             confirm: Confirm::Auto,

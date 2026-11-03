@@ -417,7 +417,7 @@ open a picker of Chanoma's own (`folders.rs`, `app/picker.rs`,
   in natural order, each with a word on what's directly in it ("12 games
   · 3 folders").
 - **What's found** is the library's own reading (`scan_games` or
-  `scan_videos`, five folders deep and at most 20,000 files), so the
+  `scan_videos`, through the files index, below), so the
   count is what Home will show, cores included ("38 games for 4 systems,
   and 2 without an emulator").
 - **Off the interface thread:** folders are read there, one reading per
@@ -439,6 +439,59 @@ The controller:
 Choosing returns to the settings with the focus on *Add a … folder*, not
 on the folder just added, so pressing again doesn't remove it.
 
+### A big collection
+
+A household's games can be thousands of files over a dozen systems, on a
+drive beside its backups. Games' settings handle that a system at a time
+(`collection.rs`, `app/grownups.rs`):
+
+- **Read through the files index** (`aizome-index`,
+  `docs/files-index.md`): games and videos folders are read to any depth,
+  with no limit on files (before, five folders deep and 20,000 files,
+  which on a drive whose backups come first alphabetically found only the
+  backups). Home shows what the index knew at once, then looks again in
+  the background and shows that (`Msg::Scanned`); on a warm drive the
+  second look takes a fraction of a second.
+  Hidden files are left out: a Mac copying to a FAT drive leaves a
+  4 KB `._Game.sfc` beside every file.
+- **Find games on your drives…** looks through home and each drive
+  plugged in (the picker's places) and lists the folders of games it
+  finds, by place and system, each with how many and where ("2 games in
+  roms › snes"). It shows what the index knew first, then each place as
+  it's read, with how many folders so far. A system's games count at the
+  nearest folder named for it (`roms/psx`, where each disc has a folder of
+  its own); others at their own folder if it holds three or more, so a
+  stray `.bin` in a backup isn't a collection. Each is a switch: on adds
+  it as a games folder, off takes it away. Files are counted by name, so
+  a disc both in a playlist and on its own counts twice here (not on
+  Home).
+- **Which games show**, before kids' rules, from the tags No-Intro's and
+  Redump's names carry (`(USA)`, `(Rev 1)`, `(Beta)`, `[!]`), so a
+  well-named set needs no database:
+  - **Systems**: a page of every system with games found, each a switch,
+    so a whole system goes with one press (`systems_off`).
+  - **Hide demos, betas and prototypes** (on unless turned off;
+    `hide_variants`): demos, betas, prototypes, samples, kiosk and test
+    discs, promos, pirates, and GoodTools' bad dumps, hacks, trainers,
+    translations and the like. A BIOS is never a game.
+  - **One of each game** (on unless turned off; `one_of_each`): a game's
+    regions and revisions show as one, the **Region first**'s (`region`;
+    from the computer's language unless chosen: `ja` or `_JP` is Japan;
+    the Americas or none, the USA; others, Europe), then the World's, then
+    any; of those, the latest revision, then the game as sold. What isn't
+    a region, a language, a revision or a date stays part of the game:
+    `(Disc 2)` and `(Arcade Mode)` are games of their own.
+- **Which games kids see**: *New games*, *Allow all N new games*, then a
+  row per system ("12 of 340", for kids) opening its games: *Let kids play
+  all N* and *Keep all N from kids*, then each game shown, a switch, with
+  its regions, *a revision*, and *New* if it waits for a grown-up. The
+  shoulder buttons (Page Up and Down) jump down the list a letter at a
+  time, a leading "The" ignored. Back or Left returns to Games, on the
+  row the page was opened from.
+
+What's hidden by these isn't forgotten: turning a switch back shows it
+with whatever kids' choice it had.
+
 ## Checking it
 
 ```sh
@@ -457,16 +510,16 @@ CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
   drivers, events into buttons and axes, navigation repeats and stick
   hysteresis, the sound ring and resampler, pixel conversion and
   enlargement, core options, game and video scanning (systems by folder
-  and extension, cue sheets' tracks, box art, shows), layouts, and a
-  language chosen found again in the next episode (by name, `en` as
-  `eng`; by place without one; none rather than another language), and
-  the sites a page may be on (subdomains; not look-alikes, a user before
-  the host, the rest of Google, or what isn't the web), which services get
-  Chanoma's keyboard, the PIN's buttons (none of yes, no, the triggers
-  or Start) and where clicks on its pad land, and the keyboard's rows,
-  moving between its keys, Shift and its symbols. What
-  plays, where a film carries on and the subtitles' cues are
-  `aizome-media`'s, tested there; serving the media controls is
+  and extension, cue sheets' tracks, box art, shows) through the files
+  index, layouts, and a language chosen found again in the next episode
+  (by name, `en` as `eng`; by place without one; none rather than
+  another language), and the sites a page may be on (subdomains; not
+  look-alikes, a user before the host, the rest of Google, or what isn't
+  the web), which services get Chanoma's keyboard, the PIN's buttons
+  (none of yes, no, the triggers or Start) and where clicks on its pad
+  land, and the keyboard's rows, moving between its keys, Shift and its
+  symbols. What plays, where a film carries on and the subtitles' cues
+  are `aizome-media`'s, tested there; serving the media controls is
   `aizome-mpris`'s, tested there against a private `dbus-daemon` (what a
   player says, and which asks reach it).
 - **Headless** (`tests/chanoma.rs`, also in the package's check): the
@@ -503,8 +556,18 @@ CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
   file says; the film's menu offering them and no language for one sound
   track; the subtitles' menu on the track showing, Back to the film's
   menu, Off; kept, and the film opening again without them; the media
-  controls' play and stop). The unit tests add where clicks land: the
-  hints, the bar's *Home* in a 16:10 window, beside a menu.
+  controls' play and stop). A big collection: a No-Intro-named set on a
+  games folder and a drive plugged in beside a backup, one of each game
+  shown (no beta, no BIOS), the Systems page turning the Game Boy off with
+  one switch, every region and then the beta shown and hidden again, a
+  system's games all let in for kids and all kept out, the shoulders
+  jumping a letter, and *Find games on your drives* listing the drive's
+  SNES folder where it's named (not the backup's stray `.bin`) and adding
+  it, its games joining one of each. The unit tests add where clicks
+  land: the hints, the bar's *Home* in a 16:10 window, beside a menu;
+  the names' tags (regions, revisions, variants, a BIOS, discs and modes
+  kept apart, dates) and the region a language puts first; Mac resource
+  forks not taken for games.
 - **Real cores** (`tests/cores.rs`, opt-in): every system's cores from
   nixpkgs load and list the extensions Chanoma sends them; gambatte,
   SameBoy and mGBA play a Game Boy game the test writes, whose screen
@@ -641,6 +704,14 @@ before calling any of it tested on hardware.
   screens (the memory card manager, the CD player), games from Europe or
   Japan, or long play. Some games load a few seconds slower with it than
   with Sony's.
+- Which games show is read from their files' names: a set not named as
+  No-Intro or Redump name them (or a game renamed by hand) shows each
+  file as a game of its own, and a name that doesn't say its region is
+  ranked after those that do.
+- *Find games on your drives* reads every folder of home and each drive
+  each time it's asked; a drive just plugged in takes minutes on a slow
+  USB stick or exFAT drive (`docs/files-index.md`), showing what it
+  found as it goes. Nothing finds games by itself when a drive appears.
 - Adding a website needs a keyboard and a mouse: its address is typed
   in a dialog of the kit's, where Chanoma's keyboard doesn't come.
   Choosing folders doesn't: see Choosing folders above.

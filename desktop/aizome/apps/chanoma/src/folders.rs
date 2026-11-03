@@ -203,16 +203,17 @@ pub enum Found {
     Videos { shows: usize, films: usize },
 }
 
-/// The games in `dir`, as a games folder of Chanoma's is read.
-pub fn games_in(dir: &Path, cores: &Cores) -> Found {
-    let (games, unplayable) = library::scan_games(&[dir.to_path_buf()], cores);
+/// The games in `dir`, as a games folder of Chanoma's is read (through the
+/// files index: refreshed first when `refresh`).
+pub fn games_in(index: &mut aizome_index::Index, dir: &Path, cores: &Cores, refresh: bool) -> Found {
+    let (games, unplayable) = library::scan_games(index, &[dir.to_path_buf()], cores, refresh);
     let systems: HashSet<&str> = games.iter().map(|g| g.system.id).collect();
     Found::Games { games: games.len(), systems: systems.len(), unplayable }
 }
 
 /// The films and shows in `dir`, as a videos folder of Chanoma's is read.
-pub fn videos_in(dir: &Path) -> Found {
-    let shelves = library::scan_videos(&[dir.to_path_buf()]);
+pub fn videos_in(index: &mut aizome_index::Index, dir: &Path, refresh: bool) -> Found {
+    let shelves = library::scan_videos(index, &[dir.to_path_buf()], refresh);
     let shows = shelves.iter().filter(|s| s.videos.len() > 1).count();
     Found::Videos { shows, films: shelves.len() - shows }
 }

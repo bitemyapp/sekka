@@ -22,6 +22,7 @@ boards' exact CSS. This document is the contract between the parts.
 | Media controls | `crates/aizome-mpris` | — | A player's side of MPRIS 2 (the menu bar's media widget and the media keys follow players through `aizome-sys`): Utsushi and Chanoma serve it |
 | Apps index | `crates/aizome-apps` | — | Installed applications without D-Bus: desktop entries, the index of them, `Exec` lines, icons, default apps and the default terminal (Settei shows it, ❖Return starts it); `aizome-sys` re-exports it as `apps` and adds launching |
 | Search | `crates/aizome-search` | — | Fuzzy matching and the file index behind the palette and Find |
+| Files index | `crates/aizome-index` | — | What's in folders and drives, shared by every app in one SQLite database; a second look lists only folders whose time changed (`docs/files-index.md`): Chanoma finds games with it |
 | Portal | `crates/aizome-portal` | `aizome-portal` | The xdg-desktop-portal backend `org.freedesktop.impl.portal.desktop.aizome`: file choosers (Open and Save) for every app that asks the portal, each a window of its own over the app that asked (`docs/apps.md`, "The file chooser") |
 | Apps | `apps/*` | one each | Settei (Settings), Yukimi, Soroban, Koyomi, Tokei, Fusen, Sumi, Tenki, Tansu, Kura, Hako, Myaku |
 

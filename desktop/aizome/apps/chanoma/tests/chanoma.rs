@@ -921,6 +921,141 @@ fn bedtime_closes_up_for_the_night() {
     shot(&mut h, "13-bedtime");
 }
 
+/// The settings' row labelled `label`, moved to with the arrows.
+fn to_row(h: &mut Harness<Chanoma>, label: &str) {
+    let page = h.program().grownups_page();
+    let Some(target) = page.rows.iter().position(|r| !r.heading && r.label == label) else {
+        panic!("no row {label:?} in {:?}", page.rows.iter().map(|r| &r.label).collect::<Vec<_>>());
+    };
+    for _ in 0..60 {
+        let row = h.program().grownups.row;
+        if row == target {
+            return;
+        }
+        input(h, Input::Dir(if row < target { Dir::Down } else { Dir::Up }));
+    }
+    panic!("couldn't reach {label:?}");
+}
+
+/// The games that show, by key.
+fn shown(h: &Harness<Chanoma>) -> Vec<String> {
+    let mut v: Vec<String> = h.program().shown_games().map(|g| g.key.clone()).collect();
+    v.sort();
+    v
+}
+
+#[test]
+fn a_big_collection_is_managed_a_system_at_a_time_and_found_on_a_drive() {
+    let (dirs, cores) = household("collection", |_| {});
+    let root = cores.parent().unwrap().to_path_buf();
+    // A set as No-Intro names it: regions, a revision, a beta, a BIOS.
+    for f in [
+        "snes/Kirby (USA).sfc",
+        "snes/Kirby (Europe).sfc",
+        "snes/Kirby (Japan) (Rev 1).sfc",
+        "snes/Kirby (USA) (Beta).sfc",
+        "snes/[BIOS] Super Famicom (Japan).sfc",
+        "gb/Tetris (World).gb",
+    ] {
+        std::fs::write(root.join("Games").join(f).tap_parent(), b"x").unwrap();
+    }
+    std::fs::write(cores.join("gambatte_libretro.so"), b"").unwrap();
+    // A drive plugged in, with a collection on it and a backup beside it.
+    let stick = root.join("media/Stick");
+    for f in ["roms/snes/Zelda (USA).sfc", "roms/snes/Zelda (Europe).sfc", "backup/firmware.bin"] {
+        std::fs::write(stick.join(f).tap_parent(), b"x").unwrap();
+    }
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    // One of each game, no beta, no BIOS.
+    assert_eq!(shown(&h), ["gb/gb/Tetris (World).gb", "snes/snes/Kirby (USA).sfc", "snes/snes/Test Quest (USA).sfc"]);
+
+    // In: the PIN, Settings, Games.
+    let shelves = h.program().home_view().shelves.len();
+    for _ in 1..shelves {
+        input(&mut h, Input::Dir(Dir::Down));
+    }
+    input(&mut h, Input::Ok);
+    type_pin(&mut h, PIN);
+    until(&mut h, |a| a.is_grownup());
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Dir(Dir::Right));
+
+    // A whole system off, with one switch.
+    to_row(&mut h, "Systems");
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().grownups_page().title, "Games › Systems");
+    to_row(&mut h, "Game Boy");
+    input(&mut h, Input::Ok);
+    assert!(!shown(&h).iter().any(|k| k.starts_with("gb/")));
+    shot(&mut h, "16-systems");
+    input(&mut h, Input::Back);
+    assert_eq!(h.program().grownups_page().rows[h.program().grownups.row].label, "Systems");
+
+    // Every region, then the beta too; then one of each again.
+    to_row(&mut h, "One of each game");
+    input(&mut h, Input::Ok);
+    assert_eq!(shown(&h).iter().filter(|k| k.contains("Kirby")).count(), 3);
+    to_row(&mut h, "Hide demos, betas and prototypes");
+    input(&mut h, Input::Ok);
+    assert_eq!(shown(&h).iter().filter(|k| k.contains("Kirby")).count(), 4);
+    assert!(!shown(&h).iter().any(|k| k.contains("BIOS")), "a BIOS is never a game");
+    input(&mut h, Input::Ok);
+    to_row(&mut h, "One of each game");
+    input(&mut h, Input::Ok);
+
+    // A system's games for kids: all, none, and down the list a letter at
+    // a time.
+    to_row(&mut h, "Super Nintendo");
+    input(&mut h, Input::Ok);
+    to_row(&mut h, "Let kids play all 2");
+    input(&mut h, Input::Ok);
+    let allowed = |h: &Harness<Chanoma>, key: &str| h.program().settings.game_allowed(key);
+    assert!(allowed(&h, "snes/snes/Kirby (USA).sfc") && allowed(&h, "snes/snes/Test Quest (USA).sfc"));
+    shot(&mut h, "17-system-games");
+    to_row(&mut h, "Keep all 2 from kids");
+    input(&mut h, Input::Ok);
+    assert!(!allowed(&h, "snes/snes/Kirby (USA).sfc") && !allowed(&h, "snes/snes/Test Quest (USA).sfc"));
+    to_row(&mut h, "Kirby");
+    input(&mut h, Input::Next);
+    assert_eq!(h.program().grownups_page().rows[h.program().grownups.row].label, "Test Quest");
+    input(&mut h, Input::Prev);
+    assert_eq!(h.program().grownups_page().rows[h.program().grownups.row].label, "Kirby");
+    input(&mut h, Input::Back);
+
+    // Found on the drive: its SNES folder, counted where it's named, and
+    // not the backup's stray .bin; switched on, its games join.
+    to_row(&mut h, "Find games on your drives…");
+    input(&mut h, Input::Ok);
+    until(&mut h, |a| a.finding.as_ref().is_some_and(|f| !f.running));
+    let page = h.program().grownups_page();
+    assert_eq!(page.title, "Games › On your drives");
+    let stick_row = page.rows.iter().position(|r| r.heading && r.label == "Stick").expect("the drive");
+    let snes = &page.rows[stick_row + 1];
+    assert_eq!((snes.label.as_str(), snes.detail.as_str()), ("Super Nintendo", "2 games in roms › snes"));
+    assert_eq!(page.rows.iter().filter(|r| !r.heading).count(), 1, "{:?}", page.rows);
+    shot(&mut h, "18-found-on-drives");
+    to_row(&mut h, "Super Nintendo");
+    input(&mut h, Input::Ok);
+    until(&mut h, |a| a.shown_games().any(|g| g.title == "Zelda"));
+    assert_eq!(h.program().shown_games().filter(|g| g.title == "Zelda").count(), 1, "one of each");
+}
+
+/// A file's folder made, for writing it.
+trait TapParent {
+    fn tap_parent(self) -> Self;
+}
+
+impl TapParent for PathBuf {
+    fn tap_parent(self) -> PathBuf {
+        std::fs::create_dir_all(self.parent().unwrap()).unwrap();
+        self
+    }
+}
+
 #[test]
 fn a_games_folder_is_chosen_with_the_controller_alone() {
     let (dirs, cores) = household("picker", |_| {});

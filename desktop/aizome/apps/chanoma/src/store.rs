@@ -21,6 +21,8 @@ pub struct Dirs {
     pub config: PathBuf,
     pub state: PathBuf,
     pub data: PathBuf,
+    /// The files index Aizome's apps share (`aizome_index`).
+    pub index: PathBuf,
 }
 
 fn xdg(var: &str, fallback: &str) -> PathBuf {
@@ -32,18 +34,34 @@ fn xdg(var: &str, fallback: &str) -> PathBuf {
 }
 
 impl Dirs {
+    /// The shared files index, or one of its own (a temporary one) if it
+    /// can't be opened.
+    pub fn open_index(&self) -> aizome_index::Index {
+        aizome_index::Index::open_at(&self.index).unwrap_or_else(|e| {
+            log::warn!("chanoma: the files index: {e}; keeping one of its own");
+            let own = std::env::temp_dir().join(format!("chanoma-index-{}.sqlite", std::process::id()));
+            aizome_index::Index::open_at(&own).expect("a temporary files index")
+        })
+    }
+
     /// The XDG places.
     pub fn standard() -> Dirs {
         Dirs {
             config: xdg("XDG_CONFIG_HOME", ".config").join("aizome"),
             state: xdg("XDG_STATE_HOME", ".local/state").join("aizome/chanoma"),
             data: xdg("XDG_DATA_HOME", ".local/share").join("aizome/chanoma"),
+            index: xdg("XDG_CACHE_HOME", ".cache").join("aizome/index/files.sqlite"),
         }
     }
 
     /// Everything under `root` (tests).
     pub fn under(root: &Path) -> Dirs {
-        Dirs { config: root.join("config"), state: root.join("state"), data: root.join("data") }
+        Dirs {
+            config: root.join("config"),
+            state: root.join("state"),
+            data: root.join("data"),
+            index: root.join("cache/index.sqlite"),
+        }
     }
 
     pub fn settings(&self) -> PathBuf {

@@ -111,7 +111,9 @@ pub enum Msg {
     /// The pointer reached the top of the screen over a page.
     Edge,
     Tick,
-    Scanned(Arc<Library>),
+    /// What the folders hold: as the files index knew it, or (`true`) read
+    /// again.
+    Scanned(Arc<Library>, bool),
     Art(PathBuf, Option<Image>),
     /// A PIN typed was checked: right or not.
     PinChecked(bool),
@@ -130,6 +132,10 @@ pub enum Msg {
     Listed(u64, Result<Vec<crate::folders::Entry>, String>),
     /// What's in the folder the picker shows, found.
     Found(u64, crate::folders::Found),
+    /// Looking for games on the drives: where, and how many folders so far.
+    Finding(String, usize),
+    /// The folders of games found on the drives (`true`: looked again, done).
+    GamesFound(Vec<crate::library::FoundFolder>, bool),
     SiteName(String),
     SiteUrl(String),
     SiteAdd,
@@ -293,6 +299,8 @@ pub struct Chanoma {
     pub recent: Recent,
     pub layouts: HashMap<String, Mapping>,
     pub library: Arc<Library>,
+    /// Which of its games show, by place ([`crate::collection`]).
+    pub shown: Vec<usize>,
     pub scanned: bool,
     pub pads: Option<Pads>,
     pub shared: Arc<Shared>,
@@ -353,6 +361,8 @@ pub struct Chanoma {
     /// Choosing a folder.
     pub picker: Option<picker::Picker>,
     pub setup: Option<grownups::PadSetUp>,
+    /// Looking for games on the drives, and what was found.
+    pub finding: Option<grownups::Finding>,
     pub site: Option<(WindowKey, String, String)>,
     /// The one-instance socket, served once the program runs.
     pub instance: Option<std::os::unix::net::UnixListener>,
@@ -382,6 +392,7 @@ impl Chanoma {
             recent,
             layouts,
             library: Arc::new(Library::default()),
+            shown: Vec::new(),
             scanned: false,
             pads: None,
             shared: Arc::new(Shared::default()),
@@ -426,6 +437,7 @@ impl Chanoma {
             pairing: None,
             picker: None,
             setup: None,
+            finding: None,
             site: None,
             instance: None,
             stage_asked: "",
@@ -1710,9 +1722,10 @@ impl Program for Chanoma {
             }
             Msg::Edge => self.edge_reached(cx),
             Msg::Tick => self.tick(cx),
-            Msg::Scanned(lib) => {
+            Msg::Scanned(lib, fresh) => {
                 self.library = lib;
-                self.scanned = true;
+                self.reshow();
+                self.scanned |= fresh;
                 self.clamp_home_focus();
                 self.want_art(cx);
             }
@@ -1750,6 +1763,33 @@ impl Program for Chanoma {
                 }
             }
             Msg::Outputs => self.outputs_changed(cx),
+            Msg::Finding(at, folders) => {
+                if let Some(f) = &mut self.finding {
+                    f.at = at;
+                    f.folders = folders;
+                }
+            }
+            Msg::GamesFound(found, done) => {
+                if let Some(f) = &mut self.finding {
+                    f.found = found;
+                    f.running &= !done;
+                }
+                // Opened before anything was found, the focus was on the
+                // page's heading: on the first folder found now.
+                if self.grownups.sub == Some(grownups::Sub::Found) {
+                    let page = self.grownups_page();
+                    if page.rows.get(self.grownups.row).is_none_or(|r| r.heading) {
+                        self.grownups.row = page.first_row();
+                        self.focus = self.grownups.focus();
+                    }
+                }
+                if done {
+                    log::info!(
+                        "chanoma: games found in {} folders",
+                        self.finding.as_ref().map_or(0, |f| f.found.len())
+                    );
+                }
+            }
             Msg::AskPage => self.ask_page(cx),
             Msg::Activate => cx.activate(self.window),
             Msg::Quit => {
@@ -1805,12 +1845,39 @@ impl Chanoma {
         self.usage_saved = Some(Instant::now());
     }
 
-    /// Read the folders again, off the interface thread.
+    /// Read the folders again, off the interface thread: what the files
+    /// index knows at once, then what's there now (only folders that
+    /// changed are read again).
     pub fn rescan(&mut self, cx: &mut Cx<Msg>) {
         let games = self.settings.game_folders.clone();
         let videos = self.settings.video_folders.clone();
         let cores = self.config.core_dirs.clone();
-        cx.spawn(move || Msg::Scanned(Arc::new(crate::library::scan(&games, &videos, &cores))));
+        let dirs = self.config.dirs.clone();
+        let scan = move |index: &mut aizome_index::Index, refresh: bool| {
+            Arc::new(crate::library::scan(index, &games, &videos, &cores, refresh))
+        };
+        match self.sender.clone() {
+            Some(tx) => {
+                let _ = std::thread::Builder::new().name("chanoma-scan".into()).spawn(move || {
+                    let mut index = dirs.open_index();
+                    tx.send(Msg::Scanned(scan(&mut index, false), false));
+                    tx.send(Msg::Scanned(scan(&mut index, true), true));
+                });
+            }
+            None => cx.spawn(move || Msg::Scanned(scan(&mut dirs.open_index(), true), true)),
+        }
+    }
+
+    /// Work out again which games show ([`crate::collection`]), after the
+    /// library or the settings that say so change.
+    pub fn reshow(&mut self) {
+        let lang = std::env::var("LC_ALL").or_else(|_| std::env::var("LANG")).unwrap_or_default();
+        self.shown = crate::collection::shown(&self.library.games, &self.settings, &lang);
+    }
+
+    /// The games that show, in order.
+    pub fn shown_games(&self) -> impl Iterator<Item = &crate::library::Game> {
+        self.shown.iter().filter_map(|i| self.library.games.get(*i))
     }
 }
 

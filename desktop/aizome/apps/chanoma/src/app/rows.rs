@@ -37,7 +37,7 @@ pub enum Act {
 impl Chanoma {
     /// Games kids may play now (all of them for a grown-up).
     pub fn playable(&self) -> Vec<&Game> {
-        self.library.games.iter().filter(|g| self.is_grownup() || self.settings.game_allowed(&g.key)).collect()
+        self.shown_games().filter(|g| self.is_grownup() || self.settings.game_allowed(&g.key)).collect()
     }
 
     /// The services on Home: ids, in order.

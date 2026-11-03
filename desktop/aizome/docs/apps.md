@@ -1153,6 +1153,14 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   shipped: forty games checked against Sony's started and played alike,
   some a few seconds slower to load. A BIOS dumped from a grown-up's own
   console, put in `~/.local/share/aizome/chanoma/system`, comes first.
+  A big collection stays manageable: a whole system turned off with one
+  switch, demos, betas and prototypes left out, and each game shown once,
+  in the household's region's release, read from the tags in No-Intro's
+  and Redump's names. *Find games on your drives* lists the folders of
+  games at home and on every drive plugged in, each a switch. Folders are
+  read through Aizome's shared files index (`docs/files-index.md`), so a
+  second look reads only what changed; a slow drive's first look takes
+  minutes.
 - **Services** open full screen in Google Chrome (or Chromium), each in a
   browser profile of its own, so a grown-up signs in once (in grown-up
   mode) and kids never see a sign-in, an address bar or a tab. The controller drives the page: the left stick moves the pointer
@@ -1201,9 +1209,9 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   In grown-up mode everything shows, nothing counts against today's time,
   and the settings open: limits for weekdays and for
   the weekend, bedtime and waking, more time today; which services kids
-  see; games folders, and which games kids may play (new ones wait for a
-  grown-up's say, unless set to show at once); videos folders (chosen with
-  the controller in a picker of Chanoma's own: places down the left,
+  see; games folders, which games show, and which kids may play, a system
+  at a time (new ones wait for a grown-up's say, unless set to show at
+  once); videos folders (chosen with the controller in a picker of Chanoma's own: places down the left,
   drives plugged in among them; a folder's folders on the right, each
   saying what's in it; and how many games, films and shows Chanoma would
   find in the one showing); pairing
