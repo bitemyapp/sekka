@@ -1,0 +1,131 @@
+70882014595895 1718909 1718909 ctor 0 /nix/store/b13lcv35…-hello-qtquick-1/bin/hello-qtquick
+70882014655365 1718909 1718909 main 0 /tmp/claude-1000/perf/design-hello/bin/hello-qtquick
+70882025038260 1718909 1718909 ctor 0 /nix/store/b13lcv35…-hello-qtquick-1/bin/.hello-qtquick-wrapped
+70882025056530 1718909 1718909 main 0 /tmp/claude-1000/perf/design-hello/bin/hello-qtquick
+70882025488520 1718909 1718909 dlopen 4660 /nix/store/h7wxgv3w…-qtbase-6.12.0/lib/qt-6/plugins/platforms/libqwayland.so.avx2 FAILED
+70882025495870 1718909 1718909 dlopen 669661 /nix/store/h7wxgv3w…-qtbase-6.12.0/lib/qt-6/plugins/platforms/libqwayland.so
+70882026183601 1718909 1718909 wl_display_connect 923131 
+70882027154832 1718909 1718909 xkb_context_new 3500 
+70882027260752 1718909 1718909 pthread_create 0 libQt6Core.so.6 ?
+70882027365413 1718909 1718910 dbus_connection_open_private 34190 
+70882027404983 1718909 1718910 dbus_call_block 212650 
+70882027360503 1718909 1718910 dbus_bus_get_private 260070 0
+70882027784773 1718909 1718909 wl_display_roundtrip 147190 queue
+70882027732273 1718909 1718909 wl_display_roundtrip 202740 
+70882027936063 1718909 1718909 wl_display_roundtrip 52511 queue
+70882027936013 1718909 1718909 wl_display_roundtrip 53211 
+70882028128494 1718909 1718909 dlopen 3870 /nix/store/h7wxgv3w…-qtbase-6.12.0/lib/qt-6/plugins/wayland-shell-integration/libxdg-shell.so.avx2 FAILED
+70882028136544 1718909 1718909 dlopen 230920 /nix/store/h7wxgv3w…-qtbase-6.12.0/lib/qt-6/plugins/wayland-shell-integration/libxdg-shell.so
+70882028447474 1718909 1718909 dlopen 2980 /nix/store/h7wxgv3w…-qtbase-6.12.0/lib/qt-6/plugins/platformthemes/libqgtk3.so.avx2 FAILED
+70882028451984 1718909 1718909 dlopen 6466769 /nix/store/h7wxgv3w…-qtbase-6.12.0/lib/qt-6/plugins/platformthemes/libqgtk3.so
+70882027807083 1718909 1718910 poll 7149980 2 ppoll
+70882035142314 1718909 1718909 pthread_create 0 libglib-2.0.so.0 ?
+70882035201224 1718909 1718909 wl_display_connect 18250 
+70882035235294 1718909 1718909 xkb_context_new 1770 
+70882035314714 1718909 1718909 pthread_create 0 libglib-2.0.so.0 ?
+70882035335914 1718909 1718909 pthread_create 0 libglib-2.0.so.0 ?
+70882035594004 1718909 1718909 pthread_create 0 libglib-2.0.so.0 ?
+70882035012623 1718909 1718910 poll 813131 2 ppoll
+70882035282394 1718909 1718909 g_dbus_proxy_new_sync 705771 org.freedesktop.portal.Desktop org.freedesktop.portal.Settings
+70882036004115 1718909 1718914 poll 726101 2 ppoll
+70882036000285 1718909 1718909 poll 793571 1 ppoll
+70882036892336 1718909 1718909 wl_display_roundtrip 81770 queue
+70882036892276 1718909 1718909 wl_display_roundtrip 82990 
+70882035196514 1718909 1718911 FcInit 3981485 
+70882039342310 1718909 1718909 xkb_context_new 930 
+70882041060692 1718909 1718909 dbus_call_block 128450 
+70882041198612 1718909 1718909 dbus_call_block 144900 
+70882041347452 1718909 1718909 dbus_connection_open_private 15790 
+70882041365172 1718909 1718909 dbus_call_block 64300 
+70882041451422 1718909 1718909 g_bus_get_sync 3820 2
+70882036794166 1718909 1718914 poll 4685726 2 ppoll
+70882041904623 1718909 1718909 dlopen 477671 /nix/store/h7pjc6hi…-gvfs-1.60.3/lib/gio/modules/libgvfsdbus.so
+70882042411844 1718909 1718909 g_bus_get_sync 670 2
+70882041521952 1718909 1718914 poll 938092 2 ppoll
+70882042601284 1718909 1718909 poll 223770 1 ppoll
+70882035854784 1718909 1718910 poll 16240163 2 ppoll
+70882052217417 1718909 1718909 pthread_create 0 libQt6Core.so.6 ?
+70882052281888 1718909 1718909 pthread_create 0 libQt6Core.so.6 ?
+70882052407418 1718909 1718909 dlopen 8710 /nix/store/h7wxgv3w…-qtbase-6.12.0/lib/qt-6/plugins/platforminputcontexts/libibusplatforminputcontextplugin.so.avx2 FAILED
+70882052419218 1718909 1718909 dlopen 203590 /nix/store/h7wxgv3w…-qtbase-6.12.0/lib/qt-6/plugins/platforminputcontexts/libibusplatforminputcontextplugin.so
+70882052142887 1718909 1718910 poll 515031 2 ppoll
+70882052746228 1718909 1718909 dlopen 4420 /nix/store/h7wxgv3w…-qtbase-6.12.0/lib/qt-6/plugins/platforminputcontexts/libcomposeplatforminputcontextplugin.so.avx2 FAILED
+70882052752448 1718909 1718909 dlopen 98830 /nix/store/h7wxgv3w…-qtbase-6.12.0/lib/qt-6/plugins/platforminputcontexts/libcomposeplatforminputcontextplugin.so
+70882057968595 1718909 1718909 pthread_create 0 libQt6Core.so.6 ?
+70882060789180 1718909 1718917 dlopen 8420 /nix/store/0jnxd2cw…-qtdeclarative-6.12.0/lib/qt-6/qml/QtQuick/Controls/libqtquickcontrols2plugin.so.avx2 FAILED
+70882060804090 1718909 1718917 dlopen 1348231 /nix/store/0jnxd2cw…-qtdeclarative-6.12.0/lib/qt-6/qml/QtQuick/Controls/libqtquickcontrols2plugin.so
+70882062410032 1718909 1718917 dlopen 8410 /nix/store/0jnxd2cw…-qtdeclarative-6.12.0/lib/qt-6/qml/QtQuick/Controls/Fusion/libqtquickcontrols2fusionstyleplugin.so.avx2 FAILED
+70882062422102 1718909 1718917 dlopen 566891 /nix/store/0jnxd2cw…-qtdeclarative-6.12.0/lib/qt-6/qml/QtQuick/Controls/Fusion/libqtquickcontrols2fusionstyleplugin.so
+70882063311093 1718909 1718917 dlopen 5280 /nix/store/0jnxd2cw…-qtdeclarative-6.12.0/lib/qt-6/qml/QtQuick/Controls/Basic/libqtquickcontrols2basicstyleplugin.so.avx2 FAILED
+70882063320623 1718909 1718917 dlopen 186830 /nix/store/0jnxd2cw…-qtdeclarative-6.12.0/lib/qt-6/qml/QtQuick/Controls/Basic/libqtquickcontrols2basicstyleplugin.so
+70882063632323 1718909 1718917 dlopen 4270 /nix/store/0jnxd2cw…-qtdeclarative-6.12.0/lib/qt-6/qml/QtQuick/Layouts/libqquicklayoutsplugin.so.avx2 FAILED
+70882063638423 1718909 1718917 dlopen 255341 /nix/store/0jnxd2cw…-qtdeclarative-6.12.0/lib/qt-6/qml/QtQuick/Layouts/libqquicklayoutsplugin.so
+70882064275474 1718909 1718917 dlopen 4790 /nix/store/0jnxd2cw…-qtdeclarative-6.12.0/lib/qt-6/qml/QtQuick/Templates/libqtquicktemplates2plugin.so.avx2 FAILED
+70882064284544 1718909 1718917 dlopen 142050 /nix/store/0jnxd2cw…-qtdeclarative-6.12.0/lib/qt-6/qml/QtQuick/Templates/libqtquicktemplates2plugin.so
+70882068213800 1718909 1718917 dlopen 7210 /nix/store/0jnxd2cw…-qtdeclarative-6.12.0/lib/qt-6/qml/QtQuick/Window/libquickwindowplugin.so.avx2 FAILED
+70882068227060 1718909 1718917 dlopen 123470 /nix/store/0jnxd2cw…-qtdeclarative-6.12.0/lib/qt-6/qml/QtQuick/Window/libquickwindowplugin.so
+70882069530772 1718909 1718909 dlopen 6600 /nix/store/h7wxgv3w…-qtbase-6.12.0/lib/qt-6/plugins/wayland-graphics-integration-client/libqt-plugin-wayland-egl.so.avx2 FAILED
+70882069542542 1718909 1718909 dlopen 251650 /nix/store/h7wxgv3w…-qtbase-6.12.0/lib/qt-6/plugins/wayland-graphics-integration-client/libqt-plugin-wayland-egl.so
+70882069819692 1718909 1718909 dlopen 10778135 /nix/store/j6846pd6…-mesa-26.2.6/lib/libEGL_mesa.so.0
+70882069798262 1718909 1718909 eglGetPlatformDisplay 10827735 0x31d8
+70882052333138 1718909 1718916 poll 28513759 2 -1
+70882080787747 1718909 1718909 wl_display_roundtrip 97021 queue
+70882080886408 1718909 1718909 wl_display_roundtrip 221190 queue
+70882088093908 1718909 1718909 pthread_create 0 libgallium-26.2.6.so ?
+70882088536998 1718909 1718909 pthread_create 0 libgallium-26.2.6.so ?
+70882088833009 1718909 1718909 pthread_create 0 libgallium-26.2.6.so ?
+70882088866079 1718909 1718909 pthread_create 0 libgallium-26.2.6.so ?
+70882080627167 1718909 1718909 eglInitialize 9209503 1
+70882052713208 1718909 1718910 poll 37238322 2 ppoll
+70882069273081 1718909 1718917 poll 21393490 1 ppoll
+70882091087232 1718909 1718909 FcInit 510 
+70882091097772 1718909 1718909 FcFontList 2632054 1506
+70882097415531 1718909 1718909 xdg_toplevel 0 34
+70882097432101 1718909 1718909 commit 0 30 toplevel
+70882090400471 1718909 1718910 poll 7150390 2 ppoll
+70882080920828 1718909 1718916 poll 16656693 2 -1
+70882097894171 1718909 1718909 pthread_create 0 libgallium-26.2.6.so ?
+70882098113782 1718909 1718909 pthread_create 0 libgallium-26.2.6.so ?
+70882098734793 1718909 1718909 pthread_create 0 libgallium-26.2.6.so ?
+70882097649761 1718909 1718909 eglCreateContext 1149852 ok
+70882098817893 1718909 1718909 eglMakeCurrent 285120 
+70882099121313 1718909 1718909 eglMakeCurrent 3730 
+70882099220863 1718909 1718909 pthread_create 0 libgallium-26.2.6.so ?
+70882099251813 1718909 1718909 pthread_create 0 libgallium-26.2.6.so ?
+70882099556884 1718909 1718909 pthread_create 0 libgallium-26.2.6.so ?
+70882099127323 1718909 1718909 eglCreateContext 478891 ok
+70882100346335 1718909 1718909 pthread_create 0 libQt6Core.so.6 ?
+70882100520645 1718909 1718930 pthread_create 0 libgallium-26.2.6.so ?
+70882100551755 1718909 1718930 pthread_create 0 libgallium-26.2.6.so ?
+70882101293206 1718909 1718930 pthread_create 0 libgallium-26.2.6.so ?
+70882100423905 1718909 1718930 eglCreateContext 938241 ok
+70882101371356 1718909 1718930 eglMakeCurrent 4850 
+70882101391886 1718909 1718930 eglMakeCurrent 2410 
+70882101499306 1718909 1718930 pthread_create 0 libgallium-26.2.6.so ?
+70882101525816 1718909 1718930 pthread_create 0 libgallium-26.2.6.so ?
+70882101925217 1718909 1718930 pthread_create 0 libgallium-26.2.6.so ?
+70882101396026 1718909 1718930 eglCreateContext 579141 ok
+70882097591321 1718909 1718916 poll 4469696 2 -1
+70882102017997 1718909 1718930 wl_display_roundtrip 65800 queue
+70882102184607 1718909 1718930 pthread_create 0 libgallium-26.2.6.so ?
+70882102085847 1718909 1718930 eglMakeCurrent 606671 
+70882109377337 1718909 1718930 pthread_create 0 libgallium-26.2.6.so ?
+70882109429447 1718909 1718930 attach 0 30 buffer
+70882109431987 1718909 1718930 commit-buffer 0 30 toplevel
+70882102082227 1718909 1718916 poll 7726781 2 -1
+70882109459028 1718909 1718915 poll 350720 2 -1
+70882109868748 1718909 1718930 eglMakeCurrent 420 
+70882110096388 1718909 1718930 attach 0 30 buffer
+70882110102738 1718909 1718930 commit-buffer 0 30 toplevel
+70882110132878 1718909 1718930 eglMakeCurrent 150 
+70882109837618 1718909 1718916 poll 366581 2 -1
+70882110255079 1718909 1718930 attach 0 30 buffer
+70882110257399 1718909 1718930 commit-buffer 0 30 toplevel
+70882110276139 1718909 1718930 eglMakeCurrent 430 
+70882110404529 1718909 1718930 attach 0 30 buffer
+70882110406429 1718909 1718930 commit-buffer 0 30 toplevel
+70882110481089 1718909 1718930 attach 0 30 buffer
+70882110482049 1718909 1718930 commit-buffer 0 30 toplevel
+70882110695909 1718909 1718930 attach 0 30 buffer
+70882110697239 1718909 1718930 commit-buffer 0 30 toplevel
+70882110714709 1718909 1718909 poll 480431 3 ppoll

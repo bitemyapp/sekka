@@ -130,8 +130,11 @@ warm-up, alternating). Documents open the same file in each app: a
   Nixpkgs.
 
 Each app ran outside its own desktop, in sway: GNOME's apps had no GNOME
-Shell and KDE's no Plasma platform integration (`QT_QPA_PLATFORMTHEME`
-unset), as each would run on another desktop. A
+Shell and KDE's no Plasma platform integration, as each would run on
+another desktop. The harness passed on the session's environment, so Qt
+programs, the hellos included, loaded Qt's GTK 3 platform theme
+(`QT_QPA_PLATFORMTHEME=gtk3`), which costs them about 23 ms at startup
+and 4.7 MiB ([why-apps.md](why-apps.md)). A
 portal and whatever the apps start over D-Bus were running after the
 warm-up, as in a session. Aizome's apps had no Aizome shell either, so
 their menus were in their windows. First frame is the window mapped:
