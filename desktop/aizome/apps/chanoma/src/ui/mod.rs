@@ -22,6 +22,7 @@ pub mod picker;
 pub mod pinpad;
 pub mod screens;
 pub mod settings;
+pub mod signin;
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -166,6 +167,8 @@ pub enum View {
     Settings(settings::Page),
     /// Choosing a folder.
     Picker(picker::Picker),
+    /// Signing in with the computer's account (the keyboard an overlay).
+    SignIn(signin::SignIn),
     Message(screens::Message),
     /// Nothing but the overlay, over a picture (a game, a film, a page).
     Clear,
@@ -262,7 +265,7 @@ impl Scene {
         let outside = |frame: Rect| (!frame.contains(d)).then_some(Target::Outside);
         match &self.overlay {
             Some(Overlay::Pin(p)) => {
-                return pinpad::hit(d, p.done).map(Target::Key).or_else(|| outside(pinpad::frame()));
+                return pinpad::hit(d, p.done, p.forgot).map(Target::Key).or_else(|| outside(pinpad::frame()));
             }
             Some(Overlay::Menu(m)) => return m.hit(d).map(Target::Item).or_else(|| outside(m.frame())),
             Some(Overlay::Keyboard(k)) => {
@@ -285,6 +288,7 @@ impl Scene {
             View::Settings(p) => p.hit(self.focus, d),
             View::Picker(p) => p.hit(self.focus, d),
             View::Message(m) => m.hit(d).map(Target::Item),
+            View::SignIn(_) => None,
             View::Clear => Some(Target::Picture),
         }
     }
@@ -303,6 +307,7 @@ impl Scene {
                 View::Settings(p) => p.paint(c, theme, self.focus),
                 View::Picker(p) => p.paint(c, theme, self.focus),
                 View::Message(m) => m.paint(c, theme, self.focus),
+                View::SignIn(s) => s.paint(c, theme),
                 View::Clear => {}
             }
             if let Some(ch) = &self.chrome {

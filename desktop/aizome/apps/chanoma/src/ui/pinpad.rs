@@ -2,7 +2,8 @@
 //! is: four to eight presses of the buttons in the legend, a dot in a cell
 //! for each and nothing lit, so someone watching sees that a button went
 //! but not which. A floating panel with a title strip, the cells, the
-//! legend, and Delete (and Done, choosing a new PIN) under it.
+//! legend, and Delete (and Done, choosing a new PIN; *Forgot it?*, asking
+//! for it) under it.
 //!
 //! The legend's buttons are where they are on every controller: the
 //! arrows, the shoulders, and the top and left face buttons. Not the two
@@ -44,6 +45,8 @@ pub enum Key {
     Delete,
     /// A new PIN is finished.
     Done,
+    /// The PIN is forgotten: sign in with the computer's account instead.
+    Forgot,
 }
 
 /// What the pad shows.
@@ -67,6 +70,8 @@ pub struct Pad {
     pub back: Button,
     /// Done finishes it (a new PIN, or one whose length wasn't kept).
     pub done: bool,
+    /// *Forgot it?* is there (the PIN asked for, not a new one chosen).
+    pub forgot: bool,
 }
 
 const STRIP_H: f64 = 84.0;
@@ -96,28 +101,31 @@ pub fn chip_rect(i: usize) -> Rect {
     Rect::new(x, y, x + CHIP, y + CHIP)
 }
 
-/// Delete's button, and Done's second when there's one, along the foot.
-fn foot_rect(second: bool, both: bool) -> Rect {
+/// What's along the foot, as [`hit`] numbers it: Delete (8), then Done (9)
+/// when there's one, then *Forgot it?* (10) when there's that.
+fn foot(done: bool, forgot: bool) -> Vec<usize> {
+    let mut v = vec![8];
+    v.extend(done.then_some(9));
+    v.extend(forgot.then_some(10));
+    v
+}
+
+/// The foot's `k`th of `n` buttons, all of them centred.
+fn foot_rect(k: usize, n: usize) -> Rect {
     let f = frame();
     let y = f.y1 - 44.0 - FOOT_H;
-    let span = 2.0 * FOOT_W + 24.0;
-    let x = if !both {
-        f.center().x - FOOT_W / 2.0
-    } else if second {
-        f.center().x - span / 2.0 + FOOT_W + 24.0
-    } else {
-        f.center().x - span / 2.0
-    };
+    let span = n as f64 * FOOT_W + (n.max(1) - 1) as f64 * 24.0;
+    let x = f.center().x - span / 2.0 + k as f64 * (FOOT_W + 24.0);
     Rect::new(x.round(), y, (x + FOOT_W).round(), y + FOOT_H)
 }
 
-/// What's at design point `p`: a legend button (0 to 7), Delete (8) or
-/// Done (9).
-pub fn hit(p: Point, done: bool) -> Option<usize> {
+/// What's at design point `p`: a legend button (0 to 7), Delete (8), Done
+/// (9) or *Forgot it?* (10).
+pub fn hit(p: Point, done: bool, forgot: bool) -> Option<usize> {
+    let foot = foot(done, forgot);
     (0..BUTTONS.len())
         .find(|i| chip_rect(*i).contains(p))
-        .or_else(|| foot_rect(false, done).contains(p).then_some(8))
-        .or_else(|| (done && foot_rect(true, done).contains(p)).then_some(9))
+        .or_else(|| foot.iter().enumerate().find(|(k, _)| foot_rect(*k, foot.len()).contains(p)).map(|(_, id)| *id))
 }
 
 /// What a click on target `i` (from [`hit`]) does.
@@ -125,6 +133,7 @@ pub fn key_at(i: usize) -> Key {
     match i {
         8 => Key::Delete,
         9 => Key::Done,
+        10 => Key::Forgot,
         _ => Key::Press(BUTTONS[i.min(BUTTONS.len() - 1)]),
     }
 }
@@ -205,10 +214,15 @@ impl Pad {
                 c.fill_rect(r, theme.raised().with_alpha(0.6));
             }
         }
-        let mut foot = vec![(foot_rect(false, self.done), self.back, "Delete")];
-        if self.done {
-            foot.push((foot_rect(true, self.done), self.ok, "Done"));
-        }
+        let ids = foot(self.done, self.forgot);
+        let foot = ids.iter().enumerate().map(|(k, id)| {
+            let (b, what) = match id {
+                8 => (self.back, "Delete"),
+                9 => (self.ok, "Done"),
+                _ => (Button::Start, "Forgot it?"),
+            };
+            (foot_rect(k, ids.len()), b, what)
+        });
         for (r, b, what) in foot {
             face(c, theme, r, theme.raised(), theme.line2());
             let w = hint_width(theme, self.family, b, what);
@@ -230,13 +244,17 @@ mod tests {
         for b in [Button::South, Button::East, Button::L2, Button::R2, Button::Start, Button::Select, Button::Guide] {
             assert_eq!(digit(b), None, "{b:?}");
         }
-        assert_eq!(hit(chip_rect(4).center(), false), Some(4));
+        assert_eq!(hit(chip_rect(4).center(), false, false), Some(4));
         assert_eq!(key_at(4), Key::Press(Button::L1));
-        assert_eq!(hit(foot_rect(false, false).center(), false), Some(8));
-        assert_eq!(hit(foot_rect(true, true).center(), true), Some(9));
+        assert_eq!(hit(foot_rect(0, 1).center(), false, false), Some(8));
+        assert_eq!(hit(foot_rect(1, 2).center(), true, false), Some(9));
         assert_eq!(key_at(9), Key::Done);
-        // The legend fits the pad.
+        // Asked for the PIN: Delete, then *Forgot it?*.
+        assert_eq!(hit(foot_rect(1, 2).center(), false, true), Some(10));
+        assert_eq!(key_at(10), Key::Forgot);
+        // The legend fits the pad, three along its foot too.
         assert!(chip_rect(0).x0 > frame().x0 && chip_rect(7).x1 < frame().x1);
-        assert!(chip_rect(0).y1 < foot_rect(false, true).y0);
+        assert!(chip_rect(0).y1 < foot_rect(0, 3).y0);
+        assert!(foot_rect(0, 3).x0 > frame().x0 && foot_rect(2, 3).x1 < frame().x1);
     }
 }

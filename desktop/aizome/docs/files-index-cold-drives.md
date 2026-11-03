@@ -58,6 +58,9 @@ shares.
    files (about 2 MB rather than 11.4 MB), and skip the drive's biggest
    folders. This needs apps to say what they want (folders to leave out),
    which the index is to have anyway. Not timed cold.
+   Chanoma's *Add a folder* opens on *Suggested*, which finds a
+   drive's `roms` from the drive's top two levels without reading the
+   rest, so adding the collection rather than the drive is one press.
 2. **Hide the wait.** Apps already show what the index knew before the
    look. A look could also take the folder on screen first.
 3. **Fill the kernel's cache in bulk, then look as usual.** The exFAT

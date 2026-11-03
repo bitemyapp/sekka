@@ -34,7 +34,7 @@ fn main() {
     let cores = Cores::search_path();
     for (pass, refresh) in [("first look", true), ("second look", true)] {
         let began = Instant::now();
-        let lib = scan(&mut index, &folders, &[], &cores, metadata.as_deref(), refresh);
+        let lib = scan(&mut index, &folders, &cores, metadata.as_deref(), refresh, &|_, _| {});
         let took = began.elapsed();
         let known = lib.games.iter().filter(|g| g.info.is_some()).count();
         println!(

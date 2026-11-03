@@ -17,6 +17,7 @@
 //! - [`app`] and [`ui`]: the program and what it draws.
 
 pub mod app;
+pub mod art;
 pub mod browser;
 pub mod clock;
 pub mod collection;
