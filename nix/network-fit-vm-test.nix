@@ -50,14 +50,22 @@ pkgs.testers.runNixOSTest {
             time.sleep(0.2)
         machine.screenshot("failure")
         raise AssertionError(json.dumps(dict(window=window(), monitor=monitor())))
-    def fits():
+    def fits(*, centered=False):
         c, m = window(), monitor()
         if not c: return False
         x, y = c["at"]; w, h = c["size"]
         left, top, right, bottom = m["reserved"]
-        return (m["x"] + left <= x and m["y"] + top <= y
-                and x + w <= m["x"] + m["width"] / m["scale"] - right
-                and y + h <= m["y"] + m["height"] / m["scale"] - bottom)
+        inside = (m["x"] + left <= x and m["y"] + top <= y
+                  and x + w <= m["x"] + m["width"] / m["scale"] - right
+                  and y + h <= m["y"] + m["height"] / m["scale"] - bottom)
+        if not inside or not centered:
+            return inside
+        # On a scale decrease, the old position already fits the larger
+        # workspace. Wait for Tatami's display watcher to recenter it before
+        # taking pointer coordinates; monitor scale changes arrive first.
+        cx = m["x"] + left + (m["width"] / m["scale"] - left - right - w) / 2
+        cy = m["y"] + top + (m["height"] / m["scale"] - top - bottom - h) / 2
+        return abs(x - cx) <= 1 and abs(y - cy) <= 1
     machine.start()
     machine.wait_for_unit("ydotoold.service")
     machine.wait_until_succeeds("test -S /run/user/1000/hypr/*/.socket.sock", timeout=180)
@@ -115,6 +123,7 @@ pkgs.testers.runNixOSTest {
         time.sleep(0.3)
         machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool click 0xC0")
     def close_button():
+        wait_for(lambda: fits(centered=True))
         c = window()
         click(c["at"][0] + c["size"][0] - 24, c["at"][1] + 24)
         wait_for(lambda: window() is None)
@@ -125,7 +134,7 @@ pkgs.testers.runNixOSTest {
         machine.send_chars("Network settings")
         text("Network settings")
         machine.send_key("ret")
-        wait_for(fits)
+        wait_for(lambda: fits(centered=True))
         time.sleep(2)
     def scroll_bottom():
         c = window()
@@ -145,13 +154,13 @@ pkgs.testers.runNixOSTest {
     for scale in [1.6, 2]:
         machine.send_key("meta_l-slash")
         wait_for(lambda: abs(monitor()["scale"] - scale) < 0.001)
-        wait_for(fits)
+        wait_for(lambda: fits(centered=True))
     machine.screenshot("scale2")
     for scale in [2, 3.2]:
         if scale == 3.2:
             machine.send_key("meta_l-slash")
             wait_for(lambda: abs(monitor()["scale"] - scale) < 0.001)
-            wait_for(fits)
+            wait_for(lambda: fits(centered=True))
         text("Ethernet")
         c = window()
         click(c["at"][0] + c["size"][0] / 2, c["at"][1] + 134)
@@ -172,7 +181,7 @@ pkgs.testers.runNixOSTest {
     for scale in [2, 1.6, 1.25, 1]:
         machine.send_key("meta_l-alt-slash")
         wait_for(lambda: abs(monitor()["scale"] - scale) < 0.001)
-        wait_for(fits)
+        wait_for(lambda: fits(centered=True))
     close_button()
     open_panel()
     machine.screenshot("scale1-restored")
