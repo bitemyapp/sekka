@@ -56,7 +56,7 @@ pub fn menus(app: &Sumi) -> MenuBar<Msg> {
 
     let mut recent = Menu::new("Open Recent");
     for p in app.recent.iter().take(12) {
-        recent.push(MenuItem::new(recent_label(p), Msg::OpenRecent(p.clone())));
+        recent.push(MenuItem::new(recent_label(p), Msg::OpenRecent(p.clone())).key(p));
     }
     let recent = if app.recent.is_empty() {
         recent.item(MenuItem::new("No Recent Files", Msg::Nothing).enabled(false))

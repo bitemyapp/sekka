@@ -53,7 +53,7 @@ An item:
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
-| `id` | number | — | Stable while the item is: the app's own if it gave one, else derived from its role (`copy` is always the same id), else from its menu's title, label and place. Submenus' ids have bit 30 set. Separators and headers are 0. |
+| `id` | number | — | Stable while the item is. An item the app keys (a row of a changing list: a tab, a recent file) has bit 31 set: its id stays with its key while its label or place changes, and is never given to another key, so choosing a row from a menu shown before the list changed chooses what it was for or nothing. Other items: derived from their role (`copy` is always the same id), else from their menu's title and label (and which of the items labelled alike it is, so rows coming and going before it don't change it), below bit 30. Submenus' ids have bit 30 set; so do the window list's rows, `0x57000000` plus the window. Separators and headers are 0. |
 | `kind` | `action`, `separator`, `submenu`, `header` | `action` | A header is a section's name: text that does nothing. |
 | `label` | string | `""` | |
 | `shortcut` | object | none | `key` (a character such as `"N"` or `","`, or a name: `Enter`, `Tab`, `Space`, `Escape`, `Backspace`, `Delete`, `Up`, `Down`, `Left`, `Right`, `Home`, `End`, `PageUp`, `PageDown`, `F1`…), and `command` (❖, Super), `shift`, `alt`, `ctrl`, each `false` if left out. Printed ⌃ ⌥ ⇧ ❖ then the key. |

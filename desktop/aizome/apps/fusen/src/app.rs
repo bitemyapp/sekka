@@ -1,4 +1,4 @@
-//! Fusen, the program: the notes, the main window, the stickies, and what
+//! Fuse                .push(MenuItem::new(f.clone(), Msg::MoveTo(f.clone())).key(f).checked(note.is_some_and(|n| n.folder == *f)));, the program: the notes, the main window, the stickies, and what
 //! each message does.
 
 use std::collections::{BTreeMap, HashMap};

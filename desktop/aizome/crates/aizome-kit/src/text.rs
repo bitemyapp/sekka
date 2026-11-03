@@ -402,6 +402,20 @@ pub struct Text<Msg> {
 
 crate::builder!(Text);
 
+/// `s` at most `most` characters long as people count them (a flag, an
+/// emoji with its skin tone or a letter with its accents is one), the last
+/// an ellipsis if any were left out: for text with no width to fit, such
+/// as a label for the shell's menus.
+pub fn clip(s: &str, most: usize) -> std::borrow::Cow<'_, str> {
+    use unicode_segmentation::UnicodeSegmentation;
+    let mut starts = s.grapheme_indices(true).map(|(i, _)| i);
+    if starts.clone().nth(most).is_none() {
+        return s.into();
+    }
+    let end = starts.nth(most.saturating_sub(1)).unwrap_or(0);
+    format!("{}…", s[..end].trim_end()).into()
+}
+
 /// Text: `text("Hello").size(15.0).weight(600.0)`. One line, ending in an
 /// ellipsis where it doesn't fit, unless it [`wrap`](Text::wrap)s.
 pub fn text<Msg>(content: impl Into<Arc<str>>) -> Text<Msg> {
@@ -822,5 +836,18 @@ mod tests {
         assert_eq!(lines.len(), 2);
         // The last line holds the rest, cut short by the ellipsis.
         assert_eq!(lines[1].range.end, text.len(), "{lines:?}");
+    }
+
+    #[test]
+    fn clipping_keeps_whole_characters_and_says_so() {
+        assert!(matches!(clip("Kirby", 5), std::borrow::Cow::Borrowed("Kirby")));
+        assert_eq!(clip(&"a".repeat(49), 48), format!("{}…", "a".repeat(47)));
+        // A family is one character, and so is a letter with its accent.
+        let family = "👨\u{200d}👩\u{200d}👧\u{200d}👦";
+        assert_eq!(clip(&format!("ab{family}cd"), 4), format!("ab{family}…"));
+        assert_eq!(clip(&"e\u{301}".repeat(5), 3), "e\u{301}e\u{301}…");
+        assert_eq!(clip("🇯🇵🇫🇷🇩🇪", 2), "🇯🇵…");
+        // No space before the ellipsis.
+        assert_eq!(clip("one two three", 5), "one…");
     }
 }

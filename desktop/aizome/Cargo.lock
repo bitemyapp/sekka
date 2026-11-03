@@ -204,7 +204,6 @@ dependencies = [
  "aizome-face",
  "aizome-kit",
  "aizome-search",
- "aizome-shell-proto",
  "aizome-theme",
  "base64 0.22.1",
  "env_logger",

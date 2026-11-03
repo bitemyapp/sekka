@@ -538,7 +538,7 @@ pub fn menus(app: &Utsushi) -> MenuBar<Msg> {
     let key = Shortcut::key;
     let mut recent = Menu::new("Open Recent");
     for (i, r) in app.store.recent.iter().take(12).enumerate() {
-        recent = recent.item(MenuItem::new(r.title.clone(), Msg::OpenRecent(i)));
+        recent = recent.item(MenuItem::new(r.title.clone(), Msg::OpenRecent(i)).key(&r.path));
     }
     recent =
         recent.separator().item(MenuItem::new("Clear Menu", Msg::ClearRecent).enabled(!app.store.recent.is_empty()));

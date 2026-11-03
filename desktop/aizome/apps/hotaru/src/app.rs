@@ -1809,6 +1809,11 @@ impl Program for Hotaru {
                 if self.tabs.iter().any(|tab| tab.id == id) {
                     self.active = id;
                     self.focus_after_rebuild(cx);
+                    // Chosen from the Window menu, or by its keys, while
+                    // Settings has the keyboard: show it.
+                    if cx.key_window() != Some(self.window) {
+                        cx.activate(self.window);
+                    }
                 }
             }
             Msg::CloseTab => self.close_tab(cx),
@@ -2620,13 +2625,13 @@ impl Program for Hotaru {
         for (index, tab) in self.tabs.iter().enumerate() {
             let title =
                 self.panes.iter().find(|pane| pane.id == tab.active).map_or("Shell", |pane| pane.title.as_str());
-            let title: String = title.chars().take(48).collect();
+            let title = aizome_kit::text::clip(title, 48);
             window = window.item(
                 self.keyed(
                     MenuItem::new(title, Msg::SelectTab(tab.id))
-                        // An open shell menu keeps this id while titles change or
-                        // other tabs close. Stay outside the kit's generated ids.
-                        .id(0x8000_0000 | tab.id.get() as u32)
+                        // A menu the shell has open keeps choosing this tab while
+                        // its title changes or tabs before it close.
+                        .key(tab.id)
                         .checked(tab.id == self.active),
                     self.tab_shortcut(index),
                 ),

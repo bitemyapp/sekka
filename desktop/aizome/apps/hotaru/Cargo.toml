@@ -24,9 +24,6 @@ serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
 
-[dev-dependencies]
-aizome-shell-proto = { path = "../../crates/aizome-shell-proto" }
-
 [[bin]]
 name = "aizome-hotaru"
 path = "src/main.rs"

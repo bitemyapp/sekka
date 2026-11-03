@@ -5,6 +5,7 @@
 //! items go to the focused text widget; the Window menu's to the
 //! compositor).
 
+use std::hash::Hash;
 use std::marker::PhantomData;
 
 use sidestep_ui::{Key, KeyEvent, NamedKey};
@@ -288,7 +289,10 @@ pub struct ActionSpec {
     pub enabled: bool,
     pub checked: bool,
     pub role: Option<MenuRole>,
-    /// A stable id for the shell protocol, if the app picks it.
+    /// What the app says the item is for ([`MenuItem::key`]), hashed: the
+    /// shell protocol's id follows it rather than the label and place.
+    pub key: Option<u64>,
+    /// The kit's own id for the shell protocol (the window list's rows).
     pub id: Option<u32>,
     pub icon: Option<Icon>,
 }
@@ -419,6 +423,7 @@ impl<Msg> MenuItem<Msg> {
                 enabled: true,
                 checked: false,
                 role: None,
+                key: None,
                 id: None,
                 icon: None,
             }),
@@ -474,11 +479,16 @@ impl<Msg> MenuItem<Msg> {
         self
     }
 
-    /// Its id in the shell protocol (else one is derived from its place
-    /// and label).
-    pub fn id(mut self, id: u32) -> Self {
+    /// What the item is for, such as the tab or file a row of a list
+    /// opens: the shell knows it by an id that follows `key` while its
+    /// label changes or the rows around it come and go, and that no other
+    /// key is ever given, so a menu still open on an older list never
+    /// chooses another row. Without one, an item's id comes from its menu,
+    /// label and place, which is right for items that are always there.
+    /// Unique within its menu.
+    pub fn key(mut self, key: impl Hash) -> Self {
         if let Some(a) = self.action() {
-            a.id = Some(id);
+            a.key = Some(crate::hash::hash_of(&key));
         }
         self
     }

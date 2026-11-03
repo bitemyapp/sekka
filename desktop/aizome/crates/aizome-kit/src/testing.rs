@@ -802,6 +802,13 @@ impl<P: Program> Harness<P> {
         self.platform.fullscreen.get(&win).copied()
     }
 
+    /// How many times the program has asked for window `key` to be
+    /// brought forward.
+    pub fn activations(&self, key: WindowKey) -> usize {
+        let win = self.win(key);
+        self.platform.activations.iter().filter(|(w, _)| *w == win).count()
+    }
+
     /// A key press (and release) in the window with the keyboard.
     pub fn key(&mut self, key: WindowKey, k: Key, mods: Modifiers) {
         let win = self.keyboard_window(key);
@@ -1460,6 +1467,155 @@ pub fn assert_golden<P: Program>(h: &mut Harness<P>, key: WindowKey, path: impl 
             actual.display()
         );
     }
+}
+
+/// How long a [`FakeShell`] waits for the app.
+const SHELL_WAIT: Duration = Duration::from_secs(5);
+
+/// A stand-in for the Aizome shell: a socket in a directory of its own
+/// (gone with the shell, and cleared of one a crashed test left), the
+/// app's messages read from it, and choices sent back. Waiting for the
+/// app gives up after five seconds, failing the test rather than hanging
+/// it.
+///
+/// ```no_run
+/// # use aizome_kit::prelude::*;
+/// # #[derive(Default)] struct App; #[derive(Clone)] enum Msg {}
+/// # impl Program for App { type Msg = Msg; fn info(&self) -> AppInfo { AppInfo::new("a", "A", "a") }
+/// # fn launched(&mut self, cx: &mut Cx<Msg>) { cx.open_window(WindowSpec::new("A")); }
+/// # fn update(&mut self, _: Msg, _: &mut Cx<Msg>) {} fn view(&self, _: WindowKey) -> Element<Msg> { text("").into() } }
+/// use aizome_kit::testing::{FakeShell, menu_item};
+///
+/// let mut shell = FakeShell::new();
+/// let mut h = shell.launch(App::default());
+/// h.advance(std::time::Duration::from_millis(50));
+/// let menus = shell.menus();
+/// shell.activate(&mut h, menu_item(&menus, "Save").id);
+/// ```
+pub struct FakeShell {
+    dir: std::path::PathBuf,
+    path: std::path::PathBuf,
+    listener: Option<std::os::unix::net::UnixListener>,
+    app: Option<(std::io::BufReader<std::os::unix::net::UnixStream>, std::os::unix::net::UnixStream)>,
+}
+
+impl FakeShell {
+    /// A shell listening.
+    pub fn new() -> FakeShell {
+        let mut shell = FakeShell::unheard();
+        shell.listen();
+        shell
+    }
+
+    /// Where a shell will be, not listening yet (for an app the session
+    /// starts before the shell); [`listen`](FakeShell::listen) when it comes.
+    pub fn unheard() -> FakeShell {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("aizome-shell-{}-{n}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a directory for the shell's socket");
+        let path = dir.join("shell.sock");
+        FakeShell { dir, path, listener: None, app: None }
+    }
+
+    /// The socket (`$AIZOME_SHELL_SOCKET`).
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Listen at the socket, again if the shell went.
+    pub fn listen(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+        let listener = std::os::unix::net::UnixListener::bind(&self.path).expect("the shell's socket");
+        listener.set_nonblocking(true).expect("a socket that doesn't block");
+        self.listener = Some(listener);
+    }
+
+    /// Launch `program` talking to this shell, and take its connection.
+    pub fn launch<P: Program>(&mut self, program: P) -> Harness<P> {
+        let h = Harness::with_shell(program, &self.path);
+        assert!(h.has_shell(), "the app didn't reach the shell at {}", self.path.display());
+        self.accept();
+        h
+    }
+
+    /// Take the app's connection.
+    pub fn accept(&mut self) {
+        let listener = self.listener.as_ref().expect("the shell listening");
+        let deadline = std::time::Instant::now() + SHELL_WAIT;
+        let stream = loop {
+            match listener.accept() {
+                Ok((stream, _)) => break stream,
+                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && std::time::Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+                Err(e) => panic!("the app didn't connect to the shell: {e}"),
+            }
+        };
+        stream.set_nonblocking(false).expect("a connection that blocks");
+        stream.set_read_timeout(Some(SHELL_WAIT)).expect("a read timeout");
+        let writer = stream.try_clone().expect("the connection twice");
+        self.app = Some((std::io::BufReader::new(stream), writer));
+    }
+
+    /// The app's next message.
+    pub fn read(&mut self) -> aizome_shell_proto::AppMessage {
+        use std::io::BufRead;
+        let (reader, _) = self.app.as_mut().expect("an app connected");
+        let mut line = String::new();
+        let n = reader.read_line(&mut line).expect("the app's next message in time");
+        assert_ne!(n, 0, "the app hung up");
+        aizome_shell_proto::decode(&line).expect("a message the shell knows")
+    }
+
+    /// The menus the app publishes next, past whatever else it sends.
+    pub fn menus(&mut self) -> Vec<aizome_shell_proto::Menu> {
+        loop {
+            if let aizome_shell_proto::AppMessage::Menus { menus } = self.read() {
+                return menus;
+            }
+        }
+    }
+
+    pub fn send(&mut self, msg: &aizome_shell_proto::ShellMessage) {
+        use std::io::Write;
+        let (_, writer) = self.app.as_mut().expect("an app connected");
+        writer.write_all(aizome_shell_proto::encode(msg).as_bytes()).expect("the app there");
+    }
+
+    /// Choose item `id` from the app's menus, and have the app take it.
+    pub fn activate<P: Program>(&mut self, h: &mut Harness<P>, id: u32) {
+        self.send(&aizome_shell_proto::ShellMessage::Activate { id });
+        assert_eq!(h.pump_shell(SHELL_WAIT), 1, "the app took the choice");
+    }
+
+    /// The shell goes: its connection and its socket.
+    pub fn hang_up(&mut self) {
+        self.app = None;
+        self.listener = None;
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+impl Default for FakeShell {
+    fn default() -> FakeShell {
+        FakeShell::new()
+    }
+}
+
+impl Drop for FakeShell {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+/// The item labelled `label` in `menus`, in a submenu or not.
+pub fn menu_item<'a>(menus: &'a [aizome_shell_proto::Menu], label: &str) -> &'a aizome_shell_proto::Item {
+    fn walk<'a>(items: &'a [aizome_shell_proto::Item], label: &str) -> Option<&'a aizome_shell_proto::Item> {
+        items.iter().find_map(|i| if i.label == label { Some(i) } else { walk(&i.items, label) })
+    }
+    menus.iter().find_map(|m| walk(&m.items, label)).unwrap_or_else(|| panic!("no item {label:?} in the menus"))
 }
 
 /// What a selection holds: every type of the prepared data while its text is

@@ -9,6 +9,7 @@
 //! for its socket once a second; once the shell is there the menus go to
 //! it again.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, channel};
@@ -153,22 +154,98 @@ impl Drop for ShellWatch {
     }
 }
 
-/// An item's id: its own, else its role's, else from its menu's title,
-/// its label and its place, so it stays while the item does.
-fn item_id(a: &ActionSpec, path: &str, index: usize) -> u32 {
+// The ids the shell knows items by (docs/shell-protocol.md): 0 for
+// separators and headers; below `SUBMENU`, an item's role's or one made
+// from its menu and label (and which of those labelled alike it is);
+// `SUBMENU`'s bit, a submenu's, among them the window list's rows
+// (`WINDOW_LIST` plus the window); `KEYED`'s bit, an item the app keys.
+const DERIVED: u32 = 0x3fff_ffff;
+const SUBMENU: u32 = 0x4000_0000;
+pub(crate) const WINDOW_LIST: u32 = 0x5700_0000;
+const KEYED: u32 = 0x8000_0000;
+
+/// The ids of the items the app keys ([`MenuItem::key`](crate::MenuItem::key)),
+/// by their keys and menus: a key keeps its id while it's in the menus,
+/// and an id is never given to another key, so a row a menu still shows
+/// after its key has gone chooses nothing rather than its neighbour.
+#[derive(Default)]
+pub(crate) struct KeyedIds {
+    ids: HashMap<u64, u32>,
+    last: u32,
+}
+
+impl KeyedIds {
+    fn get(&self, path: &str, key: u64) -> Option<u32> {
+        self.ids.get(&hash_of(&(path, key))).copied()
+    }
+}
+
+/// Giving the keyed items in menus being published their ids.
+struct Keying {
+    before: KeyedIds,
+    now: HashMap<u64, u32>,
+}
+
+impl Keying {
+    fn id(&mut self, path: &str, key: u64) -> u32 {
+        let k = hash_of(&(path, key));
+        if let Some(&id) = self.now.get(&k) {
+            return id;
+        }
+        let id = self.before.ids.get(&k).copied().unwrap_or_else(|| {
+            loop {
+                // Round after two thousand million keys, past any still shown.
+                self.before.last = self.before.last % !KEYED + 1;
+                let id = KEYED | self.before.last;
+                if !self.before.ids.values().any(|&i| i == id) {
+                    break id;
+                }
+            }
+        });
+        self.now.insert(k, id);
+        id
+    }
+
+    fn done(self) -> KeyedIds {
+        KeyedIds { ids: self.now, last: self.before.last }
+    }
+}
+
+/// The id of `spec`'s `i`th item, action `a`: its key's, else the kit's
+/// own, else its role's, else from its menu's title, its label and which
+/// of the items labelled alike it is, so it stays while the item does
+/// however rows come and go before it. `keyed` gives a key's (none if it
+/// hasn't one yet).
+fn item_id(
+    spec: &MenuSpec,
+    i: usize,
+    a: &ActionSpec,
+    path: &str,
+    keyed: &mut dyn FnMut(u64) -> Option<u32>,
+) -> Option<u32> {
+    if let Some(key) = a.key {
+        return keyed(key);
+    }
     if let Some(id) = a.id {
-        return id;
+        return Some(id);
     }
     let h = match a.role {
         Some(r) if r != crate::menu::MenuRole::WindowList => hash_of(&("role", r.name())),
-        _ => hash_of(&(path, a.label.as_str(), index)),
+        _ => {
+            let alike = |item: &ItemSpec| matches!(item, ItemSpec::Action(b) if b.label == a.label && labelled(b));
+            hash_of(&(path, a.label.as_str(), spec.items[..i].iter().filter(|item| alike(item)).count()))
+        }
     };
-    // Kept off 0 and the window list's range.
-    ((h as u32) & 0x3fff_ffff).max(1)
+    Some(((h as u32) & DERIVED).max(1))
+}
+
+/// Whether an item's id comes from its label.
+fn labelled(a: &ActionSpec) -> bool {
+    a.key.is_none() && a.id.is_none() && a.role.is_none_or(|r| r == crate::menu::MenuRole::WindowList)
 }
 
 fn menu_id(path: &str) -> u32 {
-    ((hash_of(&("menu", path)) as u32) & 0x3fff_ffff).max(1) | 0x4000_0000
+    ((hash_of(&("menu", path)) as u32) & DERIVED).max(1) | SUBMENU
 }
 
 fn shortcut(s: &Shortcut) -> proto::Shortcut {
@@ -193,12 +270,12 @@ fn shortcut(s: &Shortcut) -> proto::Shortcut {
     proto::Shortcut { key, command: s.command, shift: s.shift, alt: s.alt, ctrl: s.ctrl }
 }
 
-fn items(spec: &MenuSpec, path: &str) -> Vec<proto::Item> {
+fn items(spec: &MenuSpec, path: &str, keying: &mut Keying) -> Vec<proto::Item> {
     let mut out = Vec::new();
     for (i, item) in spec.items.iter().enumerate() {
         out.push(match item {
             ItemSpec::Action(a) => proto::Item {
-                id: item_id(a, path, i),
+                id: item_id(spec, i, a, path, &mut |key| Some(keying.id(path, key))).unwrap_or_default(),
                 kind: proto::ItemKind::Action,
                 label: a.label.clone(),
                 shortcut: a.shortcut.as_ref().map(shortcut),
@@ -225,7 +302,7 @@ fn items(spec: &MenuSpec, path: &str) -> Vec<proto::Item> {
                     kind: proto::ItemKind::Submenu,
                     label: m.title.clone(),
                     enabled: !m.items.is_empty(),
-                    items: items(m, &sub),
+                    items: items(m, &sub, keying),
                     ..Default::default()
                 }
             }
@@ -234,28 +311,35 @@ fn items(spec: &MenuSpec, path: &str) -> Vec<proto::Item> {
     out
 }
 
-/// The menus as the shell gets them, their states settled.
-pub(crate) fn published(core: &Core) -> Vec<proto::Menu> {
-    core.menubar
+/// The menus as the shell gets them, their states settled; the keyed
+/// items' ids are kept for [`find`].
+pub(crate) fn published(core: &mut Core) -> Vec<proto::Menu> {
+    let mut keying = Keying { before: std::mem::take(&mut core.keyed_ids), now: HashMap::new() };
+    let menus = core
+        .menubar
         .iter()
         .enumerate()
         .map(|(i, m)| {
             let mut m = m.clone();
             core.settle_app_menu(&mut m, None);
             let path = if i == 0 { "app".to_owned() } else { m.title.clone() };
-            proto::Menu { id: menu_id(&path), title: m.title.clone(), items: items(&m, &path) }
+            proto::Menu { id: menu_id(&path), title: m.title.clone(), items: items(&m, &path, &mut keying) }
         })
-        .collect()
+        .collect();
+    core.keyed_ids = keying.done();
+    menus
 }
 
 /// The action with the shell's id `id`.
 pub(crate) fn find(core: &Core, id: u32) -> Option<ActionSpec> {
-    fn walk(spec: &MenuSpec, path: &str, id: u32) -> Option<ActionSpec> {
+    fn walk(spec: &MenuSpec, path: &str, id: u32, keyed: &KeyedIds) -> Option<ActionSpec> {
         for (i, item) in spec.items.iter().enumerate() {
             match item {
-                ItemSpec::Action(a) if item_id(a, path, i) == id => return Some(a.clone()),
+                ItemSpec::Action(a) if item_id(spec, i, a, path, &mut |key| keyed.get(path, key)) == Some(id) => {
+                    return Some(a.clone());
+                }
                 ItemSpec::Submenu(m) => {
-                    if let Some(a) = walk(m, &format!("{path}/{}", m.title), id) {
+                    if let Some(a) = walk(m, &format!("{path}/{}", m.title), id, keyed) {
                         return Some(a);
                     }
                 }
@@ -268,7 +352,7 @@ pub(crate) fn find(core: &Core, id: u32) -> Option<ActionSpec> {
         let mut m = m.clone();
         core.settle_app_menu(&mut m, None);
         let path = if i == 0 { "app".to_owned() } else { m.title.clone() };
-        walk(&m, &path, id)
+        walk(&m, &path, id, &core.keyed_ids)
     })
 }
 
@@ -311,8 +395,8 @@ mod tests {
         let info = AppInfo::new("org.aizome.Test", "Test", "Tester");
         let mut core = Core::new(info.clone(), Appearance::default());
         core.menubar = MenuBar::<()>::standard(&info).into_specs();
-        let a = published(&core);
-        let b = published(&core);
+        let a = published(&mut core);
+        let b = published(&mut core);
         assert_eq!(a, b);
         assert_eq!(a[0].title, "Test");
         let edit = &a[1];
@@ -349,14 +433,14 @@ mod tests {
         let info = AppInfo::new("org.aizome.Test", "Test", "Tester");
         let mut core = Core::new(info.clone(), Appearance::default());
         core.menubar = MenuBar::<()>::standard(&info).into_specs();
-        assert!(!published(&core)[0].items.iter().any(|i| i.label == "Settings…"));
+        assert!(!published(&mut core)[0].items.iter().any(|i| i.label == "Settings…"));
         assert!(!core.menubar[0].actions().into_iter().any(|a| a.role == Some(MenuRole::Settings)));
         // An app that explicitly adds a role without implementing it must
         // still get the unavailable state in both menu implementations.
         core.menubar = MenuBar::<()>::standard(&info)
             .extend("Test", [MenuItem::role_item("Settings…", MenuRole::Settings)])
             .into_specs();
-        let menus = published(&core);
+        let menus = published(&mut core);
         for (index, label) in [(0, "Settings…"), (3, "Test Help")] {
             let item = menus[index].items.iter().find(|i| i.label == label).unwrap();
             assert!(!item.enabled, "{label} has no handler");
@@ -380,16 +464,88 @@ mod tests {
                 Menu::new("App")
                     .item(MenuItem::new("Settings", ()).role(MenuRole::Settings))
                     .item(MenuItem::new("Help", ()).role(MenuRole::Help))
-                    .item(MenuItem::new("Unavailable Settings", ()).role(MenuRole::Settings).id(41).enabled(false))
-                    .item(MenuItem::new("Unavailable Help", ()).role(MenuRole::Help).id(42).enabled(false)),
+                    .item(
+                        MenuItem::new("Unavailable Settings", ())
+                            .role(MenuRole::Settings)
+                            .key("settings")
+                            .enabled(false),
+                    )
+                    .item(MenuItem::new("Unavailable Help", ()).role(MenuRole::Help).key("help").enabled(false)),
             )
             .into_specs();
-        let items = &published(&core)[0].items;
+        let items = &published(&mut core)[0].items;
         assert_eq!(items.iter().map(|i| i.enabled).collect::<Vec<_>>(), [true, true, false, false]);
         for item in items {
             let action = find(&core, item.id).unwrap();
             assert!(action.msg.is_some());
             assert_eq!(action.enabled, item.enabled);
         }
+    }
+
+    #[test]
+    fn keyed_items_keep_their_ids_and_never_take_anothers() {
+        let info = AppInfo::new("org.aizome.Test", "Test", "Tester");
+        let mut core = Core::new(info, Appearance::default());
+        let rows = |list: &[(u64, &str)]| {
+            MenuBar::new()
+                .with_menu(Menu::new("Test"))
+                .with_menu(
+                    Menu::new("Window").items(list.iter().map(|&(key, label)| MenuItem::new(label, key).key(key))),
+                )
+                .into_specs()
+        };
+        let ids = |menus: &[proto::Menu]| menus[1].items.iter().map(|i| i.id).collect::<Vec<_>>();
+        // Keys alike but for their high bits, under one label: an id each,
+        // all of them the keyed items'.
+        let (a, b, c) = (7, 7 + (1 << 31), 7 + (1 << 32));
+        core.menubar = rows(&[(a, "Same"), (b, "Same"), (c, "Same")]);
+        let first = ids(&published(&mut core));
+        assert!(first.iter().all(|id| id & KEYED != 0));
+        assert!(first[0] != first[1] && first[1] != first[2] && first[0] != first[2]);
+        // Relabelled and reordered, each keeps its id and chooses its row.
+        core.menubar = rows(&[(c, "Third"), (a, "First"), (b, "Second")]);
+        assert_eq!(ids(&published(&mut core)), [first[2], first[0], first[1]]);
+        assert_eq!(find(&core, first[1]).unwrap().label, "Second");
+        // Gone, its id chooses nothing, nor is it a newcomer's.
+        core.menubar = rows(&[(c, "Third"), (a, "First")]);
+        published(&mut core);
+        assert!(find(&core, first[1]).is_none());
+        core.menubar = rows(&[(c, "Third"), (a, "First"), (8, "Second")]);
+        let now = ids(&published(&mut core));
+        assert!(!first.contains(&now[2]));
+        assert!(find(&core, first[1]).is_none());
+        // The same key in another menu is another item.
+        core.menubar = MenuBar::new()
+            .with_menu(Menu::new("Test"))
+            .with_menu(Menu::new("Window").item(MenuItem::new("In Window", 1).key(a)))
+            .with_menu(Menu::new("Go").item(MenuItem::new("In Go", 2).key(a)))
+            .into_specs();
+        let menus = published(&mut core);
+        let first_in = |title: &str| menus.iter().find(|m| m.title == title).unwrap().items[0].id;
+        assert_ne!(first_in("Window"), first_in("Go"));
+        assert_eq!(find(&core, first_in("Go")).unwrap().label, "In Go");
+    }
+
+    #[test]
+    fn items_keep_their_ids_as_rows_come_and_go_before_them() {
+        let info = AppInfo::new("org.aizome.Test", "Test", "Tester");
+        let mut core = Core::new(info, Appearance::default());
+        let go = |places: &[&str]| {
+            let mut go = Menu::new("Go");
+            for place in places {
+                go.push(MenuItem::new(*place, ()).key(*place));
+            }
+            let go = go
+                .item(MenuItem::new("Trash", ()))
+                .item(MenuItem::new("Go to Folder…", ()))
+                .item(MenuItem::new("Go to Folder…", ()));
+            MenuBar::new().with_menu(Menu::new("Test")).with_menu(go).into_specs()
+        };
+        core.menubar = go(&["Home"]);
+        let before: Vec<u32> = published(&mut core)[1].items[1..].iter().map(|i| i.id).collect();
+        core.menubar = go(&["Home", "USB Drive", "Network"]);
+        let after: Vec<u32> = published(&mut core)[1].items[3..].iter().map(|i| i.id).collect();
+        assert_eq!(before, after);
+        assert_ne!(after[1], after[2], "items labelled alike are told apart");
     }
 }
