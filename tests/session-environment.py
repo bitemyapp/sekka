@@ -141,7 +141,9 @@ def wait_tatami(machine):
     machine.wait_until_succeeds(command("systemctl --user is-active wayland-session@tatami.target"), timeout=120)
     machine.wait_until_succeeds(command("systemctl --user is-active tatami-waybar.service"), timeout=90)
     assert environment(machine)["XDG_MENU_PREFIX"] == "hyprland-"
-    wait_text(machine, r"\b\d{1,2}:\d{2}\b", timeout=90, regex=True)
+    # The panel clock. OCR can misread an hour's leading zero ("B4:44" for
+    # 04:44), so look for the last digit of the hour and the minutes alone.
+    wait_text(machine, r"\d:[0-5]\d\b", timeout=90, regex=True)
 
 
 def switch(machine, path, label):
