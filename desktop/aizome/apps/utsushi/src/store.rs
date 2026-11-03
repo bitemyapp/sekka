@@ -39,11 +39,15 @@ pub struct Prefs {
     /// The time shown at the timeline's right is what's left (else the
     /// whole length).
     pub remaining: bool,
+    /// PipeWire node.name, not its temporary numeric registry ID.
+    pub audio_device: Option<String>,
+    /// The selected output's last known friendly name, shown when absent.
+    pub audio_device_description: Option<String>,
 }
 
 impl Default for Prefs {
     fn default() -> Prefs {
-        Prefs { volume: 1.0, muted: false, remaining: true }
+        Prefs { volume: 1.0, muted: false, remaining: true, audio_device: None, audio_device_description: None }
     }
 }
 
@@ -160,7 +164,7 @@ mod tests {
     use super::*;
 
     fn temp() -> PathBuf {
-        let d = std::env::temp_dir().join(format!("utsushi-store-{}-{}", std::process::id(), now()));
+        let d = std::env::temp_dir().join(format!("utsushi-store-{}-{:?}", std::process::id(), std::thread::current().id()));
         let _ = std::fs::remove_dir_all(&d);
         d
     }
@@ -195,6 +199,27 @@ mod tests {
         let s = Store::load(Some(dir.clone()));
         let paths: Vec<_> = s.recent.iter().map(|r| r.path.to_string_lossy().into_owned()).collect();
         assert_eq!(paths, ["/a", "/b"]);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn output_preferences_are_compatible_and_survive_reopening() {
+        let old: Prefs = serde_json::from_str(r#"{"volume":0.5,"muted":true,"remaining":false}"#).unwrap();
+        assert_eq!(old.audio_device, None);
+        assert_eq!(old.audio_device_description, None);
+        let old: Prefs = serde_json::from_str(r#"{"audio_device":"alsa_output.usb-speakers"}"#).unwrap();
+        assert_eq!(old.audio_device.as_deref(), Some("alsa_output.usb-speakers"));
+        assert_eq!(old.audio_device_description, None);
+        let dir = temp();
+        let mut store = Store::load(Some(dir.clone()));
+        store.prefs.audio_device = Some("alsa_output.usb-speakers".into());
+        store.prefs.audio_device_description = Some("USB Speakers".into());
+        store.save_prefs();
+        assert_eq!(Store::load(Some(dir.clone())).prefs, store.prefs);
+        store.prefs.audio_device = None;
+        store.prefs.audio_device_description = None;
+        store.save_prefs();
+        assert_eq!(Store::load(Some(dir.clone())).prefs, store.prefs);
         let _ = std::fs::remove_dir_all(dir);
     }
 }

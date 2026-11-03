@@ -258,6 +258,14 @@ impl Ring {
 
 /// Where decoded audio goes.
 pub trait Output: Send {
+    /// Consume a loss notification. The backend has already stopped its
+    /// stream; the controller must also clear playback intent.
+    fn take_loss(&mut self) -> bool {
+        false
+    }
+    /// Preferred PipeWire node name for the next stream; None follows the
+    /// session default. Outputs without device selection may ignore it.
+    fn set_device(&mut self, _device: Option<&str>) {}
     /// Start a stream of `format` taking from `ring`, stopped: the clock
     /// follows it once it plays.
     fn open(&mut self, ring: Arc<Ring>, clock: Arc<Clock>, media: &str) -> Result<(), String>;
@@ -286,6 +294,23 @@ pub trait Output: Send {
 pub struct NullOutput {
     run: Option<Arc<NullRun>>,
     thread: Option<std::thread::JoinHandle<()>>,
+}
+
+/// A requested sound server could not be reached. Unlike an explicitly
+/// selected null output, it must not advance playback silently.
+pub(crate) struct UnavailableOutput(pub String);
+
+impl Output for UnavailableOutput {
+    fn open(&mut self, _: Arc<Ring>, _: Arc<Clock>, _: &str) -> Result<(), String> {
+        Err(self.0.clone())
+    }
+    fn set_playing(&mut self, _: bool) {}
+    fn flush(&mut self) {}
+    fn set_volume(&mut self, _: f32, _: bool) {}
+    fn close(&mut self) {}
+    fn describe(&self) -> String {
+        "Audio output unavailable".into()
+    }
 }
 
 struct NullRun {

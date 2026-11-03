@@ -950,6 +950,16 @@ rest); folders play their files in Hako's natural order.
   reduced to italics and top placement. Subtitles ▸ Show Earlier and
   Show Later move them for a file timed to another cut, until Original
   Timing or the next item.
+- **Audio → Output Device** chooses where Utsushi plays sound, independently of
+  other applications. The list follows connected PipeWire outputs; **System
+  Default** uses the session's choice. Utsushi remembers a named device across
+  items and restarts. Changing it preserves position, pause, speed and volume.
+  If the active output disappears, playback pauses with an explanation.
+  Connecting another output or restoring the old one leaves it paused until
+  Play. Requested moves in the player or desktop sound controls preserve
+  playback, volume and mute. Disconnected choices remain labelled in the
+  menu, alongside the output currently connected. The same selector is in
+  the tracks menu.
 - **Where it was**: a film over five minutes long opens where it was
   left (with Start Over for a few seconds), unless that was in its first
   or last thirty seconds. Open Recent keeps twenty items.

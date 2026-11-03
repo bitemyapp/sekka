@@ -53,7 +53,22 @@ fn stage(app: &Utsushi) -> Element<Msg> {
         (None, Status::Loading) => layers.push(container(text("")).fill(Tone::Sunk).width(Fill).height(Fill).into()),
         (None, _) => layers.push(empty(app)),
     }
-    if let Some(at) = app.resumed.filter(|_| app.info.is_some()) {
+    if app.audio_output_lost && app.status == Status::Paused {
+        let note = container(text("Paused because the audio output became unavailable.").wrap())
+            .padding(12.0)
+            .floating()
+            .max_width(360.0);
+        layers.push(
+            container(over_video(note))
+                .padding(16.0)
+                .align_x(Align::Start)
+                .align_y(Align::Start)
+                .width(Fill)
+                .height(Fill)
+                .key("audio-output-lost")
+                .into(),
+        );
+    } else if let Some(at) = app.resumed.filter(|_| app.info.is_some()) {
         layers.push(resumed(at).key("resumed"));
     }
     if app.fullscreen && app.controls && app.has_video() {
@@ -499,7 +514,33 @@ pub fn tracks_menu(app: &Utsushi) -> Menu<Msg> {
             m = m.item(MenuItem::new(t.label(i + 1), Msg::Audio(Some(i))).checked(app.audio_track == Some(i)));
         }
     }
-    m.separator().submenu(speed_menu(app))
+    m.separator().submenu(audio_outputs(app)).submenu(speed_menu(app))
+}
+
+pub fn audio_outputs(app: &Utsushi) -> Menu<Msg> {
+    let selected = app.store.prefs.audio_device.as_deref();
+    let mut menu = Menu::new("Output Device")
+        .item(MenuItem::new("System Default", Msg::AudioDevice(None)).checked(selected.is_none()));
+    for device in &app.audio_devices {
+        menu = menu.item(
+            MenuItem::new(device.description.clone(), Msg::AudioDevice(Some(device.name.clone())))
+                .checked(selected == Some(device.name.as_str())),
+        );
+    }
+    if let Some(name) = selected.filter(|name| !app.audio_devices.iter().any(|d| d.name == *name)) {
+        let description = app.store.prefs.audio_device_description.as_deref().unwrap_or("Selected output");
+        menu = menu.item(
+            MenuItem::new(format!("{description} (disconnected)"), Msg::AudioDevice(Some(name.into())))
+                .checked(true)
+                .enabled(false),
+        );
+    }
+    let current = if app.audio_routed.is_empty() {
+        "No output connected".into()
+    } else {
+        format!("Current: {}", app.audio_routed.iter().map(|d| d.description.as_str()).collect::<Vec<_>>().join(", "))
+    };
+    menu.separator().header(current)
 }
 
 pub fn speed_menu(app: &Utsushi) -> Menu<Msg> {
@@ -562,7 +603,9 @@ pub fn menus(app: &Utsushi) -> MenuBar<Msg> {
     let mut audio = Menu::new("Audio")
         .item(MenuItem::new("Louder", Msg::VolumeBy(0.05)).shortcut(key(ShortcutKey::Up)))
         .item(MenuItem::new("Quieter", Msg::VolumeBy(-0.05)).shortcut(key(ShortcutKey::Down)))
-        .item(MenuItem::new("Mute", Msg::Mute).shortcut(key(ShortcutKey::Char('M'))).checked(app.muted));
+        .item(MenuItem::new("Mute", Msg::Mute).shortcut(key(ShortcutKey::Char('M'))).checked(app.muted))
+        .separator()
+        .submenu(audio_outputs(app));
     if let Some(info) = &app.info {
         for (i, t) in info.subtitles.iter().enumerate() {
             subs = subs.item(MenuItem::new(t.label(i + 1), Msg::Subtitles(Some(i))).checked(app.sub_track == Some(i)));
