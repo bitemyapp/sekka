@@ -521,12 +521,16 @@ mod tests {
         );
         let delete = Operation::Delete { generations: vec![26], collect: true };
         assert_eq!(delete.helper_args(None), ["delete", "26", "--collect-garbage"]);
-        assert_eq!(Operation::Delete { generations: vec![24, 25], collect: false }.helper_args(None), [
-            "delete", "24", "25"
-        ]);
+        assert_eq!(
+            Operation::Delete { generations: vec![24, 25], collect: false }.helper_args(None),
+            ["delete", "24", "25"]
+        );
         assert!(delete.is_system() && !delete.is_update());
         assert_eq!(delete.title(), "Deleting generation 26");
-        assert_eq!(Operation::Delete { generations: vec![24, 25], collect: false }.done(), "Generations 24 and 25 are deleted");
+        assert_eq!(
+            Operation::Delete { generations: vec![24, 25], collect: false }.done(),
+            "Generations 24 and 25 are deleted"
+        );
         assert_eq!(
             delete.outcome(r#"{"ok":true,"deleted":[26],"collected":true,"freed":412000000}"#),
             "Generation 26 is deleted, and 412 MB came back"

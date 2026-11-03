@@ -400,7 +400,8 @@ mod tests {
     fn outputs_kept_with_their_derivations_when_asked() {
         // 0 a shell's root -> 1 shell.drv, which built 2 shell (needing 3)
         // and 4 shell-doc.
-        let nodes = vec![info("root", 1), info("shell.drv", 1), info("shell", 10), info("lib", 20), info("shell-doc", 5)];
+        let nodes =
+            vec![info("root", 1), info("shell.drv", 1), info("shell", 10), info("lib", 20), info("shell-doc", 5)];
         let g = Graph::from_parts(nodes, &[(0, 1), (2, 3)]).with_outputs(&[(1, 2), (1, 4)]);
         assert_eq!(g.outputs(PathId(1)), &[PathId(2), PathId(4)]);
         assert_eq!(g.dead([PathId(0)], Keep::default()), vec![PathId(2), PathId(3), PathId(4)]);

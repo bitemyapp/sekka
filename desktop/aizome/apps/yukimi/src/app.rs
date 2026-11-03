@@ -17,8 +17,8 @@ use aizome_kit::prelude::*;
 use yukimi_system::catalog::{self, Application};
 use yukimi_system::diff::Diff;
 use yukimi_system::generations::Generation;
-use yukimi_system::index::{Package, PackageIndex};
 use yukimi_system::human_size;
+use yukimi_system::index::{Package, PackageIndex};
 use yukimi_system::setup::{Choice, Kind};
 
 use crate::checks::{self, UpdateCheck};

@@ -465,7 +465,8 @@ impl Store {
         // links Yukimi can read.
         let (mut gc_roots, _) = reclaim::system_roots();
         if !gc_roots.iter().any(|r| r.kind == RootKind::CurrentSystem)
-            && let Some(target) = std::fs::read_link("/run/current-system").ok().and_then(|p| StorePath::parse(p.to_str()?))
+            && let Some(target) =
+                std::fs::read_link("/run/current-system").ok().and_then(|p| StorePath::parse(p.to_str()?))
         {
             gc_roots.push(Root { link: "/run/current-system".into(), target, kind: RootKind::CurrentSystem });
         }

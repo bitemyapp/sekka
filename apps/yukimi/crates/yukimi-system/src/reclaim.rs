@@ -232,7 +232,8 @@ mod tests {
         let reclaim = Reclaim::new(&graph, &roots, Keep::default());
         assert_eq!(reclaim.generations().collect::<Vec<_>>(), [1, 2, 3, 4, 5]);
         assert_eq!(reclaim.garbage(), [PathId::from_index(12)]);
-        let names = |ids: Vec<PathId>| ids.into_iter().map(|id| graph.info(id).path[44..].to_owned()).collect::<Vec<_>>();
+        let names =
+            |ids: Vec<PathId>| ids.into_iter().map(|id| graph.info(id).path[44..].to_owned()).collect::<Vec<_>>();
         // 1 has nothing of its own but its build.
         assert_eq!(names(reclaim.only_kept_by(&graph, &[1])), ["system-1"]);
         // 2 lets go of what only it has, not what it shares with 3.

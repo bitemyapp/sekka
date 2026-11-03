@@ -73,12 +73,9 @@ fn deletion(app: &Yukimi, generation: &Generation) -> Option<Element<Msg>> {
     };
     Some(
         row![
-            column![
-                text("Delete this version").weight(600.0),
-                text(explanation).size(12.0).role(Role::Text3).wrap(),
-            ]
-            .spacing(2.0)
-            .width(Fill),
+            column![text("Delete this version").weight(600.0), text(explanation).size(12.0).role(Role::Text3).wrap(),]
+                .spacing(2.0)
+                .width(Fill),
             button("Delete…").destructive().icon(Icon::Trash).on_press(Msg::Delete(generation.number)),
         ]
         .spacing(12.0)

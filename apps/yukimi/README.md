@@ -58,14 +58,38 @@ something you edit and hope.
   input's address in `flake.nix` and moves to that branch's newest commit.
   So working on a project your system is built from comes down to: push to
   the branch your system follows, open Updates, press Update.
-- **History.** Every generation you can go back to. Open one to see what
-  changed from the one before: upgrades, downgrades, additions and removals,
-  with sizes. Going back to one also brings back the choices it was built
-  from, so your next change starts from there.
+- **History.** Every generation you can go back to, each older one with the
+  disk space deleting it would give back. Open one to see what changed from
+  the one before: upgrades, downgrades, additions and removals, with sizes.
+  Going back to one also brings back the choices it was built from, so your
+  next change starts from there. You can also delete one you no longer need,
+  except the running one, the one the computer started with and the one
+  selected for the next start: it leaves the boot menu, and its space comes
+  back when garbage is collected, right away if you choose **Delete and Clean
+  Up**, otherwise at the next clean-up.
 - **Storage.** The Nix store split into what the running system needs, older
   generations, user profiles, projects and dev shells, and garbage. It lists
   the heaviest packages and every garbage-collector root, and can clean up
-  with one button.
+  with one button, saying first what that gives back on disk.
+
+## What deleting frees
+
+A generation is mostly shared: with the generations beside it, the running
+system, users' profiles, build results and dev shells, and programs still
+running from it. The space Yukimi shows beside a generation is only what
+nothing else keeps, measured as the blocks those files take on disk, with a
+file hard-linked into several store paths (`auto-optimise-store`) counted
+once and only when all its links go. It is an estimate made when Yukimi
+reads the store, and it can't promise:
+
+- On Btrfs with compression, which Sekka's installer uses when you choose
+  Btrfs, the space that comes back can be less: files are measured before
+  compression.
+- Blocks shared with a filesystem snapshot or a reflinked copy stay.
+- A program started, or a build made, from those paths before garbage is
+  collected keeps them.
+- Space comes back only when garbage is collected, and collecting also
+  removes everything else nothing needs, which Yukimi shows separately.
 
 ## Any NixOS system
 
@@ -134,11 +158,11 @@ Everything is Rust, including the parts that read Nix's own data:
 
 | Crate | What it does |
 | --- | --- |
-| `yukimi-store` | Reads the Nix store database (`/nix/var/nix/db/db.sqlite`) read-only. Handles store paths and name/version splitting, follows Nix's own `compareVersions`, builds the reference graph (closures, sizes, *why is this here*) and finds GC roots the same way the garbage collector does. |
+| `yukimi-store` | Reads the Nix store database (`/nix/var/nix/db/db.sqlite`) read-only. Handles store paths and name/version splitting, follows Nix's own `compareVersions`, builds the reference graph (closures, sizes, *why is this here*), finds GC roots the same way the garbage collector does, and measures what paths take on disk, hard-linked files counted once. |
 | `yukimi-config` | Edits Nix files without disturbing them, using a lossless [rnix](https://github.com/nix-community/rnix-parser) syntax tree: string lists, imports, entries of package lists, and `flake.lock`, including checking that a new lock file changes only what it should. |
 | `yukimi-system` | Finds how the system is configured, and reads its generations, profiles, channels and catalogs. Asks sources for their newest versions, builds the package index, diffs closures, and turns Nix's `internal-json` log into progress. |
 | `desktop/aizome/apps/yukimi` | The native interface shared by every desktop. Wayland sessions open it directly; X11 sessions use a nested Wayland window. |
-| `yukimi-helper` | The only part that runs as root, started through `pkexec`. It changes the configuration, updates inputs or channels, builds, switches, rolls back and collects garbage, with arguments it checks itself, on the configuration it finds itself. If anything fails, or you press Stop, it puts the configuration back as it was. Once the new system starts switching it finishes, so the switch is never cut off halfway. |
+| `yukimi-helper` | The only part that runs as root, started through `pkexec`. It changes the configuration, updates inputs or channels, builds, switches, rolls back, deletes generations and collects garbage, with arguments it checks itself, on the configuration it finds itself. If anything fails, or you press Stop, it puts the configuration back as it was. Once the new system starts switching it finishes, so the switch is never cut off halfway. |
 
 ## Installing
 

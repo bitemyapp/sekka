@@ -124,12 +124,9 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
         .width(Fill),
         divider().edge(Edge::Line),
         row![
-            column![
-                text("Clean up now").weight(600.0),
-                text(frees).size(12.0).role(Role::Text3).wrap(),
-            ]
-            .spacing(2.0)
-            .width(Fill),
+            column![text("Clean up now").weight(600.0), text(frees).size(12.0).role(Role::Text3).wrap(),]
+                .spacing(2.0)
+                .width(Fill),
             button("Clean Up…").destructive().icon(Icon::Trash).on_press(Msg::CleanUp),
         ]
         .spacing(12.0)
