@@ -13,7 +13,17 @@ write-up names it.
 | Aizome, GNOME and KDE Plasma in a small VM | [desktops.md](desktops.md) | [data/desktops](data/desktops) | [tests/performance/desktops](../../tests/performance/desktops) |
 | Hotaru against Ghostty, GNOME's and KDE's terminals | [terminals.md](terminals.md) | [data/terminals](data/terminals) | [tests/performance/terminals](../../tests/performance/terminals) |
 | Utsushi's energy against mpv and VLC | [media.md](media.md) | [data/media](data/media) | [tests/performance/media](../../tests/performance/media) |
-| Shiori's renderer (hayro) against PDFium and others, and conformance | [pdf.md](pdf.md) | [data/pdf](data/pdf) | [tests/performance/pdf](../../tests/performance/pdf) |
+| Shiori's renderer (hayro) against PDFium and others, and conformance | [pdf.md](pdf.md), with [pdf-verdicts.md](pdf-verdicts.md) | [data/pdf](data/pdf) | [tests/performance/pdf](../../tests/performance/pdf) |
+
+**Why the numbers come out as they do.** Three analyses take the
+comparisons above apart, each with its own data and harness. They aren't on
+the performance page yet; the third is incomplete.
+
+| Question | Write-up | Data | Harness |
+|---|---|---|---|
+| Where apps' startup time and memory go, toolkit by toolkit | [why-apps.md](why-apps.md) | [data/why-apps](data/why-apps) | [tests/performance/why-apps](../../tests/performance/why-apps) |
+| Why Aizome uses less memory, logs in faster and shows keys sooner than GNOME and Plasma in the VM, and where it loses | [why-desktop.md](why-desktop.md) | [data/why-desktop](data/why-desktop) | [tests/performance/why-desktop](../../tests/performance/why-desktop) |
+| Toolkits at work: typing latency, cost per interaction, throughput (incomplete) | [why-toolkits.md](why-toolkits.md) | [data/why-toolkits](data/why-toolkits) | [tests/performance/why-toolkits](../../tests/performance/why-toolkits) |
 
 ## The machine
 
@@ -72,7 +82,11 @@ processor's own sensors:
 - Private sessions: headless compositors with their own runtime
   directory, home and D-Bus; nothing ran on the display or in the user's
   session, which was only observed (its compositor's statistics and its
-  processes' memory, in design.md); nothing was audible.
+  processes' memory, in design.md); nothing was audible. One harness
+  broke this once: why-desktop.md's first sandbox shared the host's
+  `/tmp`, and its GNOME Shell removed the session's Xwayland lock file,
+  taking it for stale. The lock was restored and the harness isolated;
+  its Reproducing section says how.
 - The machine was unattended overnight; from about 10:00 its owner used
   the desktop again, which raised the socket's idle floor by up to 2 W.
   Every energy figure is a difference from a baseline taken beside it,
@@ -80,3 +94,26 @@ processor's own sensors:
 - What each number is: component evidence from headless compositors and
   disposable VMs, not physical-display latency (no photon was timed), and
   not battery life.
+
+## Follow-up work these records point to
+
+- **A zero-copy buffer for Hotaru, in Sukumo's backend.** CPU-drawn frames
+  reach the compositor as shared memory, which it has to copy into a
+  texture: sway spends about twice the CPU per scroll update on Hotaru that
+  it does on Ghostty, and at 4K a full kit frame costs the compositor
+  3.1 ms of GPU time uploading 28.8 MB. Drawing into a linear buffer the GPU
+  reads in place (a `udmabuf` or linear GBM buffer shared as a DMA-BUF)
+  would remove the copy ([terminals.md](terminals.md#next-a-zero-copy-buffer-for-hotaru),
+  [why-toolkits.md](why-toolkits.md#throughput-and-whole-window-redraws)).
+- **Hotaru's extra frame of typing latency** is in its own PTY-to-frame
+  path, not Sukumo's; the proxy traces recorded in why-toolkits.md's smoke
+  runs are the place to start.
+- **Aizome's idle wake-ups:** its shell's polling threads wake about 47
+  times a second and its compositor 7 ([why-desktop.md](why-desktop.md)).
+- **Aizome's wallpaper** costs its shell 24 MiB for an 8 MiB picture
+  ([why-desktop.md](why-desktop.md)).
+- **The kit's font discovery** took 12 of an app's 19 ms to its first
+  frame ([why-apps.md](why-apps.md)); PR #263 makes it lazy.
+- **The rest of why-toolkits.md:** the clean cost per key, scrolling,
+  resizing, 4K, the native compositors measured, and the per-stage
+  attribution.

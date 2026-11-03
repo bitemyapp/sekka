@@ -354,6 +354,13 @@ take about one frame more than foot: Hotaru 15 ms more at the median,
 Ghostty 18 ms. Hotaru's Sukumo toolkit paces drawing by the compositor's
 frame callbacks; an update that waits for the next callback before it's
 drawn would cost about that one frame, but this run doesn't isolate it.
+A later check points away from the toolkit: under the same kind of
+observer, a plain text view in Sukumo shows a keystroke at the next frame
+(8.4 ms at the median, the same as GTK 4 and Qt), while Hotaru, in smoke
+runs of 30 keys, still lands many keys a frame late (12–17 ms at the
+median, 29 at the 90th percentile, against foot's 10.5 and 14). The extra
+frame is in Hotaru's own path from the PTY to the frame, not in Sukumo's
+drawing or pacing ([why-toolkits.md](why-toolkits.md#hotarus-extra-frame)).
 Against Ghostty, Hotaru is 3.2 ms faster at the median, as it was on wx
 and the laptop on 30 October (1.7 and 2.7 ms there).
 
@@ -603,6 +610,72 @@ them whole; USS is only the terminal's own. gnome-terminal's figure is
 memory grows after a flood even with no scrollback (21 → 47 MiB for
 gnome-terminal, 48 → 71 MiB for Console); Hotaru, Ghostty and Konsole grow
 by 1–4 MiB, foot by 5 MiB.
+
+## Hotaru and Ghostty, from the code
+
+Read from Ghostty's source at `0b1729e` and Hotaru's at `d7ecbac`, to
+explain the results above; nothing here was measured for this section.
+
+**Ghostty is incremental on the CPU, not on the GPU.** Its renderer
+(`src/renderer/generic.zig`) tracks which rows changed and rebuilds the cell
+data of those rows only, skipping the frame when nothing changed. A frame
+it does draw is drawn whole: the cell buffers for the whole grid are
+uploaded (`cells_bg.sync`, `syncFromArrayLists`), and a background pass
+and every glyph, as instanced draws, cover the whole surface. On GTK the
+frame goes into a DMA-BUF queue (`apprt/gtk/class/render_surface.zig`);
+GTK's main thread takes it at its own frame clock, draws it as a texture
+with its own GL renderer, and the compositor gets the whole window as
+changed. One keystroke is a full-window GPU draw, a second GPU pass inside
+GTK, and a full-window composite.
+
+**Hotaru is incremental all the way to the compositor.** A reader thread
+feeds the session thread that parses (`session.rs`, modelled on Ghostty's
+two-stage reader); the session publishes an immutable snapshot of the rows
+at most every 8 ms and only after the last one was used, sharing the rows
+that didn't change. The view (`terminal_view.rs`) compares rows by
+identity and invalidates only those that changed, moves the pixels already
+drawn when the screen scrolls, and Sukumo draws only the damaged
+rectangles, on the CPU, into a shared-memory buffer. The compositor gets
+only the damage.
+
+What follows from that, against the results:
+
+- **Hotaru's lead is cost per change.** Startup (no GL context, shaders or
+  GTK: 50 ms against 178), rest (1 wake-up a second and no GPU, against
+  28 and 4.3 ms of GPU a second), memory (47 MiB against 98 plus 103 of
+  GPU memory) and typing (about no GPU against 34 ms a second at 10 keys
+  a second) all come from drawing only what changed, on the CPU, with no
+  GPU context.
+- **Throughput is not where the design helps.** Both read and parse on
+  separate threads and both coalesce frames during a flood, so frames
+  aren't the bottleneck. With history Ghostty's main branch is faster on
+  every corpus; that's its VT core (its paged screen, and recent styled
+  and Unicode work), and history eviction, which Hotaru has since fixed
+  (#261).
+- **The compositor pays for Hotaru's buffers.** Ghostty's frames are
+  already on the GPU; each of Hotaru's damaged regions has to be copied
+  from shared memory into a texture by the compositor. That's why sway
+  spends 0.76 ms per one-row scroll update on Hotaru against 0.36 on
+  Ghostty, and 4.3 ms a second of typing against 1.7.
+- **Latency:** Ghostty's extra frame fits its design (the frame waits for
+  GTK's clock and a second render). Hotaru's isn't explained by the code
+  as read: Sukumo waits for a frame callback only after a present, and the
+  session publishes at once when idle. A trace of the PTY-to-frame path is
+  the next step.
+
+### Next: a zero-copy buffer for Hotaru
+
+Hotaru should hand the compositor buffers it can use without copying:
+draw on the CPU into a linear buffer the GPU can read in place (a
+`udmabuf` or a linear GBM buffer exported as a DMA-BUF through
+`zwp_linux_dmabuf_v1`) instead of `wl_shm`. The compositor would then
+import the buffer as a texture instead of uploading every damaged region,
+which is the cost behind the compositor rows above. The CPU drawing,
+damage tracking and pixel-moving scroll stay as they are. Because Hotaru
+draws through Sukumo, the change belongs in Sukumo's backend
+(`sukumo/crates/sidestep-engine/src/backend/`), where every kit app would
+get it; the same cost shows in the kit's 4K and scrolling smoke runs
+([why-toolkits.md](why-toolkits.md)).
 
 ## Limits
 
