@@ -86,8 +86,10 @@ pkgs.testers.runNixOSTest {
 
     from datetime import timedelta
     def text(expected):
+        # One OCR pass took up to 10 seconds on a host loaded past 100:
+        # 15 seconds allowed one or two.
         try:
-            machine.wait_for_text(expected, timeout=timedelta(seconds=15))
+            machine.wait_for_text(expected, timeout=timedelta(seconds=60))
         except Exception:
             machine.screenshot("text-failure")
             raise
@@ -96,8 +98,28 @@ pkgs.testers.runNixOSTest {
         machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool mousemove -x 1 -y 0")
         time.sleep(0.3)
         machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool click 0xC0")
+    def placed():
+        # Where Tatami's display watcher puts a settings window, for a few
+        # seconds after the screens change or it opens: fitted to the usable
+        # area and centered (fit_geometry, desktop/tatami/tool/src/window.rs).
+        # It moves the window a while after the scale and fits() read right:
+        # one run clicked where Close had been at 1.25 (x 680 for 808), and
+        # the window stayed open.
+        c, m = window(), monitor()
+        if not c: return False
+        left, top, right, bottom = (max(r, 0) for r in m["reserved"])
+        area_w = max(int(m["width"] / m["scale"]) - left - right - 16, 1)
+        area_h = max(int(m["height"] / m["scale"]) - top - bottom - 16, 1)
+        w, h = c["size"]
+        x = m["x"] + left + 8 + (area_w - w) // 2
+        y = m["y"] + top + 8 + (area_h - h) // 2
+        return (w <= area_w and h <= area_h
+                and abs(c["at"][0] - x) <= 1 and abs(c["at"][1] - y) <= 1)
+    def placed_window():
+        wait_for(placed)
+        return window()
     def close_button():
-        c = window()
+        c = placed_window()
         click(c["at"][0] + c["size"][0] - 24, c["at"][1] + 24)
         wait_for(lambda: window() is None)
     def open_panel():
@@ -110,7 +132,7 @@ pkgs.testers.runNixOSTest {
         wait_for(fits)
         time.sleep(2)
     def scroll_bottom():
-        c = window()
+        c = placed_window()
         x, y = c["at"][0] + c["size"][0] - 35, c["at"][1] + c["size"][1] - 45
         user("hyprctl dispatch " + shlex.quote(f"hl.dsp.cursor.move({{ x = {x}, y = {y} }})"))
         machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool mousemove -x 1 -y 0")
@@ -135,7 +157,7 @@ pkgs.testers.runNixOSTest {
             wait_for(lambda: abs(monitor()["scale"] - scale) < 0.001)
             wait_for(fits)
         text("Ethernet")
-        c = window()
+        c = placed_window()
         click(c["at"][0] + c["size"][0] / 2, c["at"][1] + 134)
         text(connection)
         scroll_bottom()
@@ -144,9 +166,13 @@ pkgs.testers.runNixOSTest {
         machine.screenshot("details-bottom-" + str(scale) + ".png")
         assert fits()
         # Header navigation stays reachable even with the page scrolled down.
-        c = window()
+        c = placed_window()
         click(c["at"][0] + 24, c["at"][1] + 24)
-        text("Ethernet")
+        # Back on the list, its title. Not "Ethernet": while the overlay
+        # scrollbar shows, the driver's OCR misreads that row at scale 3.2
+        # in every variant, so a run read it or not by the scrollbar's timing
+        # (three runs in six failed with the list shown).
+        text("Network")
         machine.screenshot("back-" + str(scale) + ".png")
         close_button()
         open_panel()
