@@ -356,6 +356,78 @@ fn closing_a_shown_member_shows_a_neighbour() {
     assert!(m.is_shown(a));
 }
 
+fn close_front_group_member(member_count: usize, closing_index: usize) {
+    let mut m = model();
+    let images: Vec<_> = (0..member_count).map(|_| add(&mut m, "org.aizome.Shashin")).collect();
+    for &image in &images[1..] {
+        m.stack(images[0], image).unwrap();
+    }
+    let other_a = add(&mut m, "other-a");
+    let other_b = add(&mut m, "other-b");
+    m.stack(other_a, other_b).unwrap();
+    let closing = images[closing_index];
+    let neighbour = images[if closing_index == 0 { 1 } else { closing_index - 1 }];
+    m.focus(Some(closing));
+    assert_eq!(m.shown_stacking().last(), Some(&closing));
+
+    let refocus = m.remove(closing);
+    assert_eq!(refocus, Refocus::To(Some(neighbour)));
+    assert!(m.is_shown(neighbour), "the replacement tab is already visible");
+    // The compositor applies Model::remove's result through focus_window.
+    if let Refocus::To(target) = refocus {
+        m.focus(target);
+    }
+    assert_eq!(m.focused(), Some(neighbour), "closing a foreground tab must keep focus in its group");
+    assert_eq!(m.shown_stacking().last(), Some(&neighbour), "the remaining group must stay on top");
+}
+
+#[test]
+fn closing_front_group_tab_keeps_remaining_group_above_other_group() {
+    for closing_index in 0..3 {
+        close_front_group_member(3, closing_index);
+    }
+}
+
+#[test]
+fn closing_front_group_tab_keeps_last_window_above_other_group() {
+    for closing_index in 0..2 {
+        close_front_group_member(2, closing_index);
+    }
+}
+
+#[test]
+fn closing_a_background_group_member_preserves_focus_and_stacking() {
+    for close_active in [false, true] {
+        let mut m = model();
+        let a = add(&mut m, "a");
+        let b = add(&mut m, "b");
+        m.stack(a, b).unwrap();
+        let front = add(&mut m, "front");
+        assert_eq!(m.remove(if close_active { b } else { a }), Refocus::Same);
+        assert_eq!(m.focused(), Some(front));
+        assert_eq!(m.shown_stacking().last(), Some(&front));
+    }
+}
+
+#[test]
+fn closing_a_group_member_does_not_focus_a_hidden_or_minimised_survivor() {
+    for hidden in [false, true] {
+        let mut m = model();
+        let a = add(&mut m, "a");
+        let b = add(&mut m, "b");
+        m.stack(a, b).unwrap();
+        if hidden {
+            m.hide_app("a");
+        } else {
+            m.minimise(a);
+        }
+        let other = add(&mut m, "other");
+        m.focus(Some(b));
+        assert_eq!(m.remove(b), Refocus::To(Some(other)));
+        assert!(!m.is_shown(a));
+    }
+}
+
 #[test]
 fn window_behind_skips_the_group() {
     let mut m = model();
