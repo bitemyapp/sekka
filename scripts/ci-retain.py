@@ -7,9 +7,11 @@ in jobs, and sets the variable only together with that mount. Workflows run
 main's copy of this script, never a pull request's.
 """
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import contextlib
 import errno
 import fcntl
+import gzip
 import os
 from pathlib import Path
 import re
@@ -21,10 +23,13 @@ import tempfile
 import time
 
 
-GROUP = re.compile(r"(main|pr)-(uta|checks|packages)")
+GROUP = re.compile(r"(main|pr)-(uta|checks|packages|iso)")
 GENERATION = re.compile(r"[0-9]+-[a-z0-9_]+")
 STORE_PATH = re.compile(r"/nix/store/[0-9a-z]{32}-[^/\s]+")
 DAY = 86400
+# Each derivation's build inputs, queried once and reused by later runs that
+# build the same derivation: a query costs about half a second.
+CLOSURES = ".closures"
 # Successful and failed generations each group keeps, newest first.
 KEEP = {"main": (2, 1), "pr": (4, 2)}
 # Below this much free store space, keep only each group's newest successful
@@ -33,14 +38,17 @@ KEEP = {"main": (2, 1), "pr": (4, 2)}
 MIN_FREE = int(os.environ.get("SEKKA_CI_MIN_FREE_BYTES", 200 * 2**30))
 
 
-def open_lock(path, create=True):
-    """Open a lock file, refusing links and FIFOs, which could block or redirect."""
-    flags = os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
-    fd = os.open(path, flags | (os.O_CREAT if create else 0), 0o644)
+def open_regular(path, flags):
+    """Open a file in the tree, refusing links and FIFOs, which could block or redirect."""
+    fd = os.open(path, flags | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, 0o644)
     if not stat.S_ISREG(os.fstat(fd).st_mode):
         os.close(fd)
-        raise OSError(errno.EINVAL, "not a regular lock file", str(path))
+        raise OSError(errno.EINVAL, "not a regular file", str(path))
     return fd
+
+
+def open_lock(path, create=True):
+    return open_regular(path, os.O_RDWR | (os.O_CREAT if create else 0))
 
 
 @contextlib.contextmanager
@@ -78,6 +86,13 @@ def prune(root, now=None, free=None):
     """
     now = time.time() if now is None else now
     free = shutil.disk_usage("/nix/store").free if free is None else free
+    closures = root / CLOSURES
+    if closures.is_dir() and not closures.is_symlink():
+        # Reuse refreshes a record; after a week unused, drop it.
+        for record in closures.iterdir():
+            info = record.lstat()
+            if stat.S_ISREG(info.st_mode) and now - info.st_mtime >= 7 * DAY:
+                record.unlink()
     for group in sorted(root.iterdir()):
         match = GROUP.fullmatch(group.name)
         if not match or group.is_symlink() or not group.is_dir():
@@ -110,6 +125,31 @@ def nix_lines(*args):
     return subprocess.check_output(args, text=True).splitlines()
 
 
+def build_inputs(closures, deriver):
+    """What building one derivation used: its derivation closure's outputs.
+
+    Recorded after a build, when every input is present, and reused for as
+    long as runs keep building the same derivation. Returns the paths and
+    whether Nix had to be asked.
+    """
+    record = closures / Path(deriver).name
+    try:
+        with gzip.open(os.fdopen(open_regular(record, os.O_RDONLY), "rb"), "rt") as f:
+            paths = f.read().split()
+        os.utime(record, follow_symlinks=False)
+        return paths, False
+    except FileNotFoundError:
+        pass
+    except (OSError, EOFError) as error:
+        print(f"ci-retain: replacing unreadable record {record}: {error}", file=sys.stderr)
+    paths = nix_lines("nix-store", "--query", "--requisites", "--include-outputs", deriver)
+    partial = closures / f".{record.name}.{os.getpid()}"
+    with gzip.open(partial, "wt") as f:
+        f.write("\n".join(paths))
+    os.replace(partial, record)
+    return paths, True
+
+
 def retain_dependencies(generation):
     outputs = [str(p.resolve()) for p in generation.glob("result*") if p.is_symlink()]
     if not outputs:
@@ -118,16 +158,23 @@ def retain_dependencies(generation):
     # used by a check that only writes a success marker. Retain existing outputs
     # of its derivation closure too, without globally setting keep-outputs.
     derivers = nix_lines("nix-store", "--query", "--deriver", *outputs)
-    derivers = [p for p in derivers if STORE_PATH.fullmatch(p) and Path(p).exists()]
-    paths = nix_lines("nix-store", "--query", "--requisites", "--include-outputs", *derivers) if derivers else []
+    derivers = sorted({p for p in derivers if STORE_PATH.fullmatch(p) and Path(p).exists()})
+    closures = generation.parent.parent / CLOSURES
+    if closures.is_symlink():
+        raise OSError(errno.EINVAL, "closure records must not be a symlink", str(closures))
+    closures.mkdir(exist_ok=True)
+    with ThreadPoolExecutor(8) as pool:
+        found = list(pool.map(lambda deriver: build_inputs(closures, deriver), derivers))
     dependencies = generation / "dependencies"
     dependencies.mkdir(exist_ok=True)
     count = 0
-    for path in set(paths):
+    for path in {path for paths, _ in found for path in paths}:
         if STORE_PATH.fullmatch(path) and Path(path).exists():
             (dependencies / Path(path).name).symlink_to(path)
             count += 1
-    print(f"ci-retain: rooted {len(outputs)} results and {count} build inputs", file=sys.stderr)
+    queried = sum(new for _, new in found)
+    print(f"ci-retain: rooted {len(outputs)} results and {count} build inputs"
+          f" (queried {queried} of {len(derivers)} derivations)", file=sys.stderr)
 
 
 def exit_status(code):
@@ -137,7 +184,7 @@ def exit_status(code):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("scope", choices=("main", "pr", "prune"))
-    parser.add_argument("label", nargs="?", choices=("uta", "checks", "packages"))
+    parser.add_argument("label", nargs="?", choices=("uta", "checks", "packages", "iso"))
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     command = args.command[1:] if args.command[:1] == ["--"] else args.command

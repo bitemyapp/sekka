@@ -85,6 +85,18 @@ class Retention(unittest.TestCase):
         retain.prune(root, self.now, 0)
         self.assertTrue((outside / "1-old").exists())
 
+    def test_input_records_expire_after_a_week_unused(self):
+        closures = self.root / retain.CLOSURES
+        closures.mkdir()
+        old, recent = closures / "old.drv", closures / "recent.drv"
+        for record, age in ((old, 8 * retain.DAY), (recent, retain.DAY)):
+            record.touch()
+            os.utime(record, (self.now - age, self.now - age))
+        (closures / "link.drv").symlink_to(self.root / "elsewhere")
+        retain.prune(self.root, self.now, PLENTY)
+        self.assertEqual((old.exists(), recent.exists()), (False, True))
+        self.assertTrue((closures / "link.drv").is_symlink())
+
     def test_locks_refuse_fifos_and_links_without_blocking(self):
         os.mkfifo(self.root / "fifo")
         with self.assertRaises(OSError):
@@ -116,7 +128,9 @@ printf '%s\\n' "$@" > {self.args}
 while (($#)); do [[ $1 == --out-link ]] && ln -s {self.store_path} "$2"; shift; done
 exit "${{FAKE_STATUS:-0}}"
 """)
+        self.queries = base / "nix-store-queries"
         (bin_dir / "nix-store").write_text(f"""#!{bash}
+echo "$*" >> {self.queries}
 [[ -z ${{FAKE_QUERY_FAILS:-}} ]] || exit 1
 echo {self.store_path}
 """)
@@ -145,6 +159,20 @@ echo {self.store_path}
         self.assertEqual(os.readlink(generation / "dependencies" / name), self.store_path)
         self.assertFalse(retain.building(generation))
         self.assertEqual(self.args.read_text().split("\n")[:3], ["flake", "check", "--keep-going"])
+
+    def test_a_rerun_reuses_recorded_build_inputs(self):
+        for _ in range(2):
+            result = self.run_retain("pr", "checks", "flake", "check", "--keep-going")
+            self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("(queried 0 of 1 derivations)", result.stderr)
+        queries = self.queries.read_text().splitlines()
+        self.assertEqual(sum("--requisites" in q for q in queries), 1)
+        name = Path(self.store_path).name
+        for generation in self.generations("pr-checks"):
+            self.assertEqual(os.readlink(generation / "dependencies" / name), self.store_path)
+        # Another group building the same derivation reuses the record too.
+        result = self.run_retain("main", "checks", "flake", "check", "--keep-going")
+        self.assertIn("(queried 0 of 1 derivations)", result.stderr)
 
     def test_failure_keeps_its_status_and_passing_results(self):
         result = self.run_retain("main", "uta", "build", ".#uta", FAKE_STATUS="23")
