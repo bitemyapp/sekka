@@ -56,13 +56,17 @@ def select_merge(number, actor, triggering_actor, expected_head="", get=api, sle
                 or (pr["head"].get("repo") or {}).get("full_name") != REPOSITORY):
             raise NotTrusted("Only this repository's branches targeting main are eligible")
         require_writer(pr["user"]["login"], get)
-        head, base = pr["head"]["sha"], pr["base"]["sha"]
+        head = pr["head"]["sha"]
         if expected_head and head != expected_head:
             raise NotTrusted("Pull request changed since this event; use the newer run")
         merge = pr.get("merge_commit_sha")
         if pr.get("mergeable") is False:
             raise NotTrusted("Pull request has merge conflicts")
         if pr.get("mergeable") and merge:
+            # PR metadata can retain an earlier base SHA after main moves,
+            # while GitHub's test merge already uses the current branch tip.
+            # Verify against the live ref, including on every retry.
+            base = get("git/ref/heads/main")["object"]["sha"]
             if not all(re.fullmatch(r"[0-9a-f]{40}", sha) for sha in [head, base, merge]):
                 raise NotTrusted("Invalid commit identity")
             commit = get(f"git/commits/{merge}")
@@ -81,6 +85,7 @@ if __name__ == "__main__":
                                 os.environ["GITHUB_TRIGGERING_ACTOR"],
                                 os.environ.get("EXPECTED_HEAD", ""))
     except NotTrusted as error:
+        print(f"PR build not admitted: {error}.")
         with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
             output.write("allowed=false\n")
         with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
