@@ -38,13 +38,14 @@ pub enum OutputEvent {
 
 #[derive(Clone)]
 struct Controls {
+    master: f32,
     channels: Vec<f32>,
     muted: bool,
 }
 
 impl Default for Controls {
     fn default() -> Self {
-        Self { channels: vec![1.0], muted: false }
+        Self { master: 1.0, channels: vec![1.0], muted: false }
     }
 }
 
@@ -458,7 +459,7 @@ fn run(
             }
         }
         Cmd::Volume(v, muted) => {
-            *controls.borrow_mut() = Controls { channels: vec![amplitude(v)], muted };
+            *controls.borrow_mut() = Controls { master: 1.0, channels: vec![amplitude(v)], muted };
             if let Some(p) = cur.borrow_mut().as_mut() {
                 apply_volume(&p.stream, p.channels, &controls.borrow());
             }
@@ -619,6 +620,11 @@ fn open(
             let mut controls = controls.borrow_mut();
             for p in object.properties {
                 match p.value {
+                    Value::Float(master)
+                        if p.key == spa::sys::SPA_PROP_volume && master.is_finite() && master >= 0.0 =>
+                    {
+                        controls.master = master;
+                    }
                     Value::Bool(muted) if p.key == spa::sys::SPA_PROP_mute => controls.muted = muted,
                     Value::ValueArray(spa::pod::ValueArray::Float(channels))
                         if p.key == spa::sys::SPA_PROP_channelVolumes
@@ -630,7 +636,10 @@ fn open(
                     _ => (),
                 }
             }
-            events(OutputEvent::Volume(controls.channels.iter().copied().fold(0.0, f32::max).cbrt(), controls.muted));
+            events(OutputEvent::Volume(
+                (controls.master * controls.channels.iter().copied().fold(0.0, f32::max)).cbrt(),
+                controls.muted,
+            ));
         })
         .process(move |stream, _| {
             // SAFETY: a buffer dequeued is ours until queued; its first
@@ -713,6 +722,7 @@ fn apply_volume(stream: &pw::stream::Stream, channels: u32, controls: &Controls)
         type_: spa::sys::SPA_TYPE_OBJECT_Props,
         id: spa::sys::SPA_PARAM_Props,
         properties: vec![
+            Property::new(spa::sys::SPA_PROP_volume, Value::Float(controls.master)),
             Property::new(
                 spa::sys::SPA_PROP_channelVolumes,
                 Value::ValueArray(ValueArray::Float(if controls.channels.len() == channels as usize {

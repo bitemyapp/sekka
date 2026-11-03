@@ -280,8 +280,10 @@ fn utsushi_mpris_reroutes_and_loss_leave_the_ui_and_transport_in_agreement() {
         ["object.serial"]
         .as_u64()
         .unwrap();
-    command("pw-cli", &["set-param", &source.to_string(), "Props", "{ mute: true, channelVolumes: [ 0.125, 0.008 ] }"]);
-    app_wait(&mut h, |a| a.muted && (a.volume - 0.5).abs() < 0.001);
+    command("pw-cli", &[
+        "set-param", &source.to_string(), "Props", "{ volume: 0.5, mute: true, channelVolumes: [ 0.125, 0.008 ] }",
+    ]);
+    app_wait(&mut h, |a| a.muted && (a.volume - 0.0625_f32.cbrt()).abs() < 0.001);
     command("pw-metadata", &["-n", "default", &source.to_string(), "target.object", &target.to_string(), "Spa:Id"]);
     app_wait(&mut h, |a| routed(a, "utsushi-test-b"));
     assert_eq!(h.program().status, Status::Playing);
@@ -297,6 +299,10 @@ fn utsushi_mpris_reroutes_and_loss_leave_the_ui_and_transport_in_agreement() {
     assert!(h.program().muted);
     let stream = dump().into_iter().find(|o| o["info"]["props"]["node.name"] == "utsushi").unwrap();
     let volumes = &stream["info"]["params"]["Props"][0]["channelVolumes"];
+    assert!(
+        (stream["info"]["params"]["Props"][0]["volume"].as_f64().unwrap() - 0.5).abs() < 0.001,
+        "routing reset the master volume",
+    );
     assert!((volumes[0].as_f64().unwrap() - 0.125).abs() < 0.001);
     assert!((volumes[1].as_f64().unwrap() - 0.008).abs() < 0.001, "routing flattened channel balance");
     remove_sink("utsushi-test-a");
