@@ -52,7 +52,7 @@ pkgs.testers.runNixOSTest {
     environment.sessionVariables.LIBGL_ALWAYS_SOFTWARE = "1";
     environment.systemPackages = [ python ];
   };
-  testScript = ''
+  testScript = builtins.readFile ../tests/vm_start.py + ''
     import csv, io, json, pathlib, shlex, subprocess, time, textwrap
 
     def user(command):
@@ -173,7 +173,7 @@ pkgs.testers.runNixOSTest {
     """
         machine.succeed("python3 -c " + shlex.quote(textwrap.dedent(setup)))
 
-    machine.start()
+    start_vm(machine)
     machine.wait_for_unit("ydotoold.service")
     machine.wait_until_succeeds("test -S /run/user/1000/hypr/*/.socket.sock", timeout=180)
     signature = machine.succeed("basename /run/user/1000/hypr/*").strip()
