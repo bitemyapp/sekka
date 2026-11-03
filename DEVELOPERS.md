@@ -2631,6 +2631,22 @@ eight at 38–45 GiB, within the job container's 64 GiB; 16 workers were slower
 than eight. The image is the one place Nix settings live: a workflow's
 `NIX_CONFIG` would replace its whole value, not add to it.
 
+Pull requests, main and the nightly build the checks with nix-fast-build, not
+`nix flake check`, which evaluates every output before building anything and
+evaluates the ISO, installed systems and other packages it doesn't build: on
+2026-11-03, under load from other work, `nix flake check --no-build` took 151
+seconds on main against 81–95 seconds for the checks alone. nix-fast-build
+evaluates `checks.x86_64-linux` alone, in nix-eval-jobs workers, and builds each
+check as soon as its derivation is known, so a long build such as Aizome's
+starts within seconds. The workers run upstream Nix's evaluator (`eval-cores`
+doesn't apply) as separate processes; `scripts/ci-retain.py` starts twelve, each
+with a 2 GiB initial heap rather than the job's 32 GiB and restarted past 4 GiB.
+Together they peaked at 25.6 GiB with eight workers and 48.6 GiB with sixteen.
+Builds go through the job's Determinate client, sixteen `nix build` processes
+of two builds each: the 32 at a time the image allows. On a runner image
+without nix-fast-build the wrapper runs `nix flake check` instead. The nightly
+still evaluates every output, with `nix flake check --no-build`.
+
 A job's container is on Docker's default network: it reaches the internet, the
 LAN and services on the host. The admission hook and pull request approval keep
 untrusted code from getting that far. Each build leaves its closure in the
