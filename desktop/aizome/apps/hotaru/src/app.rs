@@ -2621,10 +2621,16 @@ impl Program for Hotaru {
             let title =
                 self.panes.iter().find(|pane| pane.id == tab.active).map_or("Shell", |pane| pane.title.as_str());
             let title: String = title.chars().take(48).collect();
-            window = window.item(self.keyed(
-                MenuItem::new(title, Msg::SelectTab(tab.id)).checked(tab.id == self.active),
-                self.tab_shortcut(index),
-            ));
+            window = window.item(
+                self.keyed(
+                    MenuItem::new(title, Msg::SelectTab(tab.id))
+                        // An open shell menu keeps this id while titles change or
+                        // other tabs close. Stay outside the kit's generated ids.
+                        .id(0x8000_0000 | tab.id.get() as u32)
+                        .checked(tab.id == self.active),
+                    self.tab_shortcut(index),
+                ),
+            );
         }
         let window = window
             .separator()
