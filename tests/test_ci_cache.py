@@ -144,13 +144,22 @@ printf '%s\\n' "$@" > {self.args}
 while (($#)); do [[ $1 == --out-link ]] && ln -s {self.store_path} "$2"; shift; done
 exit "${{FAKE_STATUS:-0}}"
 """)
+        (bin_dir / "nix-fast-build").write_text(f"""#!{bash}
+printf '%s\\n' "$@" > {self.args}
+echo "$TMPDIR" > {base / "fast-build-tmpdir"}
+while (($#)); do
+  [[ $1 == --out-link ]] && for attr in alpha beta; do ln -s {self.store_path} "$2-$attr"; done
+  shift
+done
+exit "${{FAKE_STATUS:-0}}"
+""")
         self.queries = base / "nix-store-queries"
         (bin_dir / "nix-store").write_text(f"""#!{bash}
 echo "$*" >> {self.queries}
 [[ -z ${{FAKE_QUERY_FAILS:-}} ]] || exit 1
 echo {self.store_path}
 """)
-        for tool in ("nix", "nix-store"):
+        for tool in ("nix", "nix-store", "nix-fast-build"):
             (bin_dir / tool).chmod(0o755)
         self.env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}",
                         SEKKA_CI_ROOTS=str(self.roots), SEKKA_CI_MIN_FREE_BYTES="0")
@@ -190,6 +199,29 @@ echo {self.store_path}
         result = self.run_retain("main", "checks", "flake", "check", "--keep-going")
         self.assertIn("(queried 0 of 1 derivations)", result.stderr)
 
+    def test_fast_build_links_each_check_and_roots_its_evaluation(self):
+        result = self.run_retain("pr", "checks", "fast-build", "--flake", ".#checks.x86_64-linux", FAKE_STATUS="1")
+        self.assertEqual(result.returncode, 1)
+        [generation] = self.generations("pr-checks")
+        self.assertEqual(sorted(p.name for p in generation.glob("result*")), ["result-alpha", "result-beta"])
+        self.assertTrue((generation / "dependencies" / Path(self.store_path).name).is_symlink())
+        self.assertFalse((generation / "success").exists())
+        nix = str(self.args.parent / "bin" / "nix")
+        self.assertEqual(self.args.read_text().split(),
+                         ["--nix", nix, *retain.FAST_BUILD, "--flake", ".#checks.x86_64-linux", "--no-nom",
+                          "--out-link", str(generation / "result")])
+        tmpdir = (self.args.parent / "fast-build-tmpdir").read_text().strip()
+        self.assertEqual(tmpdir, str(generation))
+
+    def test_fast_build_falls_back_to_flake_check_on_an_older_runner(self):
+        (self.args.parent / "bin" / "nix-fast-build").unlink()
+        result = self.run_retain("pr", "checks", "fast-build", "--flake", "path:/src#checks.x86_64-linux", "-j", "8")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("nix-fast-build is missing", result.stderr)
+        [generation] = self.generations("pr-checks")
+        self.assertEqual(self.args.read_text().split(), [
+            "flake", "check", "path:/src", "--keep-going", "--print-build-logs", "--out-link", str(generation / "result")])
+
     def test_failure_keeps_its_status_and_passing_results(self):
         result = self.run_retain("main", "uta", "build", ".#uta", FAKE_STATUS="23")
         self.assertEqual(result.returncode, 23)
@@ -213,6 +245,10 @@ echo {self.store_path}
         self.assertEqual(self.args.read_text().split(), ["build", ".#uta", "--no-link"])
         result = self.run_retain("pr", "checks", "flake", "check")
         self.assertEqual(self.args.read_text().split(), ["flake", "check"])
+        result = self.run_retain("pr", "checks", "fast-build", "--flake", ".#checks.x86_64-linux")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.args.read_text().split()[2 + len(retain.FAST_BUILD):],
+                         ["--flake", ".#checks.x86_64-linux", "--no-nom"])
         self.assertEqual(self.run_retain("prune").returncode, 0)
         self.assertEqual(list(self.roots.iterdir()), [])
 

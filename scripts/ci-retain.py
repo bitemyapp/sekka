@@ -32,6 +32,12 @@ DAY = 86400
 CLOSURES = ".closures"
 # Successful and failed generations each group keeps, newest first.
 KEEP = {"main": (2, 1), "pr": (4, 2)}
+# How nix-fast-build evaluates and builds in a job, whose container has 64 GiB
+# (nix/runner.nix): evaluation workers are separate processes, each restarted
+# past the memory limit, and every build process takes its own share of the
+# 32 concurrent builds the image's NIX_CONFIG allows one client. A
+# workflow's own options come later and win.
+FAST_BUILD = ["--eval-workers", "8", "--eval-max-memory-size", "4096", "-j", "16", "--option", "max-jobs", "2"]
 # Below this much free store space, keep only each group's newest successful
 # main generation, so the daemon's own collection (scripts/runner-host-setup.sh:
 # from 100 GiB free until 200 GiB are) can reclaim the rest.
@@ -177,6 +183,36 @@ def retain_dependencies(generation):
           f" (queried {queried} of {len(derivers)} derivations)", file=sys.stderr)
 
 
+def run(command, out_link=None, tmp=None):
+    """Run Nix, or nix-fast-build for `fast-build`, linking results under out_link."""
+    env = None
+    if command[0] == "fast-build" and not shutil.which("nix-fast-build"):
+        # A runner image from before nix-fast-build: check the same flake the
+        # slower way, evaluating it all before building.
+        flake = next((b for a, b in zip(command, command[1:]) if a in ("-f", "--flake")), ".")
+        print("::warning::nix-fast-build is missing from this runner; running nix flake check.", file=sys.stderr)
+        command = ["flake", "check", flake.split("#")[0] or ".", "--keep-going", "--print-build-logs"]
+    if command[0] == "fast-build":
+        # Evaluation streams into builds: each check starts building as soon
+        # as nix-eval-jobs has its derivation, not after the whole flake. Its
+        # workers each start with a small heap; one Nix process's 32 GiB
+        # (GC_INITIAL_HEAP_SIZE in the workflows) each would exhaust the job.
+        # Builds go through this job's own client (the runner's Determinate
+        # Nix), not the upstream one nix-fast-build puts first on its PATH.
+        argv = ["nix-fast-build", "--nix", shutil.which("nix") or "nix", *FAST_BUILD, *command[1:], "--no-nom"]
+        env = dict(os.environ, GC_INITIAL_HEAP_SIZE=str(2 * 2**30))
+        if out_link:
+            argv += ["--out-link", out_link]
+            # Its evaluation roots go in a temporary directory: keep that in
+            # the generation, where the host's collector sees it.
+            env["TMPDIR"] = str(tmp)
+    elif out_link:
+        argv = ["nix", *command, "--out-link", out_link]
+    else:
+        argv = ["nix", *command, *(["--no-link"] if command[0] == "build" else [])]
+    return subprocess.run(argv, env=env).returncode
+
+
 def exit_status(code):
     return code if code >= 0 else 128 - code
 
@@ -189,8 +225,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if args.scope != "prune":
-        if not args.label or not (command[:1] == ["build"] or command[:2] == ["flake", "check"]):
-            parser.error("expected LABEL followed by build or flake check arguments")
+        if not args.label or not (command[:1] in (["build"], ["fast-build"]) or command[:2] == ["flake", "check"]):
+            parser.error("expected LABEL followed by build, fast-build or flake check arguments")
         if any(a in ("--no-link", "--out-link", "-o") or a.startswith("--out-link=") for a in command):
             parser.error("ci-retain manages the out-link")
     root_env = os.environ.get("SEKKA_CI_ROOTS")
@@ -200,8 +236,7 @@ def main(argv=None):
         # A runner without the roots mount, or a maintainer's machine: the same
         # build and status as plain Nix, kept by nothing after the job.
         print("::warning::No persistent CI roots mounted; results are not retained between jobs.", file=sys.stderr)
-        no_link = ["--no-link"] if command[0] == "build" else []
-        return exit_status(subprocess.run(["nix", *command, *no_link]).returncode)
+        return exit_status(run(command))
     root = Path(root_env)
     if not root.is_absolute() or root.is_symlink() or not root.is_dir():
         parser.error("SEKKA_CI_ROOTS must be an existing absolute directory")
@@ -219,20 +254,20 @@ def main(argv=None):
         build_lock = open_lock(generation / ".building")
         fcntl.flock(build_lock, fcntl.LOCK_EX)
     try:
-        result = subprocess.run(["nix", *command, "--out-link", str(generation / "result")])
-        # A failed `flake check --keep-going` still links the checks that
-        # passed; their inputs are worth keeping for the rerun.
+        returncode = run(command, str(generation / "result"), generation)
+        # A failed `flake check --keep-going` or fast-build still links the
+        # checks that passed; their inputs are worth keeping for the rerun.
         try:
             retain_dependencies(generation)
         except (OSError, subprocess.CalledProcessError) as error:
             print(f"::warning::Results stay rooted, but not all of their build inputs: {error}", file=sys.stderr)
-        if result.returncode == 0:
+        if returncode == 0:
             (generation / "success").touch()
     finally:
         os.close(build_lock)
     with locked(root / ".lock"):
         prune(root)
-    return exit_status(result.returncode)
+    return exit_status(returncode)
 
 
 if __name__ == "__main__":
