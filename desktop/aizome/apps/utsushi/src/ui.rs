@@ -44,7 +44,10 @@ impl Widget for PlaybackKeys {
 
     fn event(&mut self, cx: &mut EventCx, event: &Event) -> EventStatus {
         if let Event::Key(k) = event
-            && k.modifiers.is_empty()
+            && !k.modifiers.shift()
+            && !k.modifiers.control()
+            && !k.modifiers.alt()
+            && !k.modifiers.super_key()
             && matches!(&k.key, Key::Character(s) if s == " ")
         {
             if k.pressed && !k.repeat {

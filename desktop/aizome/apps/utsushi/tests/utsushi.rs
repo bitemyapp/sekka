@@ -483,6 +483,29 @@ fn space_pauses_and_resumes_from_each_control() {
 }
 
 #[test]
+fn space_with_lock_keys_still_controls_playback() {
+    use aizome_kit::sidestep_ui::{Key, Modifiers, NamedKey};
+
+    let mut h = harness();
+    let w = window(&h);
+    h.send(Msg::Open(vec![fixture("song.flac")]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing);
+    h.named(w, NamedKey::Tab, Modifiers::NONE);
+    for mods in [Modifiers::CAPS_LOCK, Modifiers::NUM_LOCK, Modifiers::CAPS_LOCK | Modifiers::NUM_LOCK] {
+        h.key(w, Key::Character(" ".into()), mods);
+        until(&mut h, 2.0, |a| a.status == Status::Paused);
+        h.key(w, Key::Character(" ".into()), mods);
+        until(&mut h, 2.0, |a| a.status == Status::Playing);
+    }
+    // Lock flags must not strip real shortcut modifiers.
+    for mods in [Modifiers::CONTROL, Modifiers::ALT, Modifiers::SUPER] {
+        h.key(w, Key::Character(" ".into()), mods | Modifiers::CAPS_LOCK);
+        h.send_all(std::iter::empty());
+        assert_eq!(h.program().status, Status::Playing);
+    }
+}
+
+#[test]
 fn space_in_media_info_does_not_toggle_playback() {
     let mut h = harness();
     let w = window(&h);
