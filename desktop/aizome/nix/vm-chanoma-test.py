@@ -2,7 +2,8 @@
 game controller alone (a virtual one, through uinput).
 
 Chanoma starts with the session; the controller is found and held from
-other readers; Home's tiles open a game; the game hears the controller
+other readers; Home's tiles open a game (OpenBIOS linked into the cores'
+system folder as it starts); the game hears the controller
 (its screen goes dark while Right is held, read from the compositor's own
 screenshot); the Home button pauses it under a menu; stopping keeps where
 it was left; the controller going and coming back is player 1 again. A
@@ -147,6 +148,10 @@ with subtest("the controller opens a game from Home"):
     pad("tap down")
     pad("tap south")
     until("the game plays", lambda: logged("chanoma: Playing"))
+    # The PlayStation's BIOS the module offers (OpenBIOS) is linked into
+    # the cores' system folder as a game starts.
+    bios = "/home/alice/.local/share/aizome/chanoma/system/openbios.bin"
+    machine.succeed(f"test -L {bios} && test $(stat -L -c %s {bios}) = 524288")
     time.sleep(2)
     # The picture's top left, clear of the logo the game boots with.
     box = (260, 60, 460, 260)

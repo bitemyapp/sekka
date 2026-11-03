@@ -85,6 +85,7 @@ fn play(core: &Path, rom: &Path, dir: &Path, resume: bool, held: u32) -> (f64, b
         picture: dir.join("game.png"),
         resume,
         system_dir: dir.join("system"),
+        bios: Vec::new(),
         save_dir: dir.join("saves"),
         players: 1,
         prefer: Vec::new(),
@@ -166,4 +167,94 @@ fn game_boy_cores_play_hear_the_controller_and_carry_on() {
         played += 1;
     }
     assert!(played > 0, "no Game Boy cores in {}", dir.display());
+}
+
+/// Games played through PCSX-ReARMed with a system folder (OpenBIOS,
+/// another BIOS, or none for its own stand-in), a picture kept every
+/// eight seconds and its brightness said, Start and the confirm button
+/// pressed from the third on. For looking at, not judged here: a game
+/// that doesn't start fails.
+///
+/// `CHANOMA_TEST_PSX_GAMES` (a file of games, one path a line),
+/// `CHANOMA_TEST_PSX_SYSTEM` (the system folder), `CHANOMA_TEST_PSX_OUT`
+/// (where the pictures go), and `CHANOMA_TEST_PSX_STAGES` (how many
+/// pictures, six if not said).
+#[test]
+#[ignore = "needs CHANOMA_TEST_CORES and CHANOMA_TEST_PSX_*"]
+fn playstation_games_start_with_a_bios() {
+    let (Some(dir), Some(list), Some(system), Some(out)) = (
+        cores(),
+        std::env::var_os("CHANOMA_TEST_PSX_GAMES"),
+        std::env::var_os("CHANOMA_TEST_PSX_SYSTEM").map(PathBuf::from),
+        std::env::var_os("CHANOMA_TEST_PSX_OUT").map(PathBuf::from),
+    ) else {
+        return;
+    };
+    let _ = env_logger::builder().is_test(true).filter_level(log::LevelFilter::Info).try_init();
+    let core = dir.join("pcsx_rearmed_libretro.so");
+    let stages: u32 = std::env::var("CHANOMA_TEST_PSX_STAGES").ok().and_then(|s| s.parse().ok()).unwrap_or(6);
+    let games = std::fs::read_to_string(list).unwrap();
+    let mut failed = Vec::new();
+    for game in games.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        let game = Path::new(game);
+        let name = game.file_stem().unwrap().to_string_lossy().into_owned();
+        let here = out.join(&name);
+        std::fs::create_dir_all(&here).unwrap();
+        // Moments eight seconds apart: untouched for two (its logos,
+        // its film, its title), then Start and the confirm button pressed
+        // through the rest. Each carries on from the last, as Chanoma
+        // carries a game on.
+        let mut started = true;
+        let mut seen = Vec::new();
+        for stage in 1..=stages {
+            let pads = Arc::new(Shared::default());
+            let launch = Launch {
+                core: CoreSource::Library(core.clone()),
+                game: game.to_owned(),
+                save_ram: here.join("game.srm"),
+                state: here.join("game.state"),
+                picture: here.join("game.png"),
+                resume: stage > 1,
+                system_dir: system.clone(),
+                bios: Vec::new(),
+                save_dir: here.join("saves"),
+                players: 2,
+                prefer: Vec::new(),
+                screen_lines: 1080,
+                silent: true,
+            };
+            let (tx, rx) = mpsc::channel();
+            let session = Session::start(launch, None, pads.clone(), None, move |e| {
+                let _ = tx.send(e);
+            });
+            match rx.recv_timeout(Duration::from_secs(30)) {
+                Ok(Event::Started { .. }) => {}
+                other => {
+                    println!("{name}: didn't start: {other:?}");
+                    failed.push(name.clone());
+                    started = false;
+                    session.stop(false);
+                    break;
+                }
+            }
+            if stage <= 2 {
+                std::thread::sleep(Duration::from_secs(8));
+            } else {
+                for b in [Button::Start, Button::South, Button::South, Button::Start] {
+                    pads.set(0, true, b.bit(), [0.0; 6]);
+                    std::thread::sleep(Duration::from_millis(150));
+                    pads.set(0, true, 0, [0.0; 6]);
+                    std::thread::sleep(Duration::from_millis(1850));
+                }
+            }
+            session.stop(true);
+            let shot = out.join(format!("{name} {stage}.png"));
+            let _ = std::fs::copy(here.join("game.png"), &shot);
+            seen.push(if shot.is_file() { format!("{:.0}", brightness(&shot)) } else { "-".into() });
+        }
+        if started {
+            println!("{name}: played; brightness {}", seen.join(" "));
+        }
+    }
+    assert!(failed.is_empty(), "these didn't start: {failed:?}");
 }

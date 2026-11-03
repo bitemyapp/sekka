@@ -139,6 +139,7 @@ impl Chanoma {
             picture: dirs.states().join(format!("{file}.png")),
             state,
             system_dir: dirs.system(),
+            bios: crate::library::bios_dirs(),
             save_dir: dirs.saves(),
             players: g.system.players,
             prefer: g.system.prefer.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect(),
