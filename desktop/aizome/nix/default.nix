@@ -127,6 +127,8 @@ let
       hotaruFonts = pkgs.callPackage ./hotaru-fonts.nix { };
       # Chanoma, the television (programs.aizome.chanoma).
       chanoma = aizome.chanoma;
+      # A free PlayStation BIOS for its games (programs.aizome.chanoma.bios).
+      psx-openbios = pkgs.callPackage ./openbios.nix { };
       default = aizome;
     });
 

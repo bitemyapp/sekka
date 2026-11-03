@@ -141,8 +141,10 @@ let
     AIZOME_WALLPAPER_DAY = toString cfg.wallpapers.day;
   }
   // lib.optionalAttrs cfg.chanoma.enable {
-    # Where Chanoma finds its game cores.
+    # Where Chanoma finds its game cores, and the BIOS images it offers
+    # them.
     CHANOMA_CORES = "${chanomaCores}/lib/retroarch/cores";
+    CHANOMA_BIOS = "${chanomaBios}/share/chanoma/bios";
   }
   // lib.optionalAttrs (cfg.chanoma.enable && cfg.chanoma.browser != null) {
     # The browser it was given, found without a PATH (its autostarted
@@ -152,6 +154,10 @@ let
   chanomaCores = pkgs.symlinkJoin {
     name = "chanoma-cores";
     paths = cfg.chanoma.cores;
+  };
+  chanomaBios = pkgs.symlinkJoin {
+    name = "chanoma-bios";
+    paths = cfg.chanoma.bios;
   };
 in
 {
@@ -225,6 +231,19 @@ in
           The libretro cores Chanoma plays games with. Cores that need
           OpenGL or Vulkan (Nintendo 64, Dreamcast and later) don't run
           in Chanoma.
+        '';
+      };
+      bios = lib.mkOption {
+        type = lib.types.listOf lib.types.package;
+        default = [ self.packages.${system}.psx-openbios ];
+        defaultText = lib.literalExpression "[ aizome.packages.\${system}.psx-openbios ]";
+        description = ''
+          Console BIOS images for the game cores, each package's
+          `share/chanoma/bios/` files. Chanoma links them into the cores'
+          system folder before a game starts, beside any a grown-up put
+          there, which come first. The default is OpenBIOS, PCSX-Redux's
+          free replacement for the PlayStation's: the console's own is
+          Sony's and can't be shipped.
         '';
       };
       browser = lib.mkOption {

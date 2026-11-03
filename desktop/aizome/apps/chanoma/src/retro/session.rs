@@ -46,6 +46,9 @@ pub struct Launch {
     /// Carry on from the state left.
     pub resume: bool,
     pub system_dir: PathBuf,
+    /// Folders of console BIOS images offered to the core: linked into
+    /// `system_dir` beside what's there ([`offer_bios`]).
+    pub bios: Vec<PathBuf>,
     pub save_dir: PathBuf,
     pub players: usize,
     /// Core settings to use instead of the core's defaults.
@@ -140,6 +143,38 @@ fn cstring(p: &Path) -> CString {
     CString::new(p.as_os_str().as_encoded_bytes()).unwrap_or_default()
 }
 
+/// Link each file in the folders `offered` into `system` (the core's
+/// system folder): a file of its name already there stays (a grown-up's
+/// own console's BIOS), a link to elsewhere is pointed here, and links to
+/// what's gone (one offered before) go.
+pub fn offer_bios(offered: &[PathBuf], system: &Path) {
+    if let Ok(entries) = std::fs::read_dir(system) {
+        for e in entries.flatten() {
+            let is_link = e.file_type().is_ok_and(|t| t.is_symlink());
+            if is_link && !e.path().exists() {
+                let _ = std::fs::remove_file(e.path());
+            }
+        }
+    }
+    for dir in offered {
+        let Ok(entries) = std::fs::read_dir(dir) else { continue };
+        for e in entries.flatten() {
+            let (from, to) = (e.path(), system.join(e.file_name()));
+            match std::fs::symlink_metadata(&to) {
+                Ok(m) if !m.file_type().is_symlink() => continue,
+                Ok(_) if std::fs::read_link(&to).is_ok_and(|t| t == from) => continue,
+                Ok(_) => {
+                    let _ = std::fs::remove_file(&to);
+                }
+                Err(_) => {}
+            }
+            if let Err(err) = std::os::unix::fs::symlink(&from, &to) {
+                log::warn!("chanoma: offering {} to the cores: {err}", from.display());
+            }
+        }
+    }
+}
+
 /// The core's own save, read into its memory.
 fn load_save_ram(api: &Api, path: &Path) {
     // SAFETY: the core's memory of the size it says, alive while loaded.
@@ -220,6 +255,7 @@ fn run(
     for d in [&launch.system_dir, &launch.save_dir] {
         let _ = std::fs::create_dir_all(d);
     }
+    offer_bios(&launch.bios, &launch.system_dir);
     let mut host = Box::new(Host::new(Screen::new(sink), pads, live.clone()));
     host.system_dir = cstring(&launch.system_dir);
     host.save_dir = cstring(&launch.save_dir);
@@ -425,4 +461,34 @@ fn save_picture(path: &Path, w: u32, h: u32, rgba: &[u8], aspect: f64) -> Result
     let mut bytes = Vec::new();
     img.write_to(&mut std::io::Cursor::new(&mut bytes), image::ImageFormat::Png).map_err(|e| e.to_string())?;
     crate::store::write_bytes(path, &bytes).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_bios_offered_is_linked_in_beside_a_grown_ups_own() {
+        let root = std::env::temp_dir().join(format!("chanoma-bios-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (offered, system) = (root.join("offered"), root.join("system"));
+        std::fs::create_dir_all(&offered).unwrap();
+        std::fs::create_dir_all(&system).unwrap();
+        std::fs::write(offered.join("openbios.bin"), b"free").unwrap();
+        std::fs::write(offered.join("scph5501.bin"), b"offered").unwrap();
+        // A grown-up's own, a link to one offered before and since gone,
+        // and a link to elsewhere.
+        std::fs::write(system.join("scph5501.bin"), b"their own").unwrap();
+        std::os::unix::fs::symlink(root.join("gone.bin"), system.join("gone.bin")).unwrap();
+        std::os::unix::fs::symlink(system.join("scph5501.bin"), system.join("openbios.bin")).unwrap();
+        offer_bios(std::slice::from_ref(&offered), &system);
+        assert_eq!(std::fs::read(system.join("openbios.bin")).unwrap(), b"free");
+        assert_eq!(std::fs::read_link(system.join("openbios.bin")).unwrap(), offered.join("openbios.bin"));
+        assert_eq!(std::fs::read(system.join("scph5501.bin")).unwrap(), b"their own");
+        assert!(std::fs::symlink_metadata(system.join("gone.bin")).is_err());
+        // Again: nothing changes.
+        offer_bios(std::slice::from_ref(&offered), &system);
+        assert_eq!(std::fs::read(system.join("openbios.bin")).unwrap(), b"free");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }
