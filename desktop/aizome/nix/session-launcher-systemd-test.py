@@ -23,12 +23,29 @@ def ctl(*args, check=True):
                           env=ENV, check=check, text=True, capture_output=True)
 
 
+def unit_state(unit):
+    return ctl('show', '-p', 'ActiveState', '--value', unit).stdout.strip()
+
+
 def state():
-    return ctl('show', '-p', 'ActiveState', '--value', 'aizome.service').stdout.strip()
+    return unit_state('aizome.service')
 
 
 def file_manager_state():
-    return ctl('show', '-p', 'ActiveState', '--value', 'aizome-file-manager.service').stdout.strip()
+    return unit_state('aizome-file-manager.service')
+
+
+def watch_state():
+    return unit_state('aizome-session-watch.service')
+
+
+def environment():
+    return set(ctl('show-environment').stdout.splitlines())
+
+
+# The user manager's environment before any session: each one must leave
+# it as it found it, its variables and the compositor's removed.
+BASELINE = environment()
 
 
 def until(predicate):
@@ -47,13 +64,18 @@ def start(name):
     return process
 
 
+def ended():
+    until(lambda: state() == 'inactive')
+    until(lambda: file_manager_state() == 'inactive')
+    until(lambda: watch_state() == 'inactive')
+    after = environment()
+    assert after == BASELINE, {'left': sorted(after - BASELINE), 'lost': sorted(BASELINE - after)}
+
+
 def terminated(process, sig=signal.SIGTERM, group=False):
     (os.killpg if group else os.kill)(process.pid, sig)
     assert process.wait(timeout=5) == 128 + sig
-    until(lambda: state() == 'inactive')
-    until(lambda: file_manager_state() == 'inactive')
-    environment = ctl('show-environment').stdout
-    assert 'XDG_SESSION_DESKTOP=' not in environment, environment
+    ended()
 
 
 def relogin(name):
@@ -123,18 +145,63 @@ try:
             until(lambda: (ROOT / ('entered-' + gate + '-owner')).exists())
         else:
             until(lambda: state() == 'activating')
-        environment = ctl('show-environment').stdout
+        owned = environment()
         duplicate = start(gate + '-duplicate')
         assert duplicate.wait(timeout=5) == 1
         assert 'already running' in (ROOT / (gate + '-duplicate.log')).read_text()
         assert not (ROOT / ('entered-' + gate + '-duplicate')).exists()
         assert owner.poll() is None
-        assert ctl('show-environment').stdout == environment
+        assert environment() == owned
         (ROOT / gate).unlink()
         until(lambda: state() == 'active')
         terminated(owner, group=True)
         relogin(gate + '-next')
         print(gate + ': duplicate refused, owner survived, relogin succeeded', flush=True)
+
+    # Killed outright, the launcher runs no trap. The watch takes the lock
+    # the kernel released with it and ends the session in its place.
+    process = start('killed')
+    until(lambda: state() == 'active')
+    assert watch_state() == 'active'
+    process.kill()
+    assert process.wait(timeout=5) == -signal.SIGKILL
+    ended()
+    relogin('killed-next')
+    print('killed launcher: the watch ended its session, relogin succeeded', flush=True)
+
+    # A stop timeout kills what is left of the login scope while cleanup
+    # still waits for a compositor slow to stop. The watch finishes ending
+    # the session; a login meanwhile is refused, not started into it.
+    (ROOT / 'hold-stop').touch()
+    process = start('killed-in-cleanup')
+    until(lambda: state() == 'active')
+    os.kill(process.pid, signal.SIGTERM)
+    until(lambda: state() == 'deactivating')
+    os.killpg(process.pid, signal.SIGKILL)
+    assert process.wait(timeout=5) == -signal.SIGKILL
+    duplicate = start('during-watch')
+    assert duplicate.wait(timeout=5) == 1
+    assert 'already running' in (ROOT / 'during-watch.log').read_text()
+    assert state() == 'deactivating'
+    (ROOT / 'hold-stop').unlink()
+    ended()
+    relogin('killed-in-cleanup-next')
+    print('killed during cleanup: the watch finished it, a login meanwhile was refused', flush=True)
+
+    # A login resets the failures of the session's own units, which may
+    # need to start again, and leaves other user services' failures alone.
+    for unit, bound in (('unrelated-failure', False), ('session-failure', True)):
+        subprocess.run(['systemd-run', '--user', '--quiet', '--unit=' + unit,
+                        *(['--property=PartOf=graphical-session.target'] if bound else []), 'false'],
+                       env=ENV, check=True)
+        until(lambda: unit_state(unit + '.service') == 'failed')
+    process = start('reset-failed')
+    until(lambda: state() == 'active')
+    assert unit_state('session-failure.service') == 'inactive'
+    assert unit_state('unrelated-failure.service') == 'failed'
+    terminated(process, group=True)
+    ctl('reset-failed', 'unrelated-failure.service')
+    print('reset-failed: the session unit reset, the unrelated failure kept', flush=True)
 
     # No lock is held by a service started manually or by an old launcher.
     (ROOT / 'hold-ready').touch()
