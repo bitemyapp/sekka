@@ -199,6 +199,67 @@ fn stacks_share_a_frame_and_switch() {
     assert_px(&img, g.x + 20, g.y + 20, rgb(0x2222cc), "A shows");
 }
 
+fn close_tabs_over_another_group(titlebar: bool) {
+    let c = Compositor::start(opts(Some("pixman")));
+    let mut images = Vec::new();
+    for (i, color) in [0xcc2222, 0x22cc22, 0x2222cc].into_iter().enumerate() {
+        let app = format!("test.image-{i}");
+        let client = c.client(Spec::new(&app, color).title("Image"));
+        images.push((client, c.wait_window(&app), color));
+    }
+    for (_, window, _) in &images[1..] {
+        c.ok(Request::Stack { a: images[0].1.id, b: window.id });
+    }
+    let _other_a = c.client(Spec::new("test.other-a", 0x888888));
+    let other_a = c.wait_window("test.other-a");
+    let _other_b = c.client(Spec::new("test.other-b", 0x888888));
+    let other_b = c.wait_window("test.other-b");
+    c.ok(Request::Stack { a: other_a.id, b: other_b.id });
+    let g = images[0].1.geometry;
+    c.ok(Request::Move { id: Some(other_b.id), x: g.x, y: g.y });
+
+    // Three tabs become two, then a single window. Before each close,
+    // the other group is more recent than the tab that will survive.
+    for i in 0..2 {
+        let (closing, window, color) = &images[i];
+        let (survivor, next, next_color) = &images[i + 1];
+        c.ok(Request::Focus { id: other_b.id });
+        c.ok(Request::Focus { id: window.id });
+        c.settle();
+        assert_px(&c.screenshot(), g.x + 200, g.y + 150, rgb(*color), "image group starts on top");
+        if titlebar {
+            c.ok(Request::Synthesize {
+                events: vec![
+                    Synthetic::PointerMotion { x: g.x as f64 + 10.0, y: g.y as f64 - 14.0 },
+                    Synthetic::Click { button: "left".into() },
+                ],
+            });
+            closing.wait_seen("titlebar requested close", |s| s.close_requested);
+        } else {
+            closing.send(Cmd::Quit);
+        }
+        let ws = c.wait_windows("tab closed", |ws| ws.iter().all(|w| w.id != window.id));
+        assert!(ws.iter().any(|w| w.id == next.id && w.focused), "focus must stay with the image group: {ws:?}");
+        survivor.wait_seen("remaining image takes keyboard focus", |s| s.keyboard_focus && s.activated);
+        c.settle();
+        assert_px(&c.screenshot(), g.x + 200, g.y + 150, rgb(*next_color), "remaining image stays on top");
+    }
+    images[2].0.send(Cmd::Quit);
+    c.wait_windows("last image closed, other group focused", |ws| {
+        ws.len() == 2 && ws.iter().any(|w| w.id == other_b.id && w.focused)
+    });
+}
+
+#[test]
+fn closing_group_tabs_from_the_client_keeps_the_group_on_top() {
+    close_tabs_over_another_group(false);
+}
+
+#[test]
+fn closing_group_tabs_with_the_titlebar_keeps_the_group_on_top() {
+    close_tabs_over_another_group(true);
+}
+
 #[test]
 fn desks_hide_and_show_windows() {
     let c = Compositor::start(opts(None));
