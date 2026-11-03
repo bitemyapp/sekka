@@ -184,7 +184,7 @@ image is an implementation input; build and publish `.#iso`.
 
 ```sh
 nix build .#genkan.helper .#checks.x86_64-linux.genkan-preflight \
-  .#checks.x86_64-linux.iso-store-integrity --no-update-lock-file
+  .#iso-checks.store-integrity --no-update-lock-file
 ```
 
 The preflight regression uses the packaged helper and Determinate Nix in a
@@ -217,7 +217,7 @@ when GNOME is also chosen. Without that system an installation compiled them:
 for one choosing Aizome and GNOME, Genkan expected to fetch 1434 MiB
 (unpacked), most of it rustc and cargo; with it, 16 MiB
 ([record](docs/test-results/several-desktops-media.json)). The cache's
-`installed-systems` uses the same reference list. `nix build .#checks.x86_64-linux.iso-desktop-references`
+`installed-systems` uses the same reference list. `nix build .#iso-checks.desktop-references`
 compares that evaluated list with the actual GUI's `Desktop::ALL` inventory
 and checks that each reference system and path list is included in the ISO
 configuration. This is a packaging check; qualification still boots and
@@ -234,9 +234,9 @@ The live image's copy-to-RAM path checks available memory against the media size
 plus 4 GiB for the desktop and installer. It keeps the original media mounted
 until the copy is complete and preserves it on copy failure. A fallback boots
 from the media, and Genkan warns when it opens to keep the USB drive or DVD
-connected. `nix build .#checks.x86_64-linux.iso-copytoram` tests insufficient
+connected. `nix build .#iso-checks.copytoram` tests insufficient
 memory, a real read error, and a successful switch to RAM in a disposable VM;
-`nix build .#checks.x86_64-linux.iso-copytoram-initrd` separately unpacks the
+`nix build .#iso-checks.copytoram-initrd` separately unpacks the
 actual installer initrd and runs its copy-to-RAM entrypoint and runtime tools
 inside that filesystem. Initrd generation does not follow references inside
 shell scripts, so both the helper and its runtime inputs must be included.
@@ -340,13 +340,15 @@ the later forwarding/latch changes responsible for this observed regression.
 Regression checks:
 
 ```sh
-nix build .#checks.x86_64-linux.aizome-ibus-policy \
+nix build .#checks.x86_64-linux.aizome-ibus-policy{,-alone,-coexist,-gnome,-xfce,-disabled,-custom,-without-aizome,-plasma,-hyprland,-tatami} \
   .#checks.x86_64-linux.ibus-wayland-serial \
   .#checks.x86_64-linux.aizome-ibus --no-update-lock-file
 ```
 
-The policy check evaluates complete system derivations for desktop combinations,
-disabled IBus and custom panels, including the scope of the dconf default.
+The policy check covers desktop combinations, disabled IBus and custom panels,
+including the scope of the dconf default; one `aizome-ibus-policy-*` check per
+system evaluates its complete system derivations, separately so that CI
+evaluates them in parallel.
 The serial check compiles the actual registry callback before and after its
 patch; its negative control must reproduce the unrelated-global serial reset.
 The component VM exercises real Hangul preedit, editing, spaces, digits and
@@ -1373,10 +1375,10 @@ catalog `preload: false` excludes it from `application-cache` and the ISO's
 application closure lists; it remains in the free-application systems published
 to the binary cache. New catalog entries preload by default. Keep the two
 policies separate: catalog availability does not require offline media inclusion.
-Run `nix build .#uta .#checks.x86_64-linux.uta-rustypipe .#checks.x86_64-linux.uta-installation`
-after changing the pin or preload policy. This checks the package, package
-selection and evaluated ISO contents; it does not certify an ISO boot or
-installation. Because the ISO doesn't carry Uta, installing it from that ISO
+Run `nix build .#uta .#checks.x86_64-linux.uta-rustypipe .#checks.x86_64-linux.uta-installation
+.#iso-checks.application-cache` after changing the pin or preload policy. This
+checks the package, package selection and evaluated ISO contents; it does not
+certify an ISO boot or installation. Because the ISO doesn't carry Uta, installing it from that ISO
 needs the network and a cache.sekka.computer entry for the exact Uta that
 ISO's revision builds; otherwise Genkan compiles it in the live session. ISO
 qualification checks that entry first
@@ -2335,13 +2337,35 @@ git push origin v0.1.0-preview.1
 gh workflow run release.yml --ref main -f tag=v0.1.0-preview.1
 ```
 
-It checks out the tag, runs `nix flake check` and builds `.#iso` without
-updating the lock, creates checksums and a source manifest, uploads assets into
+It checks out the tag, runs `nix flake check` and the ISO's own checks (see
+below) and builds `.#iso` without updating the lock, creates checksums and a source manifest, uploads assets into
 a draft release, then publishes it as a prerelease. It uses the repository's
 `GITHUB_TOKEN` with `contents: write`. Nothing creates tags, and no push, pull
 request or schedule starts it. It does not push to the binary cache.
 
 GitHub limits individual release assets to 2 GiB. `scripts/prepare-release.py` keeps a smaller ISO whole or splits a larger one into 1900 MiB parts. Release notes include Linux/macOS and Windows reassembly instructions. `SHA256SUMS` verifies downloadable parts; `ISO-SHA256SUMS` verifies the reconstructed image. Failed uploads leave a draft to inspect, not a partially published release. The script refuses to overwrite an existing output directory.
+
+### Building an ISO
+
+`.github/workflows/iso.yml` builds `.#iso` on the builder, from `main`, and
+runs the ISO's own checks, `legacyPackages.x86_64-linux.iso-checks`: every
+prebuilt desktop system and path list on the media against Genkan's desktop
+inventory, store integrity, copy-to-RAM and its initrd, and the offline
+application cache. Only its **Run workflow** button (Actions, "Build and check
+Sekka's ISO") starts it:
+
+```sh
+gh workflow run iso.yml --ref main
+```
+
+Pull requests, main and the nightly leave these checks out: evaluating the
+media means evaluating the installer and its seven installed systems, which
+took 221 seconds of single-threaded evaluation, five times any other check
+(2026-11-03). `nix build .#iso-checks.desktop-references` runs one of them. The
+workflow publishes nothing and holds no secrets; the image stays rooted on the
+builder with main's generations, and the job summary gives its path and
+SHA-256. Qualification and publication still happen on a workstation (see
+below).
 
 ### Nightly builds
 
@@ -2360,14 +2384,17 @@ GitHub can delay or drop scheduled runs under load.
 
 The job runs on the builder. It first brings every input in `flake.lock` up
 to date (`nix flake update`) and commits that, if anything moved, on top of
-`main`. Every run checks the candidate with `nix flake check`; it doesn't build
-`.#iso`, which no check uses and only qualification needs. Every check runs
-even after one fails, and the failed ones run once more, so a VM test losing a
-timing race once doesn't hold back upstream security fixes; a check that fails
-twice stops the update. The first attempt's passing checks stay rooted (see
-[The builder](#the-builder)), so the second attempt reruns only the failures.
-The run's warning names the checks that needed the retry: they are flaky, and
-need fixing like any failure. Then, in this order and only if each step
+`main`. Every run builds the candidate's checks with nix-fast-build (see
+[The builder](#the-builder)), then evaluates every other output with
+`nix flake check --no-build`, which pull requests and main skip; it builds
+neither `.#iso` nor the ISO's checks, which only the ISO workflow and
+qualification need. Every check runs even after one fails, and the failed ones
+run once more, so a VM test losing a timing race once doesn't hold back
+upstream security fixes; a check that fails twice, or fails to evaluate, stops
+the update. The first attempt's passing checks stay rooted, and the second
+attempt builds only the failures nix-fast-build reported. The run's warning
+names the checks that needed the retry: they are flaky, and need fixing like
+any failure. Then, in this order and only if each step
 succeeded:
 
 1. `nix run .#push-cache` publishes Sekka's packages for that revision to
@@ -2484,8 +2511,8 @@ waiting run and cancels older ones, so a burst of merges builds the first and
 the last.
 
 It builds `.#uta` first, so a kit or Sukumo change that breaks Uta fails by
-name (see [Aizome](#aizome)), then runs `nix flake check` on the revision as
-merged, without updating inputs; its `uta-rustypipe` check confirms, in the
+name (see [Aizome](#aizome)), then builds every check on the revision as
+merged, without updating inputs (nix-fast-build, see [The builder](#the-builder)); its `uta-rustypipe` check confirms, in the
 build sandbox, that RustyPipe is enabled. Nothing of Uta runs in the job
 itself, which goes on to hold the cache's secrets.
 `nix run .#push-cache` signs and uploads the packages, including Uta and its
@@ -2526,11 +2553,13 @@ have a read-only token, no publishing environment or secrets, and publish no
 cache or ISO. Ordinary PR-owned workflows remain rejected by the runner's
 admission hook.
 
-The job builds Uta and runs the full root `nix flake check --keep-going` with
-the existing lock, including package check phases and the component VM checks
-exposed under `checks.x86_64-linux`. One push reports every failing check, and
-the passing ones stay rooted for the next push. The separate `aizome-checks` legacy outputs and
-actual ISO installation/hardware qualification remain separate. Results
+The job builds Uta and every check under `checks.x86_64-linux` with the
+existing lock, including package check phases and the component VM checks;
+each check starts building as soon as it is evaluated. One push reports every
+failing check, and the passing ones stay rooted for the next push. The
+separate `aizome-checks` and `iso-checks` legacy outputs, the evaluation of the
+flake's other outputs (the nightly's) and actual ISO installation/hardware
+qualification remain separate. Results
 appear on the tested PR head as `Trusted PR / build and tests`; a newer
 push cancels the previous run. To check an already open PR, dispatch from
 main: `gh workflow run pr.yml --ref main -f pr=233`. If the head or base
@@ -2538,8 +2567,8 @@ changes while queued, dispatch again against the new merge.
 
 `nix build .#checks.x86_64-linux.pr-ci` exercises trust rejection, merge
 identity, API failures, runner admission, Git object reuse with private
-candidate state, and the retention wrapper and its bounds, and lints all three
-build workflows. Enabling
+candidate state, and the retention wrapper and its bounds, and lints the
+build, ISO and release workflows. Enabling
 this workflow requires deploying the updated runner image below; the former
 admission hook rejects all pull-request events. Release publication remains
 manually disabled.
@@ -2605,15 +2634,18 @@ than eight. The image is the one place Nix settings live: a workflow's
 A job's container is on Docker's default network: it reaches the internet, the
 LAN and services on the host. The admission hook and pull request approval keep
 untrusted code from getting that far. Each build leaves its closure in the
-host's store. `scripts/ci-retain.py` runs the ordinary `nix build` or
-`nix flake check` with an out-link below `/nix/var/nix/gcroots/sekka-ci`, mounted
-at that same absolute path in the job and on the daemon's host. It retains the
+host's store. `scripts/ci-retain.py` runs the ordinary `nix build`,
+`nix flake check` or nix-fast-build with out-links below
+`/nix/var/nix/gcroots/sekka-ci`, mounted at that same absolute path in the job
+and on the daemon's host. It retains the
 results plus existing outputs of their derivation closures: otherwise a VM
 check's tiny success marker would keep neither its VM image nor compiled
 build dependencies alive. This does not globally enable `keep-outputs`, skip
-checks, or treat a failed build as successful. A failed
-`nix flake check --keep-going` still links the checks that passed, so their
-inputs are kept for the rerun; a failed `nix build` links nothing. Rooting
+checks, or treat a failed build as successful. nix-fast-build links every
+check on its own, and a failed `nix flake check --keep-going` links the checks
+that passed too, so their inputs are kept for the rerun; a failed `nix build`
+links nothing. nix-fast-build's evaluation roots stay in the generation while
+it runs. Rooting
 inputs is best effort: if Nix can't list them, the results stay rooted, the
 job warns, and a passing build stays green.
 
@@ -2626,9 +2658,13 @@ own collection target (`max-free`), each group keeps only its newest successful
 main generation, so PR results go first and the daemon can reclaim the rest.
 The host is shared, so free space is the budget, not a byte quota of Sekka's
 own. One generation of the flake's checks roots about 33,600 build inputs,
-94 GiB of store paths (2026-11-02), and takes about 11 seconds to root.
-Generations at the same Nixpkgs share nearly all of it; an input update
-starts a new set. The job-start hook and each build prune these bounds, so a cancelled job
+94 GiB of store paths (2026-11-02). Generations at the same Nixpkgs share
+nearly all of it; an input update starts a new set. Listing those inputs took
+11–13 seconds, nearly all of it Nix's queries (the links take 0.4 s), so the
+wrapper records each derivation's inputs, gzipped, in `.closures` beside the
+groups right after it builds, and runs that build the same derivation reuse the
+record: a run queries only what it builds for the first time. Records unused
+for a week expire. The job-start hook and each build prune these bounds, so a cancelled job
 cannot leave roots indefinitely while the runner is in use. A lock covers only
 pruning and creating a generation; each build holds its own generation's lock,
 so a build in progress is never pruned and concurrent jobs never wait on one
@@ -2650,8 +2686,9 @@ falls back to checkout fetching missing objects. No job may write the object cac
 `checks.x86_64-linux.ci-cache` uses the actual runner client and an untrusted
 user in a disposable VM. It collects garbage and verifies that results and
 compile-only dependencies survive, including those of the passing checks of a
-failed `--keep-going` run. It also reuses checks with builds disabled, checks
-failure propagation and the plain-Nix fallback, drops PR roots when space is
+failed `--keep-going` run and of a failed nix-fast-build run. It also reuses
+checks with builds disabled and their recorded inputs without querying Nix,
+checks failure propagation and the plain-Nix fallback, drops PR roots when space is
 low, and verifies that paths become collectable after removing the roots.
 `checks.x86_64-linux.pr-ci` exercises the wrapper with stand-ins for Nix,
 retention expiry, locks that refuse links and FIFOs, and clean Git checkouts.
