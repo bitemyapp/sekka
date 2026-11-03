@@ -186,15 +186,28 @@ impl Host {
         HOST.store(std::ptr::null_mut(), Ordering::Release);
     }
 
-    /// Set the core's callbacks to this module's.
+    /// Give the core this module's environment, before `retro_init`, as
+    /// libretro has it.
     ///
     /// # Safety
     ///
     /// `api` is a loaded core's.
+    pub unsafe fn connect_environment(api: &Api) {
+        // SAFETY: the core's setter takes this function type.
+        unsafe { (api.set_environment)(environment) };
+    }
+
+    /// Give the core the rest of this module's callbacks, after
+    /// `retro_init`: libretro promises only the environment before it, and
+    /// a core may keep them in what `retro_init` makes (Mesen's renderer,
+    /// which isn't there before, so a callback given then crashed it).
+    ///
+    /// # Safety
+    ///
+    /// `api` is a loaded core's, initialised.
     pub unsafe fn connect(api: &Api) {
         // SAFETY: the core's setters take these function types.
         unsafe {
-            (api.set_environment)(environment);
             (api.set_video_refresh)(video_refresh);
             (api.set_audio_sample)(audio_sample);
             (api.set_audio_sample_batch)(audio_sample_batch);
