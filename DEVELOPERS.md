@@ -2647,6 +2647,15 @@ of two builds each: the 32 at a time the image allows. On a runner image
 without nix-fast-build the wrapper runs `nix flake check` instead. The nightly
 still evaluates every output, with `nix flake check --no-build`.
 
+Emulating a job on wx-workstation on 2026-11-03 (load 19–35 from other work),
+a run with every check already built took 36–39 seconds with nix-fast-build
+and 38–50 seconds with `nix flake check`, against 72–84 seconds before the
+ISO's checks moved out and the reference systems were shared (2026-11-02, load
+1–3). Retention added about a second: every derivation's inputs were already
+recorded. With one VM check to rebuild (128 seconds), the run took 140 seconds
+with nix-fast-build and 168 with `nix flake check`, which starts building only
+after evaluating everything.
+
 A job's container is on Docker's default network: it reaches the internet, the
 LAN and services on the host. The admission hook and pull request approval keep
 untrusted code from getting that far. Each build leaves its closure in the
