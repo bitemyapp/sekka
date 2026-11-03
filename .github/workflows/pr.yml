@@ -102,6 +102,11 @@ jobs:
         with:
           ref: ${{ needs.trust.outputs.merge }}
           persist-credentials: false
+          # Expand explicitly: checkout v6's sparse-disable path removes
+          # worktreeConfig and exposes the earlier repository-level sparse
+          # setting, which otherwise leaves flake.nix and the source absent.
+          sparse-checkout: /*
+          sparse-checkout-cone-mode: false
       - name: Check the builder
         shell: bash
         run: |
