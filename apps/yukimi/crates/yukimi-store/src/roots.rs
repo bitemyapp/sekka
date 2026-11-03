@@ -45,6 +45,9 @@ pub enum RootKind {
     /// A development environment kept by direnv or `nix develop`.
     DevShell,
     Other,
+    /// A program running now, or a build under way: Nix finds these in
+    /// `/proc` and keeps what they use, but tells only root which program.
+    Running,
 }
 
 /// All roots on this system that the current user can see.
@@ -138,6 +141,31 @@ pub fn classify(link: &Path) -> RootKind {
     RootKind::Other
 }
 
+/// Roots as Nix's garbage collector finds them, from what
+/// `nix-store --gc --print-roots` prints: `<link> -> <store path>` a line,
+/// the link quoted by newer Nix. Besides the links, these are the programs
+/// running now and builds under way (`{censored}`, or `/proc/…` for root),
+/// which the daemon sees for everyone.
+pub fn parse_listing(text: &str) -> Vec<Root> {
+    let mut roots: Vec<Root> = text
+        .lines()
+        .filter_map(|line| {
+            let (link, target) = line.rsplit_once(" -> ")?;
+            let link = link.strip_prefix('"').and_then(|l| l.strip_suffix('"')).unwrap_or(link);
+            let target = StorePath::parse(target.trim())?;
+            let kind = if link.starts_with('{') || link.starts_with("/proc/") {
+                RootKind::Running
+            } else {
+                classify(Path::new(link))
+            };
+            Some(Root { link: PathBuf::from(link), target, kind })
+        })
+        .collect();
+    roots.sort_by(|a, b| a.kind.cmp(&b.kind).then_with(|| a.link.cmp(&b.link)).then_with(|| a.target.cmp(&b.target)));
+    roots.dedup();
+    roots
+}
+
 /// The user a path belongs to, from `/home/<user>` or a per-user profile
 /// directory.
 fn owner(text: &str) -> Option<String> {
@@ -164,6 +192,33 @@ mod tests {
         assert_eq!(classify(Path::new("/home/ref/src/app/result-man")), RootKind::BuildResult);
         assert_eq!(classify(Path::new("/home/ref/src/app/.direnv/flake-profile-a5d5b61a")), RootKind::DevShell);
         assert_eq!(classify(Path::new("/nix/var/nix/gcroots/booted-system")), RootKind::Other);
+    }
+
+    #[test]
+    fn nixs_own_listing() {
+        let text = format!(
+            "\"{{censored}}\" -> /nix/store/{H}-libidn2-2.3.8\n\
+             \"/nix/var/nix/profiles/system-50-link\" -> /nix/store/{H}-nixos-system-acer-26.11\n\
+             /run/booted-system -> /nix/store/{H}-nixos-system-acer-26.11\n\
+             /proc/412/maps -> /nix/store/{H}-glibc-2.42\n\
+             \"/home/ref/app/result\" -> /nix/store/{H}-app-1.0\n\
+             nonsense\n"
+        );
+        let roots = parse_listing(&text);
+        assert_eq!(roots.len(), 5, "{roots:?}");
+        let kinds: Vec<&RootKind> = roots.iter().map(|r| &r.kind).collect();
+        assert_eq!(
+            kinds,
+            [
+                &RootKind::BootedSystem,
+                &RootKind::SystemGeneration(50),
+                &RootKind::BuildResult,
+                &RootKind::Running,
+                &RootKind::Running
+            ]
+        );
+        assert_eq!(roots[1].link, Path::new("/nix/var/nix/profiles/system-50-link"));
+        assert_eq!(roots[1].target.name(), "nixos-system-acer");
     }
 
     #[test]

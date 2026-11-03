@@ -9,16 +9,20 @@
 //! - [`roots`]: garbage-collector roots: what keeps each path alive, sorted
 //!   into the kinds a person cares about (system generations, profiles,
 //!   build results).
+//! - [`usage`]: what paths take on disk, hard-linked files counted once,
+//!   and so what removing some of them gives back.
 //!
 //! Everything here only reads. The store database is world-readable on
 //! NixOS, so none of it needs root.
 pub mod db;
 pub mod path;
 pub mod roots;
+pub mod usage;
 
-pub use db::{Graph, PathId, StoreDb};
+pub use db::{Graph, Keep, PathId, StoreDb};
 pub use path::{StorePath, compare_versions};
 pub use roots::{Root, RootKind};
+pub use usage::{Tally, Usage};
 
 /// Where the store lives.
 pub const STORE_DIR: &str = "/nix/store";

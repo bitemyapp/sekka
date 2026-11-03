@@ -22,7 +22,7 @@ use yukimi_system::setup::{Choice, ChoiceOption, ChoiceValue, Facts, Kind, Setup
 use yukimi_system::updates::Release;
 
 use crate::checks::{self, UpdateCheck};
-use crate::model::{Composition, Configured, Heavy, Model, Store, SystemPackage};
+use crate::model::{CLEAN_UP_DAYS, Composition, Configured, Freeable, Heavy, Model, Store, SystemPackage};
 
 /// The sample's "now": Saturday 17 October 2026, 21:42 UTC.
 pub const NOW: i64 = 1_792_273_320;
@@ -365,11 +365,28 @@ pub fn store(generations: &[Generation], graph: Graph) -> Store {
             paths: 58_214,
             garbage_paths: 9_377,
         },
+        reclaim: Default::default(),
         system_packages,
         heaviest,
         latest,
         generation_sizes: generations.iter().zip(sizes).map(|(g, s)| (g.number, (s * GB as f64) as u64)).collect(),
     }
+}
+
+/// What deleting each older generation gives back on disk, and what
+/// cleaning up does: 27 alone had the older office suite, 24 a kernel.
+pub fn freeable(generations: &[Generation]) -> Freeable {
+    let generations_freed = [(24, 1_930 * MB), (25, 412 * MB), (26, 96 * MB), (27, 2_640 * MB)];
+    let each: BTreeMap<u32, u64> = generations_freed.into_iter().collect();
+    let older = CLEAN_UP_DAYS
+        .iter()
+        .map(|&days| {
+            let numbers = yukimi_system::generations::older_than(generations, NOW - i64::from(days) * DAY);
+            let bytes = numbers.iter().filter_map(|n| each.get(n)).sum();
+            (days, numbers, bytes)
+        })
+        .collect();
+    Freeable { garbage: 13_400 * MB, generations: each, older }
 }
 
 /// Sekka's choices, as the sample system declares them: three desktops,
@@ -457,6 +474,7 @@ pub fn model() -> Model {
     let (graph, systems) = graph();
     let generations = generations(&systems);
     let store = store(&generations, graph);
+    let freed = freeable(&generations);
     let nixpkgs = store_path(1, "source");
     Model {
         setup: Setup {
@@ -521,6 +539,7 @@ pub fn model() -> Model {
         channels: Vec::new(),
         nixpkgs: Some(nixpkgs),
         store: Some(Arc::new(store)),
+        freeable: Some(Arc::new(freed)),
         problems: Vec::new(),
         paths: crate::paths::Paths::default(),
     }

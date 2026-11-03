@@ -33,6 +33,15 @@ pub struct Generation {
     pub booted: bool,
 }
 
+impl Generation {
+    /// Whether it may be deleted: not the one selected for the next start,
+    /// the running one or the one the computer started with (the helper
+    /// refuses those).
+    pub fn deletable(&self) -> bool {
+        !self.current && !self.active && !self.booted
+    }
+}
+
 /// The generations of a profile, oldest first. `profile` is the profile's
 /// symlink, such as `/nix/var/nix/profiles/system`; `booted` is the store
 /// path the machine started with, if known.
@@ -98,6 +107,24 @@ pub fn generation_number(file: &str, profile: &str) -> Option<u32> {
     file.strip_prefix(profile)?.strip_prefix('-')?.strip_suffix("-link")?.parse().ok()
 }
 
+/// The generations `nix-env --delete-generations <n>d` deletes when
+/// `cutoff` (Unix time) is `n` days ago: those made before it, except the
+/// newest of them, which was the one in use then and so can still be
+/// returned to, and except the profile's current one. As Nix does, a
+/// generation made after the cutoff is kept even if an older-numbered one
+/// is newer.
+pub fn older_than(generations: &[Generation], cutoff: i64) -> Vec<u32> {
+    let mut sorted: Vec<&Generation> = generations.iter().collect();
+    sorted.sort_by_key(|g| std::cmp::Reverse(g.number));
+    let Some(first) = sorted.iter().position(|g| g.created < cutoff) else {
+        return Vec::new();
+    };
+    let mut numbers: Vec<u32> =
+        sorted[first + 1..].iter().filter(|g| g.created < cutoff && !g.current).map(|g| g.number).collect();
+    numbers.sort_unstable();
+    numbers
+}
+
 fn mtime(meta: &std::fs::Metadata) -> i64 {
     use std::os::unix::fs::MetadataExt;
     meta.mtime()
@@ -115,6 +142,40 @@ mod tests {
         assert_eq!(generation_number("system", "system"), None);
         assert_eq!(generation_number("system-boot-link", "system"), None);
         assert_eq!(generation_number("system-1-link", "profile"), None);
+    }
+
+    #[test]
+    fn older_than_as_nix_env_deletes() {
+        let h = "0123456789abcdfghijklmnpqrsvwxyz";
+        let generation = |number: u32, created: i64, current: bool| Generation {
+            number,
+            link: PathBuf::from(format!("/nix/var/nix/profiles/system-{number}-link")),
+            target: StorePath::parse(&format!("/nix/store/{h}-nixos-system-{number}")).unwrap(),
+            created,
+            nixos_version: None,
+            kernel_version: None,
+            current,
+            active: current,
+            booted: false,
+        };
+        let gens: Vec<Generation> =
+            [(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)].map(|(n, t)| generation(n, t, n == 5)).to_vec();
+        // Before 35: 3 was in use then, so it stays; 1 and 2 go.
+        assert_eq!(older_than(&gens, 35), vec![1, 2]);
+        assert_eq!(older_than(&gens, 31), vec![1, 2]);
+        assert_eq!(older_than(&gens, 30), vec![1]);
+        assert!(older_than(&gens, 5).is_empty());
+        // Everything is old: all but the newest.
+        assert_eq!(older_than(&gens, 1000), vec![1, 2, 3, 4]);
+        // The current one is never deleted, wherever it is.
+        let mut back = gens.clone();
+        back[4].current = false;
+        back[1].current = true;
+        assert_eq!(older_than(&back, 1000), vec![1, 3, 4]);
+        // A clock that was wrong: 2 made "after" the cutoff stays.
+        let mut skewed = gens.clone();
+        skewed[1].created = 100;
+        assert_eq!(older_than(&skewed, 35), vec![1]);
     }
 
     #[test]

@@ -18,11 +18,12 @@ use yukimi_system::catalog::{self, Application};
 use yukimi_system::diff::Diff;
 use yukimi_system::generations::Generation;
 use yukimi_system::index::{Package, PackageIndex};
+use yukimi_system::human_size;
 use yukimi_system::setup::{Choice, Kind};
 
 use crate::checks::{self, UpdateCheck};
 use crate::job::{Job, JobEvent, Outcome};
-use crate::model::{Model, Store};
+use crate::model::{Freeable, Model, Store};
 use crate::ops::{self, Operation, Step, SystemChange};
 use crate::paths::Paths;
 
@@ -210,6 +211,12 @@ pub enum Msg {
         store: Arc<Store>,
         problems: Vec<String>,
     },
+    /// What deleting generations would give back, measured on disk (none
+    /// when nothing was measured).
+    Measured {
+        epoch: u64,
+        freeable: Option<Arc<Freeable>>,
+    },
     FlakeNixpkgs {
         epoch: u64,
         path: String,
@@ -280,6 +287,8 @@ pub enum Msg {
     ToggleGeneration(u32),
     Changes(u32, Changes),
     ReturnTo(u32),
+    /// Ask before deleting a generation.
+    Delete(u32),
 
     // Storage.
     Older(usize),
@@ -345,6 +354,8 @@ pub struct Yukimi {
     pub loading: bool,
     /// Reading the store.
     pub reading_store: bool,
+    /// Measuring what deleting generations would give back.
+    pub measuring: bool,
     epoch: u64,
 
     pub index: Option<Arc<PackageIndex>>,
@@ -434,6 +445,7 @@ impl Yukimi {
             model: Arc::new(Model::default()),
             loading: true,
             reading_store: true,
+            measuring: false,
             epoch: 0,
             index: None,
             index_stale: false,
@@ -530,6 +542,7 @@ impl Yukimi {
         let mut model = Arc::unwrap_or_clone(model);
         if !sample {
             model.store = self.model.store.clone();
+            model.freeable = self.model.freeable.clone();
         }
         if self.check.is_none() && !sample {
             self.check = checks::load(&checks::subject(&model)).map(Arc::new);
@@ -564,9 +577,17 @@ impl Yukimi {
                 Err(_) => Msg::FlakeNixpkgs { epoch, path: String::new() },
             });
         }
+        // Then what deleting generations would give back, which reads the
+        // store's files: only for this computer's own system.
+        let measure = matches!(&self.source, Source::System(paths) if !paths.elsewhere);
+        self.measuring = measure;
+        let tx = cx.stream();
         cx.spawn(move || {
             let (store, problems) = Store::load(&generations);
-            Msg::StoreRead { epoch, store: Arc::new(store), problems }
+            let store = Arc::new(store);
+            tx.send(Msg::StoreRead { epoch, store: store.clone(), problems });
+            let freeable = measure.then(|| Arc::new(Freeable::measure(&store, &generations, yukimi_system::now())));
+            Msg::Measured { epoch, freeable }
         });
     }
 
@@ -772,6 +793,42 @@ impl Yukimi {
             return;
         }
         let alert = Alert::new(heading, body).cancel_button("Cancel").default_button(action, Msg::Run(operation));
+        cx.alert(self.window, alert);
+    }
+
+    /// Ask before deleting a generation: what it gives back and when, and
+    /// whether to collect garbage now to get it.
+    fn ask_delete(&mut self, number: u32, cx: &mut Cx<Msg>) {
+        let Some(generation) = self.model.generations.iter().find(|g| g.number == number) else { return };
+        if !generation.deletable() {
+            self.note(format!("Generation {number} is in use, so it stays"), cx);
+            return;
+        }
+        let delete = |collect| Operation::Delete { generations: vec![number], collect };
+        if let Some(why) = self.cannot_run(&delete(false)) {
+            self.note(why, cx);
+            return;
+        }
+        let freeable = self.model.freeable.as_deref();
+        let frees = match freeable.and_then(|f| f.generation(number)) {
+            Some(0) => "Deleting it frees nothing by itself: all it has is shared with other generations or kept by \
+                        something else."
+                .to_owned(),
+            Some(bytes) => format!("Deleting it frees about {} once garbage is collected.", human_size(bytes)),
+            None => "What only it has goes once garbage is collected.".to_owned(),
+        };
+        let also = match freeable {
+            Some(f) if f.garbage > 0 => format!(", with {} that nothing needs already", human_size(f.garbage)),
+            _ => String::new(),
+        };
+        let body = format!(
+            "It leaves the boot menu, and can't be returned to. {frees} Delete and Clean Up collects it now{also}; \
+             Delete leaves it for the next clean-up. Both ask for an administrator password."
+        );
+        let alert = Alert::new(format!("Delete generation {number}?"), body)
+            .cancel_button("Cancel")
+            .button("Delete", Msg::Run(delete(false)))
+            .destructive_button("Delete and Clean Up", Msg::Run(delete(true)));
         cx.alert(self.window, alert);
     }
 
@@ -1286,9 +1343,17 @@ impl Program for Yukimi {
         match msg {
             Msg::Reload => self.reload(cx),
             Msg::Read { epoch, model } => self.read(epoch, model, cx),
+            Msg::Measured { epoch, freeable } => {
+                if epoch == self.epoch {
+                    self.measuring = false;
+                    if freeable.is_some() {
+                        self.model = Arc::new(Model { freeable, ..(*self.model).clone() });
+                    }
+                }
+            }
             Msg::StoreRead { epoch, store, problems } => {
                 if epoch == self.epoch {
-                    self.model = Arc::new(self.model.with_store(Arc::into_inner(store).unwrap_or_default(), problems));
+                    self.model = Arc::new(self.model.with_store(store, problems));
                     self.reading_store = false;
                     // What generations changed is worked out again with the new store.
                     let stale: Vec<u32> = self.changes.keys().copied().collect();
@@ -1494,19 +1559,38 @@ impl Program for Yukimi {
                 );
             }
 
+            Msg::Delete(number) => self.ask_delete(number, cx),
             Msg::Older(choice) => self.older = choice.min(3),
             Msg::CleanUp => {
                 let days = [Some(7), Some(30), Some(90), None][self.older.min(3)];
+                let freeable = self.model.freeable.clone();
+                let comes_back = |extra: u64| match &freeable {
+                    Some(f) => format!(" About {} comes back.", human_size(f.garbage + extra)),
+                    None => String::new(),
+                };
                 self.confirm(
                     "Clean up the store?".to_owned(),
                     match days {
-                        Some(d) => format!(
-                            "System generations older than {d} days are deleted, then everything nothing needs is \
-                             removed. This asks for an administrator password."
+                        Some(d) => {
+                            let (numbers, extra) = freeable.as_ref().map_or((&[][..], 0), |f| f.older(d));
+                            let which = if freeable.is_some() && numbers.is_empty() {
+                                " (none is old enough to go)".to_owned()
+                            } else if numbers.is_empty() {
+                                String::new()
+                            } else {
+                                format!(" ({})", generation_words(numbers))
+                            };
+                            format!(
+                                "System generations older than {d} days are deleted{which}, then everything nothing \
+                                 needs is removed.{} This asks for an administrator password.",
+                                comes_back(extra)
+                            )
+                        }
+                        None => format!(
+                            "Everything nothing needs is removed; all generations are kept.{} This asks for an \
+                             administrator password.",
+                            comes_back(0)
                         ),
-                        None => "Everything nothing needs is removed; all generations are kept. This asks for an \
-                                 administrator password."
-                            .to_owned(),
                     },
                     "Clean up".to_owned(),
                     Operation::Clean { older_than_days: days },
@@ -1710,5 +1794,14 @@ pub fn words(items: &[String]) -> String {
         [] => String::new(),
         [one] => one.clone(),
         [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    }
+}
+
+/// "generation 24", "generations 24 and 25".
+pub fn generation_words(numbers: &[u32]) -> String {
+    let numbers: Vec<String> = numbers.iter().map(u32::to_string).collect();
+    match numbers.as_slice() {
+        [one] => format!("generation {one}"),
+        _ => format!("generations {}", words(&numbers)),
     }
 }

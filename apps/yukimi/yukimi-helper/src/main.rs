@@ -28,6 +28,14 @@
 //!   puts back the configuration it was built from.
 //! - `clean [--older-than-days n]` deletes old system generations and
 //!   collects garbage.
+//! - `delete <generation>... [--collect-garbage]` deletes particular system
+//!   generations: never the one selected for the next start, the running
+//!   one or the one the computer started with. Their kept configurations go
+//!   with them, and the boot menu is made again without them. What only
+//!   they kept goes when garbage is collected: then, with
+//!   `--collect-garbage`, or at the next clean-up.
+//! - `estimate <generation>...`, which needs no administrator, says what
+//!   deleting generations would give back (see `yukimi_system::reclaim`).
 //!
 //! Each generation's configuration is kept: a copy of the configuration's
 //! directory in [`SAVED`]`/generation-<n>`. So going back to a generation
@@ -149,6 +157,15 @@ fn commit() -> Result<()> {
     }
     state.0 = Phase::Committed;
     Ok(())
+}
+
+/// The system is whole again (generations deleted and the boot menu made
+/// without them): what follows, collecting garbage, may be stopped.
+fn settle() {
+    let mut state = state();
+    if state.0 == Phase::Committed {
+        state.0 = Phase::Working;
+    }
 }
 
 /// Start a command, remembering it so it can be stopped, and wait for it.
@@ -1090,6 +1107,19 @@ fn clean(args: &[String]) -> Result<String> {
         stage_done(1);
     }
     stage(2, "Collecting garbage");
+    let freed = collect_garbage()?;
+    stage_done(2);
+    // The boot menu lists only generations that still exist.
+    stage(3, "Updating the boot menu");
+    commit()?;
+    switch(&format!("{PROFILE}/bin/switch-to-configuration"), "boot")?;
+    stage_done(3);
+    Ok(serde_json::json!({"ok": true, "freed": freed}).to_string())
+}
+
+/// Collect garbage, passing Nix's report on, and return its last line
+/// ("… store paths deleted, … freed").
+fn collect_garbage() -> Result<String> {
     let mut gc = command("nix-store");
     gc.arg("--gc");
     let out = wait(gc.stdout(Stdio::piped()).stderr(Stdio::piped()))?;
@@ -1100,14 +1130,191 @@ fn clean(args: &[String]) -> Result<String> {
     if !out.status.success() {
         return Err(Failure("Collecting garbage failed".into()));
     }
-    stage_done(2);
-    // The boot menu lists only generations that still exist.
-    stage(3, "Updating the boot menu");
+    Ok(text.lines().rev().find(|l| l.contains("freed")).unwrap_or("").trim().to_owned())
+}
+
+/// The free blocks of the filesystem holding `path`, in bytes, counting
+/// those kept for root: what deleting files changes.
+fn blocks_free(path: &str) -> Option<u64> {
+    let path = std::ffi::CString::new(path).ok()?;
+    // SAFETY: statvfs writes only into the struct it is given.
+    unsafe {
+        let mut stat: libc::statvfs = std::mem::zeroed();
+        (libc::statvfs(path.as_ptr(), &mut stat) == 0).then(|| stat.f_bfree as u64 * stat.f_frsize as u64)
+    }
+}
+
+/// A generation number as given: digits, without sign or leading zero.
+fn parse_generation(text: &str) -> Option<u32> {
+    if text.is_empty() || text.len() > 10 || text.starts_with('0') || !text.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    text.parse().ok()
+}
+
+/// "generation 3", "generations 3 and 4", "generations 2, 3 and 4".
+fn generation_words(numbers: &[u32]) -> String {
+    let n: Vec<String> = numbers.iter().map(u32::to_string).collect();
+    match n.as_slice() {
+        [one] => format!("generation {one}"),
+        [rest @ .., last] => format!("generations {} and {last}", rest.join(", ")),
+        [] => "no generations".into(),
+    }
+}
+
+/// What `delete` was asked to do.
+#[derive(Debug, PartialEq, Eq)]
+struct Deletion {
+    generations: Vec<u32>,
+    /// Collect garbage afterwards, so the space comes back now.
+    collect: bool,
+}
+
+impl Deletion {
+    fn parse(args: &[String]) -> Result<Deletion> {
+        let mut deletion = Deletion { generations: Vec::new(), collect: false };
+        for arg in args {
+            if arg == "--collect-garbage" && !deletion.collect {
+                deletion.collect = true;
+                continue;
+            }
+            let number = parse_generation(arg).ok_or_else(|| Failure(format!("Not a generation number: {arg:?}")))?;
+            if deletion.generations.contains(&number) {
+                return Err(Failure(format!("Generation {number} was named twice")));
+            }
+            deletion.generations.push(number);
+        }
+        if deletion.generations.is_empty() {
+            return Err(Failure("delete needs the numbers of the generations to delete".into()));
+        }
+        deletion.generations.sort_unstable();
+        Ok(deletion)
+    }
+}
+
+/// The build a generation's link points at: a path directly in the store.
+fn generation_target(link: &Path) -> Option<PathBuf> {
+    let meta = std::fs::symlink_metadata(link).ok()?;
+    if !meta.file_type().is_symlink() {
+        return None;
+    }
+    let target = std::fs::read_link(link).ok()?;
+    (target.parent() == Some(Path::new("/nix/store"))).then_some(target)
+}
+
+/// Why generation `number` (whose link leads to `target`, if it exists)
+/// mustn't be deleted, if it mustn't: the profile's selected one, the
+/// running system or the one the computer started with.
+fn refusal(
+    number: u32,
+    target: Option<&Path>,
+    selected: Option<u32>,
+    running: Option<&Path>,
+    booted: Option<&Path>,
+) -> Option<String> {
+    let Some(target) = target else {
+        return Some(format!("There is no generation {number}"));
+    };
+    if selected == Some(number) {
+        return Some(format!("Generation {number} is selected for the next start, so it can't be deleted"));
+    }
+    if running == Some(target) {
+        return Some(format!("Generation {number} is the running system, so it can't be deleted"));
+    }
+    if booted == Some(target) {
+        return Some(format!(
+            "Generation {number} is the one this computer started with, so it can't be deleted until the next start"
+        ));
+    }
+    None
+}
+
+fn delete(args: &[String]) -> Result<String> {
+    let deletion = Deletion::parse(args)?;
+    let selected = current_generation();
+    let running = std::fs::canonicalize("/run/current-system").ok();
+    let booted = std::fs::canonicalize("/run/booted-system").ok();
+    for &number in &deletion.generations {
+        let target = generation_target(Path::new(&format!("{PROFILE}-{number}-link")));
+        if let Some(why) = refusal(number, target.as_deref(), selected, running.as_deref(), booted.as_deref()) {
+            return Err(Failure(why));
+        }
+    }
+    let what = generation_words(&deletion.generations);
+    // What deleting gives back, worked out as root, who sees every root.
+    let estimate = yukimi_system::reclaim::estimate(&deletion.generations);
+    match &estimate {
+        Ok(e) => report(
+            1,
+            &format!(
+                "Deleting {what} lets {} go once garbage is collected; {} is garbage already",
+                yukimi_system::human_size(e.disk),
+                yukimi_system::human_size(e.garbage)
+            ),
+        ),
+        Err(e) => report(1, &format!("What deleting {what} gives back couldn't be worked out: {e}")),
+    }
+    stage(1, &format!("Deleting {what}"));
+    // The links, the kept configurations and the boot menu change together.
     commit()?;
+    let mut delete = command("nix-env");
+    delete.args(["-p", PROFILE, "--delete-generations"]).args(deletion.generations.iter().map(u32::to_string));
+    run(delete, "Deleting the generation")?;
+    for &number in &deletion.generations {
+        let _ = std::fs::remove_dir_all(saved(number));
+    }
+    prune_saved();
+    stage_done(1);
+    // The boot menu lists only generations that still exist.
+    stage(2, "Updating the boot menu");
     switch(&format!("{PROFILE}/bin/switch-to-configuration"), "boot")?;
-    stage_done(3);
-    let freed = text.lines().rev().find(|l| l.contains("freed")).unwrap_or("").trim().to_owned();
-    Ok(serde_json::json!({"ok": true, "freed": freed}).to_string())
+    stage_done(2);
+    settle();
+    let mut report_json = serde_json::json!({
+        "ok": true,
+        "deleted": deletion.generations,
+        "collected": false,
+        "estimate": estimate.ok(),
+    });
+    if deletion.collect {
+        stage(3, "Collecting garbage");
+        let before = blocks_free("/nix/store");
+        match collect_garbage() {
+            Ok(summary) => {
+                report_json["collected"] = true.into();
+                report_json["summary"] = summary.into();
+            }
+            Err(Failure(message)) => {
+                // The generations are gone either way; the space comes
+                // back at the next clean-up.
+                report(1, &format!("Collecting garbage didn't finish: {message}"));
+                report_json["collect_error"] = message.into();
+            }
+        }
+        if let (Some(before), Some(after)) = (before, blocks_free("/nix/store")) {
+            report_json["freed"] = after.saturating_sub(before).into();
+        }
+        stage_done(3);
+    }
+    Ok(report_json.to_string())
+}
+
+/// What deleting generations would give back, for anyone to ask.
+fn estimate(args: &[String]) -> Result<String> {
+    let mut numbers = Vec::new();
+    for arg in args {
+        let number = parse_generation(arg).ok_or_else(|| Failure(format!("Not a generation number: {arg:?}")))?;
+        if !numbers.contains(&number) {
+            numbers.push(number);
+        }
+    }
+    if numbers.is_empty() {
+        return Err(Failure("estimate needs the numbers of generations".into()));
+    }
+    let estimate = yukimi_system::reclaim::estimate(&numbers).map_err(Failure)?;
+    let mut json = serde_json::to_value(estimate)?;
+    json["ok"] = true.into();
+    Ok(json.to_string())
 }
 
 fn main() -> ExitCode {
@@ -1119,6 +1326,20 @@ fn main() -> ExitCode {
             Ok(()) => ExitCode::SUCCESS,
             Err(Failure(message)) => {
                 let _ = writeln!(std::io::stderr(), "{message}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+    // Working out what deleting generations would free only reads.
+    if args.first().is_some_and(|s| s == "estimate") {
+        return match estimate(&args[1..]) {
+            Ok(json) => {
+                let _ = writeln!(std::io::stdout(), "{json}");
+                ExitCode::SUCCESS
+            }
+            Err(Failure(message)) => {
+                let _ = writeln!(std::io::stderr(), "{message}");
+                let _ = writeln!(std::io::stdout(), "{}", serde_json::json!({"ok": false, "error": message}));
                 ExitCode::FAILURE
             }
         };
@@ -1155,10 +1376,10 @@ fn main() -> ExitCode {
         }
         return if success { ExitCode::SUCCESS } else { ExitCode::FAILURE };
     }
-    let result = if args.first().is_some_and(|s| matches!(s.as_str(), "change" | "rollback" | "clean")) {
+    let result = if args.first().is_some_and(|s| matches!(s.as_str(), "change" | "rollback" | "clean" | "delete")) {
         transaction::client(&args)
     } else {
-        Err(Failure("Usage: yukimi-helper change|rollback|clean …".into()))
+        Err(Failure("Usage: yukimi-helper change|rollback|clean|delete … (or estimate …)".into()))
     };
     let json = match result {
         Ok(json) => json,
@@ -1205,7 +1426,8 @@ fn worker(args: &[String]) -> Result<String> {
         "change" => change(rest),
         "rollback" => rollback(rest),
         "clean" => clean(rest),
-        _ => Err(Failure("Usage: yukimi-helper change|rollback|clean …".into())),
+        "delete" => delete(rest),
+        _ => Err(Failure("Usage: yukimi-helper change|rollback|clean|delete … (or estimate …)".into())),
     }
 }
 
@@ -1290,6 +1512,67 @@ mod tests {
         ] {
             assert!(Change::parse(&args(bad)).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn deletions_are_checked() {
+        assert_eq!(
+            Deletion::parse(&args("27 3 --collect-garbage")).unwrap(),
+            Deletion { generations: vec![3, 27], collect: true }
+        );
+        assert_eq!(Deletion::parse(&args("4")).unwrap(), Deletion { generations: vec![4], collect: false });
+        for bad in [
+            "",
+            "--collect-garbage",
+            "0",
+            "03",
+            "+3",
+            "-3",
+            "3.0",
+            "3a",
+            "4294967296",
+            "99999999999",
+            "3 3",
+            "3 --collect-garbage --collect-garbage",
+            "--older-than-days 3",
+            "system-3-link",
+            "../3",
+        ] {
+            assert!(Deletion::parse(&args(bad)).is_err(), "{bad:?}");
+        }
+        assert_eq!(parse_generation("4294967295"), Some(u32::MAX));
+        assert_eq!(generation_words(&[3]), "generation 3");
+        assert_eq!(generation_words(&[2, 3, 4]), "generations 2, 3 and 4");
+    }
+
+    #[test]
+    fn the_selected_running_and_started_generations_stay() {
+        let (old, running, booted) = (
+            Path::new("/nix/store/0123456789abcdfghijklmnpqrsvwxyz-nixos-system-a-1"),
+            Path::new("/nix/store/1123456789abcdfghijklmnpqrsvwxyz-nixos-system-a-2"),
+            Path::new("/nix/store/2123456789abcdfghijklmnpqrsvwxyz-nixos-system-a-3"),
+        );
+        let why = |n, target| refusal(n, target, Some(9), Some(running), Some(booted));
+        assert_eq!(why(4, Some(old)), None);
+        assert!(why(4, None).unwrap().contains("no generation 4"));
+        assert!(why(9, Some(old)).unwrap().contains("selected for the next start"));
+        assert!(why(5, Some(running)).unwrap().contains("running"));
+        assert!(why(6, Some(booted)).unwrap().contains("started with"));
+        // Without /run/booted-system (a container, say), only the others.
+        assert_eq!(refusal(6, Some(booted), Some(9), Some(running), None), None);
+        // A link that isn't one to a store path isn't a generation.
+        let dir = std::env::temp_dir().join(format!("yukimi-links-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::os::unix::fs::symlink(old, dir.join("good")).unwrap();
+        std::os::unix::fs::symlink("/etc/shadow", dir.join("bad")).unwrap();
+        std::os::unix::fs::symlink(old.join("bin"), dir.join("inside")).unwrap();
+        std::fs::write(dir.join("file"), "").unwrap();
+        assert_eq!(generation_target(&dir.join("good")).as_deref(), Some(old));
+        for name in ["bad", "inside", "file", "missing"] {
+            assert_eq!(generation_target(&dir.join(name)), None, "{name}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

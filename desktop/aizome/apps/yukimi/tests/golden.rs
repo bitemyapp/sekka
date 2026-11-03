@@ -61,6 +61,11 @@ fn goldens() {
     h.send(Msg::ToggleGeneration(28));
     settle(&mut h, |a| matches!(a.changes.get(&28), Some(Changes::Ready { .. })));
     assert_golden(&mut h, w, golden("history-night"), 1.0);
+    // An older generation, with what deleting it gives back.
+    h.send(Msg::ToggleGeneration(28));
+    h.send(Msg::ToggleGeneration(26));
+    settle(&mut h, |a| matches!(a.changes.get(&26), Some(Changes::Ready { .. })));
+    assert_golden(&mut h, w, golden("history-delete-night"), 1.0);
     h.send(Msg::Show(Page::Storage));
     assert_golden(&mut h, w, golden("storage-night"), 1.0);
     h.send(Msg::Show(Page::Desktops));

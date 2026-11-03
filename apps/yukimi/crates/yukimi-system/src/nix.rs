@@ -50,6 +50,30 @@ pub fn setting(name: &str) -> Option<String> {
     output.status.success().then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
+/// What the garbage collector keeps besides the roots' closures: Nix's
+/// `keep-derivations` (on unless switched off) and `keep-outputs` (off
+/// unless switched on).
+pub fn keep() -> yukimi_store::Keep {
+    yukimi_store::Keep {
+        derivations: setting("keep-derivations").is_none_or(|value| value != "false"),
+        outputs: setting("keep-outputs").is_some_and(|value| value == "true"),
+    }
+}
+
+/// Every garbage-collector root, as the collector itself finds them
+/// (`nix-store --gc --print-roots`): through the daemon this includes, for
+/// anyone, what programs running now use, and indirect roots in places the
+/// user can't read. `None` when Nix couldn't be asked.
+pub fn gc_roots() -> Option<Vec<yukimi_store::Root>> {
+    let output = Command::new("nix-store")
+        .args(["--gc", "--print-roots"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    output.status.success().then(|| yukimi_store::roots::parse_listing(&String::from_utf8_lossy(&output.stdout)))
+}
+
 /// The useful part of Nix's error output: from the last `error:` on.
 pub fn last_error(stderr: &str) -> String {
     match stderr.rfind("error:") {

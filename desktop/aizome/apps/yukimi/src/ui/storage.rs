@@ -14,7 +14,7 @@ use crate::model::Composition;
 pub fn parts(c: &Composition) -> [(&'static str, &'static str, u64, Dye); 5] {
     [
         ("The running system", "Everything the system you are using needs.", c.system, Dye::Ai),
-        ("Older generations", "Kept so you can return to them.", c.old_generations, Dye::Hanada),
+        ("Older generations", "Kept only so you can return to them.", c.old_generations, Dye::Hanada),
         ("Packages just for users", "Installed into people's own profiles.", c.profiles, Dye::Violet),
         ("Projects and dev shells", "Build results and development environments.", c.projects, Dye::Green),
         ("Garbage", "Needed by nothing. Cleaning up removes it.", c.garbage, Dye::Faint),
@@ -42,6 +42,7 @@ fn root_kind(kind: &RootKind) -> String {
         RootKind::BuildResult => "A build result".to_owned(),
         RootKind::DevShell => "A development shell".to_owned(),
         RootKind::Other => "Other".to_owned(),
+        RootKind::Running => "A program running now".to_owned(),
     }
 }
 
@@ -93,8 +94,27 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
     .spacing(12.0)
     .width(Fill);
 
-    // Cleaning up.
+    // Cleaning up, and what it gives back on disk once measured.
     let choices = ["a week", "a month", "three months", "keep them all"];
+    let days = [Some(7), Some(30), Some(90), None][app.older.min(3)];
+    let frees = match (app.model.freeable.as_deref(), days) {
+        (Some(f), Some(days)) => match f.older(days) {
+            (&[], _) => format!(
+                "Frees about {} on disk, what nothing needs now. No generation is old enough to go.",
+                human_size(f.garbage)
+            ),
+            (numbers, extra) => format!(
+                "Frees about {} on disk: {} nothing needs now, and {} that deleting {} lets go.",
+                human_size(f.garbage + extra),
+                human_size(f.garbage),
+                human_size(extra),
+                crate::app::generation_words(numbers),
+            ),
+        },
+        (Some(f), None) => format!("Frees about {} on disk, what nothing needs now.", human_size(f.garbage)),
+        (None, _) if app.measuring => "Working out what it frees…".to_owned(),
+        (None, _) => format!("About {} of the store is needed by nothing now.", human_size(c.garbage)),
+    };
     let clean = column![
         row![
             text("Delete system generations older than").width(Fill),
@@ -106,9 +126,7 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
         row![
             column![
                 text("Clean up now").weight(600.0),
-                text(format!("Frees at least {} now, and more as old generations go.", human_size(c.garbage)))
-                    .size(12.0)
-                    .role(Role::Text3),
+                text(frees).size(12.0).role(Role::Text3).wrap(),
             ]
             .spacing(2.0)
             .width(Fill),
@@ -122,8 +140,9 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
     let clean = column![
         caption("Clean up"),
         text(
-            "Deleting old generations lets their packages go; collecting garbage removes everything nothing needs. \
-             The running system and the one this computer started with are always kept."
+            "Deleting old generations lets go of what only they have; collecting garbage removes everything nothing \
+             needs, and only then does the space come back. The running system and the one this computer started \
+             with are always kept. To delete one generation, open it in History."
         )
         .wrap()
         .size(12.0)

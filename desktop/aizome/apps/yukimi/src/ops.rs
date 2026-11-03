@@ -76,6 +76,9 @@ pub enum Operation {
     Rollback { generation: u32 },
     /// Delete old system generations and collect garbage.
     Clean { older_than_days: Option<u32> },
+    /// Delete particular system generations, and collect garbage now
+    /// (`collect`) or leave it for the next clean-up.
+    Delete { generations: Vec<u32>, collect: bool },
 }
 
 /// A command a job runs, and whether it runs as root (through pkexec).
@@ -108,6 +111,9 @@ impl Operation {
             Operation::Choose { what, .. } => format!("Changing {what}"),
             Operation::Rollback { generation } => format!("Returning to generation {generation}"),
             Operation::Clean { .. } => "Cleaning up the store".to_owned(),
+            Operation::Delete { generations, .. } => {
+                format!("Deleting {}", crate::app::generation_words(generations))
+            }
         }
     }
 
@@ -128,6 +134,10 @@ impl Operation {
             Operation::Choose { what, .. } => format!("{} changed", capitalized(what)),
             Operation::Rollback { generation } => format!("Generation {generation} is running"),
             Operation::Clean { .. } => "The store is tidy".to_owned(),
+            Operation::Delete { generations, .. } => match generations.as_slice() {
+                [one] => format!("Generation {one} is deleted"),
+                _ => capitalized(&format!("{} are deleted", crate::app::generation_words(generations))),
+            },
         }
     }
 
@@ -161,6 +171,19 @@ impl Operation {
                 Some(freed) if !freed.is_empty() => format!("The store is tidy: {freed}"),
                 _ => self.done(),
             },
+            Operation::Delete { .. } => {
+                let done = self.done();
+                match (report["collected"].as_bool(), report["freed"].as_u64()) {
+                    (Some(true), Some(freed)) => {
+                        format!("{done}, and {} came back", yukimi_system::human_size(freed))
+                    }
+                    (Some(true), None) => format!("{done}, and garbage was collected"),
+                    _ if report.get("collect_error").is_some() => {
+                        format!("{done}. Collecting garbage didn't finish; its space comes back at the next clean-up")
+                    }
+                    _ => format!("{done}. Its space comes back at the next clean-up"),
+                }
+            }
             _ => self.done(),
         }
     }
@@ -239,6 +262,14 @@ impl Operation {
                 push(&["clean"]);
                 if let Some(days) = older_than_days {
                     push(&["--older-than-days", &days.to_string()]);
+                }
+            }
+            Operation::Delete { generations, collect } => {
+                let numbers: Vec<String> = generations.iter().map(u32::to_string).collect();
+                push(&["delete"]);
+                push(&numbers.iter().map(String::as_str).collect::<Vec<_>>());
+                if *collect {
+                    push(&["--collect-garbage"]);
                 }
             }
         }
@@ -487,6 +518,27 @@ mod tests {
         assert_eq!(
             Operation::Clean { older_than_days: Some(30) }.helper_args(None),
             ["clean", "--older-than-days", "30"]
+        );
+        let delete = Operation::Delete { generations: vec![26], collect: true };
+        assert_eq!(delete.helper_args(None), ["delete", "26", "--collect-garbage"]);
+        assert_eq!(Operation::Delete { generations: vec![24, 25], collect: false }.helper_args(None), [
+            "delete", "24", "25"
+        ]);
+        assert!(delete.is_system() && !delete.is_update());
+        assert_eq!(delete.title(), "Deleting generation 26");
+        assert_eq!(Operation::Delete { generations: vec![24, 25], collect: false }.done(), "Generations 24 and 25 are deleted");
+        assert_eq!(
+            delete.outcome(r#"{"ok":true,"deleted":[26],"collected":true,"freed":412000000}"#),
+            "Generation 26 is deleted, and 412 MB came back"
+        );
+        assert_eq!(
+            delete.outcome(r#"{"ok":true,"deleted":[26],"collected":false}"#),
+            "Generation 26 is deleted. Its space comes back at the next clean-up"
+        );
+        assert!(
+            delete
+                .outcome(r#"{"ok":true,"deleted":[26],"collected":false,"collect_error":"Stopped","freed":0}"#)
+                .contains("didn't finish")
         );
         assert_eq!(
             Operation::FollowBranch { input: "sekka".into(), branch: "nightly".into() }.helper_args(None),

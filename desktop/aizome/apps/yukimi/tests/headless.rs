@@ -389,6 +389,56 @@ fn going_back_and_cleaning_up_ask_first() {
 }
 
 #[test]
+fn deleting_a_generation_says_what_comes_back_and_asks_first() {
+    let (mut h, w, ran) = sample(WORKS);
+    h.send(Msg::Show(Page::History));
+    // Beside each older generation, what deleting it gives back on disk,
+    // not everything it needs.
+    assert!(has(&h, w, "96 MB") && has(&h, w, "2.6 GB"));
+    assert!(!has(&h, w, "18 GB"));
+    h.send(Msg::ToggleGeneration(26));
+    settle(&mut h, |a| matches!(a.changes.get(&26), Some(Changes::Ready { .. })));
+    assert!(h.texts(w).iter().any(|t| t.contains("about 96 MB on disk, comes back once garbage is collected")));
+    assert!(h.click_text(w, "Delete…"));
+    assert!(has(&h, w, "Delete generation 26?"));
+    assert!(h.texts(w).iter().any(|t| t.contains("frees about 96 MB") && t.contains("13 GB that nothing needs")));
+    // Delete alone leaves the garbage for the next clean-up.
+    assert!(click_last(&mut h, w, "Delete"));
+    assert_eq!(ran.lock().unwrap().as_slice(), [Operation::Delete { generations: vec![26], collect: false }]);
+    settle(&mut h, |a| a.job.as_ref().is_some_and(|j| j.outcome.is_some()));
+    h.advance(Duration::from_secs(1));
+    h.send(Msg::Delete(25));
+    assert!(click_last(&mut h, w, "Delete and Clean Up"));
+    assert_eq!(ran.lock().unwrap().last(), Some(&Operation::Delete { generations: vec![25], collect: true }));
+}
+
+#[test]
+fn the_generations_in_use_cant_be_deleted() {
+    let (mut h, w, ran) = sample(WORKS);
+    h.send(Msg::Show(Page::History));
+    h.send(Msg::ToggleGeneration(28));
+    settle(&mut h, |a| matches!(a.changes.get(&28), Some(Changes::Ready { .. })));
+    assert!(!has(&h, w, "Delete…"));
+    // Asked anyway (from a stale view), it says so and runs nothing.
+    h.send(Msg::Delete(28));
+    assert!(!has(&h, w, "Delete generation 28?"));
+    assert!(h.program().notes.iter().any(|(_, n)| n.contains("in use")));
+    assert!(ran.lock().unwrap().is_empty());
+}
+
+#[test]
+fn cleaning_up_says_what_comes_back() {
+    let (mut h, w, _) = sample(WORKS);
+    h.send(Msg::Show(Page::Storage));
+    h.send(Msg::Older(0));
+    assert!(h.texts(w).iter().any(|t| t.contains("Frees about 15 GB on disk") && t.contains("generation 24")));
+    h.send(Msg::Older(1));
+    assert!(h.texts(w).iter().any(|t| t.contains("No generation is old enough")));
+    h.send(Msg::CleanUp);
+    assert!(h.texts(w).iter().any(|t| t.contains("none is old enough") && t.contains("About 13 GB comes back")));
+}
+
+#[test]
 fn the_running_generation_shows_what_it_changed() {
     let (mut h, w, _) = sample(WORKS);
     h.send(Msg::Show(Page::History));

@@ -4,6 +4,7 @@
 use aizome_kit::prelude::*;
 use aizome_kit::{column, row};
 use yukimi_system::diff::{Change, ChangeKind};
+use yukimi_system::generations::Generation;
 use yukimi_system::{human_age, human_size};
 
 use super::widgets::tap;
@@ -45,8 +46,51 @@ fn change_row(change: &Change) -> Element<Msg> {
     r.into()
 }
 
+/// Deleting a generation: what it gives back and when, or why it stays.
+fn deletion(app: &Yukimi, generation: &Generation) -> Option<Element<Msg>> {
+    if generation.active {
+        return None;
+    }
+    if !generation.deletable() {
+        return Some(super::empty(if generation.current {
+            "Selected for the next start, so it can't be deleted."
+        } else {
+            "This computer started with it, so it can't be deleted until the next start."
+        }));
+    }
+    let freeable = app.model.freeable.as_deref();
+    let explanation = match freeable.and_then(|f| f.generation(generation.number)) {
+        Some(0) => "It leaves the boot menu. All it has is shared with other generations or kept by something \
+                    else, so deleting it frees nothing by itself."
+            .to_owned(),
+        Some(bytes) => format!(
+            "It leaves the boot menu. What only it has, about {} on disk, comes back once garbage is collected; \
+             what it shares stays.",
+            human_size(bytes)
+        ),
+        None if app.measuring => "It leaves the boot menu. Working out what it would free…".to_owned(),
+        None => "It leaves the boot menu. What only it has comes back once garbage is collected.".to_owned(),
+    };
+    Some(
+        row![
+            column![
+                text("Delete this version").weight(600.0),
+                text(explanation).size(12.0).role(Role::Text3).wrap(),
+            ]
+            .spacing(2.0)
+            .width(Fill),
+            button("Delete…").destructive().icon(Icon::Trash).on_press(Msg::Delete(generation.number)),
+        ]
+        .spacing(12.0)
+        .padding([8.0, 12.0, 8.0, 40.0])
+        .width(Fill)
+        .into(),
+    )
+}
+
 /// What shows under an opened generation.
-fn opened(app: &Yukimi, number: u32, current: bool) -> Vec<Element<Msg>> {
+fn opened(app: &Yukimi, generation: &Generation) -> Vec<Element<Msg>> {
+    let (number, current) = (generation.number, generation.active);
     let mut rows = Vec::new();
     let Some(changes) = app.changes.get(&number) else {
         return rows;
@@ -79,6 +123,7 @@ fn opened(app: &Yukimi, number: u32, current: bool) -> Vec<Element<Msg>> {
             .into(),
         );
     }
+    rows.extend(deletion(app, generation));
     if !has_previous {
         rows.push(super::empty("The oldest generation kept."));
         return rows;
@@ -106,14 +151,15 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
     let intro = heading(
         "Every version of your system",
         "Each time the system changes, NixOS keeps the version before as a generation. Any of them can be started \
-         from the boot menu, or returned to here. Nothing is lost until old generations are cleaned up in Storage.",
+         from the boot menu, or returned to here. Nothing is lost until a generation is deleted here or old ones are \
+         cleaned up in Storage. Beside each is the disk space deleting it would give back.",
     );
     let gens = &model.generations;
     let mut rows: Vec<Element<Msg>> = Vec::new();
     if gens.is_empty() {
         rows.push(super::empty(if app.loading { "Looking around…" } else { "No generations found." }));
     }
-    let sizes = model.store.as_ref().map(|s| &s.generation_sizes);
+    let freeable = model.freeable.as_deref();
     for generation in gens.iter().rev() {
         let open = app.opened.contains(&generation.number);
         let mut facts = vec![human_age(generation.created, app.now())];
@@ -143,8 +189,10 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
         if generation.booted && !generation.active {
             head = head.push(tag("started with", Role::Violet));
         }
-        if let Some(size) = sizes.and_then(|s| s.iter().find(|(n, _)| *n == generation.number)) {
-            head = head.push(mono(human_size(size.1)).role(Role::Text3).width(64.0));
+        // What deleting it gives back, not everything it needs: most of that
+        // is shared with the others.
+        if let Some(bytes) = freeable.and_then(|f| f.generation(generation.number)) {
+            head = head.push(mono(human_size(bytes)).role(Role::Text3).width(64.0));
         }
         let label = format!("Generation {}", generation.number);
         rows.push(
@@ -155,7 +203,7 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
                 .pipe_key(generation.number),
         );
         if open {
-            rows.extend(opened(app, generation.number, generation.active));
+            rows.extend(opened(app, generation));
         }
     }
     column![intro, super::list(rows)].spacing(18.0).width(Fill).into()
