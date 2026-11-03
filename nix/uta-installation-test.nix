@@ -1,4 +1,5 @@
-# Check optional installation separately from the ISO's offline app cache.
+# Check optional installation separately from the ISO's offline app cache,
+# whose contents iso-checks.application-cache checks with the media.
 {
   pkgs,
   applicationCatalog,
@@ -27,9 +28,6 @@ assert entry != null && entry.source == "sekka" && !entry.preload && !(entry.unf
 assert hasUta selected && (manifest selected).selected == [ "uta" ];
 assert !hasUta empty && !hasUta preloaded && !hasUta iso;
 assert !(builtins.elem "uta" (manifest preloaded).selected);
-assert builtins.elem (toString applicationCatalog.cache) (map toString iso.isoImage.storeContents);
-assert
-  !(lib.any (file: file.target == "/calamares/closures/application-uta.paths") iso.isoImage.contents);
 assert uta.meta.license.spdxId == "GPL-3.0-only";
 pkgs.writeText "uta-installation.json" (
   builtins.toJSON {

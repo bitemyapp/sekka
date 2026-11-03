@@ -179,6 +179,29 @@
       # flake gave them: `nix build .#aizome-checks.session`. Not among
       # `checks`, which CI runs, as they weren't in Aizome's repository.
       legacyPackages.${system}.aizome-checks = inputs.aizome.checks.${system};
+      # The ISO's own checks, which the manual ISO workflow (and a release)
+      # runs with the image: `nix build .#iso-checks.desktop-references`.
+      # Not among `checks`: evaluating the media means evaluating every
+      # prebuilt desktop system, which alone took most of a CI evaluation.
+      legacyPackages.${system}.iso-checks = {
+        desktop-references = import ./nix/iso-desktop-references-test.nix {
+          inherit
+            pkgs
+            inputs
+            applicationCatalog
+            fixture
+            installer
+            ;
+        };
+        copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
+        store-integrity = import ./nix/iso-integrity-test.nix { inherit pkgs; };
+        copytoram-initrd = import ./nix/iso-copytoram-initrd-test.nix {
+          inherit pkgs installer;
+        };
+        application-cache = import ./nix/iso-application-cache-test.nix {
+          inherit pkgs applicationCatalog installer;
+        };
+      };
       apps.${system} = {
         update = {
           type = "app";
@@ -377,25 +400,11 @@
         };
         ibus-wayland-serial = import ./nix/ibus-wayland-serial-test.nix { inherit pkgs; };
         mpv-software = import ./nix/mpv-software-test.nix { inherit pkgs inputs; };
-        iso-desktop-references = import ./nix/iso-desktop-references-test.nix {
-          inherit
-            pkgs
-            inputs
-            applicationCatalog
-            fixture
-            installer
-            ;
-        };
-        iso-copytoram = import ./nix/iso-copytoram-test.nix { inherit pkgs; };
         genkan-live-media = import ./nix/genkan-live-media-test.nix { inherit pkgs; };
         genkan-preflight = import ./nix/genkan-preflight-test.nix {
           inherit pkgs;
           helper = calamares.helper;
           nixPackage = runnerNix;
-        };
-        iso-store-integrity = import ./nix/iso-integrity-test.nix { inherit pkgs; };
-        iso-copytoram-initrd = import ./nix/iso-copytoram-initrd-test.nix {
-          inherit pkgs installer;
         };
         chatgpt-plugins = import ./nix/chatgpt/test.nix {
           inherit pkgs;

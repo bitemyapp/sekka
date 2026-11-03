@@ -20,6 +20,6 @@ pkgs.runCommand "trusted-pr-ci-tests"
     python3 -m unittest discover -s tests -v
     shellcheck -s bash scripts/runner-admission.sh
     shellcheck scripts/runner-git-cache.sh ${../scripts/runner-host-setup.sh}
-    actionlint -config-file ${../.github/actionlint.yaml} ${../.github/workflows/pr.yml} ${../.github/workflows/cache.yml} ${../.github/workflows/nightly.yml}
+    actionlint -config-file ${../.github/actionlint.yaml} ${../.github/workflows/pr.yml} ${../.github/workflows/cache.yml} ${../.github/workflows/nightly.yml} ${../.github/workflows/iso.yml} ${../.github/workflows/release.yml}
     touch $out
   ''
