@@ -2053,10 +2053,12 @@ Chanoma (`desktop/aizome/apps/chanoma`), the family television, is
 installed only where `programs.aizome.chanoma.enable` is set: the package
 builds it into a `chanoma` output of its own, and the module adds it with
 its libretro cores (unfree snes9x and Genesis Plus GX only where unfree
-packages are allowed). It reads controllers from evdev itself so that it
-can grab them, drives libretro cores in its own process, and opens
-streaming services in Chrome or Chromium driven through the compositor's
-IPC. The PIN keeps out kids with a controller, not someone with a terminal.
+packages are allowed) and OpenBIOS, a free PlayStation BIOS built from
+source (`desktop/aizome/nix/openbios.nix`, the `psx-openbios`
+package). It reads controllers from evdev itself so that it can grab
+them, drives libretro cores in its own process, and opens streaming
+services in Chrome or Chromium driven through the compositor's IPC. The
+PIN keeps out kids with a controller, not someone with a terminal.
 
 ```sh
 cargo test -p aizome-chanoma

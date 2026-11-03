@@ -23,8 +23,10 @@ services.displayManager.autoLogin = { enable = true; user = "tv"; };
 entry and icon, kept out of Aizome's own output so desktops without it
 don't list it), the cores (`programs.aizome.chanoma.cores`; snes9x and
 Genesis Plus GX, whose licences forbid selling them, only where unfree
-packages are allowed), exports `CHANOMA_CORES` (and `CHANOMA_BROWSER`, for
-a browser given) to the session, and sets BlueZ to connect quickly and to
+packages are allowed) and a PlayStation BIOS
+(`programs.aizome.chanoma.bios`: OpenBIOS, below), exports
+`CHANOMA_CORES`, `CHANOMA_BIOS` (and `CHANOMA_BROWSER`, for a browser
+given) to the session, and sets BlueZ to connect quickly and to
 let a controller that forgot the computer pair again without anyone
 confirming. `autostart` is a user unit wanted by and ordered after
 `aizome-session.target`, which starts once the compositor is ready; it
@@ -141,8 +143,22 @@ pausing, saving and leaving are Chanoma's.
   system and save folders, rumble, input bitmasks, geometry and timing
   changes. Hardware rendering is declined: cores that need OpenGL or
   Vulkan don't run (Nintendo 64, Dreamcast and later; the PlayStation
-  plays through PCSX-ReARMed's software renderer, which needs no BIOS).
+  plays through PCSX-ReARMed's software renderer).
   Logging is declined too (a C varargs callback).
+- **The PlayStation's BIOS**: Sony's can't be shipped, so the module
+  offers OpenBIOS (`nix/openbios.nix`), PCSX-Redux's free replacement
+  (MIT, from its `nugget` repository), built from source with Nixpkgs'
+  MIPS cross compiler, unwrapped (the wrapper adds `-march=mips32r2`,
+  where the console's R3000 is MIPS I); it reproduces bit for bit.
+  Before a game starts, Chanoma links the files in `$CHANOMA_BIOS` into
+  the cores' system folder (`~/.local/share/aizome/chanoma/system`),
+  keeping any file of the same name a grown-up put there and clearing
+  links to what's gone. PCSX-ReARMed, first for the PlayStation, looks
+  for Sony's BIOS by name first (`scph5501.bin` and the like), then takes
+  any 512 KiB image that starts as a BIOS does, so a grown-up's dump of
+  their own console's BIOS comes first and OpenBIOS after; with neither,
+  it imitates one itself (and says so on the screen). Only PCSX-ReARMed
+  has been tried with OpenBIOS.
 - **Picture**: each frame is converted to XRGB8888 and enlarged by a whole
   number with nearest-neighbour into a memfd of three frames, then shown
   through the window's video sink (`docs/kit.md`, Video); the compositor
@@ -496,6 +512,30 @@ CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
   controller state, and carry on from their saved state. On 2026-10-31
   with nixpkgs' cores of that date: all three passed (mean brightness
   249–252 untouched, 3 with Right held).
+- **PlayStation games with OpenBIOS** (`tests/cores.rs`'s
+  `playstation_games_start_with_a_bios`, opt-in, with
+  `CHANOMA_TEST_PSX_GAMES`, `_SYSTEM`, `_OUT` and `_STAGES`): each game
+  played through PCSX-ReARMed with a given system folder, a picture kept
+  every eight seconds and its brightness printed, Start and Cross pressed
+  from the third picture on. On 2026-11-02, forty US games from a
+  household's own library (cue sheets on a USB drive), with nixpkgs'
+  PCSX-ReARMed, once with OpenBIOS and once with a Sony BIOS dumped from
+  a console (SCPH-5501), compared picture by picture: all forty started
+  under both and reached the same screens (titles, menus, memory card
+  checks and file screens, name entry, races and fights) with nothing
+  hung or drawn wrong under OpenBIOS. Some ran behind under it, by up to
+  a picture (Gran Turismo 2, Tomb Raider, Twisted Metal 2); Mega Man
+  Legends' first load was slower and caught up in a two-minute run. The
+  games: Crash Bandicoot (and Warped), CTR, Castlevania: Symphony of the
+  Night, Final Fantasy VII, Final Fantasy Tactics, Metal Gear Solid, Gran
+  Turismo 2, Tony Hawk's Pro Skater (and 2), Resident Evil Director's
+  Cut, Silent Hill, Tekken (and 3), Ridge Racer, Wipeout, Mega Man X4,
+  Mega Man Legends, Tomb Raider (and II), Sesame Street's Elmo's Letter
+  Adventure and Elmo's Number Journey, Chrono Cross, Legend of Mana,
+  Jumping Flash!, Street Fighter Alpha 2 and 3, Spider-Man, Twisted
+  Metal 2, Syphon Filter, Driver, Dino Crisis, Wild Arms, Legend of
+  Legaia, Persona, Bust-A-Move 4, LEGO Racers, Frogger, Metal Slug X and
+  Lunar: Silver Star Story Complete.
 - **A real browser** (`tests/devtools.rs`, opt-in): the browser started
   and kept as Chanoma does, with no display (`--ozone-platform=headless`),
   on a site of 127.0.0.1 with elsewhere at localhost, served by the test,
@@ -521,7 +561,8 @@ CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
   - the controller found and held (another reader can't grab it);
   - a game opened from Home by the controller, and its picture, as the
     compositor captures it, darkening while Right is held (on
-    2026-10-31: 103, then 39, then 103 again);
+    2026-10-31: 103, then 39, then 103 again), and OpenBIOS linked into
+    the cores' system folder as it starts;
   - the Home button pausing it under the menu, and stopping keeping its
     state and picture;
   - the controller unplugged and back as player 1;
@@ -549,7 +590,10 @@ CHANOMA_TEST_BROWSER=<chromium or google-chrome-stable> \
 
   On 2026-11-01 every step passed (the script in 65.9 s), keeping three
   screenshots in its output: the keyboard over the page, the PIN pad after
-  a press, and the page left where it was after a link elsewhere.
+  a press, and the page left where it was after a link elsewhere. On
+  2026-11-02 it passed again with the BIOS step and the numbered PIN
+  legend (65.3 s), the package's check phase running Chanoma's 60 unit
+  tests and 11 flows.
 - **Live** on the X1 Carbon, under a headless Aizome compositor of its
   own beside the desktop (release build, gambatte, generated videos):
   Home, a game shown through the compositor at the Game Boy's shape, the
@@ -592,6 +636,11 @@ before calling any of it tested on hardware.
   Widevine.
 - No hardware-rendered cores; no disc swapping for multi-disc games; no
   touch screens (the DS).
+- OpenBIOS has been checked with PCSX-ReARMed on forty games' first
+  minute: not saving to a memory card and loading again, the BIOS's own
+  screens (the memory card manager, the CD player), games from Europe or
+  Japan, or long play. Some games load a few seconds slower with it than
+  with Sony's.
 - Adding a website needs a keyboard and a mouse: its address is typed
   in a dialog of the kit's, where Chanoma's keyboard doesn't come.
   Choosing folders doesn't: see Choosing folders above.

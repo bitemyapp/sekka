@@ -1148,7 +1148,11 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
   they change; leaving it keeps exactly where it was, and the next start
   carries on from there. The picture is enlarged with square pixels and
   letterboxed to the console's shape; sound plays with short latency;
-  controllers rumble where the game asks.
+  controllers rumble where the game asks. PlayStation games play with
+  OpenBIOS, a free stand-in for the console's own BIOS, which can't be
+  shipped: forty games checked against Sony's started and played alike,
+  some a few seconds slower to load. A BIOS dumped from a grown-up's own
+  console, put in `~/.local/share/aizome/chanoma/system`, comes first.
 - **Services** open full screen in Google Chrome (or Chromium), each in a
   browser profile of its own, so a grown-up signs in once (in grown-up
   mode) and kids never see a sign-in, an address bar or a tab. The controller drives the page: the left stick moves the pointer

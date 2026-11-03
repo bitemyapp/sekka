@@ -281,6 +281,12 @@ pub struct Shelf {
     pub poster: Option<PathBuf>,
 }
 
+/// Folders of console BIOS images to offer the cores: `$CHANOMA_BIOS`
+/// (several, colon-separated), which the module points at OpenBIOS.
+pub fn bios_dirs() -> Vec<PathBuf> {
+    std::env::var_os("CHANOMA_BIOS").map(|v| std::env::split_paths(&v).collect()).unwrap_or_default()
+}
+
 /// Cores found, by stem.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Cores {
