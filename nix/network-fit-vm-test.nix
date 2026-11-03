@@ -84,13 +84,31 @@ pkgs.testers.runNixOSTest {
     assert fits(), "Network reopened beyond usable workspace at scale1.25"
     assert changed_scale_fits, "Network exceeded usable workspace after changing to scale1.25"
 
-    from datetime import timedelta
+    import os, re, subprocess
+    from pathlib import Path
     def text(expected):
-        try:
-            machine.wait_for_text(expected, timeout=timedelta(seconds=15))
-        except Exception:
+        # The driver's legacy + LSTM engine and enlarged, posterized
+        # variants can miss large GTK labels even on a settled frame.
+        # Read the original pixels with LSTM, with a second segmentation
+        # for labels that sparse-text recognition misses.
+        deadline = time.monotonic() + 60
+        readings = []
+        with machine.nested(f"waiting for {expected} to appear on screen"):
+            while time.monotonic() < deadline:
+                machine.screenshot("text-check")
+                image = Path(machine.out_dir) / "text-check.png"
+                readings = []
+                for mode in ["11", "6"]:
+                    reading = subprocess.check_output([
+                        "${pkgs.tesseract.override { enableLanguages = [ "eng" ]; }}/bin/tesseract", str(image), "stdout",
+                        "--oem", "1", "--psm", mode,
+                    ], text=True, timeout=30, env={**os.environ, "OMP_THREAD_LIMIT": "1"})
+                    readings.append(reading)
+                    if re.search(expected, reading):
+                        return
+                time.sleep(0.5)
             machine.screenshot("text-failure")
-            raise
+            raise AssertionError(f"Missing {expected!r}; OCR read {readings!r}")
     def click(x, y):
         user("hyprctl dispatch " + shlex.quote(f"hl.dsp.cursor.move({{ x = {x}, y = {y} }})"))
         machine.succeed("YDOTOOL_SOCKET=/run/ydotoold/socket ydotool mousemove -x 1 -y 0")
