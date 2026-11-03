@@ -14,7 +14,7 @@ aizome-ipc.workspace = true
 aizome-config.workspace = true
 aizome-kit.workspace = true
 aizome-face.workspace = true
-aizome-sys.workspace = true
+aizome-sys = { workspace = true, features = ["pam"] }
 aizome-search.workspace = true
 aizome-shell-proto = { path = "../aizome-shell-proto" }
 aizome-awake = { path = "../aizome-awake" }

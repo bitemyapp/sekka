@@ -30,7 +30,8 @@ pub mod menus;
 pub mod notifications;
 pub mod osd;
 pub mod palette;
-pub mod pam;
+/// Checking passwords: shared with Chanoma, in aizome-sys.
+pub use aizome_sys::pam;
 pub mod power;
 pub mod recording;
 mod recording_glue;
