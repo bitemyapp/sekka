@@ -107,15 +107,32 @@ jobs:
           # Every check runs, rather than stopping at the first failure, and
           # the failed ones run once more: a VM test that loses a timing race
           # once must not hold back upstream security fixes for a day. A check
-          # that fails twice still stops the update. The first attempt's
-          # passing checks stay rooted, so the second runs only the failures.
-          if ! python3 scripts/ci-retain.py main checks flake check --keep-going --no-update-lock-file --print-build-logs 2>&1 |
-            tee "$RUNNER_TEMP/check.log"; then
-            failed=$(sed -n 's/.*❌ \(checks\.[^ ]*\).*/\1/p' "$RUNNER_TEMP/check.log" | sort -u | paste -sd ' ')
-            echo "::warning::Running failed checks once more: ${failed:-see the log above}. One that passes now is flaky; fix it."
-            python3 scripts/ci-retain.py main checks flake check --keep-going --no-update-lock-file --print-build-logs
+          # that fails twice, or fails to evaluate, still stops the update.
+          # The first attempt's passing checks stay rooted.
+          results=$RUNNER_TEMP/checks.json
+          if ! python3 scripts/ci-retain.py main checks fast-build --flake .#checks.x86_64-linux --result-file "$results"; then
+            mapfile -t failed < <(python3 -c '
+          import json, sys
+          results = json.load(open(sys.argv[1]))["results"]
+          if any(r["type"] == "EVAL" and not r["success"] for r in results):
+              sys.exit("A check failed to evaluate; running it again cannot help.")
+          for r in results:
+              if r["type"] == "BUILD" and not r["success"]:
+                  print(r["attr"])
+          ' "$results")
+            (( ${#failed[@]} )) || exit 1
+            echo "::warning::Running failed checks once more: ${failed[*]}. One that passes now is flaky; fix it."
+            python3 scripts/ci-retain.py main checks build --keep-going --no-update-lock-file --print-build-logs \
+              "${failed[@]/#/.#checks.x86_64-linux.}"
           fi
           git diff --exit-code
+      - name: Check that every output evaluates
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Pull requests and main build the checks alone; this also catches a
+          # package, module or shell that no longer evaluates (DEVELOPERS.md).
+          nix flake check --no-build --no-update-lock-file
       - name: Publish Sekka's packages to its binary cache
         shell: bash
         env:
