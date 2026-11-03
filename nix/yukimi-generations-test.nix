@@ -125,7 +125,10 @@ pkgs.testers.runNixOSTest {
           return sorted(machine.succeed("ls /nix/var/nix/profiles | grep -o '^system-[0-9]*-link'").split())
 
       def entries():
-          return sorted(machine.succeed("ls /boot/loader/entries").split())
+          """The generations the boot menu lists, from its entries' titles
+          (`version Generation <n> ...`)."""
+          versions = machine.succeed("cat /boot/loader/entries/*.conf | grep '^version Generation '")
+          return sorted(int(line.split()[2]) for line in versions.splitlines())
 
       def kept():
           return sorted(machine.succeed("ls /var/lib/yukimi/configurations").split())
@@ -149,7 +152,7 @@ pkgs.testers.runNixOSTest {
           # 5 is selected for the next start; 1 runs and was started with.
           machine.succeed("/nix/var/nix/profiles/system/bin/switch-to-configuration boot")
           assert links() == [f"system-{n}-link" for n in range(1, 6)], links()
-          assert entries() == [f"nixos-generation-{n}.conf" for n in range(1, 6)], entries()
+          assert entries() == list(range(1, 6)), entries()
           for n in range(1, 6):
               machine.succeed(f"mkdir -p /var/lib/yukimi/configurations/generation-{n}")
               machine.succeed(f"echo '{{ }}' > /var/lib/yukimi/configurations/generation-{n}/configuration.nix")
@@ -178,7 +181,7 @@ pkgs.testers.runNixOSTest {
               report = json.loads(machine.fail(f"yukimi-helper delete {args}"))
               assert not report["ok"] and why in report["error"], (args, report)
           assert links() == [f"system-{n}-link" for n in range(1, 6)], links()
-          assert entries() == [f"nixos-generation-{n}.conf" for n in range(1, 6)], entries()
+          assert entries() == list(range(1, 6)), entries()
           assert kept() == [f"generation-{n}" for n in range(1, 6)], kept()
           machine.fail("su demo -c 'yukimi-helper delete 3'")
           assert links() == [f"system-{n}-link" for n in range(1, 6)], links()
@@ -217,12 +220,7 @@ pkgs.testers.runNixOSTest {
 
       with subtest("3 is gone from the profile, the boot menu and the kept configurations"):
           assert links() == ["system-1-link", "system-2-link", "system-4-link", "system-5-link"], links()
-          assert entries() == [
-              "nixos-generation-1.conf",
-              "nixos-generation-2.conf",
-              "nixos-generation-4.conf",
-              "nixos-generation-5.conf",
-          ], entries()
+          assert entries() == [1, 2, 4, 5], entries()
           assert kept() == ["generation-1", "generation-2", "generation-4", "generation-5"], kept()
           assert machine.succeed("readlink /nix/var/nix/profiles/system").strip() == "system-5-link"
           assert machine.succeed("readlink -f /run/current-system").strip() == base
@@ -241,7 +239,7 @@ pkgs.testers.runNixOSTest {
           assert report["ok"] and report["deleted"] == [2] and not report["collected"], report
           assert "freed" not in report, report
           assert links() == ["system-1-link", "system-4-link", "system-5-link"], links()
-          assert "nixos-generation-2.conf" not in entries(), entries()
+          assert 2 not in entries(), entries()
           assert "generation-2" not in kept(), kept()
           machine.succeed(f"test -e {gens[2]}")
           after = used()
@@ -254,6 +252,6 @@ pkgs.testers.runNixOSTest {
           assert report["ok"], report
           assert abs(estimate2["disk"] - freed) <= 0.03 * freed + 256 * 1024, (estimate2, freed)
           machine.fail(f"test -e {gens[2]}")
-          assert entries() == ["nixos-generation-1.conf", "nixos-generation-4.conf", "nixos-generation-5.conf"], entries()
+          assert entries() == [1, 4, 5], entries()
     '';
 }
