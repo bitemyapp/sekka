@@ -173,7 +173,11 @@ pkgs.testers.runNixOSTest {
         # Header navigation stays reachable even with the page scrolled down.
         c = window()
         click(c["at"][0] + 24, c["at"][1] + 24)
-        text("Ethernet")
+        # Back on the list, its title. Not "Ethernet": while the overlay
+        # scrollbar shows, the driver's OCR misreads that row at scale 3.2
+        # in every variant, so a run read it or not by the scrollbar's timing
+        # (three runs in six failed with the list shown).
+        text("Network")
         machine.screenshot("back-" + str(scale) + ".png")
         close_button()
         open_panel()
