@@ -109,7 +109,7 @@ pkgs.testers.runNixOSTest {
       gens = nodes.machine.system.build.yukimiGenerations;
     in
     ''
-      import json
+      import json, shlex
 
       gens = {
           2: "${gens."2"}",
@@ -121,7 +121,11 @@ pkgs.testers.runNixOSTest {
       kept_by_user, busy, shared = "${keptByUser}", "${busy}", "${shared}"
 
       def used():
-          """Bytes in use on the store's filesystem."""
+          """Bytes in use on the store's filesystem. Nix deletes its 8 MiB
+          reserve (gc-reserved-space) as it collects garbage and makes it again
+          when it next opens the store, as the helper has it do: it must be
+          there, or 8 MiB more would seem free than stays free."""
+          machine.succeed("test $(stat -c %s /nix/var/nix/db/reserved) -gt 0")
           machine.succeed("sync")
           blocks, free, size = machine.succeed("stat -f -c '%b %f %S' /nix/store").split()
           return (int(blocks) - int(free)) * int(size)
@@ -146,6 +150,17 @@ pkgs.testers.runNixOSTest {
 
       def mib(n):
           return f"{n / 1048576:.2f} MiB"
+
+      diagnose = """
+        others=$(nix-store --gc --print-roots | grep -v '/system-3-link' | sed 's/.* -> //' | sort -u)
+        comm -23 <(nix-store -qR /nix/var/nix/profiles/system-3-link | sort) <(nix-store -qR $others | sort) > /tmp/only3
+        echo "paths only 3 has:"; cat /tmp/only3
+        echo "count type links blocks:"
+        xargs -a /tmp/only3 -I{} find {} -printf '%y %n %b\\n' | sort | uniq -c | sort -rn | head -25
+        echo "bytes by type and links:"
+        xargs -a /tmp/only3 -I{} find {} -printf '%y %n %b\\n' | awk '{s[$1" "$2]+=$3*512} END {for (k in s) print k, s[k]}' | sort
+        ls -la /nix/var/nix/db; ls /nix/store/.links | wc -l
+      """
 
       machine.start()
       machine.wait_for_unit("multi-user.target")
@@ -205,6 +220,9 @@ pkgs.testers.runNixOSTest {
           # Before, Yukimi showed the generation's whole closure.
           closure = int(machine.succeed("nix --extra-experimental-features nix-command path-info -S /nix/var/nix/profiles/system-3-link").split()[1])
           assert closure == as_root["closure"], (closure, as_root)
+          # What only 3 has, inode by inode, and the store database's files,
+          # to explain any difference between the estimate and what comes back.
+          print(machine.succeed("bash -c " + shlex.quote(diagnose)))
           before = used()
           report = json.loads(machine.succeed("yukimi-helper delete 3 --collect-garbage"))
           after = used()
@@ -213,10 +231,10 @@ pkgs.testers.runNixOSTest {
           freed = before - after
           estimate3 = as_root["disk"]
           print(
-              f"generation 3: freed {mib(freed)} on disk; Yukimi showed {mib(closure)} before "
+              f"generation 3: freed {freed} bytes ({mib(freed)}) on disk; Yukimi showed {mib(closure)} before "
               f"({(closure - freed) / freed:+.1%}), its NAR estimate {mib(as_root['nar'])} "
               f"({(as_root['nar'] - freed) / freed:+.1%}), its disk estimate {mib(estimate3)} "
-              f"({(estimate3 - freed) / freed:+.1%})"
+              f"({(estimate3 - freed) / freed:+.1%}, {estimate3} bytes)"
           )
           assert abs(estimate3 - freed) <= 0.03 * freed + 256 * 1024, (estimate3, freed)
           assert abs(report["freed"] - freed) <= 0.03 * freed + 256 * 1024, (report["freed"], freed)
@@ -253,7 +271,10 @@ pkgs.testers.runNixOSTest {
           assert abs(estimate("4")["garbage"] - estimate2["disk"]) <= 0.01 * estimate2["disk"] + 64 * 1024
           report = json.loads(machine.succeed("yukimi-helper clean"))
           freed = after - used()
-          print(f"generation 2: freed {mib(freed)}; estimated {mib(estimate2['disk'])}; closure {mib(estimate2['closure'])}")
+          print(
+              f"generation 2: freed {freed} bytes ({mib(freed)}); estimated {estimate2['disk']} on disk "
+              f"({(estimate2['disk'] - freed) / freed:+.2%}), {estimate2['nar']} as NAR; closure {estimate2['closure']}"
+          )
           assert report["ok"], report
           assert abs(estimate2["disk"] - freed) <= 0.03 * freed + 256 * 1024, (estimate2, freed)
           machine.fail(f"test -e {gens[2]}")

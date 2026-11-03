@@ -1127,6 +1127,13 @@ fn collect_garbage() -> Result<String> {
     for line in text.lines() {
         eprintln!("{line}");
     }
+    // Nix deletes its reserve (`gc-reserved-space`, 8 MiB in
+    // /nix/var/nix/db/reserved) as a collection starts, so it can work on a
+    // full disk, and makes it again whenever it next opens the store. Open
+    // it now, so that free space measured afterwards is what stays free.
+    let mut reopen = command("nix-store");
+    reopen.args(["--query", "--hash", PROFILE]);
+    let _ = wait(reopen.stdout(Stdio::null()).stderr(Stdio::null()));
     if !out.status.success() {
         return Err(Failure("Collecting garbage failed".into()));
     }

@@ -1676,6 +1676,10 @@ only with `--collect-garbage`, it collects garbage, which may be stopped.
 Without it the space comes back at the next clean-up (or Nix's own collection
 below `min-free`). The result reports the estimate it made beforehand, as
 root, and, measured with `statvfs` around the collection, what came back.
+Nix deletes its 8 MiB reserve (`gc-reserved-space`, `/nix/var/nix/db/reserved`)
+as a collection starts and makes it again when it next opens the store, so
+the helper has Nix open the store before measuring; without that, the VM
+check saw 8 MiB more come back than stays free.
 
 Yukimi used to show each generation's closure: everything it needs, about 26
 GB per generation on ganymede, nearly all of it shared with the generations
@@ -1718,7 +1722,8 @@ added, from those paths before the collection keeps them; an unprivileged
 reading of the store database may lag its write-ahead log; and in an
 optimised store, a file whose one other link is an unoptimised live path
 counts as freed. Nix's own "freed" line adds up file sizes, not blocks, and
-counts files with two links as freed, so it differs from both.
+counts files with two links as freed, so it differs from both (8.0 MiB for
+the 10.4 MiB the VM check's generation 3 gave back).
 
 `nix build .#checks.x86_64-linux.yukimi-generations` boots a VM from its own
 ext4 disk (`useBootLoader`, systemd-boot) with four more generations built
