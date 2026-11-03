@@ -126,7 +126,8 @@ parent, and that reading is what takes the time on a USB drive. A second
 look saves nothing while the drive is cold; it saves everything while
 it's warm (the drive stays plugged in), which is when an app looks again.
 Apps show what the index knew before the look, so a cold drive costs
-waiting for news, not for the list.
+waiting for news, not for the list. Ways to make a cold drive faster
+are in `docs/files-index-cold-drives.md`.
 
 **A home folder** (ext4 on NVMe; 69,308 folders and 603,352 files, with the
 folders in memory): the first look took 3.38 s and the second 0.34 s,
