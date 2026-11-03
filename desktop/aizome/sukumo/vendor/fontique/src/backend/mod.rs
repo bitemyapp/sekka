@@ -47,14 +47,15 @@ pub(crate) use system::SystemFonts;
 ))]
 mod system {
     #[cfg(feature = "system")]
-    use super::{FallbackKey, FamilyId, FamilyInfo};
-    use super::{FamilyNameMap, GenericFamilyMap};
+    use super::{FallbackKey, FamilyId, FamilyInfo, GenericFamily};
+    use super::FamilyNameMap;
     use alloc::sync::Arc;
+    #[cfg(feature = "system")]
+    use alloc::vec::Vec;
 
     #[derive(Default)]
     pub(crate) struct SystemFonts {
         pub(crate) name_map: Arc<FamilyNameMap>,
-        pub(crate) generic_families: Arc<GenericFamilyMap>,
     }
 
     impl SystemFonts {
@@ -65,6 +66,11 @@ mod system {
         #[cfg(feature = "system")]
         pub(crate) fn family(&mut self, _id: FamilyId) -> Option<FamilyInfo> {
             None
+        }
+
+        #[cfg(feature = "system")]
+        pub(crate) fn generic_families(&mut self, _family: GenericFamily) -> Vec<FamilyId> {
+            Vec::new()
         }
 
         #[cfg(feature = "system")]

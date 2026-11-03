@@ -176,6 +176,10 @@ use_self = "warn"
 wildcard_dependencies = "warn"
 
 [lints.rust]
+# Sukumo: parlance 0.1.1 deprecates `Script::from_str_unchecked`, which this
+# release calls 161 times. Cargo caps a crates.io crate's lints but not a
+# path crate's, so the copy says what the registry build shows: nothing.
+deprecated = "allow"
 elided_lifetimes_in_paths = "warn"
 keyword_idents_2024 = "forbid"
 missing_debug_implementations = "warn"

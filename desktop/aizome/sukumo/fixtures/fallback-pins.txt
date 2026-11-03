@@ -1,0 +1,79 @@
+# fonts 141de4080d731189
+Default latin: Noto Sans | Noto Sans | missing 0
+Default greek-cyrillic: Noto Sans | Noto Sans, Noto Sans | missing 0
+Default hebrew: Noto Sans | DejaVu Sans, Noto Sans, DejaVu Sans | missing 0
+Default arabic: Noto Sans | DejaVu Sans, Noto Sans, DejaVu Sans | missing 0
+Default devanagari: Noto Sans | Noto Sans Devanagari, Noto Sans, Noto Sans Devanagari | missing 0
+Default thai: Noto Sans | Noto Sans Thai | missing 0
+Default han-kana: Noto Sans | Noto Sans CJK KR, Noto Sans CJK KR, Noto Sans CJK KR | missing 0
+Default hangul: Noto Sans | Noto Sans CJK KR, Noto Sans, Noto Sans CJK KR | missing 0
+Default combining: Noto Sans | Noto Sans | missing 0
+Default symbols: Noto Sans | DejaVu Sans, Noto Sans, DejaVu Sans, Noto Sans, DejaVu Sans, Noto Sans, DejaVu Sans, Noto Sans, DejaVu Sans, Noto Sans, DejaVu Sans, Noto Sans, DejaVu Sans, Noto Sans, DejaVu Sans, Noto Sans, DejaVu Sans, Noto Sans, DejaVu Sans | missing 0
+Default math: Noto Sans | DejaVu Sans, Noto Sans, DejaVu Sans, Noto Sans, DejaVu Sans, Noto Sans, DejaVu Sans, Noto Sans | missing 0
+Default emoji: Noto Sans | Noto Sans, Noto Color Emoji, Noto Sans, Noto Color Emoji, Noto Sans, Noto Color Emoji | missing 0
+Default mixed: Noto Sans | Noto Sans, Noto Sans CJK KR, Noto Sans, DejaVu Sans, Noto Sans, DejaVu Sans, Noto Sans, Noto Color Emoji | missing 0
+Monospaced latin: Noto Sans Mono | Noto Sans Mono | missing 0
+Monospaced greek-cyrillic: Noto Sans Mono | Noto Sans Mono, Noto Sans Mono | missing 0
+Monospaced hebrew: Noto Sans Mono | DejaVu Sans, Noto Sans Mono, DejaVu Sans | missing 0
+Monospaced arabic: Noto Sans Mono | DejaVu Sans, Noto Sans Mono, DejaVu Sans | missing 0
+Monospaced devanagari: Noto Sans Mono | Noto Sans Devanagari, Noto Sans Mono, Noto Sans Devanagari | missing 0
+Monospaced thai: Noto Sans Mono | Noto Sans Thai | missing 0
+Monospaced han-kana: Noto Sans Mono | Noto Sans CJK KR, Noto Sans CJK KR, Noto Sans CJK KR | missing 0
+Monospaced hangul: Noto Sans Mono | Noto Sans CJK KR, Noto Sans Mono, Noto Sans CJK KR | missing 0
+Monospaced combining: Noto Sans Mono | Noto Sans Mono | missing 0
+Monospaced symbols: Noto Sans Mono | Noto Sans Mono, DejaVu Sans, Noto Sans Mono, DejaVu Sans, Noto Sans Mono, DejaVu Sans, Noto Sans Mono, DejaVu Sans, Noto Sans Mono, DejaVu Sans, Noto Sans Mono, DejaVu Sans | missing 0
+Monospaced math: Noto Sans Mono | DejaVu Sans, Noto Sans Mono, DejaVu Sans, Noto Sans Mono | missing 0
+Monospaced emoji: Noto Sans Mono | Noto Sans Mono, Noto Color Emoji, Noto Sans Mono, Noto Color Emoji, Noto Sans Mono, Noto Color Emoji | missing 0
+Monospaced mixed: Noto Sans Mono | Noto Sans Mono, Noto Sans CJK KR, Noto Sans Mono, DejaVu Sans, Noto Sans Mono, DejaVu Sans, Noto Sans Mono, Noto Color Emoji | missing 0
+Serif latin: Noto Serif | Noto Serif | missing 0
+Serif greek-cyrillic: Noto Serif | Noto Serif, Noto Serif | missing 0
+Serif hebrew: Noto Serif | DejaVu Sans, Noto Serif, DejaVu Sans | missing 0
+Serif arabic: Noto Serif | DejaVu Sans, Noto Serif, DejaVu Sans | missing 0
+Serif devanagari: Noto Serif | Noto Sans Devanagari, Noto Serif, Noto Sans Devanagari | missing 0
+Serif thai: Noto Serif | Noto Sans Thai | missing 0
+Serif han-kana: Noto Serif | Noto Sans CJK KR, Noto Sans CJK KR, Noto Sans CJK KR | missing 0
+Serif hangul: Noto Serif | Noto Sans CJK KR, Noto Serif, Noto Sans CJK KR | missing 0
+Serif combining: Noto Serif | Noto Serif | missing 0
+Serif symbols: Noto Serif | DejaVu Sans, Noto Serif, DejaVu Sans, Noto Serif, DejaVu Sans, Noto Serif, DejaVu Sans, Noto Serif, DejaVu Sans, Noto Serif, DejaVu Sans, Noto Serif, DejaVu Sans, Noto Serif, DejaVu Sans, Noto Serif, DejaVu Sans, Noto Serif, DejaVu Sans | missing 0
+Serif math: Noto Serif | DejaVu Sans, Noto Serif, DejaVu Sans, Noto Serif, DejaVu Sans, Noto Serif, DejaVu Sans, Noto Serif | missing 0
+Serif emoji: Noto Serif | Noto Serif, Noto Color Emoji, Noto Serif, Noto Color Emoji, Noto Serif, Noto Color Emoji | missing 0
+Serif mixed: Noto Serif | Noto Serif, Noto Sans CJK KR, Noto Serif, DejaVu Sans, Noto Serif, DejaVu Sans, Noto Serif, Noto Color Emoji | missing 0
+DejaVu-Sans latin: DejaVu Sans | DejaVu Sans | missing 0
+DejaVu-Sans greek-cyrillic: DejaVu Sans | DejaVu Sans, DejaVu Sans | missing 0
+DejaVu-Sans hebrew: DejaVu Sans | DejaVu Sans | missing 0
+DejaVu-Sans arabic: DejaVu Sans | DejaVu Sans | missing 0
+DejaVu-Sans devanagari: DejaVu Sans | Noto Sans Devanagari, DejaVu Sans, Noto Sans Devanagari | missing 0
+DejaVu-Sans thai: DejaVu Sans | Noto Sans Thai | missing 0
+DejaVu-Sans han-kana: DejaVu Sans | Noto Sans CJK KR, Noto Sans CJK KR, Noto Sans CJK KR | missing 0
+DejaVu-Sans hangul: DejaVu Sans | Noto Sans CJK KR, DejaVu Sans, Noto Sans CJK KR | missing 0
+DejaVu-Sans combining: DejaVu Sans | DejaVu Sans | missing 0
+DejaVu-Sans symbols: DejaVu Sans | DejaVu Sans | missing 0
+DejaVu-Sans math: DejaVu Sans | DejaVu Sans | missing 0
+DejaVu-Sans emoji: DejaVu Sans | DejaVu Sans, Noto Color Emoji, DejaVu Sans, Noto Color Emoji, DejaVu Sans, Noto Color Emoji | missing 0
+DejaVu-Sans mixed: DejaVu Sans | DejaVu Sans, Noto Sans CJK KR, DejaVu Sans, DejaVu Sans, DejaVu Sans, Noto Color Emoji | missing 0
+Archivo latin: Archivo | Archivo | missing 0
+Archivo greek-cyrillic: Archivo | Noto Sans, Archivo, Noto Sans | missing 0
+Archivo hebrew: Archivo | DejaVu Sans, Archivo, DejaVu Sans | missing 0
+Archivo arabic: Archivo | DejaVu Sans, Archivo, DejaVu Sans | missing 0
+Archivo devanagari: Archivo | Noto Sans Devanagari, Archivo, Noto Sans Devanagari | missing 0
+Archivo thai: Archivo | Noto Sans Thai | missing 0
+Archivo han-kana: Archivo | Noto Sans CJK KR, Noto Sans CJK KR, Noto Sans CJK KR | missing 0
+Archivo hangul: Archivo | Noto Sans CJK KR, Archivo, Noto Sans CJK KR | missing 0
+Archivo combining: Archivo | Archivo | missing 0
+Archivo symbols: Archivo | DejaVu Sans, Archivo, DejaVu Sans, Archivo, DejaVu Sans, Archivo, DejaVu Sans, Archivo, DejaVu Sans, Archivo, DejaVu Sans, Archivo, DejaVu Sans, Archivo, DejaVu Sans | missing 0
+Archivo math: Archivo | Archivo, Noto Sans | missing 0
+Archivo emoji: Archivo | Archivo, Noto Color Emoji, Archivo, Noto Color Emoji, Archivo, Noto Color Emoji | missing 0
+Archivo mixed: Archivo | Archivo, Noto Sans CJK KR, Archivo, DejaVu Sans, Archivo, DejaVu Sans, Archivo, Noto Color Emoji | missing 0
+IBM-Plex-Mono latin: IBM Plex Mono | IBM Plex Mono | missing 0
+IBM-Plex-Mono greek-cyrillic: IBM Plex Mono | Noto Sans, IBM Plex Mono, IBM Plex Mono | missing 0
+IBM-Plex-Mono hebrew: IBM Plex Mono | DejaVu Sans, IBM Plex Mono, DejaVu Sans | missing 0
+IBM-Plex-Mono arabic: IBM Plex Mono | DejaVu Sans, IBM Plex Mono, DejaVu Sans | missing 0
+IBM-Plex-Mono devanagari: IBM Plex Mono | Noto Sans Devanagari, IBM Plex Mono, Noto Sans Devanagari | missing 0
+IBM-Plex-Mono thai: IBM Plex Mono | Noto Sans Thai | missing 0
+IBM-Plex-Mono han-kana: IBM Plex Mono | Noto Sans CJK KR, Noto Sans CJK KR, Noto Sans CJK KR | missing 0
+IBM-Plex-Mono hangul: IBM Plex Mono | Noto Sans CJK KR, IBM Plex Mono, Noto Sans CJK KR | missing 0
+IBM-Plex-Mono combining: IBM Plex Mono | IBM Plex Mono | missing 0
+IBM-Plex-Mono symbols: IBM Plex Mono | DejaVu Sans, IBM Plex Mono, DejaVu Sans, IBM Plex Mono, DejaVu Sans, IBM Plex Mono, DejaVu Sans, IBM Plex Mono, DejaVu Sans, IBM Plex Mono, DejaVu Sans, IBM Plex Mono, DejaVu Sans | missing 0
+IBM-Plex-Mono math: IBM Plex Mono | IBM Plex Mono, Noto Sans | missing 0
+IBM-Plex-Mono emoji: IBM Plex Mono | IBM Plex Mono, Noto Color Emoji, IBM Plex Mono, Noto Color Emoji, IBM Plex Mono, Noto Color Emoji | missing 0
+IBM-Plex-Mono mixed: IBM Plex Mono | IBM Plex Mono, Noto Sans CJK KR, IBM Plex Mono, DejaVu Sans, IBM Plex Mono, DejaVu Sans, IBM Plex Mono, Noto Color Emoji | missing 0

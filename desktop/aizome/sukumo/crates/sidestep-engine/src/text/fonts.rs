@@ -15,7 +15,10 @@
 //! takes some milliseconds, so [`prewarm`] starts it on a background thread
 //! as soon as a program first uses `NSApplication`, `NSColor`, `NSFont` or
 //! `NSParagraphStyle` (their class loaders call it); the first measurement
-//! waits for it only if it hasn't finished yet.
+//! waits for it only if it hasn't finished yet. What fontconfig gives for
+//! each generic family (`system-ui`, `monospace`, `serif`...) and for each
+//! script is asked for only when text first needs it, as each answer sorts
+//! every font the system has (Sukumo's copy of fontique, vendor/README.md).
 
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex, OnceLock, RwLock};
@@ -459,9 +462,16 @@ impl GlyphBoxes {
 /// system's fonts and loaded font files.
 pub struct Shared {
     fcx: Mutex<FontContext>,
-    system: Arc<str>,
-    mono: Arc<str>,
-    serif: Arc<str>,
+    /// The families `SIDESTEP_FONT` and `SIDESTEP_MONO_FONT` installed.
+    system_override: Option<Arc<str>>,
+    mono_override: Option<Arc<str>>,
+    /// The families behind the roles, found when each is first asked for:
+    /// finding one sorts every font the system has (fontconfig's
+    /// `system-ui`, `monospace`, `serif`), and most programs draw with
+    /// families they name.
+    system: OnceLock<Arc<str>>,
+    mono: OnceLock<Arc<str>>,
+    serif: OnceLock<Arc<str>>,
     /// Family names with spaces removed and lowercased, for PostScript
     /// names such as `DejaVuSans-Bold`; built on first use, and again after
     /// fonts are installed.
@@ -496,13 +506,14 @@ const SERIF: &[&str] = &["Noto Serif", "DejaVu Serif", "Liberation Serif", "Free
 
 impl Shared {
     fn open() -> Shared {
-        // fontique asks fontconfig for the generic families as it opens the
-        // collection, and panics if fontconfig has no fonts at all (or
-        // can't be loaded); the font directories are scanned instead then.
+        // If fontconfig can't be loaded or has no fonts, the collection has
+        // no system families (crates.io's fontique panics in the second
+        // case, caught here; Sukumo's copy in vendor/ doesn't), and the font
+        // directories are scanned instead.
         crate::system::load_fontconfig();
         let open = |system_fonts| Collection::new(CollectionOptions { shared: true, system_fonts });
         let mut collection = std::panic::catch_unwind(|| open(true)).unwrap_or_else(|_| open(false));
-        let mut source_cache = SourceCache::new_shared();
+        let source_cache = SourceCache::new_shared();
         if collection.family_names().next().is_none() {
             let home = std::env::var_os("HOME").map(std::path::PathBuf::from);
             let user = home.iter().flat_map(|h| [h.join(".local/share/fonts"), h.join(".fonts")]);
@@ -526,30 +537,13 @@ impl Shared {
         }
         let system_override = register_file(&mut collection, "SIDESTEP_FONT");
         let mono_override = register_file(&mut collection, "SIDESTEP_MONO_FONT");
-        let mut first = |generics: &[GenericFamily], fallback: &str| -> Arc<str> {
-            for &generic in generics {
-                let id = collection.generic_families(generic).next();
-                if let Some(name) = id.and_then(|id| collection.family_name(id)) {
-                    return name.into();
-                }
-            }
-            fallback.into()
-        };
-        let system = system_override
-            .unwrap_or_else(|| first(&[GenericFamily::SystemUi, GenericFamily::SansSerif], "sans-serif"));
-        let mono = mono_override.unwrap_or_else(|| first(&[GenericFamily::Monospace], "monospace"));
-        let serif = first(&[GenericFamily::Serif], "serif");
-        // Warm the source cache with the interface font, which almost
-        // every program draws with first.
-        let mut query = collection.query(&mut source_cache);
-        query.set_families([QueryFamily::Named(&system)]);
-        query.matches_with(|_| QueryStatus::Stop);
-        drop(query);
         Shared {
             fcx: Mutex::new(FontContext { collection, source_cache }),
-            system,
-            mono,
-            serif,
+            system_override,
+            mono_override,
+            system: OnceLock::new(),
+            mono: OnceLock::new(),
+            serif: OnceLock::new(),
             squashed: RwLock::new(None),
         }
     }
@@ -561,9 +555,29 @@ impl Shared {
 
     pub fn family_for(&self, design: Design) -> &Arc<str> {
         match design {
-            Design::Default | Design::Rounded => &self.system,
-            Design::Monospaced => &self.mono,
-            Design::Serif => &self.serif,
+            Design::Default | Design::Rounded => self.system.get_or_init(|| {
+                let mut fcx = self.fcx.lock().unwrap_or_else(|e| e.into_inner());
+                let system = self.system_override.clone().unwrap_or_else(|| {
+                    first(&mut fcx.collection, &[GenericFamily::SystemUi, GenericFamily::SansSerif], "sans-serif")
+                });
+                // Warm the source cache with the interface font, which a
+                // program that asks for it draws with first.
+                let FontContext { collection, source_cache } = &mut *fcx;
+                let mut query = collection.query(source_cache);
+                query.set_families([QueryFamily::Named(&system)]);
+                query.matches_with(|_| QueryStatus::Stop);
+                system
+            }),
+            Design::Monospaced => self.mono.get_or_init(|| {
+                let mut fcx = self.fcx.lock().unwrap_or_else(|e| e.into_inner());
+                self.mono_override
+                    .clone()
+                    .unwrap_or_else(|| first(&mut fcx.collection, &[GenericFamily::Monospace], "monospace"))
+            }),
+            Design::Serif => self.serif.get_or_init(|| {
+                let mut fcx = self.fcx.lock().unwrap_or_else(|e| e.into_inner());
+                first(&mut fcx.collection, &[GenericFamily::Serif], "serif")
+            }),
         }
     }
 
@@ -576,6 +590,18 @@ impl Shared {
         *self.squashed.write().unwrap_or_else(|e| e.into_inner()) = Some(map.clone());
         map
     }
+}
+
+/// The name of the first family of the first of `generics` that has one,
+/// or `fallback`.
+fn first(collection: &mut Collection, generics: &[GenericFamily], fallback: &str) -> Arc<str> {
+    for &generic in generics {
+        let id = collection.generic_families(generic).next();
+        if let Some(name) = id.and_then(|id| collection.family_name(id)) {
+            return name.into();
+        }
+    }
+    fallback.into()
 }
 
 /// Register the font file an environment variable names, returning its
@@ -1080,9 +1106,72 @@ pub fn face_count(bytes: &[u8]) -> u32 {
 /// text sees them. The families they are in; none if `bytes` isn't a font
 /// file.
 pub fn install(bytes: Vec<u8>) -> Vec<Arc<str>> {
+    install_blob(Blob::from(bytes))
+}
+
+/// [`install`] the font file at `path`, mapped into memory rather than
+/// read into it, as fontique maps the system's font files: its pages are
+/// the file's, shared with every program that maps it, and only those
+/// drawn from are read. The file must not be cut short or rewritten in
+/// place while the program runs, as the system's mustn't (removing or
+/// replacing it is fine). A file that can't be mapped (empty, not a
+/// regular file) is read.
+pub fn install_file(path: &std::path::Path) -> std::io::Result<Vec<Arc<str>>> {
+    let mut file = std::fs::File::open(path)?;
+    let blob = match Mapped::of(&file) {
+        Some(mapped) => Blob::new(Arc::new(mapped)),
+        None => {
+            let mut bytes = Vec::new();
+            std::io::Read::read_to_end(&mut file, &mut bytes)?;
+            Blob::from(bytes)
+        }
+    };
+    Ok(install_blob(blob))
+}
+
+/// A file mapped read-only, for as long as this lives.
+struct Mapped {
+    at: std::ptr::NonNull<u8>,
+    len: usize,
+}
+
+// SAFETY: the mapping is read-only and owned by this alone; it is only
+// read through shared slices, from any thread.
+unsafe impl Send for Mapped {}
+unsafe impl Sync for Mapped {}
+
+impl Mapped {
+    /// `file` mapped, if it's a regular file with something in it and
+    /// mapping it works.
+    fn of(file: &std::fs::File) -> Option<Mapped> {
+        use rustix::mm::{MapFlags, ProtFlags, mmap};
+        let meta = file.metadata().ok()?;
+        let len = usize::try_from(meta.len()).ok().filter(|&n| n > 0 && meta.is_file())?;
+        // SAFETY: a new read-only mapping of a whole file, at an address
+        // the kernel chooses; nothing else uses those addresses.
+        let at = unsafe { mmap(std::ptr::null_mut(), len, ProtFlags::READ, MapFlags::SHARED, file, 0) }.ok()?;
+        Some(Mapped { at: std::ptr::NonNull::new(at.cast())?, len })
+    }
+}
+
+impl AsRef<[u8]> for Mapped {
+    fn as_ref(&self) -> &[u8] {
+        // SAFETY: `len` bytes mapped readable at `at` until `drop`.
+        unsafe { std::slice::from_raw_parts(self.at.as_ptr(), self.len) }
+    }
+}
+
+impl Drop for Mapped {
+    fn drop(&mut self) {
+        // SAFETY: the mapping `of` made, which nothing borrows any more.
+        let _ = unsafe { rustix::mm::munmap(self.at.as_ptr().cast(), self.len) };
+    }
+}
+
+fn install_blob(blob: Blob<u8>) -> Vec<Arc<str>> {
     let shared = shared();
     let mut fcx = shared.fcx.lock().unwrap_or_else(|e| e.into_inner());
-    let families = fcx.collection.register_fonts(Blob::from(bytes), None);
+    let families = fcx.collection.register_fonts(blob, None);
     // Names such as `Family-Bold` find the new families too.
     *shared.squashed.write().unwrap_or_else(|e| e.into_inner()) = None;
     let mut names: Vec<Arc<str>> = Vec::new();

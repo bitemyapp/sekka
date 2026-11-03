@@ -12,6 +12,7 @@ use std::{
     os::unix::ffi::OsStrExt,
     path::Path,
     sync::Arc,
+    vec::Vec,
 };
 
 #[cfg(feature = "fontconfig-dlopen")]
@@ -40,7 +41,6 @@ use crate::{
     FallbackKey, FamilyId, FamilyInfo, FontInfo, FontStyle, FontWeight, FontWidth,
     FromFontconfig as _, GenericFamily, Script, ScriptExt,
     family_name::{FamilyName, FamilyNameMap},
-    generic::GenericFamilyMap,
     source::SourcePathMap,
 };
 
@@ -590,7 +590,6 @@ impl ScriptCharSetMap {
 #[derive(Default)]
 pub(crate) struct SystemFonts {
     pub(crate) name_map: Arc<FamilyNameMap>,
-    pub(crate) generic_families: Arc<GenericFamilyMap>,
     source_cache: SourcePathMap,
     family_map: HashMap<FamilyId, Option<FamilyInfo>>,
     config: Option<Config>,
@@ -671,53 +670,75 @@ impl SystemFonts {
             }
         }
 
-        // Populate the generic family map.
-        let mut generic_families = GenericFamilyMap::default();
-        for (generic_family, name) in GENERIC_FAMILY_NAMES.iter().copied() {
-            let mut pattern = Pattern::new().unwrap();
-            pattern.add_string(FC_FAMILY, name);
-            // TODO: do we need FcConfigSetDefaultSubstitute?
-
-            config.substitute(&mut pattern, FcMatchPattern);
-
-            // We enable the "trim" option here which ignores later fonts if
-            // they provide no new Unicode coverage.
-            let font_set = config.font_sort(&pattern, true).unwrap();
-
-            // There are a lot of duplicate font families in the substituted
-            // pattern. Keep track of which ones have already been added to the
-            // list.
-            let mut added_families = HashSet::new();
-
-            generic_families.append(
-                generic_family,
-                font_set.iter().filter_map(|font| {
-                    // Not sure if FcFontRenderPrepare performs any substitutions
-                    // relevant to fallback family name matching, but it's a good
-                    // idea to call it just in case.
-                    let font = config.font_render_prepare(&pattern, &font)?;
-                    // Generic families can have more than one name, but the only
-                    // one we care about is the first one.
-                    let name = font.get_string(FC_FAMILY, 0).ok()?;
-                    let family_name = name_map.get(name.as_ref())?;
-
-                    if !added_families.insert(family_name.id()) {
-                        return None;
-                    }
-
-                    Some(family_name.id())
-                }),
-            );
-        }
+        // The generic families (`serif`, `sans-serif`, ...) are found when
+        // each is first asked for (`generic_families`), not here: each is a
+        // sort of every font, and a program asks for one or two of the eight.
 
         Self {
             name_map: Arc::new(name_map),
-            generic_families: Arc::new(generic_families),
             source_cache: SourcePathMap::default(),
             family_map: HashMap::default(),
             config: Some(config),
             script_charsets: ScriptCharSetMap::default(),
         }
+    }
+
+    /// The families fontconfig substitutes for the generic family `family`,
+    /// best first, leaving out fonts that add no coverage: what `new` used to
+    /// find for all eight generic families, for one, when it is first asked
+    /// for. None if fontconfig has no fonts (its sort fails then) or no name
+    /// for `family`.
+    pub(crate) fn generic_families(&mut self, family: GenericFamily) -> Vec<FamilyId> {
+        let Some(config) = self.config.as_ref() else {
+            return Vec::new();
+        };
+        let Some(name) = GENERIC_FAMILY_NAMES
+            .iter()
+            .find(|(generic, _)| *generic == family)
+            .map(|(_, name)| *name)
+        else {
+            return Vec::new();
+        };
+        let name_map = &self.name_map;
+
+        let Some(mut pattern) = Pattern::new() else {
+            return Vec::new();
+        };
+        pattern.add_string(FC_FAMILY, name);
+        // TODO: do we need FcConfigSetDefaultSubstitute?
+
+        config.substitute(&mut pattern, FcMatchPattern);
+
+        // We enable the "trim" option here which ignores later fonts if
+        // they provide no new Unicode coverage.
+        let Ok(font_set) = config.font_sort(&pattern, true) else {
+            return Vec::new();
+        };
+
+        // There are a lot of duplicate font families in the substituted
+        // pattern. Keep track of which ones have already been added to the
+        // list.
+        let mut added_families = HashSet::new();
+
+        font_set
+            .iter()
+            .filter_map(|font| {
+                // Not sure if FcFontRenderPrepare performs any substitutions
+                // relevant to fallback family name matching, but it's a good
+                // idea to call it just in case.
+                let font = config.font_render_prepare(&pattern, &font)?;
+                // Generic families can have more than one name, but the only
+                // one we care about is the first one.
+                let name = font.get_string(FC_FAMILY, 0).ok()?;
+                let family_name = name_map.get(name.as_ref())?;
+
+                if !added_families.insert(family_name.id()) {
+                    return None;
+                }
+
+                Some(family_name.id())
+            })
+            .collect()
     }
 
     pub(crate) fn family(&mut self, id: FamilyId) -> Option<FamilyInfo> {

@@ -17,15 +17,29 @@ use super::{
 
 #[derive(Clone, Default)]
 pub(super) struct QueryState {
-    families: Vec<CachedFamily>,
+    families: Vec<Member>,
     fallback_families: Vec<CachedFamily>,
+    /// The fallback key whose families aren't in `fallback_families` yet:
+    /// they are found when matching first gets past `families`.
+    pending_fallbacks: Option<FallbackKey>,
 }
 
 impl QueryState {
     fn clear(&mut self) {
         self.families.clear();
         self.fallback_families.clear();
+        self.pending_fallbacks = None;
     }
+}
+
+/// One of the families a query matches against, in order: a family, or a
+/// generic family that its members replace when matching first reaches it
+/// (finding a generic family's members can mean sorting all of the
+/// system's fonts, which a query that stops at an earlier family needn't).
+#[derive(Clone)]
+enum Member {
+    Family(CachedFamily),
+    Generic(GenericFamily),
 }
 
 /// State for font selection.
@@ -63,16 +77,14 @@ impl<'a> Query<'a> {
             match family {
                 QueryFamily::Named(name) => {
                     if let Some(id) = self.collection.family_id(name) {
-                        self.state.families.push(CachedFamily::new(id));
+                        self.state.families.push(Member::Family(CachedFamily::new(id)));
                     }
                 }
                 QueryFamily::Id(id) => {
-                    self.state.families.push(CachedFamily::new(id));
+                    self.state.families.push(Member::Family(CachedFamily::new(id)));
                 }
                 QueryFamily::Generic(generic) => {
-                    for id in self.collection.generic_families(generic) {
-                        self.state.families.push(CachedFamily::new(id));
-                    }
+                    self.state.families.push(Member::Generic(generic));
                 }
             }
         }
@@ -81,8 +93,10 @@ impl<'a> Query<'a> {
     /// Sets the primary attributes to match against.
     pub fn set_attributes(&mut self, attributes: Attributes) {
         if self.attributes != attributes {
-            for family in &mut self.state.families {
-                family.clear_fonts();
+            for member in &mut self.state.families {
+                if let Member::Family(family) = member {
+                    family.clear_fonts();
+                }
             }
             for family in &mut self.state.fallback_families {
                 family.clear_fonts();
@@ -96,19 +110,8 @@ impl<'a> Query<'a> {
         let key = key.into();
         if self.fallbacks != Some(key) {
             self.state.fallback_families.clear();
-            self.state.fallback_families.extend(
-                self.collection
-                    .fallback_families(key)
-                    .map(CachedFamily::new),
-            );
-            // HACK: always add a Han font to the fallback list to capture
-            // punctuation in the common script
-            // See <https://github.com/linebender/parley/issues/597>
-            self.state.fallback_families.extend(
-                self.collection
-                    .fallback_families(FallbackKey::new(Script::from_bytes(*b"Hani"), None))
-                    .map(CachedFamily::new),
-            );
+            // Found when matching first gets to them (`matches_with`).
+            self.state.pending_fallbacks = Some(key);
             self.fallbacks = Some(key);
         }
     }
@@ -119,12 +122,48 @@ impl<'a> Query<'a> {
     /// Return [`QueryStatus::Stop`] to end iterating over the matching
     /// fonts or [`QueryStatus::Continue`] to continue iterating.
     pub fn matches_with(&mut self, mut f: impl FnMut(&QueryFont) -> QueryStatus) {
-        for family in self
-            .state
-            .families
-            .iter_mut()
-            .chain(self.state.fallback_families.iter_mut())
-        {
+        // The families, then the fallback families, as they were set; a
+        // generic family's members, and the fallback families, are found
+        // when matching first gets to them.
+        let mut i = 0;
+        loop {
+            let family = if let Some(member) = self.state.families.get(i) {
+                if let Member::Generic(generic) = *member {
+                    let members: Vec<Member> = self
+                        .collection
+                        .generic_families(generic)
+                        .map(|id| Member::Family(CachedFamily::new(id)))
+                        .collect();
+                    self.state.families.splice(i..=i, members);
+                    continue;
+                }
+                let Some(Member::Family(family)) = self.state.families.get_mut(i) else {
+                    unreachable!("a generic family was replaced above");
+                };
+                family
+            } else {
+                let j = i - self.state.families.len();
+                if let Some(key) = self.state.pending_fallbacks.take() {
+                    self.state.fallback_families.extend(
+                        self.collection
+                            .fallback_families(key)
+                            .map(CachedFamily::new),
+                    );
+                    // HACK: always add a Han font to the fallback list to capture
+                    // punctuation in the common script
+                    // See <https://github.com/linebender/parley/issues/597>
+                    self.state.fallback_families.extend(
+                        self.collection
+                            .fallback_families(FallbackKey::new(Script::from_bytes(*b"Hani"), None))
+                            .map(CachedFamily::new),
+                    );
+                }
+                let Some(family) = self.state.fallback_families.get_mut(j) else {
+                    return;
+                };
+                family
+            };
+            i += 1;
             match &mut family.family {
                 Entry::Error => continue,
                 Entry::Ok(..) => {}

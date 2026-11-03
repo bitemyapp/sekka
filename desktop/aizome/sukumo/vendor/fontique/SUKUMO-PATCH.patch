@@ -1,0 +1,450 @@
+Sukumo's change to fontique 0.11.1 as crates.io publishes it (../README.md):
+each generic family found when first asked for, and a query's generic
+families and script fallbacks found when matching reaches them.
+Apply with: patch -p1 -d fontique < fontique/SUKUMO-PATCH.patch
+
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -176,6 +176,10 @@
+ wildcard_dependencies = "warn"
+ 
+ [lints.rust]
++# Sukumo: parlance 0.1.1 deprecates `Script::from_str_unchecked`, which this
++# release calls 161 times. Cargo caps a crates.io crate's lints but not a
++# path crate's, so the copy says what the registry build shows: nothing.
++deprecated = "allow"
+ elided_lifetimes_in_paths = "warn"
+ keyword_idents_2024 = "forbid"
+ missing_debug_implementations = "warn"
+--- a/src/backend/android.rs
++++ b/src/backend/android.rs
+@@ -190,6 +190,12 @@
+         }
+     }
+ 
++    /// The families of the generic family `family`, found as the
++    /// collection opened.
++    pub(crate) fn generic_families(&mut self, family: GenericFamily) -> Vec<FamilyId> {
++        self.generic_families.get(family).to_vec()
++    }
++
+     pub(crate) fn family(&self, id: FamilyId) -> Option<FamilyInfo> {
+         self.family_map.get(&id).cloned()
+     }
+--- a/src/backend/coretext.rs
++++ b/src/backend/coretext.rs
+@@ -61,6 +61,12 @@
+         }
+     }
+ 
++    /// The families of the generic family `family`, found as the
++    /// collection opened.
++    pub(crate) fn generic_families(&mut self, family: GenericFamily) -> Vec<FamilyId> {
++        self.generic_families.get(family).to_vec()
++    }
++
+     pub(crate) fn family(&mut self, id: FamilyId) -> Option<FamilyInfo> {
+         self.family_map.get(&id).cloned()
+     }
+--- a/src/backend/dwrite.rs
++++ b/src/backend/dwrite.rs
+@@ -83,6 +83,12 @@
+         }
+     }
+ 
++    /// The families of the generic family `family`, found as the
++    /// collection opened.
++    pub(crate) fn generic_families(&mut self, family: GenericFamily) -> Vec<FamilyId> {
++        self.generic_families.get(family).to_vec()
++    }
++
+     pub(crate) fn family(&mut self, id: FamilyId) -> Option<FamilyInfo> {
+         match self.family_map.get(&id) {
+             Some(Some(family)) => return Some(family.clone()),
+--- a/src/backend/fontconfig.rs
++++ b/src/backend/fontconfig.rs
+@@ -12,6 +12,7 @@
+     os::unix::ffi::OsStrExt,
+     path::Path,
+     sync::Arc,
++    vec::Vec,
+ };
+ 
+ #[cfg(feature = "fontconfig-dlopen")]
+@@ -40,7 +41,6 @@
+     FallbackKey, FamilyId, FamilyInfo, FontInfo, FontStyle, FontWeight, FontWidth,
+     FromFontconfig as _, GenericFamily, Script, ScriptExt,
+     family_name::{FamilyName, FamilyNameMap},
+-    generic::GenericFamilyMap,
+     source::SourcePathMap,
+ };
+ 
+@@ -590,7 +590,6 @@
+ #[derive(Default)]
+ pub(crate) struct SystemFonts {
+     pub(crate) name_map: Arc<FamilyNameMap>,
+-    pub(crate) generic_families: Arc<GenericFamilyMap>,
+     source_cache: SourcePathMap,
+     family_map: HashMap<FamilyId, Option<FamilyInfo>>,
+     config: Option<Config>,
+@@ -671,48 +670,12 @@
+             }
+         }
+ 
+-        // Populate the generic family map.
+-        let mut generic_families = GenericFamilyMap::default();
+-        for (generic_family, name) in GENERIC_FAMILY_NAMES.iter().copied() {
+-            let mut pattern = Pattern::new().unwrap();
+-            pattern.add_string(FC_FAMILY, name);
+-            // TODO: do we need FcConfigSetDefaultSubstitute?
+-
+-            config.substitute(&mut pattern, FcMatchPattern);
+-
+-            // We enable the "trim" option here which ignores later fonts if
+-            // they provide no new Unicode coverage.
+-            let font_set = config.font_sort(&pattern, true).unwrap();
+-
+-            // There are a lot of duplicate font families in the substituted
+-            // pattern. Keep track of which ones have already been added to the
+-            // list.
+-            let mut added_families = HashSet::new();
+-
+-            generic_families.append(
+-                generic_family,
+-                font_set.iter().filter_map(|font| {
+-                    // Not sure if FcFontRenderPrepare performs any substitutions
+-                    // relevant to fallback family name matching, but it's a good
+-                    // idea to call it just in case.
+-                    let font = config.font_render_prepare(&pattern, &font)?;
+-                    // Generic families can have more than one name, but the only
+-                    // one we care about is the first one.
+-                    let name = font.get_string(FC_FAMILY, 0).ok()?;
+-                    let family_name = name_map.get(name.as_ref())?;
+-
+-                    if !added_families.insert(family_name.id()) {
+-                        return None;
+-                    }
+-
+-                    Some(family_name.id())
+-                }),
+-            );
+-        }
++        // The generic families (`serif`, `sans-serif`, ...) are found when
++        // each is first asked for (`generic_families`), not here: each is a
++        // sort of every font, and a program asks for one or two of the eight.
+ 
+         Self {
+             name_map: Arc::new(name_map),
+-            generic_families: Arc::new(generic_families),
+             source_cache: SourcePathMap::default(),
+             family_map: HashMap::default(),
+             config: Some(config),
+@@ -720,6 +683,64 @@
+         }
+     }
+ 
++    /// The families fontconfig substitutes for the generic family `family`,
++    /// best first, leaving out fonts that add no coverage: what `new` used to
++    /// find for all eight generic families, for one, when it is first asked
++    /// for. None if fontconfig has no fonts (its sort fails then) or no name
++    /// for `family`.
++    pub(crate) fn generic_families(&mut self, family: GenericFamily) -> Vec<FamilyId> {
++        let Some(config) = self.config.as_ref() else {
++            return Vec::new();
++        };
++        let Some(name) = GENERIC_FAMILY_NAMES
++            .iter()
++            .find(|(generic, _)| *generic == family)
++            .map(|(_, name)| *name)
++        else {
++            return Vec::new();
++        };
++        let name_map = &self.name_map;
++
++        let Some(mut pattern) = Pattern::new() else {
++            return Vec::new();
++        };
++        pattern.add_string(FC_FAMILY, name);
++        // TODO: do we need FcConfigSetDefaultSubstitute?
++
++        config.substitute(&mut pattern, FcMatchPattern);
++
++        // We enable the "trim" option here which ignores later fonts if
++        // they provide no new Unicode coverage.
++        let Ok(font_set) = config.font_sort(&pattern, true) else {
++            return Vec::new();
++        };
++
++        // There are a lot of duplicate font families in the substituted
++        // pattern. Keep track of which ones have already been added to the
++        // list.
++        let mut added_families = HashSet::new();
++
++        font_set
++            .iter()
++            .filter_map(|font| {
++                // Not sure if FcFontRenderPrepare performs any substitutions
++                // relevant to fallback family name matching, but it's a good
++                // idea to call it just in case.
++                let font = config.font_render_prepare(&pattern, &font)?;
++                // Generic families can have more than one name, but the only
++                // one we care about is the first one.
++                let name = font.get_string(FC_FAMILY, 0).ok()?;
++                let family_name = name_map.get(name.as_ref())?;
++
++                if !added_families.insert(family_name.id()) {
++                    return None;
++                }
++
++                Some(family_name.id())
++            })
++            .collect()
++    }
++
+     pub(crate) fn family(&mut self, id: FamilyId) -> Option<FamilyInfo> {
+         match self.family_map.get(&id) {
+             Some(Some(family)) => return Some(family.clone()),
+--- a/src/backend/mod.rs
++++ b/src/backend/mod.rs
+@@ -47,14 +47,15 @@
+ ))]
+ mod system {
+     #[cfg(feature = "system")]
+-    use super::{FallbackKey, FamilyId, FamilyInfo};
+-    use super::{FamilyNameMap, GenericFamilyMap};
++    use super::{FallbackKey, FamilyId, FamilyInfo, GenericFamily};
++    use super::FamilyNameMap;
+     use alloc::sync::Arc;
++    #[cfg(feature = "system")]
++    use alloc::vec::Vec;
+ 
+     #[derive(Default)]
+     pub(crate) struct SystemFonts {
+         pub(crate) name_map: Arc<FamilyNameMap>,
+-        pub(crate) generic_families: Arc<GenericFamilyMap>,
+     }
+ 
+     impl SystemFonts {
+@@ -68,6 +69,11 @@
+         }
+ 
+         #[cfg(feature = "system")]
++        pub(crate) fn generic_families(&mut self, _family: GenericFamily) -> Vec<FamilyId> {
++            Vec::new()
++        }
++
++        #[cfg(feature = "system")]
+         pub(crate) fn fallback(&mut self, _key: impl Into<FallbackKey>) -> Option<FamilyId> {
+             None
+         }
+--- a/src/collection/mod.rs
++++ b/src/collection/mod.rs
+@@ -29,6 +29,8 @@
+ use std::path::Path;
+ #[cfg(feature = "std")]
+ use std::sync::{Mutex, atomic::Ordering};
++#[cfg(feature = "system")]
++use std::sync::OnceLock;
+ 
+ type FamilyMap = HashMap<FamilyId, Option<FamilyInfo>>;
+ 
+@@ -357,7 +359,7 @@
+             system: self
+                 .system
+                 .as_ref()
+-                .map(|sys| sys.generic_families.get(family).iter().copied()),
++                .map(|sys| sys.generic_families(family).iter().copied()),
+         }
+     }
+ 
+@@ -649,21 +651,42 @@
+     #[cfg(feature = "system")]
+     fonts: Arc<Mutex<SystemFonts>>,
+     family_names: Arc<FamilyNameMap>,
+-    generic_families: Arc<GenericFamilyMap>,
++    /// Each generic family's members, asked of the system the first time
++    /// the generic family is asked for (fontconfig sorts every font for
++    /// each), and shared by every clone of the collection.
++    #[cfg(feature = "system")]
++    generic_families: Arc<[OnceLock<Vec<FamilyId>>; GENERIC_FAMILIES]>,
+ }
+ 
++#[cfg(feature = "system")]
++const GENERIC_FAMILIES: usize = GenericFamily::MAX_VALUE as usize + 1;
++
+ impl System {
+     fn new() -> Self {
+         let fonts = SystemFonts::new();
+         let family_names = fonts.name_map.clone();
+-        let generic_families = fonts.generic_families.clone();
+         #[cfg(feature = "system")]
+         let fonts = Arc::new(Mutex::new(fonts));
+         Self {
+             #[cfg(feature = "system")]
+             fonts,
+             family_names,
+-            generic_families,
++            #[cfg(feature = "system")]
++            generic_families: Arc::new([const { OnceLock::new() }; GENERIC_FAMILIES]),
++        }
++    }
++
++    /// The system's families for the generic family `family`, best first.
++    fn generic_families(&self, family: GenericFamily) -> &[FamilyId] {
++        #[cfg(feature = "system")]
++        {
++            self.generic_families[family as usize]
++                .get_or_init(|| self.fonts.lock().unwrap().generic_families(family))
++        }
++        #[cfg(not(feature = "system"))]
++        {
++            let _ = family;
++            &[]
+         }
+     }
+ }
+--- a/src/collection/query.rs
++++ b/src/collection/query.rs
+@@ -17,17 +17,31 @@
+ 
+ #[derive(Clone, Default)]
+ pub(super) struct QueryState {
+-    families: Vec<CachedFamily>,
++    families: Vec<Member>,
+     fallback_families: Vec<CachedFamily>,
++    /// The fallback key whose families aren't in `fallback_families` yet:
++    /// they are found when matching first gets past `families`.
++    pending_fallbacks: Option<FallbackKey>,
+ }
+ 
+ impl QueryState {
+     fn clear(&mut self) {
+         self.families.clear();
+         self.fallback_families.clear();
++        self.pending_fallbacks = None;
+     }
+ }
+ 
++/// One of the families a query matches against, in order: a family, or a
++/// generic family that its members replace when matching first reaches it
++/// (finding a generic family's members can mean sorting all of the
++/// system's fonts, which a query that stops at an earlier family needn't).
++#[derive(Clone)]
++enum Member {
++    Family(CachedFamily),
++    Generic(GenericFamily),
++}
++
+ /// State for font selection.
+ ///
+ /// Instances of this can be obtained from [`Collection::query`].
+@@ -63,16 +77,14 @@
+             match family {
+                 QueryFamily::Named(name) => {
+                     if let Some(id) = self.collection.family_id(name) {
+-                        self.state.families.push(CachedFamily::new(id));
++                        self.state.families.push(Member::Family(CachedFamily::new(id)));
+                     }
+                 }
+                 QueryFamily::Id(id) => {
+-                    self.state.families.push(CachedFamily::new(id));
++                    self.state.families.push(Member::Family(CachedFamily::new(id)));
+                 }
+                 QueryFamily::Generic(generic) => {
+-                    for id in self.collection.generic_families(generic) {
+-                        self.state.families.push(CachedFamily::new(id));
+-                    }
++                    self.state.families.push(Member::Generic(generic));
+                 }
+             }
+         }
+@@ -81,8 +93,10 @@
+     /// Sets the primary attributes to match against.
+     pub fn set_attributes(&mut self, attributes: Attributes) {
+         if self.attributes != attributes {
+-            for family in &mut self.state.families {
+-                family.clear_fonts();
++            for member in &mut self.state.families {
++                if let Member::Family(family) = member {
++                    family.clear_fonts();
++                }
+             }
+             for family in &mut self.state.fallback_families {
+                 family.clear_fonts();
+@@ -96,19 +110,8 @@
+         let key = key.into();
+         if self.fallbacks != Some(key) {
+             self.state.fallback_families.clear();
+-            self.state.fallback_families.extend(
+-                self.collection
+-                    .fallback_families(key)
+-                    .map(CachedFamily::new),
+-            );
+-            // HACK: always add a Han font to the fallback list to capture
+-            // punctuation in the common script
+-            // See <https://github.com/linebender/parley/issues/597>
+-            self.state.fallback_families.extend(
+-                self.collection
+-                    .fallback_families(FallbackKey::new(Script::from_bytes(*b"Hani"), None))
+-                    .map(CachedFamily::new),
+-            );
++            // Found when matching first gets to them (`matches_with`).
++            self.state.pending_fallbacks = Some(key);
+             self.fallbacks = Some(key);
+         }
+     }
+@@ -119,12 +122,48 @@
+     /// Return [`QueryStatus::Stop`] to end iterating over the matching
+     /// fonts or [`QueryStatus::Continue`] to continue iterating.
+     pub fn matches_with(&mut self, mut f: impl FnMut(&QueryFont) -> QueryStatus) {
+-        for family in self
+-            .state
+-            .families
+-            .iter_mut()
+-            .chain(self.state.fallback_families.iter_mut())
+-        {
++        // The families, then the fallback families, as they were set; a
++        // generic family's members, and the fallback families, are found
++        // when matching first gets to them.
++        let mut i = 0;
++        loop {
++            let family = if let Some(member) = self.state.families.get(i) {
++                if let Member::Generic(generic) = *member {
++                    let members: Vec<Member> = self
++                        .collection
++                        .generic_families(generic)
++                        .map(|id| Member::Family(CachedFamily::new(id)))
++                        .collect();
++                    self.state.families.splice(i..=i, members);
++                    continue;
++                }
++                let Some(Member::Family(family)) = self.state.families.get_mut(i) else {
++                    unreachable!("a generic family was replaced above");
++                };
++                family
++            } else {
++                let j = i - self.state.families.len();
++                if let Some(key) = self.state.pending_fallbacks.take() {
++                    self.state.fallback_families.extend(
++                        self.collection
++                            .fallback_families(key)
++                            .map(CachedFamily::new),
++                    );
++                    // HACK: always add a Han font to the fallback list to capture
++                    // punctuation in the common script
++                    // See <https://github.com/linebender/parley/issues/597>
++                    self.state.fallback_families.extend(
++                        self.collection
++                            .fallback_families(FallbackKey::new(Script::from_bytes(*b"Hani"), None))
++                            .map(CachedFamily::new),
++                    );
++                }
++                let Some(family) = self.state.fallback_families.get_mut(j) else {
++                    return;
++                };
++                family
++            };
++            i += 1;
+             match &mut family.family {
+                 Entry::Error => continue,
+                 Entry::Ok(..) => {}

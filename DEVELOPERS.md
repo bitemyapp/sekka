@@ -1640,6 +1640,23 @@ fails if they skip. It replaces the Linux and Wayland jobs of Sidestep's CI
 for this code. The frame and image budgets only measure, and run by hand
 under `desktop/aizome/sukumo/scripts/headless-wayland`.
 
+Sukumo carries fontique, which finds fonts through fontconfig, with one
+change in `desktop/aizome/sukumo/vendor/fontique`
+([its README](desktop/aizome/sukumo/vendor/README.md)): fontconfig's generic
+families (`sans-serif`, `monospace`, `emoji`...) and each script's fallback
+are found when text first needs them, not all as the collection opens. Each
+is a sort of every installed font, and opening them all took most of a kit
+app's start. Sukumo's, Aizome's and Genkan's window's workspaces patch it in,
+and their package sources include the directory. Uta builds the kit with
+crates.io's fontique, which gives the same faces and starts slower. The
+engine's `fallback_faces_are_pinned` test compares the face that draws
+fixture text in twelve scripts and kinds with
+`desktop/aizome/sukumo/fixtures/fallback-pins.txt`, made on the check's fonts
+with no locale set, and skips on other fonts. To compare two builds on any
+fonts, run it in each with `SUKUMO_FALLBACK_PINS=FILE` (and
+`SUKUMO_FALLBACK_GLYPHS=1` for every glyph's id and position) and diff the
+files.
+
 Sidestep stays a separate product for objc2 programs. It is not kept in
 step with Sukumo. To bring a Sidestep change across, apply it with
 `git apply --directory=desktop/aizome/sukumo`; the crates' paths are the

@@ -14,6 +14,7 @@ let
       (root + "/Cargo.toml")
       (root + "/Cargo.lock")
       (root + "/crates")
+      (root + "/vendor")
       (root + "/fixtures")
       (root + "/scripts")
     ];

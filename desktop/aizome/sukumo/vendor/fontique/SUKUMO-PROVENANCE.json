@@ -34,5 +34,6 @@
     "src/script.rs": "f6d80352160e2e885ad02fca4f58ca1204510fa4188c6d56a8f4de0e521adecd",
     "src/source.rs": "8a7a741b9d737ba7617d01c208a015ec730efb1f0158b896153e52c43ffe8d03",
     "src/source_cache.rs": "68467359af10663298af6695df3cf84bd3f9c90af5b7b864b755c81f62fe7d54"
-  }
+  },
+  "change": "SUKUMO-PATCH.patch: each generic family found when first asked for; a query expands generic families and finds script fallbacks when matching reaches them; a failed generic sort gives no members rather than panicking; the deprecated lint allowed (../README.md)"
 }

@@ -29,6 +29,8 @@ use read_fonts::types::NameId;
 use std::path::Path;
 #[cfg(feature = "std")]
 use std::sync::{Mutex, atomic::Ordering};
+#[cfg(feature = "system")]
+use std::sync::OnceLock;
 
 type FamilyMap = HashMap<FamilyId, Option<FamilyInfo>>;
 
@@ -357,7 +359,7 @@ impl Inner {
             system: self
                 .system
                 .as_ref()
-                .map(|sys| sys.generic_families.get(family).iter().copied()),
+                .map(|sys| sys.generic_families(family).iter().copied()),
         }
     }
 
@@ -649,21 +651,42 @@ struct System {
     #[cfg(feature = "system")]
     fonts: Arc<Mutex<SystemFonts>>,
     family_names: Arc<FamilyNameMap>,
-    generic_families: Arc<GenericFamilyMap>,
+    /// Each generic family's members, asked of the system the first time
+    /// the generic family is asked for (fontconfig sorts every font for
+    /// each), and shared by every clone of the collection.
+    #[cfg(feature = "system")]
+    generic_families: Arc<[OnceLock<Vec<FamilyId>>; GENERIC_FAMILIES]>,
 }
+
+#[cfg(feature = "system")]
+const GENERIC_FAMILIES: usize = GenericFamily::MAX_VALUE as usize + 1;
 
 impl System {
     fn new() -> Self {
         let fonts = SystemFonts::new();
         let family_names = fonts.name_map.clone();
-        let generic_families = fonts.generic_families.clone();
         #[cfg(feature = "system")]
         let fonts = Arc::new(Mutex::new(fonts));
         Self {
             #[cfg(feature = "system")]
             fonts,
             family_names,
-            generic_families,
+            #[cfg(feature = "system")]
+            generic_families: Arc::new([const { OnceLock::new() }; GENERIC_FAMILIES]),
+        }
+    }
+
+    /// The system's families for the generic family `family`, best first.
+    fn generic_families(&self, family: GenericFamily) -> &[FamilyId] {
+        #[cfg(feature = "system")]
+        {
+            self.generic_families[family as usize]
+                .get_or_init(|| self.fonts.lock().unwrap().generic_families(family))
+        }
+        #[cfg(not(feature = "system"))]
+        {
+            let _ = family;
+            &[]
         }
     }
 }

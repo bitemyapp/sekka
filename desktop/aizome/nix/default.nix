@@ -54,9 +54,10 @@ let
       ../etc
       ../scripts
       # Sukumo, the toolkit: its workspace manifest, for what its crates
-      # inherit, and the crates.
+      # inherit, the crates, and the crates.io crate it patches.
       ../sukumo/Cargo.toml
       ../sukumo/crates
+      ../sukumo/vendor
       (lib.fileset.maybeMissing ../apps)
       (lib.fileset.maybeMissing ../session)
     ];

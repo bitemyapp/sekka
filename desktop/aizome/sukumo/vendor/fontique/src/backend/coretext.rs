@@ -61,6 +61,12 @@ impl SystemFonts {
         }
     }
 
+    /// The families of the generic family `family`, found as the
+    /// collection opened.
+    pub(crate) fn generic_families(&mut self, family: GenericFamily) -> Vec<FamilyId> {
+        self.generic_families.get(family).to_vec()
+    }
+
     pub(crate) fn family(&mut self, id: FamilyId) -> Option<FamilyInfo> {
         self.family_map.get(&id).cloned()
     }
