@@ -143,8 +143,29 @@ Candidate checks, run locally through the root flake:
   Rust 1.99 diagnostics. No unrelated source was changed to silence them.
 
 This is component validation, not a VM, installed-system or physical-display
-qualification. The separate clipboard-routing and narrow-tab-counter concerns
-on PR #250 remain open.
+qualification. These latency measurements precede the clipboard-routing and
+narrow-tab-counter follow-up fixes in PR #250.
+
+## Follow-up review fixes
+
+Copy/Paste menu actions now use the toolkit's editing roles, so the focused
+query field handles them before the terminal action. Native tests cover the
+default and customized shortcuts, copying query text, and returning paste to
+the PTY after closing the palette. A real shell acknowledges the terminal
+paste; its output confirms that the query text was not sent to it.
+
+Hidden-tab counters now occupy bounded regions at the strip's ends. A long
+active tab shrinks to fit between them, and a lone tab uses the whole strip.
+Native tests exercise 1, 3, and 20 tabs at the 320-pixel minimum window width,
+first/middle/last selections, actual tab clicks, and intermediate scroll
+positions. Both new regression tests failed before their fixes.
+
+The follow-up library and native suites passed (65 and 49 tests respectively;
+the same 11 diagnostic/helper fixtures remain ignored), as did the two cursor
+and five pixel-scroll tests: 121 passing tests in total. Formatting and Clippy
+passed with the same allowances listed above. Native offscreen renders at
+320 × 400 were also inspected for the single-tab and 20-tab cases. The earlier
+timing results apply to the candidate revision named above, not these later fixes.
 
 ## Evidence
 

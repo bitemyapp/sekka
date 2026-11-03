@@ -1,8 +1,8 @@
 //! The tab bar's tabs. While they fit they are as wide as their titles, up to
 //! 240pt. When they don't, the others shrink, the widest first, while the shown
-//! tab keeps its width, down to a floor of a few words. Past that the strip
-//! scrolls sideways under the wheel. It keeps the shown tab in sight and counts
-//! the tabs out of sight at each end, the count amber when one of them rang.
+//! tab keeps its width when space permits, down to a floor of a few words.
+//! Past that the strip scrolls sideways under the wheel. It keeps the shown tab
+//! in sight and counts the tabs out of sight at each end, amber when one rang.
 //! A click on a count scrolls that way. The bar's buttons sit beside the
 //! strip, so no number of tabs moves them. Tabs not shown also leave off a
 //! part of the title most tabs share ("… | sekka"), since it doesn't tell
@@ -122,8 +122,7 @@ struct Count {
     tabs: usize,
     /// One of them rang.
     rang: bool,
-    /// How far from its end the count reaches: over the tabs it would cut,
-    /// to the first whole one.
+    /// Reserved counter width; never expands over the tabs between the ends.
     reach: f64,
 }
 
@@ -180,12 +179,27 @@ impl Widget for TabStrip {
         let shown = self.shown.min(n.saturating_sub(1));
         let mut widths: Vec<f64> = natural.iter().map(|size| size.width).collect();
         let view = if bc.max.width.is_finite() { bc.max.width } else { widths.iter().sum::<f64>() + gaps };
-        if widths.iter().sum::<f64>() + gaps > view && n > 1 {
-            let others = widths.iter().enumerate().filter(|(i, _)| *i != shown).map(|(_, width)| *width).collect();
-            let most = share(others, view - widths[shown] - gaps).max(FLOOR);
-            for (i, width) in widths.iter_mut().enumerate() {
-                if i != shown && *width > most {
-                    *width = most.floor();
+        // Even below the normal window minimum, leave tab content between
+        // the two counters rather than letting their hit regions overlap.
+        let counter = COUNT.min(view / 3.0);
+        if widths.iter().sum::<f64>() + gaps > view {
+            if n > 1 {
+                let others = widths.iter().enumerate().filter(|(i, _)| *i != shown).map(|(_, width)| *width).collect();
+                let most = share(others, view - widths[shown] - gaps).max(FLOOR);
+                for (i, width) in widths.iter_mut().enumerate() {
+                    if i != shown {
+                        *width = width.min(most.floor());
+                    }
+                }
+            }
+            // A long active tab must fit between the counters. A lone tab
+            // can use the whole strip and never needs a hidden-tab counter.
+            if let Some(width) = widths.get_mut(shown) {
+                let room = if n > 1 { view - 2.0 * counter } else { view };
+                *width = width.min(room);
+            }
+            for (i, width) in widths.iter().enumerate() {
+                if *width != natural[i].width {
                     cx.layout_child(i, Constraints::tight(Size::new(*width, natural[i].height)));
                 }
             }
@@ -208,7 +222,7 @@ impl Widget for TabStrip {
             && let Some(&start) = starts.get(shown)
         {
             // Clear of the counts at the ends.
-            let margin = if most > 0.0 { COUNT } else { 0.0 };
+            let margin = if most > 0.0 { counter } else { 0.0 };
             let end = start + widths[shown];
             if start - margin < st.offset {
                 st.offset = start - margin;
@@ -221,20 +235,18 @@ impl Widget for TabStrip {
         st.content = content;
         st.width = view;
         let offset = st.offset;
-        // Scrolled from an end, the strip counts the tabs before the first
-        // whole one clear of the count there (or after the last).
+        // Count tabs partly or wholly hidden at each end, without covering
+        // their remaining visible portions between the fixed-width counters.
         let mut before = Count::default();
         if offset > 0.5 {
-            let first = starts.iter().position(|start| start - offset >= COUNT).unwrap_or(n);
-            let reach = starts.get(first).map_or(view, |start| start - offset - GAP / 2.0);
-            before = Count { tabs: first, rang: self.bells.iter().take(first).any(|rang| *rang), reach };
+            let first = starts.iter().position(|start| start - offset >= counter).unwrap_or(n);
+            before = Count { tabs: first, rang: self.bells.iter().take(first).any(|rang| *rang), reach: counter };
         }
         let mut after = Count::default();
         if offset < most - 0.5 {
-            let last = (0..n).rev().find(|&i| starts[i] + widths[i] - offset <= view - COUNT);
+            let last = (0..n).rev().find(|&i| starts[i] + widths[i] - offset <= view - counter);
             let from = last.map_or(0, |i| i + 1);
-            let reach = last.map_or(view, |i| view - (starts[i] + widths[i] - offset) - GAP / 2.0);
-            after = Count { tabs: n - from, rang: self.bells.iter().skip(from).any(|rang| *rang), reach };
+            after = Count { tabs: n - from, rang: self.bells.iter().skip(from).any(|rang| *rang), reach: counter };
         }
         if (before, after, view) != (self.before, self.after, self.width) {
             cx.invalidate_rect(Rect::new(0.0, 0.0, view, height));
@@ -258,13 +270,8 @@ impl Widget for TabStrip {
             cx.canvas.fill_rect(Rect::new(edge, b.y0 + 5.0, edge + 1.0, b.y1 - 5.0), t.line());
             let color = if count.rang { look::Hue::Amber.color(t) } else { t.text2() };
             let spec = look::mono(11.0, typeface::WEIGHT_MEDIUM, color);
-            // The number sits at the strip's end, however far the count reaches.
-            let (label, at) = if after {
-                (format!("{}›", count.tabs), Rect::new(r.x1 - COUNT, r.y0, r.x1, r.y1))
-            } else {
-                (format!("‹{}", count.tabs), Rect::new(r.x0, r.y0, r.x0 + COUNT, r.y1))
-            };
-            cx.draw_text_in(&label, &spec, at, Align::Center);
+            let label = if after { format!("{}›", count.tabs) } else { format!("‹{}", count.tabs) };
+            cx.draw_text_in(&label, &spec, r, Align::Center);
         }
     }
 

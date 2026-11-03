@@ -1382,6 +1382,13 @@ impl Hotaru {
     /// waiting for a new one (which the menus mustn't take first).
     fn item(&self, label: &str, action: Action) -> MenuItem<Msg> {
         let item = MenuItem::new(label, Msg::Action(action));
+        // The kit gives editing roles to the focused widget before falling
+        // back to the app action. Search fields must never paste into a PTY.
+        let item = match action {
+            Action::Copy => item.role(MenuRole::Copy),
+            Action::Paste => item.role(MenuRole::Paste),
+            _ => item,
+        };
         match self.bindings.shortcut(action) {
             Some(shortcut) if self.recording.is_none() => item.shortcut(shortcut),
             _ => item,
@@ -2507,7 +2514,8 @@ impl Program for Hotaru {
         aizome_kit::widgets::layout::stack(layers).width(Fill).height(Fill).into()
     }
     fn menus(&self) -> MenuBar<Msg> {
-        let selected = self.find_state.copy.is_some()
+        let selected = self.go_to_tab.is_some()
+            || self.find_state.copy.is_some()
             || self.active_pane().is_some_and(|t| t.selection.is_some_and(|s| !s.is_empty()));
         let selection = self.active_pane().is_some_and(|t| t.selection.is_some_and(|s| !s.is_empty()));
         let tab = self.active_tab();

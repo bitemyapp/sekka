@@ -111,13 +111,14 @@ selects text while a running program captures the mouse; Shift-wheel scrolls
 local history.
 
 Tabs are as wide as their titles, up to 240 points. When they no longer fit,
-the others narrow to share the room while the shown tab keeps its width, and
-they leave off a part of the title most tabs share, such as a trailing
+the others narrow to share the room while the shown tab keeps its width when
+space permits. Inactive tabs leave off a part of the title most tabs share, such as a trailing
 "| project"; hovering a tab shows its whole title. Below a few words' width the
 tabs scroll sideways under the wheel, with the shown tab kept in sight. A count
 at each end says how many tabs are out of sight that way, in amber if one of
 them rang, and clicking it scrolls that way. The + button and the bar's other
-buttons stay put however many tabs there are.
+buttons stay put however many tabs there are. In a narrow window the shown tab
+also shrinks, leaving room for the counters and a clickable tab label.
 
 Window → Go to Tab… (❖P), or the list button beside +, opens a palette over the
 window drawn like the desktop's ❖Space palette. It finds a tab by its title,

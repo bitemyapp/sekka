@@ -1068,6 +1068,57 @@ fn go_to_tab_names_the_program_in_front_and_its_folder() {
     }
 }
 
+#[test]
+fn go_to_tab_clipboard_commands_follow_the_focused_query() {
+    use aizome_hotaru::go_to_tab::Event;
+    use aizome_hotaru::settings::Action;
+    use aizome_kit::sidestep_ui::{Key, Modifiers};
+    for custom in [false, true] {
+        let mut app = Hotaru::new(shell(
+            "stty -echo; printf 'READY\\n'; while IFS= read -r line; do printf 'RECEIVED:%s\\n' \"$line\"; done",
+        ));
+        if custom {
+            app.settings.keybindings.insert("ctrl+shift+v".into(), Action::Paste);
+            app.settings.keybindings.insert("ctrl+shift+c".into(), Action::Copy);
+        }
+        let mut h = Harness::new(app);
+        let window = h.window();
+        let pane = h.program().active_pane().unwrap().id;
+        assert!(h.settle(Duration::from_secs(5), |app| {
+            app.active_pane().unwrap().snapshot.plain_text().contains("READY")
+        }));
+        h.command(window, 'p');
+        h.advance(Duration::ZERO);
+        assert_eq!(h.focused_name(window).as_deref(), Some("go-to-tab"));
+        let clipboard_key = |h: &mut Harness<Hotaru>, key: char| {
+            if custom {
+                h.key(window, Key::Character(key.to_string()), Modifiers::CONTROL | Modifiers::SHIFT);
+            } else {
+                h.command(window, key);
+            }
+        };
+        h.platform.clipboard = Some("query only\n".into());
+        clipboard_key(&mut h, 'v');
+        assert_eq!(h.program().go_to_tab.as_ref().unwrap().query, "query only");
+        assert_eq!(h.focused_name(window).as_deref(), Some("go-to-tab"));
+        h.command(window, 'a');
+        h.platform.clipboard = Some("replace me".into());
+        clipboard_key(&mut h, 'c');
+        assert_eq!(h.platform.clipboard.as_deref(), Some("query only"));
+        h.send(Msg::GoToTab(Event::Close));
+        // Paste still goes to the PTY after returning focus to the terminal.
+        // Its acknowledgement also establishes that no query paste preceded it.
+        h.platform.clipboard = Some("terminal only\n".into());
+        clipboard_key(&mut h, 'v');
+        assert!(h.settle(Duration::from_secs(5), |app| {
+            app.active_pane().unwrap().snapshot.plain_text().contains("RECEIVED:terminal only")
+        }));
+        assert!(!h.program().active_pane().unwrap().snapshot.plain_text().contains("RECEIVED:query only"));
+        h.send(Msg::Input(pane, vec![4]));
+        assert!(h.settle(Duration::from_secs(5), |app| app.panes.is_empty()));
+    }
+}
+
 /// Real PTY reports, including a first report after the palette has already
 /// used /proc. No startup timeout may permanently rule out OSC 7 reporting.
 fn go_to_tab_directory_reports(timing: &str) {
@@ -1203,6 +1254,71 @@ fn crowded_tabs_shrink_then_scroll_and_never_push_the_bar_buttons_out() {
     assert_eq!(h.program().tabs.len(), 21);
     h.advance(Duration::from_millis(1));
     assert!(h.find(window, "Task 19 has a long title").is_some(), "the new tab brings the end into sight");
+}
+
+#[test]
+fn narrow_tabs_stay_visible_and_clickable_beside_the_counters() {
+    use aizome_kit::{Point, Size, Vec2};
+    for count in [1, 3, 20] {
+        let mut h = Harness::new(Hotaru::preview());
+        let window = h.window();
+        h.resize(window, Size::new(320.0, 400.0));
+        for _ in 1..count {
+            h.send(Msg::NewTab);
+        }
+        let panes: Vec<u64> = h.program().tabs.iter().map(|tab| tab.active).collect();
+        let titles: Vec<String> = (0..count).map(|i| format!("Tab {i} with a very long individual title")).collect();
+        for (&pane, title) in panes.iter().zip(&titles) {
+            h.send(Msg::Title(pane, title.clone()));
+        }
+        for index in [0, count / 2, count - 1] {
+            h.send(Msg::SelectTab(panes[index]));
+            h.advance(Duration::ZERO);
+            let tab = h.find(window, &titles[index]).expect("active tab remains visible");
+            let new = h
+                .semantics(window)
+                .into_iter()
+                .find(|(s, _)| s.label.as_deref().is_some_and(|s| s.starts_with("New Tab")))
+                .unwrap()
+                .1;
+            assert!(tab.x0 >= 0.0 && tab.x1 <= new.x0, "active tab {tab:?} overlaps the edges or toolbar at {new:?}");
+            // A counter must not intercept the active tab's click.
+            h.send(Msg::Find);
+            h.advance(Duration::ZERO);
+            assert_eq!(h.focused_name(window).as_deref(), Some("find"));
+            h.click(window, tab.center());
+            h.advance(Duration::ZERO);
+            assert_eq!(h.focused_name(window), Some(format!("terminal-{}", panes[index])));
+            h.send(Msg::CloseFind);
+        }
+        if let Some(directory) = std::env::var_os("HOTARU_SCREENSHOTS") {
+            settle_frame(&mut h);
+            h.save_png(window, std::path::PathBuf::from(directory).join(format!("hotaru-narrow-{count}.png")), 1.0);
+        }
+        // Fractional scroll positions must also leave clickable tab content,
+        // even when no complete tab fits between the two counters.
+        let y = h.find(window, titles.last().unwrap()).unwrap().center().y;
+        for delta in [-35.0, -60.0, -90.0, 30.0, 65.0] {
+            h.scroll(window, Point::new(120.0, y), Vec2::new(0.0, delta));
+            let target = (80..150)
+                .step_by(5)
+                .find_map(|x| {
+                    let point = Point::new(f64::from(x), y);
+                    titles
+                        .iter()
+                        .enumerate()
+                        .find_map(|(i, title)| h.find(window, title).filter(|r| r.contains(point)).map(|_| (i, point)))
+                })
+                .expect("a tab remains available between the counters");
+            h.send(Msg::Find);
+            h.advance(Duration::ZERO);
+            h.click(window, target.1);
+            h.advance(Duration::ZERO);
+            assert_eq!(h.program().active, panes[target.0]);
+            assert_eq!(h.focused_name(window), Some(format!("terminal-{}", panes[target.0])));
+            h.send(Msg::CloseFind);
+        }
+    }
 }
 
 #[test]
