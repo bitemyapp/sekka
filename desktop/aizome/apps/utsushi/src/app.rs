@@ -1144,6 +1144,7 @@ impl Program for Utsushi {
             }
             Msg::ClearRecent => self.store.clear_recent(),
             Msg::Close => {
+                self.audio_output_lost = false;
                 self.leave();
                 if let Some(p) = self.player() {
                     p.close();

@@ -53,7 +53,7 @@ fn stage(app: &Utsushi) -> Element<Msg> {
         (None, Status::Loading) => layers.push(container(text("")).fill(Tone::Sunk).width(Fill).height(Fill).into()),
         (None, _) => layers.push(empty(app)),
     }
-    if app.audio_output_lost {
+    if app.audio_output_lost && app.status == Status::Paused {
         let note = container(text("Paused because the audio output became unavailable.").wrap())
             .padding(12.0)
             .floating()

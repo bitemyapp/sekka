@@ -533,6 +533,16 @@ fn output_selection_keeps_position_pause_and_preferences() {
     assert!(h.program().store.prefs.audio_device_description.is_none());
     h.send(Msg::Toggle);
     until(&mut h, 2.0, |a| a.status == Status::Playing);
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    h.send(Msg::Player(PlayerEvent(aizome_media::Event::AudioOutputLost)));
+    assert!(h.texts(w).iter().any(|t| t.contains("audio output became unavailable")));
+    h.send(Msg::Close);
+    assert!(!h.program().audio_output_lost);
+    // A late notification about the closed stream must not put a pause
+    // explanation on the empty window.
+    h.send(Msg::Player(PlayerEvent(aizome_media::Event::AudioOutputLost)));
+    assert!(!h.texts(w).iter().any(|t| t.contains("audio output became unavailable")));
 }
 
 #[test]
