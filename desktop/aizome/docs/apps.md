@@ -954,8 +954,12 @@ rest); folders play their files in Hako's natural order.
   other applications. The list follows connected PipeWire outputs; **System
   Default** uses the session's choice. Utsushi remembers a named device across
   items and restarts. Changing it preserves position, pause, speed and volume.
-  Disconnected choices remain labelled in the menu; the session's sound manager
-  can fall back to another output. The same selector is in the tracks menu.
+  If the active output disappears, playback pauses with an explanation.
+  Connecting another output or restoring the old one leaves it paused until
+  Play. Requested moves in the player or desktop sound controls preserve
+  playback, volume and mute. Disconnected choices remain labelled in the
+  menu, alongside the output currently connected. The same selector is in
+  the tracks menu.
 - **Where it was**: a film over five minutes long opens where it was
   left (with Start Over for a few seconds), unless that was in its first
   or last thirty seconds. Open Recent keeps twenty items.
