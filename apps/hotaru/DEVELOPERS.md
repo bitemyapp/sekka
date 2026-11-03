@@ -34,6 +34,11 @@ cargo test --locked --manifest-path apps/hotaru/Cargo.toml
 cargo clippy --locked --manifest-path apps/hotaru/Cargo.toml --all-targets -- -D warnings
 cargo run --release --locked --manifest-path apps/hotaru/Cargo.toml -p hotaru-replay -- \
   --data /path/to/stream.vt --rows 80 --cols 120 --format json
+# Feed-only timing with history: rows, then a byte limit (none, default or a
+# count); --prefill times a second pass, after the first has filled history.
+cargo run --release --locked --manifest-path apps/hotaru/Cargo.toml -p hotaru-replay -- \
+  --data /path/to/stream.vt --scrollback 1000000 --scrollback-bytes default \
+  --bench-json --iterations 5 --prefill
 nix develop .#aizome
 cargo run --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-hotaru
 nix build .#hotaru --no-update-lock-file
