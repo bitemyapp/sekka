@@ -2364,9 +2364,11 @@ to date (`nix flake update`) and commits that, if anything moved, on top of
 `.#iso`, which no check uses and only qualification needs. Every check runs
 even after one fails, and the failed ones run once more, so a VM test losing a
 timing race once doesn't hold back upstream security fixes; a check that fails
-twice stops the update. The run's warning names the checks that needed the
-retry: they are flaky, and need fixing like any failure. Then, in this order
-and only if each step succeeded:
+twice stops the update. The first attempt's passing checks stay rooted (see
+[The builder](#the-builder)), so the second attempt reruns only the failures.
+The run's warning names the checks that needed the retry: they are flaky, and
+need fixing like any failure. Then, in this order and only if each step
+succeeded:
 
 1. `nix run .#push-cache` publishes Sekka's packages for that revision to
    cache.sekka.computer.
@@ -2512,15 +2514,22 @@ in this repository before testing it here.
 
 The workflow and trust script come from immutable main workflow source,
 using `pull_request_target`. The GitHub-hosted permission gate never loads
-PR code. It verifies the head and base parents of GitHub's merge commit;
-the isolated builder rechecks trust after queueing, then checks out only that
-SHA with credentials persistence disabled. Build jobs have a read-only
-token, no publishing environment or secrets, and publish no cache or ISO.
-Ordinary PR-owned workflows remain rejected by the runner's admission hook.
+PR code. Both permission gates initially check out only
+`scripts/check-pr-trust.py`, from the immutable workflow SHA; the builder's
+checkout also takes `scripts/ci-retain.py` from there and keeps it outside the
+workspace. They verify the head and base parents of GitHub's merge commit.
+After queueing, the isolated builder rechecks trust, then expands the full
+checkout at exactly that merge SHA with credentials persistence disabled. PR
+code then runs only in Nix's evaluator and the daemon's build sandbox: the
+retention wrapper beside the GC roots main's jobs share is main's. Build jobs
+have a read-only token, no publishing environment or secrets, and publish no
+cache or ISO. Ordinary PR-owned workflows remain rejected by the runner's
+admission hook.
 
-The job builds Uta and runs the full root `nix flake check` with the existing
-lock, including package check phases and the component VM checks exposed
-under `checks.x86_64-linux`. The separate `aizome-checks` legacy outputs and
+The job builds Uta and runs the full root `nix flake check --keep-going` with
+the existing lock, including package check phases and the component VM checks
+exposed under `checks.x86_64-linux`. One push reports every failing check, and
+the passing ones stay rooted for the next push. The separate `aizome-checks` legacy outputs and
 actual ISO installation/hardware qualification remain separate. Results
 appear on the tested PR head as `Trusted PR / build and tests`; a newer
 push cancels the previous run. To check an already open PR, dispatch from
@@ -2528,7 +2537,9 @@ main: `gh workflow run pr.yml --ref main -f pr=233`. If the head or base
 changes while queued, dispatch again against the new merge.
 
 `nix build .#checks.x86_64-linux.pr-ci` exercises trust rejection, merge
-identity, API failures and runner admission, and lints the workflow. Enabling
+identity, API failures, runner admission, Git object reuse with private
+candidate state, and the retention wrapper and its bounds, and lints all three
+build workflows. Enabling
 this workflow requires deploying the updated runner image below; the former
 admission hook rejects all pull-request events. Release publication remains
 manually disabled.
@@ -2547,8 +2558,9 @@ Jobs run on wx-workstation (Ubuntu, Docker, Determinate Nix) through
 - Each job gets a fresh container, as uid 30500, with every capability
   dropped, `no-new-privileges`, a read-only root, and a tmpfs `/tmp` and
   throwaway volume for its home and workspace, both gone with the job. It sees
-  the host's Nix store read-only and the daemon's socket, and nothing else of
-  the host: no Docker socket, `/dev/kvm` or home directories. Its builds run
+  the host's Nix store read-only and the daemon's socket. Two dedicated cache
+  directories are also mounted: writable GC roots and read-only Git objects.
+  It sees no Docker socket, `/dev/kvm` or host home directories. Its builds run
   in the daemon's own sandbox as an untrusted user, which cannot add
   substituters or change trusted settings.
 - Before the first step, the runner's job-started hook admits
@@ -2577,16 +2589,91 @@ heap is 4 GiB. A 16 GiB heap improved individual checks, but the complete
 flake's live configurations outgrew it and resumed frequent collections,
 spending most of their CPU time in collector workers before builds began.
 The larger initial heap trades memory for fewer collections within the job
-container's 64 GiB allowance. It leaves collector/evaluator threads, build
-jobs, build cores and check coverage unchanged. This job environment setting
-takes effect on the next run without redeploying the runner or restarting
-the host's daemon.
+container's 64 GiB allowance. This job environment setting takes effect on the
+next run without redeploying the runner or restarting the host's daemon.
+
+The job image also sets Determinate Nix's `eval-cores = 8`, which evaluates
+independent checks in parallel; it changes neither build jobs, build cores nor
+check coverage. A job's client reads no `nix.conf`, so without it evaluation
+uses one worker. On wx-workstation on 2026-11-02, full flake evaluation
+(`nix flake check --no-build`, evaluation cache off, as in a fresh job) took
+197–202 seconds with one worker at 34.7 GiB peak RSS and 59–87 seconds with
+eight at 38–45 GiB, within the job container's 64 GiB; 16 workers were slower
+than eight. The image is the one place Nix settings live: a workflow's
+`NIX_CONFIG` would replace its whole value, not add to it.
 
 A job's container is on Docker's default network: it reaches the internet, the
 LAN and services on the host. The admission hook and pull request approval keep
 untrusted code from getting that far. Each build leaves its closure in the
-host's store, about 6 GiB for the ISO alone; the workflows keep no GC roots,
-and the daemon collects garbage when free space runs low.
+host's store. `scripts/ci-retain.py` runs the ordinary `nix build` or
+`nix flake check` with an out-link below `/nix/var/nix/gcroots/sekka-ci`, mounted
+at that same absolute path in the job and on the daemon's host. It retains the
+results plus existing outputs of their derivation closures: otherwise a VM
+check's tiny success marker would keep neither its VM image nor compiled
+build dependencies alive. This does not globally enable `keep-outputs`, skip
+checks, or treat a failed build as successful. A failed
+`nix flake check --keep-going` still links the checks that passed, so their
+inputs are kept for the rerun; a failed `nix build` links nothing. Rooting
+inputs is best effort: if Nix can't list them, the results stay rooted, the
+job warns, and a passing build stays green.
+
+Retention is separate for main and PR work, and for Uta, checks and published
+packages. Each group keeps two successful main generations or four successful
+PR generations, expiring after seven days; the newest successful main
+generation is kept until replaced. Failed generations last a day, one per main
+group and two per PR group. Below 200 GiB of free store space, the daemon's
+own collection target (`max-free`), each group keeps only its newest successful
+main generation, so PR results go first and the daemon can reclaim the rest.
+The host is shared, so free space is the budget, not a byte quota of Sekka's
+own. One generation of the flake's checks roots about 33,600 build inputs,
+94 GiB of store paths (2026-11-02), and takes about 11 seconds to root.
+Generations at the same Nixpkgs share nearly all of it; an input update
+starts a new set. The job-start hook and each build prune these bounds, so a cancelled job
+cannot leave roots indefinitely while the runner is in use. A lock covers only
+pruning and creating a generation; each build holds its own generation's lock,
+so a build in progress is never pruned and concurrent jobs never wait on one
+another. Package publication uses the same wrapper to retain its outputs and
+build inputs.
+
+The supervisor passes `SEKKA_CI_ROOTS` only together with the roots mount.
+Without it, as on a runner deployed before this mount existed or a
+maintainer's machine, the wrapper runs plain `nix build --no-link` or
+`nix flake check` with the same status, and roots nothing.
+
+The supervisor maintains `/var/cache/sekka-ci-git/repository.git`, fetching only
+main between jobs. Jobs mount it read-only and seed a fresh, private Git
+repository using object alternates. `actions/checkout` still fetches the exact
+workflow/admitted merge SHA and cleans the workspace; refs, configuration,
+credentials and working files never persist between jobs. A failed cache refresh
+falls back to checkout fetching missing objects. No job may write the object cache.
+
+`checks.x86_64-linux.ci-cache` uses the actual runner client and an untrusted
+user in a disposable VM. It collects garbage and verifies that results and
+compile-only dependencies survive, including those of the passing checks of a
+failed `--keep-going` run. It also reuses checks with builds disabled, checks
+failure propagation and the plain-Nix fallback, drops PR roots when space is
+low, and verifies that paths become collectable after removing the roots.
+`checks.x86_64-linux.pr-ci` exercises the wrapper with stand-ins for Nix,
+retention expiry, locks that refuse links and FIFOs, and clean Git checkouts.
+
+The live-media guard fixture puts its mounts in a private guest mount namespace;
+systemd must not race the fixture by tearing down the VM's own `/nix/store`.
+Its installed/optical/RAM-media and non-root rejection cases remain. The encrypted
+splash fixture checks the visible password/log views, not transient boot log text.
+The Aizome login test still requires PAM unlocking and an encrypted secret
+store/read round trip. libsecret 0.21.7, which Nixpkgs builds with GnuTLS,
+drops leading zero bytes from its Diffie-Hellman secret, so about one Secret
+Service session in 256 fails: that was the login test's intermittent failure.
+`nix/libsecret-dh-padding.nix` backports GNOME's
+[fix](https://github.com/GNOME/libsecret/commit/96a485819fd47c3a35b7a178909794a8ce41d2a7)
+for the clients Sekka builds itself: Aizome, whose network agent keeps Wi-Fi
+secrets, and the login test's `secret-tool`. Applications keep Nixpkgs'
+libsecret: overriding it would compile source-built Electron, WebKitGTK and
+LibreOffice on every input update, where they now come from cache.nixos.org.
+Nixpkgs' 0.21.8.2, in staging since 2026-10-21, fixes them, and from 0.21.8 on
+the backport returns Nixpkgs' own package. `checks.x86_64-linux.libsecret-dh`
+forces short shared secrets at the GnuTLS boundary and verifies their padding,
+with the original backend as a negative control.
 
 The runner's Nix client comes from Sekka's pinned Determinate input, matching
 the host daemon's implementation. An upstream client cannot decode every build
@@ -2641,6 +2728,7 @@ docker run -d --name sekka-runner-supervisor --restart unless-stopped \
   --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /nix/store:/nix/store:ro \
+  -v /var/cache/sekka-ci-git:/var/cache/sekka-ci-git \
   -v "$HOME/.config/sekka-runner:/run/secrets:ro" \
   sekka-runner-supervisor:latest
 ```
@@ -2652,7 +2740,30 @@ and write (which registering runners needs) and no other permission, saved as
 `~/.config/sekka-runner/token` with mode 600. Replace the file when the token
 expires; the supervisor reads it before each registration.
 
-To update the runner, build and load again, then, while no job is running,
+For the first deployment of persistent CI caches, in this order and while no
+job is running:
+
+1. Rerun the host setup script as the maintainer through `sudo`. It creates
+   the GC-root directory owned by uid 30500 and the Git cache owned by the
+   invoking maintainer. The new supervisor mounts both into jobs, and Docker
+   refuses to start a job whose bind-mount source is missing.
+2. Build and load the images as above.
+3. Remove the old supervisor and waiting runner (`docker rm -f
+   sekka-runner-supervisor sekka-runner-job`) and start the supervisor with
+   the command above, which adds the Git-cache mount: restarting a container
+   cannot add a mount.
+
+Until then, the workflows run their complete checks through the wrapper's
+plain-Nix fallback, and nothing is retained between jobs. A Git cache refresh
+that fails says so in `docker logs sekka-runner-supervisor`; checkout then
+fetches everything itself, as before.
+
+Inside the restricted job image as uid 30500, a primed, read-only Git cache
+took 0.018 seconds to seed, 0.388 seconds to fetch and prepare the sparse main
+gate, and 1.788 seconds to expand the full main tree (2026-11-02). New PR
+objects still have to be fetched.
+
+To update an already configured runner, build and load again, then, while no job is running,
 `docker stop sekka-runner-job` (the waiting runner, which would take the next
 job in the old image) and `docker restart sekka-runner-supervisor`. A restarted
 supervisor lets a running job finish first. To stop taking jobs,

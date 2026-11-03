@@ -22,6 +22,11 @@ if ! getent passwd sekka-runner >/dev/null; then
     --home-dir /nonexistent --shell /usr/sbin/nologin sekka-runner
 fi
 
+# The job may root store paths, but cannot write Git objects used by future
+# jobs. Mount these exact paths in the supervisor/job as documented below.
+install -d -o "$id" -g "$id" -m 0755 /nix/var/nix/gcroots/sekka-ci
+install -d -o "${SUDO_UID:-0}" -g "${SUDO_GID:-0}" -m 0755 /var/cache/sekka-ci-git
+
 # The flake check of releases and nightlies runs NixOS tests in VMs: builds
 # that ask for KVM get /dev/kvm in their sandbox. There a build has no group but
 # nixbld (the sandbox drops the build users' other groups), so that group

@@ -38,6 +38,8 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
+          sparse-checkout: /scripts/check-pr-trust.py
+          sparse-checkout-cone-mode: false
       - name: Check current repository permissions and merge identity
         id: trust
         env:
@@ -72,6 +74,10 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
+          sparse-checkout: |
+            /scripts/check-pr-trust.py
+            /scripts/ci-retain.py
+          sparse-checkout-cone-mode: false
       - name: Recheck trust after waiting for the builder
         id: recheck
         env:
@@ -87,6 +93,11 @@ jobs:
         run: |
           test "$ALLOWED" = true
           test "$CURRENT_MERGE" = "$EXPECTED_MERGE"
+      # Main's retention wrapper, kept outside the workspace the merge
+      # checkout replaces: PR code runs only in Nix's evaluator and build
+      # sandbox, never beside the GC roots main's jobs share.
+      - name: Keep main's retention wrapper
+        run: install -m 0644 scripts/ci-retain.py "$RUNNER_TEMP/ci-retain.py"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ needs.trust.outputs.merge }}
@@ -102,11 +113,13 @@ jobs:
             in pkgs.runCommand "kvm-${toString builtins.currentTime}" { requiredSystemFeatures = [ "kvm" ]; } "exec 3<>/dev/kvm && touch $out"
           '
       - name: Build Uta
-        run: nix build --no-update-lock-file --print-build-logs --no-link .#uta
+        run: python3 "$RUNNER_TEMP/ci-retain.py" pr uta build --no-update-lock-file --print-build-logs .#uta
       - name: Build and test components
         run: |
           set -euo pipefail
-          nix flake check --no-update-lock-file --print-build-logs
+          # Every check runs even after one fails, so one push reports them
+          # all, and the passing checks stay rooted for the next push.
+          python3 "$RUNNER_TEMP/ci-retain.py" pr checks flake check --keep-going --no-update-lock-file --print-build-logs
           git diff --exit-code
 
   result:

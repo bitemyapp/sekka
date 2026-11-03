@@ -77,12 +77,14 @@ jobs:
           # fails here by name. Nothing of Uta runs in this job, which goes on
           # to hold the cache's secrets: the flake check's uta-rustypipe runs
           # it in the build sandbox.
-          nix build --no-update-lock-file --print-build-logs --no-link .#uta
+          python3 scripts/ci-retain.py main uta build --no-update-lock-file --print-build-logs .#uta
       - name: Check components
         shell: bash
         run: |
           set -euo pipefail
-          nix flake check --no-update-lock-file --print-build-logs
+          # Every check runs even after one fails: the log names each failure,
+          # and the passing checks stay rooted for the next run (DEVELOPERS.md).
+          python3 scripts/ci-retain.py main checks flake check --keep-going --no-update-lock-file --print-build-logs
           git diff --exit-code
       - name: Publish Sekka's packages to its binary cache
         shell: bash
