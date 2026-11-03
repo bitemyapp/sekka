@@ -131,6 +131,10 @@ the chosen tab's screen shows around what matched. Screens are searched as they
 were when the palette opened, and only what each pane shows, not its
 scrollback. The program is the one in front on the pane's terminal, so a
 program over SSH shows as `ssh`.
+The folder follows the shell's accepted local directory reports. Until the
+first report arrives, the palette checks the local shell's current directory
+when opened; a late report takes over on the next opening. If neither is
+available, it uses the last known directory.
 
 When the shell or program in a pane ends, Control-D at the prompt for one,
 its pane closes, then its tab with its last pane, and the window with its last

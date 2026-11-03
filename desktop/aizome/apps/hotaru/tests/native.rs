@@ -1042,7 +1042,10 @@ fn go_to_tab_finds_tabs_by_title_and_screen_and_goes_there() {
 
 #[test]
 fn go_to_tab_names_the_program_in_front_and_its_folder() {
-    let mut h = Harness::new(Hotaru::new(shell("cd /tmp && echo READY && exec sleep 30")));
+    let mut command = shell("cd /tmp && echo READY && exec sleep 30");
+    // main.rs supplies a startup directory even when none was passed on the CLI.
+    command.cwd = Some("/".into());
+    let mut h = Harness::new(Hotaru::new(command));
     let window = h.window();
     h.advance(Duration::ZERO);
     assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().snapshot.plain_text().contains("READY")));
@@ -1063,6 +1066,90 @@ fn go_to_tab_names_the_program_in_front_and_its_folder() {
         h.command(window, 'p');
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+/// Real PTY reports, including a first report after the palette has already
+/// used /proc. No startup timeout may permanently rule out OSC 7 reporting.
+fn go_to_tab_directory_reports(timing: &str) {
+    use aizome_hotaru::go_to_tab::Event;
+    let root = std::env::temp_dir().join(format!("hotaru-palette-cwd-{timing}-{}", std::process::id()));
+    let live = root.join("live");
+    let reported = root.join("reported");
+    for path in [&live, &reported] {
+        std::fs::create_dir_all(path).unwrap();
+    }
+    let mut command = shell(
+        "stty -echo; \
+         if test \"$HOTARU_TEST_REPORT\" = immediate; then \
+           printf '\\033]7;file://localhost%s\\007' \"$HOTARU_TEST_REPORTED\"; \
+         fi; \
+         printf 'READY\\n'; \
+         while IFS= read -r action; do \
+           case $action in \
+             cd) cd -- \"$HOTARU_TEST_LIVE\" || exit 1;; \
+             report) printf '\\033]7;file://localhost%s\\007' \"$HOTARU_TEST_REPORTED\";; \
+             clear) printf '\\033]7;\\007';; \
+           esac; \
+           printf 'ACK:%s\\n' \"$action\"; \
+         done",
+    );
+    command.cwd = Some(root.clone());
+    command.env.extend([
+        ("HOTARU_TEST_REPORT".into(), timing.into()),
+        ("HOTARU_TEST_REPORTED".into(), reported.as_os_str().into()),
+        ("HOTARU_TEST_LIVE".into(), live.as_os_str().into()),
+    ]);
+    let mut h = Harness::new(Hotaru::new(command));
+    h.advance(Duration::ZERO);
+    let pane = h.program().active_pane().unwrap().id;
+    assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().snapshot.plain_text().contains("READY")));
+    let folder = |h: &mut Harness<Hotaru>, expected: &std::path::Path| {
+        h.command(h.window(), 'p');
+        assert!(h.settle(Duration::from_secs(5), |app| app.go_to_tab.as_ref().is_some_and(|p| p.facts.is_some())));
+        let facts = h.program().go_to_tab.as_ref().unwrap().facts.as_ref().unwrap();
+        let actual = &facts.iter().find(|f| f.pane == pane).unwrap().folder;
+        assert_eq!(actual.as_deref(), expected.to_str(), "{timing}: palette's directory");
+        h.send(Msg::GoToTab(Event::Close));
+    };
+    let action = |h: &mut Harness<Hotaru>, action: &str| {
+        h.send(Msg::Input(pane, format!("{action}\n").into_bytes()));
+        let expected = format!("ACK:{action}");
+        assert!(h.settle(Duration::from_secs(5), |app| {
+            app.active_pane().unwrap().snapshot.plain_text().contains(&expected)
+        }));
+    };
+    folder(&mut h, if timing == "immediate" { &reported } else { &root });
+    action(&mut h, "cd");
+    // A valid report can describe a nested shell and must outrank the PTY
+    // owner's cwd; without one, the startup directory must not outrank /proc.
+    folder(&mut h, if timing == "immediate" { &reported } else { &live });
+    if timing == "delayed" {
+        action(&mut h, "report");
+        folder(&mut h, &reported);
+    }
+    if timing != "absent" {
+        action(&mut h, "clear");
+        folder(&mut h, &live);
+    }
+    h.send(Msg::Input(pane, vec![4]));
+    assert!(h.settle(Duration::from_secs(5), |app| app.panes.is_empty()));
+    drop(h);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn go_to_tab_prefers_an_immediate_osc7_report() {
+    go_to_tab_directory_reports("immediate");
+}
+
+#[test]
+fn go_to_tab_accepts_a_delayed_first_osc7_report() {
+    go_to_tab_directory_reports("delayed");
+}
+
+#[test]
+fn go_to_tab_tracks_cd_without_osc7_reports() {
+    go_to_tab_directory_reports("absent");
 }
 
 #[test]

@@ -67,8 +67,11 @@ pub struct Source {
     pub pane: u64,
     /// Its shell's process, while it runs.
     pub pid: Option<u32>,
-    /// The folder its shell last reported (OSC 7), or the one it started in.
+    /// The last validated local OSC 7 directory; none before the first report
+    /// or after an empty report clears it. No startup deadline rules it out.
     pub reported: Option<PathBuf>,
+    /// Last known/startup directory, used only if no report or live cwd exists.
+    pub fallback: Option<PathBuf>,
     pub snapshot: Arc<Snapshot>,
 }
 
@@ -80,7 +83,8 @@ pub fn gather(sources: Vec<Source>, home: Option<PathBuf>) -> Vec<Facts> {
             let front = source.pid.and_then(foreground);
             let folder = source
                 .reported
-                .or_else(|| source.pid.and_then(|pid| std::fs::read_link(format!("/proc/{pid}/cwd")).ok()));
+                .or_else(|| source.pid.and_then(|pid| std::fs::read_link(format!("/proc/{pid}/cwd")).ok()))
+                .or(source.fallback);
             Facts {
                 pane: source.pane,
                 program: front.and_then(program),
@@ -769,5 +773,19 @@ mod tests {
         let (shown, range) = snippet("    short needle", 10, 6);
         assert_eq!(shown, "short needle");
         assert_eq!(&shown[range], "needle");
+    }
+
+    #[test]
+    fn a_pane_without_a_live_process_keeps_its_last_known_folder() {
+        let snapshot = Arc::new(hotaru_core::Terminal::new(80, 24, 0).snapshot());
+        let source = |reported| Source {
+            pane: 1,
+            pid: None,
+            reported,
+            fallback: Some("/startup".into()),
+            snapshot: snapshot.clone(),
+        };
+        assert_eq!(gather(vec![source(None)], None)[0].folder.as_deref(), Some("/startup"));
+        assert_eq!(gather(vec![source(Some("/reported".into()))], None)[0].folder.as_deref(), Some("/reported"));
     }
 }

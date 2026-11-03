@@ -128,7 +128,7 @@ pub enum Msg {
 pub struct Pane {
     pub id: u64,
     pub title: String,
-    /// Last bounded local directory reported by this shell via OSC 7.
+    /// Last known directory: the startup fallback or a validated OSC 7 report.
     pub working_directory: Option<std::path::PathBuf>,
     /// Automatic paths use only an accepted OSC 7 report, not launch guesses.
     link_directory: Option<std::path::PathBuf>,
@@ -1481,7 +1481,10 @@ impl Hotaru {
             .map(|pane| crate::go_to_tab::Source {
                 pane: pane.id,
                 pid: pane.session.as_ref().and_then(Session::process_id),
-                reported: pane.working_directory.clone(),
+                // None until a valid OSC 7 report arrives, however late that
+                // is. A startup guess must not suppress the live /proc lookup.
+                reported: pane.link_directory.clone(),
+                fallback: pane.working_directory.clone(),
                 snapshot: pane.snapshot.clone(),
             })
             .collect();
