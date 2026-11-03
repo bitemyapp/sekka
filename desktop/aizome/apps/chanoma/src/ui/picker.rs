@@ -1,11 +1,13 @@
-//! Choosing a folder from the sofa, laid out as the settings are: places
-//! down the left (home, its usual folders, drives plugged in, the whole
-//! computer), the place showing lit; on the right where the folder is, in
-//! words, then the choice itself with what Chanoma would find there, then
-//! the folder's own folders, each with a word on what's in it.
+//! Adding a folder from the sofa, laid out as the settings are: places
+//! down the left (*Suggested*, home, its usual folders, drives plugged in,
+//! the whole computer), the place showing lit; on the right where the
+//! folder is, in words, then the choice itself with what's in the folder,
+//! then the folder's own folders, each with a word on what's in it. On
+//! *Suggested*, the list is the folders that look like a collection, each
+//! added with one press.
 //!
 //! The focus: `col` 0 is the places (`row` the place), 1 the list (`row`
-//! 0 the choice, then each folder).
+//! 0 the choice, then each folder; or each suggestion).
 
 use aizome_kit::Icon;
 use aizome_kit::layout::{Point, Rect};
@@ -23,18 +25,36 @@ pub enum Body {
     Failed(String),
     /// Its folders: each name and a word on what's in it.
     Folders(Vec<(String, String)>),
+    /// The folders that look like a collection: each name, and where it
+    /// is with what it looks like. No choice above them: each is one.
+    Suggested(Vec<(String, String)>),
+    /// Looking for those.
+    Looking,
+}
+
+/// The choice above a folder's folders.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Choice {
+    Add,
+    /// It's one of the folders already.
+    Already,
+    /// It's inside one of the folders (named) already.
+    Inside(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Picker {
     pub title: String,
+    /// Beside the title.
+    pub note: String,
     pub places: Vec<(String, Icon)>,
     /// The place the folder showing is in.
     pub place: usize,
     /// Where the folder is: "Home", "ROMs", "snes".
     pub crumbs: Vec<String>,
-    /// What Chanoma would find here, and whether that's anything (`None`
-    /// while it looks).
+    pub choice: Choice,
+    /// What's in the folder, and whether that's anything to play or watch
+    /// (`None` while it's read).
     pub found: Option<(String, bool)>,
     pub body: Body,
     /// The first row of the list showing.
@@ -72,12 +92,18 @@ fn places_showing() -> usize {
 }
 
 impl Picker {
-    /// The list's rows: the choice and each folder.
+    /// The list's rows: the choice and each folder, or each suggestion.
     pub fn rows(&self) -> usize {
-        1 + match &self.body {
-            Body::Folders(f) => f.len(),
-            _ => 0,
+        match &self.body {
+            Body::Folders(f) => 1 + f.len(),
+            Body::Suggested(s) => s.len(),
+            Body::Looking => 0,
+            _ => 1,
         }
+    }
+
+    fn suggesting(&self) -> bool {
+        matches!(self.body, Body::Suggested(_) | Body::Looking)
     }
 
     fn row_rect(&self, i: usize) -> Rect {
@@ -131,7 +157,11 @@ impl Picker {
     pub fn paint(&self, c: &mut Canvas, theme: &Theme, focus: Focus) {
         let head = Rect::new(0.0, 30.0, W, LIST_TOP - 4.0);
         if c.needs(head) {
-            text_mid(c, theme, &self.title, MARGIN, HEAD_Y, font(HEADLINE - 4.0, BOLD), theme.text());
+            let w = text_mid(c, theme, &self.title, MARGIN, HEAD_Y, font(HEADLINE - 4.0, BOLD), theme.text());
+            if !self.note.is_empty() {
+                let spec = font(SMALL + 2.0, REGULAR);
+                text_mid(c, theme, &self.note, MARGIN + w + 24.0, HEAD_Y + 3.0, spec, theme.text3());
+            }
             self.paint_crumbs(c, theme);
         }
         let side = self.side_first(focus);
@@ -167,7 +197,19 @@ impl Picker {
                 continue;
             }
             let on = focus.col == 1 && focus.row == i;
-            if i == 0 {
+            if let Body::Suggested(s) = &self.body {
+                let (name, word) = &s[i];
+                face(c, theme, r, theme.raised(), theme.line());
+                let amber = theme.role(Role::Warning);
+                icon(c, Icon::FolderOpen, Point::new(r.x0 + 28.0 + 18.0, r.center().y), 36.0, amber);
+                let room = r.width() - 84.0 - 80.0;
+                let spec = font(BODY + 2.0, MEDIUM);
+                text_mid(c, theme, &fit_text(theme, name, room, spec), r.x0 + 84.0, r.y0 + 30.0, spec, theme.text());
+                let dspec = font(SMALL - 2.0, REGULAR);
+                text_mid(c, theme, &fit_text(theme, word, room, dspec), r.x0 + 84.0, r.y1 - 22.0, dspec, theme.text2());
+                let plus = if on { theme.role(Role::Success) } else { theme.text3() };
+                icon(c, Icon::CirclePlus, Point::new(r.x1 - 28.0 - 14.0, r.center().y), 32.0, plus);
+            } else if i == 0 {
                 self.paint_choice(c, theme, r);
             } else if let Body::Folders(f) = &self.body {
                 let (name, word) = &f[i - 1];
@@ -185,8 +227,10 @@ impl Picker {
                 ring(c, theme, r);
             }
         }
-        // Under the choice, when there are no folders to show.
-        let note = Rect::new(LIST_X, LIST_TOP + ROW_H, W - MARGIN, LIST_TOP + 2.0 * ROW_H);
+        // Under the choice (at the top, for suggestions), when there are no
+        // folders to show.
+        let top = if self.suggesting() { LIST_TOP } else { LIST_TOP + ROW_H };
+        let note = Rect::new(LIST_X, top, W - MARGIN, top + ROW_H);
         if self.first == 0 && c.needs(note) {
             let y = note.y0 + 40.0;
             match &self.body {
@@ -219,7 +263,15 @@ impl Picker {
                 Body::Folders(f) if f.is_empty() => {
                     text_mid(c, theme, "No folders in here", LIST_X + 28.0, y, font(BODY, REGULAR), theme.text3());
                 }
-                Body::Folders(_) => {}
+                Body::Looking => {
+                    let s = "Looking at home and each drive plugged in…";
+                    text_mid(c, theme, s, LIST_X + 28.0, y, font(BODY, REGULAR), theme.text3());
+                }
+                Body::Suggested(s) if s.is_empty() => {
+                    let s = "Nothing here looks like games, films or shows: choose a place on the left";
+                    text_mid(c, theme, s, LIST_X + 28.0, y, font(BODY, REGULAR), theme.text3());
+                }
+                Body::Folders(_) | Body::Suggested(_) => {}
             }
         }
         let mid = (LIST_X + W - MARGIN) / 2.0;
@@ -263,18 +315,27 @@ impl Picker {
         }
     }
 
-    /// The choice: use the folder showing, with what's in it.
+    /// The choice: add the folder showing, with what's in it; or that it
+    /// is one of the folders, or in one, already.
     fn paint_choice(&self, c: &mut Canvas, theme: &Theme, r: Rect) {
         face(c, theme, r, theme.raised(), theme.line2());
         let (word, any) = match &self.found {
             Some((w, any)) => (w.as_str(), *any),
-            None => ("Looking…", false),
+            None => ("Reading…", false),
         };
-        let mark = if any { theme.role(Role::Success) } else { theme.text3() };
-        icon(c, Icon::CircleCheck, Point::new(r.x0 + 28.0 + 18.0, r.center().y), 36.0, mark);
+        let (label, glyph, mark) = match &self.choice {
+            Choice::Add => (
+                "Add this folder".to_owned(),
+                Icon::FolderPlus,
+                if any { theme.role(Role::Success) } else { theme.text3() },
+            ),
+            Choice::Already => ("Already one of your folders".to_owned(), Icon::CircleCheck, theme.text3()),
+            Choice::Inside(f) => (format!("Already looked through, as part of {f}"), Icon::CircleCheck, theme.text3()),
+        };
+        icon(c, glyph, Point::new(r.x0 + 28.0 + 18.0, r.center().y), 36.0, mark);
         let room = r.width() - 84.0 - 28.0;
         let spec = font(BODY + 2.0, SEMIBOLD);
-        text_mid(c, theme, "Use this folder", r.x0 + 84.0, r.y0 + 30.0, spec, theme.text());
+        text_mid(c, theme, &fit_text(theme, &label, room, spec), r.x0 + 84.0, r.y0 + 30.0, spec, theme.text());
         let dspec = font(SMALL - 2.0, REGULAR);
         let ink = if any { theme.text2() } else { theme.text3() };
         text_mid(c, theme, &fit_text(theme, word, room, dspec), r.x0 + 84.0, r.y1 - 22.0, dspec, ink);

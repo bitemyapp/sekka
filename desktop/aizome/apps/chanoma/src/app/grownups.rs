@@ -1,12 +1,15 @@
 //! The grown-ups' settings, pairing controllers and setting up their
 //! buttons.
 //!
-//! A big collection of games is managed from Games: folders added by hand
-//! or found on the drives (home and every drive plugged in, through the
-//! files index), whole systems turned off, variants left out and a game's
-//! regions shown as one ([`crate::collection`]), and kids' games chosen a
-//! system at a time, all at once or one by one, the shoulder buttons
-//! running down the list a letter at a time.
+//! Folders has the folders Chanoma looks through, for games, films and
+//! shows alike: each with what it holds, how far a look through it has got,
+//! or that its drive is out; added from *Suggested* or by browsing
+//! ([`super::picker`]), or found by reading every drive for games. A big
+//! collection of games is managed from Games: whole systems turned off,
+//! variants left out and a game's regions shown as one
+//! ([`crate::collection`]), and kids' games chosen a system at a time, all
+//! at once or one by one, the shoulder buttons running down the list a
+//! letter at a time.
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -24,11 +27,15 @@ use crate::ui::Focus;
 use crate::ui::screens::{Art, Message};
 use crate::ui::settings::{Page, Row, Value};
 
-pub const SECTIONS: [&str; 7] = ["Time", "Watch", "Games", "Films and shows", "Controllers", "PIN and lock", "Chanoma"];
+pub const SECTIONS: [&str; 8] =
+    ["Time", "Watch", "Games", "Films and shows", "Folders", "Controllers", "PIN and lock", "Chanoma"];
+/// The sections opened by number.
+pub const FOLDERS: usize = 4;
+pub const CONTROLLERS: usize = 5;
 
 /// Each section's icon and the colour of its square, as Settei's side list
 /// has them.
-const SECTION_ICONS: [(aizome_kit::Icon, aizome_kit::theme::Role); 7] = {
+const SECTION_ICONS: [(aizome_kit::Icon, aizome_kit::theme::Role); 8] = {
     use aizome_kit::Icon;
     use aizome_kit::theme::Role;
     [
@@ -36,6 +43,7 @@ const SECTION_ICONS: [(aizome_kit::Icon, aizome_kit::theme::Role); 7] = {
         (Icon::Tv, Role::Danger),
         (Icon::Gamepad2, Role::Violet),
         (Icon::Film, Role::Cyan),
+        (Icon::FolderOpen, Role::Warning),
         (Icon::Bluetooth, Role::Accent),
         (Icon::Lock, Role::Success),
         (Icon::Settings, Role::Text3),
@@ -64,6 +72,8 @@ pub enum Sub {
     System(&'static str),
     /// The folders of games found on the drives.
     Found,
+    /// One of the folders: what it holds, looking again, removing it.
+    Folder(usize),
 }
 
 /// Looking for games on the drives.
@@ -91,12 +101,8 @@ impl State {
     }
 }
 
-/// Which folders a file panel chose.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FolderKind {
-    Games,
-    Videos,
-}
+/// What adding a folder does, said beside it.
+const ADD_DETAIL: &str = "Games, films and shows: everything in it, however deep";
 
 /// What a row does.
 #[derive(Clone, Debug, PartialEq)]
@@ -113,17 +119,25 @@ enum Act {
     NewGames,
     Game(String),
     AllowAll,
+    /// Kids' films and shows: one, those waiting, or all (`true`) or none.
+    NewFilms,
+    Film(String),
+    AllowAllFilms,
+    FilmsAll(bool),
     Open(Sub),
     FindGames,
     UseFolder(PathBuf),
     SystemOn(&'static str),
     HideVariants,
+    FetchArt,
     OneOfEach,
     Region,
     KidsAll(&'static str),
     KidsNone(&'static str),
-    RemoveFolder(FolderKind, usize),
-    AddFolder(FolderKind),
+    RemoveFolder(usize),
+    AddFolder,
+    /// Over to Folders.
+    GoFolders,
     Rescan,
     Pair,
     SetUp(u32),
@@ -296,23 +310,7 @@ impl Chanoma {
                 rows.push((Row::new("Add a website…", Value::Action).detail("Needs a keyboard"), Act::AddSite));
             }
             2 => {
-                rows.push((Row::heading("Folders"), Act::None));
-                for (i, f) in s.game_folders.iter().enumerate() {
-                    rows.push((
-                        Row::new(f.display().to_string(), Value::Action).detail("Remove this folder"),
-                        Act::RemoveFolder(FolderKind::Games, i),
-                    ));
-                }
-                rows.push((
-                    Row::new("Add a games folder…", Value::Action)
-                        .detail("Sorted into a folder per system (snes, gba…) or by extension"),
-                    Act::AddFolder(FolderKind::Games),
-                ));
-                rows.push((
-                    Row::new("Find games on your drives…", Value::Action)
-                        .detail("Looks through home and every drive plugged in"),
-                    Act::FindGames,
-                ));
+                self.folder_rows(&mut rows);
                 rows.push((Row::new("Look again", Value::Action).detail(self.cores_note()), Act::Rescan));
                 rows.push((Row::heading("Which games show"), Act::None));
                 let systems = self.systems_found();
@@ -334,6 +332,11 @@ impl Chanoma {
                 if s.one_of_each {
                     rows.push((Row::new("Region first", Value::Choice(s.region.label().into())), Act::Region));
                 }
+                rows.push((
+                    Row::new("Box art from the internet", Value::Switch(s.fetch_art))
+                        .detail("Found by each game's name at thumbnails.libretro.com, and kept"),
+                    Act::FetchArt,
+                ));
                 rows.push((Row::heading("Which games kids see"), Act::None));
                 let new = match s.new_games {
                     NewGames::Ask => "Wait for you",
@@ -342,7 +345,12 @@ impl Chanoma {
                 rows.push((Row::new("New games", Value::Choice(new.into())), Act::NewGames));
                 let waiting = self.shown_games().filter(|g| s.game_waiting(&g.key)).count();
                 if waiting > 0 {
-                    rows.push((Row::new(format!("Allow all {waiting} new games"), Value::Action), Act::AllowAll));
+                    let label = if waiting == 1 {
+                        "Allow the new game".to_owned()
+                    } else {
+                        format!("Allow all {waiting} new games")
+                    };
+                    rows.push((Row::new(label, Value::Action), Act::AllowAll));
                 }
                 // A system at a time: thousands of games in one list
                 // would be no list at all.
@@ -366,25 +374,68 @@ impl Chanoma {
                 }
             }
             3 => {
-                rows.push((Row::heading("Folders"), Act::None));
-                for (i, f) in s.video_folders.iter().enumerate() {
-                    rows.push((
-                        Row::new(f.display().to_string(), Value::Action).detail("Remove this folder"),
-                        Act::RemoveFolder(FolderKind::Videos, i),
-                    ));
-                }
+                self.folder_rows(&mut rows);
+                let shelves = &self.library.shelves;
+                let n = shelves.len();
                 rows.push((
-                    Row::new("Add a videos folder…", Value::Action)
-                        .detail("Kids see everything in it: a folder of episodes is a show"),
-                    Act::AddFolder(FolderKind::Videos),
-                ));
-                let n = self.library.shelves.len();
-                rows.push((
-                    Row::new("Look again", Value::Action).detail(format!("{n} films and shows found")),
+                    Row::new("Look again", Value::Action)
+                        .detail(format!("{n} films and shows found: a folder of episodes is a show")),
                     Act::Rescan,
                 ));
+                rows.push((Row::heading("Which ones kids see"), Act::None));
+                let new = match s.new_films {
+                    NewGames::Ask => "Wait for you",
+                    NewGames::Allow => "Show at once",
+                };
+                rows.push((Row::new("New films and shows", Value::Choice(new.into())), Act::NewFilms));
+                let waiting = shelves.iter().filter(|f| s.film_waiting(&f.key)).count();
+                if waiting > 0 {
+                    let label = if waiting == 1 {
+                        "Allow the new one".to_owned()
+                    } else {
+                        format!("Allow all {waiting} new ones")
+                    };
+                    rows.push((Row::new(label, Value::Action), Act::AllowAllFilms));
+                }
+                if n > 0 {
+                    rows.push((Row::new(format!("Let kids watch all {n}"), Value::Action), Act::FilmsAll(true)));
+                    rows.push((Row::new(format!("Keep all {n} from kids"), Value::Action), Act::FilmsAll(false)));
+                    rows.push((Row::heading("A letter at a time with the shoulder buttons"), Act::None));
+                }
+                for f in shelves {
+                    let what = match f.videos.len() {
+                        1 => "A film".to_owned(),
+                        e => format!("A show of {e} episodes"),
+                    };
+                    let mut row = Row::new(f.title.clone(), Value::Switch(s.film_allowed(&f.key))).detail(what);
+                    if s.film_waiting(&f.key) {
+                        row = row.badge("New");
+                    }
+                    rows.push((row, Act::Film(f.key.clone())));
+                }
             }
-            4 => {
+            FOLDERS => {
+                rows.push((Row::heading("Chanoma looks through everything in these"), Act::None));
+                for (i, f) in s.folders.iter().enumerate() {
+                    let (name, place) = self.said(f);
+                    rows.push((
+                        Row::new(name, Value::Action).detail(format!("{place} · {}", self.folder_state(f))),
+                        Act::Open(Sub::Folder(i)),
+                    ));
+                }
+                if s.folders.is_empty() {
+                    rows.push((Row::heading("None yet"), Act::None));
+                }
+                rows.push((Row::new("Add a folder…", Value::Action).detail(ADD_DETAIL), Act::AddFolder));
+                rows.push((Row::new("Look again", Value::Action).detail("Reads what's changed since"), Act::Rescan));
+                rows.push((Row::heading("Not sure where your games are?"), Act::None));
+                rows.push((
+                    Row::new("Search every drive for games…", Value::Action)
+                        .detail("Reads all of home and each drive plugged in: minutes, on a big drive"),
+                    Act::FindGames,
+                ));
+            }
+            5 => {
                 rows.push((Row::heading("Connected"), Act::None));
                 if self.controllers.is_empty() {
                     rows.push((Row::new("No controllers are on", Value::None), Act::None));
@@ -417,7 +468,7 @@ impl Chanoma {
                     Act::Confirm,
                 ));
             }
-            5 => {
+            6 => {
                 rows.push((Row::new("Change the PIN…", Value::Action), Act::ChangePin));
                 rows.push((
                     Row::new("Lock grown-up mode after", Value::Choice(format!("{} minutes", s.relock_minutes)))
@@ -521,7 +572,8 @@ impl Chanoma {
                     let parts: Vec<String> =
                         found.folder.iter().rev().take(2).map(|p| p.to_string_lossy().into_owned()).collect();
                     let at: Vec<&str> = parts.iter().rev().map(String::as_str).collect();
-                    let added = s.game_folders.iter().any(|g| g.canonicalize().ok().as_ref() == Some(&found.folder));
+                    // One of the folders, or in one.
+                    let added = s.folders.iter().any(|g| g.canonicalize().is_ok_and(|g| found.folder.starts_with(g)));
                     rows.push((
                         Row::new(found.system.name, Value::Switch(added)).detail(format!(
                             "{} in {}",
@@ -534,6 +586,21 @@ impl Chanoma {
                 if !f.running && f.found.is_empty() {
                     rows.push((Row::heading("No games found"), Act::None));
                 }
+            }
+            Sub::Folder(i) => {
+                let Some(f) = s.folders.get(*i) else { return rows };
+                let (name, place) = self.said(f);
+                rows.push((Row::heading(place), Act::None));
+                rows.push((Row::new(f.display().to_string(), Value::None).detail(self.folder_state(f)), Act::None));
+                rows.push((
+                    Row::new("Look again", Value::Action).detail("Reads what's changed in it since"),
+                    Act::Rescan,
+                ));
+                rows.push((
+                    Row::new(format!("Remove {name}"), Value::Action)
+                        .detail("Its games, films and shows leave Chanoma; nothing is deleted"),
+                    Act::RemoveFolder(*i),
+                ));
             }
         }
         rows
@@ -587,7 +654,11 @@ impl Chanoma {
                 let name = crate::library::SYSTEMS.iter().find(|x| x.id == *id).map_or("", |x| x.short);
                 format!("Games › {name}")
             }
-            Some(Sub::Found) => "Games › On your drives".into(),
+            Some(Sub::Found) => "Folders › Games on your drives".into(),
+            Some(Sub::Folder(i)) => {
+                let name = self.settings.folders.get(*i).map(|f| self.said(f).0).unwrap_or_default();
+                format!("Folders › {name}")
+            }
             None if self.settings.setup_done => "Settings".into(),
             None => "Set up Chanoma".into(),
         };
@@ -720,6 +791,21 @@ impl Chanoma {
             Act::NewGames => {
                 self.settings.new_games = cycle(&[NewGames::Ask, NewGames::Allow], self.settings.new_games, forward);
             }
+            Act::NewFilms => {
+                let was = self.settings.new_films;
+                self.settings.new_films = cycle(&[NewGames::Allow, NewGames::Ask], was, forward);
+                // Waiting from now on: what kids see now, they keep seeing.
+                if was == NewGames::Allow && self.settings.new_films == NewGames::Ask {
+                    let seen: Vec<String> = self
+                        .library
+                        .shelves
+                        .iter()
+                        .filter(|f| !self.settings.films_hidden.contains(&f.key))
+                        .map(|f| f.key.clone())
+                        .collect();
+                    self.settings.films_allowed.extend(seen);
+                }
+            }
             Act::Confirm => {
                 self.settings.confirm =
                     cycle(&[Confirm::Auto, Confirm::Bottom, Confirm::Right], self.settings.confirm, forward);
@@ -733,7 +819,14 @@ impl Chanoma {
 
     fn do_row(&mut self, act: Act, cx: &mut Cx<Msg>) {
         match act {
-            Act::Weekdays | Act::Weekend | Act::Bedtime | Act::Wake | Act::NewGames | Act::Confirm | Act::Relock => {
+            Act::Weekdays
+            | Act::Weekend
+            | Act::Bedtime
+            | Act::Wake
+            | Act::NewGames
+            | Act::NewFilms
+            | Act::Confirm
+            | Act::Relock => {
                 self.change(act, true, cx);
             }
             Act::Give(m) => {
@@ -753,12 +846,7 @@ impl Chanoma {
                 }
                 self.save_settings();
             }
-            Act::RemoveSite(i) => {
-                if i < self.settings.custom_services.len() {
-                    self.settings.custom_services.remove(i);
-                    self.save_settings();
-                }
-            }
+            Act::RemoveSite(i) => self.open_menu(super::MenuKind::Remove(super::Removal::Site(i)), cx),
             Act::AddSite => {
                 let w = cx.show_sheet(self.window);
                 self.site = Some((w, String::new(), "https://".into()));
@@ -771,6 +859,42 @@ impl Chanoma {
                 } else {
                     s.games_hidden.remove(&key);
                     s.games_allowed.insert(key);
+                }
+                self.save_settings();
+            }
+            Act::Film(key) => {
+                let s = &mut self.settings;
+                if s.film_allowed(&key) {
+                    s.films_allowed.remove(&key);
+                    s.films_hidden.insert(key);
+                } else {
+                    s.films_hidden.remove(&key);
+                    s.films_allowed.insert(key);
+                }
+                self.save_settings();
+            }
+            Act::AllowAllFilms => {
+                let keys: Vec<String> = self
+                    .library
+                    .shelves
+                    .iter()
+                    .filter(|f| self.settings.film_waiting(&f.key))
+                    .map(|f| f.key.clone())
+                    .collect();
+                self.settings.films_allowed.extend(keys);
+                self.save_settings();
+            }
+            Act::FilmsAll(all) => {
+                let keys: Vec<String> = self.library.shelves.iter().map(|f| f.key.clone()).collect();
+                let s = &mut self.settings;
+                for k in keys {
+                    if all {
+                        s.films_hidden.remove(&k);
+                        s.films_allowed.insert(k);
+                    } else {
+                        s.films_allowed.remove(&k);
+                        s.films_hidden.insert(k);
+                    }
                 }
                 self.save_settings();
             }
@@ -788,14 +912,16 @@ impl Chanoma {
             }
             Act::UseFolder(folder) => {
                 let s = &mut self.settings;
-                match s.game_folders.iter().position(|g| g.canonicalize().ok().as_ref() == Some(&folder)) {
+                match s.folders.iter().position(|g| g.canonicalize().ok().as_ref() == Some(&folder)) {
                     Some(i) => {
-                        s.game_folders.remove(i);
+                        s.folders.remove(i);
+                        self.save_settings();
+                        self.rescan(cx);
                     }
-                    None => s.game_folders.push(folder),
+                    None => {
+                        self.add_folder(folder, cx);
+                    }
                 }
-                self.save_settings();
-                self.rescan(cx);
             }
             Act::SystemOn(id) => {
                 let off = &mut self.settings.systems_off;
@@ -804,6 +930,10 @@ impl Chanoma {
                 }
                 self.save_settings();
                 self.reshow();
+            }
+            Act::FetchArt => {
+                self.settings.fetch_art = !self.settings.fetch_art;
+                self.save_settings();
             }
             Act::HideVariants => {
                 self.settings.hide_variants = !self.settings.hide_variants;
@@ -832,18 +962,12 @@ impl Chanoma {
                 }
                 self.save_settings();
             }
-            Act::RemoveFolder(kind, i) => {
-                let folders = match kind {
-                    FolderKind::Games => &mut self.settings.game_folders,
-                    FolderKind::Videos => &mut self.settings.video_folders,
-                };
-                if i < folders.len() {
-                    folders.remove(i);
-                    self.save_settings();
-                    self.rescan(cx);
-                }
+            Act::RemoveFolder(i) => self.open_menu(super::MenuKind::Remove(super::Removal::Folder(i)), cx),
+            Act::AddFolder => self.open_picker(super::picker::From::Settings(self.grownups.clone()), cx),
+            Act::GoFolders => {
+                self.grownups = State { section: FOLDERS, in_list: true, ..State::default() };
+                self.grownups.row = self.grownups_page().first_row();
             }
-            Act::AddFolder(kind) => self.open_picker(kind, cx),
             Act::Rescan => {
                 self.rescan(cx);
                 self.toast("Looking…", cx);
@@ -867,29 +991,92 @@ impl Chanoma {
         }
     }
 
-    pub fn folder_chosen(&mut self, kind: FolderKind, dir: PathBuf, cx: &mut Cx<Msg>) {
-        let folders = match kind {
-            FolderKind::Games => &mut self.settings.game_folders,
-            FolderKind::Videos => &mut self.settings.video_folders,
-        };
-        if !folders.contains(&dir) {
-            folders.push(dir);
-            self.save_settings();
-            self.rescan(cx);
+    /// Remove what a grown-up said yes to removing.
+    pub fn remove(&mut self, what: super::Removal, cx: &mut Cx<Msg>) {
+        match what {
+            super::Removal::Folder(i) if i < self.settings.folders.len() => {
+                let f = self.settings.folders.remove(i);
+                self.save_settings();
+                self.rescan(cx);
+                self.close_sub();
+                self.toast(format!("Removed {}: nothing was deleted", self.said(&f).0), cx);
+            }
+            super::Removal::Site(i) if i < self.settings.custom_services.len() => {
+                let c = self.settings.custom_services.remove(i);
+                self.save_settings();
+                self.toast(format!("Removed {}", c.name), cx);
+            }
+            _ => {}
         }
+        let page = self.grownups_page();
+        self.grownups.row = self.grownups.row.min(page.rows.len().saturating_sub(1));
+        self.grownups.first = page.first;
+        self.focus = self.grownups.focus();
     }
 
-    /// Back from choosing a folder: the focus on *Add a … folder* (the
-    /// folder added is the row above it now).
-    pub fn settings_on_add(&mut self, kind: FolderKind) {
-        let section = match kind {
-            FolderKind::Games => 2,
-            FolderKind::Videos => 3,
-        };
-        let row = self.section_rows(section).iter().position(|(_, a)| *a == Act::AddFolder(kind)).unwrap_or(0);
-        self.grownups = State { section, row, in_list: true, ..State::default() };
+    /// Add `dir` to the folders, unless it's one or in one already (a toast
+    /// says which), and look through it: whether it was added. A folder
+    /// holding some already is added beside them: each file is the nearer
+    /// folder's, so their games keep what kids may play and where they were
+    /// left.
+    pub fn add_folder(&mut self, dir: PathBuf, cx: &mut Cx<Msg>) -> bool {
+        let (name, _) = self.said(&dir);
+        let covering = self
+            .settings
+            .folders
+            .iter()
+            .find(|f| dir.starts_with(f) || f.canonicalize().is_ok_and(|c| dir.starts_with(c)))
+            .cloned();
+        if let Some(f) = covering {
+            let msg = if f == dir {
+                format!("{name} is one of your folders already")
+            } else {
+                format!("{name} is looked through already, as part of {}", self.said(&f).0)
+            };
+            self.toast(msg, cx);
+            return false;
+        }
+        log::info!("chanoma: folder added: {}", dir.display());
+        self.settings.folders.push(dir);
+        self.save_settings();
+        self.rescan(cx);
+        self.toast(format!("Added {name}: looking through it"), cx);
+        true
+    }
+
+    /// Back from adding a folder: the focus on *Add a folder…*, where it
+    /// was (the folder added is a row above it now), so pressing again
+    /// adds another.
+    pub fn back_on_add(&mut self) {
+        if let Some(r) = self.list_rows().iter().position(|(_, a)| *a == Act::AddFolder) {
+            self.grownups.row = r;
+        }
         self.grownups.first = self.grownups_page().first;
         self.focus = self.grownups.focus();
+    }
+
+    /// Games' and Films' way to the folders: which, and adding one.
+    fn folder_rows(&self, rows: &mut Vec<(Row, Act)>) {
+        let names: Vec<String> = self.settings.folders.iter().map(|f| self.said(f).0).collect();
+        let which = if names.is_empty() { "None yet".to_owned() } else { names.join(", ") };
+        rows.push((Row::heading("Folders"), Act::None));
+        rows.push((Row::new("Your folders", Value::Note(names.len().to_string())).detail(which), Act::GoFolders));
+        rows.push((Row::new("Add a folder…", Value::Action).detail(ADD_DETAIL), Act::AddFolder));
+    }
+
+    /// How one of the folders is: being looked through, its drive out, or
+    /// what it holds.
+    fn folder_state(&self, f: &std::path::Path) -> String {
+        if let Some((l, n)) = &self.looking
+            && l == f
+        {
+            return format!("Looking through it: {n} folders so far");
+        }
+        match self.library.held.iter().find(|h| h.folder == f) {
+            Some(h) if !h.here => "Not plugged in".into(),
+            Some(h) => crate::folders::held_word(h),
+            None => "Not looked through yet".into(),
+        }
     }
 
     pub fn add_site(&mut self, cx: &mut Cx<Msg>) {
@@ -998,7 +1185,7 @@ impl Chanoma {
         {
             drop(p.bt.stop_discovery(a));
         }
-        self.open_grownups(Some(4), cx);
+        self.open_grownups(Some(CONTROLLERS), cx);
     }
 
     // Setting a controller's buttons up.
@@ -1058,7 +1245,7 @@ impl Chanoma {
         if let Some(p) = &self.pads {
             p.raw(false);
         }
-        self.open_grownups(Some(4), cx);
+        self.open_grownups(Some(CONTROLLERS), cx);
     }
 
     fn setup_next(&mut self, cx: &mut Cx<Msg>) {
@@ -1075,7 +1262,7 @@ impl Chanoma {
             p.raw(false);
             p.set_layouts(self.layouts.clone());
         }
-        self.open_grownups(Some(4), cx);
+        self.open_grownups(Some(CONTROLLERS), cx);
         self.toast_note(crate::ui::Note::Controller, format!("{} is set up", s.name), cx);
     }
 

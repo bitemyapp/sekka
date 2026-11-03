@@ -349,6 +349,45 @@ fn rgb(c: u32) -> Color {
     Color::hex(c)
 }
 
+/// One of a sprite's squares: eight make its side.
+const SPRITE_CELL: f64 = 7.0;
+
+/// A game's picture when it has none: a sprite of eight by eight squares,
+/// mirrored as an invader is, in its system's colour and a lighter one,
+/// made from its title (so a game's releases share it), at `at`.
+fn sprite(c: &mut Canvas, title: &str, color: u32, at: Point, cell: f64) {
+    // FNV-1a over the title, as it sounds.
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in title.to_lowercase().bytes() {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0100_0000_01b3);
+    }
+    // Squares enough to be something: a body down its middle.
+    let shape = (h as u32) | 0x0660_6600;
+    let light = mix(color, 0xffffff, 0.45);
+    for row in 0..8u32 {
+        for col in 0..4u32 {
+            let bit = row * 4 + col;
+            if shape >> bit & 1 == 0 {
+                continue;
+            }
+            let tone = if (h >> 32) >> bit & 1 == 1 { light } else { rgb(color) };
+            for x in [col, 7 - col] {
+                let x0 = at.x + f64::from(x) * cell;
+                let y0 = at.y + f64::from(row) * cell;
+                c.fill_rect(Rect::new(x0, y0, x0 + cell, y0 + cell), tone);
+            }
+        }
+    }
+}
+
+/// `a` taken `t` of the way to `b` (both `0xRRGGBB`).
+fn mix(a: u32, b: u32, t: f64) -> Color {
+    let ch = |v: u32, s: u32| f64::from((v >> s) & 0xff);
+    let one = |s: u32| ((ch(a, s) + (ch(b, s) - ch(a, s)) * t).round() as u32).min(255) << s;
+    Color::hex(one(16) | one(8) | one(0))
+}
+
 /// One tile at `r`: a flat face, its picture or its name, and while the
 /// controller is on it the focus ring, with its name under it when the
 /// tile is a picture.
@@ -385,21 +424,35 @@ pub fn paint_tile(c: &mut Canvas, theme: &Theme, t: &Tile, r: Rect, focused: boo
             }
             None => {
                 face(c, theme, r, theme.raised(), theme.line());
-                // What it is along the top (a game's system, by its
-                // colour and name; a film's icon), its title at the foot.
+                // What it is along the top (a game's sprite in its system's
+                // colour, and the system's name; a film's icon), its title
+                // at the foot.
                 let y = r.y0 + PAD + 12.0;
-                match chip {
+                let top = match chip {
                     Some(color) => {
-                        c.fill_rect(Rect::new(r.x0 + PAD, y - 8.0, r.x0 + PAD + 16.0, y + 8.0), rgb(*color));
-                        let room = r.width() - PAD * 2.0 - 28.0;
-                        let sub = if caption_width(theme, &t.sub, CAPTION) <= room { t.sub.as_str() } else { "" };
-                        caption(c, theme, sub, r.x0 + PAD + 28.0, y, theme.text3());
+                        let side = SPRITE_CELL * 8.0;
+                        sprite(c, &t.label, *color, Point::new(r.x0 + PAD, r.y0 + PAD), SPRITE_CELL);
+                        let x = r.x0 + PAD + side + 16.0;
+                        // Clear of the corner's flag; its initials (GBA) where
+                        // the system's name is too long.
+                        let flag = t.badge.as_ref().map_or(0.0, |b| caption_width(theme, b, CAPTION) + 32.0);
+                        let room = r.x1 - PAD - x - flag;
+                        let initials: String = t.sub.split_whitespace().filter_map(|w| w.chars().next()).collect();
+                        let sub = [t.sub.as_str(), initials.as_str()]
+                            .into_iter()
+                            .find(|s| caption_width(theme, s, CAPTION) <= room)
+                            .unwrap_or("");
+                        caption(c, theme, sub, x, y, theme.text3());
+                        side + 8.0
                     }
-                    None => icon(c, Icon::Film, Point::new(r.x0 + PAD + 16.0, y + 4.0), 32.0, theme.text3()),
-                }
+                    None => {
+                        icon(c, Icon::Film, Point::new(r.x0 + PAD + 16.0, y + 4.0), 32.0, theme.text3());
+                        40.0
+                    }
+                };
                 let spec = font(30.0, SEMIBOLD);
                 let lines = wrap(theme, &t.label, r.width() - PAD * 2.0, spec);
-                let room = ((r.height() - PAD * 2.0 - 40.0) / (spec.size * 1.2)).floor().max(1.0) as usize;
+                let room = ((r.height() - PAD * 2.0 - top) / (spec.size * 1.2)).floor().max(1.0) as usize;
                 let lh = spec.size * 1.2;
                 let shown = lines.len().min(room);
                 let mut top = r.y1 - PAD - lh * shown as f64;

@@ -42,6 +42,15 @@ impl Chanoma {
         self.shown_games().filter(|g| self.is_grownup() || self.settings.game_allowed(&g.key)).collect()
     }
 
+    /// The films and shows kids may watch now (all of them for a grown-up),
+    /// by their place in the library.
+    pub fn watchable(&self) -> Vec<usize> {
+        let grownup = self.is_grownup();
+        (0..self.library.shelves.len())
+            .filter(|i| grownup || self.settings.film_allowed(&self.library.shelves[*i].key))
+            .collect()
+    }
+
     /// The services on Home: ids, in order.
     pub fn services_shown(&self) -> Vec<&'static services::Service> {
         if self.is_grownup() {
@@ -55,9 +64,31 @@ impl Chanoma {
         }
     }
 
-    fn game_tile(&self, g: &Game, picture: bool) -> Tile {
+    /// Where `g`'s box art from libretro-thumbnails is, fetched or to be,
+    /// when it may be fetched and hasn't been found missing.
+    fn box_art(&self, g: &Game) -> Option<PathBuf> {
+        if !self.settings.fetch_art || self.config.art_url.is_none() {
+            return None;
+        }
+        let p = crate::art::cached(&self.config.dirs.art(), g.system.id, g.known_as.as_ref()?);
+        (!self.art_missing.contains(&p)).then_some(p)
+    }
+
+    pub(crate) fn game_tile(&self, g: &Game, picture: bool) -> Tile {
         let state = self.config.dirs.states().join(format!("{}.png", g.file_key()));
-        let (art, pixels) = if picture && state.is_file() { (Some(state), true) } else { (g.art.clone(), false) };
+        // On *Keep playing*, where it was left; else its box (beside it, or
+        // fetched); else where it was left, if it was played; else none,
+        // and the tile draws its sprite.
+        let played = || self.recent.items.iter().any(|i| matches!(i, Item::Game { key } if *key == g.key));
+        let (art, pixels) = if picture && state.is_file() {
+            (Some(state), true)
+        } else if let Some(a) = g.art.clone().or_else(|| self.box_art(g)) {
+            (Some(a), false)
+        } else if played() {
+            (Some(state), true)
+        } else {
+            (None, false)
+        };
         let waiting = self.is_grownup() && self.settings.game_waiting(&g.key);
         Tile {
             label: g.title.clone(),
@@ -131,8 +162,9 @@ impl Chanoma {
                     else {
                         continue;
                     };
-                    // A show once, at its latest episode.
-                    if !shown_shelves.insert(si) {
+                    // A show once, at its latest episode; one kept from kids
+                    // isn't theirs to carry on.
+                    if !shown_shelves.insert(si) || !(grownup || self.settings.film_allowed(&shelf.key)) {
                         continue;
                     }
                     let at = shelf.videos.iter().position(|v| &v.path == path).expect("found above");
@@ -198,14 +230,13 @@ impl Chanoma {
         // them would wait below the screen.
         let games_at = out.len();
         // Films and shows.
-        if !self.library.shelves.is_empty() {
-            let mut films: Vec<(Tile, Act)> = self
-                .library
-                .shelves
+        let watchable = self.watchable();
+        if !watchable.is_empty() {
+            let mut films: Vec<(Tile, Act)> = watchable
                 .iter()
-                .enumerate()
                 .take(SHELF_FILMS)
-                .map(|(i, s)| {
+                .map(|&i| {
+                    let s = &self.library.shelves[i];
                     let sub = if s.videos.len() > 1 { format!("{} episodes", s.videos.len()) } else { String::new() };
                     (
                         Tile {
@@ -220,7 +251,7 @@ impl Chanoma {
                     )
                 })
                 .collect();
-            if self.library.shelves.len() > SHELF_FILMS {
+            if watchable.len() > SHELF_FILMS {
                 films.push((
                     Tile {
                         label: "Everything".into(),
@@ -290,7 +321,7 @@ impl Chanoma {
                     vec![(
                         Tile {
                             label: "Add games".into(),
-                            sub: "Choose their folder".into(),
+                            sub: "Show Chanoma their folder".into(),
                             look: TileLook::Symbol { symbol: Symbol::Plus },
                             badge: None,
                             progress: None,
@@ -438,6 +469,9 @@ impl Chanoma {
             }
             Input::Prev => self.focus.col = 0,
             Input::Next => self.focus.col = len(self.focus.row).saturating_sub(1),
+            // Looking for something by name.
+            Input::Alt => return self.open_search(None, cx),
+            Input::Typed(c) => return self.open_search(Some(c), cx),
             Input::Back => {
                 // Back on Home goes to the first tile of the first shelf.
                 self.focus = Focus::default();
@@ -496,7 +530,7 @@ impl Chanoma {
             }
             Act::GrownUps => self.ask_pin(super::AfterPin::Unlock, cx),
             Act::Settings => self.open_grownups(None, cx),
-            Act::AddGames => self.open_picker(super::grownups::FolderKind::Games, cx),
+            Act::AddGames => self.open_picker(super::picker::From::Home, cx),
             Act::Lock => self.lock(cx),
             Act::Leave => {
                 self.shutdown();
@@ -513,6 +547,11 @@ impl Chanoma {
 
     /// The grid's tabs: all, those the controllers connected can play
     /// together, then each system with games here.
+    /// How many tabs the games grid has.
+    pub(crate) fn game_tab_count(&self) -> usize {
+        self.game_tabs().len()
+    }
+
     fn game_tabs(&self) -> Vec<GameTab> {
         let games = self.playable();
         let mut tabs = vec![GameTab::All];
@@ -568,6 +607,8 @@ impl Chanoma {
                     if i == Input::Next { (self.games_tab + 1) % tabs } else { (self.games_tab + tabs - 1) % tabs };
                 self.focus.col = 0;
             }
+            Input::Alt => return self.open_search(None, cx),
+            Input::Typed(c) => return self.open_search(Some(c), cx),
             Input::Back => return self.go(Screen::Home, cx),
             Input::Ok => {
                 let key = self.games_in_tab().get(self.focus.col).map(|g| g.key.clone());
@@ -587,9 +628,9 @@ impl Chanoma {
     pub fn episodes_view(&self, shelf: usize) -> Grid {
         if shelf == usize::MAX {
             let tiles = self
-                .library
-                .shelves
-                .iter()
+                .watchable()
+                .into_iter()
+                .map(|i| &self.library.shelves[i])
                 .map(|s| Tile {
                     label: s.title.clone(),
                     sub: String::new(),
@@ -663,11 +704,8 @@ impl Chanoma {
 
     pub fn episodes_input(&mut self, shelf: usize, i: Input, cx: &mut Cx<Msg>) {
         let all = shelf == usize::MAX;
-        let n = if all {
-            self.library.shelves.len()
-        } else {
-            self.library.shelves.get(shelf).map_or(0, |s| s.videos.len())
-        };
+        let n =
+            if all { self.watchable().len() } else { self.library.shelves.get(shelf).map_or(0, |s| s.videos.len()) };
         let cols = home::across(if all { TileSize::Poster } else { TileSize::Wide });
         let f = &mut self.focus.col;
         match i {
@@ -679,7 +717,8 @@ impl Chanoma {
             Input::Ok => {
                 self.episode_focus = self.focus.col;
                 if all {
-                    return self.act(Act::Shelf(self.focus.col), cx);
+                    let Some(&i) = self.watchable().get(self.focus.col) else { return };
+                    return self.act(Act::Shelf(i), cx);
                 }
                 let path =
                     self.library.shelves.get(shelf).and_then(|s| s.videos.get(self.focus.col)).map(|v| v.path.clone());
@@ -717,9 +756,11 @@ impl Chanoma {
                     }
                 }
             }
-            Screen::Games | Screen::Episodes(_) => {
+            Screen::Games | Screen::Episodes(_) | Screen::Search => {
                 let g = if self.screen == Screen::Games {
                     self.games_view()
+                } else if self.screen == Screen::Search {
+                    self.search_view()
                 } else if let Screen::Episodes(s) = self.screen {
                     self.episodes_view(s)
                 } else {

@@ -260,11 +260,14 @@ fn config(dirs: Dirs, cores: PathBuf, clock: ManualClock) -> Config {
         pin_rounds: 10,
         core_dirs: vec![cores],
         metadata: None,
+        art_url: None,
         database: None,
         fullscreen: false,
         scan: true,
         core_override: Some(test_core()),
         signals: false,
+        account: ("ann".into(), "Ann".into()),
+        authenticator: std::sync::Arc::new(aizome_sys::pam::Fixed("hunter2".into())),
         h24: true,
         // Beside the cores: a home and a folder drives appear in, for the
         // folder picker.
@@ -1037,13 +1040,16 @@ fn a_big_collection_is_managed_a_system_at_a_time_and_found_on_a_drive() {
     assert_eq!(h.program().grownups_page().rows[h.program().grownups.row].label, "Kirby");
     input(&mut h, Input::Back);
 
-    // Found on the drive: its SNES folder, counted where it's named, and
-    // not the backup's stray .bin; switched on, its games join.
-    to_row(&mut h, "Find games on your drives…");
+    // Over to Folders; every drive searched for games: its SNES folder,
+    // counted where it's named, and not the backup's stray .bin; switched
+    // on, its games join.
+    to_row(&mut h, "Your folders");
+    input(&mut h, Input::Ok);
+    to_row(&mut h, "Search every drive for games…");
     input(&mut h, Input::Ok);
     until(&mut h, |a| a.finding.as_ref().is_some_and(|f| !f.running));
     let page = h.program().grownups_page();
-    assert_eq!(page.title, "Games › On your drives");
+    assert_eq!(page.title, "Folders › Games on your drives");
     let stick_row = page.rows.iter().position(|r| r.heading && r.label == "Stick").expect("the drive");
     let snes = &page.rows[stick_row + 1];
     assert_eq!((snes.label.as_str(), snes.detail.as_str()), ("Super Nintendo", "2 games in roms › snes"));
@@ -1224,7 +1230,8 @@ fn games_say_what_the_databases_know_and_two_controllers_bring_their_games() {
 }
 
 #[test]
-fn a_games_folder_is_chosen_with_the_controller_alone() {
+fn a_folder_is_added_with_the_controller_alone() {
+    use aizome_chanoma::ui::picker::{Body, Choice};
     let (dirs, cores) = household("picker", |_| {});
     let root = cores.parent().unwrap().to_path_buf();
     let home = root.join("home");
@@ -1232,9 +1239,25 @@ fn a_games_folder_is_chosen_with_the_controller_alone() {
     std::fs::write(home.join("ROMs/Super Nintendo/Pocket Quest (USA).sfc"), b"CHANOMA test game").unwrap();
     std::fs::create_dir_all(home.join("ROMs/.cache")).unwrap();
     std::fs::create_dir_all(home.join("Videos")).unwrap();
+    // A drive with a collection (a game's clip beside it, and a film) and
+    // a backup.
     let stick = root.join("media/STICK");
-    std::fs::create_dir_all(stick.join("snes")).unwrap();
-    std::fs::write(stick.join("snes/Stick Game.sfc"), b"CHANOMA test game").unwrap();
+    for f in [
+        "roms/snes/Stick Game.sfc",
+        "roms/snes/videos/Stick Game.mp4",
+        "roms/gba/Pocket.gba",
+        "roms/Holiday.mp4",
+        "backup/old/notes.txt",
+    ] {
+        std::fs::write(stick.join(f).tap_parent(), b"CHANOMA test game").unwrap();
+    }
+    // Its pictures, as Batocera's scraper keeps them and its list says.
+    image::RgbaImage::new(2, 2).save(stick.join("roms/snes/images/Stick Game-thumb.png").tap_parent()).unwrap();
+    std::fs::write(
+        stick.join("roms/snes/gamelist.xml"),
+        "<gameList><game><path>./Stick Game.sfc</path><thumbnail>./images/Stick Game-thumb.png</thumbnail></game></gameList>",
+    )
+    .unwrap();
     let clock = ManualClock::at(2026, 10, 31, 17, 0);
     let mut h = harness(config(dirs, cores, clock));
 
@@ -1250,43 +1273,82 @@ fn a_games_folder_is_chosen_with_the_controller_alone() {
     assert_eq!(h.program().home_view().shelves[f.row].tiles[f.col].label, "Settings");
     input(&mut h, Input::Ok);
     assert_eq!(h.program().screen, Screen::GrownUps);
-    // Games, into its rows, down to adding a folder.
-    input(&mut h, Input::Dir(Dir::Down));
-    input(&mut h, Input::Dir(Dir::Down));
-    input(&mut h, Input::Dir(Dir::Right));
-    let focused = |a: &Chanoma| a.grownups_page().rows[a.grownups.row].label.clone();
+    // Folders, into its rows: the household's folder, then adding one.
     for _ in 0..4 {
-        if focused(h.program()) == "Add a games folder…" {
-            break;
-        }
         input(&mut h, Input::Dir(Dir::Down));
     }
-    assert_eq!(focused(h.program()), "Add a games folder…");
+    input(&mut h, Input::Dir(Dir::Right));
+    let focused = |a: &Chanoma| a.grownups_page().rows[a.grownups.row].label.clone();
+    assert_eq!(focused(h.program()), "Games");
+    to_row(&mut h, "Add a folder…");
     input(&mut h, Input::Ok);
     assert_eq!(h.program().screen, Screen::Folders);
-    let read = |a: &Chanoma| a.picker.as_ref().is_some_and(|p| p.listing.is_some() && p.found.is_some());
-    until(&mut h, read);
 
-    // Home: the places, and its folders with the first one ready.
+    // It opens on what looks like a collection, found from two levels of
+    // home and the drive: the stick's roms first (more systems).
+    until(&mut h, |a| a.picker.as_ref().is_some_and(|p| p.suggested.is_some()));
     let view = h.program().picker_view();
     let places: Vec<&str> = view.places.iter().map(|(n, _)| n.as_str()).collect();
-    assert_eq!(places, ["Home", "ROMs", "Videos", "STICK", "This computer"]);
-    assert_eq!(view.crumbs, ["Home"]);
-    let aizome_chanoma::ui::picker::Body::Folders(rows) = &view.body else { panic!("{:?}", view.body) };
-    assert_eq!(rows.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["ROMs", "Videos"]);
-    assert_eq!(rows[0].1, "1 folder");
-    assert_eq!(h.program().focus, aizome_chanoma::ui::Focus { row: 1, col: 1 });
-    shot(&mut h, "14-folders-home");
+    assert_eq!(places, ["Suggested", "Home", "ROMs", "Videos", "STICK", "This computer"]);
+    let Body::Suggested(rows) = &view.body else { panic!("{:?}", view.body) };
+    let rows: Vec<(&str, &str)> = rows.iter().map(|(n, w)| (n.as_str(), w.as_str())).collect();
+    assert_eq!(
+        rows,
+        [
+            ("roms", "On STICK · Folders for 2 systems: Game Boy Advance, Super NES · 1 video"),
+            ("ROMs", "In your home folder · A folder for Super NES"),
+        ]
+    );
+    assert_eq!(h.program().focus, aizome_chanoma::ui::Focus { row: 0, col: 1 });
+    shot(&mut h, "14-add-a-folder");
 
-    // Into ROMs: what Chanoma would find there, counted as it reads it.
+    // One press adds it, back where it was opened; then it's looked
+    // through: its games and its film, not its game's clip.
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::GrownUps);
+    assert!(h.program().settings.folders.contains(&stick.join("roms")));
+    assert_eq!(focused(h.program()), "Add a folder…", "back where it was, not on the folder added");
+    until(&mut h, |a| a.library.held.iter().any(|x| x.folder == stick.join("roms") && x.films == 1));
+    let stick_game = h.program().library.games.iter().find(|g| g.title == "Stick Game").cloned().expect("its game");
+    assert!(
+        stick_game.art.as_ref().is_some_and(|a| a.ends_with("images/Stick Game-thumb.png")),
+        "{:?}",
+        stick_game.art
+    );
+    assert!(!h.program().library.shelves.iter().any(|s| s.title == "Stick Game"), "a game's clip isn't a film");
+    let page = h.program().grownups_page();
+    let row = page.rows.iter().find(|r| r.label == "roms").expect("the folder's row");
+    assert_eq!(row.detail, "On STICK · 1 game for 1 system, and 1 without a game player here · 1 film");
+    shot(&mut h, "15-folders");
+
+    // Again: the stick's roms isn't suggested now. Over to the places,
+    // home, and into ROMs: what's in each folder, from one listing.
+    input(&mut h, Input::Ok);
+    until(&mut h, |a| a.picker.as_ref().is_some_and(|p| p.suggested.is_some()));
+    let Body::Suggested(rows) = h.program().picker_view().body else { panic!() };
+    assert_eq!(rows.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["ROMs"]);
+    let read = |a: &Chanoma| a.picker.as_ref().is_some_and(|p| p.listing.is_some() && p.inside.is_some());
+    input(&mut h, Input::Dir(Dir::Left));
+    input(&mut h, Input::Dir(Dir::Down));
+    until(&mut h, read);
+    let view = h.program().picker_view();
+    assert_eq!(view.crumbs, ["Home"]);
+    let Body::Folders(rows) = &view.body else { panic!("{:?}", view.body) };
+    assert_eq!(rows.iter().map(|(n, _)| n.as_str()).collect::<Vec<_>>(), ["ROMs", "Videos"]);
+    assert_eq!(rows[0].1, "A folder for Super NES");
+    input(&mut h, Input::Dir(Dir::Right));
+    assert_eq!(h.program().focus, aizome_chanoma::ui::Focus { row: 1, col: 1 });
     input(&mut h, Input::Ok);
     until(&mut h, read);
     let view = h.program().picker_view();
     assert_eq!(view.crumbs, ["Home", "ROMs"]);
-    assert_eq!(view.found, Some(("1 game for 1 system".to_owned(), true)));
-    let aizome_chanoma::ui::picker::Body::Folders(rows) = &view.body else { panic!("{:?}", view.body) };
+    assert_eq!(
+        (view.choice.clone(), view.found.clone()),
+        (Choice::Add, Some(("A folder for Super NES".to_owned(), true)))
+    );
+    let Body::Folders(rows) = &view.body else { panic!("{:?}", view.body) };
     assert_eq!(rows, &[("Super Nintendo".to_owned(), "1 game".to_owned())], "the hidden folder isn't shown");
-    shot(&mut h, "15-folders-roms");
+    shot(&mut h, "14b-add-a-folder-browsing");
 
     // Back goes up, the focus on the folder left.
     input(&mut h, Input::Back);
@@ -1294,27 +1356,222 @@ fn a_games_folder_is_chosen_with_the_controller_alone() {
     let p = h.program().picker.as_ref().unwrap();
     assert_eq!((p.dir.clone(), p.row), (home.clone(), 1));
 
-    // Left to the places; down to the stick, which shows as the focus
-    // reaches it; and the top button uses it.
+    // The stick: its roms is one of the folders, and its snes part of it,
+    // so neither is added again.
     input(&mut h, Input::Dir(Dir::Left));
     for _ in 0..3 {
         input(&mut h, Input::Dir(Dir::Down));
     }
     until(&mut h, read);
-    let p = h.program().picker.as_ref().unwrap();
-    assert_eq!(p.dir, stick);
-    assert_eq!(h.program().picker_view().found, Some(("1 game for 1 system".to_owned(), true)));
-    press(&mut h, Button::North);
-    assert_eq!(h.program().screen, Screen::GrownUps);
-    assert!(h.program().settings.game_folders.contains(&stick));
-    assert_eq!(focused(h.program()), "Add a games folder…", "back where it was, not on the folder added");
-    until(&mut h, |a| a.library.games.iter().any(|g| g.title == "Stick Game"));
-
-    // Opened again and put away: nothing changes.
+    let view = h.program().picker_view();
+    assert_eq!(view.crumbs, ["STICK"]);
+    let Body::Folders(rows) = &view.body else { panic!("{:?}", view.body) };
+    assert!(rows[1].1.starts_with("Added · "), "{rows:?}");
+    input(&mut h, Input::Dir(Dir::Right));
+    input(&mut h, Input::Dir(Dir::Down));
     input(&mut h, Input::Ok);
-    assert_eq!(h.program().screen, Screen::Folders);
+    until(&mut h, read);
+    assert_eq!(h.program().picker_view().choice, Choice::Already);
+    press(&mut h, Button::North);
+    assert_eq!(h.program().screen, Screen::Folders, "nothing to add: the picker stays");
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    until(&mut h, read);
+    assert_eq!(h.program().picker_view().crumbs, ["STICK", "roms", "snes"]);
+    assert_eq!(h.program().picker_view().choice, Choice::Inside("roms".into()));
+
+    // Put away: nothing more added.
     input(&mut h, Input::Dir(Dir::Left));
     input(&mut h, Input::Back);
     assert_eq!(h.program().screen, Screen::GrownUps);
-    assert_eq!(h.program().settings.game_folders.len(), 2);
+    assert_eq!(h.program().settings.folders.len(), 2);
+
+    // A folder's page: removing it asks first, keeping it ready to press.
+    to_row(&mut h, "roms");
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().grownups_page().title, "Folders › roms");
+    to_row(&mut h, "Remove roms");
+    input(&mut h, Input::Ok);
+    let Some(Modal::Menu { menu, kind: MenuKind::Remove(_) }) = &h.program().modal else { panic!("no question") };
+    assert_eq!(
+        (menu.title.as_str(), menu.items.clone()),
+        ("Remove roms?", vec!["Keep it".to_owned(), "Remove it from Chanoma".to_owned()])
+    );
+    shot(&mut h, "15b-remove-a-folder");
+    input(&mut h, Input::Ok);
+    assert!(h.program().modal.is_none());
+    assert_eq!(h.program().settings.folders.len(), 2, "kept");
+    input(&mut h, Input::Ok);
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().settings.folders.len(), 1, "removed");
+    assert!(!h.program().settings.folders.contains(&stick.join("roms")));
+}
+
+/// From Home, the grown-ups' door and the PIN, to Settings.
+fn into_settings(h: &mut Harness<Chanoma>) {
+    let shelves = h.program().home_view().shelves.len();
+    for _ in 1..shelves {
+        input(h, Input::Dir(Dir::Down));
+    }
+    input(h, Input::Ok);
+    type_pin(h, PIN);
+    until(h, |a| a.is_grownup());
+    input(h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::GrownUps);
+}
+
+#[test]
+fn a_forgotten_pin_is_chosen_again_with_the_accounts_password() {
+    let (dirs, cores) = household("forgot", |_| {});
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    // The grown-ups' door: the PIN pad offers *Forgot it?* on Start.
+    let shelves = h.program().home_view().shelves.len();
+    for _ in 1..shelves {
+        input(&mut h, Input::Dir(Dir::Down));
+    }
+    input(&mut h, Input::Ok);
+    assert!(matches!(h.program().modal, Some(Modal::Pin { .. })));
+    press(&mut h, Button::Start);
+    assert_eq!(h.program().screen, Screen::Reset);
+    let view = h.program().reset_view();
+    assert_eq!(view.title, "Forgot the PIN?");
+    assert!(view.lines[0].contains("Ann (ann)"), "{:?}", view.lines);
+    let k = h.program().reset_keyboard().expect("the keyboard");
+    assert!(k.field.as_ref().is_some_and(|f| f.secret), "dots, not letters");
+
+    // A wrong password: said so, and counted with wrong PINs.
+    for c in "nope".chars() {
+        input(&mut h, Input::Typed(c));
+    }
+    press(&mut h, Button::Start);
+    until(&mut h, |a| a.reset.as_ref().is_some_and(|r| !r.checking));
+    assert_eq!(h.program().reset_view().error.as_deref(), Some("That's not the password"));
+    assert_eq!(h.program().reset.as_ref().unwrap().password, "", "not kept");
+    // Typed on a real keyboard, a slip taken back with X.
+    input(&mut h, Input::Typed('h'));
+    input(&mut h, Input::Typed('x'));
+    press(&mut h, Button::West);
+    for c in "unter2".chars() {
+        input(&mut h, Input::Typed(c));
+    }
+    assert_eq!(h.program().reset.as_ref().unwrap().password, "hunter2");
+    shot(&mut h, "22-forgot-the-pin");
+    press(&mut h, Button::Start);
+
+    // Right: grown-up mode, and a new PIN to choose.
+    until(&mut h, |a| matches!(&a.modal, Some(Modal::Pin { pin, .. }) if pin.new));
+    assert!(h.program().is_grownup());
+    for _ in 0..2 {
+        type_pin(&mut h, "1357");
+        press(&mut h, Button::South);
+    }
+    until(&mut h, |a| a.settings.pin.as_ref().is_some_and(|p| p.verify("1357")));
+    assert_eq!(h.program().screen, Screen::Home);
+}
+
+#[test]
+fn films_and_shows_are_kept_from_kids_one_by_one() {
+    let videos = temp("films-kids-videos");
+    for f in ["Bluey/Bluey S01E01.mkv", "Bluey/Bluey S01E02.mkv", "Totoro (1988).mp4"] {
+        std::fs::write(videos.join(f).tap_parent(), b"x").unwrap();
+    }
+    let (dirs, cores) = household("films-kids", |s| s.video_folders = vec![videos.clone()]);
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    let titles = |a: &Chanoma| a.watchable().iter().map(|i| a.library.shelves[*i].title.clone()).collect::<Vec<_>>();
+    assert_eq!(titles(h.program()), ["Bluey", "Totoro"], "new ones show at once");
+
+    // Films and shows: Totoro kept from kids.
+    into_settings(&mut h);
+    for _ in 0..3 {
+        input(&mut h, Input::Dir(Dir::Down));
+    }
+    input(&mut h, Input::Dir(Dir::Right));
+    to_row(&mut h, "Totoro");
+    input(&mut h, Input::Ok);
+    let page = h.program().grownups_page();
+    let row = page.rows.iter().find(|r| r.label == "Totoro").unwrap();
+    assert_eq!(
+        (row.value.clone(), row.detail.as_str()),
+        (aizome_chanoma::ui::settings::Value::Switch(false), "A film")
+    );
+    let bluey = page.rows.iter().find(|r| r.label == "Bluey").unwrap();
+    assert_eq!(bluey.detail, "A show of 2 episodes");
+    // New ones wait for a grown-up from now on.
+    to_row(&mut h, "New films and shows");
+    input(&mut h, Input::Dir(Dir::Right));
+    assert_eq!(h.program().settings.new_films, aizome_chanoma::rules::NewGames::Ask);
+    std::fs::write(videos.join("Up (2009).mp4"), b"x").unwrap();
+    to_row(&mut h, "Look again");
+    input(&mut h, Input::Ok);
+    until(&mut h, |a| a.library.shelves.iter().any(|s| s.title == "Up"));
+    let page = h.program().grownups_page();
+    let up = page.rows.iter().find(|r| r.label == "Up").unwrap();
+    assert_eq!(up.badge.as_deref(), Some("New"));
+    shot(&mut h, "23-films-for-kids");
+
+    // The kids: Bluey, and nothing else; on Home too.
+    h.program_mut().grownup = None;
+    assert_eq!(titles(h.program()), ["Bluey"]);
+    let home = h.program().home_view();
+    let films = home.shelves.iter().find(|s| s.title == "Films and shows").expect("the shelf");
+    assert_eq!(films.tiles.iter().map(|t| t.label.as_str()).collect::<Vec<_>>(), ["Bluey"]);
+}
+
+#[test]
+fn search_finds_what_names_start_with_and_only_what_kids_may_open() {
+    let (dirs, cores) = household("search", |_| {});
+    let root = cores.parent().unwrap().to_path_buf();
+    std::fs::write(root.join("Games/snes/Kirby Super Star (USA).sfc"), b"x").unwrap();
+    let videos = root.join("Videos");
+    std::fs::write(videos.join("Kirby Right Back at Ya (2001).mp4").tap_parent(), b"x").unwrap();
+    let settings = dirs.settings();
+    let mut s: Settings = aizome_chanoma::store::read(&settings);
+    s.video_folders = vec![videos];
+    aizome_chanoma::store::write(&settings, &s).unwrap();
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    until(&mut h, |a| a.library.shelves.len() == 1);
+    let hits = |a: &Chanoma| a.search_view().tiles.iter().map(|t| t.label.clone()).collect::<Vec<_>>();
+
+    // A kid types on a keyboard at Home: search, with what's typed.
+    input(&mut h, Input::Typed('k'));
+    assert_eq!(h.program().screen, Screen::Search);
+    input(&mut h, Input::Typed('i'));
+    assert_eq!(hits(h.program()), ["Kirby Right Back at Ya"], "Kirby Super Star isn't theirs");
+    // Back puts the keyboard away; Back again goes home.
+    input(&mut h, Input::Back);
+    assert!(h.program().search.as_ref().is_some_and(|s| s.keys.is_none()));
+    input(&mut h, Input::Back);
+    assert_eq!(h.program().screen, Screen::Home);
+
+    // A grown-up, with the controller: Y opens it, the keyboard's keys
+    // type (from its first letter, q), X takes one back.
+    h.program_mut().grownup = Some(Instant::now());
+    press(&mut h, Button::North);
+    assert_eq!(h.program().screen, Screen::Search);
+    press(&mut h, Button::South);
+    assert_eq!(h.program().search.as_ref().unwrap().query, "q");
+    press(&mut h, Button::West);
+    for c in "super st".chars() {
+        input(&mut h, Input::Typed(c));
+    }
+    assert_eq!(hits(h.program()), ["Kirby Super Star"]);
+    input(&mut h, Input::Erase);
+    for _ in 0.."super s".len() {
+        input(&mut h, Input::Erase);
+    }
+    for c in "snes test".chars() {
+        input(&mut h, Input::Typed(c));
+    }
+    assert_eq!(hits(h.program()), ["Test Quest"], "by the system's name too");
+    shot(&mut h, "21-search");
+    // Start shows the results alone; up from them, typing again.
+    press(&mut h, Button::Start);
+    assert!(h.program().search.as_ref().is_some_and(|s| s.keys.is_none()));
+    shot(&mut h, "21b-search-results");
+    input(&mut h, Input::Dir(Dir::Up));
+    assert!(h.program().search.as_ref().is_some_and(|s| s.keys.is_some()));
 }

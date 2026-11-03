@@ -404,8 +404,8 @@ are requests, not yet looked at.
   refuses (as PCSX ReARMed did). Such a game then sits in *Keep playing*.
 - **One press removed the games folder** (the parent): a folder's row
   was *Remove this folder*, with no question asked. Since then (not what
-  they saw, and not yet committed) a folder's row opens its own page,
-  where removing is a row of its own, still without a question.
+  they saw) a folder's row opens its own page, where removing is a row
+  of its own, and asks first.
 - **The duplicates under *One of each game*** (both) come from tags it
   keeps as part of a game, as it keeps `(Disc 2)`: releases and editions
   (`(Virtual Console)`, `(e-Reader Edition)`, `(Animal Crossing)`,
@@ -443,3 +443,26 @@ are requests, not yet looked at.
   forgotten PIN; plainer words for *emulator*, a core's name and *the
   desktop*; the system tabs reached with the d-pad and named in the
   hints.
+
+## Since
+
+What the reviews led to, the next day (`docs/chanoma.md` has each):
+
+- **NES games**: it was Chanoma. It gave a core its video, sound and
+  input callbacks before `retro_init`, which libretro doesn't promise;
+  Mesen keeps them in what `retro_init` makes, and crashed, taking
+  Chanoma with it (the core dumps said so). The callbacks go in
+  libretro's order now, the tests' core loses one given early as Mesen
+  did, and the NES's 240p Test Suite plays on the test TV.
+- **Removing** a folder or a website asks first, *Keep it* ready to
+  press.
+- **Pictures on every game**: its box beside it (`gamelist.xml`,
+  Batocera's names), else fetched by name from libretro-thumbnails and
+  kept, else where it was left, else a sprite of squares made from its
+  title.
+- **Search**, from Home and the games: Y, or typing on a keyboard.
+- **Films and shows for kids**, one by one, and new ones waiting for a
+  grown-up if wanted.
+- **A forgotten PIN** chosen again after signing in with the password of
+  the computer's account.
+- **The duplicates** and the rest are left as listed above.

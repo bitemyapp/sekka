@@ -61,10 +61,14 @@ impl Menu {
         floating(c, theme, f);
         let strip = Rect::new(f.x0 + EDGE, f.y0 + EDGE, f.x1 - EDGE, f.y0 + STRIP_H);
         c.fill_rect(strip, theme.menu_title());
-        let title = fit_text(theme, &self.title, strip.width() - 300.0, font(TITLE, SEMIBOLD));
+        // The subtitle at the strip's end, if it leaves the title room; the
+        // title fitted to what's left.
+        let sub =
+            (!self.subtitle.is_empty()).then(|| caption_width(theme, &self.subtitle, CAPTION)).filter(|w| *w <= 300.0);
+        let room = strip.width() - 72.0 - sub.map_or(0.0, |w| w + 24.0);
+        let title = fit_text(theme, &self.title, room, font(TITLE, SEMIBOLD));
         text_mid(c, theme, &title, strip.x0 + 36.0, strip.center().y, font(TITLE, SEMIBOLD), theme.on_menu_title());
-        if !self.subtitle.is_empty() {
-            let w = caption_width(theme, &self.subtitle, CAPTION);
+        if let Some(w) = sub {
             caption(c, theme, &self.subtitle, strip.x1 - 36.0 - w, strip.center().y, theme.text3());
         }
         for (i, item) in self.items.iter().enumerate() {
