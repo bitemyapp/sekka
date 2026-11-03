@@ -1,5 +1,6 @@
 //! One native widget per terminal, with cached text and damage by shared row.
 
+use crate::ids::PaneId;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -135,7 +136,7 @@ impl Selection {
 
 #[allow(clippy::too_many_arguments)] // The terminal's immutable view inputs travel together.
 pub fn terminal_view(
-    id: u64,
+    id: PaneId,
     snapshot: Arc<Snapshot>,
     font: (f64, u16),
     selection: Option<Selection>,
@@ -165,7 +166,7 @@ pub fn terminal_view(
 }
 
 struct TerminalView {
-    id: u64,
+    id: PaneId,
     snapshot: Arc<Snapshot>,
     font_size: f64,
     font_weight: u16,
@@ -1685,7 +1686,7 @@ mod sprite_paint_tests {
         }
         fn view(&self, _: WindowKey) -> Element<Msg> {
             terminal_view(
-                1,
+                crate::ids::PaneId::new(1),
                 self.frame.snapshot.clone(),
                 (14.0, 400),
                 None,
@@ -1880,7 +1881,7 @@ mod sprite_paint_tests {
         h.advance(Duration::ZERO);
         let initial = h.render_rgba(w, 1.0);
         assert_eq!(h.check_frame_exact(w, 1.0).differing_pixels, 0);
-        h.send(Msg::Shaped(1, with_ink.clone()));
+        h.send(Msg::Shaped(crate::ids::PaneId::new(1), with_ink.clone()));
         h.advance(Duration::ZERO);
         assert_eq!(h.check_frame_exact(w, 1.0).differing_pixels, 0);
         let (width, _, rgba) = h.render_rgba(w, 1.0);
@@ -1896,7 +1897,7 @@ mod sprite_paint_tests {
                 assert_eq!(&rgba[at..at + 4], &[a, a, blue, 255], "mask {x},{y}");
             }
         }
-        h.send(Msg::Shaped(1, normal));
+        h.send(Msg::Shaped(crate::ids::PaneId::new(1), normal));
         h.advance(Duration::ZERO);
         assert_eq!(
             h.check_frame_exact(w, 1.0).differing_pixels,

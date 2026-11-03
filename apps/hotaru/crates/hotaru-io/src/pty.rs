@@ -7,6 +7,7 @@
 use crate::fd::nonblocking;
 use std::ffi::OsString;
 use std::io;
+use std::num::NonZeroU16;
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
@@ -54,10 +55,15 @@ impl Default for PtyCommand {
     }
 }
 
+/// A terminal always has at least one row and column.
+/// ```compile_fail
+/// use hotaru_io::PtySize;
+/// let size = PtySize { rows: 0, ..PtySize::default() };
+/// ```
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PtySize {
-    pub rows: u16,
-    pub cols: u16,
+    pub rows: NonZeroU16,
+    pub cols: NonZeroU16,
     pub pixel_width: u16,
     pub pixel_height: u16,
 }
@@ -65,8 +71,8 @@ pub struct PtySize {
 impl Default for PtySize {
     fn default() -> Self {
         Self {
-            rows: 24,
-            cols: 80,
+            rows: NonZeroU16::new(24).unwrap(),
+            cols: NonZeroU16::new(80).unwrap(),
             pixel_width: 0,
             pixel_height: 0,
         }
@@ -74,19 +80,13 @@ impl Default for PtySize {
 }
 
 impl PtySize {
-    fn winsize(self) -> io::Result<libc::winsize> {
-        if self.rows == 0 || self.cols == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "PTY dimensions must be nonzero",
-            ));
-        }
-        Ok(libc::winsize {
-            ws_row: self.rows,
-            ws_col: self.cols,
+    fn winsize(self) -> libc::winsize {
+        libc::winsize {
+            ws_row: self.rows.get(),
+            ws_col: self.cols.get(),
             ws_xpixel: self.pixel_width,
             ws_ypixel: self.pixel_height,
-        })
+        }
     }
 }
 
@@ -99,7 +99,7 @@ pub struct Pty {
 
 impl Pty {
     pub fn spawn(mut command: PtyCommand, size: PtySize) -> io::Result<Self> {
-        let winsize = size.winsize()?;
+        let winsize = size.winsize();
         let defaults = crate::launch::prepare(&mut command);
         // Initialize the reaper before a process exists: thread-creation failure
         // must fail spawn, not create a child that no one can later reap.
@@ -238,7 +238,7 @@ impl Pty {
     }
 
     pub fn resize(&self, size: PtySize) -> io::Result<()> {
-        let winsize = size.winsize()?;
+        let winsize = size.winsize();
         // SAFETY: winsize lives through the ioctl; the descriptor is live.
         if unsafe { libc::ioctl(self.as_raw_fd(), libc::TIOCSWINSZ, &winsize) } == -1 {
             return Err(io::Error::last_os_error());

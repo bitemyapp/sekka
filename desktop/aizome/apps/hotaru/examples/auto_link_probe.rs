@@ -1,6 +1,7 @@
 #[allow(dead_code)]
 #[path = "../src/automatic_links/mod.rs"]
 mod automatic_links;
+use aizome_hotaru::ids;
 use automatic_links::mapping;
 use hotaru_link_regex::{CellPoint, Limits, Matcher};
 use std::{

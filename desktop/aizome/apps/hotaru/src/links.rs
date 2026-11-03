@@ -176,7 +176,12 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(Link::at(&snapshot, CellPoint { row: 0, col: 2 }).is_none());
-        let request = Arc::new(crate::automatic_links::Request { pane: 1, snapshot, cell, retained_bytes: 1024 });
+        let request = Arc::new(crate::automatic_links::Request {
+            pane: crate::ids::PaneId::new(1),
+            snapshot,
+            cell,
+            retained_bytes: 1024,
+        });
         assert!(Link::automatic(request, found).is_none());
     }
     #[test]

@@ -3,6 +3,7 @@
 //! The UI only exchanges commands and immutable, shared row snapshots.
 
 use crate::app::Msg;
+use crate::ids::{PaneId, RequestId};
 use aizome_kit::MsgSender;
 use hotaru_core::{Terminal, TerminalColors, TerminalEvent};
 use hotaru_io::{Pty, PtyCommand, PtySize};
@@ -35,7 +36,7 @@ pub enum Command {
     Resize { cols: usize, rows: usize },
     ResizePixels { cols: usize, rows: usize, width: u16, height: u16 },
     Scroll(i32),
-    CopyAll(u64),
+    CopyAll(RequestId),
     Search(SearchControl),
     Colors(Arc<TerminalColors>),
     // The cursor programs get until they ask for another, and whether it blinks.
@@ -61,8 +62,8 @@ pub struct Defaults {
     pub cursor: (hotaru_core::CursorShape, bool),
 }
 pub enum SearchControl {
-    Capture { token: u64, cancel: Arc<AtomicBool> },
-    Navigate { token: u64, results: Arc<hotaru_core::search::Results>, index: usize, cancel: Arc<AtomicBool> },
+    Capture { token: RequestId, cancel: Arc<AtomicBool> },
+    Navigate { token: RequestId, results: Arc<hotaru_core::search::Results>, index: usize, cancel: Arc<AtomicBool> },
 }
 struct Shared {
     wake: OwnedFd,
@@ -102,7 +103,7 @@ impl Shared {
 }
 impl Session {
     pub fn spawn(
-        id: u64,
+        id: PaneId,
         mut command: PtyCommand,
         defaults: Defaults,
         tx: MsgSender<Msg>,
@@ -269,7 +270,7 @@ struct Gather {
 }
 
 impl Gather {
-    fn spawn(id: u64, pty: &Pty, shared: Arc<Shared>) -> io::Result<Self> {
+    fn spawn(id: PaneId, pty: &Pty, shared: Arc<Shared>) -> io::Result<Self> {
         // The reader owns a duplicate, so the session keeps the PTY itself for
         // writes, resizes and its child.
         let fd = pty.as_fd().try_clone_to_owned()?;
@@ -406,7 +407,7 @@ fn secure_random() -> Option<Vec<u8>> {
 
 fn publish_events(
     terminal: &mut Terminal,
-    id: u64,
+    id: PaneId,
     tx: &MsgSender<Msg>,
     hostname: Option<&str>,
     seen_title: &mut bool,
@@ -469,7 +470,7 @@ fn publish_events(
 }
 
 fn run(
-    id: u64,
+    id: PaneId,
     command: PtyCommand,
     defaults: Defaults,
     tx: MsgSender<Msg>,
@@ -514,7 +515,12 @@ fn run(
         if let Some((cols, rows, width, height)) = controls.resize {
             let (cols, rows) = (cols.clamp(1, 4096), rows.clamp(1, 4096));
             if !eof && !hung_up {
-                pty.resize(PtySize { cols: cols as u16, rows: rows as u16, pixel_width: width, pixel_height: height })?;
+                pty.resize(PtySize {
+                    cols: std::num::NonZeroU16::new(cols as u16).unwrap(),
+                    rows: std::num::NonZeroU16::new(rows as u16).unwrap(),
+                    pixel_width: width,
+                    pixel_height: height,
+                })?;
             }
             terminal.resize(cols, rows);
             last_activity = Instant::now();
@@ -904,10 +910,15 @@ mod tests {
         );
         let cancel = Arc::new(AtomicBool::new(false));
         for token in 0..100 {
-            session.command(Command::Search(SearchControl::Capture { token, cancel: cancel.clone() })).unwrap();
+            session
+                .command(Command::Search(SearchControl::Capture {
+                    token: crate::ids::RequestId::new(token),
+                    cancel: cancel.clone(),
+                }))
+                .unwrap();
             session
                 .command(Command::Search(SearchControl::Navigate {
-                    token: token + 100,
+                    token: crate::ids::RequestId::new(token + 100),
                     results: results.clone(),
                     index: 0,
                     cancel: cancel.clone(),
@@ -916,8 +927,12 @@ mod tests {
         }
         assert!(session.command(Command::Input(Arc::from(&b""[..]))).is_err());
         let controls = std::mem::take(&mut *session.shared.controls.lock().unwrap());
-        assert!(matches!(controls.search_capture, Some(SearchControl::Capture { token: 99, .. })));
-        assert!(matches!(controls.search_navigation, Some(SearchControl::Navigate { token: 199, .. })));
+        assert!(
+            matches!(controls.search_capture, Some(SearchControl::Capture { token, .. }) if token == RequestId::new(99))
+        );
+        assert!(
+            matches!(controls.search_navigation, Some(SearchControl::Navigate { token, .. }) if token == RequestId::new(199))
+        );
         assert_eq!(commands.try_iter().count(), 64);
     }
 
@@ -956,7 +971,8 @@ mod tests {
             scrollback: 100,
             cursor: (hotaru_core::CursorShape::Block, true),
         };
-        let worker = std::thread::spawn(move || run(1, child, defaults, sender, commands, shared));
+        let worker =
+            std::thread::spawn(move || run(crate::ids::PaneId::new(1), child, defaults, sender, commands, shared));
         assert!(harness.settle(Duration::from_secs(5), |probe| probe.exited));
         let frame = harness.program().frame.as_ref().unwrap();
         assert_eq!((frame.cols, frame.rows), (201, 51));
@@ -988,7 +1004,8 @@ mod tests {
             scrollback: 100,
             cursor: (hotaru_core::CursorShape::Block, true),
         };
-        let worker = std::thread::spawn(move || run(1, child, defaults, sender, commands, shared));
+        let worker =
+            std::thread::spawn(move || run(crate::ids::PaneId::new(1), child, defaults, sender, commands, shared));
         assert!(harness.settle(Duration::from_secs(30), |probe| probe.exited));
         let text = harness.program().frame.as_ref().unwrap().plain_text();
         let mut at = 0;

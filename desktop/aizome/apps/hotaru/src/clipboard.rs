@@ -1,5 +1,6 @@
 //! One clipboard worker, one replaceable pending job, no interface-thread I/O.
 
+use crate::ids::{PaneId, RequestId};
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -36,8 +37,8 @@ pub enum CopySource {
 }
 
 pub enum Job {
-    Copy { token: u64, pane: u64, source: CopySource, format: CopyFormat, cancel: Arc<AtomicBool> },
-    Paste { token: u64, tab: u64, read: ClipboardRead },
+    Copy { token: RequestId, pane: PaneId, source: CopySource, format: CopyFormat, cancel: Arc<AtomicBool> },
+    Paste { token: RequestId, pane: PaneId, read: ClipboardRead },
 }
 
 #[derive(Clone)]
@@ -76,8 +77,8 @@ pub struct ClipboardWorker {
 }
 
 pub(crate) fn prepare_copy(
-    token: u64,
-    pane: u64,
+    token: RequestId,
+    pane: PaneId,
     source: CopySource,
     format: CopyFormat,
     cancel: &AtomicBool,
@@ -164,9 +165,9 @@ impl ClipboardWorker {
                     Job::Copy { token, pane, source, format, cancel } => {
                         prepare_copy(token, pane, source, format, &cancel)
                     }
-                    Job::Paste { token, tab, read } => {
+                    Job::Paste { token, pane, read } => {
                         let text = read.read(Duration::from_secs(2), 32 * 1024 * 1024 - 12);
-                        Some(Msg::PasteReady(token, tab, read, text))
+                        Some(Msg::PasteReady(token, pane, read, text))
                     }
                 };
                 worker.0.lock().unwrap_or_else(|e| e.into_inner()).active = None;
@@ -222,6 +223,15 @@ mod tests {
         let mut terminal = Terminal::new(80, 24, 100);
         terminal.feed(b"cancelled contents");
         let source = CopySource::Content(Arc::new(terminal.content_snapshot()));
-        assert!(prepare_copy(1, 1, source, CopyFormat::Mixed, &AtomicBool::new(true)).is_none());
+        assert!(
+            prepare_copy(
+                RequestId::new(1),
+                crate::ids::PaneId::new(1),
+                source,
+                CopyFormat::Mixed,
+                &AtomicBool::new(true)
+            )
+            .is_none()
+        );
     }
 }

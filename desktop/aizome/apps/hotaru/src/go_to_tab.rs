@@ -5,6 +5,7 @@
 //! says of its shell's terminal. Nothing is gathered while it's closed, and
 //! what was is dropped when it closes.
 
+use crate::ids::{PaneId, RequestId, TabId};
 use std::io::Read;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -52,7 +53,7 @@ pub enum Event {
 /// What the palette knows of a pane besides its title, from the thread.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Facts {
-    pub pane: u64,
+    pub pane: PaneId,
     /// The program in front in its terminal: the shell's own name at a prompt.
     pub program: Option<String>,
     /// Its folder, with `~` for home.
@@ -64,7 +65,7 @@ pub struct Facts {
 
 /// A pane, as the thread is asked about it.
 pub struct Source {
-    pub pane: u64,
+    pub pane: PaneId,
     /// Its shell's process, while it runs.
     pub pid: Option<u32>,
     /// The last validated local OSC 7 directory; none before the first report
@@ -153,8 +154,8 @@ fn screen(snapshot: &Snapshot) -> Vec<String> {
 /// A pane the palette may go to.
 #[derive(Clone, Debug)]
 pub struct Candidate {
-    pub tab: u64,
-    pub pane: u64,
+    pub tab: TabId,
+    pub pane: PaneId,
     /// The tab's place in the bar, from 1.
     pub number: usize,
     /// How many panes its tab has.
@@ -174,8 +175,8 @@ pub struct Candidate {
 /// A row of the palette: a tab, and the pane it goes to.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Row {
-    pub tab: u64,
-    pub pane: u64,
+    pub tab: TabId,
+    pub pane: PaneId,
     pub number: usize,
     pub panes: usize,
     pub title: String,
@@ -313,7 +314,7 @@ pub struct Palette {
     pub selected: usize,
     pub scroll: f64,
     /// Which gathering is this palette's.
-    pub token: u64,
+    pub token: RequestId,
     pub facts: Option<Arc<[Facts]>>,
     pub rows: Vec<Row>,
     /// How many tabs there are.
@@ -321,7 +322,7 @@ pub struct Palette {
 }
 
 impl Palette {
-    pub fn new(token: u64, tabs: usize) -> Self {
+    pub fn new(token: RequestId, tabs: usize) -> Self {
         Palette { query: String::new(), selected: 0, scroll: 0.0, token, facts: None, rows: Vec::new(), tabs }
     }
 
@@ -651,11 +652,11 @@ fn footer() -> Element<Msg> {
 mod tests {
     use super::*;
 
-    fn candidate(tab: u64, title: &str, recency: usize) -> Candidate {
+    fn candidate(tab: TabId, title: &str, recency: usize) -> Candidate {
         Candidate {
             tab,
-            pane: tab * 10,
-            number: tab as usize,
+            pane: PaneId::new(tab.get() * 10),
+            number: tab.get() as usize,
             panes: 1,
             title: title.into(),
             front: true,
@@ -666,7 +667,7 @@ mod tests {
         }
     }
 
-    fn facts(pane: u64, program: &str, folder: &str, lines: &[&str]) -> Facts {
+    fn facts(pane: PaneId, program: &str, folder: &str, lines: &[&str]) -> Facts {
         Facts {
             pane,
             program: Some(program.into()),
@@ -691,10 +692,14 @@ mod tests {
 
     #[test]
     fn without_a_query_tabs_come_as_last_shown_and_the_one_before_is_selected() {
-        let candidates = [candidate(1, "one", 2), candidate(2, "two", 0), candidate(3, "three", 1)];
-        let mut palette = Palette::new(1, 3);
+        let candidates = [
+            candidate(TabId::new(1), "one", 2),
+            candidate(TabId::new(2), "two", 0),
+            candidate(crate::ids::TabId::new(3), "three", 1),
+        ];
+        let mut palette = Palette::new(crate::ids::RequestId::new(1), 3);
         palette.refresh(&candidates, true);
-        let order: Vec<u64> = palette.rows.iter().map(|row| row.tab).collect();
+        let order: Vec<u64> = palette.rows.iter().map(|row| row.tab.get()).collect();
         assert_eq!(order, [2, 3, 1]);
         assert_eq!(palette.selected, 1, "↩ goes back to the tab shown before");
     }
@@ -702,17 +707,17 @@ mod tests {
     #[test]
     fn titles_programs_and_folders_match_before_screens() {
         let candidates = [
-            candidate(1, "Review PR #221 | sekka", 1),
-            candidate(2, "Check Uta audio quality | uta", 2),
-            candidate(3, "Shell", 3),
+            candidate(crate::ids::TabId::new(1), "Review PR #221 | sekka", 1),
+            candidate(crate::ids::TabId::new(2), "Check Uta audio quality | uta", 2),
+            candidate(crate::ids::TabId::new(3), "Shell", 3),
         ];
         let all = [
-            facts(10, "claude", "~/work/sekka", &["nothing here"]),
-            facts(20, "claude", "~/work/uta", &["the nightly build failed"]),
-            facts(30, "fish", "~/work/uta", &["$ cargo test", "test review_queue ... ok"]),
+            facts(crate::ids::PaneId::new(10), "claude", "~/work/sekka", &["nothing here"]),
+            facts(crate::ids::PaneId::new(20), "claude", "~/work/uta", &["the nightly build failed"]),
+            facts(crate::ids::PaneId::new(30), "fish", "~/work/uta", &["$ cargo test", "test review_queue ... ok"]),
         ];
         let rows = rank("uta", &candidates, Some(&all));
-        let mut order: Vec<u64> = rows.iter().map(|row| row.tab).collect();
+        let mut order: Vec<u64> = rows.iter().map(|row| row.tab.get()).collect();
         order.sort_unstable();
         assert_eq!(order, [2, 3], "a title, and a folder");
         let rows = rank("audio", &candidates, Some(&all));
@@ -720,30 +725,31 @@ mod tests {
         assert_eq!(&rows[0].title[rows[0].title_ranges[0].clone()], "audio");
         // A title before a screen, whatever was shown last.
         let rows = rank("review", &candidates, Some(&all));
-        assert_eq!(rows.iter().map(|row| row.tab).collect::<Vec<_>>(), [1, 3]);
+        assert_eq!(rows.iter().map(|row| row.tab.get()).collect::<Vec<_>>(), [1, 3]);
         assert_eq!(rows[1].line, Some(1));
         // A phrase on a screen, and only there: the line shows, matched.
         let rows = rank("nightly build", &candidates, Some(&all));
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].tab, 2);
+        assert_eq!(rows[0].tab, crate::ids::TabId::new(2));
         assert_eq!(rows[0].line, Some(0));
         assert_eq!(&rows[0].detail[rows[0].detail_ranges[0].clone()], "nightly build");
         // Programs match by name.
         let rows = rank("fish", &candidates, Some(&all));
         assert_eq!(rows.len(), 1);
-        assert_eq!((rows[0].tab, rows[0].detail.as_str()), (3, "fish · ~/work/uta"));
+        assert_eq!((rows[0].tab.get(), rows[0].detail.as_str()), (3, "fish · ~/work/uta"));
         assert_eq!(&rows[0].detail[rows[0].detail_ranges[0].clone()], "fish");
         // Before the thread answers, titles still match.
-        assert_eq!(rank("review", &candidates, None).first().map(|row| row.tab), Some(1));
+        assert_eq!(rank("review", &candidates, None).first().map(|row| row.tab.get()), Some(1));
         assert!(rank("nightly build", &candidates, None).is_empty());
         // One letter is too little to look at screens with.
-        assert!(rank("q", &[candidate(3, "Shell", 0)], Some(&all)).is_empty());
+        assert!(rank("q", &[candidate(crate::ids::TabId::new(3), "Shell", 0)], Some(&all)).is_empty());
     }
 
     #[test]
     fn the_tab_shown_comes_after_others_matching_as_well() {
-        let candidates = [candidate(1, "Review PR #213", 0), candidate(2, "Review PR #221", 1)];
-        let order = |text| rank(text, &candidates, None).iter().map(|row| row.tab).collect::<Vec<_>>();
+        let candidates =
+            [candidate(TabId::new(1), "Review PR #213", 0), candidate(crate::ids::TabId::new(2), "Review PR #221", 1)];
+        let order = |text| rank(text, &candidates, None).iter().map(|row| row.tab.get()).collect::<Vec<_>>();
         assert_eq!(order("review"), [2, 1]);
         assert_eq!(order("213"), [1]);
         assert_eq!(order(""), [1, 2]);
@@ -751,17 +757,20 @@ mod tests {
 
     #[test]
     fn a_tab_goes_to_the_pane_whose_screen_matched() {
-        let mut front = candidate(1, "Shell", 0);
+        let mut front = candidate(crate::ids::TabId::new(1), "Shell", 0);
         front.panes = 2;
         let mut beside = front.clone();
-        beside.pane = 11;
+        beside.pane = crate::ids::PaneId::new(11);
         beside.front = false;
-        let all = [facts(10, "fish", "~", &["ls"]), facts(11, "htop", "~", &["Load average: 1.0", "Tasks: 300"])];
+        let all = [
+            facts(PaneId::new(10), "fish", "~", &["ls"]),
+            facts(crate::ids::PaneId::new(11), "htop", "~", &["Load average: 1.0", "Tasks: 300"]),
+        ];
         let rows = rank("tasks", &[front.clone(), beside.clone()], Some(&all));
         assert_eq!(rows.len(), 1, "one row per tab");
-        assert_eq!((rows[0].pane, rows[0].line), (11, Some(1)));
+        assert_eq!((rows[0].pane.get(), rows[0].line), (11, Some(1)));
         // Without a query, the pane in front.
-        assert_eq!(rank("", &[front, beside], Some(&all))[0].pane, 10);
+        assert_eq!(rank("", &[front, beside], Some(&all))[0].pane, crate::ids::PaneId::new(10));
     }
 
     #[test]
@@ -779,7 +788,7 @@ mod tests {
     fn a_pane_without_a_live_process_keeps_its_last_known_folder() {
         let snapshot = Arc::new(hotaru_core::Terminal::new(80, 24, 0).snapshot());
         let source = |reported| Source {
-            pane: 1,
+            pane: crate::ids::PaneId::new(1),
             pid: None,
             reported,
             fallback: Some("/startup".into()),

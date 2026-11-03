@@ -1,4 +1,5 @@
 //! One bounded latest-request matcher for the native window. No UI teardown join.
+use crate::ids::PaneId;
 pub mod mapping;
 use hotaru_core::Snapshot;
 use hotaru_link_regex::{CellPoint, Limits, Match, Matcher};
@@ -12,13 +13,13 @@ use std::{
 const SNAPSHOT_ADMISSION: usize = 8 * 1024 * 1024;
 #[derive(Debug)]
 pub struct Request {
-    pub pane: u64,
+    pub pane: PaneId,
     pub snapshot: Arc<Snapshot>,
     pub cell: CellPoint,
     pub retained_bytes: usize,
 }
 impl Request {
-    pub fn same_location(&self, pane: u64, snapshot: &Arc<Snapshot>, cell: CellPoint) -> bool {
+    pub fn same_location(&self, pane: PaneId, snapshot: &Arc<Snapshot>, cell: CellPoint) -> bool {
         self.pane == pane && Arc::ptr_eq(&self.snapshot, snapshot) && self.cell == cell
     }
 }
@@ -168,7 +169,7 @@ impl Drop for Worker {
 mod tests {
     use super::*;
     use std::sync::mpsc;
-    fn request(pane: u64) -> Arc<Request> {
+    fn request(pane: PaneId) -> Arc<Request> {
         Arc::new(Request {
             pane,
             snapshot: Arc::new(hotaru_core::Terminal::new(8, 2, 0).snapshot()),
@@ -192,15 +193,15 @@ mod tests {
             },
         )
         .unwrap();
-        worker.submit(request(1)).unwrap();
-        assert_eq!(started_rx.recv_timeout(Duration::from_secs(3)).unwrap(), 1);
-        let replaced = request(2);
+        worker.submit(request(crate::ids::PaneId::new(1))).unwrap();
+        assert_eq!(started_rx.recv_timeout(Duration::from_secs(3)).unwrap(), crate::ids::PaneId::new(1));
+        let replaced = request(crate::ids::PaneId::new(2));
         let weak = Arc::downgrade(&replaced);
         worker.submit(replaced).unwrap();
-        worker.submit(request(3)).unwrap();
+        worker.submit(request(crate::ids::PaneId::new(3))).unwrap();
         assert!(weak.upgrade().is_none());
         release_tx.send(()).unwrap();
-        assert_eq!(started_rx.recv_timeout(Duration::from_secs(3)).unwrap(), 3);
+        assert_eq!(started_rx.recv_timeout(Duration::from_secs(3)).unwrap(), crate::ids::PaneId::new(3));
         assert!(done_rx.try_recv().is_err());
         drop(worker);
         release_tx.send(()).unwrap();
@@ -210,15 +211,15 @@ mod tests {
     fn unread_completion_is_replaced_without_queueing_owned_frames() {
         let (tx, rx) = mpsc::channel();
         let worker = Worker::start(move || tx.send(()).is_ok(), || |_: &Request, _: &AtomicBool| Ok(None)).unwrap();
-        let first = request(1);
+        let first = request(crate::ids::PaneId::new(1));
         let weak = Arc::downgrade(&first);
         worker.submit(first).unwrap();
         rx.recv_timeout(Duration::from_secs(3)).unwrap();
         assert!(weak.upgrade().is_some());
-        worker.submit(request(2)).unwrap();
+        worker.submit(request(crate::ids::PaneId::new(2))).unwrap();
         rx.recv_timeout(Duration::from_secs(3)).unwrap();
         assert!(weak.upgrade().is_none());
-        assert_eq!(worker.take_response().unwrap().request.pane, 2);
+        assert_eq!(worker.take_response().unwrap().request.pane, crate::ids::PaneId::new(2));
         assert!(worker.take_response().is_none());
     }
     #[test]
@@ -234,7 +235,7 @@ mod tests {
             },
         )
         .unwrap();
-        let mut job = request(1);
+        let mut job = request(crate::ids::PaneId::new(1));
         Arc::get_mut(&mut job).unwrap().retained_bytes = SNAPSHOT_ADMISSION + 1;
         assert!(matches!(worker.submit(job), Err(Error::Admission)));
         assert!(rx.try_recv().is_err());

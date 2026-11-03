@@ -1,3 +1,4 @@
+use crate::ids::{PaneId, RequestId, SplitId, TabId};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -17,14 +18,14 @@ use crate::terminal_view::{Selection, colors_for, terminal_view};
 pub enum Msg {
     NewTab,
     Launch(PtyCommand),
-    SelectTab(u64),
+    SelectTab(TabId),
     CloseTab,
     Split(Axis),
     ClosePane,
-    FocusPane(u64),
-    RestoreFocus(u64, u64),
+    FocusPane(PaneId),
+    RestoreFocus(PaneId, RequestId),
     MoveFocus(Direction),
-    Geometry(u64, Rect),
+    Geometry(PaneId, Rect),
     Action(Action),
     SetTheme(settings::Theme),
     SetWeight(u16),
@@ -52,81 +53,81 @@ pub enum Msg {
     RemoveShortcut(Action, Shortcut),
     RestoreShortcuts,
     RestoredShortcuts,
-    ConfigLoaded(u64, Result<Settings, String>),
-    ConfigSaved(u64, Result<(), String>),
-    Frame(u64, Arc<Snapshot>),
-    ShapeScale(u64, f64),
-    Shaped(u64, Arc<crate::font::Frame>),
-    FontFailed(u64, u64, String),
-    Title(u64, String),
-    WorkingDirectory(u64, std::path::PathBuf),
-    StartupDirectory(u64, std::path::PathBuf),
+    ConfigLoaded(RequestId, Result<Settings, String>),
+    ConfigSaved(RequestId, Result<(), String>),
+    Frame(PaneId, Arc<Snapshot>),
+    ShapeScale(PaneId, f64),
+    Shaped(PaneId, Arc<crate::font::Frame>),
+    FontFailed(PaneId, u64, String),
+    Title(PaneId, String),
+    WorkingDirectory(PaneId, std::path::PathBuf),
+    StartupDirectory(PaneId, std::path::PathBuf),
     /// The program ended: its status, and whether it failed as it started.
-    Exited(u64, String, bool),
-    Failed(u64, String),
-    Notice(u64, String),
-    MatchLink(u64, Option<Arc<crate::automatic_links::Request>>),
+    Exited(PaneId, String, bool),
+    Failed(PaneId, String),
+    Notice(PaneId, String),
+    MatchLink(PaneId, Option<Arc<crate::automatic_links::Request>>),
     MatchedLink,
     ResolvedLink,
-    HoverLink(u64, Option<crate::links::Link>),
-    OpenLink(u64, crate::links::Link),
+    HoverLink(PaneId, Option<crate::links::Link>),
+    OpenLink(PaneId, crate::links::Link),
     CopyLink(Arc<str>),
-    LinkOpened(u64, Result<(), aizome_kit::urls::OpenUrlError>),
-    Bell(u64),
-    Input(u64, Vec<u8>),
-    PasteText(u64, Arc<str>),
-    Key(u64, Arc<hotaru_core::input::KeyEvent>),
-    Mouse(u64, crate::input::MouseInput),
-    Wheel(u64, crate::input::MouseInput, i32),
-    TerminalFocus(u64, bool),
-    Resize(u64, usize, usize),
-    ResizePixels(u64, usize, usize, u16, u16),
-    Scroll(u64, i32),
-    Select(u64, Selection),
+    LinkOpened(PaneId, Result<(), aizome_kit::urls::OpenUrlError>),
+    Bell(PaneId),
+    Input(PaneId, Vec<u8>),
+    PasteText(PaneId, Arc<str>),
+    Key(PaneId, Arc<hotaru_core::input::KeyEvent>),
+    Mouse(PaneId, crate::input::MouseInput),
+    Wheel(PaneId, crate::input::MouseInput, i32),
+    TerminalFocus(PaneId, bool),
+    Resize(PaneId, usize, usize),
+    ResizePixels(PaneId, usize, usize, u16, u16),
+    Scroll(PaneId, i32),
+    Select(PaneId, Selection),
     Copy,
     CopyScreen,
     CopyAll,
-    CopySnapshot(u64, u64, Arc<ContentSnapshot>),
-    CopyReady(u64, u64, PreparedClipboard),
-    CopyFailed(u64, u64, String),
-    PasteReady(u64, u64, ClipboardRead, Option<Arc<str>>),
-    ClearPasteNotice(u64, u64),
+    CopySnapshot(RequestId, PaneId, Arc<ContentSnapshot>),
+    CopyReady(RequestId, PaneId, PreparedClipboard),
+    CopyFailed(RequestId, PaneId, String),
+    PasteReady(RequestId, PaneId, ClipboardRead, Option<Arc<str>>),
+    ClearPasteNotice(PaneId, RequestId),
     Paste,
     /// A pointer selection in the pane is finished: with copy on select,
     /// it becomes the primary selection.
-    Selected(u64),
-    PrimaryReady(u64, PreparedClipboard),
+    Selected(PaneId),
+    PrimaryReady(RequestId, PreparedClipboard),
     /// Paste the primary selection, as a middle click does.
-    PastePrimary(u64),
+    PastePrimary(PaneId),
     /// A program's own clipboard request (OSC 52 or 5522), from its PTY worker.
     Clipboard(crate::selections::Request),
     /// What a read will be answered with, captured before anyone is asked.
     ClipboardCaptured(crate::selections::Request, Option<Arc<[u8]>>, crate::selections::Preview),
     /// What was chosen about the request being asked about.
-    ClipboardAnswer(u64, crate::selections::Answer),
+    ClipboardAnswer(RequestId, crate::selections::Answer),
     /// A program's notification (OSC 9 or 777): its title and body.
-    Notify(u64, String, String),
+    Notify(PaneId, String, String),
     Find,
     Search(String),
-    SearchRefresh(u64),
-    SearchSnapshot(u64, u64, Arc<ContentSnapshot>),
-    SearchReady(u64, u64, u64, crate::search::Cache),
-    SearchFailed(u64, u64, String),
+    SearchRefresh(RequestId),
+    SearchSnapshot(RequestId, PaneId, Arc<ContentSnapshot>),
+    SearchReady(RequestId, PaneId, RequestId, crate::search::Cache),
+    SearchFailed(RequestId, PaneId, String),
     SearchStep(bool),
-    SearchNavigated(u64, u64, bool),
+    SearchNavigated(RequestId, PaneId, bool),
     CloseFind,
     FontSize(i8),
     /// What Go to Tab's elements say.
     GoToTab(crate::go_to_tab::Event),
     /// What Go to Tab's thread gathered for the palette opened as `u64`.
-    GoToTabFacts(u64, Arc<[crate::go_to_tab::Facts]>),
+    GoToTabFacts(RequestId, Arc<[crate::go_to_tab::Facts]>),
     /// Go to Tab's query takes the keyboard, once the view has built it.
     GoToTabFocus,
     Theme(Arc<TerminalColors>),
 }
 
 pub struct Pane {
-    pub id: u64,
+    pub id: PaneId,
     pub title: String,
     /// Last known directory: the startup fallback or a validated OSC 7 report.
     pub working_directory: Option<std::path::PathBuf>,
@@ -138,7 +139,7 @@ pub struct Pane {
     pub status: String,
     // Expiration or input may dismiss only this paste's warning, never a
     // newer paste or another failure that has since replaced the status.
-    paste_notice: Option<(u64, &'static str)>,
+    paste_notice: Option<(RequestId, &'static str)>,
     pub(crate) hovered_link: Option<crate::links::Link>,
     pub ended: bool,
     pub bell: bool,
@@ -171,9 +172,9 @@ impl Pane {
 }
 
 pub struct Tab {
-    pub id: u64,
+    pub id: TabId,
     pub tree: PaneTree,
-    pub active: u64,
+    pub active: PaneId,
     /// The active pane fills the tab, its splits set aside until unzoomed.
     pub zoomed: bool,
 }
@@ -181,7 +182,7 @@ pub struct Tab {
 pub struct Hotaru {
     pub tabs: Vec<Tab>,
     pub panes: Vec<Pane>,
-    pub active: u64,
+    pub active: TabId,
     /// The size text is drawn at: the configured size, zoomed by ❖+ and ❖−.
     pub font_size: f64,
     pub find: bool,
@@ -193,7 +194,7 @@ pub struct Hotaru {
     demo: bool,
     pub instance: Option<crate::instance::Instance>,
     clipboard: Option<ClipboardWorker>,
-    clipboard_token: u64,
+    clipboard_token: RequestId,
     clipboard_cancel: Arc<AtomicBool>,
     clipboard_format: settings::CopyFormat,
     clipboard_read: Option<ClipboardRead>,
@@ -202,12 +203,12 @@ pub struct Hotaru {
     pub settings_path: Option<std::path::PathBuf>,
     bindings: Arc<Bindings>,
     settings_worker: Option<settings::Worker>,
-    settings_token: u64,
+    settings_token: RequestId,
     settings_pending: bool,
     closing: bool,
     desktop_appearance: aizome_kit::theme::Appearance,
     focus_timer: Option<TimerHandle>,
-    focus_generation: u64,
+    focus_generation: RequestId,
     automatic_worker: Option<crate::automatic_links::Worker>,
     automatic_request: Option<Arc<crate::automatic_links::Request>>,
     automatic_hit: Option<crate::links::Link>,
@@ -226,20 +227,20 @@ pub struct Hotaru {
     open_after_save: bool,
     /// The primary selection and programs' clipboard requests (OSC 52).
     selections: Option<crate::selections::Worker>,
-    primary_token: u64,
+    primary_token: RequestId,
     primary_cancel: Arc<AtomicBool>,
     /// A program's clipboard request being asked about.
     asking: Option<crate::selections::Question>,
-    ask_token: u64,
+    ask_token: RequestId,
     /// The pane with the keyboard, while the window has it.
-    focused_pane: Option<u64>,
+    focused_pane: Option<PaneId>,
     /// When a program's notification last reached the desktop.
     notified: Option<std::time::Instant>,
     /// Go to Tab, while it's open, and the last gathering asked for.
     pub go_to_tab: Option<crate::go_to_tab::Palette>,
-    go_to_tab_token: u64,
+    go_to_tab_token: RequestId,
     /// The tabs as last shown, the one in front first.
-    recent_tabs: Vec<u64>,
+    recent_tabs: Vec<TabId>,
 }
 
 impl Hotaru {
@@ -247,7 +248,7 @@ impl Hotaru {
         Self {
             tabs: Vec::new(),
             panes: Vec::new(),
-            active: 0,
+            active: TabId::default(),
             font_size: settings::DEFAULT_FONT_SIZE,
             find: false,
             search: String::new(),
@@ -258,7 +259,7 @@ impl Hotaru {
             demo: false,
             instance: None,
             clipboard: None,
-            clipboard_token: 0,
+            clipboard_token: RequestId::default(),
             clipboard_cancel: Arc::new(AtomicBool::new(false)),
             clipboard_format: settings::CopyFormat::Mixed,
             clipboard_read: None,
@@ -267,12 +268,12 @@ impl Hotaru {
             settings_path: None,
             bindings: Arc::new(Bindings::new(&Settings::default())),
             settings_worker: None,
-            settings_token: 0,
+            settings_token: RequestId::default(),
             settings_pending: false,
             closing: false,
             desktop_appearance: aizome_kit::theme::Appearance::default(),
             focus_timer: None,
-            focus_generation: 0,
+            focus_generation: RequestId::default(),
             automatic_worker: None,
             automatic_request: None,
             automatic_hit: None,
@@ -286,14 +287,14 @@ impl Hotaru {
             recording: None,
             open_after_save: false,
             selections: None,
-            primary_token: 0,
+            primary_token: RequestId::default(),
             primary_cancel: Arc::new(AtomicBool::new(false)),
             asking: None,
-            ask_token: 0,
+            ask_token: RequestId::default(),
             focused_pane: None,
             notified: None,
             go_to_tab: None,
-            go_to_tab_token: 0,
+            go_to_tab_token: RequestId::default(),
             recent_tabs: Vec::new(),
         }
     }
@@ -349,7 +350,7 @@ impl Hotaru {
         if let Some(timer) = self.focus_timer.take() {
             cx.cancel(timer);
         }
-        self.focus_generation = self.focus_generation.wrapping_add(1);
+        self.focus_generation = self.focus_generation.next();
         if let Some(pane) = self.active_pane() {
             // A split edit reparents a still-named leaf. An immediate focus can
             // succeed on its old node, which is removed during the next build.
@@ -358,8 +359,8 @@ impl Hotaru {
         }
     }
 
-    fn new_pane(&mut self, cx: &mut Cx<Msg>, inherit_cwd: bool) -> u64 {
-        let id = self.next_id;
+    fn new_pane(&mut self, cx: &mut Cx<Msg>, inherit_cwd: bool) -> PaneId {
+        let id = PaneId::new(self.next_id);
         self.next_id += 1;
         let mut terminal = Terminal::new(80, 24, self.settings.scrollback);
         terminal.set_default_grapheme_width(hotaru_core::GraphemeWidthMethod::Unicode);
@@ -431,8 +432,10 @@ impl Hotaru {
             return;
         }
         let id = self.new_pane(cx, inherit_cwd);
-        self.tabs.push(Tab { id, tree: PaneTree::Leaf(id), active: id, zoomed: false });
-        self.active = id;
+        let tab = TabId::new(self.next_id);
+        self.next_id += 1;
+        self.tabs.push(Tab { id: tab, tree: PaneTree::Leaf(id), active: id, zoomed: false });
+        self.active = tab;
         self.focus_after_rebuild(cx);
     }
 
@@ -468,7 +471,7 @@ impl Hotaru {
             return;
         }
         let id = self.new_pane(cx, true);
-        let split = self.next_id;
+        let split = SplitId::new(self.next_id);
         self.next_id += 1;
         if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.id == self.active) {
             tab.tree.split(target, id, split, axis);
@@ -514,7 +517,7 @@ impl Hotaru {
 
     /// Take pane `id` out of whichever tab holds it, and that tab away with
     /// its last pane. Another tab's pane leaves the one in front alone.
-    fn remove_pane(&mut self, id: u64, cx: &mut Cx<Msg>) {
+    fn remove_pane(&mut self, id: PaneId, cx: &mut Cx<Msg>) {
         let Some(index) = self.tabs.iter().position(|tab| tab.tree.leaves().contains(&id)) else { return };
         let leaves = self.tabs[index].tree.leaves();
         if leaves.len() == 1 {
@@ -523,7 +526,7 @@ impl Hotaru {
         }
         let at = leaves.iter().position(|pane| *pane == id).unwrap();
         let tab = &mut self.tabs[index];
-        tab.tree = std::mem::replace(&mut tab.tree, PaneTree::Leaf(0)).remove(id).unwrap();
+        tab.tree = std::mem::replace(&mut tab.tree, PaneTree::Leaf(crate::ids::PaneId::new(0))).remove(id).unwrap();
         if tab.active == id {
             tab.active = leaves[if at == 0 { 1 } else { at - 1 }];
             tab.zoomed = false;
@@ -551,14 +554,14 @@ impl Hotaru {
         link.request()
             .is_none_or(|request| self.automatic_request.as_ref().is_some_and(|current| Arc::ptr_eq(request, current)))
     }
-    fn valid_link_activation(&self, id: u64, link: &crate::links::Link) -> bool {
+    fn valid_link_activation(&self, id: PaneId, link: &crate::links::Link) -> bool {
         self.current_link_request(link)
             && self.active_pane().is_some_and(|pane| pane.id == id)
             && self.panes.iter().any(|pane| {
                 pane.id == id && pane.displayed_snapshot().is_some_and(|snapshot| link.matches_snapshot(snapshot))
             })
     }
-    fn notice(&mut self, id: u64, message: &str) {
+    fn notice(&mut self, id: PaneId, message: &str) {
         if let Some(pane) = self.panes.iter_mut().find(|pane| pane.id == id) {
             pane.status = message.into();
         }
@@ -595,7 +598,7 @@ impl Hotaru {
         }
     }
 
-    fn focus_pane(&mut self, id: u64, cx: &mut Cx<Msg>) {
+    fn focus_pane(&mut self, id: PaneId, cx: &mut Cx<Msg>) {
         if let Some(tab) = self.tabs.iter_mut().find(|tab| tab.tree.leaves().contains(&id)) {
             self.active = tab.id;
             // Going to another pane brings the tab's splits back, as Ghostty does.
@@ -611,7 +614,7 @@ impl Hotaru {
         }
     }
 
-    fn send(&mut self, id: u64, command: Command) {
+    fn send(&mut self, id: PaneId, command: Command) {
         let input = match &command {
             Command::Input(_) | Command::Paste(_) | Command::PasteEvent { .. } => true,
             Command::Key(key) => key.action != hotaru_core::input::KeyAction::Release,
@@ -629,7 +632,7 @@ impl Hotaru {
         }
     }
 
-    fn shape_pane(&mut self, id: u64, invalidate: bool) {
+    fn shape_pane(&mut self, id: PaneId, invalidate: bool) {
         let config = Arc::new(self.settings.fonts(self.font_size));
         if let Some(pane) = self.panes.iter_mut().find(|p| p.id == id) {
             if invalidate {
@@ -696,7 +699,7 @@ impl Hotaru {
             return;
         }
         let Some(id) = self.find_state.pane else { return };
-        self.find_state.token = self.find_state.token.wrapping_add(1);
+        self.find_state.token = self.find_state.token.next();
         let token = self.find_state.token;
         self.find_state.in_flight = true;
         self.find_state.dirty = false;
@@ -751,7 +754,7 @@ impl Hotaru {
         };
         cache.selected = Some(index);
         let results = cache.results.clone();
-        self.find_state.navigation = self.find_state.navigation.wrapping_add(1);
+        self.find_state.navigation = self.find_state.navigation.next();
         let token = self.find_state.navigation;
         self.find_state.pending_navigation = Some((token, results.clone(), index));
         self.find_state.copy = None;
@@ -787,14 +790,14 @@ impl Hotaru {
         results.resolve_match(*index, &pane.snapshot.position, pane.snapshot.generation)
     }
 
-    fn clipboard_request(&mut self) -> u64 {
+    fn clipboard_request(&mut self) -> RequestId {
         self.clipboard_cancel.store(true, Ordering::Release);
         self.clipboard_cancel = Arc::new(AtomicBool::new(false));
         self.clipboard_format = self.settings.copy_format;
         if let Some(read) = self.clipboard_read.take() {
             read.cancel();
         }
-        self.clipboard_token = self.clipboard_token.wrapping_add(1);
+        self.clipboard_token = self.clipboard_token.next();
         self.clipboard_token
     }
 
@@ -832,7 +835,7 @@ impl Hotaru {
 
     /// Copy on select: the pane's finished selection becomes the primary
     /// selection, as plain text, on the selection worker.
-    fn copy_to_primary(&mut self, id: u64) {
+    fn copy_to_primary(&mut self, id: PaneId) {
         if !self.settings.copy_on_select {
             return;
         }
@@ -841,7 +844,7 @@ impl Hotaru {
         let snapshot = pane.rendered.as_ref().map_or_else(|| pane.snapshot.clone(), |frame| frame.snapshot.clone());
         self.primary_cancel.store(true, Ordering::Release);
         self.primary_cancel = Arc::new(AtomicBool::new(false));
-        self.primary_token = self.primary_token.wrapping_add(1);
+        self.primary_token = self.primary_token.next();
         let job = crate::selections::Job::Primary {
             token: self.primary_token,
             pane: id,
@@ -917,7 +920,7 @@ impl Hotaru {
 
     /// A program that asked for paste events (mode 5522) is told a paste's
     /// types instead of given its text, and reads what it wants itself.
-    fn paste_event(&mut self, id: u64, primary: bool, read: &ClipboardRead) -> bool {
+    fn paste_event(&mut self, id: PaneId, primary: bool, read: &ClipboardRead) -> bool {
         let Some(pane) = self.panes.iter().find(|pane| pane.id == id && !pane.ended) else { return false };
         if !pane.snapshot.modes.kitty_paste_events {
             return false;
@@ -979,7 +982,7 @@ impl Hotaru {
                 "Replace",
             ),
         };
-        self.ask_token = self.ask_token.wrapping_add(1);
+        self.ask_token = self.ask_token.next();
         let token = self.ask_token;
         // The question comes while someone may be typing: Return doesn't
         // answer it; Escape refuses. A program with a password may be let
@@ -1043,7 +1046,7 @@ impl Hotaru {
 
     /// A program's notification reaches the desktop while its pane is out
     /// of sight (another tab, or the window not in use), once a second at most.
-    fn notify(&mut self, id: u64, title: &str, body: &str, cx: &mut Cx<Msg>) {
+    fn notify(&mut self, id: PaneId, title: &str, body: &str, cx: &mut Cx<Msg>) {
         if !self.settings.desktop_notifications || self.focused_pane == Some(id) {
             return;
         }
@@ -1258,7 +1261,7 @@ impl Hotaru {
     }
 
     fn save_settings(&mut self) {
-        self.settings_token = self.settings_token.wrapping_add(1);
+        self.settings_token = self.settings_token.next();
         if self.settings_managed {
             return;
         }
@@ -1367,7 +1370,7 @@ impl Hotaru {
                 Msg::Scroll(id, lines)
             }
             Action::ReloadConfig => {
-                self.settings_token = self.settings_token.wrapping_add(1);
+                self.settings_token = self.settings_token.next();
                 self.settings_pending = false;
                 if let Some(worker) = &self.settings_worker {
                     worker.load(self.settings_token);
@@ -1477,7 +1480,7 @@ impl Hotaru {
             self.focus_active(cx);
             return;
         }
-        self.go_to_tab_token = self.go_to_tab_token.wrapping_add(1);
+        self.go_to_tab_token = self.go_to_tab_token.next();
         let token = self.go_to_tab_token;
         let mut palette = crate::go_to_tab::Palette::new(token, self.tabs.len());
         palette.refresh(&self.go_to_tab_candidates(), true);
@@ -2158,7 +2161,7 @@ impl Program for Hotaru {
                 }
                 self.clipboard_read = Some(read.clone());
                 if let Some(worker) = &self.clipboard {
-                    worker.submit(Job::Paste { token, tab: id, read });
+                    worker.submit(Job::Paste { token, pane: id, read });
                 }
             }
             Msg::Clipboard(request) => self.program_clipboard(request, cx),
@@ -2204,7 +2207,7 @@ impl Program for Hotaru {
             }
             Msg::Select(id, selection) => {
                 if self.find_state.pane == Some(id) {
-                    self.find_state.navigation = self.find_state.navigation.wrapping_add(1);
+                    self.find_state.navigation = self.find_state.navigation.next();
                     self.find_state.copy = None;
                     self.find_state.pending_navigation = None;
                     self.find_state.retry_navigation = false;
@@ -2260,7 +2263,7 @@ impl Program for Hotaru {
                 }
                 self.clipboard_read = Some(read.clone());
                 if let Some(worker) = &self.clipboard {
-                    worker.submit(Job::Paste { token, tab: id, read });
+                    worker.submit(Job::Paste { token, pane: id, read });
                 }
             }
             Msg::PasteReady(token, tab, read, text) => {
@@ -2686,7 +2689,7 @@ mod automatic_link_tests {
     use hotaru_link_regex::{CellPoint, Limits, Matcher};
     use std::sync::atomic::AtomicBool;
     use std::time::{Duration, Instant};
-    fn link(snapshot: Arc<Snapshot>, pane: u64) -> crate::links::Link {
+    fn link(snapshot: Arc<Snapshot>, pane: PaneId) -> crate::links::Link {
         let cell = CellPoint { row: 0, col: 2 };
         let mapped = crate::automatic_links::mapping::extract(
             &snapshot,
@@ -2726,7 +2729,7 @@ mod automatic_link_tests {
         let first = link(snapshot.clone(), id);
         h.send(Msg::MatchLink(id, first.request().cloned()));
         assert!(h.program().valid_link_activation(id, &first));
-        assert!(!h.program().valid_link_activation(id + 1, &first));
+        assert!(!h.program().valid_link_activation(PaneId::new(id.get() + 1), &first));
         let replacement = link(snapshot, id);
         h.send(Msg::MatchLink(id, replacement.request().cloned()));
         assert!(!h.program().valid_link_activation(id, &first));

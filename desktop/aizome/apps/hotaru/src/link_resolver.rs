@@ -1,6 +1,7 @@
 //! Bounded filesystem resolution in a disposable process, never a UI/PTY call.
 //! Cancellation kills only our child. A child stuck in kernel I/O retains the
 //! single active slot until reaped; neither a hard reap deadline nor a UI join.
+use crate::ids::PaneId;
 use crate::links::Link;
 use std::{
     io::{self, Read, Write},
@@ -27,7 +28,7 @@ pub enum Error {
 }
 #[derive(Clone)]
 pub struct Request {
-    pub pane: u64,
+    pub pane: PaneId,
     pub link: Link,
     pub cwd: Option<PathBuf>,
 }
@@ -280,7 +281,7 @@ fn resolve_literal(target: &str, cwd: &Path) -> Result<String, &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn request(pane: u64) -> Arc<Request> {
+    fn request(pane: PaneId) -> Arc<Request> {
         let mut terminal = hotaru_core::Terminal::new(8, 2, 0);
         terminal.feed(b"\x1b]8;;https://x\x1b\\x\x1b]8;;\x1b\\");
         let snapshot = Arc::new(terminal.snapshot());
@@ -304,15 +305,15 @@ mod tests {
             },
         )
         .unwrap();
-        worker.submit(request(1));
-        assert_eq!(started_rx.recv_timeout(Duration::from_secs(3)).unwrap(), 1);
-        let replaced = request(2);
+        worker.submit(request(crate::ids::PaneId::new(1)));
+        assert_eq!(started_rx.recv_timeout(Duration::from_secs(3)).unwrap(), crate::ids::PaneId::new(1));
+        let replaced = request(crate::ids::PaneId::new(2));
         let weak = Arc::downgrade(&replaced);
         worker.submit(replaced);
-        worker.submit(request(3));
+        worker.submit(request(crate::ids::PaneId::new(3)));
         assert!(weak.upgrade().is_none());
         release_tx.send(()).unwrap();
-        assert_eq!(started_rx.recv_timeout(Duration::from_secs(3)).unwrap(), 3);
+        assert_eq!(started_rx.recv_timeout(Duration::from_secs(3)).unwrap(), crate::ids::PaneId::new(3));
         assert!(done_rx.try_recv().is_err());
         drop(worker);
         release_tx.send(()).unwrap();

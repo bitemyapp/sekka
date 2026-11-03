@@ -1,5 +1,6 @@
 //! Bounded font worker per pane: one active and one replaceable pending frame.
 
+use crate::ids::PaneId;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Once};
@@ -93,7 +94,7 @@ pub fn monospaced_families() -> Arc<[String]> {
 }
 
 impl Worker {
-    pub fn new(id: u64, tx: MsgSender<Msg>) -> std::io::Result<Self> {
+    pub fn new(id: PaneId, tx: MsgSender<Msg>) -> std::io::Result<Self> {
         let pending = Arc::new((Mutex::new(Pending::default()), Condvar::new()));
         let shared = pending.clone();
         std::thread::Builder::new().name(format!("hotaru-font-{id}")).spawn(move || {
