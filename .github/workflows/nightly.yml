@@ -1,11 +1,9 @@
 name: Check and cache nightly Sekka
 
 on:
-  schedule:
-    # 4:17 AM in Chicago, through daylight saving changes. Avoid GitHub's
-    # top-of-hour scheduling peak; scheduled delivery is still best-effort.
-    - cron: '17 4 * * *'
-      timezone: America/Chicago
+  # Started by hand, or at 4:17 AM Chicago time by the builder host's crontab
+  # (DEVELOPERS.md, "Nightly builds"). GitHub's own schedule delivered this
+  # job hours late or not at all.
   workflow_dispatch:
 
 permissions:
@@ -17,7 +15,7 @@ concurrency:
 
 jobs:
   nightly:
-    # Scheduled, or started by hand, from main only. It runs on the sandboxed
+    # Dispatched from main only. It runs on the sandboxed
     # builder (nix/runner.nix and DEVELOPERS.md), one fresh container per
     # job, with Nix through the host's daemon. The environment holds the
     # binary-cache token and signing key, for main alone. It neither builds
@@ -28,7 +26,7 @@ jobs:
     # when everything passed and Sekka's packages are in the binary cache
     # does it commit the update to main, move the nightly branch (which
     # installed systems follow) to it.
-    if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
     runs-on: [self-hosted, linux, x64, sekka-builder]
     timeout-minutes: 720
     environment: nightly

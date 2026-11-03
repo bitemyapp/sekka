@@ -2345,18 +2345,34 @@ GitHub limits individual release assets to 2 GiB. `scripts/prepare-release.py` k
 
 ### Nightly builds
 
-`.github/workflows/nightly.yml` is scheduled for 4:17 AM `America/Chicago`.
-It also runs from its **Run workflow** button (Actions, "Check and cache
-nightly Sekka"), on `main` only:
+`.github/workflows/nightly.yml` runs only when dispatched, on `main` only:
+from its **Run workflow** button (Actions, "Check and cache nightly Sekka"),
+or with
 
 ```sh
 gh workflow run nightly.yml --ref main
 ```
 
-The minute avoids GitHub's documented start-of-hour scheduling peak while
-keeping the job near 4 AM Central through daylight saving changes.
-[Scheduled delivery remains best-effort](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule);
-GitHub can delay or drop scheduled runs under load.
+It has no GitHub `schedule`. In October and early November 2026, GitHub
+created every scheduled run 3½ to 10 hours late and dropped 7 of 22 days
+outright, while the builder picked each one up within seconds. Instead,
+`callen`'s crontab on wx-workstation dispatches it at 4:17 AM. Cron runs in
+the host's time zone, `America/Chicago`, so the time follows daylight saving:
+
+```crontab
+# Sekka nightly: dispatch .github/workflows/nightly.yml (DEVELOPERS.md, "Nightly builds").
+17 4 * * * mkdir -p "$HOME/.local/state/sekka-nightly" && { date -u +\%FT\%TZ; GH_TOKEN="$(cat "$HOME/.config/sekka-nightly/gh-token")" /usr/bin/gh workflow run nightly.yml --repo bitemyapp/sekka --ref main; } >> "$HOME/.local/state/sekka-nightly/dispatch.log" 2>&1
+```
+
+`~/.config/sekka-nightly/gh-token` (mode 600) holds the fine-grained personal
+access token `sekka-nightly-dispatch`. It is limited to `bitemyapp/sekka`,
+with Actions read and write plus the required Metadata read, and has no
+expiry, so the nightly can't lapse unnoticed. The token must be in that file
+because cron can't reach the desktop keyring, where `gh auth login` keeps its
+token. Each dispatch appends a timestamp and any error to
+`~/.local/state/sekka-nightly/dispatch.log`. A missing or revoked token shows
+up there, and as no nightly run in Actions. To replace the token, generate one
+with the same scope and overwrite the file.
 
 The job runs on the builder. It first brings every input in `flake.lock` up
 to date (`nix flake update`) and commits that, if anything moved, on top of
