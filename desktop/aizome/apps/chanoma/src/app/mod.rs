@@ -89,6 +89,8 @@ pub enum Input {
     Erase,
     /// The space bar: OK, but on the PIN pad (the left face button).
     Space,
+    /// A digit: on the PIN pad, the legend's button of that number.
+    Digit(u8),
     /// The top face button (Y on an Xbox controller, △, Tab): a screen's
     /// other action (using the folder showing).
     Alt,
@@ -981,8 +983,8 @@ impl Chanoma {
         let _ = cx;
     }
 
-    /// The keyboard on the PIN pad: the legend's keys (the arrows, Page Up
-    /// and Down, Tab and Space), Backspace, Return, and Esc.
+    /// The keyboard on the PIN pad: the legend's numbers, or its keys (the
+    /// arrows, Page Up and Down, Tab and Space); Backspace, Return, and Esc.
     fn pin_input(&mut self, i: Input, cx: &mut Cx<Msg>) {
         use ui::pinpad::Key;
         let key = match i {
@@ -994,6 +996,10 @@ impl Chanoma {
             Input::Next => Key::Press(Button::R1),
             Input::Alt => Key::Press(Button::North),
             Input::Space => Key::Press(Button::West),
+            Input::Digit(d) => match usize::from(d).checked_sub(1).and_then(|i| ui::pinpad::BUTTONS.get(i)) {
+                Some(b) => Key::Press(*b),
+                None => return,
+            },
             Input::Erase => Key::Delete,
             Input::Ok => Key::Done,
             Input::Back => return self.pin_back(cx),
@@ -1183,6 +1189,9 @@ impl Chanoma {
             Key::Named(NamedKey::PageDown) => Input::Next,
             Key::Named(NamedKey::Tab) => Input::Alt,
             Key::Character(c) if c == " " => Input::Space,
+            Key::Character(c) if c.len() == 1 && c.as_bytes()[0].is_ascii_digit() => {
+                Input::Digit(c.as_bytes()[0] - b'0')
+            }
             _ => return None,
         })
     }

@@ -9,7 +9,8 @@
 //! that say yes and no (Nintendo's swap them), the triggers (some pads
 //! have none, and others press them only part way) or a stick. So a PIN
 //! made on one controller is the same presses on any other, drawn in the
-//! legend as the controller in hand prints them. On a keyboard they're the
+//! legend as the controller in hand prints them. Each is numbered 1 to 8,
+//! the digit a PIN keeps it as. On a keyboard they're those digits, or the
 //! arrows, Page Up and Page Down, Tab and Space, as Chanoma's hints say.
 //!
 //! It checks the PIN as soon as it's as long as the one set; wrong ones
@@ -197,6 +198,9 @@ impl Pad {
             if placed {
                 place(c, theme, *b, Point::new(r.center().x, r.y1 - 20.0));
             }
+            // Its number in the corner, the digit a PIN keeps it as.
+            let n = (i + 1).to_string();
+            text_mid(c, theme, &n, r.x0 + 11.0, r.y0 + 19.0, mono(CAPTION, MEDIUM), theme.text3());
             if locked {
                 c.fill_rect(r, theme.raised().with_alpha(0.6));
             }
