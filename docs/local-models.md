@@ -28,7 +28,27 @@ The server listens on `http://127.0.0.1:8080/v1` (OpenAI chat completions with t
 }
 ```
 
-RUNTIMES_MEASURED
+## Runtimes
+
+One model, Qwen3.8-27B, under each runtime, four request slots, a 24K-token cold prefill, then single and four concurrent 512-token answers at temperature 0 (`sekka-model-server bench`; raw JSON and server logs in `.work/evals/runtimes`). VRAM is the whole GPU's, including about 1.1 GB the desktop uses; "ready after" is from launch to a healthy server, with the weights already in the page cache. llama.cpp served unsloth's UD-Q6_K GGUF (22.0 GB, 6.6 bits per weight); vLLM and SGLang served unsloth's NVFP4 checkpoint (23.4 GB, about 4.5 bits): the formats each runtime is fastest with, so precision differs too.
+
+| Runtime (version) | Weights | Speculation | Decode, 1 stream | Aggregate, 4 streams | Cold prefill (24K) | Next turn, cached | VRAM | Ready after |
+|---|---|---|---:|---:|---:|---:|---:|---:|
+| llama.cpp 0.8.0 | Q6_K | none | 64.7 tok/s | 206 tok/s | 3,330 tok/s | 0.26 s | 28.5 GB | 3 s |
+| llama.cpp 0.8.0 | Q6_K | MTP, 2 drafts | **111.5** | 274 | 3,135 | 0.31 s | 31.0 GB | 3 s |
+| llama.cpp 0.8.0 | Q6_K | MTP, 3 drafts | 105.8 | 295 | 3,005 | 0.31 s | 31.4 GB | 3 s |
+| vLLM 0.32.0 | NVFP4 | none | 67.0 | 237 | 7,754 | 0.11 s | 30.1 GB | 2 min |
+| vLLM 0.32.0 | NVFP4 | MTP, 2 drafts | 101.6 | **372** | 6,635 | 0.61 s | 30.5 GB | 2 min |
+| SGLang 0.5.22 | NVFP4 | none | 41.5 | 83 | 7,694 | 0.05 s | 31.7 GB | 1 min |
+
+- **One user, one agent: llama.cpp with MTP.** It decodes fastest for a single stream, at higher precision, starts in seconds, serves vision through its mmproj and runs every GGUF in the table below. Qwen3.8's Q6_K file carries its multi-token-prediction head, so `--spec-type draft-mtp` speeds it up 1.7× with no extra download; three drafts trade single-stream speed for batch throughput.
+- **Several agents at once: vLLM.** With MTP it delivers 36% more aggregate throughput at four streams than llama.cpp and prefills twice as fast, at the cost of NVFP4's lower precision, two minutes to start, and a container. Stay on 0.32.0: 0.33.0 crashes with NVFP4 and MTP on SM120 ([vllm#65139](https://github.com/vllm-project/vllm/issues/65139)).
+- **SGLang 0.5.22 isn't competitive here yet.** On SM120 it runs Qwen3.8's linear-attention layers with Triton kernels, and its Mamba state cache capped it at two running requests (its log says so), so the second pair of streams waited six seconds to start.
+- **Not measured:** ExLlamaV3/TabbyAPI (supports Qwen3.8 with vision; its quants and container would have needed another ~30 GB of disk), TensorRT-LLM (release candidates only for this GPU), and Ollama, whose OpenAI endpoint ignores `tool_choice`. ik_llama.cpp and KTransformers target models that don't fit in VRAM.
+
+The agent evaluations use llama.cpp throughout, so every model is compared at the same runtime, with GGUF files of similar precision.
+
+vLLM and SGLang run in their upstream images under rootless Docker without the NVIDIA container toolkit: `sekka-model-server` passes `/dev/nvidia0`, `/dev/nvidiactl` and `/dev/nvidia-uvm` and mounts the host driver's library directory (NixOS keeps it in the store) at `/usr/local/nvidia/lib64`.
 
 ## Choosing a model
 
