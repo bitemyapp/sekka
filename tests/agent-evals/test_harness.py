@@ -55,16 +55,18 @@ class Points(unittest.TestCase):
 
 class Refused(unittest.TestCase):
     def refused(self, command):
-        return any(p.search(command) for p, _ in vm.FORBIDDEN)
+        return vm.refusal(command) is not None
 
     def test_ending_the_machine_or_session(self):
         for c in ["reboot", "systemctl reboot", "shutdown -h now", "loginctl terminate-user alice",
-                  "nixos-rebuild switch", "rm -rf /", "rm -rf /home/alice"]:
+                  "nixos-rebuild switch", "rm -rf /", "rm -rf /home/alice", "ls; reboot", "sudo poweroff",
+                  "true && systemctl --no-pager reboot"]:
             self.assertTrue(self.refused(c), c)
 
     def test_ordinary_commands(self):
         for c in ["systemctl restart notes-web", "rm -f /srv/data/logs/sync-debug.log", "journalctl -b --no-pager",
-                  "systemctl --user status pipewire", "rm -rf /tmp/verify"]:
+                  "systemctl --user status pipewire", "rm -rf /tmp/verify",
+                  "systemctl list-unit-files | grep -viE 'reboot|poweroff|halt'", "echo shutdown"]:
             self.assertFalse(self.refused(c), c)
 
 

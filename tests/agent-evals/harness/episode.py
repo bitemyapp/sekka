@@ -27,8 +27,13 @@ The computer runs Sekka, a Linux distribution built on NixOS, with the Aizome de
 Work like a careful administrator:
 - Investigate before you change anything: logs (journalctl), unit states (systemctl, and systemctl --user for alice's session through `as-alice`), configuration, permissions and processes, until the evidence shows the cause.
 - Fix the cause with the smallest change that solves it. Don't work around it, disable security features, delete alice's data, reboot, or log her out.
+- She is waiting: once you know what is wrong, fix it. If you can't tell who or what made a bad change, say so in your report rather than searching at length.
 - Verify the fix the way she would notice it.
 - Then call `finish` with the root cause, the evidence, and exactly what you changed."""
+
+# Which system prompts these are, recorded with every result: v1 lacked the
+# line about not searching at length for who made a change.
+PROMPT_VERSION = "v2"
 
 COMPUTER_USE_SYSTEM = """You are operating a computer for its user through its screen, mouse and keyboard.
 
@@ -50,7 +55,8 @@ def run(machine):
     vm = VM(machine, out)
     result = {"scenario": s.id, "track": s.track, "area": s.area, "level": s.level, "agent": cfg["agent"],
               "model": (cfg.get("model") or {}).get("name"), "observe": cfg.get("observe"),
-              "skill": bool(cfg.get("skill")), "repeat": cfg.get("repeat", 0), "started": time.time()}
+              "skill": bool(cfg.get("skill")), "repeat": cfg.get("repeat", 0), "started": time.time(),
+              "prompt_version": PROMPT_VERSION}
     try:
         t0 = time.monotonic()
         machine.start()

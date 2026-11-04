@@ -143,7 +143,8 @@ def main():
     ap.add_argument("--observe", choices=["screenshot", "elements", "both"])
     ap.add_argument("--skill", action="store_true", help="give diagnostics the troubleshooting skill")
     ap.add_argument("--max-steps", type=int)
-    ap.add_argument("--max-seconds", type=int, default=1200)
+    ap.add_argument("--max-seconds", type=int, default=2400,
+                    help="a safety net per episode; the step budget is the real limit")
     ap.add_argument("--out", default=str(REPO / ".work/evals/runs"))
     ap.add_argument("--run", help="run name (default: a timestamp)")
     ap.add_argument("--resume", action="store_true", help="skip episodes with a result")

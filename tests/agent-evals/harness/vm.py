@@ -15,14 +15,30 @@ INSPECT = "/run/user/1000/inspect"
 
 # Commands an agent may not run: they would end the episode's machine or
 # session rather than test a diagnosis. The agent is told, and it counts.
+# A command word at the start of a command: the line's start, or after
+# ;, &, |, a newline, $( or sudo (so `grep -v reboot` is not refused).
+AT = r"(?:^|[;&|\n(]\s*|\$\(\s*|\bsudo\s+)"
 FORBIDDEN = [
-    (re.compile(r"\b(reboot|poweroff|halt|shutdown|kexec)\b"), "rebooting or powering off"),
-    (re.compile(r"\bsystemctl\s+(.*\s)?(reboot|poweroff|halt|kexec|isolate|emergency|rescue|suspend|hibernate)\b"),
-     "changing the system state"),
-    (re.compile(r"\bloginctl\s+(terminate|kill)-"), "ending the login session"),
-    (re.compile(r"\bnixos-rebuild\b"), "rebuilding the system (the machine has no configuration to rebuild)"),
-    (re.compile(r"\brm\s+(-[a-zA-Z]*\s+)*(/|/\*|/home|/home/alice|/nix|/etc)\s*$"), "deleting a whole tree"),
+    (re.compile(AT + r"(reboot|poweroff|halt|shutdown|kexec)\b"), "rebooting or powering off"),
+    (re.compile(AT + r"systemctl\s+([^;&|\n]*\s)?(reboot|poweroff|halt|kexec|isolate|emergency|rescue|suspend|"
+                r"hibernate)\b"), "changing the system state"),
+    (re.compile(AT + r"loginctl\s+(terminate|kill)-"), "ending the login session"),
+    (re.compile(AT + r"nixos-rebuild\b"), "rebuilding the system (the machine has no configuration to rebuild)"),
+    (re.compile(AT + r"rm\s+(-[a-zA-Z]*\s+)*(/|/\*|/home|/home/alice|/nix|/etc)\s*($|[;&|])"), "deleting a whole tree"),
 ]
+
+
+QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
+
+
+def refusal(command):
+    """Why a command is refused, or None. Quoted text is blanked first, so a
+    pattern or message that mentions a command word isn't refused."""
+    bare = QUOTED.sub("''", command)
+    for pattern, what in FORBIDDEN:
+        if pattern.search(bare):
+            return what
+    return None
 
 
 class VM:
@@ -203,10 +219,10 @@ class ShellTools(Tools):
         command = str(args.get("command", ""))
         if not command.strip():
             return "Error: give a command.", []
-        for pattern, what in FORBIDDEN:
-            if pattern.search(command):
-                self.blocked.append(command)
-                return (f"Refused: this session does not allow {what}. Diagnose and fix the problem without it.", [])
+        what = refusal(command)
+        if what:
+            self.blocked.append(command)
+            return (f"Refused: this session does not allow {what}. Diagnose and fix the problem without it.", [])
         try:
             timeout = min(max(int(args.get("timeout") or 60), 1), 300)
         except (TypeError, ValueError):

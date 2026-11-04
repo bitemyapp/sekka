@@ -12,20 +12,25 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "harness"))
+from vm import refusal  # noqa: E402
+
 
 def load(paths):
+    """Every episode's result.json under the given run directories. The
+    label is the directory the episode is in (the model, +skill)."""
     latest = {}
     for p in paths:
-        p = Path(p)
-        files = [p] if p.is_file() else sorted(p.glob("**/results.jsonl"))
-        for f in files:
-            for line in f.read_text().splitlines():
-                if not line.strip():
-                    continue
-                r = json.loads(line)
-                key = (r.get("label") or r.get("model") or r.get("agent"), r["scenario"], r.get("repeat", 0),
-                       r.get("observe") if r.get("track") == "computer-use" else None)
-                latest[key] = r
+        for f in sorted(Path(p).glob("**/result.json")):
+            r = json.loads(f.read_text())
+            r.setdefault("label", f.parent.parent.name)
+            r.setdefault("prompt_version", "v1")
+            # Refusals re-checked with the current patterns (an early one
+            # also matched words inside grep patterns).
+            r["blocked_commands"] = [c for c in r.get("blocked_commands") or [] if refusal(c)]
+            key = (str(f.parent.parent), r["scenario"], r.get("repeat", 0), r.get("observe")
+                   if r.get("track") == "computer-use" else None)
+            latest[key] = r
     return list(latest.values())
 
 

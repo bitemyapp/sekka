@@ -101,6 +101,20 @@ def drop_old_images(messages, keep):
             m["content"] = list(reversed(parts))
 
 
+OBSERVATION_MARK = "Windows and their controls"
+
+
+def drop_old_observations(messages, keep):
+    """Element lists are as long as screenshots in tokens: keep the newest."""
+    seen = 0
+    for m in reversed(messages):
+        c = m.get("content")
+        if m.get("role") == "tool" and isinstance(c, str) and OBSERVATION_MARK in c:
+            seen += 1
+            if seen > keep:
+                m["content"] = c.split(OBSERVATION_MARK)[0] + "[an earlier element list, no longer shown]"
+
+
 def run(client, system, task, tools, transcript, max_steps=40, max_seconds=1200, keep_images=3, max_tokens=4096,
         keep_reasoning=False, images_in=None):
     """Run until the model calls `finish`, runs out of steps or time, or the
@@ -131,6 +145,7 @@ def run(client, system, task, tools, transcript, max_steps=40, max_seconds=1200,
             result["ended"] = "time"
             break
         drop_old_images(messages, keep_images)
+        drop_old_observations(messages, keep_images)
         try:
             resp = client.chat(messages, tools=tools.schemas(), max_tokens=max_tokens)
         except LLMError as e:
