@@ -56,14 +56,38 @@ if name == 'nix':
         assert not {'nixpkgs', 'applications', 'ai-apps', 'omp'} & set(a), a
         assert 'inputs.sekka.url' in p('/etc/nixos/flake.nix').read_text()
         p('/etc/nixos/flake.lock').write_text(p('/state/updated.lock').read_text())
+    elif 'lock' in a:
+        if not p('/etc/nixos/flake.lock').exists():
+            p('/etc/nixos/flake.lock').write_text(p('/state/updated.lock').read_text())
+    elif 'metadata' in a:
+        if p('/state/fail-snapshot').exists(): sys.exit(1)
+        assert '--no-update-lock-file' in a, a
+        print(json.dumps({'path': '/nix/store/00000000000000000000000000000000-config', 'locks': {'nodes': {}}}))
+    elif 'path-info' in a:
+        assert '--derivation' in a and '--no-update-lock-file' in a, a
+        assert any(x.startswith('path:/nix/store/00000000000000000000000000000000-config#') for x in a), a
+        p('/state/evaluating').touch()
+        if p('/state/fail-evaluation').exists(): sys.exit(1)
+        if p('/state/wait-evaluation').exists(): time.sleep(60)
+        print('/nix/store/00000000000000000000000000000000-system.drv')
     elif 'eval' in a and any(x.endswith('.config.nix.settings') for x in a): print(p('/state/caches.json').read_text())
     elif 'eval' in a: print('["legacy-host"]')
     elif 'build' in a:
+        assert '/nix/store/00000000000000000000000000000000-system.drv^out' in a, a
+        assert not any('#nixosConfigurations' in x for x in a), a
+        if '--dry-run' in a:
+            p('/state/planned').touch()
+            sys.exit(0)
         p('/state/building').touch()
         if p('/state/fail').exists(): sys.exit(1)
         if p('/state/wait').exists(): time.sleep(60)
+        p(a[a.index('--out-link') + 1]).symlink_to('/system-new')
         print('/system-new')
     else: sys.exit(2)
+elif name == 'nix-store':
+    assert '--add-root' in a and '--indirect' in a and '--realise' in a, a
+    p(a[a.index('--add-root') + 1]).symlink_to(a[-1])
+    print(a[-1])
 elif name == 'nix-env':
     if p('/state/fail-profile').exists(): sys.exit(1)
     profile = p('/nix/var/nix/profiles/system')
@@ -127,7 +151,7 @@ class Update(unittest.TestCase):
         (self.root / 'state/caches.json').write_text(json.dumps(CACHES))
         (self.config / 'configuration.nix').write_text('{ imports = [ ./hardware-configuration.nix ]; }')
         (self.config / 'hardware-configuration.nix').write_text('# hardware untouched')
-        for name in ['nix', 'nix-env', 'systemd-run', 'systemctl', 'loginctl']:
+        for name in ['nix', 'nix-store', 'nix-env', 'systemd-run', 'systemctl', 'loginctl']:
             path = self.root / 'system-old/sw/bin' / name
             path.write_text(f'#!{PYTHON}\n' + FAKE)
             path.chmod(0o755)
@@ -182,6 +206,46 @@ class Update(unittest.TestCase):
         self.run_cmd('/bin/sekka-update', ok=False)
         self.unchanged()
 
+    def test_snapshot_and_evaluation_failures_restore_configuration_and_release_roots(self):
+        for phase in ['snapshot', 'evaluation']:
+            with self.subTest(phase=phase):
+                fail = self.root / f'state/fail-{phase}'
+                fail.touch()
+                self.run_cmd('/bin/sekka-update', ok=False)
+                fail.unlink()
+                self.unchanged()
+                self.assertFalse(list((self.root / 'var/lib/yukimi/operations').glob('*/*-root')))
+
+    def test_configuration_without_a_lock_is_finalized_before_snapshotting(self):
+        (self.config / 'flake.lock').unlink()
+        result = self.run_cmd('/bin/yukimi-helper', 'change', '--mode', 'boot')
+        self.assertTrue(json.loads(result.stdout)['ok'])
+        commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
+        lock = next(i for i, c in enumerate(commands) if c[0] == 'nix' and 'lock' in c)
+        snapshot = next(i for i, c in enumerate(commands) if 'metadata' in c)
+        self.assertLess(lock, snapshot)
+        self.assertTrue((self.config / 'flake.lock').exists())
+
+    def test_evaluation_build_and_activation_have_separate_timed_stages(self):
+        facts = self.root / 'system-old/etc/yukimi/system.json'
+        facts.write_text(json.dumps({'evaluationCores': 8}))
+        # Facts normally come through /etc, supplied by the running system.
+        (self.root / 'etc/yukimi').symlink_to('/system-old/etc/yukimi')
+        result = self.run_cmd('/bin/sekka-update', '--boot')
+        self.assertIn('Restart to finish updating', result.stdout)
+        commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
+        evaluation = next(c for c in commands if 'path-info' in c)
+        self.assertIn('eval-cores', evaluation)
+        self.assertEqual(evaluation[evaluation.index('eval-cores') + 1], '8')
+        self.assertEqual(sum('path-info' in c for c in commands), 1)
+        self.assertEqual(sum('build' in c and '--dry-run' not in c for c in commands), 1)
+        log = next((self.root / 'var/lib/yukimi/operations').glob('*/progress.log')).read_text()
+        for phase in ['Preparing the configuration for evaluation', 'Evaluating your configuration',
+                      'Checking for cached packages', 'Downloading and building your system',
+                      'Setting it up for the next start']:
+            self.assertIn(f'Yukimi phase: {phase}; elapsed_ms=', log)
+        self.assertFalse(list((self.root / 'var/lib/yukimi/operations').glob('*/*-root')))
+
     def test_activation_failure_reports_configuration_kept(self):
         (self.root / 'state/fail-activation').touch()
         result = self.run_cmd('/bin/sekka-update', ok=False)
@@ -201,6 +265,27 @@ class Update(unittest.TestCase):
             process.communicate(timeout=10)
             self.assertNotEqual(process.returncode, 0)
             self.unchanged()
+        finally:
+            if process.poll() is None: process.kill()
+            process.wait()
+            process.stdout.close()
+            process.stderr.close()
+
+    def test_cancel_during_evaluation_restores_configuration_and_releases_roots(self):
+        (self.root / 'state/wait-evaluation').touch()
+        process = subprocess.Popen(self.base + ['/bin/sekka-update'], start_new_session=True,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            for _ in range(100):
+                if (self.root / 'state/evaluating').exists(): break
+                time.sleep(.05)
+            self.assertTrue((self.root / 'state/evaluating').exists())
+            os.killpg(process.pid, signal.SIGINT)
+            process.communicate(timeout=10)
+            self.assertNotEqual(process.returncode, 0)
+            self.unchanged()
+            self.assertFalse((self.root / 'state/building').exists())
+            self.assertFalse(list((self.root / 'var/lib/yukimi/operations').glob('*/*-root')))
         finally:
             if process.poll() is None: process.kill()
             process.wait()
@@ -239,7 +324,7 @@ class Update(unittest.TestCase):
         result = self.run_cmd('/bin/yukimi-helper', 'change', '--sekka', '--update', 'sekka,nixpkgs,applications', '--mode', 'auto')
         self.assertEqual(json.loads(result.stdout)['completion']['action'], 'none')
         commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
-        self.assertEqual(sum(command[0] == 'nix' and 'build' in command for command in commands), 1)
+        self.assertEqual(sum(command[0] == 'nix' and 'build' in command and '--dry-run' not in command for command in commands), 1)
         self.assertEqual(sum(command[0] == 'systemd-run' for command in commands), 1)
 
     def test_sekka_brings_what_it_pins_and_the_new_systems_caches(self):
@@ -300,7 +385,7 @@ class Update(unittest.TestCase):
         self.assertEqual((self.config / 'flake.lock').read_text(), ORIGINAL)
         self.assertEqual((self.config / 'flake.nix').read_text(), self.old)
         commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
-        self.assertEqual(sum(command[0] == 'nix' and 'build' in command for command in commands), 1)
+        self.assertEqual(sum(command[0] == 'nix' and 'build' in command and '--dry-run' not in command for command in commands), 1)
         self.assertFalse(any(command[0] == 'nix' and 'update' in command for command in commands))
 
         # The CLI takes the same choice, replacing rather than duplicating it.
@@ -341,7 +426,7 @@ class Update(unittest.TestCase):
         self.assertIn('"aizome"', configuration.split('calamares.desktops', 1)[1].split(';', 1)[0])
         self.assertIn('./hardware-configuration.nix', configuration)
         commands = [json.loads(line) for line in (self.root / 'state/commands').read_text().splitlines()]
-        self.assertEqual(sum(command[0] == 'nix' and 'build' in command for command in commands), 1)
+        self.assertEqual(sum(command[0] == 'nix' and 'build' in command and '--dry-run' not in command for command in commands), 1)
         # Early updates stay chosen, and --nightly goes back.
         self.run_cmd('/bin/sekka-update')
         self.assertIn('"github:bitemyapp/sekka?ref=main"', (self.config / 'flake.nix').read_text())

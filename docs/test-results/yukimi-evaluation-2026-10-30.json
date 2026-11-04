@@ -1,0 +1,177 @@
+{
+  "date": "2026-10-30",
+  "baseline_revision": "2cf052e632a357e4807738c669eb0c5a9100f936",
+  "scope": "Representative Aizome + Tatami installed configuration evaluated on wx-workstation; not a recording of the affected machine. Sources warm; single-run comparisons; no host activation.",
+  "host": {
+    "os": "Ubuntu 24.04",
+    "logical_cpus": 128,
+    "memory_GiB": 250,
+    "nix": "Determinate Nix 3.24.0 / Nix 2.35.3"
+  },
+  "baseline_measurements": [
+    {
+      "case": "full-profile",
+      "exit": 0,
+      "wall": 15.378,
+      "cpu": 15.376,
+      "maxRSS_MiB_high_water_across_runs": 3876.6
+    },
+    {
+      "case": "no-omp",
+      "exit": 0,
+      "wall": 7.78,
+      "cpu": 20.816,
+      "maxRSS_MiB_high_water_across_runs": 4176.2
+    },
+    {
+      "case": "minimal-apps",
+      "exit": 0,
+      "wall": 6.891,
+      "cpu": 17.97,
+      "maxRSS_MiB_high_water_across_runs": 4176.2
+    },
+    {
+      "case": "aizome-only",
+      "exit": 0,
+      "wall": 9.121,
+      "cpu": 22.98,
+      "maxRSS_MiB_high_water_across_runs": 4266.8
+    },
+    {
+      "case": "full-unprofiled",
+      "exit": 0,
+      "wall": 8.97,
+      "user": 20.74,
+      "sys": 3.71,
+      "maxRSS_KiB": 4502420
+    },
+    {
+      "case": "full-1-thread",
+      "exit": 0,
+      "wall": 14.68,
+      "user": 13.44,
+      "sys": 1.35,
+      "maxRSS_KiB": 3943056
+    },
+    {
+      "case": "full-8-threads",
+      "exit": 0,
+      "wall": 9.52,
+      "user": 16.99,
+      "sys": 1.86,
+      "maxRSS_KiB": 4068684
+    },
+    {
+      "case": "cache-fill",
+      "exit": 0,
+      "wall": 8.69,
+      "user": 19.26,
+      "sys": 3.95,
+      "maxRSS_KiB": 4489984
+    },
+    {
+      "case": "cache-hit",
+      "exit": 0,
+      "wall": 8.77,
+      "user": 19.9,
+      "sys": 4.02,
+      "maxRSS_KiB": 4495848
+    },
+    {
+      "case": "build-dry-first",
+      "exit": 0,
+      "wall": 8.8,
+      "user": 19.4,
+      "sys": 4.07,
+      "maxRSS_KiB": 4504332
+    },
+    {
+      "case": "build-dry-repeat",
+      "exit": 0,
+      "wall": 8.82,
+      "user": 19.38,
+      "sys": 3.95,
+      "maxRSS_KiB": 4476580
+    },
+    {
+      "case": "snapshot-build-first",
+      "exit": 0,
+      "wall": 8.87,
+      "user": 19.73,
+      "sys": 4.0,
+      "maxRSS_KiB": 4475964
+    },
+    {
+      "case": "snapshot-build-repeat",
+      "exit": 0,
+      "wall": 0.06,
+      "user": 0.01,
+      "sys": 0.02,
+      "maxRSS_KiB": 40900
+    }
+  ],
+  "snapshot_comparison": {
+    "same_derivation_and_output_paths": true,
+    "mutable_repeat_seconds": 8.82,
+    "immutable_first_seconds": 8.87,
+    "immutable_repeat_seconds": 0.06,
+    "limitation": "Unchanged repeat evaluation only. New inputs/configuration still require evaluation; cold source download was not timed."
+  },
+  "source_archive": {
+    "tracked_blob_bytes_before": 358932342,
+    "archived_capture_count": 218,
+    "archived_capture_bytes": 99446194,
+    "restored_and_sha256_verified": 218,
+    "manifest": "apps/hotaru/upstream/evidence.json",
+    "storage": "Immutable Git history; not Git archive export-ignore. Sizes are uncompressed tracked blob bytes, not network transfer."
+  },
+  "decisions": [
+    "Use immutable directory snapshots and persistent derivation cache; retain original references for Git metadata and local path inputs.",
+    "Instantiate once, plan substitutions and build by derivation; log phase times.",
+    "Default Sekka to 8 evaluator threads with an override; standalone Yukimi preserves Nix settings.",
+    "Preserve distinct package-set pins: the exploratory AI/OMP consolidation changed package identities, with only small single-run timing gains.",
+    "Preserve the existing main binary-cache publication workflow; early updates may arrive before cache publication completes."
+  ],
+  "implementation_base_revision": "d9f0217cc944d5f41bd59715497f45cbd2cc5e5b",
+  "validation": {
+    "packaged_helper": {
+      "passed": 127,
+      "ignored": 1,
+      "scope": "Nix-built helper workspace tests; ignored test contacts GitHub."
+    },
+    "rootless_transactions": {
+      "passed": 32,
+      "scope": "Real helper and CLI with Nix/systemd stubs. Includes phase order/timings, missing lock, rollback on snapshot/evaluation failure, cancellation, and GC root cleanup."
+    },
+    "real_nix_vm": {
+      "passed": true,
+      "scope": "Cached fixture system, packaged helper and real Determinate Nix in a disposable VM. Trace present on first evaluation, absent on unchanged retry, present after source edit; same output; roots removed after all three operations. No existing host profile or service changed.",
+      "evaluation_phase_ms": [
+        31,
+        27,
+        32
+      ]
+    },
+    "representative_system_evaluation": {
+      "passed": true,
+      "system": "ganymede (Aizome + Tatami)",
+      "import_from_derivation": false,
+      "evaluation_cores": 8
+    },
+    "capture_restore": {
+      "passed": true,
+      "count": 218,
+      "checks": [
+        "byte length",
+        "SHA-256",
+        "archived blob matches implementation base"
+      ]
+    },
+    "formatting_and_diff_check": true,
+    "limits": [
+      "The VM check covers cached outputs, not guest compilation, an ISO or hardware qualification.",
+      "An exploratory in-guest compilation fixture returned builder SIGKILL in direct Nix as well as through the helper; it was not used to claim compilation coverage.",
+      "The original affected machine and its multi-minute stall were not observed."
+    ]
+  }
+}
