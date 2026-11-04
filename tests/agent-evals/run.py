@@ -74,6 +74,7 @@ def episode(drv, cfg, out, timeout):
         r = json.loads((out / "result.json").read_text())
     except (FileNotFoundError, json.JSONDecodeError):
         r = {"scenario": cfg["scenario"], "agent": cfg["agent"], "model": (cfg.get("model") or {}).get("name"),
+             "repeat": cfg.get("repeat", 0),
              "harness_error": "no result (driver timed out or crashed); see driver.log"}
     r["wall_seconds"] = round(time.monotonic() - t0, 1)
     r["dir"] = str(out)

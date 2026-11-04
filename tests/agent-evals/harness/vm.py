@@ -48,8 +48,15 @@ class VM:
         self.shots = 0
 
     def sh(self, command, timeout=120):
-        """Root shell command; (status, combined output). Never raises on failure."""
-        wrapped = f"timeout -k 5 {int(timeout)} bash -c {shlex.quote(command)} </dev/null 2>&1"
+        """Root shell command; (status, combined output). Never raises on failure.
+
+        The output goes to a file in the guest, not the driver's pipe: a
+        process the command leaves in the background (`server &`) would hold
+        the pipe open and hang the driver for good."""
+        self.calls = getattr(self, "calls", 0) + 1
+        out = f"/run/agent-eval-out.{self.calls}"
+        wrapped = (f"timeout -k 5 {int(timeout)} bash -c {shlex.quote(command)} </dev/null >{out} 2>&1; "
+                   f"rc=$?; head -c 1000000 {out}; rm -f {out}; exit $rc")
         try:
             return self.machine.execute(wrapped, timeout=dt.timedelta(seconds=timeout + 30))
         except Exception as e:  # noqa: BLE001

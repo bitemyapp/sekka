@@ -9,8 +9,12 @@
 #   Qwen3.x-VL and Holo4 are trained) or pixel.
 # params: request fields sent with every chat request.
 # args: extra server arguments.
+# total_ctx: llama.cpp KV tokens shared by all slots (q8_0), when the
+#   default (slots × context) wouldn't fit beside the weights.
 
 [models."qwen3.8-27b"]
+# KV for all slots together: what fits beside the weights in 32 GB.
+total_ctx = 131072
 repo = "unsloth/Qwen3.8-27B-GGUF"
 revision = "4ca720788d1e01f1bff70c033e0d0028fd02e502"
 file = "Qwen3.8-27B-UD-Q6_K.gguf"
@@ -62,6 +66,8 @@ license = "MIT"
 params = { temperature = 0.6, top_p = 0.95, top_k = 20 }
 
 [models."muse-glimmer-30b"]
+# KV for all slots together: what fits beside the weights in 32 GB.
+total_ctx = 131072
 repo = "meta-models/Muse-Glimmer-30B-GGUF"
 revision = "b44f1072cf75e918a1b82a3a17b45c4389b076e7"
 file = "Muse-Glimmer-30B-KQuant-Dynamic-Q4_K_XL.gguf"
@@ -74,6 +80,8 @@ license = "Apache-2.0"
 params = { temperature = 1.0, top_p = 0.95, top_k = 64 }
 
 [models."gemma-4-31b"]
+# KV for all slots together: what fits beside the weights in 32 GB.
+total_ctx = 131072
 repo = "google/gemma-4-31B-it-qat-q4_0-gguf"
 revision = "59dde24573e7e61570dba08b18a2e1fe246955ed"
 file = "gemma-4-31B_q4_0-it.gguf"
@@ -86,6 +94,8 @@ license = "Apache-2.0"
 params = { temperature = 1.0, top_p = 0.95, top_k = 64 }
 
 [models."nemotron-3.5-bolt"]
+# KV for all slots together: what fits beside the weights in 32 GB.
+total_ctx = 131072
 repo = "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-GGUF"
 revision = "e0fecb69cb3e5e4c5e8a056fa2aec98c78e91246"
 file = "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB.gguf"
@@ -126,6 +136,8 @@ license = "Apache-2.0"
 params = { temperature = 0.0, chat_template_kwargs = { enable_thinking = false } }
 
 [models."holo4-27b"]
+# KV for all slots together: what fits beside the weights in 32 GB.
+total_ctx = 131072
 repo = "Hcompany/Holo4-27B-GGUF"
 revision = "045834b6864fb5cee8e9c72e47ef4c19140ce932"
 file = "q4_k_m.gguf"

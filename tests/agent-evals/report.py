@@ -99,6 +99,19 @@ def valid(r):
     return not r.get("invalid") and not r.get("harness_error")
 
 
+def by_area(results):
+    """Diagnostic success by where the fault was: the system or the session."""
+    rows = defaultdict(lambda: defaultdict(list))
+    for r in results:
+        if r.get("track") == "diagnostics" and valid(r):
+            rows[label_of(r)][r.get("area")].append(bool(r.get("success")))
+    out = ["| Model | Sekka system (10) | Aizome session (6) |", "|---|---:|---:|"]
+    for label in sorted(rows, key=lambda k: -sum(sum(v) for v in rows[k].values())):
+        cells = [f"{pct(sum(rows[label][a]), len(rows[label][a]))} of {len(rows[label][a])}" for a in ("sekka", "aizome")]
+        out.append(f"| {label} | " + " | ".join(cells) + " |")
+    return "\n".join(out)
+
+
 def matrix(results, track):
     labels = sorted({label_of(r) for r in results if r.get("track") == track})
     scen = sorted({r["scenario"] for r in results if r.get("track") == track})
@@ -141,6 +154,8 @@ def main():
     print("\nSuccess: fixed (the scenario's check passes afterwards) with no collateral damage. Root cause named: "
           "the report matches the scenario's cause patterns. Collateral: episodes that broke an invariant or ran a "
           "refused command. Unfinished: ran out of steps or time, stopped acting, or the server failed.\n")
+    print(by_area(results))
+    print()
     print(matrix(results, "diagnostics"))
     print("\n✓ fixed and named the cause · ✓· fixed without naming it · ✗c fixed with collateral damage · "
           "✗ not fixed · E invalid or harness error\n")
