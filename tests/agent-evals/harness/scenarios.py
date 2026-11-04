@@ -279,7 +279,12 @@ class WrongTimeZone(Scenario):
         vm.sh("timedatectl set-timezone Pacific/Kiritimati")
 
     def check(self, vm, final):
-        zone = vm.out_of("timedatectl show -p Timezone --value").strip()
+        # The zone the system is set to: /etc/localtime's target, which a
+        # restarted timedated reports and activation keeps. (A running
+        # timedated keeps the zone it read, so `ln -sf` alone, a valid fix,
+        # wouldn't show in `timedatectl` until it restarts.)
+        link = vm.out_of("readlink -f /etc/localtime").strip()
+        zone = link.split("/zoneinfo/")[-1] if "/zoneinfo/" in link else link
         return zone == "America/Chicago", {"zone": zone}
 
     def oracle(self, vm):

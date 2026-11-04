@@ -167,6 +167,10 @@ def main():
         print()
     print("## Excluded episodes\n")
     print(problems(results))
+    regraded = [r for r in results if r.get("regraded")]
+    if regraded:
+        print("\n## Graded by hand\n")
+        print("\n".join(f"- {label_of(r)} {r['scenario']} r{r.get('repeat', 0)}: {r['regraded']}" for r in regraded))
 
 
 if __name__ == "__main__":
