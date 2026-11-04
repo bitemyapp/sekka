@@ -1,0 +1,138 @@
+# Open models for the agent evaluations, and how to serve each on one
+# RTX 5090 (32 GB). Revisions are pinned; sizes are the Hugging Face API's.
+# serve.py downloads to ${SEKKA_MODELS:-~/.cache/sekka-models}/<name>/.
+#
+# engine: llama.cpp (llama-server from nix/local-models.nix), vllm or
+#   sglang (their pinned upstream containers).
+# vision: the model takes screenshots (computer use in screenshot mode).
+# coords: how it gives screen points: norm1000 (0–1000 on each axis, as
+#   Qwen3.x-VL and Holo4 are trained) or pixel.
+# params: request fields sent with every chat request.
+# args: extra server arguments.
+
+[models."qwen3.8-27b"]
+repo = "unsloth/Qwen3.8-27B-GGUF"
+revision = "4ca720788d1e01f1bff70c033e0d0028fd02e502"
+file = "Qwen3.8-27B-UD-Q6_K.gguf"
+mmproj = "mmproj-F16.gguf"
+size_gb = 22.9
+engine = "llama.cpp"
+vision = true
+coords = "norm1000"
+license = "Apache-2.0"
+# The UD-Q6_K file carries the MTP head (blk.64.nextn): self-speculation.
+args = ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2"]
+params = { temperature = 0.6, top_p = 0.95, top_k = 20, presence_penalty = 0.0 }
+
+[models."qwen3.8-27b-nvfp4"]
+# The same model for vLLM, to compare runtimes; not a separate candidate.
+repo = "unsloth/Qwen3.8-27B-NVFP4"
+revision = "f0b7c9e722"
+size_gb = 23.4
+engine = "vllm"
+vision = true
+coords = "norm1000"
+license = "Apache-2.0"
+args = ["--kv-cache-dtype", "fp8", "--enable-auto-tool-choice", "--tool-call-parser", "qwen3_coder",
+        "--reasoning-parser", "qwen3", "--speculative-config", '{"method":"mtp","num_speculative_tokens":2}']
+params = { temperature = 0.6, top_p = 0.95, top_k = 20 }
+
+[models."qwen3.6-35b-a3b"]
+repo = "unsloth/Qwen3.6-35B-A3B-GGUF"
+revision = "a483e9e6cbd595906af30beda3187c2663a1118c"
+file = "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"
+mmproj = "mmproj-F16.gguf"
+size_gb = 23.0
+engine = "llama.cpp"
+vision = true
+coords = "norm1000"
+license = "Apache-2.0"
+params = { temperature = 0.6, top_p = 0.95, top_k = 20 }
+
+[models."ornith-1.5-35b-a3b"]
+repo = "ornith-ai/Ornith-1.5-35B-A3B-GGUF"
+revision = "12393612fd4f730ff5aadc23e9b8f9648aa49ceb"
+file = "Ornith-1.5-35B-Q4_K_M.gguf"
+mmproj = "mmproj-Ornith-1.5-35B-BF16.gguf"
+size_gb = 22.6
+engine = "llama.cpp"
+vision = true
+coords = "norm1000"
+license = "MIT"
+params = { temperature = 0.6, top_p = 0.95, top_k = 20 }
+
+[models."muse-glimmer-30b"]
+repo = "meta-models/Muse-Glimmer-30B-GGUF"
+revision = "b44f1072cf75e918a1b82a3a17b45c4389b076e7"
+file = "Muse-Glimmer-30B-KQuant-Dynamic-Q4_K_XL.gguf"
+mmproj = "mmproj-Muse-Glimmer-30B-Q4_K_M.gguf"
+size_gb = 21.1
+engine = "llama.cpp"
+vision = true
+coords = "pixel"
+license = "Apache-2.0"
+params = { temperature = 1.0, top_p = 0.95, top_k = 64 }
+
+[models."gemma-4-31b"]
+repo = "google/gemma-4-31B-it-qat-q4_0-gguf"
+revision = "59dde24573e7e61570dba08b18a2e1fe246955ed"
+file = "gemma-4-31B_q4_0-it.gguf"
+mmproj = "gemma-4-31B-it-mmproj.gguf"
+size_gb = 18.9
+engine = "llama.cpp"
+vision = true
+coords = "pixel"
+license = "Apache-2.0"
+params = { temperature = 1.0, top_p = 0.95, top_k = 64 }
+
+[models."nemotron-3.5-bolt"]
+repo = "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-GGUF"
+revision = "e0fecb69cb3e5e4c5e8a056fa2aec98c78e91246"
+file = "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB.gguf"
+mmproj = "mmproj-NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB.gguf"
+size_gb = 23.8
+engine = "llama.cpp"
+vision = true
+coords = "pixel"
+license = "OpenMDW-1.1"
+# Its KV cache in q8_0, as NVIDIA's 28 GB recipe has it.
+args = ["-ctk", "q8_0", "-ctv", "q8_0"]
+params = { temperature = 1.0, top_p = 0.95 }
+
+[models."gpt-oss-20b"]
+repo = "ggml-org/gpt-oss-20b-GGUF"
+revision = "15dcfc7e7c608c6161507211ed43c5b590801b4b"
+file = "gpt-oss-20b-MXFP4.gguf"
+size_gb = 12.1
+engine = "llama.cpp"
+vision = false
+coords = "pixel"
+license = "Apache-2.0"
+# The harmony format keeps reasoning between tool calls.
+keep_reasoning = true
+params = { temperature = 1.0, top_p = 1.0, chat_template_kwargs = { reasoning_effort = "medium" } }
+
+[models."holo4-35b-a3b"]
+repo = "Hcompany/Holo4-35B-A3B-GGUF"
+revision = "93400a4734519493de4f49910de1f6e0e24be46b"
+file = "q4_k_m.gguf"
+mmproj = "mmproj.f16.gguf"
+size_gb = 22.2
+engine = "llama.cpp"
+vision = true
+coords = "norm1000"
+license = "Apache-2.0"
+# H Company recommends thinking off and greedy decoding for actions.
+params = { temperature = 0.0, chat_template_kwargs = { enable_thinking = false } }
+
+[models."holo4-27b"]
+repo = "Hcompany/Holo4-27B-GGUF"
+revision = "045834b6864fb5cee8e9c72e47ef4c19140ce932"
+file = "q4_k_m.gguf"
+mmproj = "mmproj.f16.gguf"
+size_gb = 17.8
+engine = "llama.cpp"
+vision = true
+coords = "norm1000"
+license = "CC-BY-NC-4.0"
+params = { temperature = 0.0, chat_template_kwargs = { enable_thinking = false } }
