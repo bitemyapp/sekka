@@ -16,6 +16,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** quitting or closing the window never calls `hidden` (the kit quits when the last window closes; `main.rs:50-52` only flushes), so pane teardown never runs (Bluetooth discoverable STB-09, Displays countdown STB-13); hidden panes miss `system_changed`/`settings_changed`, so whatever they derive stays stale until shown again; choosing the current pane from the Panes menu while its sheet is up runs `back_any`, which rejects a Bluetooth pairing (`bluetooth.rs:753-755`) or reverts a display change (`displays/mod.rs:626-628`); `shared.keyboard` only works as a side channel if a pane reads it synchronously in `focus_entry`
 - **Reify:** Medium — history plus lifecycle across six handlers; the shown/hidden pairing and the missing teardown at quit are invariants that an explicit lifecycle would enforce
 - **Suspected bug:** View ▸ Back (⌘[) is enabled only when `!back.is_empty()` (`app.rs:621`), but the title strip's Back button also counts a sub-page crumb (`app.rs:372`). Opened with `--pane general.about` and no history, ⌘[ does nothing while the on-screen Back works (confidence: medium)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="stb-02"></a>
 
@@ -27,6 +28,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `CloseSheet` carries no owner, so a late Bluetooth `Done(PAIRING)` → `close_prompt` (`bluetooth.rs:629-631`, `:328`) can close another pane's sheet, for example Displays' keep sheet, whose countdown then reverts out of sight; closing a sheet window leaves the pane's question and its responder alive until BlueZ times out
 - **Reify:** Medium — one modal with two sources of truth; a sheet state tagged with its owner would remove the cross-pane close
 - **Suspected bug:** each `DisplayPasskey` update (one per key typed on the remote device) arrives as `Prompted` and calls `open_sheet` again (`bluetooth.rs:607`), and `OpenSheet` closes and reopens the sheet window every time (`app.rs:582-586`), so the sheet flickers and loses focus (confidence: medium)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="stb-03"></a>
 
@@ -48,6 +50,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** TOCTOU between the failed connect, the unlink and the bind; `release` unlinks whatever socket is at the path, even another instance's; a successful `writeln` only means the kernel buffered the line, so a launch that arrives while the old instance is flushing at exit is dropped and nothing opens; `read_line` has no timeout, so one silent client blocks every later hand-off; `--sample` skips single-instance entirely
 - **Reify:** Medium — persisted file state with racy transitions between processes
 - **Suspected bug:** two launches at once (a double-click on the launcher): both fail to connect, A binds, B's `remove_file` (`instance.rs:29`) unlinks A's socket and B binds. Two windows run, A is unreachable, and whichever quits first unlinks the other's socket, so the next launch starts a third (confidence: medium)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="stb-05"></a>
 
@@ -59,6 +62,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** Size has no path that clears `size_before_larger`, so the memory outlives Large; hand edits or other writers leave either key stale
 - **Reify:** Low — two small persisted toggles; clearing the key in `Msg::Size` fixes it
 - **Suspected bug:** start at Small, turn Larger text on (remembers "small"), choose Medium in Appearance, then Large, then turn Larger text off: it restores Small, not Medium, because `Msg::Size` never removes `size_before_larger` (confidence: medium)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="stb-06"></a>
 
@@ -92,6 +96,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** Medium — user-visible state whose source of truth is in another process, with racing writers
 - **Suspected bug:** if Keep Awake is turned off from the menu bar's cup while Battery & Power shows, the pane's switch stays on until the pane is shown again, because `awake` is read only in `shown` (`battery.rs:337`) (confidence: medium)
 - **Related:** `desktop/aizome/crates/aizome-awake/src/lib.rs` (`setting`, `requested`), `desktop/aizome/crates/aizome-awake/src/main.rs` (`on`/`off`), the shell's menu-bar Keep Awake
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="stb-09"></a>
 
@@ -104,6 +109,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — five fields across six handlers, with an effect on privacy (discoverable)
 - **Suspected bug:** quitting Settei while Bluetooth shows never calls `hidden` (STB-01), so the adapter stays discoverable after Settei is gone until BlueZ's `DiscoverableTimeout` expires (never, where it is 0), and the next run, finding it already discoverable, doesn't take it over (`bluetooth.rs:308`) (confidence: medium)
 - **Related:** `desktop/aizome/crates/aizome-sys/src/bluetooth/mod.rs` (`set_discoverable`, `start_discovery`, `register_agent`), `desktop/aizome/crates/aizome-sys/src/bluetooth/agent.rs` (`Registration` unregisters on drop)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#stb-09)
 
 <a id="stb-10"></a>
 
@@ -136,6 +142,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** every event is ignored while `enabled` is false (`arrangement.rs:344-346`), `PointerUp` included, so a drag under way when the pane starts applying keeps its capture; there is no Escape cancel; `fit`, frozen at the press, ignores a resize mid-drag; a tile removed by an outputs event mid-drag is dropped silently
 - **Reify:** Medium — a gesture with an unhandled exit; an explicit enum with `Cancel` would fix the stuck capture
 - **Suspected bug:** pressing an arrow key while holding a tile down sends `Moved` (`arrangement.rs:426-427`); `commit` sets `applying` (`displays/mod.rs:263`) and the view disables the widget (`displays/view.rs:118`); the `PointerUp` that follows is ignored, leaving the pointer captured and the tile drawn as a ghost until the next press (confidence: low)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="stb-13"></a>
 
@@ -148,6 +155,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — three or more fields, eight handlers, a timer, and a property that protects against a blank screen
 - **Suspected bug:** closing the window or quitting (⌘Q) during the 15 s countdown exits without `revert`, leaving a resolution, rotation, mirror or off change applied in the compositor though it was never kept (and isn't in the file) (confidence: medium). Also: a modeset slower than the 10 s read timeout returns `Err`, so no countdown starts and the change stays live, unconfirmed and unpersisted (confidence: low)
 - **Related:** `output-config`/`mirror-output` handling in `desktop/aizome/crates/aizome-comp-core/src/requests.rs` and `desktop/aizome/crates/aizome-comp-core/src/outputs.rs` (`configure_output`)
+- **Reproduction:** Partly confirmed (integration): [test and output](reproductions.md#stb-13)
 
 <a id="stb-14"></a>
 
@@ -193,6 +201,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — risk of data loss, counters shared across threads, and ordering across processes
 - **Suspected bug:** while a slider is dragged (writes pending throughout), the shell writes `settings.toml` (e.g. the Deskbar's edge dragged to a new width). `reread` drops the watcher's notice (`shared.rs:74`), the next `change` uses the cached settings (`shared.rs:95`), and the shell's change is overwritten (confidence: medium)
 - **Related:** `aizome_config::Watcher` (`desktop/aizome/crates/aizome-config/src/lib.rs:823`); `reload-config` in `desktop/aizome/crates/aizome-comp-core/src/requests.rs`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#stb-17)
 
 <a id="stb-18"></a>
 

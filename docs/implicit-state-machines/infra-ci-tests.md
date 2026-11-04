@@ -39,6 +39,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the status lifecycle is spread across three jobs and two gate invocations, and its results are user-visible checks.
 - **Suspected bug:** a PR queued behind the nightly (up to 12 h) or behind another merge: main moves, the recheck returns a new merge (or none), `test "$CURRENT_MERGE" = "$EXPECTED_MERGE"` fails, and the head is marked `failure` ("Build and tests: failure") even though nothing was built or tested. Nothing re-admits the PR (confidence: medium)
 - **Related:** `scripts/check-pr-trust.py:45` (`select_merge` retry loop); `scripts/runner-admission.sh` (event admission, tested at `tests/test_pr_trust.py:144`); `nix/runner.nix:157`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ici-03)
 
 <a id="ici-04"></a>
 
@@ -72,6 +73,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** the page state has two writers (the user's change and the resync from storage), and storage is the authority; when `setItem` throws, every resync reverts to the stored value.
 - **Reify:** Low — two states and one key.
 - **Suspected bug:** where `setItem` throws (quota or private mode) or storage is blocked, switching to Day before the `load` event is undone by the initial `pageshow`, which fires after `load` and calls `show(remembered())` → Night (confidence: low)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="ici-07"></a>
 
@@ -127,6 +129,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `release()` calls `begin()` without `halt()`, assuming nothing restarted playback during the drag. Pausing during a drag does not clear `resume`, so playback restarts on pointer-up. The `{ once: true }` `pointerup`/`pointercancel` pair leaves one listener registered after the other fires; this is harmless only because `resume` is false by then.
 - **Reify:** High — six handlers write the state, and the drag sub-state is encoded by an extra flag and a `data-state` that misreports it.
 - **Suspected bug:** while dragging the seek thumb during playback, pressing K twice pauses and then calls `play()`, whose `begin()` creates source S1. On pointer-up, `release()` sees `resume` still true and calls `begin()` again, creating S2 without stopping S1. S1 is orphaned: it plays over S2, cannot be paused, and its `onended=finish` later jumps the player to `ended` (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ici-11)
 
 <a id="ici-12"></a>
 
@@ -223,6 +226,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `run.sh` has no trap, so if it exits under `set -e` or `sekka-responsiveness.service` is stopped between `start_probes` and `stop_probes`, nothing touches `$dir/stop`. `stop_probes` waits on `is-active` with no timeout. Prepared artefacts are never invalidated: a changed `probe.rs` or flake keeps the old binary and `devenv.sh`, and the first run's 2 ms calibration is reused forever.
 - **Reify:** Medium — a harness, but its marker files, unit names and cached artefacts form a cross-process protocol with no cleanup path.
 - **Suspected bug:** stopping a measurement early (`systemctl --user stop sekka-responsiveness`) leaves the `sekka-resp-*` probe units running indefinitely. Each frame probe burns about 24% of a core (2 ms of work per 8.3 ms frame), and fio runs for up to an hour. The next `run.sh measure` then fails at `start_probes`, because `systemd-run --unit=sekka-resp-wake` finds the unit still present (confidence: medium)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="ici-21"></a>
 

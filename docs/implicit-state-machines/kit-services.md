@@ -59,6 +59,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** the typed-name password view offers no Escape and no "Log in as someone else" (`view.rs:279`, `view.rs:297`), and nothing resets `login.user` in the Name stage; `state.toml` is written without fsync (`config.rs:106-108`)
 - **Reify:** High — a user-visible dead end; the stage's meaning is split between `Stage`, `Login` and the view.
 - **Suspected bug:** with `user_list = false` (or nobody listed) a mistyped user name can't be corrected. PAM's auth error begins the same name again every time (`desktop/aizome/crates/aizome-greeter/src/login.rs:182-183`). If `CreateSession` itself fails, the step becomes `Failed` and Return does nothing (`app.rs:259` → `begin` sees `user() == None`). Only restarting the greeter helps. (confidence: high)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#svc-05)
 
 <a id="svc-06"></a>
 
@@ -250,6 +251,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** stepping forward and then pressing Play jumps back to where stepping started. Forward steps only show frames (`player.rs:1196-1200`, `desktop/aizome/crates/aizome-media/src/video.rs:489-494`) and never move the clock, and `play` "catches up" by seeking to `clock.now()` (`player.rs:1077-1082`) rather than to the frame on screen (`video.last_pts`). (confidence: medium)
 - **Suspected bug:** changing speed on non-seekable media with audio drops the tempo filter (`player.rs:777-779`), but the seek that would rebase the ring is skipped (`player.rs:1123-1125`). The ring's segment keeps the old speed, so the clock runs at the old rate while the audio plays at the new tempo: the video drifts and the position is wrong. (confidence: low)
 - **Related:** the UI in `desktop/aizome/apps/utsushi/src/app.rs` (MPRIS seeks at `desktop/aizome/apps/utsushi/src/app.rs:649`, visibility at `desktop/aizome/apps/utsushi/src/app.rs:1149`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#svc-23)
 
 <a id="svc-24"></a>
 
@@ -311,6 +313,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** the two flags diverge on every seek; after that the demuxer queues video packets the thread won't consume; probing shows the last frame every second while out of sight
 - **Reify:** High — duplicated state with a reachable invalid combination that stalls playback.
 - **Suspected bug:** a seek while the window is hidden stalls playback. Utsushi reports xdg suspension through `set_visible(false)` (`desktop/aizome/apps/utsushi/src/app.rs:1149`), and MPRIS seeks arrive at `app.rs:649`. `seek_to` stops the audio and waits for the first frame of the flushed generation (`player.rs:1146`, `player.rs:1344`). The video thread is still suspended locally, so `check_sight` returns before presenting (`video.rs:778-782`), and the audio stays silent until the window is shown again. Speed and track changes seek too, so they stall the same way. (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#svc-29)
 
 <a id="svc-30"></a>
 

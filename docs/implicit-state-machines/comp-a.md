@@ -48,6 +48,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — a cross-process phase (logind/seatd) that every other output machine depends on
 - **Suspected bug:** a monitor plugged in while the user is on another VT stays dark after they return. The udev `Changed` event runs `device_changed` while paused and reserves the connector (`desktop/aizome/crates/aizome-comp-core/src/backend/udev.rs:834`); `initialize_output` fails on the inactive device (`desktop/aizome/crates/aizome-comp-core/src/backend/udev.rs:1037`); `ActivateSession` never calls `device_changed`; and later `Changed` events skip the connector as already known (`desktop/aizome/crates/aizome-comp-core/src/backend/udev.rs:823`) until it is unplugged (confidence: medium)
 - **Related:** libseat with logind or seatd (seat management, outside the repo)
+- **Reproduction:** Not reproduced (environment): [test and output](reproductions.md#cpa-04)
 
 <a id="cpa-05"></a>
 
@@ -60,6 +61,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the per-connector phase is spread over four maps in two structs, with reachable invalid combinations
 - **Suspected bug:** (1) Any setup failure leaves the connector reserved without a surface: no modes (`desktop/aizome/crates/aizome-comp-core/src/backend/udev.rs:962`), no renderer (`desktop/aizome/crates/aizome-comp-core/src/backend/udev.rs:1010`), or `initialize_output` (`desktop/aizome/crates/aizome-comp-core/src/backend/udev.rs:1037`). Later `Changed` events skip it as known (`desktop/aizome/crates/aizome-comp-core/src/backend/udev.rs:823`), so that monitor never lights until it is replugged (confidence: medium). (2) `enable_output` removes the `disabled` entry (`desktop/aizome/crates/aizome-comp-core/src/backend/udev.rs:928`) before it looks up the device (`desktop/aizome/crates/aizome-comp-core/src/backend/udev.rs:929`), reads the connector (`desktop/aizome/crates/aizome-comp-core/src/backend/udev.rs:934`) and sets the output up (`desktop/aizome/crates/aizome-comp-core/src/backend/udev.rs:936`). On failure the output either still shows as off but is refused by the next enable as "isn't off", or (past `desktop/aizome/crates/aizome-comp-core/src/backend/udev.rs:935`) becomes unknown to IPC and Settings entirely (confidence: medium). (3) `device_removed` disconnects only the CRTCs that have surfaces (`desktop/aizome/crates/aizome-comp-core/src/backend/udev.rs:853`), so an output turned off on a removed GPU (for example a DisplayLink dock) stays in `Udev.disabled` and `disabled_outputs`. Enabling it fails with "its device is gone" after the entry has been dropped. Unless the settings also say off (which dedupes at `desktop/aizome/crates/aizome-comp-core/src/backend/udev.rs:1002`), a replug adds a driven output with the same name beside the stale one (confidence: medium)
 - **Related:** IPC, settings and wlr-output-management callers of `State::configure_output` (`desktop/aizome/crates/aizome-comp-core/src/outputs.rs:345`); the Settei displays pane
+- **Reproduction:** Not reproduced (environment): [test and output](reproductions.md#cpa-05)
 
 <a id="cpa-06"></a>
 
@@ -177,6 +179,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `prewarm_gpu` makes `is_open()` true during a synchronous capture and runs `refresh_rows` while closed (`desktop/aizome/crates/aizome-comp-core/src/recovery/mod.rs:368`); `output` is never reset when its output leaves, so the panel is drawn on no output (`desktop/aizome/crates/aizome-comp-core/src/recovery/view.rs:270`) while hit testing still uses the departed output's geometry (`desktop/aizome/crates/aizome-comp-core/src/recovery/view.rs:159`); `cursor_override` has three writers (here, `desktop/aizome/crates/aizome-comp-core/src/fallback.rs:213`, `desktop/aizome/crates/aizome-comp-core/src/recovery/reset.rs:145`)
 - **Reify:** High — many dependent fields, many entry points, user-visible
 - **Suspected bug:** open the overlay with the pointer on a laptop panel while an external display is connected, then close the lid (or unplug the display the overlay opened on). That output leaves the layout (CPA-15, CPA-05) but `recovery.output` still names it, so the overlay shows only the scrim with no panel. Keys still act unseen, and a click closes it (confidence: medium)
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#cpa-16)
 
 <a id="cpa-17"></a>
 
@@ -188,6 +191,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** expiry isn't an event, so a stale prompt stays drawn until something redraws
 - **Reify:** Medium — small, but the view assumes only Log Out uses it
 - **Suspected bug:** after the first Text Console press, the Text Console button reads "Really Log Out?" (the label is hard-coded for any pending confirmation, `desktop/aizome/crates/aizome-comp-core/src/recovery/view.rs:377`), on the screen meant to rescue a stuck session (confidence: high)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="cpa-18"></a>
 
@@ -220,6 +224,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** samples are never removed, so a relaunched app inherits its previous instance's `crashed` and `stopped` until its first new sample
 - **Reify:** Medium — the cache decides the default action
 - **Suspected bug:** after an app with a CRASHED sample is relaunched with the same app ID, IPC `RecoveryState` with the overlay closed (`desktop/aizome/crates/aizome-comp-core/src/recovery/mod.rs:1071`) keeps reporting it as crashed, since nothing is sampled while closed. At the next Ctrl+Alt+Del it is preselected as the first app in trouble (`desktop/aizome/crates/aizome-comp-core/src/recovery/mod.rs:518`), and Enter force-quits the healthy app (`desktop/aizome/crates/aizome-comp-core/src/recovery/mod.rs:758`) until the first new sample lands (confidence: medium)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="cpa-21"></a>
 
@@ -265,6 +270,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the coalescing can drop a privileged action in the recovery path
 - **Suspected bug:** when the first request the drain sees is a Kill, a Sample queued behind it overwrites it (`s => req = s`, `desktop/aizome/crates/aizome-comp-core/src/recovery/procinfo.rs:152`). With the worker busy (the fresh-app 250 ms sleep, slow X11 lookups for a hung X app), pressing Force Quit followed by the open overlay's 1 s sample (`desktop/aizome/crates/aizome-comp-core/src/recovery/mod.rs:305`) silently loses the kill: no SIGKILL and no `Killed` report, and for X11 apps the linger step skips satellite (confidence: high)
 - **Related:** systemd cgroups (`cgroup.kill`); CPA-21
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#cpa-24)
 
 <a id="cpa-25"></a>
 
@@ -277,6 +283,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** Low — local, but it leaks under exactly the failure it exists for
 - **Suspected bug:** with xwayland-satellite's X server hung, every sample while the overlay is open spawns, for each X11 app (twice for a fresh app), a thread that never ends; keeping the overlay open for a minute leaks on the order of a hundred threads and sockets (confidence: medium)
 - **Related:** xwayland-satellite, supervised in `desktop/aizome/crates/aizome-comp-core/src/session.rs` (CPA-27)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="cpa-26"></a>
 
@@ -299,6 +306,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — six fields, several pollers, and a reachable never-restarted state
 - **Suspected bug:** (1) A helper whose first spawn fails (`desktop/aizome/crates/aizome-comp-core/src/session.rs:457`) keeps `restart_at` at None and is never retried (`desktop/aizome/crates/aizome-comp-core/src/session.rs:483`), so a transient spawn failure at login leaves the session with no shell, or no X11, until Restart Shell (confidence: high). (2) If the new binary given to `restart_shell` fails to exec, the old shell has already been moved to `retiring` (`desktop/aizome/crates/aizome-comp-core/src/session.rs:339`), and the call returns before any handover is set (`desktop/aizome/crates/aizome-comp-core/src/session.rs:346`). The running shell is no longer supervised, and a second `restart_shell` overwrites `retiring` with None, dropping its handle: two shells then run, and the old one is never stopped (confidence: medium)
 - **Related:** aizome-shell (`AIZOME_SHELL_PREVIOUS_PID` in `desktop/aizome/crates/aizome-shell/src/carry.rs:103`); xwayland-satellite
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#cpa-27)
 
 <a id="cpa-28"></a>
 
@@ -354,6 +362,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — a phase persisted across restarts, plus a thread, atomics and a signal handshake
 - **Suspected bug:** the signal handler allocates (`Backtrace::force_capture`, `desktop/aizome/crates/aizome-comp-core/src/watchdog.rs:169`). If the stall is the main thread slowly allocating (malloc in mmap or brk under memory pressure, holding an arena lock), the handler's own allocation deadlocks it for good, turning a recoverable stall into a permanent one; without systemd's watchdog (`desktop/aizome/crates/aizome-comp-core/src/watchdog.rs:35`) nothing kills it (confidence: low)
 - **Related:** `desktop/aizome/session/aizome.service` (`WatchdogSec=30s`, restarted by aizome-session)
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#cpa-32)
 
 ## Already explicit
 

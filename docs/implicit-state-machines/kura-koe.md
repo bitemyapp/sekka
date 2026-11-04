@@ -17,6 +17,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — persisted flag, unit state and socket liveness form one cross-process machine with several writers and representable mismatches.
 - **Suspected bug:** a crash loop (e.g. a startup error) under `Restart=on-failure`/`RestartSec=2` can trip systemd's default start limit; turning dictation on or pressing the shortcut then makes `systemctl start` fail, so `Session::start` spawns an unmanaged `aizome-koe daemon` outside the unit with stderr to /dev/null (`desktop/aizome/apps/koe/src/service.rs:103-115`), and the window shows only "Koe's service didn't start" instead of the journal reason (confidence: low)
 - **Related:** NixOS module `desktop/aizome/nix/module.nix:322` (`systemd.user.services.aizome-koe`, `wantedBy = aizome-session.target`)
+- **Reproduction:** Partly confirmed (integration): [test and output](reproductions.md#kko-01)
 
 <a id="kko-02"></a>
 
@@ -321,6 +322,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `Scanned` tears down whichever scan is current (`:589`) and applies its result without checking that it belongs to it; Stop and Rescan enablement read `scanning` (`:832-834`).
 - **Reify:** High — scan identity is implicit and results are applied unconditionally.
 - **Suspected bug:** while a scan runs, press ⌘D and Scan another disk (or ⌘N/⌘O, or launch `aizome-kura PATH` again): `start_scan` cancels the first scan, whose `Scanned(Err(Cancelled))` then arrives and `finish_scan` cancels the second scan's poll timer and clears `scanning` (`desktop/aizome/apps/kura/src/ui/mod.rs:589`), so the window shows "The scan didn't finish: the scan was stopped" while the second scan runs unseen and can no longer be stopped; its result later replaces the page unannounced, and a Rescan meanwhile starts a third scan without cancelling it (confidence: high)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#kko-30)
 
 <a id="kko-31"></a>
 
@@ -333,6 +335,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — concurrent results without an epoch, visible to people and agents.
 - **Suspected bug:** scan the home folder (duplicate hashing keeps its analysis busy for a while), then scan a small folder, or trash something so a second analysis starts and finishes first: the first analysis's `Indexed` lands last, so the Suggestions panel shows hints and totals for the earlier tree (another root, or paths already in the Trash) with live Move to Trash buttons, and index.json/index.md describe the older scan (confidence: medium)
 - **Related:** index consumers (KKO-25, `desktop/aizome/docs/kura-index.md`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#kko-31)
 
 <a id="kko-32"></a>
 

@@ -17,6 +17,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the click machine is split between the engine and four widgets, and misfires are user-visible
 - **Suspected bug:** press on inert background (nothing handles it, `active` stays `None`), move onto a button and let go: the engine bubbles the `PointerUp` to the button, which emits `on_press` though it was never pressed; the same for switches, checkboxes, radios and segments (confidence: high)
 - **Related:** kit engine pointer routing `desktop/aizome/crates/aizome-kit/src/engine.rs:2088`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#uiw-01)
 
 <a id="uiw-02"></a>
 
@@ -89,6 +90,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — six interacting fields, many handlers, a far side in the engine, and crashes below
 - **Suspected bug:** (1) a torn-off palette (`menu_view`, rendered live by the shell) whose menu shrinks while a row past the new end is hovered panics on the next pointer move, leave or arrow key: `set_hover` calls `row_rect(old)` (`menus.rs:460` → `self.rows[i]` `menus.rs:423`), and Enter/→ index `self.rows[i]` (`menus.rs:493`, `:930`); (2) after ← closes a submenu (`MenuBack` closes only the child window), the parent's `open_sub` still names it, so hovering that row again doesn't reopen it (`menus.rs:470`) and rightward moves still count as aiming (`menus.rs:842`) (confidence: medium)
 - **Related:** kit engine menu popups `desktop/aizome/crates/aizome-kit/src/engine.rs:1295` (`menu_sub`), `:2662` (`kit`); shell palettes `desktop/aizome/crates/aizome-shell/src/tearoff.rs:111`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#uiw-08)
 
 <a id="uiw-09"></a>
 
@@ -101,6 +103,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — scattered writers across widget and engine, user-visible bug below
 - **Suspected bug:** clicking the open title to close its menu reopens it: the engine closes a window's menus on any press before routing the press (`engine.rs:2107-2122`), which deletes `BarState`, so the strip sees `open == None` and takes the open arm (`menus.rs:1172`) instead of the close arm (`menus.rs:1167`) (confidence: medium — needs the compositor to deliver the press to the parent while the popup grabs, as wlroots does)
 - **Related:** `desktop/aizome/crates/aizome-kit/src/engine.rs:1239` (`open_bar_menu`), `:593` (`close_win`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#uiw-09)
 
 <a id="uiw-10"></a>
 
@@ -122,6 +125,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** the engine keeps one pending tick per node, first request wins (`engine.rs:1721-1727`); a lost release leaves `drag` set and moves keep scrolling
 - **Reify:** High — three fields plus a timer whose arming the widget can't see, bug below
 - **Suspected bug:** scroll for more than ~20 ms (any touchpad gesture, several wheel notches): only the first `scroll_by` arms the tick, which fires ~920 ms later while `shown_until`, pushed on by later events, is still ahead; nothing is invalidated and nothing re-arms, so the bars stay drawn until something else repaints them — in every `scroll`, `list`, `table` and `tree` (confidence: high)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#uiw-11)
 
 <a id="uiw-12"></a>
 
@@ -164,6 +168,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — two copies, many writers, invariants against program data that nothing enforces, crash and wrong-file bugs below
 - **Suspected bug:** (1) outline: click a row deep in an open branch (cursor 25), close its parent by the triangle (rows shrink, cursor untouched), press Return, ← or → → `self.rows[c]` out of bounds panics (`table.rs:1130`, `:1135`, `:1150`) (confidence: high); (2) table: in the portal's file chooser, click file A, sort by a header (the chooser remaps its selection by path, `desktop/aizome/crates/aizome-portal/src/chooser/model.rs:231-254`), press Return → `on_activate` gets the old cursor index (`table.rs:660-662`), so another file is chosen and returned to the requesting app; ↓ likewise moves from the old row (confidence: high)
 - **Related:** portal file chooser `desktop/aizome/crates/aizome-portal/src/chooser/model.rs:319` (`activate`), `desktop/aizome/crates/aizome-portal/src/chooser/view.rs:213`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#uiw-15)
 
 <a id="uiw-16"></a>
 
@@ -195,6 +200,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** a Tick that arrives early (armed by the other use) neither blinks nor re-arms; the bar only re-checks through the blink chain
 - **Reify:** High — seven fields, two timers multiplexed on one tick, bugs below
 - **Suspected bug:** (1) focus the editor while an earlier tick is pending (scroll it, click into it 0.4–0.9 s later; or Tab away and back within half a second): the focus tick request is dropped (`engine.rs:1723`), the pending tick fires before `next_blink`, isn't due (`text_editor.rs:1340`), so nothing re-arms and the caret stops blinking until the next focus change; (2) an unfocused editor scrolled for more than ~20 ms keeps its position bar drawn, as in UIW-11 (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#uiw-18)
 
 <a id="uiw-19"></a>
 
@@ -289,6 +295,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — four transition sites across two threads, a lock screen's failure is a hang
 - **Suspected bug:** a lock screen that unlocks and at once locks again while the old lock's `finished` is in flight: the stale `SessionLockFinished` turns the new `Asked` into `Unlocked` and closes the new lock surfaces (`app.rs:1612-1614`); the backend then creates the new lock, the compositor locks, and the `SessionLocked` is ignored as not `Asked` (`app.rs:1606`) — the session is locked with no lock surface and the program believes it unlocked (confidence: low)
 - **Related:** `desktop/aizome/sukumo/crates/sidestep-engine/src/backend/lock.rs:24` (`lock`), `:39` (`unlock`), `:63` (`finished`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#uiw-27)
 
 <a id="uiw-28"></a>
 

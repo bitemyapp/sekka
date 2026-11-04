@@ -28,6 +28,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — six-plus fields across five handlers, with representable inconsistent combinations
 - **Suspected bug:** after a crash, the supervisor's respawn fails (fork EAGAIN/ENOMEM, `desktop/aizome/apps/shiori/src/engine.rs:140-145`) and sends `OpenFailed(Worker)`. Because `desktop/aizome/apps/shiori/src/app.rs:1167` excludes `Worker` errors, the document that was showing becomes `Load::Failed` (`:1183`): "can't open" covers its pages, find/copy stay pending, and Reload reopens it as a new document at the top, because `pending` was already taken (`:1326-1329`). (confidence: low)
 - **Related:** supervisor `desktop/aizome/apps/shiori/src/engine.rs` (TSH-14), worker `desktop/aizome/apps/shiori/src/worker.rs` (TSH-21)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#tsh-02)
 
 <a id="tsh-03"></a>
 
@@ -90,6 +91,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** a new Copy silently replaces a waiting one; no timeout; `copy` never checks for an engine
 - **Suspected bug:** the worker gives up and `engine` becomes None, but Load stays Open. The person then selects across pages whose text isn't loaded (pruned, or never read) and copies: `copy` stores the `Copying` (`desktop/aizome/apps/shiori/src/app.rs:1593`), but `ask_copy_text` returns without an engine (`:424`). Nothing is copied, nothing says why (the lasting notice occupies the status), and `idle()` stays false until a reload swap. (confidence: medium)
 - **Reify:** High — suspected bug; a waiter with no exit when its producer is gone
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#tsh-08)
 
 <a id="tsh-09"></a>
 
@@ -102,6 +104,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** search "foo", press Escape (`find = None`, StopFind), then ⌘F with "bar" selected, or type it, while the worker is still on its current page. The new `Find` starts at serial 0, and `run_find` makes it 1 again (`desktop/aizome/apps/shiori/src/app.rs:1643`). The worker's late `Found{serial: 1}` for "foo" therefore passes the filter at `:1205`, is stored as a "bar" result and, with `jump` set, moves the view to a "foo" hit (`:1208-1211`). `current` can then point past that page's real hits once "bar" overwrites the entry. (confidence: medium)
 - **Reify:** High — nine fields, eleven handlers, plus a suspected bug
 - **Related:** worker search queue `desktop/aizome/apps/shiori/src/worker.rs:53` (TSH-21)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#tsh-09)
 
 <a id="tsh-10"></a>
 
@@ -164,6 +167,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** the socket file isn't removed on exit (the next launch removes it after a refused connect); a successful connect doesn't prove the peer is processing (a hung instance swallows the files); Tansu's client never shuts down its write side, so the server's 500 ms read relies on the client exiting; `--sample` skips the claim (`desktop/aizome/apps/tansu/src/main.rs:33`)
 - **Suspected bug:** two launches at the same moment both fail to connect, then both `remove_file` and `bind` (`desktop/aizome/apps/shiori/src/instance.rs:40-41`). The second unlinks the first's socket, so the first instance keeps running but can't be reached, later launches go to the second, and the two instances save `places.json` over each other (two Tansu windows could each queue and apply plans). (confidence: medium)
 - **Reify:** Medium — a time-of-check/time-of-use gap between probe, unlink and bind; ownership isn't explicit (no lock file or abstract socket)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="tsh-16"></a>
 
@@ -268,6 +272,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** the kit blocks menus while a sheet is modal, but not `Msg::Changed` (TSH-23) or `Msg::Launched`/`Program::open`; a second launch replaces a half-filled form (passphrases included) without asking; Create re-checks its offset (`desktop/aizome/apps/tansu/src/plan.rs:441`), but the other forms never check that the segment is still the one they opened for
 - **Suspected bug:** open Format… on a USB stick's partition, then unplug the stick (or let another tool repartition the disk). `refresh` falls back to the first drive (`desktop/aizome/apps/tansu/src/app.rs:308-311`), so the open sheet's `seg` now indexes that drive's layout. The sheet's title quietly changes to the other partition (`desktop/aizome/apps/tansu/src/ui/sheets.rs:137-140`), and Add to Pending queues a format of it (`desktop/aizome/apps/tansu/src/app.rs:732`); if the fallback is another removable disk, Apply asks for no typed name. Resize, Label and Flags behave the same, and Unlock tries the passphrase on another volume (`:871-873`). (confidence: medium)
 - **Reify:** High — index-based identity across a mutable layout, with data-loss consequences
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#tsh-25)
 
 <a id="tsh-26"></a>
 
@@ -280,6 +285,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** while operations run, a second `aizome-tansu image.iso` (or an image opened with Tansu) hands its path over. `Msg::Launched` → `open_sheet(Attach)` closes the Running sheet (`desktop/aizome/apps/tansu/src/app.rs:1104`, `:480-482`). The run finishes in the background, but nothing can now clear `run`: every action answers "Wait for the operations to finish." (`:408-409`), Apply/Undo/Clear/Power Off stay disabled, pending ops are never pruned, and every message resets the status line to "Applied N operations." (`:559-562`) until Tansu restarts. Meanwhile the progress view and Stop After This One are gone. (confidence: high)
 - **Reify:** High — four coupled holders of one phase; a session can get stuck for good
 - **Related:** run engine `desktop/aizome/apps/tansu/src/run.rs` (TSH-31); instance hand-off (TSH-15)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#tsh-26)
 
 <a id="tsh-27"></a>
 

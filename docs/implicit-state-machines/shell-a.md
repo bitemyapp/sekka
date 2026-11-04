@@ -53,6 +53,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
   - From then on it never saves its notifications, folds or expansions again, so a later crash or reload restores stale state. It never asks for the name again.
   - Confidence: medium.
 - **Related:** `desktop/aizome/crates/aizome-comp-core/src/session.rs` (starts the replacement and sets `AIZOME_SHELL_PREVIOUS_PID`); `desktop/aizome/crates/aizome-shell/src/notifications/server.rs:229` (`watch_name`, `RequestName` with `AllowReplacement|ReplaceExisting|DoNotQueue`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sha-02)
 
 <a id="sha-03"></a>
 
@@ -84,6 +85,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
   - `AutoHide` then rejects every timer, and the Deskbar stays revealed until the pointer enters and leaves the new surface.
   - Confidence: low; it depends on whether the kit delivers a leave event first.
 - **Related:** `desktop/aizome/crates/aizome-comp-core/src/state.rs` (treats `aizome-deskbar-transient` as an overlay, not a layout participant)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sha-03)
 
 <a id="sha-04"></a>
 
@@ -212,6 +214,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
   - Typing in the Toolchest then calls `toolchest_typed` → `open_palette`, which re-ranks into the dead window. Nothing shows, and the handover timer is not armed. An `aizomectl` palette open with a query is ignored the same way.
   - It recovers only after a toggle closes the ghost.
   - Confidence: medium.
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sha-12)
 
 <a id="sha-13"></a>
 
@@ -240,6 +243,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
   - The old `Files(1, …)` is accepted for the new opening, with `files_for` set to the new query.
   - If it arrives after the new results, the old query's files stay shown until the next keystroke.
   - Confidence: low; the old search must outlast closing, reopening and an index load.
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#sha-13)
 
 <a id="sha-14"></a>
 
@@ -259,6 +263,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
   - Both threads `File::create` the same `.tmp` and rename it. This wastes a full home-directory scan and can tear the cache.
   - The same stacking happens when a refresh tick fires while a slow build is still running.
   - Confidence: medium.
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="sha-15"></a>
 
@@ -316,6 +321,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
   - Enter renames the wrong desk.
   - Confidence: medium.
 - **Related:** the compositor's desk renumbering (`Request::RenameDesk` with `DeskSel::Index`)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="sha-19"></a>
 
@@ -341,6 +347,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
   - The scenario: a `home-manager` or `nixos-rebuild` switch rewrites the application dirs in a burst.
   - An early reload that saw a partial tree finishes last. Apps then stay missing from the Toolchest, palette and Deskbar until the next change.
   - Confidence: low.
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="sha-21"></a>
 
@@ -355,6 +362,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
   - The scenario: turning on `[menubar] clock_seconds` makes the bar label show seconds immediately.
   - The pending tick is still due at the next minute (`clock.rs:111`–`clock.rs:114`), so the seconds freeze for up to 59 s.
   - Confidence: medium.
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="sha-22"></a>
 
@@ -377,6 +385,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
   - On resume, the unlocked desktop can show briefly.
   - Confidence: medium.
 - **Related:** `desktop/aizome/crates/aizome-shell/src/lock.rs:361` (`lock_confirmed`); the aizome-sys logind power delay inhibitor (`take_sleep_delay`/`sleep_ready`)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="sha-23"></a>
 
@@ -433,6 +442,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
   - (2) If a palette's output is unplugged, the compositor closes the layer and `close_requested` forgets only the surface. `tear_shown[i]` keeps the dead window.
     - A pinned or Toolchest palette, which is always visible, therefore never reopens: not on the primary output, and not when the monitor returns, until the user closes it or the shell restarts.
     - Confidence: medium.
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sha-25)
 
 <a id="sha-26"></a>
 

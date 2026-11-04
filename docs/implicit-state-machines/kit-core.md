@@ -49,6 +49,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — cross-process staleness with a suspected bug
 - **Suspected bug:** the shell's open menu shows Save enabled; the app disables it (republished 40 ms later); a click in the shell sends `Activate{id}`, `find` returns the now-disabled Save and `perform` queues its message anyway (confidence: low)
 - **Related:** aizome-shell menu server `desktop/aizome/crates/aizome-shell/src/shell.rs:820` (AboutToShow), `:833` (Activate)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#kit-04)
 
 <a id="kit-05"></a>
 
@@ -80,6 +81,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `close_win` drops alerts but not panels (`engine.rs:628-630`); message indices index `entries` unchecked (`dialogs.rs:482`, `:403`, `:417`), so a stale index after a relist panics; `chosen()` mutates while deciding; listing runs synchronously on the UI thread (`dialogs.rs:340-379`)
 - **Reify:** High — leak and lost completion
 - **Suspected bug:** a program closes a window with `Cx::close_window` while its open or save panel is up: the `PanelState` stays in `Core.panels` for good and `done` never fires, so a program waiting for `Saved(None)` never leaves its saving state (confidence: high)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#kit-07)
 
 <a id="kit-08"></a>
 
@@ -141,6 +143,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `active` ends only by a release here, a capture release, a widget drag or a modal change; `Core::start_drag` (`engine.rs:2376-2386`, from `Cx::start_drag` `cx.rs:582-585`) leaves it set although the compositor takes the release; `press` keeps a stale `active` (`engine.rs:2254`), so the next click's release goes to the stale node
 - **Reify:** High — six fields, nine handlers, a suspected bug
 - **Suspected bug:** Hako calls `Cx::start_drag` while the button that began the drag is down (`desktop/aizome/apps/hako/src/ui/actions.rs:220`); the drop sends no release to the window, so `active` keeps naming the drag source: moves after re-entry go to it, and the next click's PointerUp reaches it instead of the clicked control, losing that click (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#kit-13)
 
 <a id="kit-14"></a>
 
@@ -182,6 +185,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `pointer_leave` cancels the platform timer but never removes its `TimerUse::Tooltip` (`engine.rs:2073-2075`; contrast `:2001-2004`); a press closes only a shown tooltip, and a pending one keeps its deadline because `update_hot` returns early (`engine.rs:1960-1962`); hiding doesn't cancel the pending one (KIT-11)
 - **Reify:** High — three fields, seven handlers, two suspected bugs
 - **Suspected bug:** hover a button and click it within 650 ms: its tooltip still appears after the click, though a click dismisses tooltips (`tests/tooltip_refresh.rs:137-142` covers only a shown one) (confidence: medium); every pointer leave with a tooltip pending leaks one `Core.timers` entry (confidence: high)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#kit-17)
 
 <a id="kit-18"></a>
 
@@ -310,6 +314,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `compact` remaps parents, children, `by_id`, `root` and `popovers` but not `scrolls[].node` or `local_damage[].0`, and `Core::relayout` calls it between `layout_window` (which fills them) and `settle` (which reads them) (`engine.rs:907-912`); `names` keeps killed nodes' names (KIT-14)
 - **Reify:** High — index validity is implicit, and a suspected bug
 - **Suspected bug:** in a relayout that compacts, a widget mounted during layout (an editor, scroll view or list inside a virtual list's row, after earlier rows died) records `invalidate_rect` or `scrolled` under its old index: its damage or pixel move lands on another node, and `take_local_damage` indexes `self.nodes[*i]` past the end once the old index is at least the live count (`tree.rs:686`), which panics (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#kit-29)
 
 <a id="kit-30"></a>
 

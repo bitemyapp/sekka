@@ -17,6 +17,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — privilege boundary, six fields, eight mutation sites.
 - **Suspected bug:** open an unreadable /var/log file: `read_file` sets `after_unlock` and the password dialog opens; while it is up the user picks All Messages; on authenticating, root `Ready` takes `after_unlock` and switches the window back to the file the user left (`desktop/aizome/apps/nisshi/src/app.rs:524`, `desktop/aizome/apps/nisshi/src/app.rs:795-797`). (confidence: medium)
 - **Related:** helper `desktop/aizome/apps/nisshi/src/bin/helper.rs` (NTU-12); polkit agent dialog `desktop/aizome/crates/aizome-shell/src/auth.rs`.
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ntu-01)
 
 <a id="ntu-02"></a>
 
@@ -39,6 +40,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `Done(File)` (`desktop/aizome/apps/nisshi/src/app.rs:882`) and any `Failed`, including `Want::Fields` and `Boots` (`desktop/aizome/apps/nisshi/src/app.rs:890`), clear the shared `loading` mid-load; an `Older` failure leaves `journal_search` set with nothing in flight and the chip reading "Searching the whole boot…" (`desktop/aizome/apps/nisshi/src/ui/view.rs:231`); follow is not retried (NTU-02).
 - **Reify:** High — four fields, about fifteen sites, user-visible progress.
 - **Suspected bug:** select a row while the 50,000-entry newest page is still streaming; its fields read fails (cursor vacuumed, or "too many reads at once") and `Failed` sets `loading = false` with `Want::Load` still pending: "Reading…" vanishes, Read Earlier enables (`desktop/aizome/apps/nisshi/src/ui/menus.rs:95`), and a pending `--cursor` gives up early (NTU-06) (`desktop/aizome/apps/nisshi/src/app.rs:889-890`). (confidence: medium)
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#ntu-03)
 
 <a id="ntu-04"></a>
 
@@ -163,6 +165,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** a timeout is treated as the end of the read.
 - **Reify:** Low.
 - **Suspected bug:** `aizome-nisshi --print --system` with the password dialog left unanswered for two minutes prints nothing and exits 0 (`desktop/aizome/apps/nisshi/src/main.rs:27`, `desktop/aizome/apps/nisshi/src/main.rs:64`), indistinguishable from an empty journal. (confidence: medium)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="ntu-16"></a>
 
@@ -185,6 +188,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — state split between a JSON file, systemd and two other writers (NTU-19, NTU-24).
 - **Suspected bug:** a once-alarm rings; the user opens Tokei (the notification names Tokei's desktop entry) → `launched` → `sync_alarms` → `systemctl --user stop aizome-alarm-<id>.timer aizome-alarm-<id>.service` kills `--ring` before it turns the alarm off, then `schedule` arms it for the same time tomorrow; the resident notification's Snooze and Stop now reach nothing (`desktop/aizome/apps/tokei/src/app.rs:451`, `desktop/aizome/apps/tokei/src/alarms.rs:259`, `desktop/aizome/apps/tokei/src/alarms.rs:266-268`). (confidence: high)
 - **Related:** systemd user manager; `desktop/aizome/nix/module.nix:305` (`aizome-tokei-alarms`); ring `desktop/aizome/apps/tokei/src/ring.rs` (NTU-24).
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ntu-17)
 
 <a id="ntu-18"></a>
 
@@ -207,6 +211,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — two processes write one file with no reload, merge or lock.
 - **Suspected bug:** Tokei stays open while a once-alarm rings and is stopped (file now `enabled: false`); the window still shows it on with "Next: … tomorrow"; toggling any other alarm saves the stale list with it enabled, and the next launch or login `--sync` arms it again (`desktop/aizome/apps/tokei/src/app.rs:220`, `desktop/aizome/apps/tokei/src/app.rs:529-533`, `desktop/aizome/apps/tokei/src/app.rs:324-330`). (confidence: high)
 - **Related:** `desktop/aizome/apps/tokei/src/ring.rs` (NTU-24); NTU-17.
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ntu-19)
 
 <a id="ntu-20"></a>
 
@@ -218,6 +223,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `SaveAlarm` writes `alarms[index]` (`desktop/aizome/apps/tokei/src/app.rs:626-628`), so anything that shifts indices under an open sheet makes it overwrite another alarm; the sound preview (`desktop/aizome/apps/tokei/src/app.rs:595`, `desktop/aizome/apps/tokei/src/app.rs:604`) and the timer's "complete" sound (`desktop/aizome/apps/tokei/src/app.rs:692`) share one player and stop each other; `error` and `time` must agree (re-checked at `desktop/aizome/apps/tokei/src/app.rs:620`).
 - **Reify:** Medium — partially explicit; identity by index is the weak point.
 - **Suspected bug:** delete alarm D, open Edit on X, choose Edit ▸ Undo Delete (still in the menu bar) → D is reinserted before X; Save then writes X's draft over the alarm now at X's old index, dropping it from the file while its timer stays armed (`desktop/aizome/apps/tokei/src/app.rs:549-552`, `desktop/aizome/apps/tokei/src/app.rs:625-628`). (confidence: low — needs the menu bar live while the sheet is up)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="ntu-21"></a>
 
@@ -260,6 +266,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** Medium — linear, but its file write races the window.
 - **Suspected bug:** with Tokei open, a once-alarm starts ringing; the user adds alarm C (file now has C, C's timer armed), then presses Stop → `ring_with` saves its snapshot without C (`desktop/aizome/apps/tokei/src/ring.rs:53`, `desktop/aizome/apps/tokei/src/ring.rs:95`); at C's time `--ring C` logs "alarm C is gone" and stays silent. (confidence: medium)
 - **Related:** notification server `desktop/aizome/crates/aizome-shell/src/notifications/server.rs`; NTU-17, NTU-19.
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="ntu-25"></a>
 
@@ -282,6 +289,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — ten fields, about fifteen sites, a data-loss bug.
 - **Suspected bug:** watching a two-hour film at 45:00, open another file (Open, drop, Open Recent or a second launch): `Msg::Open` sets `queue = paths` (`desktop/aizome/apps/utsushi/src/app.rs:792`), then `load(0)` calls `leave()` (`desktop/aizome/apps/utsushi/src/app.rs:314`) with `current` still 0, recording the new file at 45:00 with the film's length; `resume_at` (`desktop/aizome/apps/utsushi/src/app.rs:327`) then starts the new file at 45:00 under "Resumed at 45:00". If the film had ended, it erases the new file's own resume point instead. (confidence: high)
 - **Related:** `desktop/aizome/crates/aizome-media/src/player.rs:305` (`open`; events emitted untagged, its own `generation` at :637); store NTU-32.
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ntu-26)
 
 <a id="ntu-27"></a>
 

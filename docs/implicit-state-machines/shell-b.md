@@ -39,6 +39,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — six handlers, four phase fields, privilege boundary, suspected bug
 - **Suspected bug:** when the helper can't be reached (`polkit-agent-helper` socket missing, spawn error), `Session::start` emits Error then Failed at once (`desktop/aizome/crates/aizome-sys/src/polkit.rs:247`-`252`); the shell's Failed handler calls `authenticate` again (`auth.rs:294`-`295`), which fails the same way, so the shell spins through connect attempts and warnings on its event loop until the user cancels (confidence: medium)
 - **Related:** `desktop/aizome/crates/aizome-sys/src/polkit.rs:233` (`Session::start`, conversation generation, `respond` queue)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#shb-03)
 
 <a id="shb-04"></a>
 
@@ -71,6 +72,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** with no focused screen an ask closes the existing dialog and shows nothing (`confirm.rs:117`-`118`); the dialog's close by the compositor isn't tied to `confirm`
 - **Reify:** High — user-visible power-off/logout consequences, suspected bug
 - **Suspected bug:** the dialog is a layer on the focused output (`confirm.rs:118`-`122`); if that output goes (dock unplugged, monitor off) during the minute, `close_requested` removes only the `surfaces` entry (`shell.rs:1712`), `confirm` stays `Some`, ticks continue and the machine shuts down/restarts/logs out with no dialog to cancel; asking again only resets `left` (`confirm.rs:110`-`115`) and never reopens a window (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#shb-06)
 
 <a id="shb-07"></a>
 
@@ -104,6 +106,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug, reconnect semantics matter to the whole shell
 - **Suspected bug:** events between the snapshot calls and `Subscribe` are lost: the compositor's `Subscribe` only sets `subscribed` with no replay (`desktop/aizome/crates/aizome-comp-core/src/ipc.rs:207`-`211`), so a window mapped in that gap (autostart apps at login, or while the shell reconnects after a compositor restart) is missing from the Deskbar and menus until the next reconnect (confidence: medium)
 - **Related:** `desktop/aizome/crates/aizome-comp-core/src/ipc.rs:207`; `desktop/aizome/crates/aizome-ipc/src/lib.rs:1094` (`Client::events`)
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#shb-09)
 
 <a id="shb-10"></a>
 
@@ -136,6 +139,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — 8 fields, 8+ mutation sites across two files, security boundary
 - **Suspected bug:** whatever PAM says is logged and replaced by "That password didn't work" (`lock.rs:427`-`428`), so an expired password (`pam_acct_mgmt` → new token required) or a faillock lockout reports the correct password as wrong on every try and the user can't learn why (confidence: medium)
 - **Related:** `desktop/aizome/sukumo/crates/sidestep-ui/src/app.rs:1057` (kit's `Locking`), compositor ext-session-lock; logind sleep delay in `desktop/aizome/crates/aizome-sys/src/power/logind.rs:437`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#shb-12)
 
 <a id="shb-13"></a>
 
@@ -157,6 +161,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** the surface stays on the output it opened on when the primary changes
 - **Reify:** High — suspected bug, user-visible loss of critical notifications
 - **Suspected bug:** when the cards' output goes, the compositor closes the layer and `close_requested` drops only the `surfaces` entry (`shell.rs:1712`); `cards` keeps the dead key, so `sync_cards` keeps resizing it (`cards.rs:135`) and never reopens, and critical cards stay invisible until every one is read elsewhere (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#shb-14)
 
 <a id="shb-15"></a>
 
@@ -168,6 +173,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `banner_queue` is dead state (only `retain`ed, `glue.rs:96`); `banner_done` closes transient ones as Expired (`glue.rs:203`-`205`)
 - **Reify:** High — suspected bug, timer identity is implicit
 - **Suspected bug:** a replacement of the notification on the line (same id through `replaces_id`) arms a second `BannerDone(id)` while the first is still pending; the first ends the line at the original deadline (`glue.rs:198`-`201`) and, for a transient one, closes the just-updated notification. A progress notification updated every 2 s gets its line cut short and flickering (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#shb-15)
 
 <a id="shb-16"></a>
 
@@ -222,6 +228,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — 7 fields, many handlers, suspected bug
 - **Suspected bug:** `adopt_recording` never arms the indicator tick (only `Started` does, `recording_glue.rs:173`), so after a shell restart mid-recording the systray clock only advances when something else repaints the bar, about once a minute (confidence: high)
 - **Related:** picker in `desktop/aizome/crates/aizome-comp-logic/src/overlays/area.rs:63`; thread side SHB-22/SHB-23
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#shb-20)
 
 <a id="shb-21"></a>
 

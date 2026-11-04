@@ -80,6 +80,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** ❖-click a relative path (resolved by a spawned helper, up to 250 ms) and move the pointer one cell or out of the pane before the helper answers: `terminal_view.rs:441-455`/`:484` emits `MatchLink`, `app.rs:1929`/`:1945` cancels `resolver_request`, `ResolvedLink` finds nothing and the link silently never opens (confidence: medium)
 - **Reify:** High — five fields, identity invariants, user-visible silent failure
 - **Related:** `terminal_view.rs` hover requests (HOT-29); workers in `automatic_links/mod.rs`, `link_resolver.rs` (HOT-15, HOT-18); aizome-kit `urls` opener
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#hot-07)
 
 <a id="hot-08"></a>
 
@@ -134,6 +135,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** close the window (or end its last tab) while a save is in flight, then press ⇧❖, before it lands: the token bump (`app.rs:1370-1371`) makes `ConfigSaved` stale (`:1727`), `ConfigLoaded` never checks `closing`, so the window stays open with `closing` latched and a later unrelated settings change closes the window and Settings unexpectedly (`:1751-1754`); `open_after_save` latches the same way and opens hotaru.toml later (confidence: low)
 - **Reify:** High — seven fields, eight handlers, reachable invalid combinations
 - **Related:** settings worker (HOT-15); Nix/Home Manager–managed hotaru.toml symlinks
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#hot-12)
 
 <a id="hot-13"></a>
 
@@ -156,6 +158,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** with Hotaru set to Night and the desktop on Day, switch the desktop to Night (no visible change in Hotaru, so no `Msg::Theme`), then choose Follow Desktop: `apply_appearance` uses the stale Day `desktop_appearance` and Hotaru shows Day while the desktop is Night, until the desktop changes again; the Appearance page previews use the same stale base (confidence: medium)
 - **Reify:** High — ownership split across kit and app with a suspected bug
 - **Related:** aizome-kit `desktop/aizome/crates/aizome-kit/src/app.rs:290` (`woken` settings watcher) and `desktop/aizome/crates/aizome-kit/src/cx.rs:377` (`set_appearance`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#hot-14)
 
 <a id="hot-15"></a>
 
@@ -188,6 +191,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** if the first instance takes over 2 s from `claim` to `serve` (cold start), a second `aizome-hotaru` times out on the ack (`instance.rs:115`, `:119`) and opens its own window, while the first later reads the buffered request and opens a tab too: one launch, two terminals (confidence: low)
 - **Reify:** High — cross-process handshake with a suspected bug
 - **Related:** other `aizome-hotaru` processes (same file, client side)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#hot-17)
 
 <a id="hot-18"></a>
 
@@ -231,6 +235,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** in bash, `sleep 600 &` then `exit`: the background job still holds the PTY slave, so EOF never arrives, `try_wait` is never polled (`:787-790`) and the pane neither closes nor shows "Session ended" until the job exits; terminals that watch the child report the exit at once (may be an accepted trade-off for lossless output) (confidence: medium)
 - **Reify:** High — three loop flags plus two shared atomics, with a suspected bug
 - **Related:** `app.rs` pane lifecycle (HOT-02); hotaru-io `Pty`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#hot-21)
 
 <a id="hot-22"></a>
 
@@ -292,6 +297,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** neither `PointerLeave` (`:1223-1228`) nor focus loss (`:1246-1265`) clears `drag` or `buttons`; the kit ends a press on leave only for `drags_only` widgets (`desktop/aizome/crates/aizome-kit/src/engine.rs:2065-2072`), which this view is not; a right/middle press "ours" never records a button but its release still sends a mouse release (`:1214-1217`)
 - **Suspected bug:** begin a drag-select, then let the compositor take the pointer (one of its own grabs; the kit comment at `engine.rs:2065-2068` says the release then goes elsewhere): `drag` and `buttons` stay set, so later plain hover over the pane keeps extending the selection and reports button-held motion to mouse-tracking programs, and copy-on-select never fires, until the next click (confidence: medium)
 - **Reify:** High — suspected bug; state spans view, kit capture and app selection
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#hot-27)
 
 <a id="hot-28"></a>
 

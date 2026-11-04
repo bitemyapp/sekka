@@ -201,6 +201,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `:68` is the one unguarded step: under `writeShellApplication`'s errexit a failure exits 1, failing the initrd even though the media are intact, unlike every other branch; a failure inside `cleanup` stops the trap and leaves `/run/sekka-copytoram.*`
 - **Reify:** High — boot-critical, six mount phases in one linear script, one unguarded step
 - **Suspected bug:** the media size is the size of the block device holding `/sysroot/iso` (`:23`), not of the ISO. If that device is a whole USB stick (a raw-written hybrid ISO found by label on the disk rather than its partition), `bytes` is the stick's capacity, so a 64 GB stick on a 32 GB machine is reported "insufficient RAM" and copytoram is silently skipped though the image would fit (confidence: low)
+- **Reproduction:** Partly confirmed (unit): [test and output](reproductions.md#inx-18)
 
 <a id="inx-19"></a>
 
@@ -322,6 +323,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — mode, two keymap structs and seat flags across six handlers, a documented user-visible limit
 - **Suspected bug:** change the Aizome layout (e.g. US → German) while `aizome-ibus` runs with `use-system-keyboard-layout` on: the early return at `:175-178` keeps the old `key_sys`, so engines get keysyms and modifiers from the old layout. This is the probable mechanism of the known limit in DEVELOPERS.md:368-373 (confidence: medium)
 - **Related:** `installer/genkan/rust/system/input-method.nix` (`aizome-ibus.service`), Aizome compositor's input-method/virtual-keyboard handling (desktop/aizome), `tests/aizome-ibus.py`
+- **Reproduction:** Partly confirmed (unit): [test and output](reproductions.md#inx-29)
 
 <a id="inx-30"></a>
 
@@ -377,6 +379,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — persisted remote state with an ordering invariant; error handling differs between stages
 - **Suspected bug:** `:61` and `:64` use process substitution, whose exit status `errexit`/`pipefail` ignore (the comment at `:40-41` fixed this only for the build). If `nix-store --store https://cache.nixos.org --check-validity` fails part-way (network error, 5xx), `own` keeps only the paths checked before the failure, the script uploads that subset or nothing, prints "Published N of M" and exits 0: the nightly reports success while the cache lacks Sekka's packages and installs compile them (confidence: medium)
 - **Related:** `scripts/ci-retain.py`, the cache and nightly workflows (`.github/workflows/cache.yml`, `.github/workflows/nightly.yml`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#inx-34)
 
 <a id="inx-35"></a>
 
@@ -400,6 +403,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — long-running loop with remote side effects, several retry paths and no backoff on one of them
 - **Suspected bug:** if `docker run` fails to start (image `sekka-runner:latest` not loaded, missing bind source `/var/cache/sekka-ci-git`), the loop registers a new JIT runner with GitHub every ~5 s plus refresh time (`:176-207`) with no backoff, leaving a trail of never-connected runner registrations and API calls until someone notices (confidence: medium)
 - **Related:** `scripts/runner-admission.sh`, `scripts/runner-git-cache.sh`, `scripts/ci-retain.py`, `scripts/runner-host-setup.sh`; GitHub's JIT runner API
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#inx-36)
 
 <a id="inx-37"></a>
 

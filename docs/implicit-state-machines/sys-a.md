@@ -58,6 +58,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** a refused operation (`finish` with `Err`, `audio.rs:1180`) reverts neither the level/default nor the `Expect`, and PulseAudio sends no change event for a refused change, so the snapshot keeps a level the server never applied; expiry is lazy (checked only on the next report, `audio.rs:557`); `expect()` refreshes `since` for both fields when either is set (`audio.rs:582`), so a mute press extends a pending volume expectation; within the window a genuine change by another client is masked; defaults have no `Expect`, so a server-info reply requested earlier can undo an optimistic default (`audio.rs:1117-1121`); Balance drops its `done` (task `Cancelled`, not `NotFound`) when the device lookup returns no item or the context is gone (`audio.rs:1323-1345`)
 - **Reify:** High — state spread over `Expect`, the entry maps, the defaults and per-operation callbacks, with a user-visible mismatch
 - **Suspected bug:** Settings changes the volume of a stream the server refuses to change (for example a sink input with `volume_writable` false): `set_volume_in` has already stored the new level and marked the model dirty, the callback reports `Err`, no event follows, so the snapshot and slider show the unapplied level until another event for that stream (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sya-05)
 
 <a id="sya-06"></a>
 
@@ -70,6 +71,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — a suspected bug, and BlueZ's agent state can diverge from the local `Option`
 - **Suspected bug:** bluetoothd restarts while Settei's Bluetooth pane is shown; Settei keeps `agent = true` (`desktop/aizome/apps/settei/src/panes/bluetooth.rs:453`, reset only on a failed registration at `:621` or on hide at `:490`) and the worker keeps its `Registration`, so BlueZ has no agent and pairing a device that needs a passkey or confirmation fails with no prompt until the pane is hidden and shown again (confidence: medium)
 - **Related:** `desktop/aizome/apps/settei/src/panes/bluetooth.rs:442` (registers on show), `:489` (unregisters on hide); BlueZ `org.bluez.AgentManager1`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sya-06)
 
 <a id="sya-07"></a>
 
@@ -92,6 +94,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** a failed `GetManagedObjects` on Appeared (`bluetooth/mod.rs:360-363`, `disks/mod.rs:239-242`) still sets `present`, publishing `available: true` with no adapters or drives, and nothing retries until the daemon re-appears; refetching invalidated properties blocks the follower up to 2 s each (`bluetooth/mod.rs:374`, `disks/mod.rs:253`); property signals for objects not yet known are dropped by design (`bus.rs:514-516`)
 - **Reify:** Medium — two copies of the same closure machine with a reachable invalid state
 - **Suspected bug:** UDisks is started by activation (`disks/mod.rs:236`, `activate = true`) and is still enumerating when `GetManagedObjects` hits the 2 s query timeout; Tansu and the desktop then show UDisks as available with no drives until udisksd restarts (confidence: low)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="sya-09"></a>
 
@@ -146,6 +149,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** check-then-act: the device can be mounted or changed between `disks/mod.rs:603-604` and the UDisks call; the fingerprint has no drive identity (serial/WWN) and no partition-table identity, and whole partitioned disks have empty `IdType`/`IdUUID`, so a different disk of the same size at the same kernel name matches; `Instant` is monotonic, so time asleep in suspend doesn't count towards the 10 minutes
 - **Reify:** High — a data-loss guard; the gaps are in what the token records
 - **Suspected bug:** a UI that holds a `Confirm<NewPartitionTable>` made for USB stick A (32 GB, GPT) while A is swapped for an identical-size partitioned stick B that comes up as `sdb` again: path, device, size and empty id fields all match, so B is wiped (confidence: low; no app makes these tokens yet)
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#sya-13)
 
 <a id="sya-14"></a>
 
@@ -189,6 +193,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — a suspected bug, and the dead state can't be seen from the handle
 - **Suspected bug:** pipewire-pulse restarts, or the default microphone disappears and comes back under the same name, while Settei's Sound pane is open: the meter thread exits (or idles on a dead stream) with `level` at its last peak, and Settei, which polls `level()` on a timer and recreates the meter only when the default input's name changes (`desktop/aizome/apps/settei/src/panes/sound.rs:208-216`), shows a frozen input level (confidence: medium)
 - **Related:** `desktop/aizome/apps/settei/src/panes/sound.rs:213`; pipewire-pulse peak-detect stream
+- **Reproduction:** Partly confirmed (integration): [test and output](reproductions.md#sya-17)
 
 <a id="sya-18"></a>
 

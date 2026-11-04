@@ -59,6 +59,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** blocking flock with no timeout; nested acquisition by a child using the default path would hang forever (flock is per open description); `horizontal-margins.py:85` and `kitty-clipboard-oracle.py:491` hard-code `/home/callen/...` and `apps/hotaru/tools/history-hyperlink-capacity.py:38` ignores `--lock`, so they fall out of exclusion under another HOME; `reference.py` holds the lock across `git clone`/network downloads; several timing tools take no lock at all
 - **Reify:** Medium — one cross-tool mutex re-implemented in ~20 files with inconsistent paths and coverage
 - **Suspected bug:** `paired-feed-benchmark.py` times two builds (`apps/hotaru/tools/paired-feed-benchmark.py:66-71`) without taking the lock, so a `build-candidate.py` compile can run concurrently and skew the ratio; load averages are recorded but not used as a gate (confidence: medium)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="htt-06"></a>
 
@@ -81,6 +82,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** Medium — persisted gate with many independent consumers
 - **Suspected bug:** `benchmark.py` validates candidate metadata against the binary (`apps/hotaru/tools/benchmark.py:63`) before taking the lock (`apps/hotaru/tools/benchmark.py:74-75`), then re-hashes inside the lock (`apps/hotaru/tools/benchmark.py:76`) and later compares only against that in-lock hash (`apps/hotaru/tools/benchmark.py:173-178`). If `build-candidate.py` holds the lock while benchmark.py waits and rebuilds `hotaru-replay`, the new binary is measured but the report records the stale metadata's source hash and toolchain (`apps/hotaru/tools/benchmark.py:104-108`), and the end check still passes (confidence: medium)
 - **Related:** HTT-26 (reference build stages)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="htt-08"></a>
 
@@ -115,6 +117,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — many phases, persisted status, five processes
 - **Suspected bug:** on frame-matrix's 600 s timeout the harness gets SIGINT (`frame-matrix.py:241`); `KeyboardInterrupt` bypasses `except Exception` (`apps/hotaru/tools/frame-benchmark.py:626`), so `finally` writes `result.json` still saying `"status": "running"` (`apps/hotaru/tools/frame-benchmark.py:403`, `apps/hotaru/tools/frame-benchmark.py:640`) for a terminated run (confidence: high)
 - **Related:** HTT-09, HTT-11, HTT-17, HTT-15
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#htt-10)
 
 <a id="htt-11"></a>
 
@@ -157,6 +160,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — multi-outcome persisted status with several gates
 - **Suspected bug:** `--phase throughput` trials can be accepted even if an external compiler ran during the throughput flood. The measured interval ends at the last stream capture (`:380-382`), but frame-benchmark runs throughput after the streams (`frame-benchmark.py:599-619`), so `compiler_overlap` (`apps/hotaru/tools/frame-matrix.py:384`) never examines that window (confidence: high)
 - **Related:** HTT-12, HTT-15, HTT-16
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#htt-14)
 
 <a id="htt-15"></a>
 
@@ -200,6 +204,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** the cache stays valid only until a resize; the controller must send `reset` (`frame-benchmark.py:535`); discovery picks the first matching bottom marker scanning downward (`:126-127`)
 - **Reify:** Low
 - **Suspected bug:** if the first capture after `reset` still shows pre-resize content (the grid grew, so the old bottom marker is now an interior row), discovery locks `bottom_y` to that row; sequence 1's marker on the new last row never decodes, and `observations.until(... sequence == 1)` (`frame-benchmark.py:538`) times out (confidence: low)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="htt-19"></a>
 

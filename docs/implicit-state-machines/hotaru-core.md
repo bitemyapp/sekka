@@ -80,6 +80,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug; persistent and one-time grants share one bounded list
 - **Suspected bug:** a program enables mode 5522 and, after each paste event, reads only the listing (or nothing); 32 pastes later the password the user chose to remember is evicted by `entries.remove(0)` and the program is prompted again (confidence: medium)
 - **Related:** Hotaru app `desktop/aizome/apps/hotaru/src/session.rs:661` (KittyGrant), `desktop/aizome/apps/hotaru/src/session.rs:668` (paste event)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#hco-07)
 
 <a id="hco-08"></a>
 
@@ -192,6 +193,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug; five fields split across terminal and per-screen scope
 - **Suspected bug:** the user changes the cursor preference while vim/less runs on the 1049 alternate screen (`desktop/aizome/apps/hotaru/src/session.rs:529` calls `set_default_cursor`); only `alternate.cursor.shape` changes, and on exit the primary keeps the old default shape though `cursor_is_default` is true, until the next DECSCUSR or preference change (confidence: medium)
 - **Related:** Hotaru app `desktop/aizome/apps/hotaru/src/session.rs:529`, `desktop/aizome/apps/hotaru/src/app.rs:367`
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#hco-18)
 
 <a id="hco-19"></a>
 
@@ -256,6 +258,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug; lifecycle spread across owner, Drop and a polling thread
 - **Suspected bug:** `get_or_init` stores an `Err` permanently, so if creating the reaper thread fails once (EAGAIN under RLIMIT_NPROC or memory pressure), every later `Pty::spawn` in that long-lived Hotaru process fails with the cached error after the condition clears (confidence: medium — certain once thread creation fails, which is rare)
 - **Related:** Hotaru app `desktop/aizome/apps/hotaru/src/session.rs:479` (spawn), `desktop/aizome/apps/hotaru/src/session.rs:558` (`working_directory`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#hco-24)
 
 <a id="hco-25"></a>
 
@@ -278,6 +281,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug; per-shell copies of the same de-duplication, invisible to the terminal
 - **Suspected bug:** the last-PWD cache is never invalidated when something else reports OSC 7. In `~/src`, run a nested integrated shell (or a program that emits OSC 7), `cd /tmp`, then exit. The outer prompt's PWD equals `_hotaru_last_pwd`, so it stays silent, and Hotaru keeps `/tmp` as the pane's directory and title for new tabs (confidence: medium)
 - **Related:** Hotaru app `desktop/aizome/apps/hotaru/src/session.rs:423`–`:434` (accepts OSC 7 via `apps/hotaru/crates/hotaru-io/src/launch.rs:142`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#hco-26)
 
 ## Already explicit
 

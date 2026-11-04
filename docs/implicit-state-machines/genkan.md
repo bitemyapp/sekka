@@ -45,6 +45,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the check's meaning depends on the phase (pre-write vs post-write), with data-loss consequences, and there is a suspected bug.
 - **Suspected bug:** If another USB disk is unplugged or re-enumerated between `lsblk` and the per-disk `fs::metadata` during the post-partition or post-format revalidation (`install.rs:573`, `install.rs:628`), the installation aborts with an error about an unrelated disk. The target disk has already been wiped and partitioned (confidence: medium-low).
 - **Related:** GUI side `installer/genkan/ui/src/app.rs:877` (GEN-28 scan)
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#gen-03)
 
 <a id="gen-04"></a>
 
@@ -102,6 +103,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the most important transaction; destructive phases are implicit in code order and integer events, and there is a suspected bug.
 - **Suspected bug:** The deferred route skips the "selected system needs at least N GiB on the root filesystem" guard (`install.rs:479`–`488`), which runs only after an in-memory build. A low-RAM machine with a large selection on a small disk therefore passes preparation. It then fails with "No space left" while building on the target, after the disk was erased. `missing.fetch_bytes` is known by then and could be checked (confidence: medium).
 - **Related:** helper session GEN-06; GUI progress GEN-35 (`installer/genkan/ui/src/app.rs:1855`); typestate `installer/genkan/rust/src/plan.rs:354`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#gen-07)
 
 <a id="gen-08"></a>
 
@@ -347,6 +349,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** "Failed" and "still reading" are the same representation (`None`), and the read is never retried.
 - **Reify:** High — about five fields, and "Failed" can't be told apart from "Reading" (suspected bug).
 - **Suspected bug:** If `/proc/meminfo` can't be read, `Msg::Memory(Err)` turns swap off and leaves `memory` as `None` (`app.rs:1989`–`1992`). If the person turns swap back on, the Disk page says "Reading installed memory…" and Next says "Still reading installed memory; try again in a moment." indefinitely (`app.rs:916`–`918`, `app.rs:951`–`953`) (confidence: high in code; the trigger is rare).
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#gen-28)
 
 <a id="gen-29"></a>
 
@@ -402,6 +405,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the catch spans components and swallows keystrokes; suspected bug.
 - **Suspected bug:** Suppose the person clicks Review while the key wait is still open. The review worker's Wi-Fi snapshot (`app.rs:1614`) can raise a Secret Agent or wallet prompt, and the Polkit prompt can appear within the 500 ms poll window after `Reviewed`. The compositor holds back the first key typed into that prompt and delivers it to Genkan as the caught key. The password loses its first character, and the GUI's `super_key` silently becomes `AsIs` (confidence: low).
 - **Related:** `desktop/aizome/crates/aizome-ipc/src/setup.rs:66` (`catch_key`, 500 ms poll at `setup.rs:77`–`82`); compositor `CatchKey` handling
+- **Reproduction:** Partly confirmed (unit): [test and output](reproductions.md#gen-33)
 
 <a id="gen-34"></a>
 
@@ -417,6 +421,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — seven or more fields, about ten handlers, the privilege boundary and a suspected bug.
 - **Suspected bug:** Suppose the person confirms before preparation finishes and preparation then fails (for example, a download error during the in-memory build, "the target disk has not been erased"). `show_failure` takes the `installing` branch (`app.rs:1768`–`1776`). It marks step 1 "Partition the disk" as failed, heads the page "Installation Failed", and shows "The disk may have been modified" (`installer/genkan/ui/src/view/install.rs:73`). No disk write happened, the person can't go back, and they must re-enter every password (confidence: medium).
 - **Related:** `installer/genkan/rust/src/session.rs:56` (GEN-15), `installer/genkan/rust/src/helper.rs:24` (GEN-06), `installer/genkan/rust/src/install.rs:37` (`Event`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#gen-34)
 
 <a id="gen-35"></a>
 

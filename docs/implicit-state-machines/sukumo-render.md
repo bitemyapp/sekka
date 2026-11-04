@@ -37,6 +37,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — three flags plus a snapshot and a derived index are updated from six entry points, and the suspected bug below loses redraws
 - **Suspected bug:** `frame` clips damage to "where the host may draw" by target, not by host (`tree.rs:598` filters `damage` on `*t == target`), so every rect earlier hosts of the same target pushed is intersected with this host's clip too; with disjoint clips those rects become empty and are dropped (`tree.rs:603`) while their host's `last` was already advanced (`tree.rs:600`). Two layer-backed views animating at once in one window surface (two spinners): the host the stable `HashMap` order visits first never gets its animation redrawn while the other animates (confidence: high)
 - **Related:** render loop calling `frame`/`wants_frame` in `desktop/aizome/sukumo/crates/sidestep-engine/src/backend/mod.rs:1745`, `:1782`, `:2403`
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#skr-03)
 
 <a id="skr-04"></a>
 
@@ -49,6 +50,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the content/key/cache lifecycle spans two modules and three counters, with the leak below
 - **Suspected bug:** when a canvas is replaced (resize, `tree.rs:258-265`) or swapped for `None`/`Image` (`tree.rs:250`, `:254`), the old `Canvas` is dropped without `images::forget(&[old.key])`; the render thread's cache keeps `Base::Shared(old px)` until LRU eviction against the 256 MiB budget (`raster/images.rs:105`, `:229-238`). Live-resizing a window with a layer-backed view makes a new canvas per size step, so the render thread retains up to the whole budget in dead canvas pixels (confidence: medium)
 - **Related:** `desktop/aizome/sukumo/crates/sidestep-engine/src/backend/mod.rs:1062` (paint_content), `:1110` (apply), `:1172` (`ForgetImages`, sent only for main-thread image keys by `sidestep-ui/src/image.rs:30`)
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#skr-04)
 
 <a id="skr-05"></a>
 
@@ -182,6 +184,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** no `trap`: the socket timeout exits with sway still running, and the temporary runtime directory is never removed; `wait` after `kill` has no timeout if the app ignores SIGTERM
 - **Reify:** Low — test harness
 - **Suspected bug:** under `set -eu` (`headless-wayland:15`) a failing `grim` (`headless-wayland:53`, `:57`; missing binary, compositor gone) aborts the script before `kill $app_pid` and `kill $sway_pid`, leaving the app and sway running in the container (confidence: medium)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 ## Already explicit
 

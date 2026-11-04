@@ -17,6 +17,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — five external switches plus a persisted marker, four derivation sites, a user-visible bug
 - **Suspected bug:** Airplane mode turns on through the fallback (the marker lists hci0). The person then turns Wi-Fi back on with the Wi-Fi switch: `airplane_mode` reads false, but the marker stays. When they turn airplane mode on again, `bluetooth_on` returns `[]` because hci0 is still off, and `std::fs::write` (`desktop/aizome/crates/aizome-sys/src/network/mod.rs:116`) replaces the list with "". Turning airplane mode off then never powers Bluetooth back on. Separately, the stale marker makes a later plain Wi-Fi-off read as airplane on (`mod.rs:578`) (confidence: medium)
 - **Related:** `desktop/aizome/crates/aizome-shell/src/systray/glue.rs:267-271`, `desktop/aizome/apps/settei/src/panes/network/mod.rs:75` (switches); BlueZ via `desktop/aizome/crates/aizome-sys/src/bluetooth/mod.rs:430`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#syb-01)
 
 <a id="syb-02"></a>
 
@@ -29,6 +30,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the phases are spread across NM calls, timeout and rollback, with user-visible wrong outcomes
 - **Suspected bug:** Joining a saved network with a new password that takes longer than 45 s to come up: `wait_active` returns Timeout and `rejoin_with` reloads the old profile from disk (`mod.rs:717-724`). NM keeps activating with the in-memory settings it already applied and may connect. The UI reported failure and the working password was never saved, so the next reconnect fails (confidence: low)
 - **Related:** NetworkManager (Settings.Connection, Connection.Active); `desktop/aizome/apps/settei/src/panes/network/mod.rs` (callers); the `aizome-network-agent` secret agent
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#syb-02)
 
 <a id="syb-03"></a>
 
@@ -106,6 +108,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the privilege boundary, three fields plus a generation counter, and a suspected bug
 - **Suspected bug:** Retry loop without backoff. When the helper can't be reached (connect error, `polkit.rs:245-252`) or exits without printing SUCCESS/FAILURE (EOF → Failed, `polkit.rs:324`), for example a broken setuid wrapper, a socket unit refusing, or PAM refusing before any prompt, Failed is emitted at once. The shell's Failed handler immediately calls `authenticate` again (`desktop/aizome/crates/aizome-shell/src/auth.rs:289-296`), which fails again, so the dialog spins and spawns helpers or logs warnings as fast as the UI loop runs (confidence: medium)
 - **Related:** `desktop/aizome/crates/aizome-shell/src/auth.rs:237-328` (dialog); polkitd and `polkit-agent-helper-1` (`HELPER_SOCKET`, `HELPER_PATHS`, `polkit.rs:66-74`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#syb-09)
 
 <a id="syb-10"></a>
 
@@ -140,6 +143,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — state across three fields, the model and the shell, seven mutation sites, and a security-relevant outcome
 - **Suspected bug:** The lock isn't confirmed before logind's delay limit expires, so the machine sleeps with the shell's `sleep_pending` still set. On resume the delay is retaken (`logind.rs:276-278`, `shell.rs:2063`). Then `lock_confirmed` (`desktop/aizome/crates/aizome-shell/src/lock.rs:365-367`) calls `sleep_ready()` and drops the fresh inhibitor. Nothing retakes it until the next resume, so the next suspend isn't delayed and can sleep before the screen locks (confidence: medium-low)
 - **Related:** `desktop/aizome/crates/aizome-shell/src/shell.rs:2041-2090`, `desktop/aizome/crates/aizome-shell/src/lock.rs:361-389`; logind `Inhibit("sleep", "delay")`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#syb-12)
 
 <a id="syb-13"></a>
 

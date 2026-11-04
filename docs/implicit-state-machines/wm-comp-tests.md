@@ -48,6 +48,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** the anchor outlives the gesture and its `start` rect goes stale after moves and display changes; `unset` acts on the group as it is at the end, so a window that left the group mid-resize keeps `Resizing`.
 - **Reify:** High — suspected bug; the invariant "anchor only while a resize grab runs" is not enforced anywhere.
 - **Suspected bug:** resize a window from its left (or top) edge, then drag it elsewhere by its tab; the next commit whose size differs from the model's rect (an unfill or display relayout the client clamps to its minimum size, a client resizing itself) runs `r.x = a.start.right() - size.0` (`desktop/aizome/crates/aizome-comp-logic/src/actions.rs:1041-1043`) and the window jumps back to where the old resize's right edge was, possibly on another display. (confidence: medium)
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#wm-04)
 
 <a id="wm-05"></a>
 
@@ -112,6 +113,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `applied` holds synthetic presses the seat still believes are down; it is not drained when the setting turns off or when the logic is replaced.
 - **Reify:** High — suspected bug; three fields with an unwritten "every applied press gets its release" invariant.
 - **Suspected bug:** with sticky keys on, tap ⌃ and ❖ (both latch), then press R: the synthetic ⌃ and ❖ presses go out with R (`desktop/aizome/crates/aizome-comp-logic/src/input.rs:681-688`), the core takes ⌃❖R and reloads at the end of that loop iteration while R is still down (`desktop/aizome/crates/aizome-comp-core/src/input.rs:518`); the reload drops `applied` (`desktop/aizome/crates/aizome-comp-logic/src/hooks.rs:97`; unlike Reset Input it releases no keys), so R's release reaches the new logic as a plain release (`desktop/aizome/crates/aizome-comp-logic/src/input.rs:698`) and ⌃ and ❖ stay pressed in the seat: the next letter typed arrives as a ⌃❖ chord (Q would lock the session). Turning sticky keys off while a latched chord is held does the same. (confidence: medium)
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#wm-10)
 
 <a id="wm-11"></a>
 
@@ -134,6 +136,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug; a cross-process protocol whose terminal event depends on which exit runs.
 - **Suspected bug:** while the share picker (or the shell's recording "pick an area") waits, a logic reload or Ctrl+Alt+Del → Reset Input runs `quiesce` → `close_all` (`desktop/aizome/crates/aizome-comp-logic/src/hooks.rs:92`, `desktop/aizome/crates/aizome-comp-logic/src/overlays/mod.rs:81`), which drops the pick without `AreaPicked{area: None}`; `aizome-share-picker` loops on events forever and the shell's recording stays in its picking phase. (confidence: high)
 - **Related:** `desktop/aizome/crates/aizome-ipc/src/bin/aizome-share-picker.rs:105-129`, `desktop/aizome/crates/aizome-shell/src/recording_glue.rs:39`.
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#wm-12)
 
 <a id="wm-13"></a>
 
@@ -165,6 +168,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** hit boxes are only as fresh as the last frame on its output; nothing closes or moves the overview when its output goes.
 - **Reify:** High — suspected bug; modes keyed on filter emptiness plus an unchecked output binding.
 - **Suspected bug:** unplug (or lid-close) the display showing the overview: `items` never matches the gone output (`desktop/aizome/crates/aizome-comp-logic/src/overlays/overview.rs:262-265`), so nothing is drawn, yet `grabs_keyboard` stays true, every key is swallowed (`:119-121`, `:166`) and every press is taken (`:223`) — the desktop looks normal but ignores input until a blind Esc. (confidence: medium)
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#wm-15)
 
 <a id="wm-16"></a>
 

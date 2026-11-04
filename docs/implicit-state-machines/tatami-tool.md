@@ -39,6 +39,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — intent file, unit, logind and receipt are four sources of truth with sleep consequences
 - **Suspected bug:** one slow logind reply (`busctl --timeout=3`, `awake.rs:21-22`) makes `protected(...)?` return Err in `hold` (`awake.rs:138`); the holder exits, `systemd-inhibit` releases the block, and for `RestartSec=1` plus re-verification nothing blocks lid-close or idle sleep (confidence: low)
 - **Related:** logind `org.freedesktop.login1.Manager.ListInhibitors`; Waybar `custom/stay-awake` (`desktop/tatami/config/waybar/config.jsonc:84-90`); Yukimi `apps/yukimi/crates/yukimi-system/src/completion.rs:543`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ttl-03)
 
 <a id="ttl-04"></a>
 
@@ -50,6 +51,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** two fallback policies: a missing per-output image is temporary, a missing global image is permanent; `--no-block` restart reports nothing after the decode check
 - **Reify:** High — persisted choice with a destructive fallback (data loss)
 - **Suspected bug:** a global wallpaper on a removable or late-mounted drive (udiskie automounts concurrently, `desktop/tatami/module.nix:311`) is a dangling symlink when `tatami-swaybg`'s `ExecStartPre=background ensure` runs at login; `ensure` replaces it with the default for good, whereas the same image as a per-output choice would survive (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ttl-04)
 
 <a id="ttl-05"></a>
 
@@ -92,6 +94,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — process-name state with a user-visible race
 - **Suspected bug:** stopping within ~3 s of starting (Alt+Print, the bar indicator or the menu) SIGINTs gsr while the starting invocation is still in `started(15)`; it sees no recorder, takes that for "gsr cannot run" and starts the wf-recorder or mixed fallback on the same file (`capture.rs:584-605`), so recording resumes after the user stopped it (or contends with the just-saved file) (confidence: medium)
 - **Related:** Waybar `custom/screenrecording` (`desktop/tatami/config/waybar/config.jsonc:63-69`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ttl-08)
 
 <a id="ttl-09"></a>
 
@@ -115,6 +118,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — staged transaction with partial-failure semantics
 - **Suspected bug:** closing the lid while docked, if a step errs after the panel was disabled (e.g. `wait_disabled`'s 2 s, `:153-165`, expires on a slow modeset that then completes, or an unmirror wait fails), returns Err before `display_policy::save` (`:399-400`); next tick the panel is already off, so `plan` does not add it to `lid_off` (`desktop/tatami/tool/src/display_policy.rs:274-279`) and saves a record without it; opening the lid then never turns the built-in display back on (confidence: medium)
 - **Related:** Hyprland command socket via `desktop/tatami/tool/src/hypr.rs:18` (`request`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ttl-10)
 
 <a id="ttl-11"></a>
 
@@ -189,6 +193,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — procedure across four files whose outcome is persisted
 - **Suspected bug:** `tatami reload` try-restarts every running own unit except Keep Awake (`main.rs:231`), including an active `tatami-hyprsunset` and `tatami-mako`; hyprsunset returns at its identity profile (`desktop/tatami/config/hypr/hyprsunset.conf:2-5`) and mako without `do-not-disturb`, so an appearance reload or a Yukimi `update-session` silently turns off Night Light and Do Not Disturb (confidence: medium)
 - **Related:** Yukimi `apps/yukimi/crates/yukimi-system/src/completion.rs:686` runs `tatami update-session`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ttl-17)
 
 <a id="ttl-18"></a>
 
@@ -275,6 +280,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — five artefacts with TTLs coordinated across processes
 - **Suspected bug:** choosing a new place while a background fetch attempt is in flight (it read `weather-place.json` at `weather.rs:319`) makes `refresh` return at the lock (`:554-556`); the running fetch writes the old place's report with a fresh `fetched`, so `due` stays false and the bar shows the old place for up to 15 minutes (confidence: low)
 - **Related:** Waybar `custom/weather` (`desktop/tatami/config/waybar/config.jsonc:119-126`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ttl-25)
 
 <a id="ttl-26"></a>
 

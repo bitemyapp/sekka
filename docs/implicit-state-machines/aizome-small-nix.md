@@ -17,6 +17,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug; the start/poll/timeout phases of `set` are open-coded across two processes and logind.
 - **Suspected bug:** two concurrent `aizome-awake toggle` runs (the case named by the lock's doc comment at `main.rs:85`) both evaluate `!requested()` = true before either takes the lock, so both turn Keep Awake on and the second toggle is lost (confidence: medium; the menu bar sends `on`/`off`, so only CLI and script callers of `toggle` are affected).
 - **Related:** aizome-shell `desktop/aizome/crates/aizome-shell/src/awake.rs:33` (runs `aizome-awake on|off` and shows the cup from logind's state).
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#azn-01)
 
 <a id="azn-02"></a>
 
@@ -51,6 +52,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug; an enum with Unasked, Refused, ReplyLost and Registered would remove it.
 - **Suspected bug:** suppose another agent with the same identifier is still registered for the user for longer than `REGISTER_RETRY` (the case the comment at `desktop/aizome/crates/aizome-network-agent/src/lib.rs:389`–`:391` anticipates: "another still is, until its connection closes"). The first refusal sets `asked` with `done` false; the second identical refusal sets `done = asked = true`. The loop then blocks on `owners.recv()` and never registers once the other agent disconnects. NetworkManager is left with no agent and credential prompts never appear until NetworkManager restarts (confidence: medium). `tests/credentials.rs:350`–`:356` covers only "timed out, then refused".
 - **Related:** NetworkManager AgentManager (`RegisterWithCapabilities`); test harness AZN-06.
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#azn-04)
 
 <a id="azn-05"></a>
 
@@ -149,6 +151,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug; the zone is persisted across boots in two representations, plus an activation ordering.
 - **Suspected bug:** on a fresh system installed without Genkan (plain `nixos-install` with `programs.aizome.enable` and `time.timeZone = "Europe/Paris"`), there is no link and no saved zone. The declared zone is therefore discarded and the machine runs in UTC until someone sets the zone in Settings. Genkan works around this by seeding the link (`installer/genkan/rust/src/install.rs:699`) (confidence: medium).
 - **Related:** Settei `desktop/aizome/apps/settei/src/panes/general/datetime.rs`; `desktop/aizome/crates/aizome-sys/src/datetime/mod.rs`; tests `desktop/aizome/nix/timezone-policy-test.nix`, `desktop/aizome/nix/vm-test.nix:190`.
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#azn-13)
 
 <a id="azn-14"></a>
 

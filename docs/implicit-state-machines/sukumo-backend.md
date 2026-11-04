@@ -91,6 +91,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** Medium — four states held in an `Option` plus a hidden flag; consequences are a stuck locked session
 - **Suspected bug:** the lock screen asks to lock and unlocks almost at once (authentication done before the compositor's `locked` reaches this thread): `unlock` drops the unconfirmed lock, the compositor sees `destroy` after sending `locked`, kills the client with `invalid_destroy`, and the session stays locked with no lock client (confidence: low)
 - **Related:** `desktop/aizome/crates/aizome-shell/src/lock.rs`; compositor `desktop/aizome/crates/aizome-comp-core/src/state.rs`; main thread `desktop/aizome/sukumo/crates/sidestep-ui/src/app.rs`
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="skb-09"></a>
 
@@ -124,6 +125,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — eleven fields, seven mutation sites, an unnamed "configured but not presented" state that some paths respect and others don't
 - **Suspected bug:** after the header's maximize button is clicked, the configure arrives; a pointer move over the header before the main thread presents changes the hover (`desktop/aizome/sukumo/crates/sidestep-engine/src/backend/decor.rs:837`), so `refresh_decor` commits the maximized geometry and frame around the old-size content buffer: one frame with an undrawn band (confidence: low)
 - **Related:** main thread Configure handling `desktop/aizome/sukumo/crates/sidestep-ui/src/app.rs:1395`
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#skb-11)
 
 <a id="skb-12"></a>
 
@@ -167,6 +169,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** Medium — small, but its failure exit is missing
 - **Suspected bug:** a menu opened from a sheet (or a lock surface) fails in `create_popup` (`desktop/aizome/sukumo/crates/sidestep-engine/src/backend/mod.rs:1373`); the main thread is never told (no `CloseRequested` or `PopupDone`), so it keeps a popup window that never configures, never shows and never closes on its own (confidence: medium)
 - **Related:** `desktop/aizome/sukumo/crates/sidestep-ui/src/app.rs:1528` (PopupDone)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="skb-16"></a>
 
@@ -188,6 +191,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** each subsurface kind applies the flag on its own path; the menu bar only at creation
 - **Reify:** Medium — the applied state fans out to subsurfaces inconsistently
 - **Suspected bug:** `apply_input` updates the content and decorations but not an existing menu bar, so a toplevel with a menu bar that becomes passthrough still takes clicks on the bar, and a bar made while passthrough keeps an empty region after passthrough ends (confidence: medium)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="skb-18"></a>
 
@@ -200,6 +204,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** Medium — test-only, but its idle handshake has a hole
 - **Suspected bug:** a `Request` for a window the null thread doesn't have takes `continue` (`null.rs:449`), skipping `HANDLED` (`null.rs:570`); from then on `testing::render_idle()` (`desktop/aizome/sukumo/crates/sidestep-ui/src/testing.rs:75`) is false for the rest of the process and tests polling it spin to their timeout (confidence: high)
 - **Related:** `desktop/aizome/sukumo/crates/sidestep-ui/src/testing.rs:75`, `desktop/aizome/sukumo/crates/sidestep-ui/src/window.rs:687`
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="skb-19"></a>
 
@@ -253,6 +258,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `gesture` isn't cleared on Leave or window close; `finger` is inferred from `gesture.is_some()` for sourceless frames (`seat.rs:613`); Ended goes to whatever content is under the pointer at stop time, or nowhere
 - **Reify:** Medium — phase hidden in an `Option<Vec>`, ended only by an event that may not come
 - **Suspected bug:** a two-finger scroll whose window closes (or that a popup grab interrupts) never gets `axis_stop` on our surface: the old window never hears Ended, and the next touchpad scroll in any window starts with Changed and no Began (confidence: low)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="skb-24"></a>
 
@@ -295,6 +301,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — three fields in two structurally identical copies, five handlers each, feeding the shared clipboard state
 - **Suspected bug:** we clear an already-empty selection on a compositor that doesn't echo a no-op clear; later a client copies, then quits: its clear is swallowed as ours (`selection.rs:536`), so the shared state keeps the dead client's types and read-ahead text and our paste returns it (confidence: low)
 - **Related:** `desktop/aizome/sukumo/crates/sidestep-engine/src/clipboard.rs` (SKB-36); compositor `desktop/aizome/crates/aizome-comp-core/src/handlers.rs`
+- **Reproduction:** Not confirmed: [test and output](reproductions.md#skb-27)
 
 <a id="skb-28"></a>
 
@@ -412,6 +419,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** Medium — linear today, but with no retry and silent loss
 - **Suspected bug:** at login, when D-Bus activation of xdg-desktop-portal takes over the 2 s timeout, ReadOne and Read for `color-scheme` both time out; the scheme stays the light default until the user changes it, so apps started then show light on a dark desktop (confidence: low)
 - **Related:** xdg-desktop-portal Settings (external); `desktop/aizome/sukumo/crates/sidestep-engine/src/settings.rs` (SKB-41)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="skb-39"></a>
 

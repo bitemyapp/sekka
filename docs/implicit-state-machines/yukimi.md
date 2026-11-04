@@ -28,6 +28,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — persisted cross-boot phase with string states, three writers, user-visible advice, suspected bug
 - **Suspected bug:** after a Yukimi activation fails past the commit point (`switch-to-configuration` or `nix-env --set` failing at `apps/yukimi/yukimi-helper/src/main.rs:984`), the receipt stays `activating` for system S1; if the user repairs things with `nixos-rebuild switch` to a different system S2 and even reboots into it, `system_state` still returns Unknown "Activation did not finish successfully" on every read (`apps/yukimi/crates/yukimi-system/src/completion.rs:484-495`) until another Yukimi operation rewrites the receipt. (confidence: medium)
 - **Related:** privileged helper `apps/yukimi/yukimi-helper/src/main.rs` (sole writer); GUI `desktop/aizome/apps/yukimi/src/model.rs:163`; CLI `apps/yukimi/yukimi-helper/src/bin/sekka-update.rs:17`
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#yuk-02)
 
 <a id="yuk-03"></a>
 
@@ -105,6 +106,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — multi-step privileged transaction with an implicit step order, partial rollback and a commit point
 - **Suspected bug:** `--channels` runs `nix-channel --update` (`apps/yukimi/yukimi-helper/src/main.rs:951-956`), but root's channels profile isn't in the backup, so after a failed or stopped build only files are put back: the channels stay advanced, the Updates page calls them current, and the next unrelated change (installing a package) silently rebuilds the whole system on the new channel. (confidence: medium)
 - **Related:** GUI `desktop/aizome/apps/yukimi/src/ops.rs:186` (`helper_args`) and `:289` (prepared lock); CLI `apps/yukimi/yukimi-helper/src/bin/sekka-update.rs:74`
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#yuk-09)
 
 <a id="yuk-10"></a>
 
@@ -117,6 +119,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — persisted state keyed by a reusable number, read by helper and GUI, decides which files a rollback rewrites
 - **Suspected bug:** return to generation N, run `nix-collect-garbage -d` (deletes N+1…, leaves `generation-<N+1>`), then `nixos-rebuild switch` makes a new N+1; the next Yukimi change calls `save_configuration(N+1, false)` and keeps the stale copy (`apps/yukimi/yukimi-helper/src/main.rs:329-331`), so History and Updates show the old build's revisions and a later return to N+1 restores another build's flake.lock and configuration. (confidence: low)
 - **Related:** GUI `desktop/aizome/apps/yukimi/src/update_history.rs:17`
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#yuk-10)
 
 <a id="yuk-11"></a>
 
@@ -128,6 +131,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** a rollback can't be stopped at all; a crash between the profile switch and the receipt leaves the previous receipt; restored choices are written before the switch succeeds; clean's collection stays cancellable after generations are already gone
 - **Reify:** High — irreversible steps before an uncancellable commit point, suspected bug
 - **Suspected bug:** Clean Up with "older than a week", then Stop during the long `nix-store --gc`: `wait()` returns "Stopped" (`apps/yukimi/yukimi-helper/src/main.rs:1095`) before `commit()` and `switch-to-configuration boot` (`:1106-1107`), so the generations are deleted but the boot menu still lists them; the next collection removes their closures and those entries no longer boot. The same happens if GC fails. (confidence: medium)
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#yuk-11)
 
 <a id="yuk-12"></a>
 
@@ -171,6 +175,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — scattered triggers, a sentinel error, two suspected bugs
 - **Suspected bug:** after a live update moves the system's Nixpkgs, `read` calls `ensure_index`, which returns early because an index exists and isn't marked stale (`app.rs:583`); Discover keeps searching the old Nixpkgs' list (versions, "on your system" badges) for the rest of the session, and an in-flight build for the old path that lands later is marked current too (`:1316-1318`). (confidence: high)
 - **Suspected bug:** when `make` fails (`index.rs:142-145`), `indexing` drops to false with the index still None or stale, so every Search keystroke, Discover visit or reload starts another minute-long, multi-GB `nix eval` and posts another note. (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#yuk-15)
 
 <a id="yuk-16"></a>
 
@@ -213,6 +218,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** the move-and-restore logic lives only in `set_choice`; drafts survive unrelated operations
 - **Reify:** High — invariants between two collections, recursion, suspected bug
 - **Suspected bug:** untick Aizome under Desktops (Yukimi moves the default desktop to Tatami, `app.rs:1077-1085`), then press that group's Undo: `UndoChoice` removes only the desktops draft (`:1415-1418`), so Default desktop stays drafted as "Tatami (chosen)" and Apply writes `calamares.defaultDesktop = "tatami"`, a change the user never made. (confidence: high)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#yuk-19)
 
 <a id="yuk-20"></a>
 
@@ -224,6 +230,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** late comparison results are guarded by the sheet key; the branch list isn't
 - **Reify:** High — suspected bug (otherwise Medium: three similar Options)
 - **Suspected bug:** `Msg::Branches` carries neither input nor sheet key (`app.rs:915`, `:1397-1401`): open the branch chooser for one GitHub input, cancel, open it for another, and whichever GitHub answer arrives last fills the open sheet, so the user can pick another repository's branch and start a Follow that fails in the helper. (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#yuk-20)
 
 <a id="yuk-21"></a>
 

@@ -38,6 +38,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — fifteen fields with independent validity rules, plus a user-visible bug
 - **Suspected bug:** With "Update Every Second", the processor counters come from the power meter service, which returns its cached text when asked within 1 s of its last fresh read (`desktop/tatami/tool/src/power_meter.rs:100-101`). The power read happens after the per-process scan, whose length varies, so requests regularly arrive just under 1 s after the last fresh read. That reading's delta is 0 (0 W), the next is about twice the real power, and the first 0 W reading pins the idle floor at 0 for the session. A service read that times out doubles the next reading the same way (confidence: high)
 - **Related:** `desktop/tatami/tool/src/power_meter.rs:61` (`serve`, its 1 s cache `last`)
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#tap-03)
 
 <a id="tap-04"></a>
 
@@ -49,6 +50,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `last` isn't updated while `swapping`, so at start-up and after every view switch it doesn't name the actual primary column. `Table.mode` and `Filter.mode` must agree; cells capture the mode at bind (:484)
 - **Reify:** High — four cooperating fields plus a deferred idle action, with a reproducible bug
 - **Suspected bug:** At start-up `last` is None, and `set_lens` sorts the CPU view by % CPU descending while `swapping` is set. The person clicks "% CPU" to sort ascending. GTK toggles it to ascending, the handler sees `changed` (None ≠ % CPU) and schedules a flip back to descending (:589-597), so the click is undone and only a second click reverses the sort. The same happens to the first click on the restored sort column after each view switch, whenever `last` names a different column. Clicking the column `last` does name leaves it ascending: smallest first, against the rule (confidence: high)
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#tap-04)
 
 <a id="tap-05"></a>
 
@@ -70,6 +72,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** Activity's second launch acts on `state.pids` even before the first frame. A second launch presents the window before its first reading while `presented` stays false, so the first reading presents it again
 - **Reify:** High — the same wait-until-loaded shape copied three times, one copy without the guard
 - **Suspected bug:** `tatami-activity --pid N`, run while the window exists but before its first frame (within about half a second of the first launch), calls `select_pid` with an empty `pids` map (`desktop/tatami/activity/src/window.rs:97-98`, :441-444). It toasts "Process N has ended" for a live process and selects nothing, where Network guards the same case with `loaded` (`desktop/tatami/network/src/window.rs:420-422`) (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#tap-06)
 
 <a id="tap-07"></a>
 
@@ -91,6 +94,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** when the dialog is answered, the PIDs are not checked again against their start time or key. The Pause/Resume button changes only after the next frame (up to 5 s), so it can be pressed twice
 - **Reify:** High — signals go to PIDs captured an unbounded time earlier
 - **Suspected bug:** The person opens "Quit “X”?" and leaves it open. X exits on its own and another of their processes reuses its PID. Choosing Force Quit then SIGKILLs the unrelated process (:741), because `target.all` holds bare PIDs from the frame shown when the dialog opened (confidence: low)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#tap-08)
 
 <a id="tap-09"></a>
 
@@ -164,6 +168,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `open` presents whatever `UI` holds (:71-73), including a window that is closing. The drain has no overall deadline beyond each call's timeout (CancelPairing 30 s, each stop call 5 s)
 - **Reify:** High — a latch plus a hidden but live window that `open` can reach
 - **Suspected bug:** Relaunching Bluetooth while the close drain runs (for example while CancelPairing waits on a slow adapter) presents the hidden window again (:71-72). Every control is dead, because `closing` gates refresh and actions, and when the drain finishes it destroys the window under the person (:321-323) (confidence: low)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#tap-15)
 
 <a id="tap-16"></a>
 
@@ -207,6 +212,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — three flags and a counter, drop-not-queue semantics, user-visible staleness
 - **Suspected bug:** A monitor is plugged in while an SDR brightness or saturation change applies (`quietly`, which schedules no refresh). The `monitoradded` refresh 300 ms later finds `applying` set and returns (:195), or the refresh already running is discarded by the revision check (:219). Nothing reads again, so the window doesn't show the new display until another Hyprland event. A second event that arrives while a refresh runs is likewise dropped, and that reading may predate it (confidence: medium)
 - **Related:** `desktop/tatami/tool/src/displays.rs:417` (`tatami displays apply`, run by `desktop/tatami/displays/src/system.rs:83`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#tap-19)
 
 <a id="tap-20"></a>
 
@@ -230,6 +236,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — concurrent unordered writers, a user-visible wrong state
 - **Suspected bug:** Night Shift is turned on and then off within a second or two. The "off" thread finds nothing tinted yet and does nothing, then the "on" thread finishes tinting, so the screen stays warm with the switch off. Likewise, dragging the temperature and turning the switch off within 300 ms: the debounced temperature request runs after "off" and turns the tint back on (confidence: high)
 - **Related:** `desktop/tatami/tool/src/toggle.rs:147` (`nightlight_command`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#tap-21)
 
 <a id="tap-22"></a>
 
@@ -274,6 +281,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the asking phase is untracked, and cleanup depends on the worker finishing
 - **Suspected bug:** Closing the window (Escape) while a new network is being joined ends the app, since GTK quits when its last window goes. The worker thread dies before `nmcli --wait 45 connection up` returns. `Secret`'s Drop never removes the plaintext passwd-file from `$XDG_RUNTIME_DIR` (`nm.rs:199-203`), and a failed join's new profile is never deleted (`nm.rs:324-326`), so a saved network with the mistyped password stays behind (confidence: medium)
 - **Related:** NetworkManager through nmcli; `desktop/tatami/network/src/main.rs:58`
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#tap-25)
 
 <a id="tap-26"></a>
 

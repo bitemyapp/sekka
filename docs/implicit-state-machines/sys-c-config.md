@@ -17,6 +17,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — user-visible, with a suspected bug; needs explicit provenance (for example `Option` fields, or skipping values that equal the environment default)
 - **Suspected bug:** the user never opens keyboard settings but once collapses the Deskbar, and the shell saves (`desktop/aizome/crates/aizome-shell/src/shell.rs:1012`). The file now holds `layouts = ["us"]`. The admin later sets `services.xserver.xkb.layout = "de"`, which reaches `XKB_DEFAULT_LAYOUT` through `desktop/aizome/nix/module.nix:126`, but the session stays on US (confidence: medium)
 - **Related:** `desktop/aizome/nix/module.nix:126` (sets `XKB_DEFAULT_*`); `desktop/aizome/crates/aizome-shell/src/shell.rs:1004` (`save_section`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#syc-01)
 
 <a id="syc-02"></a>
 
@@ -29,6 +30,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — loses the user's choice (suspected bug)
 - **Suspected bug:** the first session after the upgrade fails in `with_index` (`desktop/aizome/crates/aizome-comp-core/src/terminal.rs:76-81`). During that session the shell saves any section, which drops `terminal`. The next session retries with `None`, so ❖Return starts Hotaru instead of the user's previous terminal (confidence: medium)
 - **Related:** `desktop/aizome/crates/aizome-comp-core/src/terminal.rs:70` (`move_to_hotaru_once`), `desktop/aizome/crates/aizome-comp-core/src/session.rs:176`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#syc-02)
 
 <a id="syc-03"></a>
 
@@ -41,6 +43,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — data loss across processes
 - **Suspected bug:** a hand edit with one typo makes the watcher fire, and the shell reloads defaults (`desktop/aizome/crates/aizome-shell/src/shell.rs:1273`). The next Deskbar or menu bar change saves those defaults over every other setting (`desktop/aizome/crates/aizome-shell/src/shell.rs:1012`); the location update path does the same (`desktop/aizome/crates/aizome-shell/src/location.rs:85-87`) (confidence: medium). Separately, a shell save racing a Settei save on the shared temp file can publish truncated TOML (confidence: low).
 - **Related:** `desktop/aizome/apps/settei/src/shared.rs:252` (`write_atomically`), `desktop/aizome/crates/aizome-shell/src/location.rs:85`, `desktop/aizome/crates/aizome-shell/src/shell.rs:385`/`:1273`, `desktop/aizome/crates/aizome-greeter/src/displays.rs:62`
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#syc-03)
 
 <a id="syc-04"></a>
 
@@ -75,6 +78,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — consumers' drag state depends on an `End` that may never come (suspected bug)
 - **Suspected bug:** during a desktop rubber-band drag, or a Deskbar app drag, the compositor takes the pointer before the release. When the pointer returns, Drawn resets silently at `drawn.rs:376`, so `desktop.band` stays `Some` and the band stays drawn (`desktop/aizome/crates/aizome-shell/src/desktop_glue.rs:225`/`:233`). For the Deskbar drag, `deskbar_visibility.dragging` stays set and holds the Deskbar open (`desktop/aizome/crates/aizome-shell/src/deskbar_glue.rs:371`/`:376`) (confidence: medium)
 - **Related:** `desktop/aizome/crates/aizome-shell/src/desktop_glue.rs:225`, `desktop/aizome/crates/aizome-shell/src/deskbar_glue.rs:369`, `desktop/aizome/crates/aizome-shell/src/tearoff.rs:289`
+- **Reproduction:** Partly confirmed (integration): [test and output](reproductions.md#syc-06)
 
 <a id="syc-07"></a>
 
@@ -87,6 +91,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — password fields on the lock screen, greeter and polkit dialog (suspected bug)
 - **Suspected bug:** with an input method composing (fcitx5 or ibus active), the characters being composed in the lock-screen password field (`desktop/aizome/crates/aizome-shell/src/lock.rs:239`) are drawn in clear text beside the dots until they are committed; the same holds for `desktop/aizome/crates/aizome-shell/src/auth.rs:131` and `desktop/aizome/crates/aizome-greeter/src/view.rs:245` (confidence: medium)
 - **Related:** `desktop/aizome/sukumo/crates/sidestep-ui/src/window.rs:1001` (`set_text_input`), `:1014` (`reset_text_input`, never called by Field)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#syc-07)
 
 <a id="syc-08"></a>
 

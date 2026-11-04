@@ -80,6 +80,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the keying loses inhibitors (see bug).
 - **Suspected bug:** a client with two inhibitors on one surface (say video playback plus a call in one browser window) destroys one; the surface leaves the set, inhibition ends and the display idles or locks while the other inhibitor is still alive (confidence: low)
 - **Related:** idle timers `desktop/aizome/crates/aizome-comp-core/src/idle.rs:84` (comp-a)
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#cpb-07)
 
 <a id="cpb-08"></a>
 
@@ -92,6 +93,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the enforcement is missing, and the activity coupling is wrong.
 - **Suspected bug:** (1) a game or VM (or Xwayland's confine-to) confines the pointer and gets `confined`, but the pointer leaves the window freely (confidence: high). (2) In a pointer-locked app driven only by the mouse (an FPS, a VM viewer), `note_activity` never runs, so Aizome's idle timers and ext-idle-notify dim or lock the screen mid-use unless the app also inhibits idle (confidence: medium).
 - **Related:** `desktop/aizome/crates/aizome-comp-core/src/idle.rs:57` (comp-a), `desktop/aizome/crates/aizome-comp-core/src/recovery/mod.rs:772-782` (comp-a)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#cpb-08)
 
 <a id="cpb-09"></a>
 
@@ -197,6 +199,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** two registries must agree. A popup appears only if it is in `popup_order` and smithay maps it under a shown root (`popups.rs:50-61`). Unconstraining is skipped while the root doesn't show (`shell.rs:364`).
 - **Reify:** High — the registries diverge (see bug).
 - **Suspected bug:** input-method popup surfaces (zwp_input_popup_surface_v2, as fcitx5 uses for its candidate list) are tracked but never pushed to `popup_order`, so `placed_popups` skips them: they are never drawn (`render.rs:155`) or hit-tested (`popups.rs:74-80`) (confidence: medium)
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#cpb-18)
 
 <a id="cpb-19"></a>
 
@@ -219,6 +222,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** a handle created at bind already carries the current state, while `sent` may be older, so the next refresh can repeat `output_enter` on it. A wl_output bound after the announce never gets `output_enter`. Managers are pruned only at refresh (`foreign_toplevel.rs:217`).
 - **Reify:** High — three maps must stay in lockstep; suspected bug.
 - **Suspected bug:** `Snapshot.parent` is compared in `refresh` (`foreign_toplevel.rs:173`) but no `parent` event is ever sent after the announce (`foreign_toplevel.rs:179-200`), so a dialog whose parent is set or changed after mapping is never re-parented in taskbars (confidence: high)
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#cpb-20)
 
 <a id="cpb-21"></a>
 
@@ -230,6 +234,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** a released control keeps `Some(output)` and can still `SetGamma`. Disabling or unplugging the output forgets the hold without sending `failed`, so after re-enabling, a second client and Night Light both drive the ramps.
 - **Reify:** High — an unowned flag with a suspected bug.
 - **Suspected bug:** client A's `SetGamma` fails (for example while the VT is switched away), so A's control is failed and released; client B (or A again) takes the output; A then destroys its failed control, `release` clears B's hold and Night Light overwrites B's ramps (confidence: medium)
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#cpb-21)
 
 <a id="cpb-22"></a>
 
@@ -242,6 +247,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — two interleaved machines, many fields, scattered transitions.
 - **Suspected bug:** a frame copied with a fence is replaced (`CreateFrame`) before the fence signals; its copy already advanced the stream's damage, `ready` drops it, and the new frame then finds `Unchanged` and waits for the next change, so an idle screen stalls the resumed portal stream (confidence: low)
 - **Related:** `desktop/aizome/crates/aizome-shell/src/sharing.rs` (share indicator via IPC); `desktop/aizome/crates/aizome-comp/tests/image_copy_capture.rs`
+- **Reproduction:** Partly confirmed (end-to-end): [test and output](reproductions.md#cpb-22)
 
 <a id="cpb-23"></a>
 
@@ -264,6 +270,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `Test` checks only the scale range and names, not modes. Each `configure_output` fires `outputs_changed` in the middle of an apply. Mode lists never refresh for a head that keeps its name. `EnableHead` after `used` isn't rejected.
 - **Reify:** High — the serial, used flag and partial apply interact; suspected bug.
 - **Suspected bug:** kanshi applies a profile of two heads and the second fails (for example "has no mode WxH" from `backend/udev.rs`); the first head's change stays applied while the client is told `failed`, so the layout is half-changed against the protocol's rule to revert on failure (`output_management.rs:339-346`) (confidence: high)
+- **Reproduction:** Not reproduced (environment) (end-to-end): [test and output](reproductions.md#cpb-24)
 
 <a id="cpb-25"></a>
 
@@ -275,6 +282,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** a stream's key leaves out the output's scale, while its tracker scale is fixed at creation (`capture.rs:82`). Pending copies for a destroyed manager recreate a stream under the dead key, which is never removed (`:277`, `:282`). The cached dmabuf formats (`:240-248`) never follow a renderer change. Damage-only frames wait indefinitely on an idle output (by design).
 - **Reify:** High — two coupled machines; suspected bugs.
 - **Suspected bug:** (1) wf-recorder records a whole output and the user changes only its scale (same mode); the region is unchanged, so the old stream is reused with its old tracker scale and surfaces are drawn at the wrong size; the ext path resets on a scale change (`image_copy_capture.rs:515-521`), this one doesn't (confidence: medium). (2) A client that destroys its manager right after requesting a frame leaves one stream, with a full-output offscreen buffer, per manager for as long as the output exists (confidence: low).
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#cpb-25)
 
 <a id="cpb-26"></a>
 

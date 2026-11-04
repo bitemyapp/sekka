@@ -350,8 +350,10 @@ Do not merge unrelated Cargo workspaces or broaden package source filters as par
 Before changing code that keeps state across events, look it up in the
 [implicit state machine catalog](docs/implicit-state-machines.md). Its entries
 list the states, transitions and hazards found by an audit of every in-scope
-first-party file at `8e0acbe5`. Its suspected bugs are leads to reproduce, not
-confirmed defects. When a change reifies, removes or reshapes a machine,
+first-party file at `8e0acbe5`. Its suspected bugs on High machines were
+reproduced with tests ([reproductions](docs/implicit-state-machines/reproductions.md)),
+which a fix can adopt as its regression test; the rest are leads. When a
+change reifies, removes or reshapes a machine,
 update its entry and its follow-up status in the index; add new files to their
 slice's ledger as `pending` until audited.
 

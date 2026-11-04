@@ -26,6 +26,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `SelectRows`/`Activate` carry row indices resolved against `rows` at handling time, while `rows` is re-sorted every reading; a group's key is its first-started member's, so when that process exits the group gets a new key and the selection orphans; `expanded` is never pruned
 - **Reify:** High — identity-based selection mixed with index-based messages over a list that reorders every second; suspected bug.
 - **Suspected bug:** Right-click a row, wait a second, choose Inspect: the item carries the row index captured at right-click (`desktop/aizome/apps/myaku/src/ui/view.rs:205`), a reading re-sorts `rows` (by % CPU) before the click, and `Msg::Activate(i)` (`desktop/aizome/apps/myaku/src/app.rs:538-540`) then selects and inspects whatever row now sits at `i`, overriding the correct selection the right-click made (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#smt-02)
 
 <a id="smt-03"></a>
 
@@ -37,6 +38,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `can_quit` (kernel, other user, Myaku itself; `desktop/aizome/apps/myaku/src/app.rs:402-419`) is checked only at ask time; targets are re-resolved by key at confirm time, so the processes signalled may differ from the count the alert named; if the target ended meanwhile `targets()` is empty and `signal()` reports success "Asked to quit: ." with no name; nothing clears `notice`, and the status line prefers it to the summary (`desktop/aizome/apps/myaku/src/ui/view.rs:457-459`)
 - **Reify:** High — a confirmation lifecycle split between alert payloads and a sticky field; suspected bug.
 - **Suspected bug:** After any quit, pause or refused attempt, the status line keeps that message (in red for "It belongs to another user…" and the like) for the rest of the session, hiding the process/thread/uptime summary and the GPU lens's client count, because `notice` is never reset to None (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#smt-03)
 
 <a id="smt-04"></a>
 
@@ -110,6 +112,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** Medium — several baselines whose validity rules interact (sleep, meter source).
 - **Suspected bug:** On a laptop with a discrete card, on battery, a momentary card-meter reading above the battery's reported draw calls `floor.update(0)`, after which no idle floor is ever split by capacity share and every later estimate charges processes the whole draw by busy share (confidence: low)
 - **Related:** `desktop/aizome/crates/aizome-sys/src/sysinfo/power.rs` (`Floor`, `meter_counters` answered by aizome-power-meter)
+- **Reproduction:** not attempted; only suspected bugs on High machines were reproduced
 
 <a id="smt-11"></a>
 
@@ -143,6 +146,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `save` returns false and leaves the window in `closing` on the changed-on-disk alert (`desktop/aizome/apps/sumi/src/app.rs:484-496`), the unencodable alert (`:498-512`) and a write failure (`:514-517`); none of their Cancel/OK paths remove it
 - **Reify:** High — an intent flag outlives the alert chain that justified it; suspected bug.
 - **Suspected bug:** Close a dirty document, choose Save, then Cancel the "changed by another program" or "can't be saved in Latin-1" alert (or hit a write error): the window stays open but stays in `closing`, so the next ordinary ⌘S, perhaps much later, saves and then closes the window unasked (`desktop/aizome/apps/sumi/src/app.rs:542-544`) (confidence: high)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#smt-13)
 
 <a id="smt-14"></a>
 
@@ -154,6 +158,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** every field message picks the first sheet of its kind from a `HashMap` (`sheet_of`, `desktop/aizome/apps/sumi/src/app.rs:968-970`), so with two sheets of one kind open over two documents the wrong one is edited, applied or closed; the Link range is fixed at open while menu commands aimed at the sheet go to its parent (`desktop/aizome/apps/sumi/src/app.rs:233`) and can change the text under it
 - **Reify:** High — the enum carries data but messages lose which sheet they belong to; suspected bug.
 - **Suspected bug:** Open Link… (⌘K) in document A, switch to document B and open Link… there: typing in B's sheet updates whichever Link sheet the map yields first, so B's field may not take the text, and Insert Link can insert A's link into A and close A's sheet while B's stays open (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#smt-14)
 
 <a id="smt-15"></a>
 
@@ -185,6 +190,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `format_dirty` isn't kept in the session, and `restore` for a document without unsaved text reloads it with the detected encoding (`desktop/aizome/apps/sumi/src/app.rs:454`), ignoring the session's `encoding` and `line_ending`; the background reload path doesn't remove the autosave text (`desktop/aizome/apps/sumi/src/app.rs:1134`) as the small-file path does (`:1122`)
 - **Reify:** High — nine fields mutated from a dozen sites with representable invalid combinations; suspected bug.
 - **Suspected bug:** Change a document's Encoding or Line Endings (the title says "— Edited"), then Quit, which promises everything comes back: on relaunch the document is reloaded in its detected encoding and clean, so the unsaved format change is gone; a Reopen with Encoding choice is lost the same way (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#smt-17)
 
 <a id="smt-18"></a>
 
@@ -196,6 +202,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** only `Msg::Edit` is gated: Format commands, Replace All, Shift Right and Link edit the old text during a load and are then overwritten by `install`; the read can't be cancelled (closing the window just drops its answer); the failure path neither resets the title nor checks whether "Untitled" is taken
 - **Reify:** High — a request id plus side fields with an inconsistent failure path; suspected bug.
 - **Suspected bug:** Open a >2 MiB file that can be stat'ed but not read (a root-only log): after the alert, a window titled with the file's name remains holding an empty "Untitled" document; and a Revert or Reopen with Encoding of a >2 MiB document whose file became unreadable detaches the document from its file (path cleared), whereas the same failure for a small file keeps the path (`desktop/aizome/apps/sumi/src/app.rs:1125`) (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#smt-18)
 
 <a id="smt-19"></a>
 
@@ -207,6 +214,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** marks go to the editor whether or not the bar is shown (`desktop/aizome/apps/sumi/src/view.rs:161`) and aren't refreshed after edits while it's hidden; above 1 MiB `fresh_matches` only spawns a search, so `find_step` and `replace_one` go on with stale ranges, and `FindQuery` selects the previous query's current match (`desktop/aizome/apps/sumi/src/app.rs:934`); background searches are never cancelled (a full scan per keystroke)
 - **Reify:** High — eight fields, nine mutation sites, a sync/async split; suspected bug.
 - **Suspected bug:** Find a word, press Done (or Escape), then type above a match: the match highlights stay painted at their old character offsets and drift onto other text; and in a >1 MiB document, ⌘G right after an edit selects a range from the pre-edit match list (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#smt-19)
 
 <a id="smt-20"></a>
 
@@ -262,6 +270,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — consent, lookup and position over six fields in two files with representable invalid combinations; suspected bug.
 - **Suspected bug:** Allow location, let it resolve, then choose Not Now or turn Show Current Location off: the last GeoClue position stays in `state.json` and is written again whenever a place is selected, although the tests take care that answers arriving after a decline are not saved (`desktop/aizome/apps/tenki/tests/tenki.rs:596`) (confidence: medium)
 - **Related:** the GeoClue client and `Cancellation` in `desktop/aizome/crates/aizome-sys/src/location.rs`; the GeoClue 2 D-Bus service
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#smt-24)
 
 <a id="smt-25"></a>
 

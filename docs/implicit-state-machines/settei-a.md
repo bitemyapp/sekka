@@ -58,6 +58,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug; three handlers decide the preview's phase.
 - **Suspected bug:** choose a Region format and cancel the polkit prompt (or have localed refuse): `preview` stays `None` and `Done(Err)` doesn't call `refresh_preview`, so the Formats section shows an indeterminate spinner until the page is shown again or localed signals some other change (confidence: high).
 - **Related:** systemd-localed through `aizome_sys::datetime::Locale` (`desktop/aizome/crates/aizome-sys/src/datetime`)
+- **Reproduction:** Not confirmed (integration): [test and output](reproductions.md#sta-05)
 
 <a id="sta-06"></a>
 
@@ -111,6 +112,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — nine fields, a counter shared with a thread, transitions in a dozen handlers.
 - **Suspected bug:** while the setup sheet waits, open Settei at another pane (the palette, `aizome-settei --pane …`): `hidden` stops the catch, the sheet stays up over the new pane without "Waiting for the key…", and pressing the key beside the space bar does nothing; only Not Now or Same as Other Keyboards get out (confidence: medium).
 - **Related:** `desktop/aizome/crates/aizome-ipc/src/setup.rs:66` (`catch_key`, 500 ms read timeout at `:77`); `desktop/aizome/crates/aizome-comp-core/src/input.rs:476-485` (the compositor swallows the caught key); `desktop/aizome/crates/aizome-shell/src/launch.rs:62` (the shell's setup launch)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sta-10)
 
 <a id="sta-11"></a>
 
@@ -133,6 +135,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — invalid combinations reachable from an external launch, with a swallowed-key consequence.
 - **Suspected bug:** with Add a Layout's picker open, plug in a keyboard and accept the shell's setup prompt (`aizome-settei --pane keyboard.setup --keyboard …`): `SetupOpen` starts a compositor key catch but `sheet()` still shows the picker, so the next key typed into the layout search is swallowed and taken as the setup key; after the picker closes, "Add a Command…" shows the leftover setup sheet instead of the command sheet (confidence: medium).
 - **Related:** `desktop/aizome/apps/settei/src/app.rs:581` (window sheet slot); `desktop/aizome/crates/aizome-shell/src/launch.rs:62` (setup launch)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sta-12)
 
 <a id="sta-13"></a>
 
@@ -166,6 +169,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug with a wrong-configuration consequence; state over four fields.
 - **Suspected bug:** change DNS (or metering) on a connection A that has a static address, go Back and open connection B before A's change returns (polkit asking, say): A's `Changed` re-reads A and `loaded` swaps the edit buffer to A's address, router and DNS; B's page then shows A's values in its fields, and Apply on B's IPv4 writes A's static address to B (confidence: medium).
 - **Related:** NetworkManager settings through `aizome_sys::network` (`desktop/aizome/crates/aizome-sys/src/network`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sta-15)
 
 <a id="sta-16"></a>
 
@@ -209,6 +213,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — seven interdependent fields and a suspected bug.
 - **Suspected bug:** choose a plugged-in printer that needs a driver, then another before CUPS's driver list comes back: the first device's `Drivers` reply fills `drivers` for the second (`printers.rs:507-513` doesn't check `chosen`), `ready` turns true, and Add installs the second printer with the first one's PPD (`DriverChoice::Model`, `:530-535`) (confidence: medium).
 - **Related:** CUPS tools through `aizome_sys::printers` (`desktop/aizome/crates/aizome-sys/src/printers/mod.rs`)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sta-19)
 
 <a id="sta-20"></a>
 
@@ -243,6 +248,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug; the account can end up without the password chosen.
 - **Suspected bug:** add a user with a password and switch panes or quit at once: `Created(Ok)` arrives when CreateUser answers, before the snapshot lists the account, `system_changed` finds nothing, later wakes go to the other pane, and the new account never gets its password (confidence: low).
 - **Related:** AccountsService through `aizome_sys::users` (`desktop/aizome/crates/aizome-sys/src/users.rs:398`, `create_user` resolves on the D-Bus reply; the snapshot learns of the account separately)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sta-22)
 
 ## Already explicit
 

@@ -27,6 +27,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — one lifecycle duplicated four times with a reachable race; one shared, lock-guarded implementation would fix all
 - **Suspected bug:** two launches started together (two pictures opened from Hako at once) both fail to connect; the second's `remove_file` unlinks the first's freshly bound socket (`desktop/aizome/apps/shashin/src/instance.rs:40-42`) and binds its own, so two instances run and the first can never be raised or handed files again (confidence: medium)
 - **Related:** Sumi's shared copy used by Fusen, `desktop/aizome/apps/sumi/src/instance.rs:34` (aizome-sumi)
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#sap-02)
 
 <a id="sap-03"></a>
 
@@ -61,6 +62,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — three files, a timer and threads must agree on one list
 - **Suspected bug:** restoring N stickies at login: the first `open_sticky` → `save_stickies` replaces `saved.stickies` with that one sticky (`desktop/aizome/apps/fusen/src/app.rs:598`), so stickies 2..N are re-added with `place: None` (`desktop/aizome/apps/fusen/src/app.rs:595`) and written out; only a later `Placed` (4 s on, Aizome's IPC only) puts their places back. Quitting or logging out within 4 s, or a session without the IPC, loses their positions for good (confidence: high)
 - **Related:** compositor IPC `Windows`, `Float`, `MoveToDesk`, `Resize` (`desktop/aizome/apps/fusen/src/wm.rs:35`, `desktop/aizome/apps/fusen/src/wm.rs:58-65`) answered by aizome-comp; SAP-06 for the wipe on a second launch
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sap-05)
 
 <a id="sap-06"></a>
 
@@ -73,6 +75,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — a process lifecycle whose never-launched state still runs persistence
 - **Suspected bug:** a second launch while Fusen runs (the shell's Services "New Note", `aizome-fusen --new …`, a launcher click) builds a full `Fusen` (`desktop/aizome/apps/fusen/src/main.rs:42`), gets `Claim::Handed` and returns (`desktop/aizome/apps/fusen/src/main.rs:44`); Drop → `save_all` → `save_stickies` with no stickies writes `{"stickies": []}` (`desktop/aizome/apps/fusen/src/app.rs:598-603`) and deletes the login item (`desktop/aizome/apps/fusen/src/app.rs:607-608`). The running Fusen rewrites both only at its next `save_stickies`; if it's killed or the session ends first, no stickies come back at the next login (confidence: high)
 - **Related:** Services launch `desktop/aizome/crates/aizome-shell/src/services.rs:99-111` (aizome-shell); claim in `desktop/aizome/apps/sumi/src/instance.rs:34` (aizome-sumi)
+- **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#sap-06)
 
 <a id="sap-07"></a>
 
@@ -85,6 +88,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the protocol lives in another crate and Fusen implements half of it
 - **Suspected bug:** once a pass sets `incomplete` (a jump more than ~3000 lines past what's worked out at the guessed rate, fewer on a slow machine, or a 3 ms budget overrun), `state_at` never works states out again (`desktop/aizome/apps/sumi/src/syntax/cache.rs:226`), so every line after the last edit is styled from a default guess (in a long note, lines under an edit inside a fenced code block show as prose) until a reload or formatting command resets it (confidence: medium)
 - **Related:** `desktop/aizome/apps/sumi/src/syntax/cache.rs:218-251` (aizome-sumi)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sap-07)
 
 <a id="sap-08"></a>
 
@@ -116,6 +120,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `Listed` carries no generation; `install` and `Header` recentre (`desktop/aizome/apps/shashin/src/app.rs:631-634`, `desktop/aizome/apps/shashin/src/app.rs:1228`), discarding a zoom about the pointer made while loading; a job that panics never answers (the kit's pool has no `catch_unwind`, `desktop/aizome/crates/aizome-kit/src/cx.rs:74-81`), leaving the picture Loading
 - **Reify:** High — the phase spans six fields and ten handlers
 - **Suspected bug:** open folder A, then folder B (a drop, the Open panel or a second launch) before A is listed: both `Listed` results pass while `current_path()` is None (`desktop/aizome/apps/shashin/src/app.rs:1198`); whichever lands first shows its first picture and the other is dropped by the same-folder check (`desktop/aizome/apps/shashin/src/app.rs:1198-1201`), so asking for B can end showing A (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sap-10)
 
 <a id="sap-11"></a>
 
@@ -127,6 +132,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `save_turned` works from the file's current orientation or pixels (`desktop/aizome/apps/shashin/src/save.rs:30-31`, `desktop/aizome/apps/shashin/src/save.rs:53`), so it isn't idempotent; a Rotate or Revert during a save is overridden when `Saved` arrives (`desktop/aizome/apps/shashin/src/app.rs:1357`, `desktop/aizome/apps/shashin/src/app.rs:1361`); quitting on the first `SavedAll` while another save writes can leave `.name.shashin-PID` temp files (`desktop/aizome/apps/shashin/src/save.rs:97`)
 - **Reify:** High — no in-flight state, with consequences for the user's files
 - **Suspected bug:** ❖S twice during a slow rewrite (a large PNG or TIFF), or ❖Q → Save and then ❖Q → Save again while the first `SaveAllAndQuit` runs (turns stay set until `SavedAll`, so the alert returns), runs `save_turned` twice with the same turns: a picture turned 90° is saved at 180° (confidence: high)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sap-11)
 
 <a id="sap-12"></a>
 
@@ -148,6 +154,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** `show` clears `busy` while an old job runs, so jobs overlap and the old `TileMade` clears the new job's flag; `idle()` (`desktop/aizome/apps/shashin/src/app.rs:490-498`) can be true with a job outstanding; a panicking job leaves `busy` set until the next picture
 - **Reify:** High — three fields across the paint/update boundary, with a stuck-render bug
 - **Suspected bug:** zoom with the toolbar's Zoom In or ❖= (`desktop/aizome/apps/shashin/src/ui.rs:277`) while a large photo decodes: the stage reports `Seen { exact: false }`, `run_jobs` takes and drops it because the picture isn't decoded (`desktop/aizome/apps/shashin/src/app.rs:723-727`); after `install` the zoom, centre and view are unchanged, so the report key is the same and the stage never reports again (`desktop/aizome/apps/shashin/src/ui.rs:378`). The picture stays drawn from the fit drawing, nearest-pixel scaled, until the view changes (`install` re-asks only for turned pictures, `desktop/aizome/apps/shashin/src/app.rs:640-642`) (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sap-13)
 
 <a id="sap-14"></a>
 
@@ -200,6 +207,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** both stacks outlive opening another folder or set of files; a failed restore pops the undo step for good; a failed re-trash in Redo loses that redo entry; the item may have been emptied or restored elsewhere meanwhile
 - **Reify:** High — a persisted two-phase move plus history that outlives its context
 - **Suspected bug:** move a picture of folder A to the Trash, open folder B, press ❖Z: the file returns to A, but its path is inserted into B's list (`desktop/aizome/apps/shashin/src/app.rs:905-907`) and shown there with B's pictures as its neighbours (confidence: high)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#sap-18)
 
 <a id="sap-19"></a>
 
@@ -271,6 +279,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** the `if self.fresh { … }` branch is repeated in about fifteen places; `remember()` runs before each key's validity check (`desktop/aizome/apps/soroban/src/entry.rs:738`) and always clears redo (`desktop/aizome/apps/soroban/src/entry.rs:612`)
 - **Reify:** High — seven fields and twenty-odd transitions
 - **Suspected bug:** after ❖Z, typing a key that does nothing — `)` with no parenthesis open (`desktop/aizome/apps/soroban/src/entry.rs:833-835`), a second `.` (`desktop/aizome/apps/soroban/src/entry.rs:764-766`), or a digit outside the radix (`desktop/aizome/apps/soroban/src/entry.rs:742-747`) — still runs `remember()`, which pushes a no-op undo step and empties the redo stack, so ❖⇧Z stops working though nothing changed (confidence: high)
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#sap-25)
 
 <a id="sap-26"></a>
 

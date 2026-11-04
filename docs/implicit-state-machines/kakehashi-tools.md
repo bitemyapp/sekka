@@ -26,6 +26,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** no generation, messages are matched by build id only (`apps/kakehashi/app/src/view.rs:270`, `apps/kakehashi/app/src/view.rs:280`); no Stopping state is shown: after Stop the session stays until workers drain (up to the 30 s range timeout, `apps/kakehashi/core/src/nightly/parallel.rs:299`); Download buttons are disabled only while `download.is_some()` (`apps/kakehashi/app/src/view.rs:711`, `apps/kakehashi/app/src/view.rs:750`)
 - **Reify:** High — suspected bug; an orphaned worker can share a `.part` with a new session
 - **Suspected bug:** dropping a file onto the window during a download sets `this.download = None` (`apps/kakehashi/app/src/view.rs:638`) without storing `cancel`, so the worker keeps downloading into Downloads in the background; the Download buttons re-enable, and restarting the same build runs a second worker on the same `.part` (no lock, `apps/kakehashi/core/src/nightly.rs:138`), the orphan's `Msg::Fetched` with the same id ends the new session (`apps/kakehashi/app/src/view.rs:280`), and an orphan in fallback mode truncates the shared file (`apps/kakehashi/core/src/nightly/parallel.rs:210`) (confidence: high for the orphaned download; medium for the double-writer outcome)
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#ktl-02)
 
 <a id="ktl-03"></a>
 
@@ -38,6 +39,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — four fields, three files and an exit code across three threads, feeding the data-loss-relevant `touched` message
 - **Suspected bug:** when the helper dies by a signal mid-write on Linux (OOM killer, `kill`), `elevate::run` returns `Ran::Failed("the helper was killed")` (`apps/kakehashi/app/src/elevate.rs:51`) and `JobEnded` maps every `Ran::Failed` to `Failed { touched: false }` (`apps/kakehashi/app/src/view.rs:319`) whatever the last `Running(Writing|Verifying)` stage was, so the window says "Not written" without the "partly written" warning (confidence: high)
 - **Related:** helper side `apps/kakehashi/helper/src/main.rs:111` and `apps/kakehashi/core/src/write.rs:171` (KTL-12)
+- **Reproduction:** Confirmed (unit): [test and output](reproductions.md#ktl-03)
 
 <a id="ktl-04"></a>
 
@@ -49,6 +51,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** identity is the name only; a hung `lsblk`/`diskutil` keeps `listing` true forever, no timeout (`apps/kakehashi/app/src/view.rs:192`); if the chosen drive vanishes while the confirm dialog is open, OK silently does nothing (`apps/kakehashi/app/src/view.rs:511`)
 - **Reify:** High — suspected bug; the selection feeds an erase and is keyed by a reusable name
 - **Suspected bug:** `confirm` describes the drive captured when the dialog opens (`apps/kakehashi/app/src/view.rs:479-490`), but OK calls `start_write` (`apps/kakehashi/app/src/view.rs:502`), which re-reads `chosen_drive()` (`apps/kakehashi/app/src/view.rs:511`) from a list that keeps refreshing under the modal; if the stick is swapped for another that gets the same name (`sdb`, `disk4`) between two refreshes, the plan and the helper's `still_there` both use the new drive, and a drive other than the one named in "Erase …?" is erased (confidence: medium)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ktl-04)
 
 <a id="ktl-05"></a>
 
@@ -133,6 +136,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — destructive phases with a hand-maintained `touched` flag that the GUI's warning depends on
 - **Suspected bug:** on Windows `platform::open` deletes the drive layout (`apps/kakehashi/core/src/platform/windows.rs:309`) before `*touched = true` (`apps/kakehashi/core/src/write.rs:199`); a failed size check, second `still_there`, fit check, or a Stop seen at `apps/kakehashi/core/src/write.rs:196` then reports `Failed { touched: false }`, with no "partly written" warning, although the partition table is already gone (confidence: medium)
 - **Related:** GUI side `apps/kakehashi/app/src/view.rs:599` (KTL-03)
+- **Reproduction:** Not reproduced (environment) (unit): [test and output](reproductions.md#ktl-12)
 
 <a id="ktl-13"></a>
 
@@ -145,6 +149,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug; persisted markers plus a console handshake
 - **Suspected bug:** the host waits for the guest's whole `build-iso` through `run()` (`rust/src/builder.rs:306`), capped at 7200 s (`rust/src/support.rs:67`), while the guest runs `nix flake check` and `nix build .#iso` under separate 7200 s caps (`rust/src/builder.rs:396`, `rust/src/builder.rs:429`) with `--max-jobs 1`; a cold build whose two steps together pass two hours is killed from the host ("Child process timed out") although each guest step is within its own limit (confidence: medium)
 - **Related:** guest side `rust/src/builder.rs:327` (KTL-14)
+- **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ktl-13)
 
 <a id="ktl-14"></a>
 
@@ -217,6 +222,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug; phase evidence spread across files and the environment
 - **Suspected bug:** `boot_installed` rebuilds the fixture's `verify` command from the current CALAMARES_TEST_* environment (`fixture_options()` at `rust/src/vm.rs:687`), but `result.json` records only `encrypted` (`rust/src/vm.rs:848`); a run installed with `CALAMARES_TEST_GITHUB` set and resumed in a fresh shell silently skips the fixture's SSH-key, sshd and Git assertions (`installer/genkan/tests/vm-fixture/src/main.rs:831`), and the reverse fails a good install (confidence: medium)
 - **Related:** fixture `installer/genkan/tests/vm-fixture/src/main.rs:662` (`verify`)
+- **Reproduction:** Partly confirmed (integration): [test and output](reproductions.md#ktl-20)
 
 <a id="ktl-21"></a>
 
@@ -261,6 +267,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug; destructive phases
 - **Suspected bug:** on macOS the raw device opened at `scripts/flash_usb.rs:290-298` is flushed with `device.sync_all()` (`scripts/flash_usb.rs:637`), i.e. F_FULLFSYNC, which Kakehashi documents and tests as failing with ENOTTY on `/dev/rdiskN` (`apps/kakehashi/core/src/platform/macos.rs:177-194`, test `apps/kakehashi/core/src/platform/macos.rs:229`); every macOS flash therefore fails after writing the whole image, before verification and ejection (confidence: medium)
 - **Related:** same design as KTL-12 (`apps/kakehashi/core/src/write.rs:171`)
+- **Reproduction:** Not reproduced (environment) (unit): [test and output](reproductions.md#ktl-24)
 
 <a id="ktl-25"></a>
 

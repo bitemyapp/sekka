@@ -1,0 +1,10 @@
+[package]
+name = "repro-fake-bluez"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+zbus = { version = "=5.19.0", default-features = false, features = ["async-io", "blocking-api"] }
+
+[workspace]
