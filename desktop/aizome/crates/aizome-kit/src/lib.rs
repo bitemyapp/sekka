@@ -46,6 +46,7 @@ pub mod hash;
 pub mod icons;
 pub mod inspect;
 pub mod layout;
+pub mod mark;
 pub mod menu;
 pub mod platform;
 pub mod program;
@@ -66,6 +67,7 @@ pub use editor::{EditorAction, EditorContent, Granularity, Highlighter, LineStyl
 pub use element::{Element, Layoutable, children};
 pub use icons::{Icon, icon};
 pub use layout::{Align, Constraints, Length, Padding, Point, Rect, Size, Vec2};
+pub use mark::ItemMark;
 pub use menu::{Menu, MenuBar, MenuItem, MenuRole, Shortcut, ShortcutKey};
 pub use program::{ActivationRequest, Anchors, DragId, KeyboardInteractivity, Layer, LayerOptions, Margins, Output};
 pub use program::{AppInfo, Program, WindowKey, WindowKind, WindowSpec, WindowState};

@@ -47,6 +47,8 @@ pub struct Detail {
     pub keys: Vec<String>,
     pub coach: Option<String>,
     pub actions: Vec<(String, String)>,
+    /// What an app is made with: its mark and the toolkit's name.
+    pub toolkit: Option<(aizome_kit::ItemMark, String)>,
 }
 
 /// Everything the palette shows.
@@ -225,7 +227,7 @@ fn shortcut_label(s: &proto::Shortcut) -> String {
 fn result(r: &Row, index: usize, on: bool) -> Element<PaletteMsg> {
     let item = r.item.clone();
     let ranges = r.ranges.clone();
-    let key = (item.title.clone(), item.trail.clone(), on, ranges.clone());
+    let key = (item.title.clone(), item.trail.clone(), on, ranges.clone(), item.mark.clone());
     let label = item.title.clone();
     drawn(0.0, ROW, key, move |cx| {
         let t = cx.theme();
@@ -273,6 +275,14 @@ fn result(r: &Row, index: usize, on: bool) -> Element<PaletteMsg> {
         cx.canvas.clip_rect(Rect::new(x, 0.0, x + tw, ROW));
         cx.canvas.draw_text(&title_l, Point::new(x, y));
         cx.canvas.restore();
+        // The app's toolkit after its name.
+        let tw = match &item.mark {
+            Some((m, _)) => {
+                let size = 14.0 * t.metrics.factor;
+                tw + aizome_kit::mark::MARK_GAP + m.paint(cx, x + tw + aizome_kit::mark::MARK_GAP, ROW / 2.0, size, on)
+            }
+            None => tw,
+        };
         if !item.trail.is_empty() {
             let ts = if item.scope == Scope::File {
                 look::mono(11.5, typeface::WEIGHT_REGULAR, dim)
@@ -379,6 +389,13 @@ fn detail(d: &Option<Detail>) -> Element<PaletteMsg> {
         if !d.path.is_empty() {
             let ps = look::ui(13.0, typeface::WEIGHT_REGULAR, t.text3());
             cx.draw_text_in(&d.path, &ps, Rect::new(x0, y, x1, y + 18.0), Align::Start);
+            y += 18.0 + 14.0;
+        }
+        // What the app is made with: its mark, then the toolkit's name.
+        if let Some((m, name)) = &d.toolkit {
+            let w = m.paint(cx, x0, y + 9.0, 13.0, false);
+            let ns = look::ui(13.0, typeface::WEIGHT_REGULAR, t.text2());
+            cx.draw_text_in(name, &ns, Rect::new(x0 + w + 8.0, y, x1, y + 18.0), Align::Start);
             y += 18.0 + 14.0;
         }
         if !d.keys.is_empty() {

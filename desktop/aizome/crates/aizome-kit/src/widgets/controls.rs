@@ -1735,6 +1735,8 @@ impl DropdownWidget {
                     role: None,
                     id: None,
                     icon: None,
+                    detail: None,
+                    mark: None,
                 })
             })
             .collect();

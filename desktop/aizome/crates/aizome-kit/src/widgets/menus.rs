@@ -31,7 +31,8 @@ use crate::engine::KitMsg;
 use crate::hash::PaintHasher;
 use crate::icons::Icon;
 use crate::layout::{Align, Constraints, Length, Point, Rect, Size, Vec2};
-use crate::menu::{ItemSpec, Menu, MenuSpec};
+use crate::mark::MARK_GAP;
+use crate::menu::{ActionSpec, ItemSpec, Menu, MenuSpec};
 use crate::platform::{Placement, WinId};
 use crate::program::AppInfo;
 use crate::text::TextSpec;
@@ -315,6 +316,14 @@ pub(crate) fn fuzzy(query: &str, text: &str) -> Option<u32> {
     (qi == q.len()).then(|| score + t.len() as u32 / 16)
 }
 
+/// An action's label with its detail after it, as it shows without a mark.
+fn shown(a: &ActionSpec) -> std::borrow::Cow<'_, str> {
+    match &a.detail {
+        Some(d) => format!("{}  —  {d}", a.label).into(),
+        None => a.label.as_str().into(),
+    }
+}
+
 fn label_of(item: &ItemSpec) -> &str {
     match item {
         ItemSpec::Action(a) => &a.label,
@@ -397,7 +406,7 @@ impl MenuView {
                 path.push(i);
                 match it {
                     ItemSpec::Action(a) => {
-                        if let Some(s) = fuzzy(query, &a.label) {
+                        if let Some(s) = fuzzy(query, &shown(a)) {
                             found.push((s, path.clone(), a.enabled, trail.to_owned()));
                         }
                     }
@@ -577,7 +586,14 @@ impl Widget for MenuView {
             let item = self.item(&path).cloned();
             let (h, w) = match (&item, kind) {
                 (Some(ItemSpec::Action(a)), _) => {
-                    let lw = cx.measure(&a.label, &label).width;
+                    let lw = match &a.mark {
+                        Some(mark) => {
+                            let mw = mark.width(theme, cx.text_cache(), label.font.size);
+                            let dw = a.detail.as_ref().map_or(0.0, |d| cx.measure(&format!("—  {d}"), &label).width);
+                            cx.measure(&a.label, &label).width + MARK_GAP + mw + MARK_GAP + dw
+                        }
+                        None => cx.measure(&shown(a), &label).width,
+                    };
                     let tw = if trail.is_empty() { 0.0 } else { cx.measure(&trail, &shortcut).width + 12.0 };
                     let sw = a.shortcut.map_or(0.0, |s| cx.measure(&s.label(), &shortcut).width + 24.0);
                     (m.menu_row, lw + tw + sw)
@@ -755,12 +771,31 @@ impl Widget for MenuView {
                         }
                     }
                     let spec = TextSpec { color: fg, ..label_spec.clone() };
-                    let w = cx.draw_text_in(
-                        item.map(label_of).unwrap_or(""),
-                        &spec,
-                        Rect::new(x, r.y0, right.max(x), r.y1),
-                        Align::Start,
-                    );
+                    let w = match item {
+                        // The label, its mark, then its detail.
+                        Some(ItemSpec::Action(a)) if a.mark.is_some() => {
+                            let mark = a.mark.as_ref().expect("a mark");
+                            let bounds = Rect::new(x, r.y0, right.max(x), r.y1);
+                            let mut w = cx.draw_text_in(&a.label, &spec, bounds, Align::Start);
+                            w += MARK_GAP;
+                            w += mark.paint(cx, x + w, r.center().y, label_spec.font.size, hot);
+                            if let Some(d) = &a.detail {
+                                w += MARK_GAP;
+                                let rest = Rect::new(x + w, r.y0, right.max(x + w), r.y1);
+                                w += cx.draw_text_in(&format!("—  {d}"), &spec, rest, Align::Start);
+                            }
+                            w
+                        }
+                        Some(ItemSpec::Action(a)) => {
+                            cx.draw_text_in(&shown(a), &spec, Rect::new(x, r.y0, right.max(x), r.y1), Align::Start)
+                        }
+                        _ => cx.draw_text_in(
+                            item.map(label_of).unwrap_or(""),
+                            &spec,
+                            Rect::new(x, r.y0, right.max(x), r.y1),
+                            Align::Start,
+                        ),
+                    };
                     if !row.trail.is_empty() {
                         let c = if hot { t.on_selection() } else { t.text3() };
                         let spec = TextSpec { color: c, ..sc_spec.clone() };
@@ -785,7 +820,7 @@ impl Widget for MenuView {
         for i in &self.spec.items {
             match i {
                 ItemSpec::Action(a) => {
-                    h.str(&a.label).add(&(a.enabled, a.checked, a.shortcut, a.icon));
+                    h.str(&a.label).add(&(a.enabled, a.checked, a.shortcut, a.icon, &a.detail, &a.mark));
                 }
                 ItemSpec::Submenu(m) => {
                     h.str(&m.title).add(&(m.items.len(), m.icon));

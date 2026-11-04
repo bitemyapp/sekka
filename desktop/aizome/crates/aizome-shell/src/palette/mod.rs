@@ -411,6 +411,7 @@ impl Shell {
                         .keywords(kw)
                         .key(key.clone());
                 item.boost = self.frecency.boost(&key);
+                item.mark = self.app_toolkit(a).and_then(|t| Some((t.mark(self.marks)?, t.name())));
                 out.push(item);
             }
         }
@@ -547,8 +548,13 @@ impl Shell {
             Scope::Action => "ACTION",
             Scope::Answer => "ANSWER",
         };
-        let mut d =
-            Detail { caption: caption.into(), title: i.title.clone(), path: i.trail.clone(), ..Detail::default() };
+        let mut d = Detail {
+            caption: caption.into(),
+            title: i.title.clone(),
+            path: i.trail.clone(),
+            toolkit: i.mark.as_ref().map(|(m, name)| (m.clone(), (*name).to_owned())),
+            ..Detail::default()
+        };
         match i.scope {
             Scope::Command => {
                 d.path = format!("{} › {}", p.app_name.clone().unwrap_or_else(|| "Aizome".into()), i.trail);

@@ -4,6 +4,7 @@
 pub mod catalog;
 pub mod registry;
 pub mod server;
+pub mod toolkit;
 
 /// Exact application IDs, allowing a desktop filename and case differences.
 pub(crate) fn same_app_id(a: &str, b: &str) -> bool {
