@@ -157,7 +157,8 @@ class VM:
             elif title == "Deskbar":
                 ox, oy, note = SCREEN[0] - w, 24, ""
             elif title == "Palette" and d.get("has_keyboard"):
-                ox, oy, note = (SCREEN[0] - w) / 2, (SCREEN[1] - h) / 2, " (position estimated)"
+                # Centred in the area below the menu bar (24 points).
+                ox, oy, note = (SCREEN[0] - w) / 2, 24 + (SCREEN[1] - 24 - h) / 2, ""
             else:
                 continue
             lines.append(f'shell "{title}"{note}')
