@@ -24,6 +24,24 @@ let
     ( exec ${bash} ${shell} ) &
     wait
   '';
+  # Terminals started every 5 ms from just before ananicy starts until it has
+  # classified the first, so that some start during each step of its startup.
+  # Each blocks reading a pipe that nothing writes to.
+  startupTerminals = pkgs.writeText "startup-terminals" ''
+    PATH=${pkgs.coreutils}/bin:/run/current-system/sw/bin
+    exec 3< <(sleep infinity)
+    systemctl start --no-block ananicy-cpp
+    first=
+    for _ in $(seq 500); do
+      ( exec -a foot ${bash} -c 'read -u 3' ) &
+      echo $! >> /tmp/startup-terminals
+      first=''${first:-$!}
+      [ "$(cut -d ' ' -f 19 /proc/$first/stat)" = -4 ] && break
+      sleep 0.005
+    done
+    touch /tmp/startup-terminals.done
+    wait
+  '';
   nvme = pkgs.runCommand "nvme.img" { } "${pkgs.coreutils}/bin/truncate -s 64M $out";
   probe = pkgs.runCommand "scheduling-probe" { nativeBuildInputs = [ pkgs.stdenv.cc ]; } ''
     mkdir -p $out/bin
@@ -128,6 +146,20 @@ pkgs.testers.runNixOSTest {
     wait_nice(build, 3)
     assert "SCHED_IDLE" in machine.succeed(f"chrt -p {build}")
     assert machine.succeed(f"ionice -p {build}").strip() == "idle"
+
+    with subtest("a terminal started while ananicy starts is classified"):
+        # ananicy scans /proc once at startup. A process started after the
+        # scan but before ananicy receives exec events used to keep its
+        # inherited priority, as the terminal above once did on a loaded CI host.
+        machine.succeed("systemctl stop ananicy-cpp")
+        machine.succeed("systemd-run --unit=startup-terminals ${bash} ${startupTerminals}")
+        machine.wait_for_file("/tmp/startup-terminals.done", timeout=WAIT)
+        machine.wait_until_succeeds(
+            "for pid in $(cat /tmp/startup-terminals); do "
+            + "[ \"$(cut -d ' ' -f 19 /proc/$pid/stat)\" = -4 ] || exit 1; done",
+            timeout=WAIT,
+        )
+        machine.succeed("systemctl stop startup-terminals")
 
     def user(command):
         return "runuser -u demo -- env XDG_RUNTIME_DIR=/run/user/1000 " + \
