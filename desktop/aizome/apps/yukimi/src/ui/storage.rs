@@ -145,9 +145,8 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
                     text(p.version.clone()).mono().size(11.0).role(Role::Text3),
                 ]
                 .spacing(1.0)
-                .width(Length::FillPortion(std::num::NonZeroU16::new(2).unwrap())),
-                bar(vec![(p.size as f64 / largest, Dye::Hanada)], 8.0)
-                    .width(Length::FillPortion(std::num::NonZeroU16::new(3).unwrap())),
+                .width(Length::fill_portion::<2>()),
+                bar(vec![(p.size as f64 / largest, Dye::Hanada)], 8.0).width(Length::fill_portion::<3>()),
                 mono(human_size(p.size)).width(72.0),
             ]
             .spacing(14.0)

@@ -121,7 +121,9 @@ Every builder takes the common settings in any order with its own
 
 Lengths: `Shrink` (the content's size, the default), `Fill` (all the room
 there is; in a row or column, an equal share of what the others leave),
-`Length::FillPortion(n)` with a `NonZeroU16` weight, and points (`.width(200.0)`).
+`Length::FillPortion(n)` with a `NonZeroU16` weight (`Length::fill_portion::<2>()`
+when the weight is written in the code, so that zero fails to build), and points
+(`.width(200.0)`).
 
 ### Layout
 

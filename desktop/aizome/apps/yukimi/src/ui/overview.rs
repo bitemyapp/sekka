@@ -91,14 +91,8 @@ fn hero(app: &Yukimi) -> Element<Msg> {
     .padding([6.0, 8.0])
     .border(Edge::Color(Color::hex(KAMENOZOKI).with_alpha(0.55)));
     let sky = column![
-        container(spacer())
-            .fill(Tone::Color(Color::hex(SKY_HIGH)))
-            .width(Fill)
-            .height(Length::FillPortion(std::num::NonZeroU16::new(1).unwrap())),
-        container(spacer())
-            .fill(Tone::Color(Color::hex(SKY)))
-            .width(Fill)
-            .height(Length::FillPortion(std::num::NonZeroU16::new(2).unwrap())),
+        container(spacer()).fill(Tone::Color(Color::hex(SKY_HIGH))).width(Fill).height(Length::fill_portion::<1>()),
+        container(spacer()).fill(Tone::Color(Color::hex(SKY))).width(Fill).height(Length::fill_portion::<2>()),
         container(spacer()).fill(Tone::Color(Color::hex(HANADA))).width(Fill).height(4.0),
         container(spacer()).fill(Tone::Color(Color::hex(KAMENOZOKI))).width(Fill).height(4.0),
         container(spacer()).fill(Tone::Color(Color::hex(SNOW))).width(Fill).height(6.0),
@@ -443,8 +437,8 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
     c = c.push(tiles(app));
     c = c.push(
         row![
-            store_panel(app).width(Length::FillPortion(std::num::NonZeroU16::new(3).unwrap())),
-            generations_panel(app).width(Length::FillPortion(std::num::NonZeroU16::new(2).unwrap()))
+            store_panel(app).width(Length::fill_portion::<3>()),
+            generations_panel(app).width(Length::fill_portion::<2>())
         ]
         .spacing(14.0)
         .align(Align::Start)

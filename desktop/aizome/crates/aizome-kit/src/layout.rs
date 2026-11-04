@@ -25,6 +25,28 @@ pub enum Length {
 }
 
 impl Length {
+    /// [`Length::FillPortion`] with a weight written in the code, which
+    /// fails to build if it is zero.
+    ///
+    /// ```
+    /// use aizome_kit::Length;
+    /// assert_eq!(Length::fill_portion::<3>().portion().map(|n| n.get()), Some(3));
+    /// ```
+    ///
+    /// ```compile_fail
+    /// let _ = aizome_kit::Length::fill_portion::<0>();
+    /// ```
+    pub const fn fill_portion<const N: u16>() -> Length {
+        Length::FillPortion(
+            const {
+                match NonZeroU16::new(N) {
+                    Some(n) => n,
+                    None => panic!("a fill portion's weight must be positive"),
+                }
+            },
+        )
+    }
+
     /// Its shares of the leftover space, if it fills.
     pub fn portion(self) -> Option<NonZeroU16> {
         match self {

@@ -29,12 +29,8 @@ fn change_row(change: &Change) -> Element<Msg> {
     };
     let mut r = row![
         icon(icon_name).size(14.0).role(role),
-        text(change.name.clone()).weight(600.0).width(Length::FillPortion(std::num::NonZeroU16::new(2).unwrap())),
-        text(versions)
-            .mono()
-            .size(12.0)
-            .role(Role::Text2)
-            .width(Length::FillPortion(std::num::NonZeroU16::new(3).unwrap())),
+        text(change.name.clone()).weight(600.0).width(Length::fill_portion::<2>()),
+        text(versions).mono().size(12.0).role(Role::Text2).width(Length::fill_portion::<3>()),
     ]
     .spacing(10.0)
     .padding([5.0, 12.0, 5.0, 40.0])
