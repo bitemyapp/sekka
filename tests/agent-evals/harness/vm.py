@@ -25,6 +25,12 @@ FORBIDDEN = [
     (re.compile(AT + r"loginctl\s+(terminate|kill)-"), "ending the login session"),
     (re.compile(AT + r"nixos-rebuild\b"), "rebuilding the system (the machine has no configuration to rebuild)"),
     (re.compile(AT + r"rm\s+(-[a-zA-Z]*\s+)*(/|/\*|/home|/home/alice|/nix|/etc)\s*($|[;&|])"), "deleting a whole tree"),
+    # The test driver's root console is a unit named backdoor.service (the
+    # shell these commands run in). An agent took it for malware and
+    # stopped it, which cut the session off.
+    (re.compile(AT + r"(systemctl\s+([^;&|\n]*\s)?(stop|kill|mask|disable|restart)\s+([^;&|\n]*\s)?backdoor|"
+                r"(pkill|killall)\s+([^;&|\n]*\s)?(backdoor|hvc0))"),
+     "stopping backdoor.service, the support session's own connection (it runs these commands)"),
 ]
 
 

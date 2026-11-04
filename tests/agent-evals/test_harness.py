@@ -60,7 +60,7 @@ class Refused(unittest.TestCase):
     def test_ending_the_machine_or_session(self):
         for c in ["reboot", "systemctl reboot", "shutdown -h now", "loginctl terminate-user alice",
                   "nixos-rebuild switch", "rm -rf /", "rm -rf /home/alice", "ls; reboot", "sudo poweroff",
-                  "true && systemctl --no-pager reboot"]:
+                  "true && systemctl --no-pager reboot", "systemctl stop backdoor.service", "pkill -f hvc0"]:
             self.assertTrue(self.refused(c), c)
 
     def test_ordinary_commands(self):
