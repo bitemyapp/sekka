@@ -442,6 +442,79 @@ fn a_song_shows_its_cover_and_who_made_it() {
 }
 
 #[test]
+fn statistics_refresh_without_blocking_playback_and_close_independently() {
+    let mut h = harness();
+    let w = window(&h);
+    play_without_subtitles(&mut h, "chaptered.mkv");
+    h.type_text(w, "i");
+    let stats = h.program().statistics.expect("a statistics window");
+    assert!(h.program().sheet.is_none(), "statistics are not modal");
+    assert_eq!(h.title(stats), "Playback Statistics");
+    let texts = h.texts(stats);
+    if let Some(path) = std::env::var_os("UTSUSHI_STATS_SCREENSHOT") {
+        h.save_png(stats, path, 1.0);
+    }
+    for label in ["Frames decoded", "Frames dropped by player", "Presentation feedback", "Frame path"] {
+        assert!(texts.iter().any(|t| t == label), "{label}: {texts:?}");
+    }
+    until(&mut h, 2.0, |a| a.player.as_ref().unwrap().stats().decoded >= 8);
+    h.advance(Duration::from_secs(1));
+    let decoded = h.program().player.as_ref().unwrap().stats().decoded.to_string();
+    assert!(h.texts(stats).contains(&decoded));
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    h.send(Msg::ShowStats);
+    assert_eq!(h.program().statistics, Some(stats), "reuse the existing window");
+    h.send(Msg::Open(vec![fixture("song.flac")]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing && !a.has_video());
+    assert!(h.texts(stats).iter().any(|t| t == "Indigo"));
+    assert!(!h.texts(stats).iter().any(|t| t == "Frames decoded"));
+    h.request_close(stats);
+    assert!(h.program().statistics.is_none());
+    assert!(h.is_shown(w));
+    h.send(Msg::ShowStats);
+    let reopened = h.program().statistics.unwrap();
+    h.send(Msg::Close);
+    assert!(h.texts(reopened).iter().any(|t| t.starts_with("Open a video")));
+}
+
+#[test]
+fn close_shortcut_targets_statistics_without_closing_media() {
+    let mut h = harness();
+    let w = window(&h);
+    play_without_subtitles(&mut h, "chaptered.mkv");
+    for paused in [false, true] {
+        if paused {
+            h.send(Msg::Pause);
+            until(&mut h, 2.0, |a| a.status == Status::Paused);
+        }
+        let status = h.program().status;
+        let queue = h.program().queue.clone();
+        h.send(Msg::ShowStats);
+        let stats = h.program().statistics.unwrap();
+        h.focus_window(w, false);
+        h.focus_window(stats, true);
+        h.command(stats, 'w');
+        assert!(h.program().statistics.is_none(), "Close should close the focused statistics window");
+        assert_eq!(h.program().status, status);
+        assert_eq!(h.program().queue, queue);
+        assert!(h.program().info.is_some());
+        assert!(h.is_shown(w));
+    }
+    h.send(Msg::ShowStats);
+    let stats = h.program().statistics.unwrap();
+    h.focus_window(stats, false);
+    h.focus_window(w, true);
+    h.command(w, 'w');
+    assert_eq!(h.program().status, Status::Empty, "Close in the player still closes its media");
+    assert_eq!(h.program().statistics, Some(stats));
+    h.focus_window(w, false);
+    h.focus_window(stats, true);
+    h.command(stats, 'w');
+    assert!(h.program().statistics.is_none(), "statistics can close even after media has closed");
+}
+
+#[test]
 fn media_info_says_how_it_plays() {
     let mut h = harness();
     let w = window(&h);
