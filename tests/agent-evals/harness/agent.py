@@ -132,6 +132,7 @@ def run(client, system, task, tools, transcript, max_steps=40, max_seconds=1200,
         "bad_arguments": 0,
         "unknown_tools": 0,
         "nudges": 0,
+        "malformed_calls": 0,
         "prompt_tokens": 0,
         "completion_tokens": 0,
         "llm_seconds": 0.0,
@@ -150,6 +151,15 @@ def run(client, system, task, tools, transcript, max_steps=40, max_seconds=1200,
             resp = client.chat(messages, tools=tools.schemas(), max_tokens=max_tokens)
         except LLMError as e:
             transcript.write("llm-error", error=str(e))
+            if "parse tool call" in str(e) and stats["malformed_calls"] < 3:
+                # The server couldn't parse the model's tool call (bad JSON
+                # in its arguments): say so, as a client would, and go on.
+                stats["malformed_calls"] += 1
+                messages.append({"role": "user", "content":
+                                 "Your last tool call could not be parsed: its arguments were not valid JSON "
+                                 "(often an unescaped quote or newline in a long command). Try again with a "
+                                 "simpler command."})
+                continue
             result["ended"] = "llm-error"
             result["error"] = str(e)[:500]
             break
@@ -187,6 +197,12 @@ def run(client, system, task, tools, transcript, max_steps=40, max_seconds=1200,
                 for c in native
             ]
         messages.append(assistant)
+        if not calls and choice.get("finish_reason") == "length":
+            # Out of output or context: the server cut the turn off with
+            # nothing to run. Another request would end the same way.
+            result["ended"] = "length"
+            result["final"] = {"text": content}
+            break
         if not calls:
             nudges_in_a_row += 1
             stats["nudges"] += 1

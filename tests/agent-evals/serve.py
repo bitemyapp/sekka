@@ -302,6 +302,8 @@ def main():
     s.add_argument("--total-ctx", type=int, help="llama.cpp: tokens of KV for all slots together "
                    "(default: the model's total_ctx, else parallel × ctx)")
     s.add_argument("--kv", default="q8_0", help="llama.cpp KV cache type (q8_0 halves F16's memory)")
+    s.add_argument("--plain", action="store_true", help="leave out the model's own server arguments "
+                   "(models.toml `args`, such as speculative decoding), to measure without them")
     s.add_argument("extra", nargs="*", help="further server arguments, after --")
     sub.add_parser("stop")
     b = sub.add_parser("bench")
@@ -322,7 +324,10 @@ def main():
         for name in a.models:
             remove(model(name))
     elif a.cmd == "start":
-        start(model(a.model), a.port, a.parallel, a.ctx, a.extra, total=a.total_ctx, kv=a.kv)
+        m = model(a.model)
+        if a.plain:
+            m["args"] = []
+        start(m, a.port, a.parallel, a.ctx, a.extra, total=a.total_ctx, kv=a.kv)
     elif a.cmd == "stop":
         stop()
     elif a.cmd == "bench":

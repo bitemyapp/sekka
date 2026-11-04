@@ -50,6 +50,10 @@ class Client:
                 text = e.read().decode(errors="replace")[:2000]
                 # 400s are the request's fault (context overflow, a
                 # template refusing the history): no point retrying.
+                # A tool call the server couldn't parse comes back as a 500;
+                # one retry samples again, then the agent loop takes over.
+                if "parse tool call" in text and attempt >= 1:
+                    raise LLMError(f"HTTP {e.code}: {text}") from e
                 if 400 <= e.code < 500 or attempt == retries:
                     raise LLMError(f"HTTP {e.code}: {text}") from e
             except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as e:

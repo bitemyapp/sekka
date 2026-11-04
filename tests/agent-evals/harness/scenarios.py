@@ -260,14 +260,18 @@ class RunawayIndexer(Scenario):
 
 class NixDaemonMasked(Scenario):
     def setup(self, vm):
-        vm.sh("systemctl mask --runtime --now nix-daemon.socket nix-daemon.service")
+        # NixOS units live in /etc/systemd/system already, so only a runtime
+        # mask is possible, and systemd applies it at the next reload.
+        vm.sh("systemctl mask --runtime nix-daemon.socket nix-daemon.service && systemctl daemon-reload && "
+              "systemctl stop nix-daemon.socket nix-daemon.service")
 
     def check(self, vm, final):
         return vm.alice("nix-store -q --hash /run/current-system", timeout=30)[0] == 0, {
-            "socket": vm.out_of("systemctl show -p ActiveState,UnitFileState --value nix-daemon.socket")}
+            "socket": vm.out_of("systemctl show -p LoadState,ActiveState --value nix-daemon.socket")}
 
     def oracle(self, vm):
-        vm.sh("systemctl unmask --runtime nix-daemon.socket nix-daemon.service && systemctl start nix-daemon.socket")
+        vm.sh("systemctl unmask --runtime nix-daemon.socket nix-daemon.service && systemctl daemon-reload && "
+              "systemctl start nix-daemon.socket")
 
 
 class WrongTimeZone(Scenario):
@@ -426,7 +430,8 @@ DIAGNOSTICS = [
     NixDaemonMasked("nix-daemon-masked", "diagnostics", "sekka",
                     "Software can't install or update anything any more. When I run "
                     "`nix-store -q --hash /run/current-system` myself it says it can't connect to the daemon.",
-                    diagnosis=[[r"nix-daemon"], [r"mask", r"stopped|not running|inactive|disabled"]], level="easy"),
+                    diagnosis=[[r"nix-daemon"], [r"mask", r"stopped|not running|inactive|disabled|deactivated|closed"]],
+                    level="easy"),
     WrongTimeZone("wrong-time-zone", "diagnostics", "sekka",
                   "The clock on my desktop is wrong: it already says it's tomorrow. I live in Chicago.",
                   diagnosis=[[r"Kiritimati", r"time ?zone"]], level="easy"),

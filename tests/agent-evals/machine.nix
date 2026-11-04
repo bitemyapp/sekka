@@ -95,6 +95,19 @@ in
   };
   hardware.graphics.enable = true;
 
+  # The store is the host's, shared over virtiofs with --cache=always:
+  # virtiofsd keeps a file handle for every inode the guest has cached, so
+  # a store-wide `find` (the host's store is far bigger than this
+  # machine's) exhausted its handles and broke every later library load.
+  # Reclaiming dentries and inodes makes the guest forget them.
+  systemd.services.virtiofs-inode-release = {
+    description = "Release cached /nix/store inodes (a test VM's shared store)";
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig.ExecStart = pkgs.writeShellScript "virtiofs-inode-release" ''
+      while sleep 2; do echo 2 > /proc/sys/vm/drop_caches; done
+    '';
+  };
+
   # Every kit window (apps and the shell) writes where its controls are:
   # the computer-use scenarios offer that as a text observation.
   systemd.user.settings.Manager.DefaultEnvironment = "AIZOME_KIT_INSPECT=/run/user/1000/inspect";
