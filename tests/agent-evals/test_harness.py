@@ -70,6 +70,29 @@ class Refused(unittest.TestCase):
             self.assertFalse(self.refused(c), c)
 
 
+class Wrapper(unittest.TestCase):
+    """The shell wrapper, run as the driver runs it (set -euo pipefail)."""
+
+    def run_wrapped(self, command):
+        import subprocess
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            line = vm.wrap(command, 10, d + "/out")
+            p = subprocess.run(["bash", "-c", "set -euo pipefail; " + line], capture_output=True, text=True,
+                               timeout=20)
+            return p.returncode, p.stdout
+
+    def test_failing_commands_keep_their_output(self):
+        self.assertEqual(self.run_wrapped("echo visible; exit 3"), (3, "visible\n"))
+        rc, out = self.run_wrapped("ls /nonexistent-path")
+        self.assertNotEqual(rc, 0)
+        self.assertIn("nonexistent-path", out)
+
+    def test_background_processes_dont_hold_the_output(self):
+        self.assertEqual(self.run_wrapped("sleep 30 & echo returned"), (0, "returned\n"))
+
+
 class Diagnosis(unittest.TestCase):
     def test_every_entry_needs_a_match(self):
         s = scenarios.SCENARIOS["nix-daemon-masked"]

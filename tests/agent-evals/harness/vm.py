@@ -47,6 +47,15 @@ def refusal(command):
     return None
 
 
+def wrap(command, timeout, out):
+    """The guest command line for `command`: output to the file `out`, then
+    printed, with the command's exit status. The driver runs it under
+    `set -euo pipefail`, so `|| rc=$?` keeps a failing command from ending
+    it before its output is printed."""
+    return (f"rc=0; timeout -k 5 {int(timeout)} bash -c {shlex.quote(command)} </dev/null >{out} 2>&1 || rc=$?; "
+            f"head -c 1000000 {out}; rm -f {out}; exit $rc")
+
+
 class VM:
     def __init__(self, machine, out_dir):
         self.machine = machine
@@ -60,9 +69,7 @@ class VM:
         process the command leaves in the background (`server &`) would hold
         the pipe open and hang the driver for good."""
         self.calls = getattr(self, "calls", 0) + 1
-        out = f"/run/agent-eval-out.{self.calls}"
-        wrapped = (f"timeout -k 5 {int(timeout)} bash -c {shlex.quote(command)} </dev/null >{out} 2>&1; "
-                   f"rc=$?; head -c 1000000 {out}; rm -f {out}; exit $rc")
+        wrapped = wrap(command, timeout, f"/run/agent-eval-out.{self.calls}")
         try:
             return self.machine.execute(wrapped, timeout=dt.timedelta(seconds=timeout + 30))
         except Exception as e:  # noqa: BLE001
