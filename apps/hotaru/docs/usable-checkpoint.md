@@ -56,7 +56,7 @@ GNU C17. The dependency sources are unchanged; the failed attempt is preserved.
 The [package receipt](../upstream/usable-checkpoint/package-checkpoint.json),
 [runtime receipt](../upstream/usable-checkpoint/package-runtime.json),
 [local launcher receipt](../upstream/usable-checkpoint/local-install.json) and
-[compressed evidence](../upstream/usable-checkpoint/evidence.tar.gz) preserve
+[compressed evidence](https://github.com/bitemyapp/sekka/blob/d9f0217cc944d5f41bd59715497f45cbd2cc5e5b/apps/hotaru/upstream/usable-checkpoint/evidence.tar.gz) preserve
 identities, logs, source checks, captures and reproduction scripts. This is
 application qualification in private Sway; an Aizome VM, installed ISO and
 physical desktop were not newly qualified.

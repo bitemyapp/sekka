@@ -55,6 +55,14 @@ source or build. `upstream/ghostty.json` pins its exact commit, the old fork's
 clipboard fix, and the verified Zig toolchain. Preserve `LICENSE.ghostty` with
 adapted logic and fixtures.
 
+The compressed benchmark captures referenced by historical reports are
+archived at the revision recorded in `upstream/evidence.json`, with per-file
+sizes and SHA-256 hashes. From Sekka's root, run
+`python3 scripts/restore-hotaru-evidence.py` to restore them locally, or pass
+quoted path globs and `--destination DIR` for selected captures elsewhere.
+See the root `DEVELOPERS.md` for shallow-clone retrieval. These captures stay
+ignored; reports, source, fixtures and licenses remain tracked.
+
 ## Workstation coordination
 
 All builds, tests and benchmarks run through `ssh wx-workstation`, including

@@ -1,0 +1,115 @@
+{
+  "date": "2026-11-01",
+  "baseline_revision": "60e216174c8befdee2c0cfe1007b6092886a42f5",
+  "method": "git ls-tree -rlz BASELINE; sum tracked blob sizes per tracked path (not .git, untracked files, build outputs or the compressed transport size). Identical Git blob IDs identify duplicate content.",
+  "baseline": {
+    "files": 5088,
+    "bytes": 368704620
+  },
+  "removed": {
+    "files": 218,
+    "bytes": 99446194,
+    "archive_revision": "d9f0217cc944d5f41bd59715497f45cbd2cc5e5b",
+    "manifest": "apps/hotaru/upstream/evidence.json",
+    "restore_script": "scripts/restore-hotaru-evidence.py"
+  },
+  "remaining_groups": [
+    {
+      "name": "Tatami wallpaper originals",
+      "files": 23,
+      "bytes": 91690609,
+      "role": "23 original-resolution runtime images, read by desktop/tatami/wallpapers/package.nix. Exact source URLs, dimensions, hashes and licenses already exist in wallpapers.json and README.md.",
+      "candidate_action": "Move originals to immutable, hash-pinned fetched assets while preserving their bytes, licenses and installed paths. This is packaging work, not safe deletion."
+    },
+    {
+      "name": "Documentation and test-result screenshots",
+      "files": 169,
+      "bytes": 69940255,
+      "role": "Mixed historical evidence and live README/website assets. nix/site.nix and nix/aizome-site.nix explicitly consume some of these.",
+      "candidate_action": "Archive historical captures with immutable links and provenance; supply current site images through pinned assets. Preserve original resolution."
+    },
+    {
+      "name": "Aizome test PNGs",
+      "files": 233,
+      "bytes": 26258624,
+      "role": "Visual regression inputs. Package checks execute Yukimi goldens and other tests consume their own images. The Aizome package source includes apps and crates.",
+      "candidate_action": "Separate a hash-pinned fixture input or use smaller targeted fixtures where equivalent coverage is demonstrated. Do not remove golden baselines wholesale."
+    },
+    {
+      "name": "Hotaru top-level oracle fixture JSON",
+      "files": 11,
+      "bytes": 20462387,
+      "role": "Used by include_str! and runtime test reads in hotaru-core and hotaru-replay.",
+      "candidate_action": "Keep for this change. A future fixture-input split must preserve the exact reference data, offline test setup and licenses."
+    },
+    {
+      "name": "Other retained Hotaru upstream material",
+      "files": 1804,
+      "bytes": 32519734,
+      "role": "Reports, source snapshots, logs, traces, screenshots and other historical experiment evidence remain after removing the 218 compressed captures.",
+      "candidate_action": "Audit raw intermediate traces and large reference outputs next. Retain compact reports, original provenance and reproducible fixture inputs."
+    }
+  ],
+  "duplicates": {
+    "groups": 87,
+    "redundant_bytes": 3304668,
+    "note": "Overlaps the groups above. Git already stores identical blobs once, but checked-out/source-archive paths repeat their content.",
+    "largest": [
+      {
+        "bytes_each": 991323,
+        "git_blob": "2012fe444a9b13f9445b40c8dc0478f11a3d8ea6",
+        "paths": [
+          "apps/hotaru/upstream/vt-controls-review/final-report.json",
+          "apps/hotaru/upstream/vt-controls/controls-report.json"
+        ]
+      },
+      {
+        "bytes_each": 313724,
+        "git_blob": "d050fb682bdefa57574e3c25d8cbc4a102759633",
+        "paths": [
+          "apps/hotaru/upstream/combined-core-cursor/cursor-reference.json",
+          "apps/hotaru/upstream/cursor-fixtures.json"
+        ]
+      },
+      {
+        "bytes_each": 266986,
+        "git_blob": "11a548267c8ec139c0521c0738c2a4dbcf168bb3",
+        "paths": [
+          "docs/images/hardware-usb-uefi.png",
+          "docs/images/usb-samsung-bios.png"
+        ]
+      },
+      {
+        "bytes_each": 251144,
+        "git_blob": "be59292a186aea3b5d3459b470e30abfd3a0e674",
+        "paths": [
+          "apps/hotaru/upstream/frame-harness/calibration/ghostty-calibration-2/final.png",
+          "apps/hotaru/upstream/gui-pilot-sprites/calibration/ghostty-calibration-2/final.png"
+        ]
+      }
+    ]
+  },
+  "scope": [
+    "Only the 218 manifest captures are deleted; other candidates are inventoried, not removed.",
+    "No Git history rewrite and no archive exclusions. Existing complete Git clones retain historical blobs.",
+    "Root source transfer, unpacking and snapshot hashing can benefit; this is not a measured Nix evaluation speedup.",
+    "desktop/aizome/nix/default.nix already filters Hotaru to manifests, crates, resources and simdutf8, with explicit license paths. The removed upstream captures are not package build inputs.",
+    "Narrow package filters do not remove files from the root GitHub source archive."
+  ],
+  "validation": {
+    "restored_and_verified_files": 218,
+    "verified_against": [
+      "manifest byte sizes",
+      "manifest SHA-256",
+      "historical Git blob bytes"
+    ],
+    "idempotent_second_restore_files": 218,
+    "restoration_regression_tests": 6,
+    "unchanged_derivations": {
+      "aizome": "/nix/store/vw8qpk81g2w4c1xvpnvgm7wiij2bja7g-aizome-0.1.0.drv",
+      "wallpapers": "/nix/store/1yg9bnr3ggkkzd98994rrk0mchqkfs7q-tatami-wallpapers.drv",
+      "kakehashi": "/nix/store/3sfwv24kf5agp1m12i8xbsrqrln3mgbc-kakehashi-0.1.0.drv"
+    },
+    "all_restored_paths_ignored": true
+  }
+}
