@@ -28,10 +28,29 @@ def load(paths):
             # Refusals re-checked with the current patterns (an early one
             # also matched words inside grep patterns).
             r["blocked_commands"] = [c for c in r.get("blocked_commands") or [] if refusal(c)]
+            r["repeated_calls"], r["calls"] = repeats(f.parent / "transcript.jsonl")
             key = (str(f.parent.parent), r["scenario"], r.get("repeat", 0), r.get("observe")
                    if r.get("track") == "computer-use" else None)
             latest[key] = r
     return list(latest.values())
+
+
+def repeats(transcript):
+    """Tool calls identical to the one before (the same action again): a
+    loop's signature."""
+    previous, same, n = None, 0, 0
+    if not transcript.exists():
+        return 0, 0
+    for line in transcript.read_text().splitlines():
+        e = json.loads(line)
+        if e.get("kind") != "assistant":
+            continue
+        for c in e.get("tool_calls") or []:
+            key = (c.get("name"), json.dumps(c.get("arguments"), sort_keys=True))
+            n += 1
+            same += key == previous
+            previous = key
+    return same, n
 
 
 def pct(n, d):
@@ -62,11 +81,11 @@ def summary(results, track):
     out = []
     if track == "diagnostics":
         out.append("| Model | Episodes | Success | Fixed | Root cause named | Collateral | Unfinished | "
-                   "Median minutes | Steps | Tokens out / episode | Text tool calls |")
+                   "Median minutes | Steps | Tokens out / episode | Repeated calls |")
         out.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     else:
         out.append("| Model [observation] | Episodes | Success | Collateral | Unfinished | Median minutes | Actions | "
-                   "Tokens out / episode | Text tool calls |")
+                   "Tokens out / episode | Repeated calls |")
         out.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
     order = sorted(rows, key=lambda k: -sum(bool(r.get("success")) for r in rows[k] if valid(r)) / max(1, len(
         [r for r in rows[k] if valid(r)])))
@@ -84,8 +103,8 @@ def summary(results, track):
         med = walls[len(walls) // 2] if walls else None
         steps = mean([(r.get("stats") or {}).get("steps") for r in rs])
         tokens = mean([(r.get("stats") or {}).get("completion_tokens") for r in rs])
-        calls = sum((r.get("stats") or {}).get("tool_calls", 0) for r in rs)
-        text_calls = sum((r.get("stats") or {}).get("text_tool_calls", 0) for r in rs)
+        calls = sum(r.get("calls", 0) for r in rs)
+        text_calls = sum(r.get("repeated_calls", 0) for r in rs)
         if track == "diagnostics":
             out.append(f"| {label} | {n} | **{pct(succ, n)}** | {pct(fixed, n)} | {pct(named, n)} | {coll} | "
                        f"{unfinished} | {fmt(med, 1)} | {fmt(steps, 1)} | {fmt(tokens)} | {pct(text_calls, calls)} |")

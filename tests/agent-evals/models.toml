@@ -135,6 +135,20 @@ license = "Apache-2.0"
 # H Company recommends thinking off and greedy decoding for actions.
 params = { temperature = 0.0, chat_template_kwargs = { enable_thinking = false } }
 
+[models."holo4-35b-a3b-think"]
+# The same files with thinking on and its base's sampling: greedy decoding
+# without thinking repeated one action until the step limit in most tasks.
+repo = "Hcompany/Holo4-35B-A3B-GGUF"
+revision = "93400a4734519493de4f49910de1f6e0e24be46b"
+file = "q4_k_m.gguf"
+mmproj = "mmproj.f16.gguf"
+size_gb = 22.2
+engine = "llama.cpp"
+vision = true
+coords = "norm1000"
+license = "Apache-2.0"
+params = { temperature = 0.6, top_p = 0.95, top_k = 20 }
+
 [models."holo4-27b"]
 # KV for all slots together: what fits beside the weights in 32 GB.
 total_ctx = 131072
@@ -147,7 +161,8 @@ engine = "llama.cpp"
 vision = true
 coords = "norm1000"
 license = "CC-BY-NC-4.0"
-params = { temperature = 0.0, chat_template_kwargs = { enable_thinking = false } }
+# Thinking on and sampling, as holo4-35b-a3b-think (see there).
+params = { temperature = 0.6, top_p = 0.95, top_k = 20 }
 
 [models."qwen3.8-27b-nvfp4-sglang"]
 # The vLLM entry's checkpoint under SGLang, to compare runtimes.
