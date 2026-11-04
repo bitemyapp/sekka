@@ -1,5 +1,6 @@
 //! Same-host capture measurement. Pass `eager` to exercise snapshot_all on the
 //! checkpoint before ContentSnapshot; `owned` additionally measures iteration.
+use hotaru_core::GridSize;
 use hotaru_core::Terminal;
 use serde_json::json;
 use std::{hint::black_box, time::Instant};
@@ -14,8 +15,7 @@ fn main() {
     let cold = args[2] == "cold";
     let owned = args[3] == "owned";
     let mut terminal = Terminal::with_history_limits(
-        80,
-        24,
+        GridSize::default(),
         hotaru_core::HistoryLimits {
             rows: history,
             bytes: None,

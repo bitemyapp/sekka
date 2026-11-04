@@ -227,23 +227,28 @@ pub fn extract(snapshot: &Snapshot, at: CellPoint, cancel: &AtomicBool, deadline
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hotaru_core::{Cols, GridSize, Rows};
     use std::time::Duration;
-    fn run(data: &str, cols: usize, rows: usize, at: CellPoint) -> Result<Mapped, Error> {
-        let mut terminal = hotaru_core::Terminal::new(cols, rows, 0);
+    fn run(data: &str, size: GridSize, at: CellPoint) -> Result<Mapped, Error> {
+        let mut terminal = hotaru_core::Terminal::new(size, 0);
         terminal.set_default_grapheme_width(hotaru_core::GraphemeWidthMethod::Unicode);
         terminal.feed(data.as_bytes());
         extract(&terminal.snapshot(), at, &AtomicBool::new(false), Instant::now() + Duration::from_secs(1))
     }
     #[test]
     fn wraps_and_semantic_cell_boundaries_are_owned() {
-        let mapped =
-            run("\x1b]133;A\x07$ \x1b]133;B\x07https://例子.test/e\u{301}\x1b]133;C\x07", 12, 4, point(1, 2)).unwrap();
+        let mapped = run(
+            "\x1b]133;A\x07$ \x1b]133;B\x07https://例子.test/e\u{301}\x1b]133;C\x07",
+            GridSize::new(Cols::new(12).unwrap(), Rows::new(4).unwrap()),
+            point(1, 2),
+        )
+        .unwrap();
         assert_eq!(mapped.source.text(), "https://例子.test/e\u{301}");
         assert_eq!(mapped.start, point(0, 2));
     }
     #[test]
     fn clipped_context_and_cancelled_requests_do_not_create_regex_boundaries() {
-        let mut terminal = hotaru_core::Terminal::new(12, 2, 0);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(12).unwrap(), Rows::new(2).unwrap()), 0);
         terminal.feed(b"https://x");
         let mut snap = terminal.snapshot();
         snap.position.first_row = 20;
@@ -259,8 +264,26 @@ mod tests {
     }
     #[test]
     fn unprinted_blanks_differ_from_literal_trailing_spaces() {
-        assert_eq!(run("https://x   ", 24, 2, point(0, 3)).unwrap().source.text(), "https://x   ");
-        assert_eq!(run("https://x", 24, 2, point(0, 3)).unwrap().source.text(), "https://x");
-        assert_eq!(run("/tmp/a\x1b[Cb.txt", 24, 2, point(0, 3)).unwrap().source.text(), "/tmp/a b.txt");
+        assert_eq!(
+            run("https://x   ", GridSize::new(Cols::new(24).unwrap(), Rows::new(2).unwrap()), point(0, 3))
+                .unwrap()
+                .source
+                .text(),
+            "https://x   "
+        );
+        assert_eq!(
+            run("https://x", GridSize::new(Cols::new(24).unwrap(), Rows::new(2).unwrap()), point(0, 3))
+                .unwrap()
+                .source
+                .text(),
+            "https://x"
+        );
+        assert_eq!(
+            run("/tmp/a\x1b[Cb.txt", GridSize::new(Cols::new(24).unwrap(), Rows::new(2).unwrap()), point(0, 3))
+                .unwrap()
+                .source
+                .text(),
+            "/tmp/a b.txt"
+        );
     }
 }

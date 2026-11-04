@@ -168,11 +168,14 @@ impl Drop for Worker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hotaru_core::{Cols, GridSize, Rows};
     use std::sync::mpsc;
     fn request(pane: PaneId) -> Arc<Request> {
         Arc::new(Request {
             pane,
-            snapshot: Arc::new(hotaru_core::Terminal::new(8, 2, 0).snapshot()),
+            snapshot: Arc::new(
+                hotaru_core::Terminal::new(GridSize::new(Cols::new(8).unwrap(), Rows::new(2).unwrap()), 0).snapshot(),
+            ),
             cell: CellPoint { row: 0, col: 0 },
             retained_bytes: 1024,
         })

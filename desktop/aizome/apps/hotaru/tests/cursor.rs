@@ -1,5 +1,6 @@
 use aizome_hotaru::app::{Hotaru, Msg};
 use aizome_kit::testing::Harness;
+use hotaru_core::GridSize;
 use hotaru_core::Terminal;
 use std::{sync::Arc, time::Duration};
 fn show(h: &mut Harness<Hotaru>, term: &Terminal) {
@@ -22,7 +23,7 @@ fn cursor_shapes_blink_focus_input_and_damage_are_native() {
     let mut h = Harness::new(Hotaru::preview());
     let w = h.window();
     h.advance(Duration::ZERO);
-    let mut term = Terminal::new(80, 24, 0);
+    let mut term = Terminal::new(GridSize::default(), 0);
     term.feed(b"\x1b[1 q");
     show(&mut h, &term);
     let id = h.program().active_pane().unwrap().id;
@@ -92,7 +93,7 @@ fn wide_cursor_ime_and_physical_scale_remain_cell_aligned() {
     h.focus_window(w, true);
     h.send(Msg::FocusPane(id));
     h.advance(Duration::ZERO);
-    let mut term = Terminal::new(80, 24, 20);
+    let mut term = Terminal::new(GridSize::default(), 20);
     term.feed("界A\x1b[H\x1b[2 q".as_bytes());
     show(&mut h, &term);
     for scale in [1., 1.25, 2.] {

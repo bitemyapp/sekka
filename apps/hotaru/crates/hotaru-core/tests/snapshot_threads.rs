@@ -1,3 +1,4 @@
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{Snapshot, Style, Terminal};
 use std::sync::mpsc::sync_channel;
 
@@ -47,7 +48,10 @@ fn concurrent_snapshot_readers_keep_owned_rows_during_reuse_and_reflow() {
                 }
             });
         }
-        let mut terminal = Terminal::new(40, 8, 25);
+        let mut terminal = Terminal::new(
+            GridSize::new(Cols::new(40).unwrap(), Rows::new(8).unwrap()),
+            25,
+        );
         for round in 0..240 {
             terminal.feed(
                 format!(
@@ -57,7 +61,10 @@ fn concurrent_snapshot_readers_keep_owned_rows_during_reuse_and_reflow() {
                 .as_bytes(),
             );
             if round % 7 == 0 {
-                terminal.resize(3 + round % 47, 3 + round % 9);
+                terminal.resize(GridSize::new(
+                    Cols::new(3 + round % 47).unwrap(),
+                    Rows::new(3 + round % 9).unwrap(),
+                ));
             }
             let snapshot = terminal.snapshot_all();
             let expected = contents(&snapshot);

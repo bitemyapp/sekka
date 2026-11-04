@@ -426,6 +426,7 @@ fn quoted(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hotaru_core::{Cols, GridSize, Rows};
 
     #[test]
     fn requests_decode_leniently_route_by_tag_and_stay_within_bounds() {
@@ -462,7 +463,7 @@ mod tests {
     }
 
     fn kitty_requests(input: &[u8]) -> Vec<kitty_clipboard::Request> {
-        let mut terminal = hotaru_core::Terminal::new(10, 2, 0);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(10).unwrap(), Rows::new(2).unwrap()), 0);
         terminal.feed(input);
         let events = terminal.take_events().into_iter();
         events

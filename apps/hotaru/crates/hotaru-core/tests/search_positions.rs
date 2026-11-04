@@ -1,3 +1,4 @@
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{
     ContentSnapshot, Terminal,
     search::{self, Match, Options, Position, Results},
@@ -16,7 +17,10 @@ fn find(terminal: &Terminal, needle: &[u8]) -> Results {
 
 #[test]
 fn immutable_history_rebases_after_append_prune_and_compression() {
-    let mut terminal = Terminal::new(4, 2, 3);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(4).unwrap(), Rows::new(2).unwrap()),
+        3,
+    );
     terminal.feed(b"0\r\n1\r\n2\r\n3\r\n4");
     let oldest = find(&terminal, b"0");
     let retained = find(&terminal, b"2");
@@ -70,7 +74,10 @@ fn immutable_history_rebases_after_append_prune_and_compression() {
 
 #[test]
 fn active_matches_expire_on_mutation_and_never_alias_reflow_clear_or_reset() {
-    let mut terminal = Terminal::new(8, 3, 100);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()),
+        100,
+    );
     terminal.feed(b"history\r\n1\r\n2\r\nactive");
     let history = find(&terminal, b"history");
     let active = find(&terminal, b"active");
@@ -91,7 +98,7 @@ fn active_matches_expire_on_mutation_and_never_alias_reflow_clear_or_reset() {
             .is_some()
     );
     let epoch = terminal.content_position(0).epoch;
-    terminal.resize(9, 4);
+    terminal.resize(GridSize::new(Cols::new(9).unwrap(), Rows::new(4).unwrap()));
     assert_ne!(epoch, terminal.content_position(0).epoch);
     assert!(
         history
@@ -109,7 +116,10 @@ fn active_matches_expire_on_mutation_and_never_alias_reflow_clear_or_reset() {
 
 #[test]
 fn alternate_replacement_does_not_destroy_primary_identity() {
-    let mut terminal = Terminal::new(8, 2, 100);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(8).unwrap(), Rows::new(2).unwrap()),
+        100,
+    );
     terminal.feed(b"primary\r\n1\r\n2");
     let primary = terminal.content_position(0);
     let result = find(&terminal, b"primary");
@@ -134,7 +144,10 @@ fn alternate_replacement_does_not_destroy_primary_identity() {
 
 #[test]
 fn scrolled_snapshot_capture_preserves_origin_and_multiline_wide_clipping() {
-    let mut terminal = Terminal::new(4, 2, 100);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(4).unwrap(), Rows::new(2).unwrap()),
+        100,
+    );
     terminal.feed("a雪bcd雪efghij".as_bytes());
     let all = find(&terminal, "bcd雪efg".as_bytes());
     let viewport = terminal.snapshot_scrolled(1);
@@ -164,12 +177,18 @@ fn scrolled_snapshot_capture_preserves_origin_and_multiline_wide_clipping() {
 
 #[test]
 fn capture_epoch_ownership_prevents_identity_reuse_after_terminal_destruction() {
-    let mut old = Terminal::new(4, 2, 10);
+    let mut old = Terminal::new(
+        GridSize::new(Cols::new(4).unwrap(), Rows::new(2).unwrap()),
+        10,
+    );
     old.feed(b"old");
     let result = find(&old, b"old");
     drop(old);
     for _ in 0..1000 {
-        let mut fresh = Terminal::new(4, 2, 10);
+        let mut fresh = Terminal::new(
+            GridSize::new(Cols::new(4).unwrap(), Rows::new(2).unwrap()),
+            10,
+        );
         fresh.feed(b"old");
         assert!(
             result
@@ -190,7 +209,10 @@ fn newlines_expire_when_their_preceding_text_anchor_is_pruned() {
 }
 
 fn multiline_pruning_regression(initial: &[u8]) {
-    let mut terminal = Terminal::new(4, 1, 5);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(4).unwrap(), Rows::new(1).unwrap()),
+        5,
+    );
     terminal.feed(initial);
     let results = find(&terminal, b"\n\n");
     assert!(!results.matches.is_empty());
@@ -213,7 +235,10 @@ fn multiline_pruning_regression(initial: &[u8]) {
 
 #[test]
 fn synthetic_final_newline_in_history_still_depends_on_active_continuation() {
-    let mut terminal = Terminal::new(4, 1, 10);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(4).unwrap(), Rows::new(1).unwrap()),
+        10,
+    );
     terminal.feed(b"abcd ");
     let result = find(&terminal, b"d\n");
     assert_eq!(result.matches.len(), 1);
@@ -240,7 +265,10 @@ fn deferred_whitespace_matches_depend_on_the_row_that_flushes_them() {
         (b"a   X".as_slice(), b"a ".as_slice()),
         (b"a\r\n\r\nX".as_slice(), b"\n\n".as_slice()),
     ] {
-        let mut terminal = Terminal::new(4, 1, 10);
+        let mut terminal = Terminal::new(
+            GridSize::new(Cols::new(4).unwrap(), Rows::new(1).unwrap()),
+            10,
+        );
         terminal.feed(input);
         let result = find(&terminal, needle);
         assert_eq!(result.matches.len(), 1);
@@ -258,7 +286,10 @@ fn deferred_whitespace_matches_depend_on_the_row_that_flushes_them() {
 #[test]
 fn generation_sensitive_prefix_tracks_newest_retention_without_hiding_stable_history() {
     for limit in [0, 1, 2, 3, 4, 10] {
-        let mut terminal = Terminal::new(4, 1, 10);
+        let mut terminal = Terminal::new(
+            GridSize::new(Cols::new(4).unwrap(), Rows::new(1).unwrap()),
+            10,
+        );
         terminal.feed(b"a b\r\nc   X");
         let result = search::find(
             terminal.content_snapshot(),

@@ -1,3 +1,4 @@
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{Snapshot, Terminal};
 
 fn same(left: &Snapshot, right: &Snapshot) {
@@ -36,8 +37,14 @@ fn compress(terminal: &mut Terminal) {
 }
 #[test]
 fn compressed_history_matches_resident_terminal_through_scroll_resize_and_clear() {
-    let mut resident = Terminal::new(40, 12, 500);
-    let mut cold = Terminal::new(40, 12, 500);
+    let mut resident = Terminal::new(
+        GridSize::new(Cols::new(40).unwrap(), Rows::new(12).unwrap()),
+        500,
+    );
+    let mut cold = Terminal::new(
+        GridSize::new(Cols::new(40).unwrap(), Rows::new(12).unwrap()),
+        500,
+    );
     for index in 0..1200 {
         let line = format!(
             "\x1b[38;2;{};17;81m{index:05} 雪 e\u{301} \x1b[4:3mcurly\x1b[0m\r\n",
@@ -58,8 +65,14 @@ fn compressed_history_matches_resident_terminal_through_scroll_resize_and_clear(
         );
     }
     for (cols, rows) in [(13, 7), (80, 24), (1, 1), (3, 9), (40, 12)] {
-        resident.resize(cols, rows);
-        cold.resize(cols, rows);
+        resident.resize(GridSize::new(
+            Cols::new(cols).unwrap(),
+            Rows::new(rows).unwrap(),
+        ));
+        cold.resize(GridSize::new(
+            Cols::new(cols).unwrap(),
+            Rows::new(rows).unwrap(),
+        ));
         same(&resident.snapshot_all(), &cold.snapshot_all());
         compress(&mut cold);
         for _ in 0..81 {
@@ -78,15 +91,21 @@ fn compressed_history_matches_resident_terminal_through_scroll_resize_and_clear(
 
 #[test]
 fn compressed_eviction_preserves_recycled_row_resize_semantics() {
-    let mut resident = Terminal::new(8, 3, 128);
-    let mut cold = Terminal::new(8, 3, 128);
+    let mut resident = Terminal::new(
+        GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()),
+        128,
+    );
+    let mut cold = Terminal::new(
+        GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()),
+        128,
+    );
     for _ in 0..132 {
         resident.feed(b"abcdefghij\r\n");
         cold.feed(b"abcdefghij\r\n");
     }
     for terminal in [&mut resident, &mut cold] {
         terminal.feed(b"\x1b[?7l");
-        terminal.resize(4, 3);
+        terminal.resize(GridSize::new(Cols::new(4).unwrap(), Rows::new(3).unwrap()));
     }
     compress(&mut cold);
     assert!(cold.history_memory().compressed_rows > 0);
@@ -96,7 +115,7 @@ fn compressed_eviction_preserves_recycled_row_resize_semantics() {
             terminal.feed(b"abcdef\r\n");
         }
         terminal.feed(b"\x1b[?7l");
-        terminal.resize(8, 3);
+        terminal.resize(GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()));
     }
     same(&resident.snapshot_all(), &cold.snapshot_all());
 }

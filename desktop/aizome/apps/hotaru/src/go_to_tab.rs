@@ -651,6 +651,7 @@ fn footer() -> Element<Msg> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hotaru_core::GridSize;
 
     fn candidate(tab: TabId, title: &str, recency: usize) -> Candidate {
         Candidate {
@@ -786,7 +787,7 @@ mod tests {
 
     #[test]
     fn a_pane_without_a_live_process_keeps_its_last_known_folder() {
-        let snapshot = Arc::new(hotaru_core::Terminal::new(80, 24, 0).snapshot());
+        let snapshot = Arc::new(hotaru_core::Terminal::new(GridSize::default(), 0).snapshot());
         let source = |reported| Source {
             pane: crate::ids::PaneId::new(1),
             pid: None,

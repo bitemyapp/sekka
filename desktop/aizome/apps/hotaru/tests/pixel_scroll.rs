@@ -3,6 +3,7 @@ use aizome_kit::layout::Constraints;
 use aizome_kit::prelude::*;
 use aizome_kit::testing::{ExactFrameCheck, Harness};
 use aizome_kit::widget::{LayoutCx, PaintCx, Widget};
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{Snapshot, Terminal};
 use std::{sync::Arc, time::Duration};
 
@@ -92,7 +93,7 @@ fn partial_regions_and_line_edits_preserve_every_pixel() {
         assert!(h.settle(Duration::from_secs(5), |app| {
             app.active_pane().unwrap().font_metrics().is_some_and(|m| m.scale == scale)
         }));
-        let mut term = Terminal::new(70, 20, 0);
+        let mut term = Terminal::new(GridSize::new(Cols::new(70).unwrap(), Rows::new(20).unwrap()), 0);
         if scale == 2. {
             term.feed(b"\x1b[?1049h");
         }
@@ -174,7 +175,7 @@ fn row_scroll_preserves_exact_pixels_and_reduces_raster_work() {
     let id = h.program().active_pane().unwrap().id;
     h.focus_window(w, true);
     h.send(Msg::FocusPane(id));
-    let mut term = Terminal::new(80, 20, 256);
+    let mut term = Terminal::new(GridSize::new(Cols::new(80).unwrap(), Rows::new(20).unwrap()), 256);
     term.feed(b"\x1b[2 q");
     for n in 0..80 {
         term.feed(format!("{n:03} 日本語 😀 e\u{301} != -> styled \x1b[3{}mcolor\x1b[0m\r\n", n % 8).as_bytes());
@@ -233,7 +234,7 @@ fn scale_resize_palette_and_ime_choose_safe_repaint_paths() {
     let id = h.program().active_pane().unwrap().id;
     h.focus_window(w, true);
     h.send(Msg::FocusPane(id));
-    let mut term = Terminal::new(70, 16, 256);
+    let mut term = Terminal::new(GridSize::new(Cols::new(70).unwrap(), Rows::new(16).unwrap()), 256);
     term.feed(b"\x1b[2 q");
     for n in 0..60 {
         term.feed(format!("{n:03} \x1b[31;4m日本語 text\x1b[0m\r\n").as_bytes());
@@ -293,7 +294,7 @@ fn clipped_negative_origins_and_covering_siblings_are_exact() {
         let id = h.program().app.active_pane().unwrap().id;
         h.focus_window(w, true);
         h.send(Msg::FocusPane(id));
-        let mut term = Terminal::new(70, 16, 256);
+        let mut term = Terminal::new(GridSize::new(Cols::new(70).unwrap(), Rows::new(16).unwrap()), 256);
         term.feed(b"\x1b[2 q");
         for n in 0..60 {
             term.feed(format!("{n:03} 日本語 e\u{301} != \x1b[4munderlined\x1b[0m\r\n").as_bytes());
@@ -328,7 +329,7 @@ fn selection_find_and_link_hover_never_leave_copied_overlays() {
     let id = h.program().active_pane().unwrap().id;
     h.focus_window(w, true);
     h.send(Msg::FocusPane(id));
-    let mut term = Terminal::new(70, 16, 256);
+    let mut term = Terminal::new(GridSize::new(Cols::new(70).unwrap(), Rows::new(16).unwrap()), 256);
     term.feed(b"\x1b[2 q");
     for n in 0..60 {
         term.feed(

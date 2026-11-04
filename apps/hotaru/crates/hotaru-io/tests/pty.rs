@@ -1,3 +1,4 @@
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_io::{Pty, PtyCommand, PtySize};
 use std::io;
 use std::os::fd::AsRawFd;
@@ -40,9 +41,8 @@ fn collect(pty: &Pty) -> Vec<u8> {
 #[test]
 fn spawned_child_has_controlling_terminal_and_requested_size() {
     let size = PtySize {
-        rows: std::num::NonZeroU16::new(37).unwrap(),
-        cols: std::num::NonZeroU16::new(109).unwrap(),
-        ..PtySize::default()
+        grid: GridSize::new(Cols::new(109).unwrap(), Rows::new(37).unwrap()),
+        pixels: None,
     };
     let mut pty = Pty::spawn(command("test -t 0 && test -t 1 && test -t 2 || exit 9; stty size; printf '%s' \"$TERM:$COLORTERM:$TERM_PROGRAM\""), size).unwrap();
     let output = String::from_utf8(collect(&pty)).unwrap();
@@ -70,9 +70,8 @@ fn pty_resize_and_input_reach_child() {
     )
     .unwrap();
     pty.resize(PtySize {
-        rows: std::num::NonZeroU16::new(43).unwrap(),
-        cols: std::num::NonZeroU16::new(132).unwrap(),
-        ..PtySize::default()
+        grid: GridSize::new(Cols::new(132).unwrap(), Rows::new(43).unwrap()),
+        pixels: None,
     })
     .unwrap();
     assert_eq!(pty.write(b"hotaru\n").unwrap(), 7);

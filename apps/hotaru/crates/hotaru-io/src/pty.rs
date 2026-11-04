@@ -5,6 +5,7 @@
 //! PTY never waits for a child; a shared reaper handles HUP, grace, KILL, and wait.
 
 use crate::fd::nonblocking;
+use hotaru_core::GridSize;
 use std::ffi::OsString;
 use std::io;
 use std::num::NonZeroU16;
@@ -55,37 +56,35 @@ impl Default for PtyCommand {
     }
 }
 
-/// A terminal always has at least one row and column.
+/// The size a PTY tells its programs: always at least one column and row,
+/// and its pixels if they're known.
+///
+/// Columns and rows are different types:
 /// ```compile_fail
-/// use hotaru_io::PtySize;
-/// let size = PtySize { rows: 0, ..PtySize::default() };
+/// use hotaru_core::{Cols, GridSize, Rows};
+/// let size = GridSize::new(Rows::new(24).unwrap(), Cols::new(80).unwrap());
 /// ```
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct PtySize {
-    pub rows: NonZeroU16,
-    pub cols: NonZeroU16,
-    pub pixel_width: u16,
-    pub pixel_height: u16,
+    pub grid: GridSize,
+    pub pixels: Option<PixelSize>,
 }
 
-impl Default for PtySize {
-    fn default() -> Self {
-        Self {
-            rows: NonZeroU16::new(24).unwrap(),
-            cols: NonZeroU16::new(80).unwrap(),
-            pixel_width: 0,
-            pixel_height: 0,
-        }
-    }
+/// A terminal's size in pixels.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PixelSize {
+    pub width: NonZeroU16,
+    pub height: NonZeroU16,
 }
 
 impl PtySize {
     fn winsize(self) -> libc::winsize {
         libc::winsize {
-            ws_row: self.rows.get(),
-            ws_col: self.cols.get(),
-            ws_xpixel: self.pixel_width,
-            ws_ypixel: self.pixel_height,
+            ws_row: self.grid.rows.to_u16(),
+            ws_col: self.grid.cols.to_u16(),
+            // Zero is unknown to the kernel.
+            ws_xpixel: self.pixels.map_or(0, |p| p.width.get()),
+            ws_ypixel: self.pixels.map_or(0, |p| p.height.get()),
         }
     }
 }

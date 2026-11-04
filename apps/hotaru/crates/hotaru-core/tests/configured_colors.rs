@@ -1,3 +1,4 @@
+use hotaru_core::GridSize;
 use hotaru_core::{Rgb, Terminal, TerminalColors};
 
 fn configured() -> TerminalColors {
@@ -13,7 +14,7 @@ fn configured() -> TerminalColors {
 
 #[test]
 fn color_queries_report_the_configured_render_colors() {
-    let mut terminal = Terminal::new(80, 24, 0);
+    let mut terminal = Terminal::new(GridSize::default(), 0);
     terminal.set_default_colors(configured());
     terminal.feed(b"\x1b]4;1;?\x07\x1b]10;?\x07\x1b]11;?\x07");
     assert_eq!(
@@ -28,7 +29,7 @@ fn color_queries_report_the_configured_render_colors() {
 
 #[test]
 fn equal_rgb_overrides_survive_theme_changes_and_resets_reveal_new_defaults() {
-    let mut terminal = Terminal::new(80, 24, 0);
+    let mut terminal = Terminal::new(GridSize::default(), 0);
     terminal.set_default_colors(configured());
     terminal.feed(b"\x1b]4;1;#0a0b0c\x07\x1b]10;#1e1f20\x07\x1b]11;#040506\x07");
     let before = terminal.snapshot();
@@ -62,7 +63,7 @@ fn equal_rgb_overrides_survive_theme_changes_and_resets_reveal_new_defaults() {
 
 #[test]
 fn ris_restores_configured_palette_and_preserves_dynamic_colors() {
-    let mut terminal = Terminal::new(80, 24, 0);
+    let mut terminal = Terminal::new(GridSize::default(), 0);
     terminal.set_default_colors(configured());
     terminal.feed(b"\x1b]4;1;#ff0000\x07\x1b]10;#010203\x07\x1b]11;#040506\x07\x1bc");
     let snapshot = terminal.snapshot();
@@ -77,7 +78,7 @@ fn ris_restores_configured_palette_and_preserves_dynamic_colors() {
 
 #[test]
 fn reset_all_palette_entries_clears_each_override() {
-    let mut terminal = Terminal::new(80, 24, 0);
+    let mut terminal = Terminal::new(GridSize::default(), 0);
     terminal.set_default_colors(configured());
     terminal.feed(b"\x1b]4;1;#ff0000;2;#ff0000\x07\x1b]104\x07");
     terminal.set_default_colors(TerminalColors::default());

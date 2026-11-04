@@ -43,6 +43,75 @@ pub type RowRef = triomphe::Arc<Row>;
 
 pub const MAX_COLS: usize = 8192;
 pub const MAX_ROWS: usize = 4096;
+
+macro_rules! cell_count {
+    ($(#[$doc:meta])* $name:ident, $max:ident) => {
+        $(#[$doc])*
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub struct $name(std::num::NonZeroU16);
+
+        impl $name {
+            pub const MIN: $name = $name(std::num::NonZeroU16::MIN);
+            pub const MAX: $name = $name(std::num::NonZeroU16::new($max as u16).unwrap());
+            /// This many, if there can be.
+            pub const fn new(n: usize) -> Option<$name> {
+                if n > $max {
+                    return None;
+                }
+                match std::num::NonZeroU16::new(n as u16) {
+                    Some(n) => Some($name(n)),
+                    None => None,
+                }
+            }
+            /// This many, or as near as there can be.
+            pub const fn saturating(n: usize) -> $name {
+                match $name::new(n) {
+                    Some(count) => count,
+                    None if n == 0 => $name::MIN,
+                    None => $name::MAX,
+                }
+            }
+            pub const fn get(self) -> usize {
+                self.0.get() as usize
+            }
+            pub const fn to_u16(self) -> u16 {
+                self.0.get()
+            }
+        }
+    };
+}
+
+cell_count!(
+    /// A terminal's width in columns: from 1 to [`MAX_COLS`].
+    Cols,
+    MAX_COLS
+);
+cell_count!(
+    /// A terminal's height in rows: from 1 to [`MAX_ROWS`].
+    Rows,
+    MAX_ROWS
+);
+
+/// A terminal's size in cells.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct GridSize {
+    pub cols: Cols,
+    pub rows: Rows,
+}
+
+impl GridSize {
+    pub const fn new(cols: Cols, rows: Rows) -> Self {
+        Self { cols, rows }
+    }
+}
+
+/// 80 by 24, as a VT100's.
+impl Default for GridSize {
+    fn default() -> Self {
+        Self::new(Cols::new(80).unwrap(), Rows::new(24).unwrap())
+    }
+}
+
 pub(crate) const MAX_GRAPHEME_SCALARS: usize = 65;
 pub(crate) const MAX_GRAPHEME_BYTES: usize = MAX_GRAPHEME_SCALARS * 4;
 
@@ -126,15 +195,15 @@ impl Terminal {
     /// Retain at most `scrollback` physical history rows within the default
     /// 50,000,000-byte logical budget, including active content. Active rows
     /// always fit, even when their metadata exceeds that configured budget.
-    pub fn new(cols: usize, rows: usize, scrollback: usize) -> Self {
-        Self::with_history_limits(cols, rows, HistoryLimits::new(scrollback))
+    pub fn new(size: GridSize, scrollback: usize) -> Self {
+        Self::with_history_limits(size, HistoryLimits::new(scrollback))
     }
     /// Explicit byte and row policies. `bytes: None` deliberately removes the
     /// byte limit; benchmark callers must opt in when measuring larger history.
-    pub fn with_history_limits(cols: usize, rows: usize, limits: HistoryLimits) -> Self {
+    pub fn with_history_limits(size: GridSize, limits: HistoryLimits) -> Self {
         Self {
             parser: parser::Parser::default(),
-            state: screen::State::new(cols, rows, limits),
+            state: screen::State::new(size, limits),
         }
     }
     /// Consume the whole input. Callers must drain replies between bounded input
@@ -252,8 +321,8 @@ impl Terminal {
         self.state.enforce_history_budget();
         original - bytes.len()
     }
-    pub fn resize(&mut self, cols: usize, rows: usize) {
-        self.state.resize(cols, rows);
+    pub fn resize(&mut self, size: GridSize) {
+        self.state.resize(size);
     }
     /// Replace configured defaults while preserving explicit OSC overrides.
     /// Queries and snapshots share the resulting colors; OSC reset commands

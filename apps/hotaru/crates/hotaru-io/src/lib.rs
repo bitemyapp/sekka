@@ -16,4 +16,4 @@ pub mod launch;
 pub mod pty;
 
 pub use clipboard::{Cancellation, ClipboardReader, ClipboardWriter, TransferState};
-pub use pty::{Pty, PtyCommand, PtySize};
+pub use pty::{PixelSize, Pty, PtyCommand, PtySize};

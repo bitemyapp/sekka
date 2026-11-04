@@ -1,8 +1,12 @@
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{Terminal, TerminalEvent};
 
 #[test]
 fn osc7_is_owned_coalesced_and_parser_bounded() {
-    let mut terminal = Terminal::new(20, 2, 0);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(20).unwrap(), Rows::new(2).unwrap()),
+        0,
+    );
     for byte in
         b"\x1b]7;file://local/first\x07\x1b]2;title\x07\x1b]7;file://local/second%20directory\x1b\\"
     {
@@ -26,7 +30,10 @@ fn osc7_boundary_is_independent_of_title_and_clipboard_limits() {
         let body = "x".repeat(size);
         let stream = format!("\x1b]7;{body}\x1b\\tail");
         for chunk in [1, 7, stream.len()] {
-            let mut terminal = Terminal::new(20, 2, 0);
+            let mut terminal = Terminal::new(
+                GridSize::new(Cols::new(20).unwrap(), Rows::new(2).unwrap()),
+                0,
+            );
             for bytes in stream.as_bytes().chunks(chunk) {
                 terminal.feed(bytes);
             }
@@ -43,7 +50,10 @@ fn osc7_boundary_is_independent_of_title_and_clipboard_limits() {
             assert!(terminal.snapshot().plain_text().starts_with("tail"));
         }
     }
-    let mut terminal = Terminal::new(20, 2, 0);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(20).unwrap(), Rows::new(2).unwrap()),
+        0,
+    );
     terminal.feed(format!("\x1b]2;{}\x07", "x".repeat(2049)).as_bytes());
     assert!(terminal.take_events().is_empty());
 }

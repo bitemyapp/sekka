@@ -1,3 +1,4 @@
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{ContentSnapshot, RowRef, Snapshot, Terminal};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -44,7 +45,10 @@ fn write_lines(terminal: &mut Terminal, count: usize) {
 
 #[test]
 fn content_captures_survive_compression_eviction_reflow_and_owner_teardown() {
-    let mut terminal = Terminal::new(40, 8, 500);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(40).unwrap(), Rows::new(8).unwrap()),
+        500,
+    );
     write_lines(&mut terminal, 700);
     let resident = terminal.content_snapshot();
     let expected = terminal.snapshot_all();
@@ -62,7 +66,10 @@ fn content_captures_survive_compression_eviction_reflow_and_owner_teardown() {
         })
     };
     for (cols, rows) in [(13, 3), (80, 12), (1, 2), (40, 8)] {
-        terminal.resize(cols, rows);
+        terminal.resize(GridSize::new(
+            Cols::new(cols).unwrap(),
+            Rows::new(rows).unwrap(),
+        ));
         write_lines(&mut terminal, 531);
         compress(&mut terminal);
         same(&terminal.content_snapshot(), &terminal.snapshot_all());
@@ -77,7 +84,10 @@ fn content_captures_survive_compression_eviction_reflow_and_owner_teardown() {
 
 #[test]
 fn ranges_and_cancellation_cover_block_and_screen_boundaries() {
-    let mut terminal = Terminal::new(40, 8, 500);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(40).unwrap(), Rows::new(8).unwrap()),
+        500,
+    );
     write_lines(&mut terminal, 700);
     compress(&mut terminal);
     for _ in 0..13 {

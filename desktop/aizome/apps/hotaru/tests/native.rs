@@ -1,4 +1,5 @@
 use aizome_hotaru::ids::{PaneId, RequestId, TabId};
+use hotaru_core::{Cols, GridSize, Rows};
 use std::sync::Arc;
 
 use aizome_hotaru::app::{Hotaru, Msg};
@@ -35,7 +36,7 @@ fn osc8_super_click_uses_displayed_cell_and_recorded_desktop_opener() {
     h.advance(Duration::ZERO);
     let id = h.program().active_pane().unwrap().id;
     let target = "https://example.test/日本?x=$(false)&quote='literal'";
-    let mut term = Terminal::new(80, 24, 0);
+    let mut term = Terminal::new(GridSize::default(), 0);
     term.feed(format!("\x1b]8;id=link;{target}\x1b\\界ab\x1b]8;;\x1b\\ plain").as_bytes());
     h.send(Msg::Frame(id, Arc::new(term.snapshot())));
     settle_frame(&mut h);
@@ -403,7 +404,7 @@ fn find_navigates_owned_history_and_wraps_in_both_directions() {
 fn find_soft_wrap_wide_text_and_copy_use_complete_owned_match() {
     let mut h = Harness::new(Hotaru::preview());
     let id = h.program().active_pane().unwrap().id;
-    let mut terminal = Terminal::new(6, 4, 20);
+    let mut terminal = Terminal::new(GridSize::new(Cols::new(6).unwrap(), Rows::new(4).unwrap()), 20);
     terminal.feed("ab界cDE".as_bytes());
     h.send(Msg::Frame(id, Arc::new(terminal.snapshot())));
     h.send(Msg::Find);
@@ -429,7 +430,7 @@ fn find_soft_wrap_wide_text_and_copy_use_complete_owned_match() {
 fn obsolete_searches_and_closed_panes_cannot_replace_the_active_query() {
     let mut h = Harness::new(Hotaru::preview());
     let first = h.program().active_pane().unwrap().id;
-    let mut old = Terminal::new(4000, 128, 0);
+    let mut old = Terminal::new(GridSize::new(Cols::new(4000).unwrap(), Rows::new(128).unwrap()), 0);
     old.feed(&vec![b'a'; 4000 * 128]);
     h.send(Msg::Frame(first, Arc::new(old.snapshot())));
     h.send(Msg::Find);
@@ -597,7 +598,7 @@ fn packaged_color_emoji_rasterizes_in_the_terminal_grid() {
     let mut h = Harness::new(Hotaru::preview());
     h.advance(Duration::ZERO);
     let id = h.program().active_pane().unwrap().id;
-    let mut terminal = Terminal::new(80, 24, 0);
+    let mut terminal = Terminal::new(GridSize::default(), 0);
     terminal.feed("\x1b[?25l日本語 😀👍🏽👩\u{200d}💻🇯🇵❤\u{fe0f} ❤\u{fe0e} a\u{301}M".as_bytes());
     h.send(Msg::Frame(id, Arc::new(terminal.snapshot())));
     settle_frame(&mut h);
@@ -841,7 +842,7 @@ fn splits_have_independent_snapshots_and_close_only_the_focused_pane() {
     assert_eq!(h.program().tabs.len(), 1);
     assert_eq!(h.program().panes.len(), 3);
     assert_eq!(h.program().active, tab);
-    let mut terminal = Terminal::new(30, 10, 0);
+    let mut terminal = Terminal::new(GridSize::new(Cols::new(30).unwrap(), Rows::new(10).unwrap()), 0);
     terminal.feed(b"only the second pane");
     h.send(Msg::Frame(second, Arc::new(terminal.snapshot())));
     h.send(Msg::FocusPane(second));
@@ -968,7 +969,7 @@ fn tabs_keep_independent_terminal_snapshots() {
     h.send(Msg::NewTab);
     let second = h.program().active;
     assert_ne!(first, second);
-    let mut terminal = Terminal::new(80, 24, 100);
+    let mut terminal = Terminal::new(GridSize::default(), 100);
     terminal.feed(b"independent tab");
     h.send(Msg::Frame(pane_for(&h, second), Arc::new(terminal.snapshot())));
     h.send(Msg::SelectTab(first));
@@ -991,7 +992,7 @@ fn go_to_tab_finds_tabs_by_title_and_screen_and_goes_there() {
     h.send(Msg::NewTab);
     let second = h.program().active_pane().unwrap().id;
     h.send(Msg::Title(second, "Check Uta audio quality | uta".into()));
-    let mut terminal = Terminal::new(80, 24, 0);
+    let mut terminal = Terminal::new(GridSize::default(), 0);
     terminal.feed(b"$ nix build\r\nthe nightly build failed\r\n");
     h.send(Msg::Frame(second, Arc::new(terminal.snapshot())));
     h.send(Msg::NewTab);
@@ -1359,7 +1360,7 @@ fn explicit_terminal_background_is_rendered_even_when_it_matches_the_builtin_def
     let mut h = Harness::new(Hotaru::preview());
     h.advance(Duration::from_millis(1));
     let id = h.program().active;
-    let terminal = Terminal::new(80, 24, 0);
+    let terminal = Terminal::new(GridSize::default(), 0);
     h.send(Msg::Frame(pane_for(&h, id), Arc::new(terminal.snapshot())));
     settle_frame(&mut h);
     let (width, height, pixels) = h.render_rgba(h.window(), 1.0);
@@ -1372,7 +1373,7 @@ fn semantic_underlines_use_their_own_color_and_overline_is_visible() {
     let mut h = Harness::new(Hotaru::preview());
     h.advance(Duration::from_millis(1));
     let id = h.program().active_pane().unwrap().id;
-    let mut terminal = Terminal::new(80, 24, 0);
+    let mut terminal = Terminal::new(GridSize::default(), 0);
     let colors = [[200, 0, 0], [0, 200, 0], [0, 0, 200], [200, 200, 0], [200, 0, 200]];
     for (index, [r, g, b]) in colors.iter().enumerate() {
         terminal.feed(format!("\x1b[4:{};58;2;{r};{g};{b}m         \x1b[0m\r\n", index + 1).as_bytes());
@@ -1547,7 +1548,7 @@ fn reply_flood_child() {
 fn large_copy_finishes_off_thread_and_stale_reply_is_ignored() {
     let mut h = Harness::new(Hotaru::preview());
     let id = h.program().active;
-    let mut terminal = Terminal::new(4096, 320, 0);
+    let mut terminal = Terminal::new(GridSize::new(Cols::new(4096).unwrap(), Rows::new(320).unwrap()), 0);
     let bytes = vec![b'x'; 4096 * 300];
     terminal.feed(&bytes);
     h.send(Msg::Frame(pane_for(&h, id), Arc::new(terminal.snapshot())));
@@ -1575,13 +1576,13 @@ fn large_copy_finishes_off_thread_and_stale_reply_is_ignored() {
 fn newer_copies_win_and_closed_panes_cannot_publish_results() {
     let mut h = Harness::new(Hotaru::preview());
     let first = h.program().active_pane().unwrap().id;
-    let mut large = Terminal::new(4096, 300, 0);
+    let mut large = Terminal::new(GridSize::new(Cols::new(4096).unwrap(), Rows::new(300).unwrap()), 0);
     large.feed(&vec![b'x'; 4096 * 290]);
     h.send(Msg::Frame(first, Arc::new(large.snapshot())));
     for _ in 0..16 {
         h.send(Msg::CopyScreen);
     }
-    let mut latest = Terminal::new(80, 24, 0);
+    let mut latest = Terminal::new(GridSize::default(), 0);
     latest.feed(b"newest copy survives");
     h.send(Msg::Frame(first, Arc::new(latest.snapshot())));
     h.send(Msg::CopyScreen);

@@ -1,5 +1,6 @@
 use hotaru_core::formatter::{CopyFormat, FormatOptions, format_copy};
 use hotaru_core::{Color, GraphemeWidthMethod, Terminal};
+use hotaru_core::{Cols, GridSize, Rows};
 use serde_json::{Value, json};
 use std::sync::atomic::AtomicBool;
 
@@ -148,8 +149,10 @@ fn unicode_terminal_matches_pinned_ghostty_at_every_byte_split() {
         let data = bytes(&case["input"]);
         for split in 0..=data.len() {
             let mut terminal = Terminal::new(
-                case["cols"].as_u64().unwrap() as usize,
-                case["rows"].as_u64().unwrap() as usize,
+                GridSize::new(
+                    Cols::new(case["cols"].as_u64().unwrap() as usize).unwrap(),
+                    Rows::new(case["rows"].as_u64().unwrap() as usize).unwrap(),
+                ),
                 0,
             );
             terminal.set_default_grapheme_width(if case["unicode"].as_bool().unwrap() {
@@ -161,10 +164,10 @@ fn unicode_terminal_matches_pinned_ghostty_at_every_byte_split() {
             terminal.feed(&data[split..]);
             if let Some(sizes) = case["resizes"].as_array() {
                 for size in sizes {
-                    terminal.resize(
-                        size[0].as_u64().unwrap() as usize,
-                        size[1].as_u64().unwrap() as usize,
-                    );
+                    terminal.resize(GridSize::new(
+                        Cols::new(size[0].as_u64().unwrap() as usize).unwrap(),
+                        Rows::new(size[1].as_u64().unwrap() as usize).unwrap(),
+                    ));
                 }
             }
             check(&mut terminal, case, split);
@@ -192,16 +195,14 @@ fn maximum_clusters_survive_archive_reflow_copy_search_and_teardown() {
     assert_eq!(cluster.chars().count(), 65);
     assert_eq!(cluster.len(), 260);
     let mut resident = Terminal::with_history_limits(
-        12,
-        4,
+        GridSize::new(Cols::new(12).unwrap(), Rows::new(4).unwrap()),
         HistoryLimits {
             rows: 1000,
             bytes: None,
         },
     );
     let mut cold = Terminal::with_history_limits(
-        12,
-        4,
+        GridSize::new(Cols::new(12).unwrap(), Rows::new(4).unwrap()),
         HistoryLimits {
             rows: 1000,
             bytes: None,
@@ -236,8 +237,14 @@ fn maximum_clusters_survive_archive_reflow_copy_search_and_teardown() {
             .all(|m| m.start.col == 0 && m.end.col == 2)
     );
     for (cols, rows) in [(3, 5), (1, 4), (30, 7), (12, 4)] {
-        resident.resize(cols, rows);
-        cold.resize(cols, rows);
+        resident.resize(GridSize::new(
+            Cols::new(cols).unwrap(),
+            Rows::new(rows).unwrap(),
+        ));
+        cold.resize(GridSize::new(
+            Cols::new(cols).unwrap(),
+            Rows::new(rows).unwrap(),
+        ));
         same_content(&resident.content_snapshot(), &cold.content_snapshot());
     }
     drop(resident);
@@ -266,8 +273,7 @@ fn unicode_metadata_mutations_preserve_chunk_invariant_byte_budgets() {
     for chunk in [1, 7, 65536] {
         let make = || {
             let mut terminal = Terminal::with_history_limits(
-                12,
-                4,
+                GridSize::new(Cols::new(12).unwrap(), Rows::new(4).unwrap()),
                 HistoryLimits {
                     rows: 1000,
                     bytes: Some(80000),
@@ -297,12 +303,12 @@ fn unicode_metadata_mutations_preserve_chunk_invariant_byte_budgets() {
                 held.push((whole.content_snapshot(), pieces.content_snapshot()));
             }
             if index % 43 == 0 {
-                whole.resize(7, 4);
-                pieces.resize(7, 4);
+                whole.resize(GridSize::new(Cols::new(7).unwrap(), Rows::new(4).unwrap()));
+                pieces.resize(GridSize::new(Cols::new(7).unwrap(), Rows::new(4).unwrap()));
             }
             if index % 43 == 3 {
-                whole.resize(12, 4);
-                pieces.resize(12, 4);
+                whole.resize(GridSize::new(Cols::new(12).unwrap(), Rows::new(4).unwrap()));
+                pieces.resize(GridSize::new(Cols::new(12).unwrap(), Rows::new(4).unwrap()));
             }
             let a = whole.history_memory();
             let b = pieces.history_memory();

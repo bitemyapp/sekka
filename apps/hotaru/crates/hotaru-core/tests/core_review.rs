@@ -1,3 +1,4 @@
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{Terminal, TerminalEvent};
 
 #[test]
@@ -6,7 +7,7 @@ fn restored_cursor_above_origin_margin_reports_row_one_without_underflow() {
     // the absolute cursor remains row 0, and origin-relative CPR is 1;1.
     let bytes = b"\x1b[?6h\x1b7\x1b[5;10r\x1b8\x1b[6n";
     for chunk in 1..=bytes.len() {
-        let mut terminal = Terminal::new(80, 24, 0);
+        let mut terminal = Terminal::new(GridSize::default(), 0);
         for part in bytes.chunks(chunk) {
             terminal.feed(part);
         }
@@ -22,7 +23,7 @@ fn oversized_dcs_header_discards_payload_through_string_terminator() {
     bytes.extend_from_slice(&[b';'; 32]);
     bytes.extend_from_slice(b"qPAYLOAD\x1b\\after");
     for chunk in 1..=bytes.len() {
-        let mut terminal = Terminal::new(80, 24, 0);
+        let mut terminal = Terminal::new(GridSize::default(), 0);
         for part in bytes.chunks(chunk) {
             terminal.feed(part);
         }
@@ -42,7 +43,7 @@ fn invalid_dcs_private_marker_and_excess_intermediates_do_not_leak_payload() {
         &b"\x1bP1?qPAYLOAD\x1b\\x"[..],
         &b"\x1bP$%&qPAYLOAD\x1b\\x"[..],
     ] {
-        let mut terminal = Terminal::new(80, 24, 0);
+        let mut terminal = Terminal::new(GridSize::default(), 0);
         terminal.feed(bytes);
         let snapshot = terminal.snapshot();
         assert_eq!(snapshot.lines[0].cells()[0].character(), 'x');
@@ -55,7 +56,7 @@ fn oversized_csi_still_finishes_at_header_final_byte() {
     let mut bytes = b"\x1b[".to_vec();
     bytes.extend_from_slice(&[b';'; 32]);
     bytes.extend_from_slice(b"mvisible");
-    let mut terminal = Terminal::new(80, 24, 0);
+    let mut terminal = Terminal::new(GridSize::default(), 0);
     terminal.feed(&bytes);
     let snapshot = terminal.snapshot();
     assert_eq!(snapshot.lines[0].cells()[0].character(), 'v');
@@ -65,7 +66,7 @@ fn oversized_csi_still_finishes_at_header_final_byte() {
 #[test]
 fn ordinary_osc_exact_body_limit_is_accepted_and_one_more_byte_discards_all() {
     for body_size in [2048, 2049] {
-        let mut terminal = Terminal::new(80, 24, 0);
+        let mut terminal = Terminal::new(GridSize::default(), 0);
         let mut bytes = b"\x1b]2;".to_vec();
         bytes.extend(std::iter::repeat_n(b't', body_size));
         bytes.extend_from_slice(b"\x1b\\x");
@@ -90,7 +91,7 @@ fn osc_palette_burst_is_bounded_and_overflow_emits_no_prefix_replies() {
     let response = b"\x1b]4;0;rgb:0000/0000/0000\x07";
     assert_eq!(response.len(), 25);
     for extra in [0, 1] {
-        let mut terminal = Terminal::new(80, 24, 0);
+        let mut terminal = Terminal::new(GridSize::default(), 0);
         let mut bytes = b"\x1b]4;".to_vec();
         bytes.extend_from_slice(&b"0;?;".repeat(512));
         bytes.extend(std::iter::repeat_n(b';', extra));
@@ -112,11 +113,11 @@ fn osc_palette_burst_is_bounded_and_overflow_emits_no_prefix_replies() {
 fn osc_palette_stops_at_invalid_pair_and_ignores_empty_fields() {
     let response = b"\x1b]4;0;rgb:0000/0000/0000\x07";
     for body in ["0;?;BAD;?;1;?", "0;?;1;INVALID;2;?"] {
-        let mut terminal = Terminal::new(80, 24, 0);
+        let mut terminal = Terminal::new(GridSize::default(), 0);
         terminal.feed(format!("\x1b]4;{body}\x07").as_bytes());
         assert_eq!(terminal.take_responses(), response);
     }
-    let mut terminal = Terminal::new(80, 24, 0);
+    let mut terminal = Terminal::new(GridSize::default(), 0);
     terminal.feed(b"\x1b]4;0;?;;0;?\x07");
     assert_eq!(terminal.take_responses(), response.repeat(2));
 }
@@ -126,7 +127,7 @@ fn clipboard_osc_cap_includes_selector_delimiter_and_reference_sentinel() {
     const LIMIT: usize = 8 * 1024 * 1024;
     for selector in [b"c;".as_slice(), b";"] {
         for extra in [0, 1] {
-            let mut terminal = Terminal::new(80, 24, 0);
+            let mut terminal = Terminal::new(GridSize::default(), 0);
             let length = LIMIT - selector.len() - 1 + extra;
             let mut bytes = b"\x1b]52;".to_vec();
             bytes.extend_from_slice(selector);
@@ -151,7 +152,10 @@ fn clipboard_osc_cap_includes_selector_delimiter_and_reference_sentinel() {
 
 #[test]
 fn malformed_byte_streams_and_control_mutations_preserve_screen_invariants() {
-    let mut terminal = Terminal::new(19, 11, 7);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(19).unwrap(), Rows::new(11).unwrap()),
+        7,
+    );
     let mut seed = 0x91ba_347d_u32;
     let mut next = || {
         seed ^= seed << 13;
@@ -184,7 +188,10 @@ fn malformed_byte_streams_and_control_mutations_preserve_screen_invariants() {
                 terminal.feed("e\u{301}猫\u{fe0f}".as_bytes());
             }
             4 => terminal.feed(b"\x1b]4;;0;?;BAD;?\x07\x1b[?1049h\x1b[?1049l"),
-            _ => terminal.resize(next() as usize % 41, next() as usize % 17),
+            _ => terminal.resize(GridSize::new(
+                Cols::saturating(next() as usize % 41),
+                Rows::saturating(next() as usize % 17),
+            )),
         }
         if step % 64 == 0 {
             // Leave unterminated random strings often enough to exercise the

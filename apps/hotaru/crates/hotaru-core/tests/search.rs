@@ -1,3 +1,4 @@
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{
     Terminal,
     search::{self, Error, Match, Options, Position},
@@ -22,8 +23,10 @@ fn selections_match_real_ghostty_search() {
     for case in fixtures["cases"].as_array().unwrap() {
         for chunk in [1, 7, 65_536] {
             let mut terminal = Terminal::new(
-                case["cols"].as_u64().unwrap() as usize,
-                case["rows"].as_u64().unwrap() as usize,
+                GridSize::new(
+                    Cols::new(case["cols"].as_u64().unwrap() as usize).unwrap(),
+                    Rows::new(case["rows"].as_u64().unwrap() as usize).unwrap(),
+                ),
                 4096,
             );
             for part in bytes(&case["input"]).chunks(chunk) {
@@ -31,10 +34,10 @@ fn selections_match_real_ghostty_search() {
             }
             if let Some(sizes) = case["resizes"].as_array() {
                 for size in sizes {
-                    terminal.resize(
-                        size[0].as_u64().unwrap() as usize,
-                        size[1].as_u64().unwrap() as usize,
-                    );
+                    terminal.resize(GridSize::new(
+                        Cols::new(size[0].as_u64().unwrap() as usize).unwrap(),
+                        Rows::new(size[1].as_u64().unwrap() as usize).unwrap(),
+                    ));
                 }
             }
             let capture = terminal.content_snapshot();
@@ -80,7 +83,10 @@ fn selections_match_real_ghostty_search() {
 
 #[test]
 fn owned_results_survive_compression_eviction_reflow_and_teardown() {
-    let mut terminal = Terminal::new(20, 4, 4096);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(20).unwrap(), Rows::new(4).unwrap()),
+        4096,
+    );
     for _ in 0..800 {
         terminal.feed(b"needle on a line\r\n");
     }
@@ -96,7 +102,7 @@ fn owned_results_survive_compression_eviction_reflow_and_teardown() {
     for _ in 0..6000 {
         terminal.feed(b"new\r\n");
     }
-    terminal.resize(3, 2);
+    terminal.resize(GridSize::new(Cols::new(3).unwrap(), Rows::new(2).unwrap()));
     drop(terminal);
     let worker = std::thread::spawn(move || {
         search::find(
@@ -115,7 +121,10 @@ fn owned_results_survive_compression_eviction_reflow_and_teardown() {
 
 #[test]
 fn retention_keeps_newest_overlaps_and_counts_the_rest() {
-    let mut terminal = Terminal::new(80, 2, 0);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(80).unwrap(), Rows::new(2).unwrap()),
+        0,
+    );
     terminal.feed(b"aaaaaaaaaa");
     for limit in [0, 1, 3, 100] {
         let result = search::find(
@@ -149,7 +158,7 @@ fn retention_keeps_newest_overlaps_and_counts_the_rest() {
 
 #[test]
 fn limits_and_cancellation_fail_without_partial_results() {
-    let terminal = Terminal::new(80, 24, 0);
+    let terminal = Terminal::new(GridSize::default(), 0);
     assert_eq!(
         search::find(
             terminal.content_snapshot(),

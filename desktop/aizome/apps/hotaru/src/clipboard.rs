@@ -216,11 +216,12 @@ impl Drop for ClipboardWorker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hotaru_core::GridSize;
     use hotaru_core::Terminal;
 
     #[test]
     fn cancelled_copy_never_prepares_or_publishes_mime_data() {
-        let mut terminal = Terminal::new(80, 24, 100);
+        let mut terminal = Terminal::new(GridSize::default(), 100);
         terminal.feed(b"cancelled contents");
         let source = CopySource::Content(Arc::new(terminal.content_snapshot()));
         assert!(

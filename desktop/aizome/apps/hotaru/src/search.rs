@@ -196,6 +196,7 @@ mod tests {
     use super::*;
     use crate::app::Hotaru;
     use aizome_kit::testing::Harness;
+    use hotaru_core::{Cols, GridSize, Rows};
 
     #[test]
     fn refresh_started_before_navigation_cannot_overwrite_its_selection() {
@@ -232,7 +233,7 @@ mod tests {
     fn late_refresh_cannot_restore_expired_active_copy_and_fatal_actor_cancels_capture() {
         let mut h = Harness::new(Hotaru::preview());
         let id = h.program().active_pane().unwrap().id;
-        let mut terminal = hotaru_core::Terminal::new(20, 2, 0);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(20).unwrap(), Rows::new(2).unwrap()), 0);
         terminal.feed(b"aaa");
         let results = Arc::new(
             search::find(terminal.content_snapshot(), b"a", Default::default(), &AtomicBool::new(false)).unwrap(),
@@ -270,7 +271,7 @@ mod tests {
     fn newer_capture_keeps_logical_selection_until_its_frame_arrives() {
         let mut h = Harness::new(Hotaru::preview());
         let id = h.program().active_pane().unwrap().id;
-        let mut terminal = hotaru_core::Terminal::new(10, 2, 2);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(10).unwrap(), Rows::new(2).unwrap()), 2);
         terminal.feed(b"Mark0\r\nMark1\r\nMark2\r\n");
         let old = Arc::new(
             search::find(terminal.content_snapshot(), b"Mark", Default::default(), &AtomicBool::new(false)).unwrap(),

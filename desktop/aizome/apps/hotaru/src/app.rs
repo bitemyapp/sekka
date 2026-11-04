@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use aizome_kit::prelude::*;
 use aizome_kit::{ClipboardRead, PreparedClipboard};
-use hotaru_core::{ContentSnapshot, Snapshot, Terminal, TerminalColors};
-use hotaru_io::PtyCommand;
+use hotaru_core::{ContentSnapshot, GridSize, Snapshot, Terminal, TerminalColors};
+use hotaru_io::{PtyCommand, PtySize};
 
 use crate::clipboard::{ClipboardWorker, CopySource, Job};
 use crate::panes::{Axis, Direction, PaneTree};
@@ -80,8 +80,7 @@ pub enum Msg {
     Mouse(PaneId, crate::input::MouseInput),
     Wheel(PaneId, crate::input::MouseInput, i32),
     TerminalFocus(PaneId, bool),
-    Resize(PaneId, usize, usize),
-    ResizePixels(PaneId, usize, usize, u16, u16),
+    Resize(PaneId, PtySize),
     Scroll(PaneId, i32),
     Select(PaneId, Selection),
     Copy,
@@ -362,7 +361,7 @@ impl Hotaru {
     fn new_pane(&mut self, cx: &mut Cx<Msg>, inherit_cwd: bool) -> PaneId {
         let id = PaneId::new(self.next_id);
         self.next_id += 1;
-        let mut terminal = Terminal::new(80, 24, self.settings.scrollback);
+        let mut terminal = Terminal::new(GridSize::default(), self.settings.scrollback);
         terminal.set_default_grapheme_width(hotaru_core::GraphemeWidthMethod::Unicode);
         let cursor = (self.settings.cursor_style.shape(), self.settings.cursor_blink);
         terminal.set_default_cursor(cursor.0, cursor.1);
@@ -2194,10 +2193,7 @@ impl Program for Hotaru {
                 self.focus_active(cx);
             }
             Msg::Notify(id, title, body) => self.notify(id, &title, &body, cx),
-            Msg::Resize(id, cols, rows) => self.send(id, Command::Resize { cols, rows }),
-            Msg::ResizePixels(id, cols, rows, width, height) => {
-                self.send(id, Command::ResizePixels { cols, rows, width, height })
-            }
+            Msg::Resize(id, size) => self.send(id, Command::Resize(size)),
             Msg::Scroll(id, lines) => {
                 if let Some(tab) = self.panes.iter_mut().find(|t| t.id == id) {
                     tab.selection = None;
@@ -2686,6 +2682,7 @@ fn publish(target: crate::selections::Target, data: PreparedClipboard, cx: &mut 
 mod automatic_link_tests {
     use super::*;
     use aizome_kit::testing::Harness;
+    use hotaru_core::{Cols, Rows};
     use hotaru_link_regex::{CellPoint, Limits, Matcher};
     use std::sync::atomic::AtomicBool;
     use std::time::{Duration, Instant};
@@ -2719,7 +2716,7 @@ mod automatic_link_tests {
         let mut h = Harness::new(Hotaru::preview());
         h.advance(Duration::ZERO);
         let id = h.program().active_pane().unwrap().id;
-        let mut term = Terminal::new(80, 4, 0);
+        let mut term = Terminal::new(GridSize::new(Cols::new(80).unwrap(), Rows::new(4).unwrap()), 0);
         term.feed(b"https://example.test/path");
         let snapshot = Arc::new(term.snapshot());
         h.send(Msg::Frame(id, snapshot.clone()));

@@ -281,8 +281,9 @@ fn resolve_literal(target: &str, cwd: &Path) -> Result<String, &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hotaru_core::{Cols, GridSize, Rows};
     fn request(pane: PaneId) -> Arc<Request> {
-        let mut terminal = hotaru_core::Terminal::new(8, 2, 0);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(8).unwrap(), Rows::new(2).unwrap()), 0);
         terminal.feed(b"\x1b]8;;https://x\x1b\\x\x1b]8;;\x1b\\");
         let snapshot = Arc::new(terminal.snapshot());
         Arc::new(Request {

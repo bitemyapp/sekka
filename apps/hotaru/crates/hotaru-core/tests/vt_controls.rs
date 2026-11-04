@@ -1,5 +1,6 @@
 use hotaru_core::formatter::{FormatOptions, format_copy};
 use hotaru_core::{Color, Terminal};
+use hotaru_core::{Cols, GridSize, Rows};
 use serde_json::{Value, json};
 use std::sync::atomic::AtomicBool;
 
@@ -44,8 +45,10 @@ fn assert_matches_recorded(fixtures: &Value) {
         for chunk in [1, 7, 65536] {
             let context = format!("{} chunk {chunk}", case["name"]);
             let mut terminal = Terminal::new(
-                case["cols"].as_u64().unwrap() as usize,
-                case["rows"].as_u64().unwrap() as usize,
+                GridSize::new(
+                    Cols::new(case["cols"].as_u64().unwrap() as usize).unwrap(),
+                    Rows::new(case["rows"].as_u64().unwrap() as usize).unwrap(),
+                ),
                 0,
             );
             for part in data.chunks(chunk) {
@@ -99,7 +102,10 @@ fn assert_matches_recorded(fixtures: &Value) {
 
 #[test]
 fn repetition_keeps_owned_link_and_history_captures() {
-    let mut terminal = Terminal::new(12, 3, 200);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(12).unwrap(), Rows::new(3).unwrap()),
+        200,
+    );
     terminal.feed("\x1b[?2027h\x1b]8;;https://example.org\x1b\\猫\x1b[1000b".as_bytes());
     let captured = terminal.content_snapshot();
     let format = || {
