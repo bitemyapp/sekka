@@ -293,6 +293,13 @@ Notes for client authors:
   scaled to fit with black bars, pointer included; the mirror has no place
   in the layout and no wl_output. It costs a second render of the source
   and a read-back per frame, and redraws when the source does.
+- **Tiled monitors**: a 5K panel such as Apple's Studio Display has two
+  connectors, one for each half (the kernel's `TILE`). When the left
+  half's connector has a mode the size of the whole panel (5120×2880,
+  with DSC), it shows all of it and the right half's connector stays dark.
+  That connector isn't a display: no Desk, and no room in the layout for
+  the pointer or windows. Without that mode each half is a display of its
+  own. Aizome doesn't drive both halves as one display.
 - **Main display**: `primary = true` (or `set-primary-output`); else the
   first output. The pointer starts in its middle, it shows the first Desk
   at login, and the current Desk comes there when its own display goes;

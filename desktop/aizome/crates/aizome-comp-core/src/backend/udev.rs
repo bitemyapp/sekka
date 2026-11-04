@@ -815,11 +815,26 @@ fn device_changed(state: &mut State, node: DrmNode) {
         Manager::Pixman(m) => m.device(),
     };
     let Ok(res) = drm.resource_handles() else { return };
+    let infos: Vec<connector::Info> =
+        res.connectors().iter().filter_map(|&h| drm.get_connector(h, true).ok()).collect();
+    let tiles: Vec<Tiling<connector::Handle>> = infos
+        .iter()
+        .filter(|i| i.state() == connector::State::Connected)
+        .map(|i| (i.handle(), tile_of(drm, i.handle()), i.modes().iter().map(|m| m.size()).collect()))
+        .collect();
+    let covered = covered_tiles(&tiles);
     let mut connected = Vec::new();
     let mut gone = Vec::new();
-    for &handle in res.connectors() {
-        let Ok(info) = drm.get_connector(handle, true) else { continue };
-        let is_on = info.state() == connector::State::Connected;
+    for info in &infos {
+        let handle = info.handle();
+        // A tile another connector shows whole isn't a display of its own:
+        // it stays dark, or goes dark if it came on before that one.
+        let by =
+            covered.iter().find(|(c, _)| *c == handle).and_then(|(_, by)| infos.iter().find(|i| i.handle() == *by));
+        if let Some(by) = by {
+            info!("{} is part of the monitor {} shows whole", connector_name(info), connector_name(by));
+        }
+        let is_on = info.state() == connector::State::Connected && by.is_none();
         let known = device.connectors.contains_key(&handle);
         if is_on && !known {
             // A free CRTC its encoders can drive.
@@ -832,7 +847,7 @@ fn device_changed(state: &mut State, node: DrmNode) {
                 .find(|c| !used.contains(c));
             if let Some(crtc) = crtc {
                 device.connectors.insert(handle, crtc);
-                connected.push((info, crtc));
+                connected.push((info.clone(), crtc));
             } else {
                 warn!("no free CRTC for {:?}", info.interface());
             }
@@ -868,17 +883,97 @@ fn device_removed(state: &mut State, node: DrmNode) {
     }
 }
 
+/// The name outputs go by: `DP-1`, `eDP-1`.
+fn connector_name(info: &connector::Info) -> String {
+    format!("{}-{}", info.interface().as_str(), info.interface_id())
+}
+
+/// A connector's blob property (`EDID`, `TILE`), if it has one set.
+fn connector_blob(drm: &DrmDevice, conn: connector::Handle, name: &str) -> Option<Vec<u8>> {
+    let props = drm.get_properties(conn).ok()?;
+    let blob = props.into_iter().find_map(|(h, v)| {
+        let info = drm.get_property(h).ok()?;
+        (info.name().to_str() == Ok(name)).then_some(v)
+    })?;
+    if blob == 0 {
+        return None;
+    }
+    drm.get_property_blob(blob).ok()
+}
+
 /// Make, model and serial from a connector's EDID.
 fn edid_info(drm: &DrmDevice, conn: connector::Handle) -> (String, String, String) {
     let unknown = || ("Unknown".to_string(), "Unknown".to_string(), String::new());
-    let Ok(props) = drm.get_properties(conn) else { return unknown() };
-    let blob = props.into_iter().find_map(|(h, v)| {
-        let info = drm.get_property(h).ok()?;
-        (info.name().to_str() == Ok("EDID")).then_some(v)
-    });
-    let Some(blob) = blob.filter(|b| *b != 0) else { return unknown() };
-    let Ok(edid) = drm.get_property_blob(blob) else { return unknown() };
-    parse_edid(&edid).unwrap_or_else(unknown)
+    connector_blob(drm, conn, "EDID").and_then(|e| parse_edid(&e)).unwrap_or_else(unknown)
+}
+
+/// Where a connector's picture goes in a monitor made of tiles (the
+/// kernel's `TILE`, from the EDID's tiled display topology): a 5K panel
+/// such as Apple's Studio Display has two connectors, its left and right
+/// halves, and the left one can also take the whole panel in one mode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Tile {
+    /// The same for every tile of a monitor (on one device).
+    group: u32,
+    /// The tiles are one panel, not a wall of monitors.
+    single_monitor: bool,
+    columns: u32,
+    rows: u32,
+    column: u32,
+    row: u32,
+    /// The tile's size in pixels.
+    width: u32,
+    height: u32,
+}
+
+impl Tile {
+    /// `group:single_monitor:columns:rows:column:row:width:height`, the
+    /// blob's text (NUL-terminated).
+    fn parse(blob: &[u8]) -> Option<Tile> {
+        let text = std::str::from_utf8(blob).ok()?.trim_end_matches('\0');
+        let fields: Vec<u32> = text.split(':').map(|f| f.parse().ok()).collect::<Option<_>>()?;
+        let &[group, single, columns, rows, column, row, width, height] = fields.as_slice() else { return None };
+        Some(Tile { group, single_monitor: single != 0, columns, rows, column, row, width, height })
+    }
+
+    fn first(&self) -> bool {
+        (self.column, self.row) == (0, 0)
+    }
+
+    /// The whole monitor in pixels.
+    fn whole(&self) -> (u16, u16) {
+        let size = |n: u32, each: u32| u16::try_from(n.saturating_mul(each)).unwrap_or(u16::MAX);
+        (size(self.columns, self.width), size(self.rows, self.height))
+    }
+}
+
+/// A connector's tile, if it's one of a monitor's.
+fn tile_of(drm: &DrmDevice, conn: connector::Handle) -> Option<Tile> {
+    Tile::parse(&connector_blob(drm, conn, "TILE")?)
+}
+
+/// A connected connector, its tile (if it's one) and the sizes of its
+/// modes.
+type Tiling<K> = (K, Option<Tile>, Vec<(u16, u16)>);
+
+/// The tiles that show nothing, each with the connector that shows their
+/// monitor: when a monitor's first tile has a mode the size of the whole
+/// panel, one stream draws all of it and the other tiles' streams aren't
+/// seen (a Studio Display at 5120×2880 on its left half's connector). They
+/// would only be displays nobody can see, with Desks and room for the
+/// pointer and windows. Without that mode each tile is a display, as two
+/// halves side by side.
+fn covered_tiles<K: Copy>(connected: &[Tiling<K>]) -> Vec<(K, K)> {
+    connected
+        .iter()
+        .filter_map(|(k, tile, _)| {
+            let t = tile.filter(|t| t.single_monitor && !t.first())?;
+            let (by, ..) = connected.iter().find(|(_, other, modes)| {
+                other.is_some_and(|o| o.group == t.group && o.first()) && modes.contains(&t.whole())
+            })?;
+            Some((*k, *by))
+        })
+        .collect()
 }
 
 /// The manufacturer's PNP id, the monitor name and serial descriptors.
@@ -949,7 +1044,7 @@ fn connector_connected_as(
     force_on: bool,
     position: Option<(i32, i32)>,
 ) {
-    let name = format!("{}-{}", info.interface().as_str(), info.interface_id());
+    let name = connector_name(&info);
     let crate::backend::Backend::Udev(u) = &mut state.backend else { return };
     let primary = u.primary_gpu;
     let Some(device) = u.devices.get_mut(&node) else { return };
@@ -1211,6 +1306,49 @@ mod tests {
         assert_eq!(make, "BOE");
         assert_eq!(model, "NE135A1");
         assert!(parse_edid(&[0; 10]).is_none());
+    }
+
+    /// A Studio Display's halves on DP-1 and DP-2, as the kernel has them.
+    fn studio_display() -> (Tile, Tile) {
+        let left = Tile::parse(b"1:1:2:1:0:0:2560:2880\0").unwrap();
+        let right = Tile::parse(b"1:1:2:1:1:0:2560:2880\0").unwrap();
+        (left, right)
+    }
+
+    #[test]
+    fn tiles_parse_from_the_kernels_text() {
+        let (left, right) = studio_display();
+        assert_eq!(
+            right,
+            Tile { group: 1, single_monitor: true, columns: 2, rows: 1, column: 1, row: 0, width: 2560, height: 2880 }
+        );
+        assert!(left.first() && !right.first());
+        assert_eq!(left.whole(), (5120, 2880));
+        assert_eq!(Tile::parse(b"1:1:2:1:0:0:2560\0"), None);
+        assert_eq!(Tile::parse(b"1:1:2:1:0:0:2560:x\0"), None);
+        assert_eq!(Tile::parse(b""), None);
+    }
+
+    #[test]
+    fn a_tile_the_first_shows_whole_is_no_display() {
+        let (left, right) = studio_display();
+        let laptop = ("eDP-1", None, vec![(2880, 1800)]);
+        let dp1 = ("DP-1", Some(left), vec![(5120, 2880), (3840, 2160), (2560, 2880)]);
+        let dp2 = ("DP-2", Some(right), vec![(2560, 2880)]);
+        assert_eq!(covered_tiles(&[laptop.clone(), dp1.clone(), dp2.clone()]), [("DP-2", "DP-1")]);
+        // In whichever order the connectors come.
+        assert_eq!(covered_tiles(&[dp2.clone(), laptop.clone(), dp1.clone()]), [("DP-2", "DP-1")]);
+        // The right half alone (its left not connected yet) is a display.
+        assert!(covered_tiles(&[laptop.clone(), dp2.clone()]).is_empty());
+        // Without the whole panel's mode (no DSC on the link) each half is.
+        let halves = ("DP-1", Some(left), vec![(2560, 2880)]);
+        assert!(covered_tiles(&[halves, dp2.clone()]).is_empty());
+        // Another Studio Display's left half doesn't cover this one's right.
+        let other = ("DP-3", Some(Tile { group: 2, ..left }), dp1.2.clone());
+        assert!(covered_tiles(&[other, dp2.clone()]).is_empty());
+        // Tiles of a wall of monitors are each a monitor.
+        let wall = |t: Tile| Some(Tile { single_monitor: false, ..t });
+        assert!(covered_tiles(&[("DP-1", wall(left), dp1.2.clone()), ("DP-2", wall(right), dp2.2)]).is_empty());
     }
 
     #[test]
