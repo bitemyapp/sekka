@@ -1253,7 +1253,7 @@ impl Shell {
             "play-pause" => self.sys.media_control(crate::systray::panels::MediaVerb::PlayPause),
             "next" => self.sys.media_control(crate::systray::panels::MediaVerb::Next),
             "previous" => self.sys.media_control(crate::systray::panels::MediaVerb::Previous),
-            a if self.media_key(a, cx) => {}
+            a if self.media_key(a, output.as_deref(), cx) => {}
             _ => log::debug!("binding {action} at {pointer:?} on {output:?}"),
         }
     }

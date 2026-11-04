@@ -82,6 +82,21 @@ pub fn sample_outputs() -> SampleOutputs {
     SampleOutputs { on: vec![laptop, monitor], off: Vec::new(), requests: Vec::new() }
 }
 
+/// The sample's external monitor, which takes its brightness over DDC/CI.
+pub fn sample_monitors() -> Vec<aizome_sys::monitors::Monitor> {
+    vec![aizome_sys::monitors::Monitor {
+        id: "card0-DP-2".into(),
+        connectors: vec!["DP-2".into()],
+        make: "ASUSTek COMPUTER INC".into(),
+        model: "PG27UCDM".into(),
+        serial: "T5LMAV009458".into(),
+        control: aizome_sys::monitors::Control::Sample,
+        level: 48,
+        min: 0,
+        max: 100,
+    }]
+}
+
 impl SampleOutputs {
     /// Take a request as the compositor would.
     fn apply(&mut self, req: &Request) -> Result<(), String> {

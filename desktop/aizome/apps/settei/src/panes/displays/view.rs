@@ -223,6 +223,46 @@ fn display_sections(p: &Displays, vcx: &ViewCx, d: &Display) -> Vec<Element<Msg>
             )
             .entry("brightness"),
         );
+    } else if s.enabled
+        && let Some((m, level)) = p.monitor_now(&d.name)
+    {
+        // An external monitor's own brightness: one control for the
+        // monitor, whichever of its tiles is selected.
+        let id = m.id.clone();
+        let help = if m.control.remembered() {
+            format!(
+                "The display's own brightness, set over {}. Aizome sets it again when the display comes back.",
+                m.control.through()
+            )
+        } else {
+            format!("The display's own brightness, set over {}.", m.control.through())
+        };
+        rows.push(
+            form::row(
+                "Brightness",
+                row![
+                    icon(Icon::SunDim).size(14.0).role(Role::Text3),
+                    slider(level as f64, 0.0..=1.0)
+                        .step(0.01)
+                        .on_change(move |v| Msg::MonitorBrightness(id.clone(), v as f32))
+                        .width(200.0),
+                    icon(Icon::Sun).size(14.0).role(Role::Text3)
+                ]
+                .spacing(8.0),
+            )
+            .help(help)
+            .entry("brightness"),
+        );
+    } else if s.enabled
+        && let Some(u) = p.monitor_unavailable(&d.name)
+    {
+        // Its own buttons, where it has them and Aizome can't reach it.
+        use aizome_sys::monitors::Why;
+        let value = match u.why {
+            Why::NoDdc | Why::NoLuminance | Why::NoChannel => "Set on the display",
+            _ => "Not available",
+        };
+        rows.push(form::value("Brightness", value).help(u.why.explain()).entry("brightness"));
     }
     out.push(vcx.section("", rows));
     if !s.enabled || s.mirror.is_some() {

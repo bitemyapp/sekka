@@ -3,7 +3,10 @@
 //! it's used as (the main display, extending the desktop, mirroring
 //! another, or off), its resolution as scaled sizes (whole scales first,
 //! fractional ones when asked for) or every resolution, its refresh rate,
-//! rotation, and the built-in panel's brightness.
+//! rotation, and its brightness: the built-in panel's backlight, or an
+//! external monitor's own over DDC/CI (a Studio Display's over USB), where
+//! it takes one (`aizome-sys`'s `monitors`). A display that doesn't says
+//! why rather than offering a slider that does nothing.
 //!
 //! Changes apply at once through the compositor's `output-config`. Those
 //! that can leave a screen blank (resolution, refresh rate, rotation,
@@ -34,6 +37,7 @@ use std::time::Duration;
 use aizome_ipc::{OutputInfo, Request};
 use aizome_kit::TimerHandle;
 use aizome_kit::prelude::*;
+use aizome_sys::monitors::{Monitor, Monitors, Unavailable};
 use aizome_sys::power::Backlight;
 use aizome_sys::{Error, Task};
 
@@ -68,6 +72,16 @@ struct Brightness {
     shown: Option<f32>,
 }
 
+/// External monitors' brightness, set as the built-in panel's is: one level
+/// on its way at a time, the latest waiting, the one asked for shown.
+#[derive(Default)]
+struct MonitorLevels {
+    live: Option<Monitors>,
+    pending: Option<(String, f32)>,
+    in_flight: bool,
+    shown: Option<(String, f32)>,
+}
+
 #[derive(Clone, Debug)]
 pub enum Msg {
     Loaded(u64, Result<Vec<OutputInfo>, String>),
@@ -83,6 +97,12 @@ pub enum Msg {
     Fractional(bool),
     Brightness(f32),
     BrightnessDone(Result<f32, Error>),
+    /// An external monitor's brightness, by its `aizome-sys` id.
+    MonitorBrightness(String, f32),
+    MonitorBrightnessDone(Result<(), Error>),
+    /// Monitors made up for a test (with displays that have no control).
+    #[cfg(test)]
+    SampleMonitors(aizome_sys::monitors::MonitorsState),
     Applied {
         result: Result<Vec<OutputInfo>, String>,
         after: Vec<Settings>,
@@ -117,6 +137,7 @@ pub struct Displays {
     /// when they change on disk.
     outputs: Vec<OutputInfo>,
     brightness: Brightness,
+    monitors: MonitorLevels,
     /// Night Light as the compositor last told it (none without one).
     night: Option<aizome_ipc::NightLightState>,
 }
@@ -138,6 +159,7 @@ impl Default for Displays {
             watching: None,
             outputs: Vec::new(),
             brightness: Brightness { sample: 0.72, ..Brightness::default() },
+            monitors: MonitorLevels::default(),
             night: None,
         }
     }
@@ -158,6 +180,11 @@ impl Displays {
             if !cx.sample() {
                 self.brightness.live = Some(Backlight::new(cx.wake()));
             }
+            self.monitors.live = Some(if cx.sample() {
+                Monitors::sample(system::sample_monitors(), cx.wake())
+            } else {
+                Monitors::new(cx.wake())
+            });
         }
     }
 
@@ -360,6 +387,36 @@ impl Displays {
         cx.wait(task, Msg::BrightnessDone);
     }
 
+    fn set_monitor_brightness(&mut self, id: String, level: f32, cx: &mut PaneCx<Msg>) {
+        let level = level.clamp(0.0, 1.0);
+        self.monitors.shown = Some((id.clone(), level));
+        let Some(m) = &self.monitors.live else { return };
+        if self.monitors.in_flight {
+            self.monitors.pending = Some((id, level));
+            return;
+        }
+        self.monitors.in_flight = true;
+        let task: Task<()> = m.set_fraction(&id, level);
+        cx.wait(task, Msg::MonitorBrightnessDone);
+    }
+
+    /// The external monitor on `connector` whose brightness can be set,
+    /// and its level (the one asked for while it's on its way).
+    pub(crate) fn monitor_now(&self, connector: &str) -> Option<(Monitor, f32)> {
+        let m = self.monitors.live.as_ref()?.snapshot().on(connector)?.clone();
+        let level = match &self.monitors.shown {
+            Some((id, level)) if *id == m.id => *level,
+            _ => m.fraction(),
+        };
+        Some((m, level))
+    }
+
+    /// Why the display on `connector` has no brightness control, if it
+    /// hasn't one.
+    pub(crate) fn monitor_unavailable(&self, connector: &str) -> Option<Unavailable> {
+        self.monitors.live.as_ref()?.snapshot().unavailable_on(connector).cloned()
+    }
+
     /// The built-in panel's brightness, if it has a backlight.
     pub(crate) fn brightness_now(&self) -> Option<f32> {
         match &self.brightness.live {
@@ -432,7 +489,13 @@ impl Pane for Displays {
                 "flip",
                 "orientation",
             ]),
-            SettingEntry::new("brightness", "Brightness").keywords(&["backlight", "dim"]),
+            SettingEntry::new("brightness", "Brightness").keywords(&[
+                "backlight",
+                "dim",
+                "monitor brightness",
+                "ddc",
+                "studio display",
+            ]),
             SettingEntry::new("night-light", "Night Light").keywords(&[
                 "night shift",
                 "warm",
@@ -446,6 +509,11 @@ impl Pane for Displays {
     fn shown(&mut self, cx: &mut PaneCx<Msg>) {
         self.start(cx);
         self.read(cx);
+        // A monitor's buttons may have changed its level, or one that didn't
+        // answer may now.
+        if let Some(m) = &self.monitors.live {
+            m.refresh();
+        }
         if !cx.sample() {
             cx.compositor(Request::NightLight { enabled: None, temperature: None }, night_state);
         }
@@ -550,6 +618,21 @@ impl Pane for Displays {
                 } else {
                     self.brightness.shown = None;
                 }
+            }
+            Msg::MonitorBrightness(id, level) => self.set_monitor_brightness(id, level, cx),
+            Msg::MonitorBrightnessDone(result) => {
+                self.monitors.in_flight = false;
+                if let Err(e) = result {
+                    cx.failed("Couldn't change the display's brightness", e);
+                }
+                match self.monitors.pending.take() {
+                    Some((id, level)) => self.set_monitor_brightness(id, level, cx),
+                    None => self.monitors.shown = None,
+                }
+            }
+            #[cfg(test)]
+            Msg::SampleMonitors(state) => {
+                self.monitors.live = Some(Monitors::sample_state(state, cx.wake()));
             }
             Msg::Applied { result, after, main, names, confirm, persist } => {
                 self.applying = false;
@@ -719,6 +802,77 @@ mod tests {
             ..Default::default()
         };
         AppMsg::Pane("displays", Arc::new(Msg::Night(Some(state))))
+    }
+
+    fn select(h: &mut Harness<Settei>, name: &str) {
+        h.send(AppMsg::Pane("displays", Arc::new(Msg::Select(name.into()))));
+    }
+
+    /// The level of the one brightness slider showing.
+    fn slider_level(h: &Harness<Settei>) -> Option<f64> {
+        let w = h.window();
+        h.semantics(w)
+            .into_iter()
+            .filter(|(s, _)| s.role == aizome_kit::widget::SemanticRole::Slider)
+            .find_map(|(s, _)| s.range.map(|(_, _, v)| v))
+    }
+
+    #[test]
+    fn an_external_monitor_gets_a_brightness_slider_of_its_own() {
+        let (mut h, _) = open("monitor");
+        let w = h.window();
+        select(&mut h, "DP-2");
+        let texts = h.texts(w);
+        assert!(texts.iter().any(|t| t == "Brightness"), "{texts:?}");
+        assert!(texts.iter().any(|t| t == "The display's own brightness, set over DDC/CI."), "{texts:?}");
+        assert!((slider_level(&h).unwrap() - 0.48).abs() < 1e-3);
+        if let Some(dir) = std::env::var_os("SETTEI_SHOTS") {
+            h.resize(w, aizome_kit::layout::Size::new(940.0, 1180.0));
+            h.save_png(w, std::path::Path::new(&dir).join("displays-monitor-night.png"), 2.0);
+        }
+        h.send(AppMsg::Pane("displays", Arc::new(Msg::MonitorBrightness("card0-DP-2".into(), 0.8))));
+        for _ in 0..400 {
+            if slider_level(&h).is_some_and(|l| (l - 0.8).abs() < 1e-3) && !texts_have(&h, "Couldn't") {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            h.send(AppMsg::Nothing);
+        }
+        assert!((slider_level(&h).unwrap() - 0.8).abs() < 1e-3, "the monitor took it");
+        // The built-in panel keeps its own (backlight) slider.
+        select(&mut h, "eDP-1");
+        assert!((slider_level(&h).unwrap() - 0.72).abs() < 1e-3);
+    }
+
+    fn texts_have(h: &Harness<Settei>, part: &str) -> bool {
+        h.texts(h.window()).iter().any(|t| t.contains(part))
+    }
+
+    #[test]
+    fn a_display_without_a_control_says_why() {
+        use aizome_sys::monitors::{MonitorsState, Unavailable, Why};
+        let (mut h, _) = open("monitor-why");
+        let w = h.window();
+        let state = MonitorsState {
+            monitors: Vec::new(),
+            unavailable: vec![Unavailable {
+                connectors: vec!["DP-2".into()],
+                make: "APP".into(),
+                model: "StudioDisplay".into(),
+                why: Why::NotAuthorized,
+            }],
+            ready: true,
+        };
+        h.send(AppMsg::Pane("displays", Arc::new(Msg::SampleMonitors(state))));
+        select(&mut h, "DP-2");
+        let texts = h.texts(w);
+        assert!(texts.iter().any(|t| t == "Not available"), "a Studio Display has no buttons: {texts:?}");
+        assert!(texts.iter().any(|t| t == &Why::NotAuthorized.explain()), "{texts:?}");
+        assert_eq!(slider_level(&h), None, "no slider that does nothing");
+        if let Some(dir) = std::env::var_os("SETTEI_SHOTS") {
+            h.resize(w, aizome_kit::layout::Size::new(940.0, 1180.0));
+            h.save_png(w, std::path::Path::new(&dir).join("displays-studio-display-not-authorized.png"), 2.0);
+        }
     }
 
     #[test]

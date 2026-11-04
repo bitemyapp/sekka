@@ -43,6 +43,8 @@ pub enum PanelMsg {
     /// Connect (true) or disconnect a device, by its path.
     Device(String, bool),
     Brightness(String, f32),
+    /// An external monitor's brightness, by its `aizome-sys` id.
+    MonitorBrightness(String, f32),
     Theme(usize),
     Size(usize),
     PowerMode(String),
@@ -123,6 +125,9 @@ pub struct BtPanel {
 pub struct DisplayPanel {
     /// Backlights: name and level.
     pub backlights: Vec<(String, f32)>,
+    /// External monitors that take a level (DDC/CI, Studio Displays):
+    /// id, name and level.
+    pub monitors: Vec<(String, String, f32)>,
     /// Night, Day, Auto.
     pub theme: usize,
     /// Small, Medium, Large.
@@ -207,6 +212,14 @@ fn labelled(label: &str, weight: f32, right: Option<Element<PanelMsg>>, h: f64) 
         items.push(r);
     }
     aizome_kit::row(items).align(Align::Center).height(h).padding([0.0, PAD]).into()
+}
+
+/// The height of the name above each of several brightness sliders.
+const CAPTION: f64 = 24.0;
+
+/// Whether the display panel names its sliders: when it has more than one.
+fn named_sliders(p: &DisplayPanel) -> bool {
+    p.backlights.len() + p.monitors.len() > 1
 }
 
 fn head(title: &str, right: Option<Element<PanelMsg>>) -> Element<PanelMsg> {
@@ -527,9 +540,21 @@ fn bluetooth(p: &BtPanel) -> Vec<Element<PanelMsg>> {
 
 fn display(p: &DisplayPanel) -> Vec<Element<PanelMsg>> {
     let mut v = vec![head("Display", None)];
+    // With more than one slider, each says whose it is.
+    let named = named_sliders(p);
     for (name, level) in &p.backlights {
+        if named {
+            v.push(labelled("Built-in Display", typeface::WEIGHT_REGULAR, None, CAPTION));
+        }
         let n = name.clone();
         v.push(slider_row(Icon::SunDim, *level, move |x| PanelMsg::Brightness(n.clone(), x as f32), None));
+    }
+    for (id, title, level) in &p.monitors {
+        if named {
+            v.push(labelled(title, typeface::WEIGHT_REGULAR, None, CAPTION));
+        }
+        let id = id.clone();
+        v.push(slider_row(Icon::SunDim, *level, move |x| PanelMsg::MonitorBrightness(id.clone(), x as f32), None));
     }
     v.push(labelled("Appearance", typeface::WEIGHT_REGULAR, None, 24.0));
     v.push(
@@ -857,7 +882,9 @@ pub fn height(p: &Panel) -> f64 {
         }
         Panel::Bluetooth(b) => HEAD + if b.powered { b.devices.len() as f64 * ROW } else { 0.0 } + sep + ROW,
         Panel::Display(d) => {
-            HEAD + d.backlights.len() as f64 * (ROW + 4.0)
+            let sliders = (d.backlights.len() + d.monitors.len()) as f64;
+            HEAD + sliders * (ROW + 4.0)
+                + if named_sliders(d) { sliders * CAPTION } else { 0.0 }
                 + 2.0 * (24.0 + 30.0)
                 + if d.night_light.is_some() { ROW } else { 0.0 }
                 + sep
