@@ -19,7 +19,7 @@ use smithay::backend::allocator::dumb::DumbAllocator;
 use smithay::backend::allocator::format::FormatSet;
 use smithay::backend::allocator::gbm::{GbmAllocator, GbmBufferFlags, GbmDevice};
 use smithay::backend::allocator::{Format as DrmFormat, Modifier};
-use smithay::backend::drm::compositor::FrameFlags;
+use smithay::backend::drm::compositor::{FrameFlags, PrimaryPlaneElement};
 use smithay::backend::drm::exporter::gbm::GbmFramebufferExporter;
 use smithay::backend::drm::output::{DrmOutput, DrmOutputManager, DrmOutputRenderElements};
 use smithay::backend::drm::{DrmDevice, DrmDeviceFd, DrmEvent, DrmEventMetadata, DrmEventTime, DrmNode, NodeType};
@@ -32,7 +32,8 @@ use smithay::backend::renderer::gles::{GlesRenderbuffer, GlesRenderer};
 use smithay::backend::renderer::multigpu::gbm::GbmGlesBackend;
 use smithay::backend::renderer::multigpu::{GpuManager, MultiRenderer};
 use smithay::backend::renderer::pixman::PixmanRenderer;
-use smithay::backend::renderer::{ImportDma, ImportMemWl};
+use smithay::backend::renderer::sync::SyncPoint;
+use smithay::backend::renderer::{ImportDma, ImportMemWl, Renderer};
 use smithay::backend::session::libseat::LibSeatSession;
 use smithay::backend::session::{Event as SessionEvent, Session};
 use smithay::backend::udev::{UdevBackend, UdevEvent, all_gpus, primary_gpu};
@@ -129,6 +130,11 @@ struct Device {
     /// Connected connectors and the CRTCs they drive.
     connectors: HashMap<connector::Handle, crtc::Handle>,
     surfaces: HashMap<crtc::Handle, Surface>,
+    /// Off the primary GPU: when the last frame's copy onto this GPU is
+    /// done. smithay draws all this GPU's outputs on the primary into one
+    /// shared buffer and copies each from there, so the next frame mustn't
+    /// draw into it before the copy has read it (#277).
+    copied: Option<SyncPoint>,
 }
 
 pub struct Udev {
@@ -462,8 +468,26 @@ impl Udev {
                     Ok(mut r) => {
                         let (mut elements, clear) = scene_for::<_, GlesRenderbuffer>(&mut r, az, output, &scene, clear);
                         crate::blur::prepare(&mut surface.blur_probe, output, &mut elements, Some(render_node));
+                        // Off the primary, this frame draws into the buffer
+                        // the last copy read: the primary GPU waits for that
+                        // copy (this thread does, if it can't take the fence).
+                        if let Some(copied) = device.copied.take()
+                            && let Err(e) = r.wait(&copied)
+                        {
+                            warn!("waiting for {render_node}'s last copy: {e:?}");
+                        }
                         match drm.render_frame(&mut r, &elements, clear, frame_flags(az)) {
                             Ok(res) => {
+                                if let PrimaryPlaneElement::Swapchain(e) = &res.primary_element {
+                                    // A plane that takes no fence shows the
+                                    // buffer as it is when queued: finish it.
+                                    if !res.is_empty && res.needs_sync() {
+                                        let _ = e.sync.wait();
+                                    }
+                                    if render_node != primary {
+                                        device.copied = Some(e.sync.clone());
+                                    }
+                                }
                                 let damaged = !res.is_empty;
                                 let states = res.states;
                                 queue(az, output, damaged, &states, |fb| {
@@ -800,8 +824,10 @@ fn device_added(state: &mut State, node: DrmNode, path: &Path) -> Result<(), Str
             )
         }
     };
-    u.devices
-        .insert(node, Device { token, render_node, manager, connectors: HashMap::new(), surfaces: HashMap::new() });
+    u.devices.insert(
+        node,
+        Device { token, render_node, manager, connectors: HashMap::new(), surfaces: HashMap::new(), copied: None },
+    );
     device_changed(state, node);
     Ok(())
 }
