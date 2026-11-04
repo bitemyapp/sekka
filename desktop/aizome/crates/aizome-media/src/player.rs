@@ -21,7 +21,7 @@ use std::time::Duration;
 
 use sidestep_ui::video::{VideoCaps, VideoSink};
 
-use crate::audio::{Channels, Format, NullOutput, Output, Producer};
+use crate::audio::{Channels, Format, Frames, NullOutput, Output, Producer};
 use crate::av::{self, Decoder, Frame, Input, Packet, ff};
 use crate::clock::Clock;
 use crate::subs::{self, Cue};
@@ -1394,7 +1394,7 @@ impl Ctl {
             && self
                 .session
                 .as_ref()
-                .is_some_and(|s| s.started && s.audio.as_ref().is_some_and(|a| a.ring.buffered() > 0))
+                .is_some_and(|s| s.started && s.audio.as_ref().is_some_and(|a| a.ring.buffered() > Frames::ZERO))
             && !self.clock.running()
             && self.started_at.is_some_and(|t| t.elapsed() > Duration::from_millis(1500));
         if stalled {
@@ -1403,10 +1403,9 @@ impl Ctl {
         let s = self.session.as_mut()?;
         // The end.
         if s.eof && !s.ended {
-            let audio_done = s
-                .audio
-                .as_ref()
-                .is_none_or(|a| a.packets.is_empty() && a.pending.is_empty() && a.drained && a.ring.buffered() == 0);
+            let audio_done = s.audio.as_ref().is_none_or(|a| {
+                a.packets.is_empty() && a.pending.is_empty() && a.drained && a.ring.buffered() == Frames::ZERO
+            });
             let video_done = s.video.is_none() || self.video.drained.load(Ordering::Acquire) || suspended;
             if let Some(a) = &mut s.audio
                 && a.packets.is_empty()
@@ -1463,11 +1462,12 @@ fn packets_secs(a: &AudioPart) -> f64 {
 
 /// Decode audio packets into the ring until it holds `HIGH` seconds.
 fn decode_audio(a: &mut AudioPart, eof: bool, speed: f64) {
-    let channels = a.ring.format().channels() as i32;
+    let format = a.ring.format();
+    let channels = format.channels().get() as i32;
     loop {
         if !a.pending.is_empty() {
             let pushed = a.ring.push(&a.pending);
-            a.pending.drain(..pushed * channels as usize);
+            a.pending.drain(..pushed.samples(format.channels()));
             if !a.pending.is_empty() {
                 return;
             }
@@ -1531,7 +1531,7 @@ fn decode_audio(a: &mut AudioPart, eof: bool, speed: f64) {
         if pkt.is_none() {
             // Drained: everything converted.
             let pushed = a.ring.push(&a.pending);
-            a.pending.drain(..pushed * channels as usize);
+            a.pending.drain(..pushed.samples(format.channels()));
             return;
         }
     }

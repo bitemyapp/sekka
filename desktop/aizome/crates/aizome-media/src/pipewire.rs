@@ -19,9 +19,9 @@ use std::sync::{Arc, Mutex};
 use pipewire as pw;
 use pw::spa;
 
-use crate::audio::{Output, Playback, Ring, amplitude, fill};
+use crate::audio::{Frames, Output, Playback, Ring, amplitude, fill};
 use crate::av::ChannelLayout;
-use crate::clock::Clock;
+use crate::clock::{Clock, MonotonicNs};
 
 /// What the stream is for: how long its cycles may be, and its role.
 #[derive(Clone, Debug)]
@@ -175,8 +175,8 @@ fn run(rx: pw::channel::Receiver<Cmd>, ready: mpsc::Sender<Result<(), String>>, 
                     *describe.lock().unwrap_or_else(|e| e.into_inner()) = format!(
                         "PipeWire, {} Hz, {} channel{}, {} ms cycles",
                         f.rate(),
-                        f.channels(),
-                        if f.channels() == 1 { "" } else { "s" },
+                        f.channels().get(),
+                        if f.channels().get() == 1 { "" } else { "s" },
                         (kind.latency * 1000.0).round()
                     );
                     *cur.borrow_mut() = Some(p);
@@ -285,7 +285,7 @@ fn open(
 ) -> Result<Playing, String> {
     let fmt = ring.format();
     let (mut consumer, playback) = ring.consumer()?;
-    let channels = fmt.channels();
+    let channels = fmt.channels().get();
     let latency = format!("{}/{}", quantum(kind.latency, fmt.rate()), fmt.rate());
     let props = pw::properties::properties! {
         "media.type" => "Audio",
@@ -301,6 +301,7 @@ fn open(
     };
     let stream = pw::stream::StreamRc::new(core.clone(), &kind.app_name, props).map_err(|e| e.to_string())?;
     let c = clock.clone();
+    // Bytes a frame.
     let stride = (channels as usize) * std::mem::size_of::<f32>();
     let listener = stream
         .add_local_listener::<()>()
@@ -318,9 +319,9 @@ fn open(
                     stream.queue_raw_buffer(b);
                     return;
                 }
-                let room = d.maxsize as usize / stride;
-                let want = if (*b).requested > 0 { ((*b).requested as usize).min(room) } else { room };
-                let out = std::slice::from_raw_parts_mut(d.data as *mut f32, want * channels as usize);
+                let room = Frames::new((d.maxsize as usize / stride) as u64);
+                let want = if (*b).requested > 0 { Frames::new((*b).requested).min(room) } else { room };
+                let out = std::slice::from_raw_parts_mut(d.data as *mut f32, want.samples(fmt.channels()));
                 let (latency, now) = match stream.time() {
                     Ok(t) => {
                         let rate = t.rate();
@@ -329,17 +330,19 @@ fn open(
                         } else {
                             0.0
                         };
-                        let frames = delay * f64::from(fmt.rate()) + (t.buffered() + t.queued()) as f64;
-                        (frames as u64, t.now().max(0) as u64)
+                        // The resampler's frames, and the queued buffers' sizes,
+                        // which are frames (below).
+                        let held = Frames::new(t.buffered() + t.queued());
+                        (fmt.frames_in(delay) + held, MonotonicNs::from_nanos(t.now().max(0) as u64))
                     }
-                    Err(_) => (0, crate::clock::monotonic_now()),
+                    Err(_) => (Frames::ZERO, crate::clock::monotonic_now()),
                 };
                 fill(&mut consumer, &c, out, latency, now);
                 let chunk = &mut *d.chunk;
                 chunk.offset = 0;
                 chunk.stride = stride as i32;
-                chunk.size = (want * stride) as u32;
-                (*b).size = want as u64;
+                chunk.size = (want.get() as usize * stride) as u32;
+                (*b).size = want.get();
                 stream.queue_raw_buffer(b);
             }
         })

@@ -36,7 +36,7 @@ use std::time::Duration;
 use sidestep_ui::video::{Dmabuf, DmabufPlane, ShmBuffer, Shown, VideoBuffer, VideoCaps, VideoFrame, VideoSink};
 
 use crate::av::{self, Decoder, Frame, Packet, ff};
-use crate::clock::{Clock, monotonic_now};
+use crate::clock::{Clock, MonotonicNs, monotonic_now};
 
 /// Frames decoded ahead.
 const AHEAD: usize = 4;
@@ -45,11 +45,11 @@ const AHEAD: usize = 4;
 pub const PACKETS_HIGH: usize = 96;
 pub const PACKETS_LOW: usize = 32;
 /// How long before its time a frame goes to the compositor.
-const LEAD_NS: u64 = 12_000_000;
+const LEAD: Duration = Duration::from_millis(12);
 /// A run of frames discarded this long (and this many) is the window out
 /// of sight.
 const HIDDEN_RUN: u32 = 8;
-const HIDDEN_NS: u64 = 400_000_000;
+const HIDDEN: Duration = Duration::from_millis(400);
 /// How often an out-of-sight video shows its last frame again, to see.
 const PROBE: Duration = Duration::from_secs(1);
 
@@ -194,6 +194,7 @@ impl Shared {
 struct Sight {
     presented: AtomicU64,
     discarded_run: AtomicU32,
+    /// A [`MonotonicNs`], as the compositor reports it.
     last_presented: AtomicU64,
 }
 
@@ -498,19 +499,19 @@ pub fn run(shared: Arc<Shared>, sink: VideoSink, caps: VideoCaps, clock: Arc<Clo
             continue;
         };
         let now = monotonic_now();
-        let half = (s.info.frame_duration / anchor.rate.max(0.01) * 0.5e9) as u64;
+        let half = Duration::from_nanos((s.info.frame_duration / anchor.rate.max(0.01) * 0.5e9) as u64);
         if due + half < now {
             s.frames.pop_front();
             s.shared.stats.dropped.fetch_add(1, Ordering::Relaxed);
             s.late(true);
             continue;
         }
-        if due > now + LEAD_NS {
-            s.wait(Some(Duration::from_nanos(due - now - LEAD_NS)));
+        if due > now + LEAD {
+            s.wait(Some(due.saturating_since(now + LEAD)));
             continue;
         }
         s.late(false);
-        let refresh = u64::from(s.shared.stats.refresh.load(Ordering::Relaxed));
+        let refresh = Duration::from_nanos(u64::from(s.shared.stats.refresh.load(Ordering::Relaxed)));
         let at = due.saturating_sub(refresh / 2);
         let (pts, frame) = s.frames.pop_front().expect("a frame");
         s.present(pts, frame, Some(at));
@@ -655,7 +656,7 @@ impl State {
     }
 
     /// Show a frame (at `at`, or now).
-    fn present(&mut self, pts: f64, frame: Frame, at: Option<u64>) {
+    fn present(&mut self, pts: f64, frame: Frame, at: Option<MonotonicNs>) {
         let again = frame.share();
         let Some((buffer, crop, keep)) = self.prepare(frame) else {
             self.shared.stats.dropped.fetch_add(1, Ordering::Relaxed);
@@ -663,7 +664,7 @@ impl State {
         };
         let mut vf = VideoFrame::new(buffer.clone());
         vf.crop = crop;
-        vf.at = at;
+        vf.at = at.map(MonotonicNs::as_nanos);
         let sight = self.sight.clone();
         let shared = self.shared.clone();
         vf.shown = Some(Box::new(move |shown| match shown {
@@ -765,8 +766,8 @@ impl State {
         let told_hidden = self.shared.window_hidden.load(Ordering::Acquire);
         if !self.suspended {
             let run = self.sight.discarded_run.load(Ordering::Relaxed);
-            let last = self.sight.last_presented.load(Ordering::Relaxed);
-            let unseen = run >= HIDDEN_RUN && monotonic_now().saturating_sub(last) > HIDDEN_NS;
+            let last = MonotonicNs::from_nanos(self.sight.last_presented.load(Ordering::Relaxed));
+            let unseen = run >= HIDDEN_RUN && monotonic_now().saturating_since(last) > HIDDEN;
             if (told_hidden || unseen) && self.clock.running() && self.seekable() {
                 self.suspend(told_hidden);
                 return true;
@@ -805,7 +806,7 @@ impl State {
         log::debug!("video back in sight: catching up");
         self.suspended = false;
         self.sight.discarded_run.store(0, Ordering::Relaxed);
-        self.sight.last_presented.store(monotonic_now(), Ordering::Relaxed);
+        self.sight.last_presented.store(monotonic_now().as_nanos(), Ordering::Relaxed);
         self.shared.resync.store(true, Ordering::Release);
         self.shared.wake_demuxer.wake();
         self.wait(Some(PROBE));

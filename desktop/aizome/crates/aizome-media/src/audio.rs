@@ -15,10 +15,11 @@
 
 use std::cell::UnsafeCell;
 use std::num::NonZeroU32;
+use std::ops::Add;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crate::clock::{Anchor, Clock, monotonic_now};
+use crate::clock::{Anchor, Clock, MonotonicNs, monotonic_now};
 
 /// The audio the ring carries: f32, interleaved.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,11 +45,93 @@ impl Format {
     pub const fn new(rate: NonZeroU32, channels: Channels) -> Self {
         Self { rate, channels }
     }
+    /// Frames per second.
     pub const fn rate(self) -> u32 {
         self.rate.get()
     }
-    pub const fn channels(self) -> u32 {
-        self.channels.get()
+    pub const fn channels(self) -> Channels {
+        self.channels
+    }
+    /// How long `frames` play, in seconds.
+    pub fn secs(self, frames: Frames) -> f64 {
+        frames.0 as f64 / f64::from(self.rate())
+    }
+    /// The whole frames nearest `secs` seconds: none for less than none.
+    pub fn frames_in(self, secs: f64) -> Frames {
+        Frames((secs * f64::from(self.rate())).round().max(0.0) as u64)
+    }
+}
+
+/// A number of frames, a frame being a sample for each channel.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Frames(u64);
+
+impl Frames {
+    pub const ZERO: Frames = Frames(0);
+    pub const fn new(frames: u64) -> Self {
+        Self(frames)
+    }
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+    /// The interleaved samples in this many frames.
+    pub const fn samples(self, channels: Channels) -> usize {
+        self.0 as usize * channels.0 as usize
+    }
+    /// The whole frames in `samples` interleaved samples.
+    pub const fn in_samples(samples: usize, channels: Channels) -> Frames {
+        Frames((samples / channels.0 as usize) as u64)
+    }
+    pub const fn saturating_sub(self, other: Frames) -> Frames {
+        Frames(self.0.saturating_sub(other.0))
+    }
+}
+
+impl Add for Frames {
+    type Output = Frames;
+    fn add(self, other: Frames) -> Frames {
+        Frames(self.0 + other.0)
+    }
+}
+
+/// Where a frame is in a ring's stream, counting from 0 for the ring's
+/// life. Only a ring makes these.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FrameIndex(u64);
+
+impl FrameIndex {
+    /// The frames from `earlier` to this one: none if it isn't earlier.
+    pub const fn since(self, earlier: FrameIndex) -> Frames {
+        Frames(self.0.saturating_sub(earlier.0))
+    }
+    /// `frames` earlier, or the first.
+    pub const fn saturating_sub(self, frames: Frames) -> FrameIndex {
+        FrameIndex(self.0.saturating_sub(frames.0))
+    }
+}
+
+impl Add<Frames> for FrameIndex {
+    type Output = FrameIndex;
+    fn add(self, frames: Frames) -> FrameIndex {
+        FrameIndex(self.0 + frames.0)
+    }
+}
+
+/// A [`FrameIndex`] shared between threads.
+struct AtomicIndex(AtomicU64);
+
+impl AtomicIndex {
+    const fn new(index: FrameIndex) -> Self {
+        Self(AtomicU64::new(index.0))
+    }
+    fn load(&self, order: Ordering) -> FrameIndex {
+        FrameIndex(self.0.load(order))
+    }
+    fn store(&self, index: FrameIndex, order: Ordering) {
+        self.0.store(index.0, order);
+    }
+    fn fetch_max(&self, index: FrameIndex, order: Ordering) -> FrameIndex {
+        FrameIndex(self.0.fetch_max(index.0, order))
     }
 }
 
@@ -76,7 +159,8 @@ impl Producer {
     pub fn shared(&self) -> Arc<Ring> {
         self.ring.clone()
     }
-    pub fn push(&mut self, samples: &[f32]) -> usize {
+    /// Write interleaved samples, as many whole frames as fit: how many.
+    pub fn push(&mut self, samples: &[f32]) -> Frames {
         self.ring.push(samples)
     }
     /// The consumer acknowledges the skip at its next cycle or stopped flush.
@@ -134,7 +218,7 @@ impl Playback {
     }
 }
 impl Stopped<'_> {
-    pub fn rewind_to(&mut self, index: u64) -> u64 {
+    pub fn rewind_to(&mut self, index: FrameIndex) -> FrameIndex {
         self.playback.lease.ring.rewind_to(index)
     }
     pub fn discard_pending(&mut self) {
@@ -153,16 +237,15 @@ pub struct Ring {
     data: Box<[UnsafeCell<f32>]>,
     format: Format,
     leased: AtomicBool,
-    read_high: AtomicU64,
-    /// Frames.
-    cap: u64,
-    history: u64,
-    /// Frames written and taken, counting up from 0 for the ring's life.
-    write: AtomicU64,
-    read: AtomicU64,
+    read_high: AtomicIndex,
+    cap: Frames,
+    history: Frames,
+    /// The next frame written, and taken.
+    write: AtomicIndex,
+    read: AtomicIndex,
     /// The consumer moves `read` here before taking (a flush while it
     /// runs).
-    skip_to: AtomicU64,
+    skip_to: AtomicIndex,
     segments: Mutex<Vec<Segment>>,
     /// The consumer is in its callback.
     busy: AtomicBool,
@@ -184,7 +267,7 @@ unsafe impl Send for Ring {}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Segment {
-    start: u64,
+    start: FrameIndex,
     pts: f64,
     speed: f64,
 }
@@ -192,19 +275,19 @@ struct Segment {
 impl Ring {
     fn new(format: Format) -> Ring {
         let rate = u64::from(format.rate());
-        let cap = rate * CAPACITY_SECS;
-        let len = (cap * u64::from(format.channels())) as usize;
+        let cap = Frames(rate * CAPACITY_SECS);
+        let start = FrameIndex::default();
         Ring {
-            data: (0..len).map(|_| UnsafeCell::new(0.0)).collect(),
+            data: (0..cap.samples(format.channels())).map(|_| UnsafeCell::new(0.0)).collect(),
             format,
             leased: AtomicBool::new(false),
-            read_high: AtomicU64::new(0),
+            read_high: AtomicIndex::new(start),
             cap,
-            history: rate * HISTORY_SECS,
-            write: AtomicU64::new(0),
-            read: AtomicU64::new(0),
-            skip_to: AtomicU64::new(0),
-            segments: Mutex::new(vec![Segment { start: 0, pts: 0.0, speed: 1.0 }]),
+            history: Frames(rate * HISTORY_SECS),
+            write: AtomicIndex::new(start),
+            read: AtomicIndex::new(start),
+            skip_to: AtomicIndex::new(start),
+            segments: Mutex::new(vec![Segment { start, pts: 0.0, speed: 1.0 }]),
             busy: AtomicBool::new(false),
             halted: AtomicBool::new(true),
             ended: AtomicBool::new(false),
@@ -226,58 +309,52 @@ impl Ring {
         Ok((Consumer { lease: lease.clone() }, Playback { lease }))
     }
 
-    fn channels(&self) -> usize {
-        self.format.channels() as usize
-    }
-
     /// Frames written and not yet taken (or skipped).
-    pub fn buffered(&self) -> u64 {
+    pub fn buffered(&self) -> Frames {
         let w = self.write.load(Ordering::Acquire);
         let r = self.read.load(Ordering::Acquire).max(self.skip_to.load(Ordering::Acquire));
-        w.saturating_sub(r)
+        w.since(r)
     }
 
     /// Seconds buffered.
     pub fn buffered_secs(&self) -> f64 {
-        self.buffered() as f64 / f64::from(self.format.rate())
+        self.format.secs(self.buffered())
     }
 
     /// Frames the producer may write now.
-    pub fn space(&self) -> u64 {
+    pub fn space(&self) -> Frames {
         let w = self.write.load(Ordering::Relaxed);
         let r = self.read.load(Ordering::Acquire);
-        (self.cap - self.history).saturating_sub(w - r)
+        self.cap.saturating_sub(self.history).saturating_sub(w.since(r))
     }
 
     /// Write interleaved samples, as many whole frames as fit: how many.
-    fn push(&self, samples: &[f32]) -> usize {
-        let ch = self.channels();
-        let frames = ((samples.len() / ch) as u64).min(self.space());
+    fn push(&self, samples: &[f32]) -> Frames {
+        let channels = self.format.channels();
+        let ch = channels.get() as usize;
+        let frames = Frames::in_samples(samples.len(), channels).min(self.space());
         let w = self.write.load(Ordering::Relaxed);
-        for f in 0..frames {
-            let slot = ((w + f) % self.cap) as usize * ch;
+        for f in 0..frames.0 {
+            let slot = ((w.0 + f) % self.cap.0) as usize * ch;
             for c in 0..ch {
                 // SAFETY: slot is the producer's (see `Sync`).
                 unsafe { *self.data[slot + c].get() = samples[f as usize * ch + c] };
             }
         }
         self.write.store(w + frames, Ordering::Release);
-        frames as usize
+        frames
     }
 
     /// Take up to `out.len()` samples (whole frames) into `out`: how many
-    /// frames, and the frame number of the first.
-    fn pop(&self, out: &mut [f32]) -> (usize, u64) {
-        let ch = self.channels();
-        let skip = self.skip_to.load(Ordering::Acquire);
-        let mut r = self.read.load(Ordering::Relaxed);
-        if r < skip {
-            r = skip;
-        }
+    /// frames, and where the first was.
+    fn pop(&self, out: &mut [f32]) -> (Frames, FrameIndex) {
+        let channels = self.format.channels();
+        let ch = channels.get() as usize;
+        let r = self.read.load(Ordering::Relaxed).max(self.skip_to.load(Ordering::Acquire));
         let w = self.write.load(Ordering::Acquire);
-        let frames = ((out.len() / ch) as u64).min(w.saturating_sub(r));
-        for f in 0..frames {
-            let slot = ((r + f) % self.cap) as usize * ch;
+        let frames = Frames::in_samples(out.len(), channels).min(w.since(r));
+        for f in 0..frames.0 {
+            let slot = ((r.0 + f) % self.cap.0) as usize * ch;
             for c in 0..ch {
                 // SAFETY: slot is the consumer's (see `Sync`).
                 out[f as usize * ch + c] = unsafe { *self.data[slot + c].get() };
@@ -285,15 +362,15 @@ impl Ring {
         }
         self.read_high.store(self.read_high.load(Ordering::Relaxed).max(r + frames), Ordering::Release);
         self.read.store(r + frames, Ordering::Release);
-        (frames as usize, r)
+        (frames, r)
     }
 
     /// The next frame to be taken.
-    pub fn read_index(&self) -> u64 {
+    pub fn read_index(&self) -> FrameIndex {
         self.read.load(Ordering::Acquire).max(self.skip_to.load(Ordering::Acquire))
     }
 
-    pub fn write_index(&self) -> u64 {
+    pub fn write_index(&self) -> FrameIndex {
         self.write.load(Ordering::Acquire)
     }
 
@@ -312,18 +389,18 @@ impl Ring {
 
     /// The media time of frame `index`, if the ring still knows it (the
     /// consumer doesn't wait for the lock: none if it's held).
-    pub fn pts_of(&self, index: u64, wait: bool) -> Option<f64> {
+    pub fn pts_of(&self, index: FrameIndex, wait: bool) -> Option<f64> {
         let segs = if wait {
             self.segments.lock().unwrap_or_else(|e| e.into_inner())
         } else {
             self.segments.try_lock().ok()?
         };
         let s = segs.iter().rev().find(|s| s.start <= index)?;
-        Some(s.pts + (index - s.start) as f64 / f64::from(self.format.rate()) * s.speed)
+        Some(s.pts + self.format.secs(index.since(s.start)) * s.speed)
     }
 
     /// The speed frame `index` plays at.
-    pub fn speed_of(&self, index: u64) -> f64 {
+    pub fn speed_of(&self, index: FrameIndex) -> f64 {
         let segs = self.segments.lock().unwrap_or_else(|e| e.into_inner());
         segs.iter().rev().find(|s| s.start <= index).map_or(1.0, |s| s.speed)
     }
@@ -331,25 +408,25 @@ impl Ring {
     /// Step the consumer back to frame `index` (the consumer stopped):
     /// the frames from there play again. Only within the history and the
     /// current segment; returns where it went.
-    fn rewind_to(&self, index: u64) -> u64 {
+    fn rewind_to(&self, index: FrameIndex) -> FrameIndex {
         let r = self.read_index();
         let start = {
             let segs = self.segments.lock().unwrap_or_else(|e| e.into_inner());
-            segs.iter().rev().find(|s| s.start <= r).map_or(0, |s| s.start)
+            segs.iter().rev().find(|s| s.start <= r).map_or(FrameIndex::default(), |s| s.start)
         };
-        let to = index.clamp(self.read_high.load(Ordering::Acquire).saturating_sub(self.history).max(start).min(r), r);
+        let earliest = self.read_high.load(Ordering::Acquire).saturating_sub(self.history).max(start).min(r);
+        let to = index.clamp(earliest, r);
         self.read.store(to, Ordering::Release);
         self.skip_to.store(to.min(self.skip_to.load(Ordering::Relaxed)), Ordering::Release);
         to
     }
 
     /// The frame being heard at media time `pos`, in the current segment.
-    pub fn index_of(&self, pos: f64) -> Option<u64> {
+    pub fn index_of(&self, pos: f64) -> Option<FrameIndex> {
         let r = self.read_index();
         let segs = self.segments.lock().unwrap_or_else(|e| e.into_inner());
         let s = segs.iter().rev().find(|s| s.start <= r)?;
-        let frames = ((pos - s.pts) / s.speed * f64::from(self.format.rate())).round();
-        Some(s.start + frames.max(0.0) as u64)
+        Some(s.start + self.format.frames_in((pos - s.pts) / s.speed))
     }
 }
 
@@ -358,7 +435,7 @@ impl Ring {
 /// the clock to what's heard. `latency` is the frames between the next
 /// frame written and the speaker; `now` the cycle's time. Returns the
 /// frames of audio (not silence) written.
-pub fn fill(consumer: &mut Consumer, clock: &Clock, out: &mut [f32], latency: u64, now: u64) -> usize {
+pub fn fill(consumer: &mut Consumer, clock: &Clock, out: &mut [f32], latency: Frames, now: MonotonicNs) -> Frames {
     let ring = &consumer.lease.ring;
     // Busy, then halted: whoever halts the ring and then waits while it's
     // busy sees this cycle, or this cycle sees the halt (sequentially
@@ -373,18 +450,16 @@ pub fn fill(consumer: &mut Consumer, clock: &Clock, out: &mut [f32], latency: u6
     let _active = ActiveRead(&ring.busy);
     if ring.halted.load(Ordering::SeqCst) {
         out.fill(0.0);
-        return 0;
+        return Frames::ZERO;
     }
     let (frames, first) = ring.pop(out);
-    let ch = ring.format.channels() as usize;
-    out[frames * ch..].fill(0.0);
-    let rate = f64::from(ring.format.rate());
+    out[frames.samples(ring.format.channels())..].fill(0.0);
     if let Some(pts) = ring.pts_of(first, false) {
         let speed = ring.speed_of_quick(first);
         // What's heard now is `latency` frames before the first written;
         // run dry, the clock stops there.
-        let pos = pts - latency as f64 / rate * speed;
-        clock.set(Anchor { pos, at: now, rate: if frames > 0 { speed } else { 0.0 } }, false);
+        let pos = pts - ring.format.secs(latency) * speed;
+        clock.set(Anchor { pos, at: now, rate: if frames > Frames::ZERO { speed } else { 0.0 } }, false);
     }
     frames
 }
@@ -392,7 +467,7 @@ pub fn fill(consumer: &mut Consumer, clock: &Clock, out: &mut [f32], latency: u6
 impl Ring {
     /// `speed_of` without waiting for the lock (the callback's): 1 if
     /// it's held.
-    fn speed_of_quick(&self, index: u64) -> f64 {
+    fn speed_of_quick(&self, index: FrameIndex) -> f64 {
         match self.segments.try_lock() {
             Ok(segs) => segs.iter().rev().find(|s| s.start <= index).map_or(1.0, |s| s.speed),
             Err(_) => 1.0,
@@ -475,8 +550,8 @@ impl Output for NullOutput {
                 .name("aizome-media-null-audio".into())
                 .spawn(move || {
                     let fmt = r.ring.format;
-                    let frames = (u64::from(fmt.rate()) * NULL_CYCLE_MS / 1000) as usize;
-                    let mut buf = vec![0.0f32; frames * fmt.channels() as usize];
+                    let frames = Frames(u64::from(fmt.rate()) * NULL_CYCLE_MS / 1000);
+                    let mut buf = vec![0.0f32; frames.samples(fmt.channels())];
                     let cycle = std::time::Duration::from_millis(NULL_CYCLE_MS);
                     let mut next = std::time::Instant::now();
                     while !r.stop.load(Ordering::Acquire) {
@@ -486,7 +561,7 @@ impl Output for NullOutput {
                             next = std::time::Instant::now();
                             continue;
                         }
-                        fill(&mut consumer, &r.clock, &mut buf, 0, monotonic_now());
+                        fill(&mut consumer, &r.clock, &mut buf, Frames::ZERO, monotonic_now());
                         next += cycle;
                         let now = std::time::Instant::now();
                         if next > now {
@@ -578,24 +653,24 @@ mod tests {
     fn what_goes_in_comes_out_in_order() {
         let r = ring();
         let samples: Vec<f32> = (0..20).map(|i| i as f32).collect();
-        assert_eq!(r.push(&samples), 10);
-        assert_eq!(r.buffered(), 10);
+        assert_eq!(r.push(&samples), Frames(10));
+        assert_eq!(r.buffered(), Frames(10));
         let mut out = [0.0; 8];
-        assert_eq!(r.pop(&mut out), (4, 0));
+        assert_eq!(r.pop(&mut out), (Frames(4), FrameIndex(0)));
         assert_eq!(out, [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
-        assert_eq!(r.buffered(), 6);
+        assert_eq!(r.buffered(), Frames(6));
     }
 
     #[test]
     fn the_producer_leaves_the_history_alone() {
         let r = ring();
         // 4 seconds of room, one kept behind the consumer: 3 free.
-        assert_eq!(r.space(), 300);
+        assert_eq!(r.space(), Frames(300));
         let big = vec![1.0; 2 * 400];
-        assert_eq!(r.push(&big), 300);
+        assert_eq!(r.push(&big), Frames(300));
         let mut out = vec![0.0; 2 * 100];
         r.pop(&mut out);
-        assert_eq!(r.space(), 100);
+        assert_eq!(r.space(), Frames(100));
     }
 
     #[test]
@@ -607,17 +682,17 @@ mod tests {
             control.pause().discard_pending();
         }
         r.push(&vec![0.0; 2 * 50]);
-        assert_eq!(r.pts_of(0, true), Some(10.0));
-        assert_eq!(r.pts_of(25, true), Some(10.25));
+        assert_eq!(r.pts_of(FrameIndex(0), true), Some(10.0));
+        assert_eq!(r.pts_of(FrameIndex(25), true), Some(10.25));
         r.flush(30.0, 2.0);
         {
             let (_, mut control) = r.consumer().unwrap();
             control.pause().discard_pending();
         }
-        assert_eq!(r.read_index(), 50);
+        assert_eq!(r.read_index(), FrameIndex(50));
         r.push(&[0.0; 2 * 10]);
-        assert_eq!(r.pts_of(60, true), Some(30.2));
-        assert_eq!(r.index_of(30.2), Some(60));
+        assert_eq!(r.pts_of(FrameIndex(60), true), Some(30.2));
+        assert_eq!(r.index_of(30.2), Some(FrameIndex(60)));
     }
 
     #[test]
@@ -632,16 +707,16 @@ mod tests {
         let mut out = vec![0.0; 2 * 150];
         r.pop(&mut out);
         // 150 taken; 40 of them still in the graph when it stopped.
-        assert_eq!(r.rewind_to(110), 110);
-        assert_eq!(r.buffered(), 90);
+        assert_eq!(r.rewind_to(FrameIndex(110)), FrameIndex(110));
+        assert_eq!(r.buffered(), Frames(90));
         // Never further back than the history, nor before the segment.
-        assert_eq!(r.rewind_to(0), 50);
+        assert_eq!(r.rewind_to(FrameIndex(0)), FrameIndex(50));
         r.flush(5.0, 1.0);
         {
             let (_, mut control) = r.consumer().unwrap();
             control.pause().discard_pending();
         }
-        assert_eq!(r.rewind_to(0), 200);
+        assert_eq!(r.rewind_to(FrameIndex(0)), FrameIndex(200));
     }
 
     #[test]
@@ -649,11 +724,11 @@ mod tests {
         let r = ring();
         r.push(&vec![1.0; 2 * 50]);
         r.flush(3.0, 1.0);
-        assert_eq!(r.buffered(), 0);
+        assert_eq!(r.buffered(), Frames::ZERO);
         r.push(&[2.0, 2.0]);
         let mut out = vec![0.0; 2 * 10];
         let (n, first) = r.pop(&mut out);
-        assert_eq!((n, first), (1, 50));
+        assert_eq!((n, first), (Frames(1), FrameIndex(50)));
         assert_eq!(out[0], 2.0);
     }
 
@@ -671,14 +746,14 @@ mod tests {
         let (mut consumer, mut control) = r.consumer().unwrap();
         control.resume();
         // 20 frames between the first written and the speaker.
-        assert_eq!(fill(&mut consumer, &c, &mut out, 20, 1_000), 30);
+        assert_eq!(fill(&mut consumer, &c, &mut out, Frames(20), MonotonicNs::from_nanos(1_000)), Frames(30));
         let a = c.anchor();
         assert!((a.pos - 1.8).abs() < 1e-9, "{a:?}");
-        assert_eq!((a.at, a.rate), (1_000, 1.0));
+        assert_eq!((a.at, a.rate), (MonotonicNs::from_nanos(1_000), 1.0));
         // Run dry: silence, and the clock stops.
         r.pop(&mut vec![0.0; 2 * 100]);
         let mut out = vec![1.0; 2 * 10];
-        assert_eq!(fill(&mut consumer, &c, &mut out, 0, 2_000), 0);
+        assert_eq!(fill(&mut consumer, &c, &mut out, Frames::ZERO, MonotonicNs::from_nanos(2_000)), Frames::ZERO);
         assert!(out.iter().all(|s| *s == 0.0));
         assert_eq!(c.anchor().rate, 0.0);
     }
@@ -725,12 +800,13 @@ mod tests {
 
     #[test]
     fn typed_endpoints_keep_samples_ordered_across_threads_and_wraparound() {
-        let mut producer = Producer::new(Format::new(NonZeroU32::new(64).unwrap(), Channels::new(1).unwrap()));
+        let format = Format::new(NonZeroU32::new(64).unwrap(), Channels::new(1).unwrap());
+        let mut producer = Producer::new(format);
         let (mut consumer, mut control) = producer.shared().consumer().unwrap();
         control.resume();
         let writer = std::thread::spawn(move || {
             for i in 1..=20_000 {
-                while producer.push(&[i as f32]) == 0 {
+                while producer.push(&[i as f32]) == Frames::ZERO {
                     std::thread::yield_now();
                 }
             }
@@ -739,12 +815,12 @@ mod tests {
         let mut expected = 1;
         let mut samples = [0.0; 31];
         while expected <= 20_000 {
-            let count = fill(&mut consumer, &clock, &mut samples, 0, 0);
-            for sample in &samples[..count] {
+            let count = fill(&mut consumer, &clock, &mut samples, Frames::ZERO, MonotonicNs::default());
+            for sample in &samples[..count.samples(format.channels())] {
                 assert_eq!(*sample, expected as f32);
                 expected += 1;
             }
-            if count == 0 {
+            if count == Frames::ZERO {
                 std::thread::yield_now();
             }
         }
@@ -758,18 +834,21 @@ mod tests {
         let (mut consumer, mut control) = shared.consumer().unwrap();
         producer.push(&vec![0.5; 400]);
         control.resume();
-        assert_eq!(fill(&mut consumer, &Clock::new(), &mut [0.0; 300], 0, 0), 150);
+        assert_eq!(
+            fill(&mut consumer, &Clock::new(), &mut [0.0; 300], Frames::ZERO, MonotonicNs::default()),
+            Frames(150)
+        );
         let mut stopped = control.pause();
-        assert_eq!(stopped.rewind_to(110), 110);
-        assert_eq!(stopped.rewind_to(0), 50);
-        assert_eq!(stopped.rewind_to(0), 50);
+        assert_eq!(stopped.rewind_to(FrameIndex(110)), FrameIndex(110));
+        assert_eq!(stopped.rewind_to(FrameIndex(0)), FrameIndex(50));
+        assert_eq!(stopped.rewind_to(FrameIndex(0)), FrameIndex(50));
         producer.flush(10.0, 1.0);
         stopped.discard_pending();
-        assert_eq!(shared.buffered(), 0);
+        assert_eq!(shared.buffered(), Frames::ZERO);
         producer.push(&[0.75, 0.75]);
         control.resume();
         let mut out = [0.0; 2];
-        assert_eq!(fill(&mut consumer, &Clock::new(), &mut out, 0, 0), 1);
+        assert_eq!(fill(&mut consumer, &Clock::new(), &mut out, Frames::ZERO, MonotonicNs::default()), Frames(1));
         assert_eq!(out, [0.75, 0.75]);
     }
 
