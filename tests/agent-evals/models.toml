@@ -27,7 +27,7 @@ params = { temperature = 0.6, top_p = 0.95, top_k = 20, presence_penalty = 0.0 }
 [models."qwen3.8-27b-nvfp4"]
 # The same model for vLLM, to compare runtimes; not a separate candidate.
 repo = "unsloth/Qwen3.8-27B-NVFP4"
-revision = "f0b7c9e722"
+revision = "f0b7c9e722f5565102fff8481c99e4d86ae099c7"
 size_gb = 23.4
 engine = "vllm"
 vision = true
@@ -136,3 +136,16 @@ vision = true
 coords = "norm1000"
 license = "CC-BY-NC-4.0"
 params = { temperature = 0.0, chat_template_kwargs = { enable_thinking = false } }
+
+[models."qwen3.8-27b-nvfp4-sglang"]
+# The vLLM entry's checkpoint under SGLang, to compare runtimes.
+repo = "unsloth/Qwen3.8-27B-NVFP4"
+revision = "f0b7c9e722f5565102fff8481c99e4d86ae099c7"
+size_gb = 23.4
+engine = "sglang"
+vision = true
+coords = "norm1000"
+license = "Apache-2.0"
+args = ["--kv-cache-dtype", "fp8_e4m3", "--mem-fraction-static", "0.88", "--tool-call-parser", "qwen3_coder",
+        "--reasoning-parser", "qwen3"]
+params = { temperature = 0.6, top_p = 0.95, top_k = 20 }

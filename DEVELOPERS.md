@@ -2243,6 +2243,38 @@ real machine's live session under build load for about 15 minutes.
 ganymede's results. Per-application time slices and sched-ext schedulers are
 held for later, in [docs/interactive-scheduling.md](docs/interactive-scheduling.md).
 
+## Local models and agent evaluations
+
+`legacyPackages.x86_64-linux.local-models` (`nix/local-models.nix`) builds
+llama.cpp with CUDA for the RTX 50 series (SM120 only, so the build is short)
+and `sekka-model-server`, which downloads the models pinned in
+`tests/agent-evals/models.toml` and serves any of them behind one
+OpenAI-compatible endpoint: llama.cpp as a local process, vLLM and SGLang in
+their pinned upstream containers under rootless Docker, given the GPU devices
+and the host driver directly (no NVIDIA container toolkit). CUDA is unfree,
+so none of this is in `checks`, the ISO or installed systems.
+[docs/local-models.md](docs/local-models.md) compares the runtimes measured on
+runnymede's RTX 5090 and recommends models.
+
+`legacyPackages.x86_64-linux.agent-evals` (`tests/agent-evals`) breaks a
+Sekka system with Aizome in a disposable VM and lets a local model fix it
+through a root shell, or use the desktop through screenshots and the
+compositor's input, then checks the machine. Each scenario is validated
+with no agent (its check fails) and a known fix (its check passes without
+collateral damage) before it scores a model.
+[tests/agent-evals/README.md](tests/agent-evals/README.md) describes the
+machine, the scenarios and grading;
+[docs/agent-evals](docs/agent-evals/README.md) holds results and analysis.
+The skills in `.agents/skills/sekka-agent-evals` and
+`.agents/skills/sekka-troubleshooting` cover running the evaluations and
+diagnosing a Sekka machine.
+
+```sh
+nix run .#local-models.serve -- download qwen3.8-27b
+nix run .#agent-evals.run -- --agent oracle --track diagnostics
+nix run .#agent-evals.run -- --models qwen3.8-27b --track diagnostics --parallel 4
+```
+
 ## Boot splash
 
 Genkan writes `calamares.bootSplash.enable = true;` into every installation; the

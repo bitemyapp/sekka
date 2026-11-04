@@ -94,7 +94,7 @@ class VM:
             g = w.get("geometry") or {}
             flags = [k for k in ("focused", "minimised", "hidden") if w.get(k)]
             lines.append(f'window "{w.get("title")}" app={w.get("app_id")} at x={g.get("x")} y={g.get("y")} '
-                         f'w={g.get("width")} h={g.get("height")} {" ".join(flags)}'.rstrip())
+                         f'w={g.get("w")} h={g.get("h")} {" ".join(flags)}'.rstrip())
             for d in docs:
                 if d.get("pid") != w.get("pid") or d.get("kind") not in ("window", "dialog", "utility"):
                     continue
@@ -104,7 +104,9 @@ class VM:
                 for e in d.get("elements", []):
                     if not e.get("visible"):
                         continue
-                    label = e.get("label") or e.get("text") or e.get("name")
+                    label = e.get("label") or e.get("text")
+                    if not label and e.get("role"):
+                        label = e.get("name")
                     if not label:
                         continue
                     x, y, ew, eh = e.get("shown") or e.get("rect")
@@ -118,6 +120,34 @@ class VM:
                     if n >= limit:
                         lines.append("  …")
                         break
+        # The shell's surfaces aren't windows; place them by their anchors
+        # (desktop/aizome/docs/shell.md): the menu bar and desktop at the
+        # origin, the Deskbar at the top right under the bar, the palette
+        # centred while it has the keyboard.
+        for d in docs:
+            if d.get("app_id") != "org.aizome.Shell" or d.get("kind") != "surface":
+                continue
+            w, h = (d.get("size") or [0, 0])[:2]
+            title = d.get("title")
+            if title in ("Menu bar", "Desktop"):
+                ox, oy, note = 0, 0, ""
+            elif title == "Deskbar":
+                ox, oy, note = SCREEN[0] - w, 24, ""
+            elif title == "Palette" and d.get("has_keyboard"):
+                ox, oy, note = (SCREEN[0] - w) / 2, (SCREEN[1] - h) / 2, " (position estimated)"
+            else:
+                continue
+            lines.append(f'shell "{title}"{note}')
+            for e in d.get("elements", []):
+                label = e.get("label") or e.get("text") or e.get("name")
+                if not e.get("visible") or not label or e.get("role") == "window":
+                    continue
+                x, y, ew, eh = e.get("shown") or e.get("rect")
+                state = [k for k in ("checked", "selected", "focused") if e.get(k)]
+                lines.append(f'  {e.get("role") or "text"} "{str(label)[:60]}" center=({ox + x + ew / 2:.0f},'
+                             f'{oy + y + eh / 2:.0f}) {" ".join(state)}'.rstrip())
+        if any(d.get("kind") in ("menu", "popover") for d in docs):
+            lines.append("(a menu or popover is open; its items aren't listed: type to pick, or use the keyboard)")
         if not lines:
             return "(no windows are open)"
         return "\n".join(lines)

@@ -139,14 +139,14 @@ def container_command(m, port, parallel, ctx, extra):
     raise SystemExit(f"unknown engine {engine}")
 
 
-def llama_command(m, port, parallel, ctx, extra):
+def llama_command(m, port, parallel, ctx, extra, total=None, kv="q8_0"):
     server = os.environ.get("SEKKA_LLAMA_SERVER", "llama-server")
     argv = [server, "--model", str(path_of(m, m["file"])), "--alias", m["name"], "--host", "127.0.0.1",
             "--port", str(port), "--jinja", "--n-gpu-layers", "999", "--flash-attn", "on",
             # One KV pool for every slot: a slot may use up to ctx tokens
             # while the total stays within what fits.
-            "--ctx-size", str(ctx * parallel), "--parallel", str(parallel), "--kv-unified",
-            "--kv-unified-per-slot", str(ctx),
+            "--ctx-size", str(total or ctx * parallel), "--parallel", str(parallel), "--kv-unified",
+            "--kv-unified-per-slot", str(ctx), "--cache-type-k", kv, "--cache-type-v", kv,
             "--metrics", "--no-webui"]
     if m.get("mmproj"):
         argv += ["--mmproj", str(path_of(m, m["mmproj"]))]
@@ -161,12 +161,15 @@ def health(port):
         return False
 
 
-def start(m, port, parallel, ctx, extra, wait=1800):
+def start(m, port, parallel, ctx, extra, wait=1800, total=None, kv="q8_0"):
     stop(quiet=True)
     for f in files_of(m):
         if not path_of(m, f).exists():
             sys.exit(f"{path_of(m, f)} is missing: run `download {m['name']}` first")
-    argv = (llama_command if m["engine"] == "llama.cpp" else container_command)(m, port, parallel, ctx, extra)
+    if m["engine"] == "llama.cpp":
+        argv = llama_command(m, port, parallel, ctx, extra, total=total or m.get("total_ctx"), kv=kv)
+    else:
+        argv = container_command(m, port, parallel, ctx, extra)
     log = CACHE / f"server-{m['name']}.log"
     CACHE.mkdir(parents=True, exist_ok=True)
     out = open(log, "w")
@@ -248,9 +251,22 @@ def stream_once(port, name, max_tokens, prompt=BENCH_PROMPT, params=None):
             "prompt_tokens": (usage or {}).get("prompt_tokens") or (timings or {}).get("prompt_n")}
 
 
+def long_context(port, name, tokens=16000):
+    """What an agent loop pays each turn: a cold prefill of a long history,
+    then the next turn, whose prefix the server should have cached."""
+    line = "Nov 04 03:12:44 studio sekka-backup[811]: chunk {} uploaded in 41 ms (attempt 1, 4 MiB)\n"
+    history = "".join(line.format(i) for i in range(tokens // 30))
+    prompt = "Here is a journal excerpt:\n" + history + "\nWhich chunk number comes last? Answer with the number."
+    cold = stream_once(port, name, 16, prompt=prompt)
+    warm = stream_once(port, name, 16, prompt=prompt + " Then say done.")
+    n = cold.get("prompt_tokens") or tokens
+    return {"prompt_tokens": n, "cold_ttft": cold["ttft"], "cold_prefill_tps": round(n / max(cold["ttft"], 1e-6)),
+            "cached_ttft": warm["ttft"]}
+
+
 def bench(port, name, max_tokens=512, concurrency=(1, 4)):
     stream_once(port, name, 32)  # warm up
-    results = {}
+    results = {"long_context": long_context(port, name)}
     for c in concurrency:
         runs = []
 
@@ -264,7 +280,7 @@ def bench(port, name, max_tokens=512, concurrency=(1, 4)):
         for t in threads:
             t.join()
         wall = time.monotonic() - t0
-        results[c] = {
+        results[f"concurrency_{c}"] = {
             "per_stream_decode_tps": round(sum(r["decode_tps"] for r in runs) / len(runs), 1),
             "aggregate_tps": round(sum(r["tokens"] for r in runs) / wall, 1),
             "ttft": round(sum(r["ttft"] for r in runs) / len(runs), 3),
@@ -283,6 +299,9 @@ def main():
     s.add_argument("--port", type=int, default=8080)
     s.add_argument("--parallel", type=int, default=4, help="concurrent requests (agent episodes)")
     s.add_argument("--ctx", type=int, default=40960, help="context per request, in tokens")
+    s.add_argument("--total-ctx", type=int, help="llama.cpp: tokens of KV for all slots together "
+                   "(default: the model's total_ctx, else parallel × ctx)")
+    s.add_argument("--kv", default="q8_0", help="llama.cpp KV cache type (q8_0 halves F16's memory)")
     s.add_argument("extra", nargs="*", help="further server arguments, after --")
     sub.add_parser("stop")
     b = sub.add_parser("bench")
@@ -303,7 +322,7 @@ def main():
         for name in a.models:
             remove(model(name))
     elif a.cmd == "start":
-        start(model(a.model), a.port, a.parallel, a.ctx, a.extra)
+        start(model(a.model), a.port, a.parallel, a.ctx, a.extra, total=a.total_ctx, kv=a.kv)
     elif a.cmd == "stop":
         stop()
     elif a.cmd == "bench":

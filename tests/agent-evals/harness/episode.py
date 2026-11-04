@@ -61,7 +61,9 @@ def run(machine):
             vm.alice("systemctl --user stop app-org.aizome.Annai.Welcome@autostart.service")
             time.sleep(1)
         for command in cfg.get("probe", []):
-            result.setdefault("probe", []).append({"command": command, "output": vm.sh(command)})
+            # "@elements" records the text observation computer use offers.
+            output = (0, vm.elements_text()) if command == "@elements" else vm.sh(command)
+            result.setdefault("probe", []).append({"command": command, "output": output})
         s.setup(vm)
         time.sleep(2)
         broken, details = s.check(vm, None)

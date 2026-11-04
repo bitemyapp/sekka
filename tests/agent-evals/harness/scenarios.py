@@ -512,7 +512,7 @@ def answer_of(final):
 class CalculatorTask(Scenario):
     def setup(self, vm):
         # Whether the Calculator ran, for the check (it may be closed by then).
-        vm.sh("systemd-run --unit=eval-watch-soroban --property=Type=simple bash -c "
+        vm.sh("systemd-run --unit=eval-watch-soroban --property=Type=simple --setenv=PATH=/run/current-system/sw/bin bash -c "
               "'while sleep 0.5; do pgrep -u alice -f aizome-soroban && touch /run/eval-soroban-ran; done' >/dev/null")
 
     def check(self, vm, final):
@@ -524,7 +524,7 @@ class CalculatorTask(Scenario):
 class LogsTask(Scenario):
     def setup(self, vm):
         BackupEnvTypo.setup(self, vm)
-        vm.sh("systemd-run --unit=eval-watch-nisshi --property=Type=simple bash -c "
+        vm.sh("systemd-run --unit=eval-watch-nisshi --property=Type=simple --setenv=PATH=/run/current-system/sw/bin bash -c "
               "'while sleep 0.5; do pgrep -u alice -f aizome-nisshi && touch /run/eval-nisshi-ran; done' >/dev/null")
 
     def check(self, vm, final):
