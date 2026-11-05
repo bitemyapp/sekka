@@ -11,7 +11,7 @@
 //!    data and moving it is cheap ([`machine!`]).
 //! 2. Instance checks are impossible to forget. A transition that acts on an
 //!    answer to an earlier request takes a proof that the answer is current
-//!    ([`Generation`], [`Current`]); a destructive step takes a proof that
+//!    ([`Generation`], [`Fresh`]); a destructive step takes a proof that
 //!    its target is the one the person confirmed ([`Reviewed`],
 //!    [`Confirmed`]).
 //! 3. Signatures are narrow: a transition takes what it needs to decide, not
@@ -51,5 +51,5 @@ mod machine;
 mod settle;
 
 pub use confirm::{Changed, Confirmed, Reviewed, SameTarget};
-pub use generation::{Current, Generation, Ticket};
+pub use generation::{Answer, Current, Fresh, Generation, Ticket};
 pub use settle::Unsettled;
