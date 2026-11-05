@@ -143,6 +143,8 @@ def main():
     ap.add_argument("--parallel", type=int, default=4)
     ap.add_argument("--observe", choices=["screenshot", "elements", "both"])
     ap.add_argument("--skill", action="store_true", help="give diagnostics the troubleshooting skill")
+    ap.add_argument("--coords", choices=["pixel", "norm1000", "norm1"],
+                    help="override the model's coordinate convention (grounding.py measures it)")
     ap.add_argument("--max-steps", type=int)
     ap.add_argument("--max-seconds", type=int, default=2400,
                     help="a safety net per episode; the step budget is the real limit")
@@ -168,7 +170,8 @@ def main():
     for name in [m for m in args.models.split(",") if m]:
         m = registry[name]
         base = args.base_url or f"http://127.0.0.1:{args.port}/v1"
-        model_cfg = {"name": name, "base_url": base, "params": m.get("params", {}), "coords": m.get("coords", "pixel"),
+        model_cfg = {"name": name, "base_url": base, "params": m.get("params", {}),
+                     "coords": args.coords or m.get("coords", "pixel"),
                      "vision": m.get("vision", False), "keep_reasoning": m.get("keep_reasoning", False),
                      "max_tokens": m.get("max_tokens", 6144), "engine": m["engine"]}
         if not args.no_serve:
