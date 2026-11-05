@@ -195,3 +195,22 @@ fn an_agreement_runs_only_the_plan_it_was_given_for() {
     let agreed = aizome_kit::agree::testing::agreed(plan.shown(&state));
     assert!(Run::agree(agreed, &plan, &state).is_ok());
 }
+
+/// Nor does it run against a plan put together elsewhere with the same
+/// operations: it names the plan it was given for.
+#[test]
+fn an_agreement_runs_only_against_the_plan_it_listed() {
+    let mock = Mock::default();
+    let state = mock.snapshot();
+    let mut plan = Plan::default();
+    let layout = plan.preview(&state, STICK).unwrap();
+    let erase = NewFs { fs: "vfat".into(), label: "BOOT".into(), erase: Erase::Quick, encrypt: None };
+    plan.format(at(&state, &layout, "sdc1"), erase).unwrap();
+    let agreed = aizome_kit::agree::testing::agreed(plan.shown(&state));
+    let mut own = Plan::default();
+    own.ops = plan.ops.clone();
+    assert_eq!(Run::agree(agreed, &own, &state).err(), Some(tansu::run::PlanChanged));
+    // A clone of the plan it listed (the undo history keeps them) is that plan.
+    let agreed = aizome_kit::agree::testing::agreed(plan.shown(&state));
+    assert!(Run::agree(agreed, &plan.clone(), &state).is_ok());
+}
