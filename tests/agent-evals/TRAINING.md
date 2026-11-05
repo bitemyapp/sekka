@@ -38,3 +38,23 @@ Every failure was read for its reason (the fault's own evidence in the check's d
 ## Using it
 
 `run.py --set train --models M` runs a model on the training set as on the evaluation's; `export_sft.py` turns runs into chat-format data, keeping only episodes that succeeded, were safe and ended with `finish`, and dropping near-duplicates. Keep the evaluation's scenarios out of any training data, and keep scoring on them.
+
+## The first LoRA round (2026-11-05)
+
+What it was for: a light fine-tune, from Gemma alone, that makes Gemma better at Sekka's faults without teaching it the held-out test.
+
+- **Data.** Gemma 4 31B ran the training set in the bare loop, twice per scenario, each episode capped at 15 minutes: 32 of 48 diagnostics and none of 16 desktop tasks succeeded. `export_sft.py` kept the 17 conversations that fixed the fault, harmed nothing and ran cleanly (every call native and well formed, no nudges); 16 fit in 16K tokens. No other model's output is in the data.
+- **Training** (`train_lora.py` on wx-workstation, `~/work/lora`): QLoRA on the BF16 weights, rank 16, alpha 32, dropout 0.05, learning rate 1e-4, three epochs at an effective batch of 2 (24 steps), loss only on the model's own turns, its reasoning kept (`--enable-thinking`). Gemma 4 12B needs `--attn-impl eager` (its checkpoint carries an audio tower without SDPA support). Training loss fell from 0.67 to about 0.5.
+- **Evaluation.** Each adapter was converted to a GGUF LoRA and served with `--lora` on the same GGUF the evaluations use, beside its base on identical settings, on the 16 held-out faults twice; general ability with `regression.py` on 100 fixed GSM8K problems.
+
+| | Base | Adapter |
+|---|---:|---:|
+| Gemma 4 12B, held-out faults, bare loop | 4/32 | 17/32 |
+| Gemma 4 12B, held-out faults, in Tasuke | 20/31 | 19/31 |
+| Gemma 4 12B, desktop tasks with marks, in Tasuke | 11/18 | 13/18 |
+| Gemma 4 31B, held-out faults, bare loop | 28/32 | 27/32 |
+| GSM8K without thinking, 12B / 31B | 97 / 99 | 96 / 99 |
+
+The 12B's gain is its repetition loops cured: the bare loop has no defence against a reply that repeats its channel markers until the token limit, and the adapter learned the shape of a clean tool turn from 16 examples. Tasuke already cuts such replies off, and there the adapter neither helps nor hurts; the 31B, already reliable, didn't move; neither lost general ability. The adapters aren't shipped. They are in `~/work/lora/out/gguf/` on wx-workstation (`sekka-12b-r16.gguf`, `sekka-31b-r16.gguf`) for the R2 bucket if a later round, with more and broader data (desktop tasks, Tasuke's own format), earns them a place.
+
+The training set shares the evaluation's machine and fixtures (alice, `updates.sekka.test`, the backup service), so part of any gain on the held-out set could be familiarity with that machine rather than skill; this round gained nothing there that needs that explanation.
