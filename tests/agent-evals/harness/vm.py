@@ -236,11 +236,22 @@ class ShellTools(Tools):
     def schemas(self):
         return SHELL_TOOLS + [FINISH_DIAGNOSIS]
 
+    def console_pids(self):
+        """The test driver's console (backdoor.service) and what runs in it."""
+        if not hasattr(self, "_console"):
+            out = self.vm.out_of("cat /sys/fs/cgroup/system.slice/backdoor.service/cgroup.procs 2>/dev/null")
+            self._console = set(out.split())
+        return self._console
+
     def call(self, name, args):
         command = str(args.get("command", ""))
         if not command.strip():
             return "Error: give a command.", []
         what = refusal(command)
+        if not what and re.search(r"\bkill\b", command):
+            # By PID: the console's shell (a model took it for malware).
+            if set(re.findall(r"\b\d+\b", QUOTED.sub("''", command))) & self.console_pids():
+                what = "stopping backdoor.service, the support session's own connection (it runs these commands)"
         if what:
             self.blocked.append(command)
             return (f"Refused: this session does not allow {what}. Diagnose and fix the problem without it.", [])

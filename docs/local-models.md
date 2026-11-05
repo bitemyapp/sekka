@@ -68,4 +68,20 @@ Candidates were chosen in November 2026 from model cards, the Hugging Face API (
 
 Left out: models too large for 32 GB at a useful precision (DeepSeek-V4-Flash, GLM-5.3-Flash, Qwen3.5-122B, Nemotron 3 Super, Qwen3.8-Flash-Next), older or weaker agents (Devstral Small 2, GLM-4.7-Flash, Laguna XS 2.1, OpenCUA, UI-TARS-1.5), and Ollama, which ignores `tool_choice`.
 
-MODELS_MEASURED
+## Measured speed of each model
+
+Each model as the agent evaluations served it: llama.cpp 0.8.0, the file in the table, four slots, q8_0 KV cache, measured just before its episodes with `sekka-model-server bench` (Qwen3.8-27B with MTP, from the runtime comparison above). Every model clears the 10 tokens/s bar by at least seven times; the mixture-of-experts models with about 3B active parameters decode three times faster than the dense 27–31B ones. Two measurements of Holo4-35B's same file, hours apart, gave 178 and 255 tokens/s single-stream: allow for that much spread between runs.
+
+| Model | File | Decode, 1 stream | Aggregate, 4 streams | Prefill, ~20K tokens | Next turn, cached |
+|---|---|---:|---:|---:|---:|
+| gpt-oss-20b | gpt-oss-20b-MXFP4.gguf (12.1 GB) | 331 tok/s | 662 tok/s | 17,728 tok/s | 0.05 s |
+| holo4-35b-a3b | q4_k_m.gguf (22.2 GB) | 255 tok/s | 636 tok/s | 8,064 tok/s | 0.12 s |
+| ornith-1.5-35b-a3b | Ornith-1.5-35B-Q4_K_M.gguf (22.6 GB) | 248 tok/s | 632 tok/s | 8,260 tok/s | 0.11 s |
+| qwen3.6-35b-a3b | Qwen3.6-35B-A3B-UD-Q4_K_M.gguf (23.0 GB) | 231 tok/s | 525 tok/s | 8,692 tok/s | 0.11 s |
+| nemotron-3.5-bolt | NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB.gguf (23.8 GB) | 153 tok/s | 236 tok/s | 5,038 tok/s | 0.21 s |
+| qwen3.8-27b | Qwen3.8-27B-UD-Q6_K.gguf (22.9 GB) | 112 tok/s | 274 tok/s | 3,135 tok/s | 0.31 s |
+| holo4-27b | q4_k_m.gguf (17.8 GB) | 78 tok/s | 228 tok/s | 3,636 tok/s | 0.25 s |
+| gemma-4-31b | gemma-4-31B_q4_0-it.gguf (18.9 GB) | 70 tok/s | 221 tok/s | 2,958 tok/s | 0.33 s |
+| muse-glimmer-30b | Muse-Glimmer-30B-KQuant-Dynamic-Q4_K_XL.gguf (21.1 GB) | 69 tok/s | 230 tok/s | 3,566 tok/s | 0.12 s |
+
+Which of them make good agents is in [agent-evals](agent-evals/README.md#results).

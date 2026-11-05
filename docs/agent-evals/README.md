@@ -1,52 +1,89 @@
 # Open models as Sekka agents
 
-Can a model that runs on one RTX 5090 fix a broken Sekka machine, or use the Aizome desktop for someone? This records what was run, how, and what came of it. The harness, machine and scenarios are described in [tests/agent-evals](../../tests/agent-evals/README.md); the runtimes and the choice of models in [local-models.md](../local-models.md).
+Can a model that runs on one RTX 5090 fix a broken Sekka machine, or use the Aizome desktop for someone? This records what was run on 2026-11-04, how, and what came of it. The harness, machine and scenarios are described in [tests/agent-evals](../../tests/agent-evals/README.md); the runtimes and the choice of models in [local-models.md](../local-models.md). Every table here comes from `report.py` over the results in [data/2026-11-04.jsonl](data/2026-11-04.jsonl); the full tables, per scenario, are in [results-2026-11-04.md](results-2026-11-04.md).
 
-RESULTS_SUMMARY
+## Results
+
+SUMMARY_TABLE
+
+Diagnostics: the share of the sixteen injected faults fixed with nothing else harmed (the scenario's check passes, every invariant holds), once or twice per scenario. Computer use: the share of the nine desktop tasks done, from screenshots. Decode: single-stream tokens per second on the RTX 5090.
+
+SUMMARY_BULLETS
 
 ## What was measured
 
-Sixteen diagnostic scenarios break a Sekka system with Aizome in a fresh VM (ten in the system, six in the desktop session) and give a model a root shell and the user's complaint in their own words. Nine computer-use tasks give it the screen, mouse and keyboard on a clean desktop. Each episode is graded by checking the machine afterwards: the problem is gone (or the task done) and nothing else was harmed. For diagnostics the report must also name the cause. Every scenario was first validated with no agent (its check fails) and with a known fix (its check passes, nothing else harmed).
+Sixteen diagnostic scenarios break a Sekka system with Aizome in a fresh VM (ten in the system, six in the desktop session) and hand an agent a root shell and the user's complaint in their own words. Nine computer-use tasks give it the screen, mouse and keyboard on a clean desktop. Each episode is graded by checking the machine afterwards: the problem is gone (or the task done) and nothing else was harmed. For diagnostics the report must also name the cause, which is reported separately. Every scenario was validated first with no agent (its check fails) and with a known fix (its check passes, nothing else harmed).
 
-All models were served by llama.cpp 0.8.0 (build 11960, CUDA 13.4, SM120) on runnymede's RTX 5090, four episodes at a time against four slots of a shared 128K-token q8_0 KV cache, with each model's recommended sampling. Diagnostics allowed 40 model turns, computer use 35, each with a 40-minute safety net. The agent loop is the same plain tool-calling loop for every model.
+Every model was served by the same llama.cpp (0.8.0, build 11960, CUDA 13.4, SM120, from this flake) with a q8_0 KV cache and the model's recommended sampling, mostly on runnymede's RTX 5090, four episodes at a time. Part of the work ran on wx-workstation's RTX PRO 6000 (96 GB), three models at a time with eight slots each: Gemma's, gpt-oss's, Bolt's and Muse's omp diagnostics, gpt-oss's skill condition and text-only computer use, and Bolt's and Muse's computer use. Agent outcomes don't depend on the GPU; only the time does. Diagnostics allowed 40 model turns, computer use 35, each with a 40-minute safety net.
 
-Diagnostics ran with the second version of the system prompt (`PROMPT_VERSION` in `harness/episode.py`), which adds one sentence to the first: once you know what is wrong, fix it, and say so rather than searching at length when you can't tell who made a bad change. The first version is kept as an ablation (Qwen3.8-27B, one pass, below). Computer use gets a screenshot after every action (the last three kept) unless the model has no vision, when it gets the windows' element lists instead (`--observe elements`); Qwen3.8-27B ran both ways. The troubleshooting-skill condition (`--skill`) appends [the skill](../../.agents/skills/sekka-troubleshooting/SKILL.md) to the diagnostics system prompt.
+Two agent harnesses ran the diagnostics against the same model server:
 
-Each model's decode speed was measured on its own server before its episodes (`bench-<model>.json` in the run): single-stream and four-stream decode, and a 24K-token prefill. Every model cleared the 10 tokens/s bar by a wide margin; the slowest single-stream decode was MODEL_SLOWEST.
+- **The bare loop** (`harness/agent.py`): one `shell` tool and `finish`, and nothing else, the same for every model, so differences are the model's.
+- **oh-my-pi** (`omp` 18.6.1, `--agent omp`): run as root inside the VM against the host's server, with its own system prompt and tools (read, edit, grep, bash, todo lists, compaction) and the same brief appended. Its limit is 30 minutes; it has no turn limit.
+
+Conditions, each against the bare loop's default: the troubleshooting skill appended to the brief (`--skill`); the first version of the system prompt (`prompt v1`, without "once you know what is wrong, fix it"); the windows' element lists instead of screenshots (`--observe elements`, Qwen3.8 and the text-only gpt-oss); and Holo4 with thinking and sampling instead of H Company's greedy, no-thinking setting.
+
+Vision models answer in their own coordinate conventions whatever the prompt asks: Qwen and Holo in 0–1000 of each axis, Nemotron Bolt in 0–1, Gemma in pixels, and Muse Glimmer in 0–1000 although it was asked for pixels. `grounding.py` measures this by asking where three known things are on a screenshot; `models.toml` records each model's.
 
 ## How they fail
 
-Read from the transcripts (`review.py` prints each episode's report and the commands that changed the machine). Most failures are one of these:
+Read from the transcripts (`review.py` prints each episode's report and every command that changed the machine):
 
-- **Not stopping.** The fault is fixed early, and the model keeps checking until the step limit without reporting: the user's problem is solved, but nobody tells them what was wrong. Muse Glimmer 30B fixed ssh-permissions at its sixth step and then spent 34 more; gpt-oss-20b did this in seven of its episodes, Qwen3.8-27B in four. These count as fixed, not as naming the cause.
-- **Over-investigating.** Qwen3.8-27B under the first prompt spent its whole budget on who had changed something: 29 steps reading Aizome's source in the Nix store to find what set the time zone, and a grep of the store for the stray DNS server, without fixing either. One sentence in the prompt ("once you know what is wrong, fix it…") turned both into passes; see the prompt ablation below. Even then, the dns scenario took it 21 minutes, and one repeat ran out of context.
-- **Searching without a map.** gpt-oss-20b looked for Notes' storage in `/usr/share`, flatpaks and quotas, never in `~/Notes`, and looped. This is where the troubleshooting skill helps.
-- **Destructive fixes.** To free space for the backup, Holo4-35B deleted alice's only previous backup. To apply a repaired `settings.toml`, Holo4-35B and Qwen3.6-35B-A3B killed the compositor (`kill -HUP`), ending alice's session; Aizome reloads the file by itself. Muse replaced `authorized_keys` with a test key to check sshd, then wrote the original back from memory. The invariants catch the first two; the third passed because the key came back intact.
-- **Acting on what looks suspicious.** Two models built on Qwen3.6 (Ornith-1.5 and Qwen3.6-35B-A3B itself) found the test driver's console, `backdoor.service`, and tried to stop it as malware, outside anything the user asked about.
-- **Loops.** Greedy decoding without thinking, as H Company recommends Holo4 for single grounding queries, repeats one action whenever the screen doesn't change: half of Holo4-35B's computer-use actions repeated the one before.
-- **Reading what it expects.** The logs task's error says `/srv/data/backpus`; Qwen3.8-27B reported `/srv/data/backups` and `/srv/data/backup`, normalising the typo it was asked to find, in both repeats.
-- **Malformed tool calls.** A long heredoc with unescaped quotes made Qwen3.8-27B's arguments invalid JSON once; llama-server returns HTTP 500 for that. The harness now tells the model and continues, as a client would.
+- **Not stopping.** The fault is fixed early and the model keeps checking until its turns run out, without reporting: the user's problem is solved, but nobody tells them what was wrong. Muse Glimmer fixed ssh-permissions at its sixth turn and spent 34 more; gpt-oss did this in seven episodes, Qwen3.8 in four. They count as fixed, not as naming the cause.
+- **Over-investigating.** Under the first prompt Qwen3.8 spent whole budgets finding who had changed something: 29 turns reading Aizome's source in the Nix store to learn what had set the time zone, and a grep of the store for the stray DNS server, without fixing either. One sentence in the prompt ("once you know what is wrong, fix it; if you can't tell who made a bad change, say so") turned both into passes. Even then, dns-nameserver took it 21 minutes, and once it ran out of its 48K-token context.
+- **Searching without a map.** gpt-oss looked for where Notes keeps its files in `/usr/share`, flatpaks and disk quotas, never `~/Notes`, and looped. The skill names these places.
+- **Destructive fixes.** To apply a repaired keyboard layout, Qwen3.6 killed the session's processes and tried to start the greeter by hand, ending alice's session, in both harnesses; Aizome reloads its settings by itself. Muse replaced alice's `authorized_keys` with a test key to check sshd, then wrote the original back from memory. BOLT_FILES In a run discarded for a harness bug, Holo4-35B deleted alice's only earlier backup to free space.
+- **Acting on what looks suspicious.** Two models built on Qwen3.6 (Ornith-1.5 and Qwen3.6 itself), in runs later discarded, found the test driver's console, a unit named `backdoor.service`, and stopped it as malware, outside anything the user asked about; the shell tool now refuses that.
+- **Loops.** Greedy decoding with no thinking, as H Company recommends Holo4 for one-shot grounding, repeats the same click whenever the screen doesn't change: half of Holo4-35B's actions repeated the one before.
+- **Reading what it expects.** The logs task's error says `/srv/data/backpus`. Qwen3.8 reported `/srv/data/backups`, in both repeats, normalising the typo it was asked to find ([its screen](screenshots/logs-backpus.png)).
+- **Malformed tool calls.** A long heredoc with unescaped quotes made Qwen3.8's arguments invalid JSON once; llama-server answers that with HTTP 500. The bare loop now tells the model and continues, as omp does.
+
+## Prompt, skill, harness and observation
+
+ABLATIONS
 
 ## What the harness needed
 
-Each of these was found by an episode going wrong and reading its transcript, fixed in the harness, and the scenarios validated again. They matter to anyone building evaluations on NixOS test VMs:
+Each of these was found by an episode going wrong and reading its transcript, fixed in the harness, and the scenarios validated again. Episodes the defect affected were excluded and run again; [the data](data/2026-11-04.jsonl) holds only valid ones. They matter to anyone building evaluations on NixOS test VMs:
 
-- **A store-wide search could break the VM.** The test VM shares the host's `/nix/store` (1.6 TB on runnymede) over virtiofs with `--cache=always`, and virtiofsd keeps a file handle for every inode the guest has cached. One `find /nix/store -maxdepth 4` ran virtiofsd out of handles, after which nothing in the guest could load a library and every check failed. A guest service now drops reclaimable dentries and inodes every two seconds, which keeps virtiofsd near 20,000 handles through the same `find` (`virtiofs-inode-release` in `machine.nix`). Building the VM its own store image instead (`useNixStoreImage`) took minutes per boot and was abandoned.
-- **A backgrounded process could hang the driver for good.** The driver runs each command as `timeout N bash -c … | base64`; a server started with `&` inherits the pipe, so `timeout` kills bash but the read never ends. Commands now write to a file in the guest, which is printed afterwards.
-- **The test driver's console is a unit named `backdoor.service`.** One model took it for malware and stopped it, cutting itself off. The shell tool now refuses that, as it refuses reboots.
-- **NixOS units can only be masked at run time,** and systemd applies a runtime mask at its next reload. Without `daemon-reload` the nix-daemon scenario was only "socket stopped", which one model diagnosed correctly and the cause patterns didn't accept.
-- **A running timedated keeps the zone it read.** `ln -sf /etc/zoneinfo/America/Chicago /etc/localtime` is a valid fix that `timedatectl` doesn't show until timedated restarts; the check now reads the link (one episode was graded by hand).
-- **The text observation must place the shell's surfaces exactly.** The command palette is centred below the 24-point menu bar, not on the screen; the first text-only runs had its rows 12 points too high, so clicks hit the neighbouring row. They were run again.
-- **Refusals must ignore quoted text.** The first filter refused `grep -v 'reboot|poweroff'`.
-- **The wall-clock limit must not measure server load.** With four episodes sharing one GPU, decode slows from 75 to about 37 tokens/s per stream at 25K-token contexts; a 20-minute limit cut off thorough models for the server's sake. The step budget is the limit; time is a 40-minute safety net.
+- **A failing command lost its output.** Output went to a file in the guest, printed afterwards, but the driver runs every command under `set -e`, which ended the wrapper first: for 90 minutes models saw nothing from any command that failed, and some escalated to drastic steps. 77 diagnostics episodes were run again; `test_harness.py` now runs the wrapper as the driver does.
+- **A store-wide search could break the VM.** The VM shares the host's `/nix/store` (1.6 TB on runnymede) over virtiofs with `--cache=always`, and virtiofsd keeps a file handle for every inode the guest has cached. One `find /nix/store -maxdepth 4` ran it out of handles, after which nothing in the guest could load a library. A guest service drops reclaimable dentries and inodes every two seconds, which keeps virtiofsd near 20,000 handles through the same search. Giving the VM its own store image (`useNixStoreImage`) took minutes per boot and was abandoned.
+- **A backgrounded process could hang the driver.** The driver runs `timeout N bash -c … | base64`; a server started with `&` inherits the pipe, so `timeout` kills bash but the read never ends. Commands write to a file in the guest instead.
+- **The test driver's console is a unit named `backdoor.service`.** Models took it for malware and stopped it, cutting themselves off. The shell tool refuses that, as it refuses reboots; attempts are listed apart from damage.
+- **Models' coordinate conventions differ from what they're told.** Bolt's clicks were fractions of the screen and Muse's 0–1000, all landing near a corner, until `grounding.py` measured them; both were run again.
+- **NixOS units can only be masked at run time,** and systemd applies a runtime mask at its next reload; without `daemon-reload` the nix-daemon scenario was only "socket stopped".
+- **A running timedated keeps the zone it read.** `ln -sf … /etc/localtime` is a valid fix that `timedatectl` doesn't show until timedated restarts; the check reads the link (one episode was graded by hand).
+- **The text observation must place the shell's surfaces exactly.** The command palette is centred below the 24-point menu bar; the first text-only runs had it 12 points too high, and clicks hit the neighbouring row.
+- **Refusals must ignore quoted text,** or `grep -v 'reboot|poweroff'` is refused.
+- **Time limits mustn't measure server load.** Four episodes sharing a GPU slow decode from 75 to about 37 tokens/s per stream at long contexts, and a 20-minute limit cut thorough models off for the server's sake; the turn budget is the limit, time a safety net.
 
 ## Limits
 
-- Few repeats: two per scenario and model for most conditions. A difference of one or two scenarios between models is within run-to-run variation.
-- The faults are injected locally and fixed in the running system; there is no `/etc/nixos` to change in the VM. On a real install some fixes would also belong in the configuration.
-- The VM renders with pixman on a virtio GPU at 1440×900 and has no real audio, Wi-Fi, Bluetooth or printers.
-- "Root cause named" is a set of regular expressions over the final report; hits and misses quoted here were checked by reading the transcripts.
-- The troubleshooting skill was written by the same author as the scenarios, so its effect is an upper bound on what documentation gives.
+- Few repeats: two per scenario for Qwen3.8 and gpt-oss, one for the rest. A difference of one or two scenarios between models is within run-to-run variation.
+- The faults are injected locally and fixed in the running system; there is no `/etc/nixos` in the VM to change. On a real install some fixes would also belong in the configuration.
+- The VM renders with pixman on a virtio GPU at 1440×900, and has no real audio, Wi-Fi, Bluetooth or printers. It reaches the internet through QEMU's user network, as a real desktop would, and can read the host's Nix store (including Sekka's source, which some models did).
+- "Root cause named" is regular expressions over the final report. Hits and misses quoted here were read; most misses are reports never written.
+- omp ran in the same machine with the omp package added; the bare loop's earlier VMs lacked it. Nothing else differed.
 - Vendor and third-party figures in local-models.md are claims; the numbers here are measured.
 
-RUNS
+## The demonstration
+
+`tests/agent-evals/harness/demo.py` records one fix the way a person would see it: the same machine on a 1920×1080 screen, the settings-syntax fault, and alice typing into Hotaru (`omp --allow-home --model llama.cpp/gemma-4-31b`, then her complaint) while Aizome's own screen recorder runs. In the take recorded on 2026-11-04 (83 seconds, 60 fps), Gemma 4 31B found the unterminated string and fixed it 21 seconds after the question, and the desktop turned to the Day theme as Aizome reloaded the file. The typing is scripted through the compositor's input and quicker than a person's; the model's work isn't scripted.
+
+```sh
+nix build .#agent-evals.demo-driver -o .work/evals/demo-driver
+# A model server on the host's port 8090, then:
+SEKKA_DEMO_CONFIG=demo.json .work/evals/demo-driver/bin/nixos-test-driver -o OUT
+```
+
+## Reproducing
+
+```sh
+nix run .#local-models.serve -- download gemma-4-31b
+nix run .#agent-evals.run -- --agent none && nix run .#agent-evals.run -- --agent oracle --track diagnostics
+nix run .#agent-evals.run -- --models gemma-4-31b --repeats 2
+nix run .#agent-evals.run -- --agent omp --models gemma-4-31b --no-serve   # against a running server
+python3 tests/agent-evals/report.py .work/evals/runs/RUN… --jsonl results.jsonl
+```
+
+The runs of 2026-11-04, by directory under `.work/evals/runs/` (not committed; [the data](data/2026-11-04.jsonl) holds their results): `main` (Qwen3.8 under prompt v1, and its computer use), `v2` (Qwen3.8's diagnostics), `final` and `wx-final` (the other models), `final-cu` and `wx-final-cu` (text-only computer use), `omp` and `wx-omp` (oh-my-pi), and `../runtimes` (the runtime comparison). Excluded and superseded episodes are kept in `superseded-*`, with the reason.
