@@ -532,7 +532,6 @@ dependencies = [
  "aizome-kit",
  "aizome-sys",
  "aizome-theme",
- "aizome-typestate",
  "env_logger",
  "log",
  "zbus",

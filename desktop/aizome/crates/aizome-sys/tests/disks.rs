@@ -6,7 +6,7 @@ mod common;
 
 use aizome_sys::disks::{
     Change, Confirm, CreatePartition, DeletePartition, Disks, Erase, Format, FormatSpec, Identity, NewPartitionTable,
-    Repair, Seen, TableKind,
+    Repair, TableKind,
 };
 use aizome_sys::{Error, Wake};
 use common::{eventually, path};
@@ -560,7 +560,7 @@ fn seen(disks: &Disks, path: &str) -> Identity {
 
 /// A confirmation of the device as the test sees it (any brand will do).
 fn agree<Op: Change>(seen: Identity) -> Confirm<Op, ()> {
-    Confirm::new(aizome_typestate::Reviewed::new(Seen::new(seen), ()))
+    Confirm::new(seen, ())
 }
 
 fn start(bus: &common::TestBus) -> Disks {
