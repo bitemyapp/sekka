@@ -46,6 +46,39 @@ fn point(glyph: Icon, words: String) -> Element<Msg> {
     .into()
 }
 
+/// The recommended model's incidents, the catalog's sentences as they
+/// are, said before its download with what stands in the way here.
+fn caution(incidents: &[String]) -> Option<String> {
+    if incidents.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "In Sekka's evaluations, where nothing asked first: {} Here, nothing changes until you press Run.",
+        incidents.join(" ")
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::caution;
+
+    #[test]
+    fn a_recommended_model_that_did_harm_says_so_before_the_download() {
+        assert_eq!(caution(&[]), None);
+        let said = caution(&[
+            "Deleted the user's older backup to free disk space.".to_owned(),
+            "Ended the user's session to apply a keyboard layout.".to_owned(),
+        ]);
+        assert_eq!(
+            said.as_deref(),
+            Some(
+                "In Sekka's evaluations, where nothing asked first: Deleted the user's older backup to free disk \
+                 space. Ended the user's session to apply a keyboard layout. Here, nothing changes until you press Run."
+            )
+        );
+    }
+}
+
 pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
     let hw = app.models.hardware.as_ref();
     let choice = app.first_choice();
@@ -75,22 +108,35 @@ pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
                             .to_owned(),
                     };
                     let memory = bar::in_memory(&fb).unwrap_or_else(|| space(0.0));
-                    let card = container(
-                        column![
-                            row![text(e.name.clone()).size(17.0).weight(700.0), tag("Recommended", Role::Accent)]
-                                .spacing(8.0),
-                            text(format!("By {} · {} licence · {}", e.maker, e.license, e.origin.join(", ")))
-                                .size(12.0)
-                                .role(Role::Text3),
-                            bar::verdict(&fb),
-                            bar::bar(&fb, 12.0),
-                            bar::legend(&fb),
-                            memory,
-                            text(score).size(12.5).role(Role::Text2).wrap().line_height(1.4),
-                        ]
-                        .spacing(8.0)
-                        .width(Fill),
-                    )
+                    let mut lines: Vec<Element<Msg>> = vec![
+                        row![text(e.name.clone()).size(17.0).weight(700.0), tag("Recommended", Role::Accent)]
+                            .spacing(8.0)
+                            .into(),
+                        text(format!("By {} · {} licence · {}", e.maker, e.license, e.origin.join(", ")))
+                            .size(12.0)
+                            .role(Role::Text3)
+                            .into(),
+                        bar::verdict(&fb),
+                        bar::bar(&fb, 12.0),
+                        bar::legend(&fb),
+                        memory,
+                        text(score).size(12.5).role(Role::Text2).wrap().line_height(1.4).into(),
+                    ];
+                    // What it did wrong when nothing stood between it and
+                    // the machine, said before the download, not only in
+                    // Models.
+                    if let Some(said) = caution(&e.incidents) {
+                        lines.push(
+                            row![
+                                super::lead(icon(Icon::TriangleAlert).size(13.0).role(Role::Warning)),
+                                text(said).size(12.5).role(Role::Text2).wrap().line_height(1.4)
+                            ]
+                            .spacing(8.0)
+                            .align(Align::Start)
+                            .into(),
+                        );
+                    }
+                    let card = container(column_of(lines).spacing(8.0).width(Fill))
                     .padding([14.0, 16.0])
                     .fill(Tone::Chrome)
                     .border(Edge::Line2)
