@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use hako::fsops::transfer::{restore, trash_items};
 use hako::fsops::trash::Trash;
-use hako::fsops::undo::{Record, invert};
+use hako::fsops::undo::{History, Record, Step, invert};
 use hako::fsops::{Always, Control, Env, ErrorChoice, Resolution};
 
 /// A folder of the test's own under the private TMPDIR, removed when dropped.
@@ -86,7 +86,11 @@ fn undo_of_move_to_trash_replace_moves_the_newer_item_to_the_trash() {
     let (_, items) = trash_items(std::slice::from_ref(&a), &trash, &mut Env::new(&control, &mut asker, &mut ()));
     t.file("home/docs/a.txt", "newer a");
     // ⌘Z of the Move to Trash: the inverse is a restore.
-    let (r, _) = invert(&Record::Trash { items }, &trash, &mut Env::new(&control, &mut asker, &mut ()));
+    let mut history = History::default();
+    history.push(Step { record: Record::Trash { items }, label: "Move to Trash of “a.txt”".into() });
+    let inversion = history.begin_undo().expect("the Move to Trash to undo");
+    let (r, inverted) = invert(inversion, &trash, &mut Env::new(&control, &mut asker, &mut ()));
+    history.finished(inverted);
     eprintln!("undo report: {r:?}");
     assert_eq!(fs::read_to_string(&a).unwrap(), "old a");
     assert!(in_trash(&trash, &a, "newer a"), "the item undo replaced should be in the Trash, not deleted");
