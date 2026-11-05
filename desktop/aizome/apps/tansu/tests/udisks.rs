@@ -23,7 +23,7 @@ use tansu::run::{Outcome, Run};
 /// The run of `plan`, as if the person pressed Apply on the sheet listing it
 /// (the kit's test agreement stands for their press).
 fn agree(plan: &Plan, state: &aizome_sys::disks::DisksState) -> Run {
-    Run::agree(aizome_kit::agree::testing::agreed(plan.shown(state)), state)
+    Run::agree(aizome_kit::agree::testing::agreed(plan.shown(state)), plan, state).expect("the plan as shown")
 }
 use zbus::fdo;
 use zbus::object_server::{ObjectServer, SignalEmitter};

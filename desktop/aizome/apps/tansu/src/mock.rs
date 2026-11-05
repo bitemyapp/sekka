@@ -441,6 +441,7 @@ impl Backend for Mock {
         type_id: Option<&str>,
         name: &str,
         format: Option<FormatSpec>,
+        flags: u64,
     ) -> Task<String> {
         let table = confirm.block().to_owned();
         let table = table.as_str();
@@ -488,6 +489,9 @@ impl Backend for Mock {
                         is_contained: state.blocks.iter().filter_map(|b| b.partition.as_ref()).any(|p| {
                             p.is_container && p.table == table && offset >= p.offset && offset < p.offset + p.size
                         }),
+                        // As UDisks's client sets them: on the partition it made.
+                        flags,
+                        flag_names: flag_names(&kind, flags),
                         ..Default::default()
                     }),
                     ..Default::default()

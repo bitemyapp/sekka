@@ -789,14 +789,15 @@ impl Tansu {
                     return;
                 }
                 let Some(agreed) = pressed.take() else { return };
-                // The person agreed to the plan as the sheet listed it: if it
-                // has changed since (an operation dropped as its device went),
-                // what they agreed to isn't what would run.
-                if agreed.target().iter().map(|s| s.op()).ne(self.plan.ops.iter()) {
-                    sheet.error = Some("The pending operations changed: review them and apply again.".into());
-                    return;
-                }
-                let run = Run::agree(agreed, &state);
+                // The person agreed to the plan as the sheet listed it: the run
+                // refuses it if the plan has changed since.
+                let run = match Run::agree(agreed, &self.plan, &state) {
+                    Ok(run) => run,
+                    Err(changed) => {
+                        sheet.error = Some(changed.to_string());
+                        return;
+                    }
+                };
                 sheet.kind = SheetKind::Running;
                 self.run = Some(run);
                 self.run_timer = Some(cx.every(Duration::from_millis(250), Msg::Tick));

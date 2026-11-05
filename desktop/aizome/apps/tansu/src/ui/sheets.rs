@@ -492,6 +492,7 @@ fn apply(t: &Tansu, f: &crate::app::ApplyForm) -> Vec<Element<Msg>> {
     // What the sheet lists is what its Apply button agrees to.
     let shown = t.plan.shown(&t.state);
     let mut list: Vec<Element<Msg>> = Vec::new();
+    let mut destroys = false;
     for (k, item) in shown.iter().enumerate() {
         let w = item.words();
         let mut lines: Vec<Element<Msg>> = vec![text(w.title.clone()).semibold().wrap().width(Length::Fill).into()];
@@ -500,6 +501,7 @@ fn apply(t: &Tansu, f: &crate::app::ApplyForm) -> Vec<Element<Msg>> {
         }
         match &w.loss {
             Loss::Destroys(m) => {
+                destroys = true;
                 lines.push(
                     row![
                         icon(Icon::TriangleAlert).size(14.0).role(Role::Danger),
@@ -570,6 +572,8 @@ fn apply(t: &Tansu, f: &crate::app::ApplyForm) -> Vec<Element<Msg>> {
     // Return, which in a name field moves here instead.
     let label = format!("Apply {n} Operation{}", if n == 1 { "" } else { "s" });
     let apply = button(label).primary().id("apply").on_agree(shown, |p| s(SheetMsg::Apply(p))).enabled(ready);
+    // Red when it destroys data, as before.
+    let apply = if destroys { apply.destructive() } else { apply };
     v.push(
         row![spacer(), button("Cancel").cancel().on_press(Msg::CloseSheet), apply]
             .spacing(8.0)

@@ -220,13 +220,8 @@ fn pending_operations_do_not_follow_a_swapped_stick() {
     swap_for_another_stick(&mock);
     h.send(Msg::Changed);
     h.send(Msg::Apply);
-    if h.program().sheet.is_some() {
-        // The person presses Apply (none of it may run on the second stick).
-        let w = h.window();
-        if let Some(at) = h.find_id(w, "apply").map(|r| r.center()) {
-            h.click(w, at);
-        }
-    }
+    // The swap dropped both operations, so Apply has nothing to open.
+    assert!(h.program().plan.is_empty() && h.program().sheet.is_none(), "an Apply sheet opened for the second stick");
     for _ in 0..4 {
         h.send(Msg::Tick);
     }
