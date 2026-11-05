@@ -145,6 +145,7 @@
         tatami = inputs.tatami.nixosModules.default;
         yukimi = inputs.yukimi.nixosModules.default;
         aizome = inputs.aizome.nixosModules.default;
+        sekka-discord = import ./nix/sekka-discord-service.nix;
       };
       lib = {
         inherit installedLock;
