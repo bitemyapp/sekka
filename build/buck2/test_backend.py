@@ -9,7 +9,8 @@ import sys
 import tempfile
 import unittest
 
-from generate import package_records, units_from_graph
+from generate import outside_data, package_records, units_from_graph
+from action import OUTPUT_TOKEN, ROOT_TOKEN, relocate
 
 
 class CompilerContract(unittest.TestCase):
@@ -17,6 +18,158 @@ class CompilerContract(unittest.TestCase):
         result = subprocess.run(command, cwd=cwd, env=env, text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, "Command: " + repr(command) + "\n" + result.stdout + result.stderr)
         return result.stdout
+
+    def test_output_relocation_respects_path_ownership(self):
+        with tempfile.TemporaryDirectory(prefix="sekka-buck-relocation-") as temporary:
+            producer = Path(temporary) / "producer"
+            consumer = Path(temporary) / "consumer"
+            output = producer / "output_artifacts/unit"
+            materialized = consumer / "input_artifacts/hash/unit"
+            (output / "nested/subdir").mkdir(parents=True)
+            materialized.parent.mkdir(parents=True)
+            (output / "generated.h").write_text("generated")
+            (output / "file with spaces").write_text("spaced")
+            (output / "nested/header.h").write_text("symlink referent")
+            (output / "link").symlink_to("nested/subdir", target_is_directory=True)
+            for root in [producer, consumer]:
+                (root / "assets").write_text("root-owned")
+                sibling = root / "output_artifacts/unit-extra"
+                sibling.mkdir(parents=True)
+                (sibling / "data").write_text("sibling-owned")
+                (root / "source/nested/subdir").mkdir(parents=True)
+                (root / "source/nested/header.h").write_text("source referent")
+                (root / "source/link").symlink_to("nested/subdir", target_is_directory=True)
+            cases = [
+                (str(output / "generated.h"), OUTPUT_TOKEN + "/generated.h", materialized / "generated.h"),
+                (str(output / "nested/../generated.h"), OUTPUT_TOKEN + "/generated.h", materialized / "generated.h"),
+                (str(output / "file with spaces"), OUTPUT_TOKEN + "/file with spaces", materialized / "file with spaces"),
+                (str(output / "../../assets"), ROOT_TOKEN + "/assets", consumer / "assets"),
+                (str(output) + "-extra/data", ROOT_TOKEN + "/output_artifacts/unit-extra/data", consumer / "output_artifacts/unit-extra/data"),
+                (str(output / "link/../header.h"), OUTPUT_TOKEN + "/nested/header.h", materialized / "nested/header.h"),
+                (str(producer / "source/link/../header.h"), ROOT_TOKEN + "/source/link/../header.h", consumer / "source/link/../header.h"),
+            ]
+            contents = {original: Path(original).read_text() for original, _, _ in cases}
+            encoded_paths = [relocate(original, producer, output, encode=True) for original, _, _ in cases]
+            # Exercise the actual metadata shapes, not only standalone paths.
+            metadata = {
+                "search": ["native=" + cases[3][0]],
+                "paths": ":".join(case[0] for case in cases),
+                "stdout": "cargo:root=" + cases[0][0] + "\ncargo:assets=" + cases[3][0] + "\n",
+            }
+            encoded = relocate(metadata, producer, output, encode=True)
+            # Encoding happens in the producer; decoding happens only after its
+            # complete output, including relative symlinks, moves to a new path.
+            shutil.move(output, materialized)
+            for actual, (original, expected_encoding, expected_path) in zip(encoded_paths, cases):
+                with self.subTest(path=original):
+                    self.assertEqual(actual, expected_encoding)
+                    decoded_path = relocate(actual, consumer, materialized)
+                    self.assertEqual(decoded_path, str(expected_path))
+                    self.assertEqual(Path(decoded_path).read_text(), contents[original])
+            self.assertEqual((materialized / "link/../header.h").read_text(), "symlink referent")
+            decoded = relocate(encoded, consumer, materialized)
+            self.assertEqual(decoded["search"], ["native=" + str(consumer / "assets")])
+            self.assertEqual(decoded["paths"], ":".join(str(case[2]) for case in cases))
+            self.assertEqual(decoded["stdout"], "cargo:root=" + str(materialized / "generated.h") + "\ncargo:assets=" + str(consumer / "assets") + "\n")
+
+    def test_sibling_resources_are_action_inputs(self):
+        environment = Path(os.environ["SEKKA_BUCK2_ENV"]).resolve()
+        tools = json.loads(environment.read_text())
+        engine = os.environ["SEKKA_BUCK2_BIN"]
+        with tempfile.TemporaryDirectory(prefix="sekka-buck-source-inputs-") as temporary:
+            root = Path(temporary) / "workspace"
+            home = Path(temporary) / "home"
+            home.mkdir()
+            env = dict(os.environ, HOME=str(home), CARGO_HOME=str(home / "cargo"),
+                       RUSTC=tools["rustc"], RUSTC_BOOTSTRAP="1",
+                       BUCK2_TEST_SKIP_DEFAULT_EXTERNAL_CONFIG="true")
+            for key in ["BUCK2_EXTRA_EXTERNAL_CONFIG", "BUCK2_LOCAL_CONTENT_STORE", "BUCK2_DAEMON_DIR"]:
+                env.pop(key, None)
+            initial = "<svg>declared resource</svg>\n"
+            changed = "<svg>changed resource</svg>\n"
+            files = {
+                "Cargo.toml": '[workspace]\nresolver="3"\nmembers=["library"]\n',
+                "library/Cargo.toml": '[package]\nname="resource-fixture"\nversion="0.1.0"\nedition="2024"\n',
+                "library/src/main.rs": '''macro_rules! icon {
+    ($name:literal) => { include_str!(concat!("../../icons/", $name, ".svg")) };
+}
+fn main() { print!("{}", icon!("sample")); }
+''',
+                "icons/sample.svg": initial,
+                "unrelated/secret.txt": "not an input\n",
+                ".buckconfig": '''[cells]
+root = .
+prelude = prelude
+none = none
+toolchains = toolchains
+[cell_aliases]
+config = prelude
+ovr_config = prelude
+fbcode = none
+fbsource = none
+fbcode_macros = none
+buck = none
+[external_cells]
+prelude = bundled
+[parser]
+target_platform_detector_spec = target:root//...->prelude//platforms:default target:prelude//...->prelude//platforms:default
+[build]
+execution_platforms = root//build/buck2:execution
+''',
+                "build/buck2/BUCK": '''load(":platforms.bzl", "execution")
+execution(name = "execution")
+export_file(name = "action.py", visibility = ["PUBLIC"])
+export_file(name = "run.py", visibility = ["PUBLIC"])
+''',
+            }
+            for relative, text in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(text)
+            for name in ["units.bzl", "platforms.bzl", "action.py", "run.py"]:
+                shutil.copyfile(Path(__file__).with_name(name), root / "build/buck2" / name)
+            metadata = json.loads(self.checked([tools["cargo"], "metadata", "--format-version", "1", "--offline"], cwd=root, env=env))
+            graph = json.loads(self.checked([tools["cargo"], "build", "--locked", "--offline", "--unit-graph", "-Z", "unstable-options"], cwd=root, env=env))
+            units, _ = units_from_graph(graph, package_records(metadata, root), metadata)
+            self.assertEqual(len(graph["roots"]), 1)
+            unit = units[graph["roots"][0]]
+            resources = outside_data(root, "library")
+            self.assertEqual(resources, ["icons/sample.svg"])
+            inputs = {path.relative_to(root).as_posix(): path.relative_to(root).as_posix()
+                      for path in (root / "library").rglob("*") if path.is_file()}
+            inputs.update({path: path for path in resources})
+            (root / "BUCK").write_text(
+                'load("//build/buck2:units.bzl", "cargo_source", "cargo_unit")\n'
+                'cargo_source(name = "source", prefix = "library", files = ' + json.dumps(inputs) + ')\n'
+                'cargo_unit(name = "unit", source = ":source", spec = ' + json.dumps(json.dumps(unit)) + ')\n'
+            )
+            trace_file = Path(temporary) / "build-id"
+            try:
+                for relative, contents, expected, executions in [
+                    (None, None, initial, 1),
+                    ("icons/sample.svg", changed, changed, 1),
+                    ("unrelated/secret.txt", "still not an input\n", changed, 0),
+                ]:
+                    if relative is not None:
+                        (root / relative).write_text(contents)
+                    outputs = json.loads(self.checked(
+                        [engine, "build", "//:unit", "--show-full-json-output", "--write-build-id", str(trace_file), "--config-file", str(environment.with_name("buckconfig"))],
+                        cwd=root, env=env,
+                    ))
+                    executable = next(iter(outputs.values()))
+                    self.assertEqual(self.checked([executable], cwd=root, env=env), expected)
+                    # Local symlinks can hide a missing sibling input. A real
+                    # resource edit must invalidate the action, not reuse stale bytes.
+                    # Select this exact invocation, not filesystem-dependent
+                    # "latest" log ordering for several builds in one second.
+                    trace_id = trace_file.read_text().strip()
+                    commands = self.checked([engine, "log", "what-ran", "--trace-id", trace_id, "--format", "json"], cwd=root, env=env)
+                    commands = [json.loads(line) for line in commands.splitlines()]
+                    self.assertEqual(len(commands), executions, (relative, trace_id, commands))
+                    for command in commands:
+                        self.assertEqual(command["reproducer"]["executor"], "Local")
+            finally:
+                self.checked([engine, "kill"], cwd=root, env=env)
 
     def test_real_compiler_runtime_and_test_contracts(self):
         environment = Path(os.environ["SEKKA_BUCK2_ENV"]).resolve()
@@ -152,6 +305,7 @@ contract-native={path="../native"}
             completed = {}
             closures = {}
             built = {}
+            (root / "outputs").mkdir()
 
             def build(index):
                 if index in completed:
@@ -177,7 +331,14 @@ contract-native={path="../native"}
                 }
                 specification = root / (unit["key"] + ".json")
                 specification.write_text(json.dumps(payload))
-                self.checked([sys.executable, str(action), "--environment", str(environment), "--spec", str(specification), "--output", output], cwd=root, env=cargo_env)
+                producer_output = "producer-outputs/" + unit["key"]
+                self.checked([sys.executable, str(action), "--environment", str(environment), "--spec", str(specification), "--output", producer_output], cwd=root, env=cargo_env)
+                # RBE publishes an output at a different path in the next action.
+                shutil.move(root / producer_output, root / output)
+                for name in ["build-script.json", "unit.json", "stdout"]:
+                    metadata_file = root / output / name
+                    if metadata_file.exists():
+                        self.assertNotIn("producer-outputs", metadata_file.read_text())
                 completed[index] = output
                 closures[index] = closure
                 built[unit["key"]] = output, closure

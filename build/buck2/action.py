@@ -4,24 +4,55 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import subprocess
 import sys
 
 ROOT_TOKEN = "${SEKKA_EXEC_ROOT}"
+# RBE publishes a producer's output at a different path in consuming actions.
+OUTPUT_TOKEN = "${SEKKA_UNIT_OUTPUT}"
 
 
 def load(path):
     return json.loads(Path(path).read_text())
 
 
-def relocate(value, root, encode=False):
+def relocate(value, root, output, encode=False):
     if isinstance(value, str):
-        return value.replace(str(root), ROOT_TOKEN) if encode else value.replace(ROOT_TOKEN, str(root))
+        if encode:
+            root, output = str(root), str(output)
+            prefix = re.escape(root)
+            # Cargo instructions and linker arguments can embed multiple paths.
+            # Keep spaces within paths, but stop at separators or the next root.
+            pattern = prefix + r"(?=/|$|[\s,:;\"'])(?:(?!" + prefix + r")[^\n\r,:;\"'])*"
+
+            def encode_path(match):
+                original = match.group()
+                path = original.rstrip()
+                suffix = original[len(path):]
+                if path == output or path.startswith(output + "/"):
+                    # Lexical `normpath` would change `link/../file` when link
+                    # is a symlink. Resolve while the producer output exists.
+                    referent = str(Path(path).resolve())
+                    if path.endswith("/") and not referent.endswith("/"):
+                        referent += "/"
+                    for directory, token in [(output, OUTPUT_TOKEN), (root, ROOT_TOKEN)]:
+                        if referent == directory or referent.startswith(directory + "/"):
+                            return token + referent[len(directory):] + suffix
+                    return referent + suffix
+                # Siblings such as `unit-extra`, and unrelated input paths,
+                # retain their original traversal and symlink semantics.
+                if path == root or path.startswith(root + "/"):
+                    return ROOT_TOKEN + path[len(root):] + suffix
+                return original
+
+            return re.sub(pattern, encode_path, value)
+        return value.replace(ROOT_TOKEN, str(root)).replace(OUTPUT_TOKEN, str(output))
     if isinstance(value, list):
-        return [relocate(v, root, encode) for v in value]
+        return [relocate(v, root, output, encode) for v in value]
     if isinstance(value, dict):
-        return {k: relocate(v, root, encode) for k, v in value.items()}
+        return {k: relocate(v, root, output, encode) for k, v in value.items()}
     return value
 
 
@@ -158,7 +189,7 @@ def run_script(payload, output, env, tools, root):
         dep = dependency["spec"]
         directory = Path(dependency["directory"]).absolute()
         if dep["mode"] == "run-custom-build":
-            instructions = relocate(load(directory / "build-script.json"), root)
+            instructions = relocate(load(directory / "build-script.json"), root, directory)
             links = dep["package"].get("links")
             if links:
                 for key, value in instructions["metadata"].items():
@@ -168,11 +199,11 @@ def run_script(payload, output, env, tools, root):
     if executable is None:
         raise ValueError("Cargo unit has no build-script executable")
     completed = subprocess.run([str(executable)], cwd=manifest, env=env, text=True, stdout=subprocess.PIPE)
-    (output / "stdout").write_text(completed.stdout)
+    (output / "stdout").write_text(relocate(completed.stdout, root, output, encode=True))
     completed.check_returncode()
     result = script_instructions(completed.stdout)
     result["out_dir"] = str(out_dir)
-    (output / "build-script.json").write_text(json.dumps(relocate(result, root, encode=True), sort_keys=True))
+    (output / "build-script.json").write_text(json.dumps(relocate(result, root, output, encode=True), sort_keys=True))
 
 
 def compile_unit(payload, output, env, tools, root):
@@ -203,7 +234,7 @@ def compile_unit(payload, output, env, tools, root):
         args += ["-L", "dependency=" + str(directory)]
         instructions = directory / "build-script.json"
         if instructions.exists():
-            for search in relocate(load(instructions), root)["search"]:
+            for search in relocate(load(instructions), root, directory)["search"]:
                 args += ["-L", search]
     for dependency, edge in zip(payload["dependencies"], unit["dependencies"]):
         dep = dependency["spec"]
@@ -211,7 +242,7 @@ def compile_unit(payload, output, env, tools, root):
         if dep["mode"] == "run-custom-build":
             if dep["package"]["id"] != unit["package"]["id"]:
                 continue
-            instructions = relocate(load(directory / "build-script.json"), root)
+            instructions = relocate(load(directory / "build-script.json"), root, directory)
             env.update(instructions["env"])
             env["OUT_DIR"] = instructions["out_dir"]
             for value in instructions["cfg"]:
@@ -266,7 +297,7 @@ def main():
     for directory in payload["closure"]:
         instructions = Path(directory) / "build-script.json"
         if instructions.exists():
-            for search in relocate(load(instructions), root)["search"]:
+            for search in relocate(load(instructions), root, Path(directory).absolute())["search"]:
                 kind, separator, path = search.partition("=")
                 path = path if separator and kind in {"native", "dependency", "all", "crate", "framework"} else search
                 if path not in library_paths:
@@ -282,7 +313,7 @@ def main():
     temporary = test_tmp_path(payload["unit"])
     if temporary is not None:
         info["test_tmp"] = str(temporary)
-    (output / "unit.json").write_text(json.dumps(relocate(info, root, encode=True), sort_keys=True))
+    (output / "unit.json").write_text(json.dumps(relocate(info, root, output, encode=True), sort_keys=True))
 
 
 if __name__ == "__main__":

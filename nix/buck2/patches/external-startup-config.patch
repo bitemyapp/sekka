@@ -1,7 +1,31 @@
 diff --git a/app/buck2_client_ctx/src/immediate_config.rs b/app/buck2_client_ctx/src/immediate_config.rs
-index fc38a48..fd51bdc 100644
+index fc38a48..a4d72e7 100644
 --- a/app/buck2_client_ctx/src/immediate_config.rs
 +++ b/app/buck2_client_ctx/src/immediate_config.rs
+@@ -38,8 +38,8 @@ use buck2_fs::paths::abs_path::AbsPathBuf;
+ use buck2_fs::working_dir::AbsWorkingDir;
+ use prost::Message;
+ 
+-/// Lazy-computed immediate config data. This is produced by reading the root buckconfig (but not
+-/// processing any includes).
++/// Lazy-computed immediate config data. Includes are normally skipped, but an explicit
++/// `BUCK2_EXTRA_EXTERNAL_CONFIG` layer opts into parsing its complete effective configuration.
+ struct ImmediateConfigContextData {
+     cell_resolver: CellResolver,
+     cwd_cell_alias_resolver: CellAliasResolver,
+@@ -52,9 +52,9 @@ struct ImmediateConfigContextData {
+ }
+ 
+ impl ImmediateConfigContextData {
+-    /// Performs a parse of the root `.buckconfig` for the cell _only_ without following includes
+-    /// and without parsing any configs for any referenced cells. This means this function might return
+-    /// an empty mapping if the root `.buckconfig` does not contain the cell definitions.
++    /// Parses the root configuration without parsing configs for referenced cells.
++    /// Includes are skipped unless `BUCK2_EXTRA_EXTERNAL_CONFIG` is set, so the default
++    /// parse may return an empty mapping when cell definitions live in an include.
+     fn parse(roots: InvocationRoots) -> buck2_error::Result<Self> {
+         let paranoid_info_path = roots.paranoid_info_path()?;
+         // This function is non-reentrant, and blocking for a bit should be ok
 @@ -142,8 +142,13 @@ impl<'a> ImmediateConfigContext<'a> {
                      }
                  };
@@ -18,7 +42,7 @@ index fc38a48..fd51bdc 100644
              })
              .buck_error_context("Error creating daemon startup config")
      }
-@@ -269,6 +274,44 @@ mod tests {
+@@ -269,6 +274,128 @@ mod tests {
          Ok(AbsWorkingDir::unchecked_new(fs_util::canonicalize(path)?))
      }
  
@@ -56,6 +80,90 @@ index fc38a48..fd51bdc 100644
 +            &rotated
 +                .daemon_startup_config()?
 +                .remote_execution_config_digest
++        );
++        Ok(())
++    }
++
++    #[test]
++    fn test_external_startup_config_follows_includes() -> buck2_error::Result<()> {
++        // A child process owns the environment: buck2_env! values are cached, and
++        // unrelated tests must retain their normal include-free startup behavior.
++        let Some(directory) = std::env::var_os("BUCK2_TEST_STARTUP_INCLUDE_ROOT") else {
++            let tempdir = tempfile::tempdir()?;
++            let root = AbsPath::new(tempdir.path())?;
++            fs_util::write(root.join(".buckconfig"), "[cells]\nroot = .\n")?;
++            fs_util::write(root.join("cert.pem"), "first certificate")?;
++            fs_util::create_dir_all(root.join("nested"))?;
++            fs_util::write(
++                root.join("startup.buckconfig"),
++                format!("<file:{}>\n", root.join("private.buckconfig")),
++            )?;
++            fs_util::write(
++                root.join("private.buckconfig"),
++                "[buck2_re_client]\ntls_ca_certs = cert.pem\n<file:headers.buckconfig>\n",
++            )?;
++            fs_util::write(
++                root.join("headers.buckconfig"),
++                "[buck2_re_client]\nhttp_headers = x-test:first-test-credential\n",
++            )?;
++            let status = std::process::Command::new(std::env::current_exe()?)
++                .args([
++                    "--exact",
++                    "immediate_config::tests::test_external_startup_config_follows_includes",
++                    "--nocapture",
++                ])
++                .env("BUCK2_TEST_STARTUP_INCLUDE_ROOT", tempdir.path())
++                .env(
++                    "BUCK2_EXTRA_EXTERNAL_CONFIG",
++                    root.join("startup.buckconfig").as_os_str(),
++                )
++                .status()?;
++            assert!(status.success(), "startup include regression child failed");
++            return Ok(());
++        };
++        let root = AbsPath::new(std::path::Path::new(&directory))?;
++        let root_cwd = working_dir(root)?;
++        let nested_cwd = working_dir(&root.join("nested"))?;
++        let initial = ImmediateConfigContext::new(&root_cwd);
++        initial.set_setting_arg_layers(Vec::new())?;
++        let initial = initial.daemon_startup_config()?;
++        assert!(!initial.serialize()?.contains("first-test-credential"));
++        let nested = ImmediateConfigContext::new(&nested_cwd);
++        nested.set_setting_arg_layers(Vec::new())?;
++        assert_eq!(
++            initial.remote_execution_config_digest,
++            nested.daemon_startup_config()?.remote_execution_config_digest
++        );
++        fs_util::write(
++            root.join("headers.buckconfig"),
++            "[buck2_re_client]\nhttp_headers = x-test:rotated-test-credential\n",
++        )?;
++        let rotated = ImmediateConfigContext::new(&nested_cwd);
++        rotated.set_setting_arg_layers(Vec::new())?;
++        let rotated = rotated.daemon_startup_config()?;
++        assert!(!rotated.serialize()?.contains("rotated-test-credential"));
++        assert_ne!(
++            initial.remote_execution_config_digest,
++            rotated.remote_execution_config_digest
++        );
++        fs_util::write(root.join("cert.pem"), "rotated certificate")?;
++        let rotated_cert = ImmediateConfigContext::new(&nested_cwd);
++        rotated_cert.set_setting_arg_layers(Vec::new())?;
++        assert_ne!(
++            rotated.remote_execution_config_digest,
++            rotated_cert
++                .daemon_startup_config()?
++                .remote_execution_config_digest
++        );
++        fs_util::write(
++            root.join("private.buckconfig"),
++            "<file:missing-private-credentials.buckconfig>\n",
++        )?;
++        let missing = ImmediateConfigContext::new(&nested_cwd);
++        missing.set_setting_arg_layers(Vec::new())?;
++        assert!(
++            missing.daemon_startup_config().is_err(),
++            "a required credential include must fail closed"
 +        );
 +        Ok(())
 +    }
@@ -345,10 +453,28 @@ index 4661bab..089e121 100644
          assert!(
              startup_config.hydration.is_some(),
 diff --git a/app/buck2_common/src/legacy_configs/cells.rs b/app/buck2_common/src/legacy_configs/cells.rs
-index e6fb50d..df05798 100644
+index e6fb50d..0d73a70 100644
 --- a/app/buck2_common/src/legacy_configs/cells.rs
 +++ b/app/buck2_common/src/legacy_configs/cells.rs
-@@ -634,6 +634,13 @@ async fn get_project_buckconfig_paths(
+@@ -244,12 +244,16 @@ impl BuckConfigBasedCells {
+         project_fs: &ProjectRoot,
+         config_args: &[buck2_cli_proto::ConfigOverride],
+     ) -> buck2_error::Result<Self> {
++        // Explicit startup layers can be include-only wrappers around private
++        // credentials. Read their full effective config before matching a daemon.
++        // Preserve the upstream fast, include-free parse when no layer is opted in.
++        let follow_includes = buck2_env!("BUCK2_EXTRA_EXTERNAL_CONFIG")?.is_some();
+         Self::parse_with_file_ops_and_options(
+             &mut DefaultConfigParserFileOps {
+                 project_fs: project_fs.dupe(),
+             },
+             config_args,
+-            false, /* follow includes */
++            follow_includes,
+         )
+         .await
+     }
+@@ -634,6 +638,13 @@ async fn get_project_buckconfig_paths(
          }
      }
  

@@ -29,7 +29,7 @@ def main():
     tools = load(args.environment)
     root = Path.cwd()
     output = Path(args.run).absolute()
-    info = relocate(load(output / "unit.json"), root)
+    info = relocate(load(output / "unit.json"), root, output)
     runtime = load(args.runtime)
     env = native_environment(tools)
     env.update(runtime)

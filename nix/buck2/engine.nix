@@ -32,7 +32,7 @@ platform.buildRustPackage {
   checkPhase = ''
     runHook preCheck
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_common init::tests
-    cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_client_ctx test_relative_re_tls_uses_project_root_from_subdirectory
+    cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_client_ctx immediate_config::tests
     runHook postCheck
   '';
   meta = {

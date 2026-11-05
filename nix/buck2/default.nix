@@ -21,6 +21,8 @@ let
       ../../build/buck2/action.py
       ../../build/buck2/run.py
       ../../build/buck2/test_backend.py
+      ../../build/buck2/units.bzl
+      ../../build/buck2/platforms.bzl
       ../../build/buck2/CARGO-LICENSE-MIT
     ];
   };
@@ -66,7 +68,10 @@ let
   '';
   backendTest = pkgs.runCommand "sekka-buck2-backend-test" {
     SEKKA_BUCK2_ENV = "${environment}/env.json";
+    SEKKA_BUCK2_BIN = "${buck2}/bin/buck2";
     SEKKA_BUCK2_RUNTIME = "${shared.testEnv}/env.json";
+    # Buck initializes its HTTP client even for this network-disabled local build.
+    SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
     PYTHONDONTWRITEBYTECODE = "1";
   } ''
     ${pkgs.python3}/bin/python3 ${backendTestSource}/test_backend.py
