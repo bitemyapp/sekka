@@ -129,6 +129,8 @@ struct Device {
     /// Connected connectors and the CRTCs they drive.
     connectors: HashMap<connector::Handle, crtc::Handle>,
     surfaces: HashMap<crtc::Handle, Surface>,
+    /// Coalesces output configuration changes until the whole batch ends.
+    tiles_pending: bool,
 }
 
 pub struct Udev {
@@ -800,8 +802,17 @@ fn device_added(state: &mut State, node: DrmNode, path: &Path) -> Result<(), Str
             )
         }
     };
-    u.devices
-        .insert(node, Device { token, render_node, manager, connectors: HashMap::new(), surfaces: HashMap::new() });
+    u.devices.insert(
+        node,
+        Device {
+            token,
+            render_node,
+            manager,
+            connectors: HashMap::new(),
+            surfaces: HashMap::new(),
+            tiles_pending: false,
+        },
+    );
     device_changed(state, node);
     Ok(())
 }
@@ -810,58 +821,106 @@ fn device_added(state: &mut State, node: DrmNode, path: &Path) -> Result<(), Str
 fn device_changed(state: &mut State, node: DrmNode) {
     let crate::backend::Backend::Udev(u) = &mut state.backend else { return };
     let Some(device) = u.devices.get_mut(&node) else { return };
+    device.tiles_pending = false;
     let drm = match &device.manager {
         Manager::Gles(m) => m.device(),
         Manager::Pixman(m) => m.device(),
     };
     let Ok(res) = drm.resource_handles() else { return };
-    let infos: Vec<connector::Info> =
-        res.connectors().iter().filter_map(|&h| drm.get_connector(h, true).ok()).collect();
-    let tiles: Vec<Tiling<connector::Handle>> = infos
+    let mut infos: Vec<_> = res
+        .connectors()
         .iter()
-        .filter(|i| i.state() == connector::State::Connected)
-        .map(|i| (i.handle(), tile_of(drm, i.handle()), i.modes().iter().map(|m| m.size()).collect()))
+        .filter_map(|&h| drm.get_connector(h, true).ok())
+        .map(|i| {
+            let tile = if i.state() == connector::State::Connected { tile_of(drm, i.handle()) } else { None };
+            (i, tile)
+        })
         .collect();
-    let covered = covered_tiles(&tiles);
-    let mut connected = Vec::new();
-    let mut gone = Vec::new();
-    for info in &infos {
-        let handle = info.handle();
-        // A tile another connector shows whole isn't a display of its own:
-        // it stays dark, or goes dark if it came on before that one.
-        let by =
-            covered.iter().find(|(c, _)| *c == handle).and_then(|(_, by)| infos.iter().find(|i| i.handle() == *by));
-        if let Some(by) = by {
-            info!("{} is part of the monitor {} shows whole", connector_name(info), connector_name(by));
-        }
-        let is_on = info.state() == connector::State::Connected && by.is_none();
-        let known = device.connectors.contains_key(&handle);
-        if is_on && !known {
-            // A free CRTC its encoders can drive.
-            let used: Vec<crtc::Handle> = device.connectors.values().copied().collect();
-            let crtc = info
-                .encoders()
-                .iter()
-                .filter_map(|e| drm.get_encoder(*e).ok())
-                .flat_map(|e| res.filter_crtcs(e.possible_crtcs()))
-                .find(|c| !used.contains(c));
-            if let Some(crtc) = crtc {
-                device.connectors.insert(handle, crtc);
-                connected.push((info.clone(), crtc));
-            } else {
-                warn!("no free CRTC for {:?}", info.interface());
-            }
-        } else if !is_on && known {
-            let crtc = device.connectors.remove(&handle).unwrap();
-            gone.push(crtc);
-        }
-    }
+    let gone: Vec<_> = device
+        .connectors
+        .iter()
+        .filter(|(h, _)| {
+            !res.connectors().contains(h)
+                || infos.iter().any(|(i, _)| i.handle() == **h && i.state() != connector::State::Connected)
+        })
+        .map(|(_, c)| *c)
+        .collect();
+    infos.retain(|(i, _)| i.state() == connector::State::Connected);
+    // Try a panel's first tile before its siblings, but never evict a
+    // working sibling merely to attempt a full-panel modeset.
+    infos.sort_by_key(|(_, t)| t.is_some_and(|t| t.single_monitor && !t.first()));
+    // Finish cleanup before assigning any freed CRTC: disconnect also
+    // removes its connector mapping, including for disabled outputs.
     for crtc in gone {
         connector_disconnected(state, node, crtc);
     }
-    for (info, crtc) in connected {
-        connector_connected(state, node, info, crtc);
+    for (info, tile) in &infos {
+        let crate::backend::Backend::Udev(u) = &mut state.backend else { return };
+        let Some(device) = u.devices.get_mut(&node) else { return };
+        let by = covered_by(
+            *tile,
+            infos.iter().map(|(other, tile)| {
+                let mode = device
+                    .connectors
+                    .get(&other.handle())
+                    .and_then(|c| device.surfaces.get(c))
+                    .and_then(|s| s.output.current_mode())
+                    .map(|m| (m.size.w, m.size.h));
+                (other.handle(), *tile, mode)
+            }),
+        );
+        if let Some(by) = by {
+            info!("{} is covered by connector {:?}", connector_name(info), by);
+            // An explicitly disabled sibling already has no layout or
+            // scanout. Keep its disabled intent when coverage changes.
+            if let Some(crtc) = device.connectors.get(&info.handle()).copied()
+                && device.surfaces.contains_key(&crtc)
+            {
+                connector_disconnected(state, node, crtc);
+            }
+            continue;
+        }
+        if device.connectors.contains_key(&info.handle()) {
+            continue;
+        }
+        let drm = match &device.manager {
+            Manager::Gles(m) => m.device(),
+            Manager::Pixman(m) => m.device(),
+        };
+        let crtc = info
+            .encoders()
+            .iter()
+            .filter_map(|e| drm.get_encoder(*e).ok())
+            .flat_map(|e| res.filter_crtcs(e.possible_crtcs()))
+            .find(|c| !device.connectors.values().any(|used| used == c));
+        if let Some(crtc) = crtc {
+            // Only successful initialization (or a deliberately disabled
+            // output) reserves the CRTC. A failed first tile covers nothing.
+            connector_connected_as(state, node, info.clone(), crtc, false, None);
+        } else {
+            warn!("no free CRTC for {:?}", info.interface());
+        }
     }
+}
+
+/// Reevaluate tiles after the complete configuration batch. Doing this
+/// between individual heads would invalidate later changes in the batch.
+pub(crate) fn refresh_tiles(state: &mut State, name: &str) {
+    let Some(id) = state.az.known_output(name).and_then(|o| o.user_data().get::<UdevOutputId>().copied()) else {
+        return;
+    };
+    let crate::backend::Backend::Udev(u) = &mut state.backend else { return };
+    let Some(device) = u.devices.get_mut(&id.node) else { return };
+    if device.tiles_pending {
+        return;
+    }
+    device.tiles_pending = true;
+    state.az.lh.insert_idle(move |state| {
+        let crate::backend::Backend::Udev(u) = &state.backend else { return };
+        if u.devices.get(&id.node).is_some_and(|d| d.tiles_pending) {
+            device_changed(state, id.node);
+        }
+    });
 }
 
 fn device_removed(state: &mut State, node: DrmNode) {
@@ -952,28 +1011,21 @@ fn tile_of(drm: &DrmDevice, conn: connector::Handle) -> Option<Tile> {
     Tile::parse(&connector_blob(drm, conn, "TILE")?)
 }
 
-/// A connected connector, its tile (if it's one) and the sizes of its
-/// modes.
-type Tiling<K> = (K, Option<Tile>, Vec<(u16, u16)>);
+/// A connected connector, its tile and its successfully initialized mode.
+/// Disabled outputs and failed modesets have no active mode.
+type Tiling<K> = (K, Option<Tile>, Option<(i32, i32)>);
 
-/// The tiles that show nothing, each with the connector that shows their
-/// monitor: when a monitor's first tile has a mode the size of the whole
-/// panel, one stream draws all of it and the other tiles' streams aren't
-/// seen (a Studio Display at 5120×2880 on its left half's connector). They
-/// would only be displays nobody can see, with Desks and room for the
-/// pointer and windows. Without that mode each tile is a display, as two
-/// halves side by side.
-fn covered_tiles<K: Copy>(connected: &[Tiling<K>]) -> Vec<(K, K)> {
-    connected
-        .iter()
-        .filter_map(|(k, tile, _)| {
-            let t = tile.filter(|t| t.single_monitor && !t.first())?;
-            let (by, ..) = connected.iter().find(|(_, other, modes)| {
-                other.is_some_and(|o| o.group == t.group && o.first()) && modes.contains(&t.whole())
-            })?;
-            Some((*k, *by))
-        })
-        .collect()
+/// A sibling is hidden only while its first tile actually drives the whole
+/// panel. Advertised modes alone say nothing about the selected mode or
+/// whether initialization succeeded.
+fn covered_by<K>(tile: Option<Tile>, connected: impl IntoIterator<Item = Tiling<K>>) -> Option<K> {
+    let tile = tile.filter(|t| t.single_monitor && !t.first())?;
+    let (w, h) = tile.whole();
+    connected.into_iter().find_map(|(key, other, mode)| {
+        (other.is_some_and(|o| o.single_monitor && o.group == tile.group && o.first())
+            && mode == Some((i32::from(w), i32::from(h))))
+        .then_some(key)
+    })
 }
 
 /// The manufacturer's PNP id, the monitor name and serial descriptors.
@@ -1010,10 +1062,6 @@ pub fn auto_scale(width_px: i32, width_mm: i32) -> f64 {
     }
     let dpi = width_px as f64 / (width_mm as f64 / 25.4);
     if dpi > 180.0 { 2.0 } else { 1.0 }
-}
-
-fn connector_connected(state: &mut State, node: DrmNode, info: connector::Info, crtc: crtc::Handle) {
-    connector_connected_as(state, node, info, crtc, false, None);
 }
 
 /// Turns an output that was turned off back on: set up afresh, at the
@@ -1093,6 +1141,7 @@ fn connector_connected_as(
     if off {
         // Known, so Settings can turn it on, but not driven.
         info!("{name} is off in the settings");
+        device.connectors.insert(info.handle(), crtc);
         u.disabled.insert(name.clone(), (node, info.handle(), crtc));
         state.az.disabled_outputs.retain(|o| o.name() != name);
         state.az.disabled_outputs.push(output);
@@ -1136,6 +1185,7 @@ fn connector_connected_as(
             return;
         }
     };
+    device.connectors.insert(info.handle(), crtc);
     device.surfaces.insert(
         crtc,
         Surface {
@@ -1170,8 +1220,8 @@ fn connector_disconnected(state: &mut State, node: DrmNode, crtc: crtc::Handle) 
         crate::outputs::outputs_changed(&mut state.az);
     }
     let Some(device) = u.devices.get_mut(&node) else { return };
-    let Some(surface) = device.surfaces.remove(&crtc) else { return };
     device.connectors.retain(|_, c| *c != crtc);
+    let Some(surface) = device.surfaces.remove(&crtc) else { return };
     info!("output {} disconnected", surface.output.name());
     crate::outputs::remove_output(&mut state.az, &surface.output);
     let _ = surface.connector;
@@ -1330,25 +1380,20 @@ mod tests {
     }
 
     #[test]
-    fn a_tile_the_first_shows_whole_is_no_display() {
+    fn only_an_active_full_panel_mode_covers_a_sibling() {
         let (left, right) = studio_display();
-        let laptop = ("eDP-1", None, vec![(2880, 1800)]);
-        let dp1 = ("DP-1", Some(left), vec![(5120, 2880), (3840, 2160), (2560, 2880)]);
-        let dp2 = ("DP-2", Some(right), vec![(2560, 2880)]);
-        assert_eq!(covered_tiles(&[laptop.clone(), dp1.clone(), dp2.clone()]), [("DP-2", "DP-1")]);
-        // In whichever order the connectors come.
-        assert_eq!(covered_tiles(&[dp2.clone(), laptop.clone(), dp1.clone()]), [("DP-2", "DP-1")]);
-        // The right half alone (its left not connected yet) is a display.
-        assert!(covered_tiles(&[laptop.clone(), dp2.clone()]).is_empty());
-        // Without the whole panel's mode (no DSC on the link) each half is.
-        let halves = ("DP-1", Some(left), vec![(2560, 2880)]);
-        assert!(covered_tiles(&[halves, dp2.clone()]).is_empty());
-        // Another Studio Display's left half doesn't cover this one's right.
-        let other = ("DP-3", Some(Tile { group: 2, ..left }), dp1.2.clone());
-        assert!(covered_tiles(&[other, dp2.clone()]).is_empty());
-        // Tiles of a wall of monitors are each a monitor.
-        let wall = |t: Tile| Some(Tile { single_monitor: false, ..t });
-        assert!(covered_tiles(&[("DP-1", wall(left), dp1.2.clone()), ("DP-2", wall(right), dp2.2)]).is_empty());
+        let cover = |mode| covered_by(Some(right), [("DP-1", Some(left), mode)]);
+        assert_eq!(cover(Some((5120, 2880))), Some("DP-1"));
+        // Disabled, failed initialization, and not-yet-allocated first tiles
+        // all lack a surface, even if they advertise the full-panel mode.
+        assert_eq!(cover(None), None);
+        assert_eq!(cover(Some((2560, 2880))), None);
+        assert_eq!(cover(Some((3840, 2160))), None);
+        assert_eq!(covered_by(Some(left), [("DP-2", Some(right), Some((5120, 2880)))]), None);
+        assert_eq!(covered_by(Some(right), [("DP-3", Some(Tile { group: 2, ..left }), Some((5120, 2880)))]), None);
+        assert_eq!(covered_by(None, [("DP-1", Some(left), Some((5120, 2880)))]), None);
+        let wall = Some(Tile { single_monitor: false, ..right });
+        assert_eq!(covered_by(wall, [("DP-1", Some(left), Some((5120, 2880)))]), None);
     }
 
     #[test]
