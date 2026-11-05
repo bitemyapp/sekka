@@ -43,7 +43,11 @@ pkgs.runCommand "sekka-scheduling-policy" { nativeBuildInputs = [ pkgs.python3 ]
   cp ${./agent-workloads.py} source/nix/scheduling/agent-workloads.py
   cp ${../../tests/test_agent_workloads.py} source/tests/test_agent_workloads.py
   cp ${./lag-recorder.py} source/nix/scheduling/lag-recorder.py
+  cp ${./lag_history.py} source/nix/scheduling/lag_history.py
+  cp ${./lag_summary.py} source/nix/scheduling/lag_summary.py
   cp ${../../tests/test_lag_recorder.py} source/tests/test_lag_recorder.py
+  cp ${../../tests/test_lag_history.py} source/tests/test_lag_history.py
+  cp ${../../tests/test_lag_summary.py} source/tests/test_lag_summary.py
   python3 -m unittest discover -s source/tests -p 'test_*.py' -v
   touch $out
 ''

@@ -9,6 +9,8 @@ import threading
 import unittest
 from unittest.mock import patch
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "nix/scheduling"))
+
 spec = importlib.util.spec_from_file_location(
     "lag_recorder", Path(__file__).resolve().parents[1] / "nix/scheduling/lag-recorder.py"
 )
@@ -99,6 +101,54 @@ class IncidentTest(unittest.TestCase):
         self.assertEqual(recorder.trigger_reasons(sample, 1), [])
         sample["compositor_ipc"]["status"] = "timeout"
         self.assertIn("compositor_ipc_timeout", recorder.trigger_reasons(sample, 1))
+
+
+class RetainedEvidenceTest(unittest.TestCase):
+    def test_continuous_evidence_survives_snapshot_throttling_and_prehistory_replay(self):
+        with tempfile.TemporaryDirectory() as root:
+            with recorder.HistoryStore(root, clock=lambda: 1000) as store:
+                retained = recorder.RetainedEvidence(store)
+                samples = []
+                for second in range(76):
+                    sample = {"type": "sample", "schema": 1, "run_id": "first", "boot_id": "boot",
+                              "sample_id": second, "wall_utc": recorder.utc_now(1000 + second),
+                              "monotonic_seconds": second, "context": "quiet",
+                              "compositor_ipc": {"status": "timeout" if second == 12 else "ok",
+                                                 "latency_seconds": 0.1 if second == 12 else 0.001}}
+                    samples.append(sample)
+                    retained.write(sample, force_snapshot=second == 12)
+                # A raw prehistory replay must neither duplicate the timeline
+                # nor turn every old sample back into a full snapshot.
+                for sample in samples[:60]:
+                    retained.write(sample)
+                # Monotonic time and sample IDs can restart in another run.
+                retained.write({**samples[0], "run_id": "second"})
+            rows = list(recorder.query_records(root))
+            summaries = [row for row in rows if row["type"] == "summary"]
+            self.assertEqual(sorted(row["sample_id"] for row in summaries if row["run_id"] == "first"),
+                             list(range(76)))
+            stalled = next(row for row in summaries if row["run_id"] == "first" and row["sample_id"] == 12)
+            self.assertEqual(stalled["compositor_ipc"]["status"], "timeout")
+            snapshots = [row for row in rows if row["type"] == "sample"]
+            self.assertEqual([row["sample_id"] for row in snapshots if row["run_id"] == "first"], [0, 12, 42, 72])
+            self.assertEqual([row["sample_id"] for row in snapshots if row["run_id"] == "second"], [0])
+
+    def test_failed_journal_reads_remain_evidence_when_empty_successes_are_omitted(self):
+        with tempfile.TemporaryDirectory() as root:
+            with recorder.HistoryStore(root, clock=lambda: 1000) as store:
+                retained = recorder.RetainedEvidence(store)
+                for status in ("ok", "no_matches", "timeout", "unavailable"):
+                    retained.write({"type": "journal", "wall_utc": recorder.utc_now(1000),
+                                    "status": status, "messages": []})
+                retained.write({"type": "journal", "wall_utc": recorder.utc_now(1001),
+                                "status": "ok", "messages": [{"MESSAGE": "libinput: event processing lagging"}]})
+                retained.write({"type": "journal", "wall_utc": recorder.utc_now(1000.5),
+                                "status": "ok", "messages": [], "parse_errors": 1, "window_truncated": True})
+            rows = list(recorder.query_records(root))
+            self.assertEqual({row["status"] for row in rows if not row["messages"] and not row.get("parse_errors")},
+                             {"timeout", "unavailable"})
+            self.assertEqual([row["parse_errors"] for row in rows if row.get("window_truncated")], [1])
+            self.assertEqual(rows[-1]["messages"][0]["MESSAGE"], "libinput: event processing lagging")
 
 
 class StorageTest(unittest.TestCase):

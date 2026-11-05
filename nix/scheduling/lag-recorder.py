@@ -19,12 +19,17 @@ import re
 import selectors
 import signal
 import socket
+import sqlite3
 import stat
 import struct
 import subprocess
 import sys
 import time
 import uuid
+import zlib
+
+from lag_history import HistoryStore, MAX_BYTES, RETENTION_SECONDS, history_stats, query_records
+from lag_summary import compact_sample
 
 
 PROC = Path("/proc")
@@ -718,6 +723,41 @@ class PrivateLog:
         self.close()
 
 
+class RetainedEvidence:
+    """Keep the continuous timeline and periodic detail without replaying raw prehistory."""
+
+    def __init__(self, store):
+        self.store = store
+        self.last_snapshot = {}
+
+    def write(self, record, force_snapshot=False):
+        kind = record["type"]
+        if kind == "sample":
+            self.store.write(compact_sample(record))
+            run = record["run_id"]
+            now = record["monotonic_seconds"]
+            previous = self.last_snapshot.get(run)
+            if previous is None or now - previous >= 30 or (force_snapshot and now - previous >= 1):
+                self.store.write(record)
+                self.last_snapshot[run] = now
+        elif kind != "worker_timing":
+            if (kind == "journal" and not record.get("messages")
+                    and record.get("status") in ("ok", "no_matches")
+                    and not any(record.get(key) for key in ("parse_errors", "window_truncated", "possible_line_limit"))):
+                return
+            self.store.write(record)
+
+
+def history_timestamp(value):
+    try:
+        parsed = datetime.fromisoformat(value)
+        if parsed.tzinfo is None:
+            raise ValueError("include Z or a UTC offset")
+        return parsed.timestamp()
+    except (ValueError, OverflowError) as exc:
+        raise argparse.ArgumentTypeError(f"expected an ISO timestamp with timezone: {exc}") from exc
+
+
 def bounded_command(command, timeout=1, max_bytes=65536):
     """Bound both pipes; terminate only the journalctl child we create."""
     started = time.monotonic()
@@ -967,7 +1007,27 @@ def main(argv=None):
     parser.add_argument("--memory-full-threshold", type=threshold, default=10.0)
     parser.add_argument("--io-full-threshold", type=threshold, default=10.0)
     parser.add_argument("--cpu-some-threshold", type=threshold, default=50.0)
+    history_mode = parser.add_mutually_exclusive_group()
+    history_mode.add_argument("--history", action="store_true", help="export retained history as JSONL; do not start recording")
+    history_mode.add_argument("--history-stats", action="store_true", help="show retained coverage and storage limits")
+    parser.add_argument("--since", type=history_timestamp, help="inclusive history start, ISO timestamp with timezone")
+    parser.add_argument("--until", type=history_timestamp, help="inclusive history end, ISO timestamp with timezone")
+    parser.add_argument("--kind", action="append", help="history record type; repeat to include multiple types")
     args = parser.parse_args(argv)
+    if (args.since is not None or args.until is not None or args.kind) and not args.history:
+        parser.error("--since, --until and --kind require --history")
+    if args.since is not None and args.until is not None and args.since > args.until:
+        parser.error("--since must not be later than --until")
+    if args.history or args.history_stats:
+        try:
+            records = (query_records(args.output_dir, since=args.since, until=args.until, kinds=args.kind)
+                       if args.history else [history_stats(args.output_dir)])
+            for record in records:
+                print(json.dumps(record, separators=(",", ":"), allow_nan=False))
+        except (OSError, RuntimeError, ValueError, sqlite3.Error, zlib.error) as exc:
+            print(f"sekka-lag-recorder: {exc}", file=sys.stderr)
+            return 1
+        return 0
     if args.once:
         args.samples = 1
     os.umask(0o077)
@@ -992,7 +1052,9 @@ def main(argv=None):
                 "sampling_gap_threshold_seconds": max(1, 2 * args.interval), "quiet_sample_seconds": 10,
                 "history_samples": 60, "incident_quiet_seconds": 15, "details_cooldown_seconds": 30,
                 "journal_seconds": 10, "metadata_seconds": 300, "log_bytes": LOG_BYTES,
-                "log_backups": LOG_BACKUPS, "ipc_deadline_seconds": 0.1, "ipc_trigger_seconds": 0.05}
+                "log_backups": LOG_BACKUPS, "ipc_deadline_seconds": 0.1, "ipc_trigger_seconds": 0.05,
+                "retention_seconds": RETENTION_SECONDS, "history_max_bytes": MAX_BYTES,
+                "history_snapshot_seconds": 30, "history_summary_seconds": args.interval}
     sampler, tracker, worker = Sampler(), IncidentTracker(args.interval), DetailWorker(settings)
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="lag-details")
     future = None
@@ -1004,16 +1066,26 @@ def main(argv=None):
     deadline = time.monotonic()
     pending_reasons = []
     try:
-        with PrivateLog(args.output_dir) as logger:
+        with PrivateLog(args.output_dir) as logger, HistoryStore(args.output_dir) as history:
+            retained = RetainedEvidence(history)
+
+            def envelope(record):
+                return {"schema": 1, "run_id": run_id, "boot_id": boot.get("value"),
+                        "wall_utc": utc_now(), "monotonic_seconds": time.monotonic(), **record}
+
             def emit(record):
-                logger.write({"schema": 1, "run_id": run_id, "boot_id": boot.get("value"),
-                              "wall_utc": utc_now(), "monotonic_seconds": time.monotonic(), **record})
+                record = envelope(record)
+                logger.write(record)
+                if record["type"] != "sample":
+                    retained.write(record)
 
             def receive(result):
                 for report in result["reports"]:
                     emit(report)
                     if report["type"] == "journal" and report.get("messages"):
                         pending_reasons.append("aizome_watchdog_libinput_stall_journal")
+                    if report["type"] == "metadata":
+                        emit({"type": "retention_status", "history": history.stats()})
                 emit({"type": "worker_timing", "duration_seconds": result["duration_seconds"]})
 
             emit({"type": "recorder_start", "pid": os.getpid(), "settings": settings, "boot_id_read": boot})
@@ -1047,6 +1119,10 @@ def main(argv=None):
                 manual_now = manual
                 manual = False
                 records = tracker.observe(sample, reasons, manual_now)
+                current = next((record for record in records
+                                if record.get("type") == "sample" and record.get("sample_id") == count),
+                               {**sample, "type": "sample", "context": "quiet", "trigger_reasons": reasons})
+                retained.write(envelope(current), force_snapshot=any(record["type"] == "event_start" for record in records))
                 for record in records:
                     emit(record)
                 if (reasons or manual_now) and tracker.details_due(started):
@@ -1081,7 +1157,7 @@ def main(argv=None):
             if tracker.active is not None:
                 emit({"type": "event_end", "event_id": tracker.active, "reason": "shutdown"})
             emit({"type": "recorder_stop", "samples": count, "reason": "signal" if stopping else "sample_limit"})
-    except (OSError, RuntimeError, ValueError) as exc:
+    except (OSError, RuntimeError, ValueError, sqlite3.Error, zlib.error) as exc:
         print(f"sekka-lag-recorder: {exc}", file=sys.stderr)
         return 1
     finally:

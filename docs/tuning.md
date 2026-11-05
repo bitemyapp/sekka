@@ -198,20 +198,72 @@ Default sampling is once per second. The command also accepts
 output directory for a manual capture while the service runs; a process lock
 prevents duplicate writers to the same directory.
 
-Logs remain local in `$XDG_STATE_HOME/sekka/lag-recorder`, or
-`~/.local/state/sekka/lag-recorder` when `XDG_STATE_HOME` is unset.
-The directory is private (`0700`), files are private (`0600`), and
-`recorder.jsonl` rotates at 8 MiB with four backups, keeping approximately
-40 MiB of JSONL in total. Rotation is size-based, not a promised number of
-hours: event frequency and record sizes affect retention. Copy relevant
-records before they rotate away.
+Evidence remains local in `$XDG_STATE_HOME/sekka/lag-recorder`, or
+`~/.local/state/sekka/lag-recorder` when `XDG_STATE_HOME` is unset. The directory
+is private (`0700`) and files are private (`0600`). There are two storage tiers:
 
-Quiet operation writes a baseline sample every ten seconds while retaining
-the last 60 samples in memory. An event flushes that pre-event context and
-records each sample until 15 quiet seconds have passed. Detailed snapshots
-are rate-limited to one per 30 seconds; periodic metadata is refreshed every
-five minutes. This keeps background logging bounded without claiming that
-every second of a long quiet run is saved.
+- `history.sqlite3` retains **72 hours** of compressed evidence, leaving room
+  to investigate an incident 24–48 hours later. A compact `summary` is saved
+  for every sample, including quiet periods. Full samples are saved every
+  30 seconds and at incident starts (at least one second apart); incident
+  boundaries, process details, metadata, relevant journal messages, and
+  collection failures are also retained. Empty successful journal polls and
+  routine worker timings are omitted.
+- `recorder.jsonl` still rotates at 8 MiB with four backups, approximately
+  40 MiB total. This short-term tier preserves full one-second incident
+  samples and 60-sample prehistory. Quiet full samples are written every ten
+  seconds, and incidents end after 15 quiet seconds. Its duration depends on
+  event frequency and record size, not the 72-hour history policy.
+
+The history database has a **2 GiB safety budget**, including its WAL and
+shared-memory files; write batches and reclamation can temporarily exceed
+that budget. Time-based expiry runs about once a minute. If the byte budget
+requires earlier eviction, the recorder warns in its service journal and
+persists a `retention_notice` with the lost time range and record count.
+`--history-stats` reports that notice, actual oldest/newest timestamps,
+allocation, and any unresolved over-budget state. The window can therefore
+be shorter with unusually large records or faster sampling; it is not a
+guarantee of uninterrupted coverage. The raw 40 MiB ring is additional.
+
+The compact timeline keeps global pressure averages/interval stalls,
+CPU/load, memory/swap/zswap occupancy, selected fault/reclaim/swap rates,
+disk latency/activity, desktop process identity/faults/memory/wait evidence,
+IPC status/latency, and configured cgroup protection and occupancy. Detailed
+cgroup counters and short-window pressure are kept for the session,
+compositor, background, and Nix daemon, rather than every ancestor.
+Summaries cap groups/devices/desktop processes at 16/8/8 with explicit
+omission flags; full snapshots preserve the collector's broader view.
+Values that are unavailable or have reset are not converted to zero.
+
+History writes are batched for up to five seconds during normal sampling;
+clean SIGTERM/SIGINT flushes them. Abrupt termination can lose the pending
+batch, and power loss can also lose recent uncheckpointed transactions.
+Existing committed history survives recorder restarts. Coverage begins
+when recording starts; longer retention cannot recover already-rotated
+evidence or periods when the recorder was stopped.
+
+Query history without stopping the recorder or taking its writer lock:
+
+```sh
+sekka-lag-recorder --history-stats
+umask 077
+sekka-lag-recorder --history \
+  --since '2026-11-05T05:30:00Z' --until '2026-11-05T05:45:00Z' \
+  --kind summary --kind event_start --kind event_end --kind journal \
+  > lag-window.jsonl
+```
+
+Use the incident's actual timestamps, including `Z` or an explicit UTC
+offset. Both boundaries are inclusive; omit `--kind` to include full
+snapshots and other evidence. Export is ordered JSONL and reads bounded
+batches without pinning the writer's WAL. It is a live traversal, not an
+atomic backup: concurrent expiry can remove records not yet read. Missing
+or corrupt history is an error, not an empty successful result. Use the
+export command rather than copying only the database file while recording.
+Review exported workload metadata before sharing it.
+
+Detailed process snapshots are rate-limited to one per 30 seconds;
+periodic metadata is refreshed every five minutes.
 
 Accessible `/proc` and `/sys` evidence includes:
 
@@ -253,7 +305,7 @@ Automatic recording triggers include memory or I/O PSI `full avg10` at
 `max(1 second, 2 × interval)`, and relevant watchdog/libinput/stall journal
 messages. The command's `--memory-full-threshold`, `--io-full-threshold`,
 and `--cpu-some-threshold` options accept finite percentages; these only
-change when evidence is recorded.
+change incident capture and detail collection, not resource policy.
 
 The recorder also probes the user's running Aizome with the read-only
 newline-delimited IPC request `{"request":"version"}`. It verifies the
@@ -353,6 +405,9 @@ explicit overrides, process-tree classification, and opt-in recording without
 enabling scheduling or OOM policy. It also runs the recorder's regressions for
 PID reuse/counter resets, incident history and cooldown, bounded private
 rotation and locking, journal retry windows, and authenticated IPC timeouts.
+History regressions cover 24–48-hour survival, the 72-hour expiry boundary,
+restart/replay deduplication, live time-window queries, explicit budget
+eviction, checkpoint pressure, and loss-aware metric projection.
 `nix build .#checks.x86_64-linux.tuning` boots a disposable VM and checks the
 preemption and disk-scheduler settings, terminal/shell/compiler nice values,
 all-thread Nix scheduling and I/O, late threads, Chrome retitling and fork-only
