@@ -16,6 +16,10 @@
 //! - Nothing in use (mounted, active swap, unlocked) is changed, and a
 //!   new partition table drops what was pending for the old partitions.
 
+// Every arm names what it matches: a variant added later is a compile
+// error here, not a case quietly taken by `_`.
+#![deny(clippy::wildcard_enum_match_arm)]
+
 use aizome_sys::Task;
 use aizome_sys::disks::{
     Change, Confirm, CreatePartition, DeletePartition, DisksState, Encryption, Erase, Format, FormatSpec, Holds,
@@ -514,10 +518,10 @@ impl Plan {
                 if seg.fs != "swap" {
                     return Err("It isn't swap.".into());
                 }
-                match (action, seg.in_use) {
-                    (Action::SwapOn, true) => Err("It's in use as swap already.".into()),
-                    (Action::SwapOff, false) => Err("It isn't in use.".into()),
-                    _ => Ok(()),
+                match (action == Action::SwapOn, seg.in_use) {
+                    (true, true) => Err("It's in use as swap already.".into()),
+                    (false, false) => Err("It isn't in use.".into()),
+                    (true, false) | (false, true) => Ok(()),
                 }
             }
             Action::New => {
@@ -554,7 +558,7 @@ impl Plan {
                     SegKind::Extended => {
                         return Err("An extended partition holds others; it can't hold a filesystem.".into());
                     }
-                    _ => {}
+                    SegKind::Partition | SegKind::Whole | SegKind::Blank => {}
                 }
                 if is_new {
                     return Ok(());
@@ -671,7 +675,13 @@ impl Plan {
     fn creation(&mut self, id: u64) -> Option<&mut NewPartition> {
         self.ops.iter_mut().find(|o| o.id == id).and_then(|o| match &mut o.kind {
             OpKind::Create(p) => Some(p),
-            _ => None,
+            OpKind::NewTable { .. }
+            | OpKind::Delete
+            | OpKind::Format(_)
+            | OpKind::Resize { .. }
+            | OpKind::Label { .. }
+            | OpKind::Flags { .. }
+            | OpKind::Repair => None,
         })
     }
 
@@ -858,9 +868,19 @@ impl Plan {
             }
             Some(Target::Block(path)) => {
                 // The flags as the disk has them, before any pending change.
-                let from = match self.ops.iter().find(|o| o.target == path && matches!(o.kind, OpKind::Flags { .. })) {
-                    Some(Op { kind: OpKind::Flags { from, .. }, .. }) => *from,
-                    _ => Flags::of(&layout.table, &seg.type_id, seg.flag_bits),
+                let pending = self.ops.iter().find(|o| o.target == path && matches!(o.kind, OpKind::Flags { .. }));
+                let from = match pending.map(|o| &o.kind) {
+                    Some(OpKind::Flags { from, .. }) => *from,
+                    Some(
+                        OpKind::NewTable { .. }
+                        | OpKind::Create(_)
+                        | OpKind::Delete
+                        | OpKind::Format(_)
+                        | OpKind::Resize { .. }
+                        | OpKind::Label { .. }
+                        | OpKind::Repair,
+                    )
+                    | None => Flags::of(&layout.table, &seg.type_id, seg.flag_bits),
                 };
                 self.ops.retain(|o| !(o.target == path && matches!(o.kind, OpKind::Flags { .. })));
                 if from != to {
@@ -922,7 +942,9 @@ impl Plan {
                     let mounted = target.filesystem.as_ref().is_some_and(|f| !f.mount_points.is_empty());
                     mounted && !fs::labels_while_mounted(&target.id_type)
                 }
-                _ => state.in_use(&o.target) || target.encrypted.as_ref().is_some_and(|e| e.cleartext_device.is_some()),
+                OpKind::Delete | OpKind::Format(_) | OpKind::Resize { .. } | OpKind::Repair => {
+                    state.in_use(&o.target) || target.encrypted.as_ref().is_some_and(|e| e.cleartext_device.is_some())
+                }
             };
             if busy {
                 out.push(format!("{} is in use now: unmount or lock it first.", o.device));
@@ -961,7 +983,7 @@ impl Plan {
                             "The filesystem on {disk} ({}) will be lost.",
                             seg_on_whole(now.as_ref())
                         )),
-                        _ => Loss::Destroys(format!("Anything on {disk} will be lost.")),
+                        (true, Some(false) | None) => Loss::Destroys(format!("Anything on {disk} will be lost.")),
                     };
                 Words {
                     title: format!("Create a new {name} partition table on {disk}"),
@@ -1140,10 +1162,10 @@ fn check_label(fs: &str, label: &str) -> Check {
     }
     match fs::label_limit(fs) {
         Some(limit) if label.len() > limit => Err(format!("A {} label has at most {limit} bytes.", fs::name(fs))),
-        _ if label.contains('\0') || label.contains('/') && fs == "vfat" => {
+        Some(_) | None if label.contains('\0') || label.contains('/') && fs == "vfat" => {
             Err("That label has a character FAT doesn't take.".into())
         }
-        _ => Ok(()),
+        Some(_) | None => Ok(()),
     }
 }
 

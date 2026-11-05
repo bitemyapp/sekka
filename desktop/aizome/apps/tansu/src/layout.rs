@@ -3,6 +3,10 @@
 //! as it is now ([`current`]) or as it will be once the pending
 //! operations have run (see [`crate::plan::Plan::preview`]).
 
+// Every arm names what it matches: a variant added later is a compile
+// error here, not a case quietly taken by `_`.
+#![deny(clippy::wildcard_enum_match_arm)]
+
 use aizome_sys::disks::types::{flag_names, flags as bits};
 use aizome_sys::disks::{BlockDevice, DisksState, Holds, Identity};
 
@@ -109,7 +113,7 @@ impl Seg {
     pub fn block(&self) -> Option<&str> {
         match &self.target {
             Some(Target::Block(p)) => Some(p),
-            _ => None,
+            Some(Target::New(_)) | None => None,
         }
     }
 
@@ -117,7 +121,7 @@ impl Seg {
     pub fn shown_fs(&self) -> &str {
         match self.crypt.as_ref().and_then(|c| c.unlocked.as_ref()) {
             Some(inner) if !inner.fs.is_empty() => &inner.fs,
-            _ => &self.fs,
+            Some(_) | None => &self.fs,
         }
     }
 
@@ -155,8 +159,10 @@ impl Seg {
         match self.kind() {
             SegKind::Free => "Unallocated".into(),
             SegKind::Blank => "No partition table".into(),
-            _ if self.device.is_empty() => "New partition".into(),
-            _ => self.device.trim_start_matches("/dev/").to_owned(),
+            SegKind::Partition | SegKind::Extended | SegKind::Whole if self.device.is_empty() => "New partition".into(),
+            SegKind::Partition | SegKind::Extended | SegKind::Whole => {
+                self.device.trim_start_matches("/dev/").to_owned()
+            }
         }
     }
 
@@ -645,11 +651,11 @@ impl Layout {
         };
         let seen = match &seg.target {
             Some(Target::Block(path)) => Some(state.identity(path)?),
-            _ => None,
+            Some(Target::New(_)) | None => None,
         };
         let name = match seg.kind() {
             SegKind::Free => format!("The unallocated space on {}", self.device.trim_start_matches("/dev/")),
-            _ => seg.short_name(),
+            SegKind::Partition | SegKind::Extended | SegKind::Whole | SegKind::Blank => seg.short_name(),
         };
         Some(Chosen { disk: self.disk.clone(), disk_seen: state.identity(&self.disk)?, spot, seen, name })
     }

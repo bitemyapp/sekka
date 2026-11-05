@@ -1,5 +1,9 @@
 //! Tansu's state and what each message does to it.
 
+// Every arm names what it matches: a variant added later is a compile
+// error here, not a case quietly taken by `_`.
+#![deny(clippy::wildcard_enum_match_arm)]
+
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -686,7 +690,7 @@ impl Tansu {
                         flags.esp = false;
                     }
                 }
-                _ => flags.hidden = on,
+                3..=u8::MAX => flags.hidden = on,
             },
             (SheetKind::Flags { target, flags }, SheetMsg::Submit) => {
                 let (target, flags) = (target.clone(), *flags);
@@ -794,7 +798,41 @@ impl Tansu {
                 );
             }
             (SheetKind::Smart { .. }, SheetMsg::Submit) => self.close_sheet(cx),
-            _ => {}
+            // A message for another kind of sheet, or one this sheet takes
+            // no notice of: nothing (every sheet takes Submit). Both sides are
+            // listed, so a new sheet or a new message has to say what it does
+            // here.
+            (
+                SheetKind::Format(_)
+                | SheetKind::Create(_)
+                | SheetKind::Resize(_)
+                | SheetKind::Label { .. }
+                | SheetKind::Flags { .. }
+                | SheetKind::Table { .. }
+                | SheetKind::Unlock { .. }
+                | SheetKind::Attach { .. }
+                | SheetKind::Apply(_)
+                | SheetKind::Running
+                | SheetKind::Smart { .. },
+                SheetMsg::Fs(_)
+                | SheetMsg::Label(_)
+                | SheetMsg::Name(_)
+                | SheetMsg::Erase(_)
+                | SheetMsg::Encrypt(_)
+                | SheetMsg::Pass(_)
+                | SheetMsg::Pass2(_)
+                | SheetMsg::Size(_)
+                | SheetMsg::SizeText(_)
+                | SheetMsg::Unit(_)
+                | SheetMsg::Flag(..)
+                | SheetMsg::Table(_)
+                | SheetMsg::Path(_)
+                | SheetMsg::ReadOnly(_)
+                | SheetMsg::Typed(..)
+                | SheetMsg::Choose
+                | SheetMsg::Chosen(_)
+                | SheetMsg::SelfTest(_),
+            ) => {}
         }
     }
 
@@ -906,6 +944,7 @@ pub fn parse_size(text: &str, unit: u64) -> Option<u64> {
         "mib" => 1 << 20,
         "gib" => 1 << 30,
         "tib" => 1 << 40,
+        // Any other suffix (text, not an enum: nothing to list).
         _ => return None,
     };
     let bytes = n * mult as f64;
@@ -1086,7 +1125,7 @@ impl Program for Tansu {
     fn view(&self, window: WindowKey) -> Element<Msg> {
         match &self.sheet {
             Some(s) if s.key == window => crate::ui::sheets::view(self, s),
-            _ => crate::ui::view::window(self),
+            Some(_) | None => crate::ui::view::window(self),
         }
     }
 
@@ -1101,7 +1140,7 @@ impl Program for Tansu {
             .item(MenuItem::role_item("Close Window", MenuRole::CloseWindow).shortcut(Shortcut::cmd('W')));
         let undo_label = match self.history.last() {
             Some(_) if idle => "Undo Last Operation",
-            _ => "Undo",
+            Some(_) | None => "Undo",
         };
         let edit = Menu::new("Edit")
             .item(MenuItem::new(undo_label, Msg::Undo).role(MenuRole::Undo).shortcut(Shortcut::cmd('Z')))
