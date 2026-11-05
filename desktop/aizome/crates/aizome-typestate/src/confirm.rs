@@ -11,7 +11,9 @@ pub trait SameTarget {
     fn same_target(&self, fresh: &Self) -> bool;
 }
 
-/// A target as the person saw it when they agreed to act on it.
+/// A target as the person saw it when they agreed to act on it, or as a
+/// record kept it (a saved configuration's generation): anything a fresh
+/// reading must still match before a step acts on it.
 ///
 /// `B` is a brand: a type only the code that shows the person the target can
 /// make (a unit struct with a private field). Making a `Reviewed` takes one,
