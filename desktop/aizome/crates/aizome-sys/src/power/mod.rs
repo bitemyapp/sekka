@@ -22,7 +22,7 @@ mod upower;
 
 pub use backlight::{Backlight, BacklightDevice, BacklightState, MIN_STEP_FRACTION, stepped as stepped_brightness};
 pub(crate) use logind::session_id;
-pub use logind::{Can, Inhibition, Inhibitor, Logind, LogindState, SessionEvent};
+pub use logind::{Can, Inhibition, Inhibitor, Logind, LogindState, SessionEvent, SleepCycle};
 pub use profiles::{PowerProfiles, Profile, ProfileHold, ProfilesState};
 pub use upower::{
     BatteryState, HistoryPoint, KeyboardBacklight, PowerDevice, PowerKind, Upower, UpowerState, WarningLevel,

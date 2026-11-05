@@ -27,7 +27,7 @@ fn locked(day: bool) -> (aizome_kit::testing::Harness<Shell>, WindowKey) {
     h.send(Msg::Run(Action::Session(SessionVerb::Lock)));
     assert!(h.platform.lock_asked);
     h.confirm_lock();
-    assert_eq!(h.program().lock.phase, Phase::Locked);
+    assert_eq!(h.program().lock.phase(), Phase::Locked);
     // The lock surface is the window without a title.
     let lock = h.windows().into_iter().find(|k| h.title(*k).is_empty()).expect("a lock surface");
     h.resize(lock, Size::new(W, H));
@@ -39,7 +39,7 @@ fn settle(h: &mut aizome_kit::testing::Harness<Shell>) {
     for _ in 0..50 {
         std::thread::sleep(Duration::from_millis(10));
         h.send(Msg::Nothing);
-        if !h.program().lock.busy {
+        if h.program().lock.phase() != Phase::Checking {
             return;
         }
     }
@@ -52,13 +52,13 @@ fn a_wrong_password_says_so_and_the_right_one_unlocks() {
     h.type_text(lock, "nope");
     h.named(lock, NamedKey::Enter, Modifiers::NONE);
     settle(&mut h);
-    assert!(h.program().lock.error.is_some());
-    assert_eq!(h.program().lock.phase, Phase::Locked);
-    assert!(h.program().lock.password.is_empty(), "the password isn't kept");
+    assert!(h.program().lock.error().is_some());
+    assert_eq!(h.program().lock.phase(), Phase::Locked);
+    assert!(h.program().lock.password().is_empty(), "the password isn't kept");
     h.type_text(lock, "hunter2");
     h.named(lock, NamedKey::Enter, Modifiers::NONE);
     settle(&mut h);
-    assert_eq!(h.program().lock.phase, Phase::Unlocked);
+    assert_eq!(h.program().lock.phase(), Phase::Unlocked);
     assert!(h.windows().iter().all(|k| *k != lock), "the lock surfaces closed");
 }
 
@@ -81,7 +81,7 @@ fn external() -> Output {
 }
 
 fn prompt(h: &mut aizome_kit::testing::Harness<Shell>, output: u32) -> WindowKey {
-    let key = h.program().lock.surfaces.iter().find(|(_, id)| *id == output).expect("lock surface on output").0;
+    let key = h.program().lock.surfaces().iter().find(|(_, id)| *id == output).expect("lock surface on output").0;
     h.resize(key, Size::new(W, H));
     assert!(h.find_id(key, "lock-password").is_some(), "every display has a password field");
     assert_eq!(h.focused_name(key).as_deref(), Some("lock-password"), "ready to type without clicking");
@@ -99,10 +99,10 @@ fn every_display_can_accept_the_password() {
     let monitor = prompt(&mut h, 2);
     h.type_text(laptop, "hunter");
     h.type_text(monitor, "2");
-    assert_eq!(h.program().lock.password, "hunter2", "one password shared across displays");
+    assert_eq!(h.program().lock.password(), "hunter2", "one password shared across displays");
     h.named(monitor, NamedKey::Enter, Modifiers::NONE);
     settle(&mut h);
-    assert_eq!(h.program().lock.phase, Phase::Unlocked);
+    assert_eq!(h.program().lock.phase(), Phase::Unlocked);
 }
 
 #[test]
@@ -116,17 +116,17 @@ fn returning_laptop_panel_gets_a_prompt_without_restarting_the_lock() {
     // Dock removed while asleep, then the built-in panel comes back with
     // a new Wayland global. There may briefly be no advertised outputs.
     h.set_outputs(vec![]);
-    assert_eq!(h.program().lock.phase, Phase::Locked);
-    assert!(h.program().lock.surfaces.is_empty());
+    assert_eq!(h.program().lock.phase(), Phase::Locked);
+    assert!(h.program().lock.surfaces().is_empty());
     assert!(!h.windows().contains(&old));
     let panel = Output { id: 7, ..output() };
     h.set_outputs(vec![panel.clone()]);
     let lock = prompt(&mut h, 7);
     h.set_outputs(vec![panel]);
-    assert_eq!(h.program().lock.surfaces, vec![(lock, 7)], "repeated descriptions don't duplicate surfaces");
+    assert_eq!(h.program().lock.surfaces(), [(lock, 7)], "repeated descriptions don't duplicate surfaces");
     h.type_text(lock, "hunter2\n");
     settle(&mut h);
-    assert_eq!(h.program().lock.phase, Phase::Unlocked);
+    assert_eq!(h.program().lock.phase(), Phase::Unlocked);
 }
 
 #[test]
@@ -135,14 +135,14 @@ fn displays_can_change_before_lock_confirmation() {
     h.send(Msg::Run(Action::Session(SessionVerb::Lock)));
     let old = prompt(&mut h, 1);
     h.set_outputs(vec![external()]);
-    assert_eq!(h.program().lock.phase, Phase::Locking);
+    assert_eq!(h.program().lock.phase(), Phase::Locking);
     assert!(!h.windows().contains(&old));
     prompt(&mut h, 2);
     h.confirm_lock();
-    assert_eq!(h.program().lock.phase, Phase::Locked);
+    assert_eq!(h.program().lock.phase(), Phase::Locked);
     h.finish_lock();
     h.set_outputs(vec![output(), external()]);
-    assert!(h.program().lock.surfaces.is_empty(), "an ended lock isn't recreated");
+    assert!(h.program().lock.surfaces().is_empty(), "an ended lock isn't recreated");
 }
 
 #[test]
@@ -153,11 +153,11 @@ fn removing_one_display_preserves_the_other_prompt_and_password() {
     let monitor = prompt(&mut h, 2);
     h.set_outputs(vec![external()]);
     assert!(!h.windows().contains(&laptop));
-    assert_eq!(h.program().lock.surfaces, vec![(monitor, 2)]);
-    assert_eq!(h.program().lock.password, "hunter");
+    assert_eq!(h.program().lock.surfaces(), [(monitor, 2)]);
+    assert_eq!(h.program().lock.password(), "hunter");
     h.type_text(monitor, "2\n");
     settle(&mut h);
-    assert_eq!(h.program().lock.phase, Phase::Unlocked);
+    assert_eq!(h.program().lock.phase(), Phase::Unlocked);
 }
 
 #[test]
@@ -167,10 +167,10 @@ fn a_closed_lock_surface_is_replaced_without_ending_the_lock() {
     let new = prompt(&mut h, 1);
     assert_ne!(old, new);
     assert!(!h.windows().contains(&old));
-    assert_eq!(h.program().lock.phase, Phase::Locked);
+    assert_eq!(h.program().lock.phase(), Phase::Locked);
     h.type_text(new, "hunter2\n");
     settle(&mut h);
-    assert_eq!(h.program().lock.phase, Phase::Unlocked);
+    assert_eq!(h.program().lock.phase(), Phase::Unlocked);
 }
 
 #[test]
@@ -185,7 +185,7 @@ fn an_output_description_repositions_the_existing_prompt() {
     let after = h.find_id(lock, "lock-password").unwrap();
     assert_eq!(after.x0, before.x0 - 100.0);
     assert_eq!(after.y0, before.y0 - 50.0);
-    assert_eq!(h.program().lock.surfaces, vec![(lock, 1)]);
+    assert_eq!(h.program().lock.surfaces(), [(lock, 1)]);
 }
 
 #[test]
@@ -197,4 +197,40 @@ fn pictures_of_the_lock_screen() {
         h.save_png(lock, shots().join(name), 1.0);
         aizome_kit::testing::assert_golden(&mut h, lock, golden(name), 1.0);
     }
+}
+
+/// PAM that answers only once told to: a check still running when its
+/// lock ends.
+struct Held(std::sync::Mutex<std::sync::mpsc::Receiver<()>>);
+
+impl aizome_shell::pam::Authenticator for Held {
+    fn authenticate(&self, user: &str, password: &str) -> aizome_shell::pam::Reply {
+        let _ = self.0.lock().unwrap().recv();
+        aizome_shell::pam::Fixed("hunter2".into()).authenticate(user, password)
+    }
+}
+
+#[test]
+fn an_answer_for_an_earlier_lock_doesnt_unlock_the_next() {
+    let (mut h, lock) = locked(false);
+    let (answer, gate) = std::sync::mpsc::channel();
+    h.program_mut().authenticator = Arc::new(Held(std::sync::Mutex::new(gate)));
+    h.type_text(lock, "hunter2");
+    h.named(lock, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(h.program().lock.phase(), Phase::Checking);
+    // The compositor ends that lock while PAM checks, and the idle timer
+    // locks again.
+    h.finish_lock();
+    assert_eq!(h.program().lock.phase(), Phase::Unlocked);
+    h.send(Msg::Run(Action::Session(SessionVerb::Lock)));
+    h.confirm_lock();
+    assert_eq!(h.program().lock.phase(), Phase::Locked);
+    // Now the earlier check answers yes, for a lock that's gone.
+    answer.send(()).unwrap();
+    for _ in 0..30 {
+        std::thread::sleep(Duration::from_millis(10));
+        h.send(Msg::Nothing);
+    }
+    assert_eq!(h.program().lock.phase(), Phase::Locked, "the new lock stays");
+    assert!(h.program().lock.error().is_none());
 }

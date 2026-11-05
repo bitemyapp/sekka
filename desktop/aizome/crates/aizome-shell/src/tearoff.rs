@@ -218,7 +218,7 @@ impl Shell {
         let theme = cx.theme().clone();
         for i in 0..self.tearoffs.len() {
             let t = self.tearoffs[i].clone();
-            let want = self.tear_visible(&t) && self.lock.phase == crate::lock::Phase::Unlocked;
+            let want = self.tear_visible(&t) && self.lock.phase() == crate::lock::Phase::Unlocked;
             let menu = if want { self.tear_menu(&t) } else { None };
             match (menu, self.tear_shown.get(&i).cloned()) {
                 (Some((_, menu)), None) => {

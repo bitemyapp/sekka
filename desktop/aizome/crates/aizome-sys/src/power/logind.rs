@@ -12,7 +12,7 @@
 //! // When the wake fires:
 //! for event in logind.take_events() {
 //!     match event {
-//!         SessionEvent::PrepareForSleep => { lock_screen(); logind.sleep_ready(); }
+//!         SessionEvent::PrepareForSleep(sleep) => { lock_screen(); logind.sleep_ready(sleep); }
 //!         SessionEvent::Lock => lock_screen(),
 //!         _ => {}
 //!     }
@@ -22,10 +22,20 @@
 //! logind waits for the delay inhibitor to be released (at most
 //! `InhibitDelayMaxSec`, 5 seconds by default) before sleeping; after
 //! resuming, the inhibitor is taken again by itself.
+//!
+//! Each `PrepareForSleep` names its sleep ([`SleepCycle`]), and releasing
+//! the delay takes it back. A sleep that came and went before the screen
+//! locked (logind stops waiting after its limit) is over at the resume:
+//! giving it back then releases nothing, so the delay held for the next
+//! sleep stays held.
+
+#![deny(clippy::wildcard_enum_match_arm)]
 
 use crate::bus::{self, Bus, Event, Opts, Props, PropsExt, signals_from};
 use crate::error::{Error, Result};
 use crate::service::{Model, Stop, Task, Wake, lock, service_handle};
+use aizome_typestate::{Generation, Ticket};
+use std::fmt;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use zbus::zvariant::{OwnedFd, OwnedObjectPath};
@@ -105,19 +115,100 @@ pub struct LogindState {
 
 /// Something that happened to the session, in order. Read them with
 /// [`Logind::take_events`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum SessionEvent {
     /// Lock the screen (`loginctl lock-session`, or before sleep).
     Lock,
     /// Unlock the screen (`loginctl unlock-session`).
     Unlock,
-    /// The machine is about to sleep: lock, then call
+    /// The machine is about to sleep: lock, then give the sleep back to
     /// [`Logind::sleep_ready`].
-    PrepareForSleep,
-    /// The machine woke up.
+    PrepareForSleep(SleepCycle),
+    /// The machine woke up: the last sleep is over.
     Resumed,
     /// The machine is about to power off or reboot.
     PrepareForShutdown,
+}
+
+/// The kind of [`Generation`] logind's sleeps are counted in. Private, so
+/// only this module can issue a sleep's ticket.
+enum Sleep {}
+
+/// One sleep logind announced (`PrepareForSleep(true)`), from then until
+/// the machine resumes. [`SessionEvent::PrepareForSleep`] brings it, and
+/// [`Logind::sleep_ready`] takes it back to release the sleep delay for
+/// that sleep, and only that one.
+///
+/// Only the follower makes one, and releasing spends it. The mistake of
+/// letting logind sleep without saying which sleep the lock was for
+/// doesn't compile:
+///
+/// ```compile_fail,E0061
+/// use aizome_sys::power::Logind;
+/// fn lock_confirmed(logind: &Logind) {
+///     logind.sleep_ready();
+/// }
+/// ```
+///
+/// nor does releasing one sleep twice (the second time for the next
+/// sleep):
+///
+/// ```compile_fail,E0382
+/// use aizome_sys::power::{Logind, SleepCycle};
+/// fn lock_confirmed(logind: &Logind, sleep: SleepCycle) {
+///     logind.sleep_ready(sleep);
+///     logind.sleep_ready(sleep);
+/// }
+/// ```
+///
+/// keeping a copy for later:
+///
+/// ```compile_fail,E0599
+/// use aizome_sys::power::{Logind, SleepCycle};
+/// fn lock_confirmed(logind: &Logind, sleep: SleepCycle) {
+///     let kept = sleep.clone();
+///     logind.sleep_ready(sleep);
+///     logind.sleep_ready(kept);
+/// }
+/// ```
+///
+/// or making one:
+///
+/// ```compile_fail,E0451
+/// use aizome_sys::power::SleepCycle;
+/// fn forge() -> SleepCycle {
+///     SleepCycle { ticket: aizome_typestate::Generation::new().issue() }
+/// }
+/// ```
+///
+/// What compiles is giving back the sleep the event brought:
+///
+/// ```
+/// use aizome_sys::power::{Logind, SessionEvent};
+/// fn session_events(logind: &Logind) {
+///     for event in logind.take_events() {
+///         match event {
+///             SessionEvent::PrepareForSleep(sleep) => logind.sleep_ready(sleep),
+///             SessionEvent::Lock
+///             | SessionEvent::Unlock
+///             | SessionEvent::Resumed
+///             | SessionEvent::PrepareForShutdown => {}
+///         }
+///     }
+/// }
+/// ```
+///
+/// Whether the sleep is over when it comes back is logind's to say, at
+/// run time: a sleep given back after its resume releases nothing.
+#[derive(PartialEq, Eq)]
+pub struct SleepCycle {
+    ticket: Ticket<Sleep>,
+}
+
+impl fmt::Debug for SleepCycle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("SleepCycle").field(&self.ticket).finish()
+    }
 }
 
 /// A held inhibitor (`systemd-inhibit`): released when dropped.
@@ -147,6 +238,9 @@ struct Shared {
     /// Take the delay again after each resume.
     want_delay: bool,
     session_path: Option<String>,
+    /// The sleep logind announced last: current until the machine
+    /// resumes, or logind goes away.
+    sleeps: Generation<Sleep>,
 }
 
 /// systemd-logind.
@@ -228,7 +322,11 @@ impl Logind {
                 }
                 Event::Vanished => {
                     present = false;
-                    lock(&fshared).delay = None;
+                    let mut shared = lock(&fshared);
+                    shared.delay = None;
+                    // A sleep it announced is no one's to release now.
+                    shared.sleeps.retire();
+                    drop(shared);
                     follower.set_if_changed(LogindState::default());
                 }
                 Event::Signal(msg) => {
@@ -266,12 +364,16 @@ impl Logind {
                             manager.insert("PreparingForSleep".into(), zbus::zvariant::OwnedValue::from(start));
                             let mut shared = lock(&fshared);
                             if start {
-                                shared.events.push(SessionEvent::PrepareForSleep);
+                                let ticket = shared.sleeps.issue();
+                                shared.events.push(SessionEvent::PrepareForSleep(SleepCycle { ticket }));
                                 // Nobody will release it: don't hold up sleep.
                                 if !shared.want_delay {
                                     shared.delay = None;
                                 }
                             } else {
+                                // That sleep is over, released or not: a
+                                // delay still held now is for the next one.
+                                shared.sleeps.retire();
                                 shared.events.push(SessionEvent::Resumed);
                                 if shared.want_delay && shared.delay.is_none() {
                                     shared.delay = take_delay(bus).ok();
@@ -377,21 +479,35 @@ impl Logind {
     /// Hold a sleep delay inhibitor from now on, so the shell can lock the
     /// screen when [`SessionEvent::PrepareForSleep`] arrives; release it
     /// each time with [`sleep_ready`](Logind::sleep_ready). It is taken
-    /// again after each resume.
+    /// again after each resume. A delay held already is kept: replacing
+    /// it would let go of the one held for the next sleep.
     pub fn take_sleep_delay(&self) -> Result<()> {
         let bus = self.bus.as_ref().ok_or_else(|| Error::Unavailable("logind".into()))?;
-        let fd = take_delay(bus)?;
-        let mut shared = lock(&self.shared);
-        shared.delay = Some(fd);
-        shared.want_delay = true;
-        drop(shared);
+        let held = {
+            let mut shared = lock(&self.shared);
+            shared.want_delay = true;
+            shared.delay.is_some()
+        };
+        if !held {
+            let fd = take_delay(bus)?;
+            // The follower may have taken one meanwhile: keep that one.
+            lock(&self.shared).delay.get_or_insert(fd);
+        }
         self.model.update(|s| s.sleep_delay_held = true);
         Ok(())
     }
 
-    /// The screen is locked: let the machine sleep.
-    pub fn sleep_ready(&self) {
-        lock(&self.shared).delay = None;
+    /// The screen is locked for `sleep`: let the machine sleep. A sleep
+    /// that's over (the machine slept and woke since, or logind went
+    /// away) releases nothing: the delay held now is for the next sleep.
+    pub fn sleep_ready(&self, sleep: SleepCycle) {
+        let mut shared = lock(&self.shared);
+        if !shared.sleeps.is_current(sleep.ticket) {
+            log::debug!("logind's sleep delay: kept for the next sleep; {sleep:?} is over");
+            return;
+        }
+        shared.delay = None;
+        drop(shared);
         self.model.update(|s| s.sleep_delay_held = false);
     }
 

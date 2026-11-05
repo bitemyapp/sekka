@@ -10,7 +10,8 @@ repository.workspace = true
 [dependencies]
 # Installed applications; this crate adds launching them (apps.rs).
 aizome-apps.workspace = true
-# Confirmations of a disk operation's target (disks/confirm.rs).
+# Confirmations of a disk operation's target (disks/confirm.rs), and
+# logind's sleeps (power/logind.rs).
 aizome-typestate.workspace = true
 log.workspace = true
 # D-Bus: the blocking API for calls, the async one (on a thread of our own)
