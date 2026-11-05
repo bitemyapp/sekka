@@ -215,10 +215,17 @@ mod tests {
     #[test]
     fn saved_locks_supply_history_without_branches_or_app_state() {
         let dir = std::env::temp_dir().join(format!("yukimi-saved-locks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        // Copies are checked against the generations' links, so give the
+        // sample generations real ones, made before the copies.
+        let profiles = dir.join("profiles");
+        std::fs::create_dir_all(&profiles).unwrap();
         let mut generations = crate::fixture::model().generations;
         for g in &mut generations {
             g.active = g.number == 27;
             g.current = g.number == 27;
+            g.link = profiles.join(format!("system-{}-link", g.number));
+            std::os::unix::fs::symlink(g.target.as_str(), &g.link).unwrap();
         }
         for (number, inputs) in history().snapshots {
             let path = dir.join(format!("generation-{number}"));
@@ -244,9 +251,13 @@ mod tests {
         }
         // YUK-10: a copy kept for an earlier generation 26, which Nix
         // deleted before building today's, isn't today's 26's history.
-        let mut older = generations.iter().find(|g| g.number == 26).unwrap().clone();
-        older.target = generations[0].target.clone();
-        yukimi_system::saved::mark(&dir.join("generation-26"), &GenerationId::listed(&older)).unwrap();
+        let earlier = dir.join("earlier");
+        std::fs::create_dir_all(&earlier).unwrap();
+        std::os::unix::fs::symlink(generations[0].target.as_str(), earlier.join("system-26-link")).unwrap();
+        let older = GenerationId::read(&earlier.join("system"), 26).unwrap();
+        let copy = yukimi_system::saved::Saving::begin(&dir, &older).unwrap();
+        std::fs::copy(dir.join("generation-26/flake.lock"), copy.dir().join("flake.lock")).unwrap();
+        copy.finish().unwrap();
         let loaded = History::load(&dir, &generations);
         assert!(!loaded.snapshots.contains_key(&26) && loaded.snapshots.contains_key(&27));
         std::fs::remove_dir_all(dir).unwrap();
