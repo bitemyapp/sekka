@@ -71,10 +71,17 @@ pub fn classify_read(path: &Path, home: &Path) -> Approval {
 /// or the machine, delete the home folder or the system, erase a disk, or
 /// stop Tasuke's model server. Applies to `run_as_root` too.
 pub fn refused(command: &str, home: &Path) -> Option<String> {
+    refused_from(command, home, home)
+}
+
+/// [`refused`], for a command that runs in `cwd` rather than the home
+/// folder (tasuke-helper runs root's commands from `/`).
+pub fn refused_from(command: &str, home: &Path, cwd: &Path) -> Option<String> {
     if command.len() > MAX_REFUSAL_LEN {
         return Some("It is too long for anyone to check.".into());
     }
-    let ctx = Ctx::new(home);
+    let mut ctx = Ctx::new(home);
+    ctx.cwd = Some(cwd.to_path_buf());
     refusal_in(command, &ctx, 0)
 }
 
@@ -4293,7 +4300,39 @@ fn refusal_in(src: &str, ctx: &Ctx, depth: u32) -> Option<String> {
 }
 
 fn refusal_script(script: &Script, ctx: &Ctx, depth: u32) -> Option<String> {
+    // Every folder the shell could be in: `cd / && rm -rf usr`.
+    let mut cwds = vec![ctx.cwd()];
     for p in &script.pipelines {
+        for cwd in &cwds {
+            let here = Ctx { home: ctx.home, cwd: Some(cwd.clone()), cd_to: None, piped: false };
+            if let Some(r) = refusal_pipeline(p, &here, depth) {
+                return Some(r);
+            }
+        }
+        if let [cmd] = p.commands.as_slice() {
+            let args: Vec<Arg> = cmd.words.iter().map(|w| ctx.expand(w)).collect();
+            if args.first().is_some_and(|a| a.text == "cd") && cwds.len() < 8 {
+                let target = args[1..].iter().find(|a| !a.text.starts_with('-')).cloned();
+                for cwd in cwds.clone() {
+                    let here = Ctx { home: ctx.home, cwd: Some(cwd), cd_to: None, piped: false };
+                    let to: PathBuf = match &target {
+                        Some(t) => std::iter::once("/".to_string())
+                            .chain(here.components(t).iter().map(|s| unescape(s)))
+                            .collect(),
+                        None => ctx.home.to_path_buf(),
+                    };
+                    if !cwds.contains(&to) {
+                        cwds.push(to);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn refusal_pipeline(p: &Pipeline, ctx: &Ctx, depth: u32) -> Option<String> {
+    {
         let mut feeds_protected = false;
         let mut previous: Option<Vec<Arg>> = None;
         for cmd in &p.commands {
@@ -4443,6 +4482,16 @@ fn refuse_command(args: &[Arg], ctx: &Ctx, depth: u32) -> Option<String> {
     let prog = basename(&first.known_text()).to_string();
     let rest = &args[1..];
     let texts: Vec<&str> = rest.iter().map(|a| a.text.as_str()).collect();
+    // `/???/??m -rf ~`: a pattern the shell expands to a program's name.
+    if first.glob && depth <= MAX_DEPTH {
+        let pattern = basename(&first.pattern).to_string();
+        for name in REFUSAL_PROGRAMS.iter().filter(|n| glob_match(&pattern, n)) {
+            let named: Vec<Arg> = std::iter::once(Arg::literal(name)).chain(rest.iter().cloned()).collect();
+            if let Some(r) = refuse_command(&named, ctx, depth + 1) {
+                return Some(r);
+            }
+        }
+    }
     match prog.as_str() {
         _ if depth > MAX_DEPTH => Some("It nests commands too deeply for anyone to check.".into()),
         // Wrappers: whatever they run.
@@ -4613,13 +4662,150 @@ fn refuse_command(args: &[Arg], ctx: &Ctx, depth: u32) -> Option<String> {
             refuse_command(&words, ctx, depth + 1)
         }
         "busctl" | "dbus-send" | "gdbus" | "qdbus" | "dbus" => {
+            let calls = |methods: &[&str]| {
+                texts.iter().any(|t| methods.iter().any(|m| *t == *m || t.ends_with(&format!(".{m}"))))
+            };
             let login1 = texts.iter().any(|t| t.contains("login1"));
-            let method = texts.iter().any(|t| LOGIN1_METHODS.iter().any(|m| *t == *m || t.ends_with(&format!(".{m}"))));
-            if login1 && method { Some("It would shut down the computer or end your session.".into()) } else { None }
+            if login1 && calls(LOGIN1_METHODS) {
+                return Some("It would shut down the computer or end your session.".into());
+            }
+            // The service manager's own methods: systemctl poweroff, start
+            // reboot.target, stop display-manager, as calls.
+            if !texts.iter().any(|t| t.contains("systemd1")) {
+                return None;
+            }
+            if calls(&["PowerOff", "Reboot", "Halt", "KExec", "SoftReboot", "Exit", "SwitchRoot"]) {
+                return Some("It would shut down the computer or end your session.".into());
+            }
+            let units: Vec<&Arg> = rest
+                .iter()
+                .filter(|a| [".service", ".target", ".scope", ".slice", ".socket"].iter().any(|s| a.text.ends_with(s)))
+                .collect();
+            let starts = calls(&["StartUnit", "StartUnitReplace", "EnqueueUnitJob"]);
+            let restarts = calls(&["RestartUnit", "TryRestartUnit", "ReloadOrRestartUnit", "ReloadOrTryRestartUnit"]);
+            if (starts || restarts)
+                && let Some(u) = units.iter().find(|u| SESSION_ENDING_TARGETS.iter().any(|t| unit_matches(&u.text, t)))
+            {
+                return Some(format!("It would shut down the computer or end your session ({}).", u.text));
+            }
+            if restarts {
+                return protected_unit(&units, false);
+            }
+            if calls(&["StopUnit", "KillUnit", "FreezeUnit"]) {
+                return protected_unit(&units, true);
+            }
+            None
         }
         _ => None,
     }
 }
+
+/// The programs [`refuse_command`] knows, to try a pattern in a program's
+/// place against.
+const REFUSAL_PROGRAMS: &[&str] = &[
+    "sudo",
+    "doas",
+    "pkexec",
+    "run0",
+    "runuser",
+    "su",
+    "env",
+    "timeout",
+    "nice",
+    "ionice",
+    "stdbuf",
+    "nohup",
+    "setsid",
+    "exec",
+    "command",
+    "builtin",
+    "xargs",
+    "systemd-run",
+    "flatpak-spawn",
+    "chrt",
+    "taskset",
+    "busybox",
+    "watch",
+    "chroot",
+    "nsenter",
+    "unshare",
+    "setpriv",
+    "strace",
+    "ltrace",
+    "time",
+    "parallel",
+    "script",
+    "sg",
+    "bash",
+    "sh",
+    "dash",
+    "zsh",
+    "ksh",
+    "mksh",
+    "fish",
+    "eval",
+    "reboot",
+    "poweroff",
+    "halt",
+    "kexec",
+    "shutdown",
+    "telinit",
+    "init",
+    "systemctl",
+    "loginctl",
+    "aizomectl",
+    "kill",
+    "pkill",
+    "killall",
+    "skill",
+    "slay",
+    "shred",
+    "rm",
+    "unlink",
+    "rmdir",
+    "srm",
+    "trash",
+    "trash-put",
+    "gio",
+    "find",
+    "rsync",
+    "mv",
+    "chmod",
+    "chown",
+    "chgrp",
+    "chattr",
+    "setfacl",
+    "chcon",
+    "mkfs",
+    "mkfs.ext4",
+    "mkfs.btrfs",
+    "mkfs.xfs",
+    "mkfs.vfat",
+    "mkfs.fat",
+    "mkfs.f2fs",
+    "mkfs.ntfs",
+    "mkfs.exfat",
+    "mke2fs",
+    "mkswap",
+    "wipefs",
+    "blkdiscard",
+    "mkdosfs",
+    "mkntfs",
+    "dd",
+    "sgdisk",
+    "sfdisk",
+    "parted",
+    "fdisk",
+    "gdisk",
+    "cfdisk",
+    "cryptsetup",
+    "busctl",
+    "dbus-send",
+    "gdbus",
+    "qdbus",
+    "dbus",
+    "rg",
+];
 
 fn is_assignment_text(t: &str) -> bool {
     t.split_once('=').is_some_and(|(n, _)| is_name(n.trim_end_matches('+')))
@@ -6041,6 +6227,36 @@ mod tests {
             ("echo 'rm -rf ~'", "run"),
             ("git log --grep='rm -rf ~; reboot'", "run"),
             ("man shutdown", "ask"),
+            // After cd, in every folder the shell could be in.
+            ("cd / && rm -rf usr", "refuse"),
+            ("cd /; rm -rf home", "refuse"),
+            ("cd /home && rm -rf alice", "refuse"),
+            ("cd /tmp && rm -rf build", "ask"),
+            // A pattern in the program's place.
+            ("/???/??m -rf ~", "refuse"),
+            ("/???/?? -c reboot", "refuse"),
+            ("/???/??[s]tem?tl poweroff", "refuse"),
+            // The service manager's methods, called over D-Bus.
+            (
+                "busctl call org.freedesktop.systemd1 /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager StartUnit ss reboot.target replace",
+                "refuse",
+            ),
+            (
+                "busctl --user call org.freedesktop.systemd1 /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager Exit",
+                "refuse",
+            ),
+            (
+                "gdbus call --system --dest org.freedesktop.systemd1 --object-path /org/freedesktop/systemd1 --method org.freedesktop.systemd1.Manager.PowerOff",
+                "refuse",
+            ),
+            (
+                "busctl call org.freedesktop.systemd1 /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager StopUnit ss display-manager.service replace",
+                "refuse",
+            ),
+            (
+                "busctl call org.freedesktop.systemd1 /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager RestartUnit ss sshd.service replace",
+                "ask",
+            ),
         ]);
     }
 

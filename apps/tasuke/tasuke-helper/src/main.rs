@@ -109,9 +109,11 @@ fn parse(input: &[u8]) -> Result<RootRequest, String> {
 }
 
 /// Why the command never runs, if it doesn't: for the person's home and
-/// for root's, since `~` is root's here.
+/// for root's, since `~` is root's here, and from `/`, where it runs.
 fn refusal(command: &str, home: &Path) -> Option<String> {
-    policy::refused(command, home).or_else(|| policy::refused(command, Path::new("/root")))
+    policy::refused(command, home)
+        .or_else(|| policy::refused(command, Path::new("/root")))
+        .or_else(|| policy::refused_from(command, Path::new("/root"), Path::new("/")))
 }
 
 struct User {
@@ -335,6 +337,10 @@ mod tests {
         assert!(refusal("rm -rf /home/alice", home).is_some());
         assert!(refusal("rm -rf ~", home).is_some());
         assert!(refusal("systemctl stop display-manager", home).is_some());
+        // Relative to /, where root's commands run.
+        assert!(refusal("rm -rf etc", home).is_some());
+        assert!(refusal("rm -rf nix/store", home).is_some());
+        assert!(refusal("rm -rf tmp/build", home).is_none());
         assert!(refusal("nixos-rebuild switch", home).is_none());
         assert!(refusal("systemctl restart NetworkManager", home).is_none());
     }
