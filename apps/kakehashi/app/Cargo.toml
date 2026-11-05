@@ -7,6 +7,21 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
+# The dialog and the helper's start, as a library its doctests can reach;
+# the window is the binary.
+[lib]
+name = "kakehashi_window"
+path = "src/lib.rs"
+
+[[bin]]
+name = "kakehashi"
+path = "src/main.rs"
+
+[features]
+# `dialog::Pressed::for_tests`: a press of OK for the window's own tests.
+# Only the dev-dependency on this package below turns it on.
+test-util = []
+
 [dependencies]
 kakehashi-core.workspace = true
 anyhow.workspace = true
@@ -27,3 +42,7 @@ features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ]
+
+[dev-dependencies]
+# Itself, with test-util, for the window's tests that press OK.
+kakehashi = { path = ".", features = ["test-util"] }

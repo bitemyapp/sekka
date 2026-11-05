@@ -22,8 +22,8 @@
 //! # list.listed(DriveListing::new(listing, Ok(vec![stick.clone()])));
 //! # list.choose(&stick);
 //! # let image = ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
-//! # let (review, _) = list.open_review(None, image.clone()).unwrap();
-//! # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
+//! # let (review, shown) = list.open_review(None, image.clone()).map(|(r, t)| (r, t.clone())).unwrap();
+//! # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap(), shown).unwrap();
 //! # let dir = kakehashi_core::job::JobDir::new().unwrap();
 //! # let path = dir.progress();
 //! use kakehashi_core::job::{End, Event, Job, JobState, ProgressFile, Ran};
@@ -117,8 +117,8 @@ impl Report {
 /// # list.listed(DriveListing::new(listing, Ok(vec![stick.clone()])));
 /// # list.choose(&stick);
 /// # let image = ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
-/// # let (review, _) = list.open_review(None, image.clone()).unwrap();
-/// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
+/// # let (review, shown) = list.open_review(None, image.clone()).map(|(r, t)| (r, t.clone())).unwrap();
+/// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap(), shown).unwrap();
 /// use kakehashi_core::job::{Event, Job, Ran};
 /// let dir = kakehashi_core::job::JobDir::new().unwrap();
 /// let mut job = Job::start(&plan, &dir);
@@ -138,8 +138,8 @@ impl Report {
 /// # list.listed(DriveListing::new(listing, Ok(vec![stick.clone()])));
 /// # list.choose(&stick);
 /// # let image = ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
-/// # let (review, _) = list.open_review(None, image.clone()).unwrap();
-/// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
+/// # let (review, shown) = list.open_review(None, image.clone()).map(|(r, t)| (r, t.clone())).unwrap();
+/// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap(), shown).unwrap();
 /// use kakehashi_core::job::{Event, Job, ProgressFile, Ran};
 /// let dir = kakehashi_core::job::JobDir::new().unwrap();
 /// let reports = ProgressFile::new(&dir);
@@ -458,8 +458,8 @@ impl<'s> Running<'s> {
     /// # list.listed(DriveListing::new(listing, Ok(vec![stick.clone()])));
     /// # list.choose(&stick);
     /// # let image = ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
-    /// # let (review, _) = list.open_review(None, image.clone()).unwrap();
-    /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
+    /// # let (review, shown) = list.open_review(None, image.clone()).map(|(r, t)| (r, t.clone())).unwrap();
+    /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap(), shown).unwrap();
     /// # let dir = kakehashi_core::job::JobDir::new().unwrap();
     /// # let path = dir.progress();
     /// # std::fs::write(&path, "{\"stage\":\"writing\",\"done\":1073741824,\"total\":4294967296}\n").unwrap();
@@ -488,8 +488,8 @@ impl<'s> Running<'s> {
     /// # list.listed(DriveListing::new(listing, Ok(vec![stick.clone()])));
     /// # list.choose(&stick);
     /// # let image = ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
-    /// # let (review, _) = list.open_review(None, image.clone()).unwrap();
-    /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
+    /// # let (review, shown) = list.open_review(None, image.clone()).map(|(r, t)| (r, t.clone())).unwrap();
+    /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap(), shown).unwrap();
     /// # let dir = kakehashi_core::job::JobDir::new().unwrap();
     /// # let path = dir.progress();
     /// # std::fs::write(&path, "{\"stage\":\"writing\",\"done\":1073741824,\"total\":4294967296}\n").unwrap();
@@ -545,7 +545,7 @@ enum Step {
 
 impl Job {
     /// Starts following the write of `plan`, from the job's directory `dir`.
-    pub fn start(plan: &Plan, dir: &JobDir) -> Job {
+    pub fn start<P>(plan: &Plan<P>, dir: &JobDir) -> Job {
         let image = plan.image().file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         Job::new(Write { drive: plan.drive().clone(), image, cancel: dir.cancel(), cancelling: false })
     }
@@ -639,8 +639,8 @@ mod tests {
         list.listed(DriveListing::new(listing, Ok(vec![stick.clone()])));
         list.choose(&stick);
         let image = ImageId { path: "/images/sekka.iso".into(), sha256: "0".repeat(64) };
-        let (review, _) = list.open_review(None, image.clone()).unwrap();
-        let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
+        let (review, shown) = list.open_review(None, image.clone()).map(|(r, t)| (r, t.clone())).unwrap();
+        let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap(), shown).unwrap();
         Job::start(&plan, dir)
     }
 

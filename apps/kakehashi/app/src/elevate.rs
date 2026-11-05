@@ -1,9 +1,87 @@
 //! Starting the helper with the system's own administrator prompt: pkexec
 //! on Linux and UAC on Windows. On macOS the helper runs as the user and
 //! authorizes only the device open with authopen. The window never elevates.
+//!
+//! The helper starts only for a plan the person confirmed with the dialog's
+//! OK: [`run`] takes a [`PlanFile`], which only [`PlanFile::write`] makes,
+//! from a plan holding that press ([`Pressed`]). A plan made any other way,
+//! from a drive list of the code's own, doesn't start it:
+//!
+//! ```compile_fail,E0308
+//! use kakehashi_core::choice::{ConfirmedWrite, Target};
+//! use kakehashi_core::job::JobDir;
+//! use kakehashi_core::write::Plan;
+//! use kakehashi_window::elevate::{self, PlanFile, Ran};
+//! fn write_unasked(helper: &std::path::Path, dir: &JobDir, write: ConfirmedWrite, seen: Target) -> Ran {
+//!     let plan = Plan::new(write, seen).unwrap();
+//!     elevate::run(helper, &PlanFile::write(dir, plan).unwrap())
+//! }
+//! ```
+//!
+//! nor does a plan file the code wrote itself:
+//!
+//! ```compile_fail,E0308
+//! use kakehashi_core::job::JobDir;
+//! use kakehashi_window::elevate::{self, Ran};
+//! fn write_unasked(helper: &std::path::Path, dir: &JobDir) -> Ran {
+//!     std::fs::write(dir.plan(), r#"{"image":"sekka.iso","sha256":"0","drive":{}}"#).unwrap();
+//!     elevate::run(helper, &dir.plan())
+//! }
+//! ```
+//!
+//! ```compile_fail,E0451
+//! use kakehashi_core::job::JobDir;
+//! use kakehashi_window::elevate::PlanFile;
+//! fn forge(dir: &JobDir) -> PlanFile {
+//!     PlanFile { plan: dir.plan(), progress: dir.progress() }
+//! }
+//! ```
+//!
+//! The person's confirmed write:
+//!
+//! ```
+//! use kakehashi_core::choice::ConfirmedWrite;
+//! use kakehashi_core::job::JobDir;
+//! use kakehashi_core::write::Plan;
+//! use kakehashi_window::dialog::Pressed;
+//! use kakehashi_window::elevate::{self, PlanFile, Ran};
+//! fn write(helper: &std::path::Path, dir: &JobDir, write: ConfirmedWrite, pressed: Pressed) -> Option<Ran> {
+//!     let plan = Plan::new(write, pressed).ok()?;
+//!     Some(elevate::run(helper, &PlanFile::write(dir, plan).ok()?))
+//! }
+//! ```
+//!
+//! The helper can't tell who pressed: it reads only the plan's bytes, and
+//! keeps its own checks of the drive against the plan (`still_there`).
 
+use crate::dialog::Pressed;
+use kakehashi_core::job::JobDir;
 pub use kakehashi_core::job::Ran;
+use kakehashi_core::write::Plan;
 use std::path::{Path, PathBuf};
+
+/// The plan of a write the person confirmed, written to its job's
+/// directory for the helper, with the progress file beside it.
+#[derive(Debug)]
+pub struct PlanFile {
+    plan: PathBuf,
+    progress: PathBuf,
+}
+
+impl PlanFile {
+    /// Writes `plan`, confirmed with the dialog's OK, to `dir`'s
+    /// `plan.json`. The press itself isn't written.
+    pub fn write(dir: &JobDir, plan: Plan<Pressed>) -> std::io::Result<PlanFile> {
+        std::fs::write(dir.plan(), serde_json::to_string(&plan)?)?;
+        Ok(PlanFile { plan: dir.plan(), progress: dir.progress() })
+    }
+}
+
+/// Starts the helper for `file`'s plan, through the system's prompt, and
+/// waits for it.
+pub fn run(helper: &Path, file: &PlanFile) -> Ran {
+    run_paths(helper, &file.plan, &file.progress)
+}
 
 /// The helper beside this program: in the same directory, or in the same
 /// `Contents/MacOS` of the app bundle.
@@ -14,7 +92,7 @@ pub fn helper_path() -> std::io::Result<PathBuf> {
 }
 
 #[cfg(target_os = "linux")]
-pub fn run(helper: &Path, plan: &Path, progress: &Path) -> Ran {
+fn run_paths(helper: &Path, plan: &Path, progress: &Path) -> Ran {
     // On NixOS only the setuid wrapper works; polkit's own pkexec, which can
     // come first in the search path, refuses to run. Since NixOS 26.11 the
     // wrapper is there only when something asks for it.
@@ -43,7 +121,7 @@ pub fn run(helper: &Path, plan: &Path, progress: &Path) -> Ran {
 }
 
 #[cfg(target_os = "macos")]
-pub fn run(helper: &Path, plan: &Path, progress: &Path) -> Ran {
+fn run_paths(helper: &Path, plan: &Path, progress: &Path) -> Ran {
     // Keep the helper in the GUI's process ancestry so macOS can attribute
     // authopen's removable-volume request to the application the user allowed.
     match std::process::Command::new(helper).arg("--plan").arg(plan).arg("--progress").arg(progress).status() {
@@ -53,7 +131,7 @@ pub fn run(helper: &Path, plan: &Path, progress: &Path) -> Ran {
 }
 
 #[cfg(windows)]
-pub fn run(helper: &Path, plan: &Path, progress: &Path) -> Ran {
+fn run_paths(helper: &Path, plan: &Path, progress: &Path) -> Ran {
     use std::os::windows::ffi::OsStrExt;
     use windows::Win32::Foundation::{CloseHandle, ERROR_CANCELLED};
     use windows::Win32::System::Threading::{GetExitCodeProcess, INFINITE, WaitForSingleObject};
@@ -97,7 +175,7 @@ pub fn run(helper: &Path, plan: &Path, progress: &Path) -> Ran {
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
-pub fn run(_helper: &Path, _plan: &Path, _progress: &Path) -> Ran {
+fn run_paths(_helper: &Path, _plan: &Path, _progress: &Path) -> Ran {
     Ran::Failed("Kakehashi writes drives on Linux, macOS and Windows".into())
 }
 
