@@ -9,62 +9,62 @@ cargo_source(
 )
 
 alias(
-    name = "aizome_annai-build-dev",
-    actual = "//build/buck2/graph/dev:38bd6d6cc78b3b2b0cd9",
+    name = "aizome-annai-build-dev",
+    actual = "//build/buck2/graph/dev:4d632d4f813568563c19",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome-annai-build-dev",
-    actual = "//build/buck2/graph/dev:dcecd922988e12401951",
+    name = "aizome_annai-build-dev",
+    actual = "//build/buck2/graph/dev:be15d1002148c22f73d7",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_annai-build-release",
-    actual = "//build/buck2/graph/release:0dd21969903ed159e2ba",
+    actual = "//build/buck2/graph/release:07aa9a1cc302ff49cc78",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-annai-build-release",
-    actual = "//build/buck2/graph/release:6656e6f28adee4923f87",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_annai-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:a9cabf1632831c4e4621",
+    actual = "//build/buck2/graph/release:8a17fd8b87bfe499ad4b",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-annai-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:60834c3fc739d652d9f3",
+    actual = "//build/buck2/graph/release-lto:33a4cb46f36f36777590",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_annai-test-test-lib",
-    actual = "//build/buck2/graph/test:ab92c034a8709a32bd70",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-annai-test-test-bin",
-    actual = "//build/buck2/graph/test:76610fac9fecacbbd9e2",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "annai-test-test-test",
-    actual = "//build/buck2/graph/test:6b6f0065b8c37fc30ceb",
+    name = "aizome_annai-build-release-lto",
+    actual = "//build/buck2/graph/release-lto:b98c75f8f858c77d4bc0",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "budget-test-test-test",
-    actual = "//build/buck2/graph/test:2f1d83578b734147884f",
+    actual = "//build/buck2/graph/test:249186c1424f7abcd969",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-annai-test-test-bin",
+    actual = "//build/buck2/graph/test:a14fb870fa64d57b1dcc",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_annai-test-test-lib",
+    actual = "//build/buck2/graph/test:bfc31c575b3cf581c3a6",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "annai-test-test-test",
+    actual = "//build/buck2/graph/test:c8426d40a9fefe78c688",
     visibility = ["PUBLIC"],
 )
 

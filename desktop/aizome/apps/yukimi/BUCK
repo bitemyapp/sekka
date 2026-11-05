@@ -9,74 +9,74 @@ cargo_source(
 )
 
 alias(
-    name = "aizome_yukimi-build-dev",
-    actual = "//build/buck2/graph/dev:7f12fcc4a54d23afed1c",
+    name = "aizome-yukimi-build-dev",
+    actual = "//build/buck2/graph/dev:4760067f7305b53c1f16",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome-yukimi-build-dev",
-    actual = "//build/buck2/graph/dev:a6d2dfd7486a50931941",
+    name = "aizome_yukimi-build-dev",
+    actual = "//build/buck2/graph/dev:71d32c5eba13d77d0193",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_yukimi-build-release",
-    actual = "//build/buck2/graph/release:3967d27e6fd0d0cad77a",
+    actual = "//build/buck2/graph/release:60457fd4e037527f5008",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-yukimi-build-release",
-    actual = "//build/buck2/graph/release:b86c795267a711234e93",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_yukimi-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:411cadbdf3bb77016c48",
+    actual = "//build/buck2/graph/release:accddc9948c6183a5a82",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-yukimi-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:de7b2a38af7faa36cfc5",
+    actual = "//build/buck2/graph/release-lto:55b667f9e81ac03e225e",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_yukimi-test-test-lib",
-    actual = "//build/buck2/graph/test:8c20c42ca9a0d8256258",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-yukimi-test-test-bin",
-    actual = "//build/buck2/graph/test:041b1120f6f43519aa67",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "budget-test-test-test",
-    actual = "//build/buck2/graph/test:3136ef0eb15c8d209b89",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "golden-test-test-test",
-    actual = "//build/buck2/graph/test:8cd5b37b736b622dad3a",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "headless-test-test-test",
-    actual = "//build/buck2/graph/test:9b98f926278c4104e949",
+    name = "aizome_yukimi-build-release-lto",
+    actual = "//build/buck2/graph/release-lto:78ecdae8950a96ad0a5c",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "look-test-test-test",
-    actual = "//build/buck2/graph/test:d06ca37c62f004cb8b39",
+    actual = "//build/buck2/graph/test:3ca14fac9e798856e94e",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-yukimi-test-test-bin",
+    actual = "//build/buck2/graph/test:43f27e7d16cafc9c7913",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_yukimi-test-test-lib",
+    actual = "//build/buck2/graph/test:6fa59d90ac565ea03c14",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "budget-test-test-test",
+    actual = "//build/buck2/graph/test:7714eb304be9f3e20708",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "golden-test-test-test",
+    actual = "//build/buck2/graph/test:79610fd4d7c60d6a570d",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "headless-test-test-test",
+    actual = "//build/buck2/graph/test:863edfa36aec6b40c1c7",
     visibility = ["PUBLIC"],
 )
 

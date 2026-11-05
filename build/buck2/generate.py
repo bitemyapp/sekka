@@ -83,15 +83,88 @@ def package_records(meta, root):
     return records
 
 
+def lto_modes(graph):
+    """Adapted from Cargo 1.99.0's LTO planner; see CARGO-LICENSE-MIT.
+
+    https://github.com/rust-lang/cargo/blob/5f94df4789f005f9a352888e8355ffc645b7ed0e/src/compiler/lto.rs
+    """
+    units = graph["units"]
+    modes = {}
+    pending = []
+    can_lto = {"bin", "staticlib", "cdylib"}
+    dynamic = {"dylib", "cdylib", "proc-macro"}
+
+    def host(unit):
+        return bool({"custom-build", "proc-macro"} & set(unit["target"]["kind"]))
+
+    def needs_object(kinds):
+        return bool((can_lto | dynamic) & set(kinds))
+
+    def object_mode(kinds):
+        return "object" if all(kind == "dylib" for kind in kinds) else "object-bitcode"
+
+    for index in graph["roots"]:
+        unit = units[index]
+        requested = unit["profile"]["lto"]
+        kinds = unit["target"]["crate_types"]
+        if requested in (False, "false") or host(unit):
+            mode = "object"
+        elif requested == "off":
+            mode = "off"
+        else:
+            mode = object_mode(kinds) if needs_object(kinds) else "bitcode"
+        pending.append((index, mode))
+
+    while pending:
+        index, parent = pending.pop()
+        unit = units[index]
+        kinds = ["bin"] if unit["mode"] in {"test", "doctest"} else unit["target"]["crate_types"]
+        requested = unit["profile"]["lto"]
+        if host(unit):
+            mode = "object"
+        elif all(kind in can_lto for kind in kinds):
+            mode = "object" if requested in (False, "false") else "off" if requested == "off" else "run:" + ("fat" if requested is True else requested)
+        elif parent.startswith("run:"):
+            mode = object_mode(kinds) if needs_object(kinds) else "bitcode"
+        elif parent == "bitcode" and needs_object(kinds):
+            mode = object_mode(kinds)
+        else:
+            mode = parent
+        previous = modes.get(index)
+        if previous is not None and previous != mode:
+            if previous.startswith("run:") or mode.startswith("run:"):
+                mode = mode if mode.startswith("run:") else previous
+            elif "off" in (previous, mode):
+                mode = "off"
+            else:
+                mode = "object-bitcode"
+        if previous == mode:
+            continue
+        modes[index] = mode
+        pending.extend((dep["index"], mode) for dep in unit["dependencies"])
+    return modes
+
+
 def units_from_graph(graph, packages, meta):
     raw = graph["units"]
     prepared = []
     metadata = {p["id"]: p for p in meta["packages"]}
-    for unit in raw:
+    modes = lto_modes(graph)
+    for index, unit in enumerate(raw):
         package = packages[unit["pkg_id"]]
         target = dict(unit["target"])
         target["src_path"] = Path(target["src_path"]).relative_to(Path(metadata[unit["pkg_id"]]["manifest_path"]).parent).as_posix()
         prepared.append({"package": package, "target": target, "profile": unit["profile"], "platform": unit["platform"], "mode": unit["mode"], "features": unit["features"], "dependencies": [{k: v for k, v in dep.items() if k != "index"} for dep in unit["dependencies"]]})
+        prepared[-1]["lto_mode"] = modes[index]
+    abi_targets = {}
+    for index, unit in enumerate(prepared):
+        if unit["package"]["name"] != "aizome-comp-core" or unit["mode"] != "build" or "dylib" not in unit["target"]["crate_types"]:
+            continue
+        for dependency in raw[index]["dependencies"]:
+            script = prepared[dependency["index"]]
+            if script["mode"] == "run-custom-build" and script["package"]["id"] == unit["package"]["id"]:
+                script["abi_target"] = {"profile": unit["profile"], "lto_mode": unit["lto_mode"]}
+                abi_targets[dependency["index"]] = index
     keys = {}
     visiting = set()
     def key(index):
@@ -122,6 +195,10 @@ def units_from_graph(graph, packages, meta):
         else:
             filename = "lib" + name + "-" + spec["key"] + ".rlib"
         spec["filename"] = filename
+    # The final crate's metadata includes its build-script dependency. Fill it
+    # only after hashing the DAG, rather than introducing an identity cycle.
+    for script, target in abi_targets.items():
+        prepared[script]["abi_target"]["key"] = keys[target]
     return prepared, keys
 
 
@@ -137,8 +214,7 @@ def input_fingerprints(root, meta, manifest):
                 break
             if (ancestor / "Cargo.toml").exists():
                 paths.add(ancestor / "Cargo.toml")
-    paths.update((root / "build/buck2").glob("*.py"))
-    paths.update((root / "build/buck2").glob("*.bzl"))
+    paths.update(root / "build/buck2" / name for name in ["generate.py", "action.py", "units.bzl", "platforms.bzl"])
     return {path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest() for path in sorted(paths)}
 
 
@@ -221,6 +297,7 @@ def main():
     files[workspace + "/BUCK"] = GENERATED + 'load("//build/buck2:units.bzl", "cargo_source")\n\n' + rule("cargo_source", name="cargo-workspace", files={"Cargo.toml": "Cargo.toml", "Cargo.lock": "Cargo.lock"}, visibility=["PUBLIC"])
     targets = {profile: [] for profile in PROFILES}
     discovery = {profile: [] for profile in PROFILES}
+    excluded_lto_packages = set()
     for profile in PROFILES:
         command = ["test" if profile == "test" else "build", "--locked", "--offline", "--manifest-path", str(manifest), "--workspace", "--unit-graph", "-Z", "unstable-options"]
         command += feature_args
@@ -232,11 +309,12 @@ def main():
             for package in meta["packages"]:
                 if any("dylib" in t["crate_types"] for t in package["targets"]) or package["name"] == "aizome-comp":
                     command += ["--exclude", package["name"]]
+                    excluded_lto_packages.add(package["name"])
         graph = cargo_command(tools, vendor, command, root)
         units, keys = units_from_graph(graph, packages, meta)
         graph_path = "build/buck2/graph/" + profile
         text = GENERATED + 'load("//build/buck2:units.bzl", "cargo_unit")\n\n'
-        for index, spec in enumerate(units):
+        for index, spec in sorted(enumerate(units), key=lambda item: item[1]["key"]):
             deps = [":" + keys[dep["index"]] for dep in graph["units"][index]["dependencies"]]
             extras = {}
             if spec["mode"] == "run-custom-build" and spec["package"]["name"] == "aizome-comp-core":
@@ -259,7 +337,7 @@ def main():
             text += rule("cargo_unit", name=spec["key"], spec=canonical(spec), source=sources[graph["units"][index]["pkg_id"]], deps=deps, extra_sources=extras, visibility=["PUBLIC"])
             discovery[profile].append({"label": "//" + graph_path + ":" + spec["key"], "package": spec["package"]["name"], "package_id": spec["package"]["id"], "target": spec["target"]["name"], "kind": spec["target"]["kind"], "mode": spec["mode"], "filename": spec["filename"], "features": spec["features"], "dependencies": ["//" + graph_path + dep for dep in deps]})
         files[graph_path + "/BUCK"] = text
-        for index in graph["roots"]:
+        for index in sorted(graph["roots"], key=lambda item: units[item]["key"]):
             spec = units[index]
             if spec["package"]["external"]:
                 continue
@@ -269,6 +347,30 @@ def main():
             path = spec["package"]["path"]
             first_party[path] += rule("alias", name=alias, actual="//" + graph_path + ":" + spec["key"], visibility=["PUBLIC"])
             targets[profile].append({"label": "//" + path + ":" + alias, "unit_label": "//" + graph_path + ":" + spec["key"], "package": spec["package"]["name"], "target": spec["target"]["name"], "kind": spec["target"]["kind"], "mode": spec["mode"], "filename": spec["filename"]})
+    # Rust dylibs cannot participate in LTO. Keep the complete runtime by
+    # explicitly depending on the already-generated non-LTO release graph.
+    release_units = {unit["label"]: unit for unit in discovery["release"]}
+    pending = []
+    for target in targets["release"]:
+        if target["package"] not in excluded_lto_packages:
+            continue
+        mixed = dict(target, label=target["label"].removesuffix("-release") + "-release-lto")
+        path, alias = mixed["label"][2:].split(":", 1)
+        first_party[path] += rule("alias", name=alias, actual=mixed["unit_label"], visibility=["PUBLIC"])
+        targets["release-lto"].append(mixed)
+        pending.append(mixed["unit_label"])
+    seen = set()
+    while pending:
+        label = pending.pop()
+        if label in seen:
+            continue
+        seen.add(label)
+        unit = release_units[label]
+        discovery["release-lto"].append(unit)
+        pending.extend(unit["dependencies"])
+    for profile in PROFILES:
+        targets[profile].sort(key=lambda target: target["label"])
+        discovery[profile].sort(key=lambda unit: unit["label"])
     for path, text in first_party.items():
         files[path + "/BUCK"] = text
     for owner, exports in source_exports.items():

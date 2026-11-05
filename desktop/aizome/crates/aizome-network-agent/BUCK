@@ -9,56 +9,56 @@ cargo_source(
 )
 
 alias(
-    name = "aizome_network_agent-build-dev",
-    actual = "//build/buck2/graph/dev:beca8d315a2874dffa15",
-    visibility = ["PUBLIC"],
-)
-
-alias(
     name = "aizome-network-agent-build-dev",
-    actual = "//build/buck2/graph/dev:75d9dc85e680a08fdadc",
+    actual = "//build/buck2/graph/dev:030be650d6039b779a3d",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_network_agent-build-release",
-    actual = "//build/buck2/graph/release:a81d7982aa91d9fef8c2",
+    name = "aizome_network_agent-build-dev",
+    actual = "//build/buck2/graph/dev:3f1f439b1a0fda366323",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-network-agent-build-release",
-    actual = "//build/buck2/graph/release:a5f047f6fcf7fa0c851e",
+    actual = "//build/buck2/graph/release:9b2b81e1fd526f43ee78",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_network_agent-build-release",
+    actual = "//build/buck2/graph/release:b2817b7464f44a191e90",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_network_agent-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:d979647947e0a405259f",
+    actual = "//build/buck2/graph/release-lto:a37d3ffa641e23f081ee",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-network-agent-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:2aff8b64ab7e33f0ad27",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_network_agent-test-test-lib",
-    actual = "//build/buck2/graph/test:906f998f452e050db8fc",
+    actual = "//build/buck2/graph/release-lto:e2e3504042f68e74b18c",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-network-agent-test-test-bin",
-    actual = "//build/buck2/graph/test:7a09f99c432736ac8d1f",
+    actual = "//build/buck2/graph/test:380a0160a826dd67bbab",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "credentials-test-test-test",
-    actual = "//build/buck2/graph/test:e0c5667f2a0cba1e2df6",
+    actual = "//build/buck2/graph/test:4b442020ab9c781955c5",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_network_agent-test-test-lib",
+    actual = "//build/buck2/graph/test:fa4822b49122abc4f527",
     visibility = ["PUBLIC"],
 )
 

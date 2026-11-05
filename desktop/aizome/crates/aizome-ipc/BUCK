@@ -9,98 +9,98 @@ cargo_source(
 )
 
 alias(
+    name = "aizome-share-picker-build-dev",
+    actual = "//build/buck2/graph/dev:258f4c8a9faa0ea313d3",
+    visibility = ["PUBLIC"],
+)
+
+alias(
     name = "aizome_ipc-build-dev",
-    actual = "//build/buck2/graph/dev:a120ed0f9a355ec21abf",
+    actual = "//build/buck2/graph/dev:4209d9f9466bf9b340c1",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-dev-build-dev",
-    actual = "//build/buck2/graph/dev:afacd134af29f2eda388",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-share-picker-build-dev",
-    actual = "//build/buck2/graph/dev:e503c4660de5a1767a83",
+    actual = "//build/buck2/graph/dev:66859a2991576fe99197",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizomectl-build-dev",
-    actual = "//build/buck2/graph/dev:e191e190487d2011e34a",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_ipc-build-release",
-    actual = "//build/buck2/graph/release:aa7eb8495f677b25b665",
+    actual = "//build/buck2/graph/dev:a637862313cede7254b5",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-dev-build-release",
-    actual = "//build/buck2/graph/release:0edbbed4ae228f68156b",
+    actual = "//build/buck2/graph/release:279228a7458a6c0e1589",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-share-picker-build-release",
-    actual = "//build/buck2/graph/release:f2ee4c579523a5bc2de0",
+    actual = "//build/buck2/graph/release:722096612e733132d8da",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_ipc-build-release",
+    actual = "//build/buck2/graph/release:a99f568e74555af44f5f",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizomectl-build-release",
-    actual = "//build/buck2/graph/release:9b9b1731a7eb4cd50ad1",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_ipc-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:33382278f815ef51d444",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-dev-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:11464e54b4981110e467",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-share-picker-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:abe1cc2c7f63955d81f4",
+    actual = "//build/buck2/graph/release:fc42d742fe176b7669a7",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizomectl-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:d85da01af2db702e68dc",
+    actual = "//build/buck2/graph/release-lto:37928234ebaf588a2516",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-share-picker-build-release-lto",
+    actual = "//build/buck2/graph/release-lto:4c25eee34c99fdd35d01",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-dev-build-release-lto",
+    actual = "//build/buck2/graph/release-lto:d5ede575ffd9c92b2021",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_ipc-build-release-lto",
+    actual = "//build/buck2/graph/release-lto:ffb8b4f511d3edf108b9",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_ipc-test-test-lib",
-    actual = "//build/buck2/graph/test:f6d18d594ffae471fd15",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-dev-test-test-bin",
-    actual = "//build/buck2/graph/test:5b03c1a0378362c6cfc0",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-share-picker-test-test-bin",
-    actual = "//build/buck2/graph/test:a8b301574987cbd54bb5",
+    actual = "//build/buck2/graph/test:56b69ddfe849298b5faa",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizomectl-test-test-bin",
-    actual = "//build/buck2/graph/test:59f329858ed71e3e4173",
+    actual = "//build/buck2/graph/test:63d174b415bb42c2475c",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-share-picker-test-test-bin",
+    actual = "//build/buck2/graph/test:898b354f95fbca83a54e",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-dev-test-test-bin",
+    actual = "//build/buck2/graph/test:c22e8ae3bafd082a878d",
     visibility = ["PUBLIC"],
 )
 

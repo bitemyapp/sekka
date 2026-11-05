@@ -17,6 +17,12 @@ Untrusted job tmpfs quotas include incomplete uploads. Worker scratch and logs
 are independently bounded. resize uses the supported eviction configuration
 against the existing cache; it never deletes objects to simulate eviction.
 retain roots already-realized Nix closures, without evaluating source trees.
+A minimal namespace-owner container keeps gateway process restarts independent
+of backend/worker networking. up reconciles namespace-generation labels after
+an owner restart or recreation, draining and replacing stale dependents.
+Host publication stays loopback-only. CI joins an owned frontend bridge as a
+separate container and uses client --frontend; connection-info prints its stable
+network/DNS endpoint without credentials. Teardown refuses attached foreign jobs.
 
 Tunnel with: ssh -N -L 17841:127.0.0.1:17841 -L 17842:127.0.0.1:17842 HOST
 """
@@ -37,15 +43,47 @@ ARCHIVE_SHA256 = "1a6596c96f059d4e99f7352164321e1f1cdff435275667ad8489e83f7e2977
 NGINX = "nginx@sha256:30f1c0d78e0ad60901648be663a710bdadf19e4c10ac6782c235200619158284"
 DOCKER = ["docker", "-H", "unix:///run/docker.sock"]
 LABEL = "computer.sekka.shared-build-service"
+NETWORK_LABEL = LABEL + ".network-generation"
 
 
-def remote(m, *args, capture=False):
+def remote(m, *args, capture=False, input=None):
     return subprocess.run(["ssh", m["host"], shlex.join(map(str, args))],
-                          check=True, text=True, capture_output=capture).stdout
+                          check=True, text=True, capture_output=capture, input=input).stdout
 
 
-def docker(m, *args, capture=False):
-    return remote(m, *DOCKER, *args, capture=capture)
+def docker(m, *args, capture=False, input=None):
+    return remote(m, *DOCKER, *args, capture=capture, input=input)
+
+
+def inspect_frontend(m, domain):
+    network = name(m, domain, "frontend")
+    if not docker(m, "network", "ls", "--filter", "name=^" + network + "$",
+                  "--format", "{{.Name}}", capture=True).strip():
+        return None
+    info = json.loads(docker(m, "network", "inspect", network, capture=True))[0]
+    if info["Labels"].get(LABEL) != m["name"] or info["Driver"] != "bridge":
+        raise SystemExit("Refusing unowned frontend network " + network)
+    return info
+
+
+def assert_frontend_unused(m, domain):
+    info = inspect_frontend(m, domain)
+    if info:
+        allowed = set()
+        for role in ("network", "gateway", "backend", "worker"):
+            container = inspect_owned(m, name(m, domain, role))
+            if container:
+                allowed.add(container["Id"])
+        foreign = [endpoint["Name"] for identifier, endpoint in info["Containers"].items()
+                   if identifier not in allowed]
+        if foreign:
+            raise SystemExit("Refusing frontend teardown with attached jobs: " + ", ".join(foreign))
+    return info
+
+
+def connection_info(m, domain):
+    return {"network": name(m, domain, "frontend"),
+            "endpoint": "grpc://" + name(m, domain, "network") + ":50050", "instance": "sekka"}
 
 
 def put(m, relative, content, mode=0o600):
@@ -134,6 +172,20 @@ http {
     listen 50050;
     http2 on;
     client_max_body_size 0;
+    error_page 401 = @unauthenticated;
+    error_page 403 = @forbidden;
+    location @unauthenticated {
+      default_type application/grpc;
+      add_header grpc-status 16 always;
+      add_header grpc-message "Unauthenticated" always;
+      return 200;
+    }
+    location @forbidden {
+      default_type application/grpc;
+      add_header grpc-status 7 always;
+      add_header grpc-message "Permission denied" always;
+      return 200;
+    }
     location / {
       if ($access = none) { return 401; }
       if ($allowed = 0) { return 403; }
@@ -157,17 +209,59 @@ def assert_owned(m, container):
         raise SystemExit("Refusing unowned container " + container)
 
 
-def run_container(m, domain, role, *args):
+def inspect_owned(m, container):
+    if not docker(m, "ps", "-a", "--filter", "name=^/" + container + "$",
+                  "--format", "{{.Names}}", capture=True).strip():
+        return None
+    info = json.loads(docker(m, "inspect", container, capture=True))[0]
+    if info["Config"]["Labels"].get(LABEL) != m["name"]:
+        raise SystemExit("Refusing unowned container " + container)
+    return info
+
+
+def reconcile_network(m, domain, generation):
+    dependents = [(role, inspect_owned(m, name(m, domain, role)))
+                  for role in ("worker", "backend", "gateway")]
+    if not any(info and info["Config"]["Labels"].get(NETWORK_LABEL) != generation
+               for _, info in dependents):
+        return
+    for role, info in dependents:
+        if info:
+            container = name(m, domain, role)
+            docker(m, "stop", "--timeout", "3600" if role == "worker" else "30", container)
+            docker(m, "rm", container)
+
+
+def run_container(m, domain, role, *args, network_generation=None):
     container = name(m, domain, role)
-    existing = docker(m, "ps", "-a", "--filter", "name=^/" + container + "$", "--format", "{{.Names}}", capture=True).strip()
+    existing = inspect_owned(m, container)
     if existing:
-        assert_owned(m, container)
-        state = docker(m, "inspect", "--format", "{{.State.Status}}", container, capture=True).strip()
+        state = existing["State"]["Status"]
         docker(m, "restart" if state == "restarting" else "start", container)
         return
-    docker(m, "run", "-d", "--name", name(m, domain, role), "--label", LABEL + "=" + m["name"],
+    labels = [] if network_generation is None else ["--label", NETWORK_LABEL + "=" + network_generation]
+    docker(m, "run", "-d", "--name", container, "--label", LABEL + "=" + m["name"], *labels,
            "--restart", "unless-stopped", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges",
-           "--pids-limit", "2048", "--log-driver=json-file", "--log-opt=max-size=10m", "--log-opt=max-file=3", *args)
+           "--pids-limit", "2048", "--ulimit", "nofile=16384:16384",
+           "--log-driver=json-file", "--log-opt=max-size=10m", "--log-opt=max-file=3", *args)
+
+
+def runtime_paths(shell, env):
+    paths = {"worker_shell": shell, "worker_env": env}
+    for path in paths.values():
+        if not path or not path.startswith("/nix/store/") or ".." in Path(path).parts:
+            raise SystemExit("Use the Nix-packaged controller or pass --shell and --env immutable Nix executables")
+    return paths
+
+
+def retain_runtime(m):
+    remote(m, "mkdir", "-p", m["directory"] + "/roots")
+    for key in ("worker_shell", "worker_env"):
+        path = m[key]
+        remote(m, "test", "-x", path)
+        store = "/" + "/".join(Path(path).parts[1:4])
+        remote(m, "nix-store", "--realise", store, "--add-root",
+               m["directory"] + "/roots/" + Path(store).name, "--indirect")
 
 
 def init(args):
@@ -180,6 +274,7 @@ def init(args):
          "scratch_bytes": args.scratch_bytes, "worker_cache_bytes": args.scratch_bytes // 4,
          "domains": {d: {"port": args.port + i, "token": secrets.token_hex(32),
                          "reader_token": secrets.token_hex(32)} for i, d in enumerate(args.domains)}}
+    m.update(runtime_paths(args.shell, args.env))
     # Untrusted writable jobs must not fill the host filesystem through active
     # uploads outside the retained-object LRU. Their entire CAS/AC/temp area is
     # a size-limited tmpfs and disappears on restart; a miss rebuilds correctly.
@@ -194,6 +289,7 @@ def init(args):
         os.chmod(f.fileno(), 0o600)
         json.dump(m, f, indent=2)
     put(m, "owner.json", json.dumps({"name": unique, "schema": 1}))
+    retain_runtime(m)
     with tempfile.TemporaryDirectory(prefix="sekka-nativelink-") as tmp:
         archive = Path(tmp) / "nativelink.tar.gz"
         urllib.request.urlretrieve(f"https://github.com/TraceMachina/nativelink/releases/download/v{VERSION}/nativelink-{VERSION}-x86_64-unknown-linux-musl.tar.gz", archive)
@@ -223,11 +319,33 @@ def up(m):
         put(m, d + "/worker.json", json.dumps(worker_config(m)), 0o644)
         put(m, d + "/nginx.conf", gateway_config(settings["token"], settings["reader_token"]), 0o644)
         base = m["directory"] + "/" + d
-        run_container(m, d, "gateway", "--user", "101:101", "--memory", "256m", "--cpus", "2",
+        owner = name(m, d, "network")
+        frontend = name(m, d, "frontend")
+        if not inspect_frontend(m, d):
+            docker(m, "network", "create", "--driver", "bridge", "--label", LABEL + "=" + m["name"], frontend)
+        bindings = [{"HostIp": "127.0.0.1", "HostPort": str(settings["port"])}]
+        existing = inspect_owned(m, owner)
+        if existing and (existing["HostConfig"]["PortBindings"] != {"50050/tcp": bindings}
+                         or not existing["HostConfig"]["Init"]
+                         or existing["HostConfig"]["NetworkMode"] != frontend):
+            reconcile_network(m, d, "")
+            docker(m, "stop", "--timeout", "30", owner)
+            docker(m, "rm", owner)
+            existing = None
+        if not existing:
+            # Also cuts over deployments whose gateway owned the namespace.
+            reconcile_network(m, d, "")
+        run_container(m, d, "network", "--network", frontend, "--init", "--user", "65534:65534",
+                      "--memory", "32m", "--cpus", "0.1", "-p", f'127.0.0.1:{settings["port"]}:50050',
+                      "--entrypoint", "/bin/sleep", NGINX, "infinity")
+        generation = docker(m, "inspect", "--format", "{{.Id}}:{{.NetworkSettings.SandboxID}}",
+                            owner, capture=True).strip()
+        reconcile_network(m, d, generation)
+        network = "container:" + owner
+        run_container(m, d, "gateway", "--network", network, "--user", "101:101", "--memory", "256m", "--cpus", "2",
                       "--tmpfs", "/tmp:rw,nosuid,nodev,size=64m,uid=101,gid=101",
-                      "-p", f'127.0.0.1:{settings["port"]}:50050', "-v", base + "/nginx.conf:/etc/nginx/nginx.conf:ro",
-                      "--entrypoint", "nginx", NGINX, "-g", "daemon off;")
-        network = "container:" + name(m, d, "gateway")
+                      "-v", base + "/nginx.conf:/etc/nginx/nginx.conf:ro",
+                      "--entrypoint", "nginx", NGINX, "-g", "daemon off;", network_generation=generation)
         if m.get("ephemeral_cache", False):
             storage = ["--tmpfs", f'/data:rw,nosuid,nodev,size={m["backend_data_bytes"]},uid={m["uid"]},gid={m["gid"]},mode=0700']
             memory = str(m["backend_data_bytes"] + 1024**3)
@@ -236,13 +354,17 @@ def up(m):
             memory = "8g"
         run_container(m, d, "backend", "--network", network, "--user", f'{m["uid"]}:{m["gid"]}',
                       "--memory", memory, "--cpus", "8", *storage,
-                      "-v", base + "/backend.json:/config.json:ro", "-e", "RUST_LOG=info", m["image"], "/config.json")
+                      "-v", base + "/backend.json:/config.json:ro", "-e", "RUST_LOG=info", m["image"], "/config.json",
+                      network_generation=generation)
         run_container(m, d, "worker", "--network", network, "--user", "30501:30501",
                       "--memory", str(m["scratch_bytes"] + 8 * 1024**3), "--cpus", str(m["jobs"]),
-                      "--tmpfs", f'/scratch:rw,nosuid,nodev,size={m["scratch_bytes"]},uid=30501,gid=30501,mode=0700',
+                      "--tmpfs", f'/scratch:rw,exec,nosuid,nodev,size={m["scratch_bytes"]},uid=30501,gid=30501,mode=0700',
                       "--tmpfs", "/tmp:rw,nosuid,nodev,size=1g,uid=30501,gid=30501,mode=1777",
                       "-v", "/nix/store:/nix/store:ro", "-v", base + "/worker.json:/config.json:ro",
-                      "-e", "RUST_LOG=info", m["image"], "/config.json")
+                      "-v", m["worker_shell"] + ":/bin/sh:ro",
+                      "-v", m["worker_shell"] + ":/bin/bash:ro",
+                      "-v", m["worker_env"] + ":/usr/bin/env:ro",
+                      "-e", "RUST_LOG=info", m["image"], "/config.json", network_generation=generation)
 
 
 def main():
@@ -252,12 +374,16 @@ def main():
     create = sub.add_parser("init")
     create.add_argument("--host", default="wx-workstation")
     create.add_argument("--port", type=int, default=17841)
-    create.add_argument("--domains", choices=("trusted", "ci"), nargs="+", default=["trusted", "ci"],
-                        help="Use --domains ci for a unique, disposable writable CI job")
+    create.add_argument("--domains", choices=("trusted", "ci"), nargs="+", default=["trusted"],
+                        help="ci alone creates a disposable writer job; trusted ci together is for qualification only")
     create.add_argument("--jobs", type=int, default=8)
     create.add_argument("--cas-bytes", type=int, default=64 * 1024**3)
     create.add_argument("--ac-bytes", type=int, default=1024**3)
     create.add_argument("--scratch-bytes", type=int, default=32 * 1024**3)
+    runtime = sub.add_parser("runtime", help="Retain new immutable interpreter paths and replace only owned workers")
+    for command in (create, runtime):
+        command.add_argument("--shell", default=os.environ.get("SEKKA_BUILD_SERVICE_SHELL"))
+        command.add_argument("--env", default=os.environ.get("SEKKA_BUILD_SERVICE_ENV"))
     for command in ("up", "stop", "restart", "logs", "status", "issue-reader", "metrics"):
         sub.add_parser(command)
     destroy = sub.add_parser("destroy")
@@ -269,9 +395,13 @@ def main():
     resize.add_argument("--ac-bytes", type=int, required=True)
     client = sub.add_parser("client")
     client.add_argument("--domain", choices=("trusted", "ci"), required=True)
-    client.add_argument("--format", choices=("bazel", "json"), default="json")
-    client.add_argument("--endpoint")
+    client.add_argument("--format", choices=("bazel", "buck2", "json"), default="json")
+    address = client.add_mutually_exclusive_group()
+    address.add_argument("--frontend", action="store_true", help="Use stable DNS from a separate container on the owned frontend bridge")
+    address.add_argument("--endpoint")
     client.add_argument("--access", choices=("read-only", "writer"), default="read-only")
+    connection = sub.add_parser("connection-info", help="Print nonsecret Docker network and authenticated gateway DNS endpoint")
+    connection.add_argument("--domain", choices=("trusted", "ci"), required=True)
     args = parser.parse_args()
     if args.command == "init":
         init(args)
@@ -279,15 +409,26 @@ def main():
     if args.manifest.stat().st_mode & 0o077:
         raise SystemExit("Credential manifest must be mode 0600")
     m = json.loads(args.manifest.read_text())
+    if args.command == "connection-info":
+        print(json.dumps(connection_info(m, args.domain)))
+        return
+    if args.command == "runtime":
+        m.update(runtime_paths(args.shell, args.env))
+        retain_runtime(m)
+        args.manifest.write_text(json.dumps(m, indent=2) + "\n")
+        for domain in m["domains"]:
+            container = name(m, domain, "worker")
+            assert_owned(m, container)
+            docker(m, "stop", "--timeout", "3600", container)
+            docker(m, "rm", container)
+        up(m)
+        return
     if args.command == "restart":
         for domain in m["domains"]:
             for role in ("worker", "backend", "gateway"):
                 assert_owned(m, name(m, domain, role))
-            docker(m, "stop", "--timeout", "3600", name(m, domain, "worker"))
-            docker(m, "stop", "--timeout", "30", name(m, domain, "backend"))
-            docker(m, "restart", "--timeout", "30", name(m, domain, "gateway"))
-            docker(m, "start", name(m, domain, "backend"))
-            docker(m, "start", name(m, domain, "worker"))
+                docker(m, "stop", "--timeout", "3600" if role == "worker" else "30", name(m, domain, role))
+        up(m)
         return
     if args.command == "resize":
         if min(args.cas_bytes, args.ac_bytes) < 1:
@@ -301,13 +442,12 @@ def main():
                 docker(m, "stop", "--timeout", "3600", name(m, domain, role))
             put(m, domain + "/backend.json", json.dumps(backend_config(m)), 0o644)
             put(m, domain + "/worker.json", json.dumps(worker_config(m)), 0o644)
-            for role in ("backend", "worker"):
-                docker(m, "start", name(m, domain, role))
+        up(m)
         args.manifest.write_text(json.dumps(m, indent=2) + "\n")
         print(json.dumps({"deployment": m["name"], "cas_bytes": m["cas_bytes"], "ac_bytes": m["ac_bytes"]}))
         return
     if args.command == "metrics":
-        containers = [name(m, d, role) for d in m["domains"] for role in ("gateway", "backend", "worker")]
+        containers = [name(m, d, role) for d in m["domains"] for role in ("network", "gateway", "backend", "worker")]
         for container in containers:
             assert_owned(m, container)
         stats = docker(m, "stats", "--no-stream", "--format", "{{json .}}", *containers, capture=True)
@@ -355,19 +495,29 @@ def main():
         up(m)
     elif args.command == "client":
         d = m["domains"][args.domain]
-        endpoint = args.endpoint or f'grpc://127.0.0.1:{d["port"]}'
+        endpoint = (connection_info(m, args.domain)["endpoint"] if args.frontend
+                    else args.endpoint or f'grpc://127.0.0.1:{d["port"]}')
         token = d["token" if args.access == "writer" else "reader_token"]
         if args.format == "bazel":
             print(f'build --remote_cache={endpoint}\nbuild --remote_instance_name=sekka')
             print('build "--remote_header=authorization=Bearer ' + token + '"')
             if args.access == "read-only":
                 print("build --remote_upload_local_results=false")
+        elif args.format == "buck2":
+            print("[buck2_re_client]")
+            for address in ("engine_address", "action_cache_address", "cas_address"):
+                print(f"{address} = {endpoint}")
+            print("tls = false\ninstance_name = sekka")
+            print("http_headers = authorization: Bearer " + token)
         else:
             print(json.dumps({"endpoint": endpoint, "instance": "sekka", "authorization": "Bearer " + token,
                               "access": args.access}))
     else:
+        if args.command == "destroy":
+            for domain in m["domains"]:
+                assert_frontend_unused(m, domain)
         for domain in m["domains"]:
-            for role in ("worker", "backend", "gateway"):
+            for role in ("worker", "backend", "gateway", "network"):
                 container = name(m, domain, role)
                 if args.command == "destroy" and not docker(
                     m, "ps", "-a", "--filter", "name=^/" + container + "$", "--format", "{{.Names}}", capture=True
@@ -382,6 +532,11 @@ def main():
                     docker(m, "rm", "-f", container)
                 else:
                     docker(m, "stop", "--timeout", "3600" if role == "worker" else "30", container)
+        if args.command == "destroy":
+            for domain in m["domains"]:
+                network = assert_frontend_unused(m, domain)
+                if network:
+                    docker(m, "network", "rm", network["Id"])
         if args.command == "destroy" and args.purge_state:
             remote(m, "rm", "-rf", "--one-file-system", "--", m["directory"])
 

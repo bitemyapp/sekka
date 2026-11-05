@@ -8,12 +8,17 @@ cache=${SEKKA_BUCK2_CLIENT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/sekka/buck2-cl
 mkdir -p "$cache"
 inputs=(
   flake.lock nix/bazel/nixpkgs.nix nix/buck2/default.nix
+  nix/buck2/engine.nix nix/buck2/nightly.nix
+  nix/buck2/patches/local-content-store.patch nix/buck2/patches/drop-unused-bindgen.patch
+  nix/buck2/patches/external-startup-config.patch
+  nix/buck2/patches/http2-goaway.patch
   nix/bazel/toolchains.nix nix/bazel/aizome-inputs.nix
   nix/libsecret-dh-padding.nix nix/patches/libsecret-gnutls-dh-padding.patch
   desktop/aizome/nix/fonts.nix desktop/aizome/nix/aizome-fonts.nix
   desktop/aizome/nix/hotaru-fonts.nix desktop/aizome/Cargo.lock
-  desktop/aizome/nix/cargo-output-hashes.nix
   build/buck2/client.py build/buck2/generate.py build/buck2/action.py
+  build/buck2/run.py
+  build/buck2/CARGO-LICENSE-MIT
 )
 fingerprint() {
   sha256sum "${inputs[@]}" | sha256sum | cut -d ' ' -f 1

@@ -1,0 +1,187 @@
+Subject: [PATCH] Retry remotely initiated graceful HTTP/2 GOAWAY in RE RPCs
+
+Base: facebook/buck2 9a1876786f32806f6b65fc51f4c1c3077efc38a5
+
+Tonic maps h2 NO_ERROR to INTERNAL using its RST_STREAM status mapping,
+including a remote GOAWAY that retires an HTTP/2 connection normally.
+Recognize only the typed remote GOAWAY/NO_ERROR source in the existing
+bounded RPC retry policy. Tonic reconnects the pooled channel; do not
+retry arbitrary INTERNAL statuses, reset frames, or other GOAWAY reasons.
+
+Regression tests exchange actual HTTP/2 frames and cover successful retry,
+exhaustion, genuine INTERNAL errors, other GOAWAY reasons and RST_STREAM.
+No dependency, service keepalive limit, or materializer changes.
+
+diff --git a/remote_execution/oss/re_grpc/src/client.rs b/remote_execution/oss/re_grpc/src/client.rs
+index 3253460..adc3a30 100644
+--- a/remote_execution/oss/re_grpc/src/client.rs
++++ b/remote_execution/oss/re_grpc/src/client.rs
+@@ -574,6 +574,9 @@ fn is_transient_io_error(err: &std::io::Error) -> bool {
+ ///     (Unavailable, ResourceExhausted, Aborted, Cancelled)
+ ///   - `io::Error` of a kind that indicates a transport-level disruption
+ ///     (BrokenPipe, ConnectionReset/Aborted, UnexpectedEof, TimedOut)
++///   - A remote `h2::Error` GOAWAY with NO_ERROR: the peer is gracefully
++///     retiring the connection. Tonic maps this to Internal using its
++///     RST_STREAM mapping, so inspect the typed source, not the gRPC code.
+ ///   - `h2::Error` wrapping such an `io::Error`. `h2::Error` does not
+ ///     implement `source()`, so the inner `io::Error` never appears as its
+ ///     own link in the chain; tonic also maps these errors to
+@@ -602,6 +605,12 @@ fn is_retryable(err: &anyhow::Error) -> bool {
+             }
+         }
+         if let Some(h2_err) = cause.downcast_ref::<h2::Error>() {
++            if h2_err.is_go_away()
++                && h2_err.is_remote()
++                && h2_err.reason() == Some(h2::Reason::NO_ERROR)
++            {
++                return true;
++            }
+             if let Some(io_err) = h2_err.get_io() {
+                 if is_transient_io_error(io_err) {
+                     return true;
+@@ -640,8 +649,10 @@ fn normalize_re_error(err: anyhow::Error) -> anyhow::Error {
+ /// Retry an RPC on transient connection errors and classify its final error.
+ ///
+ /// On retryable failure, the closure is called again from scratch — acquiring
+-/// a fresh connection from the pool, rebuilding the request, etc. Up to 5
+-/// attempts with exponential backoff (100ms, 200ms, 400ms, 800ms — capped at
++/// a channel from the pool and rebuilding the request. Tonic reconnects a
++/// channel whose HTTP/2 connection has received GOAWAY; no pool eviction is
++/// needed. Cache reads and content-addressed writes can safely be replayed.
++/// Up to 5 attempts with exponential backoff (100ms, 200ms, 400ms, 800ms — capped at
+ /// 5s) plus 0–50ms of jitter to avoid synchronized retry storms across
+ /// concurrent in-flight requests.
+ async fn retry<F, Fut, T>(f: F) -> anyhow::Result<T>
+@@ -1978,6 +1989,132 @@ mod tests {
+ 
+     use super::*;
+ 
++    // Exercise h2's actual frame handling: Error::from(Reason) does not retain
++    // whether an error was a GOAWAY, a reset, or remotely initiated.
++    async fn remote_h2_error(reason: h2::Reason, reset: bool) -> h2::Error {
++        tokio::time::timeout(Duration::from_secs(5), async {
++            let (client_io, mut server_io) = tokio::io::duplex(4096);
++            let server = tokio::spawn(async move {
++                let mut preface = [0; 24];
++                server_io.read_exact(&mut preface).await.unwrap();
++                assert_eq!(&preface, b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
++                // Empty SETTINGS, followed by a terminal frame once a request
++                // is in flight. Keep reading so closing the test peer cannot
++                // turn its GOAWAY into an unrelated transport I/O error.
++                server_io.write_all(&[0, 0, 0, 4, 0, 0, 0, 0, 0]).await.unwrap();
++                loop {
++                    let mut header = [0; 9];
++                    server_io.read_exact(&mut header).await.unwrap();
++                    let len = u32::from_be_bytes([0, header[0], header[1], header[2]]);
++                    let mut payload = vec![0; len as usize];
++                    server_io.read_exact(&mut payload).await.unwrap();
++                    if header[3] == 1 {
++                        let mut frame = if reset {
++                            // RST_STREAM for the request's stream.
++                            let mut frame = vec![0, 0, 4, 3, 0];
++                            frame.extend_from_slice(&header[5..9]);
++                            frame
++                        } else {
++                            // GOAWAY with last-stream-id zero: not processed.
++                            vec![0, 0, 8, 7, 0, 0, 0, 0, 0, 0, 0, 0, 0]
++                        };
++                        frame.extend_from_slice(&u32::from(reason).to_be_bytes());
++                        server_io.write_all(&frame).await.unwrap();
++                        tokio::io::copy(&mut server_io, &mut tokio::io::sink()).await.unwrap();
++                        break;
++                    }
++                }
++            });
++            let (mut client, connection) = h2::client::handshake(client_io).await.unwrap();
++            let driver = tokio::spawn(connection);
++            let request = http::Request::builder()
++                .uri("http://localhost/")
++                .body(())
++                .unwrap();
++            let (response, _stream) = client.send_request(request, true).unwrap();
++            let err = response.await.unwrap_err();
++            drop(client);
++            driver.abort();
++            server.abort();
++            assert!(err.is_remote(), "{err:?}");
++            assert_eq!(err.is_reset(), reset, "{err:?}");
++            assert_eq!(err.is_go_away(), !reset, "{err:?}");
++            assert_eq!(err.reason(), Some(reason));
++            err
++        })
++        .await
++        .expect("HTTP/2 peer did not complete")
++    }
++
++    #[tokio::test]
++    async fn test_retry_remote_graceful_goaway() {
++        let attempts = AtomicU16::new(0);
++        retry(|| async {
++            if attempts.fetch_add(1, Ordering::Relaxed) == 0 {
++                let err = remote_h2_error(h2::Reason::NO_ERROR, false).await;
++                let status = tonic::Status::from_error(Box::new(err));
++                assert_eq!(status.code(), tonic::Code::Internal);
++                return Err(anyhow::Error::new(status).context("UpdateActionResult failed"));
++            }
++            Ok(())
++        })
++        .await
++        .unwrap();
++        assert_eq!(attempts.load(Ordering::Relaxed), 2);
++    }
++
++    #[tokio::test]
++    async fn test_retry_remote_graceful_goaway_exhausted() {
++        let attempts = AtomicU16::new(0);
++        let err = retry(|| async {
++            attempts.fetch_add(1, Ordering::Relaxed);
++            let err = remote_h2_error(h2::Reason::NO_ERROR, false).await;
++            Err::<(), _>(anyhow::Error::new(tonic::Status::from_error(Box::new(err))))
++        })
++        .await
++        .unwrap_err();
++        assert_eq!(attempts.load(Ordering::Relaxed), 5);
++        assert_eq!(
++            err.downcast_ref::<REClientError>().unwrap().code,
++            TCode::INTERNAL
++        );
++        assert!(err.chain().any(|cause| cause.is::<h2::Error>()));
++    }
++
++    #[tokio::test]
++    async fn test_retry_rejects_other_h2_errors() {
++        for (reason, reset) in [
++            (h2::Reason::PROTOCOL_ERROR, false),
++            (h2::Reason::INTERNAL_ERROR, false),
++            (h2::Reason::NO_ERROR, true),
++        ] {
++            let err = remote_h2_error(reason, reset).await;
++            let status = tonic::Status::from_error(Box::new(err));
++            assert!(!is_retryable(&anyhow::Error::new(status)));
++        }
++        assert!(!is_retryable(&anyhow::Error::new(h2::Error::from(
++            h2::Reason::NO_ERROR,
++        ))));
++    }
++
++    #[tokio::test]
++    async fn test_retry_internal_without_graceful_goaway_source() {
++        let attempts = AtomicU16::new(0);
++        let err = retry(|| async {
++            attempts.fetch_add(1, Ordering::Relaxed);
++            Err::<(), _>(anyhow::Error::new(tonic::Status::internal(
++                "h2 protocol error: GoAway(NO_ERROR, Remote)",
++            )))
++        })
++        .await
++        .unwrap_err();
++        assert_eq!(attempts.load(Ordering::Relaxed), 1);
++        assert_eq!(
++            err.downcast_ref::<REClientError>().unwrap().code,
++            TCode::INTERNAL
++        );
++    }
++
+     #[tokio::test]
+     async fn test_retry_unauthenticated() {
+         let attempts = AtomicU16::new(0);

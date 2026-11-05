@@ -64,11 +64,11 @@ def _unit_impl(ctx):
         CargoUnitInfo(output = output, closure = closure, spec = spec),
     ]
     runtime = read_root_config("sekka", "runtime", "")
-    run = cmd_args(python, ctx.attrs._runner, "--environment", environment, "--runtime", runtime, "--run", output)
+    run = cmd_args(python, ctx.attrs._runtime, "--environment", environment, "--runtime", runtime, "--run", output, hidden = [ctx.attrs._runner])
     if spec["mode"] == "test":
-        providers.append(ExternalRunnerTestInfo(type = "rust", command = [cmd_args(run, "--test-run")], env = {}, labels = [], contacts = []))
+        providers.append(ExternalRunnerTestInfo(type = "rust", command = [cmd_args(run, "--test-run", "--")], env = {}, labels = [], contacts = []))
     elif "bin" in spec["target"]["crate_types"] and spec["mode"] == "build":
-        providers.append(RunInfo(args = run))
+        providers.append(RunInfo(args = cmd_args(run, "--")))
     return providers
 
 cargo_unit = rule(
@@ -79,5 +79,6 @@ cargo_unit = rule(
         "deps": attrs.list(attrs.dep(providers = [CargoUnitInfo]), default = []),
         "extra_sources": attrs.dict(attrs.string(), attrs.dep(providers = [SourceInfo]), default = {}),
         "_runner": attrs.default_only(attrs.source(default = "root//build/buck2:action.py")),
+        "_runtime": attrs.default_only(attrs.source(default = "root//build/buck2:run.py")),
     },
 )

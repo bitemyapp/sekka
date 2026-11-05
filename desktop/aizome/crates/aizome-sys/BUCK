@@ -10,133 +10,133 @@ cargo_source(
 
 alias(
     name = "aizome_sys-build-dev",
-    actual = "//build/buck2/graph/dev:83ea7072f7b4aaaf7ebf",
+    actual = "//build/buck2/graph/dev:01ac781c75e1a8a835b7",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_sys-build-release",
-    actual = "//build/buck2/graph/release:0abea6240661d8130622",
+    actual = "//build/buck2/graph/release:6bf7e048b25e6f7ffdb8",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_sys-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:8b74de3703393edb9cd7",
+    actual = "//build/buck2/graph/release-lto:0d8d6829104cf23ed8c1",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_sys-test-test-lib",
-    actual = "//build/buck2/graph/test:dc9d9e2624f5e5241498",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "apps-test-test-test",
-    actual = "//build/buck2/graph/test:3e40ca4e8fad123ef0e5",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "audio-test-test-test",
-    actual = "//build/buck2/graph/test:de6c766b5c7a7bee4bf9",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "bluetooth-test-test-test",
-    actual = "//build/buck2/graph/test:08c256b399b3b2ed0c46",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "datetime-test-test-test",
-    actual = "//build/buck2/graph/test:36d32594fb694d10228b",
+    actual = "//build/buck2/graph/test:08978a5dd07652dd7f67",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "disks-test-test-test",
-    actual = "//build/buck2/graph/test:9eb5d3a93effee94b0c8",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "disks_encrypted_real-test-test-test",
-    actual = "//build/buck2/graph/test:cd7c8347fed182c4cc48",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "disks_real-test-test-test",
-    actual = "//build/buck2/graph/test:66fc3b79ea55550503eb",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "disks_visibility-test-test-test",
-    actual = "//build/buck2/graph/test:2dddcde191af8ab6e1ef",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "display_scales-test-test-test",
-    actual = "//build/buck2/graph/test:f3d3fee2da7ded93af5c",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "live-test-test-test",
-    actual = "//build/buck2/graph/test:ea24bf98f690d0430d85",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "location-test-test-test",
-    actual = "//build/buck2/graph/test:d3a807b53c137d7f6d04",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "mpris-test-test-test",
-    actual = "//build/buck2/graph/test:f39b067fa52b90bd4568",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "network-test-test-test",
-    actual = "//build/buck2/graph/test:a8f9d391013f898caa56",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "notifications-test-test-test",
-    actual = "//build/buck2/graph/test:19fa609f2fb4f5a0a6ee",
+    actual = "//build/buck2/graph/test:09a4d82b70689f9d43f3",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "polkit-test-test-test",
-    actual = "//build/buck2/graph/test:0ac1871c171e5c257fc2",
+    actual = "//build/buck2/graph/test:0a48576ac77e1d06cf75",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "power-test-test-test",
-    actual = "//build/buck2/graph/test:d2358a0cc0061352d901",
+    name = "location-test-test-test",
+    actual = "//build/buck2/graph/test:0b094da0d18fc8a1392d",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "live-test-test-test",
+    actual = "//build/buck2/graph/test:1cf57ebc9bc52d65837b",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "statusnotifier-test-test-test",
-    actual = "//build/buck2/graph/test:71152f2d2cc02d779a32",
+    actual = "//build/buck2/graph/test:236c2fb20ace632e435f",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "disks_visibility-test-test-test",
+    actual = "//build/buck2/graph/test:27f8b171cd61d8631160",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "disks_real-test-test-test",
+    actual = "//build/buck2/graph/test:2a6c443b33db58aafe53",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "display_scales-test-test-test",
+    actual = "//build/buck2/graph/test:2be8b35fcf25a2feb898",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "network-test-test-test",
+    actual = "//build/buck2/graph/test:3b440a33143e59f3a2be",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "mpris-test-test-test",
+    actual = "//build/buck2/graph/test:46c3b2fab98bd33f9952",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "disks_encrypted_real-test-test-test",
+    actual = "//build/buck2/graph/test:48314c7b810229e6592d",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "power-test-test-test",
+    actual = "//build/buck2/graph/test:75266163e316534c14d5",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "apps-test-test-test",
+    actual = "//build/buck2/graph/test:79ec489e6a957e6be3f6",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "bluetooth-test-test-test",
+    actual = "//build/buck2/graph/test:881d6fc89d216a2839c3",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "audio-test-test-test",
+    actual = "//build/buck2/graph/test:a790694b407558428bec",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "users-test-test-test",
-    actual = "//build/buck2/graph/test:10f624520e53201b74d8",
+    actual = "//build/buck2/graph/test:bc8ebc253b1eba3fe37e",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "notifications-test-test-test",
+    actual = "//build/buck2/graph/test:eedc791cd0c43f3202b0",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "datetime-test-test-test",
+    actual = "//build/buck2/graph/test:f4a3a5b0eeaaddeb6f4d",
     visibility = ["PUBLIC"],
 )
 

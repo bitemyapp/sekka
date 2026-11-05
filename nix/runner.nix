@@ -19,14 +19,17 @@
   pkgs,
   lib,
   nixPackage,
+  role ? "nix",
 }:
 let
+  clientOnly = role == "build-client";
+  runnerName = if clientOnly then "sekka-build-client" else "sekka-runner";
   repository = "bitemyapp/sekka";
   labels = [
     "self-hosted"
     "linux"
     "x64"
-    "sekka-builder"
+    (if clientOnly then "sekka-build-client" else "sekka-builder")
   ];
   # Jobs' user and group: nobody else's on the builder, apart from its Nix
   # build users' ids (from 30000), and reserved there by
@@ -71,21 +74,23 @@ let
   # whatever GitHub's settings let through.
   admit = pkgs.writeShellScript "sekka-runner-admit.sh" ''
     source ${../scripts/runner-admission.sh}
+    export SEKKA_RUNNER_ROLE=${role}
     job="''${GITHUB_REPOSITORY:-?} ''${GITHUB_EVENT_NAME:-?} ''${GITHUB_REF:-?}"
     if ! sekka_runner_admitted; then
       echo "::error::This runner requires an admitted main workflow of ${repository}, not: $job"
       kill -KILL -1
       exit 1
     fi
-    # Expire CI roots even in jobs that build nothing, then give checkout a
-    # private repository over the supervisor's read-only Git objects.
-    ${pkgs.python3}/bin/python3 ${../scripts/ci-retain.py} prune
-    ${pkgs.bash}/bin/bash ${../scripts/runner-git-cache.sh} seed
+    ${lib.optionalString (!clientOnly) ''
+      # Only main's Nix jobs see shared roots or the read-only Git cache.
+      ${pkgs.python3}/bin/python3 ${../scripts/ci-retain.py} prune
+      ${pkgs.bash}/bin/bash ${../scripts/runner-git-cache.sh} seed
+    ''}
   '';
 
   # A job: the runner, registered for it alone, then gone with its container.
   job = pkgs.writeShellApplication {
-    name = "sekka-runner-job";
+    name = "${runnerName}-job";
     runtimeInputs = [ pkgs.github-runner ];
     text = ''
       config="''${RUNNER_JITCONFIG:?The supervisor passes the registration for this job}"
@@ -124,7 +129,7 @@ let
   ];
 
   jobImage = pkgs.dockerTools.buildLayeredImage {
-    name = "sekka-runner";
+    name = runnerName;
     tag = "latest";
     includeStorePaths = false;
     fakeRootCommands = rootFiles + ''
@@ -142,7 +147,7 @@ let
   # The supervisor: one job's runner at a time, for as long as Docker keeps
   # it running.
   supervisor = pkgs.writeShellApplication {
-    name = "sekka-runner-supervisor";
+    name = "${runnerName}-supervisor";
     runtimeInputs = with pkgs; [
       coreutils
       curl
@@ -152,16 +157,21 @@ let
     ];
     text = ''
       token=/run/secrets/token
+      ${lib.optionalString clientOnly ''
+        reader_dir="''${SEKKA_BUILD_READER_DIR:?Set the host directory containing read-only cache client configurations}"
+        build_network="''${SEKKA_BUILD_NETWORK:?Set the owned authenticated cache frontend network}"
+      ''}
       secrets=$(mktemp -d)
       trap 'rm -rf "$secrets"' EXIT
       while true; do
         # A job that outlived an earlier supervisor finishes first.
-        docker wait sekka-runner-job >/dev/null 2>&1 || true
-        # The job sees these Git objects read-only. Refresh only between jobs,
-        # so pruning/repacking cannot invalidate an active clone's alternates.
-        if ! timeout 180 ${pkgs.bash}/bin/bash ${../scripts/runner-git-cache.sh} refresh; then
-          echo "Git object cache refresh failed; checkout will fetch missing objects."
-        fi
+        docker wait ${runnerName}-job >/dev/null 2>&1 || true
+        ${lib.optionalString (!clientOnly) ''
+          # Refresh immutable Git objects only between main's Nix jobs.
+          if ! timeout 180 ${pkgs.bash}/bin/bash ${../scripts/runner-git-cache.sh} refresh; then
+            echo "Git object cache refresh failed; checkout will fetch missing objects."
+          fi
+        ''}
         if [ ! -r "$token" ]; then
           echo "No token at $token yet; checking again in a minute."
           sleep 60
@@ -170,7 +180,7 @@ let
         # The token stays in files: never on a command line, where other
         # users of the host could read it.
         printf 'Authorization: Bearer %s\n' "$(cat "$token")" > "$secrets/headers"
-        name="wx-workstation-$(date -u +%Y%m%dT%H%M%S)"
+        name="${runnerName}-$(date -u +%Y%m%dT%H%M%S)"
         request=$(jq -cn --arg name "$name" --argjson labels '${builtins.toJSON labels}' \
           '{name: $name, runner_group_id: 1, labels: $labels, work_folder: "_work"}')
         if ! curl -fsS -X POST \
@@ -185,23 +195,29 @@ let
           continue
         fi
         echo "$name is waiting for a job."
-        docker run --rm --name sekka-runner-job \
+        docker run --rm --name ${runnerName}-job \
           --env-file "$secrets/job.env" \
+          ${lib.optionalString clientOnly ''--network "$build_network"''} \
           --user ${toString uid}:${toString uid} \
           --cap-drop ALL \
           --security-opt no-new-privileges \
           --read-only \
           --tmpfs /tmp:rw,exec,nosuid,nodev,size=8g \
-          --mount type=volume,dst=/home/runner \
+          ${if clientOnly then "--tmpfs /home/runner:rw,exec,nosuid,nodev,size=32g,uid=${toString uid},gid=${toString uid},mode=0700" else "--mount type=volume,dst=/home/runner"} \
           --volume /nix/store:/nix/store:ro \
-          --volume /nix/var/nix/daemon-socket:/nix/var/nix/daemon-socket:ro \
-          --mount type=bind,src=/nix/var/nix/gcroots/sekka-ci,dst=/nix/var/nix/gcroots/sekka-ci \
-          --env SEKKA_CI_ROOTS=/nix/var/nix/gcroots/sekka-ci \
-          --mount type=bind,src=/var/cache/sekka-ci-git,dst=/var/cache/sekka-ci-git,readonly \
+          ${lib.concatStringsSep " " (if clientOnly then [
+            ''--mount "type=bind,src=$reader_dir/trusted.bazelrc,dst=/run/sekka/reader.bazelrc,readonly"''
+            ''--mount "type=bind,src=$reader_dir/trusted.buckconfig,dst=/run/sekka/reader.buckconfig,readonly"''
+          ] else [
+            "--volume /nix/var/nix/daemon-socket:/nix/var/nix/daemon-socket:ro"
+            "--mount type=bind,src=/nix/var/nix/gcroots/sekka-ci,dst=/nix/var/nix/gcroots/sekka-ci"
+            "--env SEKKA_CI_ROOTS=/nix/var/nix/gcroots/sekka-ci"
+            "--mount type=bind,src=/var/cache/sekka-ci-git,dst=/var/cache/sekka-ci-git,readonly"
+          ])} \
           --pids-limit 16384 \
           --memory 64g \
           --cpus 32 \
-          sekka-runner:latest \
+          ${runnerName}:latest \
           || echo "$name ended with status $?."
         rm -f "$secrets/job.env"
         sleep 5
@@ -210,7 +226,7 @@ let
   };
 
   supervisorImage = pkgs.dockerTools.buildLayeredImage {
-    name = "sekka-runner-supervisor";
+    name = "${runnerName}-supervisor";
     tag = "latest";
     includeStorePaths = false;
     fakeRootCommands = rootFiles + ''
@@ -226,9 +242,10 @@ let
     };
   };
 in
+assert builtins.elem role [ "nix" "build-client" ];
 # Everything the containers run, kept alive by one GC root on the builder:
 # the images refer to store paths without holding them.
-(pkgs.linkFarm "sekka-runner" {
+(pkgs.linkFarm runnerName {
   "job-image.tar.gz" = jobImage;
   "supervisor-image.tar.gz" = supervisorImage;
   job = job;

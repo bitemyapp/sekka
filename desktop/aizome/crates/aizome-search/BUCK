@@ -10,25 +10,25 @@ cargo_source(
 
 alias(
     name = "aizome_search-build-dev",
-    actual = "//build/buck2/graph/dev:9a9422fdffa0c9c8fc1d",
+    actual = "//build/buck2/graph/dev:397fb33f5e7e37b6cb26",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_search-build-release",
-    actual = "//build/buck2/graph/release:6bb780cd38c90b511c07",
+    actual = "//build/buck2/graph/release:27a0deca630ebb1b4fa0",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_search-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:9a58faf63e280e375bab",
+    actual = "//build/buck2/graph/release-lto:d6a7c2bf950e4ac1bece",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_search-test-test-lib",
-    actual = "//build/buck2/graph/test:3a99e93eda467a3a9287",
+    actual = "//build/buck2/graph/test:f6b06b8242fd3f914557",
     visibility = ["PUBLIC"],
 )
 

@@ -10,67 +10,67 @@ cargo_source(
 
 alias(
     name = "aizome_shiori-build-dev",
-    actual = "//build/buck2/graph/dev:945d25ee5577225e792f",
+    actual = "//build/buck2/graph/dev:04938784e31685980c1b",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-shiori-build-dev",
-    actual = "//build/buck2/graph/dev:f997b88ebd976eae7269",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_shiori-build-release",
-    actual = "//build/buck2/graph/release:bb9c19b847da26b25669",
+    actual = "//build/buck2/graph/dev:949ae24c9f9ffc364fd5",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-shiori-build-release",
-    actual = "//build/buck2/graph/release:256a0935952aa94b8242",
+    actual = "//build/buck2/graph/release:ab1c1a5cb955af79f495",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_shiori-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:9a1e90b1c9aab0659b29",
+    name = "aizome_shiori-build-release",
+    actual = "//build/buck2/graph/release:ca98cb70fbd1ae97dd46",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-shiori-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:35e9759e070e4d195051",
+    actual = "//build/buck2/graph/release-lto:3643f70f51a17c46ad3c",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_shiori-test-test-lib",
-    actual = "//build/buck2/graph/test:2baaa89044cbfce67f4a",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-shiori-test-test-bin",
-    actual = "//build/buck2/graph/test:9c7678ecb1aa02fef54f",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "budget-test-test-test",
-    actual = "//build/buck2/graph/test:7968a510eb62dc69752b",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "shiori-test-test-test",
-    actual = "//build/buck2/graph/test:ad2468fcc251a7e32069",
+    name = "aizome_shiori-build-release-lto",
+    actual = "//build/buck2/graph/release-lto:895ddb1103ea8e859f42",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "worker-test-test-test",
-    actual = "//build/buck2/graph/test:f80a767709ef33352710",
+    actual = "//build/buck2/graph/test:05ab31a606732979217c",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "shiori-test-test-test",
+    actual = "//build/buck2/graph/test:16442b44d005b88c47b2",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "budget-test-test-test",
+    actual = "//build/buck2/graph/test:36e30b3adff4a70ad868",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_shiori-test-test-lib",
+    actual = "//build/buck2/graph/test:e12ead8ac720d5e4e12a",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-shiori-test-test-bin",
+    actual = "//build/buck2/graph/test:e5bcc911af5f2247512e",
     visibility = ["PUBLIC"],
 )
 

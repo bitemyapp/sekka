@@ -9,68 +9,68 @@ cargo_source(
 )
 
 alias(
-    name = "aizome_portal-build-dev",
-    actual = "//build/buck2/graph/dev:3c8bd079de525c458c89",
+    name = "aizome-portal-build-dev",
+    actual = "//build/buck2/graph/dev:1a751457b9ca6d6f0996",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome-portal-build-dev",
-    actual = "//build/buck2/graph/dev:00332b61ebad8c921b9f",
+    name = "aizome_portal-build-dev",
+    actual = "//build/buck2/graph/dev:612877967b8def6b4017",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_portal-build-release",
-    actual = "//build/buck2/graph/release:5573ca9f01fc2dde2234",
+    actual = "//build/buck2/graph/release:038ca8f7a229e7d5c991",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-portal-build-release",
-    actual = "//build/buck2/graph/release:12f553c47f686be0f63f",
+    actual = "//build/buck2/graph/release:581ebd34efd91f6afe3e",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_portal-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:cc0e4566ff9f178536fe",
+    actual = "//build/buck2/graph/release-lto:82a271400e4fce8ec430",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-portal-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:5ea4a1b62eb1bb3b8629",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_portal-test-test-lib",
-    actual = "//build/buck2/graph/test:3f108ab898fb23b425f9",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-portal-test-test-bin",
-    actual = "//build/buck2/graph/test:55b1eb740aead39d3230",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "chooser-test-test-test",
-    actual = "//build/buck2/graph/test:ae5327e55bd723b4197f",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "goldens-test-test-test",
-    actual = "//build/buck2/graph/test:a68150256608064f62cb",
+    actual = "//build/buck2/graph/release-lto:d124e27537c5538f029d",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "service-test-test-test",
-    actual = "//build/buck2/graph/test:727d91805b00f3ee1cfc",
+    actual = "//build/buck2/graph/test:708bbb1fef6680967f9a",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "goldens-test-test-test",
+    actual = "//build/buck2/graph/test:86bf6dc18b06e4d08210",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_portal-test-test-lib",
+    actual = "//build/buck2/graph/test:b4e85f9fbf22071820e8",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-portal-test-test-bin",
+    actual = "//build/buck2/graph/test:f11f4e23ff86c64cb747",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "chooser-test-test-test",
+    actual = "//build/buck2/graph/test:f8a10f9e62e761d53def",
     visibility = ["PUBLIC"],
 )
 

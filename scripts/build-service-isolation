@@ -3,16 +3,167 @@
 
 Administration requires Docker access, but the probe and job workers receive
 neither that socket nor a host-writable bind mount. Run only on owned deployments.
+--lifecycle additionally restarts/kills owned gateways and restarts namespace
+owners, then proves explicit up recovery and idempotence. It requires grpcio
+and SSH forwarding of the manifest ports; use only a disposable deployment.
 """
 import argparse
 from importlib.machinery import SourceFileLoader
 from importlib.util import module_from_spec, spec_from_loader
 import json
 from pathlib import Path
+import sys
+import time
+
+sys.dont_write_bytecode = True
 
 loader = SourceFileLoader("build_service", str(Path(__file__).with_name("build-service")))
 controller = module_from_spec(spec_from_loader(loader.name, loader))
 loader.exec_module(controller)
+
+
+def qualify_lifecycle(m, domain):
+    import grpc
+
+    settings = m["domains"][domain]
+    channel = grpc.insecure_channel(f'127.0.0.1:{settings["port"]}')
+    capabilities = channel.unary_unary("/build.bazel.remote.execution.v2.Capabilities/GetCapabilities")
+
+    def ready():
+        deadline = time.monotonic() + 30
+        while True:
+            try:
+                result = capabilities(b"\x0a\x05sekka", timeout=2,
+                                      metadata=[("authorization", "Bearer " + settings["reader_token"])])
+                assert result
+                return
+            except grpc.RpcError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.25)
+
+    def state():
+        result = {}
+        for role in ("network", "gateway", "backend", "worker"):
+            info = controller.inspect_owned(m, controller.name(m, domain, role))
+            result[role] = {"id": info["Id"], "started": info["State"]["StartedAt"],
+                            "sandbox": info["NetworkSettings"]["SandboxID"]}
+        return result
+
+    try:
+        ready()
+        before = state()
+        gateway = controller.name(m, domain, "gateway")
+        controller.docker(m, "restart", gateway)
+        ready()
+        restarted = state()
+        for role in ("network", "backend", "worker"):
+            assert before[role] == restarted[role], (role, before, restarted)
+        controller.docker(m, "kill", "--signal", "KILL", gateway)
+        controller.docker(m, "restart", gateway)
+        ready()
+        killed = state()
+        for role in ("network", "backend", "worker"):
+            assert before[role] == killed[role], (role, before, killed)
+        controller.docker(m, "restart", controller.name(m, domain, "network"))
+        stranded = state()
+        assert stranded["network"]["sandbox"] != before["network"]["sandbox"]
+        controller.up(m)
+        ready()
+        recovered = state()
+        for role in ("gateway", "backend", "worker"):
+            assert recovered[role]["id"] != before[role]["id"]
+        controller.up(m)
+        assert state() == recovered
+        return {"gateway_only_restart": True, "gateway_sigkill_restart": True,
+                "dependents_unchanged_across_gateway_restarts": True,
+                "namespace_owner_restart_up_recovery": True, "up_idempotent": True,
+                "before": before, "recovered": recovered}
+    finally:
+        channel.close()
+
+
+def qualify_frontend(m, python, evidence):
+    frontend = controller.name(m, "trusted", "frontend")
+    assert controller.inspect_frontend(m, "trusted")
+    marker = (evidence / "marker.bin").read_bytes()
+    settings = m["domains"]["trusted"]
+    source = Path(__file__).with_name("build-service-qualify").read_text()
+    owner = controller.inspect_owned(m, controller.name(m, "trusted", "network"))
+    backend_ip = owner["NetworkSettings"]["Networks"][frontend]["IPAddress"]
+    probe = f'''
+import json, os, socket
+assert os.getuid() == 30500
+assert not os.path.exists('/run/docker.sock') and not os.path.exists('/home/callen')
+namespace = {{'__name__': 'qualification_client'}}
+exec({source!r}, namespace)
+Client, digest, field, grpc = (namespace[k] for k in ('Client', 'digest', 'field', 'grpc'))
+reader = Client(50050, {settings["reader_token"]!r}, host={controller.name(m, "trusted", "network")!r})
+anonymous = Client(50050, None, host={controller.name(m, "trusted", "network")!r})
+assert reader.download(digest({marker!r})) == {marker!r}
+checks = [
+    ('anonymous_write', lambda: anonymous.upload(b'forbidden'), grpc.StatusCode.UNAUTHENTICATED),
+    ('reader_cas_write', lambda: reader.upload(b'forbidden'), grpc.StatusCode.PERMISSION_DENIED),
+    ('reader_action_write', lambda: reader.action(digest(b'forbidden'), b''), grpc.StatusCode.PERMISSION_DENIED),
+    ('reader_execute', lambda: next(reader.call('Execution', 'Execute', field(1, 'sekka'), stream=True)), grpc.StatusCode.PERMISSION_DENIED),
+    ('reader_bytestream_write', lambda: reader.channel.stream_unary('/google.bytestream.ByteStream/Write')(
+        iter([b'']), metadata=reader.metadata, timeout=5), grpc.StatusCode.PERMISSION_DENIED),
+]
+result = {{'uid30500_named_bridge_cache_read': True, 'no_hosthome_or_daemon_socket': True}}
+for label, invoke, expected in checks:
+    try:
+        invoke()
+    except grpc.RpcError as error:
+        assert error.code() == expected, (label, error)
+        result[label] = error.code().name
+    else:
+        raise AssertionError(label + ' unexpectedly allowed')
+for port in (50051, 50061):
+    with socket.socket() as sock:
+        sock.settimeout(2)
+        try:
+            sock.connect(({backend_ip!r}, port))
+        except (ConnectionRefusedError, TimeoutError):
+            pass
+        else:
+            raise AssertionError('Unauthenticated backend exposed to bridge client')
+result['bridge_backend_denied'] = True
+reader.channel.close()
+anonymous.channel.close()
+print(json.dumps(result))
+'''
+    # Code and reader credential travel over SSH stdin, never argv or container
+    # configuration. The adversarial process sees only its read-only token.
+    output = controller.docker(m, "run", "--rm", "-i", "--network", frontend, "--read-only",
+                               "--cap-drop=ALL", "--security-opt=no-new-privileges",
+                               "--user", "30500:30500", "--memory", "256m",
+                               "-v", "/nix/store:/nix/store:ro", "--entrypoint", python,
+                               controller.NGINX, "-", capture=True, input=probe)
+    return json.loads(output)
+
+
+def qualify_teardown_guard(m, manifest):
+    domain = next(iter(m["domains"]))
+    frontend = controller.name(m, domain, "frontend")
+    before = {role: controller.inspect_owned(m, controller.name(m, domain, role))["State"]["StartedAt"]
+              for role in ("network", "gateway", "backend", "worker")}
+    probe = controller.docker(m, "run", "-d", "--rm", "--init", "--network", frontend,
+                              "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges",
+                              "--user", "30500:30500", "--memory", "32m",
+                              "--label", controller.LABEL + ".qualification=" + m["name"],
+                              "--entrypoint", "/bin/sleep", controller.NGINX, "infinity", capture=True).strip()
+    try:
+        result = controller.subprocess.run([sys.executable, str(Path(__file__).with_name("build-service")),
+                                            "--manifest", str(manifest), "destroy"], capture_output=True, text=True)
+        assert result.returncode != 0 and "attached jobs" in result.stderr, (result.stdout, result.stderr)
+        for role, started in before.items():
+            info = controller.inspect_owned(m, controller.name(m, domain, role))
+            assert info["State"]["Running"] and info["State"]["StartedAt"] == started
+        return {"foreign_attachment_teardown_refused": True, "service_left_running": True}
+    finally:
+        info = json.loads(controller.docker(m, "inspect", probe, capture=True))[0]
+        assert info["Config"]["Labels"][controller.LABEL + ".qualification"] == m["name"]
+        controller.docker(m, "rm", "-f", probe)
 
 
 def main():
@@ -20,23 +171,48 @@ def main():
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--python", required=True, help="Immutable Python executable already realized on the service host")
     parser.add_argument("--evidence", type=Path, required=True)
+    parser.add_argument("--lifecycle", action="store_true", help="Exercise owned container failure/recovery; requires grpcio and forwarded ports")
+    parser.add_argument("--frontend-readonly", type=Path, help="Read marker.bin using a separate UID30500 container on the owned frontend bridge")
     args = parser.parse_args()
     m = json.loads(args.manifest.read_text())
     report = {"deployment": m["name"], "host": m["host"], "domains": {}}
+    if args.lifecycle:
+        report["lifecycle"] = {domain: qualify_lifecycle(m, domain) for domain in m["domains"]}
+        report["teardown_guard"] = qualify_teardown_guard(m, args.manifest)
+    if args.frontend_readonly:
+        report["frontend_readonly"] = qualify_frontend(m, args.python, args.frontend_readonly)
     for domain, settings in m["domains"].items():
         worker = controller.name(m, domain, "worker")
         gateway = controller.name(m, domain, "gateway")
         controller.assert_owned(m, worker)
         controller.assert_owned(m, gateway)
+        network = controller.name(m, domain, "network")
+        controller.assert_owned(m, network)
+        owner = json.loads(controller.docker(m, "inspect", network, capture=True))[0]
+        assert owner["Config"]["User"] == "65534:65534"
+        assert owner["HostConfig"]["ReadonlyRootfs"] and not owner["Mounts"]
+        assert owner["HostConfig"]["Init"]
+        assert controller.inspect_frontend(m, domain)
+        assert owner["HostConfig"]["NetworkMode"] == controller.name(m, domain, "frontend")
+        assert owner["HostConfig"]["PortBindings"] == {"50050/tcp": [{"HostIp": "127.0.0.1", "HostPort": str(settings["port"])}]}
+        generation = owner["Id"] + ":" + owner["NetworkSettings"]["SandboxID"]
+        for role in ("gateway", "backend", "worker"):
+            dependent = controller.inspect_owned(m, controller.name(m, domain, role))
+            assert dependent["Config"]["Labels"][controller.NETWORK_LABEL] == generation
+            assert dependent["HostConfig"]["NetworkMode"] == "container:" + owner["Id"]
         info = json.loads(controller.docker(m, "inspect", worker, capture=True))[0]
         assert info["Config"]["User"] == "30501:30501"
         assert info["HostConfig"]["ReadonlyRootfs"]
         assert "ALL" in info["HostConfig"]["CapDrop"]
         assert any(x.startswith("no-new-privileges") for x in info["HostConfig"]["SecurityOpt"])
         assert all(not mount["RW"] for mount in info["Mounts"] if mount["Type"] == "bind")
-        assert {mount["Destination"] for mount in info["Mounts"] if mount["Type"] == "bind"} == {"/nix/store", "/config.json"}
+        binds = {mount["Destination"]: mount["Source"] for mount in info["Mounts"] if mount["Type"] == "bind"}
+        assert set(binds) == {"/nix/store", "/config.json", "/bin/sh", "/bin/bash", "/usr/bin/env"}
+        assert binds["/bin/sh"] == binds["/bin/bash"] == m["worker_shell"]
+        assert binds["/usr/bin/env"] == m["worker_env"]
+        assert m["worker_shell"].startswith("/nix/store/") and m["worker_env"].startswith("/nix/store/")
         assert info["HostConfig"]["PidsLimit"] == 2048
-        ip = controller.docker(m, "inspect", "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", gateway, capture=True).strip()
+        ip = controller.docker(m, "inspect", "--format", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", network, capture=True).strip()
         probe = f'''
 import errno, http.client, json, socket
 try:
@@ -58,7 +234,9 @@ for port in (50051, 50061):
         sock.close()
 conn = http.client.HTTPConnection('127.0.0.1', {settings['port']}, timeout=5)
 conn.request('POST', '/build.bazel.remote.execution.v2.ActionCache/UpdateActionResult', body=b'')
-assert conn.getresponse().status == 401
+response = conn.getresponse()
+assert response.status == 200 and response.getheader('grpc-status') == '16'
+assert response.getheader('Content-Type') == 'application/grpc' and response.read() == b''
 print(json.dumps({{'uid30500_state_denied': True, 'bridge_backend_denied': True, 'gateway_unauthorized_write_denied': True}}))
 '''
         output = controller.docker(m, "run", "--rm", "--network", "host", "--read-only", "--cap-drop=ALL",

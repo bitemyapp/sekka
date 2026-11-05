@@ -301,7 +301,7 @@ index 1631900..6564cc9 100644
          } else {
              None
 diff --git a/docs/getting_started/install.md b/docs/getting_started/install.md
-index 9c21691..e2961a9 100644
+index 9c21691..e975551 100644
 --- a/docs/getting_started/install.md
 +++ b/docs/getting_started/install.md
 @@ -87,6 +87,43 @@ nixpkgs for inspiration for writing one. An `.envrc` using the Nix flake is
@@ -338,9 +338,9 @@ index 9c21691..e2961a9 100644
 +can repopulate it from a producer or the remote CAS. Permissions are not used as
 +an integrity shortcut.
 +
-+The capacity covers cache object logical bytes (an upper bound on their
-+uncompressed data allocation), plus bounded index metadata and one in-flight
-+object. It does not cap live worktree outputs or Buck's daemon state; use the
++The capacity covers cache object logical bytes, plus filesystem block rounding,
++bounded index metadata, and one in-flight object. It does not cap live worktree
++outputs or Buck's daemon state; use the
 +existing deferred-materialization and clean-stale policies for those. Separate
 +worktrees can still execute identical actions concurrently; this store shares
 +their resulting extents, not their action execution.
@@ -350,10 +350,10 @@ index 9c21691..e2961a9 100644
  Buck2 uses Protocol Buffers extensively, both internally and to talk to remote
 diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
 new file mode 100644
-index 0000000..a553fe1
+index 0000000..483e907
 --- /dev/null
 +++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-@@ -0,0 +1,766 @@
+@@ -0,0 +1,887 @@
 +/*
 + * Copyright (c) Meta Platforms, Inc. and affiliates.
 + *
@@ -547,6 +547,26 @@ index 0000000..a553fe1
 +            format!("{}-{}", digest.raw_digest().algorithm(), digest).replace(':', "-")
 +        }
 +
++        fn object_path(&self, key: &str) -> buck2_error::Result<PathBuf> {
++            let mut parts = key.rsplitn(3, '-');
++            let size = parts.next().and_then(|s| s.parse::<u64>().ok());
++            let digest = parts.next().unwrap_or("");
++            let algorithm = parts.next().unwrap_or("");
++            let length = match algorithm {
++                "SHA1" => 40,
++                "SHA256" | "BLAKE3" | "BLAKE3-KEYED" => 64,
++                _ => 0,
++            };
++            if size.is_none()
++                || length == 0
++                || digest.len() != length
++                || !digest.bytes().all(|c| c.is_ascii_hexdigit())
++            {
++                return Err(error("Invalid object key in local content store index"));
++            }
++            Ok(self.root.join(key))
++        }
++
 +        fn reconcile(&self) -> buck2_error::Result<()> {
 +            remove(&self.root.join("pending"))?;
 +            // Interrupted inserts are accounted in the index before publication;
@@ -555,7 +575,7 @@ index 0000000..a553fe1
 +            let keys = statement.query_map([], |r| r.get::<_, String>(0))?;
 +            for key in keys {
 +                let key = key?;
-+                if !self.root.join(&key).try_exists()? {
++                if !self.object_path(&key)?.try_exists()? {
 +                    self.db
 +                        .execute("DELETE FROM objects WHERE key=?1", [&key])?;
 +                }
@@ -583,7 +603,7 @@ index 0000000..a553fe1
 +        }
 +
 +        fn forget(&self, key: &str) -> buck2_error::Result<()> {
-+            remove(&self.root.join(key))?;
++            remove(&self.object_path(key)?)?;
 +            self.db.execute("DELETE FROM objects WHERE key=?1", [key])?;
 +            Ok(())
 +        }
@@ -913,6 +933,22 @@ index 0000000..a553fe1
 +            assert!(Store::open(root, 65536, 8).is_err());
 +            Ok(())
 +        }
++
++        #[test]
++        fn reflink_store_rejects_corrupt_index_paths() -> buck2_error::Result<()> {
++            let temp = tempfile::tempdir()?;
++            let victim = temp.path().join("victim");
++            fs::write(&victim, b"outside store")?;
++            let root = temp.path().join("store");
++            let store = Store::open(root.clone(), 65536, 8)?;
++            store
++                .db
++                .execute("INSERT INTO objects VALUES('../victim',1,0)", [])?;
++            drop(store);
++            assert!(Store::open(root, 65536, 8).is_err());
++            assert_eq!(fs::read(victim)?, b"outside store");
++            Ok(())
++        }
 +    }
 +}
 +
@@ -985,7 +1021,7 @@ index 0000000..a553fe1
 +/// digest mismatches never become visible as successfully materialized files.
 +pub(crate) struct Download {
 +    destination: buck2_fs::paths::abs_norm_path::AbsNormPathBuf,
-+    temporary: tempfile::NamedTempFile,
++    temporary: tempfile::TempPath,
 +    metadata: buck2_common::file_ops::metadata::FileMetadata,
 +}
 +
@@ -1012,7 +1048,8 @@ index 0000000..a553fe1
 +        })?;
 +        let temporary = tempfile::Builder::new()
 +            .prefix(".buck2-download-")
-+            .tempfile_in(parent.as_path())?;
++            .tempfile_in(parent.as_path())?
++            .into_temp_path();
 +        Ok(Some(Self {
 +            destination,
 +            temporary,
@@ -1022,15 +1059,15 @@ index 0000000..a553fe1
 +
 +    pub(crate) fn name(&self) -> buck2_error::Result<String> {
 +        Ok(
-+            buck2_fs::paths::abs_norm_path::AbsNormPathBuf::new(self.temporary.path().to_owned())?
++            buck2_fs::paths::abs_norm_path::AbsNormPathBuf::new(self.temporary.to_path_buf())?
 +                .as_maybe_relativized_str()?
 +                .to_owned(),
 +        )
 +    }
 +
-+    pub(crate) fn finish(mut self, config: DigestConfig) -> buck2_error::Result<()> {
++    pub(crate) fn finish(self, config: DigestConfig) -> buck2_error::Result<()> {
 +        let path =
-+            buck2_fs::paths::abs_norm_path::AbsNormPathBuf::new(self.temporary.path().to_owned())?;
++            buck2_fs::paths::abs_norm_path::AbsNormPathBuf::new(self.temporary.to_path_buf())?;
 +        if !file(
 +            &path,
 +            self.metadata.digest.data(),
@@ -1050,8 +1087,10 @@ index 0000000..a553fe1
 +                        "Disabled download digest algorithm"
 +                    )
 +                })?;
-+            let actual =
-+                FileDigest::from_reader_for_algorithm(self.temporary.as_file_mut(), algorithm)?;
++            let actual = FileDigest::from_reader_for_algorithm(
++                std::fs::File::open(path.as_path())?,
++                algorithm,
++            )?;
 +            if actual != *expected {
 +                return Err(buck2_error::buck2_error!(
 +                    buck2_error::ErrorTag::MaterializationError,
@@ -1075,7 +1114,7 @@ index 0000000..a553fe1
 +                }),
 +            )?;
 +        }
-+        self.temporary.as_file().sync_all()?;
++        std::fs::File::open(path.as_path())?.sync_all()?;
 +        self.temporary
 +            .persist(self.destination.as_path())
 +            .map_err(|e| e.error)?;
@@ -1115,6 +1154,88 @@ index 0000000..a553fe1
 +            assert_eq!(
 +                std::fs::metadata(output.as_path())?.permissions().mode() & 0o777,
 +                0o755
++            );
++        }
++        Ok(())
++    }
++
++    #[cfg(target_os = "linux")]
++    #[test]
++    fn many_pending_downloads_respect_descriptor_limit() -> buck2_error::Result<()> {
++        const CHILD: &str = "BUCK2_MATERIALIZER_FD_REGRESSION_CHILD";
++        if std::env::var_os(CHILD).is_none() {
++            use std::os::unix::process::CommandExt;
++
++            #[repr(C)]
++            struct Limit {
++                current: u64,
++                maximum: u64,
++            }
++            unsafe extern "C" {
++                fn setrlimit(resource: i32, limit: *const Limit) -> i32;
++            }
++
++            for shared_store in [false, true] {
++                let temp = tempfile::tempdir()?;
++                let mut command = std::process::Command::new(std::env::current_exe()?);
++                command.args([
++                    "--exact",
++                    "materializers::local_content_store::download_tests::many_pending_downloads_respect_descriptor_limit",
++                    "--nocapture",
++                ]);
++                command.env(CHILD, "1");
++                command.env_remove("BUCK2_LOCAL_CONTENT_STORE");
++                if shared_store {
++                    command.env("BUCK2_LOCAL_CONTENT_STORE", temp.path().join("store"));
++                }
++                // Apply the limit only in the child, never in the parallel
++                // parent test harness. setrlimit is async-signal-safe.
++                unsafe {
++                    command.pre_exec(|| {
++                        if setrlimit(
++                            7,
++                            &Limit {
++                                current: 64,
++                                maximum: 64,
++                            },
++                        ) != 0
++                        {
++                            return Err(std::io::Error::last_os_error());
++                        }
++                        Ok(())
++                    });
++                }
++                let result = command.output()?;
++                assert!(
++                    result.status.success(),
++                    "shared_store={shared_store}: {}",
++                    String::from_utf8_lossy(&result.stderr)
++                );
++            }
++            return Ok(());
++        }
++
++        let temp = tempfile::tempdir()?;
++        let config = DigestConfig::testing_default();
++        let mut pending = Vec::new();
++        for index in 0..512 {
++            let output = AbsNormPathBuf::new(temp.path().join(format!("output-{index}")))?;
++            let metadata = FileMetadata {
++                digest: TrackedFileDigest::from_content(b"downloaded", config.cas_digest_config()),
++                is_executable: false,
++            };
++            pending.push(Download::prepare(output, metadata, config)?.unwrap());
++        }
++        for download in &pending {
++            std::fs::write(download.name()?, b"downloaded")?;
++        }
++        for download in pending {
++            download.finish(config)?;
++        }
++        for index in 0..512 {
++            assert_eq!(
++                std::fs::read(temp.path().join(format!("output-{index}")))?,
++                b"downloaded"
 +            );
 +        }
 +        Ok(())

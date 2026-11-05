@@ -77,7 +77,10 @@
       pipewirePkgs = pkgs.extend pipewireOverlay;
       tools = import ./nix/tools.nix { inherit pkgs; };
       bazelClient = import ./nix/bazel/client.nix { inherit pkgs; };
-      buckBuild = import ./nix/buck2 { inherit pkgs; };
+      buckBuild = import ./nix/buck2 {
+        inherit pkgs;
+        rustOverlay = externalInputs.omp.inputs.rust-overlay.overlays.default;
+      };
       buildService = import ./nix/build-service { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
       publishNightly = import ./nix/publish-nightly.nix { inherit pkgs; };
@@ -229,6 +232,11 @@
         sekka-buck2 = buckBuild.client;
         buck2 = buckBuild.buck2;
         build-service = buildService.controller;
+        shared-build-inputs = pkgs.linkFarm "sekka-shared-build-inputs" {
+          source = self;
+          bazel = bazelClient;
+          buck2 = buckBuild.client;
+        };
         sekka-discord = import ./nix/sekka-discord.nix { inherit pkgs; };
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
         aizome = inputs.aizome.packages.${system}.aizome;
@@ -246,6 +254,12 @@
           inherit pkgs;
           inherit (pkgs) lib;
           nixPackage = runnerNix;
+        };
+        build-client-runner = import ./nix/runner.nix {
+          inherit pkgs;
+          inherit (pkgs) lib;
+          nixPackage = runnerNix;
+          role = "build-client";
         };
         screenshots = import ./nix/screenshots.nix {
           inherit pkgs;
@@ -403,6 +417,7 @@
           aizome = inputs.aizome.packages.${system}.aizome;
         };
         build-input-stability = import ./nix/build-inputs-test.nix { inherit pkgs; };
+        buck2-backend = buckBuild.backendTest;
         # Aizome's toolkit's own tests, under a headless sway
         # (desktop/aizome/sukumo).
         sukumo = import ./nix/sukumo-test.nix {

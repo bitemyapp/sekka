@@ -9,128 +9,128 @@ cargo_source(
 )
 
 alias(
-    name = "settei-build-dev",
-    actual = "//build/buck2/graph/dev:3f575bfb22797575c1ef",
+    name = "aizome-settei-build-dev",
+    actual = "//build/buck2/graph/dev:c1469c9ed18f7812d8dd",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome-settei-build-dev",
-    actual = "//build/buck2/graph/dev:b2044b96eacf8fa86121",
+    name = "settei-build-dev",
+    actual = "//build/buck2/graph/dev:c5f0d620952477c038e1",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "settei-build-release",
-    actual = "//build/buck2/graph/release:996a26dcdba0e9f1ef70",
+    actual = "//build/buck2/graph/release:1099fd7d6da6615bd3ce",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-settei-build-release",
-    actual = "//build/buck2/graph/release:05241d51f91812cbc40b",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "settei-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:f9da77fffa92e0b50b7e",
+    actual = "//build/buck2/graph/release:3ed882ea148fbb016a5e",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-settei-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:8130455e4b5a1ebe8d4b",
+    actual = "//build/buck2/graph/release-lto:863ac623f14be834b58e",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "settei-test-test-lib",
-    actual = "//build/buck2/graph/test:03b2ccbfe4d689046b64",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-settei-test-test-bin",
-    actual = "//build/buck2/graph/test:2daef50554bad308d7d5",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "budget-test-test-test",
-    actual = "//build/buck2/graph/test:b72d9f36e4bdd3d8cf46",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "budget_hw-test-test-test",
-    actual = "//build/buck2/graph/test:83f08a119c48a3b83b6f",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "desktop-test-test-test",
-    actual = "//build/buck2/graph/test:48e9a38c411328a63d63",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "devices-test-test-test",
-    actual = "//build/buck2/graph/test:402647478d7ce010f331",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "displays-test-test-test",
-    actual = "//build/buck2/graph/test:40a350f73bdefc8ea04c",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "displays_live-test-test-test",
-    actual = "//build/buck2/graph/test:e3382742f766c7ba7c76",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "goldens-test-test-test",
-    actual = "//build/buck2/graph/test:c5d69ffa5f53c7064181",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "goldens_hw-test-test-test",
-    actual = "//build/buck2/graph/test:7801ba0eb8dc6dd2ca71",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "keyboard-test-test-test",
-    actual = "//build/buck2/graph/test:90185c32eea2acb4a8e5",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "live_snapshot-test-test-test",
-    actual = "//build/buck2/graph/test:ae0d712434ae8b1af03c",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "network-test-test-test",
-    actual = "//build/buck2/graph/test:8efdc850f1ce08a17aab",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "tour-test-test-test",
-    actual = "//build/buck2/graph/test:c6146bf166a648b04098",
+    name = "settei-build-release-lto",
+    actual = "//build/buck2/graph/release-lto:8c0187d7312a17a48b1c",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "window-test-test-test",
-    actual = "//build/buck2/graph/test:518449342bc5c7d9cfeb",
+    actual = "//build/buck2/graph/test:1109b96951e9eba4fd07",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-settei-test-test-bin",
+    actual = "//build/buck2/graph/test:1afe480436156f3bf4a9",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "displays_live-test-test-test",
+    actual = "//build/buck2/graph/test:23f9f3606b50b9ebb2f3",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "budget-test-test-test",
+    actual = "//build/buck2/graph/test:26f85d9287920a409947",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "network-test-test-test",
+    actual = "//build/buck2/graph/test:338a2d0a8be68a9d3809",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "tour-test-test-test",
+    actual = "//build/buck2/graph/test:4784b765b365f481c94b",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "goldens_hw-test-test-test",
+    actual = "//build/buck2/graph/test:49ee20801c19b7dfb500",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "devices-test-test-test",
+    actual = "//build/buck2/graph/test:56e562a8d256e8b8bb5b",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "displays-test-test-test",
+    actual = "//build/buck2/graph/test:83abe95cc0f45b438dfd",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "budget_hw-test-test-test",
+    actual = "//build/buck2/graph/test:8c4700a2ba006b7ed16d",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "live_snapshot-test-test-test",
+    actual = "//build/buck2/graph/test:91005de7a3898ce8c22c",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "goldens-test-test-test",
+    actual = "//build/buck2/graph/test:9efba465a2de1c9a481c",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "desktop-test-test-test",
+    actual = "//build/buck2/graph/test:e4016fcb39612d958fab",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "settei-test-test-lib",
+    actual = "//build/buck2/graph/test:e964caedacff7694f1f8",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "keyboard-test-test-test",
+    actual = "//build/buck2/graph/test:f2881e0388c0c9455348",
     visibility = ["PUBLIC"],
 )
 
