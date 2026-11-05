@@ -279,8 +279,9 @@ mod tests {
         list.listed(DriveListing::new(listing, Ok(vec![drive.clone()])));
         list.choose(drive);
         let image = ImageId { path: "/images/sekka.iso".into(), sha256: "ab".repeat(32) };
-        let (review, _) = list.open_review(None, image.clone()).unwrap();
-        let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
+        let (review, shown) = list.open_review(None, image.clone()).map(|(r, t)| (r, t.clone())).unwrap();
+        // The core's target stands for the window's press here.
+        let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap(), shown).unwrap();
         serde_json::from_str(&serde_json::to_string(&plan).unwrap()).unwrap()
     }
 

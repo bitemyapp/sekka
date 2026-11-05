@@ -8,7 +8,6 @@
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
-mod elevate;
 #[cfg(target_os = "macos")]
 mod staged_image;
 mod theme;
