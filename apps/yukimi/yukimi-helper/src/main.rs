@@ -772,7 +772,8 @@ fn rollback(args: &[String]) -> Result<String> {
     let mut set = command("nix-env");
     set.args(["-p", PROFILE, "--switch-generation", &generation.to_string()]);
     run(set, "Choosing the generation")?;
-    let activating = Receipt::activating(std::fs::canonicalize(PROFILE)?, reasons);
+    let system = std::fs::canonicalize(PROFILE)?;
+    let activating = Receipt::activating(system.clone(), reasons);
     save_update(activating.receipt())?;
     // The configuration follows the system, so the next change builds on
     // what this generation was made from: the copy kept for this very
@@ -787,7 +788,6 @@ fn rollback(args: &[String]) -> Result<String> {
         }
     }
     switch(&format!("{PROFILE}/bin/switch-to-configuration"), mode)?;
-    let system = activating.receipt().system().to_owned();
     if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_ref() != Some(&system) {
         return Err(Failure("Rollback did not make the selected generation current".into()));
     }
