@@ -997,10 +997,10 @@ impl<'h> Ctx<'h> {
                         bare.extend(text.chars().map(|_| '_'));
                     } else {
                         let chars: Vec<char> = text.chars().collect();
+                        let last_close = chars.iter().rposition(|&d| d == ']');
                         for (k, &c) in chars.iter().enumerate() {
                             // `[` is a wildcard only with a `]` after it (`[ -d x ]` isn't).
-                            let wild = matches!(c, '*' | '?')
-                                || (c == '[' && chars[k + 1..].iter().skip(1).any(|&d| d == ']'));
+                            let wild = matches!(c, '*' | '?') || (c == '[' && last_close.is_some_and(|l| l >= k + 2));
                             if wild {
                                 a.glob = true;
                                 if n == 0 && k == 0 {
@@ -1117,26 +1117,29 @@ impl<'h> Ctx<'h> {
 
 fn has_brace(bare: &str) -> bool {
     let chars: Vec<char> = bare.chars().collect();
-    for (i, &c) in chars.iter().enumerate() {
-        if c != '{' {
-            continue;
-        }
-        let mut depth = 0;
-        for (j, &d) in chars.iter().enumerate().skip(i) {
-            match d {
-                '{' => depth += 1,
-                '}' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        let inner: String = chars[i + 1..j].iter().collect();
-                        if inner.contains(',') || inner.contains("..") {
-                            return true;
-                        }
-                        break;
+    // Commas and `..` pairs before each position, so each `{…}` is checked
+    // in constant time: the scan stays linear however the braces nest.
+    let mut commas = vec![0usize; chars.len() + 1];
+    let mut dots = vec![0usize; chars.len() + 1];
+    for (k, &c) in chars.iter().enumerate() {
+        commas[k + 1] = commas[k] + usize::from(c == ',');
+        dots[k + 1] = dots[k] + usize::from(c == '.' && chars.get(k + 1) == Some(&'.'));
+    }
+    let mut open = Vec::new();
+    for (j, &c) in chars.iter().enumerate() {
+        match c {
+            '{' => open.push(j),
+            '}' => {
+                if let Some(i) = open.pop() {
+                    // The text between them, chars[i + 1..j].
+                    let comma = commas[j] > commas[i + 1];
+                    let range = j >= i + 3 && dots[j - 1] > dots[i + 1];
+                    if comma || range {
+                        return true;
                     }
                 }
-                _ => {}
             }
+            _ => {}
         }
     }
     false
@@ -6175,6 +6178,15 @@ mod tests {
         assert_eq!(class(&deep), "refuse");
         let huge = "a".repeat(MAX_REFUSAL_LEN + 1);
         assert!(refused(&huge, Path::new(HOME)).is_some());
+        // Checking takes time in proportion to the length, whatever the text.
+        for unit in ["{", "[", "{a,", "a{", "${", "`", "*a"] {
+            let n = (MAX_REFUSAL_LEN - 8) / unit.len();
+            let started = std::time::Instant::now();
+            classify_command(&format!("echo {}", unit.repeat(n)), Path::new(HOME));
+            assert!(started.elapsed() < std::time::Duration::from_secs(5), "{unit}: {:?}", started.elapsed());
+        }
+        assert!(has_brace("{a,b}") && has_brace("x{1..3}") && has_brace("{{a,b}}") && has_brace("{a{b}c,d}"));
+        assert!(!has_brace("{a}") && !has_brace("{a.b}") && !has_brace("{,") && !has_brace("a,b}") && !has_brace("{}"));
     }
 
     #[test]
