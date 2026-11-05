@@ -1,0 +1,22 @@
+--- src/markdown/view.rs.orig	2026-11-05 00:05:19.386562535 -0600
++++ src/markdown/view.rs	2026-11-05 00:05:19.390439940 -0600
+@@ -420,7 +420,7 @@
+             _ => Align::Start,
+         };
+         let boxed: Container<Msg> = container(content).padding([5.0, 10.0]).align_x(align);
+-        boxed.width(Length::FillPortion(portions[c])).into()
++        boxed.width(Length::FillPortion(std::num::NonZeroU16::new(portions[c]).unwrap_or(std::num::NonZeroU16::MIN))).into()
+     };
+     let line = |cells: &[Vec<Run>], header: bool| -> Element<Msg> {
+         row_of((0..columns).map(|c| cell(cells.get(c), c, header)).collect()).align(Align::Start).width(Fill).into()
+--- src/ui/mod.rs.orig	2026-11-05 00:05:19.387562550 -0600
++++ src/ui/mod.rs	2026-11-05 00:05:19.392760569 -0600
+@@ -330,7 +330,7 @@
+         if head {
+             t = t.scale(0.85).semibold().role(Role::Text3);
+         }
+-        let boxed = container(t).width(Length::FillPortion((weight * 10.0) as u16));
++        let boxed = container(t).width(Length::FillPortion(std::num::NonZeroU16::new((weight * 10.0) as u16).unwrap_or(std::num::NonZeroU16::MIN)));
+         if numeric { boxed.align_x(Align::End).into() } else { boxed.into() }
+     };
+     let shape: Vec<(f64, bool)> = columns.iter().map(|c| (c.1, c.2)).collect();
