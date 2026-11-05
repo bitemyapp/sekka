@@ -128,7 +128,7 @@ fn greeter(dir: &std::path::Path) -> Harness<Greeter> {
 }
 
 fn progress(g: &Greeter) -> Option<Progress<'_>> {
-    match g.login.screen() {
+    match g.login().screen() {
         Screen::Login { progress, .. } => Some(progress),
         Screen::Unstarted | Screen::People { .. } | Screen::Name { .. } => None,
     }
@@ -139,7 +139,7 @@ fn asking(g: &Greeter) -> bool {
 }
 
 fn wait(h: &mut Harness<Greeter>, what: &str, f: impl Fn(&Greeter) -> bool) {
-    assert!(h.settle(Duration::from_secs(5), f), "waiting for {what}: {:?}", h.program().login.screen());
+    assert!(h.settle(Duration::from_secs(5), f), "waiting for {what}: {:?}", h.program().login().screen());
 }
 
 fn enter(h: &mut Harness<Greeter>, w: WindowKey) {
@@ -168,13 +168,17 @@ fn cancels(log: &Log) -> usize {
 fn back_to_the_name(h: &mut Harness<Greeter>, w: WindowKey, log: &Log) {
     let before = cancels(log);
     h.named(w, NamedKey::Escape, Modifiers::NONE);
-    let user = h.program().login.user().map(str::to_owned);
+    let user = h.program().login().user().map(str::to_owned);
     assert!(
         h.find_id(w, "greeter-name").is_some(),
         "no way back to the name: after Escape the login is still for {user:?} and the screen shows only {:?}",
         h.texts(w)
     );
-    assert!(matches!(h.program().login.screen(), Screen::Name { typed: "alcie" }), "{:?}", h.program().login.screen());
+    assert!(
+        matches!(h.program().login().screen(), Screen::Name { typed: "alcie" }),
+        "{:?}",
+        h.program().login().screen()
+    );
     assert!(
         h.settle(Duration::from_secs(5), |_| cancels(log) > before),
         "greetd wasn't told to let the login go: {:?}",
@@ -213,7 +217,7 @@ fn repro_svc_05_child() {
     };
     let mut h = greeter(&dir);
     let w = h.program().main_window().expect("the login's surface");
-    assert!(matches!(h.program().login.screen(), Screen::Name { typed: "" }));
+    assert!(matches!(h.program().login().screen(), Screen::Name { typed: "" }));
     // The name, mistyped.
     h.type_text(w, "alcie");
     enter(&mut h, w);
@@ -223,7 +227,7 @@ fn repro_svc_05_child() {
             click_id(&mut h, w, "greeter-password");
             h.type_text(w, "hunter2");
             enter(&mut h, w);
-            wait(&mut h, "the rejection and the question again", |g| g.login.failed() == 1 && asking(g));
+            wait(&mut h, "the rejection and the question again", |g| g.login().failed() == 1 && asking(g));
             eprintln!("greetd was asked: {:?}", log.lock().unwrap());
             eprintln!("showing: {:?}", h.texts(w));
             assert!(h.texts(w).iter().any(|t| t == "Log in as someone else"), "{:?}", h.texts(w));
@@ -234,31 +238,42 @@ fn repro_svc_05_child() {
             }
             h.type_text(w, "alice");
             enter(&mut h, w);
-            wait(&mut h, "the corrected name's password question", |g| g.login.user() == Some("alice") && asking(g));
+            wait(&mut h, "the corrected name's password question", |g| g.login().user() == Some("alice") && asking(g));
             assert_eq!(created(&log, "alice"), 1, "{:?}", log.lock().unwrap());
             eprintln!("then greetd was asked: {:?}", log.lock().unwrap());
         }
         "create-fails" => {
             wait(&mut h, "the failure", |g| progress(g) == Some(Progress::Failed));
-            let asked = created(&log, "alcie");
-            eprintln!("greetd was asked: {:?}; message: {:?}", log.lock().unwrap(), h.program().login.message());
-            // "Press Return to try again".
+            eprintln!("greetd was asked: {:?}; message: {:?}", log.lock().unwrap(), h.program().login().message());
+            // "Press Return to try again", in the empty field, as a person
+            // would.
             click_id(&mut h, w, "greeter-password");
+            assert_eq!(h.program().password(), "");
+            return_tries_again(&mut h, w, &log);
+            // And with something typed in it first: that goes.
             h.type_text(w, "x");
-            enter(&mut h, w);
-            let again = h.settle(Duration::from_secs(5), |_| created(&log, "alcie") > asked);
-            assert!(
-                again,
-                "Return did nothing: {:?}, greetd asked again: {again}, user {:?}, showing {:?}",
-                h.program().login.screen(),
-                h.program().login.user(),
-                h.texts(w)
-            );
-            wait(&mut h, "the failure again", |g| progress(g) == Some(Progress::Failed));
+            return_tries_again(&mut h, w, &log);
+            assert_eq!(h.program().password(), "");
             eprintln!("then greetd was asked: {:?}", log.lock().unwrap());
             // And Escape brings the name back.
             back_to_the_name(&mut h, w, &log);
         }
         _ => unreachable!(),
     }
+}
+
+/// Return in the failed login asks greetd again, for the same name, and
+/// greetd fails it again.
+fn return_tries_again(h: &mut Harness<Greeter>, w: WindowKey, log: &Log) {
+    let asked = created(log, "alcie");
+    enter(h, w);
+    let again = h.settle(Duration::from_secs(5), |_| created(log, "alcie") > asked);
+    assert!(
+        again,
+        "Return did nothing: {:?}, greetd asked again: {again}, user {:?}, showing {:?}",
+        h.program().login().screen(),
+        h.program().login().user(),
+        h.texts(w)
+    );
+    wait(h, "the failure again", |g| progress(g) == Some(Progress::Failed));
 }

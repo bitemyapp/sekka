@@ -89,35 +89,60 @@ type Wall = (PathBuf, (u32, u32), Option<Image>);
 /// How the greetd thread asks: greetd itself, or the demo's stand-in.
 type Link = Box<dyn FnMut(&Request) -> std::io::Result<Response>>;
 
-/// The greeter.
+/// The greeter. Its fields are its own: the view reads what it draws
+/// through the methods below, and the stage only as the login's
+/// [`Screen`]. The view once decided the way back from the configuration's
+/// `user_list`, the number of people and its own idea of the stage; none
+/// of those is the view's to read now (SVC-05):
+///
+/// ```compile_fail,E0616
+/// use aizome_greeter::app::Greeter;
+/// fn others(g: &Greeter, typed: bool) -> bool {
+///     g.cfg.user_list && g.users.len() > 1 && !typed
+/// }
+/// ```
+///
+/// ```
+/// use aizome_greeter::app::Greeter;
+/// use aizome_greeter::login::{EscapeTo, Screen};
+/// fn others(g: &Greeter) -> bool {
+///     match g.login().screen() {
+///         Screen::Login { way_back, .. } => way_back.to() != EscapeTo::Nowhere,
+///         Screen::Unstarted | Screen::People { .. } | Screen::Name { .. } => false,
+///     }
+/// }
+/// ```
 pub struct Greeter {
-    pub cfg: Config,
-    pub state: State,
-    pub sessions: Vec<Session>,
+    cfg: Config,
+    state: State,
+    sessions: Vec<Session>,
     /// Who's logging in, and how far greetd has got.
-    pub login: Login,
+    login: Login,
+    /// The people's pictures to read (AccountsService's), by user name.
+    icons: Vec<(String, PathBuf)>,
     /// Each person's session, as picked (by id).
-    pub session_of: HashMap<String, String>,
-    pub password: String,
-    pub caps: bool,
-    pub shake: u32,
+    session_of: HashMap<String, String>,
+    /// What's in the password field (the view builds the field from it).
+    pub(crate) password: String,
+    caps: bool,
+    shake: u32,
     shaken: u32,
-    pub now: Now,
-    pub hostname: String,
+    now: Now,
+    hostname: String,
     /// Each display's surface, by output id.
-    pub windows: Vec<(WindowKey, u32)>,
+    windows: Vec<(WindowKey, u32)>,
     /// Each display's size in points, by output id.
-    pub frames: HashMap<u32, Size>,
+    frames: HashMap<u32, Size>,
     /// The display with the login on it.
-    pub main_output: Option<u32>,
+    main_output: Option<u32>,
     wallpapers: HashMap<u32, Wall>,
-    pub avatars: HashMap<String, Image>,
+    avatars: HashMap<String, Image>,
     to_greetd: Option<mpsc::Sender<Request>>,
     /// Real greetd and real displays (not a test).
-    pub live: bool,
+    live: bool,
     /// Pretend to be greetd (`--demo`): any user, the password `aizome`.
-    pub demo: bool,
-    pub power_error: Option<String>,
+    demo: bool,
+    power_error: Option<String>,
 }
 
 /// The session picked for `user`: theirs from last time, else the
@@ -218,12 +243,14 @@ impl Greeter {
         live: bool,
         demo: bool,
     ) -> Greeter {
+        let icons = users.iter().filter_map(|u| Some((u.name.clone(), u.icon.clone()?))).collect();
         Greeter {
             session_of: state.sessions.clone().into_iter().collect(),
             cfg,
             state,
             sessions,
             login: Login::with_users(users),
+            icons,
             password: String::new(),
             caps: false,
             shake: 0,
@@ -242,23 +269,97 @@ impl Greeter {
         }
     }
 
+    /// Who's logging in, and how far greetd has got.
+    pub fn login(&self) -> &Login {
+        &self.login
+    }
+
+    /// What's in the password field.
+    pub fn password(&self) -> &str {
+        &self.password
+    }
+
+    /// What's remembered between logins.
+    pub fn state(&self) -> &State {
+        &self.state
+    }
+
+    /// The step of the field's shake (0: still).
+    pub fn shake(&self) -> u32 {
+        self.shake
+    }
+
     /// The session picked for whoever is logging in: theirs from last
     /// time, else the default, else the first.
     pub fn session(&self) -> Option<&Session> {
         session_for(&self.sessions, &self.session_of, &self.cfg, self.login.user())
     }
 
-    fn send(&mut self, requests: Vec<Request>) {
+    /// Whether there's a choice of sessions to offer.
+    pub(crate) fn several_sessions(&self) -> bool {
+        self.sessions.len() > 1
+    }
+
+    /// Whether the power menu is offered.
+    pub(crate) fn offers_power(&self) -> bool {
+        self.cfg.power
+    }
+
+    pub(crate) fn hostname(&self) -> &str {
+        &self.hostname
+    }
+
+    pub(crate) fn now(&self) -> &Now {
+        &self.now
+    }
+
+    pub(crate) fn caps(&self) -> bool {
+        self.caps
+    }
+
+    pub(crate) fn power_error(&self) -> Option<&str> {
+        self.power_error.as_deref()
+    }
+
+    /// `user`'s picture, once it's read.
+    pub(crate) fn avatar(&self, user: &str) -> Option<Image> {
+        self.avatars.get(user).cloned()
+    }
+
+    /// A display's size in points.
+    pub(crate) fn frame(&self, output: u32) -> Option<Size> {
+        self.frames.get(&output).copied()
+    }
+
+    /// Whether the login is on display `output`.
+    pub(crate) fn is_main(&self, output: u32) -> bool {
+        self.main_output == Some(output)
+    }
+
+    /// Sends greetd what the login asks. If its thread has stopped, greetd
+    /// is gone, as when the link reports it.
+    fn send(&mut self, requests: Vec<Request>, cx: &mut Cx<Msg>) {
         for r in requests {
             match &self.to_greetd {
                 Some(tx) => {
                     if tx.send(r).is_err() {
-                        self.login.lost("its thread stopped");
+                        self.lost("its thread stopped", cx);
+                        return;
                     }
                 }
                 // A test: what would be sent is the test's to answer.
                 None => drop(r),
             }
+        }
+    }
+
+    /// The connection to greetd is gone: say so, and quit when it's real
+    /// greetd (it starts the greeter again; nothing here can reach it).
+    fn lost(&mut self, why: &str, cx: &mut Cx<Msg>) {
+        log::error!("greetd: {why}");
+        self.login.lost(why);
+        if self.live && !self.demo {
+            cx.quit();
         }
     }
 
@@ -272,27 +373,24 @@ impl Greeter {
         }
     }
 
-    /// Return, in whatever the stage shows. The field is empty after: its
-    /// text answered PAM, or a login began.
+    /// Return, in whatever the stage shows.
     fn submit(&mut self, cx: &mut Cx<Msg>) {
-        let requests = self.login.on_return(|state| on_return(state, &mut self.password));
-        greetd::zero_string(&mut self.password);
-        self.send(requests);
+        let requests = self.login.on_return(&mut self.password, on_return);
+        self.send(requests, cx);
         self.focus(cx);
     }
 
     /// Escape, or "Log in as someone else".
     fn back(&mut self, cx: &mut Cx<Msg>) {
-        let requests = self.login.on_escape(on_escape);
-        greetd::zero_string(&mut self.password);
-        self.send(requests);
+        let requests = self.login.on_escape(&mut self.password, on_escape);
+        self.send(requests, cx);
         self.focus(cx);
     }
 
     fn heard(&mut self, response: Response, cx: &mut Cx<Msg>) {
         let (sessions, session_of, cfg) = (&self.sessions, &self.session_of, &self.cfg);
         let heard = self.login.heard(response, |user| launch_for(sessions, session_of, cfg, user));
-        self.send(heard.requests);
+        self.send(heard.requests, cx);
         match heard.outcome {
             Outcome::Quiet => {}
             Outcome::Refused => {
@@ -322,9 +420,8 @@ impl Greeter {
 
     /// Person `i` clicked in the row.
     fn pick(&mut self, i: usize, cx: &mut Cx<Msg>) {
-        let requests = self.login.pick(i);
-        greetd::zero_string(&mut self.password);
-        self.send(requests);
+        let requests = self.login.pick(i, &mut self.password);
+        self.send(requests, cx);
         self.focus(cx);
     }
 
@@ -444,11 +541,9 @@ impl Greeter {
     }
 
     fn load_avatars(&mut self, cx: &mut Cx<Msg>) {
-        for u in self.login.users() {
-            if let Some(path) = u.icon.clone() {
-                let name = u.name.clone();
-                cx.spawn(move || Msg::Avatar(name, Image::open(&path).ok()));
-            }
+        for (name, path) in &self.icons {
+            let (name, path) = (name.clone(), path.clone());
+            cx.spawn(move || Msg::Avatar(name, Image::open(&path).ok()));
         }
     }
 
@@ -509,7 +604,7 @@ impl Program for Greeter {
         self.sync_windows(cx);
         self.load_avatars(cx);
         let requests = self.login.start(self.cfg.user_list, self.state.last_user.as_deref());
-        self.send(requests);
+        self.send(requests, cx);
         self.focus(cx);
         cx.after(self.now.until_next_minute(), Msg::Tick);
     }
@@ -529,14 +624,7 @@ impl Program for Greeter {
         match msg {
             Msg::Nothing => {}
             Msg::Greetd(r) => self.heard(r, cx),
-            Msg::GreetdLost(why) => {
-                log::error!("greetd: {why}");
-                self.login.lost(&why);
-                if self.live && !self.demo {
-                    // greetd starts the greeter again.
-                    cx.quit();
-                }
-            }
+            Msg::GreetdLost(why) => self.lost(&why, cx),
             Msg::Password(p) => {
                 greetd::zero_string(&mut self.password);
                 self.password = p;

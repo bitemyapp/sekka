@@ -292,10 +292,10 @@ impl Seal for Typed {
 /// failed login, that's [`Failed::retry`], so a route can't leave it as it
 /// was:
 ///
-/// ```compile_fail,E0451
+/// ```compile_fail,E0624
 /// use aizome_greeter::login::{Failed, Returned, Typed};
 /// fn on_return<'s>(failed: Failed<'s, Typed>) -> Returned<'s> {
-///     Returned { next: failed.into() }
+///     Returned::keep(failed)
 /// }
 /// ```
 ///
@@ -308,6 +308,7 @@ impl Seal for Typed {
 #[must_use = "Login::on_return applies it"]
 pub struct Returned<'s> {
     next: LoginAny<'s>,
+    field: Field,
 }
 
 /// Where Escape went: back where the person was chosen, or nowhere, from a
@@ -315,17 +316,53 @@ pub struct Returned<'s> {
 #[must_use = "Login::on_escape applies it"]
 pub struct Went<'s> {
     next: LoginAny<'s>,
+    field: Field,
+}
+
+/// What a key's transition leaves in the field: what was typed, when it
+/// did nothing (typing ahead while greetd is asked), or nothing, when a
+/// login began, was answered, or was given up.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Field {
+    Keep,
+    Clear,
+}
+
+impl<'s> Returned<'s> {
+    fn keep(next: impl Into<LoginAny<'s>>) -> Self {
+        Returned { next: next.into(), field: Field::Keep }
+    }
+    fn clear(next: impl Into<LoginAny<'s>>) -> Self {
+        Returned { next: next.into(), field: Field::Clear }
+    }
+}
+
+impl<'s> Went<'s> {
+    fn keep(next: impl Into<LoginAny<'s>>) -> Self {
+        Went { next: next.into(), field: Field::Keep }
+    }
+    fn clear(next: impl Into<LoginAny<'s>>) -> Self {
+        Went { next: next.into(), field: Field::Clear }
+    }
+}
+
+/// Empties the field after a key's transition, if it says to.
+fn settle_field(field: &mut String, after: Field) {
+    match after {
+        Field::Clear => crate::greetd::zero_string(field),
+        Field::Keep => {}
+    }
 }
 
 impl<'s> From<People<'s>> for Went<'s> {
     fn from(people: People<'s>) -> Self {
-        Went { next: people.into() }
+        Went::clear(people)
     }
 }
 
 impl<'s> From<Name<'s>> for Went<'s> {
     fn from(name: Name<'s>) -> Self {
-        Went { next: name.into() }
+        Went::clear(name)
     }
 }
 
@@ -372,12 +409,12 @@ impl<'s> Unstarted<'s> {
 
     /// Return before the greeter starts: nothing.
     pub fn busy(self) -> Returned<'s> {
-        Returned { next: self.into() }
+        Returned::keep(self)
     }
 
     /// Escape before the greeter starts: nothing.
     pub fn stay(self) -> Went<'s> {
-        Went { next: self.into() }
+        Went::keep(self)
     }
 }
 
@@ -403,12 +440,12 @@ impl<'s> People<'s> {
     pub fn pick(self) -> Returned<'s> {
         let index = self.data;
         self.ctx.message = None;
-        Returned { next: begin(self.ctx, Chosen { index }).into() }
+        Returned::clear(begin(self.ctx, Chosen { index }))
     }
 
     /// Escape in the row: it's where choosing starts.
     pub fn stay(self) -> Went<'s> {
-        self.into()
+        Went::keep(self)
     }
 }
 
@@ -417,16 +454,16 @@ impl<'s> Name<'s> {
     pub fn submit(self) -> Returned<'s> {
         let name = self.data.trim();
         if name.is_empty() {
-            return Returned { next: self.into() };
+            return Returned::keep(self);
         }
         let name = name.to_owned();
         self.ctx.message = None;
-        Returned { next: begin(self.ctx, Typed { name }).into() }
+        Returned::clear(begin(self.ctx, Typed { name }))
     }
 
     /// Escape in the name: it's where choosing starts.
     pub fn stay(self) -> Went<'s> {
-        self.into()
+        Went::keep(self)
     }
 }
 
@@ -665,7 +702,7 @@ fn refused(ctx: &mut Ctx, kind: ErrorType, why: String) {
 impl<'s, W: Who> Waiting<'s, W> {
     /// Return while greetd is asked: nothing until it answers.
     pub fn busy(self) -> Returned<'s> {
-        Returned { next: self.into() }
+        Returned::keep(self)
     }
 
     /// greetd answered, with the proof that it's this login's answer.
@@ -673,6 +710,9 @@ impl<'s, W: Who> Waiting<'s, W> {
     /// authenticated.
     pub fn heard(self, said: Fresh<Conversation, Said>, launch: impl FnOnce(&str) -> Launch) -> Step<'s, W> {
         let Waiting { ctx, who, ticket, asked } = self;
+        // Only Login::heard makes a Said, and only for the one login under
+        // way: the proof is for this login's ticket.
+        debug_assert_eq!(said.current().ticket(), ticket);
         match said.into_answer().response {
             Response::AuthMessage { auth_message_type, auth_message } => {
                 prompted(ctx, who, ticket, auth_message_type, auth_message)
@@ -705,25 +745,28 @@ impl<'s, W: Who> Asking<'s, W> {
         let response = Some(std::mem::take(field));
         ctx.message = None;
         ctx.ask(Pending::Login(ticket), Request::PostAuthMessageResponse { response });
-        Returned { next: Waiting { ctx, who, ticket, asked: Asked::Answer }.into() }
+        Returned::clear(Waiting { ctx, who, ticket, asked: Asked::Answer })
     }
 }
 
 impl<'s, W: Who> Starting<'s, W> {
     /// Return while the session starts: nothing.
     pub fn busy(self) -> Returned<'s> {
-        Returned { next: self.into() }
+        Returned::keep(self)
     }
 
     /// Escape while the session starts: there's no way back.
     pub fn stay(self) -> Went<'s> {
-        Went { next: self.into() }
+        Went::keep(self)
     }
 
     /// greetd answered the request to start the session, with the proof
     /// that it's this login's answer.
     pub fn heard(self, said: Fresh<Conversation, Said>) -> Step<'s, W> {
         let Starting { ctx, who, ticket } = self;
+        // Only Login::heard makes a Said, and only for the one login under
+        // way: the proof is for this login's ticket.
+        debug_assert_eq!(said.current().ticket(), ticket);
         match said.into_answer().response {
             Response::Success => {
                 ctx.open = false;
@@ -745,19 +788,19 @@ impl<'s, W: Who> Failed<'s, W> {
     /// Return: begin again, for the same person (cancelling whatever greetd
     /// kept first).
     pub fn retry(self) -> Returned<'s> {
-        Returned { next: begin(self.ctx, self.who).into() }
+        Returned::clear(begin(self.ctx, self.who))
     }
 }
 
 impl<'s, W: Who> Done<'s, W> {
     /// Return once logged in: nothing.
     pub fn busy(self) -> Returned<'s> {
-        Returned { next: self.into() }
+        Returned::keep(self)
     }
 
     /// Escape once logged in: nothing.
     pub fn stay(self) -> Went<'s> {
-        Went { next: self.into() }
+        Went::keep(self)
     }
 
     /// Who logged in.
@@ -811,21 +854,21 @@ impl Typed {
 impl<'s> Waiting<'s, Only> {
     /// Escape: there's nobody else to choose.
     pub fn stay(self) -> Went<'s> {
-        Went { next: self.into() }
+        Went::keep(self)
     }
 }
 
 impl<'s> Asking<'s, Only> {
     /// Escape: there's nobody else to choose.
     pub fn stay(self) -> Went<'s> {
-        Went { next: self.into() }
+        Went::keep(self)
     }
 }
 
 impl<'s> Failed<'s, Only> {
     /// Escape: there's nobody else to choose.
     pub fn stay(self) -> Went<'s> {
-        Went { next: self.into() }
+        Went::keep(self)
     }
 }
 
@@ -858,8 +901,22 @@ pub enum Screen<'a> {
     People { people: &'a [User], selected: usize },
     /// The user name, as typed so far.
     Name { typed: &'a str },
-    /// Someone's login: who, how far, and where Escape goes.
-    Login { person: Person<'a>, progress: Progress<'a>, escape: EscapeTo },
+    /// Someone's login: who, how far, and its way back, which only the
+    /// login block that draws it takes (`view::block::with_way_back`).
+    Login { person: Person<'a>, progress: Progress<'a>, way_back: WayBack },
+}
+
+/// A login's way back, as the model decides it: only this module makes
+/// one, and it isn't `Copy` or `Clone`, so the view hands the one it was
+/// given to the block that draws the link and binds Escape.
+#[derive(Debug)]
+pub struct WayBack(EscapeTo);
+
+impl WayBack {
+    /// Where Escape (and "Log in as someone else") goes.
+    pub fn to(&self) -> EscapeTo {
+        self.0
+    }
 }
 
 /// Who's logging in, as the screen shows them.
@@ -957,20 +1014,23 @@ impl Login {
         self.in_row(|people| people.previous());
     }
 
-    /// Person `i` clicked in the row: log them in. What to ask greetd.
-    pub fn pick(&mut self, i: usize) -> Vec<Request> {
+    /// Person `i` clicked in the row: log them in, and empty `field`.
+    /// What to ask greetd.
+    pub fn pick(&mut self, i: usize, field: &mut String) -> Vec<Request> {
         if i < self.ctx.users.len() {
-            self.with_typed(|state| match state {
+            let after = self.with_typed(|state| match state {
                 LoginAny::People(mut people) => {
                     people.select(i);
-                    (people.pick().next, ())
+                    let picked = people.pick();
+                    (picked.next, picked.field)
                 }
                 other @ (LoginAny::Unstarted(_)
                 | LoginAny::Name(_)
                 | LoginAny::ChosenLogin(_)
                 | LoginAny::OnlyLogin(_)
-                | LoginAny::TypedLogin(_)) => (other, ()),
+                | LoginAny::TypedLogin(_)) => (other, Field::Keep),
             });
+            settle_field(field, after);
         }
         self.sent()
     }
@@ -990,17 +1050,36 @@ impl Login {
         });
     }
 
-    /// Return, routed by `route`: it hands back what one of Return's
-    /// transitions made. What to ask greetd.
-    pub fn on_return(&mut self, route: impl for<'s> FnOnce(LoginAny<'s>) -> Returned<'s>) -> Vec<Request> {
-        self.with_typed(|state| (route(state).next, ()));
+    /// Return in `field`, routed by `route`: it hands back what one of
+    /// Return's transitions made. The field keeps what was typed when that
+    /// did nothing, and is emptied when a login began or was answered.
+    /// What to ask greetd.
+    pub fn on_return(
+        &mut self,
+        field: &mut String,
+        route: impl for<'s> FnOnce(LoginAny<'s>, &mut String) -> Returned<'s>,
+    ) -> Vec<Request> {
+        let after = self.with_typed(|state| {
+            let returned = route(state, field);
+            (returned.next, returned.field)
+        });
+        settle_field(field, after);
         self.sent()
     }
 
     /// Escape, routed by `route`: it hands back where one of Escape's
-    /// transitions went. What to ask greetd.
-    pub fn on_escape(&mut self, route: impl for<'s> FnOnce(LoginAny<'s>) -> Went<'s>) -> Vec<Request> {
-        self.with_typed(|state| (route(state).next, ()));
+    /// transitions went. `field` is emptied when a login was given up, and
+    /// kept where there's no way back. What to ask greetd.
+    pub fn on_escape(
+        &mut self,
+        field: &mut String,
+        route: impl for<'s> FnOnce(LoginAny<'s>) -> Went<'s>,
+    ) -> Vec<Request> {
+        let after = self.with_typed(|state| {
+            let went = route(state);
+            (went.next, went.field)
+        });
+        settle_field(field, after);
         self.sent()
     }
 
@@ -1061,11 +1140,6 @@ impl Login {
         }
     }
 
-    /// Who can be picked.
-    pub fn users(&self) -> &[User] {
-        &self.ctx.users
-    }
-
     /// The user name being logged in, if a login is under way.
     pub fn user(&self) -> Option<&str> {
         match self.stored() {
@@ -1117,7 +1191,7 @@ fn login_screen<'a>(person: Person<'a>, step: &'a StepState, back: EscapeTo) -> 
         StepState::Starting(_) => (Progress::Starting, EscapeTo::Nowhere),
         StepState::Done => (Progress::Done, EscapeTo::Nowhere),
     };
-    Screen::Login { person, progress, escape }
+    Screen::Login { person, progress, way_back: WayBack(escape) }
 }
 
 /// greetd's or PAM's words, made a sentence.
@@ -1173,11 +1247,11 @@ mod tests {
 
     fn enter(l: &mut Login, field: &str) -> Vec<Request> {
         let mut field = field.to_owned();
-        l.on_return(|s| on_return(s, &mut field))
+        l.on_return(&mut field, on_return)
     }
 
     fn escape(l: &mut Login) -> Vec<Request> {
-        l.on_escape(on_escape)
+        l.on_escape(&mut String::new(), on_escape)
     }
 
     fn progress(l: &Login) -> Option<Progress<'_>> {
@@ -1189,7 +1263,7 @@ mod tests {
 
     fn escape_to(l: &Login) -> Option<EscapeTo> {
         match l.screen() {
-            Screen::Login { escape, .. } => Some(escape),
+            Screen::Login { way_back, .. } => Some(way_back.to()),
             Screen::Unstarted | Screen::People { .. } | Screen::Name { .. } => None,
         }
     }
@@ -1325,7 +1399,7 @@ mod tests {
         enter(&mut l, "alices");
         // Bob is picked while greetd checks Alice's password.
         assert_eq!(escape(&mut l), [Request::CancelSession]);
-        assert_eq!(l.pick(1), [create("bob")]);
+        assert_eq!(l.pick(1, &mut String::new()), [create("bob")]);
         // Alice's success, then the cancel's answer: neither starts anything.
         assert_eq!(heard(&mut l, Response::Success).requests, []);
         assert_eq!(heard(&mut l, Response::Success).requests, []);
@@ -1442,5 +1516,32 @@ mod tests {
         let mut l = Login::with_users(vec![user("alice"), user("bob")]);
         assert!(l.start(false, Some("alice")).is_empty());
         assert_eq!(typed(&l), Some(""));
+    }
+
+    #[test]
+    fn the_field_keeps_what_a_key_did_nothing_with() {
+        let (mut l, _) = listing(&["solo"], None);
+        let mut field = "abc".to_owned();
+        // Typed ahead while greetd is asked: Return and Escape leave it.
+        assert_eq!(l.on_return(&mut field, on_return), []);
+        assert_eq!(l.on_escape(&mut field, on_escape), []);
+        assert_eq!(field, "abc");
+        // A question: Return answers with it, and it leaves the field.
+        heard(&mut l, secret("Password: "));
+        assert_eq!(l.on_return(&mut field, on_return), [answer("abc")]);
+        assert_eq!(field, "");
+        // A login greetd couldn't begin: Return begins again, and empties
+        // the field.
+        let (mut l, _) = listing(&["solo"], None);
+        heard(&mut l, error(ErrorType::Error, "account expired"));
+        assert_eq!(progress(&l), Some(Progress::Failed));
+        field.push('x');
+        assert_eq!(l.on_return(&mut field, on_return), [Request::CancelSession, create("solo")]);
+        assert_eq!(field, "");
+        // Back to the row empties it too.
+        let (mut l, _) = listing(&["alice", "bob"], Some("alice"));
+        let mut field = "half-typed".to_owned();
+        assert_eq!(l.on_escape(&mut field, on_escape), [Request::CancelSession]);
+        assert_eq!(field, "");
     }
 }

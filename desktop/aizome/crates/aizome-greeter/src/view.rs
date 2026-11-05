@@ -19,7 +19,7 @@ use aizome_kit::{Icon, Image};
 use aizome_theme::{NIGHT, Rgba, typeface};
 
 use crate::app::{Greeter, Msg};
-use crate::login::{EscapeTo, Person, Progress, Screen, Tone};
+use crate::login::{EscapeTo, Person, Progress, Screen, Tone, WayBack};
 use crate::users::User;
 
 const FIELD_W: f64 = 260.0;
@@ -33,17 +33,17 @@ const LINE_H: f64 = 30.0;
 
 pub fn view(g: &Greeter, _window: WindowKey, output: Option<u32>) -> Element<Msg> {
     let Some(output) = output else { return aizome_kit::column(Vec::new()).into() };
-    let size = g.frames.get(&output).copied().unwrap_or(Size::new(1440.0, 900.0));
-    let main = Some(output) == g.main_output;
+    let size = g.frame(output).unwrap_or(Size::new(1440.0, 900.0));
+    let main = g.is_main(output);
     let mut layers: Vec<Element<Msg>> = vec![ground(size, g.wallpaper(output))];
-    let mut column: Vec<Element<Msg>> = vec![clock(size, &g.now.time(), &g.now.date())];
+    let mut column: Vec<Element<Msg>> = vec![clock(size, &g.now().time(), &g.now().date())];
     let mut block_h = CLOCK_H;
     if main {
-        let (content, h) = match g.login.screen() {
+        let (content, h) = match g.login().screen() {
             Screen::Unstarted => (aizome_kit::column(Vec::new()).into(), 0.0),
             Screen::People { people: list, selected } => people(g, size, list, selected),
             Screen::Name { typed } => name(g, size, typed),
-            Screen::Login { person, progress, escape } => password(g, size, person, progress, escape),
+            Screen::Login { person, progress, way_back } => password(g, size, person, progress, way_back).into_parts(),
         };
         column.push(content);
         block_h += h;
@@ -99,14 +99,14 @@ fn clock(size: Size, time: &str, date: &str) -> Element<Msg> {
 /// The computer's name at the top left; the power menu's button at the
 /// top right.
 fn top_bar(g: &Greeter, size: Size) -> Element<Msg> {
-    let host = g.hostname.clone();
+    let host = g.hostname().to_owned();
     let name = drawn(size.width / 2.0, 44.0, host.clone(), move |cx| {
         let s = look::ui(13.0, typeface::WEIGHT_SEMIBOLD, color(NIGHT.text2));
         cx.draw_text_in(&host, &s, Rect::new(24.0, 0.0, cx.bounds().x1, 44.0), Align::Start);
     })
-    .text(g.hostname.clone(), SemanticRole::Label);
+    .text(g.hostname().to_owned(), SemanticRole::Label);
     let mut items: Vec<(f64, Element<Msg>)> = vec![(0.0, name.into())];
-    if g.cfg.power {
+    if g.offers_power() {
         let button = drawn(32.0, 28.0, "power", |cx| {
             let b = cx.bounds();
             if cx.is_hovered() {
@@ -163,7 +163,7 @@ fn people(g: &Greeter, size: Size, list: &[User], selected: usize) -> (Element<M
         .enumerate()
         .map(|(i, u)| {
             let selected = i == selected;
-            let pic = g.avatars.get(&u.name).cloned();
+            let pic = g.avatar(&u.name);
             let (initial, real) = (u.initial(), u.real_name.clone());
             drawn(TILE_W, WHO_H, (real.clone(), selected, pic.is_some()), move |cx| {
                 let b = cx.bounds();
@@ -192,7 +192,7 @@ fn people(g: &Greeter, size: Size, list: &[User], selected: usize) -> (Element<M
     });
     let mut parts: Vec<Element<Msg>> = vec![row.into(), hint.into()];
     parts.push(message(g, size));
-    let power = g.cfg.power;
+    let power = g.offers_power();
     let body = focus_keys(aizome_kit::column(parts), move |k| match named(k) {
         Some(NamedKey::ArrowLeft) => Some(Msg::Previous),
         Some(NamedKey::ArrowRight) => Some(Msg::Next),
@@ -212,16 +212,16 @@ fn named(k: &KeyEvent) -> Option<NamedKey> {
 }
 
 /// The person logging in, the field, their session, what's to say, and
-/// the way back to choosing someone else, where there's one.
+/// the way back the model gave the login.
 fn password(
     g: &Greeter,
     size: Size,
     person: Person<'_>,
     progress: Progress<'_>,
-    escape: EscapeTo,
-) -> (Element<Msg>, f64) {
+    way_back: WayBack,
+) -> block::LoginBlock {
     let (real, initial, pic) = match person {
-        Person::Listed(u) => (u.real_name.clone(), u.initial(), g.avatars.get(&u.name).cloned()),
+        Person::Listed(u) => (u.real_name.clone(), u.initial(), g.avatar(&u.name)),
         Person::Typed(n) => {
             let i = n.chars().next().map(|c| c.to_uppercase().collect()).unwrap_or_default();
             (n.to_owned(), i, None)
@@ -252,11 +252,11 @@ fn password(
     if secret {
         f = f.secure();
     }
-    let boxed = boxed_field(Element::from(f).id("greeter-password"), g.login.failed());
-    let off = crate::app::shake_offset(g.shake);
+    let boxed = boxed_field(Element::from(f).id("greeter-password"), g.login().failed());
+    let off = crate::app::shake_offset(g.shake());
     let field_row =
         aizome_kit::container(boxed).padding([0.0, 0.0, 0.0, ((size.width - FIELD_W) / 2.0 + off).max(0.0)]);
-    let several = g.sessions.len() > 1;
+    let several = g.several_sessions();
     // As wide as the name (and its chevron), centred: the menu hangs from it.
     let label = session.clone();
     let chooser = drawn(0.0, LINE_H, (session.clone(), several), move |cx| {
@@ -282,15 +282,84 @@ fn password(
         .width(size.width)
         .align_x(Align::Center)
         .padding([4.0, 0.0, 0.0, 0.0]);
-    let mut parts: Vec<Element<Msg>> = vec![who.into(), field_row.into(), chooser.into(), message(g, size)];
-    let mut h = WHO_H + FIELD_H + 4.0 + LINE_H + LINE_H;
-    // The way back is the login's: to the row, or to the name as typed.
-    let back = match escape {
-        EscapeTo::People | EscapeTo::Name => true,
-        EscapeTo::Nowhere => false,
-    };
-    if back {
-        let link = drawn(size.width, LINE_H, "others", |cx| {
+    let parts: Vec<Element<Msg>> = vec![who.into(), field_row.into(), chooser.into(), message(g, size)];
+    let h = WHO_H + FIELD_H + 4.0 + LINE_H + LINE_H;
+    let power = g.offers_power();
+    block::with_way_back(way_back, parts, h, size.width, move |k| match named(k) {
+        Some(NamedKey::F(2)) if several => Some(Msg::SessionMenu),
+        Some(NamedKey::F(3)) if power => Some(Msg::PowerMenu),
+        _ => None,
+    })
+}
+
+/// What the login screen shows of a login, with its way back. Only
+/// [`with_way_back`](block::with_way_back) makes one, from the
+/// [`WayBack`] the model put in the [`Screen`]: the view can't show a
+/// login without the way back the model decided on. It once decided that
+/// itself, from the configuration, the number of people and its own idea
+/// of the stage, and left a typed name with neither the link nor Escape
+/// (SVC-05):
+///
+/// ```compile_fail,E0451
+/// use aizome_greeter::app::Msg;
+/// use aizome_greeter::view::block::LoginBlock;
+/// use aizome_kit::element::Element;
+/// fn login_block(body: Element<Msg>, height: f64) -> LoginBlock {
+///     LoginBlock { element: body, height }
+/// }
+/// ```
+///
+/// ```
+/// use aizome_greeter::app::Msg;
+/// use aizome_greeter::login::WayBack;
+/// use aizome_greeter::view::block::{LoginBlock, with_way_back};
+/// use aizome_kit::element::Element;
+/// fn login_block(way_back: WayBack, body: Vec<Element<Msg>>, height: f64) -> LoginBlock {
+///     with_way_back(way_back, body, height, 1440.0, |_| None)
+/// }
+/// ```
+pub mod block {
+    use super::*;
+
+    /// A login's part of the screen, and its height.
+    pub struct LoginBlock {
+        element: Element<Msg>,
+        height: f64,
+    }
+
+    impl LoginBlock {
+        pub(super) fn into_parts(self) -> (Element<Msg>, f64) {
+            (self.element, self.height)
+        }
+    }
+
+    /// The login's `body` (`height` tall, `width` wide) with its way back:
+    /// "Log in as someone else" where the model offers one, and Escape
+    /// always, which the model makes do nothing where there's none. Other
+    /// keys go to `keys_of`.
+    pub fn with_way_back(
+        way_back: WayBack,
+        mut body: Vec<Element<Msg>>,
+        mut height: f64,
+        width: f64,
+        keys_of: impl Fn(&KeyEvent) -> Option<Msg> + 'static,
+    ) -> LoginBlock {
+        match way_back.to() {
+            EscapeTo::People | EscapeTo::Name => {
+                body.push(someone_else(width));
+                height += LINE_H;
+            }
+            EscapeTo::Nowhere => {}
+        }
+        let element = keys(aizome_kit::column(body), move |k| match named(k) {
+            Some(NamedKey::Escape) => Some(Msg::Back),
+            _ => keys_of(k),
+        });
+        LoginBlock { element, height }
+    }
+
+    fn someone_else(width: f64) -> Element<Msg> {
+        drawn(width, LINE_H, "others", |cx| {
             let s = look::ui(
                 12.5,
                 typeface::WEIGHT_REGULAR,
@@ -300,18 +369,9 @@ fn password(
         })
         .hoverable()
         .on_click(Msg::Back)
-        .text("Log in as someone else", SemanticRole::Button);
-        parts.push(link.into());
-        h += LINE_H;
+        .text("Log in as someone else", SemanticRole::Button)
+        .into()
     }
-    let power = g.cfg.power;
-    let body = keys(aizome_kit::column(parts), move |k| match named(k) {
-        Some(NamedKey::Escape) if back => Some(Msg::Back),
-        Some(NamedKey::F(2)) if several => Some(Msg::SessionMenu),
-        Some(NamedKey::F(3)) if power => Some(Msg::PowerMenu),
-        _ => None,
-    });
-    (body, h)
 }
 
 /// The user name to log in as (no list, or no one on it).
@@ -351,11 +411,11 @@ fn boxed_field(f: Element<Msg>, failed: u32) -> Element<Msg> {
 /// What's to say under the field: why the last try failed, what PAM says,
 /// Caps Lock, or why the power menu didn't do it.
 fn message(g: &Greeter, size: Size) -> Element<Msg> {
-    let msg = if let Some((m, tone)) = g.login.message() {
+    let msg = if let Some((m, tone)) = g.login().message() {
         Some((m.to_owned(), if tone == Tone::Error { Hue::Red } else { Hue::Text2 }))
-    } else if let Some(e) = &g.power_error {
-        Some((e.clone(), Hue::Red))
-    } else if g.caps {
+    } else if let Some(e) = g.power_error() {
+        Some((e.to_owned(), Hue::Red))
+    } else if g.caps() {
         Some(("Caps Lock is on".to_owned(), Hue::Amber))
     } else {
         None

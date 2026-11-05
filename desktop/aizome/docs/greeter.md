@@ -34,6 +34,8 @@ with the same pieces (`aizome-face`).
   wrong one asks for the password again; Escape goes back to the name.
 - If greetd can't begin a login at all (an unknown user), the field says
   *Press Return to try again*, and Return does.
+- What's typed while the field says *Checking…* stays there: Return
+  leaves it until greetd asks its question.
 
 Whoever logged in last starts at their password. Other displays show the
 wallpaper and the time.
@@ -71,9 +73,13 @@ the conversation's steps are types, as in
 [Sekka's typestate machines](../../../docs/typestate-tier1.md). A login
 carries its own person, so trying again is always for them, and each
 login's way back is part of its type. The view reads the stage as a
-`Screen` and picks none of its own. Every request carries its login's
-ticket. An answer that comes for someone no longer picked is let go, so
-picking someone else mid-check can never start the first person's session.
+`Screen` and picks none of its own; it draws a login only with the way
+back the model gave it. greetd answers each request in turn, and the
+greeter remembers which login each request it sent belongs to, in the
+order sent. An answer that comes for someone no longer picked is let go,
+so picking someone else mid-check can never start the first person's
+session. If the link to greetd breaks, the greeter quits, and greetd
+starts it again.
 
 ## Security
 
