@@ -76,6 +76,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** a second launch while Fusen runs (the shell's Services "New Note", `aizome-fusen --new …`, a launcher click) builds a full `Fusen` (`desktop/aizome/apps/fusen/src/main.rs:42`), gets `Claim::Handed` and returns (`desktop/aizome/apps/fusen/src/main.rs:44`); Drop → `save_all` → `save_stickies` with no stickies writes `{"stickies": []}` (`desktop/aizome/apps/fusen/src/app.rs:598-603`) and deletes the login item (`desktop/aizome/apps/fusen/src/app.rs:607-608`). The running Fusen rewrites both only at its next `save_stickies`; if it's killed or the session ends first, no stickies come back at the next login (confidence: high)
 - **Related:** Services launch `desktop/aizome/crates/aizome-shell/src/services.rs:99-111` (aizome-shell); claim in `desktop/aizome/apps/sumi/src/instance.rs:34` (aizome-sumi)
 - **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#sap-06)
+- **Follow-up:** bug fixed in [#301](https://github.com/bitemyapp/sekka/pull/301), not reified. `main` claims the instance socket before it builds a `Fusen`, and the kept stickies are a state: `Kept::Unopened` until `launched` reopens them, then `Kept::Reopened`. Only a reopened list is written, so a `Fusen` that never launched can't save over it. The request hand-off and the Drop-time save of notes stay implicit.
 
 <a id="sap-07"></a>
 

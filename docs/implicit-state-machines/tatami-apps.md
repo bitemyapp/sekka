@@ -282,6 +282,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** Closing the window (Escape) while a new network is being joined ends the app, since GTK quits when its last window goes. The worker thread dies before `nmcli --wait 45 connection up` returns. `Secret`'s Drop never removes the plaintext passwd-file from `$XDG_RUNTIME_DIR` (`nm.rs:199-203`), and a failed join's new profile is never deleted (`nm.rs:324-326`), so a saved network with the mistyped password stays behind (confidence: medium)
 - **Related:** NetworkManager through nmcli; `desktop/tatami/network/src/main.rs:58`
 - **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#tap-25)
+- **Follow-up:** bug fixed in [#302](https://github.com/bitemyapp/sekka/pull/302), not reified. The password reaches nmcli through a pipe (`passwd-file /dev/stdin`), so no file can be left behind. Closing the window while a join runs only hides it until the join and its rollback are over. Unchanged: the untracked asking phase, "Timeout" counted as a refused password, and a session that kills the program mid-join, which still leaves a failed new profile (but no password).
 
 <a id="tap-26"></a>
 

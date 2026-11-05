@@ -2357,6 +2357,7 @@ Catalog entry: [SAP-06](small-apps.md#sap-06), Fusen launch, request hand-off an
 - **Observed:** `after a second launch handed its request over: stickies.json = "{\n  \"stickies\": []\n}", login item present = false`. The hand-off itself worked: `Notes/From Services.md` was created by the running instance.
 - **Notes:** the running Fusen does not repair the files when it takes the request (`new_note` doesn't call `save_stickies`). Its next `save_stickies` does: an autosave, a sticky opened or closed, Float, Delete, or its own clean quit through `Drop`. So the loss persists only if it is killed or the session ends without `Drop` before then. The test's final step (a kill simulated with `mem::forget`, then the next `--stickies` login) was not reached, because the earlier assertion failed. With the observed empty list, `restore_stickies` has nothing to open.
 - **Files:** `desktop/aizome/apps/fusen/tests/repro_sap_06.rs`
+- **Fixed:** in [#301](https://github.com/bitemyapp/sekka/pull/301), which adopts this test as `desktop/aizome/apps/fusen/tests/second_launch.rs`. With the fix the final step is reached, and the sticky comes back at the next login.
 
 <a id="sap-07"></a>
 
@@ -2827,6 +2828,7 @@ Catalog entry: [TAP-25](tatami-apps.md#tap-25), Joining a Wi-Fi network: one at 
 - **Files:** `desktop/tatami/network/src/repro_tap_25.rs`
 - **Harness:** [`support/tatami-gtk/gtkrun.sh`](reproductions/support/tatami-gtk/gtkrun.sh) (private Xvfb, private session bus and a preload shim refusing host services). Run the test through it as Cargo's runner: `CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER=$PWD/docs/implicit-state-machines/reproductions/support/tatami-gtk/gtkrun.sh cargo test --locked --manifest-path desktop/tatami/<app>/Cargo.toml <filter> -- --test-threads=1`.
 - **Module line added to:** `desktop/tatami/network/src/window.rs`
+- **Fixed:** in [#302](https://github.com/bitemyapp/sekka/pull/302). Its regression test runs this scenario against real NetworkManager rather than the stub: the `network-vm` check's subtest "Closing the window while joining leaves nothing behind" (`nix/network-vm-test.nix`). On main, the password file was there while nmcli waited and afterwards, and Office stayed saved.
 
 <a id="ktl-02"></a>
 
