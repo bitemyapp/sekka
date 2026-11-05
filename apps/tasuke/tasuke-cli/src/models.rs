@@ -199,6 +199,10 @@ fn hardware(json: bool) -> Result {
         if g.integrated {
             about.push("integrated".into());
         }
+        if g.is_unified() && fit::unified_budget(g, &hw).is_none() {
+            // A display GPU, slower than the processor (fit::unified_budget).
+            about.push("not used for models".into());
+        }
         if let Some(bw) = g.bandwidth {
             about.push(format!("{:.0} GB/s", bw.0 / 1e9));
         }

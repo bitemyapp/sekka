@@ -48,7 +48,10 @@ then.
   sentence. The six Models pictures were taken again at `9842393b`, when
   the catalog's notes gained each model's result inside Tasuke; against
   the takes at `58e13304`, `compare` finds changes only from the first
-  card's notes down.
+  card's notes down. The two unified-memory Models pictures were taken
+  again when unified memory was held to the same 10 tokens/s floor as the
+  processor: Muse Glimmer 30B no longer qualifies on the 8060S, and
+  `compare` finds the change only in the "Also fits" count (11 to 10).
 - **Display**: a private headless sway 1.12 with the pixman renderer
   (`desktop/aizome/sukumo/scripts/headless-wayland`, `SIZE=1440x900`),
   with `WAYLAND_DISPLAY`, `DISPLAY` and `AIZOME_SHELL_SOCKET` unset. The

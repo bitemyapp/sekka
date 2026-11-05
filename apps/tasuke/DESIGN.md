@@ -148,12 +148,12 @@ pub enum Event {
 - A model needs weights + KV(context) + compute buffer.
 - It fits on a GPU when that is ≤ 92% of the GPU's free memory. A GPU that drives a display keeps 1.5 GiB back.
 - An MoE can fit with its experts in RAM (`-ncmoe`) when the dense part fits on the GPU and the experts fit in available RAM.
-- On unified memory the budget is RAM minus 8 GiB.
-- When nothing fits on a GPU, it runs on the CPU, recommended only for small MoEs.
+- On unified memory the budget is RAM minus 8 GiB, for integrated GPUs whose bandwidth is known (a Strix Halo, Strix Point, Phoenix, a GB10). Others, like desktop Ryzens' Radeon 610M, are display GPUs: on a Ryzen 7 9800X3D it ran Gemma 4 26B-A4B at half the processor's speed, so models run on the processor.
+- When nothing fits on a GPU, it runs on the CPU, recommended only for small MoEs. Anywhere but a GPU's own memory, a model must be estimated at 10 tokens/s or more.
 
 **Recommendations.**
 
-- Per role, rank the fitting models by measured score, then by trust (no destructive incidents) and speed.
+- Per role, rank the fitting models by measured score, then by trust (no destructive incidents) and speed. One basis for the whole list: Tasuke's own results when every evaluated model in it has one, the evaluation harnesses otherwise.
 - Show maker and lineage. A user setting can hide model families by origin.
 - The curated default per tier is stated in the catalog, with the reason.
 

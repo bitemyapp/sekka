@@ -292,7 +292,8 @@ impl fmt::Display for Tally {
 pub struct Scores {
     pub date: String,
     /// Diagnostics in Tasuke itself (`run.py --agent tasuke`): the product's
-    /// own agent, prompt, skills and policy. What the ranking prefers.
+    /// own agent, prompt, skills and policy. The ranking prefers it when every
+    /// model ranked has one ([`Basis`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tasuke: Option<Tally>,
     /// Desktop tasks in Tasuke, with set-of-marks.
@@ -312,16 +313,34 @@ pub struct Scores {
     pub computer_use_text: Option<Tally>,
 }
 
+/// Which evaluation a ranking compares models by. Tasuke's skills, policy and
+/// numbered controls lift every model, so its results and the evaluation
+/// harnesses' aren't comparable: one ranking uses one basis for every model.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Basis {
+    /// Inside Tasuke (`tasuke`, `computer_use_tasuke`).
+    Tasuke,
+    /// The evaluation harnesses: the bare loop and oh-my-pi pooled, and
+    /// desktop tasks from screenshots.
+    Harnesses,
+}
+
 impl Scores {
-    /// What the assistant role ranks by: Tasuke's own result when measured,
-    /// else both evaluation harnesses pooled.
-    pub fn assistant(&self) -> Option<Tally> {
-        self.tasuke.or_else(|| self.diagnostics_pooled())
+    /// The assistant role's result in `basis`.
+    pub fn assistant(&self, basis: Basis) -> Option<Tally> {
+        match basis {
+            Basis::Tasuke => self.tasuke,
+            Basis::Harnesses => self.diagnostics_pooled(),
+        }
     }
 
-    /// What the desktop role ranks by: Tasuke's own result when measured.
-    pub fn desktop(&self) -> Option<Tally> {
-        self.computer_use_tasuke.or(self.computer_use).or(self.computer_use_text)
+    /// The desktop role's result in `basis`.
+    pub fn desktop(&self, basis: Basis) -> Option<Tally> {
+        match basis {
+            Basis::Tasuke => self.computer_use_tasuke,
+            Basis::Harnesses => self.computer_use.or(self.computer_use_text),
+        }
     }
 
     /// Both diagnostics harnesses pooled.

@@ -377,20 +377,26 @@ fn amd_gpu(card: &DrmCard, ram: &Ram) -> Gpu {
         (false, None) => GpuMemory::Unknown,
     };
     let name = amd_name(&device).unwrap_or_else(|| if integrated { "AMD Radeon (integrated)" } else { "AMD Radeon" }.to_owned());
+    let bandwidth = if integrated {
+        read_hex(&device.join("device")).and_then(amd_integrated).and_then(|(_, bw)| bw)
+    } else {
+        None
+    };
     Gpu {
         vendor: GpuVendor::Amd,
         name,
         memory,
         drives_display: card.drives_display,
         integrated,
-        bandwidth: None,
+        bandwidth,
         pci: card.pci.clone(),
         device_index: None,
         compute_capability: None,
     }
 }
 
-/// amdgpu has `product_name` on some boards; otherwise the PCI device ID.
+/// amdgpu has `product_name` on some boards; otherwise an integrated GPU's
+/// name from [`AMD_INTEGRATED`], or the PCI device ID.
 fn amd_name(device: &Path) -> Option<String> {
     if let Ok(s) = fs::read_to_string(device.join("product_name")) {
         let s = s.trim();
@@ -399,7 +405,31 @@ fn amd_name(device: &Path) -> Option<String> {
         }
     }
     let id = read_hex(&device.join("device"))?;
-    Some(format!("AMD Radeon [1002:{id:04x}]"))
+    Some(amd_integrated(id).map_or_else(|| format!("AMD Radeon [1002:{id:04x}]"), |(name, _)| name.to_owned()))
+}
+
+/// AMD's integrated GPUs by PCI device ID (as pci.ids lists them), with the
+/// bandwidth of their usual memory when they're worth running models on. The
+/// others are display GPUs: on a Ryzen 7 9800X3D, its two-compute-unit Radeon
+/// 610M ran Gemma 4 26B-A4B at half the processor's speed (65 against 130
+/// tokens/s reading a prompt, 8.3 against 17.8 writing; llama-bench, Vulkan).
+/// An APU rarely has a `product_name`, so this is how a Strix Halo is known.
+const AMD_INTEGRATED: &[(u64, &str, Option<f64>)] = &[
+    // 256-bit LPDDR5X-8000.
+    (0x1586, "AMD Radeon 8050S/8060S", Some(256.0)),
+    // 128-bit LPDDR5X-7500.
+    (0x150e, "AMD Radeon 880M/890M", Some(120.0)),
+    // Phoenix and Hawk Point, with DDR5-5600 (LPDDR5X laptops have more).
+    (0x15bf, "AMD Radeon 760M/780M", Some(89.6)),
+    (0x1900, "AMD Radeon 760M/780M", Some(89.6)),
+    // Granite Ridge, Raphael, Mendocino.
+    (0x13c0, "AMD Radeon 610M", None),
+    (0x164e, "AMD Radeon 610M", None),
+    (0x1506, "AMD Radeon 610M", None),
+];
+
+fn amd_integrated(id: u64) -> Option<(&'static str, Option<BytesPerSecond>)> {
+    AMD_INTEGRATED.iter().find(|&&(i, _, _)| i == id).map(|&(_, name, gb)| (name, gb.map(BytesPerSecond::gb_per_s)))
 }
 
 fn intel_gpu(card: &DrmCard) -> Gpu {
@@ -648,6 +678,16 @@ mod tests {
         assert_eq!(known_bandwidth("NVIDIA GeForce RTX 4070 Ti SUPER"), Some(BytesPerSecond::gb_per_s(672.0)));
         assert_eq!(known_bandwidth("NVIDIA GeForce RTX 4070"), Some(BytesPerSecond::gb_per_s(504.0)));
         assert_eq!(known_bandwidth("Mystery GPU"), None);
+    }
+
+    #[test]
+    fn integrated_amd_gpus_by_pci_id() {
+        // A Strix Halo without a product_name: named, and its bandwidth known.
+        assert_eq!(amd_integrated(0x1586), Some(("AMD Radeon 8050S/8060S", Some(BytesPerSecond::gb_per_s(256.0)))));
+        assert_eq!(known_bandwidth("AMD Radeon 8050S/8060S"), Some(BytesPerSecond::gb_per_s(256.0)));
+        // A Ryzen 9000's display GPU: named, but no bandwidth, so it runs no models.
+        assert_eq!(amd_integrated(0x13c0), Some(("AMD Radeon 610M", None)));
+        assert_eq!(amd_integrated(0x744c), None);
     }
 
     #[test]

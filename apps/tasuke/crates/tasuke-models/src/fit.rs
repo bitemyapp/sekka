@@ -11,7 +11,8 @@
 //!    other layers' experts in system RAM. The fewest layers that fit are
 //!    moved.
 //! 3. **On unified memory** (an APU, a GB10): the budget is RAM less 8 GiB,
-//!    capped by what the driver lets the GPU map.
+//!    capped by what the driver lets the GPU map; only for integrated GPUs
+//!    known to run models ([`unified_budget`]).
 //! 4. **On the CPU**, in RAM less 8 GiB.
 //!
 //! Each placement first tries the requested context, then shrinks it (to a
@@ -267,10 +268,13 @@ pub fn gpu_budget(gpu: &Gpu, basis: MemoryBasis) -> Option<Bytes> {
 }
 
 /// Unified memory's budget: RAM less the system reserve, capped by the GPU's
-/// mapping limit.
+/// mapping limit. Only GPUs whose bandwidth is known (a Strix Halo, a GB10)
+/// have one: an unknown integrated GPU may be a display GPU, like desktop
+/// Ryzens' Radeon 610M, which runs models at half the processor's speed
+/// (see `hardware::AMD_INTEGRATED`), so models run on the processor.
 pub fn unified_budget(gpu: &Gpu, hw: &Hardware) -> Option<Bytes> {
     match gpu.memory {
-        GpuMemory::Unified { limit } => {
+        GpuMemory::Unified { limit } if gpu.bandwidth.is_some() => {
             let ram = hw.ram.total - SYSTEM_RESERVE;
             Some(limit.map_or(ram, |l| l.min(ram)))
         }

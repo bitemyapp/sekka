@@ -22,7 +22,7 @@ pinned to the same files, so what a person downloads is what was measured.
 | `args`, `offload_args` | Extra llama-server arguments, and those used when experts are moved to system RAM |
 | `keep_reasoning`, `sampling`, `template_kwargs` | Request settings the evaluations used for the model |
 | `files` | Hugging Face repository, revision, path, size and sha256 of each file; downloads are checked against the sha256 before they are used |
-| `scores` | Measured results with their date: `diagnostics` (the bare loop), `diagnostics_omp`, `computer_use` (screenshots) or `computer_use_text` (element lists), and `tasuke`/`computer_use_tasuke` when Tasuke itself was evaluated; the assistant and desktop roles rank by Tasuke's own result when there is one |
+| `scores` | Measured results with their date: `diagnostics` (the bare loop), `diagnostics_omp`, `computer_use` (screenshots) or `computer_use_text` (element lists), and `tasuke`/`computer_use_tasuke` when Tasuke itself was evaluated; a ranking uses Tasuke's own results only when every evaluated model it ranks has one, and the harnesses' for all of them otherwise, since Tasuke lifts every model it runs |
 | `speed` | Single-stream decode and prefill on the reference GPU (`[reference]`), measured; other GPUs are estimated from memory bandwidth |
 | `incidents` | Anything an evaluation saw the model do to the machine, in plain words; a model with incidents loses ties |
 | `notes` | What the evaluations showed, for people |

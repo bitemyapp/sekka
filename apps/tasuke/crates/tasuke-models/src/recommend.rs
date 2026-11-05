@@ -3,11 +3,16 @@
 //! Ranking, per role:
 //!
 //! - Only entries with the role that fit, and aren't hidden by the user's
-//!   `exclude_lineage`, are considered. CPU and offloaded placements must be
-//!   estimated at [`MIN_USEFUL_DECODE`] or more.
+//!   `exclude_lineage`, are considered. Anywhere but a GPU's own memory (the
+//!   CPU, unified memory, experts offloaded to RAM) a model must be estimated
+//!   at [`MIN_USEFUL_DECODE`] or more, the curated default included.
 //! - Evaluated entries are ranked by their measured score for the role:
-//!   pooled diagnostics (bare loop and oh-my-pi) for `assistant`, desktop tasks
-//!   for `desktop`, and the estimated decode speed for `fast`.
+//!   diagnostics for `assistant`, desktop tasks for `desktop`, and the
+//!   estimated decode speed for `fast`. Scores come from one [`Basis`] for
+//!   all of them: Tasuke's own results when every evaluated entry ranked has
+//!   one, the evaluation harnesses (bare loop and oh-my-pi pooled, desktop
+//!   tasks from screenshots) otherwise, since a model measured inside Tasuke
+//!   would otherwise outrank one measured only in a stricter harness.
 //! - Scores within [`CLOSE`] of each other are a tie, since one or two
 //!   scenarios is within run-to-run variation: ties are broken by trust (no
 //!   destructive incidents), then by the better placement, then by score and
@@ -18,7 +23,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::catalog::{Catalog, Entry, Role, Tally};
+use crate::catalog::{Basis, Catalog, Entry, Role, Tally};
 use crate::fit::{self, Fit, FitOptions};
 use crate::hardware::Hardware;
 use crate::units::{Bytes, ModelId, TokensPerSecond};
@@ -45,6 +50,9 @@ pub struct Recommendation {
     /// The measured result the ranking used, if evaluated.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub score: Option<Tally>,
+    /// Where `score` was measured: the same for every recommendation in a list.
+    #[serde(default = "harnesses")]
+    pub basis: Basis,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub estimated_decode: Option<TokensPerSecond>,
     pub trusted: bool,
@@ -55,13 +63,25 @@ pub struct Recommendation {
     pub why: String,
 }
 
-/// The measured score `role` ranks by.
-pub fn role_score(entry: &Entry, role: Role) -> Option<Tally> {
+fn harnesses() -> Basis {
+    Basis::Harnesses
+}
+
+/// The measured score `role` ranks by, in `basis`.
+pub fn role_score(entry: &Entry, role: Role, basis: Basis) -> Option<Tally> {
     let s = entry.scores.as_ref()?;
     match role {
-        Role::Assistant | Role::Fast => s.assistant(),
-        Role::Desktop => s.desktop(),
+        Role::Assistant | Role::Fast => s.assistant(basis),
+        Role::Desktop => s.desktop(basis),
     }
+}
+
+/// The basis `entries` are ranked on for `role`: Tasuke's own results when
+/// every evaluated one has them, the evaluation harnesses otherwise.
+pub fn ranking_basis<'e>(entries: impl IntoIterator<Item = &'e Entry>, role: Role) -> Basis {
+    let mut evaluated = entries.into_iter().filter(|e| e.evaluated).peekable();
+    let measured = evaluated.peek().is_some() && evaluated.all(|e| role_score(e, role, Basis::Tasuke).is_some());
+    if measured { Basis::Tasuke } else { Basis::Harnesses }
 }
 
 /// The largest memory budget for a model on `hw`: its best GPU, unified
@@ -83,16 +103,26 @@ pub fn curated_default<'c>(hw: &Hardware, catalog: &'c Catalog, role: Role, pref
     candidates.sort_by_key(|d| std::cmp::Reverse(d.min_budget));
     candidates.into_iter().find(|d| {
         catalog.get(&d.model).is_some_and(|e| {
-            !excluded(e, prefs) && matches!(
-                    fit::fit(e, hw, FitOptions::default()),
-                    Fit::Gpu { .. } | Fit::Unified { .. } | Fit::GpuWithExpertOffload { .. }
-                )
+            let fit = fit::fit(e, hw, FitOptions::default());
+            !excluded(e, prefs)
+                && matches!(fit, Fit::Gpu { .. } | Fit::Unified { .. } | Fit::GpuWithExpertOffload { .. })
+                && fast_enough(e, &fit, hw, catalog)
         })
     })
 }
 
 fn excluded(entry: &Entry, prefs: &Preferences) -> bool {
     prefs.exclude_lineage.iter().any(|tag| entry.matches_lineage(tag))
+}
+
+/// Whether `entry` placed as `fit` is worth suggesting: on a GPU's own memory
+/// it is; anywhere else it must be estimated at [`MIN_USEFUL_DECODE`] or more.
+fn fast_enough(entry: &Entry, fit: &Fit, hw: &Hardware, catalog: &Catalog) -> bool {
+    match fit {
+        Fit::Gpu { .. } => true,
+        Fit::TooLarge { .. } => false,
+        _ => fit::estimate_decode(entry, fit, hw, &catalog.reference).is_some_and(|s| s >= MIN_USEFUL_DECODE),
+    }
 }
 
 /// Ranked recommendations for `role` on `hw`; empty when nothing fits.
@@ -107,16 +137,16 @@ pub fn recommend(hw: &Hardware, catalog: &Catalog, role: Role, prefs: &Preferenc
             if !fit.fits() {
                 return None;
             }
-            let speed = fit::estimate_decode(e, &fit, hw, &catalog.reference);
-            let slow_placement = matches!(fit, Fit::Cpu { .. } | Fit::GpuWithExpertOffload { .. });
-            if slow_placement && speed.is_none_or(|s| s < MIN_USEFUL_DECODE) {
+            if !fast_enough(e, &fit, hw, catalog) {
                 return None;
             }
+            let speed = fit::estimate_decode(e, &fit, hw, &catalog.reference);
             let is_default = default.is_some_and(|d| d.model == e.id);
             Some(Recommendation {
                 id: e.id.clone(),
                 role,
-                score: role_score(e, role),
+                score: None,
+                basis: Basis::Harnesses,
                 estimated_decode: speed,
                 trusted: e.trusted(),
                 evaluated: e.evaluated,
@@ -126,6 +156,12 @@ pub fn recommend(hw: &Hardware, catalog: &Catalog, role: Role, prefs: &Preferenc
             })
         })
         .collect();
+    let entry = |r: &Recommendation| catalog.get(&r.id).expect("from the catalog");
+    let basis = ranking_basis(recs.iter().map(entry), role);
+    for r in &mut recs {
+        r.score = role_score(entry(r), role, basis);
+        r.basis = basis;
+    }
     rank(&mut recs, role);
     // The curated choice leads: it is what first run downloads.
     if let Some(i) = recs.iter().position(|r| r.curated_default) {
@@ -174,9 +210,13 @@ fn why(e: &Entry, r: &Recommendation, role: Role, hw: &Hardware, default_why: Op
     if let Some(reason) = default_why {
         parts.push(reason.to_owned());
     }
+    let place = match r.basis {
+        Basis::Tasuke => "inside Tasuke",
+        Basis::Harnesses => "in Sekka's evaluations",
+    };
     match (role, r.score) {
-        (Role::Desktop, Some(t)) => parts.push(format!("Did {} of {} desktop tasks in Sekka's evaluations.", t.passed, t.total)),
-        (_, Some(t)) => parts.push(format!("Fixed {} of {} injected faults in Sekka's evaluations.", t.passed, t.total)),
+        (Role::Desktop, Some(t)) => parts.push(format!("Did {} of {} desktop tasks {place}.", t.passed, t.total)),
+        (_, Some(t)) => parts.push(format!("Fixed {} of {} injected faults {place}.", t.passed, t.total)),
         (_, None) => parts.push("Not yet evaluated by Sekka.".to_owned()),
     }
     if let Some(i) = e.incidents.first() {
@@ -186,4 +226,83 @@ fn why(e: &Entry, r: &Recommendation, role: Role, hw: &Hardware, default_why: Op
     parts.push(format!("Runs {}{speed}.", r.fit.describe(hw)));
     parts.push(format!("Made by {} ({}).", e.maker, e.origin.join(", ")));
     parts.join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hardware::{Cpu, Gpu, GpuMemory, GpuVendor, Ram};
+    use crate::units::BytesPerSecond;
+
+    fn machine(gpu: &str, bandwidth: Option<f64>, ram_gib: u64) -> Hardware {
+        Hardware {
+            gpus: vec![Gpu {
+                vendor: GpuVendor::Amd,
+                name: gpu.into(),
+                memory: GpuMemory::Unified { limit: Some(Bytes::gib(ram_gib / 2)) },
+                drives_display: true,
+                integrated: true,
+                bandwidth: bandwidth.map(BytesPerSecond::gb_per_s),
+                pci: None,
+                device_index: None,
+                compute_capability: None,
+            }],
+            ram: Ram { total: Bytes::gib(ram_gib), available: Bytes::gib(ram_gib / 2) },
+            cpu: Cpu { model: "AMD Ryzen".into(), physical_cores: 8, logical_cores: 16, ..Cpu::default() },
+            notes: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_display_gpu_runs_nothing_and_slow_models_stay_off_the_list() {
+        // A Ryzen 7 9800X3D's Radeon 610M with 64 GB, as detected.
+        let hw = machine("AMD Radeon 610M", None, 64);
+        let catalog = Catalog::load_default();
+        let dense = catalog.get(&ModelId::new("gemma-4-31b")).unwrap();
+        assert!(matches!(fit::fit(dense, &hw, FitOptions::default()), Fit::Cpu { .. }));
+        let recs = recommend(&hw, &catalog, Role::Assistant, &Preferences::default());
+        assert!(!recs.is_empty());
+        assert!(recs.iter().all(|r| matches!(r.fit, Fit::Cpu { .. })), "{recs:?}");
+        assert!(recs.iter().all(|r| r.estimated_decode.is_some_and(|s| s >= MIN_USEFUL_DECODE)), "{recs:?}");
+        assert!(!recs.iter().any(|r| r.id.as_str() == "gemma-4-31b"));
+    }
+
+    #[test]
+    fn unified_memory_is_held_to_the_same_speed() {
+        // A Phoenix laptop with 32 GB: a dense 31B would fit, at about 3 tokens/s.
+        let hw = machine("AMD Radeon 760M/780M", Some(89.6), 32);
+        let catalog = Catalog::load_default();
+        let recs = recommend(&hw, &catalog, Role::Assistant, &Preferences::default());
+        assert!(!recs.iter().any(|r| r.id.as_str() == "gemma-4-31b"), "{recs:?}");
+        assert!(recs.iter().all(|r| r.estimated_decode.is_some_and(|s| s >= MIN_USEFUL_DECODE)), "{recs:?}");
+    }
+
+    #[test]
+    fn one_basis_for_every_model_ranked() {
+        let hw = machine("AMD Radeon 8050S/8060S", Some(256.0), 128);
+        let mut catalog = Catalog::load_default();
+        // Five models were measured inside Tasuke, the others only in the
+        // harnesses: every one is ranked by the harnesses.
+        let recs = recommend(&hw, &catalog, Role::Assistant, &Preferences::default());
+        assert!(recs.iter().all(|r| r.basis == Basis::Harnesses), "{recs:?}");
+        let gemma = recs.iter().find(|r| r.id.as_str() == "gemma-4-31b").unwrap();
+        assert_eq!(gemma.score, catalog.get(&gemma.id).and_then(|e| e.scores.as_ref()?.diagnostics_pooled()));
+        // Once every one has a Tasuke result, Tasuke's results rank them.
+        for s in catalog.models.iter_mut().filter_map(|e| e.scores.as_mut()) {
+            s.tasuke.get_or_insert(Tally { passed: 1, total: 32 });
+        }
+        let recs = recommend(&hw, &catalog, Role::Assistant, &Preferences::default());
+        assert!(recs.iter().all(|r| r.basis == Basis::Tasuke), "{recs:?}");
+        let gemma = recs.iter().find(|r| r.id.as_str() == "gemma-4-31b").unwrap();
+        assert_eq!(gemma.score, Some(Tally { passed: 28, total: 32 }));
+        assert!(gemma.why.contains("inside Tasuke"), "{}", gemma.why);
+    }
+
+    #[test]
+    fn a_strix_halo_keeps_the_31b() {
+        let hw = machine("AMD Radeon 8050S/8060S", Some(256.0), 128);
+        let catalog = Catalog::load_default();
+        let d = curated_default(&hw, &catalog, Role::Assistant, &Preferences::default()).unwrap();
+        assert_eq!(d.model.as_str(), "gemma-4-31b");
+    }
 }
