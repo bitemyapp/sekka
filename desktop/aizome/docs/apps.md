@@ -329,7 +329,7 @@ parent when needed.
 
 Replace at a name conflict moves the item that was there to the Trash,
 for Put Back and Undo as for copies and moves. If the Trash can't take it,
-it stays beside its replacement under a hidden name the report gives, and
+it stays beside its replacement as “name (replaced)”, and
 an item that changed while the question was up isn't replaced at all. A
 folder put back by merging, with a conflict in it skipped, keeps the
 skipped part in the Trash, where it can still be put back from. Undo and
