@@ -117,12 +117,18 @@ impl<'f> Item<'f> {
 
     /// It was a file, copied to [`copy`](Self::copy) as `file`. In a move,
     /// its data is synced and its source recorded in its folder; if the
-    /// sync fails, the item comes back to try again.
+    /// sync fails, or `file` isn't what's at its copy, the item comes back.
     pub fn file(self, file: &fs::File) -> Result<(), (Item<'f>, io::Error)> {
-        if self.into.is_some()
-            && let Err(e) = file.sync_all()
-        {
-            return Err((self, e));
+        if self.into.is_some() {
+            let made = |m: &fs::Metadata| (m.dev(), m.ino());
+            let is_copy =
+                matches!((file.metadata(), fs::symlink_metadata(&self.copy)), (Ok(a), Ok(b)) if made(&a) == made(&b));
+            if !is_copy {
+                return Err((self, io::Error::new(io::ErrorKind::InvalidInput, "it isn't the copy made")));
+            }
+            if let Err(e) = file.sync_all() {
+                return Err((self, e));
+            }
         }
         if let Some(into) = self.into {
             into.leaves.push(self.source);
@@ -131,10 +137,15 @@ impl<'f> Item<'f> {
     }
 
     /// It was a link, made at [`copy`](Self::copy): all of it is its name.
-    pub fn link(self) {
+    /// In a move, its source is recorded only if a link is there.
+    pub fn link(self) -> io::Result<()> {
         if let Some(into) = self.into {
+            if !fs::symlink_metadata(&self.copy)?.file_type().is_symlink() {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "no link was made"));
+            }
             into.leaves.push(self.source);
         }
+        Ok(())
     }
 
     /// It's a folder, made at [`copy`](Self::copy): what's copied into it
@@ -166,9 +177,9 @@ impl<'f> Item<'f> {
 /// use hako::fsops::place::Folder;
 /// fn in_turn(top: &mut Folder<'_>) -> std::io::Result<()> {
 ///     let mut inner = top.child("inner".as_ref()).folder();
-///     inner.child("y.txt".as_ref()).link();
+///     inner.child("y.txt".as_ref()).link()?;
 ///     inner.sync()?;
-///     top.child("x.txt".as_ref()).link();
+///     top.child("x.txt".as_ref()).link()?;
 ///     Ok(())
 /// }
 /// ```
@@ -253,6 +264,11 @@ impl Move {
         if dir.is_none() || dir != self.partial.parent() {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "it isn't where the copy was made"));
         }
+        // A move inside another copy (in its partial) isn't in place till
+        // that one is: its sources can't go yet.
+        if placed.target().ancestors().skip(1).any(|a| a.file_name().is_some_and(super::names::is_temporary)) {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "it's inside a copy not in place yet"));
+        }
         sys::sync_dir(dir.unwrap_or(Path::new("/")))?;
         Ok(Committed(self.came))
     }
@@ -290,5 +306,39 @@ impl Committed {
             let _ = fs::remove_dir(dir);
         }
         problems
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fsops::testing::TempDir;
+
+    #[test]
+    fn an_item_records_only_the_copy_made_at_its_place() {
+        let t = TempDir::new("place-item");
+        let src = t.file("src/a.txt", "a");
+        let partial = t.dir("dest").join(".a.txt.hako-part-x");
+        let mut moving = Move::new(&src, &partial);
+        assert!(moving.item().link().is_err(), "no link was made there");
+        fs::write(&partial, "a").unwrap();
+        let elsewhere = fs::File::open(&src).unwrap();
+        assert!(moving.item().file(&elsewhere).is_err(), "the source's handle isn't its copy");
+        assert!(moving.came.leaves.is_empty());
+        let copy = fs::File::open(&partial).unwrap();
+        assert!(moving.item().file(&copy).is_ok());
+        assert_eq!(moving.came.leaves, vec![src]);
+    }
+
+    #[test]
+    fn a_move_inside_another_copy_doesn_t_commit() {
+        let t = TempDir::new("place-nested");
+        let outer = t.dir("dest/.f.hako-part-x");
+        let src = t.file("src/a.txt", "a");
+        let partial = outer.join(".a.txt.hako-part-y");
+        fs::write(&partial, "a").unwrap();
+        let moving = Move::new(&src, &partial);
+        let placed = rename(&partial, &outer.join("a.txt")).unwrap();
+        assert!(moving.commit(&placed).is_err(), "the outer copy isn't in place");
     }
 }
