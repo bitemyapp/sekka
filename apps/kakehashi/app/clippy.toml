@@ -1,0 +1,16 @@
+# Only the person's press of the "Erase …?" dialog's OK makes a
+# dialog::Pressed, the only way to start the helper. GPUI's public input
+# API would let the window's code press OK itself: dispatching the dialog's
+# Confirm action, an Enter keystroke, or a synthetic click. The window
+# never dispatches input, so all of it is denied, in both GPUI crates the
+# kit links (gpui-fast and gpui-pre, each named `gpui`). The binary and the
+# library forbid the lint, and the Nix package's check runs it
+# (nix/kakehashi.nix).
+disallowed-methods = [
+  { path = "gpui::Window::dispatch_action", reason = "presses dialogs' buttons for the program; only a person presses OK" },
+  { path = "gpui::Window::dispatch_keystroke", reason = "types keys for the program; only a person presses OK" },
+  { path = "gpui::Window::dispatch_event", reason = "makes input for the program; only a person presses OK" },
+  { path = "gpui::App::dispatch_action", reason = "presses dialogs' buttons for the program; only a person presses OK" },
+  { path = "gpui::FocusHandle::dispatch_action", reason = "presses dialogs' buttons for the program; only a person presses OK" },
+  { path = "gpui::PlatformInputHandler::dispatch_input", reason = "types text for the program" },
+]

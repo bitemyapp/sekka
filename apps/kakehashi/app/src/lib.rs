@@ -5,5 +5,9 @@
 //!
 //! [`Pressed`]: dialog::Pressed
 
+// GPUI's input dispatch would press the dialog's OK for the program
+// (clippy.toml): never here.
+#![forbid(clippy::disallowed_methods)]
+
 pub mod dialog;
 pub mod elevate;
