@@ -1838,6 +1838,12 @@ fallback and automatic moves disabled; it does not inherit dictation's
 microphone selection. Stop, process cancellation and parent death terminate
 the owned audio subprocess.
 
+File-caption startup loads and validates the resident model without a
+discarded synthetic-silence inference; file decoding can apply backpressure.
+Live output retains pre-capture inference warm-up: a cold-GPU smoke without
+it overran the bounded queue and dropped the opening audio. Dictation's
+service warm-up is unchanged.
+
 `apps/koe/src/caption_app.rs` is the opt-in, high-contrast system-output
 window. `apps/utsushi/src/captions.rs` consumes the same CLI without linking
 Whisper into the player. Bounded queues and playback generations prevent
@@ -1892,6 +1898,12 @@ Those outputs were not substituted for ground truth. All three references
 remain unvalidated; this record does not establish YouTube superiority in
 either direction.
 
+The [official Qwen3-Omni demo](https://huggingface.co/spaces/Qwen/Qwen3-Omni-Demo)
+was also tried with audio only, blind to both contestants and the publisher
+text. Its audio request and a minimal text-only diagnostic both ended in
+server error events; no transcript was returned and no reference was
+marked validated.
+
 Component smoke checks use a private headless Aizome session and PipeWire
 null output, not the host microphone. Actual local-model inference,
 sink-to-capture graph links, visible captions/turns/lyrics, media seeks and
@@ -1899,15 +1911,22 @@ speed, and Stop/close cleanup are distinct evidence from parser and
 lifecycle tests. These checks do not qualify a Sekka ISO or physical
 hearing-accessibility deployment.
 
+With fresh GPU-cache directories, the final packaged live-caption smoke
+took 47.3 seconds to prepare, then displayed the opening JFK speech
+6.8 seconds after capture became ready, without a gap. Stop/close removed
+the capture node. A separate Stop during preparation reaped the recognizer
+in 0.22 seconds without opening capture. These are individual observations
+on the build host, not startup or latency guarantees.
+
 Original 1440×1000 screenshots from that private headless component session:
 [system-output captions](docs/test-results/koe-system-captions-2026-11-05.png)
 use whisper.cpp's JFK sample through the null sink;
 [generated lyrics](docs/test-results/utsushi-generated-lyrics-2026-11-05.png)
 use [Bautsch's CC0 sung Auld Lang Syne](https://commons.wikimedia.org/wiki/File:AuldLangSyne.ogg),
-Large v3 Turbo and 0.5× playback while the build host was busy. The images
-are unaltered; recognition errors remain visible. They show working
-surfaces and wrapping, not word-perfect transcription or guaranteed live
-latency.
+Large v3 Turbo and normal-speed playback in the packaged player. Its first
+visible lyric arrived 14.8 seconds after Play in this run. The images are
+unaltered; recognition errors remain visible. They show working surfaces,
+not word-perfect transcription or guaranteed live latency.
 
 ### Sukumo
 

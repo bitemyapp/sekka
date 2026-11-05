@@ -405,9 +405,14 @@ async fn consume(
 async fn session(config: Config, options: Options, cancel: Arc<Cancellation>, output: &mut Output) -> Result<()> {
     options.validate()?;
     let engine = Recognizer::new(config.engine);
-    // Load and validate the resident model before opening any audio source.
-    // Silence is discarded, never emitted as a cue or used as context.
-    engine.captions(vec![0.0; audio::RATE], options.diarize, cancel.flag.clone()).await?;
+    if options.input.is_some() {
+        // File decoding applies backpressure, so no discarded inference is needed.
+        engine.prepare_captions(options.diarize, cancel.flag.clone()).await?;
+    } else {
+        // Warm live inference before capture: cold GPU setup can otherwise
+        // overrun the bounded queue and evict the opening audio.
+        engine.captions(vec![0.0; audio::RATE], options.diarize, cancel.flag.clone()).await?;
+    }
     let child = spawn_source(&options)?;
     let queue = Arc::new(Queue::default());
     let capture = tokio::spawn(capture(child, options.input.is_none(), queue.clone(), cancel.clone()));

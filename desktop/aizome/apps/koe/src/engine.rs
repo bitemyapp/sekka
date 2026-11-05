@@ -134,13 +134,7 @@ impl Recognizer {
             Backend::Http => self.http(&samples, cancel).await,
         }
     }
-    /// Timestamped recognition always stays local and reuses resident buffers.
-    pub async fn captions(
-        &self,
-        samples: Vec<f32>,
-        diarize: bool,
-        cancel: Arc<AtomicBool>,
-    ) -> Result<Vec<CaptionSegment>> {
+    fn validate_caption_options(&self, diarize: bool, cancel: &AtomicBool) -> Result<()> {
         ensure!(
             self.config.backend == Backend::Local,
             "captions require the local Whisper backend; HTTP is unsupported"
@@ -150,6 +144,34 @@ impl Recognizer {
             "tinydiarize captions require English and translation disabled"
         );
         ensure!(!cancel.load(Ordering::Relaxed), "cancelled");
+        Ok(())
+    }
+    /// Load and validate without decoding synthetic audio or opening a source.
+    pub async fn prepare_captions(&self, diarize: bool, cancel: Arc<AtomicBool>) -> Result<()> {
+        self.validate_caption_options(diarize, &cancel)?;
+        #[cfg(feature = "local")]
+        {
+            let this = self.clone();
+            tokio::task::spawn_blocking(move || {
+                let mut context = this.context.lock().map_err(|_| anyhow::anyhow!("recognizer mutex poisoned"))?;
+                this.load_model(&mut context, diarize, &cancel)
+            })
+            .await
+            .context("caption model loader failed")?
+        }
+        #[cfg(not(feature = "local"))]
+        {
+            self.local(&[], cancel, Some(diarize)).map(|_| ())
+        }
+    }
+    /// Timestamped recognition always stays local and reuses resident buffers.
+    pub async fn captions(
+        &self,
+        samples: Vec<f32>,
+        diarize: bool,
+        cancel: Arc<AtomicBool>,
+    ) -> Result<Vec<CaptionSegment>> {
+        self.validate_caption_options(diarize, &cancel)?;
         let this = self.clone();
         match tokio::task::spawn_blocking(move || this.local(&samples, cancel, Some(diarize)))
             .await
@@ -159,20 +181,14 @@ impl Recognizer {
             Recognition::Dictation(_) => unreachable!("captions request segments"),
         }
     }
-    #[cfg(not(feature = "local"))]
-    fn local(&self, _: &[f32], _: Arc<AtomicBool>, _: Option<bool>) -> Result<Recognition> {
-        bail!("this build has no local backend; build with the default local feature");
-    }
     #[cfg(feature = "local")]
-    fn local(&self, samples: &[f32], cancel: Arc<AtomicBool>, captions: Option<bool>) -> Result<Recognition> {
-        use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+    fn load_model(&self, context: &mut Option<Resident>, diarize: bool, cancel: &AtomicBool) -> Result<()> {
+        use whisper_rs::{WhisperContext, WhisperContextParameters};
         ensure!(
             self.config.language == "auto" || whisper_rs::get_lang_id(&self.config.language).is_some(),
             "unknown Whisper language code"
         );
-        let mut context = self.context.lock().map_err(|_| anyhow::anyhow!("recognizer mutex poisoned"))?;
         ensure!(!cancel.load(Ordering::Relaxed), "cancelled");
-        let diarize = captions == Some(true);
         let mut tdrz_verified = context.as_ref().is_some_and(|resident| resident.tdrz_verified);
         if diarize && !tdrz_verified {
             // A filename is not evidence of model capability: verify the
@@ -201,16 +217,30 @@ impl Recognizer {
             self.loaded.store(true, Ordering::Relaxed);
         }
         ensure!(!cancel.load(Ordering::Relaxed), "cancelled");
-        // Keep the inference state resident as well as the weights. Recreating
-        // it on every utterance repeats GPU allocation and pipeline setup.
         let resident = context.as_mut().unwrap();
         resident.tdrz_verified = tdrz_verified;
-        let hint_limit = resident.model.n_text_ctx() as usize / 2;
-        let tokens = resident.model.tokenize(&self.config.prompt, self.config.prompt.len() + 1)?;
-        ensure!(
-            tokens.len() <= hint_limit,
-            "vocabulary and engine.prompt exceed Whisper's {hint_limit}-token hint limit; disable a pack or shorten its words"
-        );
+        if !self.config.prompt.is_empty() {
+            let hint_limit = resident.model.n_text_ctx() as usize / 2;
+            let tokens = resident.model.tokenize(&self.config.prompt, self.config.prompt.len() + 1)?;
+            ensure!(
+                tokens.len() <= hint_limit,
+                "vocabulary and engine.prompt exceed Whisper's {hint_limit}-token hint limit; disable a pack or shorten its words"
+            );
+        }
+        Ok(())
+    }
+    #[cfg(not(feature = "local"))]
+    fn local(&self, _: &[f32], _: Arc<AtomicBool>, _: Option<bool>) -> Result<Recognition> {
+        bail!("this build has no local backend; build with the default local feature");
+    }
+    #[cfg(feature = "local")]
+    fn local(&self, samples: &[f32], cancel: Arc<AtomicBool>, captions: Option<bool>) -> Result<Recognition> {
+        use whisper_rs::{FullParams, SamplingStrategy};
+        let mut context = self.context.lock().map_err(|_| anyhow::anyhow!("recognizer mutex poisoned"))?;
+        let diarize = captions == Some(true);
+        self.load_model(&mut context, diarize, &cancel)?;
+        // Reuse inference buffers as well as the weights across chunks.
+        let resident = context.as_mut().unwrap();
         let state = &mut resident.state;
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
         params.set_n_threads(self.config.threads as i32);

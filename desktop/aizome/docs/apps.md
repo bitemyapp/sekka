@@ -972,11 +972,14 @@ rest); folders play their files in Hako's natural order.
   Generated lyrics are speech recognition, not a lyrics lookup service;
   singing and accompaniment can produce incorrect or invented words.
 - **Caption limits**: recognition needs extra CPU/GPU and memory, may arrive
-  late, and can be wrong. Detected turns require the English tinydiarize
-  model and do not identify returning speakers across recognition windows.
-  No captions, audio or lyrics history is saved. Authored subtitles remain
-  selectable; choose them when available. See [Koe](koe.md#live-captions)
-  for system-wide output captions and privacy details.
+  late, and can be wrong. Playback does not wait for model startup, so
+  opening lines can be missed; seek back once recognition is running if
+  you need to replay the opening. Detected turns require the English
+  tinydiarize model and mark possible speaker changes, not persistent
+  speaker identities. No captions, audio or lyrics history is saved.
+  Authored subtitles remain selectable; choose them when available.
+  See [Koe](koe.md#live-captions) for system-wide output captions and
+  privacy details.
 - **Where it was**: a film over five minutes long opens where it was
   left (with Start Over for a few seconds), unless that was in its first
   or last thirty seconds. Open Recent keeps twenty items.

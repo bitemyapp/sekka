@@ -115,6 +115,8 @@ quitting stops capture and clears the text.
   Larger models need more memory and computation; they may not keep up on
   the processor. If inference falls behind, a visible gap reports skipped
   audio rather than allowing an unbounded backlog.
+  Initial model and GPU setup can take tens of seconds. Wait for
+  **CAPTURING** before starting the audio you want transcribed.
 - **Detect speaker turns** needs the verified `small.en-tdrz` model,
   English, and translation off. It uses
   [tinydiarize](https://github.com/akashmjn/tinydiarize)'s experimental
@@ -256,6 +258,11 @@ thirty-second recognition windows with bounded backpressure, not
 real-time playback capture. `--audio-track` is the zero-based audio-track
 ordinal, not the container's stream index. Inputs must be local files.
 Neither launching the CLI nor opening the window enables dictation.
+
+File-caption startup loads and validates the model without transcribing
+synthetic silence. Live output capture warms inference before opening its
+audio source, so cold GPU setup does not consume its bounded audio queue.
+Dictation's separate service warm-up is unchanged.
 
 ## The control protocol
 

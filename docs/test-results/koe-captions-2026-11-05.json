@@ -17,7 +17,8 @@
     "file_window_seconds": 30,
     "custom_prompt": false,
     "translation": false,
-    "diarization": false
+    "diarization": false,
+    "file_caption_startup": "load_only"
   },
   "normalization_policy": "Unicode NFKC/casefold; L/N/M words; internal apostrophes retained; other punctuation/symbols become spaces; no word removal",
   "clip_policy": "source seconds [start,end); timed segments by onset; crossing untimed cues rejected",
@@ -76,7 +77,8 @@
           "errors": 32,
           "wer": 0.128,
           "outcome": "win",
-          "wall_seconds": 7.125
+          "wall_seconds": 34.532,
+          "ndjson_sha256": "9bad222721af027f6d729974b44a208b0b1a1a26aba1f4e3034b6978d434a82d"
         },
         "large_v3_turbo_q8_0": {
           "reference_words": 250,
@@ -87,7 +89,8 @@
           "errors": 33,
           "wer": 0.132,
           "outcome": "win",
-          "wall_seconds": 5.271
+          "wall_seconds": 6.638,
+          "ndjson_sha256": "499a04bcf6290f05cd6b6065b7d861a64bb4bf23b608b26efb3767109f35c119"
         }
       }
     },
@@ -131,7 +134,8 @@
           "errors": 23,
           "wer": 0.10043668122270742,
           "outcome": "win",
-          "wall_seconds": 3.624
+          "wall_seconds": 37.553,
+          "ndjson_sha256": "c5a9049da3908d30f96f34c1e20636b3b9fc155d6a06d1de0da6188775205d6d"
         },
         "large_v3_turbo_q8_0": {
           "reference_words": 229,
@@ -142,7 +146,8 @@
           "errors": 22,
           "wer": 0.09606986899563319,
           "outcome": "win",
-          "wall_seconds": 1.416
+          "wall_seconds": 9.219,
+          "ndjson_sha256": "61d161356be4e622ed86ad28738587d82e66e51e41b04bbd23a27f63fbb4122e"
         }
       }
     },
@@ -186,7 +191,8 @@
           "errors": 22,
           "wer": 0.05569620253164557,
           "outcome": "loss",
-          "wall_seconds": 7.162
+          "wall_seconds": 13.705,
+          "ndjson_sha256": "2ce1d8f4c8531490b14b385d5abc44e1144be5aaf9f89d37152ab93e69fa9de4"
         },
         "large_v3_turbo_q8_0": {
           "reference_words": 395,
@@ -197,7 +203,8 @@
           "errors": 29,
           "wer": 0.07341772151898734,
           "outcome": "loss",
-          "wall_seconds": 2.018
+          "wall_seconds": 5.871,
+          "ndjson_sha256": "f287f97a3d59b05e3f89b5600fe77ed8ce2a04f9737184cd6d37f62ecf8cdbbc"
         }
       }
     }
@@ -240,7 +247,8 @@
     "Reference omissions and boundary mismatches can change the ranking.",
     "No human auditory review or GPT-6-Astra audio review was performed.",
     "Speaker diarization, noisy audio, non-English speech, singing and live latency are not scored by this corpus.",
-    "Inference wall times are observations on this GPU, not real-time guarantees on other hardware."
+    "Inference wall times are observations on this GPU, not real-time guarantees on other hardware.",
+    "Final inference runs overlapped package compilation and player smoke checks; wall times are not a controlled performance benchmark."
   ],
   "reproduction": {
     "evaluator": "desktop/aizome/scripts/evaluate-captions.py",
@@ -248,5 +256,23 @@
     "manifest_sha256": "8fa46da81a2be12f618e34730cffd5e871c44a574882ddb8b98c9b7c08f88781",
     "local_raw_evidence_directory": "/tmp/sekka-caption-eval",
     "redistributed_media": false
-  }
+  },
+  "additional_reference_review_attempts": [
+    {
+      "service": "https://huggingface.co/spaces/Qwen/Qwen3-Omni-Demo",
+      "space_revision": "f04f51c20aeae49bca0005aa99e56bbdfd4267aa",
+      "model_requested_by_demo": "qwen3-omni-flash-2025-12-01",
+      "model_selection_source": "https://huggingface.co/spaces/Qwen/Qwen3-Omni-Demo/raw/f04f51c20aeae49bca0005aa99e56bbdfd4267aa/app.py",
+      "uploaded_public_clip": "DcWqzZ3I2cY",
+      "audio_only": true,
+      "competitor_or_reference_text_supplied": false,
+      "result": "Both the actual audio request and a minimal text-only service diagnostic ended with SSE event:error, data:null. No transcript was returned.",
+      "transcript_returned": false,
+      "raw_evidence": [
+        "DcWqzZ3I2cY/hosted-review-request.json",
+        "DcWqzZ3I2cY/hosted-review-events.txt",
+        "hosted-review-service-diagnostic.json"
+      ]
+    }
+  ]
 }
