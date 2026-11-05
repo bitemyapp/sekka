@@ -5,8 +5,7 @@ use crate::input::{KeyboardOptions, KittyFlags, KittyKeyboard, MouseFormat, Mous
 use crate::parser::{Csi, Handler, Param};
 use crate::style::Underline;
 use crate::{
-    Cell, Color, MAX_COLS, MAX_ROWS, Rgb, Row, SemanticContent, Snapshot, Style, TerminalColors,
-    attrs,
+    Cell, Color, GridSize, Rgb, Row, SemanticContent, Snapshot, Style, TerminalColors, attrs,
 };
 use std::collections::VecDeque;
 use triomphe::Arc;
@@ -187,7 +186,8 @@ struct Screen {
 }
 
 impl Screen {
-    fn new(cols: usize, rows: usize, max_history: usize, byte_limit: Option<usize>) -> Self {
+    fn new(size: GridSize, max_history: usize, byte_limit: Option<usize>) -> Self {
+        let (cols, rows) = (size.cols.get(), size.rows.get());
         let mut screen = Self {
             lines: (0..rows).map(|_| Arc::new(Row::new(cols))).collect(),
             history: History::default(),
@@ -432,7 +432,8 @@ impl Screen {
         }
         self.enforce_budget();
     }
-    fn resize(&mut self, cols: usize, rows: usize, reflow: bool) {
+    fn resize(&mut self, size: GridSize, reflow: bool) {
+        let (cols, rows) = (size.cols.get(), size.rows.get());
         self.budget_signal.pause();
         let old_rows = self.lines.len();
         let history = self.history.len();
@@ -686,6 +687,7 @@ impl ResizeRows {
 }
 
 pub(crate) struct State {
+    size: GridSize,
     primary: Screen,
     alternate: Screen,
     modes: Modes,
@@ -730,12 +732,11 @@ pub(crate) struct State {
 }
 
 impl State {
-    pub fn new(cols: usize, rows: usize, limits: HistoryLimits) -> Self {
-        let cols = cols.clamp(1, MAX_COLS);
-        let rows = rows.clamp(1, MAX_ROWS);
+    pub fn new(size: GridSize, limits: HistoryLimits) -> Self {
         Self {
-            primary: Screen::new(cols, rows, limits.rows, limits.bytes),
-            alternate: Screen::new(cols, rows, 0, Some(0)),
+            size,
+            primary: Screen::new(size, limits.rows, limits.bytes),
+            alternate: Screen::new(size, 0, Some(0)),
             modes: Modes::default(),
             default_grapheme_cluster: false,
             saved_modes: SavedModes::default(),
@@ -760,7 +761,7 @@ impl State {
             cursor_is_default: true,
             next_link_id: 0,
             semantic_markers_seen: false,
-            tabs: default_tabs(cols),
+            tabs: default_tabs(size.cols.get()),
             default_colors: TerminalColors::default(),
             palette: crate::style::default_palette(),
             palette_overrides: [false; 256],
@@ -776,8 +777,7 @@ impl State {
     }
     /// RIS: everything but the configured defaults and OSC 10/11 overrides.
     pub fn full_reset(&mut self) {
-        let cols = self.screen().cols;
-        let rows = self.screen().lines.len();
+        let size = self.size;
         let limits = HistoryLimits {
             rows: self.primary.max_history,
             bytes: self.primary.byte_limit,
@@ -794,7 +794,7 @@ impl State {
         let events = std::mem::take(&mut self.events);
         let mut kitty_clipboard = std::mem::take(&mut self.kitty_clipboard);
         kitty_clipboard.grants.clear();
-        *self = Self::new(cols, rows, limits);
+        *self = Self::new(size, limits);
         self.generation = generation.wrapping_add(1);
         self.responses = responses;
         self.events = events;
@@ -915,17 +915,16 @@ impl State {
             &mut self.primary
         }
     }
-    pub fn resize(&mut self, cols: usize, rows: usize) {
-        let cols = cols.clamp(1, MAX_COLS);
-        let rows = rows.clamp(1, MAX_ROWS);
-        if cols == self.primary.cols && rows == self.primary.lines.len() {
+    pub fn resize(&mut self, size: GridSize) {
+        if size == self.size {
             return;
         }
-        if self.tabs.len() != cols {
-            self.tabs = default_tabs(cols);
+        self.size = size;
+        if self.tabs.len() != size.cols.get() {
+            self.tabs = default_tabs(size.cols.get());
         }
-        self.primary.resize(cols, rows, self.autowrap);
-        self.alternate.resize(cols, rows, false);
+        self.primary.resize(size, self.autowrap);
+        self.alternate.resize(size, false);
         self.generation = self.generation.wrapping_add(1);
     }
     pub fn scrollback_len(&self) -> usize {

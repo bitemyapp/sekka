@@ -3,13 +3,17 @@
 //! terminal answers malformed and oversized writes itself and reports whole
 //! reads and committed writes, in order with OSC 52's requests.
 
+use hotaru_core::{Cols, GridSize, Rows};
 use std::sync::Arc;
 
 use hotaru_core::kitty_clipboard::{Direction, Location, Request, Status, Terminator};
 use hotaru_core::{Terminal, TerminalEvent};
 
 fn terminal() -> Terminal {
-    Terminal::new(20, 4, 0)
+    Terminal::new(
+        GridSize::new(Cols::new(20).unwrap(), Rows::new(4).unwrap()),
+        0,
+    )
 }
 
 fn requests(terminal: &mut Terminal) -> Vec<Request> {

@@ -6,6 +6,7 @@
 //! element's [`Length`]s narrow what its parent offers before it chooses.
 
 pub use sidestep_ui::kurbo::{Insets, Point, Rect, Size, Vec2};
+use std::num::NonZeroU16;
 
 /// How much room an element takes along one axis.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -18,17 +19,39 @@ pub enum Length {
     Fill,
     /// In a row or column, this many shares of what the other children
     /// leave; elsewhere, like [`Length::Fill`].
-    FillPortion(u16),
+    FillPortion(NonZeroU16),
     /// Exactly this many points (as far as the parent allows).
     Fixed(f64),
 }
 
 impl Length {
+    /// [`Length::FillPortion`] with a weight written in the code, which
+    /// fails to build if it is zero.
+    ///
+    /// ```
+    /// use aizome_kit::Length;
+    /// assert_eq!(Length::fill_portion::<3>().portion().map(|n| n.get()), Some(3));
+    /// ```
+    ///
+    /// ```compile_fail
+    /// let _ = aizome_kit::Length::fill_portion::<0>();
+    /// ```
+    pub const fn fill_portion<const N: u16>() -> Length {
+        Length::FillPortion(
+            const {
+                match NonZeroU16::new(N) {
+                    Some(n) => n,
+                    None => panic!("a fill portion's weight must be positive"),
+                }
+            },
+        )
+    }
+
     /// Its shares of the leftover space, if it fills.
-    pub fn portion(self) -> Option<u16> {
+    pub fn portion(self) -> Option<NonZeroU16> {
         match self {
-            Length::Fill => Some(1),
-            Length::FillPortion(n) => Some(n.max(1)),
+            Length::Fill => Some(NonZeroU16::MIN),
+            Length::FillPortion(n) => Some(n),
             _ => None,
         }
     }

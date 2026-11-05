@@ -10,6 +10,7 @@
 //! `cx.state::<T>()`.
 
 use std::any::{Any, TypeId};
+use std::num::NonZeroU16;
 use std::time::{Duration, Instant};
 
 use sidestep_ui::{Canvas, Cursor, Ime, KeyEvent, Modifiers, PointerButton, ScrollPhase, TextLayout};
@@ -390,7 +391,7 @@ pub trait Widget: std::any::Any {
 
     /// Shares of a row's or column's leftover room along its axis,
     /// whatever its own lengths say (a spacer).
-    fn flex(&self) -> Option<u16> {
+    fn flex(&self) -> Option<NonZeroU16> {
         None
     }
 }

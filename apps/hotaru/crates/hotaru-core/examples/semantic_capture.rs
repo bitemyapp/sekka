@@ -1,4 +1,5 @@
 //! Development-only exact-state adapter for semantic metadata qualification.
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{GraphemeWidthMethod, HistoryLimits, Terminal};
 use serde_json::json;
 use std::io::{Cursor, Read};
@@ -13,8 +14,7 @@ fn main() {
         GraphemeWidthMethod::Legacy
     };
     let mut terminal = Terminal::with_history_limits(
-        cols,
-        rows,
+        GridSize::new(Cols::new(cols).unwrap(), Rows::new(rows).unwrap()),
         HistoryLimits {
             rows: 256,
             bytes: None,
@@ -39,7 +39,10 @@ fn main() {
                 data.read_exact(&mut size).unwrap();
                 cols = u16::from_le_bytes(size[..2].try_into().unwrap()) as usize;
                 rows = u16::from_le_bytes(size[2..].try_into().unwrap()) as usize;
-                terminal.resize(cols, rows);
+                terminal.resize(GridSize::new(
+                    Cols::new(cols).unwrap(),
+                    Rows::new(rows).unwrap(),
+                ));
             }
             b'C' => while terminal.compress_history_step() {},
             _ => panic!("unknown fixture operation"),

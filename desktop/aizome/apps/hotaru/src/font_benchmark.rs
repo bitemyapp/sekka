@@ -47,8 +47,9 @@ mod allocation_probe {
 #[global_allocator]
 static ALLOCATION_PROBE: allocation_probe::Allocator = allocation_probe::Allocator;
 
-fn benchmark_jobs(cols: usize, rows: usize, kind: &str) -> Vec<Job> {
-    let mut terminal = hotaru_core::Terminal::new(cols, rows, 0);
+fn benchmark_jobs(size: hotaru_core::GridSize, kind: &str) -> Vec<Job> {
+    let (cols, rows) = (size.cols.get(), size.rows.get());
+    let mut terminal = hotaru_core::Terminal::new(size, 0);
     terminal.set_default_grapheme_width(hotaru_core::GraphemeWidthMethod::Unicode);
     terminal.feed(b"\x1b[?25l");
     let text = if kind == "fallback" { "日本語 😀 👩\u{200d}💻 != a\u{301}  " } else { "abcdefgh != -> === 0123456789 " };
@@ -97,8 +98,9 @@ fn benchmark_row_preparation() {
     let mut results = Vec::new();
     let cancel = AtomicBool::new(false);
     for (cols, rows) in [(120, 40), (240, 80)] {
+        let size = hotaru_core::GridSize::new(hotaru_core::Cols::new(cols).unwrap(), hotaru_core::Rows::new(rows).unwrap());
         for kind in ["unchanged", "cell", "cursor", "scroll", "fallback", "replace"] {
-            let jobs = benchmark_jobs(cols, rows, kind);
+            let jobs = benchmark_jobs(size, kind);
             let mut fonts = grid::FontSet::new((*jobs[0].config).clone()).unwrap();
             let mut cache = RowCache::default();
             // Every tested snapshot is checked against the preserved original

@@ -36,7 +36,7 @@ use std::time::Duration;
 use sidestep_ui::video::{Dmabuf, DmabufPlane, ShmBuffer, Shown, VideoBuffer, VideoCaps, VideoFrame, VideoSink};
 
 use crate::av::{self, Decoder, Frame, Packet, ff};
-use crate::clock::{Clock, monotonic_now};
+use crate::clock::{Clock, MonotonicNs, monotonic_now};
 
 /// Frames decoded ahead.
 const AHEAD: usize = 4;
@@ -45,11 +45,11 @@ const AHEAD: usize = 4;
 pub const PACKETS_HIGH: usize = 96;
 pub const PACKETS_LOW: usize = 32;
 /// How long before its time a frame goes to the compositor.
-const LEAD_NS: u64 = 12_000_000;
+const LEAD: Duration = Duration::from_millis(12);
 /// A run of frames discarded this long (and this many) is the window out
 /// of sight.
 const HIDDEN_RUN: u32 = 8;
-const HIDDEN_NS: u64 = 400_000_000;
+const HIDDEN: Duration = Duration::from_millis(400);
 /// How often an out-of-sight video shows its last frame again, to see.
 const PROBE: Duration = Duration::from_secs(1);
 
@@ -194,6 +194,7 @@ impl Shared {
 struct Sight {
     presented: AtomicU64,
     discarded_run: AtomicU32,
+    /// A [`MonotonicNs`], as the compositor reports it.
     last_presented: AtomicU64,
 }
 
@@ -235,7 +236,8 @@ impl ShmPool {
             if libc::ftruncate(fd, size as libc::off_t) != 0 {
                 return None;
             }
-            let map = libc::mmap(std::ptr::null_mut(), size, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_SHARED, fd, 0);
+            let map =
+                libc::mmap(std::ptr::null_mut(), size, libc::PROT_READ | libc::PROT_WRITE, libc::MAP_SHARED, fd, 0);
             if map == libc::MAP_FAILED {
                 return None;
             }
@@ -309,7 +311,7 @@ impl Scaler {
         // SAFETY: an empty frame pointing into the slot's memory (not
         // reference-counted: sws writes it, nobody frees it).
         unsafe {
-            let p = out.0;
+            let p = out.as_ptr();
             let o = &mut *p;
             o.format = ff::AVPixelFormat::AV_PIX_FMT_BGR0 as i32;
             o.width = width as i32;
@@ -318,7 +320,7 @@ impl Scaler {
             o.linesize[0] = stride as i32;
             o.colorspace = ff::AVColorSpace::AVCOL_SPC_RGB;
             o.color_range = ff::AVColorRange::AVCOL_RANGE_JPEG;
-            let r = ff::sws_scale_frame(self.ctx, p, src.0);
+            let r = ff::sws_scale_frame(self.ctx, p, src.as_ptr());
             o.data[0] = std::ptr::null_mut();
             r >= 0
         }
@@ -352,7 +354,7 @@ fn export(frame: &Frame) -> Option<Dmabuf> {
         let hw = &*((*f.hw_frames_ctx).data as *const ff::AVHWFramesContext);
         let mut mapped = Frame::new();
         mapped.get_mut().format = ff::AVPixelFormat::AV_PIX_FMT_DRM_PRIME as i32;
-        if ff::av_hwframe_map(mapped.0, frame.0, ff::AV_HWFRAME_MAP_READ as i32) < 0 {
+        if ff::av_hwframe_map(mapped.as_ptr(), frame.as_ptr(), ff::AV_HWFRAME_MAP_READ as i32) < 0 {
             return None;
         }
         let desc = &*(mapped.get().data[0] as *const ff::AVDRMFrameDescriptor);
@@ -376,13 +378,7 @@ fn export(frame: &Frame) -> Option<Dmabuf> {
                 planes.push(DmabufPlane { fd, offset: p.offset as u32, stride: p.pitch as u32 });
             }
         }
-        Some(Dmabuf {
-            width: hw.width as u32,
-            height: hw.height as u32,
-            fourcc,
-            modifier: modifier?,
-            planes,
-        })
+        Some(Dmabuf { width: hw.width as u32, height: hw.height as u32, fourcc, modifier: modifier?, planes })
     }
 }
 
@@ -390,9 +386,12 @@ fn export(frame: &Frame) -> Option<Dmabuf> {
 /// syncs it), without exporting what's known.
 fn sync_surface(frame: &Frame) -> bool {
     let mut mapped = Frame::new();
-    mapped.get_mut().format = ff::AVPixelFormat::AV_PIX_FMT_DRM_PRIME as i32;
+    // SAFETY: changing only the destination format on an empty frame.
+    unsafe {
+        mapped.get_mut().format = ff::AVPixelFormat::AV_PIX_FMT_DRM_PRIME as i32;
+    }
     // SAFETY: valid frames; the mapping is dropped at once.
-    unsafe { ff::av_hwframe_map(mapped.0, frame.0, ff::AV_HWFRAME_MAP_READ as i32) >= 0 }
+    unsafe { ff::av_hwframe_map(mapped.as_ptr(), frame.as_ptr(), ff::AV_HWFRAME_MAP_READ as i32) >= 0 }
 }
 
 /// How the thread shows its frames.
@@ -500,19 +499,19 @@ pub fn run(shared: Arc<Shared>, sink: VideoSink, caps: VideoCaps, clock: Arc<Clo
             continue;
         };
         let now = monotonic_now();
-        let half = (s.info.frame_duration / anchor.rate.max(0.01) * 0.5e9) as u64;
+        let half = Duration::from_nanos((s.info.frame_duration / anchor.rate.max(0.01) * 0.5e9) as u64);
         if due + half < now {
             s.frames.pop_front();
             s.shared.stats.dropped.fetch_add(1, Ordering::Relaxed);
             s.late(true);
             continue;
         }
-        if due > now + LEAD_NS {
-            s.wait(Some(Duration::from_nanos(due - now - LEAD_NS)));
+        if due > now + LEAD {
+            s.wait(Some(due.saturating_since(now + LEAD)));
             continue;
         }
         s.late(false);
-        let refresh = u64::from(s.shared.stats.refresh.load(Ordering::Relaxed));
+        let refresh = Duration::from_nanos(u64::from(s.shared.stats.refresh.load(Ordering::Relaxed)));
         let at = due.saturating_sub(refresh / 2);
         let (pts, frame) = s.frames.pop_front().expect("a frame");
         s.present(pts, frame, Some(at));
@@ -650,14 +649,14 @@ impl State {
             self.skipping = skip;
             // SAFETY: the decoder's own field, read at each packet.
             unsafe {
-                (*d.ctx).skip_frame =
+                (*d.as_ptr()).skip_frame =
                     if skip { ff::AVDiscard::AVDISCARD_NONREF } else { ff::AVDiscard::AVDISCARD_DEFAULT };
             }
         }
     }
 
     /// Show a frame (at `at`, or now).
-    fn present(&mut self, pts: f64, frame: Frame, at: Option<u64>) {
+    fn present(&mut self, pts: f64, frame: Frame, at: Option<MonotonicNs>) {
         let again = frame.share();
         let Some((buffer, crop, keep)) = self.prepare(frame) else {
             self.shared.stats.dropped.fetch_add(1, Ordering::Relaxed);
@@ -665,7 +664,7 @@ impl State {
         };
         let mut vf = VideoFrame::new(buffer.clone());
         vf.crop = crop;
-        vf.at = at;
+        vf.at = at.map(MonotonicNs::as_nanos);
         let sight = self.sight.clone();
         let shared = self.shared.clone();
         vf.shown = Some(Box::new(move |shown| match shown {
@@ -734,11 +733,11 @@ impl State {
         let sw = if hw {
             let s = Frame::new();
             // SAFETY: valid frames.
-            if unsafe { ff::av_hwframe_transfer_data(s.0, frame.0, 0) } < 0 {
+            if unsafe { ff::av_hwframe_transfer_data(s.as_ptr(), frame.as_ptr(), 0) } < 0 {
                 return None;
             }
             // SAFETY: both valid; copies times and colour.
-            unsafe { ff::av_frame_copy_props(s.0, frame.0) };
+            unsafe { ff::av_frame_copy_props(s.as_ptr(), frame.as_ptr()) };
             self.shared.stats.path.store(3, Ordering::Relaxed);
             s
         } else {
@@ -767,8 +766,8 @@ impl State {
         let told_hidden = self.shared.window_hidden.load(Ordering::Acquire);
         if !self.suspended {
             let run = self.sight.discarded_run.load(Ordering::Relaxed);
-            let last = self.sight.last_presented.load(Ordering::Relaxed);
-            let unseen = run >= HIDDEN_RUN && monotonic_now().saturating_sub(last) > HIDDEN_NS;
+            let last = MonotonicNs::from_nanos(self.sight.last_presented.load(Ordering::Relaxed));
+            let unseen = run >= HIDDEN_RUN && monotonic_now().saturating_since(last) > HIDDEN;
             if (told_hidden || unseen) && self.clock.running() && self.seekable() {
                 self.suspend(told_hidden);
                 return true;
@@ -807,7 +806,7 @@ impl State {
         log::debug!("video back in sight: catching up");
         self.suspended = false;
         self.sight.discarded_run.store(0, Ordering::Relaxed);
-        self.sight.last_presented.store(monotonic_now(), Ordering::Relaxed);
+        self.sight.last_presented.store(monotonic_now().as_nanos(), Ordering::Relaxed);
         self.shared.resync.store(true, Ordering::Release);
         self.shared.wake_demuxer.wake();
         self.wait(Some(PROBE));
@@ -822,11 +821,11 @@ impl State {
         let src = if f.format == ff::AVPixelFormat::AV_PIX_FMT_VAAPI as i32 {
             let s = Frame::new();
             // SAFETY: valid frames.
-            if unsafe { ff::av_hwframe_transfer_data(s.0, frame.0, 0) } < 0 {
+            if unsafe { ff::av_hwframe_transfer_data(s.as_ptr(), frame.as_ptr(), 0) } < 0 {
                 return None;
             }
             // SAFETY: both valid; copies times and colour.
-            unsafe { ff::av_frame_copy_props(s.0, frame.0) };
+            unsafe { ff::av_frame_copy_props(s.as_ptr(), frame.as_ptr()) };
             s
         } else {
             frame
@@ -843,7 +842,7 @@ impl State {
             o.height = h;
             o.colorspace = ff::AVColorSpace::AVCOL_SPC_RGB;
             o.color_range = ff::AVColorRange::AVCOL_RANGE_JPEG;
-            if ff::av_frame_get_buffer(out.0, 0) < 0 {
+            if ff::av_frame_get_buffer(out.as_ptr(), 0) < 0 {
                 return None;
             }
             let mut ctx = ff::sws_alloc_context();
@@ -851,7 +850,7 @@ impl State {
                 return None;
             }
             (*ctx).flags = ff::SwsFlags::SWS_BICUBIC as u32;
-            let r = ff::sws_scale_frame(ctx, out.0, src.0);
+            let r = ff::sws_scale_frame(ctx, out.as_ptr(), src.as_ptr());
             ff::sws_free_context(&mut ctx);
             if r < 0 {
                 return None;

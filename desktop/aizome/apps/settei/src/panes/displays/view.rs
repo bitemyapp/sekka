@@ -216,7 +216,10 @@ fn display_sections(p: &Displays, vcx: &ViewCx, d: &Display) -> Vec<Element<Msg>
                 "Brightness",
                 row![
                     icon(Icon::SunDim).size(14.0).role(Role::Text3),
-                    slider(level as f64, 0.01..=1.0).step(0.01).on_change(|v| Msg::Brightness(v as f32)).width(200.0),
+                    slider(level as f64, ValueRange::new(0.01, 1.0).unwrap())
+                        .step(PositiveStep::new(0.01).unwrap())
+                        .on_change(|v| Msg::Brightness(v as f32))
+                        .width(200.0),
                     icon(Icon::Sun).size(14.0).role(Role::Text3)
                 ]
                 .spacing(8.0),

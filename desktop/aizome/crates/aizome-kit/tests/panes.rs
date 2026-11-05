@@ -89,7 +89,7 @@ impl Program for Settings {
                         .into(),
                         form_row(
                             "Brightness",
-                            slider(self.brightness, 0.0..=1.0).on_change(Msg::Brightness).width(200.0)
+                            slider(self.brightness, ValueRange::UNIT).on_change(Msg::Brightness).width(200.0)
                         )
                         .into(),
                     ],

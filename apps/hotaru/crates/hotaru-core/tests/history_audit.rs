@@ -1,5 +1,6 @@
 //! Compression must be observationally transparent through live mutations,
 //! row recycling, alternate screens, resize and retained snapshot ownership.
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{Snapshot, Style, Terminal};
 
 type CellImage = (char, usize, bool, Style, Option<String>);
@@ -67,8 +68,14 @@ fn compare(actual: &Snapshot, expected: &Snapshot, step: usize) {
 
 #[test]
 fn compression_matches_resident_mutations_and_retained_snapshots() {
-    let mut compressed = Terminal::new(40, 3, 1024);
-    let mut resident = Terminal::new(40, 3, 1024);
+    let mut compressed = Terminal::new(
+        GridSize::new(Cols::new(40).unwrap(), Rows::new(3).unwrap()),
+        1024,
+    );
+    let mut resident = Terminal::new(
+        GridSize::new(Cols::new(40).unwrap(), Rows::new(3).unwrap()),
+        1024,
+    );
     let mut seed = 0x2931_2982u32;
     let mut held = Vec::new();
     let mut did_compress = false;
@@ -109,8 +116,14 @@ fn compression_matches_resident_mutations_and_retained_snapshots() {
         if step % 79 == 0 {
             let cols = 1 + seed as usize % 80;
             let rows = 1 + (seed as usize >> 16) % 9;
-            compressed.resize(cols, rows);
-            resident.resize(cols, rows);
+            compressed.resize(GridSize::new(
+                Cols::new(cols).unwrap(),
+                Rows::new(rows).unwrap(),
+            ));
+            resident.resize(GridSize::new(
+                Cols::new(cols).unwrap(),
+                Rows::new(rows).unwrap(),
+            ));
         }
         if step % 23 == 0 {
             let mut ticks = 0;

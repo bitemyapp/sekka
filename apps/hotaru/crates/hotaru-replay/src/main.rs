@@ -1,4 +1,4 @@
-use hotaru_core::{Rgb, Terminal};
+use hotaru_core::{Cols, GridSize, Rgb, Rows, Terminal};
 use std::io::{self, Read, Write};
 
 fn main() {
@@ -9,8 +9,7 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let mut rows = 80usize;
-    let mut cols = 120usize;
+    let mut size = GridSize::new(Cols::new(120).unwrap(), Rows::new(80).unwrap());
     let mut format = "plain".to_owned();
     let mut data = None;
     let mut bench = false;
@@ -23,8 +22,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--data" => data = Some(args.next().ok_or("--data requires a path")?),
-            "--rows" => rows = args.next().ok_or("--rows requires a number")?.parse()?,
-            "--cols" => cols = args.next().ok_or("--cols requires a number")?.parse()?,
+            "--rows" => {
+                size.rows =
+                    Rows::new(args.next().ok_or("--rows requires a number")?.parse()?).ok_or(
+                        format!("--rows must be from 1 to {}", hotaru_core::MAX_ROWS),
+                    )?
+            }
+            "--cols" => {
+                size.cols =
+                    Cols::new(args.next().ok_or("--cols requires a number")?.parse()?).ok_or(
+                        format!("--cols must be from 1 to {}", hotaru_core::MAX_COLS),
+                    )?
+            }
             "--scrollback" => {
                 history = args
                     .next()
@@ -57,13 +66,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             _ => return Err(format!("unknown argument {arg}").into()),
         }
     }
-    if rows == 0
-        || cols == 0
-        || rows > hotaru_core::MAX_ROWS
-        || cols > hotaru_core::MAX_COLS
-        || chunk == 0
-    {
-        return Err("dimensions/chunk outside supported bounds".into());
+    if chunk == 0 {
+        return Err("--chunk must be positive".into());
     }
     if !matches!(format.as_str(), "plain" | "json") {
         return Err("format must be plain or json (VT formatter port is pending)".into());
@@ -87,7 +91,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let mut response_bytes = Vec::with_capacity(iterations);
         for _ in 0..iterations {
             let start = Instant::now();
-            let mut terminal = Terminal::new(cols, rows, 0);
+            let mut terminal = Terminal::new(size, 0);
             terminal.set_default_grapheme_width(grapheme_width);
             setup.push(start.elapsed().as_nanos() as u64);
             let start = Instant::now();
@@ -104,7 +108,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         serde_json::to_writer(
             io::stdout().lock(),
             &serde_json::json!({"schema":1,"engine":"hotaru",
-            "timed_scope":"feed-only","input_bytes":bytes.len(),"rows":rows,"cols":cols,
+            "timed_scope":"feed-only","input_bytes":bytes.len(),"rows":size.rows.get(),"cols":size.cols.get(),
             "scrollback":0,"chunk_bytes":chunk,"samples_ns":feed,"setup_ns":setup,"teardown_ns":teardown,
             "response_bytes":response_bytes,
             "grapheme_width_method":if grapheme_width == hotaru_core::GraphemeWidthMethod::Unicode { "unicode" } else { "legacy" }}),
@@ -112,8 +116,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     let mut terminal = Terminal::with_history_limits(
-        cols,
-        rows,
+        size,
         hotaru_core::HistoryLimits {
             rows: history,
             bytes: None,
@@ -141,7 +144,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         output.write_all(snapshot.plain_text().as_bytes())?;
     } else {
         let lines:Vec<_>=snapshot.lines.iter().map(|line|{
-            let mut text=String::new();line.append_text(&mut text,0,cols,true);
+            let mut text=String::new();line.append_text(&mut text,0,size.cols.get(),true);
             let cells:Vec<_>=line.cells().iter().enumerate().map(|(col,&cell)|{
                 let style=line.style(cell);
                 serde_json::json!({"text":line.grapheme(col).map(str::to_owned).unwrap_or_else(||cell.character().to_string()),"width":cell.width(),"foreground":color(style.foreground),"background":color(style.background),"underline_color":color(style.underline_color),"attrs":style.attrs})
@@ -151,7 +154,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         serde_json::to_writer(
             &mut output,
             &serde_json::json!({
-                "cols":cols,"rows":rows,
+                "cols":size.cols.get(),"rows":size.rows.get(),
                 "cursor":{"row":snapshot.cursor.row,"col":snapshot.cursor.col,"visible":snapshot.cursor.visible},
                 "lines":lines,"responses":responses,
                 "modes":{

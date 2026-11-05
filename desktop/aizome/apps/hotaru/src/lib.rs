@@ -3,6 +3,7 @@ mod automatic_links;
 mod clipboard;
 mod font;
 pub mod go_to_tab;
+pub mod ids;
 pub mod input;
 pub mod instance;
 mod link_resolver;

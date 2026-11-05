@@ -528,8 +528,7 @@ async fn protocol_limits_single_instance_and_stale_socket() {
         .unwrap();
     assert!(!second.status.success());
     assert!(String::from_utf8_lossy(&second.stderr).contains("already running"));
-    let response =
-        ipc::request(&h.socket, &Request { action: Action::Status, version: 999, vocabulary: None }).await.unwrap();
+    let response = ipc::request(&h.socket, &Request { version: 999, ..Request::new(Action::Status) }).await.unwrap();
     assert!(!response.ok);
     let mut bad = UnixStream::connect(&h.socket).await.unwrap();
     bad.write_all(&vec![b'x'; 65537]).await.unwrap();

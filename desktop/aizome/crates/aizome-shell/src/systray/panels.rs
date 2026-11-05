@@ -323,8 +323,8 @@ fn slider_row_released(
     let mut items: Vec<Element<PanelMsg>> = vec![
         glyph.into(),
         Element::from(match on_release {
-            Some(m) => slider(value as f64, 0.0..=1.0).on_change(on_change).on_release(m),
-            None => slider(value as f64, 0.0..=1.0).on_change(on_change),
+            Some(m) => slider(value as f64, aizome_kit::widgets::ValueRange::UNIT).on_change(on_change).on_release(m),
+            None => slider(value as f64, aizome_kit::widgets::ValueRange::UNIT).on_change(on_change),
         })
         .width(aizome_kit::Length::Fill),
     ];

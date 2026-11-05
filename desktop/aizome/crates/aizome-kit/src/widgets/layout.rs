@@ -2,6 +2,7 @@
 //! `divider`.
 
 use std::marker::PhantomData;
+use std::num::NonZeroU16;
 
 use sidestep_ui::Color;
 
@@ -135,7 +136,7 @@ pub(crate) fn flex_layout(
     let (max_main, max_cross) = split(axis, inner.max);
     let (min_main, min_cross) = split(axis, inner.min);
     let gaps = spacing * n.saturating_sub(1) as f64;
-    let portions: Vec<Option<u16>> = (0..n)
+    let portions: Vec<Option<NonZeroU16>> = (0..n)
         .map(|i| {
             let flex = cx.tree.nodes[cx.tree.nodes[cx.node].children[i]].widget.flex();
             let c = cx.child_common(i);
@@ -169,14 +170,14 @@ pub(crate) fn flex_layout(
         cross = cross.max(c);
         sizes[i] = s;
     }
-    let total: u32 = portions.iter().flatten().map(|p| u32::from(*p)).sum();
+    let total: u32 = portions.iter().flatten().map(|p| u32::from(p.get())).sum();
     if total > 0 {
         let left = (max_main - used).max(0.0);
         let mut given = 0.0;
         let mut seen = 0u32;
         for i in 0..n {
             let Some(p) = portions[i] else { continue };
-            seen += u32::from(p);
+            seen += u32::from(p.get());
             // Whole points, the last taking what rounding left.
             let end = (left * f64::from(seen) / f64::from(total)).round();
             let share = (end - given).max(0.0);
@@ -577,14 +578,14 @@ impl Widget for ContainerWidget {
 /// Room that stretches: in a row, it pushes what follows to the right.
 pub struct Spacer<Msg> {
     pub(crate) common: Common,
-    portion: u16,
+    portion: NonZeroU16,
     _m: PhantomData<fn() -> Msg>,
 }
 
 crate::builder!(Spacer);
 
 pub fn spacer<Msg>() -> Spacer<Msg> {
-    Spacer { common: Common::default(), portion: 1, _m: PhantomData }
+    Spacer { common: Common::default(), portion: NonZeroU16::MIN, _m: PhantomData }
 }
 
 /// Fixed room: `space(8.0)` is 8pt along a row or a column.
@@ -593,8 +594,8 @@ pub fn space<Msg>(points: f64) -> Element<Msg> {
 }
 
 impl<Msg> Spacer<Msg> {
-    pub fn portion(mut self, n: u16) -> Self {
-        self.portion = n.max(1);
+    pub fn portion(mut self, n: NonZeroU16) -> Self {
+        self.portion = n;
         self
     }
 }
@@ -605,7 +606,7 @@ impl<Msg> From<Spacer<Msg>> for Element<Msg> {
     }
 }
 
-struct SpacerWidget(u16);
+struct SpacerWidget(NonZeroU16);
 
 impl Widget for SpacerWidget {
     fn name(&self) -> &'static str {
@@ -616,7 +617,7 @@ impl Widget for SpacerWidget {
         bc.min
     }
 
-    fn flex(&self) -> Option<u16> {
+    fn flex(&self) -> Option<NonZeroU16> {
         Some(self.0)
     }
 }

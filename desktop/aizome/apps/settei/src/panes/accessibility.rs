@@ -118,7 +118,13 @@ impl Pane for Accessibility {
             typing.push(
                 form::row(
                     "Hold for",
-                    crate::panes::mouse::speed_slider(slow_ms, 100.0..=1000.0, "Short", "Long", Msg::SlowMs),
+                    crate::panes::mouse::speed_slider(
+                        slow_ms,
+                        ValueRange::new(100.0, 1000.0).unwrap(),
+                        "Short",
+                        "Long",
+                        Msg::SlowMs,
+                    ),
                 )
                 .detail(format!("{} ms", slow_ms as i64)),
             );
@@ -137,8 +143,8 @@ impl Pane for Accessibility {
                     form::row(
                         "Pointer size",
                         row![
-                            slider(cursor_i as f64, 0.0..=(CURSOR_SIZES.len() - 1) as f64)
-                                .step(1.0)
+                            slider(cursor_i as f64, ValueRange::new(0.0, (CURSOR_SIZES.len() - 1) as f64).unwrap())
+                                .step(PositiveStep::new(1.0).unwrap())
                                 .ticks(CURSOR_SIZES.len())
                                 .on_change(Msg::Cursor)
                                 .width(180.0),

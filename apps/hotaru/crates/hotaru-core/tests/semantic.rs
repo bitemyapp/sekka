@@ -1,3 +1,4 @@
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{GraphemeWidthMethod, HistoryLimits, SemanticContent, Terminal};
 use serde_json::{Value, json};
 use std::io::{Cursor, Read};
@@ -16,8 +17,7 @@ fn semantic_cells_rows_and_clear_behavior_match_pinned_library() {
             .collect();
         for chunk in [1, 7, 65536] {
             let mut terminal = Terminal::with_history_limits(
-                cols,
-                rows,
+                GridSize::new(Cols::new(cols).unwrap(), Rows::new(rows).unwrap()),
                 HistoryLimits {
                     rows: 256,
                     bytes: None,
@@ -44,10 +44,15 @@ fn semantic_cells_rows_and_clear_behavior_match_pinned_library() {
                     b'R' => {
                         let mut dims = [0; 4];
                         input.read_exact(&mut dims).unwrap();
-                        terminal.resize(
-                            u16::from_le_bytes(dims[..2].try_into().unwrap()) as usize,
-                            u16::from_le_bytes(dims[2..].try_into().unwrap()) as usize,
-                        );
+                        // Recorded sizes, clamped as the terminal always has.
+                        terminal.resize(GridSize::new(
+                            Cols::saturating(
+                                u16::from_le_bytes(dims[..2].try_into().unwrap()) as usize
+                            ),
+                            Rows::saturating(
+                                u16::from_le_bytes(dims[2..].try_into().unwrap()) as usize
+                            ),
+                        ));
                     }
                     b'C' => while terminal.compress_history_step() {},
                     _ => panic!("invalid oracle fixture"),
@@ -106,8 +111,7 @@ fn semantic_cells_rows_and_clear_behavior_match_pinned_library() {
 #[test]
 fn retained_semantic_rows_survive_overwrite_reflow_compression_and_drop() {
     let mut terminal = Terminal::with_history_limits(
-        20,
-        4,
+        GridSize::new(Cols::new(20).unwrap(), Rows::new(4).unwrap()),
         HistoryLimits {
             rows: 256,
             bytes: None,
@@ -144,7 +148,7 @@ fn retained_semantic_rows_survive_overwrite_reflow_compression_and_drop() {
             .any(|(_, semantic)| *semantic == SemanticContent::Input)
     }));
     terminal.feed(b"\x1b[2J\x1b]133;D\x07replacement");
-    terminal.resize(7, 9);
+    terminal.resize(GridSize::new(Cols::new(7).unwrap(), Rows::new(9).unwrap()));
     terminal.feed(&vec![b'x'; 4000]);
     while terminal.compress_history_step() {}
     drop(terminal);

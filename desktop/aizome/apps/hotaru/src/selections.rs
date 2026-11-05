@@ -10,6 +10,7 @@
 //! holds a [`Ticket`] against its pane's bounds until it is answered or
 //! dropped, so a flood of requests is refused rather than queued.
 
+use crate::ids::{PaneId, RequestId};
 use std::io;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, mpsc};
@@ -162,7 +163,7 @@ pub enum Kind {
 
 #[derive(Clone)]
 pub struct Request {
-    pub pane: u64,
+    pub pane: PaneId,
     /// The selection byte the program named, which an answer repeats.
     pub tag: u8,
     pub target: Target,
@@ -173,7 +174,7 @@ pub struct Request {
 /// A request from an OSC 52 body's selection byte and data, on the PTY
 /// worker: `?` asks to read, base64 asks to write. Undecodable data, and a
 /// request past the pane's bounds, come to nothing.
-pub fn request(pane: u64, tag: u8, data: &[u8], bounds: &Arc<Bounds>) -> Option<Request> {
+pub fn request(pane: PaneId, tag: u8, data: &[u8], bounds: &Arc<Bounds>) -> Option<Request> {
     let target = Target::of(tag);
     if data == b"?" {
         let ticket = Arc::new(Ticket::take(bounds, 0)?);
@@ -220,7 +221,7 @@ impl Request {
 /// A Kitty clipboard request on the PTY worker, a write's types prepared to
 /// offer there. Past the pane's bounds, or a write of no type this desktop
 /// can offer, it comes to the program's answer instead.
-pub fn kitty(pane: u64, request: kitty_clipboard::Request, bounds: &Arc<Bounds>) -> Result<Request, Arc<[u8]>> {
+pub fn kitty(pane: PaneId, request: kitty_clipboard::Request, bounds: &Arc<Bounds>) -> Result<Request, Arc<[u8]>> {
     let mut answer = Vec::new();
     match request {
         kitty_clipboard::Request::Read(read) => {
@@ -315,7 +316,7 @@ pub enum Answer {
 /// A request being asked about, under the token its answer comes with; a
 /// read's with the answer it would send.
 pub struct Question {
-    pub token: u64,
+    pub token: RequestId,
     pub request: Request,
     pub reply: Option<Arc<[u8]>>,
 }
@@ -337,7 +338,7 @@ pub enum Job {
     /// Capture what a read request will be answered with.
     Read { request: Request, read: ClipboardRead },
     /// Make a finished pointer selection the primary selection, as plain text.
-    Primary { token: u64, pane: u64, source: CopySource, cancel: Arc<AtomicBool> },
+    Primary { token: RequestId, pane: PaneId, source: CopySource, cancel: Arc<AtomicBool> },
 }
 
 pub struct Worker {
@@ -425,11 +426,13 @@ fn quoted(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hotaru_core::{Cols, GridSize, Rows};
 
     #[test]
     fn requests_decode_leniently_route_by_tag_and_stay_within_bounds() {
         let bounds = Arc::new(Bounds::default());
-        let Some(Request { target, kind: Kind::Write { data, preview }, .. }) = request(1, b'c', b"aGk", &bounds)
+        let Some(Request { target, kind: Kind::Write { data, preview }, .. }) =
+            request(crate::ids::PaneId::new(1), b'c', b"aGk", &bounds)
         else {
             panic!("unpadded base64 is a write");
         };
@@ -438,23 +441,29 @@ mod tests {
             (Target::Clipboard, Some(&b"hi"[..]), "hi")
         );
         // Bytes that aren't UTF-8 are offered as sent.
-        let Some(Request { kind: Kind::Write { data, .. }, .. }) = request(1, b'c', b"YQBi/w==", &bounds) else {
+        let Some(Request { kind: Kind::Write { data, .. }, .. }) =
+            request(crate::ids::PaneId::new(1), b'c', b"YQBi/w==", &bounds)
+        else {
             panic!("binary write");
         };
         assert_eq!(data.text_bytes().as_deref(), Some(&b"a\0b\xff"[..]));
-        assert_eq!(request(1, b'p', b"?", &bounds).map(|r| r.target), Some(Target::Primary));
-        assert_eq!(request(1, b's', b"?", &bounds).map(|r| r.target), Some(Target::Primary));
-        assert_eq!(request(1, 0xff, b"?", &bounds).map(|r| r.target), Some(Target::Clipboard));
-        assert!(request(1, b'c', b"not base64!", &bounds).is_none());
-        let held: Vec<_> = (0..MAX_PENDING).map_while(|_| request(1, b'c', b"?", &bounds)).collect();
+        assert_eq!(request(crate::ids::PaneId::new(1), b'p', b"?", &bounds).map(|r| r.target), Some(Target::Primary));
+        assert_eq!(request(crate::ids::PaneId::new(1), b's', b"?", &bounds).map(|r| r.target), Some(Target::Primary));
+        assert_eq!(request(crate::ids::PaneId::new(1), 0xff, b"?", &bounds).map(|r| r.target), Some(Target::Clipboard));
+        assert!(request(crate::ids::PaneId::new(1), b'c', b"not base64!", &bounds).is_none());
+        let held: Vec<_> =
+            (0..MAX_PENDING).map_while(|_| request(crate::ids::PaneId::new(1), b'c', b"?", &bounds)).collect();
         assert_eq!(held.len(), MAX_PENDING);
-        assert!(request(1, b'c', b"?", &bounds).is_none(), "a full pane refuses");
+        assert!(request(crate::ids::PaneId::new(1), b'c', b"?", &bounds).is_none(), "a full pane refuses");
         drop(held);
-        assert!(request(1, b'c', b"?", &bounds).is_some(), "answered requests free their place");
+        assert!(
+            request(crate::ids::PaneId::new(1), b'c', b"?", &bounds).is_some(),
+            "answered requests free their place"
+        );
     }
 
     fn kitty_requests(input: &[u8]) -> Vec<kitty_clipboard::Request> {
-        let mut terminal = hotaru_core::Terminal::new(10, 2, 0);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(10).unwrap(), Rows::new(2).unwrap()), 0);
         terminal.feed(input);
         let events = terminal.take_events().into_iter();
         events
@@ -475,7 +484,8 @@ mod tests {
             "\x1b]5522;type=wdata\x1b\\",
         );
         let [request] = <[_; 1]>::try_from(kitty_requests(input.as_bytes())).unwrap();
-        let Ok(Request { target, kind: Kind::KittyWrite { data, preview, .. }, .. }) = kitty(1, request, &bounds)
+        let Ok(Request { target, kind: Kind::KittyWrite { data, preview, .. }, .. }) =
+            kitty(crate::ids::PaneId::new(1), request, &bounds)
         else {
             panic!("a write");
         };
@@ -486,11 +496,14 @@ mod tests {
 
         let only_unofferable = "\x1b]5522;type=write:id=x\x1b\\\x1b]5522;type=wdata:mime=dGV4dC/DqQ==;aGk=\x1b\\\x1b]5522;type=wdata\x1b\\";
         let [request] = <[_; 1]>::try_from(kitty_requests(only_unofferable.as_bytes())).unwrap();
-        assert_eq!(&*kitty(1, request, &bounds).err().unwrap(), b"\x1b]5522;type=write:status=EINVAL:id=x\x1b\\");
+        assert_eq!(
+            &*kitty(crate::ids::PaneId::new(1), request, &bounds).err().unwrap(),
+            b"\x1b]5522;type=write:status=EINVAL:id=x\x1b\\"
+        );
 
         let clear = "\x1b]5522;type=write:loc=primary\x07\x1b]5522;type=wdata\x07";
         let [request] = <[_; 1]>::try_from(kitty_requests(clear.as_bytes())).unwrap();
-        let Ok(cleared) = kitty(1, request, &bounds) else { panic!("an empty write clears") };
+        let Ok(cleared) = kitty(crate::ids::PaneId::new(1), request, &bounds) else { panic!("an empty write clears") };
         assert_eq!(cleared.target, Target::Primary);
         assert_eq!(cleared.status(Status::Done).as_deref(), Some(&b"\x1b]5522;type=write:status=DONE\x07"[..]));
         drop(cleared);
@@ -499,7 +512,7 @@ mod tests {
         let mut held = Vec::new();
         let mut answers = Vec::new();
         for request in kitty_requests(read.as_bytes()) {
-            match kitty(1, request, &bounds) {
+            match kitty(crate::ids::PaneId::new(1), request, &bounds) {
                 Ok(request) => held.push(request),
                 Err(answer) => answers.push(answer),
             }

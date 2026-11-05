@@ -1,4 +1,5 @@
 use hotaru_core::{Color, GraphemeWidthMethod, Rgb, SemanticContent, Snapshot, Terminal};
+use hotaru_core::{Cols, GridSize, Rows};
 use serde_json::{Value, json};
 
 fn color(value: Color) -> Value {
@@ -35,7 +36,10 @@ fn one_column_reflow_and_margin_edits_never_create_orphan_wide_tails() {
     }
     for method in [GraphemeWidthMethod::Legacy, GraphemeWidthMethod::Unicode] {
         for chunk in [1, 7, 65536] {
-            let mut terminal = Terminal::new(8, 3, 100);
+            let mut terminal = Terminal::new(
+                GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()),
+                100,
+            );
             terminal.set_default_grapheme_width(method);
             let initial = "雪😀\u{fe0e}☀\u{fe0f}A\u{301}\r\n雪雪雪雪\r\n";
             for _ in 0..70 {
@@ -45,7 +49,10 @@ fn one_column_reflow_and_margin_edits_never_create_orphan_wide_tails() {
             }
             let held = terminal.snapshot();
             for cols in [1, 2, 8, 1, 3, 8] {
-                terminal.resize(cols, 3);
+                terminal.resize(GridSize::new(
+                    Cols::new(cols).unwrap(),
+                    Rows::new(3).unwrap(),
+                ));
                 check(
                     &terminal.snapshot(),
                     &format!("resize method={method:?} chunk={chunk} cols={cols}"),
@@ -77,7 +84,10 @@ fn one_column_reflow_and_margin_edits_never_create_orphan_wide_tails() {
 #[test]
 fn margin_edit_cow_keeps_old_rows_and_outside_cells_exact() {
     for edit in [b"\x1b[@\x1b[P".as_slice(), b"\x1b[P\x1b[@"] {
-        let mut terminal = Terminal::new(8, 3, 0);
+        let mut terminal = Terminal::new(
+            GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()),
+            0,
+        );
         terminal.feed(b"ABCDEFGH\r\nIJKLMNOP\r\nQRSTUVWX");
         terminal.feed("\x1b[?69h\x1b[1;3s\x1b[H雪雪\r".as_bytes());
         let before = terminal.snapshot();
@@ -166,8 +176,10 @@ fn margins_match_actual_library_across_chunks() {
             .collect();
         for chunk in [1, 7, 65536] {
             let mut terminal = Terminal::new(
-                case["cols"].as_u64().unwrap() as usize,
-                case["rows"].as_u64().unwrap() as usize,
+                GridSize::new(
+                    Cols::new(case["cols"].as_u64().unwrap() as usize).unwrap(),
+                    Rows::new(case["rows"].as_u64().unwrap() as usize).unwrap(),
+                ),
                 0,
             );
             terminal.set_default_grapheme_width(if case["mode"] == "unicode" {
@@ -202,7 +214,10 @@ fn pending_wrap_recomputes_margin_before_wide_print_independent_of_chunks() {
                 let data = format!("\x1b[?69h\x1b[{left};{right}s\x1b[3;8HX{text}");
                 let mut expected = None;
                 for split in 0..=data.len() {
-                    let mut terminal = Terminal::new(8, 5, 0);
+                    let mut terminal = Terminal::new(
+                        GridSize::new(Cols::new(8).unwrap(), Rows::new(5).unwrap()),
+                        0,
+                    );
                     terminal.set_default_grapheme_width(method);
                     terminal.feed(&data.as_bytes()[..split]);
                     terminal.feed(&data.as_bytes()[split..]);
@@ -228,7 +243,10 @@ fn pending_wrap_recomputes_margin_before_wide_print_independent_of_chunks() {
 
 #[test]
 fn rectangular_scroll_preserves_outside_cells_metadata_and_held_rows() {
-    let mut terminal = Terminal::new(8, 5, 100);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(8).unwrap(), Rows::new(5).unwrap()),
+        100,
+    );
     for (r, text) in ["abcdefgh", "ijklmnop", "qrstuvwx", "yz012345", "6789ABCD"]
         .into_iter()
         .enumerate()
@@ -269,7 +287,7 @@ fn rectangular_scroll_preserves_outside_cells_metadata_and_held_rows() {
         terminal.feed(b"\n");
     }
     assert_eq!(terminal.scrollback_len(), 0);
-    terminal.resize(3, 3);
+    terminal.resize(GridSize::new(Cols::new(3).unwrap(), Rows::new(3).unwrap()));
     drop(terminal);
     assert_eq!(compact(&held, Vec::new()), old);
 }
@@ -282,7 +300,10 @@ fn only_full_width_regions_touching_the_top_append_history() {
         output
     };
     for (margins, expected) in [(b"1;8".as_slice(), 2), (b"3;6".as_slice(), 0)] {
-        let mut terminal = Terminal::new(8, 5, 128);
+        let mut terminal = Terminal::new(
+            GridSize::new(Cols::new(8).unwrap(), Rows::new(5).unwrap()),
+            128,
+        );
         terminal.feed(b"one\r\ntwo\r\nthree\r\nfour\r\nfive\x1b[?69h\x1b[");
         terminal.feed(margins);
         terminal.feed(b"s\x1b[1;3r\x1b[3;3H\x1b[2S");
@@ -302,10 +323,13 @@ fn only_full_width_regions_touching_the_top_append_history() {
 
 #[test]
 fn resize_resets_bounds_but_retains_mode_until_soft_reset() {
-    let mut terminal = Terminal::new(8, 5, 0);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(8).unwrap(), Rows::new(5).unwrap()),
+        0,
+    );
     terminal.feed(b"\x1b[?69h\x1b[3;6s\x1b[?6h\x1bP$qs\x1b\\");
     assert_eq!(terminal.take_responses(), b"\x1bP1$r3;6s\x1b\\");
-    terminal.resize(10, 6);
+    terminal.resize(GridSize::new(Cols::new(10).unwrap(), Rows::new(6).unwrap()));
     terminal.feed(b"\x1bP$qs\x1b\\\x1b[?69$p\x1b[H\x1b[6n");
     assert_eq!(
         terminal.take_responses(),

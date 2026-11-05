@@ -1,4 +1,4 @@
-use hotaru_core::Terminal;
+use hotaru_core::{Cols, GridSize, Rows, Terminal};
 use serde_json::Value;
 
 fn bytes(value: &Value) -> Vec<u8> {
@@ -16,13 +16,17 @@ fn osc8_cells_match_pinned_ghostty_at_read_boundaries() {
         serde_json::from_str(include_str!("../../../upstream/hyperlink-fixtures.json")).unwrap();
     for case in fixtures["cases"].as_array().unwrap() {
         for chunk in [1, 7, 65536] {
+            let cols = case["initial_cols"]
+                .as_u64()
+                .unwrap_or(case["cols"].as_u64().unwrap());
+            let rows = case["initial_rows"]
+                .as_u64()
+                .unwrap_or(case["rows"].as_u64().unwrap());
             let mut terminal = Terminal::new(
-                case["initial_cols"]
-                    .as_u64()
-                    .unwrap_or(case["cols"].as_u64().unwrap()) as usize,
-                case["initial_rows"]
-                    .as_u64()
-                    .unwrap_or(case["rows"].as_u64().unwrap()) as usize,
+                GridSize::new(
+                    Cols::new(cols as usize).unwrap(),
+                    Rows::new(rows as usize).unwrap(),
+                ),
                 1024,
             );
             for part in bytes(&case["input"]).chunks(chunk) {
@@ -30,10 +34,10 @@ fn osc8_cells_match_pinned_ghostty_at_read_boundaries() {
             }
             if let Some(sizes) = case["resizes"].as_array() {
                 for size in sizes {
-                    terminal.resize(
-                        size[0].as_u64().unwrap() as usize,
-                        size[1].as_u64().unwrap() as usize,
-                    );
+                    terminal.resize(GridSize::new(
+                        Cols::new(size[0].as_u64().unwrap() as usize).unwrap(),
+                        Rows::new(size[1].as_u64().unwrap() as usize).unwrap(),
+                    ));
                 }
             }
             let snapshot = terminal.snapshot();
@@ -54,11 +58,14 @@ fn osc8_cells_match_pinned_ghostty_at_read_boundaries() {
 
 #[test]
 fn owned_links_survive_erase_resize_and_terminal_destruction() {
-    let mut terminal = Terminal::new(10, 3, 128);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(10).unwrap(), Rows::new(3).unwrap()),
+        128,
+    );
     terminal.feed(b"\x1b]8;id=owned;https://example.test\x1b\\hello\x1b]8;;\x1b\\");
     let snapshot = terminal.snapshot();
     terminal.feed(b"\x1b[2J");
-    terminal.resize(2, 1);
+    terminal.resize(GridSize::new(Cols::new(2).unwrap(), Rows::new(1).unwrap()));
     drop(terminal);
     for col in 0..5 {
         assert_eq!(

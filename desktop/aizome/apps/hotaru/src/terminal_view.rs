@@ -1,5 +1,6 @@
 //! One native widget per terminal, with cached text and damage by shared row.
 
+use crate::ids::PaneId;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -14,7 +15,9 @@ use aizome_kit::widget::{
     Widget,
 };
 use hotaru_core::input as vt;
-use hotaru_core::{Color as TerminalColor, Rgb, Snapshot, TerminalColors, attrs};
+use hotaru_core::{Color as TerminalColor, Cols, GridSize, Rgb, Rows, Snapshot, TerminalColors, attrs};
+use hotaru_io::{PixelSize, PtySize};
+use std::num::NonZeroU16;
 
 use crate::app::Msg;
 use crate::input;
@@ -135,7 +138,7 @@ impl Selection {
 
 #[allow(clippy::too_many_arguments)] // The terminal's immutable view inputs travel together.
 pub fn terminal_view(
-    id: u64,
+    id: PaneId,
     snapshot: Arc<Snapshot>,
     font: (f64, u16),
     selection: Option<Selection>,
@@ -165,7 +168,7 @@ pub fn terminal_view(
 }
 
 struct TerminalView {
-    id: u64,
+    id: PaneId,
     snapshot: Arc<Snapshot>,
     font_size: f64,
     font_weight: u16,
@@ -1047,8 +1050,10 @@ impl Widget for TerminalView {
                 let refresh_hover = std::mem::take(&mut st.auto_refresh_pending);
                 let hover_position = st.pointer;
                 let hover_modifier = st.link_modifier;
-                let cols = ((st.size.width - st.padding * 2.0) / st.cell_width).floor().max(1.0) as usize;
-                let rows = ((st.size.height - st.padding * 2.0) / st.line_height).floor().max(1.0) as usize;
+                let grid = GridSize::new(
+                    Cols::saturating(((st.size.width - st.padding * 2.0) / st.cell_width).floor() as usize),
+                    Rows::saturating(((st.size.height - st.padding * 2.0) / st.line_height).floor() as usize),
+                );
                 let resized = std::mem::take(&mut st.resize_pending);
                 let scale_changed = std::mem::take(&mut st.scale_pending);
                 let scale = st.scale;
@@ -1071,13 +1076,17 @@ impl Widget for TerminalView {
                     emit(cx, Msg::Theme(colors));
                 }
                 if resized {
-                    let (width, height) = self.rendered.as_ref().map_or((0, 0), |frame| {
-                        (
-                            cols.saturating_mul(frame.metrics.cell_width_px as usize).min(u16::MAX as usize) as u16,
-                            rows.saturating_mul(frame.metrics.cell_height_px as usize).min(u16::MAX as usize) as u16,
-                        )
+                    // Unknown until a frame has been drawn.
+                    let pixels = self.rendered.as_ref().and_then(|frame| {
+                        let pixels = |cells: usize, cell: u32| {
+                            NonZeroU16::new(cells.saturating_mul(cell as usize).min(u16::MAX as usize) as u16)
+                        };
+                        Some(PixelSize {
+                            width: pixels(grid.cols.get(), frame.metrics.cell_width_px)?,
+                            height: pixels(grid.rows.get(), frame.metrics.cell_height_px)?,
+                        })
                     });
-                    emit(cx, Msg::ResizePixels(self.id, cols, rows, width, height));
+                    emit(cx, Msg::Resize(self.id, PtySize { grid, pixels }));
                 }
                 if scale_changed {
                     emit(cx, Msg::ShapeScale(self.id, scale));
@@ -1465,7 +1474,9 @@ mod scroll_retention_tests {
             retention_bytes: charge,
             sprite_overhang: false,
             epoch: 0,
-            snapshot: Arc::new(hotaru_core::Terminal::new(2, 2, 0).snapshot()),
+            snapshot: Arc::new(
+                hotaru_core::Terminal::new(GridSize::new(Cols::new(2).unwrap(), Rows::new(2).unwrap()), 0).snapshot(),
+            ),
             selection: None,
             metrics: fonts.metrics(1.).unwrap(),
             rows: Vec::new(),
@@ -1477,7 +1488,10 @@ mod scroll_retention_tests {
     fn identified_frame(rows: usize) -> Arc<crate::font::Frame> {
         let mut result = frame(1024);
         let f = Arc::get_mut(&mut result).unwrap();
-        let mut terminal = hotaru_core::Terminal::new(4, rows, 0);
+        let mut terminal = hotaru_core::Terminal::new(
+            hotaru_core::GridSize::new(hotaru_core::Cols::new(4).unwrap(), hotaru_core::Rows::new(rows).unwrap()),
+            0,
+        );
         for row in 1..=rows {
             terminal.feed(format!("\x1b[{row};1H{row}").as_bytes());
         }
@@ -1510,8 +1524,14 @@ mod scroll_retention_tests {
         snapshot.lines.fill(shared);
         let f = Arc::get_mut(&mut new).unwrap();
         f.snapshot = old.snapshot.clone();
-        Arc::make_mut(&mut f.snapshot).lines[0] = hotaru_core::Terminal::new(2, 1, 0).snapshot().lines[0].clone();
-        Arc::make_mut(&mut f.snapshot).lines[7] = hotaru_core::Terminal::new(2, 1, 0).snapshot().lines[0].clone();
+        Arc::make_mut(&mut f.snapshot).lines[0] =
+            hotaru_core::Terminal::new(GridSize::new(Cols::new(2).unwrap(), Rows::new(1).unwrap()), 0).snapshot().lines
+                [0]
+            .clone();
+        Arc::make_mut(&mut f.snapshot).lines[7] =
+            hotaru_core::Terminal::new(GridSize::new(Cols::new(2).unwrap(), Rows::new(1).unwrap()), 0).snapshot().lines
+                [0]
+            .clone();
         f.rows = old.rows.clone();
         assert!(scroll_reuse(&old, &new).is_none(), "ambiguous repeated identities are not hints");
         let f = Arc::get_mut(&mut new).unwrap();
@@ -1618,7 +1638,8 @@ mod scroll_retention_tests {
         assert!(original.upgrade().unwrap().retention_bytes <= SCROLL_FRAME_BYTES);
         h.send(Msg::Notice(id, "fixture-hide".into()));
         assert!(!h.is_shown(window));
-        let mut terminal = hotaru_core::Terminal::new(70, 16, 64);
+        let mut terminal =
+            hotaru_core::Terminal::new(GridSize::new(Cols::new(70).unwrap(), Rows::new(16).unwrap()), 64);
         let mut frames = Vec::new();
         for n in 0..12 {
             terminal.feed(format!("hidden output {n}\r\n").as_bytes());
@@ -1685,7 +1706,7 @@ mod sprite_paint_tests {
         }
         fn view(&self, _: WindowKey) -> Element<Msg> {
             terminal_view(
-                1,
+                crate::ids::PaneId::new(1),
                 self.frame.snapshot.clone(),
                 (14.0, 400),
                 None,
@@ -1699,7 +1720,7 @@ mod sprite_paint_tests {
         }
     }
     fn frame(sprite: bool) -> Arc<crate::font::Frame> {
-        let mut terminal = hotaru_core::Terminal::new(4, 4, 0);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(4).unwrap(), Rows::new(4).unwrap()), 0);
         terminal.feed(b"\x1b[?25l\x1b[48;2;0;0;200m\x1b[2J");
         let fonts = grid::FontSet::new(Default::default()).unwrap();
         let mut metrics = fonts.metrics(1.0).unwrap();
@@ -1760,7 +1781,8 @@ mod sprite_paint_tests {
                     let mut owned = frame(false);
                     let f = Arc::get_mut(&mut owned).unwrap();
                     f.sprite_overhang = overhang;
-                    let mut term = hotaru_core::Terminal::new(4, 4, 0);
+                    let mut term =
+                        hotaru_core::Terminal::new(GridSize::new(Cols::new(4).unwrap(), Rows::new(4).unwrap()), 0);
                     if wide {
                         term.feed("\x1b[1;2H界\x1b[1;2H".as_bytes());
                     } else {
@@ -1880,7 +1902,7 @@ mod sprite_paint_tests {
         h.advance(Duration::ZERO);
         let initial = h.render_rgba(w, 1.0);
         assert_eq!(h.check_frame_exact(w, 1.0).differing_pixels, 0);
-        h.send(Msg::Shaped(1, with_ink.clone()));
+        h.send(Msg::Shaped(crate::ids::PaneId::new(1), with_ink.clone()));
         h.advance(Duration::ZERO);
         assert_eq!(h.check_frame_exact(w, 1.0).differing_pixels, 0);
         let (width, _, rgba) = h.render_rgba(w, 1.0);
@@ -1896,7 +1918,7 @@ mod sprite_paint_tests {
                 assert_eq!(&rgba[at..at + 4], &[a, a, blue, 255], "mask {x},{y}");
             }
         }
-        h.send(Msg::Shaped(1, normal));
+        h.send(Msg::Shaped(crate::ids::PaneId::new(1), normal));
         h.advance(Duration::ZERO);
         assert_eq!(
             h.check_frame_exact(w, 1.0).differing_pixels,

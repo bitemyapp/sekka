@@ -11,6 +11,7 @@
 //! Hotaru's PTY worker does. Ghostty answers within its callback instead,
 //! so a step's bytes match as long as a step completes at most one request.
 
+use hotaru_core::GridSize;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -107,7 +108,7 @@ impl<'a> Scenario<'a> {
     }
 
     fn run(mut self, chunk: usize) -> Value {
-        let mut terminal = Terminal::new(80, 24, 0);
+        let mut terminal = Terminal::new(GridSize::default(), 0);
         if let Some(limit) = self.case["write_limit"].as_u64() {
             terminal.set_kitty_clipboard_write_limit(limit as usize);
         }

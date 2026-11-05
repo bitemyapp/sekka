@@ -1,3 +1,4 @@
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{CursorShape, Terminal};
 use serde_json::Value;
 
@@ -17,7 +18,10 @@ fn cursor_state_and_queries_match_real_ghostty_library() {
         let data = bytes(&case["input"]);
 
         for chunk in [1, 7, 65536] {
-            let mut terminal = Terminal::new(10, 4, 100);
+            let mut terminal = Terminal::new(
+                GridSize::new(Cols::new(10).unwrap(), Rows::new(4).unwrap()),
+                100,
+            );
             let shape = |value: &Value| match value.as_i64().unwrap() {
                 0 => CursorShape::Bar,
                 1 => CursorShape::Block,
@@ -97,7 +101,10 @@ fn cursor_state_and_queries_match_real_ghostty_library() {
 
 #[test]
 fn cursor_defaults_snapshots_and_viewport_are_owned() {
-    let mut term = Terminal::new(10, 4, 100);
+    let mut term = Terminal::new(
+        GridSize::new(Cols::new(10).unwrap(), Rows::new(4).unwrap()),
+        100,
+    );
     term.set_default_cursor(CursorShape::Bar, true);
     assert_eq!(term.snapshot().cursor.shape, CursorShape::Bar);
     term.feed(b"\x1b[4 q");

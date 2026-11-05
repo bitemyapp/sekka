@@ -52,7 +52,7 @@ impl Program for Demo {
             row![text("Wi-Fi"), spacer(), toggle(self.on).on_toggle(Msg::Toggle)].width(Fill),
             checkbox("Show hidden files", self.checked).on_toggle(Msg::Check),
             segmented(["Night", "Day", "Auto"], self.seg).on_select(Msg::Seg),
-            slider(self.value, 0.0..=1.0).on_change(Msg::Slide),
+            slider(self.value, ValueRange::UNIT).on_change(Msg::Slide),
             text(format!("{} clicks", self.clicks)).role(Role::Text3).mono(),
         ]
         .spacing(10.0)

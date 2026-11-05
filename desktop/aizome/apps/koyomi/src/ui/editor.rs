@@ -468,8 +468,8 @@ impl Editor {
                     form_row(
                         "Every",
                         stepper(r.interval as f64)
-                            .range(1.0..=99.0)
-                            .step(1.0)
+                            .range(ValueRange::new(1.0, 99.0).unwrap())
+                            .step(PositiveStep::new(1.0).unwrap())
                             .suffix(format!(" {}", if r.interval == 1 { unit.trim_end_matches('s') } else { unit }))
                             .on_change(move |v| e(Field::Interval(v))),
                     )
@@ -518,8 +518,8 @@ impl Editor {
                             1,
                             Some(
                                 stepper(*n as f64)
-                                    .range(1.0..=999.0)
-                                    .step(1.0)
+                                    .range(ValueRange::new(1.0, 999.0).unwrap())
+                                    .step(PositiveStep::new(1.0).unwrap())
                                     .suffix(" times")
                                     .on_change(move |v| e(Field::Count(v)))
                                     .into(),

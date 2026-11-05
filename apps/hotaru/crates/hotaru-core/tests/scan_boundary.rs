@@ -2,6 +2,7 @@
 //! vector's spare capacity. The adjacent virtual page is deliberately PROT_NONE.
 #![cfg(target_os = "linux")]
 use hotaru_core::Terminal;
+use hotaru_core::{Cols, GridSize, Rows};
 
 #[test]
 fn printable_scanner_never_reads_the_guard_page() {
@@ -39,7 +40,10 @@ fn printable_scanner_never_reads_the_guard_page() {
     memory.fill(b'x');
     for len in 0..=128 {
         let bytes = &memory[page - len..];
-        let mut terminal = Terminal::new(160, 2, 0);
+        let mut terminal = Terminal::new(
+            GridSize::new(Cols::new(160).unwrap(), Rows::new(2).unwrap()),
+            0,
+        );
         terminal.feed(bytes);
         assert_eq!(terminal.snapshot().cursor.col, len);
     }
@@ -47,7 +51,10 @@ fn printable_scanner_never_reads_the_guard_page() {
     for len in 2..=128 {
         memory[page - len] = 0xc3;
         memory[page - len + 1] = 0xa9;
-        let mut terminal = Terminal::new(160, 2, 0);
+        let mut terminal = Terminal::new(
+            GridSize::new(Cols::new(160).unwrap(), Rows::new(2).unwrap()),
+            0,
+        );
         terminal.feed(&memory[page - len..]);
         assert_eq!(terminal.snapshot().cursor.col, len - 1);
         memory[page - len] = b'x';

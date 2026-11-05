@@ -1,3 +1,4 @@
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{GraphemeWidthMethod, Terminal};
 
 #[test]
@@ -33,14 +34,20 @@ fn streamed_invalid_utf8_matches_bytewise_parser() {
                 seed ^= seed << 5;
                 input.extend_from_slice(fragments[seed as usize % fragments.len()]);
             }
-            let mut scalar = Terminal::new(19, 4, 128);
+            let mut scalar = Terminal::new(
+                GridSize::new(Cols::new(19).unwrap(), Rows::new(4).unwrap()),
+                128,
+            );
             scalar.set_default_grapheme_width(mode);
             for byte in &input {
                 scalar.feed(&[*byte]);
             }
             let expected = scalar.snapshot_all();
             for chunk in [3, 7, 16, 64, input.len()] {
-                let mut bulk = Terminal::new(19, 4, 128);
+                let mut bulk = Terminal::new(
+                    GridSize::new(Cols::new(19).unwrap(), Rows::new(4).unwrap()),
+                    128,
+                );
                 bulk.set_default_grapheme_width(mode);
                 for bytes in input.chunks(chunk) {
                     bulk.feed(bytes);
@@ -83,8 +90,14 @@ fn dense_malformed_utf8_keeps_control_and_chunk_boundaries() {
         data.extend_from_slice(b"\x1b[31mEND\r\n");
         data.extend_from_slice("雪花👩🏽‍💻".as_bytes());
         for mode in [GraphemeWidthMethod::Legacy, GraphemeWidthMethod::Unicode] {
-            let mut whole = Terminal::new(120, 12, 0);
-            let mut split = Terminal::new(120, 12, 0);
+            let mut whole = Terminal::new(
+                GridSize::new(Cols::new(120).unwrap(), Rows::new(12).unwrap()),
+                0,
+            );
+            let mut split = Terminal::new(
+                GridSize::new(Cols::new(120).unwrap(), Rows::new(12).unwrap()),
+                0,
+            );
             whole.set_default_grapheme_width(mode);
             split.set_default_grapheme_width(mode);
             whole.feed(&data);
@@ -115,7 +128,10 @@ fn malformed_utf8_cache_survives_partial_parser_and_bounded_replies() {
     let mut input = fragment.repeat(64);
     input.extend_from_slice("👩🏽‍💻END".as_bytes());
     for mode in [GraphemeWidthMethod::Legacy, GraphemeWidthMethod::Unicode] {
-        let mut expected = Terminal::new(29, 5, 0);
+        let mut expected = Terminal::new(
+            GridSize::new(Cols::new(29).unwrap(), Rows::new(5).unwrap()),
+            0,
+        );
         expected.set_default_grapheme_width(mode);
         for byte in &input {
             expected.feed(&[*byte]);
@@ -124,7 +140,10 @@ fn malformed_utf8_cache_survives_partial_parser_and_bounded_replies() {
         let expected = expected.snapshot();
         for split in 0..fragment.len() {
             for budget in [1, 7, 64] {
-                let mut terminal = Terminal::new(29, 5, 0);
+                let mut terminal = Terminal::new(
+                    GridSize::new(Cols::new(29).unwrap(), Rows::new(5).unwrap()),
+                    0,
+                );
                 terminal.set_default_grapheme_width(mode);
                 terminal.feed(&input[..split]);
                 let mut actual_replies = terminal.take_responses();

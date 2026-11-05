@@ -607,6 +607,7 @@ fn render(
 mod tests {
     use super::*;
     use crate::Terminal;
+    use crate::{Cols, GridSize, Rows};
     use serde_json::Value;
 
     fn bytes(value: &Value) -> Vec<u8> {
@@ -626,22 +627,26 @@ mod tests {
         let cancel = AtomicBool::new(false);
         let mut failures = Vec::new();
         for case in fixtures["cases"].as_array().unwrap() {
+            let cols = case["initial_cols"]
+                .as_u64()
+                .unwrap_or(case["cols"].as_u64().unwrap());
+            let rows = case["initial_rows"]
+                .as_u64()
+                .unwrap_or(case["rows"].as_u64().unwrap());
             let mut terminal = Terminal::new(
-                case["initial_cols"]
-                    .as_u64()
-                    .unwrap_or(case["cols"].as_u64().unwrap()) as usize,
-                case["initial_rows"]
-                    .as_u64()
-                    .unwrap_or(case["rows"].as_u64().unwrap()) as usize,
+                GridSize::new(
+                    Cols::new(cols as usize).unwrap(),
+                    Rows::new(rows as usize).unwrap(),
+                ),
                 128,
             );
             terminal.feed(&bytes(&case["input"]));
             if let Some(sizes) = case["resizes"].as_array() {
                 for size in sizes {
-                    terminal.resize(
-                        size[0].as_u64().unwrap() as usize,
-                        size[1].as_u64().unwrap() as usize,
-                    );
+                    terminal.resize(GridSize::new(
+                        Cols::new(size[0].as_u64().unwrap() as usize).unwrap(),
+                        Rows::new(size[1].as_u64().unwrap() as usize).unwrap(),
+                    ));
                 }
             }
             let snapshot = ContentSnapshot::from(terminal.snapshot());
@@ -713,7 +718,10 @@ mod tests {
 
     #[test]
     fn output_budget_is_aggregate_and_cancellation_is_explicit() {
-        let mut terminal = Terminal::new(10, 2, 128);
+        let mut terminal = Terminal::new(
+            GridSize::new(Cols::new(10).unwrap(), Rows::new(2).unwrap()),
+            128,
+        );
         terminal.feed(b"hello");
         let snapshot = terminal.content_snapshot();
         let cancel = AtomicBool::new(false);
@@ -750,7 +758,10 @@ mod tests {
 
     #[test]
     fn copy_uses_captured_defaults_and_palette_with_mixed_background_omitted() {
-        let mut terminal = Terminal::new(20, 2, 128);
+        let mut terminal = Terminal::new(
+            GridSize::new(Cols::new(20).unwrap(), Rows::new(2).unwrap()),
+            128,
+        );
         let mut colors = crate::TerminalColors {
             foreground: Rgb(0xab, 0xcd, 0xef),
             background: Rgb(0x12, 0x34, 0x56),
@@ -797,7 +808,10 @@ mod tests {
 
     #[test]
     fn selection_bounds_and_empty_selection_are_explicit() {
-        let mut terminal = Terminal::new(10, 2, 0);
+        let mut terminal = Terminal::new(
+            GridSize::new(Cols::new(10).unwrap(), Rows::new(2).unwrap()),
+            0,
+        );
         terminal.feed(b"hello");
         let content = terminal.content_snapshot();
         let cancel = AtomicBool::new(false);

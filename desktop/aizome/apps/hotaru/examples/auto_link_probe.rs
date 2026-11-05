@@ -1,7 +1,9 @@
 #[allow(dead_code)]
 #[path = "../src/automatic_links/mod.rs"]
 mod automatic_links;
+use aizome_hotaru::ids;
 use automatic_links::mapping;
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_link_regex::{CellPoint, Limits, Matcher};
 use std::{
     io::{self, BufRead},
@@ -13,8 +15,10 @@ fn main() {
     for line in io::stdin().lock().lines() {
         let data: serde_json::Value = serde_json::from_str(&line.unwrap()).unwrap();
         let mut terminal = hotaru_core::Terminal::new(
-            data["cols"].as_u64().unwrap() as usize,
-            data["rows"].as_u64().unwrap() as usize,
+            GridSize::new(
+                Cols::new(data["cols"].as_u64().unwrap() as usize).unwrap(),
+                Rows::new(data["rows"].as_u64().unwrap() as usize).unwrap(),
+            ),
             0,
         );
         if data["unicode"].as_bool().unwrap_or(true) {

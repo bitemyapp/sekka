@@ -1,4 +1,5 @@
 use hotaru_core::{Color, Rgb, Snapshot, Terminal};
+use hotaru_core::{Cols, GridSize, Rows};
 use serde_json::{Value, json};
 
 fn color(value: Color) -> Value {
@@ -59,8 +60,10 @@ fn resize_matches_actual_ghostty_oracle_across_input_chunks() {
     for case in fixture["cases"].as_array().unwrap() {
         for chunk in [1, 7, usize::MAX] {
             let mut terminal = Terminal::new(
-                case["cols"].as_u64().unwrap() as usize,
-                case["rows"].as_u64().unwrap() as usize,
+                GridSize::new(
+                    Cols::new(case["cols"].as_u64().unwrap() as usize).unwrap(),
+                    Rows::new(case["rows"].as_u64().unwrap() as usize).unwrap(),
+                ),
                 case["history"].as_u64().unwrap_or(10_000) as usize,
             );
             for (step, (op, want)) in case["ops"]
@@ -76,10 +79,10 @@ fn resize_matches_actual_ghostty_oracle_across_input_chunks() {
                     }
                 }
                 if let Some(size) = op["resize"].as_array() {
-                    terminal.resize(
-                        size[0].as_u64().unwrap() as usize,
-                        size[1].as_u64().unwrap() as usize,
-                    );
+                    terminal.resize(GridSize::new(
+                        Cols::new(size[0].as_u64().unwrap() as usize).unwrap(),
+                        Rows::new(size[1].as_u64().unwrap() as usize).unwrap(),
+                    ));
                 }
                 let actual = compact_snapshot(
                     &terminal.snapshot_all(),
@@ -99,12 +102,18 @@ fn resize_matches_actual_ghostty_oracle_across_input_chunks() {
 
 #[test]
 fn snapshots_keep_cells_styles_and_graphemes_across_reflow_and_teardown() {
-    let mut terminal = Terminal::new(8, 4, 100);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(8).unwrap(), Rows::new(4).unwrap()),
+        100,
+    );
     terminal.feed("\x1b[31;44mab雪\u{301}cdefghijkl\x1b[0m".as_bytes());
     let snapshot = terminal.snapshot_all();
     let expected = compact_snapshot(&snapshot, 4, 0, Vec::new());
     for (cols, rows) in [(3, 2), (1, 1), (18, 8), (4, 5), (80, 24)] {
-        terminal.resize(cols, rows);
+        terminal.resize(GridSize::new(
+            Cols::new(cols).unwrap(),
+            Rows::new(rows).unwrap(),
+        ));
         terminal.feed(b"\x1b[2J\x1b[Hnew content");
     }
     drop(terminal);
@@ -114,12 +123,18 @@ fn snapshots_keep_cells_styles_and_graphemes_across_reflow_and_teardown() {
 
 #[test]
 fn narrow_reflow_keeps_history_bounded_and_wide_pairs_valid() {
-    let mut terminal = Terminal::new(120, 24, 37);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(120).unwrap(), Rows::new(24).unwrap()),
+        37,
+    );
     for _ in 0..1000 {
         terminal.feed("prefix 雪花 e\u{301} tail\r\n".as_bytes());
     }
     for (cols, rows) in [(1, 1), (3, 2), (240, 30), (2, 4), (80, 24)] {
-        terminal.resize(cols, rows);
+        terminal.resize(GridSize::new(
+            Cols::new(cols).unwrap(),
+            Rows::new(rows).unwrap(),
+        ));
         assert!(terminal.scrollback_len() <= 37);
         let snapshot = terminal.snapshot_all();
         assert_eq!(snapshot.lines.len(), rows + terminal.scrollback_len());
@@ -139,10 +154,16 @@ fn narrow_reflow_keeps_history_bounded_and_wide_pairs_valid() {
 
 #[test]
 fn copying_reflowed_wide_text_omits_layout_spacers() {
-    let mut terminal = Terminal::new(8, 4, 100);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(8).unwrap(), Rows::new(4).unwrap()),
+        100,
+    );
     terminal.feed("abcdefg雪xyz".as_bytes());
     for (cols, rows) in [(8, 4), (3, 4), (13, 3), (2, 4)] {
-        terminal.resize(cols, rows);
+        terminal.resize(GridSize::new(
+            Cols::new(cols).unwrap(),
+            Rows::new(rows).unwrap(),
+        ));
         assert_eq!(
             terminal.snapshot_all().plain_text().trim_end(),
             "abcdefg雪xyz"

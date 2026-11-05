@@ -1,5 +1,6 @@
 //! Hotaru settings follow Aizome's per-application TOML convention.
 
+use crate::ids::RequestId;
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::io::{Read, Write};
@@ -761,8 +762,8 @@ impl Bindings {
 }
 
 enum Job {
-    Load(u64),
-    Save(u64, Settings),
+    Load(RequestId),
+    Save(RequestId, Settings),
 }
 #[derive(Default)]
 struct Queue {
@@ -806,10 +807,10 @@ impl Worker {
         lock.lock().unwrap_or_else(|error| error.into_inner()).job = Some(job);
         changed.notify_one();
     }
-    pub fn load(&self, token: u64) {
+    pub fn load(&self, token: RequestId) {
         self.submit(Job::Load(token));
     }
-    pub fn save(&self, token: u64, settings: Settings) {
+    pub fn save(&self, token: RequestId, settings: Settings) {
         self.submit(Job::Save(token, settings));
     }
 }

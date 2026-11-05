@@ -125,7 +125,7 @@ async fn ipc_preserves_coalesced_and_fragmented_frames() {
     let mut read = BufReader::new(read);
     for action in [Action::Start, Action::Stop] {
         let req: Request = serde_json::from_slice(&ipc::read_line(&mut read).await.unwrap().unwrap()).unwrap();
-        assert_eq!(req.action, action);
+        assert_eq!(req.action(), Some(action));
     }
     assert!(ipc::read_line(&mut read).await.unwrap().is_none());
 }

@@ -8,9 +8,47 @@
 //! is heard; without audio (or while it isn't running) the player
 //! anchors it to the monotonic clock.
 
+use std::ops::Add;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
-pub use sidestep_ui::video::monotonic_now;
+/// An instant of CLOCK_MONOTONIC, in nanoseconds: what PipeWire times its
+/// graph by, and frames are presented by.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct MonotonicNs(u64);
+
+impl MonotonicNs {
+    pub const fn from_nanos(nanos: u64) -> Self {
+        Self(nanos)
+    }
+    pub const fn as_nanos(self) -> u64 {
+        self.0
+    }
+    /// How long after `earlier` this is: zero if it isn't.
+    pub fn saturating_since(self, earlier: MonotonicNs) -> Duration {
+        Duration::from_nanos(self.0.saturating_sub(earlier.0))
+    }
+    /// `d` earlier, or the clock's start.
+    pub fn saturating_sub(self, d: Duration) -> MonotonicNs {
+        Self(self.0.saturating_sub(nanos(d)))
+    }
+}
+
+impl Add<Duration> for MonotonicNs {
+    type Output = MonotonicNs;
+    fn add(self, d: Duration) -> MonotonicNs {
+        Self(self.0.saturating_add(nanos(d)))
+    }
+}
+
+fn nanos(d: Duration) -> u64 {
+    u64::try_from(d.as_nanos()).unwrap_or(u64::MAX)
+}
+
+/// The monotonic clock now.
+pub fn monotonic_now() -> MonotonicNs {
+    MonotonicNs(sidestep_ui::video::monotonic_now())
+}
 
 /// The clock, a seqlock of three words, and who to tell when it starts.
 #[derive(Default)]
@@ -27,24 +65,23 @@ pub struct Clock {
 pub struct Anchor {
     /// Media seconds at `at`.
     pub pos: f64,
-    /// CLOCK_MONOTONIC nanoseconds.
-    pub at: u64,
+    pub at: MonotonicNs,
     /// Media seconds per second: 0 while stopped.
     pub rate: f64,
 }
 
 impl Anchor {
-    /// Media seconds at `now` (monotonic nanoseconds).
-    pub fn at_time(&self, now: u64) -> f64 {
+    /// Media seconds at `now`.
+    pub fn at_time(&self, now: MonotonicNs) -> f64 {
         if self.rate == 0.0 {
             return self.pos;
         }
-        self.pos + (now as f64 - self.at as f64) / 1e9 * self.rate
+        self.pos + (now.0 as f64 - self.at.0 as f64) / 1e9 * self.rate
     }
 
-    /// The monotonic time media time `pos` comes, if the clock runs.
-    pub fn time_of(&self, pos: f64) -> Option<u64> {
-        (self.rate > 0.0).then(|| (self.at as f64 + (pos - self.pos) / self.rate * 1e9).max(0.0) as u64)
+    /// The instant media time `pos` comes, if the clock runs.
+    pub fn time_of(&self, pos: f64) -> Option<MonotonicNs> {
+        (self.rate > 0.0).then(|| MonotonicNs((self.at.0 as f64 + (pos - self.pos) / self.rate * 1e9).max(0.0) as u64))
     }
 }
 
@@ -67,7 +104,7 @@ impl Clock {
                 && self.seq.compare_exchange_weak(s, s + 1, Ordering::Acquire, Ordering::Relaxed).is_ok()
             {
                 self.pos.store(a.pos.to_bits(), Ordering::Relaxed);
-                self.at.store(a.at, Ordering::Relaxed);
+                self.at.store(a.at.0, Ordering::Relaxed);
                 let was = f64::from_bits(self.rate.swap(a.rate.to_bits(), Ordering::Relaxed));
                 self.seq.store(s + 2, Ordering::Release);
                 // Waiting for it to run (the video, before the audio's first
@@ -95,7 +132,7 @@ impl Clock {
             }
             let a = Anchor {
                 pos: f64::from_bits(self.pos.load(Ordering::Relaxed)),
-                at: self.at.load(Ordering::Relaxed),
+                at: MonotonicNs(self.at.load(Ordering::Relaxed)),
                 rate: f64::from_bits(self.rate.load(Ordering::Relaxed)),
             };
             std::sync::atomic::fence(Ordering::Acquire);
@@ -135,9 +172,9 @@ mod tests {
         c.stop_at(12.5);
         assert_eq!(c.now(), 12.5);
         assert!(!c.running());
-        let a = Anchor { pos: 10.0, at: 1_000_000_000, rate: 2.0 };
-        assert_eq!(a.at_time(1_500_000_000), 11.0);
-        assert_eq!(a.time_of(11.0), Some(1_500_000_000));
+        let a = Anchor { pos: 10.0, at: MonotonicNs(1_000_000_000), rate: 2.0 };
+        assert_eq!(a.at_time(MonotonicNs(1_500_000_000)), 11.0);
+        assert_eq!(a.time_of(11.0), Some(MonotonicNs(1_500_000_000)));
         c.set(a, true);
         assert!(c.running());
         assert_eq!(c.anchor(), a);
@@ -151,12 +188,12 @@ mod tests {
         let writer = std::thread::spawn(move || {
             for i in 0..20_000u64 {
                 let x = i as f64;
-                w.set(Anchor { pos: x, at: i, rate: x }, true);
+                w.set(Anchor { pos: x, at: MonotonicNs(i), rate: x }, true);
             }
         });
         for _ in 0..20_000 {
             let a = c.anchor();
-            assert_eq!(a.pos, a.at as f64);
+            assert_eq!(a.pos, a.at.0 as f64);
             assert_eq!(a.rate, a.pos);
         }
         writer.join().expect("writer");

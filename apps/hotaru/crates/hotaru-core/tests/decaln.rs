@@ -1,10 +1,10 @@
 use hotaru_core::{Color, HistoryLimits, Rgb, RowPrompt, SemanticContent, Style, Terminal};
+use hotaru_core::{Cols, GridSize, Rows};
 
 #[test]
 fn alignment_replaces_owned_content_but_preserves_pen_colors_and_cursor_attributes() {
     let mut terminal = Terminal::with_history_limits(
-        8,
-        3,
+        GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()),
         HistoryLimits {
             rows: 64,
             bytes: None,
@@ -72,7 +72,10 @@ fn alignment_replaces_owned_content_but_preserves_pen_colors_and_cursor_attribut
 
 #[test]
 fn alignment_resets_origin_margins_and_pending_wrap_but_not_rep() {
-    let mut terminal = Terminal::new(3, 3, 0);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(3).unwrap(), Rows::new(3).unwrap()),
+        0,
+    );
     terminal.feed(b"\x1b[44m\x1b[2;3r\x1b[?6h\x1b[?25lAAA\x1b#8\x1b[?6$p\x1b[3b");
     assert_eq!(terminal.take_responses(), b"\x1b[?6;2$y");
     let state = terminal.snapshot();
@@ -90,7 +93,10 @@ fn alignment_resets_origin_margins_and_pending_wrap_but_not_rep() {
 
 #[test]
 fn alignment_is_local_to_active_screen_and_exact_escape_sequence() {
-    let mut terminal = Terminal::new(5, 3, 20);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(5).unwrap(), Rows::new(3).unwrap()),
+        20,
+    );
     terminal.feed(b"main\x1b[?1049halt\x1b#8");
     assert_eq!(terminal.snapshot().plain_text(), "EEEEE\nEEEEE\nEEEEE");
     terminal.feed(b"\x1b[?1049l");

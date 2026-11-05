@@ -4,10 +4,15 @@
 //! export; each type here is used by one thread at a time.
 
 use std::ffi::{CStr, CString, c_int};
-use std::ptr;
+use std::ptr::{self, NonNull};
 
-pub use ffmpeg_sys_next as ff;
+// Infallible owning constructors follow Rust allocation failure behavior.
+fn allocated<T>(p: *mut T) -> NonNull<T> {
+    NonNull::new(p).unwrap_or_else(|| std::alloc::handle_alloc_error(std::alloc::Layout::new::<T>()))
+}
+
 use ff::{AVCodecContext, AVFormatContext, AVFrame, AVMediaType, AVPacket, AVRational, AVStream};
+pub use ffmpeg_sys_next as ff;
 
 /// An FFmpeg error code, with its message.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -81,9 +86,12 @@ pub fn quiet() {
 }
 
 /// A channel layout, freed when dropped.
-pub struct ChannelLayout(pub ff::AVChannelLayout);
+pub struct ChannelLayout(ff::AVChannelLayout);
 
 impl ChannelLayout {
+    pub fn as_ptr(&self) -> *const ff::AVChannelLayout {
+        &self.0
+    }
     /// The layout `n` channels are mixed to and played in: FFmpeg's usual
     /// one for that many (2.1 for three, 4.0 for four, 5.1(back) for six).
     /// The resampler makes it, and the sound server is told it, from here.
@@ -112,7 +120,7 @@ impl Drop for ChannelLayout {
 
 /// An open input: a file, or a URL FFmpeg reads.
 pub struct Input {
-    pub ctx: *mut AVFormatContext,
+    ctx: NonNull<AVFormatContext>,
 }
 
 // SAFETY: an input is used by one thread at a time (the demuxer's).
@@ -124,30 +132,36 @@ impl Input {
         let mut ctx: *mut AVFormatContext = ptr::null_mut();
         // SAFETY: on failure FFmpeg frees what it made and leaves ctx null.
         check(unsafe { ff::avformat_open_input(&mut ctx, c.as_ptr(), ptr::null(), ptr::null_mut()) })?;
-        let input = Input { ctx };
+        let input = Input { ctx: allocated(ctx) };
         // SAFETY: ctx is open.
         check(unsafe { ff::avformat_find_stream_info(ctx, ptr::null_mut()) })?;
         Ok(input)
     }
 
-    pub fn streams(&self) -> &[*mut AVStream] {
-        // SAFETY: nb_streams pointers, valid while the input is.
-        unsafe {
-            let c = &*self.ctx;
-            if c.streams.is_null() { &[] } else { std::slice::from_raw_parts(c.streams, c.nb_streams as usize) }
-        }
+    /// Borrowed pointer: never free it or keep it past this owner. Mutations
+    /// must preserve FFmpeg invariants and respect outstanding Rust borrows.
+    pub fn as_ptr(&self) -> *mut AVFormatContext {
+        self.ctx.as_ptr()
     }
 
-    pub fn stream(&self, i: usize) -> Option<&AVStream> {
-        // SAFETY: as `streams`.
-        self.streams().get(i).map(|s| unsafe { &**s })
+    pub fn streams(&self) -> impl ExactSizeIterator<Item = Stream<'_>> {
+        // SAFETY: the open input owns nb_streams initialized stream pointers.
+        let streams = unsafe {
+            let c = &*self.as_ptr();
+            if c.streams.is_null() { &[] } else { std::slice::from_raw_parts(c.streams, c.nb_streams as usize) }
+        };
+        streams.iter().map(|s| Stream(unsafe { &**s }))
+    }
+
+    pub fn stream(&self, i: usize) -> Option<Stream<'_>> {
+        self.streams().nth(i)
     }
 
     /// The next packet, or none at the end.
     pub fn read(&mut self, pkt: &mut Packet) -> Result<bool> {
         pkt.unref();
         // SAFETY: both are valid.
-        match unsafe { ff::av_read_frame(self.ctx, pkt.0) } {
+        match unsafe { ff::av_read_frame(self.as_ptr(), pkt.as_ptr()) } {
             0 => Ok(true),
             e if e == ff::AVERROR_EOF => Ok(false),
             e => Err(Error(e)),
@@ -162,11 +176,11 @@ impl Input {
             match stream.and_then(|i| self.stream(i).map(|s| (i, s.time_base))) {
                 Some((i, tb)) => {
                     let ts = in_base(secs, tb);
-                    check(ff::av_seek_frame(self.ctx, i as c_int, ts, ff::AVSEEK_FLAG_BACKWARD))?;
+                    check(ff::av_seek_frame(self.as_ptr(), i as c_int, ts, ff::AVSEEK_FLAG_BACKWARD))?;
                 }
                 None => {
                     let ts = (secs * f64::from(ff::AV_TIME_BASE)) as i64;
-                    check(ff::avformat_seek_file(self.ctx, -1, i64::MIN, ts, ts, 0))?;
+                    check(ff::avformat_seek_file(self.as_ptr(), -1, i64::MIN, ts, ts, 0))?;
                 }
             }
         }
@@ -176,14 +190,14 @@ impl Input {
     /// Seconds long, if it says.
     pub fn duration(&self) -> Option<f64> {
         // SAFETY: valid context.
-        let d = unsafe { (*self.ctx).duration };
+        let d = unsafe { (*self.as_ptr()).duration };
         (d != ff::AV_NOPTS_VALUE && d > 0).then(|| d as f64 / f64::from(ff::AV_TIME_BASE))
     }
 
     /// Where its timestamps start, in seconds.
     pub fn start(&self) -> f64 {
         // SAFETY: valid context.
-        let s = unsafe { (*self.ctx).start_time };
+        let s = unsafe { (*self.as_ptr()).start_time };
         if s == ff::AV_NOPTS_VALUE { 0.0 } else { s as f64 / f64::from(ff::AV_TIME_BASE) }
     }
 
@@ -191,32 +205,32 @@ impl Input {
     pub fn seekable(&self) -> bool {
         // SAFETY: valid context; pb may be null (formats with no file).
         unsafe {
-            let c = &*self.ctx;
+            let c = &*self.as_ptr();
             !c.pb.is_null() && ((*c.pb).seekable & 1) != 0
         }
     }
 
     pub fn metadata(&self) -> Vec<(String, String)> {
         // SAFETY: valid context.
-        unsafe { dictionary((*self.ctx).metadata) }
+        unsafe { dictionary((*self.as_ptr()).metadata) }
     }
 
     pub fn format_name(&self) -> String {
         // SAFETY: an input has its format.
-        unsafe { text((*(*self.ctx).iformat).long_name).or_else(|| text((*(*self.ctx).iformat).name)) }
+        unsafe { text((*(*self.as_ptr()).iformat).long_name).or_else(|| text((*(*self.as_ptr()).iformat).name)) }
             .unwrap_or_default()
     }
 
     pub fn bit_rate(&self) -> i64 {
         // SAFETY: valid context.
-        unsafe { (*self.ctx).bit_rate }
+        unsafe { (*self.as_ptr()).bit_rate }
     }
 
     /// Chapters: start and end seconds, and title.
     pub fn chapters(&self) -> Vec<(f64, f64, Option<String>)> {
         // SAFETY: nb_chapters valid pointers.
         unsafe {
-            let c = &*self.ctx;
+            let c = &*self.as_ptr();
             if c.chapters.is_null() {
                 return Vec::new();
             }
@@ -226,8 +240,10 @@ impl Input {
                     let ch = &*ch;
                     let start = seconds(ch.start, ch.time_base).unwrap_or(0.0);
                     let end = seconds(ch.end, ch.time_base).unwrap_or(start);
-                    let title =
-                        dictionary(ch.metadata).into_iter().find(|(k, _)| k.eq_ignore_ascii_case("title")).map(|(_, v)| v);
+                    let title = dictionary(ch.metadata)
+                        .into_iter()
+                        .find(|(k, _)| k.eq_ignore_ascii_case("title"))
+                        .map(|(_, v)| v);
                     (start, end, title)
                 })
                 .collect()
@@ -238,7 +254,7 @@ impl Input {
 impl Drop for Input {
     fn drop(&mut self) {
         // SAFETY: opened by avformat_open_input; nulls it.
-        unsafe { ff::avformat_close_input(&mut self.ctx) };
+        unsafe { ff::avformat_close_input(&mut self.as_ptr()) };
     }
 }
 
@@ -265,40 +281,60 @@ pub unsafe fn dictionary(d: *const ff::AVDictionary) -> Vec<(String, String)> {
     out
 }
 
+/// A stream borrowed from a live input, never a caller-constructed C struct.
+#[derive(Clone, Copy)]
+pub struct Stream<'a>(&'a AVStream);
+impl std::ops::Deref for Stream<'_> {
+    type Target = AVStream;
+    fn deref(&self) -> &AVStream {
+        self.0
+    }
+}
+
 /// A stream's kind.
-pub fn media_type(s: &AVStream) -> AVMediaType {
+pub fn media_type(s: Stream<'_>) -> AVMediaType {
     // SAFETY: streams have parameters.
     unsafe { (*s.codecpar).codec_type }
 }
 
 /// A packet, reused for each read.
-pub struct Packet(pub *mut AVPacket);
+/// ```compile_fail
+/// use aizome_media::av::Packet;
+/// let packet = Packet::new();
+/// let duplicate = Packet(packet.0);
+/// ```
+pub struct Packet(NonNull<AVPacket>);
 
 // SAFETY: a packet's data is reference-counted; one owner at a time.
 unsafe impl Send for Packet {}
 
 impl Packet {
+    /// Borrowed pointer: never free it or keep it past this owner. Mutations
+    /// must preserve FFmpeg invariants and respect outstanding Rust borrows.
+    pub fn as_ptr(&self) -> *mut AVPacket {
+        self.0.as_ptr()
+    }
     pub fn new() -> Packet {
-        // SAFETY: allocation; FFmpeg aborts on failure.
-        Packet(unsafe { ff::av_packet_alloc() })
+        // SAFETY: allocation, checked before constructing the owner.
+        Packet(allocated(unsafe { ff::av_packet_alloc() }))
     }
 
     /// A new reference to the same data.
     pub fn share(&self) -> Packet {
         let p = Packet::new();
         // SAFETY: both valid.
-        unsafe { ff::av_packet_ref(p.0, self.0) };
+        check(unsafe { ff::av_packet_ref(p.as_ptr(), self.as_ptr()) }).expect("reference packet");
         p
     }
 
     pub fn unref(&mut self) {
         // SAFETY: valid packet.
-        unsafe { ff::av_packet_unref(self.0) };
+        unsafe { ff::av_packet_unref(self.as_ptr()) };
     }
 
     pub fn get(&self) -> &AVPacket {
         // SAFETY: valid packet.
-        unsafe { &*self.0 }
+        unsafe { self.0.as_ref() }
     }
 
     pub fn is_key(&self) -> bool {
@@ -325,42 +361,49 @@ impl Default for Packet {
 impl Drop for Packet {
     fn drop(&mut self) {
         // SAFETY: allocated by av_packet_alloc.
-        unsafe { ff::av_packet_free(&mut self.0) };
+        unsafe { ff::av_packet_free(&mut self.as_ptr()) };
     }
 }
 
 /// A frame.
-pub struct Frame(pub *mut AVFrame);
+pub struct Frame(NonNull<AVFrame>);
 
 // SAFETY: frames are reference-counted and used by one owner at a time;
 // a hardware frame's surface is FFmpeg's to synchronize.
 unsafe impl Send for Frame {}
 
 impl Frame {
+    /// Borrowed pointer: never free it or keep it past this owner. Mutations
+    /// must preserve FFmpeg invariants and respect outstanding Rust borrows.
+    pub fn as_ptr(&self) -> *mut AVFrame {
+        self.0.as_ptr()
+    }
     pub fn new() -> Frame {
-        // SAFETY: allocation; FFmpeg aborts on failure.
-        Frame(unsafe { ff::av_frame_alloc() })
+        // SAFETY: allocation, checked before constructing the owner.
+        Frame(allocated(unsafe { ff::av_frame_alloc() }))
     }
 
     /// Another reference to the same pictures (or samples).
     pub fn share(&self) -> Frame {
         // SAFETY: valid frame.
-        Frame(unsafe { ff::av_frame_clone(self.0) })
+        Frame(allocated(unsafe { ff::av_frame_clone(self.as_ptr()) }))
     }
 
     pub fn get(&self) -> &AVFrame {
         // SAFETY: valid frame.
-        unsafe { &*self.0 }
+        unsafe { self.0.as_ref() }
     }
 
-    pub fn get_mut(&mut self) -> &mut AVFrame {
+    /// # Safety
+    /// Preserve FFmpeg ownership and buffer invariants of every modified field.
+    pub(crate) unsafe fn get_mut(&mut self) -> &mut AVFrame {
         // SAFETY: valid frame, ours.
-        unsafe { &mut *self.0 }
+        unsafe { self.0.as_mut() }
     }
 
     pub fn unref(&mut self) {
         // SAFETY: valid frame.
-        unsafe { ff::av_frame_unref(self.0) };
+        unsafe { ff::av_frame_unref(self.as_ptr()) };
     }
 
     /// Its time in seconds in `tb`: the decoder's best guess.
@@ -380,13 +423,13 @@ impl Default for Frame {
 impl Drop for Frame {
     fn drop(&mut self) {
         // SAFETY: allocated by av_frame_alloc or av_frame_clone.
-        unsafe { ff::av_frame_free(&mut self.0) };
+        unsafe { ff::av_frame_free(&mut self.as_ptr()) };
     }
 }
 
 /// A decoder for one stream.
 pub struct Decoder {
-    pub ctx: *mut AVCodecContext,
+    ctx: NonNull<AVCodecContext>,
     /// The stream's time base, which its frames' times are in.
     pub time_base: AVRational,
 }
@@ -395,16 +438,28 @@ pub struct Decoder {
 unsafe impl Send for Decoder {}
 
 impl Decoder {
+    /// Borrowed pointer: never free it or keep it past this owner. Mutations
+    /// must preserve FFmpeg invariants and respect outstanding Rust borrows.
+    pub fn as_ptr(&self) -> *mut AVCodecContext {
+        self.ctx.as_ptr()
+    }
     /// A decoder for `stream`; `setup` adjusts the context before it
     /// opens (threads, a hardware device).
-    pub fn open(stream: &AVStream, setup: impl FnOnce(&mut AVCodecContext)) -> Result<Decoder> {
-        Decoder::open_with(stream, false, setup)
+    pub fn open(stream: Stream<'_>, threads: i32) -> Result<Decoder> {
+        // SAFETY: only the scalar thread count is changed.
+        unsafe { Decoder::open_with(stream, false, |ctx| ctx.thread_count = threads) }
     }
 
     /// As `open`, with a decoder that can use a VA-API device if `vaapi`
     /// and the codec has one (AV1's is FFmpeg's own, where libdav1d, which
     /// can't, comes first).
-    pub fn open_with(stream: &AVStream, vaapi: bool, setup: impl FnOnce(&mut AVCodecContext)) -> Result<Decoder> {
+    /// # Safety
+    /// `setup` must preserve the context's ownership and pointer invariants.
+    pub(crate) unsafe fn open_with(
+        stream: Stream<'_>,
+        vaapi: bool,
+        setup: impl FnOnce(&mut AVCodecContext),
+    ) -> Result<Decoder> {
         // SAFETY: the stream's parameters are valid; on each failure the
         // context is freed by the Decoder's drop.
         unsafe {
@@ -416,33 +471,33 @@ impl Decoder {
             if codec.is_null() {
                 return Err(Error(ff::AVERROR_DECODER_NOT_FOUND));
             }
-            let ctx = ff::avcodec_alloc_context3(codec);
+            let ctx = allocated(ff::avcodec_alloc_context3(codec));
             let dec = Decoder { ctx, time_base: stream.time_base };
-            check(ff::avcodec_parameters_to_context(ctx, stream.codecpar))?;
-            (*ctx).pkt_timebase = stream.time_base;
-            setup(&mut *ctx);
-            check(ff::avcodec_open2(ctx, codec, ptr::null_mut()))?;
+            check(ff::avcodec_parameters_to_context(ctx.as_ptr(), stream.codecpar))?;
+            (*ctx.as_ptr()).pkt_timebase = stream.time_base;
+            setup(&mut *ctx.as_ptr());
+            check(ff::avcodec_open2(ctx.as_ptr(), codec, ptr::null_mut()))?;
             Ok(dec)
         }
     }
 
     pub fn get(&self) -> &AVCodecContext {
         // SAFETY: valid context.
-        unsafe { &*self.ctx }
+        unsafe { &*self.as_ptr() }
     }
 
     /// Give it a packet, or none to drain it. `Err` again: take frames
     /// first.
     pub fn send(&mut self, pkt: Option<&Packet>) -> Result<()> {
         // SAFETY: valid context; null drains.
-        check(unsafe { ff::avcodec_send_packet(self.ctx, pkt.map_or(ptr::null(), |p| p.0)) }).map(|_| ())
+        check(unsafe { ff::avcodec_send_packet(self.as_ptr(), pkt.map_or(ptr::null(), |p| p.as_ptr())) }).map(|_| ())
     }
 
     /// Take a decoded frame: none when it needs more input (or is
     /// drained).
     pub fn receive(&mut self, frame: &mut Frame) -> Result<bool> {
         // SAFETY: valid context and frame.
-        match unsafe { ff::avcodec_receive_frame(self.ctx, frame.0) } {
+        match unsafe { ff::avcodec_receive_frame(self.as_ptr(), frame.as_ptr()) } {
             0 => Ok(true),
             e if e == ff::AVERROR_EOF || e == ff::AVERROR(libc::EAGAIN) => Ok(false),
             e => Err(Error(e)),
@@ -452,19 +507,19 @@ impl Decoder {
     /// Forget what it was decoding (after a seek).
     pub fn flush(&mut self) {
         // SAFETY: valid, open context.
-        unsafe { ff::avcodec_flush_buffers(self.ctx) };
+        unsafe { ff::avcodec_flush_buffers(self.as_ptr()) };
     }
 
     pub fn codec_name(&self) -> String {
         // SAFETY: an open context has its codec.
-        unsafe { text((*(*self.ctx).codec).name) }.unwrap_or_default()
+        unsafe { text((*(*self.as_ptr()).codec).name) }.unwrap_or_default()
     }
 }
 
 impl Drop for Decoder {
     fn drop(&mut self) {
         // SAFETY: allocated by avcodec_alloc_context3; nulls it.
-        unsafe { ff::avcodec_free_context(&mut self.ctx) };
+        unsafe { ff::avcodec_free_context(&mut self.as_ptr()) };
     }
 }
 
@@ -522,5 +577,24 @@ mod tests {
         assert!(e.is_eof());
         assert!(e.to_string().to_lowercase().contains("end of file"));
         assert!(Error(ff::AVERROR(libc::EAGAIN)).is_again());
+    }
+}
+
+#[cfg(test)]
+mod ownership_tests {
+    use super::*;
+    #[test]
+    fn shared_packet_retains_data_after_original_is_dropped() {
+        let packet = Packet::new();
+        // SAFETY: packet is a live empty owner; FFmpeg allocates its buffer.
+        check(unsafe { ff::av_new_packet(packet.as_ptr(), 3) }).unwrap();
+        // SAFETY: the packet now owns three writable bytes.
+        unsafe {
+            std::ptr::copy_nonoverlapping(b"abc".as_ptr(), packet.get().data, 3);
+        }
+        let shared = packet.share();
+        assert_ne!(packet.as_ptr(), shared.as_ptr());
+        drop(packet);
+        assert_eq!(shared.bytes(), b"abc");
     }
 }

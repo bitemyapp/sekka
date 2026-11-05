@@ -1,3 +1,4 @@
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{Terminal, TerminalEvent};
 
 fn request(selection: u8, data: &[u8]) -> TerminalEvent {
@@ -11,7 +12,10 @@ fn request(selection: u8, data: &[u8]) -> TerminalEvent {
 fn raw_single_byte_kinds_and_payloads_survive_without_granting_access() {
     let input = b"\x1b]52;;?\x07\x1b]52;\xff;a\xffb\x1b\\\x1b]52;p;\x07";
     for size in [1, 7, 65536] {
-        let mut terminal = Terminal::new(8, 3, 0);
+        let mut terminal = Terminal::new(
+            GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()),
+            0,
+        );
         for chunk in input.chunks(size) {
             terminal.feed(chunk);
         }
@@ -37,7 +41,10 @@ fn raw_single_byte_kinds_and_payloads_survive_without_granting_access() {
         b" 52;c;?",
         b"52 ;c;?",
     ] {
-        let mut terminal = Terminal::new(8, 3, 0);
+        let mut terminal = Terminal::new(
+            GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()),
+            0,
+        );
         terminal.feed(b"\x1b]");
         terminal.feed(input);
         terminal.feed(b"\x07");
@@ -55,13 +62,19 @@ fn terminal_stream_filters_nul_retains_del_and_cancels_can_sub() {
         b"52;\0;YWJj",
         b"52;c;Y\0WJj",
     ] {
-        let mut terminal = Terminal::new(8, 3, 0);
+        let mut terminal = Terminal::new(
+            GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()),
+            0,
+        );
         terminal.feed(b"\x1b]");
         terminal.feed(body);
         terminal.feed(b"\x07");
         assert_eq!(terminal.take_events(), vec![request(b'c', b"YWJj")]);
     }
-    let mut terminal = Terminal::new(8, 3, 0);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()),
+        0,
+    );
     terminal.feed(b"\x1b]52;c;Y\x7fWJj\x07");
     assert_eq!(terminal.take_events(), vec![request(b'c', b"Y\x7fWJj")]);
     for cancel in [0x18, 0x1a] {
@@ -79,7 +92,10 @@ fn terminal_stream_filters_nul_retains_del_and_cancels_can_sub() {
 
 #[test]
 fn non_streaming_event_flood_keeps_bounded_ordered_prefix_and_ui_notifications() {
-    let mut terminal = Terminal::new(8, 3, 0);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()),
+        0,
+    );
     for index in 0..100 {
         terminal.feed(format!("\x1b]52;c;{index}\x07").as_bytes());
     }
@@ -103,7 +119,10 @@ fn non_streaming_event_flood_keeps_bounded_ordered_prefix_and_ui_notifications()
 
 #[test]
 fn pending_payload_cap_is_checked_before_copy_and_released_on_drain() {
-    let mut terminal = Terminal::new(8, 3, 0);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()),
+        0,
+    );
     let body = vec![b'A'; 5 * 1024 * 1024];
     for _ in 0..2 {
         terminal.feed(b"\x1b]52;c;");
@@ -118,7 +137,10 @@ fn pending_payload_cap_is_checked_before_copy_and_released_on_drain() {
 
 #[test]
 fn notifications_come_from_osc_9_and_777_but_not_conemu_commands() {
-    let mut terminal = Terminal::new(8, 3, 0);
+    let mut terminal = Terminal::new(
+        GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()),
+        0,
+    );
     terminal.feed(b"\x1b]9;Build finished\x07");
     assert_eq!(
         terminal.take_events(),

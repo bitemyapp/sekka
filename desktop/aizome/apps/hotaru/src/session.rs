@@ -3,6 +3,7 @@
 //! The UI only exchanges commands and immutable, shared row snapshots.
 
 use crate::app::Msg;
+use crate::ids::{PaneId, RequestId};
 use aizome_kit::MsgSender;
 use hotaru_core::{Terminal, TerminalColors, TerminalEvent};
 use hotaru_io::{Pty, PtyCommand, PtySize};
@@ -32,10 +33,9 @@ pub enum Command {
     Wheel(crate::input::MouseInput, i32),
     Focus(bool),
     Paste(Arc<str>),
-    Resize { cols: usize, rows: usize },
-    ResizePixels { cols: usize, rows: usize, width: u16, height: u16 },
+    Resize(PtySize),
     Scroll(i32),
-    CopyAll(u64),
+    CopyAll(RequestId),
     Search(SearchControl),
     Colors(Arc<TerminalColors>),
     // The cursor programs get until they ask for another, and whether it blinks.
@@ -61,8 +61,8 @@ pub struct Defaults {
     pub cursor: (hotaru_core::CursorShape, bool),
 }
 pub enum SearchControl {
-    Capture { token: u64, cancel: Arc<AtomicBool> },
-    Navigate { token: u64, results: Arc<hotaru_core::search::Results>, index: usize, cancel: Arc<AtomicBool> },
+    Capture { token: RequestId, cancel: Arc<AtomicBool> },
+    Navigate { token: RequestId, results: Arc<hotaru_core::search::Results>, index: usize, cancel: Arc<AtomicBool> },
 }
 struct Shared {
     wake: OwnedFd,
@@ -76,7 +76,7 @@ struct Shared {
 }
 #[derive(Default)]
 struct Controls {
-    resize: Option<(usize, usize, u16, u16)>,
+    resize: Option<PtySize>,
     colors: Option<Arc<TerminalColors>>,
     cursor: Option<(hotaru_core::CursorShape, bool)>,
     search_capture: Option<SearchControl>,
@@ -102,7 +102,7 @@ impl Shared {
 }
 impl Session {
     pub fn spawn(
-        id: u64,
+        id: PaneId,
         mut command: PtyCommand,
         defaults: Defaults,
         tx: MsgSender<Msg>,
@@ -164,14 +164,8 @@ impl Session {
             return Err("The terminal session has ended.");
         }
         let command = match command {
-            Command::Resize { cols, rows } => {
-                self.shared.controls.lock().unwrap_or_else(|e| e.into_inner()).resize = Some((cols, rows, 0, 0));
-                self.shared.wake();
-                return Ok(());
-            }
-            Command::ResizePixels { cols, rows, width, height } => {
-                self.shared.controls.lock().unwrap_or_else(|e| e.into_inner()).resize =
-                    Some((cols, rows, width, height));
+            Command::Resize(size) => {
+                self.shared.controls.lock().unwrap_or_else(|e| e.into_inner()).resize = Some(size);
                 self.shared.wake();
                 return Ok(());
             }
@@ -269,7 +263,7 @@ struct Gather {
 }
 
 impl Gather {
-    fn spawn(id: u64, pty: &Pty, shared: Arc<Shared>) -> io::Result<Self> {
+    fn spawn(id: PaneId, pty: &Pty, shared: Arc<Shared>) -> io::Result<Self> {
         // The reader owns a duplicate, so the session keeps the PTY itself for
         // writes, resizes and its child.
         let fd = pty.as_fd().try_clone_to_owned()?;
@@ -406,7 +400,7 @@ fn secure_random() -> Option<Vec<u8>> {
 
 fn publish_events(
     terminal: &mut Terminal,
-    id: u64,
+    id: PaneId,
     tx: &MsgSender<Msg>,
     hostname: Option<&str>,
     seen_title: &mut bool,
@@ -469,21 +463,22 @@ fn publish_events(
 }
 
 fn run(
-    id: u64,
+    id: PaneId,
     command: PtyCommand,
     defaults: Defaults,
     tx: MsgSender<Msg>,
     commands: mpsc::Receiver<Command>,
     shared: Arc<Shared>,
 ) -> io::Result<()> {
-    let mut pty = Pty::spawn(command, PtySize::default())?;
+    let size = PtySize::default();
+    let mut pty = Pty::spawn(command, size)?;
     shared.child.store(pty.child_id(), Ordering::Release);
     let gather = Gather::spawn(id, &pty, shared.clone())?;
     let started = Instant::now();
     let clipboard = Arc::new(crate::selections::Bounds::default());
     let hostname = hotaru_io::launch::local_hostname();
     let mut seen_title = false;
-    let mut terminal = Terminal::new(80, 24, defaults.scrollback);
+    let mut terminal = Terminal::new(size.grid, defaults.scrollback);
     terminal.set_default_cursor(defaults.cursor.0, defaults.cursor.1);
     terminal.set_default_grapheme_width(hotaru_core::GraphemeWidthMethod::Unicode);
     terminal.set_default_colors(defaults.colors);
@@ -511,12 +506,11 @@ fn run(
         // These latest-state controls cannot be rejected by a full input queue.
         // Never reflow, allocate, or call the PTY while holding the UI's mutex.
         let controls = std::mem::take(&mut *shared.controls.lock().unwrap_or_else(|e| e.into_inner()));
-        if let Some((cols, rows, width, height)) = controls.resize {
-            let (cols, rows) = (cols.clamp(1, 4096), rows.clamp(1, 4096));
+        if let Some(size) = controls.resize {
             if !eof && !hung_up {
-                pty.resize(PtySize { cols: cols as u16, rows: rows as u16, pixel_width: width, pixel_height: height })?;
+                pty.resize(size)?;
             }
-            terminal.resize(cols, rows);
+            terminal.resize(size.grid);
             last_activity = Instant::now();
             compress_more = true;
             changed = true;
@@ -673,13 +667,7 @@ fn run(
                         changed = true;
                     }
                 }
-                Ok(
-                    Command::Resize { .. }
-                    | Command::ResizePixels { .. }
-                    | Command::Colors(_)
-                    | Command::Cursor(..)
-                    | Command::Search(_),
-                ) => {
+                Ok(Command::Resize(_) | Command::Colors(_) | Command::Cursor(..) | Command::Search(_)) => {
                     unreachable!("controls use the mailbox")
                 }
             }
@@ -851,7 +839,9 @@ mod tests {
     use super::*;
     use aizome_kit::prelude::*;
     use aizome_kit::testing::Harness;
-    use hotaru_core::{Rgb, Snapshot};
+    use hotaru_core::{Cols, GridSize, Rgb, Rows, Snapshot};
+    use hotaru_io::PixelSize;
+    use std::num::NonZeroU16;
 
     struct Probe {
         session: Session,
@@ -891,7 +881,7 @@ mod tests {
         for _ in 0..64 {
             session.command(Command::Input(Arc::from(&b""[..]))).unwrap();
         }
-        let mut terminal = Terminal::new(10, 2, 0);
+        let mut terminal = Terminal::new(GridSize::new(Cols::new(10).unwrap(), Rows::new(2).unwrap()), 0);
         terminal.feed(b"needle");
         let results = Arc::new(
             hotaru_core::search::find(
@@ -904,10 +894,15 @@ mod tests {
         );
         let cancel = Arc::new(AtomicBool::new(false));
         for token in 0..100 {
-            session.command(Command::Search(SearchControl::Capture { token, cancel: cancel.clone() })).unwrap();
+            session
+                .command(Command::Search(SearchControl::Capture {
+                    token: crate::ids::RequestId::new(token),
+                    cancel: cancel.clone(),
+                }))
+                .unwrap();
             session
                 .command(Command::Search(SearchControl::Navigate {
-                    token: token + 100,
+                    token: crate::ids::RequestId::new(token + 100),
                     results: results.clone(),
                     index: 0,
                     cancel: cancel.clone(),
@@ -916,8 +911,12 @@ mod tests {
         }
         assert!(session.command(Command::Input(Arc::from(&b""[..]))).is_err());
         let controls = std::mem::take(&mut *session.shared.controls.lock().unwrap());
-        assert!(matches!(controls.search_capture, Some(SearchControl::Capture { token: 99, .. })));
-        assert!(matches!(controls.search_navigation, Some(SearchControl::Navigate { token: 199, .. })));
+        assert!(
+            matches!(controls.search_capture, Some(SearchControl::Capture { token, .. }) if token == RequestId::new(99))
+        );
+        assert!(
+            matches!(controls.search_navigation, Some(SearchControl::Navigate { token, .. }) if token == RequestId::new(199))
+        );
         assert_eq!(commands.try_iter().count(), 64);
     }
 
@@ -929,12 +928,21 @@ mod tests {
         }
         assert!(session.command(Command::Input(Arc::from(&b""[..]))).unwrap_err().contains("queue is full"));
         for cols in 80..180 {
-            session.command(Command::Resize { cols, rows: 50 }).unwrap();
+            let grid = GridSize::new(Cols::new(cols).unwrap(), Rows::new(50).unwrap());
+            session.command(Command::Resize(PtySize { grid, pixels: None })).unwrap();
             session.command(Command::Colors(Arc::new(TerminalColors::default()))).unwrap();
         }
         let colors =
             TerminalColors { foreground: Rgb(17, 29, 43), background: Rgb(59, 71, 89), ..TerminalColors::default() };
-        session.command(Command::ResizePixels { cols: 201, rows: 51, width: 2211, height: 1275 }).unwrap();
+        session
+            .command(Command::Resize(PtySize {
+                grid: GridSize::new(Cols::new(201).unwrap(), Rows::new(51).unwrap()),
+                pixels: Some(PixelSize {
+                    width: NonZeroU16::new(2211).unwrap(),
+                    height: NonZeroU16::new(1275).unwrap(),
+                }),
+            }))
+            .unwrap();
         session.command(Command::Colors(Arc::new(colors.clone()))).unwrap();
         assert!(session.command(Command::Input(Arc::from(&b""[..]))).is_err());
         assert_eq!(session.shared.input_bytes.load(Ordering::Acquire), 0);
@@ -956,7 +964,8 @@ mod tests {
             scrollback: 100,
             cursor: (hotaru_core::CursorShape::Block, true),
         };
-        let worker = std::thread::spawn(move || run(1, child, defaults, sender, commands, shared));
+        let worker =
+            std::thread::spawn(move || run(crate::ids::PaneId::new(1), child, defaults, sender, commands, shared));
         assert!(harness.settle(Duration::from_secs(5), |probe| probe.exited));
         let frame = harness.program().frame.as_ref().unwrap();
         assert_eq!((frame.cols, frame.rows), (201, 51));
@@ -988,7 +997,8 @@ mod tests {
             scrollback: 100,
             cursor: (hotaru_core::CursorShape::Block, true),
         };
-        let worker = std::thread::spawn(move || run(1, child, defaults, sender, commands, shared));
+        let worker =
+            std::thread::spawn(move || run(crate::ids::PaneId::new(1), child, defaults, sender, commands, shared));
         assert!(harness.settle(Duration::from_secs(30), |probe| probe.exited));
         let text = harness.program().frame.as_ref().unwrap().plain_text();
         let mut at = 0;

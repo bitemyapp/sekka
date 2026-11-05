@@ -1,5 +1,6 @@
 //! Resident-memory and history-read baseline, run with tools/history_benchmark.py.
 use hotaru_core::Terminal;
+use hotaru_core::{Cols, GridSize, Rows};
 use serde_json::json;
 use std::{hint::black_box, time::Instant};
 fn rss_kib() -> usize {
@@ -21,8 +22,7 @@ fn main() {
     let compress = args.get(5).is_some_and(|arg| arg == "1");
     let before = rss_kib();
     let mut terminal = Terminal::with_history_limits(
-        cols,
-        rows,
+        GridSize::new(Cols::new(cols).unwrap(), Rows::new(rows).unwrap()),
         hotaru_core::HistoryLimits {
             rows: history,
             bytes: None,

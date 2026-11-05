@@ -1,5 +1,6 @@
 //! Bounded font worker per pane: one active and one replaceable pending frame.
 
+use crate::ids::PaneId;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, Once};
@@ -93,7 +94,7 @@ pub fn monospaced_families() -> Arc<[String]> {
 }
 
 impl Worker {
-    pub fn new(id: u64, tx: MsgSender<Msg>) -> std::io::Result<Self> {
+    pub fn new(id: PaneId, tx: MsgSender<Msg>) -> std::io::Result<Self> {
         let pending = Arc::new((Mutex::new(Pending::default()), Condvar::new()));
         let shared = pending.clone();
         std::thread::Builder::new().name(format!("hotaru-font-{id}")).spawn(move || {
@@ -610,6 +611,7 @@ fn shape_uncached(job: &Job, fonts: &mut grid::FontSet, cancel: &AtomicBool) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hotaru_core::{Cols, GridSize, Rows};
 
     #[test]
     fn frame_retention_charge_saturates_instead_of_admitting_wrapped_sizes() {
@@ -619,7 +621,7 @@ mod tests {
 
     #[test]
     fn whole_content_search_projects_wide_and_soft_wrapped_highlights_on_worker() {
-        let mut terminal = hotaru_core::Terminal::new(6, 4, 8);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(6).unwrap(), Rows::new(4).unwrap()), 8);
         terminal.feed("ab界cDE".as_bytes());
         let cancel = AtomicBool::new(false);
         let results =
@@ -707,7 +709,7 @@ mod tests {
     #[test]
     fn row_cache_reuses_moved_rows_and_preserves_frame_and_link_ownership() {
         install_fonts();
-        let mut terminal = hotaru_core::Terminal::new(24, 8, 32);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(24).unwrap(), Rows::new(8).unwrap()), 32);
         terminal.feed(b"\x1b[?25l");
         for y in 0..8 {
             terminal.feed(
@@ -735,7 +737,7 @@ mod tests {
         assert!(Arc::ptr_eq(&held.rows[1], &moved.rows[0]));
         assert_eq!(moved.links[0].row, 0);
         assert_eq!(fingerprint(&held), held_text);
-        terminal.resize(1, 3);
+        terminal.resize(GridSize::new(Cols::new(1).unwrap(), Rows::new(3).unwrap()));
         terminal.feed("界\u{301}".as_bytes());
         work.snapshot = Arc::new(terminal.snapshot());
         compared(&work, &mut fonts, &mut cache);
@@ -745,7 +747,7 @@ mod tests {
     #[test]
     fn row_cache_context_limits_cancellation_and_metadata_are_complete() {
         install_fonts();
-        let mut terminal = hotaru_core::Terminal::new(32, 6, 32);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(32).unwrap(), Rows::new(6).unwrap()), 32);
         terminal.set_default_grapheme_width(hotaru_core::GraphemeWidthMethod::Unicode);
         terminal.feed("!= === e\u{301} 界 👩\u{200d}💻\r\nneedle needle\r\nthird row".as_bytes());
         let mut work = job(&terminal);
@@ -795,7 +797,8 @@ mod tests {
     #[test]
     fn row_cache_matches_uncached_seeded_snapshot_transitions() {
         install_fonts();
-        let mut terminal = hotaru_core::Terminal::new(40, 9, 128);
+        let mut terminal =
+            hotaru_core::Terminal::new(GridSize::new(Cols::new(40).unwrap(), Rows::new(9).unwrap()), 128);
         terminal.set_default_grapheme_width(hotaru_core::GraphemeWidthMethod::Unicode);
         let mut work = job(&terminal);
         let mut fonts = grid::FontSet::new((*work.config).clone()).unwrap();
@@ -819,7 +822,10 @@ mod tests {
                 6 => terminal
                     .feed(format!("\x1b]8;id={step};https://example.test/{step}\x1b\\link\x1b]8;;\x1b\\").as_bytes()),
                 7 => terminal.feed(b"\x1b[2K"),
-                8 => terminal.resize(1 + (seed as usize % 60), 1 + ((seed >> 12) as usize % 12)),
+                8 => terminal.resize(GridSize::new(
+                    Cols::new(1 + (seed as usize % 60)).unwrap(),
+                    Rows::new(1 + ((seed >> 12) as usize % 12)).unwrap(),
+                )),
                 9 => {
                     let a = crate::terminal_view::CellPoint { row: row - 1, col: col - 1 };
                     let b = crate::terminal_view::CellPoint {
@@ -878,9 +884,10 @@ fn sprite_layout(
 #[cfg(test)]
 mod sprite_tests {
     use super::*;
+    use hotaru_core::{Cols, GridSize, Rows};
     #[test]
     fn unsupported_sprite_metrics_fall_back_without_discarding_surrounding_text() {
-        let mut terminal = hotaru_core::Terminal::new(16, 2, 0);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(16).unwrap(), Rows::new(2).unwrap()), 0);
         terminal.feed("left─right".as_bytes());
         let snapshot = Arc::new(terminal.snapshot());
         let mut cache = RowCache::default();
@@ -912,7 +919,7 @@ mod sprite_tests {
     #[test]
     fn qualified_sprites_split_shaping_and_retain_styles_links_and_snapshots() {
         install_fonts();
-        let mut terminal = hotaru_core::Terminal::new(32, 16, 0);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(32).unwrap(), Rows::new(16).unwrap()), 0);
         terminal.feed(b"\x1b[?25l\x1b]8;id=box;https://example.test/box\x1b\\");
         let text: String = (0x2500..=0x25ff)
             .chain(0x2800..=0x28ff)

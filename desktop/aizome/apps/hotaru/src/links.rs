@@ -135,6 +135,7 @@ impl Press {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hotaru_core::{Cols, GridSize, Rows};
     #[test]
     fn targets_are_validated_without_rewriting_or_shell_interpretation() {
         for invalid in [
@@ -154,7 +155,7 @@ mod tests {
     }
     #[test]
     fn explicit_link_presence_suppresses_automatic_fallback_even_when_uri_is_invalid() {
-        let mut terminal = hotaru_core::Terminal::new(40, 2, 0);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(40).unwrap(), Rows::new(2).unwrap()), 0);
         terminal.feed(b"\x1b]8;;invalid\x1b\\https://example.test\x1b]8;;\x1b\\");
         let snapshot = Arc::new(terminal.snapshot());
         let cell = hotaru_link_regex::CellPoint { row: 0, col: 2 };
@@ -176,12 +177,17 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(Link::at(&snapshot, CellPoint { row: 0, col: 2 }).is_none());
-        let request = Arc::new(crate::automatic_links::Request { pane: 1, snapshot, cell, retained_bytes: 1024 });
+        let request = Arc::new(crate::automatic_links::Request {
+            pane: crate::ids::PaneId::new(1),
+            snapshot,
+            cell,
+            retained_bytes: 1024,
+        });
         assert!(Link::automatic(request, found).is_none());
     }
     #[test]
     fn changed_frames_movement_or_cell_cancel_the_owned_gesture() {
-        let mut term = hotaru_core::Terminal::new(12, 2, 0);
+        let mut term = hotaru_core::Terminal::new(GridSize::new(Cols::new(12).unwrap(), Rows::new(2).unwrap()), 0);
         term.feed("\x1b]8;id=one;https://example.test\x1b\\界AB\x1b]8;;\x1b\\".as_bytes());
         let first = Arc::new(term.snapshot());
         let head = Link::at(&first, CellPoint { row: 0, col: 0 }).unwrap();

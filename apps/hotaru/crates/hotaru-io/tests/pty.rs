@@ -1,3 +1,4 @@
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_io::{Pty, PtyCommand, PtySize};
 use std::io;
 use std::os::fd::AsRawFd;
@@ -6,6 +7,8 @@ use std::time::{Duration, Instant};
 fn command(script: &str) -> PtyCommand {
     let mut command = PtyCommand::new("/bin/sh");
     command.args = vec!["-c".into(), script.into()];
+    // This fixture checks the fallback identity, independently of dev-shell terminfo.
+    command.env.push(("HOTARU_TERMINFO_DIR".into(), "".into()));
     command
 }
 
@@ -38,9 +41,8 @@ fn collect(pty: &Pty) -> Vec<u8> {
 #[test]
 fn spawned_child_has_controlling_terminal_and_requested_size() {
     let size = PtySize {
-        rows: 37,
-        cols: 109,
-        ..PtySize::default()
+        grid: GridSize::new(Cols::new(109).unwrap(), Rows::new(37).unwrap()),
+        pixels: None,
     };
     let mut pty = Pty::spawn(command("test -t 0 && test -t 1 && test -t 2 || exit 9; stty size; printf '%s' \"$TERM:$COLORTERM:$TERM_PROGRAM\""), size).unwrap();
     let output = String::from_utf8(collect(&pty)).unwrap();
@@ -68,9 +70,8 @@ fn pty_resize_and_input_reach_child() {
     )
     .unwrap();
     pty.resize(PtySize {
-        rows: 43,
-        cols: 132,
-        ..PtySize::default()
+        grid: GridSize::new(Cols::new(132).unwrap(), Rows::new(43).unwrap()),
+        pixels: None,
     })
     .unwrap();
     assert_eq!(pty.write(b"hotaru\n").unwrap(), 7);
@@ -148,17 +149,7 @@ fn drop_is_nonblocking_and_reaps_hangup_ignoring_child() {
 }
 
 #[test]
-fn invalid_dimensions_and_missing_program_fail_before_returning_a_session() {
-    assert!(
-        Pty::spawn(
-            command("exit 0"),
-            PtySize {
-                rows: 0,
-                ..PtySize::default()
-            }
-        )
-        .is_err()
-    );
+fn missing_program_fails_before_returning_a_session() {
     assert!(
         Pty::spawn(
             PtyCommand::new("/hotaru/nonexistent-program"),

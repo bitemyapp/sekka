@@ -1,5 +1,6 @@
 //! Development search timing driver; parsing and result serialization are
 //! outside the timed region. Capture creation is included, release excluded.
+use hotaru_core::GridSize;
 use hotaru_core::{
     Terminal,
     search::{self, Options},
@@ -22,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "resident" => false,
         _ => return Err("invalid storage".into()),
     };
-    let mut terminal = Terminal::new(80, 24, 1_000_000);
+    let mut terminal = Terminal::new(GridSize::default(), 1_000_000);
     for chunk in input.chunks(65_536) {
         terminal.feed(chunk);
     }

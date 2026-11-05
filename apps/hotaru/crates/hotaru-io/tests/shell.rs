@@ -1,5 +1,6 @@
 //! Explicit fixtures use real shells in disposable homes. No host dotfiles are
 //! read or changed; run the ignored parent with HOTARU_TEST_FISH configured.
+use hotaru_core::GridSize;
 use hotaru_io::{Pty, PtyCommand, PtySize};
 use std::io::{self, Write};
 use std::os::unix::ffi::OsStringExt;
@@ -182,7 +183,7 @@ fn shell_child() {
     let mut pty = Pty::spawn(command, PtySize::default()).unwrap();
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut output = Vec::new();
-    let mut terminal = hotaru_core::Terminal::new(80, 24, 0);
+    let mut terminal = hotaru_core::Terminal::new(GridSize::default(), 0);
     let mut responses = Vec::new();
     let mut response_at = 0;
     let mut sent = 0;

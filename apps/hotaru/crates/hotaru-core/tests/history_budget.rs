@@ -1,8 +1,12 @@
+use hotaru_core::{Cols, GridSize, Rows};
 use hotaru_core::{ContentSnapshot, DEFAULT_HISTORY_BYTES, HistoryLimits, Terminal};
 use std::sync::atomic::AtomicBool;
 
 fn terminal(bytes: Option<usize>) -> Terminal {
-    Terminal::with_history_limits(40, 4, HistoryLimits { rows: 1000, bytes })
+    Terminal::with_history_limits(
+        GridSize::new(Cols::new(40).unwrap(), Rows::new(4).unwrap()),
+        HistoryLimits { rows: 1000, bytes },
+    )
 }
 fn compress(t: &mut Terminal) {
     let mut count = 0;
@@ -36,7 +40,12 @@ fn bounded(t: &Terminal, limit: usize) {
 #[test]
 fn default_policy_and_explicit_unlimited_row_limit_are_distinct() {
     assert_eq!(
-        Terminal::new(40, 4, 1000).history_memory().limit_bytes,
+        Terminal::new(
+            GridSize::new(Cols::new(40).unwrap(), Rows::new(4).unwrap()),
+            1000
+        )
+        .history_memory()
+        .limit_bytes,
         Some(DEFAULT_HISTORY_BYTES)
     );
     let mut limited = terminal(Some(12_000));
@@ -72,10 +81,10 @@ fn compression_preserves_byte_pruning_through_metadata_churn_shrink_and_recyclin
             t.feed(line.as_bytes());
             if index % 131 == 0 {
                 t.feed(b"\x1b[?7l");
-                t.resize(17, 4);
+                t.resize(GridSize::new(Cols::new(17).unwrap(), Rows::new(4).unwrap()));
             }
             if index % 131 == 3 {
-                t.resize(40, 4);
+                t.resize(GridSize::new(Cols::new(40).unwrap(), Rows::new(4).unwrap()));
                 t.feed(b"\x1b[?7h");
             }
             bounded(t, LIMIT);
@@ -301,8 +310,12 @@ fn interior_wide_overwrites_preserve_erased_style_allocation_and_compaction_orde
         for overwrite in ["abcdefgh", "αβγδεζηθ"] {
             let mut initial = b"old\r\n".repeat(80);
             initial.extend_from_slice(seed.as_bytes());
-            let make =
-                |bytes| Terminal::with_history_limits(8, 3, HistoryLimits { rows: 1000, bytes });
+            let make = |bytes| {
+                Terminal::with_history_limits(
+                    GridSize::new(Cols::new(8).unwrap(), Rows::new(3).unwrap()),
+                    HistoryLimits { rows: 1000, bytes },
+                )
+            };
             let mut unlimited = make(None);
             unlimited.feed(&initial);
             let before = unlimited.history_memory();

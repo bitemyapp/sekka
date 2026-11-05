@@ -5,8 +5,10 @@
 //! PTY never waits for a child; a shared reaper handles HUP, grace, KILL, and wait.
 
 use crate::fd::nonblocking;
+use hotaru_core::GridSize;
 use std::ffi::OsString;
 use std::io;
+use std::num::NonZeroU16;
 use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
@@ -54,39 +56,36 @@ impl Default for PtyCommand {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// The size a PTY tells its programs: always at least one column and row,
+/// and its pixels if they're known.
+///
+/// Columns and rows are different types:
+/// ```compile_fail
+/// use hotaru_core::{Cols, GridSize, Rows};
+/// let size = GridSize::new(Rows::new(24).unwrap(), Cols::new(80).unwrap());
+/// ```
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct PtySize {
-    pub rows: u16,
-    pub cols: u16,
-    pub pixel_width: u16,
-    pub pixel_height: u16,
+    pub grid: GridSize,
+    pub pixels: Option<PixelSize>,
 }
 
-impl Default for PtySize {
-    fn default() -> Self {
-        Self {
-            rows: 24,
-            cols: 80,
-            pixel_width: 0,
-            pixel_height: 0,
-        }
-    }
+/// A terminal's size in pixels.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PixelSize {
+    pub width: NonZeroU16,
+    pub height: NonZeroU16,
 }
 
 impl PtySize {
-    fn winsize(self) -> io::Result<libc::winsize> {
-        if self.rows == 0 || self.cols == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "PTY dimensions must be nonzero",
-            ));
+    fn winsize(self) -> libc::winsize {
+        libc::winsize {
+            ws_row: self.grid.rows.to_u16(),
+            ws_col: self.grid.cols.to_u16(),
+            // Zero is unknown to the kernel.
+            ws_xpixel: self.pixels.map_or(0, |p| p.width.get()),
+            ws_ypixel: self.pixels.map_or(0, |p| p.height.get()),
         }
-        Ok(libc::winsize {
-            ws_row: self.rows,
-            ws_col: self.cols,
-            ws_xpixel: self.pixel_width,
-            ws_ypixel: self.pixel_height,
-        })
     }
 }
 
@@ -99,7 +98,7 @@ pub struct Pty {
 
 impl Pty {
     pub fn spawn(mut command: PtyCommand, size: PtySize) -> io::Result<Self> {
-        let winsize = size.winsize()?;
+        let winsize = size.winsize();
         let defaults = crate::launch::prepare(&mut command);
         // Initialize the reaper before a process exists: thread-creation failure
         // must fail spawn, not create a child that no one can later reap.
@@ -238,7 +237,7 @@ impl Pty {
     }
 
     pub fn resize(&self, size: PtySize) -> io::Result<()> {
-        let winsize = size.winsize()?;
+        let winsize = size.winsize();
         // SAFETY: winsize lives through the ioctl; the descriptor is live.
         if unsafe { libc::ioctl(self.as_raw_fd(), libc::TIOCSWINSZ, &winsize) } == -1 {
             return Err(io::Error::last_os_error());

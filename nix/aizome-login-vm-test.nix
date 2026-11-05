@@ -130,6 +130,21 @@ pkgs.testers.runNixOSTest {
         user("printf hunter2 | secret-tool store --label='Aizome login test' app aizome-login-test")
         assert user("secret-tool lookup app aizome-login-test").strip() == "hunter2"
 
+    with subtest("the keyring survives clients that call as soon as they connect"):
+        # gnome-keyring records a client from an idle that nothing orders
+        # before the client's first call; a call that came first aborted the
+        # daemon, and the keyring was locked from then on
+        # (nix/overlays/gnome-keyring.nix).
+        daemons = machine.succeed("pgrep -u demo -f gnome-keyring-daemon | sort")
+        user(
+            "for t in $(seq 16); do (for i in $(seq 30); do busctl --user get-property "
+            "org.freedesktop.secrets /org/freedesktop/secrets/collection/login "
+            "org.freedesktop.Secret.Collection Locked >/dev/null 2>&1; done) & done; wait"
+        )
+        assert machine.succeed("pgrep -u demo -f gnome-keyring-daemon | sort") == daemons
+        machine.fail("coredumpctl list --no-legend | grep -q gnome-keyring")
+        assert user("secret-tool lookup app aizome-login-test").strip() == "hunter2"
+
     with subtest("Foot delivers every TUI keystroke while agent child jobs saturate the CPUs"):
         socket = machine.succeed("ls /run/user/1000/aizome.wayland-*.sock").strip()
         user("AIZOME_SOCKET=" + shlex.quote(socket) + " aizomectl spawn -- foot -- ${inputProbe}/bin/codex")

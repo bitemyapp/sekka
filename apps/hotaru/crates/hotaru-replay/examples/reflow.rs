@@ -1,5 +1,6 @@
 //! JSON operation runner for comparison with the actual libghostty-vt library.
 use hotaru_core::{Color, Rgb, Terminal};
+use hotaru_core::{Cols, GridSize, Rows};
 use serde_json::{Value, json};
 use std::io::{self, Read};
 
@@ -17,8 +18,10 @@ fn main() {
     let mut results = Vec::new();
     for case in cases {
         let mut terminal = Terminal::new(
-            case["cols"].as_u64().unwrap() as usize,
-            case["rows"].as_u64().unwrap() as usize,
+            GridSize::new(
+                Cols::new(case["cols"].as_u64().unwrap() as usize).unwrap(),
+                Rows::new(case["rows"].as_u64().unwrap() as usize).unwrap(),
+            ),
             case["history"].as_u64().unwrap_or(10_000) as usize,
         );
         let mut steps = Vec::new();
@@ -27,10 +30,10 @@ fn main() {
                 terminal.feed(text.as_bytes());
             }
             if let Some(size) = op["resize"].as_array() {
-                terminal.resize(
-                    size[0].as_u64().unwrap() as usize,
-                    size[1].as_u64().unwrap() as usize,
-                );
+                terminal.resize(GridSize::new(
+                    Cols::new(size[0].as_u64().unwrap() as usize).unwrap(),
+                    Rows::new(size[1].as_u64().unwrap() as usize).unwrap(),
+                ));
             }
             let snapshot = terminal.snapshot_all();
             let lines: Vec<_> = snapshot.lines.iter().map(|line| {

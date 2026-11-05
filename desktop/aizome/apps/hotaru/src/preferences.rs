@@ -313,7 +313,11 @@ fn text_page(app: &Hotaru) -> Vec<Element<Msg>> {
             form_row("Family", family).description(family_note).into(),
             form_row(
                 "Size",
-                stepper(s.font_size).range(8.0..=72.0).step(0.5).suffix(" pt").on_change(Msg::SetFontSize),
+                stepper(s.font_size)
+                    .range(ValueRange::new(8.0, 72.0).unwrap())
+                    .step(PositiveStep::new(0.5).unwrap())
+                    .suffix(" pt")
+                    .on_change(Msg::SetFontSize),
             )
             .description(zoom)
             .into(),

@@ -149,8 +149,20 @@ fn keys(k: &aizome_kit::sidestep_ui::KeyEvent) -> Option<Msg> {
     }
     let small = m.shift();
     match &k.key {
-        Key::Named(NamedKey::ArrowLeft) => Some(Msg::SeekBy(if small { -1.0 } else if m.alt() { -60.0 } else { -5.0 })),
-        Key::Named(NamedKey::ArrowRight) => Some(Msg::SeekBy(if small { 1.0 } else if m.alt() { 60.0 } else { 5.0 })),
+        Key::Named(NamedKey::ArrowLeft) => Some(Msg::SeekBy(if small {
+            -1.0
+        } else if m.alt() {
+            -60.0
+        } else {
+            -5.0
+        })),
+        Key::Named(NamedKey::ArrowRight) => Some(Msg::SeekBy(if small {
+            1.0
+        } else if m.alt() {
+            60.0
+        } else {
+            5.0
+        })),
         Key::Named(NamedKey::ArrowUp) => Some(Msg::VolumeBy(0.05)),
         Key::Named(NamedKey::ArrowDown) => Some(Msg::VolumeBy(-0.05)),
         Key::Named(NamedKey::Home) => Some(Msg::SeekTo(0.0)),
@@ -255,7 +267,13 @@ fn resumed(at: f64) -> Element<Msg> {
     )
     .padding([4.0, 10.0])
     .floating();
-    container(over_video(note)).padding(16.0).align_x(Align::Start).align_y(Align::Start).width(Fill).height(Fill).into()
+    container(over_video(note))
+        .padding(16.0)
+        .align_x(Align::Start)
+        .align_y(Align::Start)
+        .width(Fill)
+        .height(Fill)
+        .into()
 }
 
 /// A song: its cover (or a tile in the dye), what it is and who made it;
@@ -391,7 +409,8 @@ fn bar(app: &Utsushi, floating: bool) -> Element<Msg> {
     let chapters = app.chapters();
     let mut items: Vec<Element<Msg>> = Vec::new();
     if many || !chapters.is_empty() {
-        let (msg, tip) = if many { (Msg::Previous, "Previous  ⇧P") } else { (Msg::Chapter(-1), "Previous Chapter  ⇞") };
+        let (msg, tip) =
+            if many { (Msg::Previous, "Previous  ⇧P") } else { (Msg::Chapter(-1), "Previous Chapter  ⇞") };
         items.push(tool(Icon::SkipBack, tip, msg, have));
     }
     let (play_icon, play_tip) = if app.playing() { (Icon::Pause, "Pause  Space") } else { (Icon::Play, "Play  Space") };
@@ -437,7 +456,7 @@ fn bar(app: &Utsushi, floating: bool) -> Element<Msg> {
     // back to the picture, so Space and the rest still play and pause.
     // (Tab to it keeps it, for its arrows.)
     items.push(
-        slider(if app.muted { 0.0 } else { f64::from(app.volume) }, 0.0..=1.0)
+        slider(if app.muted { 0.0 } else { f64::from(app.volume) }, ValueRange::UNIT)
             .on_change(|v| Msg::Volume(v as f32))
             .on_release(Msg::FocusPicture)
             .width(84.0)
@@ -521,15 +540,24 @@ pub fn menus(app: &Utsushi) -> MenuBar<Msg> {
     for (i, r) in app.store.recent.iter().take(12).enumerate() {
         recent = recent.item(MenuItem::new(r.title.clone(), Msg::OpenRecent(i)));
     }
-    recent = recent.separator().item(MenuItem::new("Clear Menu", Msg::ClearRecent).enabled(!app.store.recent.is_empty()));
+    recent =
+        recent.separator().item(MenuItem::new("Clear Menu", Msg::ClearRecent).enabled(!app.store.recent.is_empty()));
     let file = Menu::new("File")
         .item(MenuItem::new("Open…", Msg::OpenPanel).shortcut(Shortcut::cmd('O')))
         .submenu(recent)
         .separator()
         .item(MenuItem::new("Media Info", Msg::ShowInfo).shortcut(Shortcut::cmd('I')).enabled(have))
-        .item(MenuItem::new("Show in Hako", Msg::ShowInHako).shortcut(Shortcut::cmd('R').alt()).enabled(app.current_path().is_some()))
+        .item(
+            MenuItem::new("Show in Hako", Msg::ShowInHako)
+                .shortcut(Shortcut::cmd('R').alt())
+                .enabled(app.current_path().is_some()),
+        )
         .separator()
-        .item(MenuItem::new("Close", Msg::Close).shortcut(Shortcut::cmd('W')).enabled(have || app.status == Status::Failed));
+        .item(
+            MenuItem::new("Close", Msg::Close)
+                .shortcut(Shortcut::cmd('W'))
+                .enabled(have || app.status == Status::Failed),
+        );
     let mut repeat = Menu::new("Repeat");
     for (label, r) in [("Off", Repeat::Off), ("This Item", Repeat::One), ("All", Repeat::All)] {
         repeat = repeat.item(MenuItem::new(label, Msg::Repeat(r)).checked(app.repeat == r));
@@ -543,15 +571,41 @@ pub fn menus(app: &Utsushi) -> MenuBar<Msg> {
         .separator()
         .item(MenuItem::new("Back 5 Seconds", Msg::SeekBy(-5.0)).shortcut(key(ShortcutKey::Left)).enabled(seekable))
         .item(MenuItem::new("Forward 5 Seconds", Msg::SeekBy(5.0)).shortcut(key(ShortcutKey::Right)).enabled(seekable))
-        .item(MenuItem::new("Back 10 Seconds", Msg::SeekBy(-10.0)).shortcut(key(ShortcutKey::Char('J'))).enabled(seekable))
-        .item(MenuItem::new("Forward 10 Seconds", Msg::SeekBy(10.0)).shortcut(key(ShortcutKey::Char('L'))).enabled(seekable))
-        .item(MenuItem::new("Previous Chapter", Msg::Chapter(-1)).shortcut(key(ShortcutKey::PageUp)).enabled(!app.chapters().is_empty()))
-        .item(MenuItem::new("Next Chapter", Msg::Chapter(1)).shortcut(key(ShortcutKey::PageDown)).enabled(!app.chapters().is_empty()))
-        .item(MenuItem::new("Previous Frame", Msg::Step(false)).shortcut(key(ShortcutKey::Char(','))).enabled(video && seekable))
+        .item(
+            MenuItem::new("Back 10 Seconds", Msg::SeekBy(-10.0))
+                .shortcut(key(ShortcutKey::Char('J')))
+                .enabled(seekable),
+        )
+        .item(
+            MenuItem::new("Forward 10 Seconds", Msg::SeekBy(10.0))
+                .shortcut(key(ShortcutKey::Char('L')))
+                .enabled(seekable),
+        )
+        .item(
+            MenuItem::new("Previous Chapter", Msg::Chapter(-1))
+                .shortcut(key(ShortcutKey::PageUp))
+                .enabled(!app.chapters().is_empty()),
+        )
+        .item(
+            MenuItem::new("Next Chapter", Msg::Chapter(1))
+                .shortcut(key(ShortcutKey::PageDown))
+                .enabled(!app.chapters().is_empty()),
+        )
+        .item(
+            MenuItem::new("Previous Frame", Msg::Step(false))
+                .shortcut(key(ShortcutKey::Char(',')))
+                .enabled(video && seekable),
+        )
         .item(MenuItem::new("Next Frame", Msg::Step(true)).shortcut(key(ShortcutKey::Char('.'))).enabled(video))
         .separator()
-        .item(MenuItem::new("Previous Item", Msg::Previous).shortcut(key(ShortcutKey::Char('P')).shift()).enabled(app.can_previous()))
-        .item(MenuItem::new("Next Item", Msg::Next).shortcut(key(ShortcutKey::Char('N')).shift()).enabled(app.can_next()))
+        .item(
+            MenuItem::new("Previous Item", Msg::Previous)
+                .shortcut(key(ShortcutKey::Char('P')).shift())
+                .enabled(app.can_previous()),
+        )
+        .item(
+            MenuItem::new("Next Item", Msg::Next).shortcut(key(ShortcutKey::Char('N')).shift()).enabled(app.can_next()),
+        )
         .separator()
         .item(MenuItem::new("Slower", Msg::SpeedBy(-1)).shortcut(key(ShortcutKey::Char('['))).enabled(have))
         .item(MenuItem::new("Faster", Msg::SpeedBy(1)).shortcut(key(ShortcutKey::Char(']'))).enabled(have))
@@ -570,18 +624,31 @@ pub fn menus(app: &Utsushi) -> MenuBar<Msg> {
         if !info.audio.is_empty() {
             audio = audio.separator();
             for (i, t) in info.audio.iter().enumerate() {
-                audio = audio.item(MenuItem::new(t.label(i + 1), Msg::Audio(Some(i))).checked(app.audio_track == Some(i)));
+                audio =
+                    audio.item(MenuItem::new(t.label(i + 1), Msg::Audio(Some(i))).checked(app.audio_track == Some(i)));
             }
         }
     }
     subs = subs
         .separator()
         .item(MenuItem::new("Next Subtitles", Msg::CycleSubtitles).shortcut(key(ShortcutKey::Char('C'))).enabled(have))
-        .item(MenuItem::new("Show Earlier", Msg::SubtitleDelay(Some(-0.1))).shortcut(key(ShortcutKey::Char('Z'))).enabled(have))
-        .item(MenuItem::new("Show Later", Msg::SubtitleDelay(Some(0.1))).shortcut(key(ShortcutKey::Char('X'))).enabled(have))
+        .item(
+            MenuItem::new("Show Earlier", Msg::SubtitleDelay(Some(-0.1)))
+                .shortcut(key(ShortcutKey::Char('Z')))
+                .enabled(have),
+        )
+        .item(
+            MenuItem::new("Show Later", Msg::SubtitleDelay(Some(0.1)))
+                .shortcut(key(ShortcutKey::Char('X')))
+                .enabled(have),
+        )
         .item(
             MenuItem::new(
-                if app.sub_delay == 0.0 { "Original Timing".to_owned() } else { format!("Original Timing (now {:+.1} s)", app.sub_delay) },
+                if app.sub_delay == 0.0 {
+                    "Original Timing".to_owned()
+                } else {
+                    format!("Original Timing (now {:+.1} s)", app.sub_delay)
+                },
                 Msg::SubtitleDelay(None),
             )
             .enabled(app.sub_delay != 0.0),
@@ -622,10 +689,8 @@ pub fn info_sheet(app: &Utsushi) -> Element<Msg> {
     if let Some(d) = info.duration {
         file.push(row_("Length", clock(d)));
     }
-    let mut sections = vec![
-        text(info.title.clone()).size(17.0).semibold().max_lines(2).into(),
-        form_section("File", file),
-    ];
+    let mut sections =
+        vec![text(info.title.clone()).size(17.0).semibold().max_lines(2).into(), form_section("File", file)];
     if let Some(v) = &info.video {
         let mut rows = vec![
             row_("Codec", format!("{} · {}-bit", v.codec.to_uppercase(), v.bit_depth)),
@@ -640,12 +705,10 @@ pub fn info_sheet(app: &Utsushi) -> Element<Msg> {
         sections.push(form_section("Video", rows));
     }
     if let Some(t) = app.audio_track.and_then(|i| info.audio.get(i)) {
-        sections.push(
-            form_section(
-                "Audio",
-                vec![row_("Track", t.label(app.audio_track.unwrap_or(0) + 1)), row_("Codec", t.codec.to_uppercase())],
-            ),
-        );
+        sections.push(form_section(
+            "Audio",
+            vec![row_("Track", t.label(app.audio_track.unwrap_or(0) + 1)), row_("Codec", t.codec.to_uppercase())],
+        ));
     }
     // How it's being played, which is what costs the battery.
     let stats = app.player.as_ref().map(aizome_media::Player::stats);
@@ -669,14 +732,23 @@ pub fn info_sheet(app: &Utsushi) -> Element<Msg> {
             how.push(row_("Frames to the screen", path.into()));
             how.push(row_(
                 "Frames",
-                format!("{} shown, {} dropped{}", s.shown, s.dropped, s.refresh_hz.map(|h| format!(" · display at {h:.0} Hz")).unwrap_or_default()),
+                format!(
+                    "{} shown, {} dropped{}",
+                    s.shown,
+                    s.dropped,
+                    s.refresh_hz.map(|h| format!(" · display at {h:.0} Hz")).unwrap_or_default()
+                ),
             ));
             how.push(row_(
                 "Out of sight",
                 if s.suspended {
                     "Not decoding video now: the window is out of sight".into()
                 } else if s.suspensions > 0 {
-                    format!("Video decoding stopped {} time{} while out of sight", s.suspensions, if s.suspensions == 1 { "" } else { "s" })
+                    format!(
+                        "Video decoding stopped {} time{} while out of sight",
+                        s.suspensions,
+                        if s.suspensions == 1 { "" } else { "s" }
+                    )
                 } else {
                     "Video stops decoding while the window is out of sight".into()
                 },

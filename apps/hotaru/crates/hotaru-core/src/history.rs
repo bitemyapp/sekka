@@ -803,7 +803,11 @@ mod tests {
         // A decode would panic on the deliberately damaged bytes. Capture and
         // cancellation must only touch owned handles and frozen coordinates.
         let snapshot = crate::ContentSnapshot::capture(
-            crate::Terminal::new(80, 2, 0).snapshot(),
+            crate::Terminal::new(
+                crate::GridSize::new(crate::Cols::new(80).unwrap(), crate::Rows::new(2).unwrap()),
+                0,
+            )
+            .snapshot(),
             history.capture(),
         );
         drop(history);

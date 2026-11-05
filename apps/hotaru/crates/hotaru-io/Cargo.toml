@@ -7,7 +7,5 @@ license = "MIT OR Apache-2.0"
 description = "Linux PTY lifecycle and bounded nonblocking clipboard transport for Hotaru"
 
 [dependencies]
-libc = "0.2"
-
-[dev-dependencies]
 hotaru-core = { path = "../hotaru-core" }
+libc = "0.2"

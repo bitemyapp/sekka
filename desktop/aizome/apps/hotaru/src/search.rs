@@ -1,5 +1,6 @@
 //! One cancellable whole-history search worker for the active pane.
 
+use crate::ids::{PaneId, RequestId};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 
@@ -16,15 +17,15 @@ pub struct Cache {
 
 pub struct State {
     pub worker: Option<Worker>,
-    pub pane: Option<u64>,
-    pub token: u64,
+    pub pane: Option<PaneId>,
+    pub token: RequestId,
     pub cancel: Arc<AtomicBool>,
     pub in_flight: bool,
     pub dirty: bool,
     pub timer: Option<TimerHandle>,
     pub caches: [Option<Cache>; 2],
-    pub navigation: u64,
-    pub pending_navigation: Option<(u64, Arc<search::Results>, usize)>,
+    pub navigation: RequestId,
+    pub pending_navigation: Option<(RequestId, Arc<search::Results>, usize)>,
     pub retry_navigation: bool,
     pub copy: Option<(Arc<search::Results>, usize)>,
     pub error: Option<String>,
@@ -35,13 +36,13 @@ impl Default for State {
         Self {
             worker: None,
             pane: None,
-            token: 0,
+            token: RequestId::default(),
             cancel: Arc::new(AtomicBool::new(false)),
             in_flight: false,
             dirty: false,
             timer: None,
             caches: [None, None],
-            navigation: 0,
+            navigation: RequestId::default(),
             pending_navigation: None,
             retry_navigation: false,
             copy: None,
@@ -54,7 +55,7 @@ impl State {
     pub fn invalidate(&mut self, clear: bool) {
         self.cancel.store(true, Ordering::Release);
         self.cancel = Arc::new(AtomicBool::new(false));
-        self.token = self.token.wrapping_add(1);
+        self.token = self.token.next();
         self.in_flight = false;
         self.dirty = true;
         self.copy = None;
@@ -86,9 +87,9 @@ impl State {
 }
 
 pub struct Job {
-    pub token: u64,
-    pub pane: u64,
-    pub navigation: u64,
+    pub token: RequestId,
+    pub pane: PaneId,
+    pub navigation: RequestId,
     pub snapshot: ContentSnapshot,
     pub needle: Vec<u8>,
     pub preserve: Option<(Arc<search::Results>, Option<usize>)>,
@@ -195,6 +196,7 @@ mod tests {
     use super::*;
     use crate::app::Hotaru;
     use aizome_kit::testing::Harness;
+    use hotaru_core::{Cols, GridSize, Rows};
 
     #[test]
     fn refresh_started_before_navigation_cannot_overwrite_its_selection() {
@@ -207,12 +209,17 @@ mod tests {
         app.find = true;
         app.search = "Hotaru".into();
         app.find_state.pane = Some(id);
-        app.find_state.token = 42;
-        app.find_state.navigation = 7;
+        app.find_state.token = crate::ids::RequestId::new(42);
+        app.find_state.navigation = crate::ids::RequestId::new(7);
         app.find_state.in_flight = true;
         app.find_state.caches[0] = Some(Cache { results: results.clone(), selected: Some(1) });
         app.find_state.copy = Some((results.clone(), 1));
-        h.send(Msg::SearchReady(42, id, 6, Cache { results, selected: Some(0) }));
+        h.send(Msg::SearchReady(
+            RequestId::new(42),
+            id,
+            crate::ids::RequestId::new(6),
+            Cache { results, selected: Some(0) },
+        ));
         assert_eq!(h.program().find_state.caches[0].as_ref().unwrap().selected, Some(1));
         assert_eq!(h.program().find_state.copy.as_ref().unwrap().1, 1);
         assert!(!h.program().find_state.in_flight);
@@ -226,7 +233,7 @@ mod tests {
     fn late_refresh_cannot_restore_expired_active_copy_and_fatal_actor_cancels_capture() {
         let mut h = Harness::new(Hotaru::preview());
         let id = h.program().active_pane().unwrap().id;
-        let mut terminal = hotaru_core::Terminal::new(20, 2, 0);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(20).unwrap(), Rows::new(2).unwrap()), 0);
         terminal.feed(b"aaa");
         let results = Arc::new(
             search::find(terminal.content_snapshot(), b"a", Default::default(), &AtomicBool::new(false)).unwrap(),
@@ -237,11 +244,16 @@ mod tests {
         app.find = true;
         app.search = "a".into();
         app.find_state.pane = Some(id);
-        app.find_state.token = 42;
+        app.find_state.token = crate::ids::RequestId::new(42);
         app.find_state.in_flight = true;
         app.find_state.caches[0] = Some(Cache { results: results.clone(), selected: Some(0) });
         app.find_state.copy = Some((results.clone(), 0));
-        h.send(Msg::SearchReady(42, id, 0, Cache { results, selected: Some(0) }));
+        h.send(Msg::SearchReady(
+            RequestId::new(42),
+            id,
+            crate::ids::RequestId::new(0),
+            Cache { results, selected: Some(0) },
+        ));
         assert!(h.program().find_state.copy.is_none());
         // The logical index belongs to the result, while copy requires a
         // currently valid display anchor. The next worker refresh decides
@@ -259,7 +271,7 @@ mod tests {
     fn newer_capture_keeps_logical_selection_until_its_frame_arrives() {
         let mut h = Harness::new(Hotaru::preview());
         let id = h.program().active_pane().unwrap().id;
-        let mut terminal = hotaru_core::Terminal::new(10, 2, 2);
+        let mut terminal = hotaru_core::Terminal::new(GridSize::new(Cols::new(10).unwrap(), Rows::new(2).unwrap()), 2);
         terminal.feed(b"Mark0\r\nMark1\r\nMark2\r\n");
         let old = Arc::new(
             search::find(terminal.content_snapshot(), b"Mark", Default::default(), &AtomicBool::new(false)).unwrap(),
@@ -276,11 +288,16 @@ mod tests {
         app.find = true;
         app.search = "Mark".into();
         app.find_state.pane = Some(id);
-        app.find_state.token = 42;
+        app.find_state.token = crate::ids::RequestId::new(42);
         app.find_state.in_flight = true;
         app.find_state.caches[0] = Some(Cache { results: old.clone(), selected: Some(0) });
         app.find_state.copy = Some((old, 0));
-        h.send(Msg::SearchReady(42, id, 0, Cache { results, selected: Some(selected) }));
+        h.send(Msg::SearchReady(
+            RequestId::new(42),
+            id,
+            crate::ids::RequestId::new(0),
+            Cache { results, selected: Some(selected) },
+        ));
         assert_eq!(h.program().find_state.caches[0].as_ref().unwrap().selected, Some(selected));
         assert!(h.program().find_state.copy.is_none());
         h.send(Msg::Frame(id, Arc::new(terminal.snapshot())));

@@ -102,7 +102,24 @@
  bool set_oom_score_adjust(pid_t pid, std::int32_t value) {
 --- a/src/platform/linux/process.cpp
 +++ b/src/platform/linux/process.cpp
-@@ -50,10 +50,9 @@
+@@ -28,13 +28,15 @@
+ 
+ void ProcessQueue::init() noexcept {
+   g_process_queue = &this->process_queue;
+-  this->full_scan();
+ 
+   g_exiting.store(false, std::memory_order_relaxed);
+   if (!m_bpf_program.initialize()) {
+     spdlog::error("Failed to initialize the BPF program");
+     m_status = false;
+   }
++  // Scan only once exec and fork events reach the perf buffer. A process
++  // started after an earlier scan but before then would never be classified.
++  this->full_scan();
+ }
+ 
+ extern "C" void handle_event(void *ctx, int32_t cpu, void *data,
+@@ -50,10 +52,9 @@
  
    auto *e = static_cast<struct event *>(data);
  
@@ -116,7 +133,7 @@
      return;
    }
  
-@@ -140,16 +139,10 @@
+@@ -140,16 +141,10 @@
        return EXIT_FAILURE;
      }
  
@@ -134,7 +151,23 @@
  
      Process process{.pid = pid, .name = get_command_from_pid(pid)};
      spdlog::trace("Pushing new process: pid = {}", pid);
-@@ -198,6 +191,33 @@
+@@ -160,13 +155,13 @@
+ }
+ 
+ void ProcessQueue::init() noexcept {
+-  this->full_scan();
+-
+   if (!m_netlink_program.initialize()) {
+     spdlog::error(fmt::format("Failed to initialize the NETLINK program : {}",
+                               get_error_string(errno)));
+     m_status = false;
+   }
++  // Subscribe before scanning, for the same reason as above.
++  this->full_scan();
+ }
+ 
+ void ProcessQueue::start() {
+@@ -198,6 +193,33 @@
    try {
      std::vector<std::string> cmdline = process_info::get_cmdline_from_pid(pid);
      if (!cmdline.empty()) {

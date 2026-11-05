@@ -1,3 +1,4 @@
+use hotaru_core::GridSize;
 use hotaru_core::Terminal;
 use hotaru_core::input::*;
 use serde_json::Value;
@@ -234,7 +235,7 @@ fn protocol_negotiation_matches_pinned_ghostty_c_api() {
         .enumerate()
     {
         for chunk in [1, 7, 65536] {
-            let mut terminal = Terminal::new(80, 24, 0);
+            let mut terminal = Terminal::new(GridSize::default(), 0);
             for part in bytes(&row[0]).chunks(chunk) {
                 terminal.feed(part);
             }
@@ -286,7 +287,7 @@ fn protocol_negotiation_matches_pinned_ghostty_c_api() {
 
 #[test]
 fn kitty_stack_is_per_screen_bounded_and_zero_pop_is_distinct() {
-    let mut terminal = Terminal::new(80, 24, 0);
+    let mut terminal = Terminal::new(GridSize::default(), 0);
     terminal.feed(b"\x1b[>1u\x1b[>2u\x1b[<0u\x1b[?u\x1b[<u\x1b[?u");
     assert_eq!(terminal.take_responses(), b"\x1b[?2u\x1b[?1u");
     terminal.feed(b"\x1b[?1049h\x1b[?u\x1b[>31u\x1b[?1049l\x1b[?u");
@@ -299,7 +300,7 @@ fn kitty_stack_is_per_screen_bounded_and_zero_pop_is_distinct() {
 
 #[test]
 fn current_modes_drive_keyboard_and_mouse_encoding() {
-    let mut terminal = Terminal::new(80, 24, 0);
+    let mut terminal = Terminal::new(GridSize::default(), 0);
     assert!(terminal.keyboard_options().ignore_keypad_with_numlock);
     assert!(terminal.keyboard_options().alt_esc_prefix);
     terminal.feed(b"\x1b[?1h\x1b=\x1b[?1035l\x1b[?1002;1006h");

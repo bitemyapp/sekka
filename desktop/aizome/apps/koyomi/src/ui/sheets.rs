@@ -125,7 +125,11 @@ pub fn settings(k: &Koyomi) -> Element<Msg> {
                 .into(),
                 form_row(
                     "Day views start at",
-                    stepper(s.day_starts as f64).range(0.0..=20.0).step(1.0).suffix(":00").on_change(Msg::DayStarts)
+                    stepper(s.day_starts as f64)
+                        .range(ValueRange::new(0.0, 20.0).unwrap())
+                        .step(PositiveStep::new(1.0).unwrap())
+                        .suffix(":00")
+                        .on_change(Msg::DayStarts)
                 )
                 .into(),
             ]
@@ -137,7 +141,11 @@ pub fn settings(k: &Koyomi) -> Element<Msg> {
                 form_row("New all-day events", dropdown(all, Some(ai)).on_select(Msg::DefaultAllDayAlert)).into(),
                 form_row(
                     "Snooze for",
-                    stepper(s.snooze_minutes as f64).range(1.0..=120.0).step(5.0).suffix(" min").on_change(Msg::Snooze)
+                    stepper(s.snooze_minutes as f64)
+                        .range(ValueRange::new(1.0, 120.0).unwrap())
+                        .step(PositiveStep::new(5.0).unwrap())
+                        .suffix(" min")
+                        .on_change(Msg::Snooze)
                 )
                 .description("Alerts come from the Koyomi agent (aizome-koyomi --agent), even with this window closed.")
                 .into(),

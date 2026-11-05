@@ -5,7 +5,8 @@ use crate::{
     engine::Recognizer,
     ipc::{self, SocketGuard},
     protocol::{
-        Action, Phase, Request, Response, Status, TeachingPreview, VERSION, VocabularyReply, VocabularyRequest,
+        Action, Phase, Request, RequestCommand, Response, Status, TeachingPreview, VERSION, VocabularyReply,
+        VocabularyRequest,
     },
     text::Processor,
     vocabulary::{self, Store},
@@ -374,7 +375,6 @@ impl State {
                 self.recognizer.unload()?;
             }
             Action::Toggle => unreachable!(),
-            Action::Vocabulary => bail!("vocabulary command is required"),
         }
         Ok(None)
     }
@@ -397,8 +397,7 @@ async fn serve(
         response.error = Some(format!("unsupported protocol version; expected {VERSION}"));
         return ipc::write_json(&mut writer, &response).await;
     }
-    ensure!((request.action == Action::Vocabulary) == request.vocabulary.is_some(), "invalid vocabulary request");
-    if let Some(command) = request.vocabulary.as_ref().filter(|v| v.is_store_command()) {
+    if let Some(command) = request.vocabulary_command().filter(|v| v.is_store_command()) {
         let command = command.clone();
         // Exporting recordings and editing packs must not block microphone controls.
         let result = tokio::task::spawn_blocking(move || store.dispatch(command, &config)).await?;
@@ -412,7 +411,7 @@ async fn serve(
         }
         return ipc::write_json(&mut writer, &response).await;
     }
-    let subscribe = request.action == Action::Subscribe;
+    let subscribe = request.action() == Some(Action::Subscribe);
     let (reply, response) = oneshot::channel();
     let (flushed, flush) = oneshot::channel();
     tx.send((request, reply, flush)).await?;
@@ -539,12 +538,14 @@ pub async fn run(config: Config, path: &Path, settings: Option<PathBuf>) -> Resu
             }
             Some((request, reply, flushed)) = commands.recv() => {
                 let mut vocabulary = None;
-                let polling = matches!(request.vocabulary, Some(VocabularyRequest::TeachPoll { .. }));
-                let result = if let Some(command) = request.vocabulary {
-                    state.vocabulary(command).await.map(|result| { vocabulary = Some(result); None })
-                } else { state.command(request.action).await };
+                let action = request.action();
+                let polling = matches!(request.vocabulary_command(), Some(VocabularyRequest::TeachPoll { .. }));
+                let result = match request.command {
+                    RequestCommand::Vocabulary(command) => state.vocabulary(command).await.map(|result| { vocabulary = Some(result); None }),
+                    RequestCommand::Control(action) => state.command(action).await,
+                };
                 // Read-only polling must not generate events or wake the shell.
-                if !polling && !matches!(request.action, Action::Status | Action::Subscribe | Action::Last) { state.publish(); }
+                if !polling && !matches!(action, Some(Action::Status | Action::Subscribe | Action::Last)) { state.publish(); }
                 let mut response = Response::status(state.status.clone());
                 response.vocabulary = vocabulary;
                 match result {
@@ -552,7 +553,7 @@ pub async fn run(config: Config, path: &Path, settings: Option<PathBuf>) -> Resu
                     Err(e) => { response.ok = false; response.error = Some(format!("{e:#}")); }
                 }
                 let _ = reply.send(response);
-                if request.action == Action::Shutdown {
+                if action == Some(Action::Shutdown) {
                     let _ = tokio::time::timeout(Duration::from_secs(1), flushed).await;
                     break;
                 }

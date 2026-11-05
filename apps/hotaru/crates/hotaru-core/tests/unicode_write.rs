@@ -1,6 +1,6 @@
 //! Bulk Unicode runs must match byte-at-a-time scalar printing.
 use hotaru_core::formatter::{CopyFormat, FormatOptions, format_copy};
-use hotaru_core::{Snapshot, Terminal};
+use hotaru_core::{Cols, GridSize, Rows, Snapshot, Terminal};
 use std::sync::atomic::AtomicBool;
 
 fn compare(a: &Snapshot, b: &Snapshot, label: &str) {
@@ -41,8 +41,12 @@ fn unicode_runs_match_scalar_printing_through_edits_wraps_metadata_and_resize() 
     for (initial_cols, initial_rows) in
         [(1, 1), (2, 3), (7, 4), (63, 3), (64, 5), (65, 3), (257, 4)]
     {
-        let mut bulk = Terminal::new(initial_cols, initial_rows, 32);
-        let mut scalar = Terminal::new(initial_cols, initial_rows, 32);
+        let size = GridSize::new(
+            Cols::new(initial_cols).unwrap(),
+            Rows::new(initial_rows).unwrap(),
+        );
+        let mut bulk = Terminal::new(size, 32);
+        let mut scalar = Terminal::new(size, 32);
         for step in 0..256 {
             seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
             let data = match seed % 16 {
@@ -90,10 +94,11 @@ fn unicode_runs_match_scalar_printing_through_edits_wraps_metadata_and_resize() 
                 scalar.feed(&[byte]);
             }
             if step % 47 == 0 {
-                let cols = [1, 2, 7, 63, 64, 65, 257][(seed >> 24) as usize % 7];
-                let rows = 1 + (seed >> 32) as usize % 5;
-                bulk.resize(cols, rows);
-                scalar.resize(cols, rows);
+                let cols =
+                    Cols::new([1, 2, 7, 63, 64, 65, 257][(seed >> 24) as usize % 7]).unwrap();
+                let rows = Rows::new(1 + (seed >> 32) as usize % 5).unwrap();
+                bulk.resize(GridSize::new(cols, rows));
+                scalar.resize(GridSize::new(cols, rows));
             }
             let a = bulk.snapshot_all();
             let b = scalar.snapshot_all();

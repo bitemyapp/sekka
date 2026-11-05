@@ -152,7 +152,7 @@ impl Pane for Trackpad {
             vcx.section(
                 "Pointer",
                 vec![
-                    row("Tracking speed", speed_slider(t.speed, -1.0..=1.0, "Slow", "Fast", Msg::Speed))
+                    row("Tracking speed", speed_slider(t.speed, ValueRange::new(-1.0, 1.0).unwrap(), "Slow", "Fast", Msg::Speed))
                         .entry("speed")
                         .detail(speed_words(t.speed)),
                     row("Pointer acceleration", toggle(t.accel_profile == AccelProfile::Adaptive).on_toggle(Msg::Acceleration))
@@ -165,7 +165,7 @@ impl Pane for Trackpad {
                     row("Natural scrolling", toggle(t.natural_scroll).on_toggle(Msg::Natural))
                         .entry("natural-scroll")
                         .help("Content moves with your fingers."),
-                    row("Scrolling speed", speed_slider(scroll, 0.2..=3.0, "Slow", "Fast", Msg::ScrollSpeed))
+                    row("Scrolling speed", speed_slider(scroll, ValueRange::new(0.2, 3.0).unwrap(), "Slow", "Fast", Msg::ScrollSpeed))
                         .entry("scroll-speed")
                         .detail(format!("{scroll:.1}×")),
                 ],
