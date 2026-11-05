@@ -57,8 +57,10 @@ impl fmt::Display for SwapUnsized {
 
 aizome_typestate::machine! {
     /// The installed-memory read. Its state is private: code outside this
-    /// module can't decide from it, so it can't take a failed read for one
-    /// under way, as `None` once did (GEN-28):
+    /// module can't match it, as the check that took a failed read for one
+    /// under way once matched `None` (GEN-28). It gets [`SwapUnsized`], whose
+    /// two reasons have their own words here; it could still collapse them
+    /// into words of its own (`swap_size(..).is_err()`), which no type stops:
     ///
     /// ```compile_fail,E0603,E0624
     /// use genkan::ram::{Memory, MemoryState};

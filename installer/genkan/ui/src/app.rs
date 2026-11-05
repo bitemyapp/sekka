@@ -469,6 +469,14 @@ pub struct Preparation {
     pub failure: Option<String>,
 }
 
+/// The stage a transition reached, or the one it refused to leave.
+fn either<'s>(reached: Result<impl Into<FlowAny<'s>>, impl Into<FlowAny<'s>>>) -> FlowAny<'s> {
+    match reached {
+        Ok(stage) => stage.into(),
+        Err(stage) => stage.into(),
+    }
+}
+
 /// How the helper stopped.
 enum Stop {
     Cancelled,
@@ -2088,7 +2096,7 @@ impl Genkan {
     /// What the helper said, proven to be about the latest review: the
     /// transitions read their payload from the answer itself.
     fn session_update(&mut self, said: Said, cx: &mut Cx<Msg>) {
-        match said.answer().said().clone() {
+        match crate::flow::heard(&said).clone() {
             // What the helper is doing, the most frequent: the pages say it,
             // and the review stays where it is.
             Helper::Event(Event::Log { line }) => {
@@ -2139,7 +2147,7 @@ impl Genkan {
                         },
                         FlowAny::Queued(queued) => queued.prepared(&said).into(),
                         // Ahead of the worker's answer: review again.
-                        FlowAny::Checking(checking) => checking.stopped(&said).into(),
+                        FlowAny::Checking(checking) => either(checking.stopped(&said)),
                         // The review moved on: late.
                         FlowAny::Editing(s) => s.into(),
                         FlowAny::Ready(s) => s.into(),
@@ -2197,7 +2205,7 @@ impl Genkan {
             Helper::Event(Event::Complete) => {
                 let (moved, ()) = self.moved(|state| {
                     let state = match state {
-                        FlowAny::Installing(installing) => installing.complete(&said).into(),
+                        FlowAny::Installing(installing) => either(installing.complete(&said)),
                         FlowAny::Editing(s) => s.into(),
                         FlowAny::Checking(s) => s.into(),
                         FlowAny::Preparing(s) => s.into(),
@@ -2256,16 +2264,16 @@ impl Genkan {
         let (moved, ()) = self.moved(|state| {
             let state = match state {
                 // The helper stopped before the review opened.
-                FlowAny::Checking(checking) => checking.stopped(said).into(),
-                FlowAny::Preparing(preparing) => preparing.stopped(said).into(),
-                FlowAny::Ready(ready) => ready.stopped(said).into(),
+                FlowAny::Checking(checking) => either(checking.stopped(said)),
+                FlowAny::Preparing(preparing) => either(preparing.stopped(said)),
+                FlowAny::Ready(ready) => either(ready.stopped(said)),
                 // Before the confirmation was sent: nothing was written (GEN-34).
-                FlowAny::Queued(queued) => queued.stopped(said).into(),
+                FlowAny::Queued(queued) => either(queued.stopped(said)),
                 // The helper never cancels once it's confirmed.
                 FlowAny::Installing(installing) if cancelled => installing.into(),
-                FlowAny::Installing(installing) if exited => installing.exited(said).into(),
-                FlowAny::Installing(installing) => installing.failed(said).into(),
-                FlowAny::Failed(failed) if exited => failed.exited(said).into(),
+                FlowAny::Installing(installing) if exited => either(installing.exited(said)),
+                FlowAny::Installing(installing) => either(installing.failed(said)),
+                FlowAny::Failed(failed) if exited => either(failed.exited(said)),
                 FlowAny::Failed(s) => s.into(),
                 FlowAny::Editing(s) => s.into(),
                 FlowAny::Unprepared(s) => s.into(),
