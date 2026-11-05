@@ -165,10 +165,194 @@ Review the ananicy patch whenever ananicy-cpp changes and remove it when the
 upstream version contains equivalent fixes. Existing terminals and harnesses
 should be restarted after installing the change.
 
+### Opt-in continuous lag recording
+
+The observational recorder is off by default. On an installed system importing
+Sekka's tuning module, enable it explicitly:
+
+```nix
+services.sekka-lag-recorder.enable = true;
+```
+
+This option is independent of `calamares.tuning.enable`: it works with tuning
+disabled and does not enable scheduling, memory reserves, or OOM policy.
+Apply the configuration through the normal NixOS rebuild workflow. The module
+installs `sekka-lag-recorder` and the user unit
+`sekka-lag-recorder.service`, wanted by `default.target`. To start or inspect
+the configured unit in the current login:
+
+```sh
+systemctl --user start sekka-lag-recorder.service
+systemctl --user status sekka-lag-recorder.service
+```
+
+The service runs in `background.slice` with CPU and I/O weights of 20,
+`MemoryMax=128M`, private umask `0077`, and no new privileges. It restarts on
+failure after five seconds. There is deliberately no hard CPU quota: a quota
+could manufacture sampling gaps. These limits apply only to the recorder;
+it does not kill, reprioritize, or move workload processes.
+
+Default sampling is once per second. The command also accepts
+`--output-dir DIR`, `--interval SECONDS` (finite and at least 0.1),
+`--samples N` for a finite capture, and `--once` for one sample. Use a separate
+output directory for a manual capture while the service runs; a process lock
+prevents duplicate writers to the same directory.
+
+Logs remain local in `$XDG_STATE_HOME/sekka/lag-recorder`, or
+`~/.local/state/sekka/lag-recorder` when `XDG_STATE_HOME` is unset.
+The directory is private (`0700`), files are private (`0600`), and
+`recorder.jsonl` rotates at 8 MiB with four backups, keeping approximately
+40 MiB of JSONL in total. Rotation is size-based, not a promised number of
+hours: event frequency and record sizes affect retention. Copy relevant
+records before they rotate away.
+
+Quiet operation writes a baseline sample every ten seconds while retaining
+the last 60 samples in memory. An event flushes that pre-event context and
+records each sample until 15 quiet seconds have passed. Detailed snapshots
+are rate-limited to one per 30 seconds; periodic metadata is refreshed every
+five minutes. This keeps background logging bounded without claiming that
+every second of a long quiet run is saved.
+
+Accessible `/proc` and `/sys` evidence includes:
+
+- System CPU/load and CPU, memory, and I/O PSI totals and interval stall
+  percentages; memory/swap/zswap usage; selected fault, reclaim, swap, and
+  zswap counters and rates; block-device I/O counters, rates, await, and busy
+  time (excluding loop and RAM devices).
+- Known system/user/session/application/background, Aizome, and Nix-daemon
+  cgroups: configured memory protection and limits, ancestor limit context,
+  current memory/swap usage, memory events/statistics, pressure, and CPU/I/O
+  counters. These are configured hierarchy values, not a calculation proving
+  effective reclaim protection.
+- Actual session-cgroup Aizome process identity (PID and start time),
+  executable, CPU/faults/RSS/swap, and main-thread wait channel/scheduling
+  statistics. Event details also rank processes by CPU delta and RSS and
+  include desktop processes. One detail worker limits discovery to 2,048
+  process entries and a quarter-second budget, with a 0.35-second total
+  budget including enriched reads of selected processes; results may be
+  incomplete.
+- Kernel/version information, selected kernel configuration, zswap module
+  parameters, swappiness, and the recorder's settings in metadata snapshots.
+
+Journal collection is restricted to the current user's `aizome.service`
+watchdog, libinput, and stall messages, not broad application logs. It runs
+about every ten seconds, requests at most 20 matching messages, has a
+one-second timeout and a 64 KiB raw-output cap, and truncates each message
+to 2,048 characters. Inaccessible metrics are reported as unavailable, not
+silently replaced with zero.
+Timeouts and unavailable journal reads preserve the previous query window
+for the next bounded retry. Successful reads, including no matches, advance
+the window. Hitting the raw-output cap also advances it to avoid retrying
+one oversized message forever, explicitly recording `window_advanced` and
+`window_truncated`; some messages can therefore be omitted.
+`possible_line_limit` flags a full 20-line response before deduplication,
+not proof that the entire interval's messages were captured.
+
+Automatic recording triggers include memory or I/O PSI `full avg10` at
+10%, CPU PSI `some avg10` at 50%, a sampling delay of at least
+`max(1 second, 2 × interval)`, and relevant watchdog/libinput/stall journal
+messages. The command's `--memory-full-threshold`, `--io-full-threshold`,
+and `--cpu-some-threshold` options accept finite percentages; these only
+change when evidence is recorded.
+
+The recorder also probes the user's running Aizome with the read-only
+newline-delimited IPC request `{"request":"version"}`. It verifies the
+socket peer's credentials against discovered `aizome.service` processes,
+revalidates PID start time and service-cgroup membership before sending
+anything, excludes shell/headless sockets, bounds the reply to 16 KiB, and
+gives the whole exchange at most 100 ms per sample.
+A response taking at least 50 ms or timing out triggers recording.
+Unavailable, refused, or unverifiable sockets are reported as unavailable,
+not classified as compositor lag. Round-trip latency includes scheduling
+delays in the recorder itself; it is not compositor-only execution time or
+an input-to-screen latency measurement.
+
+After noticing a stall, request an immediate manual event and pre-event
+history by signalling **only the recorder's main process**:
+
+```sh
+systemctl --user kill --kill-whom=main --signal=SIGUSR1 sekka-lag-recorder.service
+```
+
+Manual events request a sample within about 0.1 seconds, scheduling
+permitting; detailed snapshots use the same worker and 30-second cooldown
+as automatic triggers, so a fresh detailed snapshot is not guaranteed.
+Do not use broad process-name matching or signal the compositor. If the
+recorder itself cannot run during a stall, the request is handled only when
+it runs again; the resulting sample is not a reconstruction of the frozen
+instant.
+
+Stop recording without stopping any other work:
+
+```sh
+systemctl --user stop sekka-lag-recorder.service
+```
+
+For a temporary stop that also prevents another start during this user
+manager's lifetime:
+
+```sh
+systemctl --user mask --runtime --now sekka-lag-recorder.service
+# Remove that temporary block when recording is wanted again:
+systemctl --user unmask --runtime sekka-lag-recorder.service
+```
+
+To disable it persistently, set `services.sekka-lag-recorder.enable = false;`,
+apply the NixOS configuration, and stop the unit if it is still running.
+Do not rely on `systemctl --user disable` to override NixOS's declarative
+`default.target` dependency. Stopping or disabling does not delete retained
+logs. SIGTERM and SIGINT also request a clean stop.
+
+#### Interpreting a memory-protection comparison
+
+Recording thresholds flag evidence to retain, not conditions for killing a
+process or changing resource policy. Enabling the recorder does **not**
+activate the separate memory-reservation fix. Before and after deploying
+that fix, save the actual running configuration, not only the desired Nix
+options or a PR revision:
+
+```sh
+systemctl --user show session.slice app-background.slice aizome.service \
+  --property=ControlGroup,MemoryMin,MemoryLow,MemoryHigh,MemoryMax,ManagedOOMMemoryPressure
+systemctl show "user-$(id -u).slice" "user@$(id -u).service" \
+  --property=ControlGroup,MemoryMin,MemoryLow,MemoryHigh,MemoryMax,ManagedOOMMemoryPressure
+```
+
+Read the corresponding accessible cgroup `memory.min`, `memory.low`,
+`memory.high`, `memory.max`, `memory.events`, and pressure files as well.
+The user manager, its parent slices, and the session/compositor hierarchy
+matter: a reservation requested in one child alone does not prove effective
+protection through its ancestors. `MemoryMin`/`MemoryLow` reclaim protection,
+`MemoryHigh` throttling, `MemoryMax` limits, and systemd-oomd's pressure
+policy are different mechanisms. Note missing units, unavailable properties,
+and permission failures rather than treating them as zero protection.
+Compare similar workloads and record the deployed generation, relevant
+overrides, and actual active values for both runs. A recorder event or the
+absence of an OOM kill alone does not establish that protection worked.
+
+These measurements are a baseline for correlating symptoms with memory,
+reclaim, swap, I/O, and scheduler pressure; they are **not** an exact
+decompression CPU profile. Aggregate swap/reclaim activity and CPU use cannot
+attribute CPU time to zswap decompression. Sampling can be delayed or queued
+under contention, and a gap says the recorder was late, not which component
+caused it. Snapshots after a gap can miss short-lived processes and transient
+peaks. Unprivileged access and journal retention also limit what can be
+observed; missing data is not evidence that no stall happened.
+
+There are no uploads, command-line or environment-variable captures,
+screenshots, keystrokes, `smaps` scans, `perf`, root, or debugfs access.
+Before sharing even a small event window, review it: process names and IDs,
+unit/cgroup names and paths, device identifiers, timestamps, and relevant
+journal excerpts can disclose metadata about workloads or the machine.
+Private permissions and bounded retention are not anonymization.
+
 ### Checks
 
 `nix build .#checks.x86_64-linux.tuning-policy` checks disabling the policy,
-explicit overrides and process-tree classification.
+explicit overrides, process-tree classification, and opt-in recording without
+enabling scheduling or OOM policy. It also runs the recorder's regressions for
+PID reuse/counter resets, incident history and cooldown, bounded private
+rotation and locking, journal retry windows, and authenticated IPC timeouts.
 `nix build .#checks.x86_64-linux.tuning` boots a disposable VM and checks the
 preemption and disk-scheduler settings, terminal/shell/compiler nice values,
 all-thread Nix scheduling and I/O, late threads, Chrome retitling and fork-only
