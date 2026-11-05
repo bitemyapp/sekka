@@ -347,6 +347,16 @@ open. If that folder leaves the listing (including Put Back from Trash),
 its obsolete columns close and keyboard focus returns to the surviving
 parent when needed.
 
+Replace at a name conflict moves the item that was there to the Trash,
+for Put Back and Undo as for copies and moves. If the Trash can't take it,
+it stays beside its replacement under a hidden name the report gives, and
+an item that changed while the question was up isn't replaced at all. A
+folder put back by merging, with a conflict in it skipped, keeps the
+skipped part in the Trash, where it can still be put back from. Undo and
+Redo run one at a time. An undo that can't be carried out (a name taken
+since, or Stop at a conflict) stays in Edit ▸ Undo to try again, so the
+next ❖Z doesn't undo the step before it instead.
+
 Encrypted removable volumes stay in the file sidebar after unlocking. Hako asks for a volume passphrase before mounting a locked one; Cancel leaves it locked, and an incorrect passphrase can be retried. While unlocking, the prompt waits for the device operation to finish. System volumes and devices hidden by UDisks policy stay excluded from the removable list.
 
 The sidebar also lists, after the system's disk, the volumes of built-in drives the system doesn't run from (a second internal drive; `DisksState::internal_volumes`). UDisks treats them as system devices, so mounting or unlocking one asks for an administrator's password; the sidebar unmounts them and never ejects their drive. Everything on a drive the system uses (a filesystem mounted outside `/run/media`, `/media` and `/mnt`, or active swap), EFI, boot, recovery and swap partitions on any drive, and devices hidden by UDisks policy stay out, as does every built-in volume when `/` can't be traced to a drive (LVM, a live image). The desktop's icons are as before. `nix build .#aizome-checks.encrypted-volumes` checks both lists against real UDisks on disposable VM disks.
