@@ -60,7 +60,7 @@ fn invalid_resize_size_cannot_queue_the_last_valid_prefix() {
     sheet(&mut h, SheetMsg::SizeText("120".into()));
     sheet(&mut h, SheetMsg::Submit);
     assert_eq!(sheet_kind(&h), None);
-    let OpKind::Resize { from, to } = h.program().plan.ops[0].kind else { panic!() };
+    let OpKind::Resize { from, to } = *h.program().plan.ops[0].kind() else { panic!() };
     assert!(to < from);
 }
 
@@ -78,7 +78,7 @@ fn size_slider_and_unit_selection_recover_invalid_text_without_rounding_the_size
     sheet(&mut h, SheetMsg::SizeText("invalid".into()));
     sheet(&mut h, SheetMsg::Unit(0));
     sheet(&mut h, SheetMsg::Submit);
-    let OpKind::Create(ref p) = h.program().plan.ops[0].kind else { panic!() };
+    let OpKind::Create(p) = h.program().plan.ops[0].kind() else { panic!() };
     assert_eq!(p.size, exact, "rounded display text must not change the chosen bytes");
 
     h.send(Msg::Undo);
@@ -87,7 +87,7 @@ fn size_slider_and_unit_selection_recover_invalid_text_without_rounding_the_size
     sheet(&mut h, SheetMsg::SizeText("invalid".into()));
     sheet(&mut h, SheetMsg::Size(4777.0));
     sheet(&mut h, SheetMsg::Submit);
-    let OpKind::Create(ref p) = h.program().plan.ops[0].kind else { panic!() };
+    let OpKind::Create(p) = h.program().plan.ops[0].kind() else { panic!() };
     assert_eq!(p.size, exact, "moving the slider replaces invalid typed text");
 }
 
@@ -294,7 +294,7 @@ fn shrinking_checks_then_shrinks_the_filesystem_then_the_partition() {
     sheet(&mut h, SheetMsg::Unit(1));
     sheet(&mut h, SheetMsg::SizeText("120".into()));
     sheet(&mut h, SheetMsg::Submit);
-    let OpKind::Resize { from, to } = h.program().plan.ops[0].kind else { panic!() };
+    let OpKind::Resize { from, to } = *h.program().plan.ops[0].kind() else { panic!() };
     assert!(to < from);
     h.send(Msg::Apply);
     h.type_text(w, "sda");
@@ -330,7 +330,7 @@ fn a_failure_stops_the_run_and_keeps_the_rest_pending() {
     let w = h.window();
     assert!(h.texts(w).iter().any(|t| t.contains("mkfs.btrfs: device is busy")));
     sheet(&mut h, SheetMsg::Submit);
-    let left: Vec<&str> = h.program().plan.ops.iter().map(|o| tansu::plan::verb(&o.kind)).collect();
+    let left: Vec<&str> = h.program().plan.ops.iter().map(|o| tansu::plan::verb(o.kind())).collect();
     assert_eq!(left, ["Format", "Flags on"], "the label ran; the rest waits");
     assert!(h.program().notice.as_ref().is_some_and(|(n, e)| *e && n.contains("busy")));
 }

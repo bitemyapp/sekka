@@ -6,6 +6,8 @@
 use aizome_sys::disks::types::{flag_names, flags as bits};
 use aizome_sys::disks::{BlockDevice, DisksState, Holds, Identity};
 
+use crate::app::Opening;
+
 pub const MIB: u64 = 1 << 20;
 
 /// What a segment refers to: a block device UDisks has (by object path),
@@ -362,6 +364,11 @@ pub fn current(state: &DisksState, disk: &str) -> Option<Layout> {
 
 /// What the selection names, so it survives the layout changing: a
 /// segment's target, or unallocated space by where it starts.
+///
+/// A sheet never holds a `Sel` (or an index): a `Sel` names a path, which
+/// another device can take over, and resolving it when the sheet is
+/// submitted acts on whatever has it then. A sheet holds the [`Chosen`]
+/// made as it opened ([`Layout::choose`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Sel {
     Target(Target),
@@ -369,7 +376,8 @@ pub enum Sel {
 }
 
 impl Sel {
-    /// What selecting `seg` names.
+    /// What selecting `seg` names: for the selection, not for a sheet, which
+    /// holds the [`Chosen`] made as it opened.
     pub fn of(seg: &Seg) -> Sel {
         match &seg.target {
             Some(t) => Sel::Target(t.clone()),
@@ -460,14 +468,16 @@ impl Chosen {
 /// }
 /// ```
 ///
-/// nor chosen then (a choice is of the selection, not of an index):
+/// nor chosen then, even by code holding an opening (a choice is of the
+/// selection, not of an index):
 ///
 /// ```compile_fail,E0308
 /// use aizome_sys::disks::{DisksState, Erase};
+/// use tansu::app::Opening;
 /// use tansu::layout::Layout;
 /// use tansu::plan::{NewFs, Plan};
-/// fn submit(state: &DisksState, layout: &Layout, plan: &mut Plan, seg: usize) {
-///     let chosen = layout.choose(state, seg).unwrap();
+/// fn submit(state: &DisksState, layout: &Layout, plan: &mut Plan, seg: usize, opening: &Opening) {
+///     let chosen = layout.choose(state, seg, opening).unwrap();
 ///     let ext4 = NewFs { fs: "ext4".into(), label: String::new(), erase: Erase::Quick, encrypt: None };
 ///     let _ = plan.format(layout.locate(state, &chosen).unwrap(), ext4);
 /// }
@@ -488,6 +498,7 @@ impl Chosen {
 /// ```
 /// use aizome_sys::disks::Erase;
 /// use tansu::backend::Backend;
+/// use tansu::app::Opening;
 /// use tansu::layout::Sel;
 /// use tansu::mock::{self, Mock};
 /// use tansu::plan::{NewFs, Plan};
@@ -496,10 +507,10 @@ impl Chosen {
 /// let (state, mut plan) = (mock.snapshot(), Plan::default());
 /// let layout = plan.preview(&state, stick).unwrap();
 /// let sdc1 = layout.segs.iter().find(|s| s.short_name() == "sdc1").unwrap();
-/// let chosen = layout.choose(&state, &Sel::of(sdc1)).unwrap();
+/// let chosen = layout.choose(&state, &Sel::of(sdc1), &Opening::for_tests()).unwrap();
 /// let ext4 = || NewFs { fs: "ext4".into(), label: String::new(), erase: Erase::Quick, encrypt: None };
 /// plan.format(layout.locate(&state, &chosen).unwrap(), ext4()).unwrap();
-/// assert_eq!(plan.ops[0].device, "/dev/sdc1");
+/// assert_eq!(plan.ops[0].device(), "/dev/sdc1");
 ///
 /// let _ = mock.power_off("/org/freedesktop/UDisks2/drives/cruzer");
 /// let state = mock.snapshot();
@@ -600,9 +611,33 @@ impl Layout {
 
     /// The selected segment of this layout, as the person chooses it now to
     /// act on it once they've filled in a sheet (`state` is what the layout
-    /// shows). Choose when the sheet opens: the selection resolved later
-    /// may name what took the segment's place.
-    pub fn choose(&self, state: &DisksState, sel: &Sel) -> Option<Chosen> {
+    /// shows). It takes the [`Opening`] that only the code opening a sheet
+    /// (or acting on the selection at once) gets, so a sheet that kept a
+    /// selection can't choose it when it is submitted:
+    ///
+    /// ```compile_fail,E0423
+    /// use aizome_sys::disks::{DisksState, Erase};
+    /// use tansu::app::Opening;
+    /// use tansu::layout::{Layout, Sel};
+    /// use tansu::plan::{NewFs, Plan};
+    /// struct FormatForm { sel: Sel }
+    /// fn submit(state: &DisksState, layout: &Layout, plan: &mut Plan, f: &FormatForm) {
+    ///     let chosen = layout.choose(state, &f.sel, &Opening(())).unwrap();
+    ///     let ext4 = NewFs { fs: "ext4".into(), label: String::new(), erase: Erase::Quick, encrypt: None };
+    ///     let _ = plan.format(layout.locate(state, &chosen).unwrap(), ext4);
+    /// }
+    /// ```
+    ///
+    /// nor without one:
+    ///
+    /// ```compile_fail,E0061
+    /// use aizome_sys::disks::DisksState;
+    /// use tansu::layout::{Layout, Sel};
+    /// fn submit(state: &DisksState, layout: &Layout, kept: &Sel) {
+    ///     let _ = layout.choose(state, kept);
+    /// }
+    /// ```
+    pub fn choose(&self, state: &DisksState, sel: &Sel, _: &Opening) -> Option<Chosen> {
         let seg = self.segs.get(self.position(sel)?)?;
         let spot = match &seg.target {
             Some(t) => Spot::Seg(t.clone()),
@@ -621,7 +656,7 @@ impl Layout {
 
     /// The disk itself, as the person chooses it now (for a new partition
     /// table).
-    pub fn choose_disk(&self, state: &DisksState) -> Option<Chosen> {
+    pub fn choose_disk(&self, state: &DisksState, _: &Opening) -> Option<Chosen> {
         Some(Chosen {
             disk: self.disk.clone(),
             disk_seen: state.identity(&self.disk)?,
