@@ -21,6 +21,12 @@ use tansu::mock::Mock;
 use tansu::plan::{NewFs, Plan, Queued};
 use tansu::run::{Outcome, Run};
 
+/// The run of `plan`, as if the person pressed Apply on the sheet listing it
+/// (the kit's test agreement stands for their press).
+fn agree(plan: &Plan, state: &aizome_sys::disks::DisksState) -> Run {
+    Run::agree(aizome_kit::agree::testing::agreed(plan.shown(state)), state)
+}
+
 /// The mock, with a format that takes `slow` and a note of each
 /// confirmation's age when it arrives.
 struct Slow {
@@ -154,7 +160,7 @@ fn each_operation_is_confirmed_as_it_starts_not_at_apply() {
     plan.flags(at(&state, &layout, "sdc1"), Flags { hidden: true, ..Flags::of("dos", "0x0c", 0x80) }).unwrap();
 
     let applied = Instant::now();
-    let mut run = Run::agree(&plan, &state);
+    let mut run = agree(&plan, &state);
     while run.is_running() && applied.elapsed() < Duration::from_secs(10) {
         run.advance(&backend);
     }
