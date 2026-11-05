@@ -194,6 +194,7 @@ dependencies = [
  "aizome-kit",
  "aizome-search",
  "aizome-sys",
+ "aizome-typestate",
  "env_logger",
  "libc",
  "log",
