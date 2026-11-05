@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 """Execute exactly one resolved Cargo unit, never invoke Cargo to build it."""
 import argparse
+import errno
+import fcntl
 import json
 import os
 from pathlib import Path
 import re
 import shlex
+import shutil
 import subprocess
 import sys
+import tempfile
 
 ROOT_TOKEN = "${SEKKA_EXEC_ROOT}"
 # RBE publishes a producer's output at a different path in consuming actions.
 OUTPUT_TOKEN = "${SEKKA_UNIT_OUTPUT}"
+# Match owned paths at token boundaries, including joined native search options.
+EXECUTION_PATH_PREFIX = r"(?<![A-Za-z0-9_./-])(-[LIBF])?"
 
 
 def load(path):
@@ -25,10 +31,12 @@ def relocate(value, root, output, encode=False):
             prefix = re.escape(root)
             # Cargo instructions and linker arguments can embed multiple paths.
             # Keep spaces within paths, but stop at separators or the next root.
-            pattern = prefix + r"(?=/|$|[\s,:;\"'])(?:(?!" + prefix + r")[^\n\r,:;\"'])*"
+            start = EXECUTION_PATH_PREFIX + prefix + r"(?=/|$|[\s,:;\"'])"
+            pattern = start + r"(?:(?!" + start + r")[^\n\r,:;\"'])*"
 
             def encode_path(match):
-                original = match.group()
+                option = match[1] or ""
+                original = match.group()[len(option):]
                 path = original.rstrip()
                 suffix = original[len(path):]
                 if path == output or path.startswith(output + "/"):
@@ -39,13 +47,13 @@ def relocate(value, root, output, encode=False):
                         referent += "/"
                     for directory, token in [(output, OUTPUT_TOKEN), (root, ROOT_TOKEN)]:
                         if referent == directory or referent.startswith(directory + "/"):
-                            return token + referent[len(directory):] + suffix
-                    return referent + suffix
+                            return option + token + referent[len(directory):] + suffix
+                    return option + referent + suffix
                 # Siblings such as `unit-extra`, and unrelated input paths,
                 # retain their original traversal and symlink semantics.
                 if path == root or path.startswith(root + "/"):
-                    return ROOT_TOKEN + path[len(root):] + suffix
-                return original
+                    return option + ROOT_TOKEN + path[len(root):] + suffix
+                return option + original
 
             return re.sub(pattern, encode_path, value)
         return value.replace(ROOT_TOKEN, str(root)).replace(OUTPUT_TOKEN, str(output))
@@ -245,16 +253,19 @@ def write_dependencies(raw, destination, root):
     Path(destination).write_text("".join(path + "\n" for path in sorted(paths)))
 
 
-def compile_unit(payload, output, env, tools, root, dep_file):
+def compile_unit(payload, output, env, tools, root, dep_file, incremental_directory):
     unit = payload["unit"]
     target = unit["target"]
     manifest = Path(payload["source"]).absolute()
     env.update(package_environment(unit, manifest))
     flags = profile_flags(unit)
+    if incremental_directory is not None:
+        flags += ["-C", "incremental=" + str(incremental_directory)]
     raw_dep_file = output / "rustc.d"
     emit = "link,dep-info=" + str(raw_dep_file) if dep_file is not None else "link"
-    args = [tools["rustc"], str(manifest / target["src_path"]), "--crate-name", target["name"].replace("-", "_"), "--edition=" + target["edition"], "--emit=" + emit, "-C", "metadata=" + unit["key"], "-C", "extra-filename=-" + unit["key"], "--out-dir", str(output), "--remap-path-prefix", str(root) + "=.", "-C", "linker=" + tools["cc"], *flags]
-    args += ["--remap-path-prefix", "/proc/self/cwd=."]
+    args = [tools["rustc"], str(manifest / target["src_path"]), "--crate-name", target["name"].replace("-", "_"), "--edition=" + target["edition"], "--emit=" + emit, "-C", "metadata=" + unit["key"], "-C", "extra-filename=-" + unit["key"], "--out-dir", str(output), "-C", "linker=" + tools["cc"], *flags]
+    # Rustc tracks the actual working directory independently of argv paths.
+    args += ["--remap-path-prefix", "/proc/self/cwd=.", "-Z", "remap-cwd-prefix=."]
     if unit["mode"] == "test":
         args.append("--test")
     else:
@@ -316,7 +327,11 @@ def compile_unit(payload, output, env, tools, root, dep_file):
     # Linux's process-relative absolute path works both for include!(env!(...))
     # during rustc and env!("CARGO_MANIFEST_DIR") in a cached test on a new tree.
     # Unlike the checkout's absolute path, it is identical on every executor.
-    env = {key: value.replace(str(root), "/proc/self/cwd") for key, value in env.items()}
+    # Joined search-path options still contain an owned absolute path. Keep
+    # their option prefix without matching a root embedded in an external path.
+    execution_root = re.compile(EXECUTION_PATH_PREFIX + re.escape(str(root)) + r"(?=/|$)")
+    args = [execution_root.sub(r"\1/proc/self/cwd", value) for value in args]
+    env = {key: execution_root.sub(r"\1/proc/self/cwd", value) for key, value in env.items()}
     subprocess.run(args, env=env, check=True)
     if dep_file is not None:
         write_dependencies(raw_dep_file, dep_file, root)
@@ -325,18 +340,65 @@ def compile_unit(payload, output, env, tools, root, dep_file):
         raise RuntimeError("rustc did not produce expected output " + unit["filename"])
 
 
+def own_readonly_incremental_files(directory, env):
+    # Imported state may share read-only inodes with the CAS. Rustc requires
+    # writable locks and reused objects; detach before changing any mode.
+    for path in directory.rglob("*"):
+        if not path.is_file():
+            continue
+        status = path.stat()
+        if status.st_mode & 0o200:
+            continue
+        descriptor, temporary = tempfile.mkstemp(prefix=".owned-", dir=path.parent)
+        try:
+            cloned = False
+            with os.fdopen(descriptor, "wb") as destination, path.open("rb") as source:
+                try:
+                    fcntl.ioctl(destination.fileno(), 0x40049409, source.fileno())  # Linux FICLONE
+                    cloned = True
+                except OSError as error:
+                    if error.errno not in {errno.EXDEV, errno.EOPNOTSUPP, errno.ENOTTY, errno.EINVAL}:
+                        raise
+            if not cloned:
+                if status.st_blocks * 512 < status.st_size:
+                    subprocess.run(["cp", "--reflink=auto", "--sparse=always", "--", str(path), temporary], env=env, check=True)
+                else:
+                    # The pinned Python uses the platform's native fast-copy path.
+                    shutil.copyfile(path, temporary)
+            os.chmod(temporary, (status.st_mode & 0o777) | 0o200)
+            os.replace(temporary, path)
+        finally:
+            Path(temporary).unlink(missing_ok=True)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--environment", required=True)
     parser.add_argument("--spec", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--dep-file")
+    parser.add_argument("--incremental-directory")
     args = parser.parse_args()
     tools = load(args.environment)
     root = Path.cwd()
     env = native_environment(tools)
     payload = load(args.spec)
     output = Path(args.output).absolute()
+    incremental = payload["unit"]["mode"] != "run-custom-build" and payload["unit"]["profile"]["incremental"]
+    if incremental != (args.incremental_directory is not None):
+        raise RuntimeError("incremental directory must match the Cargo unit profile")
+    incremental_directory = None
+    if incremental:
+        incremental_directory = Path(args.incremental_directory).absolute()
+        if incremental_directory == output or incremental_directory.is_relative_to(output) or output.is_relative_to(incremental_directory):
+            raise RuntimeError("incremental state must be separate from ordinary output")
+        # Buck retains all outputs for these actions. Preserve only compiler
+        # state, never a prior library, executable, or source dependency list.
+        if output.exists():
+            shutil.rmtree(output)
+        if args.dep_file:
+            Path(args.dep_file).unlink(missing_ok=True)
+        incremental_directory.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
     library_paths = [str(Path(p).absolute()) for p in payload["closure"]]
     for directory in payload["closure"]:
@@ -353,7 +415,17 @@ def main():
     if payload["unit"]["mode"] == "run-custom-build":
         run_script(payload, output, env, tools, root)
     else:
-        compile_unit(payload, output, env, tools, root, args.dep_file)
+        try:
+            if incremental_directory is not None:
+                own_readonly_incremental_files(incremental_directory, env)
+            compile_unit(payload, output, env, tools, root, args.dep_file, incremental_directory)
+        except BaseException:
+            if incremental_directory is not None:
+                if output.exists():
+                    shutil.rmtree(output)
+                if args.dep_file:
+                    Path(args.dep_file).unlink(missing_ok=True)
+            raise
     info = {"filename": payload["unit"]["filename"], "library_paths": library_paths}
     temporary = test_tmp_path(payload["unit"])
     if temporary is not None:

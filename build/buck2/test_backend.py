@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Real pinned-rustc regression: Cargo resolves; individual actions compile/run."""
+import errno
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -8,9 +10,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from generate import outside_data, package_records, scheduling_priorities, units_from_graph
-from action import OUTPUT_TOKEN, ROOT_TOKEN, relocate, write_dependencies
+from action import OUTPUT_TOKEN, ROOT_TOKEN, native_environment, own_readonly_incremental_files, relocate, write_dependencies
 
 
 class SchedulingContract(unittest.TestCase):
@@ -51,6 +54,71 @@ class CompilerContract(unittest.TestCase):
         self.assertEqual(result.returncode, 0, "Command: " + repr(command) + "\n" + result.stdout + result.stderr)
         return result.stdout
 
+    def test_imported_incremental_state_is_owned_without_inflating_holes(self):
+        tools = json.loads(Path(os.environ["SEKKA_BUCK2_ENV"]).read_text())
+        env = native_environment(tools)
+
+        def digest(path):
+            with path.open("rb") as source:
+                return hashlib.file_digest(source, "sha256").digest()
+
+        for fallback in [False, True]:
+            with self.subTest(fallback=fallback), tempfile.TemporaryDirectory(prefix="sekka-buck-state-") as temporary:
+                root = Path(temporary)
+                state = root / "state"
+                state.mkdir()
+                donors = []
+                for name in ["dense", "sparse"]:
+                    donor = root / name
+                    with donor.open("wb") as source:
+                        source.write(b"begin state")
+                        if name == "sparse":
+                            source.seek(8 * 1024 * 1024)
+                        else:
+                            source.write(bytes(range(256)) * 32)
+                        source.write(b"end state")
+                    donor.chmod(0o444)
+                    output = state / name
+                    output.hardlink_to(donor)
+                    donors.append((donor, output, donor.stat(), digest(donor)))
+                if fallback:
+                    with patch("action.fcntl.ioctl", side_effect=OSError(errno.EOPNOTSUPP, "reflink unavailable")):
+                        own_readonly_incremental_files(state, env)
+                else:
+                    own_readonly_incremental_files(state, env)
+                for donor, output, before, expected in donors:
+                    after = donor.stat()
+                    owned = output.stat()
+                    self.assertEqual((after.st_dev, after.st_ino, after.st_mode), (before.st_dev, before.st_ino, before.st_mode))
+                    self.assertNotEqual((owned.st_dev, owned.st_ino), (after.st_dev, after.st_ino))
+                    self.assertTrue(owned.st_mode & 0o200)
+                    self.assertEqual(digest(output), expected)
+                    if donor.name == "sparse":
+                        self.assertLess(owned.st_blocks * 512, owned.st_size // 4)
+                    output.write_bytes(b"next compiler session")
+                    self.assertEqual(digest(donor), expected)
+                self.assertEqual({path.name for path in state.iterdir()}, {"dense", "sparse"})
+
+    def test_failed_incremental_state_copy_preserves_donor_and_removes_temporary(self):
+        with tempfile.TemporaryDirectory(prefix="sekka-buck-state-failure-") as temporary:
+            root = Path(temporary)
+            state = root / "state"
+            state.mkdir()
+            donor = root / "donor"
+            donor.write_bytes(b"cached compiler state")
+            donor.chmod(0o444)
+            output = state / "entry"
+            output.hardlink_to(donor)
+            before = donor.stat()
+            with patch("action.fcntl.ioctl", side_effect=PermissionError(errno.EPERM, "clone denied")):
+                with self.assertRaises(PermissionError):
+                    own_readonly_incremental_files(state, {})
+            after = donor.stat()
+            self.assertEqual((after.st_dev, after.st_ino, after.st_mode), (before.st_dev, before.st_ino, before.st_mode))
+            self.assertEqual(donor.read_bytes(), b"cached compiler state")
+            self.assertEqual(output.stat().st_ino, before.st_ino)
+            self.assertEqual({path.name for path in state.iterdir()}, {"entry"})
+
     def test_output_relocation_respects_path_ownership(self):
         with tempfile.TemporaryDirectory(prefix="sekka-buck-relocation-") as temporary:
             producer = Path(temporary) / "producer"
@@ -63,6 +131,9 @@ class CompilerContract(unittest.TestCase):
             (output / "file with spaces").write_text("spaced")
             (output / "nested/header.h").write_text("symlink referent")
             (output / "link").symlink_to("nested/subdir", target_is_directory=True)
+            external = Path(temporary) / "external" / producer.relative_to("/") / "native"
+            external.parent.mkdir(parents=True)
+            external.write_text("external path containing the execution root")
             for root in [producer, consumer]:
                 (root / "assets").write_text("root-owned")
                 sibling = root / "output_artifacts/unit-extra"
@@ -79,6 +150,7 @@ class CompilerContract(unittest.TestCase):
                 (str(output) + "-extra/data", ROOT_TOKEN + "/output_artifacts/unit-extra/data", consumer / "output_artifacts/unit-extra/data"),
                 (str(output / "link/../header.h"), OUTPUT_TOKEN + "/nested/header.h", materialized / "nested/header.h"),
                 (str(producer / "source/link/../header.h"), ROOT_TOKEN + "/source/link/../header.h", consumer / "source/link/../header.h"),
+                (str(external), str(external), external),
             ]
             contents = {original: Path(original).read_text() for original, _, _ in cases}
             encoded_paths = [relocate(original, producer, output, encode=True) for original, _, _ in cases]
@@ -87,6 +159,8 @@ class CompilerContract(unittest.TestCase):
                 "search": ["native=" + cases[3][0]],
                 "paths": ":".join(case[0] for case in cases),
                 "stdout": "cargo:root=" + cases[0][0] + "\ncargo:assets=" + cases[3][0] + "\n",
+                "joined": "-L" + cases[0][0] + " -L" + str(producer / "assets"),
+                "external": "-L" + str(external),
             }
             encoded = relocate(metadata, producer, output, encode=True)
             # Encoding happens in the producer; decoding happens only after its
@@ -103,6 +177,8 @@ class CompilerContract(unittest.TestCase):
             self.assertEqual(decoded["search"], ["native=" + str(consumer / "assets")])
             self.assertEqual(decoded["paths"], ":".join(str(case[2]) for case in cases))
             self.assertEqual(decoded["stdout"], "cargo:root=" + str(materialized / "generated.h") + "\ncargo:assets=" + str(consumer / "assets") + "\n")
+            self.assertEqual(decoded["joined"], "-L" + str(materialized / "generated.h") + " -L" + str(consumer / "assets"))
+            self.assertEqual(decoded["external"], "-L" + str(external))
 
     def test_real_rustc_dependency_filenames(self):
         tools = json.loads(Path(os.environ["SEKKA_BUCK2_ENV"]).read_text())
@@ -309,11 +385,13 @@ fn main() {
     fs::write(out.join("generated.rs"), "const GENERATED: i32 = 3;\\n").unwrap();
     println!("cargo:rustc-link-search=native={}", out.display());
     println!("cargo:rustc-link-lib=dylib=contract_native");
+    println!("cargo:rustc-env=NATIVE_SEARCH=-L{}", out.display());
 }
 ''',
                 "native/src/lib.rs": '''include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 unsafe extern "C" { fn native_value() -> i32; }
 pub fn value() -> i32 { unsafe { native_value() + GENERATED } }
+pub fn search_path() -> &'static str { env!("NATIVE_SEARCH").strip_prefix("-L").unwrap() }
 ''',
                 "core/Cargo.toml": '''[package]
 name="aizome-comp-core"
@@ -347,6 +425,9 @@ contract-native={path="../native"}
                 "app/src/main.rs": '''fn main() {
     assert_eq!(std::env::args().skip(1).collect::<Vec<_>>(), ["--runtime", "user value", "--environment", "app-env", "--", "literal"]);
     assert_eq!(contract_macros::answer!() + contract_native::value(), 21);
+    let search = std::path::Path::new(contract_native::search_path()).canonicalize().unwrap();
+    assert!(search.starts_with(std::env::current_dir().unwrap()));
+    assert!(search.join("libcontract_native.so").is_file());
     println!("real LTO, proc-macro, generated Rust and native dylib: 21");
 }
 ''',
@@ -408,6 +489,7 @@ contract-native={path="../native"}
                 build(index)
             app = next(i for i, unit in enumerate(units) if unit["package"]["name"] == "contract-app" and unit["mode"] == "build")
             self.assertEqual(units[app]["lto_mode"], "run:thin")
+            app_output = completed[app]
             result = self.checked([sys.executable, str(runner), "--action-module", str(action), "--environment", str(environment), "--runtime", str(runtime), "--run", completed[app], "--", "--runtime", "user value", "--environment", "app-env", "--", "literal"], cwd=root, env=cargo_env)
             self.assertIn("native dylib: 21", result)
             core = next(i for i, unit in enumerate(units) if unit["package"]["name"] == "aizome-comp-core" and unit["mode"] == "build" and "dylib" in unit["target"]["crate_types"])
@@ -431,6 +513,7 @@ contract-native={path="../native"}
                 restored = root / ("restored-" + kind)
                 shutil.copytree(workspace, restored / "workspace")
                 shutil.copytree(root / "outputs", restored / "outputs")
+                self.checked([sys.executable, str(runner), "--action-module", str(action), "--environment", str(environment), "--runtime", str(runtime), "--run", app_output, "--", "--runtime", "user value", "--environment", "app-env", "--", "literal"], cwd=restored, env=cargo_env)
                 for execution_root in [root, restored]:
                     result = self.checked([sys.executable, str(runner), "--action-module", str(action), "--environment", str(environment), "--runtime", str(runtime), "--run", completed[index], "--test-run", "--"], cwd=execution_root, env=cargo_env)
                     self.assertIn("1 passed", result)

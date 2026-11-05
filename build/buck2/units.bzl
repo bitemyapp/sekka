@@ -42,7 +42,14 @@ def _unit_impl(ctx):
         closure.update(info.closure)
         closure[str(dep.label.raw_target())] = info.output
         dependencies.append({"directory": info.output, "spec": info.spec})
-    output = ctx.actions.declare_output("unit", dir = True)
+    incremental = spec["mode"] != "run-custom-build" and spec["profile"]["incremental"]
+    output = ctx.actions.declare_output("unit", dir = True, has_content_based_path = not incremental)
+    incremental_args = []
+    if incremental:
+        # Advisory compiler state is not part of CargoUnitInfo or its closure:
+        # consumers depend only on the actual library/build-script outputs.
+        state = ctx.actions.declare_output("incremental", dir = True, has_content_based_path = False)
+        incremental_args = ["--incremental-directory", state.as_output()]
     payload = {
         "unit": spec,
         "source": ctx.attrs.source[SourceInfo].path,
@@ -59,7 +66,7 @@ def _unit_impl(ctx):
     if spec["mode"] != "run-custom-build" and source_inputs:
         source_tag = ctx.actions.artifact_tag()
         source_inputs = source_tag.tag_artifacts(cmd_args(source_inputs))
-        dep_file = ctx.actions.declare_output("rust.dependencies")
+        dep_file = ctx.actions.declare_output("rust.dependencies", has_content_based_path = not incremental)
         dep_file_args = ["--dep-file", source_tag.tag_artifacts(dep_file.as_output())]
         dep_files["rust"] = source_tag
     python = read_root_config("sekka", "python")
@@ -77,6 +84,7 @@ def _unit_impl(ctx):
             "--output",
             output.as_output(),
             dep_file_args,
+            incremental_args,
             # A projected crate path omits declared sibling resources from the
             # remote input tree. Retain the complete, narrowly assembled tree.
             hidden = [source_inputs, closure.values()] + [source[SourceInfo].inputs for source in ctx.attrs.extra_sources.values()],
@@ -87,6 +95,8 @@ def _unit_impl(ctx):
         allow_cache_upload = True,
         dep_files = dep_files,
         allow_dep_file_cache_upload = True,
+        no_outputs_cleanup = incremental,
+        incremental_remote_outputs = incremental,
     )
     executable = output.project(spec["filename"]) if spec["filename"] else None
     providers = [
