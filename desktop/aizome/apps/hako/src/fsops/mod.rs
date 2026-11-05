@@ -12,7 +12,8 @@
 //!   every file and folder made, then the rename into place and an
 //!   `fsync` of the folder it's in, and only then the deletion of the
 //!   source. An item whose copy skipped or failed anything stays where it
-//!   was.
+//!   was, and so does everything in a folder whose copy couldn't be
+//!   synced ([`place`]).
 //! - **Nothing is replaced unasked.** Renames refuse to overwrite
 //!   (`renameat2(RENAME_NOREPLACE)`); an existing name is a [`Conflict`]
 //!   the [`Asker`] answers (replace, skip, keep both, merge folders). A
