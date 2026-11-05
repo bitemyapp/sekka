@@ -3,10 +3,12 @@
 //! Text input follows the keyboard. When it's on a window whose first
 //! responder takes composed text (the main thread says so), the text input
 //! is enabled, with the caret's rectangle for the input method to place its
-//! candidate window by. What the input method sends between two `done`
-//! events (text to insert, text being composed) goes to the main thread as
-//! one message, which applies it through `NSTextInputClient`. Surrounding
-//! text isn't sent, so input methods don't ask to delete around the caret.
+//! candidate window by, and what it takes: a password's purpose and hints
+//! ask input methods not to compose, predict or learn it. What the input
+//! method sends between two `done` events (text to insert, text being
+//! composed) goes to the main thread as one message, which applies it
+//! through `NSTextInputClient`. Surrounding text isn't sent, so input
+//! methods don't ask to delete around the caret.
 
 use smithay_client_toolkit::reexports::client::globals::GlobalList;
 use smithay_client_toolkit::reexports::client::protocol::wl_seat::WlSeat;
@@ -17,7 +19,7 @@ use smithay_client_toolkit::reexports::protocols::wp::text_input::zv3::client::z
 };
 
 use super::{Role, State};
-use crate::protocol::{FromRender, Rect, WindowId};
+use crate::protocol::{FromRender, Rect, TextPurpose, WindowId};
 
 pub struct TextInputs {
     manager: Option<ZwpTextInputManagerV3>,
@@ -69,12 +71,14 @@ pub(super) fn remove_seat(state: &mut State, seat: &WlSeat) {
 }
 
 /// The main thread says whether the window's first responder takes
-/// composed text, and where its caret is.
-pub(super) fn set_wanted(state: &mut State, window: WindowId, wanted: bool, caret: Option<Rect>) {
+/// composed text, what text, and where its caret is.
+pub(super) fn set_wanted(state: &mut State, window: WindowId, wanted: bool, purpose: TextPurpose, caret: Option<Rect>) {
     let Some(win) = state.windows.get_mut(&window) else { return };
     win.text_input = wanted;
     let caret_changed = win.caret != caret;
+    let purpose_changed = win.text_purpose != purpose;
     win.caret = caret;
+    win.text_purpose = purpose;
     for i in 0..state.text_inputs.inputs.len() {
         if state.text_inputs.inputs[i].focus != Some(window) {
             continue;
@@ -82,6 +86,11 @@ pub(super) fn set_wanted(state: &mut State, window: WindowId, wanted: bool, care
         let enabled = state.text_inputs.inputs[i].enabled;
         if wanted != enabled {
             apply(state, i, wanted);
+        } else if wanted && purpose_changed {
+            // Another kind of text (a password after a name): the input
+            // method starts over with it, dropping what it was composing.
+            apply(state, i, false);
+            apply(state, i, true);
         } else if wanted && caret_changed {
             set_caret(state, i);
             state.text_inputs.inputs[i].input.commit();
@@ -112,13 +121,23 @@ pub(super) fn reset(state: &mut State, window: WindowId) {
     }
 }
 
+/// What input methods are told text input of `purpose` takes.
+fn content_type(purpose: TextPurpose) -> (ContentHint, ContentPurpose) {
+    match purpose {
+        TextPurpose::Normal => (ContentHint::None, ContentPurpose::Normal),
+        TextPurpose::Password => (ContentHint::HiddenText | ContentHint::SensitiveData, ContentPurpose::Password),
+    }
+}
+
 /// Enable or disable input `i` for its focused window, with the window's
-/// caret.
+/// caret and purpose.
 fn apply(state: &mut State, i: usize, enable: bool) {
     let input = &state.text_inputs.inputs[i];
     if enable {
+        let purpose = input.focus.and_then(|w| state.windows.get(&w)).map_or(TextPurpose::Normal, |w| w.text_purpose);
+        let (hint, purpose) = content_type(purpose);
         input.input.enable();
-        input.input.set_content_type(ContentHint::None, ContentPurpose::Normal);
+        input.input.set_content_type(hint, purpose);
         set_caret(state, i);
     } else {
         input.input.disable();
@@ -209,5 +228,18 @@ impl Dispatch<ZwpTextInputV3, ()> for State {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_password_asks_input_methods_not_to_compose_or_keep_it() {
+        let (hint, purpose) = content_type(TextPurpose::Password);
+        assert_eq!(purpose, ContentPurpose::Password);
+        assert!(hint.contains(ContentHint::HiddenText | ContentHint::SensitiveData));
+        assert_eq!(content_type(TextPurpose::Normal), (ContentHint::None, ContentPurpose::Normal));
     }
 }

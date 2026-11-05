@@ -108,4 +108,6 @@ pub use text::{
     Alignment, Caret, Font, FontMetrics, Hit, LineMetrics, TextAttachment, TextLayout, TextLayoutBuilder, TextStyle,
     Wrap, measure,
 };
-pub use window::{Background, Corner, Cursor, PopupPosition, Window, WindowId, WindowOptions, gather_damage};
+pub use window::{
+    Background, Corner, Cursor, PopupPosition, TextPurpose, Window, WindowId, WindowOptions, gather_damage,
+};
