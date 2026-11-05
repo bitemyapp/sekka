@@ -199,6 +199,111 @@ impl Session {
     }
 }
 
+/// What earlier conversations say about `query`: for the best matches
+/// (every word of the query counts, newest first on ties), when it was,
+/// what the person asked, where the words matched, and the changes that
+/// ran with their approval. At most `limit` characters, for the model.
+pub fn search(dir: &DataDir, query: &str, exclude: Option<&SessionId>, limit: usize) -> String {
+    let words: Vec<String> = query
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric() && c != '-' && c != '.')
+        .filter(|w| w.len() > 2)
+        .map(str::to_owned)
+        .collect();
+    if words.is_empty() {
+        return "Give a few words to search for.".into();
+    }
+    let mut hits = Vec::new();
+    for s in Session::list(dir).unwrap_or_default() {
+        if exclude == Some(&s.id) {
+            continue;
+        }
+        let Ok(records) = read_records(&s.path) else { continue };
+        let mut asked = Vec::new();
+        let mut said = String::new();
+        let mut asking = std::collections::HashMap::new();
+        let mut changed = Vec::new();
+        for r in records {
+            match r {
+                Record::User { text, .. } => asked.push(text),
+                Record::Event { event: Event::TextDelta { text }, .. } => said.push_str(&text),
+                Record::Event { event: Event::ToolCall { id, call, needs }, .. } if needs.asks() => {
+                    asking.insert(id, call.summary());
+                }
+                Record::Event { event: Event::ToolOutput { id, output }, .. } => {
+                    if output.status == crate::event::ToolStatus::Done
+                        && let Some(what) = asking.remove(&id)
+                    {
+                        changed.push(what);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let text = format!("{}\n{}\n{}", asked.join("\n"), said, changed.join("\n"));
+        let lower = text.to_lowercase();
+        let score = words.iter().filter(|w| lower.contains(w.as_str())).count();
+        if score == 0 {
+            continue;
+        }
+        let at = words.iter().filter_map(|w| lower.find(w.as_str())).min().unwrap_or(0);
+        hits.push((
+            score,
+            s.updated,
+            s.title.clone(),
+            asked.first().cloned().unwrap_or_default(),
+            snippet(&text, at),
+            changed,
+        ));
+    }
+    if hits.is_empty() {
+        return format!("No earlier conversation mentions {query:?}.");
+    }
+    hits.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)));
+    let mut out = String::new();
+    for (_, updated, title, asked, found, changed) in hits.into_iter().take(5) {
+        let mut entry =
+            format!("{} — {}\n  asked: {}\n  matched: {}\n", day(updated), title, one_line(&asked, 160), found);
+        if !changed.is_empty() {
+            entry.push_str(&format!("  changes made: {}\n", one_line(&changed.join("; "), 240)));
+        }
+        if out.len() + entry.len() > limit {
+            break;
+        }
+        out.push_str(&entry);
+    }
+    out
+}
+
+fn one_line(s: &str, n: usize) -> String {
+    let s = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    if s.chars().count() <= n { s } else { format!("{}…", s.chars().take(n).collect::<String>()) }
+}
+
+/// About 160 characters around byte `at` of `text`, on one line.
+fn snippet(text: &str, at: usize) -> String {
+    let mut start = at.saturating_sub(60);
+    while !text.is_char_boundary(start) {
+        start -= 1;
+    }
+    let mut end = (at + 100).min(text.len());
+    while !text.is_char_boundary(end) {
+        end += 1;
+    }
+    one_line(&text[start..end], 170)
+}
+
+/// A timestamp's local date, YYYY-MM-DD.
+fn day(t: Timestamp) -> String {
+    // SAFETY: localtime_r writes only into the local `tm`.
+    unsafe {
+        let secs = t.0 as libc::time_t;
+        let mut tm: libc::tm = std::mem::zeroed();
+        libc::localtime_r(&secs, &mut tm);
+        format!("{:04}-{:02}-{:02}", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday)
+    }
+}
+
 pub(crate) fn make_title(text: &str) -> String {
     let line = text.lines().map(str::trim).find(|l| !l.is_empty()).unwrap_or("");
     if line.chars().count() <= TITLE_CHARS {
@@ -265,6 +370,44 @@ mod tests {
 
     fn temp_dir() -> DataDir {
         DataDir::new(std::env::temp_dir().join(format!("tasuke-sessions-{}", crate::ids::random_hex(4))))
+    }
+
+    #[test]
+    fn search_finds_what_was_asked_and_what_was_changed() {
+        use crate::event::{Approval, ToolCall, ToolOutput};
+        use crate::ids::CallId;
+        let dir = temp_dir();
+        let a = Session::create(&dir).unwrap();
+        let mut w = Writer::open(&a).unwrap();
+        let t = TurnNumber(1);
+        w.append(&Record::User { turn: t, text: "My sound stopped working".into(), at: Timestamp(5) }).unwrap();
+        let call = ToolCall::RunAsRoot {
+            command: "systemctl unmask pipewire.socket".into(),
+            purpose: String::new(),
+            timeout_seconds: 60,
+        };
+        let id = CallId::new("c1");
+        w.append(&Record::Event {
+            turn: t,
+            event: Event::ToolCall { id: id.clone(), call, needs: Approval::AskRoot { reason: "root".into() } },
+        })
+        .unwrap();
+        w.append(&Record::Event { turn: t, event: Event::ToolOutput { id, output: ToolOutput::done("ok") } }).unwrap();
+        w.append(&Record::Event {
+            turn: t,
+            event: Event::TextDelta { text: "PipeWire was masked; I unmasked it.".into() },
+        })
+        .unwrap();
+        let b = Session::create(&dir).unwrap();
+        let mut w = Writer::open(&b).unwrap();
+        w.append(&Record::User { turn: t, text: "Set my time zone to Tokyo".into(), at: Timestamp(6) }).unwrap();
+        let found = search(&dir, "sound pipewire", None, 1500);
+        assert!(found.contains("asked: My sound stopped working"), "{found}");
+        assert!(found.contains("changes made: Run as administrator systemctl unmask pipewire.socket"), "{found}");
+        assert!(!found.contains("Tokyo"), "{found}");
+        assert!(search(&dir, "pipewire", Some(a.id()), 1500).starts_with("No earlier conversation"));
+        assert_eq!(search(&dir, "a", None, 1500), "Give a few words to search for.");
+        std::fs::remove_dir_all(dir.path()).ok();
     }
 
     #[test]

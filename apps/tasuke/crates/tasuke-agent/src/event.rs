@@ -119,6 +119,13 @@ pub enum ToolCall {
     },
     LoadSkill {
         name: String,
+        /// One section of it, by heading (the whole guide when absent).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        section: Option<String>,
+    },
+    /// Earlier conversations with this person, searched for `query`.
+    SearchConversations {
+        query: String,
     },
     Remember {
         text: String,
@@ -189,6 +196,7 @@ impl ToolCall {
             ToolCall::WriteFile { .. } => "write_file",
             ToolCall::EditFile { .. } => "edit_file",
             ToolCall::LoadSkill { .. } => "load_skill",
+            ToolCall::SearchConversations { .. } => "search_conversations",
             ToolCall::Remember { .. } => "remember",
             ToolCall::Forget { .. } => "forget",
             ToolCall::Screenshot => "screenshot",
@@ -219,7 +227,11 @@ impl ToolCall {
             ToolCall::ReadFile { path, .. } => format!("Read {}", path.display()),
             ToolCall::WriteFile { path, .. } => format!("Write {}", path.display()),
             ToolCall::EditFile { path, .. } => format!("Edit {}", path.display()),
-            ToolCall::LoadSkill { name } => format!("Read the guide {name}"),
+            ToolCall::LoadSkill { name, section: None } => format!("Read the guide {name}"),
+            ToolCall::LoadSkill { name, section: Some(s) } => format!("Read \"{}\" in the guide {name}", first_line(s)),
+            ToolCall::SearchConversations { query } => {
+                format!("Search earlier conversations for \"{}\"", first_line(query))
+            }
             ToolCall::Remember { text } => format!("Remember \"{}\"", first_line(text)),
             ToolCall::Forget { id } => format!("Forget note {id}"),
             ToolCall::Screenshot => "Look at the screen".into(),

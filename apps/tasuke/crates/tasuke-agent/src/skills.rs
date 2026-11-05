@@ -106,6 +106,37 @@ impl Skills {
         Ok(body)
     }
 
+    /// One section of a skill: from the heading that contains `section`
+    /// (ignoring case) to the next heading of the same or a higher level.
+    /// Without a section, the whole skill.
+    pub fn load_section(&self, name: &str, section: Option<&str>) -> Result<String, String> {
+        let body = self.load(name)?;
+        let Some(want) = section.map(str::trim).filter(|s| !s.is_empty()) else { return Ok(body) };
+        let want = want.trim_start_matches('#').trim().to_lowercase();
+        let level = |l: &str| l.chars().take_while(|c| *c == '#').count();
+        let lines: Vec<&str> = body.lines().collect();
+        let mut fence = false;
+        let mut headings = Vec::new();
+        for (i, l) in lines.iter().enumerate() {
+            if l.trim_start().starts_with("```") {
+                fence = !fence;
+            }
+            if !fence && level(l) > 0 && l[level(l)..].starts_with(' ') {
+                headings.push(i);
+            }
+        }
+        let Some(&start) = headings.iter().find(|&&i| lines[i].to_lowercase().contains(&want)) else {
+            let names: Vec<&str> = headings.iter().map(|&i| lines[i].trim_start_matches('#').trim()).collect();
+            return Err(format!("{name} has no section {want:?}; its sections are: {}", names.join(", ")));
+        };
+        let end = headings
+            .iter()
+            .find(|&&i| i > start && level(lines[i]) <= level(lines[start]))
+            .copied()
+            .unwrap_or(lines.len());
+        Ok(lines[start..end].join("\n"))
+    }
+
     /// The index as the system prompt lists it.
     pub fn prompt_block(&self) -> String {
         self.skills.iter().map(|s| format!("- {}: {}", s.name, s.description)).collect::<Vec<_>>().join("\n")
@@ -243,6 +274,28 @@ mod tests {
         // `y` has no name: its directory names it.
         assert_eq!(names, ["x", "y"]);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_section_runs_to_the_next_heading_of_its_level() {
+        let dir = std::env::temp_dir().join(format!("tasuke-skill-sections-{}", crate::ids::random_hex(4)));
+        std::fs::create_dir_all(dir.join("s")).unwrap();
+        std::fs::write(
+            dir.join("s/SKILL.md"),
+            "---\nname: s\ndescription: d\n---\n# S\nintro\n## Sound\nwpctl\n```sh\n# a comment, not a heading\n```\n### Bluetooth audio\nbluetoothctl\n## Printers\nlpstat\n",
+        )
+        .unwrap();
+        let skills = Skills::discover_in(&[dir.clone()]);
+        let sound = skills.load_section("s", Some("sound")).unwrap();
+        assert!(
+            sound.starts_with("## Sound") && sound.contains("bluetoothctl") && !sound.contains("lpstat"),
+            "{sound}"
+        );
+        assert!(skills.load_section("s", Some("printers")).unwrap().contains("lpstat"));
+        let err = skills.load_section("s", Some("wifi")).unwrap_err();
+        assert!(err.contains("Sound") && err.contains("Printers") && !err.contains("a comment"), "{err}");
+        assert_eq!(skills.load_section("s", None).unwrap(), skills.load("s").unwrap());
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[test]

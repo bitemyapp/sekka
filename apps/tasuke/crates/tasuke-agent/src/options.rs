@@ -182,6 +182,9 @@ pub struct Options {
     /// Send the model's reasoning back with its tool calls (gpt-oss's harmony format wants it).
     pub keep_reasoning: bool,
     pub skills: Skills,
+    /// The conversation this turn belongs to (set by the turn), which a
+    /// search of earlier conversations leaves out.
+    pub session: Option<crate::ids::SessionId>,
     pub data_dir: DataDir,
     /// `tasuke-helper`, run through pkexec for `run_as_root`.
     pub helper: PathBuf,
@@ -220,6 +223,7 @@ impl Options {
             request_params: serde_json::Map::new(),
             keep_reasoning: false,
             skills: Skills::default(),
+            session: None,
             data_dir: DataDir::user(),
             helper: default_helper(),
             user_command_prefix: Vec::new(),

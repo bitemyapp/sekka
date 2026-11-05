@@ -85,10 +85,18 @@ pub(crate) fn schemas(o: &Options, screen: (u32, u32)) -> Vec<Value> {
         t.push(function(
             "load_skill",
             "Read one of the guides to this computer (listed in your instructions) before answering or acting in its area.",
-            json!({"name": {"type": "string", "enum": names}}),
+            json!({"name": {"type": "string", "enum": names},
+                   "section": {"type": "string", "description": "Optional: a heading in that guide, to read only that part."}}),
             &["name"],
         ));
     }
+    t.push(function(
+        "search_conversations",
+        "Search the person's earlier conversations with you: what they asked, what was found, and what was \
+         changed. Use it when they say it happened again or ask what was done before.",
+        json!({"query": {"type": "string", "description": "A few words: a service, a file, a symptom."}}),
+        &["query"],
+    ));
     t.push(function(
         "remember",
         "Keep a short note for future conversations: something the person told you about themselves, their \
@@ -300,7 +308,11 @@ pub(crate) fn parse(name: &str, arguments: &str, offered: &[String], desktop: &D
                 let diff = unified_diff(&text, &text.replacen(old.as_str(), &new, 1), &path);
                 ToolCall::EditFile { path, old, new, diff }
             }
-            "load_skill" => ToolCall::LoadSkill { name: need("name")? },
+            "load_skill" => ToolCall::LoadSkill {
+                name: need("name")?,
+                section: text_arg(&args, "section").filter(|s| !s.trim().is_empty()),
+            },
+            "search_conversations" => ToolCall::SearchConversations { query: need("query")? },
             "remember" => ToolCall::Remember { text: need("text")? },
             "forget" => ToolCall::Forget { id: NoteId::new(need("id")?.trim()) },
             "screenshot" => ToolCall::Screenshot,
@@ -469,7 +481,10 @@ pub(crate) fn execute(call: &ToolCall, o: &Options, desktop: &mut Desktop<'_>, c
             Ok(_) => ToolOutput::failed(format!("{} changed since; read it again", path.display())),
             Err(e) => ToolOutput::failed(format!("{}: {e}", path.display())),
         }),
-        ToolCall::LoadSkill { name } => Outcome::text(match o.skills.load(name) {
+        ToolCall::SearchConversations { query } => {
+            Outcome::text(ToolOutput::done(crate::session::search(&o.data_dir, query, o.session.as_ref(), 1500)))
+        }
+        ToolCall::LoadSkill { name, section } => Outcome::text(match o.skills.load_section(name, section.as_deref()) {
             Ok(body) => ToolOutput::done(body),
             Err(e) => ToolOutput::failed(e),
         }),
@@ -765,6 +780,7 @@ mod tests {
         assert_eq!(approval(&click, &o, true), Approval::None);
         o.act = false;
         assert!(matches!(approval(&root, &o, false), Approval::Refused { .. }));
-        assert_eq!(approval(&ToolCall::LoadSkill { name: "x".into() }, &o, false), Approval::None);
+        assert_eq!(approval(&ToolCall::LoadSkill { name: "x".into(), section: None }, &o, false), Approval::None);
+        assert_eq!(approval(&ToolCall::SearchConversations { query: "x".into() }, &o, false), Approval::None);
     }
 }
