@@ -12,7 +12,6 @@
 use crate::format::size;
 use aizome_typestate::{Answer, Fresh, Generation, Ticket};
 use calamares_nixos::memory::{self, MemInfo};
-use std::fmt;
 
 /// Names the memory read: its answer carries the ticket.
 pub enum MemoryRead {}
@@ -36,33 +35,44 @@ impl Answer<MemoryRead> for MemoryAnswer {
     }
 }
 
-/// Why the swap partition can't be sized.
+/// The swap partition, sized to installed memory, as far as that's known.
+/// It has no shortcut that answers "is it known?": callers match all four,
+/// so a read under way and a failed one can't fall together (GEN-28):
+///
+/// ```compile_fail,E0599
+/// use genkan::ram::Memory;
+/// fn still_reading(memory: &Memory) -> bool {
+///     memory.swap_size(true).is_err()
+/// }
+/// ```
+///
+/// ```
+/// use genkan::ram::{Memory, SwapSize};
+/// fn still_reading(memory: &Memory) -> bool {
+///     match memory.swap_size(true) {
+///         SwapSize::Reading => true,
+///         SwapSize::Off | SwapSize::Known(_) | SwapSize::Unreadable(_) => false,
+///     }
+/// }
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SwapUnsized {
+pub enum SwapSize {
+    /// Swap is off: there's no partition to size.
+    Off,
+    /// Its size, matching installed memory.
+    Known(u64),
     /// The read hasn't answered yet.
     Reading,
     /// It failed, and why: it isn't read again, so swap stays off.
     Unreadable(String),
 }
 
-impl fmt::Display for SwapUnsized {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Reading => f.write_str("Still reading installed memory; try again in a moment."),
-            Self::Unreadable(error) => write!(
-                f,
-                "Installed memory could not be read ({error}), so a swap partition can't be sized. Turn swap off to continue."
-            ),
-        }
-    }
-}
-
 aizome_typestate::machine! {
     /// The installed-memory read. Its state is private: code outside this
     /// module can't match it, as the check that took a failed read for one
-    /// under way once matched `None` (GEN-28). It gets [`SwapUnsized`], whose
-    /// two reasons have their own words here; it could still collapse them
-    /// into words of its own (`swap_size(..).is_err()`), which no type stops:
+    /// under way once matched `None` (GEN-28). It gets a [`SwapSize`], with no
+    /// shortcut past its states; a `_` arm in a match on it is the one way
+    /// left to collapse them, which no type stops:
     ///
     /// ```compile_fail,E0603,E0624
     /// use genkan::ram::{Memory, MemoryState};
@@ -72,9 +82,9 @@ aizome_typestate::machine! {
     /// ```
     ///
     /// ```
-    /// use genkan::ram::{Memory, SwapUnsized};
+    /// use genkan::ram::{Memory, SwapSize};
     /// fn still_reading(memory: &Memory) -> bool {
-    ///     memory.swap_size(true) == Err(SwapUnsized::Reading)
+    ///     memory.swap_size(true) == SwapSize::Reading
     /// }
     /// ```
     pub struct Memory over Generation<MemoryRead> {
@@ -128,16 +138,16 @@ impl Memory {
         });
     }
 
-    /// The swap partition's size, matching installed memory, when swap is
-    /// `on`; why there can't be one yet, or at all.
-    pub fn swap_size(&self, on: bool) -> Result<Option<u64>, SwapUnsized> {
+    /// The swap partition when swap is `on`: its size, or why it can't be
+    /// sized yet, or at all.
+    pub fn swap_size(&self, on: bool) -> SwapSize {
         if !on {
-            return Ok(None);
+            return SwapSize::Off;
         }
         match self.stored() {
-            MemoryState::Known(info) => Ok(Some(memory::swap_bytes(info.total))),
-            MemoryState::Unasked(()) | MemoryState::Reading(()) => Err(SwapUnsized::Reading),
-            MemoryState::Unreadable(error) => Err(SwapUnsized::Unreadable(error.clone())),
+            MemoryState::Known(info) => SwapSize::Known(memory::swap_bytes(info.total)),
+            MemoryState::Unasked(()) | MemoryState::Reading(()) => SwapSize::Reading,
+            MemoryState::Unreadable(error) => SwapSize::Unreadable(error.clone()),
         }
     }
 
