@@ -3,11 +3,12 @@
 //! what's left (or what's too much) after them.
 
 use aizome_kit::prelude::*;
-use aizome_kit::row;
 use aizome_kit::widgets::layout::row as row_of;
+use aizome_kit::{column, row};
 
 use crate::app::Msg;
 use crate::models::{FitBar, Part, size};
+use tasuke_models::Bytes;
 
 fn part_role(p: Part) -> Option<Role> {
     match p {
@@ -53,6 +54,20 @@ pub fn bar(b: &FitBar, height: f64) -> Element<Msg> {
         parts: b.shares().iter().map(|(p, s)| (code(*p), (s * 10_000.0).round() as u32)).collect(),
         mark: (b.budget_mark() * 10_000.0).round() as u32,
     };
+    drawn(shape, height)
+}
+
+/// Parts as a bar, each its share of the whole.
+fn parts_bar(parts: &[(Part, Bytes)], height: f64) -> Element<Msg> {
+    let whole: u64 = parts.iter().map(|(_, b)| b.0).sum::<u64>().max(1);
+    let shape = Shape {
+        parts: parts.iter().map(|(p, b)| (code(*p), (b.0 as f64 / whole as f64 * 10_000.0).round() as u32)).collect(),
+        mark: 10_000,
+    };
+    drawn(shape, height)
+}
+
+fn drawn(shape: Shape, height: f64) -> Element<Msg> {
     canvas(shape, |c, r, s, theme| {
         c.fill_rect(r, theme.sunk());
         let mut x = r.x0;
@@ -107,7 +122,9 @@ pub fn legend(b: &FitBar) -> Element<Msg> {
         .parts
         .iter()
         .map(|&(p, bytes)| {
-            let mut words = format!("{} {}", p.words(), size(bytes));
+            // Split between the GPU and system memory, the bar is the GPU's.
+            let name = if p == Part::Weights && b.in_ram.is_some() { "Model on the GPU" } else { p.words() };
+            let mut words = format!("{name} {}", size(bytes));
             if p == Part::Context
                 && let Some(ctx) = b.context
             {
@@ -129,4 +146,23 @@ pub fn verdict(b: &FitBar) -> Element<Msg> {
         Verdict::TooLarge => (Icon::CircleX, Role::Danger),
     };
     row![icon(glyph).size(14.0).role(role), text(b.words()).size(12.5).role(Role::Text)].spacing(7.0).into()
+}
+
+/// For a model split between the GPU and system memory, the memory side:
+/// what of the model is there, against what system memory allows it.
+pub fn in_memory(b: &FitBar) -> Option<Element<Msg>> {
+    let parts = b.ram_parts()?;
+    let budget = b.ram_budget?;
+    let words: Vec<Element<Msg>> = parts
+        .iter()
+        .map(|&(p, bytes)| {
+            let name = match p {
+                Part::Weights => "Model in system memory",
+                other => other.words(),
+            };
+            row![swatch(p), text(format!("{name} {}", size(bytes))).size(11.5).role(Role::Text3)].spacing(5.0).into()
+        })
+        .chain(std::iter::once(text(format!("of the {} it may use", size(budget))).size(11.5).role(Role::Text3).into()))
+        .collect();
+    Some(column![parts_bar(&parts, 8.0), row_of(words).spacing(14.0)].spacing(6.0).width(Fill).into())
 }

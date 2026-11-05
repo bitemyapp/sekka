@@ -74,6 +74,7 @@ pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
                         None => "Not yet in Sekka's evaluations: it's the best that fits until a measured one does."
                             .to_owned(),
                     };
+                    let memory = bar::in_memory(&fb).unwrap_or_else(|| space(0.0));
                     let card = container(
                         column![
                             row![text(e.name.clone()).size(17.0).weight(700.0), tag("Recommended", Role::Accent)]
@@ -84,6 +85,7 @@ pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
                             bar::verdict(&fb),
                             bar::bar(&fb, 12.0),
                             bar::legend(&fb),
+                            memory,
                             text(score).size(12.5).role(Role::Text2).wrap().line_height(1.4),
                         ]
                         .spacing(8.0)

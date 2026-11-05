@@ -232,9 +232,11 @@ fn card(c: &Card, first: bool) -> Element<Msg> {
                 .into(),
         );
     }
-    parts.push(
-        column![bar::verdict(&c.bar), bar::bar(&c.bar, 12.0), bar::legend(&c.bar)].spacing(7.0).width(Fill).into(),
-    );
+    let mut fit = column![bar::verdict(&c.bar), bar::bar(&c.bar, 12.0), bar::legend(&c.bar)].spacing(7.0).width(Fill);
+    if let Some(memory) = bar::in_memory(&c.bar) {
+        fit = fit.push(container(memory).padding([4.0, 0.0, 0.0, 0.0]).width(Fill));
+    }
+    parts.push(fit.into());
     let score = match &c.score {
         Some((_, date)) if !date.is_empty() => format!("{} · measured {date}", c.score_words),
         _ => c.score_words.clone(),

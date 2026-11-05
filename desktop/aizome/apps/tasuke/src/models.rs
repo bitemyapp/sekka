@@ -215,8 +215,10 @@ pub struct FitBar {
     pub place: String,
     /// The context it gets there.
     pub context: Option<tasuke_models::units::ContextTokens>,
-    /// For a split placement: what goes to system memory.
+    /// For a split placement: what goes to system memory, and what system
+    /// memory allows it (all of it less what the system keeps).
     pub in_ram: Option<Bytes>,
+    pub ram_budget: Option<Bytes>,
 }
 
 /// Less than this share of the budget to spare is tight.
@@ -257,18 +259,20 @@ impl FitBar {
                     },
                     context: Some(ctx),
                     in_ram: None,
+                    ram_budget: None,
                 }
             }
-            Fit::GpuWithExpertOffload { gpu, ctx, gpu_need, gpu_budget, ram_need, .. } => {
+            Fit::GpuWithExpertOffload { gpu, ctx, gpu_need, gpu_budget, ram_need, ram_budget, .. } => {
                 let n = fit::need(entry, ctx, KvCacheType::Q8_0);
                 let on_gpu = gpu_need.saturating_sub(n.kv + n.compute + n.mmproj);
                 FitBar {
                     parts: with_spare(parts(n, on_gpu), gpu_need, gpu_budget),
                     budget: gpu_budget,
                     verdict: Verdict::Split,
-                    place: format!("on the {}, with part of it in memory", gpu_name(gpu)),
+                    place: format!("on the {}", gpu_name(gpu)),
                     context: Some(ctx),
                     in_ram: Some(ram_need),
+                    ram_budget: Some(ram_budget),
                 }
             }
             Fit::Cpu { ctx, need, budget } => {
@@ -280,6 +284,7 @@ impl FitBar {
                     place: "on the processor".into(),
                     context: Some(ctx),
                     in_ram: None,
+                    ram_budget: None,
                 }
             }
             Fit::TooLarge { needed, available } => {
@@ -291,6 +296,7 @@ impl FitBar {
                     place: "on this computer".into(),
                     context: None,
                     in_ram: None,
+                    ram_budget: None,
                 }
             }
         }
@@ -309,6 +315,17 @@ impl FitBar {
         (self.budget.0 as f64 / whole as f64).min(1.0)
     }
 
+    /// For a split placement, the system-memory side as a bar of its own:
+    /// the part of the model there, and what's left of what it may use.
+    pub fn ram_parts(&self) -> Option<Vec<(Part, Bytes)>> {
+        let (need, budget) = (self.in_ram?, self.ram_budget?);
+        Some(if need <= budget {
+            vec![(Part::Weights, need), (Part::Spare, budget - need)]
+        } else {
+            vec![(Part::Weights, budget), (Part::Over, need - budget)]
+        })
+    }
+
     pub fn used(&self) -> Bytes {
         self.parts.iter().filter(|(p, _)| !matches!(p, Part::Spare | Part::Over)).fold(Bytes::ZERO, |a, (_, b)| a + *b)
     }
@@ -320,8 +337,8 @@ impl FitBar {
             Verdict::Fits => format!("Fits {}, {} to spare", self.place, size(spare)),
             Verdict::Tight => format!("Just fits {}, {} to spare", self.place, size(spare)),
             Verdict::Split => format!(
-                "Fits {}: {} goes to system memory, which is slower",
-                self.place.replace(", with part of it in memory", ""),
+                "Runs {} with {} of it in system memory, which is slower",
+                self.place,
                 size(self.in_ram.unwrap_or_default())
             ),
             Verdict::Processor => format!("Runs on the processor in {} of memory: slow", size(self.used())),
@@ -632,6 +649,26 @@ mod tests {
             "{}",
             bar.words()
         );
+    }
+
+    #[test]
+    fn a_model_split_with_system_memory_shows_both_sides() {
+        let catalog = Catalog::load_default();
+        let hw = fixture::laptop_8gb();
+        let e = catalog.get(&ModelId::new("gemma-4-26b-a4b")).unwrap();
+        let f = fit::fit(e, &hw, fit::FitOptions::default());
+        let bar = FitBar::of(e, &f, &hw);
+        assert_eq!(bar.verdict, Verdict::Split, "{f:?}");
+        let w = bar.words();
+        assert!(w.starts_with("Runs on the RTX 4060 Laptop GPU with ") && w.ends_with(" of it in system memory, which is slower"), "{w}");
+        let ram = bar.ram_parts().expect("the memory side");
+        let total: u64 = ram.iter().map(|(_, b)| b.0).sum();
+        assert_eq!(total, bar.ram_budget.unwrap().0);
+        assert_eq!(ram[0], (Part::Weights, bar.in_ram.unwrap()));
+        // Placed on the GPU alone, there's no memory side.
+        let big = fixture::desktop_32gb();
+        let whole = FitBar::of(e, &fit::fit(e, &big, fit::FitOptions::default()), &big);
+        assert!(whole.ram_parts().is_none());
     }
 
     #[test]
