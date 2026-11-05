@@ -1,4 +1,4 @@
-//! `aizome-tasuke [--fixture NAME]`: the Assistant window. `--fixture`
+//! `aizome-tasuke [--fixture NAME]`: Tasuke's window. `--fixture`
 //! shows made-up conversations, machines and notes instead of this
 //! computer's, and changes nothing.
 
@@ -7,7 +7,7 @@ use tasuke_window::app::{FIXTURES, Tasuke};
 fn help() -> String {
     format!(
         "Usage: aizome-tasuke [--fixture NAME]\n\n\
-         Assistant (助 Tasuke): Sekka's private assistant, running on this computer.\n\n\
+         Tasuke 助: Sekka's private assistant, running on this computer.\n\n\
          \x20 --fixture NAME   show made-up data instead of this computer's; NAME is one of\n\
          \x20                  {}\n\
          \x20 -h, --help       show this\n",

@@ -818,11 +818,11 @@ impl Program for Tasuke {
     type Msg = Msg;
 
     fn info(&self) -> AppInfo {
-        AppInfo::new(APP_ID, "Assistant", "Assistant").icon(Icon::MessageSquare)
+        AppInfo::new(APP_ID, "Tasuke", "Assistant").icon(Icon::MessageSquare)
     }
 
     fn launched(&mut self, cx: &mut Cx<Msg>) {
-        let w = cx.open_window(WindowSpec::new("Assistant").size(1180.0, 780.0).min_size(760.0, 520.0));
+        let w = cx.open_window(WindowSpec::new("Tasuke").size(1180.0, 780.0).min_size(760.0, 520.0));
         self.window = Some(w);
         self.stream = Some(cx.stream());
         self.want_thumbs(cx);
@@ -882,7 +882,7 @@ impl Program for Tasuke {
 }
 
 impl Tasuke {
-    /// "Why is my disk filling up? — Assistant", "Models — Assistant".
+    /// "Why is my disk filling up? — Tasuke", "Models — Tasuke".
     pub fn window_title(&self) -> String {
         let page = match (self.first_run.is_some(), self.page) {
             (true, _) => None,
@@ -891,8 +891,8 @@ impl Tasuke {
             (_, Page::Conversation(id)) => self.conversation(id).map(|c| c.title.clone()).filter(|t| !t.is_empty()),
         };
         match page {
-            Some(p) => format!("{p} — Assistant"),
-            None => "Assistant".to_owned(),
+            Some(p) => format!("{p} — Tasuke"),
+            None => "Tasuke".to_owned(),
         }
     }
 

@@ -1,4 +1,4 @@
-"""The Assistant window through Aizome's real password dialog."""
+"""Tasuke's window through Aizome's real password dialog."""
 
 QUESTION = "Read the marker, make a file, write one as root, then tidy up."
 ANSWER = "All four steps are done."

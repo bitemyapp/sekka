@@ -17,7 +17,7 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
     let header = column![
         text("Models").size(22.0).weight(700.0),
         text(
-            "Everything runs on this computer. Sekka measured each of these models doing the assistant's work, \
+            "Everything runs on this computer. Sekka measured each of these models doing Tasuke's work, \
              and what fits is worked out from this computer's memory."
         )
         .size(13.0)

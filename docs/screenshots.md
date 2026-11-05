@@ -63,7 +63,7 @@ in `desktop/aizome/apps/nisshi/tests/snapshots/` are headless renders from
 the kit's offscreen renderer, not window captures.
 
 The captures in `desktop/aizome/docs/screenshots/tasuke/` are original
-1440 × 900 `grim` captures, at scale 1, of the Assistant window's dev
+1440 × 900 `grim` captures, at scale 1, of Tasuke's window's dev
 build from 5 November 2026, each running alone on one of its launch
 fixtures under a private headless sway, with nothing clicked or typed.
 The machines, conversations, command outputs and notes are made up; the

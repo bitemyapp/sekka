@@ -23,7 +23,7 @@ usage: tasuke COMMAND [options]
   models [--json]                      the catalog, with fit and download state
   download ID                          download a model (progress on stderr)
   remove ID                            delete a downloaded model
-  use ID                               make it the assistant's model
+  use ID                               make it Tasuke's model
   server start [--foreground]          start the model server (the user unit
                                        tasuke-llm.service, or here and now)
   server stop                          stop it
@@ -31,7 +31,7 @@ usage: tasuke COMMAND [options]
   server exec                          become the model server (the unit runs this)
   ask [--act] [--desktop] [--approve never|ask|all]
       [--base-url URL --model NAME] \"request\"
-                                       ask the assistant from the terminal
+                                       ask Tasuke from the terminal
   checkup [--notify]                   look over the system's health, changing nothing
 ";
 

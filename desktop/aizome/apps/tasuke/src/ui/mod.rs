@@ -39,8 +39,8 @@ fn brand() -> Element<Msg> {
             .fill(Tone::Chrome)
             .border(Edge::Line),
         column![
-            text("Assistant").size(15.0).weight(700.0),
-            text("助 Tasuke · on this computer").size(11.0).role(Role::Text3),
+            text("Tasuke").size(15.0).weight(700.0),
+            text("助 Assistant · on this computer").size(11.0).role(Role::Text3),
         ]
         .spacing(1.0),
     ]

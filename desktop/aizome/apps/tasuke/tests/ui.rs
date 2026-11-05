@@ -113,7 +113,7 @@ fn a_server_that_cant_be_reached_offers_retry_and_the_error_stays() {
     assert!(texts.iter().any(|t| t == "The model server can't be reached"), "{texts:?}");
     assert!(texts.iter().any(|t| t == "Connection refused (os error 111)"), "{texts:?}");
     assert!(texts.iter().any(|t| t == "Starting the model server…"), "it failed, so it isn't 'started': {texts:?}");
-    assert_eq!(h.program().window_title(), "Is my graphics card running hot? — Assistant");
+    assert_eq!(h.program().window_title(), "Is my graphics card running hot? — Tasuke");
     assert!(h.click_text(w, "Retry"));
     for _ in 0..100 {
         h.advance(Duration::from_millis(100));

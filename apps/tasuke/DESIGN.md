@@ -1,6 +1,6 @@
 # Tasuke 助 — Sekka's local assistant: design
 
-Status: v1 design, November 2026. Tasuke is the code name; people see **Assistant**.
+Status: v1 design, November 2026. Tasuke is its name, as the other Aizome apps have theirs; **Assistant** is its generic name.
 
 Tasuke is a private assistant that runs entirely on the user's machine. It helps with three kinds of request:
 

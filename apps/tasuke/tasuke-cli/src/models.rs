@@ -483,7 +483,7 @@ fn download(ctx: &Context, entry: &Entry) -> Result {
         Ok(_) => {
             eprintln!("Downloaded {}.", entry.id);
             if ctx.config.model.id.as_ref() != Some(&entry.id) {
-                eprintln!("To make it the assistant's model: tasuke use {}", entry.id);
+                eprintln!("To make it Tasuke's model: tasuke use {}", entry.id);
             }
             Ok(())
         }
@@ -516,7 +516,7 @@ fn remove(ctx: &Context, entry: &Entry) -> Result {
     };
     eprintln!("Removed {} ({freed} freed).", entry.id);
     if ctx.config.model.id.as_ref() == Some(&entry.id) {
-        eprintln!("It was the assistant's model: download it again, or pick another with tasuke use ID.");
+        eprintln!("It was Tasuke's model: download it again, or pick another with tasuke use ID.");
     }
     Ok(())
 }
@@ -525,7 +525,7 @@ fn use_model(ctx: &Context, entry: &Entry) -> Result {
     let mut config = ctx.config.clone();
     config.model.id = Some(entry.id.clone());
     config.save(&ctx.paths).map_err(failed)?;
-    eprintln!("The assistant now uses {} ({}).", entry.name, entry.id);
+    eprintln!("Tasuke now uses {} ({}).", entry.name, entry.id);
     let hw = Hardware::detect();
     let fit = fit::fit(entry, &hw, fit::FitOptions { context: config.model.context, ..Default::default() });
     eprintln!("{} on this machine.", fit_sentence(&fit, &hw));

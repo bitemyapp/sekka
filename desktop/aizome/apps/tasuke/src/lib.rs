@@ -1,4 +1,4 @@
-//! Tasuke 助 (Assistant): Sekka's private assistant, in a native Aizome
+//! Tasuke 助: Sekka's private assistant, in a native Aizome
 //! window. See `apps/tasuke/DESIGN.md` for the whole of it.
 
 pub mod agent;

@@ -2281,7 +2281,7 @@ nix run .#agent-evals.run -- --models qwen3.8-27b --track diagnostics --parallel
 
 ## Tasuke, the local assistant
 
-Tasuke 助 (shown as **Assistant**) is an agent that runs on the machine's own
+Tasuke 助 (its generic name is Assistant) is an agent that runs on the machine's own
 GPU or CPU. [apps/tasuke/DESIGN.md](apps/tasuke/DESIGN.md) is the contract
 between its pieces:
 

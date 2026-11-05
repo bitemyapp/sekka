@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT OR Apache-2.0
-# The Assistant window through the real password dialog (vm-desktop.nix's
+# Tasuke's window through the real password dialog (vm-desktop.nix's
 # machine): alice opens the window and asks; the scripted model proposes a
 # read-only command, one needing approval, one as root and one Tasuke
 # refuses. The test presses Run and Run as administrator in the window,

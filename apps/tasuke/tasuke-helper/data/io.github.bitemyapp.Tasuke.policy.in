@@ -10,8 +10,8 @@
        refuses what Tasuke never runs, enforces a timeout and an output
        cap, and logs the command and its purpose to the journal. -->
   <action id="io.github.bitemyapp.Tasuke.run-as-root">
-    <description>Run a command the assistant proposed as administrator</description>
-    <message>The assistant needs an administrator's password to run the command you approved</message>
+    <description>Run a command Tasuke proposed, as administrator</description>
+    <message>Tasuke needs an administrator's password to run the command you approved</message>
     <defaults>
       <allow_any>auth_admin</allow_any>
       <allow_inactive>auth_admin</allow_inactive>

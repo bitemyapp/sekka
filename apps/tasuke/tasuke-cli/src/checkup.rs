@@ -156,7 +156,7 @@ fn notify_desktop(title: &str, body: &str) {
             "org.freedesktop.Notifications",
             "Notify",
             "susssasa{sv}i",
-            "Assistant",
+            "Tasuke",
             "0",
             "org.aizome.Tasuke",
             title,

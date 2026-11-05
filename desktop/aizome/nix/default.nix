@@ -74,7 +74,7 @@ let
     ];
   };
   # Tasuke's libraries (the agent and model management) and the model
-  # catalog they compile in, for the Assistant window; not its CLI or root
+  # catalog they compile in, for Tasuke's window; not its CLI or root
   # helper, so edits to those don't rebuild Aizome.
   tasukeSrc = lib.fileset.toSource {
     root = ../../../apps/tasuke;
