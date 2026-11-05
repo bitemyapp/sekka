@@ -523,6 +523,7 @@ name = "aizome-sys"
 version = "0.1.0"
 dependencies = [
  "aizome-apps",
+ "aizome-typestate",
  "async-io",
  "event-listener",
  "futures-lite",
@@ -542,6 +543,7 @@ dependencies = [
  "aizome-kit",
  "aizome-sys",
  "aizome-theme",
+ "aizome-typestate",
  "env_logger",
  "log",
  "zbus",
