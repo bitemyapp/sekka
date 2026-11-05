@@ -314,6 +314,9 @@ pub(crate) struct Core {
     /// from the compositor's input; in the testing harness only when a test
     /// build asks.
     pub agreeing: bool,
+    /// A release is going to what's under the pointer though no widget took
+    /// its press: buttons' presses then make no agreement.
+    pub unpressed_release: bool,
 }
 
 impl Core {
@@ -345,6 +348,7 @@ impl Core {
             quit: false,
             wm: None,
             agreeing: false,
+            unpressed_release: false,
         }
     }
 
@@ -1663,6 +1667,9 @@ impl Core {
         // Only buttons push these, and only as a person presses them: their
         // `event` for the pointer's release, their `activate` for the keys.
         for (node, agree) in agreements {
+            if self.unpressed_release {
+                continue;
+            }
             if !self.agreeing {
                 log::warn!("an agreeing button was pressed where presses make no agreement (a test harness)");
                 continue;
@@ -2193,8 +2200,13 @@ impl Core {
                 }
                 None => {
                     let path = w.tree.path_at(p, w.modal());
+                    // No widget took the press (it began on nothing, and the
+                    // pointer came here): the release is no press of a button
+                    // there, and agrees to nothing.
                     if let Some(&last) = path.last() {
+                        self.unpressed_release = true;
                         self.bubble(win, last, &ev, platform);
+                        self.unpressed_release = false;
                     }
                 }
             }
