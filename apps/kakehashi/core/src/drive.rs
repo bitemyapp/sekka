@@ -1,6 +1,7 @@
 //! A whole drive as the operating system describes it, and whether it may
 //! be offered for writing.
 
+use aizome_typestate::SameTarget;
 use serde::{Deserialize, Serialize};
 
 /// Larger than this is probably an external disk, not a flash drive.
@@ -103,6 +104,15 @@ impl Drive {
     pub fn same(&self, other: &Drive) -> bool {
         (&self.name, self.bytes, &self.vendor, &self.model, &self.serial, &self.bus)
             == (&other.name, other.bytes, &other.vendor, &other.model, &other.serial, &other.bus)
+    }
+}
+
+/// A drive is the same target when [`Drive::same`] says so: its serial,
+/// size, vendor, model and bus, as well as its name, which alone another
+/// drive can take over.
+impl SameTarget for Drive {
+    fn same_target(&self, fresh: &Drive) -> bool {
+        self.same(fresh)
     }
 }
 

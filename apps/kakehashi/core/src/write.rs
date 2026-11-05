@@ -2,29 +2,84 @@
 //! drive as it is now, write the image, clear the drive's end, read every
 //! byte back and compare, and eject.
 
+use crate::choice::ConfirmedDrive;
 use crate::drive::{Drive, human};
 use crate::image::{CHUNK, Cancelled, hex};
 use crate::platform;
+use aizome_typestate::{Confirmed, Reviewed};
 use anyhow::{Context, Result, bail, ensure};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::alloc::{Layout, alloc_zeroed, dealloc};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Cleared at the end of the drive: a previous GPT's backup header lives in
 /// the last sectors, and would confuse firmware.
 pub const TAIL: u64 = 1024 * 1024;
 
 /// What the window asks the helper to do.
+///
+/// The window makes one only for the drive the person confirmed, found
+/// again when they agreed ([`ConfirmedDrive`]); the helper reads it from
+/// the file the window wrote and checks its drive against the drive as it
+/// is then ([`still_there`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Plan {
-    pub image: PathBuf,
+    image: PathBuf,
     /// The image's SHA-256 as the window computed it: what is written and
     /// what is read back must both have it.
-    pub sha256: String,
-    pub drive: Drive,
+    sha256: String,
+    drive: Drive,
+}
+
+impl Plan {
+    /// The write of `image` onto the drive the person confirmed.
+    ///
+    /// A plan for the drive chosen in the list as it is now, rather than
+    /// the one the confirmation dialog named, doesn't compile (KTL-04): the
+    /// list keeps refreshing under the dialog, and the next stick plugged
+    /// in takes the same name.
+    ///
+    /// ```compile_fail,E0308
+    /// use kakehashi_core::{Drive, choice::DriveList, write::Plan};
+    /// fn ok_pressed(list: &DriveList, image: std::path::PathBuf, sha256: String) -> Option<Plan> {
+    ///     let chosen_now: Drive = list.chosen(None)?.clone();
+    ///     Some(Plan::new(image, sha256, chosen_now))
+    /// }
+    /// ```
+    ///
+    /// The dialog's drive, found again in the list when OK is pressed:
+    ///
+    /// ```
+    /// use kakehashi_core::{choice::{DriveList, ReviewedDrive}, write::Plan};
+    /// fn ok_pressed(list: &DriveList, reviewed: ReviewedDrive, image: std::path::PathBuf, sha256: String) -> Option<Plan> {
+    ///     Some(Plan::new(image, sha256, list.confirm(reviewed, None).ok()?))
+    /// }
+    /// ```
+    pub fn new(image: PathBuf, sha256: String, drive: ConfirmedDrive) -> Plan {
+        Plan { image, sha256, drive: drive.drive().clone() }
+    }
+
+    /// The same write from a copy of the image (on macOS, one the helper
+    /// may read).
+    pub fn with_image(self, image: PathBuf) -> Plan {
+        Plan { image, ..self }
+    }
+
+    pub fn image(&self) -> &Path {
+        &self.image
+    }
+
+    pub fn sha256(&self) -> &str {
+        &self.sha256
+    }
+
+    /// The drive as the person confirmed it.
+    pub fn drive(&self) -> &Drive {
+        &self.drive
+    }
 }
 
 /// What the helper reports, one JSON object per line.
@@ -52,15 +107,21 @@ pub enum Progress {
 }
 
 /// The drive named in the plan, as it is now, if it is still the same one
-/// and still one that may be written.
-pub fn still_there(plan: &Plan) -> Result<Drive> {
+/// ([`Drive::same`]) and still one that may be written. Unmounting and
+/// opening a drive take the proof, so the helper can't reach a drive
+/// without this check.
+pub fn still_there(plan: &Plan) -> Result<Confirmed<Drive>> {
+    // The plan carries the drive as the person confirmed it in the window.
+    let reviewed = Reviewed::new(plan.drive.clone());
     let now = platform::drives()?
         .into_iter()
         .find(|d| d.name == plan.drive.name)
         .with_context(|| format!("{} is gone; was it unplugged?", plan.drive.label()))?;
-    ensure!(now.same(&plan.drive), "{} is no longer the drive you picked; nothing was written", plan.drive.name);
-    if let Some(why) = now.excluded(None, true) {
-        bail!("{} may not be written: it is {}", now.label(), why.reason());
+    let Ok(now) = reviewed.confirm(now) else {
+        bail!("{} is no longer the drive you picked; nothing was written", plan.drive.name);
+    };
+    if let Some(why) = now.target().excluded(None, true) {
+        bail!("{} may not be written: it is {}", now.target().label(), why.reason());
     }
     Ok(now)
 }
@@ -175,15 +236,16 @@ pub fn execute(
     touched: &mut bool,
 ) -> Result<Outcome> {
     report(Progress::Preparing);
-    let drive = still_there(plan)?;
+    let confirmed = still_there(plan)?;
     let mut image = File::open(&plan.image).with_context(|| format!("could not open {}", plan.image.display()))?;
     let len = image.metadata()?.len();
     ensure!(len > 0, "the image is empty");
-    platform::unmount(&drive)?;
-    let mut device = platform::open(&drive, cancelled)?;
+    platform::unmount(&confirmed)?;
+    let mut device = platform::open(&confirmed, cancelled)?;
+    let drive = confirmed.target();
     ensure!(device.bytes == drive.bytes, "{} reports {} bytes, not {}", drive.name, device.bytes, drive.bytes);
     // Opened: check once more that it is still the drive that was picked.
-    still_there(plan)?;
+    let _still = still_there(plan)?;
     let sector = device.sector;
     ensure!(
         round_up(len, sector) + TAIL <= device.bytes,
@@ -230,7 +292,7 @@ pub fn execute(
     ensure!(back.iter().all(|&b| b == 0), "the end of the drive was not cleared");
     drop(device);
 
-    Ok(match platform::eject(&drive) {
+    Ok(match platform::eject(drive) {
         Ok(()) => Outcome { ejected: true, note: None },
         Err(e) => Outcome { ejected: false, note: Some(format!("{e:#}")) },
     })

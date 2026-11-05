@@ -2,6 +2,7 @@
 //! helper, opening one for writing.
 
 use crate::drive::Drive;
+use aizome_typestate::Confirmed;
 use anyhow::Result;
 use std::fs::File;
 use std::path::Path;
@@ -48,15 +49,19 @@ pub fn image_drive(image: &Path) -> Option<String> {
     imp::image_drive(image)
 }
 
-pub(crate) fn unmount(drive: &Drive) -> Result<()> {
-    imp::unmount(drive)
+/// Unmounts the drive the plan names, as [`still_there`](crate::write::still_there)
+/// found it.
+pub(crate) fn unmount(drive: &Confirmed<Drive>) -> Result<()> {
+    imp::unmount(drive.target())
 }
 
-pub(crate) fn open(drive: &Drive, _cancelled: &dyn Fn() -> bool) -> Result<Device> {
+/// Opens the drive the plan names, as [`still_there`](crate::write::still_there)
+/// found it, for writing.
+pub(crate) fn open(drive: &Confirmed<Drive>, _cancelled: &dyn Fn() -> bool) -> Result<Device> {
     #[cfg(target_os = "macos")]
-    return imp::open(drive, _cancelled);
+    return imp::open(drive.target(), _cancelled);
     #[cfg(not(target_os = "macos"))]
-    return imp::open(drive);
+    return imp::open(drive.target());
 }
 
 /// Finish device writes before read-back verification. On macOS a raw disk

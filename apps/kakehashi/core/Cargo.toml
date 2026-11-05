@@ -8,6 +8,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+aizome-typestate.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

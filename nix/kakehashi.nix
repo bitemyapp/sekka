@@ -39,8 +39,10 @@ in
   package = pkgs.rustPlatform.buildRustPackage {
     pname = "kakehashi";
     version = "0.1.0";
+    # Sekka's paths, as the core's path dependency on Aizome's typestate
+    # crate names them; nothing else of Aizome's.
     src = lib.fileset.toSource {
-      root = source;
+      root = ../.;
       fileset = lib.fileset.unions [
         (source + "/Cargo.toml")
         (source + "/Cargo.lock")
@@ -48,8 +50,12 @@ in
         (source + "/helper")
         (source + "/app")
         (source + "/linux")
+        ../desktop/aizome/crates/aizome-typestate
       ];
     };
+    postUnpack = ''
+      sourceRoot="$sourceRoot/apps/kakehashi"
+    '';
     cargoLock.lockFile = source + "/Cargo.lock";
     nativeBuildInputs = [
       pkgs.pkg-config
