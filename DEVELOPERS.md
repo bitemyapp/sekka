@@ -3129,6 +3129,26 @@ helper appends one JSON object per line to the progress file, which it opens
 without following links and only while it has a single name; the window stops
 it by creating `PROGRESS.cancel`, which the helper checks between 8 MiB chunks.
 
+The window's side of a write is typestate in `core`, on Aizome's
+`aizome-typestate` crate, taken by path; the Nix package's source adds only
+that directory. `core::choice` lists the drives every two seconds while no
+write runs and keeps the chosen drive as the drive itself, compared with
+`Drive::same` at each listing, so a stick swapped for one that gets the same
+name (`sdb`, `disk4`) is no longer chosen. The "Erase …?" dialog describes a
+`ReviewedDrive`; OK finds that drive again in the current list, and only the
+`ConfirmedDrive` that yields makes a `Plan`. If the drive was unplugged or
+replaced, nothing is written and the window says why. `core::job` follows the
+helper: before it starts, a failure means nothing was written; once it has
+reported, its final report decides, and a helper that exits without one
+(killed, or an unexplained exit code) leaves the drive marked as partly
+written. Reports reach the job only through `ProgressFile`. The `compile_fail`
+doctests on `Plan::new`, `ConfirmedDrive`, `Running::exited`, `Failure` and
+`Report` show the mistakes these types rule out; `RUSTC_BOOTSTRAP=1 cargo test
+--doc -p kakehashi-core` checks their error codes. `app/repro_ktl_03.sh` and
+`app/repro_ktl_04.sh` run the window's real write worker and `elevate::run`
+against a fake `pkexec` in bubblewrap, for a helper killed mid-write and a
+stick swapped under the dialog; they never run the helper or open a device.
+
 On macOS the GUI first stages the selected image in that private temporary
 directory, on a worker thread. Administrator authorization alone does not
 grant macOS file-privacy access. The former AppleScript elevation path lost
