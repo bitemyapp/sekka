@@ -6,7 +6,8 @@
 //! make: `Confirm::new(state.identity(&block)?, brand)`. An identity holds
 //! what stays with a device, not only what another device can take over
 //! (an object path, a `/dev` name, a size): the drive it is on (its serial,
-//! its WWN, and when UDisks detected it and the medium in it) or the image a
+//! its WWN, the USB port it is in, and when UDisks detected it and the
+//! medium in it) or the image a
 //! loop device holds; a partition's place in its table and its UUID; and
 //! what is on it (its filesystem's type and UUID, or its partition table's
 //! partitions). Only [`DisksState::identity`] makes one, from the whole
@@ -42,7 +43,7 @@
 //!   tell the cards apart, and an operation held only to the disk's place
 //!   (making a partition, in free space checked again) goes ahead.
 
-use super::model::DisksState;
+use super::model::{BlockDevice, DisksState};
 use crate::error::{Error, Result};
 use aizome_typestate::{Confirmed, Reviewed, SameTarget};
 use std::marker::PhantomData;
@@ -52,7 +53,9 @@ use std::time::{Duration, Instant};
 pub const CONFIRMATION_LIFETIME: Duration = Duration::from_secs(600);
 
 /// What a confirmation holds its device to, besides being at the same path
-/// on the same drive (or image).
+/// on the same drive (or image), in the same USB port: every kind holds
+/// that, since another port means another stick, or this one moved while
+/// the person wasn't looking.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Holds {
     /// Its place: the same partition of the same table (number, start and
@@ -155,6 +158,9 @@ pub struct Identity {
     device: String,
     size: u64,
     medium: Medium,
+    /// The USB port the drive is in, as udev names it (`pci-0000:00:14.0-usb-0:2:1.0-scsi-0:0:0:0`),
+    /// when it is on USB and UDisks lists the link.
+    port: Option<String>,
     place: Option<Place>,
     contents: Contents,
 }
@@ -204,6 +210,10 @@ impl Identity {
         let place = self.path == fresh.path
             && self.device == fresh.device
             && self.medium == fresh.medium
+            // Another port is another stick, even one alike in every other
+            // way; compared only when both readings have one, as udev can drop
+            // and remake the link while it probes the disk again.
+            && self.port.as_ref().zip(fresh.port.as_ref()).is_none_or(|(seen, now)| seen == now)
             && self.place == fresh.place
             // A partition's size is what resizing changes; a whole device's
             // is part of what it is.
@@ -217,6 +227,25 @@ impl Identity {
 }
 
 impl DisksState {
+    /// The USB port the disk holding `block` is in: its whole disk's
+    /// `/dev/disk/by-path` link, when that is a USB one.
+    fn usb_port(&self, block: &BlockDevice) -> Option<String> {
+        let mut disk = block;
+        for _ in 0..8 {
+            let up =
+                disk.crypto_backing_device.as_deref().or_else(|| disk.partition.as_ref().map(|p| p.table.as_str()));
+            match up.and_then(|path| self.block(path)) {
+                Some(next) => disk = next,
+                None => break,
+            }
+        }
+        disk.symlinks
+            .iter()
+            .filter_map(|link| link.strip_prefix("/dev/disk/by-path/"))
+            .find(|name| name.contains("-usb-"))
+            .map(str::to_owned)
+    }
+
     /// The identity of the block device at `path` (an object path), as this
     /// state has it: where the person reviews the device, make the
     /// confirmation from this.
@@ -254,6 +283,7 @@ impl DisksState {
             device: b.device.clone(),
             size: b.size,
             medium,
+            port: self.usb_port(b),
             place,
             contents: Contents { id_type: b.id_type.clone(), id_uuid: b.id_uuid.clone(), table },
         })
@@ -509,6 +539,37 @@ mod tests {
         let confirm = || confirm::<NewPartitionTable>(first.identity("/b/sdb").unwrap());
         assert!(confirm().check(&first).is_ok());
         assert!(confirm().check(&copy).is_err(), "the copy is another stick");
+    }
+
+    #[test]
+    fn another_usb_port_is_another_stick() {
+        let port = |n: u8| format!("/dev/disk/by-path/pci-0000:00:14.0-usb-0:{n}:1.0-scsi-0:0:0:0");
+        let stick = |links: Vec<String>| {
+            let whole = BlockDevice {
+                path: "/b/sdb".into(),
+                device: "/dev/sdb".into(),
+                size: 1 << 30,
+                drive: Some(DRIVE.into()),
+                symlinks: links,
+                ..Default::default()
+            };
+            let part = BlockDevice {
+                partition: Some(Partition { table: "/b/sdb".into(), number: 1, ..Default::default() }),
+                drive: None,
+                ..block("aaaa")
+            };
+            on(stick(), vec![whole, part])
+        };
+        let seen = stick(vec![port(2), "/dev/disk/by-id/usb-Stick-0:0".into()]);
+        let flags = || confirm::<PartitionEntry>(seen.identity("/b/sdb1").unwrap());
+        // Every kind holds a device to its port, flags (held only to place)
+        // included.
+        assert!(flags().check(&stick(vec![port(3)])).is_err(), "another port");
+        assert!(flags().check(&stick(vec![port(2)])).is_ok(), "the same port");
+        // While udev probes the disk again it may list no link: no port to
+        // compare, so nothing is refused for it.
+        assert!(flags().check(&stick(Vec::new())).is_ok());
+        assert_eq!(seen.identity("/b/sdb1").unwrap().port.as_deref(), Some(&port(2)["/dev/disk/by-path/".len()..]));
     }
 
     #[test]
