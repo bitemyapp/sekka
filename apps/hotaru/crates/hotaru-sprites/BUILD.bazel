@@ -25,5 +25,5 @@ rust_library(
     rustc_env = {
         "CARGO_PKG_NAME": "hotaru-sprites",
     },
-    deps = ["@nix_native//:link_search"],
+    link_deps = ["@nix_native//:link_search"],
 )

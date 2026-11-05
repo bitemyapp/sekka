@@ -1,0 +1,390 @@
+#!/usr/bin/env python3
+"""Provision isolated NativeLink domains without touching existing services.
+
+init creates a private manifest; up/restart/stop/logs touch only its labelled
+containers. client defaults to server-enforced read-only credentials. Redirect
+secret client configuration into a mode-0600 file; never give CI the manifest.
+Trusted developers explicitly request client --access writer. Shared CI only
+reads trusted artifacts. A writable CI job instead needs its own init --domains
+ci --port UNUSED, up, and client --domain ci --access writer. Such a job gets
+separate tokens, network namespace, bounded tmpfs CAS/AC and workers; never
+reuse that namespace across unrelated jobs. Restart means correct cold misses.
+destroy --purge-state validates and removes only that owned job directory.
+
+Persistent developer caches have per-store byte LRU and seven-day age limits.
+These are retained-object bounds, not a hard quota on active trusted uploads.
+Untrusted job tmpfs quotas include incomplete uploads. Worker scratch and logs
+are independently bounded. resize uses the supported eviction configuration
+against the existing cache; it never deletes objects to simulate eviction.
+retain roots already-realized Nix closures, without evaluating source trees.
+
+Tunnel with: ssh -N -L 17841:127.0.0.1:17841 -L 17842:127.0.0.1:17842 HOST
+"""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import secrets
+import shlex
+import subprocess
+import tarfile
+import tempfile
+import urllib.request
+
+VERSION = "1.8.3"
+ARCHIVE_SHA256 = "1a6596c96f059d4e99f7352164321e1f1cdff435275667ad8489e83f7e2977c5"
+NGINX = "nginx@sha256:30f1c0d78e0ad60901648be663a710bdadf19e4c10ac6782c235200619158284"
+DOCKER = ["docker", "-H", "unix:///run/docker.sock"]
+LABEL = "computer.sekka.shared-build-service"
+
+
+def remote(m, *args, capture=False):
+    return subprocess.run(["ssh", m["host"], shlex.join(map(str, args))],
+                          check=True, text=True, capture_output=capture).stdout
+
+
+def docker(m, *args, capture=False):
+    return remote(m, *DOCKER, *args, capture=capture)
+
+
+def put(m, relative, content, mode=0o600):
+    with tempfile.TemporaryDirectory(prefix="sekka-service-") as tmp:
+        file = Path(tmp) / "payload"
+        file.write_text(content)
+        file.chmod(mode)
+        subprocess.run(["scp", "-q", str(file), f'{m["host"]}:{m["directory"]}/{relative}'], check=True)
+
+
+def filesystem(path, limit):
+    return {"filesystem": {"content_path": path + "/content", "temp_path": path + "/temp",
+                           "eviction_policy": {"max_bytes": limit, "max_seconds": 604800}}}
+
+
+def backend_config(m):
+    services = {kind: [{"instance_name": "sekka", field: store}]
+                for kind, field, store in [("cas", "cas_store", "cas"),
+                                           ("bytestream", "cas_store", "cas"), ("ac", "ac_store", "ac")]}
+    services["execution"] = [{"instance_name": "sekka", "cas_store": "cas", "scheduler": "scheduler"}]
+    services["capabilities"] = [{"instance_name": "sekka", "remote_execution": {"scheduler": "scheduler"}}]
+    return {"stores": [
+        {"name": "cas", "verify": {"verify_size": True, "verify_hash": True,
+                                   "backend": filesystem("/data/cas", m["cas_bytes"])}},
+        {"name": "ac", "completeness_checking": {"backend": filesystem("/data/ac", m["ac_bytes"]),
+                                                 "cas_store": {"ref_store": {"name": "cas"}}}}],
+        "schedulers": [{"name": "scheduler", "simple": {"supported_platform_properties": {
+            "OSFamily": "exact", "ISA": "exact", "cpu_count": "minimum"}}}],
+        "servers": [{"name": "reapi", "listener": {"http": {"socket_address": "127.0.0.1:50051"}},
+                     "services": services},
+                    {"name": "workers", "listener": {"http": {"socket_address": "127.0.0.1:50061"}},
+                     "services": {"worker_api": {"scheduler": "scheduler"}, "health": {}}}],
+        "global": {"max_open_files": 16384}}
+
+
+def worker_config(m):
+    def grpc(kind):
+        return {"grpc": {"instance_name": "sekka", "endpoints": [{"address": "grpc://127.0.0.1:50051"}],
+                         "store_type": kind}}
+    return {"stores": [{"name": "cas", "fast_slow": {"fast": filesystem("/scratch/cas", m["worker_cache_bytes"]),
+                                                       "slow": grpc("cas")}},
+                       {"name": "ac", **grpc("ac")}],
+            "workers": [{"local": {"worker_api_endpoint": {"uri": "grpc://127.0.0.1:50061"},
+                                    "cas_fast_slow_store": "cas", "upload_action_result": {"ac_store": "ac"},
+                                    "work_directory": "/scratch/work",
+                                    "max_inflight_tasks": m["jobs"], "max_action_timeout_s": 3600,
+                                    "max_concurrent_input_downloads": 64,
+                                    "max_captured_output_bytes": 1048576,
+                                    "orphan_sweep_interval_s": 60, "drain_on_shutdown": True,
+                                    "platform_properties": {"OSFamily": {"values": ["linux"]},
+                                                            "ISA": {"values": ["x86-64"]},
+                                                            "cpu_count": {"values": [str(m["jobs"])]}}}}],
+            "servers": [], "global": {"max_open_files": 16384}}
+
+
+def gateway_config(token, reader_token):
+    # Backend is namespace-loopback, not the host-accessible Docker bridge.
+    return '''worker_processes 2;
+pid /tmp/nginx.pid;
+error_log /dev/stderr notice;
+events { worker_connections 4096; }
+http {
+  map_hash_bucket_size 128;
+  access_log /dev/stdout;
+  client_body_temp_path /tmp/client;
+  proxy_temp_path /tmp/proxy;
+  fastcgi_temp_path /tmp/fastcgi;
+  uwsgi_temp_path /tmp/uwsgi;
+  scgi_temp_path /tmp/scgi;
+  map $http_authorization $access {
+    default none;
+    "Bearer WRITER_TOKEN" writer;
+    "Bearer READER_TOKEN" reader;
+  }
+  map "$access:$uri" $allowed {
+    default 0;
+    ~^writer: 1;
+    "reader:/build.bazel.remote.execution.v2.Capabilities/GetCapabilities" 1;
+    "reader:/build.bazel.remote.execution.v2.ActionCache/GetActionResult" 1;
+    "reader:/build.bazel.remote.execution.v2.ContentAddressableStorage/FindMissingBlobs" 1;
+    "reader:/build.bazel.remote.execution.v2.ContentAddressableStorage/BatchReadBlobs" 1;
+    "reader:/build.bazel.remote.execution.v2.ContentAddressableStorage/GetTree" 1;
+    "reader:/google.bytestream.ByteStream/Read" 1;
+  }
+  server {
+    listen 50050;
+    http2 on;
+    client_max_body_size 0;
+    location / {
+      if ($access = none) { return 401; }
+      if ($allowed = 0) { return 403; }
+      grpc_pass grpc://127.0.0.1:50051;
+      grpc_set_header Authorization "";
+      grpc_read_timeout 3600s;
+      grpc_send_timeout 3600s;
+    }
+  }
+}
+'''.replace("WRITER_TOKEN", token).replace("READER_TOKEN", reader_token)
+
+
+def name(m, domain, role):
+    return f'{m["name"]}-{domain}-{role}'
+
+
+def assert_owned(m, container):
+    found = docker(m, "inspect", "--format", '{{ index .Config.Labels "' + LABEL + '" }}', container, capture=True).strip()
+    if found != m["name"]:
+        raise SystemExit("Refusing unowned container " + container)
+
+
+def run_container(m, domain, role, *args):
+    container = name(m, domain, role)
+    existing = docker(m, "ps", "-a", "--filter", "name=^/" + container + "$", "--format", "{{.Names}}", capture=True).strip()
+    if existing:
+        assert_owned(m, container)
+        state = docker(m, "inspect", "--format", "{{.State.Status}}", container, capture=True).strip()
+        docker(m, "restart" if state == "restarting" else "start", container)
+        return
+    docker(m, "run", "-d", "--name", name(m, domain, role), "--label", LABEL + "=" + m["name"],
+           "--restart", "unless-stopped", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges",
+           "--pids-limit", "2048", "--log-driver=json-file", "--log-opt=max-size=10m", "--log-opt=max-file=3", *args)
+
+
+def init(args):
+    if args.manifest.exists():
+        raise SystemExit("Manifest already exists; refusing to overwrite credentials")
+    unique = "shared-build-service-" + secrets.token_hex(6)
+    m = {"schema": 1, "name": unique, "host": args.host,
+         "directory": "/home/callen/sekka-work/" + unique, "image": "sekka-nativelink:" + unique,
+         "cas_bytes": args.cas_bytes, "ac_bytes": args.ac_bytes, "jobs": args.jobs,
+         "scratch_bytes": args.scratch_bytes, "worker_cache_bytes": args.scratch_bytes // 4,
+         "domains": {d: {"port": args.port + i, "token": secrets.token_hex(32),
+                         "reader_token": secrets.token_hex(32)} for i, d in enumerate(args.domains)}}
+    # Untrusted writable jobs must not fill the host filesystem through active
+    # uploads outside the retained-object LRU. Their entire CAS/AC/temp area is
+    # a size-limited tmpfs and disappears on restart; a miss rebuilds correctly.
+    m["ephemeral_cache"] = args.domains == ["ci"]
+    m["backend_data_bytes"] = args.cas_bytes + args.ac_bytes + min(args.cas_bytes, 4 * 1024**3)
+    remote(m, "mkdir", "-m", "700", m["directory"])
+    remote(m, "mkdir", "-m", "700", m["directory"] + "/image")
+    m["uid"] = int(remote(m, "id", "-u", capture=True))
+    m["gid"] = int(remote(m, "id", "-g", capture=True))
+    args.manifest.parent.mkdir(parents=True, exist_ok=True)
+    with args.manifest.open("x") as f:
+        os.chmod(f.fileno(), 0o600)
+        json.dump(m, f, indent=2)
+    put(m, "owner.json", json.dumps({"name": unique, "schema": 1}))
+    with tempfile.TemporaryDirectory(prefix="sekka-nativelink-") as tmp:
+        archive = Path(tmp) / "nativelink.tar.gz"
+        urllib.request.urlretrieve(f"https://github.com/TraceMachina/nativelink/releases/download/v{VERSION}/nativelink-{VERSION}-x86_64-unknown-linux-musl.tar.gz", archive)
+        if hashlib.file_digest(archive.open("rb"), "sha256").hexdigest() != ARCHIVE_SHA256:
+            raise SystemExit("NativeLink archive checksum mismatch")
+        with tarfile.open(archive) as tar:
+            binary = next(x for x in tar.getmembers() if x.name.rsplit("/", 1)[-1] == "nativelink" and x.isfile())
+            payload = Path(tmp) / "nativelink"
+            payload.write_bytes(tar.extractfile(binary).read())
+            payload.chmod(0o755)
+        subprocess.run(["scp", "-q", str(payload), f'{m["host"]}:{m["directory"]}/image/nativelink'], check=True)
+    put(m, "image/Dockerfile", 'FROM scratch\nCOPY nativelink /bin/nativelink\nENTRYPOINT ["/bin/nativelink"]\n')
+    docker(m, "build", "-t", m["image"], m["directory"] + "/image")
+    docker(m, "pull", NGINX)
+    for d, settings in m["domains"].items():
+        remote(m, "mkdir", "-m", "700", m["directory"] + "/" + d)
+        remote(m, "mkdir", "-m", "700", m["directory"] + "/" + d + "/data")
+        put(m, d + "/backend.json", json.dumps(backend_config(m)), 0o644)
+        put(m, d + "/worker.json", json.dumps(worker_config(m)), 0o644)
+        put(m, d + "/nginx.conf", gateway_config(settings["token"], settings["reader_token"]), 0o644)
+    print(json.dumps({"manifest": str(args.manifest), "host": m["host"], "directory": m["directory"]}))
+
+
+def up(m):
+    for d, settings in m["domains"].items():
+        put(m, d + "/backend.json", json.dumps(backend_config(m)), 0o644)
+        put(m, d + "/worker.json", json.dumps(worker_config(m)), 0o644)
+        put(m, d + "/nginx.conf", gateway_config(settings["token"], settings["reader_token"]), 0o644)
+        base = m["directory"] + "/" + d
+        run_container(m, d, "gateway", "--user", "101:101", "--memory", "256m", "--cpus", "2",
+                      "--tmpfs", "/tmp:rw,nosuid,nodev,size=64m,uid=101,gid=101",
+                      "-p", f'127.0.0.1:{settings["port"]}:50050', "-v", base + "/nginx.conf:/etc/nginx/nginx.conf:ro",
+                      "--entrypoint", "nginx", NGINX, "-g", "daemon off;")
+        network = "container:" + name(m, d, "gateway")
+        if m.get("ephemeral_cache", False):
+            storage = ["--tmpfs", f'/data:rw,nosuid,nodev,size={m["backend_data_bytes"]},uid={m["uid"]},gid={m["gid"]},mode=0700']
+            memory = str(m["backend_data_bytes"] + 1024**3)
+        else:
+            storage = ["-v", base + "/data:/data:rw"]
+            memory = "8g"
+        run_container(m, d, "backend", "--network", network, "--user", f'{m["uid"]}:{m["gid"]}',
+                      "--memory", memory, "--cpus", "8", *storage,
+                      "-v", base + "/backend.json:/config.json:ro", "-e", "RUST_LOG=info", m["image"], "/config.json")
+        run_container(m, d, "worker", "--network", network, "--user", "30501:30501",
+                      "--memory", str(m["scratch_bytes"] + 8 * 1024**3), "--cpus", str(m["jobs"]),
+                      "--tmpfs", f'/scratch:rw,nosuid,nodev,size={m["scratch_bytes"]},uid=30501,gid=30501,mode=0700',
+                      "--tmpfs", "/tmp:rw,nosuid,nodev,size=1g,uid=30501,gid=30501,mode=1777",
+                      "-v", "/nix/store:/nix/store:ro", "-v", base + "/worker.json:/config.json:ro",
+                      "-e", "RUST_LOG=info", m["image"], "/config.json")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", type=Path, required=True)
+    sub = parser.add_subparsers(dest="command", required=True)
+    create = sub.add_parser("init")
+    create.add_argument("--host", default="wx-workstation")
+    create.add_argument("--port", type=int, default=17841)
+    create.add_argument("--domains", choices=("trusted", "ci"), nargs="+", default=["trusted", "ci"],
+                        help="Use --domains ci for a unique, disposable writable CI job")
+    create.add_argument("--jobs", type=int, default=8)
+    create.add_argument("--cas-bytes", type=int, default=64 * 1024**3)
+    create.add_argument("--ac-bytes", type=int, default=1024**3)
+    create.add_argument("--scratch-bytes", type=int, default=32 * 1024**3)
+    for command in ("up", "stop", "restart", "logs", "status", "issue-reader", "metrics"):
+        sub.add_parser(command)
+    destroy = sub.add_parser("destroy")
+    destroy.add_argument("--purge-state", action="store_true", help="Remove only the validated owned deployment directory after stopping containers")
+    retain = sub.add_parser("retain")
+    retain.add_argument("store_paths", nargs="+", help="Already-provisioned immutable toolchain/native store roots")
+    resize = sub.add_parser("resize")
+    resize.add_argument("--cas-bytes", type=int, required=True)
+    resize.add_argument("--ac-bytes", type=int, required=True)
+    client = sub.add_parser("client")
+    client.add_argument("--domain", choices=("trusted", "ci"), required=True)
+    client.add_argument("--format", choices=("bazel", "json"), default="json")
+    client.add_argument("--endpoint")
+    client.add_argument("--access", choices=("read-only", "writer"), default="read-only")
+    args = parser.parse_args()
+    if args.command == "init":
+        init(args)
+        return
+    if args.manifest.stat().st_mode & 0o077:
+        raise SystemExit("Credential manifest must be mode 0600")
+    m = json.loads(args.manifest.read_text())
+    if args.command == "restart":
+        for domain in m["domains"]:
+            for role in ("worker", "backend", "gateway"):
+                assert_owned(m, name(m, domain, role))
+            docker(m, "stop", "--timeout", "3600", name(m, domain, "worker"))
+            docker(m, "stop", "--timeout", "30", name(m, domain, "backend"))
+            docker(m, "restart", "--timeout", "30", name(m, domain, "gateway"))
+            docker(m, "start", name(m, domain, "backend"))
+            docker(m, "start", name(m, domain, "worker"))
+        return
+    if args.command == "resize":
+        if min(args.cas_bytes, args.ac_bytes) < 1:
+            raise SystemExit("Cache bounds must be positive")
+        if m.get("ephemeral_cache") and args.cas_bytes + args.ac_bytes > m["backend_data_bytes"]:
+            raise SystemExit("New cache budget exceeds the job's immutable tmpfs quota; provision a larger job instead")
+        m.update(cas_bytes=args.cas_bytes, ac_bytes=args.ac_bytes)
+        for domain in m["domains"]:
+            for role in ("worker", "backend"):
+                assert_owned(m, name(m, domain, role))
+                docker(m, "stop", "--timeout", "3600", name(m, domain, role))
+            put(m, domain + "/backend.json", json.dumps(backend_config(m)), 0o644)
+            put(m, domain + "/worker.json", json.dumps(worker_config(m)), 0o644)
+            for role in ("backend", "worker"):
+                docker(m, "start", name(m, domain, role))
+        args.manifest.write_text(json.dumps(m, indent=2) + "\n")
+        print(json.dumps({"deployment": m["name"], "cas_bytes": m["cas_bytes"], "ac_bytes": m["ac_bytes"]}))
+        return
+    if args.command == "metrics":
+        containers = [name(m, d, role) for d in m["domains"] for role in ("gateway", "backend", "worker")]
+        for container in containers:
+            assert_owned(m, container)
+        stats = docker(m, "stats", "--no-stream", "--format", "{{json .}}", *containers, capture=True)
+        allocated = {}
+        for domain in m["domains"]:
+            path = m["directory"] + "/" + domain + "/data"
+            allocated[domain] = int(remote(m, "du", "-s", "-B1", path, capture=True).split()[0])
+        print(json.dumps({"schema": 1, "deployment": m["name"], "host": m["host"],
+                          "configured_per_domain": {k: m[k] for k in ("cas_bytes", "ac_bytes", "scratch_bytes", "worker_cache_bytes")},
+                          "ephemeral_cache": m.get("ephemeral_cache", False),
+                          "backend_hard_bytes": m.get("backend_data_bytes") if m.get("ephemeral_cache") else None,
+                          "filesystem_allocated_bytes_not_extent_union": allocated,
+                          "containers": [json.loads(line) for line in stats.splitlines()]}, indent=2))
+        return
+    if args.command == "destroy" and args.purge_state:
+        expected = "/home/callen/sekka-work/" + m["name"]
+        suffix = m["name"].removeprefix("shared-build-service-")
+        if len(suffix) != 12 or any(c not in "0123456789abcdef" for c in suffix) or m["directory"] != expected:
+            raise SystemExit("Refusing non-owned deployment path")
+        if remote(m, "realpath", "-e", expected, capture=True).strip() != expected:
+            raise SystemExit("Refusing symlinked deployment directory")
+        owner = json.loads(remote(m, "cat", expected + "/owner.json", capture=True))
+        if owner != {"name": m["name"], "schema": 1}:
+            raise SystemExit("Deployment ownership marker mismatch")
+    if args.command == "issue-reader":
+        for d, settings in m["domains"].items():
+            settings.setdefault("reader_token", secrets.token_hex(32))
+            put(m, d + "/nginx.conf", gateway_config(settings["token"], settings["reader_token"]), 0o644)
+            assert_owned(m, name(m, d, "gateway"))
+            docker(m, "exec", name(m, d, "gateway"), "nginx", "-s", "reload")
+        args.manifest.write_text(json.dumps(m, indent=2) + "\n")
+        return
+    if args.command == "retain":
+        remote(m, "mkdir", "-p", m["directory"] + "/roots")
+        for path in args.store_paths:
+            if not path.startswith("/nix/store/") or "/" in path[len("/nix/store/"):] or ".." in path:
+                raise SystemExit("Expected a Nix store root, not a subpath: " + path)
+            # Requires a pre-realized closure. No flake/source evaluation and no
+            # import of unsigned arbitrary client outputs into the worker store.
+            remote(m, "nix-store", "--check-validity", path)
+            remote(m, "nix-store", "--realise", path, "--add-root",
+                   m["directory"] + "/roots/" + Path(path).name, "--indirect")
+        return
+    if args.command == "up":
+        up(m)
+    elif args.command == "client":
+        d = m["domains"][args.domain]
+        endpoint = args.endpoint or f'grpc://127.0.0.1:{d["port"]}'
+        token = d["token" if args.access == "writer" else "reader_token"]
+        if args.format == "bazel":
+            print(f'build --remote_cache={endpoint}\nbuild --remote_instance_name=sekka')
+            print('build "--remote_header=authorization=Bearer ' + token + '"')
+            if args.access == "read-only":
+                print("build --remote_upload_local_results=false")
+        else:
+            print(json.dumps({"endpoint": endpoint, "instance": "sekka", "authorization": "Bearer " + token,
+                              "access": args.access}))
+    else:
+        for domain in m["domains"]:
+            for role in ("worker", "backend", "gateway"):
+                container = name(m, domain, role)
+                if args.command == "destroy" and not docker(
+                    m, "ps", "-a", "--filter", "name=^/" + container + "$", "--format", "{{.Names}}", capture=True
+                ).strip():
+                    continue
+                assert_owned(m, container)
+                if args.command == "logs":
+                    docker(m, "logs", "--tail", "200", container)
+                elif args.command == "status":
+                    docker(m, "inspect", "--format", "{{.Name}} {{.State.Status}} {{.State.ExitCode}}", container)
+                elif args.command == "destroy":
+                    docker(m, "rm", "-f", container)
+                else:
+                    docker(m, "stop", "--timeout", "3600" if role == "worker" else "30", container)
+        if args.command == "destroy" and args.purge_state:
+            remote(m, "rm", "-rf", "--one-file-system", "--", m["directory"])
+
+
+if __name__ == "__main__":
+    main()

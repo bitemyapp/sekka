@@ -9,7 +9,12 @@ exports_files(["Cargo.toml"])
 
 filegroup(
     name = "files_icons_lucide",
-    srcs = glob(["icons/lucide/**"], exclude = ["BUILD.bazel"], allow_empty = True),
+    srcs = glob(["icons/lucide/**"], exclude = [
+        "BUILD",
+        "BUILD.bazel",
+        "BUCK",
+        "PACKAGE",
+    ], allow_empty = True),
 )
 
 filegroup(
@@ -29,7 +34,10 @@ cargo_build_script(
     pkg_name = "aizome-kit",
     version = "0.1.0",
     data = glob(["**"], exclude = [
+        "BUILD",
         "BUILD.bazel",
+        "BUCK",
+        "PACKAGE",
         "target/**",
     ], allow_empty = True),
 )
@@ -58,8 +66,8 @@ rust_library(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -117,9 +125,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -158,9 +166,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -199,9 +207,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -240,9 +248,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -281,9 +289,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -322,9 +330,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -363,9 +371,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -404,9 +412,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -445,9 +453,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -486,9 +494,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -527,9 +535,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -568,9 +576,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -609,9 +617,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -650,9 +658,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -691,9 +699,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -732,9 +740,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -773,9 +781,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -814,9 +822,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -855,9 +863,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -896,9 +904,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -937,9 +945,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -978,9 +986,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -1019,9 +1027,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -1060,9 +1068,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -1101,9 +1109,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -1142,9 +1150,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -1183,9 +1191,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -1224,9 +1232,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -1265,9 +1273,9 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -1306,7 +1314,7 @@ rust_test(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
         "@aizome_crates//:unicode-segmentation-1.13.3",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_kit",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )

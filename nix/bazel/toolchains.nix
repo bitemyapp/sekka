@@ -127,6 +127,14 @@ rec {
     pathsToLink = [ "/bin" ];
     postBuild = ''
       rm -f $out/bin/ld.gold $out/bin/*-ld.gold
+      # buildEnv also includes the underlying compiler for its tools. Ensure
+      # C++ aliases never win a collision against stdenv's wrapped compiler:
+      # the wrapper supplies the libc startup objects and Nix linker flags.
+      for tool in cc c++ gcc g++ cpp; do
+        if test -e ${pkgs.stdenv.cc}/bin/$tool; then
+          ln -sfn ${pkgs.stdenv.cc}/bin/$tool $out/bin/$tool
+        fi
+      done
     '';
     passthru = {
       inherit (pkgs.stdenv.cc) isClang targetPrefix;
@@ -152,6 +160,7 @@ rec {
     extraOutputsToInstall = [ "lib" ];
     ignoreCollisions = true;
     postBuild = ''
+      touch $out/REPO.bazel
       cat > $out/BUILD.bazel <<'EOF'
       ${rustBuild}
       EOF
@@ -173,6 +182,7 @@ rec {
     installPhase = ''
       runHook preInstall
       mkdir -p $out/bin
+      touch $out/REPO.bazel
       ln -s ${lib.getExe pkgs.pkg-config-unwrapped} $out/bin/pkg-config
       # PATH for build scripts that run tools by name (rustc, cc, cmake,
       # glslc), and the libraries' directories for the ones that link test
@@ -267,6 +277,10 @@ rec {
         # stdenv's tools too: Bazel's test runner (generate-xml.sh) shares it.
         PATH = lib.makeBinPath [
           pkgs.dbus
+          pkgs.systemd
+          pkgs.wl-clipboard
+          pkgs.dconf
+          pkgs.ffmpeg
           pkgs.bash
           pkgs.coreutils
           pkgs.findutils
@@ -279,11 +293,15 @@ rec {
     in
     pkgs.runCommand "sekka-bazel-test-env" { } ''
       mkdir $out
+      touch $out/REPO.bazel
+      cat > $out/env.json <<'EOF'
+      ${builtins.toJSON variables}
+      EOF
       {
         echo '"""Aizome'"'"'s test environment, from nix/bazel/toolchains.nix."""'
         echo
         echo 'TEST_ENV = ${builtins.toJSON variables}'
       } > $out/env.bzl
-      echo 'exports_files(["env.bzl"])' > $out/BUILD.bazel
+      echo 'exports_files(["env.bzl", "env.json"])' > $out/BUILD.bazel
     '';
 }

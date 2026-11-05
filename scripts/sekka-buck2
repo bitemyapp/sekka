@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Cache a rooted executable closure, never a mutable shell-environment snapshot.
+set -euo pipefail
+umask 077
+root=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$root"
+cache=${SEKKA_BUCK2_CLIENT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/sekka/buck2-clients}
+mkdir -p "$cache"
+inputs=(
+  flake.lock nix/bazel/nixpkgs.nix nix/buck2/default.nix
+  nix/bazel/toolchains.nix nix/bazel/aizome-inputs.nix
+  nix/libsecret-dh-padding.nix nix/patches/libsecret-gnutls-dh-padding.patch
+  desktop/aizome/nix/fonts.nix desktop/aizome/nix/aizome-fonts.nix
+  desktop/aizome/nix/hotaru-fonts.nix desktop/aizome/Cargo.lock
+  desktop/aizome/nix/cargo-output-hashes.nix
+  build/buck2/client.py build/buck2/generate.py build/buck2/action.py
+)
+fingerprint() {
+  sha256sum "${inputs[@]}" | sha256sum | cut -d ' ' -f 1
+}
+key=$(fingerprint)
+client="$cache/$key"
+# Independent worktrees may initialize the same client simultaneously.
+exec 9>"$client.lock"
+flock 9
+if [[ ! -x "$client/bin/sekka-buck2" ]]; then
+  temporary="$client.$$"
+  trap 'rm -f -- "$temporary"' EXIT
+  nix-build --no-build-output --out-link "$temporary" --expr '
+    let pkgs = import ./nix/bazel/nixpkgs.nix {};
+    in (import ./nix/buck2 { inherit pkgs; }).client
+  ' >/dev/null
+  if [[ "$(fingerprint)" != "$key" ]]; then
+    echo 'Buck2 client inputs changed during realization; run the command again.' >&2
+    exit 1
+  fi
+  # Keep the temporary GC root alive until the final indirect root exists.
+  nix-store --add-root "$client" --indirect --realise "$(readlink -f "$temporary")" >/dev/null
+  rm -f -- "$temporary"
+  trap - EXIT
+fi
+exec 9>&-
+exec "$client/bin/sekka-buck2" "$@"

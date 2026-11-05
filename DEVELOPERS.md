@@ -234,6 +234,18 @@ files are out of date. The plan's
 [implementation status](docs/bazel-build-plan.md#implementation-status) lists
 what is done, what differs from the Nix package, and what comes next.
 
+Build metadata is not a Cargo package input. The shared source filter excludes
+generated Bazel/Buck files; real Rust sources and Cargo manifests still change
+the Nix source identity. Small probes name the files they actually compile
+rather than copying an entire desktop checkout. `checks.build-input-stability`
+exercises those boundaries with a private Nix store inside the build sandbox,
+including independent paths, unrelated metadata, meaningful source edits and
+reverts. Run it with:
+
+```sh
+nix build .#checks.x86_64-linux.build-input-stability --no-update-lock-file
+```
+
 Sekka's PipeWire service uses `sekka-pipewire-daemon`, with the X11 bell
 disconnect fix in `nix/patches/pipewire-x11-bell-disconnect.patch`. Xlib can
 report a lost display more than once during logout. The fix makes removal of

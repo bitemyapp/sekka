@@ -28,8 +28,8 @@ rust_library(
     deps = [
         "//desktop/aizome/crates/aizome-kit:aizome_kit",
         "//desktop/aizome/crates/aizome-theme:aizome_theme",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(

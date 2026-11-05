@@ -11,3 +11,6 @@ __pycache__/
 # are this machine's (docs/bazel-build-plan.md).
 /bazel-*
 /rust-project.json
+# Cargo graph probing and independent Buck2 daemon/output state.
+/.buckal/
+/buck-out/

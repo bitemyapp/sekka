@@ -8,7 +8,12 @@ exports_files(["Cargo.toml"])
 
 filegroup(
     name = "files_tests_fixtures",
-    srcs = glob(["tests/fixtures/**"], exclude = ["BUILD.bazel"], allow_empty = True),
+    srcs = glob(["tests/fixtures/**"], exclude = [
+        "BUILD",
+        "BUILD.bazel",
+        "BUCK",
+        "PACKAGE",
+    ], allow_empty = True),
 )
 
 filegroup(
@@ -36,8 +41,8 @@ rust_library(
         "@aizome_crates//:libc-0.2.191",
         "@aizome_crates//:log-0.4.34",
         "@aizome_crates//:pipewire-0.10.1",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -57,6 +62,7 @@ rust_test(
         "TZDIR": "$(TEST_TZDIR)",
     },
     toolchains = ["//build/bazel:test_env"],
+    data = ["tests/fixtures/song.flac"],
 )
 
 rust_test(
@@ -87,7 +93,7 @@ rust_test(
         "@aizome_crates//:libc-0.2.191",
         "@aizome_crates//:log-0.4.34",
         "@aizome_crates//:pipewire-0.10.1",
-        "@nix_native//:link_search",
         ":aizome_media",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )

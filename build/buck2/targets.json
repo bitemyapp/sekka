@@ -1,0 +1,4806 @@
+{
+  "dev": [
+    {
+      "filename": "libaizome_annai-38bd6d6cc78b3b2b0cd9.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/annai:aizome_annai-build-dev",
+      "mode": "build",
+      "package": "aizome-annai",
+      "target": "aizome_annai",
+      "unit_label": "//build/buck2/graph/dev:38bd6d6cc78b3b2b0cd9"
+    },
+    {
+      "filename": "aizome_annai-dcecd922988e12401951",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/annai:aizome-annai-build-dev",
+      "mode": "build",
+      "package": "aizome-annai",
+      "target": "aizome-annai",
+      "unit_label": "//build/buck2/graph/dev:dcecd922988e12401951"
+    },
+    {
+      "filename": "libaizome_apps-3be594349eec8740c06f.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-apps:aizome_apps-build-dev",
+      "mode": "build",
+      "package": "aizome-apps",
+      "target": "aizome_apps",
+      "unit_label": "//build/buck2/graph/dev:3be594349eec8740c06f"
+    },
+    {
+      "filename": "libaizome_awake-5d38977b6e37d037c789.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-awake:aizome_awake-build-dev",
+      "mode": "build",
+      "package": "aizome-awake",
+      "target": "aizome_awake",
+      "unit_label": "//build/buck2/graph/dev:5d38977b6e37d037c789"
+    },
+    {
+      "filename": "aizome_awake-340fba270e489ebdd96e",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-awake:aizome-awake-build-dev",
+      "mode": "build",
+      "package": "aizome-awake",
+      "target": "aizome-awake",
+      "unit_label": "//build/buck2/graph/dev:340fba270e489ebdd96e"
+    },
+    {
+      "filename": "aizome-7bdee634ba6db80f30bd",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:aizome-build-dev",
+      "mode": "build",
+      "package": "aizome-comp",
+      "target": "aizome",
+      "unit_label": "//build/buck2/graph/dev:7bdee634ba6db80f30bd"
+    },
+    {
+      "filename": "libaizome_comp_core-6b889f06edf75717bf7f.so",
+      "kind": [
+        "dylib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp-core:aizome_comp_core-build-dev",
+      "mode": "build",
+      "package": "aizome-comp-core",
+      "target": "aizome_comp_core",
+      "unit_label": "//build/buck2/graph/dev:6b889f06edf75717bf7f"
+    },
+    {
+      "filename": "libaizome_comp_logic-b7c96b8bda18e2674dc0.so",
+      "kind": [
+        "dylib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp-logic:aizome_comp_logic-build-dev",
+      "mode": "build",
+      "package": "aizome-comp-logic",
+      "target": "aizome_comp_logic",
+      "unit_label": "//build/buck2/graph/dev:b7c96b8bda18e2674dc0"
+    },
+    {
+      "filename": "libaizome_config-b47605824d122da094f0.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-config:aizome_config-build-dev",
+      "mode": "build",
+      "package": "aizome-config",
+      "target": "aizome_config",
+      "unit_label": "//build/buck2/graph/dev:b47605824d122da094f0"
+    },
+    {
+      "filename": "libaizome_face-e385afd596c786c7a62d.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-face:aizome_face-build-dev",
+      "mode": "build",
+      "package": "aizome-face",
+      "target": "aizome_face",
+      "unit_label": "//build/buck2/graph/dev:e385afd596c786c7a62d"
+    },
+    {
+      "filename": "libaizome_fusen-ee4e7f3b3d4074dff83e.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/fusen:aizome_fusen-build-dev",
+      "mode": "build",
+      "package": "aizome-fusen",
+      "target": "aizome_fusen",
+      "unit_label": "//build/buck2/graph/dev:ee4e7f3b3d4074dff83e"
+    },
+    {
+      "filename": "aizome_fusen-7ac157f493267447569e",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/fusen:aizome-fusen-build-dev",
+      "mode": "build",
+      "package": "aizome-fusen",
+      "target": "aizome-fusen",
+      "unit_label": "//build/buck2/graph/dev:7ac157f493267447569e"
+    },
+    {
+      "filename": "libaizome_greeter-586591b618b68ef0c377.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-greeter:aizome_greeter-build-dev",
+      "mode": "build",
+      "package": "aizome-greeter",
+      "target": "aizome_greeter",
+      "unit_label": "//build/buck2/graph/dev:586591b618b68ef0c377"
+    },
+    {
+      "filename": "aizome_greeter-4f3fc83f0ac91af68976",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-greeter:aizome-greeter-build-dev",
+      "mode": "build",
+      "package": "aizome-greeter",
+      "target": "aizome-greeter",
+      "unit_label": "//build/buck2/graph/dev:4f3fc83f0ac91af68976"
+    },
+    {
+      "filename": "libhako-e19391849f93dcabcaae.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/hako:hako-build-dev",
+      "mode": "build",
+      "package": "aizome-hako",
+      "target": "hako",
+      "unit_label": "//build/buck2/graph/dev:e19391849f93dcabcaae"
+    },
+    {
+      "filename": "aizome_hako-dfbfa7a737d9016affb2",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/hako:aizome-hako-build-dev",
+      "mode": "build",
+      "package": "aizome-hako",
+      "target": "aizome-hako",
+      "unit_label": "//build/buck2/graph/dev:dfbfa7a737d9016affb2"
+    },
+    {
+      "filename": "libaizome_hotaru-444b0ba998c769cec8ef.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/hotaru:aizome_hotaru-build-dev",
+      "mode": "build",
+      "package": "aizome-hotaru",
+      "target": "aizome_hotaru",
+      "unit_label": "//build/buck2/graph/dev:444b0ba998c769cec8ef"
+    },
+    {
+      "filename": "aizome_hotaru-c7a03414e8e8fc0c50a2",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/hotaru:aizome-hotaru-build-dev",
+      "mode": "build",
+      "package": "aizome-hotaru",
+      "target": "aizome-hotaru",
+      "unit_label": "//build/buck2/graph/dev:c7a03414e8e8fc0c50a2"
+    },
+    {
+      "filename": "libaizome_ipc-a120ed0f9a355ec21abf.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizome_ipc-build-dev",
+      "mode": "build",
+      "package": "aizome-ipc",
+      "target": "aizome_ipc",
+      "unit_label": "//build/buck2/graph/dev:a120ed0f9a355ec21abf"
+    },
+    {
+      "filename": "aizome_dev-afacd134af29f2eda388",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizome-dev-build-dev",
+      "mode": "build",
+      "package": "aizome-ipc",
+      "target": "aizome-dev",
+      "unit_label": "//build/buck2/graph/dev:afacd134af29f2eda388"
+    },
+    {
+      "filename": "aizome_share_picker-e503c4660de5a1767a83",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizome-share-picker-build-dev",
+      "mode": "build",
+      "package": "aizome-ipc",
+      "target": "aizome-share-picker",
+      "unit_label": "//build/buck2/graph/dev:e503c4660de5a1767a83"
+    },
+    {
+      "filename": "aizomectl-e191e190487d2011e34a",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizomectl-build-dev",
+      "mode": "build",
+      "package": "aizome-ipc",
+      "target": "aizomectl",
+      "unit_label": "//build/buck2/graph/dev:e191e190487d2011e34a"
+    },
+    {
+      "filename": "libaizome_kit-3cbda5872ea46bd22b57.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:aizome_kit-build-dev",
+      "mode": "build",
+      "package": "aizome-kit",
+      "target": "aizome_kit",
+      "unit_label": "//build/buck2/graph/dev:3cbda5872ea46bd22b57"
+    },
+    {
+      "filename": "libkoe-d1e47fbd5323abcdb9ab.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/koe:koe-build-dev",
+      "mode": "build",
+      "package": "aizome-koe",
+      "target": "koe",
+      "unit_label": "//build/buck2/graph/dev:d1e47fbd5323abcdb9ab"
+    },
+    {
+      "filename": "aizome_koe-04ab7fe72a7646c4c478",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/koe:aizome-koe-build-dev",
+      "mode": "build",
+      "package": "aizome-koe",
+      "target": "aizome-koe",
+      "unit_label": "//build/buck2/graph/dev:04ab7fe72a7646c4c478"
+    },
+    {
+      "filename": "libkoyomi-f7d64200370c29e2dff3.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/koyomi:koyomi-build-dev",
+      "mode": "build",
+      "package": "aizome-koyomi",
+      "target": "koyomi",
+      "unit_label": "//build/buck2/graph/dev:f7d64200370c29e2dff3"
+    },
+    {
+      "filename": "aizome_koyomi-e368eb112230d90183f8",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/koyomi:aizome-koyomi-build-dev",
+      "mode": "build",
+      "package": "aizome-koyomi",
+      "target": "aizome-koyomi",
+      "unit_label": "//build/buck2/graph/dev:e368eb112230d90183f8"
+    },
+    {
+      "filename": "libkura-fd03605a8a3b50b776d7.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/kura:kura-build-dev",
+      "mode": "build",
+      "package": "aizome-kura",
+      "target": "kura",
+      "unit_label": "//build/buck2/graph/dev:fd03605a8a3b50b776d7"
+    },
+    {
+      "filename": "aizome_kura-98ed9f96b5a3b78c7df6",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/kura:aizome-kura-build-dev",
+      "mode": "build",
+      "package": "aizome-kura",
+      "target": "aizome-kura",
+      "unit_label": "//build/buck2/graph/dev:98ed9f96b5a3b78c7df6"
+    },
+    {
+      "filename": "libaizome_media-a018180887752c95ce2d.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-media:aizome_media-build-dev",
+      "mode": "build",
+      "package": "aizome-media",
+      "target": "aizome_media",
+      "unit_label": "//build/buck2/graph/dev:a018180887752c95ce2d"
+    },
+    {
+      "filename": "libmyaku-0c83405d47060a5436b8.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/myaku:myaku-build-dev",
+      "mode": "build",
+      "package": "aizome-myaku",
+      "target": "myaku",
+      "unit_label": "//build/buck2/graph/dev:0c83405d47060a5436b8"
+    },
+    {
+      "filename": "aizome_myaku-d65f7cc83afb18976e82",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/myaku:aizome-myaku-build-dev",
+      "mode": "build",
+      "package": "aizome-myaku",
+      "target": "aizome-myaku",
+      "unit_label": "//build/buck2/graph/dev:d65f7cc83afb18976e82"
+    },
+    {
+      "filename": "libaizome_network_agent-beca8d315a2874dffa15.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-network-agent:aizome_network_agent-build-dev",
+      "mode": "build",
+      "package": "aizome-network-agent",
+      "target": "aizome_network_agent",
+      "unit_label": "//build/buck2/graph/dev:beca8d315a2874dffa15"
+    },
+    {
+      "filename": "aizome_network_agent-75d9dc85e680a08fdadc",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-network-agent:aizome-network-agent-build-dev",
+      "mode": "build",
+      "package": "aizome-network-agent",
+      "target": "aizome-network-agent",
+      "unit_label": "//build/buck2/graph/dev:75d9dc85e680a08fdadc"
+    },
+    {
+      "filename": "libnisshi-6a91c38ff8129a1af935.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:nisshi-build-dev",
+      "mode": "build",
+      "package": "aizome-nisshi",
+      "target": "nisshi",
+      "unit_label": "//build/buck2/graph/dev:6a91c38ff8129a1af935"
+    },
+    {
+      "filename": "aizome_nisshi-31c1a950739fcd157de1",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:aizome-nisshi-build-dev",
+      "mode": "build",
+      "package": "aizome-nisshi",
+      "target": "aizome-nisshi",
+      "unit_label": "//build/buck2/graph/dev:31c1a950739fcd157de1"
+    },
+    {
+      "filename": "aizome_nisshi_helper-eab64685f4c52af30ae3",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:aizome-nisshi-helper-build-dev",
+      "mode": "build",
+      "package": "aizome-nisshi",
+      "target": "aizome-nisshi-helper",
+      "unit_label": "//build/buck2/graph/dev:eab64685f4c52af30ae3"
+    },
+    {
+      "filename": "libaizome_portal-3c8bd079de525c458c89.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-portal:aizome_portal-build-dev",
+      "mode": "build",
+      "package": "aizome-portal",
+      "target": "aizome_portal",
+      "unit_label": "//build/buck2/graph/dev:3c8bd079de525c458c89"
+    },
+    {
+      "filename": "aizome_portal-00332b61ebad8c921b9f",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-portal:aizome-portal-build-dev",
+      "mode": "build",
+      "package": "aizome-portal",
+      "target": "aizome-portal",
+      "unit_label": "//build/buck2/graph/dev:00332b61ebad8c921b9f"
+    },
+    {
+      "filename": "aizome_power_meter-41fb3bdf61f6bb7c3c40",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-power-meter:aizome-power-meter-build-dev",
+      "mode": "build",
+      "package": "aizome-power-meter",
+      "target": "aizome-power-meter",
+      "unit_label": "//build/buck2/graph/dev:41fb3bdf61f6bb7c3c40"
+    },
+    {
+      "filename": "libaizome_search-9a9422fdffa0c9c8fc1d.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-search:aizome_search-build-dev",
+      "mode": "build",
+      "package": "aizome-search",
+      "target": "aizome_search",
+      "unit_label": "//build/buck2/graph/dev:9a9422fdffa0c9c8fc1d"
+    },
+    {
+      "filename": "libsettei-3f575bfb22797575c1ef.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/settei:settei-build-dev",
+      "mode": "build",
+      "package": "aizome-settei",
+      "target": "settei",
+      "unit_label": "//build/buck2/graph/dev:3f575bfb22797575c1ef"
+    },
+    {
+      "filename": "aizome_settei-b2044b96eacf8fa86121",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/settei:aizome-settei-build-dev",
+      "mode": "build",
+      "package": "aizome-settei",
+      "target": "aizome-settei",
+      "unit_label": "//build/buck2/graph/dev:b2044b96eacf8fa86121"
+    },
+    {
+      "filename": "libaizome_shashin-28535ce4a25a6b5b369f.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/shashin:aizome_shashin-build-dev",
+      "mode": "build",
+      "package": "aizome-shashin",
+      "target": "aizome_shashin",
+      "unit_label": "//build/buck2/graph/dev:28535ce4a25a6b5b369f"
+    },
+    {
+      "filename": "aizome_shashin-7653fc2cd2eeb3d0ed7d",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/shashin:aizome-shashin-build-dev",
+      "mode": "build",
+      "package": "aizome-shashin",
+      "target": "aizome-shashin",
+      "unit_label": "//build/buck2/graph/dev:7653fc2cd2eeb3d0ed7d"
+    },
+    {
+      "filename": "libaizome_shell-3886d864e554627887f9.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:aizome_shell-build-dev",
+      "mode": "build",
+      "package": "aizome-shell",
+      "target": "aizome_shell",
+      "unit_label": "//build/buck2/graph/dev:3886d864e554627887f9"
+    },
+    {
+      "filename": "aizome_shell-8dac20d020171aeb379f",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:aizome-shell-build-dev",
+      "mode": "build",
+      "package": "aizome-shell",
+      "target": "aizome-shell",
+      "unit_label": "//build/buck2/graph/dev:8dac20d020171aeb379f"
+    },
+    {
+      "filename": "libaizome_shell_proto-cd9e56d5408f6adfbea1.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell-proto:aizome_shell_proto-build-dev",
+      "mode": "build",
+      "package": "aizome-shell-proto",
+      "target": "aizome_shell_proto",
+      "unit_label": "//build/buck2/graph/dev:cd9e56d5408f6adfbea1"
+    },
+    {
+      "filename": "libaizome_shiori-945d25ee5577225e792f.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/shiori:aizome_shiori-build-dev",
+      "mode": "build",
+      "package": "aizome-shiori",
+      "target": "aizome_shiori",
+      "unit_label": "//build/buck2/graph/dev:945d25ee5577225e792f"
+    },
+    {
+      "filename": "aizome_shiori-f997b88ebd976eae7269",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/shiori:aizome-shiori-build-dev",
+      "mode": "build",
+      "package": "aizome-shiori",
+      "target": "aizome-shiori",
+      "unit_label": "//build/buck2/graph/dev:f997b88ebd976eae7269"
+    },
+    {
+      "filename": "libaizome_soroban-0f2652e1830aec824492.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/soroban:aizome_soroban-build-dev",
+      "mode": "build",
+      "package": "aizome-soroban",
+      "target": "aizome_soroban",
+      "unit_label": "//build/buck2/graph/dev:0f2652e1830aec824492"
+    },
+    {
+      "filename": "aizome_soroban-48ea13ef22cccce1c9e1",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/soroban:aizome-soroban-build-dev",
+      "mode": "build",
+      "package": "aizome-soroban",
+      "target": "aizome-soroban",
+      "unit_label": "//build/buck2/graph/dev:48ea13ef22cccce1c9e1"
+    },
+    {
+      "filename": "libaizome_sumi-28afb4ddaeab26f96dd4.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/sumi:aizome_sumi-build-dev",
+      "mode": "build",
+      "package": "aizome-sumi",
+      "target": "aizome_sumi",
+      "unit_label": "//build/buck2/graph/dev:28afb4ddaeab26f96dd4"
+    },
+    {
+      "filename": "aizome_sumi-a7f681d2f1056032b376",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/sumi:aizome-sumi-build-dev",
+      "mode": "build",
+      "package": "aizome-sumi",
+      "target": "aizome-sumi",
+      "unit_label": "//build/buck2/graph/dev:a7f681d2f1056032b376"
+    },
+    {
+      "filename": "libaizome_sys-83ea7072f7b4aaaf7ebf.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:aizome_sys-build-dev",
+      "mode": "build",
+      "package": "aizome-sys",
+      "target": "aizome_sys",
+      "unit_label": "//build/buck2/graph/dev:83ea7072f7b4aaaf7ebf"
+    },
+    {
+      "filename": "libtansu-3cd580d40f040da83a10.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/tansu:tansu-build-dev",
+      "mode": "build",
+      "package": "aizome-tansu",
+      "target": "tansu",
+      "unit_label": "//build/buck2/graph/dev:3cd580d40f040da83a10"
+    },
+    {
+      "filename": "aizome_tansu-bea4e5352a2b30c3c5ec",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/tansu:aizome-tansu-build-dev",
+      "mode": "build",
+      "package": "aizome-tansu",
+      "target": "aizome-tansu",
+      "unit_label": "//build/buck2/graph/dev:bea4e5352a2b30c3c5ec"
+    },
+    {
+      "filename": "libaizome_tenki-1c226ae0e209e44945cd.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/tenki:aizome_tenki-build-dev",
+      "mode": "build",
+      "package": "aizome-tenki",
+      "target": "aizome_tenki",
+      "unit_label": "//build/buck2/graph/dev:1c226ae0e209e44945cd"
+    },
+    {
+      "filename": "aizome_tenki-a9e611458d281b746df7",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/tenki:aizome-tenki-build-dev",
+      "mode": "build",
+      "package": "aizome-tenki",
+      "target": "aizome-tenki",
+      "unit_label": "//build/buck2/graph/dev:a9e611458d281b746df7"
+    },
+    {
+      "filename": "libaizome_theme-f411d2e0927febe131a9.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-theme:aizome_theme-build-dev",
+      "mode": "build",
+      "package": "aizome-theme",
+      "target": "aizome_theme",
+      "unit_label": "//build/buck2/graph/dev:f411d2e0927febe131a9"
+    },
+    {
+      "filename": "libaizome_tokei-f8c01b995230fa1c08bf.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/tokei:aizome_tokei-build-dev",
+      "mode": "build",
+      "package": "aizome-tokei",
+      "target": "aizome_tokei",
+      "unit_label": "//build/buck2/graph/dev:f8c01b995230fa1c08bf"
+    },
+    {
+      "filename": "aizome_tokei-e9bdddc4097119e343e7",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/tokei:aizome-tokei-build-dev",
+      "mode": "build",
+      "package": "aizome-tokei",
+      "target": "aizome-tokei",
+      "unit_label": "//build/buck2/graph/dev:e9bdddc4097119e343e7"
+    },
+    {
+      "filename": "libaizome_utsushi-246beb4799a4f3b8cad9.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/utsushi:aizome_utsushi-build-dev",
+      "mode": "build",
+      "package": "aizome-utsushi",
+      "target": "aizome_utsushi",
+      "unit_label": "//build/buck2/graph/dev:246beb4799a4f3b8cad9"
+    },
+    {
+      "filename": "aizome_utsushi-bf613a730ed8325297cf",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/utsushi:aizome-utsushi-build-dev",
+      "mode": "build",
+      "package": "aizome-utsushi",
+      "target": "aizome-utsushi",
+      "unit_label": "//build/buck2/graph/dev:bf613a730ed8325297cf"
+    },
+    {
+      "filename": "libaizome_yukimi-7f12fcc4a54d23afed1c.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/yukimi:aizome_yukimi-build-dev",
+      "mode": "build",
+      "package": "aizome-yukimi",
+      "target": "aizome_yukimi",
+      "unit_label": "//build/buck2/graph/dev:7f12fcc4a54d23afed1c"
+    },
+    {
+      "filename": "aizome_yukimi-a6d2dfd7486a50931941",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/yukimi:aizome-yukimi-build-dev",
+      "mode": "build",
+      "package": "aizome-yukimi",
+      "target": "aizome-yukimi",
+      "unit_label": "//build/buck2/graph/dev:a6d2dfd7486a50931941"
+    },
+    {
+      "filename": "libhotaru_link_regex-600a44e885cbc605f5af.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/hotaru-link-regex:hotaru_link_regex-build-dev",
+      "mode": "build",
+      "package": "hotaru-link-regex",
+      "target": "hotaru_link_regex",
+      "unit_label": "//build/buck2/graph/dev:600a44e885cbc605f5af"
+    }
+  ],
+  "release": [
+    {
+      "filename": "libaizome_annai-0dd21969903ed159e2ba.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/annai:aizome_annai-build-release",
+      "mode": "build",
+      "package": "aizome-annai",
+      "target": "aizome_annai",
+      "unit_label": "//build/buck2/graph/release:0dd21969903ed159e2ba"
+    },
+    {
+      "filename": "aizome_annai-6656e6f28adee4923f87",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/annai:aizome-annai-build-release",
+      "mode": "build",
+      "package": "aizome-annai",
+      "target": "aizome-annai",
+      "unit_label": "//build/buck2/graph/release:6656e6f28adee4923f87"
+    },
+    {
+      "filename": "libaizome_apps-994f6e1e4c2eddb385c6.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-apps:aizome_apps-build-release",
+      "mode": "build",
+      "package": "aizome-apps",
+      "target": "aizome_apps",
+      "unit_label": "//build/buck2/graph/release:994f6e1e4c2eddb385c6"
+    },
+    {
+      "filename": "libaizome_awake-eb0aa401e3a0bfd9c682.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-awake:aizome_awake-build-release",
+      "mode": "build",
+      "package": "aizome-awake",
+      "target": "aizome_awake",
+      "unit_label": "//build/buck2/graph/release:eb0aa401e3a0bfd9c682"
+    },
+    {
+      "filename": "aizome_awake-0466321a57a82e62ba12",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-awake:aizome-awake-build-release",
+      "mode": "build",
+      "package": "aizome-awake",
+      "target": "aizome-awake",
+      "unit_label": "//build/buck2/graph/release:0466321a57a82e62ba12"
+    },
+    {
+      "filename": "aizome-63f12100f0edacb1ea0f",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:aizome-build-release",
+      "mode": "build",
+      "package": "aizome-comp",
+      "target": "aizome",
+      "unit_label": "//build/buck2/graph/release:63f12100f0edacb1ea0f"
+    },
+    {
+      "filename": "libaizome_comp_core-666340eadef18dfb4ee4.so",
+      "kind": [
+        "dylib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp-core:aizome_comp_core-build-release",
+      "mode": "build",
+      "package": "aizome-comp-core",
+      "target": "aizome_comp_core",
+      "unit_label": "//build/buck2/graph/release:666340eadef18dfb4ee4"
+    },
+    {
+      "filename": "libaizome_comp_logic-d57b117132096855733a.so",
+      "kind": [
+        "dylib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp-logic:aizome_comp_logic-build-release",
+      "mode": "build",
+      "package": "aizome-comp-logic",
+      "target": "aizome_comp_logic",
+      "unit_label": "//build/buck2/graph/release:d57b117132096855733a"
+    },
+    {
+      "filename": "libaizome_config-f67448bb61933df4f55a.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-config:aizome_config-build-release",
+      "mode": "build",
+      "package": "aizome-config",
+      "target": "aizome_config",
+      "unit_label": "//build/buck2/graph/release:f67448bb61933df4f55a"
+    },
+    {
+      "filename": "libaizome_face-8ff147cc398ca9992e83.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-face:aizome_face-build-release",
+      "mode": "build",
+      "package": "aizome-face",
+      "target": "aizome_face",
+      "unit_label": "//build/buck2/graph/release:8ff147cc398ca9992e83"
+    },
+    {
+      "filename": "libaizome_fusen-d6f871e6b1b2807913b3.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/fusen:aizome_fusen-build-release",
+      "mode": "build",
+      "package": "aizome-fusen",
+      "target": "aizome_fusen",
+      "unit_label": "//build/buck2/graph/release:d6f871e6b1b2807913b3"
+    },
+    {
+      "filename": "aizome_fusen-94e622f4e725841a9661",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/fusen:aizome-fusen-build-release",
+      "mode": "build",
+      "package": "aizome-fusen",
+      "target": "aizome-fusen",
+      "unit_label": "//build/buck2/graph/release:94e622f4e725841a9661"
+    },
+    {
+      "filename": "libaizome_greeter-ec54678cc4dd3059fea0.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-greeter:aizome_greeter-build-release",
+      "mode": "build",
+      "package": "aizome-greeter",
+      "target": "aizome_greeter",
+      "unit_label": "//build/buck2/graph/release:ec54678cc4dd3059fea0"
+    },
+    {
+      "filename": "aizome_greeter-8b1adcbdc2b267f51023",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-greeter:aizome-greeter-build-release",
+      "mode": "build",
+      "package": "aizome-greeter",
+      "target": "aizome-greeter",
+      "unit_label": "//build/buck2/graph/release:8b1adcbdc2b267f51023"
+    },
+    {
+      "filename": "libhako-77fadb8b56f0de655b36.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/hako:hako-build-release",
+      "mode": "build",
+      "package": "aizome-hako",
+      "target": "hako",
+      "unit_label": "//build/buck2/graph/release:77fadb8b56f0de655b36"
+    },
+    {
+      "filename": "aizome_hako-c0fa985f1e276351fd42",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/hako:aizome-hako-build-release",
+      "mode": "build",
+      "package": "aizome-hako",
+      "target": "aizome-hako",
+      "unit_label": "//build/buck2/graph/release:c0fa985f1e276351fd42"
+    },
+    {
+      "filename": "libaizome_hotaru-23e0e6600e1e17173932.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/hotaru:aizome_hotaru-build-release",
+      "mode": "build",
+      "package": "aizome-hotaru",
+      "target": "aizome_hotaru",
+      "unit_label": "//build/buck2/graph/release:23e0e6600e1e17173932"
+    },
+    {
+      "filename": "aizome_hotaru-73dd473ffb940e579cf2",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/hotaru:aizome-hotaru-build-release",
+      "mode": "build",
+      "package": "aizome-hotaru",
+      "target": "aizome-hotaru",
+      "unit_label": "//build/buck2/graph/release:73dd473ffb940e579cf2"
+    },
+    {
+      "filename": "libaizome_ipc-aa7eb8495f677b25b665.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizome_ipc-build-release",
+      "mode": "build",
+      "package": "aizome-ipc",
+      "target": "aizome_ipc",
+      "unit_label": "//build/buck2/graph/release:aa7eb8495f677b25b665"
+    },
+    {
+      "filename": "aizome_dev-0edbbed4ae228f68156b",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizome-dev-build-release",
+      "mode": "build",
+      "package": "aizome-ipc",
+      "target": "aizome-dev",
+      "unit_label": "//build/buck2/graph/release:0edbbed4ae228f68156b"
+    },
+    {
+      "filename": "aizome_share_picker-f2ee4c579523a5bc2de0",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizome-share-picker-build-release",
+      "mode": "build",
+      "package": "aizome-ipc",
+      "target": "aizome-share-picker",
+      "unit_label": "//build/buck2/graph/release:f2ee4c579523a5bc2de0"
+    },
+    {
+      "filename": "aizomectl-9b9b1731a7eb4cd50ad1",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizomectl-build-release",
+      "mode": "build",
+      "package": "aizome-ipc",
+      "target": "aizomectl",
+      "unit_label": "//build/buck2/graph/release:9b9b1731a7eb4cd50ad1"
+    },
+    {
+      "filename": "libaizome_kit-7671f4163d9616473c7a.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:aizome_kit-build-release",
+      "mode": "build",
+      "package": "aizome-kit",
+      "target": "aizome_kit",
+      "unit_label": "//build/buck2/graph/release:7671f4163d9616473c7a"
+    },
+    {
+      "filename": "libkoe-0b0cf388ae9c47beb2cb.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/koe:koe-build-release",
+      "mode": "build",
+      "package": "aizome-koe",
+      "target": "koe",
+      "unit_label": "//build/buck2/graph/release:0b0cf388ae9c47beb2cb"
+    },
+    {
+      "filename": "aizome_koe-1c627b073503862bfe40",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/koe:aizome-koe-build-release",
+      "mode": "build",
+      "package": "aizome-koe",
+      "target": "aizome-koe",
+      "unit_label": "//build/buck2/graph/release:1c627b073503862bfe40"
+    },
+    {
+      "filename": "libkoyomi-423384f355fdb30cd650.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/koyomi:koyomi-build-release",
+      "mode": "build",
+      "package": "aizome-koyomi",
+      "target": "koyomi",
+      "unit_label": "//build/buck2/graph/release:423384f355fdb30cd650"
+    },
+    {
+      "filename": "aizome_koyomi-9c0e0676980b7e2f4033",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/koyomi:aizome-koyomi-build-release",
+      "mode": "build",
+      "package": "aizome-koyomi",
+      "target": "aizome-koyomi",
+      "unit_label": "//build/buck2/graph/release:9c0e0676980b7e2f4033"
+    },
+    {
+      "filename": "libkura-77f6675739db991a3d5a.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/kura:kura-build-release",
+      "mode": "build",
+      "package": "aizome-kura",
+      "target": "kura",
+      "unit_label": "//build/buck2/graph/release:77f6675739db991a3d5a"
+    },
+    {
+      "filename": "aizome_kura-9e26a62d8a8e76f1befd",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/kura:aizome-kura-build-release",
+      "mode": "build",
+      "package": "aizome-kura",
+      "target": "aizome-kura",
+      "unit_label": "//build/buck2/graph/release:9e26a62d8a8e76f1befd"
+    },
+    {
+      "filename": "libaizome_media-c3413608dfab15fd2f15.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-media:aizome_media-build-release",
+      "mode": "build",
+      "package": "aizome-media",
+      "target": "aizome_media",
+      "unit_label": "//build/buck2/graph/release:c3413608dfab15fd2f15"
+    },
+    {
+      "filename": "libmyaku-e3b1a4156c74edac8805.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/myaku:myaku-build-release",
+      "mode": "build",
+      "package": "aizome-myaku",
+      "target": "myaku",
+      "unit_label": "//build/buck2/graph/release:e3b1a4156c74edac8805"
+    },
+    {
+      "filename": "aizome_myaku-09f3010b5eaa2f4ca854",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/myaku:aizome-myaku-build-release",
+      "mode": "build",
+      "package": "aizome-myaku",
+      "target": "aizome-myaku",
+      "unit_label": "//build/buck2/graph/release:09f3010b5eaa2f4ca854"
+    },
+    {
+      "filename": "libaizome_network_agent-a81d7982aa91d9fef8c2.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-network-agent:aizome_network_agent-build-release",
+      "mode": "build",
+      "package": "aizome-network-agent",
+      "target": "aizome_network_agent",
+      "unit_label": "//build/buck2/graph/release:a81d7982aa91d9fef8c2"
+    },
+    {
+      "filename": "aizome_network_agent-a5f047f6fcf7fa0c851e",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-network-agent:aizome-network-agent-build-release",
+      "mode": "build",
+      "package": "aizome-network-agent",
+      "target": "aizome-network-agent",
+      "unit_label": "//build/buck2/graph/release:a5f047f6fcf7fa0c851e"
+    },
+    {
+      "filename": "libnisshi-f0e2aa6271bf8fe7a3eb.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:nisshi-build-release",
+      "mode": "build",
+      "package": "aizome-nisshi",
+      "target": "nisshi",
+      "unit_label": "//build/buck2/graph/release:f0e2aa6271bf8fe7a3eb"
+    },
+    {
+      "filename": "aizome_nisshi-a2b1c6a5533f40b53065",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:aizome-nisshi-build-release",
+      "mode": "build",
+      "package": "aizome-nisshi",
+      "target": "aizome-nisshi",
+      "unit_label": "//build/buck2/graph/release:a2b1c6a5533f40b53065"
+    },
+    {
+      "filename": "aizome_nisshi_helper-9c83f813dcaa5f5ec63c",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:aizome-nisshi-helper-build-release",
+      "mode": "build",
+      "package": "aizome-nisshi",
+      "target": "aizome-nisshi-helper",
+      "unit_label": "//build/buck2/graph/release:9c83f813dcaa5f5ec63c"
+    },
+    {
+      "filename": "libaizome_portal-5573ca9f01fc2dde2234.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-portal:aizome_portal-build-release",
+      "mode": "build",
+      "package": "aizome-portal",
+      "target": "aizome_portal",
+      "unit_label": "//build/buck2/graph/release:5573ca9f01fc2dde2234"
+    },
+    {
+      "filename": "aizome_portal-12f553c47f686be0f63f",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-portal:aizome-portal-build-release",
+      "mode": "build",
+      "package": "aizome-portal",
+      "target": "aizome-portal",
+      "unit_label": "//build/buck2/graph/release:12f553c47f686be0f63f"
+    },
+    {
+      "filename": "aizome_power_meter-d166e3c745ccadef7e46",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-power-meter:aizome-power-meter-build-release",
+      "mode": "build",
+      "package": "aizome-power-meter",
+      "target": "aizome-power-meter",
+      "unit_label": "//build/buck2/graph/release:d166e3c745ccadef7e46"
+    },
+    {
+      "filename": "libaizome_search-6bb780cd38c90b511c07.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-search:aizome_search-build-release",
+      "mode": "build",
+      "package": "aizome-search",
+      "target": "aizome_search",
+      "unit_label": "//build/buck2/graph/release:6bb780cd38c90b511c07"
+    },
+    {
+      "filename": "libsettei-996a26dcdba0e9f1ef70.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/settei:settei-build-release",
+      "mode": "build",
+      "package": "aizome-settei",
+      "target": "settei",
+      "unit_label": "//build/buck2/graph/release:996a26dcdba0e9f1ef70"
+    },
+    {
+      "filename": "aizome_settei-05241d51f91812cbc40b",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/settei:aizome-settei-build-release",
+      "mode": "build",
+      "package": "aizome-settei",
+      "target": "aizome-settei",
+      "unit_label": "//build/buck2/graph/release:05241d51f91812cbc40b"
+    },
+    {
+      "filename": "libaizome_shashin-6c797df7f942b0b7bd7c.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/shashin:aizome_shashin-build-release",
+      "mode": "build",
+      "package": "aizome-shashin",
+      "target": "aizome_shashin",
+      "unit_label": "//build/buck2/graph/release:6c797df7f942b0b7bd7c"
+    },
+    {
+      "filename": "aizome_shashin-bdb90b66fdc2801e2e5b",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/shashin:aizome-shashin-build-release",
+      "mode": "build",
+      "package": "aizome-shashin",
+      "target": "aizome-shashin",
+      "unit_label": "//build/buck2/graph/release:bdb90b66fdc2801e2e5b"
+    },
+    {
+      "filename": "libaizome_shell-50cbc14b5dfc9f28476f.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:aizome_shell-build-release",
+      "mode": "build",
+      "package": "aizome-shell",
+      "target": "aizome_shell",
+      "unit_label": "//build/buck2/graph/release:50cbc14b5dfc9f28476f"
+    },
+    {
+      "filename": "aizome_shell-75f203eca767dfe1b4a5",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:aizome-shell-build-release",
+      "mode": "build",
+      "package": "aizome-shell",
+      "target": "aizome-shell",
+      "unit_label": "//build/buck2/graph/release:75f203eca767dfe1b4a5"
+    },
+    {
+      "filename": "libaizome_shell_proto-853d12ec8c7bb8e48080.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell-proto:aizome_shell_proto-build-release",
+      "mode": "build",
+      "package": "aizome-shell-proto",
+      "target": "aizome_shell_proto",
+      "unit_label": "//build/buck2/graph/release:853d12ec8c7bb8e48080"
+    },
+    {
+      "filename": "libaizome_shiori-bb9c19b847da26b25669.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/shiori:aizome_shiori-build-release",
+      "mode": "build",
+      "package": "aizome-shiori",
+      "target": "aizome_shiori",
+      "unit_label": "//build/buck2/graph/release:bb9c19b847da26b25669"
+    },
+    {
+      "filename": "aizome_shiori-256a0935952aa94b8242",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/shiori:aizome-shiori-build-release",
+      "mode": "build",
+      "package": "aizome-shiori",
+      "target": "aizome-shiori",
+      "unit_label": "//build/buck2/graph/release:256a0935952aa94b8242"
+    },
+    {
+      "filename": "libaizome_soroban-4430df7ee0a0936632a8.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/soroban:aizome_soroban-build-release",
+      "mode": "build",
+      "package": "aizome-soroban",
+      "target": "aizome_soroban",
+      "unit_label": "//build/buck2/graph/release:4430df7ee0a0936632a8"
+    },
+    {
+      "filename": "aizome_soroban-80cfba1b2751e675f17f",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/soroban:aizome-soroban-build-release",
+      "mode": "build",
+      "package": "aizome-soroban",
+      "target": "aizome-soroban",
+      "unit_label": "//build/buck2/graph/release:80cfba1b2751e675f17f"
+    },
+    {
+      "filename": "libaizome_sumi-6114afa5c269acc23813.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/sumi:aizome_sumi-build-release",
+      "mode": "build",
+      "package": "aizome-sumi",
+      "target": "aizome_sumi",
+      "unit_label": "//build/buck2/graph/release:6114afa5c269acc23813"
+    },
+    {
+      "filename": "aizome_sumi-e82a9720d4578b6c6194",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/sumi:aizome-sumi-build-release",
+      "mode": "build",
+      "package": "aizome-sumi",
+      "target": "aizome-sumi",
+      "unit_label": "//build/buck2/graph/release:e82a9720d4578b6c6194"
+    },
+    {
+      "filename": "libaizome_sys-0abea6240661d8130622.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:aizome_sys-build-release",
+      "mode": "build",
+      "package": "aizome-sys",
+      "target": "aizome_sys",
+      "unit_label": "//build/buck2/graph/release:0abea6240661d8130622"
+    },
+    {
+      "filename": "libtansu-93310442046c82af3ff4.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/tansu:tansu-build-release",
+      "mode": "build",
+      "package": "aizome-tansu",
+      "target": "tansu",
+      "unit_label": "//build/buck2/graph/release:93310442046c82af3ff4"
+    },
+    {
+      "filename": "aizome_tansu-25cc4c9bde14aadeee2b",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/tansu:aizome-tansu-build-release",
+      "mode": "build",
+      "package": "aizome-tansu",
+      "target": "aizome-tansu",
+      "unit_label": "//build/buck2/graph/release:25cc4c9bde14aadeee2b"
+    },
+    {
+      "filename": "libaizome_tenki-309d873cacec94b7ab70.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/tenki:aizome_tenki-build-release",
+      "mode": "build",
+      "package": "aizome-tenki",
+      "target": "aizome_tenki",
+      "unit_label": "//build/buck2/graph/release:309d873cacec94b7ab70"
+    },
+    {
+      "filename": "aizome_tenki-dff30c3a0227728637b3",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/tenki:aizome-tenki-build-release",
+      "mode": "build",
+      "package": "aizome-tenki",
+      "target": "aizome-tenki",
+      "unit_label": "//build/buck2/graph/release:dff30c3a0227728637b3"
+    },
+    {
+      "filename": "libaizome_theme-25cdd2f9f5969662ba55.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-theme:aizome_theme-build-release",
+      "mode": "build",
+      "package": "aizome-theme",
+      "target": "aizome_theme",
+      "unit_label": "//build/buck2/graph/release:25cdd2f9f5969662ba55"
+    },
+    {
+      "filename": "libaizome_tokei-e6824972094fa770e63f.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/tokei:aizome_tokei-build-release",
+      "mode": "build",
+      "package": "aizome-tokei",
+      "target": "aizome_tokei",
+      "unit_label": "//build/buck2/graph/release:e6824972094fa770e63f"
+    },
+    {
+      "filename": "aizome_tokei-60ce0f56d9991649c5ab",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/tokei:aizome-tokei-build-release",
+      "mode": "build",
+      "package": "aizome-tokei",
+      "target": "aizome-tokei",
+      "unit_label": "//build/buck2/graph/release:60ce0f56d9991649c5ab"
+    },
+    {
+      "filename": "libaizome_utsushi-9cd36e6a97df710d0521.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/utsushi:aizome_utsushi-build-release",
+      "mode": "build",
+      "package": "aizome-utsushi",
+      "target": "aizome_utsushi",
+      "unit_label": "//build/buck2/graph/release:9cd36e6a97df710d0521"
+    },
+    {
+      "filename": "aizome_utsushi-f5da0173cd1cf68141a3",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/utsushi:aizome-utsushi-build-release",
+      "mode": "build",
+      "package": "aizome-utsushi",
+      "target": "aizome-utsushi",
+      "unit_label": "//build/buck2/graph/release:f5da0173cd1cf68141a3"
+    },
+    {
+      "filename": "libaizome_yukimi-3967d27e6fd0d0cad77a.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/yukimi:aizome_yukimi-build-release",
+      "mode": "build",
+      "package": "aizome-yukimi",
+      "target": "aizome_yukimi",
+      "unit_label": "//build/buck2/graph/release:3967d27e6fd0d0cad77a"
+    },
+    {
+      "filename": "aizome_yukimi-b86c795267a711234e93",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/yukimi:aizome-yukimi-build-release",
+      "mode": "build",
+      "package": "aizome-yukimi",
+      "target": "aizome-yukimi",
+      "unit_label": "//build/buck2/graph/release:b86c795267a711234e93"
+    },
+    {
+      "filename": "libhotaru_link_regex-e4bee36489a9015877c0.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/hotaru-link-regex:hotaru_link_regex-build-release",
+      "mode": "build",
+      "package": "hotaru-link-regex",
+      "target": "hotaru_link_regex",
+      "unit_label": "//build/buck2/graph/release:e4bee36489a9015877c0"
+    }
+  ],
+  "release-lto": [
+    {
+      "filename": "libaizome_annai-a9cabf1632831c4e4621.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/annai:aizome_annai-build-release-lto",
+      "mode": "build",
+      "package": "aizome-annai",
+      "target": "aizome_annai",
+      "unit_label": "//build/buck2/graph/release-lto:a9cabf1632831c4e4621"
+    },
+    {
+      "filename": "aizome_annai-60834c3fc739d652d9f3",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/annai:aizome-annai-build-release-lto",
+      "mode": "build",
+      "package": "aizome-annai",
+      "target": "aizome-annai",
+      "unit_label": "//build/buck2/graph/release-lto:60834c3fc739d652d9f3"
+    },
+    {
+      "filename": "libaizome_apps-34539c54d36170e7481c.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-apps:aizome_apps-build-release-lto",
+      "mode": "build",
+      "package": "aizome-apps",
+      "target": "aizome_apps",
+      "unit_label": "//build/buck2/graph/release-lto:34539c54d36170e7481c"
+    },
+    {
+      "filename": "libaizome_awake-385030f59d277945e2c8.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-awake:aizome_awake-build-release-lto",
+      "mode": "build",
+      "package": "aizome-awake",
+      "target": "aizome_awake",
+      "unit_label": "//build/buck2/graph/release-lto:385030f59d277945e2c8"
+    },
+    {
+      "filename": "aizome_awake-b2b6fd83f3d85ff0990f",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-awake:aizome-awake-build-release-lto",
+      "mode": "build",
+      "package": "aizome-awake",
+      "target": "aizome-awake",
+      "unit_label": "//build/buck2/graph/release-lto:b2b6fd83f3d85ff0990f"
+    },
+    {
+      "filename": "libaizome_config-abc2e47eed7057f665f0.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-config:aizome_config-build-release-lto",
+      "mode": "build",
+      "package": "aizome-config",
+      "target": "aizome_config",
+      "unit_label": "//build/buck2/graph/release-lto:abc2e47eed7057f665f0"
+    },
+    {
+      "filename": "libaizome_face-4f3a6507656a7e2fe10f.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-face:aizome_face-build-release-lto",
+      "mode": "build",
+      "package": "aizome-face",
+      "target": "aizome_face",
+      "unit_label": "//build/buck2/graph/release-lto:4f3a6507656a7e2fe10f"
+    },
+    {
+      "filename": "libaizome_fusen-4e11853cd1e92578b877.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/fusen:aizome_fusen-build-release-lto",
+      "mode": "build",
+      "package": "aizome-fusen",
+      "target": "aizome_fusen",
+      "unit_label": "//build/buck2/graph/release-lto:4e11853cd1e92578b877"
+    },
+    {
+      "filename": "aizome_fusen-050e9fe975fff11eefbd",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/fusen:aizome-fusen-build-release-lto",
+      "mode": "build",
+      "package": "aizome-fusen",
+      "target": "aizome-fusen",
+      "unit_label": "//build/buck2/graph/release-lto:050e9fe975fff11eefbd"
+    },
+    {
+      "filename": "libaizome_greeter-464e5a432ecb7d57855a.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-greeter:aizome_greeter-build-release-lto",
+      "mode": "build",
+      "package": "aizome-greeter",
+      "target": "aizome_greeter",
+      "unit_label": "//build/buck2/graph/release-lto:464e5a432ecb7d57855a"
+    },
+    {
+      "filename": "aizome_greeter-b2803a52b455be756a9b",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-greeter:aizome-greeter-build-release-lto",
+      "mode": "build",
+      "package": "aizome-greeter",
+      "target": "aizome-greeter",
+      "unit_label": "//build/buck2/graph/release-lto:b2803a52b455be756a9b"
+    },
+    {
+      "filename": "libhako-2a095d2a0f7f7fc288c2.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/hako:hako-build-release-lto",
+      "mode": "build",
+      "package": "aizome-hako",
+      "target": "hako",
+      "unit_label": "//build/buck2/graph/release-lto:2a095d2a0f7f7fc288c2"
+    },
+    {
+      "filename": "aizome_hako-199a60770818e6a7da4e",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/hako:aizome-hako-build-release-lto",
+      "mode": "build",
+      "package": "aizome-hako",
+      "target": "aizome-hako",
+      "unit_label": "//build/buck2/graph/release-lto:199a60770818e6a7da4e"
+    },
+    {
+      "filename": "libaizome_hotaru-6e08dcdbfd8a40c83c01.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/hotaru:aizome_hotaru-build-release-lto",
+      "mode": "build",
+      "package": "aizome-hotaru",
+      "target": "aizome_hotaru",
+      "unit_label": "//build/buck2/graph/release-lto:6e08dcdbfd8a40c83c01"
+    },
+    {
+      "filename": "aizome_hotaru-b8d2d6c2e68f7cd3f958",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/hotaru:aizome-hotaru-build-release-lto",
+      "mode": "build",
+      "package": "aizome-hotaru",
+      "target": "aizome-hotaru",
+      "unit_label": "//build/buck2/graph/release-lto:b8d2d6c2e68f7cd3f958"
+    },
+    {
+      "filename": "libaizome_ipc-33382278f815ef51d444.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizome_ipc-build-release-lto",
+      "mode": "build",
+      "package": "aizome-ipc",
+      "target": "aizome_ipc",
+      "unit_label": "//build/buck2/graph/release-lto:33382278f815ef51d444"
+    },
+    {
+      "filename": "aizome_dev-11464e54b4981110e467",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizome-dev-build-release-lto",
+      "mode": "build",
+      "package": "aizome-ipc",
+      "target": "aizome-dev",
+      "unit_label": "//build/buck2/graph/release-lto:11464e54b4981110e467"
+    },
+    {
+      "filename": "aizome_share_picker-abe1cc2c7f63955d81f4",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizome-share-picker-build-release-lto",
+      "mode": "build",
+      "package": "aizome-ipc",
+      "target": "aizome-share-picker",
+      "unit_label": "//build/buck2/graph/release-lto:abe1cc2c7f63955d81f4"
+    },
+    {
+      "filename": "aizomectl-d85da01af2db702e68dc",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizomectl-build-release-lto",
+      "mode": "build",
+      "package": "aizome-ipc",
+      "target": "aizomectl",
+      "unit_label": "//build/buck2/graph/release-lto:d85da01af2db702e68dc"
+    },
+    {
+      "filename": "libaizome_kit-38fad17b90381d308153.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:aizome_kit-build-release-lto",
+      "mode": "build",
+      "package": "aizome-kit",
+      "target": "aizome_kit",
+      "unit_label": "//build/buck2/graph/release-lto:38fad17b90381d308153"
+    },
+    {
+      "filename": "libkoe-18b6d3828c14a92ba703.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/koe:koe-build-release-lto",
+      "mode": "build",
+      "package": "aizome-koe",
+      "target": "koe",
+      "unit_label": "//build/buck2/graph/release-lto:18b6d3828c14a92ba703"
+    },
+    {
+      "filename": "aizome_koe-c6a1d5c46fcfd506f338",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/koe:aizome-koe-build-release-lto",
+      "mode": "build",
+      "package": "aizome-koe",
+      "target": "aizome-koe",
+      "unit_label": "//build/buck2/graph/release-lto:c6a1d5c46fcfd506f338"
+    },
+    {
+      "filename": "libkoyomi-6fe85dfafab9fe49937e.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/koyomi:koyomi-build-release-lto",
+      "mode": "build",
+      "package": "aizome-koyomi",
+      "target": "koyomi",
+      "unit_label": "//build/buck2/graph/release-lto:6fe85dfafab9fe49937e"
+    },
+    {
+      "filename": "aizome_koyomi-87e886848da07c73ca52",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/koyomi:aizome-koyomi-build-release-lto",
+      "mode": "build",
+      "package": "aizome-koyomi",
+      "target": "aizome-koyomi",
+      "unit_label": "//build/buck2/graph/release-lto:87e886848da07c73ca52"
+    },
+    {
+      "filename": "libkura-53e8600ba06a9eba7d25.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/kura:kura-build-release-lto",
+      "mode": "build",
+      "package": "aizome-kura",
+      "target": "kura",
+      "unit_label": "//build/buck2/graph/release-lto:53e8600ba06a9eba7d25"
+    },
+    {
+      "filename": "aizome_kura-40e0aefa108d6947d9ca",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/kura:aizome-kura-build-release-lto",
+      "mode": "build",
+      "package": "aizome-kura",
+      "target": "aizome-kura",
+      "unit_label": "//build/buck2/graph/release-lto:40e0aefa108d6947d9ca"
+    },
+    {
+      "filename": "libaizome_media-89978908f94167a07865.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-media:aizome_media-build-release-lto",
+      "mode": "build",
+      "package": "aizome-media",
+      "target": "aizome_media",
+      "unit_label": "//build/buck2/graph/release-lto:89978908f94167a07865"
+    },
+    {
+      "filename": "libmyaku-88ba6183b7aec5ae5821.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/myaku:myaku-build-release-lto",
+      "mode": "build",
+      "package": "aizome-myaku",
+      "target": "myaku",
+      "unit_label": "//build/buck2/graph/release-lto:88ba6183b7aec5ae5821"
+    },
+    {
+      "filename": "aizome_myaku-72d4a372d42de417e6c6",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/myaku:aizome-myaku-build-release-lto",
+      "mode": "build",
+      "package": "aizome-myaku",
+      "target": "aizome-myaku",
+      "unit_label": "//build/buck2/graph/release-lto:72d4a372d42de417e6c6"
+    },
+    {
+      "filename": "libaizome_network_agent-d979647947e0a405259f.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-network-agent:aizome_network_agent-build-release-lto",
+      "mode": "build",
+      "package": "aizome-network-agent",
+      "target": "aizome_network_agent",
+      "unit_label": "//build/buck2/graph/release-lto:d979647947e0a405259f"
+    },
+    {
+      "filename": "aizome_network_agent-2aff8b64ab7e33f0ad27",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-network-agent:aizome-network-agent-build-release-lto",
+      "mode": "build",
+      "package": "aizome-network-agent",
+      "target": "aizome-network-agent",
+      "unit_label": "//build/buck2/graph/release-lto:2aff8b64ab7e33f0ad27"
+    },
+    {
+      "filename": "libnisshi-55ce653112bc3aa52045.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:nisshi-build-release-lto",
+      "mode": "build",
+      "package": "aizome-nisshi",
+      "target": "nisshi",
+      "unit_label": "//build/buck2/graph/release-lto:55ce653112bc3aa52045"
+    },
+    {
+      "filename": "aizome_nisshi-afc3d709969d3578caa9",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:aizome-nisshi-build-release-lto",
+      "mode": "build",
+      "package": "aizome-nisshi",
+      "target": "aizome-nisshi",
+      "unit_label": "//build/buck2/graph/release-lto:afc3d709969d3578caa9"
+    },
+    {
+      "filename": "aizome_nisshi_helper-4555be2e1ae0e1452553",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:aizome-nisshi-helper-build-release-lto",
+      "mode": "build",
+      "package": "aizome-nisshi",
+      "target": "aizome-nisshi-helper",
+      "unit_label": "//build/buck2/graph/release-lto:4555be2e1ae0e1452553"
+    },
+    {
+      "filename": "libaizome_portal-cc0e4566ff9f178536fe.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-portal:aizome_portal-build-release-lto",
+      "mode": "build",
+      "package": "aizome-portal",
+      "target": "aizome_portal",
+      "unit_label": "//build/buck2/graph/release-lto:cc0e4566ff9f178536fe"
+    },
+    {
+      "filename": "aizome_portal-5ea4a1b62eb1bb3b8629",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-portal:aizome-portal-build-release-lto",
+      "mode": "build",
+      "package": "aizome-portal",
+      "target": "aizome-portal",
+      "unit_label": "//build/buck2/graph/release-lto:5ea4a1b62eb1bb3b8629"
+    },
+    {
+      "filename": "aizome_power_meter-304ec0dcd65a3861671c",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-power-meter:aizome-power-meter-build-release-lto",
+      "mode": "build",
+      "package": "aizome-power-meter",
+      "target": "aizome-power-meter",
+      "unit_label": "//build/buck2/graph/release-lto:304ec0dcd65a3861671c"
+    },
+    {
+      "filename": "libaizome_search-9a58faf63e280e375bab.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-search:aizome_search-build-release-lto",
+      "mode": "build",
+      "package": "aizome-search",
+      "target": "aizome_search",
+      "unit_label": "//build/buck2/graph/release-lto:9a58faf63e280e375bab"
+    },
+    {
+      "filename": "libsettei-f9da77fffa92e0b50b7e.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/settei:settei-build-release-lto",
+      "mode": "build",
+      "package": "aizome-settei",
+      "target": "settei",
+      "unit_label": "//build/buck2/graph/release-lto:f9da77fffa92e0b50b7e"
+    },
+    {
+      "filename": "aizome_settei-8130455e4b5a1ebe8d4b",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/settei:aizome-settei-build-release-lto",
+      "mode": "build",
+      "package": "aizome-settei",
+      "target": "aizome-settei",
+      "unit_label": "//build/buck2/graph/release-lto:8130455e4b5a1ebe8d4b"
+    },
+    {
+      "filename": "libaizome_shashin-4a7f4d3878f731678ead.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/shashin:aizome_shashin-build-release-lto",
+      "mode": "build",
+      "package": "aizome-shashin",
+      "target": "aizome_shashin",
+      "unit_label": "//build/buck2/graph/release-lto:4a7f4d3878f731678ead"
+    },
+    {
+      "filename": "aizome_shashin-4511780050696ba83236",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/shashin:aizome-shashin-build-release-lto",
+      "mode": "build",
+      "package": "aizome-shashin",
+      "target": "aizome-shashin",
+      "unit_label": "//build/buck2/graph/release-lto:4511780050696ba83236"
+    },
+    {
+      "filename": "libaizome_shell-e34cd247aa221a1c103d.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:aizome_shell-build-release-lto",
+      "mode": "build",
+      "package": "aizome-shell",
+      "target": "aizome_shell",
+      "unit_label": "//build/buck2/graph/release-lto:e34cd247aa221a1c103d"
+    },
+    {
+      "filename": "aizome_shell-4565ad3633b71a33f934",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:aizome-shell-build-release-lto",
+      "mode": "build",
+      "package": "aizome-shell",
+      "target": "aizome-shell",
+      "unit_label": "//build/buck2/graph/release-lto:4565ad3633b71a33f934"
+    },
+    {
+      "filename": "libaizome_shell_proto-cd035f3337986572a9af.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell-proto:aizome_shell_proto-build-release-lto",
+      "mode": "build",
+      "package": "aizome-shell-proto",
+      "target": "aizome_shell_proto",
+      "unit_label": "//build/buck2/graph/release-lto:cd035f3337986572a9af"
+    },
+    {
+      "filename": "libaizome_shiori-9a1e90b1c9aab0659b29.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/shiori:aizome_shiori-build-release-lto",
+      "mode": "build",
+      "package": "aizome-shiori",
+      "target": "aizome_shiori",
+      "unit_label": "//build/buck2/graph/release-lto:9a1e90b1c9aab0659b29"
+    },
+    {
+      "filename": "aizome_shiori-35e9759e070e4d195051",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/shiori:aizome-shiori-build-release-lto",
+      "mode": "build",
+      "package": "aizome-shiori",
+      "target": "aizome-shiori",
+      "unit_label": "//build/buck2/graph/release-lto:35e9759e070e4d195051"
+    },
+    {
+      "filename": "libaizome_soroban-6fa49aaa5b07a7b0662d.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/soroban:aizome_soroban-build-release-lto",
+      "mode": "build",
+      "package": "aizome-soroban",
+      "target": "aizome_soroban",
+      "unit_label": "//build/buck2/graph/release-lto:6fa49aaa5b07a7b0662d"
+    },
+    {
+      "filename": "aizome_soroban-e4face41adff70983d79",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/soroban:aizome-soroban-build-release-lto",
+      "mode": "build",
+      "package": "aizome-soroban",
+      "target": "aizome-soroban",
+      "unit_label": "//build/buck2/graph/release-lto:e4face41adff70983d79"
+    },
+    {
+      "filename": "libaizome_sumi-7d018a69377ae5f2b680.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/sumi:aizome_sumi-build-release-lto",
+      "mode": "build",
+      "package": "aizome-sumi",
+      "target": "aizome_sumi",
+      "unit_label": "//build/buck2/graph/release-lto:7d018a69377ae5f2b680"
+    },
+    {
+      "filename": "aizome_sumi-908c8f96c84fb8da5854",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/sumi:aizome-sumi-build-release-lto",
+      "mode": "build",
+      "package": "aizome-sumi",
+      "target": "aizome-sumi",
+      "unit_label": "//build/buck2/graph/release-lto:908c8f96c84fb8da5854"
+    },
+    {
+      "filename": "libaizome_sys-8b74de3703393edb9cd7.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:aizome_sys-build-release-lto",
+      "mode": "build",
+      "package": "aizome-sys",
+      "target": "aizome_sys",
+      "unit_label": "//build/buck2/graph/release-lto:8b74de3703393edb9cd7"
+    },
+    {
+      "filename": "libtansu-ed4cf06332c80e932215.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/tansu:tansu-build-release-lto",
+      "mode": "build",
+      "package": "aizome-tansu",
+      "target": "tansu",
+      "unit_label": "//build/buck2/graph/release-lto:ed4cf06332c80e932215"
+    },
+    {
+      "filename": "aizome_tansu-df6da698ada478ed40a7",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/tansu:aizome-tansu-build-release-lto",
+      "mode": "build",
+      "package": "aizome-tansu",
+      "target": "aizome-tansu",
+      "unit_label": "//build/buck2/graph/release-lto:df6da698ada478ed40a7"
+    },
+    {
+      "filename": "libaizome_tenki-b6cf0ec7e7d0dfc662f1.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/tenki:aizome_tenki-build-release-lto",
+      "mode": "build",
+      "package": "aizome-tenki",
+      "target": "aizome_tenki",
+      "unit_label": "//build/buck2/graph/release-lto:b6cf0ec7e7d0dfc662f1"
+    },
+    {
+      "filename": "aizome_tenki-8f71e94344d31220ae7f",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/tenki:aizome-tenki-build-release-lto",
+      "mode": "build",
+      "package": "aizome-tenki",
+      "target": "aizome-tenki",
+      "unit_label": "//build/buck2/graph/release-lto:8f71e94344d31220ae7f"
+    },
+    {
+      "filename": "libaizome_theme-35c45a92491279978820.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-theme:aizome_theme-build-release-lto",
+      "mode": "build",
+      "package": "aizome-theme",
+      "target": "aizome_theme",
+      "unit_label": "//build/buck2/graph/release-lto:35c45a92491279978820"
+    },
+    {
+      "filename": "libaizome_tokei-0b5c23fe8facdede1fc9.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/tokei:aizome_tokei-build-release-lto",
+      "mode": "build",
+      "package": "aizome-tokei",
+      "target": "aizome_tokei",
+      "unit_label": "//build/buck2/graph/release-lto:0b5c23fe8facdede1fc9"
+    },
+    {
+      "filename": "aizome_tokei-85152ce388ce3ade5c4d",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/tokei:aizome-tokei-build-release-lto",
+      "mode": "build",
+      "package": "aizome-tokei",
+      "target": "aizome-tokei",
+      "unit_label": "//build/buck2/graph/release-lto:85152ce388ce3ade5c4d"
+    },
+    {
+      "filename": "libaizome_utsushi-0093d2e9b4dab81a2927.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/utsushi:aizome_utsushi-build-release-lto",
+      "mode": "build",
+      "package": "aizome-utsushi",
+      "target": "aizome_utsushi",
+      "unit_label": "//build/buck2/graph/release-lto:0093d2e9b4dab81a2927"
+    },
+    {
+      "filename": "aizome_utsushi-d5dff16787bed1230199",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/utsushi:aizome-utsushi-build-release-lto",
+      "mode": "build",
+      "package": "aizome-utsushi",
+      "target": "aizome-utsushi",
+      "unit_label": "//build/buck2/graph/release-lto:d5dff16787bed1230199"
+    },
+    {
+      "filename": "libaizome_yukimi-411cadbdf3bb77016c48.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/yukimi:aizome_yukimi-build-release-lto",
+      "mode": "build",
+      "package": "aizome-yukimi",
+      "target": "aizome_yukimi",
+      "unit_label": "//build/buck2/graph/release-lto:411cadbdf3bb77016c48"
+    },
+    {
+      "filename": "aizome_yukimi-de7b2a38af7faa36cfc5",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/yukimi:aizome-yukimi-build-release-lto",
+      "mode": "build",
+      "package": "aizome-yukimi",
+      "target": "aizome-yukimi",
+      "unit_label": "//build/buck2/graph/release-lto:de7b2a38af7faa36cfc5"
+    },
+    {
+      "filename": "libhotaru_link_regex-12abd11ea16d7a6e779d.rlib",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/hotaru-link-regex:hotaru_link_regex-build-release-lto",
+      "mode": "build",
+      "package": "hotaru-link-regex",
+      "target": "hotaru_link_regex",
+      "unit_label": "//build/buck2/graph/release-lto:12abd11ea16d7a6e779d"
+    }
+  ],
+  "test": [
+    {
+      "filename": "aizome_annai-ab92c034a8709a32bd70",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/annai:aizome_annai-test-test-lib",
+      "mode": "test",
+      "package": "aizome-annai",
+      "target": "aizome_annai",
+      "unit_label": "//build/buck2/graph/test:ab92c034a8709a32bd70"
+    },
+    {
+      "filename": "aizome_annai-76610fac9fecacbbd9e2",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/annai:aizome-annai-test-test-bin",
+      "mode": "test",
+      "package": "aizome-annai",
+      "target": "aizome-annai",
+      "unit_label": "//build/buck2/graph/test:76610fac9fecacbbd9e2"
+    },
+    {
+      "filename": "annai-6b6f0065b8c37fc30ceb",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/annai:annai-test-test-test",
+      "mode": "test",
+      "package": "aizome-annai",
+      "target": "annai",
+      "unit_label": "//build/buck2/graph/test:6b6f0065b8c37fc30ceb"
+    },
+    {
+      "filename": "budget-2f1d83578b734147884f",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/annai:budget-test-test-test",
+      "mode": "test",
+      "package": "aizome-annai",
+      "target": "budget",
+      "unit_label": "//build/buck2/graph/test:2f1d83578b734147884f"
+    },
+    {
+      "filename": "aizome_apps-bc6e11f79a27f26ad3ef",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-apps:aizome_apps-test-test-lib",
+      "mode": "test",
+      "package": "aizome-apps",
+      "target": "aizome_apps",
+      "unit_label": "//build/buck2/graph/test:bc6e11f79a27f26ad3ef"
+    },
+    {
+      "filename": "aizome_awake-cd58aa867e485b06af80",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-awake:aizome_awake-test-test-lib",
+      "mode": "test",
+      "package": "aizome-awake",
+      "target": "aizome_awake",
+      "unit_label": "//build/buck2/graph/test:cd58aa867e485b06af80"
+    },
+    {
+      "filename": "aizome_awake-1f5ef3f5fbf30f07298a",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-awake:aizome-awake-test-test-bin",
+      "mode": "test",
+      "package": "aizome-awake",
+      "target": "aizome-awake",
+      "unit_label": "//build/buck2/graph/test:1f5ef3f5fbf30f07298a"
+    },
+    {
+      "filename": "aizome-076c6200bf80a5ed841c",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:aizome-test-test-bin",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "aizome",
+      "unit_label": "//build/buck2/graph/test:076c6200bf80a5ed841c"
+    },
+    {
+      "filename": "chromium-ee24732f36465533a3d8",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:chromium-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "chromium",
+      "unit_label": "//build/buck2/graph/test:ee24732f36465533a3d8"
+    },
+    {
+      "filename": "churn-fbd387f17821ef56946b",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:churn-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "churn",
+      "unit_label": "//build/buck2/graph/test:fbd387f17821ef56946b"
+    },
+    {
+      "filename": "context_menus-2d0f087296efc3a51515",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:context_menus-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "context_menus",
+      "unit_label": "//build/buck2/graph/test:2d0f087296efc3a51515"
+    },
+    {
+      "filename": "displays-44d62b4f913ae2e9cb0c",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:displays-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "displays",
+      "unit_label": "//build/buck2/graph/test:44d62b4f913ae2e9cb0c"
+    },
+    {
+      "filename": "focus-51ca27215d7b65fdd82f",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:focus-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "focus",
+      "unit_label": "//build/buck2/graph/test:51ca27215d7b65fdd82f"
+    },
+    {
+      "filename": "fullscreen-ff607f4d03e968c5d5ce",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:fullscreen-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "fullscreen",
+      "unit_label": "//build/buck2/graph/test:ff607f4d03e968c5d5ce"
+    },
+    {
+      "filename": "fullscreen_frames-235beb05a841792a9b7e",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:fullscreen_frames-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "fullscreen_frames",
+      "unit_label": "//build/buck2/graph/test:235beb05a841792a9b7e"
+    },
+    {
+      "filename": "headless-9f9a71d4283934bafbb4",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:headless-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "headless",
+      "unit_label": "//build/buck2/graph/test:9f9a71d4283934bafbb4"
+    },
+    {
+      "filename": "idle_inhibit-0143a75c7e424586c949",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:idle_inhibit-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "idle_inhibit",
+      "unit_label": "//build/buck2/graph/test:0143a75c7e424586c949"
+    },
+    {
+      "filename": "image_copy_capture-183e59bc7ceadbb1c24e",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:image_copy_capture-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "image_copy_capture",
+      "unit_label": "//build/buck2/graph/test:183e59bc7ceadbb1c24e"
+    },
+    {
+      "filename": "input_method-49452e4bcd4bf605b270",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:input_method-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "input_method",
+      "unit_label": "//build/buck2/graph/test:49452e4bcd4bf605b270"
+    },
+    {
+      "filename": "keys-45aee17bcde90ff9cd5c",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:keys-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "keys",
+      "unit_label": "//build/buck2/graph/test:45aee17bcde90ff9cd5c"
+    },
+    {
+      "filename": "layout-65bf9f9e7ca16f3de9f6",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:layout-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "layout",
+      "unit_label": "//build/buck2/graph/test:65bf9f9e7ca16f3de9f6"
+    },
+    {
+      "filename": "layout_desktop-9961db4925d725280bb3",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:layout_desktop-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "layout_desktop",
+      "unit_label": "//build/buck2/graph/test:9961db4925d725280bb3"
+    },
+    {
+      "filename": "lock_displays-636e37996ede4dae7d77",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:lock_displays-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "lock_displays",
+      "unit_label": "//build/buck2/graph/test:636e37996ede4dae7d77"
+    },
+    {
+      "filename": "marking_edges-ad0d6f9207a7b899f526",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:marking_edges-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "marking_edges",
+      "unit_label": "//build/buck2/graph/test:ad0d6f9207a7b899f526"
+    },
+    {
+      "filename": "notebook_desktop-fd2beb3c8f9c8e7665a8",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:notebook_desktop-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "notebook_desktop",
+      "unit_label": "//build/buck2/graph/test:fd2beb3c8f9c8e7665a8"
+    },
+    {
+      "filename": "overlays-85e43fd0b3cfa86dd979",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:overlays-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "overlays",
+      "unit_label": "//build/buck2/graph/test:85e43fd0b3cfa86dd979"
+    },
+    {
+      "filename": "pacing-8d71ddc514b7631f4800",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:pacing-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "pacing",
+      "unit_label": "//build/buck2/graph/test:8d71ddc514b7631f4800"
+    },
+    {
+      "filename": "picker_cursor-679decd734ab2c24b1ba",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:picker_cursor-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "picker_cursor",
+      "unit_label": "//build/buck2/graph/test:679decd734ab2c24b1ba"
+    },
+    {
+      "filename": "portal-786021225abf889fb1fa",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:portal-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "portal",
+      "unit_label": "//build/buck2/graph/test:786021225abf889fb1fa"
+    },
+    {
+      "filename": "protocols-1a29542223da2502809a",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:protocols-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "protocols",
+      "unit_label": "//build/buck2/graph/test:1a29542223da2502809a"
+    },
+    {
+      "filename": "recovery-4346601aa70149075a55",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:recovery-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "recovery",
+      "unit_label": "//build/buck2/graph/test:4346601aa70149075a55"
+    },
+    {
+      "filename": "reload-fb9016f5003848b3b9ba",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:reload-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "reload",
+      "unit_label": "//build/buck2/graph/test:fb9016f5003848b3b9ba"
+    },
+    {
+      "filename": "scales-9341922591e0e26c60ac",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:scales-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "scales",
+      "unit_label": "//build/buck2/graph/test:9341922591e0e26c60ac"
+    },
+    {
+      "filename": "screencopy-76b30f58afb5bb02492a",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:screencopy-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "screencopy",
+      "unit_label": "//build/buck2/graph/test:76b30f58afb5bb02492a"
+    },
+    {
+      "filename": "screens-dfe735b52d41fa700602",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:screens-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "screens",
+      "unit_label": "//build/buck2/graph/test:dfe735b52d41fa700602"
+    },
+    {
+      "filename": "settings-947565cc19d25b938fe2",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:settings-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "settings",
+      "unit_label": "//build/buck2/graph/test:947565cc19d25b938fe2"
+    },
+    {
+      "filename": "sidestep-57d1bd3df9e138a5d7c8",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp:sidestep-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp",
+      "target": "sidestep",
+      "unit_label": "//build/buck2/graph/test:57d1bd3df9e138a5d7c8"
+    },
+    {
+      "filename": "aizome_comp_core-f34cd573d7b4fd41c4f7",
+      "kind": [
+        "dylib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp-core:aizome_comp_core-test-test-dylib",
+      "mode": "test",
+      "package": "aizome-comp-core",
+      "target": "aizome_comp_core",
+      "unit_label": "//build/buck2/graph/test:f34cd573d7b4fd41c4f7"
+    },
+    {
+      "filename": "keymap_options-2756b81443e3024fb7a7",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp-core:keymap_options-test-test-test",
+      "mode": "test",
+      "package": "aizome-comp-core",
+      "target": "keymap_options",
+      "unit_label": "//build/buck2/graph/test:2756b81443e3024fb7a7"
+    },
+    {
+      "filename": "aizome_comp_logic-1d90b636b4ce2ad2580b",
+      "kind": [
+        "dylib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-comp-logic:aizome_comp_logic-test-test-dylib",
+      "mode": "test",
+      "package": "aizome-comp-logic",
+      "target": "aizome_comp_logic",
+      "unit_label": "//build/buck2/graph/test:1d90b636b4ce2ad2580b"
+    },
+    {
+      "filename": "aizome_config-ddf6543757103c96a80a",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-config:aizome_config-test-test-lib",
+      "mode": "test",
+      "package": "aizome-config",
+      "target": "aizome_config",
+      "unit_label": "//build/buck2/graph/test:ddf6543757103c96a80a"
+    },
+    {
+      "filename": "keyboard_defaults-3981555c4a9745afa2e6",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-config:keyboard_defaults-test-test-test",
+      "mode": "test",
+      "package": "aizome-config",
+      "target": "keyboard_defaults",
+      "unit_label": "//build/buck2/graph/test:3981555c4a9745afa2e6"
+    },
+    {
+      "filename": "aizome_face-8852ab9f3572604aa16d",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-face:aizome_face-test-test-lib",
+      "mode": "test",
+      "package": "aizome-face",
+      "target": "aizome_face",
+      "unit_label": "//build/buck2/graph/test:8852ab9f3572604aa16d"
+    },
+    {
+      "filename": "aizome_fusen-1b701895775f493280e6",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/fusen:aizome_fusen-test-test-lib",
+      "mode": "test",
+      "package": "aizome-fusen",
+      "target": "aizome_fusen",
+      "unit_label": "//build/buck2/graph/test:1b701895775f493280e6"
+    },
+    {
+      "filename": "aizome_fusen-20d587605565365cccd9",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/fusen:aizome-fusen-test-test-bin",
+      "mode": "test",
+      "package": "aizome-fusen",
+      "target": "aizome-fusen",
+      "unit_label": "//build/buck2/graph/test:20d587605565365cccd9"
+    },
+    {
+      "filename": "fusen-b86e0dfac5b841fa0188",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/fusen:fusen-test-test-test",
+      "mode": "test",
+      "package": "aizome-fusen",
+      "target": "fusen",
+      "unit_label": "//build/buck2/graph/test:b86e0dfac5b841fa0188"
+    },
+    {
+      "filename": "save_errors-cf23f39ae9b54500018f",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/fusen:save_errors-test-test-test",
+      "mode": "test",
+      "package": "aizome-fusen",
+      "target": "save_errors",
+      "unit_label": "//build/buck2/graph/test:cf23f39ae9b54500018f"
+    },
+    {
+      "filename": "aizome_greeter-52fc05b33a94d8929e0c",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-greeter:aizome_greeter-test-test-lib",
+      "mode": "test",
+      "package": "aizome-greeter",
+      "target": "aizome_greeter",
+      "unit_label": "//build/buck2/graph/test:52fc05b33a94d8929e0c"
+    },
+    {
+      "filename": "aizome_greeter-2cc55e6fa09389a07719",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-greeter:aizome-greeter-test-test-bin",
+      "mode": "test",
+      "package": "aizome-greeter",
+      "target": "aizome-greeter",
+      "unit_label": "//build/buck2/graph/test:2cc55e6fa09389a07719"
+    },
+    {
+      "filename": "budget-2527a45e90e8d3a13dc6",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-greeter:budget-test-test-test",
+      "mode": "test",
+      "package": "aizome-greeter",
+      "target": "budget",
+      "unit_label": "//build/buck2/graph/test:2527a45e90e8d3a13dc6"
+    },
+    {
+      "filename": "screens-9323cb7eb912b34fea5e",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-greeter:screens-test-test-test",
+      "mode": "test",
+      "package": "aizome-greeter",
+      "target": "screens",
+      "unit_label": "//build/buck2/graph/test:9323cb7eb912b34fea5e"
+    },
+    {
+      "filename": "hako-3b53ff620a1b7a01f594",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/hako:hako-test-test-lib",
+      "mode": "test",
+      "package": "aizome-hako",
+      "target": "hako",
+      "unit_label": "//build/buck2/graph/test:3b53ff620a1b7a01f594"
+    },
+    {
+      "filename": "aizome_hako-8d6074aec76ceb3567f4",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/hako:aizome-hako-test-test-bin",
+      "mode": "test",
+      "package": "aizome-hako",
+      "target": "aizome-hako",
+      "unit_label": "//build/buck2/graph/test:8d6074aec76ceb3567f4"
+    },
+    {
+      "filename": "file_manager-88182671caf7046ae8b4",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/hako:file_manager-test-test-test",
+      "mode": "test",
+      "package": "aizome-hako",
+      "target": "file_manager",
+      "unit_label": "//build/buck2/graph/test:88182671caf7046ae8b4"
+    },
+    {
+      "filename": "files-0e83c1927047e002f1a1",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/hako:files-test-test-test",
+      "mode": "test",
+      "package": "aizome-hako",
+      "target": "files",
+      "unit_label": "//build/buck2/graph/test:0e83c1927047e002f1a1"
+    },
+    {
+      "filename": "goldens-ec43560aa3c62732a3e0",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/hako:goldens-test-test-test",
+      "mode": "test",
+      "package": "aizome-hako",
+      "target": "goldens",
+      "unit_label": "//build/buck2/graph/test:ec43560aa3c62732a3e0"
+    },
+    {
+      "filename": "perf-aab4d1c90c5af79c3ba1",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/hako:perf-test-test-test",
+      "mode": "test",
+      "package": "aizome-hako",
+      "target": "perf",
+      "unit_label": "//build/buck2/graph/test:aab4d1c90c5af79c3ba1"
+    },
+    {
+      "filename": "window-1f59c6d746b0630a2f53",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/hako:window-test-test-test",
+      "mode": "test",
+      "package": "aizome-hako",
+      "target": "window",
+      "unit_label": "//build/buck2/graph/test:1f59c6d746b0630a2f53"
+    },
+    {
+      "filename": "aizome_hotaru-ad5af0949fa55af8e3d8",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/hotaru:aizome_hotaru-test-test-lib",
+      "mode": "test",
+      "package": "aizome-hotaru",
+      "target": "aizome_hotaru",
+      "unit_label": "//build/buck2/graph/test:ad5af0949fa55af8e3d8"
+    },
+    {
+      "filename": "aizome_hotaru-51f5ff844650ab2371d3",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/hotaru:aizome-hotaru-test-test-bin",
+      "mode": "test",
+      "package": "aizome-hotaru",
+      "target": "aizome-hotaru",
+      "unit_label": "//build/buck2/graph/test:51f5ff844650ab2371d3"
+    },
+    {
+      "filename": "cursor-2269549a16d0e91496d8",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/hotaru:cursor-test-test-test",
+      "mode": "test",
+      "package": "aizome-hotaru",
+      "target": "cursor",
+      "unit_label": "//build/buck2/graph/test:2269549a16d0e91496d8"
+    },
+    {
+      "filename": "native-46dfd07f1983438cf132",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/hotaru:native-test-test-test",
+      "mode": "test",
+      "package": "aizome-hotaru",
+      "target": "native",
+      "unit_label": "//build/buck2/graph/test:46dfd07f1983438cf132"
+    },
+    {
+      "filename": "pixel_scroll-6909a50f1c69de641fbc",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/hotaru:pixel_scroll-test-test-test",
+      "mode": "test",
+      "package": "aizome-hotaru",
+      "target": "pixel_scroll",
+      "unit_label": "//build/buck2/graph/test:6909a50f1c69de641fbc"
+    },
+    {
+      "filename": "aizome_ipc-f6d18d594ffae471fd15",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizome_ipc-test-test-lib",
+      "mode": "test",
+      "package": "aizome-ipc",
+      "target": "aizome_ipc",
+      "unit_label": "//build/buck2/graph/test:f6d18d594ffae471fd15"
+    },
+    {
+      "filename": "aizome_dev-5b03c1a0378362c6cfc0",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizome-dev-test-test-bin",
+      "mode": "test",
+      "package": "aizome-ipc",
+      "target": "aizome-dev",
+      "unit_label": "//build/buck2/graph/test:5b03c1a0378362c6cfc0"
+    },
+    {
+      "filename": "aizome_share_picker-a8b301574987cbd54bb5",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizome-share-picker-test-test-bin",
+      "mode": "test",
+      "package": "aizome-ipc",
+      "target": "aizome-share-picker",
+      "unit_label": "//build/buck2/graph/test:a8b301574987cbd54bb5"
+    },
+    {
+      "filename": "aizomectl-59f329858ed71e3e4173",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-ipc:aizomectl-test-test-bin",
+      "mode": "test",
+      "package": "aizome-ipc",
+      "target": "aizomectl",
+      "unit_label": "//build/buck2/graph/test:59f329858ed71e3e4173"
+    },
+    {
+      "filename": "aizome_kit-f1362d5152adf542ba7b",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "aizome_kit",
+      "unit_label": "//build/buck2/graph/test:f1362d5152adf542ba7b"
+    },
+    {
+      "filename": "alert_layout-222d96f55bef4b132234",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:alert_layout-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "alert_layout",
+      "unit_label": "//build/buck2/graph/test:222d96f55bef4b132234"
+    },
+    {
+      "filename": "canvas-0bb84936f1757e537148",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:canvas-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "canvas",
+      "unit_label": "//build/buck2/graph/test:0bb84936f1757e537148"
+    },
+    {
+      "filename": "collections-59ae9b284ca69c935fba",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:collections-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "collections",
+      "unit_label": "//build/buck2/graph/test:59ae9b284ca69c935fba"
+    },
+    {
+      "filename": "core-011df657131045aeb44f",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:core-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "core",
+      "unit_label": "//build/buck2/graph/test:011df657131045aeb44f"
+    },
+    {
+      "filename": "dialogs-b64ead0a51366d9cc9cd",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:dialogs-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "dialogs",
+      "unit_label": "//build/buck2/graph/test:b64ead0a51366d9cc9cd"
+    },
+    {
+      "filename": "drag_out-7ae64521d7f19e6bd80a",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:drag_out-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "drag_out",
+      "unit_label": "//build/buck2/graph/test:7ae64521d7f19e6bd80a"
+    },
+    {
+      "filename": "editor-0de62d5e622c0d0a262b",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:editor-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "editor",
+      "unit_label": "//build/buck2/graph/test:0de62d5e622c0d0a262b"
+    },
+    {
+      "filename": "field_blur-a9cb2da107904f6c34f4",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:field_blur-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "field_blur",
+      "unit_label": "//build/buck2/graph/test:a9cb2da107904f6c34f4"
+    },
+    {
+      "filename": "goldens-dc8c5602e1bc43f37694",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:goldens-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "goldens",
+      "unit_label": "//build/buck2/graph/test:dc8c5602e1bc43f37694"
+    },
+    {
+      "filename": "hidden-efa442bf70f322175118",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:hidden-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "hidden",
+      "unit_label": "//build/buck2/graph/test:efa442bf70f322175118"
+    },
+    {
+      "filename": "inspect-d0bd2502bbbdc2e2e66d",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:inspect-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "inspect",
+      "unit_label": "//build/buck2/graph/test:d0bd2502bbbdc2e2e66d"
+    },
+    {
+      "filename": "lists-d8831adb948e1a4151aa",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:lists-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "lists",
+      "unit_label": "//build/buck2/graph/test:d8831adb948e1a4151aa"
+    },
+    {
+      "filename": "menu_hooks-dd6242dbb834e46250a5",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:menu_hooks-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "menu_hooks",
+      "unit_label": "//build/buck2/graph/test:dd6242dbb834e46250a5"
+    },
+    {
+      "filename": "modal_commands-b3305dfd4a4c574af4a5",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:modal_commands-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "modal_commands",
+      "unit_label": "//build/buck2/graph/test:b3305dfd4a4c574af4a5"
+    },
+    {
+      "filename": "nested_modals-e15a3389f90204ff337c",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:nested_modals-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "nested_modals",
+      "unit_label": "//build/buck2/graph/test:e15a3389f90204ff337c"
+    },
+    {
+      "filename": "panes-9e13c34d0945aa98e657",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:panes-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "panes",
+      "unit_label": "//build/buck2/graph/test:9e13c34d0945aa98e657"
+    },
+    {
+      "filename": "perf-9fb010147d48156b527a",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:perf-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "perf",
+      "unit_label": "//build/buck2/graph/test:9fb010147d48156b527a"
+    },
+    {
+      "filename": "popups-4de2408d7681ea6f460e",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:popups-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "popups",
+      "unit_label": "//build/buck2/graph/test:4de2408d7681ea6f460e"
+    },
+    {
+      "filename": "program_popups-3a04eb3f342b848e0271",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:program_popups-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "program_popups",
+      "unit_label": "//build/buck2/graph/test:3a04eb3f342b848e0271"
+    },
+    {
+      "filename": "scroll_growth-53f356e27b858ba547ea",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:scroll_growth-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "scroll_growth",
+      "unit_label": "//build/buck2/graph/test:53f356e27b858ba547ea"
+    },
+    {
+      "filename": "scrolling-b0cfc7ca7898384074bb",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:scrolling-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "scrolling",
+      "unit_label": "//build/buck2/graph/test:b0cfc7ca7898384074bb"
+    },
+    {
+      "filename": "shell_api-ac24ddfebc9c826be887",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:shell_api-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "shell_api",
+      "unit_label": "//build/buck2/graph/test:ac24ddfebc9c826be887"
+    },
+    {
+      "filename": "shell_link-54837c4e64bf20e3a9a7",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:shell_link-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "shell_link",
+      "unit_label": "//build/buck2/graph/test:54837c4e64bf20e3a9a7"
+    },
+    {
+      "filename": "smoke-a6d72369d1d799e82c5a",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:smoke-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "smoke",
+      "unit_label": "//build/buck2/graph/test:a6d72369d1d799e82c5a"
+    },
+    {
+      "filename": "text_drag-fe9cd7ee307705b8082e",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:text_drag-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "text_drag",
+      "unit_label": "//build/buck2/graph/test:fe9cd7ee307705b8082e"
+    },
+    {
+      "filename": "text_field-5b5f1567d7e657221491",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:text_field-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "text_field",
+      "unit_label": "//build/buck2/graph/test:5b5f1567d7e657221491"
+    },
+    {
+      "filename": "tooltip_refresh-9eb6f360f01c586ea2c8",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:tooltip_refresh-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "tooltip_refresh",
+      "unit_label": "//build/buck2/graph/test:9eb6f360f01c586ea2c8"
+    },
+    {
+      "filename": "video_modals-886b14eccc2fc177a685",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:video_modals-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "video_modals",
+      "unit_label": "//build/buck2/graph/test:886b14eccc2fc177a685"
+    },
+    {
+      "filename": "widget_timers-21ace22b14cb9e433f27",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:widget_timers-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "widget_timers",
+      "unit_label": "//build/buck2/graph/test:21ace22b14cb9e433f27"
+    },
+    {
+      "filename": "window_state-54a3198fe1fa606d1f93",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-kit:window_state-test-test-test",
+      "mode": "test",
+      "package": "aizome-kit",
+      "target": "window_state",
+      "unit_label": "//build/buck2/graph/test:54a3198fe1fa606d1f93"
+    },
+    {
+      "filename": "koe-0160f57d475546062922",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/koe:koe-test-test-lib",
+      "mode": "test",
+      "package": "aizome-koe",
+      "target": "koe",
+      "unit_label": "//build/buck2/graph/test:0160f57d475546062922"
+    },
+    {
+      "filename": "aizome_koe-71cf719ba97ddaa03a39",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/koe:aizome-koe-test-test-bin",
+      "mode": "test",
+      "package": "aizome-koe",
+      "target": "aizome-koe",
+      "unit_label": "//build/buck2/graph/test:71cf719ba97ddaa03a39"
+    },
+    {
+      "filename": "aizome-06e14689190f55928f7c",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/koe:aizome-test-test-test",
+      "mode": "test",
+      "package": "aizome-koe",
+      "target": "aizome",
+      "unit_label": "//build/buck2/graph/test:06e14689190f55928f7c"
+    },
+    {
+      "filename": "core-2aab69c2e9516ca1b7aa",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/koe:core-test-test-test",
+      "mode": "test",
+      "package": "aizome-koe",
+      "target": "core",
+      "unit_label": "//build/buck2/graph/test:2aab69c2e9516ca1b7aa"
+    },
+    {
+      "filename": "daemon-e2673e74f20c4f2c54c7",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/koe:daemon-test-test-test",
+      "mode": "test",
+      "package": "aizome-koe",
+      "target": "daemon",
+      "unit_label": "//build/buck2/graph/test:e2673e74f20c4f2c54c7"
+    },
+    {
+      "filename": "look-4bbc144b6da7e93e716b",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/koe:look-test-test-test",
+      "mode": "test",
+      "package": "aizome-koe",
+      "target": "look",
+      "unit_label": "//build/buck2/graph/test:4bbc144b6da7e93e716b"
+    },
+    {
+      "filename": "setup-be3a8d8392e319200922",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/koe:setup-test-test-test",
+      "mode": "test",
+      "package": "aizome-koe",
+      "target": "setup",
+      "unit_label": "//build/buck2/graph/test:be3a8d8392e319200922"
+    },
+    {
+      "filename": "tray-20206e9b665c69f411c5",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/koe:tray-test-test-test",
+      "mode": "test",
+      "package": "aizome-koe",
+      "target": "tray",
+      "unit_label": "//build/buck2/graph/test:20206e9b665c69f411c5"
+    },
+    {
+      "filename": "vocabulary-051926f669f3d87e450b",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/koe:vocabulary-test-test-test",
+      "mode": "test",
+      "package": "aizome-koe",
+      "target": "vocabulary",
+      "unit_label": "//build/buck2/graph/test:051926f669f3d87e450b"
+    },
+    {
+      "filename": "koyomi-0ba515baa44f4afb4949",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/koyomi:koyomi-test-test-lib",
+      "mode": "test",
+      "package": "aizome-koyomi",
+      "target": "koyomi",
+      "unit_label": "//build/buck2/graph/test:0ba515baa44f4afb4949"
+    },
+    {
+      "filename": "aizome_koyomi-2995b59a290146592270",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/koyomi:aizome-koyomi-test-test-bin",
+      "mode": "test",
+      "package": "aizome-koyomi",
+      "target": "aizome-koyomi",
+      "unit_label": "//build/buck2/graph/test:2995b59a290146592270"
+    },
+    {
+      "filename": "agent-27ecbc8183d710984597",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/koyomi:agent-test-test-test",
+      "mode": "test",
+      "package": "aizome-koyomi",
+      "target": "agent",
+      "unit_label": "//build/buck2/graph/test:27ecbc8183d710984597"
+    },
+    {
+      "filename": "app-f1b5fc4dd659c86ed75a",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/koyomi:app-test-test-test",
+      "mode": "test",
+      "package": "aizome-koyomi",
+      "target": "app",
+      "unit_label": "//build/buck2/graph/test:f1b5fc4dd659c86ed75a"
+    },
+    {
+      "filename": "ics-8fa5dc45414ed9724ce2",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/koyomi:ics-test-test-test",
+      "mode": "test",
+      "package": "aizome-koyomi",
+      "target": "ics",
+      "unit_label": "//build/buck2/graph/test:8fa5dc45414ed9724ce2"
+    },
+    {
+      "filename": "perf-7a96ae9f9d3305e5f33c",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/koyomi:perf-test-test-test",
+      "mode": "test",
+      "package": "aizome-koyomi",
+      "target": "perf",
+      "unit_label": "//build/buck2/graph/test:7a96ae9f9d3305e5f33c"
+    },
+    {
+      "filename": "kura-6dcb3ac9b5c2cd6bf4da",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/kura:kura-test-test-lib",
+      "mode": "test",
+      "package": "aizome-kura",
+      "target": "kura",
+      "unit_label": "//build/buck2/graph/test:6dcb3ac9b5c2cd6bf4da"
+    },
+    {
+      "filename": "aizome_kura-c89af18e1b297ad04147",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/kura:aizome-kura-test-test-bin",
+      "mode": "test",
+      "package": "aizome-kura",
+      "target": "aizome-kura",
+      "unit_label": "//build/buck2/graph/test:c89af18e1b297ad04147"
+    },
+    {
+      "filename": "index-fe65c294cd427d59a887",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/kura:index-test-test-test",
+      "mode": "test",
+      "package": "aizome-kura",
+      "target": "index",
+      "unit_label": "//build/buck2/graph/test:fe65c294cd427d59a887"
+    },
+    {
+      "filename": "ui-543f98fd168a9604042d",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/kura:ui-test-test-test",
+      "mode": "test",
+      "package": "aizome-kura",
+      "target": "ui",
+      "unit_label": "//build/buck2/graph/test:543f98fd168a9604042d"
+    },
+    {
+      "filename": "aizome_media-d397a845a2365835c246",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-media:aizome_media-test-test-lib",
+      "mode": "test",
+      "package": "aizome-media",
+      "target": "aizome_media",
+      "unit_label": "//build/buck2/graph/test:d397a845a2365835c246"
+    },
+    {
+      "filename": "engine-20864e142ba6195416e7",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-media:engine-test-test-test",
+      "mode": "test",
+      "package": "aizome-media",
+      "target": "engine",
+      "unit_label": "//build/buck2/graph/test:20864e142ba6195416e7"
+    },
+    {
+      "filename": "myaku-06d8d867c22f453514f2",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/myaku:myaku-test-test-lib",
+      "mode": "test",
+      "package": "aizome-myaku",
+      "target": "myaku",
+      "unit_label": "//build/buck2/graph/test:06d8d867c22f453514f2"
+    },
+    {
+      "filename": "aizome_myaku-12c8f5bc8ee8a825947b",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/myaku:aizome-myaku-test-test-bin",
+      "mode": "test",
+      "package": "aizome-myaku",
+      "target": "aizome-myaku",
+      "unit_label": "//build/buck2/graph/test:12c8f5bc8ee8a825947b"
+    },
+    {
+      "filename": "energy-927a5dc5c1d8c435668f",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/myaku:energy-test-test-test",
+      "mode": "test",
+      "package": "aizome-myaku",
+      "target": "energy",
+      "unit_label": "//build/buck2/graph/test:927a5dc5c1d8c435668f"
+    },
+    {
+      "filename": "gpu-3ababc34643133543e3c",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/myaku:gpu-test-test-test",
+      "mode": "test",
+      "package": "aizome-myaku",
+      "target": "gpu",
+      "unit_label": "//build/buck2/graph/test:3ababc34643133543e3c"
+    },
+    {
+      "filename": "look-94dc01a6339d574ba2b2",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/myaku:look-test-test-test",
+      "mode": "test",
+      "package": "aizome-myaku",
+      "target": "look",
+      "unit_label": "//build/buck2/graph/test:94dc01a6339d574ba2b2"
+    },
+    {
+      "filename": "perf-f8d2bf1b0f00e37ade63",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/myaku:perf-test-test-test",
+      "mode": "test",
+      "package": "aizome-myaku",
+      "target": "perf",
+      "unit_label": "//build/buck2/graph/test:f8d2bf1b0f00e37ade63"
+    },
+    {
+      "filename": "ui-a1fbec20d5bfee835163",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/myaku:ui-test-test-test",
+      "mode": "test",
+      "package": "aizome-myaku",
+      "target": "ui",
+      "unit_label": "//build/buck2/graph/test:a1fbec20d5bfee835163"
+    },
+    {
+      "filename": "aizome_network_agent-906f998f452e050db8fc",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-network-agent:aizome_network_agent-test-test-lib",
+      "mode": "test",
+      "package": "aizome-network-agent",
+      "target": "aizome_network_agent",
+      "unit_label": "//build/buck2/graph/test:906f998f452e050db8fc"
+    },
+    {
+      "filename": "aizome_network_agent-7a09f99c432736ac8d1f",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-network-agent:aizome-network-agent-test-test-bin",
+      "mode": "test",
+      "package": "aizome-network-agent",
+      "target": "aizome-network-agent",
+      "unit_label": "//build/buck2/graph/test:7a09f99c432736ac8d1f"
+    },
+    {
+      "filename": "credentials-e0c5667f2a0cba1e2df6",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-network-agent:credentials-test-test-test",
+      "mode": "test",
+      "package": "aizome-network-agent",
+      "target": "credentials",
+      "unit_label": "//build/buck2/graph/test:e0c5667f2a0cba1e2df6"
+    },
+    {
+      "filename": "nisshi-65175e1d475bc5ff5920",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:nisshi-test-test-lib",
+      "mode": "test",
+      "package": "aizome-nisshi",
+      "target": "nisshi",
+      "unit_label": "//build/buck2/graph/test:65175e1d475bc5ff5920"
+    },
+    {
+      "filename": "aizome_nisshi-c4ff107d9ed266dce26b",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:aizome-nisshi-test-test-bin",
+      "mode": "test",
+      "package": "aizome-nisshi",
+      "target": "aizome-nisshi",
+      "unit_label": "//build/buck2/graph/test:c4ff107d9ed266dce26b"
+    },
+    {
+      "filename": "aizome_nisshi_helper-ae002f3a44e70fe90b40",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:aizome-nisshi-helper-test-test-bin",
+      "mode": "test",
+      "package": "aizome-nisshi",
+      "target": "aizome-nisshi-helper",
+      "unit_label": "//build/buck2/graph/test:ae002f3a44e70fe90b40"
+    },
+    {
+      "filename": "look-7a26aecbdba3da68c983",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:look-test-test-test",
+      "mode": "test",
+      "package": "aizome-nisshi",
+      "target": "look",
+      "unit_label": "//build/buck2/graph/test:7a26aecbdba3da68c983"
+    },
+    {
+      "filename": "perf-ae4bb756ba6b5ffabe10",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:perf-test-test-test",
+      "mode": "test",
+      "package": "aizome-nisshi",
+      "target": "perf",
+      "unit_label": "//build/buck2/graph/test:ae4bb756ba6b5ffabe10"
+    },
+    {
+      "filename": "reader-1476580d7c1dc5220b39",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:reader-test-test-test",
+      "mode": "test",
+      "package": "aizome-nisshi",
+      "target": "reader",
+      "unit_label": "//build/buck2/graph/test:1476580d7c1dc5220b39"
+    },
+    {
+      "filename": "ui-110a6c8eef0549c231ca",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/nisshi:ui-test-test-test",
+      "mode": "test",
+      "package": "aizome-nisshi",
+      "target": "ui",
+      "unit_label": "//build/buck2/graph/test:110a6c8eef0549c231ca"
+    },
+    {
+      "filename": "aizome_portal-3f108ab898fb23b425f9",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-portal:aizome_portal-test-test-lib",
+      "mode": "test",
+      "package": "aizome-portal",
+      "target": "aizome_portal",
+      "unit_label": "//build/buck2/graph/test:3f108ab898fb23b425f9"
+    },
+    {
+      "filename": "aizome_portal-55b1eb740aead39d3230",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-portal:aizome-portal-test-test-bin",
+      "mode": "test",
+      "package": "aizome-portal",
+      "target": "aizome-portal",
+      "unit_label": "//build/buck2/graph/test:55b1eb740aead39d3230"
+    },
+    {
+      "filename": "chooser-ae5327e55bd723b4197f",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-portal:chooser-test-test-test",
+      "mode": "test",
+      "package": "aizome-portal",
+      "target": "chooser",
+      "unit_label": "//build/buck2/graph/test:ae5327e55bd723b4197f"
+    },
+    {
+      "filename": "goldens-a68150256608064f62cb",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-portal:goldens-test-test-test",
+      "mode": "test",
+      "package": "aizome-portal",
+      "target": "goldens",
+      "unit_label": "//build/buck2/graph/test:a68150256608064f62cb"
+    },
+    {
+      "filename": "service-727d91805b00f3ee1cfc",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-portal:service-test-test-test",
+      "mode": "test",
+      "package": "aizome-portal",
+      "target": "service",
+      "unit_label": "//build/buck2/graph/test:727d91805b00f3ee1cfc"
+    },
+    {
+      "filename": "aizome_power_meter-edfc5509cf9a1f0c73f7",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-power-meter:aizome-power-meter-test-test-bin",
+      "mode": "test",
+      "package": "aizome-power-meter",
+      "target": "aizome-power-meter",
+      "unit_label": "//build/buck2/graph/test:edfc5509cf9a1f0c73f7"
+    },
+    {
+      "filename": "aizome_search-3a99e93eda467a3a9287",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-search:aizome_search-test-test-lib",
+      "mode": "test",
+      "package": "aizome-search",
+      "target": "aizome_search",
+      "unit_label": "//build/buck2/graph/test:3a99e93eda467a3a9287"
+    },
+    {
+      "filename": "settei-03b2ccbfe4d689046b64",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/settei:settei-test-test-lib",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "settei",
+      "unit_label": "//build/buck2/graph/test:03b2ccbfe4d689046b64"
+    },
+    {
+      "filename": "aizome_settei-2daef50554bad308d7d5",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/settei:aizome-settei-test-test-bin",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "aizome-settei",
+      "unit_label": "//build/buck2/graph/test:2daef50554bad308d7d5"
+    },
+    {
+      "filename": "budget-b72d9f36e4bdd3d8cf46",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/settei:budget-test-test-test",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "budget",
+      "unit_label": "//build/buck2/graph/test:b72d9f36e4bdd3d8cf46"
+    },
+    {
+      "filename": "budget_hw-83f08a119c48a3b83b6f",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/settei:budget_hw-test-test-test",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "budget_hw",
+      "unit_label": "//build/buck2/graph/test:83f08a119c48a3b83b6f"
+    },
+    {
+      "filename": "desktop-48e9a38c411328a63d63",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/settei:desktop-test-test-test",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "desktop",
+      "unit_label": "//build/buck2/graph/test:48e9a38c411328a63d63"
+    },
+    {
+      "filename": "devices-402647478d7ce010f331",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/settei:devices-test-test-test",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "devices",
+      "unit_label": "//build/buck2/graph/test:402647478d7ce010f331"
+    },
+    {
+      "filename": "displays-40a350f73bdefc8ea04c",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/settei:displays-test-test-test",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "displays",
+      "unit_label": "//build/buck2/graph/test:40a350f73bdefc8ea04c"
+    },
+    {
+      "filename": "displays_live-e3382742f766c7ba7c76",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/settei:displays_live-test-test-test",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "displays_live",
+      "unit_label": "//build/buck2/graph/test:e3382742f766c7ba7c76"
+    },
+    {
+      "filename": "goldens-c5d69ffa5f53c7064181",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/settei:goldens-test-test-test",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "goldens",
+      "unit_label": "//build/buck2/graph/test:c5d69ffa5f53c7064181"
+    },
+    {
+      "filename": "goldens_hw-7801ba0eb8dc6dd2ca71",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/settei:goldens_hw-test-test-test",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "goldens_hw",
+      "unit_label": "//build/buck2/graph/test:7801ba0eb8dc6dd2ca71"
+    },
+    {
+      "filename": "keyboard-90185c32eea2acb4a8e5",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/settei:keyboard-test-test-test",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "keyboard",
+      "unit_label": "//build/buck2/graph/test:90185c32eea2acb4a8e5"
+    },
+    {
+      "filename": "live_snapshot-ae0d712434ae8b1af03c",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/settei:live_snapshot-test-test-test",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "live_snapshot",
+      "unit_label": "//build/buck2/graph/test:ae0d712434ae8b1af03c"
+    },
+    {
+      "filename": "network-8efdc850f1ce08a17aab",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/settei:network-test-test-test",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "network",
+      "unit_label": "//build/buck2/graph/test:8efdc850f1ce08a17aab"
+    },
+    {
+      "filename": "tour-c6146bf166a648b04098",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/settei:tour-test-test-test",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "tour",
+      "unit_label": "//build/buck2/graph/test:c6146bf166a648b04098"
+    },
+    {
+      "filename": "window-518449342bc5c7d9cfeb",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/settei:window-test-test-test",
+      "mode": "test",
+      "package": "aizome-settei",
+      "target": "window",
+      "unit_label": "//build/buck2/graph/test:518449342bc5c7d9cfeb"
+    },
+    {
+      "filename": "aizome_shashin-94a9ff9ab8f33f857d77",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/shashin:aizome_shashin-test-test-lib",
+      "mode": "test",
+      "package": "aizome-shashin",
+      "target": "aizome_shashin",
+      "unit_label": "//build/buck2/graph/test:94a9ff9ab8f33f857d77"
+    },
+    {
+      "filename": "aizome_shashin-0c7956fc966e455fbe5b",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/shashin:aizome-shashin-test-test-bin",
+      "mode": "test",
+      "package": "aizome-shashin",
+      "target": "aizome-shashin",
+      "unit_label": "//build/buck2/graph/test:0c7956fc966e455fbe5b"
+    },
+    {
+      "filename": "budget-66b3fb02049ec360b4b5",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/shashin:budget-test-test-test",
+      "mode": "test",
+      "package": "aizome-shashin",
+      "target": "budget",
+      "unit_label": "//build/buck2/graph/test:66b3fb02049ec360b4b5"
+    },
+    {
+      "filename": "modal_commands-7f2b197d7d5811d79b9e",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/shashin:modal_commands-test-test-test",
+      "mode": "test",
+      "package": "aizome-shashin",
+      "target": "modal_commands",
+      "unit_label": "//build/buck2/graph/test:7f2b197d7d5811d79b9e"
+    },
+    {
+      "filename": "shashin-5efce954ab482ecc537e",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/shashin:shashin-test-test-test",
+      "mode": "test",
+      "package": "aizome-shashin",
+      "target": "shashin",
+      "unit_label": "//build/buck2/graph/test:5efce954ab482ecc537e"
+    },
+    {
+      "filename": "aizome_shell-6ccc9801b0b15f6a38e1",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:aizome_shell-test-test-lib",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "aizome_shell",
+      "unit_label": "//build/buck2/graph/test:6ccc9801b0b15f6a38e1"
+    },
+    {
+      "filename": "aizome_shell-10add5d469fd2a7f21c2",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:aizome-shell-test-test-bin",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "aizome-shell",
+      "unit_label": "//build/buck2/graph/test:10add5d469fd2a7f21c2"
+    },
+    {
+      "filename": "auth-95d014dfddc62dd8bca3",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:auth-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "auth",
+      "unit_label": "//build/buck2/graph/test:95d014dfddc62dd8bca3"
+    },
+    {
+      "filename": "deskbar-bb05a2112348409c5dc1",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:deskbar-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "deskbar",
+      "unit_label": "//build/buck2/graph/test:bb05a2112348409c5dc1"
+    },
+    {
+      "filename": "deskbar_designs-11640abe1bccb7f78662",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:deskbar_designs-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "deskbar_designs",
+      "unit_label": "//build/buck2/graph/test:11640abe1bccb7f78662"
+    },
+    {
+      "filename": "desktop-978103f8917c4bf784b8",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:desktop-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "desktop",
+      "unit_label": "//build/buck2/graph/test:978103f8917c4bf784b8"
+    },
+    {
+      "filename": "lock-6648dde1d699ed0586d8",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:lock-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "lock",
+      "unit_label": "//build/buck2/graph/test:6648dde1d699ed0586d8"
+    },
+    {
+      "filename": "media-29ee989fa04f9bbf88a3",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:media-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "media",
+      "unit_label": "//build/buck2/graph/test:29ee989fa04f9bbf88a3"
+    },
+    {
+      "filename": "menubar-0ed28e9c2b4abafc84cd",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:menubar-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "menubar",
+      "unit_label": "//build/buck2/graph/test:0ed28e9c2b4abafc84cd"
+    },
+    {
+      "filename": "menus-6482bbf32c2e5512e294",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:menus-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "menus",
+      "unit_label": "//build/buck2/graph/test:6482bbf32c2e5512e294"
+    },
+    {
+      "filename": "palette-91afbfa9eb89c7f0742f",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:palette-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "palette",
+      "unit_label": "//build/buck2/graph/test:91afbfa9eb89c7f0742f"
+    },
+    {
+      "filename": "panels-f2716bcd9f37a4ec79b8",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:panels-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "panels",
+      "unit_label": "//build/buck2/graph/test:f2716bcd9f37a4ec79b8"
+    },
+    {
+      "filename": "perf-91d289906654caa5b010",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:perf-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "perf",
+      "unit_label": "//build/buck2/graph/test:91d289906654caa5b010"
+    },
+    {
+      "filename": "recording-13a0c84a5b3a44f4e432",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:recording-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "recording",
+      "unit_label": "//build/buck2/graph/test:13a0c84a5b3a44f4e432"
+    },
+    {
+      "filename": "session-3ac5ee35ab6aa002aee9",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:session-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "session",
+      "unit_label": "//build/buck2/graph/test:3ac5ee35ab6aa002aee9"
+    },
+    {
+      "filename": "settings-9e3065d0ece030c41ce8",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:settings-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "settings",
+      "unit_label": "//build/buck2/graph/test:9e3065d0ece030c41ce8"
+    },
+    {
+      "filename": "sharing-e8ac0fac8b9035891c75",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell:sharing-test-test-test",
+      "mode": "test",
+      "package": "aizome-shell",
+      "target": "sharing",
+      "unit_label": "//build/buck2/graph/test:e8ac0fac8b9035891c75"
+    },
+    {
+      "filename": "aizome_shell_proto-a8c822c8076c9588deb5",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-shell-proto:aizome_shell_proto-test-test-lib",
+      "mode": "test",
+      "package": "aizome-shell-proto",
+      "target": "aizome_shell_proto",
+      "unit_label": "//build/buck2/graph/test:a8c822c8076c9588deb5"
+    },
+    {
+      "filename": "aizome_shiori-2baaa89044cbfce67f4a",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/shiori:aizome_shiori-test-test-lib",
+      "mode": "test",
+      "package": "aizome-shiori",
+      "target": "aizome_shiori",
+      "unit_label": "//build/buck2/graph/test:2baaa89044cbfce67f4a"
+    },
+    {
+      "filename": "aizome_shiori-9c7678ecb1aa02fef54f",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/shiori:aizome-shiori-test-test-bin",
+      "mode": "test",
+      "package": "aizome-shiori",
+      "target": "aizome-shiori",
+      "unit_label": "//build/buck2/graph/test:9c7678ecb1aa02fef54f"
+    },
+    {
+      "filename": "budget-7968a510eb62dc69752b",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/shiori:budget-test-test-test",
+      "mode": "test",
+      "package": "aizome-shiori",
+      "target": "budget",
+      "unit_label": "//build/buck2/graph/test:7968a510eb62dc69752b"
+    },
+    {
+      "filename": "shiori-ad2468fcc251a7e32069",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/shiori:shiori-test-test-test",
+      "mode": "test",
+      "package": "aizome-shiori",
+      "target": "shiori",
+      "unit_label": "//build/buck2/graph/test:ad2468fcc251a7e32069"
+    },
+    {
+      "filename": "worker-f80a767709ef33352710",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/shiori:worker-test-test-test",
+      "mode": "test",
+      "package": "aizome-shiori",
+      "target": "worker",
+      "unit_label": "//build/buck2/graph/test:f80a767709ef33352710"
+    },
+    {
+      "filename": "aizome_soroban-aa2911747b37b360eac5",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib",
+      "mode": "test",
+      "package": "aizome-soroban",
+      "target": "aizome_soroban",
+      "unit_label": "//build/buck2/graph/test:aa2911747b37b360eac5"
+    },
+    {
+      "filename": "aizome_soroban-d73170884cfaedd5abac",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/soroban:aizome-soroban-test-test-bin",
+      "mode": "test",
+      "package": "aizome-soroban",
+      "target": "aizome-soroban",
+      "unit_label": "//build/buck2/graph/test:d73170884cfaedd5abac"
+    },
+    {
+      "filename": "soroban-313aab66eb4afd0253c9",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/soroban:soroban-test-test-test",
+      "mode": "test",
+      "package": "aizome-soroban",
+      "target": "soroban",
+      "unit_label": "//build/buck2/graph/test:313aab66eb4afd0253c9"
+    },
+    {
+      "filename": "aizome_sumi-829d46e99a900c673ab9",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/sumi:aizome_sumi-test-test-lib",
+      "mode": "test",
+      "package": "aizome-sumi",
+      "target": "aizome_sumi",
+      "unit_label": "//build/buck2/graph/test:829d46e99a900c673ab9"
+    },
+    {
+      "filename": "aizome_sumi-7618332ccf923475b487",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/sumi:aizome-sumi-test-test-bin",
+      "mode": "test",
+      "package": "aizome-sumi",
+      "target": "aizome-sumi",
+      "unit_label": "//build/buck2/graph/test:7618332ccf923475b487"
+    },
+    {
+      "filename": "sumi-a064d69a94cbfb4b2b66",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/sumi:sumi-test-test-test",
+      "mode": "test",
+      "package": "aizome-sumi",
+      "target": "sumi",
+      "unit_label": "//build/buck2/graph/test:a064d69a94cbfb4b2b66"
+    },
+    {
+      "filename": "aizome_sys-dc9d9e2624f5e5241498",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:aizome_sys-test-test-lib",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "aizome_sys",
+      "unit_label": "//build/buck2/graph/test:dc9d9e2624f5e5241498"
+    },
+    {
+      "filename": "apps-3e40ca4e8fad123ef0e5",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:apps-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "apps",
+      "unit_label": "//build/buck2/graph/test:3e40ca4e8fad123ef0e5"
+    },
+    {
+      "filename": "audio-de6c766b5c7a7bee4bf9",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:audio-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "audio",
+      "unit_label": "//build/buck2/graph/test:de6c766b5c7a7bee4bf9"
+    },
+    {
+      "filename": "bluetooth-08c256b399b3b2ed0c46",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:bluetooth-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "bluetooth",
+      "unit_label": "//build/buck2/graph/test:08c256b399b3b2ed0c46"
+    },
+    {
+      "filename": "datetime-36d32594fb694d10228b",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:datetime-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "datetime",
+      "unit_label": "//build/buck2/graph/test:36d32594fb694d10228b"
+    },
+    {
+      "filename": "disks-9eb5d3a93effee94b0c8",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:disks-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "disks",
+      "unit_label": "//build/buck2/graph/test:9eb5d3a93effee94b0c8"
+    },
+    {
+      "filename": "disks_encrypted_real-cd7c8347fed182c4cc48",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:disks_encrypted_real-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "disks_encrypted_real",
+      "unit_label": "//build/buck2/graph/test:cd7c8347fed182c4cc48"
+    },
+    {
+      "filename": "disks_real-66fc3b79ea55550503eb",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:disks_real-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "disks_real",
+      "unit_label": "//build/buck2/graph/test:66fc3b79ea55550503eb"
+    },
+    {
+      "filename": "disks_visibility-2dddcde191af8ab6e1ef",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:disks_visibility-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "disks_visibility",
+      "unit_label": "//build/buck2/graph/test:2dddcde191af8ab6e1ef"
+    },
+    {
+      "filename": "display_scales-f3d3fee2da7ded93af5c",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:display_scales-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "display_scales",
+      "unit_label": "//build/buck2/graph/test:f3d3fee2da7ded93af5c"
+    },
+    {
+      "filename": "live-ea24bf98f690d0430d85",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:live-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "live",
+      "unit_label": "//build/buck2/graph/test:ea24bf98f690d0430d85"
+    },
+    {
+      "filename": "location-d3a807b53c137d7f6d04",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:location-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "location",
+      "unit_label": "//build/buck2/graph/test:d3a807b53c137d7f6d04"
+    },
+    {
+      "filename": "mpris-f39b067fa52b90bd4568",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:mpris-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "mpris",
+      "unit_label": "//build/buck2/graph/test:f39b067fa52b90bd4568"
+    },
+    {
+      "filename": "network-a8f9d391013f898caa56",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:network-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "network",
+      "unit_label": "//build/buck2/graph/test:a8f9d391013f898caa56"
+    },
+    {
+      "filename": "notifications-19fa609f2fb4f5a0a6ee",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:notifications-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "notifications",
+      "unit_label": "//build/buck2/graph/test:19fa609f2fb4f5a0a6ee"
+    },
+    {
+      "filename": "polkit-0ac1871c171e5c257fc2",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:polkit-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "polkit",
+      "unit_label": "//build/buck2/graph/test:0ac1871c171e5c257fc2"
+    },
+    {
+      "filename": "power-d2358a0cc0061352d901",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:power-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "power",
+      "unit_label": "//build/buck2/graph/test:d2358a0cc0061352d901"
+    },
+    {
+      "filename": "statusnotifier-71152f2d2cc02d779a32",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:statusnotifier-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "statusnotifier",
+      "unit_label": "//build/buck2/graph/test:71152f2d2cc02d779a32"
+    },
+    {
+      "filename": "users-10f624520e53201b74d8",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/aizome-sys:users-test-test-test",
+      "mode": "test",
+      "package": "aizome-sys",
+      "target": "users",
+      "unit_label": "//build/buck2/graph/test:10f624520e53201b74d8"
+    },
+    {
+      "filename": "tansu-d5d904a9aecc1133d0e5",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/tansu:tansu-test-test-lib",
+      "mode": "test",
+      "package": "aizome-tansu",
+      "target": "tansu",
+      "unit_label": "//build/buck2/graph/test:d5d904a9aecc1133d0e5"
+    },
+    {
+      "filename": "aizome_tansu-e847b4add112ff2bdcfc",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/tansu:aizome-tansu-test-test-bin",
+      "mode": "test",
+      "package": "aizome-tansu",
+      "target": "aizome-tansu",
+      "unit_label": "//build/buck2/graph/test:e847b4add112ff2bdcfc"
+    },
+    {
+      "filename": "look-27be678bf2bcb246f7d0",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/tansu:look-test-test-test",
+      "mode": "test",
+      "package": "aizome-tansu",
+      "target": "look",
+      "unit_label": "//build/buck2/graph/test:27be678bf2bcb246f7d0"
+    },
+    {
+      "filename": "perf-0ccb6d285a00fb265a3a",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/tansu:perf-test-test-test",
+      "mode": "test",
+      "package": "aizome-tansu",
+      "target": "perf",
+      "unit_label": "//build/buck2/graph/test:0ccb6d285a00fb265a3a"
+    },
+    {
+      "filename": "resize-0d6ff58666e957ed22d0",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/tansu:resize-test-test-test",
+      "mode": "test",
+      "package": "aizome-tansu",
+      "target": "resize",
+      "unit_label": "//build/buck2/graph/test:0d6ff58666e957ed22d0"
+    },
+    {
+      "filename": "udisks-c6a12612bd9848e072c8",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/tansu:udisks-test-test-test",
+      "mode": "test",
+      "package": "aizome-tansu",
+      "target": "udisks",
+      "unit_label": "//build/buck2/graph/test:c6a12612bd9848e072c8"
+    },
+    {
+      "filename": "ui-4abde16bd0b269ebfae5",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/tansu:ui-test-test-test",
+      "mode": "test",
+      "package": "aizome-tansu",
+      "target": "ui",
+      "unit_label": "//build/buck2/graph/test:4abde16bd0b269ebfae5"
+    },
+    {
+      "filename": "aizome_tenki-7bd7b527ef55b11040d8",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/tenki:aizome_tenki-test-test-lib",
+      "mode": "test",
+      "package": "aizome-tenki",
+      "target": "aizome_tenki",
+      "unit_label": "//build/buck2/graph/test:7bd7b527ef55b11040d8"
+    },
+    {
+      "filename": "aizome_tenki-608d2dea131342eed234",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/tenki:aizome-tenki-test-test-bin",
+      "mode": "test",
+      "package": "aizome-tenki",
+      "target": "aizome-tenki",
+      "unit_label": "//build/buck2/graph/test:608d2dea131342eed234"
+    },
+    {
+      "filename": "geoclue-349fad69d46340edfd3b",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/tenki:geoclue-test-test-test",
+      "mode": "test",
+      "package": "aizome-tenki",
+      "target": "geoclue",
+      "unit_label": "//build/buck2/graph/test:349fad69d46340edfd3b"
+    },
+    {
+      "filename": "search_generation-2f46b24cb78e26d0f2dc",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/tenki:search_generation-test-test-test",
+      "mode": "test",
+      "package": "aizome-tenki",
+      "target": "search_generation",
+      "unit_label": "//build/buck2/graph/test:2f46b24cb78e26d0f2dc"
+    },
+    {
+      "filename": "tenki-9c32c96d140a11e956e2",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/tenki:tenki-test-test-test",
+      "mode": "test",
+      "package": "aizome-tenki",
+      "target": "tenki",
+      "unit_label": "//build/buck2/graph/test:9c32c96d140a11e956e2"
+    },
+    {
+      "filename": "aizome_theme-88207783cefd6dadaef1",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/aizome-theme:aizome_theme-test-test-lib",
+      "mode": "test",
+      "package": "aizome-theme",
+      "target": "aizome_theme",
+      "unit_label": "//build/buck2/graph/test:88207783cefd6dadaef1"
+    },
+    {
+      "filename": "aizome_tokei-40a686515fa800b109e1",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/tokei:aizome_tokei-test-test-lib",
+      "mode": "test",
+      "package": "aizome-tokei",
+      "target": "aizome_tokei",
+      "unit_label": "//build/buck2/graph/test:40a686515fa800b109e1"
+    },
+    {
+      "filename": "aizome_tokei-dd3ae46345b97fa10760",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/tokei:aizome-tokei-test-test-bin",
+      "mode": "test",
+      "package": "aizome-tokei",
+      "target": "aizome-tokei",
+      "unit_label": "//build/buck2/graph/test:dd3ae46345b97fa10760"
+    },
+    {
+      "filename": "tokei-b65296e8172a58c1644e",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/tokei:tokei-test-test-test",
+      "mode": "test",
+      "package": "aizome-tokei",
+      "target": "tokei",
+      "unit_label": "//build/buck2/graph/test:b65296e8172a58c1644e"
+    },
+    {
+      "filename": "aizome_utsushi-e4d26365d563b8423cfa",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/utsushi:aizome_utsushi-test-test-lib",
+      "mode": "test",
+      "package": "aizome-utsushi",
+      "target": "aizome_utsushi",
+      "unit_label": "//build/buck2/graph/test:e4d26365d563b8423cfa"
+    },
+    {
+      "filename": "aizome_utsushi-06de4a62a825903a8b13",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/utsushi:aizome-utsushi-test-test-bin",
+      "mode": "test",
+      "package": "aizome-utsushi",
+      "target": "aizome-utsushi",
+      "unit_label": "//build/buck2/graph/test:06de4a62a825903a8b13"
+    },
+    {
+      "filename": "utsushi-2e56439d6a9e68e6e636",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/utsushi:utsushi-test-test-test",
+      "mode": "test",
+      "package": "aizome-utsushi",
+      "target": "utsushi",
+      "unit_label": "//build/buck2/graph/test:2e56439d6a9e68e6e636"
+    },
+    {
+      "filename": "aizome_yukimi-8c20c42ca9a0d8256258",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/apps/yukimi:aizome_yukimi-test-test-lib",
+      "mode": "test",
+      "package": "aizome-yukimi",
+      "target": "aizome_yukimi",
+      "unit_label": "//build/buck2/graph/test:8c20c42ca9a0d8256258"
+    },
+    {
+      "filename": "aizome_yukimi-041b1120f6f43519aa67",
+      "kind": [
+        "bin"
+      ],
+      "label": "//desktop/aizome/apps/yukimi:aizome-yukimi-test-test-bin",
+      "mode": "test",
+      "package": "aizome-yukimi",
+      "target": "aizome-yukimi",
+      "unit_label": "//build/buck2/graph/test:041b1120f6f43519aa67"
+    },
+    {
+      "filename": "budget-3136ef0eb15c8d209b89",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/yukimi:budget-test-test-test",
+      "mode": "test",
+      "package": "aizome-yukimi",
+      "target": "budget",
+      "unit_label": "//build/buck2/graph/test:3136ef0eb15c8d209b89"
+    },
+    {
+      "filename": "golden-8cd5b37b736b622dad3a",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/yukimi:golden-test-test-test",
+      "mode": "test",
+      "package": "aizome-yukimi",
+      "target": "golden",
+      "unit_label": "//build/buck2/graph/test:8cd5b37b736b622dad3a"
+    },
+    {
+      "filename": "headless-9b98f926278c4104e949",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/yukimi:headless-test-test-test",
+      "mode": "test",
+      "package": "aizome-yukimi",
+      "target": "headless",
+      "unit_label": "//build/buck2/graph/test:9b98f926278c4104e949"
+    },
+    {
+      "filename": "look-d06ca37c62f004cb8b39",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/apps/yukimi:look-test-test-test",
+      "mode": "test",
+      "package": "aizome-yukimi",
+      "target": "look",
+      "unit_label": "//build/buck2/graph/test:d06ca37c62f004cb8b39"
+    },
+    {
+      "filename": "hotaru_link_regex-a8b19ccb0e496076a469",
+      "kind": [
+        "lib"
+      ],
+      "label": "//desktop/aizome/crates/hotaru-link-regex:hotaru_link_regex-test-test-lib",
+      "mode": "test",
+      "package": "hotaru-link-regex",
+      "target": "hotaru_link_regex",
+      "unit_label": "//build/buck2/graph/test:a8b19ccb0e496076a469"
+    },
+    {
+      "filename": "matching-5a9e9ada883e492fca33",
+      "kind": [
+        "test"
+      ],
+      "label": "//desktop/aizome/crates/hotaru-link-regex:matching-test-test-test",
+      "mode": "test",
+      "package": "hotaru-link-regex",
+      "target": "matching",
+      "unit_label": "//build/buck2/graph/test:5a9e9ada883e492fca33"
+    }
+  ]
+}

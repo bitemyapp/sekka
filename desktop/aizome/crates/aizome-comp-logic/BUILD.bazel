@@ -25,7 +25,10 @@ cargo_build_script(
     version = "0.1.0",
     deps = ["@aizome_crates//:sha2-0.10.9"],
     data = glob(["**"], exclude = [
+        "BUILD",
         "BUILD.bazel",
+        "BUCK",
+        "PACKAGE",
         "target/**",
     ], allow_empty = True),
 )
@@ -55,8 +58,8 @@ rust_dylib_library(
         "@aizome_crates//:smithay-0.7.0",
         "@aizome_crates//:tracing-0.1.44",
         ":build_script",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(

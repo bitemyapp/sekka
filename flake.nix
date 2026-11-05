@@ -76,6 +76,9 @@
       pipewireOverlay = import ./nix/overlays/pipewire.nix;
       pipewirePkgs = pkgs.extend pipewireOverlay;
       tools = import ./nix/tools.nix { inherit pkgs; };
+      bazelClient = import ./nix/bazel/client.nix { inherit pkgs; };
+      buckBuild = import ./nix/buck2 { inherit pkgs; };
+      buildService = import ./nix/build-service { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
       publishNightly = import ./nix/publish-nightly.nix { inherit pkgs; };
       kakehashi = import ./nix/kakehashi.nix { inherit pkgs; };
@@ -152,9 +155,9 @@
       };
       devShells.${system} = {
         kakehashi = kakehashi.shell;
-        # Bazel, for the build plan's workstation trials
-        # (docs/bazel-build-plan.md, nix/bazel/).
+        # Build clients share the root lock's tools and native libraries.
         bazel = import ./nix/bazel/shell.nix { inherit pkgs; };
+        buck2 = buckBuild.shell;
         # Aizome's workspace (desktop/aizome), which its `just` recipes and
         # aizome-dev enter.
         aizome = inputs.aizome.devShells.${system}.default;
@@ -184,6 +187,21 @@
       # `checks`, which CI runs, as they weren't in Aizome's repository.
       legacyPackages.${system}.aizome-checks = inputs.aizome.checks.${system};
       apps.${system} = {
+        sekka-bazel = {
+          type = "app";
+          program = "${bazelClient}/bin/sekka-bazel-client";
+          meta.description = "Build Cargo workspaces with pinned Bazel toolchains and shared artifacts";
+        };
+        sekka-buck2 = {
+          type = "app";
+          program = "${buckBuild.client}/bin/sekka-buck2";
+          meta.description = "Build Cargo unit graphs with pinned Buck2 toolchains and shared artifacts";
+        };
+        build-service = {
+          type = "app";
+          program = "${buildService.controller}/bin/sekka-build-service";
+          meta.description = "Manage isolated authenticated shared build caches and workers";
+        };
         update = {
           type = "app";
           program = "${inputs.yukimi.packages.${system}.yukimi}/bin/sekka-update";
@@ -207,6 +225,10 @@
           iso = installer.config.system.build.isoImage;
         };
         inherit tools calamares;
+        sekka-bazel = bazelClient;
+        sekka-buck2 = buckBuild.client;
+        buck2 = buckBuild.buck2;
+        build-service = buildService.controller;
         sekka-discord = import ./nix/sekka-discord.nix { inherit pkgs; };
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
         aizome = inputs.aizome.packages.${system}.aizome;
@@ -380,6 +402,7 @@
           inherit pkgs;
           aizome = inputs.aizome.packages.${system}.aizome;
         };
+        build-input-stability = import ./nix/build-inputs-test.nix { inherit pkgs; };
         # Aizome's toolkit's own tests, under a headless sway
         # (desktop/aizome/sukumo).
         sukumo = import ./nix/sukumo-test.nix {

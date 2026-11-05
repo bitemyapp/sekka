@@ -37,8 +37,8 @@ rust_library(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -93,9 +93,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -131,9 +131,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -169,9 +169,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -207,9 +207,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -245,9 +245,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -283,9 +283,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -321,9 +321,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -359,9 +359,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -397,9 +397,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -435,9 +435,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -473,9 +473,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -511,9 +511,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -549,9 +549,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -587,9 +587,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -625,9 +625,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -663,9 +663,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -701,9 +701,9 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -739,7 +739,7 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:sha-crypt-0.5.0",
         "@aizome_crates//:zbus-5.19.0",
-        "@nix_native//:link_search",
         ":aizome_sys",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )

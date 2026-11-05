@@ -6,6 +6,8 @@ ignore_directories([
     "artifacts",
     "result*",
     "**/target",
+    "**/buck-out",
+    "**/.buckal",
     "**/node_modules",
     "**/.objc2-overlay",
 ])

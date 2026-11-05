@@ -42,7 +42,7 @@ archive_override(
 )
 
 nix = use_extension("//build/bazel:nix.bzl", "nix")
-use_repo(nix, "nix_cc_toolchains", "nix_native", "nix_rust_toolchain", "nix_test_env", "nixpkgs")
+use_repo(nix, "nix_cc_info", "nix_cc_toolchains", "nix_native", "nix_rust", "nix_rust_toolchain", "nix_test_env", "nixpkgs")
 
 register_toolchains(
     "@nix_rust_toolchain//:all",

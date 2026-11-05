@@ -29,8 +29,10 @@ def main():
         description=__doc__.splitlines()[0],
         epilog="Other options are Bazel startup options, e.g. --output_user_root=DIR.",
     )
-    _, startup = parser.parse_known_args()
-    subprocess.run([sys.executable, str(ROOT / "build/bazel/generate.py")], check=True, cwd=ROOT)
+    parser.add_argument("--skip-generate", action="store_true", help=argparse.SUPPRESS)
+    args, startup = parser.parse_known_args()
+    if not args.skip_generate:
+        subprocess.run([sys.executable, str(ROOT / "build/bazel/generate.py")], check=True, cwd=ROOT)
     before = CARGO_LOCK.read_bytes()
     env = dict(os.environ, CARGO_BAZEL_REPIN="1")
     try:

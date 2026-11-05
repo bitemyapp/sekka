@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Retain an immutable executable closure, keyed only by its declared inputs.
+# No shell environment snapshots and no whole-checkout Nix source imports.
+set -euo pipefail
+root=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$root"
+cache=${SEKKA_BAZEL_CLIENT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/sekka/bazel-clients}
+mkdir -p "$cache"
+inputs=(
+  flake.lock nix/bazel/nixpkgs.nix nix/bazel/client.nix
+  nix/bazel/repositories.nix nix/bazel/toolchains.nix nix/bazel/aizome-inputs.nix
+  nix/libsecret-dh-padding.nix nix/patches/libsecret-gnutls-dh-padding.patch
+  desktop/aizome/nix/fonts.nix desktop/aizome/nix/aizome-fonts.nix
+  desktop/aizome/nix/hotaru-fonts.nix build/bazel/workflow.py
+)
+key=$(sha256sum "${inputs[@]}" | sha256sum)
+key=${key%% *}
+client="$cache/$key"
+if [[ ! -x "$client/bin/sekka-bazel-client" ]]; then
+  exec 9>"$cache/$key.lock"
+  flock 9
+  if [[ ! -x "$client/bin/sekka-bazel-client" ]]; then
+    temporary="$client.$$"
+    trap 'rm -f -- "$temporary"' EXIT
+    nix-build nix/bazel/client.nix --no-build-output --out-link "$temporary" >/dev/null
+    # The temporary indirect root must remain alive until the final root
+    # exists and is registered: no unrooted window for concurrent store GC.
+    nix-store --add-root "$client" --indirect --realise "$(readlink -f "$temporary")" >/dev/null
+    rm -f -- "$temporary"
+    trap - EXIT
+  fi
+  flock -u 9
+  exec 9>&-
+fi
+exec "$client/bin/sekka-bazel-client" --workspace "$root" "$@"
