@@ -4087,7 +4087,9 @@ and closes the handle without unmounting, writing or ejecting. It requires
 macOS authorization. These checks do not validate physical USB writing.
 
 `kakehashi_write::execute` compares the plan's drive with the drive as
-it is now (name, size, vendor, model, serial and bus) and rejects one the
+it is now (name, size, vendor, model, serial and bus, and the USB port when
+both readings have one: Linux reads it from sysfs as `2-1.3`, macOS from the
+I/O Registry's location ID, Windows not at all) and rejects one the
 rules now exclude, unmounts it, opens it exclusively, checks again, writes in
 sector-padded chunks, zeroes the last MiB, syncs, drops the page cache where
 it can, reads everything back against the image, checks the zeroed tail and
@@ -4150,9 +4152,10 @@ nix build .#checks.x86_64-linux.kakehashi-vm
 
 `checks.kakehashi-vm` hot-plugs a 256 MiB virtual USB stick into a disposable
 NixOS VM. It checks the helper refuses the VM's own disk and a stick whose
-serial number differs from the plan's. Then an ordinary user starts the helper
-through `pkexec` as the window does, with a polkit rule in place of a
-password: once with the cancel file already present, which must leave the
+serial number or USB port differs from the plan's. Then an ordinary user
+starts the helper through `pkexec` as the window does, with a polkit rule in
+place of a password: once with the cancel file already present, which must
+leave the
 stick unchanged, and once to write a random image, after which the stick's
 bytes are compared from outside the VM and its last MiB must be clear. It
 doesn't drive the window itself. NixOS 26.11 installs the setuid `pkexec`
