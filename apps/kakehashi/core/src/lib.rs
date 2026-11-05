@@ -6,7 +6,12 @@
 //! started with the operating system's own administrator prompt, is the one
 //! process that opens a drive for writing; it checks the plan it is given
 //! again before it does.
+//!
+//! The window's side of a write is here too, as typestate (see
+//! `aizome-typestate`): [`choice`], the drive list and the drive the person
+//! confirmed, which is the only drive a [`write::Plan`] can name.
 
+pub mod choice;
 pub mod drive;
 pub mod image;
 pub mod nightly;

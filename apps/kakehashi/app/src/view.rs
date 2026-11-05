@@ -17,25 +17,26 @@ use gpui_kit::{
     AnyElement, Context, ExternalPaths, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
     PathPromptOptions, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Task, Window, div,
 };
+use kakehashi_core::choice::{DriveList, Listed, ListingTicket, ReviewedDrive};
 use kakehashi_core::image::{self, Cancelled};
 use kakehashi_core::nightly::{self, Build, Fetch, NIGHTLY};
 use kakehashi_core::write::{Plan, Progress, TAIL};
 use kakehashi_core::{Drive, human, platform};
+use std::cell::Cell;
 use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
-/// How often the drive list is refreshed, so a stick plugged in appears.
-const REFRESH: Duration = Duration::from_secs(2);
 /// How often progress from a thread is sent on.
 const REPORT: Duration = Duration::from_millis(100);
 
 enum Msg {
     Builds(Result<Vec<Build>, String>),
-    Drives(Result<Vec<Drive>, String>),
+    Drives(ListingTicket, Result<Vec<Drive>, String>),
     Hashed { path: PathBuf, done: u64 },
     HashDone { path: PathBuf, result: Result<(String, Option<(String, PathBuf)>), String> },
     Holds { path: PathBuf, drive: Option<String> },
@@ -114,11 +115,7 @@ pub struct Kakehashi {
     builds: Loading<Vec<Build>>,
     image: Option<Image>,
     download: Option<Download>,
-    drives: Loading<Vec<Drive>>,
-    listing: bool,
-    listed: Instant,
-    show_all: bool,
-    chosen: Option<String>,
+    drives: DriveList,
     job: Option<Job>,
     /// A download or preparation that failed, shown under the image.
     error: Option<String>,
@@ -165,11 +162,7 @@ impl Kakehashi {
             builds: Loading::Pending,
             image: None,
             download: None,
-            drives: Loading::Pending,
-            listing: false,
-            listed: Instant::now() - REFRESH,
-            show_all: false,
-            chosen: None,
+            drives: DriveList::new(),
             job: None,
             error: None,
             downloads,
@@ -188,14 +181,12 @@ impl Kakehashi {
         });
     }
 
+    /// Lists the drives, if a listing is due.
     fn list_drives(&mut self) {
-        if self.listing {
-            return;
-        }
-        self.listing = true;
+        let Some(ticket) = self.drives.request(Instant::now()) else { return };
         let tx = self.tx.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(Msg::Drives(platform::drives().map_err(|e| format!("{e:#}"))));
+            let _ = tx.send(Msg::Drives(ticket, platform::drives().map_err(|e| format!("{e:#}"))));
         });
     }
 
@@ -206,8 +197,7 @@ impl Kakehashi {
             changed = true;
         }
         let busy = self.job.as_ref().is_some_and(|j| !j.ended);
-        if !busy && self.listed.elapsed() >= REFRESH {
-            self.listed = Instant::now();
+        if !busy {
             self.list_drives();
         }
         if changed {
@@ -223,19 +213,7 @@ impl Kakehashi {
                     Err(e) => Loading::Failed(e),
                 }
             }
-            Msg::Drives(result) => {
-                self.listing = false;
-                self.drives = match result {
-                    Ok(drives) => Loading::Ready(drives),
-                    Err(e) => Loading::Failed(e),
-                };
-                // A chosen drive that was unplugged is no longer chosen.
-                if let (Some(name), Loading::Ready(drives)) = (&self.chosen, &self.drives)
-                    && !drives.iter().any(|d| &d.name == name)
-                {
-                    self.chosen = None;
-                }
-            }
+            Msg::Drives(ticket, result) => self.drives.listed(ticket, result),
             Msg::Hashed { path, done } => {
                 if let Some(image) = self.image.as_mut().filter(|i| i.path == path) {
                     image.check = Check::Hashing { done };
@@ -324,7 +302,7 @@ impl Kakehashi {
                         };
                     }
                 }
-                self.listed = Instant::now() - REFRESH;
+                self.drives.refresh_soon();
             }
         }
     }
@@ -434,24 +412,13 @@ impl Kakehashi {
         });
     }
 
-    /// The drives offered, and those that are not with why.
-    fn sorted_drives(&self) -> (Vec<&Drive>, Vec<(&Drive, &'static str)>) {
-        let Loading::Ready(drives) = &self.drives else { return (Vec::new(), Vec::new()) };
-        let holds = self.image.as_ref().and_then(|i| i.holds.as_deref());
-        let mut offered = Vec::new();
-        let mut not = Vec::new();
-        for drive in drives {
-            match drive.excluded(holds, self.show_all) {
-                None => offered.push(drive),
-                Some(why) => not.push((drive, why.reason())),
-            }
-        }
-        (offered, not)
+    /// The whole drive the image is on, which is never offered.
+    fn holds(&self) -> Option<&str> {
+        self.image.as_ref().and_then(|i| i.holds.as_deref())
     }
 
     fn chosen_drive(&self) -> Option<&Drive> {
-        let (offered, _) = self.sorted_drives();
-        offered.into_iter().find(|d| Some(&d.name) == self.chosen.as_ref())
+        self.drives.chosen(self.holds())
     }
 
     /// What stops writing now, if anything.
@@ -476,8 +443,9 @@ impl Kakehashi {
     }
 
     fn confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let (Some(image), Some(drive)) = (&self.image, self.chosen_drive().cloned()) else { return };
+        let (Some(image), Some(reviewed)) = (&self.image, self.drives.review(self.holds())) else { return };
         let name = image.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let drive = reviewed.drive();
         let view = cx.entity();
         let title = format!("Erase {}?", drive.label());
         let description = format!(
@@ -488,8 +456,11 @@ impl Kakehashi {
             drive.serial_hint(),
             name
         );
+        // OK writes the drive described here, found again when it is pressed.
+        let reviewed = Rc::new(Cell::new(Some(reviewed)));
         window.open_alert_dialog(cx, move |alert, _, _| {
             let view = view.clone();
+            let reviewed = reviewed.clone();
             alert
                 .title(title.clone())
                 .description(description.clone())
@@ -498,19 +469,30 @@ impl Kakehashi {
                 .cancel_text("Cancel")
                 .show_cancel(true)
                 .on_ok(move |_, _, cx| {
-                    view.update(cx, |this, cx| {
-                        this.start_write();
-                        cx.notify();
-                    });
+                    if let Some(reviewed) = reviewed.take() {
+                        view.update(cx, |this, cx| {
+                            this.start_write(reviewed);
+                            cx.notify();
+                        });
+                    }
                     true
                 })
         });
     }
 
-    fn start_write(&mut self) {
-        let (Some(image), Some(drive)) = (&self.image, self.chosen_drive().cloned()) else { return };
+    /// Writes the drive the person reviewed in the dialog, if it is still
+    /// the drive listed under its name.
+    fn start_write(&mut self, reviewed: ReviewedDrive) {
+        let Some(image) = &self.image else { return };
         let Some(sha) = image.sha.clone() else { return };
-        let plan = Plan { image: image.path.clone(), sha256: sha, drive: drive.clone() };
+        let drive = match self.drives.confirm(reviewed, image.holds.as_deref()) {
+            Ok(drive) => drive,
+            Err(why) => {
+                self.error = Some(why.to_string());
+                return;
+            }
+        };
+        let plan = Plan::new(image.path.clone(), sha, drive);
         let started = (|| -> anyhow::Result<(tempfile::TempDir, PathBuf, PathBuf)> {
             let dir = tempfile::Builder::new().prefix("kakehashi-").tempdir()?;
             let plan_path = dir.path().join("plan.json");
@@ -527,7 +509,7 @@ impl Kakehashi {
         };
         let cancel = PathBuf::from(format!("{}.cancel", progress.display()));
         self.job = Some(Job {
-            drive,
+            drive: plan.drive().clone(),
             image: image.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
             stage: Stage::PreparingImage,
             phase: None,
@@ -542,9 +524,10 @@ impl Kakehashi {
             let dir = dir;
             let prepared = (|| -> anyhow::Result<()> {
                 #[cfg(target_os = "macos")]
-                let plan = Plan {
-                    image: crate::staged_image::prepare(&plan.image, &plan.sha256, dir.path(), &|| cancel.exists())?,
-                    ..plan
+                let plan = {
+                    let staged =
+                        crate::staged_image::prepare(plan.image(), plan.sha256(), dir.path(), &|| cancel.exists())?;
+                    plan.with_image(staged)
                 };
                 if cancel.exists() {
                     anyhow::bail!(Cancelled);
@@ -870,23 +853,23 @@ impl Kakehashi {
     fn render_drives(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme().clone();
         let mut s = section("2  Drive", cx);
-        let (offered, not) = self.sorted_drives();
-        match &self.drives {
-            Loading::Pending => {
+        let (offered, not) = self.drives.sorted(self.holds());
+        match self.drives.drives() {
+            Listed::Pending => {
                 s = s.child(
                     h_flex().gap_2().child(Spinner::new().small()).child(div().text_sm().child("Looking for drives…")),
                 )
             }
-            Loading::Failed(e) => {
+            Listed::Failed(e) => {
                 s = s.child(div().text_sm().text_color(theme.danger).child(format!("Could not list drives: {e}")))
             }
-            Loading::Ready(_) if offered.is_empty() => {
+            Listed::Ready(_) if offered.is_empty() => {
                 s = s.child(div().text_sm().child("Plug in a USB drive; it appears here."))
             }
-            Loading::Ready(_) => {
+            Listed::Ready(_) => {
                 for drive in &offered {
-                    let chosen = self.chosen.as_ref() == Some(&drive.name);
-                    let name = drive.name.clone();
+                    let chosen = self.drives.is_chosen(drive);
+                    let row = (*drive).clone();
                     let mut details = vec![human(drive.bytes), drive.name.clone()];
                     if !drive.bus.is_empty() {
                         details.push(drive.bus.clone());
@@ -903,7 +886,7 @@ impl Kakehashi {
                             .border_color(if chosen { theme.primary } else { theme.border })
                             .when(chosen, |row| row.bg(theme.secondary))
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.chosen = Some(name.clone());
+                                this.drives.choose(&row);
                                 cx.notify();
                             }))
                             .child(
@@ -928,9 +911,9 @@ impl Kakehashi {
         s = s.child(
             Switch::new("all")
                 .label("Show all external drives, not only USB and removable ones")
-                .checked(self.show_all)
+                .checked(self.drives.show_all())
                 .on_change(cx.listener(|this, value: &bool, _, cx| {
-                    this.show_all = *value;
+                    this.drives.set_show_all(*value);
                     cx.notify();
                 })),
         );
@@ -942,7 +925,7 @@ impl Kakehashi {
                     drive.label(),
                     drive.name,
                     human(drive.bytes),
-                    why
+                    why.reason()
                 )));
             }
             s = s
@@ -1078,8 +1061,8 @@ impl Kakehashi {
             s = s.child(Button::new("again").label("Write another drive").small().primary().on_click(cx.listener(
                 |this, _, _, cx| {
                     this.job = None;
-                    this.chosen = None;
-                    this.listed = Instant::now() - REFRESH;
+                    this.drives.clear_choice();
+                    this.drives.refresh_soon();
                     cx.notify();
                 },
             )));
@@ -1087,3 +1070,9 @@ impl Kakehashi {
         s.into_any_element()
     }
 }
+
+// The window's regression for a stick swapped for another under the
+// confirmation dialog (KTL-04).
+#[cfg(test)]
+#[path = "repro_ktl_04.rs"]
+mod repro_ktl_04;
