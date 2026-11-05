@@ -315,6 +315,8 @@ impl Session {
             .parent()
             .context("Installer location")?
             .join("calamares-nixos-helper");
+        // The window starting the helper through Polkit: it runs no disk tool.
+        #[allow(clippy::disallowed_methods)]
         let mut child = Command::new(option_env!("CALAMARES_PKEXEC").unwrap_or("pkexec"))
             .arg(helper)
             .arg("session")

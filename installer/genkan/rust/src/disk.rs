@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-use crate::process::output;
+use crate::{process::output, storage::Program};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -112,7 +112,7 @@ fn list(device: Option<&str>) -> Result<Vec<Disk>> {
         "PATH,TYPE,SIZE,RO,MODEL,SERIAL,WWN,MAJ:MIN,MOUNTPOINTS",
     ];
     args.extend(device);
-    parse(&output("lsblk", &args, 30)?)
+    parse(&output(Program::LSBLK, &args, 30)?)
 }
 
 /// The checks lsblk can't make: the node is the disk lsblk named, and its
@@ -416,14 +416,14 @@ impl Layout {
         filesystem: crate::Filesystem,
     ) -> Result<()> {
         let dev = disk.path();
-        output("wipefs", &["--all", "--force", dev], 60)?;
+        output(Program::WIPEFS, &["--all", "--force", dev], 60)?;
         let script = self.parted_script(firmware, filesystem.name());
         let mut args = vec!["--script", dev];
         args.extend(script.iter().map(String::as_str));
-        output("parted", &args, 60)?;
+        output(Program::PARTED, &args, 60)?;
         // Keep udev from observing partially written superblocks. Partition nodes
         // come from the kernel/devtmpfs; do not wait for udev while holding its lock.
-        output("blockdev", &["--rereadpt", dev], 30)?;
+        output(Program::BLOCKDEV, &["--rereadpt", dev], 30)?;
         Ok(())
     }
 }

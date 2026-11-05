@@ -14,7 +14,7 @@ use crate::{
     disk::{self, Layout},
     filesystem::{self, Identities},
     memory, nixlog, precache,
-    process::{self, output, output_lines},
+    process::{self, Program, output, output_lines},
 };
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -171,7 +171,7 @@ fn ram_live_guard() -> Result<()> {
         filesystems: Vec<LiveStoreMount>,
     }
     let mounts: Mounts = serde_json::from_str(&output(
-        "findmnt",
+        Program::FINDMNT,
         &[
             "--json",
             "--output",
@@ -205,7 +205,7 @@ pub fn live_guard(settings: &Settings) -> Result<()> {
     );
     ensure!(
         output(
-            "findmnt",
+            Program::FINDMNT,
             &["--noheadings", "--output", "FSTYPE", "--mountpoint", "/"],
             15
         )?
@@ -214,7 +214,7 @@ pub fn live_guard(settings: &Settings) -> Result<()> {
         "Refusing to run on an installed host: root is not temporary"
     );
     let media = output(
-        "findmnt",
+        Program::FINDMNT,
         &["--noheadings", "--output", "FSTYPE", "--mountpoint", "/iso"],
         15,
     )?;
@@ -243,7 +243,11 @@ impl Target {
         ))
     }
     fn unmount(&self) -> Result<()> {
-        output("umount", &["--recursive", self.0.to_str().unwrap()], 60)?;
+        output(
+            Program::UMOUNT,
+            &["--recursive", self.0.to_str().unwrap()],
+            60,
+        )?;
         self.1.set(false);
         Ok(())
     }
@@ -251,7 +255,11 @@ impl Target {
 impl Drop for Target {
     fn drop(&mut self) {
         if self.1.get() {
-            let _ = output("umount", &["--recursive", self.0.to_str().unwrap()], 60);
+            let _ = output(
+                Program::UMOUNT,
+                &["--recursive", self.0.to_str().unwrap()],
+                60,
+            );
         }
         let _ = fs::remove_dir(&self.0);
     }
@@ -428,8 +436,7 @@ pub fn check(plan: &InstallPlan) -> Result<Checked<'_>> {
     preparing("Checking filesystem support before erasing the disk");
     plan.filesystem().preflight(plan.firmware())?;
     if plan.swap() {
-        output("mkswap", &["--version"], 15)
-            .context("The installation media is missing mkswap; no disk writes were made")?;
+        filesystem::swap_preflight()?;
     }
     let ram = memory::read()?;
     let swap_bytes = plan.swap().then(|| memory::swap_bytes(ram.total));
@@ -481,7 +488,7 @@ impl<'p> Checked<'p> {
         // Hardware detection does not depend on the target's future filesystems:
         // they are declared explicitly in configuration.nix with chosen identities.
         let hardware = output(
-            "nixos-generate-config",
+            Program::NIXOS_GENERATE_CONFIG,
             &["--show-hardware-config", "--no-filesystems"],
             120,
         )?;
@@ -519,7 +526,7 @@ impl<'p> Configured<'p> {
         );
         let report = Mutex::new(String::new());
         let dry = output_lines(
-            "nix",
+            Program::NIX,
             &[
                 "build",
                 "--dry-run",
@@ -599,7 +606,7 @@ impl InMemory<'_> {
         ));
         let tracker = Mutex::new(nixlog::Tracker::default());
         output_lines(
-            "nix",
+            Program::NIX,
             &[
                 "build",
                 "--log-format",
@@ -619,7 +626,7 @@ impl InMemory<'_> {
             "The built system differs from the evaluated system"
         );
         let closure_info: serde_json::Value = serde_json::from_str(&output(
-            "nix",
+            Program::NIX,
             &["path-info", "--json", "--closure-size", system],
             300,
         )?)?;
@@ -630,7 +637,7 @@ impl InMemory<'_> {
         let stage = Stage::start("cache");
         preparing("Caching the installed system in memory");
         let closure: Vec<PathBuf> =
-            process::output_full("nix", &["path-info", "--recursive", system], 300)?
+            process::output_full(Program::NIX, &["path-info", "--recursive", system], 300)?
                 .lines()
                 .filter_map(precache::store_path)
                 .collect();
@@ -709,7 +716,7 @@ const PER_BUILD: u64 = 4 << 20;
 /// refusing.
 fn target_store_bytes(derivation: &str, missing: nixlog::DryRun) -> Result<u64> {
     let requisites = process::output_full(
-        "nix-store",
+        Program::NIX_STORE,
         &["--query", "--requisites", "--include-outputs", derivation],
         300,
     )?;
@@ -723,7 +730,9 @@ fn target_store_bytes(derivation: &str, missing: nixlog::DryRun) -> Result<u64> 
         args.extend(chunk);
         live = live
             .checked_add(nar_sizes(&serde_json::from_str(&process::output_full(
-                "nix", &args, 300,
+                Program::NIX,
+                &args,
+                300,
             )?)?)?)
             .context("Store size overflow")?;
     }
@@ -884,7 +893,7 @@ fn build_on_target(
     let installable = format!("{derivation}^out");
     retry_downloads(&DOWNLOAD_RETRY_DELAYS, tracker, |fallback| {
         let args = on_target_build_args(store, build_dir, &installable, fallback);
-        output_lines("nix", &args, 7200, on_line).map(drop)
+        output_lines(Program::NIX, &args, 7200, on_line).map(drop)
     })
 }
 
@@ -997,7 +1006,7 @@ fn prepare_storage(
         }
         let mapping_paths = mappings.paths();
         changed.extend(mapping_paths.iter().map(String::as_str));
-        output("udevadm", &changed, 70)?;
+        output(Program::UDEVADM, &changed, 70)?;
         // Recheck identity and busy state, accepting only this install's own mappings.
         disk.recheck(&mappings.paths())?;
         request.filesystem().mount(&root_device, mount)?;
@@ -1126,7 +1135,7 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
             // Measured against a direct parallel file copy with database
             // registration: nix copy was faster both in VMs and on the host.
             output_lines(
-                "nix",
+                Program::NIX,
                 &[
                     "copy",
                     "--no-check-sigs",
@@ -1154,7 +1163,7 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     // The closure is already in the target store: nixos-install only sets the
     // system profile and installs the bootloader.
     output(
-        "nixos-install",
+        Program::NIXOS_INSTALL,
         &[
             "--root",
             mount,
@@ -1193,7 +1202,7 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
 
     let stage = Stage::start("flush");
     progress(6, "Flushing writes and unmounting the installed system");
-    output("sync", &["--file-system", mount], 300)?;
+    output(Program::SYNC, &["--file-system", mount], 300)?;
     target.unmount()?;
     mappings.close()?;
     stage.done();
@@ -1503,7 +1512,7 @@ mod encryption_tests {
                 assert!(disk::Reviewed::new(identity.clone()).revalidate().is_err());
                 fs::write(target.0.join("encrypted-sentinel"), b"written by Genkan")?;
                 let mount = target.0.to_str().unwrap();
-                output("fstrim", &["--verbose", mount], 30)?;
+                output(Program::TEST_FSTRIM, &["--verbose", mount], 30)?;
                 if swap {
                     let path = format!(
                         "/dev/mapper/genkan-{}",
@@ -1531,7 +1540,7 @@ mod encryption_tests {
                 // recovers data after all installer mappings have been closed.
                 assert!(
                     process::output_secret(
-                        "cryptsetup",
+                        Program::TEST_CRYPTSETUP,
                         &["open", "--test-passphrase", "--key-file", "-", &root],
                         b"incorrect-passphrase",
                         30
@@ -1539,7 +1548,7 @@ mod encryption_tests {
                     .is_err()
                 );
                 process::output_secret(
-                    "cryptsetup",
+                    Program::TEST_CRYPTSETUP,
                     &[
                         "open",
                         "--allow-discards",
@@ -1560,11 +1569,11 @@ mod encryption_tests {
                 // Deletion and trim on an opened mapping must reach the disk.
                 fs::write(target.0.join("trim-me"), vec![1u8; 4 << 20])?;
                 fs::remove_file(target.0.join("trim-me"))?;
-                output("fstrim", &["--verbose", mount], 30)?;
+                output(Program::TEST_FSTRIM, &["--verbose", mount], 30)?;
                 target.unmount()?;
-                output("cryptsetup", &["close", "genkan-reopen"], 30)?;
+                output(Program::TEST_CRYPTSETUP, &["close", "genkan-reopen"], 30)?;
                 let dump: serde_json::Value = serde_json::from_str(&output(
-                    "cryptsetup",
+                    Program::TEST_CRYPTSETUP,
                     &["luksDump", "--dump-json-metadata", &root],
                     30,
                 )?)?;

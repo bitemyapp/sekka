@@ -54,7 +54,17 @@ let
         sourceRoot="$sourceRoot/installer/genkan/rust"
       '';
       cargoLock.lockFile = ../rust/Cargo.lock;
-      nativeBuildInputs = [ pkgs.pkg-config ];
+      nativeBuildInputs = [
+        pkgs.pkg-config
+        pkgs.clippy
+      ];
+      # The installer runs programs only through its library, which names
+      # them; rust/clippy.toml denies the other ways to start one. Only that
+      # lint fails the build, so a toolchain's new lints don't.
+      preCheck = ''
+        cargo clippy --offline --locked --all-targets -- \
+          -A clippy::all -D clippy::disallowed_methods
+      '';
       buildInputs = [
         pkgs.glib
         pkgs.networkmanager
