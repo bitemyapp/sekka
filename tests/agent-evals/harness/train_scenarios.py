@@ -845,7 +845,7 @@ DIAGNOSTICS = [
                          "of a prompt whenever I open it.",
                          diagnosis=[[r"hotaru\.toml", r"\bshell\b"], [r"zsh"]], topic="app settings"),
     SshAgentStopped("ssh-agent-stopped", "diagnostics", "aizome",
-                    "`ssh-add` says 'Could not open a connection to your authentication agent', so I have to type my "
+                    "`ssh-add` says 'Error connecting to agent: Connection refused', so I have to type my "
                     "key's passphrase every time I connect to my server.",
                     diagnosis=[[r"gcr-ssh-agent", r"ssh-agent", r"\bagent"],
                                [r"stopped", r"inactive", r"not running", r"socket", r"dead"]], level="hard",
