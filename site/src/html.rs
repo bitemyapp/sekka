@@ -42,6 +42,9 @@ pub const ORIGIN: &str = "https://sekka.computer";
 /// Aizome's own site, which links back here.
 pub const AIZOME: &str = "https://aizome.computer";
 
+/// An invite to the Sekka Community Discord server.
+pub const DISCORD: &str = "https://discord.gg/baTc5rfqs";
+
 /// The bar's theme switch shows the theme in use: a moon for Night, a sun
 /// for Day, in the text colour.
 const MOON: &str = r#"<svg class="bar-theme-icon" viewBox="0 0 16 16" width="12" height="12"><path fill="currentColor" d="M14 10.2A6.5 6.5 0 1 1 5.8 2 6 6 0 0 0 14 10.2Z"/></svg>"#;
@@ -101,7 +104,7 @@ pub fn shell(site: &Site, page: &Page) -> Result<String> {
     <p><strong>No cookies, no analytics.</strong> One script remembers Night or Day in your browser and sends it nowhere; the other plays the video on the home page. Every page, script, font and image here is served from this site; nothing is loaded from anywhere else.</p>
     <p>Sekka builds on NixOS, Determinate Nix and many other free-software projects. Aizome takes its ideas from Haiku, NeXTSTEP and IRIX; Tatami is inspired by Omarchy. Sekka is not an official NixOS, Determinate Systems, Calamares or Omarchy product.</p>
     <p>Genkan is GPL-3.0-or-later; Aizome, Tatami and Yukimi are MIT OR Apache-2.0. JetBrains Mono, Atkinson Hyperlegible Next and the video's fonts are under the <a href="/fonts/">SIL Open Font License</a>.</p>
-    <p><a href="{AIZOME}/">aizome.computer</a> · <a href="{REPO}">Source</a> · <a href="{REPO}/issues">Issues</a> · <a href="/design/">Brand</a></p>
+    <p><a href="{AIZOME}/">aizome.computer</a> · <a href="{REPO}">Source</a> · <a href="{REPO}/issues">Issues</a> · <a href="{DISCORD}">Discord</a> · <a href="/design/">Brand</a></p>
   </div>
 </footer>
 </body>
