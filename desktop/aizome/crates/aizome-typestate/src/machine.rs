@@ -73,8 +73,9 @@
 ///   struct. Each state converts into it with `From`. `open(stored, ctx)` and
 ///   `close(self)` (both private) move between the stored and typed states.
 /// - **The machine**, `struct Name { ctx, stored }`, starting in the first
-///   state listed, which must carry no data. `new(ctx)`, `ctx()` and
-///   `stored()` (read-only), and `with_typed(f)`: `f` gets the current typed
+///   state listed, which must carry no data. `new(ctx)` (with the machine's
+///   visibility, or the one `new(pub(crate));` or `new(private);` gives),
+///   `ctx()` and `stored()` (read-only), and `with_typed(f)`: `f` gets the current typed
 ///   state and must hand back the state it ends in. Its `for<'s>` ties both
 ///   to this machine's context, so a state can't move between machines.
 ///   `with_typed` is private unless `with_typed(pub)` or another visibility
@@ -137,6 +138,7 @@ macro_rules! machine {
             typed $any:ident;
             states { $($states:tt)* }
             $(branches { $($branches:tt)* })?
+            $(new($($nvis:tt)*);)?
             $(with_typed($($wvis:tt)*);)?
         }
     ) => {
@@ -145,6 +147,7 @@ macro_rules! machine {
                 [$(#[$meta])*] [$vis] $name [$ctx]
                 [$(#[$smeta])*] [$($copy)?] $stored [$(#[$ameta])*] $any
                 [$($($branches)*)?] [$($($wvis)*)?]
+                [$($($nvis)*)?] [$vis]
             ]
             []
             $($states)*
@@ -167,6 +170,7 @@ macro_rules! machine {
             [$(#[$meta:meta])*] [$vis:vis] $name:ident [$ctx:ty]
             [$(#[$smeta:meta])*] [$($copy:ident)?] $stored:ident [$(#[$ameta:meta])*] $any:ident
             [$($bname:ident = $($bstate:ident)|+ ;)*] [$($wvis:tt)*]
+            [$($nvis:tt)*] [$dvis:vis]
         ]
         [[$(#[$fm:meta])*] $first:ident [$fd:ty]]
         $([[$(#[$m:meta])*] $s:ident [$d:ty]])*
@@ -215,12 +219,7 @@ macro_rules! machine {
         }
 
         impl $name {
-            /// The machine in its first state.
-            #[inline]
-            #[allow(dead_code)]
-            $vis fn new(ctx: $ctx) -> Self {
-                $name { ctx, stored: $stored::$first(()) }
-            }
+            $crate::machine!(@new [$($nvis)*] [$dvis] $name $ctx, $stored::$first(()));
 
             /// The shared context, read-only.
             #[inline]
@@ -264,6 +263,25 @@ macro_rules! machine {
                 }
             }
         )*
+    };
+
+    // `new`, with the visibility `new(...)` gave, or the machine's.
+    (@new [] [$dvis:vis] $name:ident $ctx:ty, $first:expr) => {
+        $crate::machine!(@new_fn [$dvis] $name $ctx, $first);
+    };
+    (@new [private] [$dvis:vis] $name:ident $ctx:ty, $first:expr) => {
+        $crate::machine!(@new_fn [] $name $ctx, $first);
+    };
+    (@new [$($nvis:tt)+] [$dvis:vis] $name:ident $ctx:ty, $first:expr) => {
+        $crate::machine!(@new_fn [$($nvis)+] $name $ctx, $first);
+    };
+    (@new_fn [$($v:tt)*] $name:ident $ctx:ty, $first:expr) => {
+        /// The machine in its first state.
+        #[inline]
+        #[allow(dead_code)]
+        $($v)* fn new(ctx: $ctx) -> Self {
+            $name { ctx, stored: $first }
+        }
     };
 
     // Takes the stored state out for `with_typed`: a `Copy` one is copied,
@@ -357,5 +375,29 @@ mod tests {
         }
         assert_eq!(core::mem::size_of::<LampState>(), 1);
         assert_eq!(core::mem::size_of::<Lamp>(), 1);
+    }
+}
+
+#[cfg(test)]
+mod visibility {
+    mod m {
+        crate::machine! {
+            pub struct Gate over u8 {
+                stored GateState;
+                typed GateAny;
+                states { Shut, Ajar }
+                new(private);
+                with_typed(pub(crate));
+            }
+        }
+        pub fn gate() -> Gate {
+            Gate::new(3)
+        }
+    }
+
+    #[test]
+    fn a_private_constructor_still_builds_inside_the_module() {
+        let g = m::gate();
+        assert_eq!(*g.ctx(), 3);
     }
 }
