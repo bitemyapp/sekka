@@ -12,7 +12,10 @@ fn partitions(app: &Genkan, review: &Review) -> String {
     let disk = &review.disk;
     let swap = review
         .swap
-        .then(|| app.memory.map(|m| memory::swap_bytes(m.total)))
+        .then(|| match app.memory() {
+            crate::ram::MemoryState::Known(info) => Some(memory::swap_bytes(info.total)),
+            _ => None,
+        })
         .flatten();
     match Layout::for_install(disk.bytes, review.firmware, swap, review.encrypt) {
         Ok(layout) => {

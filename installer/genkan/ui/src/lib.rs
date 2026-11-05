@@ -11,6 +11,7 @@ pub mod flow;
 pub mod format;
 pub mod media;
 pub mod preview;
+pub mod ram;
 pub mod view;
 pub mod zone;
 
