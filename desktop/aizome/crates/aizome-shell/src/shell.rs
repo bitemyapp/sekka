@@ -522,7 +522,7 @@ impl Shell {
             drag_grab: aizome_kit::Vec2::ZERO,
             volumes_fixture: Vec::new(),
             system_disk_fallback: None,
-            lock: Default::default(),
+            lock: crate::lock::LockState::unlocked(),
             authenticator: Arc::new(crate::pam::Pam::new("aizome")),
             user_picture: None,
             auth: None,
@@ -1982,7 +1982,9 @@ impl Program for Shell {
         // opened again when the outputs change.
         if let Some(s) = self.surfaces.remove(&window) {
             if matches!(s, Surface::Lock { .. }) {
-                self.lock.surfaces.retain(|(key, _)| *key != window);
+                if let Some(lock_surfaces) = self.lock.surfaces_mut() {
+                    lock_surfaces.retain(|(key, _)| *key != window);
+                }
                 // Reconcile after the kit has destroyed the old surface;
                 // creating its replacement here would duplicate its role.
                 cx.send(Msg::Nothing);
@@ -2071,8 +2073,8 @@ impl Program for Shell {
         self.lock_confirmed(cx);
     }
 
-    fn session_lock_finished(&mut self, _cx: &mut Cx<Msg>) {
-        self.lock_ended();
+    fn session_lock_finished(&mut self, cx: &mut Cx<Msg>) {
+        self.lock_ended(cx);
     }
 }
 
@@ -2363,17 +2365,13 @@ impl Shell {
             match e {
                 SessionEvent::Lock => self.lock(cx),
                 SessionEvent::Unlock => self.unlock(cx),
-                SessionEvent::PrepareForSleep => {
-                    if self.lock_cfg.before_sleep && self.lock.phase == crate::lock::Phase::Unlocked {
-                        self.lock.sleep_pending = true;
-                        self.lock(cx);
-                    } else if let Some(l) = &self.sys.logind {
-                        l.sleep_ready();
-                    }
-                }
+                SessionEvent::PrepareForSleep(sleep) => self.lock_for_sleep(sleep, cx),
                 SessionEvent::Resumed => {
+                    // A sleep that waited for the lock is over.
+                    self.lock_resumed();
                     self.sync_screens(cx.outputs(), cx);
-                    // Take the delay again for the next sleep.
+                    // Hold the delay for the next sleep (the one held
+                    // stays, if logind went to sleep without its release).
                     if let Some(l) = &self.sys.logind
                         && let Err(e) = l.take_sleep_delay()
                     {
