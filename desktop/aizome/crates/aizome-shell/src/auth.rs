@@ -1,20 +1,24 @@
 //! The authentication dialog: polkit's agent (`aizome-sys`) asks, and the
 //! shell shows an overlay dialog with the mark, the action's message, who
 //! authenticates (a pop-up if several may), the password, PAM's prompts and
-//! errors inline, Cancel and Authenticate.
+//! errors inline, Cancel and Authenticate (Try Again once the agent has
+//! stopped trying). Its states are in [`dialog`].
+
+pub mod dialog;
 
 use aizome_kit::element::Element;
 use aizome_kit::layout::{Align, Point, Rect, Size};
 use aizome_kit::prelude::*;
 use aizome_kit::widget::SemanticRole;
 use aizome_kit::{KeyboardInteractivity, Layer, LayerOptions, button, dropdown};
-use aizome_sys::polkit::{AuthEvent, AuthRequest};
+use aizome_sys::polkit::{AuthEvent, AuthRequest, Heard, RequestId};
 use aizome_theme::typeface;
 
 use crate::look::{self, Hue};
 use crate::shell::{Msg, Shell, Surface, layer};
 use crate::widgets::drawn::{around, drawn};
 use crate::widgets::field::field;
+use dialog::{Dialog, DialogAny};
 
 pub const WIDTH: f64 = 440.0;
 pub const HEIGHT: f64 = 300.0;
@@ -24,22 +28,16 @@ pub const SHADOW: f64 = 3.0;
 #[derive(Clone, Debug)]
 pub enum AuthIn {
     Begin(AuthRequest),
-    Prompt { cookie: String, text: String, echo: bool },
-    Error { cookie: String, text: String },
-    Info { cookie: String, text: String },
-    Failed { cookie: String },
-    Done { cookie: String },
+    Heard(Heard),
+    Done { request: RequestId },
 }
 
 impl From<AuthEvent> for AuthIn {
     fn from(e: AuthEvent) -> AuthIn {
         match e {
             AuthEvent::Begin(r) => AuthIn::Begin(r),
-            AuthEvent::Prompt { cookie, text, echo } => AuthIn::Prompt { cookie, text, echo },
-            AuthEvent::Error { cookie, text } => AuthIn::Error { cookie, text },
-            AuthEvent::Info { cookie, text } => AuthIn::Info { cookie, text },
-            AuthEvent::Failed { cookie } => AuthIn::Failed { cookie },
-            AuthEvent::Done { cookie, .. } => AuthIn::Done { cookie },
+            AuthEvent::Heard(heard) => AuthIn::Heard(heard),
+            AuthEvent::Done { request, .. } => AuthIn::Done { request },
         }
     }
 }
@@ -53,18 +51,17 @@ pub enum AuthMsg {
     Cancel,
 }
 
-/// The dialog while it's open.
-#[derive(Clone, Debug)]
-pub struct AuthState {
-    pub window: WindowKey,
-    pub request: AuthRequest,
-    pub identity: usize,
-    /// PAM's prompt ("Password:") and whether what's typed shows.
-    pub prompt: Option<(String, bool)>,
-    pub password: String,
-    pub info: Option<String>,
-    pub error: Option<String>,
-    pub busy: bool,
+/// What the dialog's default button does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Submit {
+    /// Authenticate: answer the prompt (or the first one, if it hasn't
+    /// come yet).
+    Answer,
+    /// Authenticate, dimmed: an answer is being checked, or the agent is
+    /// about to try again.
+    Wait,
+    /// Try Again: the agent stopped trying.
+    TryAgain,
 }
 
 /// What the dialog shows (testable without polkit).
@@ -78,6 +75,7 @@ pub struct AuthView {
     pub password: String,
     pub note: Option<(String, bool)>,
     pub busy: bool,
+    pub submit: Submit,
 }
 
 pub fn view(v: &AuthView) -> Element<AuthMsg> {
@@ -155,10 +153,15 @@ pub fn view(v: &AuthView) -> Element<AuthMsg> {
             );
         }
     });
+    let (action, press) = match v.submit {
+        Submit::Answer => ("Authenticate", Some(AuthMsg::Authenticate)),
+        Submit::Wait => ("Authenticate", None),
+        Submit::TryAgain => ("Try Again", Some(AuthMsg::Authenticate)),
+    };
     let buttons = aizome_kit::row(vec![
         aizome_kit::spacer().into(),
         button("Cancel").cancel().on_press(AuthMsg::Cancel).into(),
-        button("Authenticate").default().on_press_maybe((!v.busy).then_some(AuthMsg::Authenticate)).into(),
+        button(action).default().on_press_maybe(press).into(),
     ])
     .spacing(8.0);
     let content = aizome_kit::column(vec![
@@ -217,120 +220,114 @@ impl Shell {
     }
 
     pub fn auth_view(&self) -> Option<AuthView> {
-        let a = self.auth.as_ref()?;
-        let identities: Vec<String> =
-            a.request.identities.iter().map(|i| format!("{} ({})", i.display_name(), i.name)).collect();
-        let (prompt, echo) = a.prompt.clone().unwrap_or_else(|| ("Password:".into(), false));
-        let note = a.error.clone().map(|e| (e, true)).or_else(|| a.info.clone().map(|i| (i, false)));
-        Some(AuthView {
-            message: a.request.message.clone(),
-            identities,
-            identity: a.identity,
-            prompt,
-            echo,
-            password: a.password.clone(),
-            note,
-            busy: a.busy,
-        })
+        self.auth.as_ref().map(Dialog::view)
     }
 
     pub fn auth_in(&mut self, e: AuthIn, cx: &mut Cx<Msg>) {
-        let same = |a: &Option<AuthState>, c: &str| a.as_ref().is_some_and(|a| a.request.cookie == c);
         match e {
             AuthIn::Begin(request) => {
                 if let Some(old) = self.auth.take() {
-                    old.request.cancel();
-                    cx.close_window(old.window);
-                    self.surfaces.remove(&old.window);
+                    self.close_auth_window(old.cancel(), cx);
                 }
                 let Some(output) = self.focused_screen().map(|s| s.output.id) else {
                     request.cancel();
                     return;
                 };
-                let opts = LayerOptions::new(Layer::Overlay, "aizome-auth")
-                    .keyboard(KeyboardInteractivity::Exclusive)
-                    .output(output);
-                let s = size();
-                let window = cx.open_window(layer(opts, s.width, s.height, "Authenticate"));
-                self.surfaces.insert(window, Surface::Auth);
-                let identity = request
-                    .default_identity()
-                    .and_then(|d| request.identities.iter().position(|i| i == d))
-                    .unwrap_or(0);
-                if let Some(i) = request.identities.get(identity) {
-                    request.authenticate(i);
-                }
-                self.auth = Some(AuthState {
-                    window,
-                    request,
-                    identity,
-                    prompt: None,
-                    password: String::new(),
-                    info: None,
-                    error: None,
-                    busy: false,
+                let window = self.open_auth_window(output, cx);
+                self.auth = Some(Dialog::begin(request, window));
+            }
+            AuthIn::Heard(heard) => {
+                let Some(dialog) = &mut self.auth else { return };
+                // Another request's, or about a conversation since superseded.
+                let Ok(fresh) = dialog.check(heard) else { return };
+                let asked = dialog.with_typed(|s| {
+                    let next = s.heard(fresh);
+                    let asked = match &next {
+                        DialogAny::Prompted(_) => true,
+                        DialogAny::Starting(_)
+                        | DialogAny::Eager(_)
+                        | DialogAny::Checking(_)
+                        | DialogAny::Waiting(_)
+                        | DialogAny::Unavailable(_) => false,
+                    };
+                    (next, asked)
                 });
-                cx.focus("auth-password");
-            }
-            AuthIn::Prompt { cookie, text, echo } if same(&self.auth, &cookie) => {
-                let a = self.auth.as_mut().expect("open");
-                a.prompt = Some((text, echo));
-                a.busy = false;
-                cx.focus("auth-password");
-            }
-            AuthIn::Error { cookie, text } if same(&self.auth, &cookie) => {
-                let a = self.auth.as_mut().expect("open");
-                a.error = Some(text);
-                a.busy = false;
-            }
-            AuthIn::Info { cookie, text } if same(&self.auth, &cookie) => {
-                self.auth.as_mut().expect("open").info = Some(text);
-            }
-            AuthIn::Failed { cookie } if same(&self.auth, &cookie) => {
-                let a = self.auth.as_mut().expect("open");
-                a.busy = false;
-                a.password.clear();
-                a.error = Some("That didn't work. Try again.".into());
-                if let Some(i) = a.request.identities.get(a.identity) {
-                    a.request.authenticate(i);
+                if asked {
+                    cx.focus("auth-password");
                 }
             }
-            AuthIn::Done { cookie } if same(&self.auth, &cookie) => self.close_auth(cx),
-            _ => {}
+            AuthIn::Done { request } => {
+                if self.auth.as_ref().is_some_and(|d| d.id() == request) {
+                    let dialog = self.auth.take().map(Dialog::close);
+                    self.close_auth_window(dialog.flatten(), cx);
+                }
+            }
         }
     }
 
     pub fn auth_msg(&mut self, m: AuthMsg, cx: &mut Cx<Msg>) {
-        let Some(a) = &mut self.auth else { return };
+        let Some(dialog) = &mut self.auth else { return };
         match m {
-            AuthMsg::Identity(i) => {
-                a.identity = i;
-                a.error = None;
-                if let Some(id) = a.request.identities.get(i) {
-                    a.request.authenticate(id);
-                }
-            }
-            AuthMsg::Password(p) => a.password = p,
-            AuthMsg::Authenticate => {
-                if a.busy {
-                    return;
-                }
-                a.busy = true;
-                a.error = None;
-                let pw = std::mem::take(&mut a.password);
-                a.request.respond(&pw);
-            }
+            AuthMsg::Identity(i) => dialog.with_typed(|s| (s.choose(i), ())),
+            AuthMsg::Password(p) => dialog.type_password(p),
+            AuthMsg::Authenticate => dialog.with_typed(|s| {
+                let next = match s {
+                    DialogAny::Starting(s) => s.submit().into(),
+                    DialogAny::Prompted(s) => s.submit().into(),
+                    DialogAny::Unavailable(s) => s.try_again().into(),
+                    // Checking an answer, or the agent about to try again.
+                    s @ (DialogAny::Eager(_) | DialogAny::Checking(_) | DialogAny::Waiting(_)) => s,
+                };
+                (next, ())
+            }),
             AuthMsg::Cancel => {
-                a.request.cancel();
-                self.close_auth(cx);
+                if let Some(dialog) = self.auth.take() {
+                    self.close_auth_window(dialog.cancel(), cx);
+                }
             }
         }
     }
 
-    fn close_auth(&mut self, cx: &mut Cx<Msg>) {
-        if let Some(a) = self.auth.take() {
-            cx.close_window(a.window);
-            self.surfaces.remove(&a.window);
+    /// The dialog's overlay on `output`.
+    fn open_auth_window(&mut self, output: u32, cx: &mut Cx<Msg>) -> WindowKey {
+        let opts =
+            LayerOptions::new(Layer::Overlay, "aizome-auth").keyboard(KeyboardInteractivity::Exclusive).output(output);
+        let s = size();
+        let window = cx.open_window(layer(opts, s.width, s.height, "Authenticate"));
+        self.surfaces.insert(window, Surface::Auth);
+        cx.focus("auth-password");
+        window
+    }
+
+    fn close_auth_window(&mut self, window: Option<WindowKey>, cx: &mut Cx<Msg>) {
+        if let Some(window) = window {
+            cx.close_window(window);
+            self.surfaces.remove(&window);
+        }
+    }
+
+    /// The compositor took a window away (its output went): if it was the
+    /// dialog's, the dialog shows again on a screen there is, once the kit
+    /// has let the old one go.
+    pub fn auth_window_closed(&mut self, window: WindowKey, cx: &mut Cx<Msg>) {
+        if let Some(dialog) = &mut self.auth
+            && dialog.window() == Some(window)
+        {
+            dialog.window_gone();
+            cx.send(Msg::Nothing);
+        }
+    }
+
+    /// Gives a dialog that lost its window another, on the focused screen.
+    /// Without a screen it waits for one: polkitd's request stays pending.
+    pub fn sync_auth(&mut self, cx: &mut Cx<Msg>) {
+        if self.auth.as_ref().is_none_or(|d| d.window().is_some()) {
+            return;
+        }
+        let Some(output) = self.focused_screen().map(|s| s.output.id) else { return };
+        let window = self.open_auth_window(output, cx);
+        if let Some(dialog) = &mut self.auth {
+            dialog.shown_in(window);
         }
     }
 }

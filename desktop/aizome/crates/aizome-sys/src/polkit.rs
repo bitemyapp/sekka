@@ -10,14 +10,26 @@
 //!
 //! The UI picks an identity and calls [`AuthRequest::authenticate`]; the
 //! agent then runs polkit's helper, which does the PAM conversation as
-//! root, and relays it line by line ([`AuthEvent::Prompt`] for a password,
-//! [`AuthEvent::Error`] and [`AuthEvent::Info`] for messages), the UI
-//! answering prompts with [`AuthRequest::respond`]. When PAM succeeds the
-//! helper itself tells polkitd (`AuthenticationAgentResponse2`), prints
-//! `SUCCESS`, and the agent completes `BeginAuthentication`. On `FAILURE`
-//! the dialog says so ([`AuthEvent::Failed`]) and may try again; dismissing
-//! it is [`AuthRequest::cancel`]. polkitd's `CancelAuthentication` (the
-//! application gave up) ends it too.
+//! root, and relays it line by line as [`AuthEvent::Heard`]: a prompt
+//! ([`Said::Prompt`]), PAM's messages, and how each attempt ended. Each
+//! event names the conversation it's about, and the UI reads one only
+//! after [`AuthRequest::check`] proves it's about the latest
+//! ([`conversation::said`]); it answers a prompt with
+//! [`AuthRequest::respond`], which takes that prompt's [`Asked`]. When PAM
+//! succeeds the helper itself tells polkitd (`AuthenticationAgentResponse2`),
+//! prints `SUCCESS`, and the agent completes `BeginAuthentication`
+//! ([`AuthEvent::Done`]). Dismissing the dialog is [`AuthRequest::cancel`];
+//! polkitd's `CancelAuthentication` (the application gave up) ends it too.
+//!
+//! The agent starts the next attempt itself. After a refused answer
+//! (`FAILURE`) it starts at once ([`Said::Refused`]): the person types
+//! again. After an attempt that ended with no answer written (the helper
+//! couldn't be reached, or stopped or refused before anyone answered) it
+//! waits half a second, then a second ([`Said::Retrying`]); after a third
+//! it stops ([`Said::Unavailable`]) until the UI asks again, and every
+//! later start waits out a floor of up to four seconds. So no UI, however
+//! it answers events, makes the agent start helpers faster than that. The
+//! states and their proofs are in [`conversation`].
 //!
 //! # The helper
 //!
@@ -42,19 +54,23 @@
 //! again after a restart, and retries while another shell still owns the
 //! session. Losing the owner cancels its pending conversations.
 
+pub mod conversation;
+
 use crate::bus::{Bus, Opts, value_u64, with_timeout};
 use crate::error::{Error, Result};
 use crate::oneshot;
 use crate::service::lock;
+use aizome_typestate::Fresh;
+pub use conversation::{Asked, Heard, RequestId, Said, Talk, said};
+use conversation::{ConvAny, Conversation, Converse, Ctx, Dialed, Due, Line, Reply, Then, Wake};
 use futures_lite::StreamExt;
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
+use std::io::BufRead;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
-use std::sync::mpsc;
+use std::process::Child;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use zbus::zvariant::{OwnedValue, Value};
 
 const POLKIT: &str = "org.freedesktop.PolicyKit1";
@@ -109,23 +125,16 @@ impl Identity {
 }
 
 /// What the dialog shows and does.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum AuthEvent {
     /// Show the dialog for this request.
     Begin(AuthRequest),
-    /// Ask for a line: a password (`echo` false: hide what is typed) or
-    /// something else, such as a user name (`echo` true). Answer with
-    /// [`AuthRequest::respond`].
-    Prompt { cookie: String, text: String, echo: bool },
-    /// Show an error from PAM ("Authentication failure").
-    Error { cookie: String, text: String },
-    /// Show a message from PAM ("Touch the fingerprint reader").
-    Info { cookie: String, text: String },
-    /// That attempt failed (a wrong password): say so and let the person
-    /// try again with [`AuthRequest::authenticate`], or cancel.
-    Failed { cookie: String },
-    /// It is over (authenticated, cancelled or abandoned): close the dialog.
-    Done { cookie: String, authorized: bool },
+    /// The request's conversation said something: read it after
+    /// [`AuthRequest::check`].
+    Heard(Heard),
+    /// It is over (authenticated, cancelled or abandoned): close the
+    /// dialog for `request`.
+    Done { cookie: String, authorized: bool, request: RequestId },
 }
 
 /// One authentication request from polkitd.
@@ -165,20 +174,39 @@ impl AuthRequest {
         self.identities.iter().find(|i| i.uid == me).or_else(|| self.identities.first())
     }
 
-    /// Start (or restart, after a failure) the conversation as `identity`.
+    /// Start the conversation as `identity`: the first, another identity's,
+    /// or one more after [`Said::Unavailable`]. The agent starts it when its
+    /// floor allows (at once, unless attempts have been ending with no
+    /// answer); a call while an attempt waits for the floor changes only
+    /// whom it's for.
     pub fn authenticate(&self, identity: &Identity) {
-        Session::start(&self.session, identity.name.clone());
+        let user = identity.name.clone();
+        self.session.step(move |state| (start(state, user), ()));
     }
 
-    /// Answer the current prompt. The text is written to the helper and the
-    /// agent's copy is overwritten.
-    pub fn respond(&self, text: &str) {
-        self.session.respond(text);
+    /// The proof that `heard` is about this request's latest conversation,
+    /// or the event back when it's another request's, or about one a newer
+    /// conversation superseded. Read it with [`said`].
+    pub fn check(&self, heard: Heard) -> std::result::Result<Fresh<Talk, Heard>, Heard> {
+        lock(&self.session.inner).conversation.check_heard(heard)
+    }
+
+    /// Answer the prompt `asked`. The text is written to the helper only if
+    /// that prompt is still the one waiting, and the agent's copy is
+    /// overwritten.
+    pub fn respond(&self, asked: Asked, text: &str) {
+        let reply = Reply::new(asked, text);
+        self.session.step(move |state| (answer(state, reply), ()));
     }
 
     /// The person dismissed the dialog.
     pub fn cancel(&self) {
-        self.session.finish(false);
+        self.session.cancel();
+    }
+
+    /// Which request this is, as [`AuthEvent::Done`] names it.
+    pub fn id(&self) -> RequestId {
+        self.session.id
     }
 }
 
@@ -187,39 +215,276 @@ type Ui = Arc<dyn Fn(AuthEvent) + Send + Sync>;
 /// One `BeginAuthentication` in progress.
 struct Session {
     cookie: String,
+    id: RequestId,
     ui: Ui,
     helper: Helper,
     inner: Mutex<SessionInner>,
 }
 
 struct SessionInner {
-    /// Completes `BeginAuthentication`: authorized or not.
-    reply: Option<oneshot::Sender<bool>>,
-    /// The conversation running, if any.
-    conversation: Option<Conversation>,
-    /// Counts conversations, so a superseded one's events are dropped.
-    generation: u64,
+    conversation: Conversation,
+    /// A thread is handing the UI what the conversation said.
+    telling: bool,
 }
 
-struct Conversation {
-    responses: mpsc::Sender<Vec<u8>>,
-    end: Ender,
+/// Whether a helper's line was about the latest conversation.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Heeded {
+    Current,
+    Stale,
 }
 
-/// Ends a conversation from outside its thread.
+/// The UI asked for an attempt as `user`.
+fn start(state: ConvAny<'_>, user: String) -> conversation::Step<'_> {
+    match state {
+        ConvAny::Idle(s) => s.start(user),
+        ConvAny::Dialing(s) => s.start(user),
+        ConvAny::Starting(s) => s.start(user),
+        ConvAny::Prompted(s) => s.start(user),
+        ConvAny::Checking(s) => s.start(user),
+        ConvAny::Cooling(s) => (s.start(user).into(), Then::Nothing),
+        ConvAny::Unavailable(s) => s.start(user),
+        ConvAny::Over(s) => (s.into(), Then::Nothing),
+    }
+}
+
+/// The UI answered a prompt.
+fn answer(state: ConvAny<'_>, reply: Reply) -> conversation::Step<'_> {
+    let Ok(now) = state.check(reply) else { return (state, Then::Nothing) };
+    let next = match state {
+        ConvAny::Prompted(s) => match s.answer(now) {
+            Ok(checking) => checking.into(),
+            Err(prompted) => prompted.into(),
+        },
+        // The conversation's ticket, but its prompt is answered already.
+        s @ (ConvAny::Idle(_)
+        | ConvAny::Dialing(_)
+        | ConvAny::Starting(_)
+        | ConvAny::Checking(_)
+        | ConvAny::Cooling(_)
+        | ConvAny::Unavailable(_)
+        | ConvAny::Over(_)) => s,
+    };
+    (next, Then::Nothing)
+}
+
+/// The helper wrote a line, or its output ended.
+fn hear(state: ConvAny<'_>, line: Line) -> (conversation::Step<'_>, Heeded) {
+    let Ok(now) = state.check(line) else { return ((state, Then::Nothing), Heeded::Stale) };
+    let (next, then) = match state {
+        ConvAny::Starting(s) => s.heard(now),
+        ConvAny::Prompted(s) => s.heard(now),
+        ConvAny::Checking(s) => s.heard(now),
+        // A current line names a running helper, so these never see one.
+        s @ (ConvAny::Idle(_)
+        | ConvAny::Dialing(_)
+        | ConvAny::Cooling(_)
+        | ConvAny::Unavailable(_)
+        | ConvAny::Over(_)) => (s, Then::Nothing),
+    };
+    ((next, then), Heeded::Current)
+}
+
+/// Starting a helper went one way or the other.
+fn dialed(state: ConvAny<'_>, dialed: Dialed) -> conversation::Step<'_> {
+    let now = match state.check(dialed) {
+        Ok(now) => now,
+        Err(stale) => return (state, Then::Abandon(stale)),
+    };
+    match state {
+        ConvAny::Dialing(s) => s.dialed(now),
+        // A current connection names the attempt being started.
+        s @ (ConvAny::Idle(_)
+        | ConvAny::Starting(_)
+        | ConvAny::Prompted(_)
+        | ConvAny::Checking(_)
+        | ConvAny::Cooling(_)
+        | ConvAny::Unavailable(_)
+        | ConvAny::Over(_)) => (s, Then::Abandon(now.into_answer())),
+    }
+}
+
+/// A retry's timer went off.
+fn due(state: ConvAny<'_>, due: Due) -> conversation::Step<'_> {
+    let Ok(now) = state.check(due) else { return (state, Then::Nothing) };
+    match state {
+        ConvAny::Cooling(s) => s.due(now),
+        // A current timer names the planned attempt, which may be starting.
+        s @ (ConvAny::Idle(_)
+        | ConvAny::Dialing(_)
+        | ConvAny::Starting(_)
+        | ConvAny::Prompted(_)
+        | ConvAny::Checking(_)
+        | ConvAny::Unavailable(_)
+        | ConvAny::Over(_)) => (s, Then::Nothing),
+    }
+}
+
+/// The request ends, unauthorized.
+fn cancel(state: ConvAny<'_>) -> conversation::Step<'_> {
+    let over = match state {
+        ConvAny::Idle(s) => s.cancel(),
+        ConvAny::Dialing(s) => s.cancel(),
+        ConvAny::Starting(s) => s.cancel(),
+        ConvAny::Prompted(s) => s.cancel(),
+        ConvAny::Checking(s) => s.cancel(),
+        ConvAny::Cooling(s) => s.cancel(),
+        ConvAny::Unavailable(s) => s.cancel(),
+        ConvAny::Over(s) => s,
+    };
+    (over.into(), Then::Nothing)
+}
+
+impl Session {
+    /// Runs one step of the conversation under its lock, then, with the lock
+    /// released, tells the UI what it said and does the work it left
+    /// (starting a helper, a thread, a timer). Nothing waits on I/O under
+    /// the lock, and a proof the step checked ([`conversation::Now`]) can't
+    /// outlive it.
+    fn step<R>(self: &Arc<Self>, f: impl for<'s> FnOnce(ConvAny<'s>) -> ((ConvAny<'s>, Then), R)) -> R {
+        let (then, r) = lock(&self.inner).conversation.with_typed(|state| {
+            let ((next, then), r) = f(state);
+            (next, (then, r))
+        });
+        self.tell();
+        self.carry_out(then);
+        r
+    }
+
+    fn cancel(self: &Arc<Self>) {
+        self.step(|state| (cancel(state), ()));
+    }
+
+    /// Hands the UI what the conversation said, in order, without the lock:
+    /// one thread at a time, so events reach the UI in the order the steps
+    /// made them, and a UI that answers inside its callback only queues.
+    fn tell(&self) {
+        {
+            let mut inner = lock(&self.inner);
+            if inner.telling {
+                return;
+            }
+            inner.telling = true;
+        }
+        // If the UI's callback panics, the next step tells again.
+        struct Unstick<'a>(&'a Session);
+        impl Drop for Unstick<'_> {
+            fn drop(&mut self) {
+                if std::thread::panicking() {
+                    lock(&self.0.inner).telling = false;
+                }
+            }
+        }
+        let _unstick = Unstick(self);
+        loop {
+            let next = {
+                let mut inner = lock(&self.inner);
+                let next = inner.conversation.next_event();
+                if next.is_none() {
+                    inner.telling = false;
+                }
+                next
+            };
+            match next {
+                Some(event) => (self.ui)(event),
+                None => return,
+            }
+        }
+    }
+
+    fn carry_out(self: &Arc<Self>, then: Then) {
+        match then {
+            Then::Nothing => {}
+            Then::Dial(dial) => {
+                let result = dial.connect(&self.helper, &self.cookie);
+                self.step(move |state| (dialed(state, result), ()));
+            }
+            Then::Wake(wake) => self.wake(wake),
+            Then::Converse(conversation) => self.converse(conversation),
+            Then::Abandon(dialed) => dialed.abandon(),
+        }
+    }
+
+    /// The planned attempt starts when its timer goes off (if the request
+    /// is still there and the attempt still wanted).
+    fn wake(self: &Arc<Self>, wake: Wake) {
+        let session = Arc::downgrade(self);
+        let spawned = std::thread::Builder::new().name("aizome-sys polkit retry".into()).spawn(move || {
+            std::thread::sleep(wake.at().saturating_duration_since(Instant::now()));
+            if let Some(session) = session.upgrade() {
+                let fired = wake.fire();
+                session.step(move |state| (due(state, fired), ()));
+            }
+        });
+        if let Err(error) = spawned {
+            log::warn!("aizome-sys: polkit retry: {error}");
+        }
+    }
+
+    /// Reads the helper on a thread of its own.
+    fn converse(self: &Arc<Self>, conversation: Converse) {
+        let ended = conversation.ended();
+        let session = self.clone();
+        let spawned =
+            std::thread::Builder::new().name("aizome-sys polkit".into()).spawn(move || session.relay(conversation));
+        if let Err(error) = spawned {
+            log::warn!("aizome-sys: polkit helper: {error}");
+            self.step(move |state| hear(state, ended));
+        }
+    }
+
+    /// Relays the helper's lines until its output ends or a newer
+    /// conversation supersedes it, then ends it.
+    fn relay(self: Arc<Session>, conversation: Converse) {
+        let (lines, reader, ender) = conversation.into_parts();
+        let mut heeded = Heeded::Current;
+        for text in reader.lines() {
+            let Ok(text) = text else { break };
+            let line = lines.line(&text);
+            heeded = self.step(move |state| hear(state, line));
+            match heeded {
+                Heeded::Current => {}
+                Heeded::Stale => break,
+            }
+        }
+        match heeded {
+            Heeded::Current => {
+                let line = lines.ended();
+                self.step(move |state| hear(state, line));
+            }
+            Heeded::Stale => {}
+        }
+        ender.end();
+    }
+}
+
+/// Ends a helper from outside its thread.
 #[derive(Clone)]
-enum Ender {
-    Child(Arc<Mutex<Option<Child>>>),
+pub(crate) enum Ender {
+    Child(Arc<ChildSlot>),
     Stream(Arc<UnixStream>),
 }
 
+/// The setuid helper, until its thread reaps it.
+pub(crate) struct ChildSlot(Mutex<Option<Child>>);
+
+impl Drop for ChildSlot {
+    fn drop(&mut self) {
+        // Nothing reaped it (its thread never ran): don't leave a zombie.
+        if let Some(mut child) = self.0.get_mut().unwrap_or_else(|e| e.into_inner()).take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
 impl Ender {
-    fn end(&self) {
+    /// Stops the helper, without waiting: its thread sees its output end.
+    fn stop(&self) {
         match self {
-            Ender::Child(child) => {
-                if let Some(mut child) = lock(child).take() {
+            Ender::Child(slot) => {
+                if let Some(child) = lock(&slot.0).as_mut() {
                     let _ = child.kill();
-                    let _ = child.wait();
                 }
             }
             Ender::Stream(stream) => {
@@ -227,154 +492,20 @@ impl Ender {
             }
         }
     }
-}
 
-impl Session {
-    fn start(this: &Arc<Session>, user: String) {
-        let (tx, rx) = mpsc::channel::<Vec<u8>>();
-        let mut inner = lock(&this.inner);
-        if inner.reply.is_none() {
-            return; // already over
-        }
-        if let Some(old) = inner.conversation.take() {
-            old.end.end();
-        }
-        inner.generation += 1;
-        let generation = inner.generation;
-        let connected = connect(&this.helper, &user, &this.cookie);
-        let (reader, writer, end) = match connected {
-            Ok(parts) => parts,
-            Err(error) => {
-                log::warn!("aizome-sys: polkit helper: {error}");
-                drop(inner);
-                (this.ui)(AuthEvent::Error { cookie: this.cookie.clone(), text: error.describe() });
-                (this.ui)(AuthEvent::Failed { cookie: this.cookie.clone() });
-                return;
-            }
-        };
-        inner.conversation = Some(Conversation { responses: tx, end: end.clone() });
-        drop(inner);
-        let session = this.clone();
-        let spawned = std::thread::Builder::new()
-            .name("aizome-sys polkit".into())
-            .spawn(move || session.converse(generation, reader, writer, rx, end));
-        if spawned.is_err() {
-            (this.ui)(AuthEvent::Failed { cookie: this.cookie.clone() });
-        }
-    }
-
-    /// Whether `generation` is still the conversation in progress.
-    fn current(&self, generation: u64) -> bool {
-        let inner = lock(&self.inner);
-        inner.reply.is_some() && inner.generation == generation
-    }
-
-    /// Relay the helper's lines until it says SUCCESS or FAILURE.
-    fn converse(
-        self: Arc<Session>,
-        generation: u64,
-        reader: Box<dyn BufRead + Send>,
-        mut writer: Box<dyn Write + Send>,
-        responses: mpsc::Receiver<Vec<u8>>,
-        end: Ender,
-    ) {
-        let cookie = self.cookie.clone();
-        let mut outcome = None;
-        for line in reader.lines() {
-            let Ok(line) = line else { break };
-            if !self.current(generation) {
-                break;
-            }
-            match parse_line(&line) {
-                HelperLine::Prompt { text, echo } => {
-                    (self.ui)(AuthEvent::Prompt { cookie: cookie.clone(), text, echo });
-                    let Ok(mut answer) = responses.recv() else { break };
-                    answer.push(b'\n');
-                    let written = writer.write_all(&answer).and_then(|()| writer.flush());
-                    answer.fill(0);
-                    if written.is_err() {
-                        break;
-                    }
-                }
-                HelperLine::Error(text) => (self.ui)(AuthEvent::Error { cookie: cookie.clone(), text }),
-                HelperLine::Info(text) => (self.ui)(AuthEvent::Info { cookie: cookie.clone(), text }),
-                HelperLine::Success => {
-                    outcome = Some(true);
-                    break;
-                }
-                HelperLine::Failure => {
-                    outcome = Some(false);
-                    break;
-                }
-                HelperLine::Unknown(line) => {
-                    // As libpolkit-agent does: an unknown line ends the attempt.
-                    log::warn!("aizome-sys: unknown line from the polkit helper: {line:?}");
-                    outcome = Some(false);
-                    break;
+    /// Stops the helper and reaps it (its own thread, outside any lock).
+    fn end(&self) {
+        match self {
+            Ender::Child(slot) => {
+                let child = lock(&slot.0).take();
+                if let Some(mut child) = child {
+                    let _ = child.kill();
+                    let _ = child.wait();
                 }
             }
-        }
-        end.end();
-        if !self.current(generation) {
-            return;
-        }
-        lock(&self.inner).conversation = None;
-        match outcome {
-            Some(true) => self.finish(true),
-            _ => (self.ui)(AuthEvent::Failed { cookie }),
-        }
-    }
-
-    fn respond(&self, text: &str) {
-        let inner = lock(&self.inner);
-        if let Some(conversation) = &inner.conversation {
-            let _ = conversation.responses.send(text.as_bytes().to_vec());
-        }
-    }
-
-    /// End it: reply to polkitd and tell the UI.
-    fn finish(&self, authorized: bool) {
-        let mut inner = lock(&self.inner);
-        let Some(reply) = inner.reply.take() else { return };
-        if let Some(conversation) = inner.conversation.take() {
-            conversation.end.end();
-        }
-        drop(inner);
-        reply.send(authorized);
-        (self.ui)(AuthEvent::Done { cookie: self.cookie.clone(), authorized });
-    }
-}
-
-type Connected = (Box<dyn BufRead + Send>, Box<dyn Write + Send>, Ender);
-
-/// Start the helper for `user` and hand it the cookie.
-fn connect(helper: &Helper, user: &str, cookie: &str) -> Result<Connected> {
-    if user.contains('\n') || cookie.contains('\n') {
-        return Err(Error::InvalidArgument("a line break in a user name or cookie".into()));
-    }
-    match helper {
-        Helper::Socket(path) => {
-            let stream = UnixStream::connect(path)?;
-            let mut writer = stream.try_clone()?;
-            writer.write_all(format!("{user}\n{cookie}\n").as_bytes())?;
-            writer.flush()?;
-            let reader = BufReader::new(stream.try_clone()?);
-            Ok((Box::new(reader), Box::new(writer), Ender::Stream(Arc::new(stream))))
-        }
-        Helper::Program(path) => {
-            let mut child = Command::new(path)
-                .arg(user)
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::null())
-                .env("LC_ALL", "C")
-                .spawn()
-                .map_err(|e| Error::Unavailable(format!("{}: {e}", path.display())))?;
-            let mut stdin = child.stdin.take().ok_or_else(|| Error::Failed("no helper stdin".into()))?;
-            let stdout = child.stdout.take().ok_or_else(|| Error::Failed("no helper stdout".into()))?;
-            stdin.write_all(format!("{cookie}\n").as_bytes())?;
-            stdin.flush()?;
-            Ok((Box::new(BufReader::new(stdout)), Box::new(stdin), Ender::Child(Arc::new(Mutex::new(Some(child))))))
+            Ender::Stream(stream) => {
+                let _ = stream.shutdown(std::net::Shutdown::Both);
+            }
         }
     }
 }
@@ -555,7 +686,7 @@ fn change_owner(state: &Mutex<AgentState>, owner: Option<String>) {
         std::mem::take(&mut state.sessions)
     };
     for session in sessions.into_values() {
-        session.finish(false);
+        session.cancel();
     }
     lock(state).owner = owner;
 }
@@ -586,11 +717,16 @@ impl Agent {
             return Err(PolkitError::Failed("No one may authenticate for this".into()));
         }
         let (tx, rx) = oneshot::channel();
+        let id = RequestId::next();
         let session = Arc::new(Session {
             cookie: cookie.clone(),
+            id,
             ui: self.ui.clone(),
             helper: self.helper.clone(),
-            inner: Mutex::new(SessionInner { reply: Some(tx), conversation: None, generation: 0 }),
+            inner: Mutex::new(SessionInner {
+                conversation: Conversation::new(Ctx::new(id, cookie.clone(), tx)),
+                telling: false,
+            }),
         });
         {
             let mut state = lock(&self.state);
@@ -599,7 +735,9 @@ impl Agent {
                 return Err(PolkitError::Failed("An authentication with this cookie is already pending".into()));
             }
             state.sessions.insert(cookie.clone(), session.clone());
-            (self.ui)(AuthEvent::Begin(AuthRequest {
+            // Queued first, so the UI hears of the request before its end,
+            // and told once the agent's lock is released.
+            lock(&session.inner).conversation.begun(AuthRequest {
                 cookie: cookie.clone(),
                 action_id,
                 message,
@@ -607,8 +745,9 @@ impl Agent {
                 details,
                 identities: people,
                 session: session.clone(),
-            }));
+            });
         }
+        session.tell();
         let authorized = rx.await;
         let mut state = lock(&self.state);
         if state.sessions.get(&cookie).is_some_and(|current| Arc::ptr_eq(current, &session)) {
@@ -632,7 +771,7 @@ impl Agent {
         };
         match session {
             Some(session) => {
-                session.finish(false);
+                session.cancel();
                 Ok(())
             }
             None => Err(PolkitError::Failed(format!("No authentication with cookie {cookie}"))),
@@ -899,6 +1038,9 @@ impl Drop for PolkitAgent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::BufReader;
+    use std::process::{Command, Stdio};
+    use std::sync::mpsc;
 
     #[test]
     fn setup_failure_and_bus_loss_reconnect_until_the_handle_is_dropped() {
