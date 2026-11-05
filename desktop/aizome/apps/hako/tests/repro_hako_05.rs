@@ -6,11 +6,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use aizome_kit::agree::Agreed;
 use hako::fsops::transfer::{restore, trash_items};
 use hako::fsops::trash::Trash;
 use hako::fsops::undo::{History, Record, Step, invert};
-use hako::fsops::{Asker, Choice, Conflict, Consent, Control, Env, ErrorChoice, Failure, Replacing, Resolution};
+use hako::fsops::{Asker, Choice, Conflict, Control, Env, ErrorChoice, Failure, ReplaceAll, Replacing};
 
 /// A folder of the test's own under the private TMPDIR, removed when dropped.
 struct Tmp(PathBuf);
@@ -38,19 +37,20 @@ impl Drop for Tmp {
 
 /// Replace at every conflict, as a person who pressed Replace with "Apply
 /// to all" (the kit's test agreement stands for their press).
-struct ReplaceAll(Agreed<Replacing>);
+struct Replacer(ReplaceAll);
 
-impl Asker for ReplaceAll {
+impl Asker for Replacer {
     fn conflict(&mut self, c: &Conflict) -> Choice {
-        Consent::to(&self.0, c).map_or(Resolution::Cancel.into(), Choice::Replace)
+        Choice::Replace(self.0.consent(c))
     }
     fn error(&mut self, _: &Failure) -> ErrorChoice {
         ErrorChoice::Skip
     }
 }
 
-fn replace_all() -> ReplaceAll {
-    ReplaceAll(aizome_kit::agree::testing::agreed(Replacing { target: PathBuf::new(), all: true }))
+fn replace_all() -> Replacer {
+    let agreed = aizome_kit::agree::testing::agreed(Replacing { job: 1, target: PathBuf::new(), all: true });
+    Replacer(ReplaceAll::new(agreed, 1).expect("an \"Apply to all\" Replace for job 1"))
 }
 
 /// A Trash entirely inside the test folder (no mount points looked at).

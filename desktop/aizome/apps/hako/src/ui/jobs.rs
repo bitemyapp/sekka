@@ -14,8 +14,8 @@ use crate::fsops::transfer::{self, Mode};
 use crate::fsops::trash::{self, Trash};
 use crate::fsops::undo::{self, Inversion, Inverted, Record, Step, items_label};
 use crate::fsops::{
-    Asker, Choice, Conflict, Consent, Control, Env, ErrorChoice, Failure, Progress, Replacing, Report, Reporter,
-    Resolution,
+    Asker, Choice, Conflict, Consent, Control, Env, ErrorChoice, Failure, Progress, ReplaceAll, Replacing, Report,
+    Reporter, Resolution,
 };
 use aizome_kit::agree::Agreed;
 
@@ -222,7 +222,8 @@ pub fn start<Msg: Send + 'static>(
             let (tx, wrap) = (tx.clone(), wrap.clone());
             move |e: JobEvent| tx.send(wrap(id, e))
         };
-        let mut asker = UiAsker { send: &send, answers: arx, conflicts: None, replace_all: None, errors: None };
+        let mut asker =
+            UiAsker { job: id, send: &send, answers: arx, conflicts: None, replace_all: None, errors: None };
         let mut reporter = Throttle { send: &send, last: None };
         let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut env = Env::new(&c, &mut asker, &mut reporter);
@@ -328,20 +329,23 @@ fn made(report: &Report, label: &str) -> Option<Step> {
 
 /// Asks the person, through the program, and waits for the answer.
 struct UiAsker<'a> {
+    /// The job it asks for: an agreement to replace is for one job's
+    /// conflicts.
+    job: u64,
     send: &'a dyn Fn(JobEvent) -> bool,
     answers: mpsc::Receiver<Reply>,
     /// "Apply to all" with an answer other than Replace.
     conflicts: Option<Resolution>,
     /// "Apply to all" with Replace: the person's agreement, which consents
     /// for this job's later conflicts and dies with the job.
-    replace_all: Option<Agreed<Replacing>>,
+    replace_all: Option<ReplaceAll>,
     errors: Option<ErrorChoice>,
 }
 
 impl Asker for UiAsker<'_> {
     fn conflict(&mut self, c: &Conflict) -> Choice {
-        if let Some(consent) = self.replace_all.as_ref().and_then(|agreed| Consent::to(agreed, c)) {
-            return Choice::Replace(consent);
+        if let Some(all) = &self.replace_all {
+            return Choice::Replace(all.consent(c));
         }
         match self.conflicts {
             // Merging a folder into a file (or the other way) keeps both.
@@ -361,13 +365,23 @@ impl Asker for UiAsker<'_> {
                     return r.into();
                 }
                 Ok(Reply::Replace(agreed)) => {
-                    // An agreement for another conflict (none should come)
-                    // replaces nothing: ask again.
-                    let Some(consent) = Consent::to(&agreed, c) else { continue };
-                    if agreed.target().all {
-                        self.replace_all = Some(agreed);
+                    let agreed = match ReplaceAll::new(agreed, self.job) {
+                        Ok(all) => {
+                            let consent = all.consent(c);
+                            self.replace_all = Some(all);
+                            return Choice::Replace(consent);
+                        }
+                        Err(agreed) => agreed,
+                    };
+                    if let Ok(consent) = Consent::to(agreed, self.job, c) {
+                        return Choice::Replace(consent);
                     }
-                    return Choice::Replace(consent);
+                    // An agreement for another conflict (another job's, or
+                    // an earlier sheet's) replaces nothing: the sheet it
+                    // answered has closed, so ask again.
+                    if !(self.send)(JobEvent::Ask(Question::Conflict(c.clone()))) {
+                        return Resolution::Cancel.into();
+                    }
                 }
                 Ok(Reply::Answer(Answer::Error(..))) => continue,
                 Err(_) => return Resolution::Cancel.into(),
@@ -448,30 +462,50 @@ mod tests {
         }
     }
 
-    fn replacing(target: &str, all: bool) -> Agreed<Replacing> {
-        agreed(Replacing { target: PathBuf::from("/to").join(target), all })
+    fn replacing(job: u64, target: &str, all: bool) -> Agreed<Replacing> {
+        agreed(Replacing { job, target: PathBuf::from("/to").join(target), all })
+    }
+
+    fn replaced(choice: Choice) -> Option<PathBuf> {
+        match choice {
+            Choice::Replace(consent) => Some(consent.target().to_path_buf()),
+            Choice::Other(_) => None,
+        }
     }
 
     /// The window's asker replaces only with the person's agreement to the
-    /// conflict asked about (a press of the sheet's Replace), and with
-    /// "Apply to all" every later conflict of its job.
+    /// conflict asked about (a press of the sheet's Replace), for its own
+    /// job, and with "Apply to all" every later conflict of that job. A press
+    /// for another conflict or job is asked about again.
     #[test]
     fn only_an_agreement_to_the_conflict_asked_replaces() {
-        let send = |_: JobEvent| true;
+        let asked = std::cell::Cell::new(0);
+        let send = |_: JobEvent| {
+            asked.set(asked.get() + 1);
+            true
+        };
         let (tx, rx) = mpsc::channel();
-        let mut asker = UiAsker { send: &send, answers: rx, conflicts: None, replace_all: None, errors: None };
-        // An agreement to another item replaces nothing; the asker waits on.
-        tx.send(Reply::Replace(replacing("b.txt", false))).unwrap();
+        let mut asker = UiAsker { job: 7, send: &send, answers: rx, conflicts: None, replace_all: None, errors: None };
+        // Agreements to another item, and to another job's same item,
+        // replace nothing: the asker asks again and waits on.
+        tx.send(Reply::Replace(replacing(7, "b.txt", false))).unwrap();
+        tx.send(Reply::Replace(replacing(8, "a.txt", false))).unwrap();
         tx.send(Reply::Answer(Answer::Conflict(Resolution::Skip, false))).unwrap();
-        assert!(matches!(asker.conflict(&conflict("a.txt")), Choice::Other(Resolution::Skip)));
-        // An agreement to this one does.
-        tx.send(Reply::Replace(replacing("a.txt", false))).unwrap();
-        assert!(matches!(asker.conflict(&conflict("a.txt")), Choice::Replace(_)));
-        // "Apply to all": this one and the job's later ones, unasked.
-        tx.send(Reply::Replace(replacing("c.txt", true))).unwrap();
-        assert!(matches!(asker.conflict(&conflict("c.txt")), Choice::Replace(_)));
+        assert!(replaced(asker.conflict(&conflict("a.txt"))).is_none());
+        assert_eq!(asked.get(), 3, "asked, then asked again after each stray press");
+        // An agreement to this one does, for this one.
+        tx.send(Reply::Replace(replacing(7, "a.txt", false))).unwrap();
+        assert_eq!(replaced(asker.conflict(&conflict("a.txt"))), Some(PathBuf::from("/to/a.txt")));
+        // Another job's "Apply to all" isn't this job's.
+        tx.send(Reply::Replace(replacing(8, "c.txt", true))).unwrap();
+        tx.send(Reply::Answer(Answer::Conflict(Resolution::KeepBoth, false))).unwrap();
+        assert!(replaced(asker.conflict(&conflict("c.txt"))).is_none());
+        // "Apply to all": this one and the job's later ones, unasked, each
+        // consenting for its own item.
+        tx.send(Reply::Replace(replacing(7, "c.txt", true))).unwrap();
+        assert_eq!(replaced(asker.conflict(&conflict("c.txt"))), Some(PathBuf::from("/to/c.txt")));
         drop(tx);
-        assert!(matches!(asker.conflict(&conflict("d.txt")), Choice::Replace(_)));
+        assert_eq!(replaced(asker.conflict(&conflict("d.txt"))), Some(PathBuf::from("/to/d.txt")));
     }
 
     #[test]

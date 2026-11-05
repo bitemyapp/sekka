@@ -754,7 +754,7 @@ mod tests {
     impl crate::fsops::Asker for Script {
         fn conflict(&mut self, c: &Conflict) -> Choice {
             self.asked.push(format!("conflict {}", c.target.file_name().unwrap().to_string_lossy()));
-            self.conflicts.pop_front().expect("an answer for the conflict").choice()
+            self.conflicts.pop_front().expect("an answer for the conflict").choice(c)
         }
 
         fn error(&mut self, f: &Failure) -> ErrorChoice {
@@ -775,9 +775,9 @@ mod tests {
     }
 
     impl Say {
-        fn choice(self) -> Choice {
+        fn choice(self, c: &Conflict) -> Choice {
             match self {
-                Say::Replace => Choice::Replace(Consent::for_tests()),
+                Say::Replace => Choice::Replace(Consent::for_tests(c)),
                 Say::Skip => Resolution::Skip.into(),
                 Say::KeepBoth => Resolution::KeepBoth.into(),
                 Say::Merge => Resolution::Merge.into(),
@@ -788,11 +788,11 @@ mod tests {
 
     /// Replaces at every conflict, as if the person had pressed Replace with
     /// "Apply to all".
-    struct ReplaceAll(ErrorChoice);
+    struct AlwaysReplace(ErrorChoice);
 
-    impl crate::fsops::Asker for ReplaceAll {
-        fn conflict(&mut self, _: &Conflict) -> Choice {
-            Choice::Replace(Consent::for_tests())
+    impl crate::fsops::Asker for AlwaysReplace {
+        fn conflict(&mut self, c: &Conflict) -> Choice {
+            Choice::Replace(Consent::for_tests(c))
         }
 
         fn error(&mut self, _: &Failure) -> ErrorChoice {
@@ -942,7 +942,7 @@ mod tests {
         t.file("dest/folder/old-only.txt", "kept in the trash");
         let src = t.file("new/folder/new.txt", "new");
         let control = Control::new();
-        let mut asker = ReplaceAll(ErrorChoice::Cancel);
+        let mut asker = AlwaysReplace(ErrorChoice::Cancel);
         let mut quiet = ();
         let mut env = Env::new(&control, &mut asker, &mut quiet);
         let r = transfer(&[src.parent().unwrap().to_path_buf()], &dest, Mode::Copy, &mut env, &trash);
@@ -970,7 +970,7 @@ mod tests {
         t.file("dest/a.txt", "old a");
         let a = t.file("new/a.txt", "new a");
         let control = Control::new();
-        let mut asker = ReplaceAll(ErrorChoice::Cancel);
+        let mut asker = AlwaysReplace(ErrorChoice::Cancel);
         let mut quiet = ();
         let mut env = Env::new(&control, &mut asker, &mut quiet);
         let r = transfer(std::slice::from_ref(&a), &dest, Mode::Copy, &mut env, &trash);
@@ -983,6 +983,29 @@ mod tests {
         no_temporaries(&dest);
     }
 
+    /// An asker that answers one conflict with the consent for another item
+    /// replaces nothing: the conflict is skipped.
+    #[test]
+    fn a_consent_for_another_item_replaces_nothing() {
+        struct Elsewhere;
+        impl crate::fsops::Asker for Elsewhere {
+            fn conflict(&mut self, c: &Conflict) -> Choice {
+                let other = Conflict { target: c.target.with_file_name("someone-elses.txt"), ..c.clone() };
+                Choice::Replace(Consent::for_tests(&other))
+            }
+            fn error(&mut self, _: &Failure) -> ErrorChoice {
+                ErrorChoice::Cancel
+            }
+        }
+        let t = TempDir::new("consent-elsewhere");
+        let dest = t.dir("dest");
+        t.file("dest/a.txt", "old a");
+        let a = t.file("new/a.txt", "new a");
+        let r = run(std::slice::from_ref(&a), &dest, Mode::Copy, &mut Elsewhere);
+        assert_eq!(read(dest.join("a.txt")), "old a", "{r:?}");
+        no_temporaries(&dest);
+    }
+
     #[test]
     fn a_target_that_changed_while_asked_is_not_replaced() {
         /// Answers Replace, after another program swapped what's there.
@@ -992,7 +1015,7 @@ mod tests {
                 let fresh = c.target.with_extension("fresh");
                 fs::write(&fresh, "newest").unwrap();
                 fs::rename(&fresh, &c.target).unwrap();
-                Choice::Replace(Consent::for_tests())
+                Choice::Replace(Consent::for_tests(c))
             }
             fn error(&mut self, _: &Failure) -> ErrorChoice {
                 ErrorChoice::Cancel

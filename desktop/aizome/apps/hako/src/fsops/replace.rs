@@ -62,7 +62,10 @@ impl SameTarget for Found {
 /// let _ = Asked(());
 /// ```
 #[derive(Debug)]
-pub struct Asked(Consent);
+pub struct Asked(
+    // Held, not read: the consent is what makes the brand.
+    #[allow(dead_code)] Consent,
+);
 
 /// The item at a replacement's target, as the person saw it when they
 /// answered Replace.
@@ -83,7 +86,8 @@ pub(super) enum Answer {
 
 /// Ask about `conflict`, `tmeta` being what's at its target (not
 /// followed). Merge is an answer only for folders: for anything else it
-/// keeps both (replacing takes the person's consent, which Merge isn't).
+/// keeps both (replacing takes the person's consent, which Merge isn't). A
+/// consent for another target than this conflict's skips it.
 pub(super) fn ask(asker: &mut dyn Asker, conflict: &Conflict, tmeta: &fs::Metadata) -> Answer {
     match asker.conflict(conflict) {
         Choice::Other(Resolution::Skip) => Answer::Skip,
@@ -91,9 +95,12 @@ pub(super) fn ask(asker: &mut dyn Asker, conflict: &Conflict, tmeta: &fs::Metada
         Choice::Other(Resolution::KeepBoth) => Answer::KeepBoth,
         Choice::Other(Resolution::Merge) if conflict.can_merge() => Answer::Merge,
         Choice::Other(Resolution::Merge) => Answer::KeepBoth,
-        Choice::Replace(consent) => {
+        Choice::Replace(consent) if consent.target() == conflict.target => {
             Answer::Replace(Occupant { seen: Reviewed::new(Found::at(&conflict.target, tmeta), Asked(consent)) })
         }
+        // Consent to replace another item (another conflict's) replaces
+        // nothing here.
+        Choice::Replace(_) => Answer::Skip,
     }
 }
 
