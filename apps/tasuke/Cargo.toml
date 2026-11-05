@@ -26,6 +26,8 @@ libc = "0.2"
 ureq = "3"
 sha2 = "0.10"
 log = "0.4"
+png = "0.18"
+similar = "2"
 
 [profile.release]
 lto = "thin"

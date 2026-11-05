@@ -9,3 +9,8 @@ rust-version.workspace = true
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+toml = { workspace = true }
+libc = { workspace = true }
+ureq = { workspace = true }
+png = { workspace = true }
+similar = { workspace = true }
