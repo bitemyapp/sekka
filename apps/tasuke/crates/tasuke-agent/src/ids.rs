@@ -109,6 +109,17 @@ impl Default for StepBudget {
     }
 }
 
+/// A numbered box on a marked screenshot (set-of-marks), from 1.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct MarkId(pub u32);
+
+impl fmt::Display for MarkId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// A number of tokens: a context size, a prompt, an answer.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]

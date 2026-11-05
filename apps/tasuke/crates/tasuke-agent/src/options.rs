@@ -14,8 +14,7 @@ pub const DEFAULT_PORT: u16 = 8737;
 
 /// How a vision model gives screen points (models.toml's `coords`): each
 /// answers in its own convention whatever the prompt says.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Coords {
     /// Pixels of the screenshot it was shown.
     #[default]
@@ -24,15 +23,77 @@ pub enum Coords {
     Norm1000,
     /// 0–1 across each axis (Nemotron Bolt).
     Norm1,
+    /// Measured per axis (`grounding.py`): the screenshot's pixel is
+    /// `scale · value + offset`. The model is asked for pixels. Gemma 4 12B,
+    /// for one, answers x in a 0–1000 frame and y in pixels.
+    Affine { x: Axis, y: Axis },
+}
+
+/// One axis of an affine coordinate mapping.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Axis {
+    pub scale: f64,
+    pub offset: f64,
 }
 
 impl Coords {
+    /// `pixel`, `norm1000`, `norm1`, or `affine:XSCALE,XOFFSET,YSCALE,YOFFSET`.
     pub fn parse(s: &str) -> Option<Coords> {
-        match s {
+        match s.trim() {
             "pixel" | "pixels" => Some(Coords::Pixel),
             "norm1000" => Some(Coords::Norm1000),
             "norm1" => Some(Coords::Norm1),
-            _ => None,
+            other => {
+                let v: Vec<f64> =
+                    other.strip_prefix("affine:")?.split(',').map(|p| p.trim().parse().ok()).collect::<Option<_>>()?;
+                let [xs, xo, ys, yo] = v[..] else { return None };
+                Some(Coords::Affine { x: Axis { scale: xs, offset: xo }, y: Axis { scale: ys, offset: yo } })
+            }
+        }
+    }
+
+    /// The point a model gave, in pixels of the image it was shown (`w`×`h`).
+    pub fn to_image(self, x: f64, y: f64, w: f64, h: f64) -> (f64, f64) {
+        match self {
+            Coords::Pixel => (x, y),
+            Coords::Norm1000 => (x * w / 1000.0, y * h / 1000.0),
+            Coords::Norm1 => (x * w, y * h),
+            Coords::Affine { x: ax, y: ay } => (ax.scale * x + ax.offset, ay.scale * y + ay.offset),
+        }
+    }
+
+    /// What the tools' schemas tell the model about x and y.
+    pub fn describe(self, w: u32, h: u32) -> String {
+        match self {
+            Coords::Norm1000 => {
+                "x and y from 0 to 1000 across the screenshot's width and height (0,0 top left, 1000,1000 bottom right)"
+                    .into()
+            }
+            Coords::Norm1 => {
+                "x and y from 0 to 1 across the screenshot's width and height (0,0 top left, 1,1 bottom right)".into()
+            }
+            Coords::Pixel | Coords::Affine { .. } => {
+                format!("x and y in pixels of the latest screenshot, 0,0 top left; it is {w}×{h}")
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Coords {
+    /// models.toml's forms: `coords = "norm1000"` or `coords = { x = [a, b], y = [c, d] }`.
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Coords, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Form {
+            Name(String),
+            Affine { x: [f64; 2], y: [f64; 2] },
+        }
+        match Form::deserialize(d)? {
+            Form::Name(n) => Coords::parse(&n).ok_or_else(|| serde::de::Error::custom(format!("unknown coords {n:?}"))),
+            Form::Affine { x, y } => Ok(Coords::Affine {
+                x: Axis { scale: x[0], offset: x[1] },
+                y: Axis { scale: y[0], offset: y[1] },
+            }),
         }
     }
 }
@@ -106,6 +167,10 @@ pub struct Options {
     /// Whether the model takes images (offers `screenshot`).
     pub vision: bool,
     pub coords: Coords,
+    /// Set-of-marks: when kit apps say where their controls are, number
+    /// them on the screenshot, list them, and offer `click_element` and
+    /// `type_into` (x/y clicks stay for windows without that information).
+    pub set_of_marks: bool,
     /// The context size to assume when the server's `/props` doesn't say.
     pub context_fallback: Tokens,
     /// The most tokens one reply may have.
@@ -140,6 +205,7 @@ impl Options {
             time_limit: None,
             vision: false,
             coords: Coords::Pixel,
+            set_of_marks: false,
             context_fallback: Tokens(32768),
             max_output_tokens: Tokens(8192),
             request_params: serde_json::Map::new(),
@@ -277,5 +343,27 @@ mod tests {
         assert_eq!(Coords::parse("norm1"), Some(Coords::Norm1));
         assert_eq!(Coords::parse("pixel"), Some(Coords::Pixel));
         assert_eq!(Coords::parse("inches"), None);
+        assert_eq!(Coords::parse("affine:1,2,3"), None);
+        let gemma = Coords::parse("affine:1.45,8,0.99,-32").unwrap();
+        let (x, y) = gemma.to_image(100.0, 100.0, 1440.0, 900.0);
+        assert!((x - 153.0).abs() < 1e-9 && (y - 67.0).abs() < 1e-9);
+        assert_eq!(Coords::Norm1000.to_image(500.0, 500.0, 1440.0, 900.0), (720.0, 450.0));
+        assert_eq!(Coords::Norm1.to_image(0.5, 0.25, 1440.0, 900.0), (720.0, 225.0));
+    }
+
+    #[test]
+    fn coords_read_from_toml_names_and_tables() {
+        #[derive(Deserialize)]
+        struct M {
+            coords: Coords,
+        }
+        let m: M = toml::from_str("coords = \"norm1\"").unwrap();
+        assert_eq!(m.coords, Coords::Norm1);
+        let m: M = toml::from_str("coords = { x = [1.45, 8.0], y = [0.99, -32.0] }").unwrap();
+        assert_eq!(
+            m.coords,
+            Coords::Affine { x: Axis { scale: 1.45, offset: 8.0 }, y: Axis { scale: 0.99, offset: -32.0 } }
+        );
+        assert!(toml::from_str::<M>("coords = \"feet\"").is_err());
     }
 }

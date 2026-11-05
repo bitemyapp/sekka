@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{CallId, NoteId, Tokens, TurnNumber};
+use crate::ids::{CallId, MarkId, NoteId, Tokens, TurnNumber};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -154,6 +154,19 @@ pub enum ToolCall {
     OpenApp {
         name: String,
     },
+    /// A click on a numbered element of the last marked screenshot (set-of-marks).
+    ClickElement {
+        mark: MarkId,
+        label: String,
+        at: ScreenPoint,
+    },
+    /// A click on a numbered element, then typing into it.
+    TypeInto {
+        mark: MarkId,
+        label: String,
+        at: ScreenPoint,
+        text: String,
+    },
     Wait {
         seconds: f64,
     },
@@ -188,6 +201,8 @@ impl ToolCall {
             ToolCall::TypeText { .. } => "type_text",
             ToolCall::Key { .. } => "key",
             ToolCall::OpenApp { .. } => "open_app",
+            ToolCall::ClickElement { .. } => "click_element",
+            ToolCall::TypeInto { .. } => "type_into",
             ToolCall::Wait { .. } => "wait",
             ToolCall::Invalid { name, .. } => name,
         }
@@ -222,6 +237,10 @@ impl ToolCall {
             ToolCall::TypeText { text } => format!("Type \"{}\"", first_line(text)),
             ToolCall::Key { keys } => format!("Press {keys}"),
             ToolCall::OpenApp { name } => format!("Open {name}"),
+            ToolCall::ClickElement { mark, label, .. } => format!("Click [{mark}] \"{}\"", first_line(label)),
+            ToolCall::TypeInto { mark, label, text, .. } => {
+                format!("Type \"{}\" into [{mark}] \"{}\"", first_line(text), first_line(label))
+            }
             ToolCall::Wait { seconds } => format!("Wait {seconds} s"),
             ToolCall::Invalid { name, .. } => format!("{name} (not understood)"),
         }
@@ -238,6 +257,8 @@ impl ToolCall {
                 | ToolCall::TypeText { .. }
                 | ToolCall::Key { .. }
                 | ToolCall::OpenApp { .. }
+                | ToolCall::ClickElement { .. }
+                | ToolCall::TypeInto { .. }
         )
     }
 }
