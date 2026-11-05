@@ -357,5 +357,29 @@ The check kinds are kept apart, as `AGENTS.md` asks.
     lock moved into Genkan's system-call module;
   - `genkan-preflight`;
   - `tansu-resize`.
-- **ISO installs:** pending. UEFI GUI installs from an ISO built from this branch, confirming before and after preparation finishes; the deferred route on a disk too small and on one large enough; and a scripted helper-session install.
+- **Nix build of Uta** (`.#uta`), which builds against this branch's kit
+  and Sukumo.
+- **ISO installs**, from an ISO built from `abaa9c61` (SHA-256
+  `cd9b5ba6…7508`), in disposable QEMU VMs driven by mouse and keyboard
+  through QMP, each screenshot inspected:
+
+  | Case | Result |
+  |---|---|
+  | UEFI GUI install, confirmed while preparation was still running | pass: the window waited ("Finishing preparation…"), the disk stayed untouched for 9 minutes until `Prepared`, then it installed; the installed system booted and its greeter took the password |
+  | UEFI GUI install, confirmed after "Ready to install" | pass: installing began at once; the disk was untouched before the click |
+  | BIOS GUI install, confirmed while preparing | pass, as the first, with GRUB |
+  | Deferred route, a 26 GiB disk too small for Firefox and Uta, confirmed early | pass: refused before any write ("needs at least 23.0 GiB on the root filesystem; it would have 21.0 GiB"); the queued confirmation was dropped and the window returned to Review; the disk image's hash didn't change |
+  | Deferred route, an 80 GiB disk | fail, from a defect older than this branch (below) |
+  | Scripted helper session | pass: confirmation sent only after `prepared`, then `complete`; the installed system passed the fixture's checks |
+
+  The deferred route chose its route, passed the room check, erased the
+  confirmed disk and started building on it, then failed while compiling
+  Uta. Genkan builds there with `--option build-dir /nix/var/nix/builds`,
+  which for a build into `/mnt` is on the live system's RAM-backed root
+  (1.9 GB with 4 GiB of memory). The argument dates from Genkan's import,
+  and main hides it because the cache serves its Uta; this branch's Uta
+  isn't cached, so it compiled. The same Uta builds on the host. An earlier
+  attempt also hit a transient download error, which aborts the install
+  after erasing because the build doesn't fall back. Both are follow-ups,
+  not tier 1 changes.
 - **Hardware:** no physical hardware was tested.
