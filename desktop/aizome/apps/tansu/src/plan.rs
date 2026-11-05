@@ -23,7 +23,7 @@
 use aizome_kit::agree::Agreed;
 use aizome_sys::Task;
 use aizome_sys::disks::{
-    Confirm, CreatePartition, DeletePartition, DisksState, Encryption, Erase, Format, FormatSpec, Holds, Identity,
+    Confirm, CreatePartition, DeletePartition, DisksState, Encryption, Erase, Format, FormatSpec, Identity,
     NewPartitionTable, PartitionEntry, Relabel, Repair, Resize, TableKind, format_size,
 };
 
@@ -159,8 +159,13 @@ impl Creating {
     }
 }
 
-/// A partition an operation's first step made, for its later steps (its
-/// flags): only [`Creating::take`] gives one.
+/// A partition an operation's first step made, with its flags already set:
+/// only [`Creating::take`] gives one.
+///
+/// ```compile_fail,E0451
+/// use tansu::plan::Made;
+/// let _ = Made { op: 1, path: "/org/freedesktop/UDisks2/block_devices/sda1".into() };
+/// ```
 #[derive(Clone, Debug, PartialEq)]
 pub struct Made {
     op: u64,
@@ -267,7 +272,7 @@ impl AsRef<Identity> for Shown {
 /// use aizome_sys::disks::{Confirm, DisksState, Format};
 /// use tansu::plan::{Op, Queued};
 /// fn confirm_what_is_there(state: &DisksState, op: &Op) -> Confirm<Format, Queued> {
-///     Confirm::new(state.identity(&op.target).unwrap(), Queued(()))
+///     Confirm::new(state.identity(op.target()).unwrap(), Queued(()))
 /// }
 /// ```
 ///
@@ -326,58 +331,14 @@ pub fn start_create(agreed: &Agreed<Shown>, backend: &dyn Backend, state: &Disks
     let OpKind::Create(p) = &op.kind else { return Err("It doesn't make a partition.".into()) };
     let table =
         state.block(&op.target).and_then(|b| b.partition_table.as_ref()).map(|t| t.kind.clone()).unwrap_or_default();
-    let (type_id, _) = p.flags.apply(&table, &p.fs, "", 0);
+    // Its type, and its flags, which UDisks's client sets on the partition
+    // it makes: nobody saw that partition before, so nothing else names it.
+    let (type_id, flags) = p.flags.apply(&table, &p.fs, "", 0);
     let format =
         (!p.fs.is_empty()).then(|| FormatSpec { encrypt: p.encrypt.clone(), ..FormatSpec::new(&p.fs, &p.label) });
     let confirm = Confirm::new(agreed, Queued(()));
-    let task = backend.create_partition(confirm, p.offset, p.size, Some(&type_id), &p.name, format);
+    let task = backend.create_partition(confirm, p.offset, p.size, Some(&type_id), &p.name, format, flags);
     Ok(Creating { op: op.id, task })
-}
-
-/// The confirmation for setting the flags of the partition an agreed
-/// [`OpKind::Create`] made. No one saw it before it was made, so it is
-/// taken as it is, if it is where the operation made it: in the space it
-/// asked for, in its disk's table, on the disk the person agreed to, which
-/// is still the one it was queued for. Only what the create step gave can
-/// name it, not any partition:
-///
-/// ```compile_fail,E0599
-/// use aizome_kit::agree::Agreed;
-/// use aizome_sys::disks::{Confirm, DeletePartition, DisksState};
-/// use tansu::backend::Backend;
-/// use tansu::plan::Shown;
-/// fn f(backend: &dyn Backend, state: &DisksState, create_op: &Agreed<Shown>, other_partition: &str) {
-///     let c: Confirm<DeletePartition, _> = Confirm::new(create_op.review_made(state, other_partition).unwrap());
-///     let _ = backend.delete_partition(c);
-/// }
-/// ```
-///
-/// ```compile_fail,E0308
-/// use aizome_kit::agree::Agreed;
-/// use aizome_sys::disks::DisksState;
-/// use tansu::backend::Backend;
-/// use tansu::plan::{Shown, made_flags};
-/// fn f(backend: &dyn Backend, state: &DisksState, create_op: &Agreed<Shown>, other_partition: &str) {
-///     let c = made_flags(create_op, state, other_partition).unwrap();
-///     let _ = backend.set_partition_flags(c, 0x80);
-/// }
-/// ```
-///
-/// ```compile_fail,E0451
-/// use tansu::plan::Made;
-/// let _ = Made { op: 1, path: "/org/freedesktop/UDisks2/block_devices/sda1".into() };
-/// ```
-pub fn made_flags(agreed: &Agreed<Shown>, state: &DisksState, made: &Made) -> Option<Confirm<PartitionEntry, Queued>> {
-    let op = &agreed.target().op;
-    let OpKind::Create(p) = &op.kind else { return None };
-    if made.op != op.id {
-        return None;
-    }
-    let part = state.block(&made.path)?.partition.as_ref()?;
-    let in_place = part.table == op.target && part.offset >= p.offset && part.offset < p.offset + p.size;
-    let disk_same = state.identity(&op.target).is_some_and(|now| op.seen.same(&now, Holds::Place));
-    let made = state.identity(&made.path).filter(|_| in_place && disk_same)?;
-    Confirm::made_on(agreed, made, Queued(()))
 }
 
 /// What the person can do to a segment (or its disk).
