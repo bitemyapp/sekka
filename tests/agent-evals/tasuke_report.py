@@ -13,12 +13,24 @@ from pathlib import Path
 
 
 def load(dirs):
-    rows = []
+    """Every episode, a later run's replacing an earlier one's with the same
+    label, scenario and repeat (a rerun on a fixed build)."""
+    by = {}
+    replaced = []
     for d in dirs:
         f = Path(d) / "results.jsonl"
-        if f.exists():
-            rows += [json.loads(line) for line in f.open()]
-    return rows
+        if not f.exists():
+            continue
+        for line in f.open():
+            r = json.loads(line)
+            key = (r.get("label"), r.get("scenario"), r.get("repeat"), r.get("observe"))
+            if key in by and Path(d).name != Path(by[key]["_run"]).name:
+                replaced.append(key)
+            r["_run"] = d
+            by[key] = r
+    if replaced:
+        print(f"replaced by a later run: {sorted(set(replaced))}")
+    return list(by.values())
 
 
 def main():
