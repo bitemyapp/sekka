@@ -8,11 +8,11 @@ No training scenario is a paraphrase of a held-out one, or the same fault on ano
 
 - **System** (15): crash dumps filling the root filesystem, a journald drop-in with `Storage=none`, the wired NetworkManager profile down with autoconnect off, `dns` missing from nsswitch.conf's hosts line, `usermod -G` without `-a`, /tmp without its 1777 mode, a paused and rejecting CUPS queue, an immutable file, a proxy in `~/.curlrc`, a static route via an old router, a disabled user timer, `~` in a user service's EnvironmentFile, a dangling link in `~/.local/bin`, the firewall closed to a port alice serves, and a `~/.bashrc` that replaces PATH.
 - **Session** (9): `mimeapps.list` sending PDFs to the Text Editor, a user desktop entry hiding the Calculator, `LC_ALL=C` in `~/.config/aizome/environment`, the default output muted at volume 0, `~/Pictures/Screenshots` linked to a missing USB stick, a Clock alarm never scheduled, `hotaru.toml` naming a shell that isn't installed, the gcr SSH agent stopped, and `user-dirs.dirs` pointing the desktop elsewhere.
-- **Computer use** (8): Night Light on, an alarm in Clock, a file to the Trash in Files, the volume to half, a note saved from the Text Editor, an event in Calendar, the biggest folder from Disk Usage, a pinned note in Notes.
+- **Computer use** (8): the terminal's text size in its preferences, an alarm in Clock, a file to the Trash in Files, the volume to half, a note saved from the Text Editor, an event in Calendar, the biggest folder from Disk Usage, a pinned note in Notes.
 
 The held-out faults are left alone: no resolv.conf, /etc/hosts, nftables table, port conflict on 8080, /srv/data, sekka-backup, ~/.ssh or sshd, CPU-hog unit, nix-daemon, time zone, ~/Notes ownership, Aizome's settings.toml, keyboard layout, masked PipeWire or portal; and no theme, time zone, terminal file, new note, new folder, output device, lock time, Calculator sum or Logs search.
 
-Computer-use tasks have shell oracles here, which leave the state the app would (through the app's own command line where it has one: `aizomectl night-light on`, `aizome-tokei --sync`, `wpctl`), to show each check can pass; an oracle for a task that asks a question returns the answer, which `episode.py` now passes on. That the apps' own controls do each task is shown by the model runs that collect the data.
+Computer-use tasks have shell oracles here, which leave the state the app would (through the app's own command line where it has one: `aizome-tokei --sync`, `wpctl`), to show each check can pass; an oracle for a task that asks a question returns the answer, which `episode.py` now passes on. That the apps' own controls do each task is shown by the model runs that collect the data.
 
 ## Validation
 
@@ -27,8 +27,11 @@ python3 tests/agent-evals/run.py --set train --agent oracle --parallel 12 --run 
 |---|---|---|
 | 1 (`val1-*`) | 32 of 32 checks failed; none passed before the agent; no harness errors | 32 of 32 checks passed; no collateral damage; no harness errors |
 | 2 (`val2-*`) | 32 of 32 checks failed; none passed before the agent; no harness errors | 32 of 32 checks passed; no collateral damage; no harness errors |
+| 3 (`val3-*`, the replacement task and its neighbour) | 2 of 2 failed | 2 of 2 passed; no collateral damage |
 
-Both rounds ran while four evaluation lanes shared the machine, on 2026-11-05.
+The rounds ran while four evaluation lanes shared the machine, on 2026-11-05.
+
+One task was dropped after rounds 1 and 2: `cu-night-light` (turn on Night Light) validated both ways, but Settei and the menu bar offer Night Light only for a display whose CRTC takes a gamma table, and the VM's virtio GPU reports none (`aizomectl --json night-light`: `"outputs": []`), so no agent could do it through the UI. `cu-terminal-font-size` replaced it. Disk Usage's task puts 65 MB in `~/Videos` first, since `~/.cache` (5 MB) is otherwise bigger than `~/Documents` (3 MB).
 
 Every failure was read for its reason (the fault's own evidence in the check's details: `Volume: 0.00 [MUTED]`, `hosts: … myhostname` without `dns`, `aizomectl: /home/alice/Pictures/Screenshots: File exists`, and so on), and every pass for the repaired state.
 

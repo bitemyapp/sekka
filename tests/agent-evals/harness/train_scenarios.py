@@ -35,7 +35,7 @@ unit or file. Each training scenario beside the nearest held-out one:
 | terminal-shell-missing | aizome | settings-syntax | another app's file (hotaru.toml) parses, but names a shell that isn't installed |
 | ssh-agent-stopped | aizome | ssh-permissions | the session's key agent (gcr-ssh-agent) is stopped; sshd and ~/.ssh are untouched |
 | desktop-folder-renamed | aizome | (none) | user-dirs.dirs points the desktop at another folder |
-| cu-night-light | aizome | cu-theme-day | Night Light, not the theme |
+| cu-terminal-font-size | aizome | cu-terminal-file | the terminal's own preferences, not a command in it |
 | cu-alarm | aizome | (none) | the Clock app |
 | cu-trash-readme | aizome | cu-folder | Files, moving a file to the Trash, not making a folder |
 | cu-volume-half | aizome | cu-sound-output | the output's volume, not which output |
@@ -57,7 +57,6 @@ from dataclasses import dataclass
 
 from scenarios import (  # noqa: F401 (collateral and diagnosed are this module's interface too)
     HOME,
-    SETTINGS,
     Scenario,
     alice_write,
     answer_of,
@@ -862,18 +861,16 @@ DIAGNOSTICS = [
 # Computer use.
 
 
-class NightLightTask(Train):
+class TerminalFontTask(Train):
     def check(self, vm, final):
-        status, out = vm.alice("aizomectl --json night-light")
-        session = status == 0 and bool(re.search(r'"enabled"\s*:\s*true', out))
         try:
-            saved = toml_value(vm, SETTINGS, "night_light.enabled") is True
-        except ValueError:
-            saved = False
-        return session or saved, {"session": session, "settings": saved}
+            size = toml_value(vm, HOTARU, "font_size")
+        except ValueError as e:
+            return False, {"error": str(e)[-200:]}
+        return isinstance(size, (int, float)) and abs(size - 14) < 0.6, {"font_size": size}
 
     def oracle(self, vm):
-        vm.alice("aizomectl night-light on")
+        alice_write(vm, HOTARU, "font_size = 14\n")
 
 
 TOKEI_ALARMS = HOME + "/.local/share/aizome/tokei/alarms.json"
@@ -1012,8 +1009,8 @@ class PinNoteTask(Train):
 
 
 COMPUTER_USE = [
-    NightLightTask("cu-night-light", "computer-use", "aizome", "Turn on Night Light, so the screen is warmer at night.",
-                   level="easy", topic="settings"),
+    TerminalFontTask("cu-terminal-font-size", "computer-use", "aizome",
+                     "In the terminal app's preferences, make its text size 14 points.", topic="app preferences"),
     AlarmTask("cu-alarm", "computer-use", "aizome", "In the Clock app, set an alarm for 6:45 in the morning.",
               topic="clock"),
     TrashTask("cu-trash-readme", "computer-use", "aizome",
