@@ -145,10 +145,9 @@ pub fn budget_words(hw: &Hardware) -> String {
             s
         }
         (None, Some((b, g))) => format!(
-            "A model can use up to {} of the memory the {} shares, leaving {} for everything else.",
+            "A model can use up to {} of the memory the {} shares; the rest stays free for everything else.",
             size(b),
-            short_gpu_name(g),
-            size(hw.ram.total.saturating_sub(b))
+            short_gpu_name(g)
         ),
         (None, None) => format!(
             "No GPU a model can use was found, so models run on the processor, in up to {} of memory.",
