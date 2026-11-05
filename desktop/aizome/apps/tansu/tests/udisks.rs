@@ -19,6 +19,12 @@ use tansu::backend::Backend;
 use tansu::layout::{Here, Layout, Sel};
 use tansu::plan::{NewFs, Plan};
 use tansu::run::{Outcome, Run};
+
+/// The run of `plan`, as if the person pressed Apply on the sheet listing it
+/// (the kit's test agreement stands for their press).
+fn agree(plan: &Plan, state: &aizome_sys::disks::DisksState) -> Run {
+    Run::agree(aizome_kit::agree::testing::agreed(plan.shown(state)), state)
+}
 use zbus::fdo;
 use zbus::object_server::{ObjectServer, SignalEmitter};
 use zbus::zvariant::{OwnedObjectPath, OwnedValue};
@@ -360,7 +366,7 @@ fn a_plan_runs_through_udisks() {
     let (_fake, log) = serve(&bus);
     let d = disks(&bus);
     let plan = format_and_delete(&d);
-    let mut run = Run::agree(&plan, &d.snapshot());
+    let mut run = agree(&plan, &d.snapshot());
     assert_eq!(finish(&mut run, &d), Outcome::Done);
     assert_eq!(*log.lock().unwrap(), ["Format(ext4, DATA) /dev/sdx1".to_owned(), format!("Delete {B}sdx2")]);
     let state = d.snapshot();
@@ -375,7 +381,7 @@ fn a_device_changed_since_the_apply_sheet_is_refused() {
     let d = disks(&bus);
     let plan = format_and_delete(&d);
     // The person agrees to the plan as the sheet shows it…
-    let mut run = Run::agree(&plan, &d.snapshot());
+    let mut run = agree(&plan, &d.snapshot());
     // …then another stick is in the port: a new filesystem at sdx1.
     let iface = fake.object_server().interface::<_, Block>(format!("{B}sdx1").as_str()).unwrap();
     {
@@ -405,7 +411,7 @@ fn a_device_mounted_since_it_was_queued_stops_the_apply() {
     let problems = plan.problems(&d.snapshot());
     assert_eq!(problems, ["/dev/sdx1 is in use now: unmount or lock it first."]);
     // And were it run anyway, UDisks's client refuses before asking.
-    let mut run = Run::agree(&plan, &d.snapshot());
+    let mut run = agree(&plan, &d.snapshot());
     assert!(matches!(finish(&mut run, &d), Outcome::Failed { error, .. } if error.contains("in use")));
     assert!(log.lock().unwrap().is_empty());
 }

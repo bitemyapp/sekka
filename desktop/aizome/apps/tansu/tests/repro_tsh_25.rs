@@ -21,7 +21,10 @@ use tansu::plan::Action;
 
 fn start(state: DisksState) -> (Harness<Tansu>, Rc<Mock>) {
     let mock = Rc::new(Mock::new(state));
-    (Harness::new(Tansu::new(mock.clone())), mock)
+    let mut h = Harness::new(Tansu::new(mock.clone()));
+    // Apply is pressed as a person would.
+    h.allow_agreements();
+    (h, mock)
 }
 
 /// The sample with the SD card listed first, so the drive Tansu falls back
@@ -218,7 +221,11 @@ fn pending_operations_do_not_follow_a_swapped_stick() {
     h.send(Msg::Changed);
     h.send(Msg::Apply);
     if h.program().sheet.is_some() {
-        h.send(Msg::Sheet(SheetMsg::Submit));
+        // The person presses Apply (none of it may run on the second stick).
+        let w = h.window();
+        if let Some(at) = h.find_id(w, "apply").map(|r| r.center()) {
+            h.click(w, at);
+        }
     }
     for _ in 0..4 {
         h.send(Msg::Tick);

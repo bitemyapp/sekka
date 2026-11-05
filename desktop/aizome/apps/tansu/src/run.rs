@@ -2,7 +2,8 @@
 //! confirmations of what the person agreed to.
 //!
 //! As each step starts it gets its [`Confirm`] token
-//! ([`Op::agreement`](crate::plan::Op::agreement)), made from the identity
+//! ([`plan::agreement`](crate::plan::agreement)), made from the person's
+//! agreement to the operation as the Apply sheet showed it: the identity
 //! the operation's device had when it was queued; UDisks's client checks it
 //! again just before the step runs, so a device that changed meanwhile
 //! (another stick in the same port, a partition moved) is refused rather
@@ -23,7 +24,8 @@ use aizome_sys::disks::{BlockDevice, DisksState, Erase, FormatSpec};
 use crate::backend::Backend;
 use crate::fs;
 use crate::layout::MIB;
-use crate::plan::{Agreement, Creating, Made, Op, OpKind, Plan, Words};
+use crate::plan::{self, Agreement, Creating, Made, Op, OpKind, Shown, Words};
+use aizome_kit::agree::Agreed;
 
 /// How long a step waits for UDisks to report what it did.
 const SETTLE: Duration = Duration::from_secs(15);
@@ -38,13 +40,22 @@ pub enum Status {
 }
 
 pub struct Item {
-    pub op: Op,
     pub words: Words,
     pub status: Status,
-    /// The device as it was agreed to.
-    agreed: Option<BlockDevice>,
+    /// The person's agreement to the operation, as the Apply sheet showed
+    /// it: each step's confirmation is made from it.
+    agreed: Agreed<Shown>,
+    /// The device's record as it was agreed to.
+    block: Option<BlockDevice>,
     /// What a step made (a new partition).
     made: Option<Made>,
+}
+
+impl Item {
+    /// The operation, as the person agreed to it.
+    pub fn op(&self) -> &Op {
+        self.agreed.target().op()
+    }
 }
 
 enum InFlight {
@@ -121,18 +132,64 @@ enum Step {
 }
 
 impl Run {
-    /// Agree to `plan` as `state` shows it: words for each operation. Each
-    /// step's confirmation is made when it starts, of the operation's device
-    /// as it was queued (not whatever has its names now).
-    pub fn agree(plan: &Plan, state: &DisksState) -> Run {
-        let items = plan
-            .ops
-            .iter()
-            .map(|op| Item {
-                op: op.clone(),
-                words: plan.words(op, state),
+    /// Run what the person agreed to with the Apply sheet's button: its
+    /// operations, as it showed them. Each step's confirmation is made when
+    /// it starts, from that agreement: of the operation's device as it was
+    /// queued (not whatever has its names now).
+    ///
+    /// Only the person's press makes the agreement, so the plan can't run as
+    /// the sheet merely lists it:
+    ///
+    /// ```compile_fail,E0308
+    /// use aizome_sys::disks::DisksState;
+    /// use tansu::plan::Plan;
+    /// use tansu::run::Run;
+    /// fn apply_unasked(plan: &Plan, state: &DisksState) -> Run {
+    ///     Run::agree(plan.shown(state), state)
+    /// }
+    /// ```
+    ///
+    /// nor as it once did, from the plan alone:
+    ///
+    /// ```compile_fail,E0308
+    /// use aizome_sys::disks::DisksState;
+    /// use tansu::plan::Plan;
+    /// use tansu::run::Run;
+    /// fn apply_unasked(plan: &Plan, state: &DisksState) -> Run {
+    ///     Run::agree(plan, state)
+    /// }
+    /// ```
+    ///
+    /// One press runs once: the agreement is spent by the run it starts.
+    ///
+    /// ```compile_fail,E0382
+    /// use aizome_kit::agree::Agreed;
+    /// use aizome_sys::disks::DisksState;
+    /// use tansu::plan::Shown;
+    /// use tansu::run::Run;
+    /// fn apply_twice(agreed: Agreed<Vec<Shown>>, state: &DisksState) -> (Run, Run) {
+    ///     (Run::agree(agreed, state), Run::agree(agreed, state))
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// use aizome_kit::agree::Agreed;
+    /// use aizome_sys::disks::DisksState;
+    /// use tansu::plan::Shown;
+    /// use tansu::run::Run;
+    /// fn apply(agreed: Agreed<Vec<Shown>>, state: &DisksState) -> Run {
+    ///     Run::agree(agreed, state)
+    /// }
+    /// ```
+    pub fn agree(agreed: Agreed<Vec<Shown>>, state: &DisksState) -> Run {
+        let items = agreed
+            .split()
+            .into_iter()
+            .map(|agreed| Item {
+                words: agreed.target().words().clone(),
                 status: Status::Waiting,
-                agreed: state.block(op.target()).cloned(),
+                block: state.block(agreed.target().op().target()).cloned(),
+                agreed,
                 made: None,
             })
             .collect();
@@ -156,13 +213,13 @@ impl Run {
 
     /// The ids of the operations that ran to the end.
     pub fn done_ids(&self) -> Vec<u64> {
-        self.items.iter().filter(|i| i.status == Status::Done).map(|i| i.op.id()).collect()
+        self.items.iter().filter(|i| i.status == Status::Done).map(|i| i.op().id()).collect()
     }
 
     /// The device the running operation works on (to find its UDisks job).
     pub fn working_on(&self) -> Option<&str> {
         let item = self.items.get(self.current)?;
-        Some(item.made.as_ref().map_or(item.op.target(), |m| m.path()))
+        Some(item.made.as_ref().map_or(item.op().target(), |m| m.path()))
     }
 
     /// Move the run along as far as it can go now: collect finished
@@ -259,13 +316,13 @@ impl Run {
         let state = backend.snapshot();
         let step = self.step;
         let item = &mut self.items[self.current];
-        let target = item.op.target().to_owned();
+        let target = item.op().target().to_owned();
         let unit = |t: Task<()>, e: Option<Expect>, what: &str| Ok(Step::Start(InFlight::Unit(t), e, what.to_owned()));
-        let unconfirmed = || no_token(&item.op);
-        match item.op.kind().clone() {
+        let unconfirmed = || no_token(item.op());
+        match item.op().kind().clone() {
             OpKind::NewTable { kind } => match step {
                 0 => {
-                    let Agreement::NewTable(c) = item.op.agreement() else { return Err(unconfirmed()) };
+                    let Agreement::NewTable(c) = plan::agreement(&item.agreed) else { return Err(unconfirmed()) };
                     let k = if kind == aizome_sys::disks::TableKind::Gpt { "gpt" } else { "dos" };
                     unit(
                         backend.create_partition_table(c, kind),
@@ -277,7 +334,7 @@ impl Run {
             },
             OpKind::Create(p) => match step {
                 0 => {
-                    let creating = item.op.start_create(backend, &state)?;
+                    let creating = plan::start_create(&item.agreed, backend, &state)?;
                     Ok(Step::Start(InFlight::Made(creating), None, "Making the partition…".into()))
                 }
                 1 => {
@@ -292,7 +349,8 @@ impl Run {
                         return Ok(Step::Finished);
                     }
                     // What the first step made, where it made it.
-                    let c = item.op.made_flags(&state, made).ok_or("The new partition isn't where it was made.")?;
+                    let c = plan::made_flags(&item.agreed, &state, made)
+                        .ok_or("The new partition isn't where it was made.")?;
                     let block = made.path().to_owned();
                     unit(
                         backend.set_partition_flags(c, bits),
@@ -304,16 +362,16 @@ impl Run {
             },
             OpKind::Delete => match step {
                 0 => {
-                    let Agreement::Delete(c) = item.op.agreement() else { return Err(unconfirmed()) };
+                    let Agreement::Delete(c) = plan::agreement(&item.agreed) else { return Err(unconfirmed()) };
                     unit(backend.delete_partition(c), Some(Expect::Gone(target)), "Deleting…")
                 }
                 _ => Ok(Step::Finished),
             },
             OpKind::Format(f) => match step {
                 0 => {
-                    let Agreement::Format(c) = item.op.agreement() else { return Err(unconfirmed()) };
+                    let Agreement::Format(c) = plan::agreement(&item.agreed) else { return Err(unconfirmed()) };
                     let keep = item
-                        .agreed
+                        .block
                         .as_ref()
                         .and_then(|b| b.partition.as_ref())
                         .is_some_and(|p| crate::plan::keeps_type(&p.type_id, &f.fs));
@@ -324,14 +382,14 @@ impl Run {
                         ..FormatSpec::new(&f.fs, &f.label)
                     };
                     let fs = if f.encrypt.is_some() { "crypto_LUKS".to_owned() } else { f.fs.clone() };
-                    let old = item.agreed.as_ref().map(|b| b.id_uuid.clone()).unwrap_or_default();
+                    let old = item.block.as_ref().map(|b| b.id_uuid.clone()).unwrap_or_default();
                     let what = if f.erase == Erase::Quick { "Formatting…" } else { "Erasing, then formatting…" };
                     unit(backend.format(c, spec), Some(Expect::Fs { block: target, fs, old_uuid: old }), what)
                 }
                 _ => Ok(Step::Finished),
             },
             OpKind::Resize { from, to } => {
-                let fs_type = item.agreed.as_ref().map(|b| b.id_type.clone()).unwrap_or_default();
+                let fs_type = item.block.as_ref().map(|b| b.id_type.clone()).unwrap_or_default();
                 let has_fs = !fs_type.is_empty();
                 let check = fs::check_before_resize(&fs_type);
                 // Every step, the check before it included, is held as the
@@ -352,7 +410,7 @@ impl Run {
                     (false, false, _) => &["part"],
                 };
                 let Some(what) = steps.get(step).copied() else { return Ok(Step::Finished) };
-                let Agreement::Resize(c) = item.op.agreement() else { return Err(unconfirmed()) };
+                let Agreement::Resize(c) = plan::agreement(&item.agreed) else { return Err(unconfirmed()) };
                 match what {
                     "repair" => Ok(Step::Start(
                         InFlight::Bool(backend.repair_before_resize(c)),
@@ -373,7 +431,7 @@ impl Run {
             }
             OpKind::Label { label } => match step {
                 0 => {
-                    let Agreement::Label(c) = item.op.agreement() else { return Err(unconfirmed()) };
+                    let Agreement::Label(c) = plan::agreement(&item.agreed) else { return Err(unconfirmed()) };
                     unit(
                         backend.set_label(c, &label),
                         Some(Expect::Label { block: target.clone(), label: label.clone() }),
@@ -395,7 +453,7 @@ impl Run {
                 if step >= 2 || (type_id.eq_ignore_ascii_case(&p.type_id) && bits == p.flags) {
                     return Ok(Step::Finished);
                 }
-                let Agreement::Flags(c) = item.op.agreement() else { return Err(unconfirmed()) };
+                let Agreement::Flags(c) = plan::agreement(&item.agreed) else { return Err(unconfirmed()) };
                 if !type_id.eq_ignore_ascii_case(&p.type_id) {
                     unit(
                         backend.set_partition_type(c, &type_id),
@@ -412,7 +470,7 @@ impl Run {
             }
             OpKind::Repair => match step {
                 0 => {
-                    let Agreement::Repair(c) = item.op.agreement() else { return Err(unconfirmed()) };
+                    let Agreement::Repair(c) = plan::agreement(&item.agreed) else { return Err(unconfirmed()) };
                     Ok(Step::Start(InFlight::Bool(backend.repair(c)), None, "Checking and repairing…".into()))
                 }
                 _ => Ok(Step::Finished),

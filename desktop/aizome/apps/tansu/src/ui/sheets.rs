@@ -489,17 +489,17 @@ fn attach(path: &str, read_only: bool) -> Vec<Element<Msg>> {
 fn apply(t: &Tansu, f: &crate::app::ApplyForm) -> Vec<Element<Msg>> {
     let n = t.plan.len();
     let mut v = vec![title(&format!("Apply {n} Operation{}", if n == 1 { "" } else { "s" })), sub("In this order:")];
-    let mut destroys = false;
+    // What the sheet lists is what its Apply button agrees to.
+    let shown = t.plan.shown(&t.state);
     let mut list: Vec<Element<Msg>> = Vec::new();
-    for (k, op) in t.plan.ops.iter().enumerate() {
-        let w = t.plan.words(op, &t.state);
+    for (k, item) in shown.iter().enumerate() {
+        let w = item.words();
         let mut lines: Vec<Element<Msg>> = vec![text(w.title.clone()).semibold().wrap().width(Length::Fill).into()];
         if !w.detail.is_empty() {
             lines.push(text(w.detail.clone()).size(12.0).role(Role::Text3).wrap().width(Length::Fill).into());
         }
         match &w.loss {
             Loss::Destroys(m) => {
-                destroys = true;
                 lines.push(
                     row![
                         icon(Icon::TriangleAlert).size(14.0).role(Role::Danger),
@@ -565,7 +565,17 @@ fn apply(t: &Tansu, f: &crate::app::ApplyForm) -> Vec<Element<Msg>> {
     }
     v.push(note("Administrator rights may be asked for. Operations run one at a time; the first that fails stops the rest, which stay pending."));
     let ready = t.plan.problems(&t.state).is_empty() && f.typed.iter().all(|(name, typed)| typed.trim() == name);
-    v.push(buttons(&format!("Apply {n} Operation{}", if n == 1 { "" } else { "s" }), ready, destroys));
+    // The person's press of Apply agrees to the operations listed above, as
+    // listed: only that agreement runs them (`Run::agree`). It doesn't answer
+    // Return, which in a name field moves here instead.
+    let label = format!("Apply {n} Operation{}", if n == 1 { "" } else { "s" });
+    let apply = button(label).primary().id("apply").on_agree(shown, |p| s(SheetMsg::Apply(p))).enabled(ready);
+    v.push(
+        row![spacer(), button("Cancel").cancel().on_press(Msg::CloseSheet), apply]
+            .spacing(8.0)
+            .width(Length::Fill)
+            .into(),
+    );
     v
 }
 

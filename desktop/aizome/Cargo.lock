@@ -514,6 +514,7 @@ name = "aizome-sys"
 version = "0.1.0"
 dependencies = [
  "aizome-apps",
+ "aizome-kit",
  "aizome-typestate",
  "async-io",
  "event-listener",
