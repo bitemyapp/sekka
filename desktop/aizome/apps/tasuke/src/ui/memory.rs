@@ -17,7 +17,8 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
         )
         .size(13.0)
         .role(Role::Text2)
-        .wrap().line_height(1.4),
+        .wrap()
+        .line_height(1.4),
     ]
     .spacing(4.0);
     let body: Element<Msg> = if app.notes.is_empty() {
@@ -31,7 +32,8 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
                 )
                 .size(12.5)
                 .role(Role::Text3)
-                .wrap().line_height(1.4)
+                .wrap()
+                .line_height(1.4)
                 .center(),
             ]
             .spacing(8.0)
@@ -44,7 +46,7 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
         .into()
     } else {
         let mut notes: Vec<&crate::app::Note> = app.notes.iter().collect();
-        notes.sort_by(|a, b| b.created.cmp(&a.created));
+        notes.sort_by_key(|n| std::cmp::Reverse(n.created));
         let rows: Vec<Element<Msg>> = notes
             .iter()
             .enumerate()
@@ -79,7 +81,8 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
                 text("Tasuke adds a note when you ask it to remember something, and says so in the conversation.")
                     .size(12.0)
                     .role(Role::Text3)
-                    .wrap().line_height(1.4),
+                    .wrap()
+                    .line_height(1.4),
             ]
             .spacing(8.0)
             .padding([8.0, 2.0, 0.0, 2.0]),

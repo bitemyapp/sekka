@@ -54,7 +54,10 @@ pub fn reasoning(c: &Conversation, key: u64, r: &Reasoning) -> Element<Msg> {
         return head;
     }
     let body = container(
-        prose([(Span::new(r.text.trim().to_owned()).italic(), None)]).font(FontSpec::ui(13.0)).role(Role::Text2).line_height(1.45),
+        prose([(Span::new(r.text.trim().to_owned()).italic(), None)])
+            .font(FontSpec::ui(13.0))
+            .role(Role::Text2)
+            .line_height(1.45),
     )
     .edges(Edge::Line2, Sides::LEFT)
     .padding([2.0, 0.0, 4.0, 12.0])
@@ -68,7 +71,9 @@ fn clause(reason: &str) -> String {
     let r = reason.trim().trim_end_matches('.');
     let mut chars = r.chars();
     match (chars.next(), chars.next()) {
-        (Some(a), Some(b)) if a.is_uppercase() && b.is_lowercase() => a.to_lowercase().chain(r[a.len_utf8()..].chars()).collect(),
+        (Some(a), Some(b)) if a.is_uppercase() && b.is_lowercase() => {
+            a.to_lowercase().chain(r[a.len_utf8()..].chars()).collect()
+        }
         _ => r.to_owned(),
     }
 }
@@ -118,11 +123,30 @@ fn details(t: &Tool) -> Element<Msg> {
     if let Some(p) = &t.described.purpose {
         parts.push(text(format!("Why: {p}")).size(12.0).role(Role::Text3).wrap().line_height(1.4).into());
     }
+    if t.call.name == "invalid"
+        && let Some(e) = t.call.args.get("error").and_then(serde_json::Value::as_str)
+    {
+        parts.push(
+            text(format!("The model asked for this in a way Tasuke couldn't read: {e}"))
+                .size(12.0)
+                .role(Role::Text3)
+                .wrap()
+                .line_height(1.4)
+                .into(),
+        );
+    }
     if t.described.code && t.described.target.contains('\n') {
         parts.push(code_box(&t.described.target));
     }
     if let ToolState::Refused { reason } = &t.state {
-        parts.push(text(format!("Tasuke never runs this: {reason}.")).size(12.0).role(Role::Warning).wrap().line_height(1.4).into());
+        parts.push(
+            text(format!("Tasuke never runs this: {reason}."))
+                .size(12.0)
+                .role(Role::Warning)
+                .wrap()
+                .line_height(1.4)
+                .into(),
+        );
     }
     let out = output_text(t);
     if !out.is_empty() {
@@ -227,7 +251,10 @@ pub fn looked(_app: &Tasuke, c: &Conversation, run: &Run) -> Element<Msg> {
         .collect();
     column![
         head,
-        container(column_of(inner).spacing(2.0).width(Fill)).edges(Edge::Line2, Sides::LEFT).padding([2.0, 0.0, 4.0, 14.0]).width(Fill),
+        container(column_of(inner).spacing(2.0).width(Fill))
+            .edges(Edge::Line2, Sides::LEFT)
+            .padding([2.0, 0.0, 4.0, 14.0])
+            .width(Fill),
     ]
     .spacing(2.0)
     .width(Fill)
@@ -262,7 +289,8 @@ fn diff_box(d: &str) -> Element<Msg> {
 /// it stays, saying what was decided and what came of it.
 fn approval(c: &Conversation, key: u64, t: &Tool, g: &Gate) -> Element<Msg> {
     let d = &t.described;
-    let root = matches!(d.kind, Kind::RootCommand) || matches!(g, Gate::Pending { root: true, .. } | Gate::Sent { root: true });
+    let root = matches!(d.kind, Kind::RootCommand)
+        || matches!(g, Gate::Pending { root: true, .. } | Gate::Sent { root: true });
     let pending = g.is_pending();
     let question = match (&d.kind, root) {
         (Kind::FileChange { .. }, _) => "Change this file?",
@@ -271,9 +299,8 @@ fn approval(c: &Conversation, key: u64, t: &Tool, g: &Gate) -> Element<Msg> {
         _ => "Run this command?",
     };
     let (glyph, role) = if pending { (Icon::Shield, Role::Warning) } else { (Icon::ShieldCheck, Role::Text3) };
-    let mut parts: Vec<Element<Msg>> = vec![
-        row![icon(glyph).size(16.0).role(role), text(question).size(14.0).weight(650.0)].spacing(8.0).into(),
-    ];
+    let mut parts: Vec<Element<Msg>> =
+        vec![row![icon(glyph).size(16.0).role(role), text(question).size(14.0).weight(650.0)].spacing(8.0).into()];
     if let Some(p) = &d.purpose {
         parts.push(prose([(Span::new(p.clone()), None)]).font(FontSpec::ui(13.5)).line_height(1.45).into());
     }
@@ -286,12 +313,24 @@ fn approval(c: &Conversation, key: u64, t: &Tool, g: &Gate) -> Element<Msg> {
     }
     if let Gate::Pending { reason, root } = g {
         let why = format!("Why it asks: {}.", clause(reason));
-        parts.push(row![super::lead(icon(Icon::Info).size(13.0).role(Role::Text3)), text(why).size(12.0).role(Role::Text2).wrap().line_height(1.4)].spacing(8.0).align(Align::Start).into());
+        parts.push(
+            row![
+                super::lead(icon(Icon::Info).size(13.0).role(Role::Text3)),
+                text(why).size(12.0).role(Role::Text2).wrap().line_height(1.4)
+            ]
+            .spacing(8.0)
+            .align(Align::Start)
+            .into(),
+        );
         if *root {
             parts.push(
                 row![
                     super::lead(icon(Icon::Lock).size(13.0).role(Role::Text3)),
-                    text("After you choose Run as administrator, the system asks for your password.").size(12.0).role(Role::Text2).wrap().line_height(1.4),
+                    text("After you choose Run as administrator, the system asks for your password.")
+                        .size(12.0)
+                        .role(Role::Text2)
+                        .wrap()
+                        .line_height(1.4),
                 ]
                 .spacing(8.0)
                 .align(Align::Start)
@@ -314,9 +353,12 @@ fn approval(c: &Conversation, key: u64, t: &Tool, g: &Gate) -> Element<Msg> {
         let (gl, rl, words) = decision_words(g, &t.state, root);
         let open = c.open.contains(&key);
         let has_output = t.output.as_ref().is_some_and(|o| !o.text.trim().is_empty());
-        let mut line = row![icon(gl).size(14.0).role(rl), text(words).size(12.5).role(Role::Text2).width(Fill)].spacing(8.0);
+        let mut line =
+            row![icon(gl).size(14.0).role(rl), text(words).size(12.5).role(Role::Text2).width(Fill)].spacing(8.0);
         if has_output {
-            line = line.push(text(if open { "Hide output" } else { "Show output" }).size(12.0).role(Role::Accent)).push(chevron(open));
+            line = line
+                .push(text(if open { "Hide output" } else { "Show output" }).size(12.0).role(Role::Accent))
+                .push(chevron(open));
         }
         let line: Element<Msg> = if has_output { opener(line, c.id, key) } else { line.into() };
         parts.push(container(line).padding([2.0, 0.0, 0.0, 0.0]).width(Fill).into());
@@ -336,7 +378,9 @@ fn approval(c: &Conversation, key: u64, t: &Tool, g: &Gate) -> Element<Msg> {
 /// What was decided, and what came of it.
 fn decision_words(g: &Gate, s: &ToolState, root: bool) -> (Icon, Role, String) {
     match (g, s) {
-        (Gate::Sent { root: true }, _) => (Icon::Lock, Role::Accent, "You chose Run as administrator · waiting for your password…".into()),
+        (Gate::Sent { root: true }, _) => {
+            (Icon::Lock, Role::Accent, "You chose Run as administrator · waiting for your password…".into())
+        }
         (Gate::Sent { .. }, _) => (Icon::Hourglass, Role::Accent, "You chose Run · starting…".into()),
         (Gate::Allowed, ToolState::Running) => (Icon::CircleDot, Role::Accent, "You chose Run · running…".into()),
         (Gate::Allowed, ToolState::Done { .. }) => {
@@ -346,9 +390,13 @@ fn decision_words(g: &Gate, s: &ToolState, root: bool) -> (Icon, Role, String) {
         (Gate::Allowed, ToolState::Failed { exit: Some(code) }) => {
             (Icon::CircleX, Role::Danger, format!("You chose Run · it failed (exit {code})"))
         }
-        (Gate::Allowed, ToolState::TimedOut) => (Icon::CircleX, Role::Danger, "You chose Run · it took too long and was stopped".into()),
+        (Gate::Allowed, ToolState::TimedOut) => {
+            (Icon::CircleX, Role::Danger, "You chose Run · it took too long and was stopped".into())
+        }
         (Gate::Allowed, _) => (Icon::CircleCheck, Role::Text3, "You chose Run".into()),
-        (Gate::Denied { .. }, _) => (Icon::CircleMinus, Role::Text3, "You chose Don't run · nothing was changed".into()),
+        (Gate::Denied { .. }, _) => {
+            (Icon::CircleMinus, Role::Text3, "You chose Don't run · nothing was changed".into())
+        }
         (Gate::Withdrawn, _) => (Icon::Square, Role::Text3, "The turn ended before you answered · not run".into()),
         (Gate::Pending { .. }, _) => (Icon::Hourglass, Role::Text3, "Waiting for you".into()),
     }
@@ -362,7 +410,8 @@ fn screenshot(app: &Tasuke, c: &Conversation, key: u64, t: &Tool) -> Element<Msg
     let picture: Element<Msg> = match app.thumb(&path) {
         Some(Thumb::Ready(img)) => {
             let size = img.size();
-            let framed = container(image(img.clone()).width(size.width).height(size.height)).border(Edge::Line).padding(1.0);
+            let framed =
+                container(image(img.clone()).width(size.width).height(size.height)).border(Edge::Line).padding(1.0);
             mouse_area(framed)
                 .on_press(Msg::OpenLink(format!("file://{}", path.display())))
                 .cursor(Cursor::Pointer)
@@ -387,12 +436,15 @@ pub fn notice(level: Level, words: &str) -> Element<Msg> {
         Level::Warning => (Icon::TriangleAlert, Role::Warning),
         Level::Error => (Icon::CircleAlert, Role::Danger),
     };
-    row![super::lead(icon(glyph).size(13.0).role(role)), text(words.to_owned()).size(12.0).role(Role::Text3).wrap().line_height(1.4)]
-        .spacing(8.0)
-        .align(Align::Start)
-        .padding([2.0, 0.0])
-        .width(Fill)
-        .into()
+    row![
+        super::lead(icon(glyph).size(13.0).role(role)),
+        text(words.to_owned()).size(12.0).role(Role::Text3).wrap().line_height(1.4)
+    ]
+    .spacing(8.0)
+    .align(Align::Start)
+    .padding([2.0, 0.0])
+    .width(Fill)
+    .into()
 }
 
 pub fn error(conv: ConvId, words: &str, retryable: bool) -> Element<Msg> {

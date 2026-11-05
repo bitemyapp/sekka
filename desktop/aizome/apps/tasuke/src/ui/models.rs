@@ -22,36 +22,53 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
         )
         .size(13.0)
         .role(Role::Text2)
-        .wrap().line_height(1.4),
+        .wrap()
+        .line_height(1.4),
     ]
     .spacing(4.0);
     let mut parts: Vec<Element<Msg>> = vec![header.into()];
     if let Some(p) = &app.models.problem {
         parts.push(
-            container(row![icon(Icon::CircleAlert).size(15.0).role(Role::Danger), text(p.clone()).wrap().line_height(1.4)].spacing(8.0))
-                .padding([8.0, 12.0])
-                .fill(Tone::Chrome)
-                .border(Edge::Line)
-                .width(Fill)
-                .into(),
+            container(
+                row![icon(Icon::CircleAlert).size(15.0).role(Role::Danger), text(p.clone()).wrap().line_height(1.4)]
+                    .spacing(8.0),
+            )
+            .padding([8.0, 12.0])
+            .fill(Tone::Chrome)
+            .border(Edge::Line)
+            .width(Fill)
+            .into(),
         );
     }
     match &app.models.hardware {
         None => parts.push(
-            column![text("Looking at this computer…").role(Role::Text2), progress_indeterminate().width(240.0)].spacing(8.0).into(),
+            column![text("Looking at this computer…").role(Role::Text2), progress_indeterminate().width(240.0)]
+                .spacing(8.0)
+                .into(),
         ),
         Some(hw) => {
             parts.push(machine(app, hw));
-            let sections = models::sections(hw, &app.models.catalog, &app.models.prefs, &app.models.installs_now(), app.models.in_use.as_ref());
+            let sections = models::sections(
+                hw,
+                &app.models.catalog,
+                &app.models.prefs,
+                &app.models.installs_now(),
+                app.models.in_use.as_ref(),
+            );
             for s in &sections {
                 parts.push(section(s));
             }
             parts.push(origins(app));
         }
     }
-    scroll(container(column_of(parts).spacing(22.0).max_width(WIDE)).align_x(Align::Center).padding([24.0, 32.0, 32.0, 32.0]).width(Fill))
-        .key("models")
-        .into()
+    scroll(
+        container(column_of(parts).spacing(22.0).max_width(WIDE))
+            .align_x(Align::Center)
+            .padding([24.0, 32.0, 32.0, 32.0])
+            .width(Fill),
+    )
+    .key("models")
+    .into()
 }
 
 fn device_line(d: &Device) -> Element<Msg> {
@@ -86,9 +103,12 @@ pub(crate) fn machine(app: &Tasuke, hw: &tasuke_models::Hardware) -> Element<Msg
             column![
                 column_of(lines).spacing(8.0),
                 divider().edge(Edge::Line),
-                row![super::lead(icon(Icon::Info).size(13.0).role(Role::Text3)), text(models::budget_words(hw)).size(12.5).role(Role::Text2).wrap().line_height(1.4)]
-                    .spacing(8.0)
-                    .align(Align::Start),
+                row![
+                    super::lead(icon(Icon::Info).size(13.0).role(Role::Text3)),
+                    text(models::budget_words(hw)).size(12.5).role(Role::Text2).wrap().line_height(1.4)
+                ]
+                .spacing(8.0)
+                .align(Align::Start),
             ]
             .spacing(10.0)
             .width(Fill)
@@ -101,8 +121,14 @@ pub(crate) fn machine(app: &Tasuke, hw: &tasuke_models::Hardware) -> Element<Msg
     .spacing(0.0);
     if !app.models.server.is_empty() {
         body = body.push(
-            container(row![icon(Icon::Server).size(13.0).role(Role::Text3), text(app.models.server.clone()).size(12.0).role(Role::Text3)].spacing(8.0))
-                .padding([8.0, 2.0, 0.0, 2.0]),
+            container(
+                row![
+                    icon(Icon::Server).size(13.0).role(Role::Text3),
+                    text(app.models.server.clone()).size(12.0).role(Role::Text3)
+                ]
+                .spacing(8.0),
+            )
+            .padding([8.0, 2.0, 0.0, 2.0]),
         );
     }
     body.width(Fill).into()
@@ -110,12 +136,17 @@ pub(crate) fn machine(app: &Tasuke, hw: &tasuke_models::Hardware) -> Element<Msg
 
 fn section(s: &Section) -> Element<Msg> {
     let mut parts: Vec<Element<Msg>> = vec![
-        column![text(s.title).size(16.0).weight(700.0), text(s.about).size(12.5).role(Role::Text2).wrap().line_height(1.4)].spacing(2.0).into(),
+        column![
+            text(s.title).size(16.0).weight(700.0),
+            text(s.about).size(12.5).role(Role::Text2).wrap().line_height(1.4)
+        ]
+        .spacing(2.0)
+        .into(),
     ];
     match s.cards.split_first() {
-        None => parts.push(
-            text("Nothing in the catalog fits this computer for this.").size(12.5).role(Role::Text3).into(),
-        ),
+        None => {
+            parts.push(text("Nothing in the catalog fits this computer for this.").size(12.5).role(Role::Text3).into())
+        }
         Some((first, rest)) => {
             parts.push(card(first, true));
             if !rest.is_empty() {
@@ -137,7 +168,9 @@ fn fact(glyph: Icon, words: String) -> Element<Msg> {
 fn actions(c: &Card) -> Element<Msg> {
     let id = c.id.clone();
     match &c.install {
-        Install::Absent => button(format!("Download · {}", size(c.download))).icon(Icon::Download).on_press(Msg::Download(id)).into(),
+        Install::Absent => {
+            button(format!("Download · {}", size(c.download))).icon(Icon::Download).on_press(Msg::Download(id)).into()
+        }
         Install::Partial { have, total } => column![
             button("Resume Download").icon(Icon::Download).on_press(Msg::Download(id.clone())),
             text(format!("{} of {} here", size(*have), size(*total))).size(11.0).role(Role::Text3),
@@ -157,7 +190,9 @@ fn actions(c: &Card) -> Element<Msg> {
             row![tag("In use", Role::Success), button("Remove").on_press(Msg::Remove(id))].spacing(8.0).into()
         }
         Install::Installed => {
-            row![button("Use").primary().on_press(Msg::Use(id.clone())), button("Remove").on_press(Msg::Remove(id))].spacing(6.0).into()
+            row![button("Use").primary().on_press(Msg::Use(id.clone())), button("Remove").on_press(Msg::Remove(id))]
+                .spacing(6.0)
+                .into()
         }
     }
 }
@@ -191,9 +226,15 @@ fn card(c: &Card, first: bool) -> Element<Msg> {
     .align(Align::Start);
     let mut parts: Vec<Element<Msg>> = vec![head.into()];
     if let Install::Downloading(p) = &c.install {
-        parts.push(column![progress(p.fraction()).width(Fill), text(p.words()).size(12.0).role(Role::Text2)].spacing(5.0).into());
+        parts.push(
+            column![progress(p.fraction()).width(Fill), text(p.words()).size(12.0).role(Role::Text2)]
+                .spacing(5.0)
+                .into(),
+        );
     }
-    parts.push(column![bar::verdict(&c.bar), bar::bar(&c.bar, 12.0), bar::legend(&c.bar)].spacing(7.0).width(Fill).into());
+    parts.push(
+        column![bar::verdict(&c.bar), bar::bar(&c.bar, 12.0), bar::legend(&c.bar)].spacing(7.0).width(Fill).into(),
+    );
     let score = match &c.score {
         Some((_, date)) if !date.is_empty() => format!("{} · measured {date}", c.score_words),
         _ => c.score_words.clone(),
@@ -213,7 +254,12 @@ fn card(c: &Card, first: bool) -> Element<Msg> {
         .map(|i| (Icon::TriangleAlert, Role::Warning, i.clone()))
         .chain(c.licence_note.iter().map(|n| (Icon::Info, Role::Text3, n.clone())))
         .chain(c.notes.iter().map(|n| (Icon::Dot, Role::Text3, n.clone())))
-        .map(|(g, r, n)| row![super::lead(icon(g).size(13.0).role(r)), text(n).size(12.0).role(Role::Text2).wrap().line_height(1.4)].spacing(6.0).align(Align::Start).into())
+        .map(|(g, r, n)| {
+            row![super::lead(icon(g).size(13.0).role(r)), text(n).size(12.0).role(Role::Text2).wrap().line_height(1.4)]
+                .spacing(6.0)
+                .align(Align::Start)
+                .into()
+        })
         .collect();
     if !notes.is_empty() {
         parts.push(column_of(notes).spacing(4.0).width(Fill).into());
@@ -248,7 +294,8 @@ fn origins(app: &Tasuke) -> Element<Msg> {
                 text("A model counts as made where its maker is, and where the models it was built from were made.")
                     .size(12.0)
                     .role(Role::Text3)
-                    .wrap().line_height(1.4),
+                    .wrap()
+                    .line_height(1.4),
             ]
             .spacing(8.0)
             .width(Fill)

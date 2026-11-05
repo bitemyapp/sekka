@@ -16,17 +16,42 @@ use serde_json::Value;
 /// One thing that happened in a turn.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
-    TurnStarted { turn: u32 },
-    ReasoningDelta { text: String },
-    TextDelta { text: String },
-    ToolCall { id: String, call: ToolCall, needs: Approval },
-    ToolStarted { id: String },
-    ToolOutput { id: String, output: ToolOutput },
+    TurnStarted {
+        turn: u32,
+    },
+    ReasoningDelta {
+        text: String,
+    },
+    TextDelta {
+        text: String,
+    },
+    ToolCall {
+        id: String,
+        call: ToolCall,
+        needs: Approval,
+    },
+    ToolStarted {
+        id: String,
+    },
+    ToolOutput {
+        id: String,
+        output: ToolOutput,
+    },
     /// The notes changed (`remember`, `forget`): read them again.
     MemoryChanged,
-    Notice { level: Level, text: String },
-    TurnFinished { reason: FinishReason, usage: Usage, decode_tps: Option<f32> },
-    Error { text: String, retryable: bool },
+    Notice {
+        level: Level,
+        text: String,
+    },
+    TurnFinished {
+        reason: FinishReason,
+        usage: Usage,
+        decode_tps: Option<f32>,
+    },
+    Error {
+        text: String,
+        retryable: bool,
+    },
 }
 
 /// Whether a call waits for the person.
@@ -34,12 +59,18 @@ pub enum Event {
 pub enum Approval {
     None,
     /// It changes something: the reason the policy gave.
-    Ask { reason: String },
+    Ask {
+        reason: String,
+    },
     /// It runs as root: approval, then polkit's password.
-    AskRoot { reason: String },
+    AskRoot {
+        reason: String,
+    },
     /// Tasuke never runs it (it would end the session or delete what
     /// can't come back): nobody is asked, and the model is told why.
-    Refused { reason: String },
+    Refused {
+        reason: String,
+    },
 }
 
 impl Approval {
@@ -147,7 +178,10 @@ pub enum Kind {
     Command,
     RootCommand,
     /// Writing or editing a file: the change, as a unified diff.
-    FileChange { path: String, diff: String },
+    FileChange {
+        path: String,
+        diff: String,
+    },
     Desktop,
     Other,
 }
@@ -197,29 +231,55 @@ impl ToolCall {
             },
             "run_as_root" => Described {
                 kind: Kind::RootCommand,
-                ..d(Icon::ShieldCheck, "Running as administrator", "Ran as administrator", self.arg("command").unwrap_or("").to_owned(), true)
+                ..d(
+                    Icon::ShieldCheck,
+                    "Running as administrator",
+                    "Ran as administrator",
+                    self.arg("command").unwrap_or("").to_owned(),
+                    true,
+                )
             },
             "read_file" => d(Icon::FileText, "Reading", "Read", self.arg("path").unwrap_or("").to_owned(), true),
             "write_file" => {
                 let path = self.arg("path").unwrap_or("").to_owned();
-                let diff = self.arg("diff").map(str::to_owned).unwrap_or_else(|| {
-                    crate::diff::unified("", self.arg("content").unwrap_or(""))
-                });
-                Described { kind: Kind::FileChange { path: path.clone(), diff }, ..d(Icon::Pencil, "Writing", "Wrote", path, true) }
+                let diff = self
+                    .arg("diff")
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| crate::diff::unified("", self.arg("content").unwrap_or("")));
+                Described {
+                    kind: Kind::FileChange { path: path.clone(), diff },
+                    ..d(Icon::Pencil, "Writing", "Wrote", path, true)
+                }
             }
             "edit_file" => {
                 let path = self.arg("path").unwrap_or("").to_owned();
                 let diff = self.arg("diff").map(str::to_owned).unwrap_or_else(|| {
                     crate::diff::unified(self.arg("old").unwrap_or(""), self.arg("new").unwrap_or(""))
                 });
-                Described { kind: Kind::FileChange { path: path.clone(), diff }, ..d(Icon::Pencil, "Changing", "Changed", path, true) }
+                Described {
+                    kind: Kind::FileChange { path: path.clone(), diff },
+                    ..d(Icon::Pencil, "Changing", "Changed", path, true)
+                }
             }
-            "load_skill" => d(Icon::BookOpen, "Reading notes on", "Read notes on", self.arg("name").unwrap_or("").to_owned(), false),
-            "remember" => d(Icon::NotebookPen, "Remembering", "Remembered", self.arg("text").unwrap_or("").to_owned(), false),
+            "load_skill" => {
+                d(Icon::BookOpen, "Reading notes on", "Read notes on", self.arg("name").unwrap_or("").to_owned(), false)
+            }
+            "remember" => {
+                d(Icon::NotebookPen, "Remembering", "Remembered", self.arg("text").unwrap_or("").to_owned(), false)
+            }
             "forget" => d(Icon::NotebookPen, "Forgetting", "Forgot", self.arg("id").unwrap_or("").to_owned(), false),
-            "screenshot" => Described { kind: Kind::Desktop, ..d(Icon::Camera, "Looking at the screen", "Looked at the screen", String::new(), false) },
-            "list_windows" => Described { kind: Kind::Desktop, ..d(Icon::AppWindow, "Listing windows", "Listed the windows", String::new(), false) },
-            "ui_elements" => Described { kind: Kind::Desktop, ..d(Icon::LayoutList, "Reading the window", "Read the window", String::new(), false) },
+            "screenshot" => Described {
+                kind: Kind::Desktop,
+                ..d(Icon::Camera, "Looking at the screen", "Looked at the screen", String::new(), false)
+            },
+            "list_windows" => Described {
+                kind: Kind::Desktop,
+                ..d(Icon::AppWindow, "Listing windows", "Listed the windows", String::new(), false)
+            },
+            "ui_elements" => Described {
+                kind: Kind::Desktop,
+                ..d(Icon::LayoutList, "Reading the window", "Read the window", String::new(), false)
+            },
             "click" | "double_click" => Described {
                 kind: Kind::Desktop,
                 ..d(
@@ -244,10 +304,21 @@ impl ToolCall {
                 )
             },
             "drag" => Described { kind: Kind::Desktop, ..d(Icon::Move, "Dragging", "Dragged", String::new(), false) },
-            "scroll" => Described { kind: Kind::Desktop, ..d(Icon::ArrowUpDown, "Scrolling", "Scrolled", at(self), false) },
-            "type_text" => Described { kind: Kind::Desktop, ..d(Icon::Keyboard, "Typing", "Typed", self.arg("text").unwrap_or("").to_owned(), true) },
-            "key" => Described { kind: Kind::Desktop, ..d(Icon::Keyboard, "Pressing", "Pressed", self.arg("keys").unwrap_or("").to_owned(), true) },
-            "open_app" => Described { kind: Kind::Desktop, ..d(Icon::AppWindow, "Opening", "Opened", self.arg("name").unwrap_or("").to_owned(), false) },
+            "scroll" => {
+                Described { kind: Kind::Desktop, ..d(Icon::ArrowUpDown, "Scrolling", "Scrolled", at(self), false) }
+            }
+            "type_text" => Described {
+                kind: Kind::Desktop,
+                ..d(Icon::Keyboard, "Typing", "Typed", self.arg("text").unwrap_or("").to_owned(), true)
+            },
+            "key" => Described {
+                kind: Kind::Desktop,
+                ..d(Icon::Keyboard, "Pressing", "Pressed", self.arg("keys").unwrap_or("").to_owned(), true)
+            },
+            "open_app" => Described {
+                kind: Kind::Desktop,
+                ..d(Icon::AppWindow, "Opening", "Opened", self.arg("name").unwrap_or("").to_owned(), false)
+            },
             "wait" => d(
                 Icon::Hourglass,
                 "Waiting",
@@ -256,7 +327,9 @@ impl ToolCall {
                 false,
             ),
             // A call the agent couldn't read: the tool it named.
-            "invalid" => d(Icon::CircleAlert, "Trying", "Couldn’t use", self.arg("name").unwrap_or("a tool").to_owned(), true),
+            "invalid" => {
+                d(Icon::CircleAlert, "Trying", "Couldn’t use", self.arg("name").unwrap_or("a tool").to_owned(), true)
+            }
             other => d(Icon::Wrench, "Using", "Used", other.to_owned(), true),
         }
     }
@@ -284,8 +357,12 @@ mod tests {
         assert_eq!((d.done, d.target.as_str(), d.code), ("Ran", "wpctl status", true));
         assert_eq!(d.purpose.as_deref(), Some("See the sound devices"));
         assert_eq!(d.kind, Kind::Command);
-        assert_eq!(ToolCall::new("run_as_root", json!({"command": "nixos-rebuild switch"})).describe().kind, Kind::RootCommand);
-        let edit = ToolCall::new("edit_file", json!({"path": "/home/u/a.conf", "old": "a = 1\n", "new": "a = 2\n"})).describe();
+        assert_eq!(
+            ToolCall::new("run_as_root", json!({"command": "nixos-rebuild switch"})).describe().kind,
+            Kind::RootCommand
+        );
+        let edit = ToolCall::new("edit_file", json!({"path": "/home/u/a.conf", "old": "a = 1\n", "new": "a = 2\n"}))
+            .describe();
         let Kind::FileChange { path, diff } = edit.kind else { panic!() };
         assert_eq!(path, "/home/u/a.conf");
         assert!(diff.contains("-a = 1") && diff.contains("+a = 2"), "{diff}");

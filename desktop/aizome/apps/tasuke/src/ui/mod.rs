@@ -34,7 +34,10 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
 
 fn brand() -> Element<Msg> {
     row![
-        container(icon(Icon::MessageSquare).size(18.0).role(Role::Accent)).padding(5.0).fill(Tone::Chrome).border(Edge::Line),
+        container(icon(Icon::MessageSquare).size(18.0).role(Role::Accent))
+            .padding(5.0)
+            .fill(Tone::Chrome)
+            .border(Edge::Line),
         column![
             text("Assistant").size(15.0).weight(700.0),
             text("助 Tasuke · on this computer").size(11.0).role(Role::Text3),
@@ -106,12 +109,10 @@ fn sidebar(app: &Tasuke) -> Element<Msg> {
 
 /// A conversation in the list: its title, and when, or that it waits.
 fn conversation_item(id: ConvId, title: &str, detail: &str, selected: bool, waits: bool) -> Element<Msg> {
-    let item = sidebar_item(None, title.to_owned(), selected).detail(detail.to_owned()).on_press(Msg::Show(Page::Conversation(id)));
-    let el: Element<Msg> = if waits {
-        tooltip(item, "A command is waiting for your answer")
-    } else {
-        item.into()
-    };
+    let item = sidebar_item(None, title.to_owned(), selected)
+        .detail(detail.to_owned())
+        .on_press(Msg::Show(Page::Conversation(id)));
+    let el: Element<Msg> = if waits { tooltip(item, "A command is waiting for your answer") } else { item.into() };
     el.key(id.0)
 }
 

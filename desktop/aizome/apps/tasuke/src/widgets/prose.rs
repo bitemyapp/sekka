@@ -129,7 +129,8 @@ impl ProseWidget {
         let hit = l.hit_test(p);
         let c = hit.character;
         // Only on the line's text, not the room after its end.
-        let on_text = l.lines().iter().any(|line| p.y >= line.top && p.y < line.top + line.height && p.x <= line.x + line.width);
+        let on_text =
+            l.lines().iter().any(|line| p.y >= line.top && p.y < line.top + line.height && p.x <= line.x + line.width);
         if !on_text {
             return None;
         }

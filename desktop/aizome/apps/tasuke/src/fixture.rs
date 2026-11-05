@@ -333,11 +333,14 @@ pub fn day_theme() -> Script {
             Approval::Ask { reason: "It changes a file in your settings".into() },
         )
         .runs("t3", "Changed 1 line.", None, 30)
-        .event(220, crate::agent::Event::ToolCall {
-            id: "t4".into(),
-            call: crate::agent::ToolCall::new("screenshot", json!({})),
-            needs: Approval::None,
-        })
+        .event(
+            220,
+            crate::agent::Event::ToolCall {
+                id: "t4".into(),
+                call: crate::agent::ToolCall::new("screenshot", json!({})),
+                needs: Approval::None,
+            },
+        )
         .event(30, crate::agent::Event::ToolStarted { id: "t4".into() })
         .event(600, crate::agent::Event::ToolOutput { id: "t4".into(), output: shot })
         .say(

@@ -12,8 +12,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use aizome_kit::prelude::*;
 use aizome_kit::MsgSender;
+use aizome_kit::prelude::*;
 use tasuke_models::{Bytes, Catalog, Hardware, ModelId, Preferences};
 
 use crate::agent::{Decision, Event, Level};
@@ -160,6 +160,8 @@ pub struct Models {
     pub download: Option<Downloading>,
     /// The model server, in words.
     pub server: String,
+    /// How long a model stays loaded unused before it sleeps, in minutes.
+    pub idle_minutes: u32,
     /// Something went wrong with the last action (a download, a removal).
     pub problem: Option<String>,
 }
@@ -333,6 +335,7 @@ impl Tasuke {
                 in_use: None,
                 download: None,
                 server: String::new(),
+                idle_minutes: 10,
                 problem: None,
             },
             notes: Vec::new(),
@@ -361,8 +364,9 @@ impl Tasuke {
             "models-unified" => fixture::apu_128gb(),
             _ => fixture::desktop_32gb(),
         };
-        t.models.server = "Running · a model unloads after 10 minutes unused".into();
-        t.notes = fixture::notes().into_iter().map(|(id, text, created)| Note { id, text: text.into(), created }).collect();
+        t.models.server = format!("Running · a model unloads after {} minutes unused", t.models.idle_minutes);
+        t.notes =
+            fixture::notes().into_iter().map(|(id, text, created)| Note { id, text: text.into(), created }).collect();
         // What's downloaded on each machine.
         let installed: &[&str] = match name {
             "models-8gb" => &["gemma-4-12b"],
@@ -374,13 +378,22 @@ impl Tasuke {
             t.models.installs.insert(ModelId::new(*id), Install::Installed);
         }
         if name == "models-unified" {
-            let total = t.models.catalog.get(&ModelId::new("nemotron-3.5-bolt")).map(|e| e.download_size()).unwrap_or_default();
-            t.models.installs.insert(ModelId::new("nemotron-3.5-bolt"), Install::Partial { have: total.scale(0.38), total });
+            let total =
+                t.models.catalog.get(&ModelId::new("nemotron-3.5-bolt")).map(|e| e.download_size()).unwrap_or_default();
+            t.models
+                .installs
+                .insert(ModelId::new("nemotron-3.5-bolt"), Install::Partial { have: total.scale(0.38), total });
         }
         t.models.in_use = installed.first().map(|id| ModelId::new(*id));
         t.models.hardware = Some(hw);
         t.chip = Chip {
-            name: t.models.in_use.as_ref().and_then(|id| t.models.catalog.get(id)).map(|e| e.name.clone()).unwrap_or_default(),
+            name: t
+                .models
+                .in_use
+                .as_ref()
+                .and_then(|id| t.models.catalog.get(id))
+                .map(|e| e.name.clone())
+                .unwrap_or_default(),
             state: if t.models.in_use.is_some() { ModelState::Asleep } else { ModelState::Missing },
         };
         // The earlier conversations, played to where they stopped.
@@ -394,7 +407,7 @@ impl Tasuke {
             loop {
                 while let Some(d) = player.next_in() {
                     at += d.as_millis() as Millis;
-                    if let Some(e) = player.next() {
+                    if let Some(e) = player.advance() {
                         conv.transcript.apply(e, at);
                     }
                 }
@@ -448,7 +461,13 @@ impl Tasuke {
                     let total = t.models.catalog.get(&rec).map(|e| e.download_size()).unwrap_or_default();
                     t.models.download = Some(Downloading {
                         id: rec,
-                        progress: Progress { done: total.scale(0.42), total, rate: Some(38.6 * 1024.0 * 1024.0), paused: false, checking: false },
+                        progress: Progress {
+                            done: total.scale(0.42),
+                            total,
+                            rate: Some(38.6 * 1024.0 * 1024.0),
+                            paused: false,
+                            checking: false,
+                        },
                         simulated: true,
                         #[cfg(feature = "live")]
                         handle: None,
@@ -560,12 +579,15 @@ impl Tasuke {
         let now = self.now();
         let Some(c) = self.conversation_mut(id) else { return };
         let mut finished = false;
+        // The model answering (thinking, writing, asking for a tool) means
+        // it's loaded.
+        let mut answering = false;
         for e in events {
             if matches!(e, Event::TurnFinished { .. } | Event::Error { .. }) {
                 finished = true;
             }
-            if matches!(e, Event::ToolOutput { .. }) {
-                // Pictures are shrunk as they come.
+            if matches!(e, Event::ReasoningDelta { .. } | Event::TextDelta { .. } | Event::ToolCall { .. }) {
+                answering = true;
             }
             c.transcript.apply(e, now);
         }
@@ -578,8 +600,8 @@ impl Tasuke {
         if let Some(tps) = tps {
             self.speed = Some(tps);
         }
-        if finished {
-            self.chip.state = if self.chip.state == ModelState::Missing { ModelState::Missing } else { ModelState::Ready };
+        if (finished || answering) && self.chip.state == ModelState::Loading {
+            self.chip.state = ModelState::Ready;
         }
         if memory_changed {
             self.reload_notes(cx);
@@ -616,7 +638,10 @@ impl Tasuke {
         c.updated = now;
         if missing {
             c.transcript.apply(
-                Event::Notice { level: Level::Warning, text: "No model is downloaded yet. Choose one in Models, and it will answer.".into() },
+                Event::Notice {
+                    level: Level::Warning,
+                    text: "No model is downloaded yet. Choose one in Models, and it will answer.".into(),
+                },
                 now,
             );
             return;
@@ -730,7 +755,8 @@ impl Program for Tasuke {
         let mut file = Menu::new("File")
             .item(MenuItem::new("New Conversation", Msg::NewConversation).shortcut(Shortcut::cmd('N')));
         if let Some(id) = current {
-            file = file.separator().item(MenuItem::new("Stop", Msg::Stop(id)).shortcut(Shortcut::cmd('.')).enabled(busy));
+            file =
+                file.separator().item(MenuItem::new("Stop", Msg::Stop(id)).shortcut(Shortcut::cmd('.')).enabled(busy));
         }
         let go = Menu::new("Go")
             .item(MenuItem::new("Models", Msg::Show(Page::Models)).shortcut(Shortcut::cmd('1').shift()))
@@ -773,12 +799,15 @@ impl Program for Tasuke {
                 }
             }
             Msg::Retry(id) => {
-                let Some(text) = self.conversation(id).and_then(|c| c.transcript.last_prompt()).map(str::to_owned) else {
+                let Some(text) = self.conversation(id).and_then(|c| c.transcript.last_prompt()).map(str::to_owned)
+                else {
                     return;
                 };
                 // The message stays; the turn runs again.
                 if let Some(c) = self.conversation_mut(id) {
-                    if let Some(i) = c.transcript.items.iter().rposition(|i| matches!(i.body, crate::transcript::Body::Error { .. })) {
+                    if let Some(i) =
+                        c.transcript.items.iter().rposition(|i| matches!(i.body, crate::transcript::Body::Error { .. }))
+                    {
                         c.transcript.items.remove(i);
                     }
                     c.transcript.revision += 1;
@@ -835,10 +864,7 @@ impl Program for Tasuke {
                 if p.generation != generation {
                     return;
                 }
-                let events: Vec<Event> = p.next().into_iter().collect();
-                if self.chip.state == ModelState::Loading && events.iter().any(|e| !matches!(e, Event::TurnStarted { .. })) {
-                    self.chip.state = ModelState::Ready;
-                }
+                let events: Vec<Event> = p.advance().into_iter().collect();
                 self.apply(id, events, cx);
                 self.schedule(id, cx);
             }

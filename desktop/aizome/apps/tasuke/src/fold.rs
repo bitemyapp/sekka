@@ -61,7 +61,7 @@ impl Headline {
 
 fn tool(items: &[Item], i: usize) -> Option<&Tool> {
     match &items.get(i)?.body {
-        Body::Tool(t) => Some(t),
+        Body::Tool(t) => Some(&**t),
         _ => None,
     }
 }
@@ -157,7 +157,10 @@ mod tests {
             0,
         );
         if let Some(code) = exit {
-            t.apply(Event::ToolOutput { id: id.into(), output: ToolOutput { exit: Some(code), ..Default::default() } }, 1);
+            t.apply(
+                Event::ToolOutput { id: id.into(), output: ToolOutput { exit: Some(code), ..Default::default() } },
+                1,
+            );
         }
     }
 
@@ -206,7 +209,10 @@ mod tests {
             1,
         );
         look(&mut t, "c", "du -sh ~/.cache", Some(0));
-        t.apply(Event::ToolCall { id: "s".into(), call: ToolCall::new("screenshot", json!({})), needs: Approval::None }, 2);
+        t.apply(
+            Event::ToolCall { id: "s".into(), call: ToolCall::new("screenshot", json!({})), needs: Approval::None },
+            2,
+        );
         look(&mut t, "d", "ls", Some(0));
         assert_eq!(shape(&t), ["item 0", "item 1", "item 2", "item 3", "item 4"]);
     }

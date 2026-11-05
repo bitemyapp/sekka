@@ -13,6 +13,7 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
+use aizome_kit::Element;
 use aizome_kit::element::MsgFn;
 use aizome_kit::hash::PaintHasher;
 use aizome_kit::layout::{Constraints, Point, Rect, Size, Vec2};
@@ -20,7 +21,6 @@ use aizome_kit::sidestep_ui::{Key, NamedKey, PointerButton};
 use aizome_kit::widget::{
     Event, EventCx, FocusRing, Focusable, LayoutCx, PaintCx, SemanticAction, SemanticRole, Semantics, Status, Widget,
 };
-use aizome_kit::Element;
 
 /// Where a reader is in a transcript.
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

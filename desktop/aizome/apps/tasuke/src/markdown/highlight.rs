@@ -109,7 +109,10 @@ mod tests {
     #[test]
     fn diffs_and_sections() {
         let l = lines("diff", "@@ -1 +1 @@\n-old\n+new");
-        assert_eq!(l.iter().map(|r| r[0].role).collect::<Vec<_>>(), [Some(Role::Cyan), Some(Role::Danger), Some(Role::Success)]);
+        assert_eq!(
+            l.iter().map(|r| r[0].role).collect::<Vec<_>>(),
+            [Some(Role::Cyan), Some(Role::Danger), Some(Role::Success)]
+        );
         assert_eq!(lines("toml", "[model]")[0][0].role, Some(Role::Violet));
         assert_eq!(lines("rust", "fn x() {} # no")[0].len(), 1);
     }

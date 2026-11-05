@@ -103,7 +103,15 @@ impl Builder {
     }
 
     /// A call that only looks, and its output after `took_ms`.
-    pub fn look(self, id: &str, name: &str, args: serde_json::Value, output: &str, exit: Option<i32>, took_ms: u64) -> Builder {
+    pub fn look(
+        self,
+        id: &str,
+        name: &str,
+        args: serde_json::Value,
+        output: &str,
+        exit: Option<i32>,
+        took_ms: u64,
+    ) -> Builder {
         let output = ToolOutput { text: output.to_owned(), exit, ..ToolOutput::default() };
         self.event(180, Event::ToolCall { id: id.into(), call: ToolCall::new(name, args), needs: Approval::None })
             .event(30, Event::ToolStarted { id: id.into() })
@@ -172,7 +180,7 @@ impl Player {
     }
 
     /// The next event, now due.
-    pub fn next(&mut self) -> Option<Event> {
+    pub fn advance(&mut self) -> Option<Event> {
         if self.waiting.is_some() {
             return None;
         }
@@ -189,7 +197,7 @@ impl Player {
     /// fixture's starting state.
     pub fn fast_forward(&mut self) -> Vec<Event> {
         let mut out = Vec::new();
-        while let Some(e) = self.next() {
+        while let Some(e) = self.advance() {
             out.push(e);
         }
         out
@@ -237,7 +245,12 @@ mod tests {
             .start()
             .say("I'll check.")
             .look("a", "run_command", json!({"command": "wpctl status"}), "Sinks: muted", Some(0), 300)
-            .ask("b", "run_command", json!({"command": "wpctl set-mute @DEFAULT_AUDIO_SINK@ 0"}), Approval::Ask { reason: "It changes a setting".into() })
+            .ask(
+                "b",
+                "run_command",
+                json!({"command": "wpctl set-mute @DEFAULT_AUDIO_SINK@ 0"}),
+                Approval::Ask { reason: "It changes a setting".into() },
+            )
             .runs("b", "", Some(0), 100)
             .say("Unmuted.")
             .finish(70.0)
@@ -252,7 +265,7 @@ mod tests {
         let mut at = 0;
         while let Some(d) = p.next_in() {
             at += d.as_millis() as i64;
-            let e = p.next().unwrap();
+            let e = p.advance().unwrap();
             t.apply(e, at);
         }
     }
@@ -294,7 +307,7 @@ mod tests {
     fn stopping_drops_the_rest() {
         let mut p = Player::new(script());
         let mut t = Transcript::new();
-        p.next();
+        p.advance();
         let g = p.generation;
         for e in p.cancel() {
             t.apply(e, 0);

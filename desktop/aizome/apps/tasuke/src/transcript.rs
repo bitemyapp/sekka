@@ -26,12 +26,23 @@ pub struct Item {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Body {
-    User { text: String, at: Millis },
+    User {
+        text: String,
+        at: Millis,
+    },
     Answer(Answer),
     Reasoning(Reasoning),
-    Tool(Tool),
-    Notice { level: Level, text: String },
-    Error { text: String, retryable: bool },
+    /// Boxed: a call, its description and its output are much larger than
+    /// the other items.
+    Tool(Box<Tool>),
+    Notice {
+        level: Level,
+        text: String,
+    },
+    Error {
+        text: String,
+        retryable: bool,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -76,13 +87,19 @@ pub enum ToolState {
     /// Not started: waiting for its approval, or for the agent.
     Waiting,
     Running,
-    Done { exit: Option<i32> },
+    Done {
+        exit: Option<i32>,
+    },
     /// It ran and failed (a command's non-zero exit), or couldn't run.
-    Failed { exit: Option<i32> },
+    Failed {
+        exit: Option<i32>,
+    },
     TimedOut,
     Denied,
     /// The policy never runs it: why.
-    Refused { reason: String },
+    Refused {
+        reason: String,
+    },
     /// The turn ended before it ran or finished.
     Stopped,
 }
@@ -166,14 +183,14 @@ impl Transcript {
 
     pub fn tool_mut(&mut self, call_id: &str) -> Option<&mut Tool> {
         self.items.iter_mut().rev().find_map(|i| match &mut i.body {
-            Body::Tool(t) if t.call_id == call_id => Some(t),
+            Body::Tool(t) if t.call_id == call_id => Some(&mut **t),
             _ => None,
         })
     }
 
     pub fn tool(&self, call_id: &str) -> Option<&Tool> {
         self.items.iter().rev().find_map(|i| match &i.body {
-            Body::Tool(t) if t.call_id == call_id => Some(t),
+            Body::Tool(t) if t.call_id == call_id => Some(&**t),
             _ => None,
         })
     }
@@ -181,7 +198,7 @@ impl Transcript {
     /// The approval waiting for the person, if one is.
     pub fn pending_approval(&self) -> Option<&Tool> {
         self.items.iter().rev().find_map(|i| match &i.body {
-            Body::Tool(t) if t.gate.as_ref().is_some_and(Gate::is_pending) => Some(t),
+            Body::Tool(t) if t.gate.as_ref().is_some_and(Gate::is_pending) => Some(&**t),
             _ => None,
         })
     }
@@ -260,7 +277,15 @@ impl Transcript {
                     Approval::Refused { reason } => (None, ToolState::Refused { reason }),
                 };
                 let described = call.describe();
-                self.push(Body::Tool(Tool { call_id: id, call, described, gate, looks, state, output: None }));
+                self.push(Body::Tool(Box::new(Tool {
+                    call_id: id,
+                    call,
+                    described,
+                    gate,
+                    looks,
+                    state,
+                    output: None,
+                })));
             }
             Event::ToolStarted { id } => {
                 if let Some(t) = self.tool_mut(&id) {
@@ -384,7 +409,10 @@ mod tests {
         t.apply(Event::TextDelta { text: "It's **swap**".into() }, 4100);
         t.apply(Event::TextDelta { text: " pressure.".into() }, 4200);
         assert!(t.busy);
-        assert_eq!(texts(&t), ["user: Why is it slow?", "reasoning: Let me look.", "answer (open): It's **swap** pressure."]);
+        assert_eq!(
+            texts(&t),
+            ["user: Why is it slow?", "reasoning: Let me look.", "answer (open): It's **swap** pressure."]
+        );
         let Body::Reasoning(r) = &t.items[1].body else { panic!() };
         assert_eq!(r.seconds(), Some(4), "from its first delta to the answer's");
         t.apply(finished(), 4300);
@@ -410,11 +438,20 @@ mod tests {
         );
         t.apply(Event::ToolStarted { id: "c1".into() }, 30);
         assert_eq!(t.tool("c1").unwrap().state, ToolState::Running);
-        t.apply(Event::ToolOutput { id: "c1".into(), output: ToolOutput { text: "ok".into(), exit: Some(0), ..Default::default() } }, 40);
+        t.apply(
+            Event::ToolOutput {
+                id: "c1".into(),
+                output: ToolOutput { text: "ok".into(), exit: Some(0), ..Default::default() },
+            },
+            40,
+        );
         t.apply(Event::TextDelta { text: "\n\n".into() }, 45);
         t.apply(Event::TextDelta { text: "It's muted.".into() }, 50);
         t.apply(finished(), 60);
-        assert_eq!(texts(&t), ["user: Is the sound on?", "answer: I'll check.", "tool c1: done (exit 0)", "answer: It's muted."]);
+        assert_eq!(
+            texts(&t),
+            ["user: Is the sound on?", "answer: I'll check.", "tool c1: done (exit 0)", "answer: It's muted."]
+        );
         let Body::Answer(second) = &t.items[3].body else { panic!() };
         assert!(!second.first, "only the turn's first answer carries the heading");
     }
@@ -423,7 +460,10 @@ mod tests {
     fn exit_codes_and_refusals_are_told_apart() {
         let mut t = Transcript::new();
         for (id, exit) in [("a", Some(0)), ("b", Some(1)), ("c", None)] {
-            t.apply(Event::ToolCall { id: id.into(), call: ToolCall::new("run_command", json!({})), needs: Approval::None }, 0);
+            t.apply(
+                Event::ToolCall { id: id.into(), call: ToolCall::new("run_command", json!({})), needs: Approval::None },
+                0,
+            );
             t.apply(Event::ToolOutput { id: id.into(), output: ToolOutput { exit, ..Default::default() } }, 1);
         }
         assert_eq!(t.tool("a").unwrap().state.words(), "done (exit 0)");
@@ -465,7 +505,13 @@ mod tests {
         t.decide("one", Decision::Deny { note: None });
         assert_eq!(t.tool("one").unwrap().state, ToolState::Denied);
         // The agent reports the refusal back; it stays denied.
-        t.apply(Event::ToolOutput { id: "one".into(), output: ToolOutput { outcome: Outcome::Denied, ..Default::default() } }, 2);
+        t.apply(
+            Event::ToolOutput {
+                id: "one".into(),
+                output: ToolOutput { outcome: Outcome::Denied, ..Default::default() },
+            },
+            2,
+        );
         assert_eq!(t.tool("one").unwrap().state, ToolState::Denied);
         t.apply(ask("two"), 3);
         t.apply(Event::TurnFinished { reason: FinishReason::Cancelled, usage: Usage::default(), decode_tps: None }, 4);
@@ -488,11 +534,8 @@ mod tests {
 
     #[test]
     fn a_session_replays_to_the_same_transcript() {
-        let events = vec![
-            (0, Event::TurnStarted { turn: 1 }),
-            (5, Event::TextDelta { text: "Hello".into() }),
-            (9, finished()),
-        ];
+        let events =
+            vec![(0, Event::TurnStarted { turn: 1 }), (5, Event::TextDelta { text: "Hello".into() }), (9, finished())];
         let mut live = Transcript::new();
         for (at, e) in events.clone() {
             live.apply(e, at);

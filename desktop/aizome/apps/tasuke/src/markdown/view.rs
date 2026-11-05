@@ -58,7 +58,12 @@ fn span(run: &Run, size: f64) -> (Span, Option<String>) {
     (s, link)
 }
 
-fn paragraph<Msg: Clone + Send + 'static>(runs: &[Run], look: &Look<Msg>, size: f64, weight: Option<f32>) -> Element<Msg> {
+fn paragraph<Msg: Clone + Send + 'static>(
+    runs: &[Run],
+    look: &Look<Msg>,
+    size: f64,
+    weight: Option<f32>,
+) -> Element<Msg> {
     let open = look.open.clone();
     let runs = runs.iter().map(|r| {
         let (s, l) = span(r, size);
@@ -97,9 +102,11 @@ fn block<Msg: Clone + Send + 'static>(block: &Block, look: &Look<Msg>) -> Elemen
                 .into()
         }
         Block::Code { lang, text, lines } => code_block(lang, text, lines, look),
-        Block::Quote(inner) => {
-            container(blocks(inner, look)).edges(Edge::Line2, Sides::LEFT).padding([2.0, 0.0, 2.0, 14.0]).width(Fill).into()
-        }
+        Block::Quote(inner) => container(blocks(inner, look))
+            .edges(Edge::Line2, Sides::LEFT)
+            .padding([2.0, 0.0, 2.0, 14.0])
+            .width(Fill)
+            .into(),
         Block::Callout { kind, blocks: inner } => callout(*kind, inner, look),
         Block::List { start, items } => list(*start, items, look),
         Block::Table { aligns, head, rows } => table_block(aligns, head, rows, look),

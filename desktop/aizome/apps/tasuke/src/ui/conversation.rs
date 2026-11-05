@@ -86,7 +86,12 @@ fn home(app: &Tasuke, c: &Conversation) -> Element<Msg> {
     let id = c.id;
     let pairs: Vec<Element<Msg>> = SUGGESTIONS
         .chunks(2)
-        .map(|pair| row_of(pair.iter().map(|s| suggestion(id, s, app.hovered == Some(s.text))).collect()).spacing(10.0).width(Fill).into())
+        .map(|pair| {
+            row_of(pair.iter().map(|s| suggestion(id, s, app.hovered == Some(s.text))).collect())
+                .spacing(10.0)
+                .width(Fill)
+                .into()
+        })
         .collect();
     let greeting = format!("{}.", app.clock().greeting());
     let content = column![
@@ -170,7 +175,8 @@ fn transcript(app: &Tasuke, c: &Conversation) -> Element<Msg> {
         .align_x(Align::Center)
         .padding([24.0, 32.0, 28.0, 32.0])
         .width(Fill);
-    let scroller: Element<Msg> = follow_scroll(content).scroll_to_end(c.sent).restore(c.reading).on_read(move |r| Msg::Read(id, r)).into();
+    let scroller: Element<Msg> =
+        follow_scroll(content).scroll_to_end(c.sent).restore(c.reading).on_read(move |r| Msg::Read(id, r)).into();
     scroller.key(("transcript", id.0))
 }
 
@@ -191,19 +197,23 @@ fn working(app: &Tasuke, c: &Conversation) -> Option<Element<Msg>> {
         return None;
     }
     let words = if app.chip.state == ModelState::Loading { "Waking the model…" } else { "Working…" };
-    Some(row![icon(Icon::Hourglass).size(14.0).role(Role::Accent), text(words).size(12.5).role(Role::Text3)].spacing(8.0).into())
+    Some(
+        row![icon(Icon::Hourglass).size(14.0).role(Role::Accent), text(words).size(12.5).role(Role::Text3)]
+            .spacing(8.0)
+            .into(),
+    )
 }
 
 fn item_view(app: &Tasuke, c: &Conversation, item: &Item, answer: &Look<Msg>) -> Element<Msg> {
     match &item.body {
-        Body::User { text, .. } => container(
-            prose([(Span::new(text.clone()), None)]).font(FontSpec::ui(ANSWER)).line_height(1.35),
-        )
-        .padding([10.0, 14.0])
-        .fill(Tone::Chrome)
-        .border(Edge::Line)
-        .width(Fill)
-        .into(),
+        Body::User { text, .. } => {
+            container(prose([(Span::new(text.clone()), None)]).font(FontSpec::ui(ANSWER)).line_height(1.35))
+                .padding([10.0, 14.0])
+                .fill(Tone::Chrome)
+                .border(Edge::Line)
+                .width(Fill)
+                .into()
+        }
         Body::Answer(a) => md::doc(&a.doc, answer),
         Body::Reasoning(r) => cards::reasoning(c, item.id, r),
         Body::Tool(t) => cards::tool(app, c, item.id, t),
@@ -213,11 +223,20 @@ fn item_view(app: &Tasuke, c: &Conversation, item: &Item, answer: &Look<Msg>) ->
 }
 
 /// A mode's switch, its name and what it means now.
-fn mode(on: bool, name: &'static str, on_words: &'static str, off_words: &'static str, f: impl Fn(bool) -> Msg + 'static) -> Element<Msg> {
+fn mode(
+    on: bool,
+    name: &'static str,
+    on_words: &'static str,
+    off_words: &'static str,
+    f: impl Fn(bool) -> Msg + 'static,
+) -> Element<Msg> {
     row![
         toggle(on).on_toggle(f),
-        column![text(name).size(12.5).weight(600.0), text(if on { on_words } else { off_words }).size(11.0).role(Role::Text3)]
-            .spacing(1.0),
+        column![
+            text(name).size(12.5).weight(600.0),
+            text(if on { on_words } else { off_words }).size(11.0).role(Role::Text3)
+        ]
+        .spacing(1.0),
     ]
     .spacing(8.0)
     .into()
@@ -226,15 +245,18 @@ fn mode(on: bool, name: &'static str, on_words: &'static str, off_words: &'stati
 /// The model's chip: its name, where it runs, its state, its last speed.
 fn chip(app: &Tasuke) -> Element<Msg> {
     let (glyph, role) = state_glyph(app.chip.state);
-    let mut words = vec![Span::new(if app.chip.name.is_empty() { "No model".to_owned() } else { app.chip.name.clone() }).weight(600.0)];
+    let mut words = vec![
+        Span::new(if app.chip.name.is_empty() { "No model".to_owned() } else { app.chip.name.clone() }).weight(600.0),
+    ];
     let mut rest = format!(" · on this computer · {}", app.chip.state.words());
     if let (Some(tps), ModelState::Ready | ModelState::Asleep) = (app.speed, app.chip.state) {
         rest.push_str(&format!(" · {tps:.0} tokens/s"));
     }
     words.push(Span::new(rest).role(Role::Text3));
-    let chip = container(row![icon(glyph).size(13.0).role(role), rich_text(words).font(FontSpec::ui(12.0))].spacing(6.0))
-        .padding([3.0, 8.0])
-        .border(Edge::Line);
+    let chip =
+        container(row![icon(glyph).size(13.0).role(role), rich_text(words).font(FontSpec::ui(12.0))].spacing(6.0))
+            .padding([3.0, 8.0])
+            .border(Edge::Line);
     mouse_area(chip)
         .on_press(Msg::Show(Page::Models))
         .cursor(aizome_kit::sidestep_ui::Cursor::Pointer)

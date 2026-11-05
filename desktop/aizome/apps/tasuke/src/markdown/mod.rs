@@ -27,14 +27,31 @@ pub struct Doc {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Block {
     Paragraph(Vec<Run>),
-    Heading { level: u8, runs: Vec<Run> },
+    Heading {
+        level: u8,
+        runs: Vec<Run>,
+    },
     /// Fenced or indented code: its language as written, its text, and
     /// its lines coloured.
-    Code { lang: String, text: Arc<str>, lines: Arc<Vec<Vec<Run>>> },
+    Code {
+        lang: String,
+        text: Arc<str>,
+        lines: Arc<Vec<Vec<Run>>>,
+    },
     Quote(Vec<Block>),
-    Callout { kind: Callout, blocks: Vec<Block> },
-    List { start: Option<u64>, items: Vec<Item> },
-    Table { aligns: Vec<Align>, head: Vec<Vec<Run>>, rows: Vec<Vec<Vec<Run>>> },
+    Callout {
+        kind: Callout,
+        blocks: Vec<Block>,
+    },
+    List {
+        start: Option<u64>,
+        items: Vec<Item>,
+    },
+    Table {
+        aligns: Vec<Align>,
+        head: Vec<Vec<Run>>,
+        rows: Vec<Vec<Vec<Run>>>,
+    },
     Rule,
 }
 
@@ -561,7 +578,9 @@ mod tests {
         let doc = parse("Intro\n\n- one\n- tw");
         assert_eq!(doc.blocks.len(), 2);
         let doc = parse("```sh\nsystemctl --user status");
-        assert!(matches!(&doc.blocks[0], Block::Code { text, lang, .. } if &**text == "systemctl --user status" && lang == "sh"));
+        assert!(
+            matches!(&doc.blocks[0], Block::Code { text, lang, .. } if &**text == "systemctl --user status" && lang == "sh")
+        );
     }
 
     #[test]

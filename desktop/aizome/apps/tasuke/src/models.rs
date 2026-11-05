@@ -86,7 +86,9 @@ pub fn devices(hw: &Hardware) -> Vec<Device> {
             tags.push("drives the display".to_owned());
         }
         let (kind, memory) = match g.memory {
-            GpuMemory::Dedicated { total, .. } => (DeviceKind::Gpu, format!("{} of its own memory", installed_size(total))),
+            GpuMemory::Dedicated { total, .. } => {
+                (DeviceKind::Gpu, format!("{} of its own memory", installed_size(total)))
+            }
             GpuMemory::Unified { .. } => {
                 tags.push("unified memory".to_owned());
                 (DeviceKind::UnifiedGpu, format!("shares the {} of memory", installed_size(hw.ram.total)))
@@ -100,7 +102,12 @@ pub fn devices(hw: &Hardware) -> Vec<Device> {
         let name = if g.name.starts_with(vendor.trim()) { g.name.clone() } else { format!("{vendor}{}", g.name) };
         out.push(Device { kind, name, memory, tags });
     }
-    out.push(Device { kind: DeviceKind::Memory, name: "Memory".into(), memory: installed_size(hw.ram.total), tags: Vec::new() });
+    out.push(Device {
+        kind: DeviceKind::Memory,
+        name: "Memory".into(),
+        memory: installed_size(hw.ram.total),
+        tags: Vec::new(),
+    });
     if !hw.cpu.model.is_empty() {
         let cores = format!("{} cores", hw.cpu.physical_cores);
         out.push(Device { kind: DeviceKind::Processor, name: hw.cpu.model.clone(), memory: cores, tags: Vec::new() });
@@ -118,8 +125,7 @@ pub fn budget_words(hw: &Hardware) -> String {
         .iter()
         .filter_map(|g| fit::gpu_budget(g, fit::MemoryBasis::Total).map(|b| (b, g)))
         .max_by_key(|(b, _)| *b);
-    let unified =
-        hw.gpus.iter().filter_map(|g| fit::unified_budget(g, hw).map(|b| (b, g))).max_by_key(|(b, _)| *b);
+    let unified = hw.gpus.iter().filter_map(|g| fit::unified_budget(g, hw).map(|b| (b, g))).max_by_key(|(b, _)| *b);
     match (dedicated, unified) {
         (Some((b, g)), shared) => {
             let total = g.dedicated_total().unwrap_or_default();
@@ -244,7 +250,11 @@ impl FitBar {
                     parts: with_spare(parts(n, n.weights), need, budget),
                     budget,
                     verdict: if tight(need, budget) { Verdict::Tight } else { Verdict::Fits },
-                    place: if unified { format!("in the {}'s unified memory", gpu_name(gpu)) } else { format!("on the {}", gpu_name(gpu)) },
+                    place: if unified {
+                        format!("in the {}'s unified memory", gpu_name(gpu))
+                    } else {
+                        format!("on the {}", gpu_name(gpu))
+                    },
                     context: Some(ctx),
                     in_ram: None,
                 }
@@ -327,7 +337,10 @@ impl FitBar {
 pub enum Install {
     Absent,
     /// Some is here (a download paused or stopped).
-    Partial { have: Bytes, total: Bytes },
+    Partial {
+        have: Bytes,
+        total: Bytes,
+    },
     Downloading(Progress),
     Installed,
 }
@@ -478,7 +491,14 @@ fn catalog_date(s: &str) -> String {
     }
 }
 
-fn card(entry: &Entry, rec: &Recommendation, catalog: &Catalog, hw: &Hardware, installs: &Installs, in_use: Option<&ModelId>) -> Card {
+fn card(
+    entry: &Entry,
+    rec: &Recommendation,
+    catalog: &Catalog,
+    hw: &Hardware,
+    installs: &Installs,
+    in_use: Option<&ModelId>,
+) -> Card {
     let mut lineage = entry.lineage.first().cloned().unwrap_or_else(|| entry.maker.clone());
     if entry.lineage.len() > 1 {
         lineage.push_str(&format!(" · from {}", entry.lineage[1..].join(", ")));
@@ -500,9 +520,10 @@ fn card(entry: &Entry, rec: &Recommendation, catalog: &Catalog, hw: &Hardware, i
         score_words: score_words(rec.role, rec.score, entry.evaluated),
         speed: rec.estimated_decode.map(|s| s.0),
         measured,
-        why: rec.curated_default.then(|| {
-            catalog.defaults.iter().find(|d| d.role == rec.role && d.model == entry.id).map(|d| d.why.clone())
-        }).flatten(),
+        why: rec
+            .curated_default
+            .then(|| catalog.defaults.iter().find(|d| d.role == rec.role && d.model == entry.id).map(|d| d.why.clone()))
+            .flatten(),
         notes: entry.notes.clone(),
         incidents: entry.incidents.clone(),
         evaluated: entry.evaluated,
@@ -513,7 +534,13 @@ fn card(entry: &Entry, rec: &Recommendation, catalog: &Catalog, hw: &Hardware, i
 }
 
 /// The page's sections, one per role, each ranked by `recommend`.
-pub fn sections(hw: &Hardware, catalog: &Catalog, prefs: &Preferences, installs: &Installs, in_use: Option<&ModelId>) -> Vec<Section> {
+pub fn sections(
+    hw: &Hardware,
+    catalog: &Catalog,
+    prefs: &Preferences,
+    installs: &Installs,
+    in_use: Option<&ModelId>,
+) -> Vec<Section> {
     Role::ALL
         .iter()
         .map(|&role| {
@@ -600,7 +627,11 @@ mod tests {
         assert_eq!(total, bar.budget.0, "parts and spare make the budget");
         assert!((bar.shares().iter().map(|(_, s)| s).sum::<f64>() - 1.0).abs() < 1e-9);
         assert_eq!(bar.budget_mark(), 1.0);
-        assert!(bar.words().starts_with("Fits on the RTX 5090") || bar.words().starts_with("Just fits"), "{}", bar.words());
+        assert!(
+            bar.words().starts_with("Fits on the RTX 5090") || bar.words().starts_with("Just fits"),
+            "{}",
+            bar.words()
+        );
     }
 
     #[test]
@@ -640,7 +671,13 @@ mod tests {
 
     #[test]
     fn progress_in_words() {
-        let p = Progress { done: Bytes::gib(3), total: Bytes::gib(7), rate: Some(40.0 * 1024.0 * 1024.0), paused: false, checking: false };
+        let p = Progress {
+            done: Bytes::gib(3),
+            total: Bytes::gib(7),
+            rate: Some(40.0 * 1024.0 * 1024.0),
+            paused: false,
+            checking: false,
+        };
         assert_eq!(p.words(), "3 GB of 7 GB · 40 MB/s · about 2 minutes left");
         assert_eq!(Progress { paused: true, ..p.clone() }.words(), "3 GB of 7 GB · paused");
     }

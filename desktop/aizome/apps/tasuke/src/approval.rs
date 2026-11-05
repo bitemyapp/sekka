@@ -17,12 +17,19 @@ use crate::agent::Decision;
 pub enum Gate {
     /// Waiting for the person: why the policy asks, and whether it runs
     /// as root (which asks for a password after Run).
-    Pending { reason: String, root: bool },
+    Pending {
+        reason: String,
+        root: bool,
+    },
     /// Run was pressed and sent; the agent hasn't started it yet (for
     /// root, polkit's dialog is up).
-    Sent { root: bool },
+    Sent {
+        root: bool,
+    },
     Allowed,
-    Denied { note: Option<String> },
+    Denied {
+        note: Option<String>,
+    },
     /// The turn ended before anyone answered.
     Withdrawn,
 }

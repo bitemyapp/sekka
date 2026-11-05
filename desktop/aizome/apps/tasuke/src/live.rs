@@ -9,8 +9,8 @@
 
 use std::sync::mpsc::TryRecvError;
 
-use aizome_kit::prelude::*;
 use aizome_kit::MsgSender;
+use aizome_kit::prelude::*;
 use tasuke_agent as agent;
 use tasuke_models::{Catalog, Config, DownloadEvent, Entry, Hardware, ModelId, Paths, Preferences, Store};
 
@@ -61,8 +61,14 @@ impl Live {
                 Err(TryRecvError::Disconnected) => {
                     // The turn's thread ended; a turn that didn't say so
                     // still ends.
-                    if !out.iter().any(|e| matches!(e, Event::TurnFinished { .. } | Event::Error { .. })) && self.handle.is_finished() {
-                        out.push(Event::TurnFinished { reason: FinishReason::Failed, usage: Usage::default(), decode_tps: None });
+                    if !out.iter().any(|e| matches!(e, Event::TurnFinished { .. } | Event::Error { .. }))
+                        && self.handle.is_finished()
+                    {
+                        out.push(Event::TurnFinished {
+                            reason: FinishReason::Failed,
+                            usage: Usage::default(),
+                            decode_tps: None,
+                        });
                     }
                     break;
                 }
@@ -91,7 +97,12 @@ pub fn map(e: agent::Event) -> Event {
         agent::Event::ReasoningDelta { text } => Event::ReasoningDelta { text },
         agent::Event::TextDelta { text } => Event::TextDelta { text },
         agent::Event::ToolCall { id, call, needs } => {
-            let name = call.tool_name().to_owned();
+            // A call the agent couldn't read is shown as such, naming the
+            // tool the model asked for.
+            let name = match &call {
+                agent::ToolCall::Invalid { .. } => "invalid".to_owned(),
+                c => c.tool_name().to_owned(),
+            };
             let args = serde_json::to_value(&call).unwrap_or_default();
             let needs = match needs {
                 agent::Approval::None => Approval::None,
@@ -159,6 +170,7 @@ pub fn load(t: &mut Tasuke) {
     let notes = notes(env);
     t.models.prefs = config.recommend.clone();
     t.models.in_use = config.model.id.clone();
+    t.models.idle_minutes = config.server.idle_minutes;
     t.models.server = format!("A model unloads after {} minutes unused", config.server.idle_minutes);
     t.notes = notes;
     let catalog: &Catalog = &t.models.catalog;
@@ -167,7 +179,8 @@ pub fn load(t: &mut Tasuke) {
         t.models.installs.insert(e.id.clone(), install_of(store.state(e)));
     }
     let name = t.models.in_use.as_ref().and_then(|id| catalog.get(id)).map(|e| e.name.clone());
-    let installed = t.models.in_use.as_ref().is_some_and(|id| matches!(t.models.installs.get(id), Some(Install::Installed)));
+    let installed =
+        t.models.in_use.as_ref().is_some_and(|id| matches!(t.models.installs.get(id), Some(Install::Installed)));
     t.chip = Chip {
         name: name.unwrap_or_default(),
         state: if installed { ModelState::Asleep } else { ModelState::Missing },
@@ -215,7 +228,10 @@ pub fn start(t: &mut Tasuke, id: ConvId, text: &str, cx: &mut Cx<Msg>) {
         match agent::Session::create(&data) {
             Ok(s) => c.session = Some(s),
             Err(e) => {
-                c.transcript.apply(Event::Error { text: format!("The conversation couldn't be saved: {e}"), retryable: true }, 0);
+                c.transcript.apply(
+                    Event::Error { text: format!("The conversation couldn't be saved: {e}"), retryable: true },
+                    0,
+                );
                 return;
             }
         }
@@ -274,7 +290,12 @@ pub fn save_prefs(env: &Env, prefs: &Preferences) {
 }
 
 /// Start downloading `entry`; its events come back as messages.
-pub fn download(env: &Env, entry: &Entry, stream: Option<MsgSender<Msg>>, id: ModelId) -> tasuke_models::DownloadHandle {
+pub fn download(
+    env: &Env,
+    entry: &Entry,
+    stream: Option<MsgSender<Msg>>,
+    id: ModelId,
+) -> tasuke_models::DownloadHandle {
     let mut handle = tasuke_models::Download::start(entry, &env.store());
     handle_forward(&mut handle, stream, id);
     handle
@@ -303,4 +324,71 @@ fn handle_forward(handle: &mut tasuke_models::DownloadHandle, stream: Option<Msg
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agent::Kind;
+
+    #[test]
+    fn agent_calls_are_put_in_the_window_s_words() {
+        let call = |c: agent::ToolCall| match map(agent::Event::ToolCall {
+            id: agent::CallId::new("c"),
+            call: c,
+            needs: agent::Approval::None,
+        }) {
+            Event::ToolCall { call, .. } => call,
+            other => panic!("{other:?}"),
+        };
+        let run = call(agent::ToolCall::RunCommand {
+            command: "df -h".into(),
+            purpose: "See the disk".into(),
+            timeout_seconds: 60,
+        });
+        let d = run.describe();
+        assert_eq!((d.done, d.target.as_str(), d.purpose.as_deref()), ("Ran", "df -h", Some("See the disk")));
+        let edit = call(agent::ToolCall::EditFile {
+            path: "/home/u/a.toml".into(),
+            old: "a".into(),
+            new: "b".into(),
+            diff: "@@ -1 +1 @@\n-a\n+b".into(),
+        });
+        assert!(matches!(edit.describe().kind, Kind::FileChange { ref diff, .. } if diff.contains("+b")));
+        let click = call(agent::ToolCall::Click {
+            at: agent::ScreenPoint { x: 120.4, y: 80.0 },
+            button: agent::MouseButton::Left,
+        });
+        assert_eq!(click.describe().target, "120, 80");
+        let bad = call(agent::ToolCall::Invalid {
+            name: "frobnicate".into(),
+            arguments: "{".into(),
+            error: "not JSON".into(),
+        });
+        assert_eq!(bad.name, "invalid");
+        assert_eq!(bad.describe().target, "frobnicate");
+        assert!(!bad.looks_only(&Approval::None), "a call that couldn't be read isn't folded away");
+    }
+
+    #[test]
+    fn outcomes_and_endings_map_one_to_one() {
+        let out = map(agent::Event::ToolOutput {
+            id: agent::CallId::new("c"),
+            output: agent::ToolOutput {
+                status: agent::ToolStatus::Refused,
+                text: String::new(),
+                exit_code: None,
+                image: None,
+                truncated: false,
+            },
+        });
+        let Event::ToolOutput { output, .. } = out else { panic!() };
+        assert!(output.refused());
+        let end = map(agent::Event::TurnFinished {
+            reason: agent::FinishReason::Answered,
+            usage: agent::Usage::default(),
+            decode_tps: Some(70.0),
+        });
+        assert!(matches!(end, Event::TurnFinished { reason: FinishReason::Done, decode_tps: Some(_), .. }));
+    }
 }

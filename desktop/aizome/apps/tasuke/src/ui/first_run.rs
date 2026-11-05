@@ -13,8 +13,15 @@ const WIDE: f64 = 640.0;
 
 fn frame(parts: Vec<Element<Msg>>) -> Element<Msg> {
     let brand = row![
-        container(icon(Icon::MessageSquare).size(18.0).role(Role::Accent)).padding(5.0).fill(Tone::Chrome).border(Edge::Line),
-        column![text("Assistant").size(15.0).weight(700.0), text("助 Tasuke · on this computer").size(11.0).role(Role::Text3)].spacing(1.0),
+        container(icon(Icon::MessageSquare).size(18.0).role(Role::Accent))
+            .padding(5.0)
+            .fill(Tone::Chrome)
+            .border(Edge::Line),
+        column![
+            text("Assistant").size(15.0).weight(700.0),
+            text("助 Tasuke · on this computer").size(11.0).role(Role::Text3)
+        ]
+        .spacing(1.0),
     ]
     .spacing(10.0);
     let content = column_of(std::iter::once(brand.into()).chain(parts).collect()).spacing(18.0).max_width(WIDE);
@@ -30,7 +37,13 @@ fn para(words: &str) -> Element<Msg> {
 }
 
 fn point(glyph: Icon, words: String) -> Element<Msg> {
-    row![super::lead(icon(glyph).size(15.0).role(Role::Text3)), text(words).size(13.0).role(Role::Text2).wrap().line_height(1.4)].spacing(10.0).align(Align::Start).into()
+    row![
+        super::lead(icon(glyph).size(15.0).role(Role::Text3)),
+        text(words).size(13.0).role(Role::Text2).wrap().line_height(1.4)
+    ]
+    .spacing(10.0)
+    .align(Align::Start)
+    .into()
 }
 
 pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
@@ -58,12 +71,16 @@ pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
                     let fb = FitBar::of(e, &rec.fit, hw);
                     let score = match rec.score {
                         Some(t) => format!("Fixed {} of {} faults in Sekka's evaluations.", t.passed, t.total),
-                        None => "Not yet in Sekka's evaluations: it's the best that fits until a measured one does.".to_owned(),
+                        None => "Not yet in Sekka's evaluations: it's the best that fits until a measured one does."
+                            .to_owned(),
                     };
                     let card = container(
                         column![
-                            row![text(e.name.clone()).size(17.0).weight(700.0), tag("Recommended", Role::Accent)].spacing(8.0),
-                            text(format!("By {} · {} licence · {}", e.maker, e.license, e.origin.join(", "))).size(12.0).role(Role::Text3),
+                            row![text(e.name.clone()).size(17.0).weight(700.0), tag("Recommended", Role::Accent)]
+                                .spacing(8.0),
+                            text(format!("By {} · {} licence · {}", e.maker, e.license, e.origin.join(", ")))
+                                .size(12.0)
+                                .role(Role::Text3),
                             bar::verdict(&fb),
                             bar::bar(&fb, 12.0),
                             bar::legend(&fb),
@@ -80,7 +97,10 @@ pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
                     let total = e.download_size();
                     parts.push(
                         row![
-                            button(format!("Download {} · {}", e.name, size(total))).icon(Icon::Download).primary().on_press(Msg::FirstRunDownload),
+                            button(format!("Download {} · {}", e.name, size(total)))
+                                .icon(Icon::Download)
+                                .primary()
+                                .on_press(Msg::FirstRunDownload),
                             button("Choose Another…").on_press(Msg::FirstRunSkip),
                         ]
                         .spacing(8.0)
@@ -94,7 +114,8 @@ pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
                         ))
                         .size(12.0)
                         .role(Role::Text3)
-                        .wrap().line_height(1.4)
+                        .wrap()
+                        .line_height(1.4)
                         .into(),
                     );
                 }
@@ -114,7 +135,13 @@ pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
             } else {
                 button("Pause").icon(Icon::Pause).on_press(Msg::Pause).into()
             };
-            let idle = app.models.server.contains("10 minutes").then_some("10 minutes").unwrap_or("a while");
+            let sleeps = match app.models.idle_minutes {
+                0 => "It loads when you send something and stays loaded until the model server stops.".to_owned(),
+                n => format!(
+                    "It loads when you send something and sleeps after {} unused, so games and other programs get the graphics card back.",
+                    if n == 1 { "a minute".to_owned() } else { format!("{n} minutes") }
+                ),
+            };
             frame(vec![
                 text(format!("Downloading {name}")).size(24.0).weight(700.0).into(),
                 container(
@@ -134,7 +161,7 @@ pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
                 column![
                     point(Icon::Download, format!("{name} comes from Hugging Face, and every byte is checked against the fingerprint Sekka recorded for it, so you get exactly the model that was tested.")),
                     point(Icon::Lock, "It runs here, with llama.cpp. Nothing you ask leaves this computer.".into()),
-                    point(Icon::Moon, format!("It loads when you send something and sleeps after {idle} unused, so games and other programs get the graphics card back.")),
+                    point(Icon::Moon, sleeps),
                     point(Icon::Pause, "Pause or close the window whenever you like: the download picks up where it stopped.".into()),
                 ]
                 .spacing(12.0)
@@ -142,7 +169,13 @@ pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
             ])
         }
         (FirstRun::Ready, Some(_)) => {
-            let name = app.models.in_use.as_ref().and_then(|id| app.models.catalog.get(id)).map(|e| e.name.clone()).unwrap_or_default();
+            let name = app
+                .models
+                .in_use
+                .as_ref()
+                .and_then(|id| app.models.catalog.get(id))
+                .map(|e| e.name.clone())
+                .unwrap_or_default();
             frame(vec![
                 text("Ready.").size(28.0).weight(700.0).into(),
                 para(&format!("{name} is downloaded and checked. Ask it anything, or tell it what's wrong.")),
