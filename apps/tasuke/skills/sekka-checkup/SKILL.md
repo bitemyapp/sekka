@@ -23,7 +23,7 @@ not a problem: skip it.
 | Disk space | `df -h / /home /nix 2>/dev/null` | a filesystem is over 85% full |
 | Journal size | `journalctl --disk-usage` | over 1 GB |
 | System generations | `ls -d /nix/var/nix/profiles/system-*-link` (count the lines) | more than about 20 (each keeps its packages on disk) |
-| Last system update | `stat -c %y /nix/var/nix/profiles/system` (when the newest system was made) | the newest generation is more than 2 weeks old |
+| Last system update | `stat -c %y /nix/var/nix/profiles/system` (when the newest system was made; a live USB session or a test machine has no system profile: skip this and the line above) | the newest generation is more than 2 weeks old |
 | Memory and swap | `free -h` and `swapon --show` | available memory under 10%, or swap mostly used |
 | Busy processes | `uptime`, `nproc`, and the command below the table | something uses a whole core with nothing open that explains it, or load stays above the core count (`nproc`) |
 | Crashes | `coredumpctl list --since=-7d --no-pager` | an app crashed more than once |
