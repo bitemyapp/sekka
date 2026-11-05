@@ -1248,7 +1248,8 @@ impl Ctl {
         log::warn!("nothing plays sound: playing on without it");
         let Some(ring) = self.session.as_ref().and_then(|s| s.audio.as_ref()).map(|a| a.ring.shared()) else { return };
         self.out().set_playing(false);
-        self.output.close();
+        // Release both halves of the active output's lease, including a prior fallback.
+        self.out().close();
         let mut null = NullOutput::new();
         let media = self.session.as_ref().map(|s| s.info.title.clone()).unwrap_or_default();
         if null.open(ring, self.clock.clone(), &media).is_ok() {
@@ -1816,6 +1817,41 @@ fn media_info(input: &Input, url: &str, path: Option<PathBuf>) -> MediaInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn replacing_a_silent_output_keeps_playback_running() {
+        let (_tx, rx) = mpsc::channel();
+        let wake = Wake::new();
+        let clock = Arc::new(Clock::new());
+        let video = video::Shared::new(wake.clone());
+        let (started, starts) = mpsc::channel();
+        clock.on_start(move || {
+            let _ = started.send(());
+        });
+        let mut ctl = Ctl::new(
+            Options { sink: None, audio: AudioChoice::Null, hardware: false, caps: None },
+            rx,
+            wake,
+            clock.clone(),
+            video,
+            Arc::new(Seeks::default()),
+            Arc::new(|_| {}),
+        );
+        let song = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/song.flac");
+        ctl.open(song.to_str().unwrap(), 0.0).unwrap();
+        ctl.work();
+        let ring = ctl.session.as_ref().unwrap().audio.as_ref().unwrap().ring.shared();
+
+        // The first fallback replaces the original output.
+        ctl.silent();
+        starts.recv_timeout(Duration::from_secs(5)).expect("first fallback starts the playback clock");
+        // A later underrun can replace the fallback itself, not the original.
+        ctl.silent();
+        assert!(ring.consumer().is_err(), "the replacement must retain the ring's output lease");
+        starts.recv_timeout(Duration::from_secs(5)).expect("replacement restarts the playback clock");
+        assert!(clock.running());
+        ctl.close();
+    }
 
     #[test]
     fn tracks_say_what_they_are() {

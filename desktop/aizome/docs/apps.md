@@ -1029,9 +1029,11 @@ seek plays without stopping its video out of sight.
 `crates/aizome-media/tests/fixtures` (made by `make.sh` there) in
 software with no sound server and no window: opening, playing to the
 end, pausing, seeking, subtitles, chapters, tags and covers, speed, and
-video stopping out of sight while audio plays on. `cargo test -p
-aizome-utsushi` drives the window through the kit's harness with the
-real engine: the picture's place, subtitles in the letterbox or over the
+video stopping out of sight while audio plays on. It also checks that
+replacing an existing silent fallback releases its output lease and
+restarts the playback clock. `cargo test -p aizome-utsushi` drives the
+window through the kit's harness with the real engine: the picture's
+place, subtitles in the letterbox or over the
 picture, full screen's controls (hiding again after a pause, a Desk
 switch, or the pointer leaving a control), keys and where they go, seeks
 in a row, a song, Media Info, and folders.
