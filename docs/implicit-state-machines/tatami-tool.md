@@ -215,6 +215,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Hazards:** a killed helper leaves `tatami-wifi-PID` with the PSK (0600) in the runtime dir and/or a key-less created connection; `saved` takes the first profile with that SSID; scan results arrive only for the next opening (`:711`)
 - **Reify:** Low — linear flow with one retry branch
 - **Related:** Network window `tatami-network --join` (`desktop/tatami/network/`)
+- **Follow-up:** the key-file hazard is fixed in [#304](https://github.com/bitemyapp/sekka/pull/304): the key reaches nmcli through a pipe (`passwd-file /dev/stdin`), so a killed helper leaves no file. A key-less created connection can still stay behind. The machine stays implicit.
 
 <a id="ttl-20"></a>
 
