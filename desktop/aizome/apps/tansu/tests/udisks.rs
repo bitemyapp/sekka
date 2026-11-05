@@ -336,11 +336,14 @@ fn format_and_delete(d: &Disks) -> Plan {
     let mut plan = Plan::default();
     let l = plan.preview(&state, &format!("{B}sdx")).unwrap();
     let one = l.segs.iter().position(|s| s.short_name() == "sdx1").unwrap();
-    plan.format(&l, one, NewFs { fs: "ext4".into(), label: "DATA".into(), erase: Erase::Quick, encrypt: None })
-        .unwrap();
+    plan.format(
+        l.at(&state, one).unwrap(),
+        NewFs { fs: "ext4".into(), label: "DATA".into(), erase: Erase::Quick, encrypt: None },
+    )
+    .unwrap();
     let l = plan.preview(&state, &format!("{B}sdx")).unwrap();
     let two = l.segs.iter().position(|s| s.short_name() == "sdx2").unwrap();
-    plan.delete(&l, two).unwrap();
+    plan.delete(l.at(&state, two).unwrap()).unwrap();
     plan
 }
 

@@ -12,7 +12,7 @@ use aizome_sys::disks::{DisksState, Encryption, Erase, SelfTest, SmartAttribute,
 use crate::backend::Backend;
 use crate::drives::{self, Entry};
 use crate::fs;
-use crate::layout::{Flags, Layout, MIB, Target};
+use crate::layout::{Chosen, Flags, Layout, MIB, Target};
 use crate::plan::{Action, NewFs, NewPartition, Plan};
 use crate::run::{Outcome, Run};
 
@@ -30,7 +30,8 @@ pub const UNITS: [(&str, u64); 2] = [("MB", 1_000_000), ("GB", 1_000_000_000)];
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FormatForm {
-    pub seg: usize,
+    /// The partition (or whole-disk filesystem) to format, as chosen.
+    pub target: Chosen,
     pub fs: usize,
     pub label: String,
     pub erase: bool,
@@ -41,7 +42,8 @@ pub struct FormatForm {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateForm {
-    pub seg: usize,
+    /// The unallocated space, as chosen.
+    pub target: Chosen,
     pub offset: u64,
     pub max: u64,
     pub size: u64,
@@ -60,7 +62,8 @@ pub struct CreateForm {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResizeForm {
-    pub seg: usize,
+    /// The partition, as chosen.
+    pub target: Chosen,
     /// Bytes in use when it was last seen mounted.
     pub last_used: Option<u64>,
     pub from: u64,
@@ -83,10 +86,10 @@ pub enum SheetKind {
     Format(FormatForm),
     Create(CreateForm),
     Resize(ResizeForm),
-    Label { seg: usize, label: String },
-    Flags { seg: usize, flags: Flags },
-    Table { kind: TableKind },
-    Unlock { seg: usize, pass: String },
+    Label { target: Chosen, label: String },
+    Flags { target: Chosen, flags: Flags },
+    Table { target: Chosen, kind: TableKind },
+    Unlock { target: Chosen, pass: String },
     Attach { path: String, read_only: bool },
     Apply(ApplyForm),
     Running,
@@ -296,7 +299,10 @@ impl Tansu {
             if self.run.is_none() {
                 let dropped = self.plan.prune(&self.state);
                 if !dropped.is_empty() {
-                    self.notice = Some((format!("Dropped, as the disk is gone: {}.", dropped.join("; ")), true));
+                    self.notice = Some((
+                        format!("Dropped, as the device is gone or another took its place: {}.", dropped.join("; ")),
+                        true,
+                    ));
                 }
             }
             if self.state.available && !self.asked_tools && !self.state.supported_filesystems.is_empty() {
@@ -582,6 +588,12 @@ impl Tansu {
         let name = seg.short_name();
         let block = seg.block().map(str::to_owned);
         let b = self.backend.clone();
+        // What a sheet acts on once it's filled in: the segment as chosen
+        // now, found again when the person submits.
+        let Some(target) = self.layout.choose(&self.state, i) else {
+            self.say(format!("{name} is gone."), true);
+            return;
+        };
         match action {
             Action::Mount => {
                 if let Some(target) = self.mount_target(i) {
@@ -631,13 +643,13 @@ impl Tansu {
                 }
             }
             Action::Unlock => {
-                self.open_sheet(SheetKind::Unlock { seg: i, pass: String::new() }, cx, Some("unlock-pass"))
+                self.open_sheet(SheetKind::Unlock { target, pass: String::new() }, cx, Some("unlock-pass"))
             }
             Action::New => {
                 let size = seg.size;
                 let text = size_text(size, 1);
                 let form = CreateForm {
-                    seg: i,
+                    target,
                     offset: seg.offset,
                     max: seg.size,
                     size,
@@ -654,12 +666,12 @@ impl Tansu {
                 self.open_sheet(SheetKind::Create(form), cx, Some("create-size"));
             }
             Action::Delete => {
-                self.queue(|p, _, l| p.delete(l, i));
+                self.queue(|p, s, l| p.delete(l.locate(s, &target)?));
             }
             Action::Format => {
                 let current = fs::FORMATS.iter().position(|f| *f == seg.fs).unwrap_or(0);
                 let form = FormatForm {
-                    seg: i,
+                    target,
                     fs: current,
                     label: if seg.is_locked() { String::new() } else { seg.label.clone() },
                     erase: false,
@@ -674,7 +686,7 @@ impl Tansu {
                 let (min, max) = self.plan.resize_range_knowing(&self.layout, i, last);
                 let unit = if seg.size >= 10_000_000_000 { 1 } else { 0 };
                 let form = ResizeForm {
-                    seg: i,
+                    target,
                     from: seg.size,
                     min,
                     max,
@@ -687,14 +699,14 @@ impl Tansu {
                 self.open_sheet(SheetKind::Resize(form), cx, Some("resize-size"));
             }
             Action::Label => {
-                self.open_sheet(SheetKind::Label { seg: i, label: seg.label.clone() }, cx, Some("label-field"))
+                self.open_sheet(SheetKind::Label { target, label: seg.label.clone() }, cx, Some("label-field"))
             }
             Action::Flags => {
                 let flags = Flags::of(&self.layout.table, &seg.type_id, seg.flag_bits);
-                self.open_sheet(SheetKind::Flags { seg: i, flags }, cx, None);
+                self.open_sheet(SheetKind::Flags { target, flags }, cx, None);
             }
             Action::Repair => {
-                self.queue(|p, _, l| p.repair(l, i));
+                self.queue(|p, s, l| p.repair(l.locate(s, &target)?));
             }
         }
     }
@@ -729,7 +741,7 @@ impl Tansu {
                     erase: if f.erase { Erase::Zeros } else { Erase::Quick },
                     encrypt: f.encrypt.then(|| Encryption { passphrase: f.pass.clone(), luks1: false }),
                 };
-                if self.queue(|p, _, l| p.format(l, f.seg, spec)) {
+                if self.queue(|p, s, l| p.format(l.locate(s, &f.target)?, spec)) {
                     self.close_sheet(cx);
                 }
             }
@@ -786,7 +798,7 @@ impl Tansu {
                     logical: false,
                 };
                 let mut made = None;
-                if self.queue(|plan, _, l| plan.create(l, f.seg, p).map(|id| made = Some(id))) {
+                if self.queue(|plan, s, l| plan.create(l.locate(s, &f.target)?, p).map(|id| made = Some(id))) {
                     if let Some(id) = made {
                         self.sel = Some(Sel::Target(Target::New(id)));
                     }
@@ -817,15 +829,15 @@ impl Tansu {
                 if f.size_error.is_some() {
                     return;
                 }
-                let (seg, size) = (f.seg, f.size);
-                if self.queue(|p, _, l| p.resize(l, seg, size)) {
+                let (target, size) = (f.target.clone(), f.size);
+                if self.queue(|p, s, l| p.resize(l.locate(s, &target)?, size)) {
                     self.close_sheet(cx);
                 }
             }
             (SheetKind::Label { label, .. }, SheetMsg::Label(l)) => *label = l,
-            (SheetKind::Label { seg, label }, SheetMsg::Submit) => {
-                let (seg, label) = (*seg, label.trim().to_owned());
-                if self.queue(|p, s, l| p.label(s, l, seg, &label)) {
+            (SheetKind::Label { target, label }, SheetMsg::Submit) => {
+                let (target, label) = (target.clone(), label.trim().to_owned());
+                if self.queue(|p, s, l| p.label(s, l.locate(s, &target)?, &label)) {
                     self.close_sheet(cx);
                 }
             }
@@ -845,31 +857,38 @@ impl Tansu {
                 }
                 _ => flags.hidden = on,
             },
-            (SheetKind::Flags { seg, flags }, SheetMsg::Submit) => {
-                let (seg, flags) = (*seg, *flags);
-                if self.queue(|p, _, l| p.flags(l, seg, flags)) {
+            (SheetKind::Flags { target, flags }, SheetMsg::Submit) => {
+                let (target, flags) = (target.clone(), *flags);
+                if self.queue(|p, s, l| p.flags(l.locate(s, &target)?, flags)) {
                     self.close_sheet(cx);
                 }
             }
-            (SheetKind::Table { kind }, SheetMsg::Table(k)) => *kind = k,
-            (SheetKind::Table { kind }, SheetMsg::Submit) => {
-                let kind = *kind;
-                if self.queue(|p, s, l| p.new_table(s, l, kind)) {
+            (SheetKind::Table { kind, .. }, SheetMsg::Table(k)) => *kind = k,
+            (SheetKind::Table { target, kind }, SheetMsg::Submit) => {
+                let (target, kind) = (target.clone(), *kind);
+                if self.queue(|p, s, l| p.new_table(s, l.locate(s, &target)?, kind)) {
                     self.sel = None;
                     self.relayout();
                     self.close_sheet(cx);
                 }
             }
             (SheetKind::Unlock { pass, .. }, SheetMsg::Pass(p)) => *pass = p,
-            (SheetKind::Unlock { seg, pass }, SheetMsg::Submit) => {
+            (SheetKind::Unlock { target, pass }, SheetMsg::Submit) => {
                 if pass.is_empty() {
                     sheet.error = Some("Type its passphrase.".into());
                     return;
                 }
-                let seg = *seg;
+                // The passphrase goes only to the volume chosen.
+                let block = match self.layout.locate(&state, target) {
+                    Ok(at) => at.device().map(|d| d.path().to_owned()),
+                    Err(why) => {
+                        sheet.error = Some(why);
+                        return;
+                    }
+                };
+                let Some(block) = block else { return };
+                let name = target.name().to_owned();
                 let pass = std::mem::take(pass);
-                let Some(block) = self.layout.segs.get(seg).and_then(|s| s.block()).map(str::to_owned) else { return };
-                let name = self.layout.segs[seg].short_name();
                 let task = self.backend.unlock(&block, &pass);
                 self.close_sheet(cx);
                 self.start(format!("Unlocking {name}…"), format!("{name} is unlocked."), BusyTask::Text(task));
@@ -1134,14 +1153,17 @@ impl Program for Tansu {
                 }
             }
             Msg::Do(a) => self.act(a, cx),
-            Msg::NewTable => match self.can_new_table() {
-                Ok(()) => {
+            Msg::NewTable => match self
+                .can_new_table()
+                .and_then(|()| self.layout.choose_disk(&self.state).ok_or_else(|| "The disk is gone.".to_owned()))
+            {
+                Ok(target) => {
                     let kind = if self.layout.table == "dos" && self.layout.size < (2u64 << 40) {
                         TableKind::Dos
                     } else {
                         TableKind::Gpt
                     };
-                    self.open_sheet(SheetKind::Table { kind }, cx, None);
+                    self.open_sheet(SheetKind::Table { target, kind }, cx, None);
                 }
                 Err(e) => self.say(e, true),
             },

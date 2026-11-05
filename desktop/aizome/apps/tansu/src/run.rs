@@ -19,39 +19,28 @@ use std::time::{Duration, Instant};
 
 use aizome_sys::Task;
 use aizome_sys::disks::{
-    BlockDevice, Change, Confirm, CreatePartition, DeletePartition, DisksState, Erase, Format, FormatSpec, Holds,
-    Identity, NewPartitionTable, PartitionEntry, Relabel, Repair, Resize, Seen,
+    BlockDevice, Change, Confirm, CreatePartition, DeletePartition, DisksState, Erase, Format, FormatSpec,
+    NewPartitionTable, PartitionEntry, Relabel, Repair, Resize,
 };
-use aizome_typestate::Reviewed;
 
 use crate::backend::Backend;
 use crate::fs;
 use crate::layout::MIB;
-use crate::plan::{Op, OpKind, Plan, Words};
+use crate::plan::{Op, OpKind, Plan, Queued, Words};
 
 /// How long a step waits for UDisks to report what it did.
 const SETTLE: Duration = Duration::from_secs(15);
 
 /// A confirmation the person gave, for one operation's first step.
 enum Token {
-    Table(Confirm<NewPartitionTable, Agreed>),
-    Create(Confirm<CreatePartition, Agreed>),
-    Delete(Confirm<DeletePartition, Agreed>),
-    Format(Confirm<Format, Agreed>),
-    Resize(Confirm<Resize, Agreed>),
-    Repair(Confirm<Repair, Agreed>),
-    Label(Confirm<Relabel, Agreed>),
-    Entry(Confirm<PartitionEntry, Agreed>),
-}
-
-/// The brand of the person's agreement on the Apply sheet: only the run
-/// makes one, so the backend's confirmations come from it.
-#[derive(Debug)]
-pub struct Agreed(());
-
-/// The review of `seen` for a step `O`, as the person agreed to it.
-fn review<O: Change>(seen: Identity) -> Reviewed<Seen<O>, Agreed> {
-    Reviewed::new(Seen::new(seen), Agreed(()))
+    Table(Confirm<NewPartitionTable, Queued>),
+    Create(Confirm<CreatePartition, Queued>),
+    Delete(Confirm<DeletePartition, Queued>),
+    Format(Confirm<Format, Queued>),
+    Resize(Confirm<Resize, Queued>),
+    Repair(Confirm<Repair, Queued>),
+    Label(Confirm<Relabel, Queued>),
+    Entry(Confirm<PartitionEntry, Queued>),
 }
 
 /// Where an operation stands.
@@ -70,17 +59,15 @@ pub struct Item {
     token: Option<Token>,
     /// The device as it was agreed to.
     agreed: Option<BlockDevice>,
-    /// Its identity, which every step's confirmation holds it to.
-    seen: Option<Identity>,
     /// What a step made (a new partition's path).
     made: Option<String>,
 }
 
 impl Item {
     /// A confirmation for a later step of the operation, of the device as it
-    /// was agreed to.
-    fn again<Op: Change>(&self) -> Result<Confirm<Op, Agreed>, String> {
-        self.seen.clone().map(|seen| Confirm::new(review(seen))).ok_or_else(|| no_token(&self.op))
+    /// was when the operation was queued.
+    fn again<Op: Change>(&self) -> Confirm<Op, Queued> {
+        Confirm::new(self.op.review())
     }
 }
 
@@ -159,25 +146,25 @@ enum Step {
 
 impl Run {
     /// Agree to `plan` as `state` shows it: words for each operation, and
-    /// the confirmation tokens for those that destroy.
+    /// its confirmation token, of its device as it was when the operation
+    /// was queued (not whatever has its names now).
     pub fn agree(plan: &Plan, state: &DisksState) -> Run {
         let items = plan
             .ops
             .iter()
             .map(|op| {
                 let agreed = state.block(&op.target).cloned();
-                let seen = state.identity(&op.target);
                 let ext = agreed.as_ref().is_some_and(|b| fs::check_before_resize(&b.id_type));
-                let token = seen.clone().map(|seen| match &op.kind {
-                    OpKind::NewTable { .. } => Token::Table(Confirm::new(review(seen))),
-                    OpKind::Create(_) => Token::Create(Confirm::new(review(seen))),
-                    OpKind::Delete => Token::Delete(Confirm::new(review(seen))),
-                    OpKind::Format(_) => Token::Format(Confirm::new(review(seen))),
-                    OpKind::Resize { .. } if ext => Token::Repair(Confirm::new(review(seen))),
-                    OpKind::Resize { .. } => Token::Resize(Confirm::new(review(seen))),
-                    OpKind::Label { .. } => Token::Label(Confirm::new(review(seen))),
-                    OpKind::Flags { .. } => Token::Entry(Confirm::new(review(seen))),
-                    OpKind::Repair => Token::Repair(Confirm::new(review(seen))),
+                let token = Some(match &op.kind {
+                    OpKind::NewTable { .. } => Token::Table(Confirm::new(op.review())),
+                    OpKind::Create(_) => Token::Create(Confirm::new(op.review())),
+                    OpKind::Delete => Token::Delete(Confirm::new(op.review())),
+                    OpKind::Format(_) => Token::Format(Confirm::new(op.review())),
+                    OpKind::Resize { .. } if ext => Token::Repair(Confirm::new(op.review())),
+                    OpKind::Resize { .. } => Token::Resize(Confirm::new(op.review())),
+                    OpKind::Label { .. } => Token::Label(Confirm::new(op.review())),
+                    OpKind::Flags { .. } => Token::Entry(Confirm::new(op.review())),
+                    OpKind::Repair => Token::Repair(Confirm::new(op.review())),
                 });
                 Item {
                     op: op.clone(),
@@ -185,7 +172,6 @@ impl Run {
                     status: Status::Waiting,
                     token,
                     agreed,
-                    seen,
                     made: None,
                 }
             })
@@ -352,21 +338,11 @@ impl Run {
                     if bits == 0 {
                         return Ok(Step::Finished);
                     }
-                    // What the first step made, on the disk agreed to: no one
-                    // saw it before, so confirm it as it is.
-                    let disk_same = item
-                        .seen
-                        .as_ref()
-                        .zip(state.identity(&target))
-                        .is_some_and(|(seen, now)| seen.same(&now, Holds::Place));
-                    let on_disk =
-                        state.block(&made).and_then(|b| b.partition.as_ref()).is_some_and(|p| p.table == target);
-                    let made_now = state
-                        .identity(&made)
-                        .filter(|_| disk_same && on_disk)
-                        .ok_or("The new partition isn't where it was made.")?;
+                    // What the first step made, on the disk as it was queued.
+                    let made_now =
+                        item.op.review_made(&state, &made).ok_or("The new partition isn't where it was made.")?;
                     unit(
-                        backend.set_partition_flags(Confirm::new(review(made_now)), bits),
+                        backend.set_partition_flags(Confirm::new(made_now), bits),
                         Some(Expect::Partition { block: made.clone(), type_id: None, flags: Some(bits) }),
                         "Setting its flags…",
                     )
@@ -424,7 +400,7 @@ impl Run {
                         Some("part") => {
                             let c = match item.token.take() {
                                 Some(Token::Resize(c)) => c,
-                                _ => item.again::<Resize>()?,
+                                _ => item.again::<Resize>(),
                             };
                             unit(
                                 backend.resize_partition(c, to),
@@ -433,7 +409,7 @@ impl Run {
                             )
                         }
                         Some("fs") => {
-                            unit(backend.resize_filesystem(item.again::<Resize>()?, 0), None, "Growing the filesystem…")
+                            unit(backend.resize_filesystem(item.again::<Resize>(), 0), None, "Growing the filesystem…")
                         }
                         _ => Ok(Step::Finished),
                     }
@@ -454,7 +430,7 @@ impl Run {
                         Some("fs") => {
                             let c = match item.token.take() {
                                 Some(Token::Resize(c)) => c,
-                                _ => item.again::<Resize>()?,
+                                _ => item.again::<Resize>(),
                             };
                             unit(
                                 backend.resize_filesystem(c, to.saturating_sub(MIB)),
@@ -465,7 +441,7 @@ impl Run {
                         Some("part") => {
                             let c = match item.token.take() {
                                 Some(Token::Resize(c)) => c,
-                                _ => item.again::<Resize>()?,
+                                _ => item.again::<Resize>(),
                             };
                             unit(
                                 backend.resize_partition(c, to),
@@ -474,7 +450,7 @@ impl Run {
                             )
                         }
                         Some("fill") => unit(
-                            backend.resize_filesystem(item.again::<Resize>()?, 0),
+                            backend.resize_filesystem(item.again::<Resize>(), 0),
                             None,
                             "Fitting the filesystem to the partition…",
                         ),
@@ -504,23 +480,23 @@ impl Run {
                 // Each step does what's still to do: the type, then the bits.
                 let (type_id, bits) = to.apply(&table, &b.id_type, &p.type_id, p.flags);
                 // The first step spends the token; the second confirms the
-                // partition as it was agreed to (its entry changes, not its
+                // partition as it was queued (its entry changes, not its
                 // place).
                 let mut confirm = || match item.token.take() {
-                    Some(Token::Entry(c)) => Ok(c),
+                    Some(Token::Entry(c)) => c,
                     _ => item.again::<PartitionEntry>(),
                 };
                 if step >= 2 {
                     Ok(Step::Finished)
                 } else if !type_id.eq_ignore_ascii_case(&p.type_id) {
                     unit(
-                        backend.set_partition_type(confirm()?, &type_id),
+                        backend.set_partition_type(confirm(), &type_id),
                         Some(Expect::Partition { block: target.clone(), type_id: Some(type_id.clone()), flags: None }),
                         "Changing the partition's type…",
                     )
                 } else if bits != p.flags {
                     unit(
-                        backend.set_partition_flags(confirm()?, bits),
+                        backend.set_partition_flags(confirm(), bits),
                         Some(Expect::Partition { block: target.clone(), type_id: None, flags: Some(bits) }),
                         "Setting the flags…",
                     )
