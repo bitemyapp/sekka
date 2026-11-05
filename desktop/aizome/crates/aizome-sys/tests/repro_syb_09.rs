@@ -124,11 +124,11 @@ fn drive(helper: Helper, window: Duration) -> Option<Run> {
                 let Ok(fresh) = r.check(heard) else { continue };
                 let failed = match said(fresh) {
                     Said::Retrying { failed: Some(text), .. } => Some(text),
-                    Said::Unavailable { failed } => {
+                    Said::Unavailable { failed, .. } => {
                         run.unavailable = true;
                         Some(failed)
                     }
-                    Said::Refused => Some("refused".into()),
+                    Said::Refused { .. } => Some("refused".into()),
                     Said::Prompt(_) => {
                         run.prompts += 1;
                         None
