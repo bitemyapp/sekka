@@ -45,13 +45,12 @@ fn run() -> Result<()> {
         ensure!(input.len() <= REQUEST_LIMIT, "Request too large");
         let request = parse_request(&input)?;
         drop(input);
-        let confirmed = request.parse_confirmed(&Settings::load()?)?;
         let mode = if args == ["preflight"] {
             InstallMode::Preflight
         } else {
             InstallMode::Execute
         };
-        install::install(confirmed, mode)?;
+        install::install(request, &Settings::load()?, mode)?;
     } else {
         anyhow::bail!(
             "Usage: calamares-nixos-helper discover|session|preflight|install; requests are JSON on stdin"
