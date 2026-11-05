@@ -27,6 +27,7 @@ fn a_failure_before_any_disk_write_is_not_reported_as_a_failed_partitioning() {
         ..Appearance::default()
     };
     let mut h = Harness::with(Genkan::new(Some("review".into())), appearance, false);
+    h.allow_agreements();
     let w = h.window();
     assert_eq!(h.program().step, Step::Review);
     assert!(!h.program().prepared(), "preparation is still running");
@@ -38,7 +39,7 @@ fn a_failure_before_any_disk_write_is_not_reported_as_a_failed_partitioning() {
     h.send(Msg::Erase(phrase));
     h.send(Msg::Consent(true));
     assert!(h.program().next_enabled(), "confirming early is allowed");
-    h.send(Msg::Next);
+    press_confirm(&mut h);
     assert_eq!(h.program().step, Step::Install);
     println!("after confirming: {:?}", h.program().install_message);
 
@@ -110,11 +111,12 @@ fn a_queued_confirmation_starts_the_installation_once_prepared() {
         Appearance::default(),
         false,
     );
+    h.allow_agreements();
     let ticket = h.program().review_ticket().unwrap();
     let phrase = h.program().phrase.clone();
     h.send(Msg::Erase(phrase));
     h.send(Msg::Consent(true));
-    h.send(Msg::Next);
+    press_confirm(&mut h);
     assert!(h.program().installing() && !h.program().prepared());
     assert!(!h.program().password.is_empty(), "nothing was sent yet");
     h.send(Msg::Session(HelperAnswer::new(
@@ -151,4 +153,63 @@ fn a_queued_confirmation_starts_the_installation_once_prepared() {
             .iter()
             .any(|t| t.contains("The disk may have been modified"))
     );
+}
+
+/// A press of the Review page's Erase Disk and Install button, as a person's:
+/// the agreement only such a press makes is what confirms.
+fn press_confirm(h: &mut Harness<Genkan>) {
+    let w = h.window();
+    let at = h
+        .find_id(w, "next")
+        .expect("the Review page's button")
+        .center();
+    h.click(w, at);
+}
+
+/// Nothing but a person's press of the button confirms: not Next sent for
+/// them (as the Review page's Next once confirmed, and the preview's sample
+/// still confirms by its own path), not a press the harness makes without
+/// letting it agree, and not a press before the phrase is typed.
+#[test]
+fn only_a_press_of_the_button_confirms() {
+    let mut h = Harness::with(
+        Genkan::new(Some("review".into())),
+        Appearance::default(),
+        false,
+    );
+    let phrase = h.program().phrase.clone();
+    h.send(Msg::Consent(true));
+    h.allow_agreements();
+    press_confirm(&mut h);
+    assert_eq!(
+        h.program().step,
+        Step::Review,
+        "a press before the phrase is typed"
+    );
+    h.send(Msg::Erase(phrase));
+    h.send(Msg::Next);
+    assert_eq!(
+        h.program().step,
+        Step::Review,
+        "Next sent by code confirms nothing"
+    );
+    assert!(!h.program().installing());
+
+    let mut h = Harness::with(
+        Genkan::new(Some("review".into())),
+        Appearance::default(),
+        false,
+    );
+    let phrase = h.program().phrase.clone();
+    h.send(Msg::Erase(phrase));
+    h.send(Msg::Consent(true));
+    press_confirm(&mut h);
+    assert_eq!(
+        h.program().step,
+        Step::Review,
+        "a press that makes no agreement"
+    );
+    h.allow_agreements();
+    press_confirm(&mut h);
+    assert_eq!(h.program().step, Step::Install, "the person's press");
 }
