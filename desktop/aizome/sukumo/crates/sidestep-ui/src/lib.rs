@@ -80,6 +80,7 @@ mod event;
 mod image;
 pub mod layer_shell;
 pub mod offscreen;
+pub mod session_lock;
 mod text;
 pub mod video;
 mod window;

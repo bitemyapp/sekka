@@ -296,10 +296,26 @@ pub fn inject_outputs(cx: &mut Cx, outputs: &[crate::Output]) {
     cx.inject(FromRender::ScreensChanged);
 }
 
-/// The compositor ending the session lock (or refusing it) without the
-/// program unlocking.
+/// The compositor ending the session lock the program asks for or holds
+/// now (or refusing it) without the program unlocking. Nothing without
+/// one.
 pub fn inject_session_lock_finished(cx: &mut Cx) {
-    cx.inject(FromRender::SessionLockFinished);
+    if let Some(lock) = cx.session_lock_request() {
+        cx.inject(FromRender::SessionLockFinished { lock });
+    }
+}
+
+/// The session lock request the program asks for or holds now, to name
+/// in [`inject_session_lock_finished_for`] later.
+pub fn session_lock_request(cx: &Cx) -> Option<crate::session_lock::LockTicket> {
+    cx.session_lock_request()
+}
+
+/// The compositor ending (or refusing) the lock asked for under `lock`,
+/// which may be a request the program has withdrawn since: its `finished`
+/// was already on its way.
+pub fn inject_session_lock_finished_for(cx: &mut Cx, lock: crate::session_lock::LockTicket) {
+    cx.inject(FromRender::SessionLockFinished { lock });
 }
 
 /// A destination asking for the data drag `drag` (out of one of the

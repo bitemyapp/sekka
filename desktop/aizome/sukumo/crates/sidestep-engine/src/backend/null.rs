@@ -430,9 +430,9 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
             ToRender::FrameTicks { window, on } => note(Seen::FrameTicks { window, on }),
             // No shared memory to make room in.
             ToRender::ReserveBuffers { .. } => {}
-            ToRender::LockSession => {
+            ToRender::LockSession { lock } => {
                 note(Seen::SessionLock { locked: true });
-                send(FromRender::SessionLocked);
+                send(FromRender::SessionLocked { lock });
             }
             ToRender::UnlockSession => note(Seen::SessionLock { locked: false }),
             ToRender::RequestActivationToken { request, .. } => {
