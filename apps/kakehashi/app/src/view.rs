@@ -407,25 +407,12 @@ impl Kakehashi {
         let Some(image) = self.image_id() else { return };
         let holds = self.holds().map(str::to_owned);
         let Some((review, target)) = self.drives.open_review(holds.as_deref(), image) else { return };
-        let (drive, image) = (target.drive(), target.image());
-        let name = image.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let title = format!("Erase {}?", drive.label());
-        let description = format!(
-            "{} ({}, {}, {}) will be erased and replaced with {}. Everything on it now will be lost; this can't be undone.",
-            drive.label(),
-            human(drive.bytes),
-            drive.name,
-            drive.identity_hint(),
-            name
-        );
         // OK writes the drive and image described here, found again when it
         // is pressed, and only while this dialog's review is the open one:
         // the person's press is what the write takes.
         dialog::erase(
             window,
             cx,
-            title,
-            description,
             review,
             target.clone(),
             |this, pressed, cx| {
@@ -435,7 +422,6 @@ impl Kakehashi {
             |this, review, _| this.drives.cancel_review(review),
         );
     }
-
     /// Writes the drive and image the dialog the person pressed OK in
     /// described, if they are still the drive listed under its name and the
     /// window's image.
@@ -465,7 +451,7 @@ impl Kakehashi {
             // cancellation and failure alike.
             let dir = dir;
             let cancel = dir.cancel();
-            let prepared = (|| -> anyhow::Result<PlanFile> {
+            let prepared = (|| -> anyhow::Result<_> {
                 #[cfg(target_os = "macos")]
                 let plan = {
                     let staged =
@@ -475,10 +461,13 @@ impl Kakehashi {
                 if cancel.exists() {
                     anyhow::bail!(Cancelled);
                 }
-                Ok(PlanFile::write(&dir, plan)?)
+                let helper = elevate::helper_path().map_err(|e| anyhow::anyhow!("could not find the helper: {e}"))?;
+                // Written just before the helper starts, which then takes it
+                // (by value: one press starts it once).
+                Ok((helper, PlanFile::write(&dir, plan)?))
             })();
-            let file = match prepared {
-                Ok(file) => file,
+            let (helper, file) = match prepared {
+                Ok(ready) => ready,
                 Err(e) => {
                     let message = if e.is::<Cancelled>() {
                         "Stopped before writing; nothing was written.".to_owned()
@@ -489,15 +478,8 @@ impl Kakehashi {
                     return;
                 }
             };
-            let helper = match elevate::helper_path() {
-                Ok(helper) => helper,
-                Err(e) => {
-                    let _ = tx.send(Msg::Job(Event::NotStarted(format!("could not find the helper: {e}"))));
-                    return;
-                }
-            };
             let _ = tx.send(Msg::Job(Event::Authorizing));
-            let runner = std::thread::spawn(move || elevate::run(&helper, &file));
+            let runner = std::thread::spawn(move || elevate::run(&helper, file));
             let mut reports = ProgressFile::new(&dir);
             while !runner.is_finished() {
                 for report in reports.read() {

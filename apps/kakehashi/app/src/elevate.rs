@@ -14,7 +14,7 @@
 //! use kakehashi_window::elevate::{self, PlanFile, Ran};
 //! fn write_unasked(helper: &std::path::Path, dir: &JobDir, write: ConfirmedWrite, seen: Target) -> Ran {
 //!     let plan = Plan::new(write, seen).unwrap();
-//!     elevate::run(helper, &PlanFile::write(dir, plan).unwrap())
+//!     elevate::run(helper, PlanFile::write(dir, plan).unwrap())
 //! }
 //! ```
 //!
@@ -47,7 +47,21 @@
 //! use kakehashi_window::elevate::{self, PlanFile, Ran};
 //! fn write(helper: &std::path::Path, dir: &JobDir, write: ConfirmedWrite, pressed: Pressed) -> Option<Ran> {
 //!     let plan = Plan::new(write, pressed).ok()?;
-//!     Some(elevate::run(helper, &PlanFile::write(dir, plan).ok()?))
+//!     Some(elevate::run(helper, PlanFile::write(dir, plan).ok()?))
+//! }
+//! ```
+//!
+//! One press starts the helper once: [`run`] takes the plan file.
+//!
+//! ```compile_fail,E0382
+//! use kakehashi_core::choice::ConfirmedWrite;
+//! use kakehashi_core::job::JobDir;
+//! use kakehashi_core::write::Plan;
+//! use kakehashi_window::dialog::Pressed;
+//! use kakehashi_window::elevate::{self, PlanFile, Ran};
+//! fn twice(helper: &std::path::Path, dir: &JobDir, write: ConfirmedWrite, pressed: Pressed) -> Option<(Ran, Ran)> {
+//!     let file = PlanFile::write(dir, Plan::new(write, pressed).ok()?).ok()?;
+//!     Some((elevate::run(helper, file), elevate::run(helper, file)))
 //! }
 //! ```
 //!
@@ -79,7 +93,7 @@ impl PlanFile {
 
 /// Starts the helper for `file`'s plan, through the system's prompt, and
 /// waits for it.
-pub fn run(helper: &Path, file: &PlanFile) -> Ran {
+pub fn run(helper: &Path, file: PlanFile) -> Ran {
     run_paths(helper, &file.plan, &file.progress)
 }
 

@@ -7,6 +7,9 @@
 //! handle from authopen on macOS); the window watches its progress.
 
 #![cfg_attr(windows, windows_subsystem = "windows")]
+// GPUI's input dispatch would press the dialog's OK for the program
+// (clippy.toml): never here.
+#![forbid(clippy::disallowed_methods)]
 
 #[cfg(target_os = "macos")]
 mod staged_image;

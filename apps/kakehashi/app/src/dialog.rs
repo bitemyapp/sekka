@@ -35,8 +35,20 @@
 //! What stays a run-time check: that the press is of the dialog still open
 //! (its review ticket, which [`DriveList::confirm`] checks), and that the
 //! drive found again at OK is the one described ([`Plan::new`] compares
-//! them). Whatever the system takes for a click (an accessibility tool,
-//! synthetic input) presses OK as a person does.
+//! them).
+//!
+//! What no type rules out, and a lint does: GPUI's public input API.
+//! `Window::dispatch_action`, `dispatch_keystroke` and `dispatch_event`,
+//! `App::dispatch_action` and `FocusHandle::dispatch_action` would let the
+//! window's code press OK itself (the dialog's `Confirm` action, an Enter
+//! keystroke, a synthetic click). `app/clippy.toml` denies them, this
+//! library and the binary forbid the lint, and the Nix package's check runs
+//! it and refuses any other lint level for it; a plain `cargo build` doesn't
+//! run Clippy. GPUI's test contexts (`test-support`) aren't built here.
+//!
+//! What nothing here can see: whatever the system takes for a click (an
+//! accessibility tool, synthetic input) presses OK as a person does, and the
+//! dialog takes Return for OK, as GPUI's dialogs do.
 //!
 //! [`DriveList::confirm`]: kakehashi_core::choice::DriveList::confirm
 //! [`Plan::new`]: kakehashi_core::write::Plan::new
@@ -76,22 +88,37 @@ impl AsRef<Target> for Pressed {
     }
 }
 
-/// Opens the "Erase …?" dialog for `review`, describing `shown` with `title`
-/// and `description`. OK calls `ok` with the person's [`Pressed`]; Cancel
-/// calls `cancel`.
-#[allow(clippy::too_many_arguments)]
+/// What the dialog says of `shown`: its title and description, made from the
+/// target the press agrees to, so the words and the agreement can't differ.
+pub fn words(shown: &Target) -> (String, String) {
+    let (drive, image) = (shown.drive(), shown.image());
+    let name = image.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let title = format!("Erase {}?", drive.label());
+    let description = format!(
+        "{} ({}, {}, {}) will be erased and replaced with {}. Everything on it now will be lost; this can't be undone.",
+        drive.label(),
+        kakehashi_core::human(drive.bytes),
+        drive.name,
+        drive.identity_hint(),
+        name
+    );
+    (title, description)
+}
+
+/// Opens the "Erase …?" dialog for `review`, describing `shown` in its
+/// [`words`]. OK calls `ok` with the person's [`Pressed`]; Cancel calls
+/// `cancel`.
 pub fn erase<V: 'static>(
     window: &mut Window,
     cx: &mut Context<V>,
-    title: impl Into<SharedString>,
-    description: impl Into<SharedString>,
     review: ReviewTicket,
     shown: Target,
     ok: impl Fn(&mut V, Pressed, &mut Context<V>) + 'static,
     cancel: impl Fn(&mut V, ReviewTicket, &mut Context<V>) + 'static,
 ) {
     let view = cx.entity();
-    let (title, description) = (title.into(), description.into());
+    let (title, description) = words(&shown);
+    let (title, description): (SharedString, SharedString) = (title.into(), description.into());
     let (ok, cancel) = (Rc::new(ok), Rc::new(cancel));
     window.open_alert_dialog(cx, move |alert, _, _| {
         let (on_ok, on_cancel) = (view.clone(), view.clone());
