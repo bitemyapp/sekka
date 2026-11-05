@@ -1,6 +1,6 @@
 [package]
 name = "kakehashi-core"
-description = "Drives, images, nightly builds and the write that Kakehashi's window and helper share"
+description = "Drives, images, nightly builds and the write plan that Kakehashi's window and helper share"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

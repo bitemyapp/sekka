@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["core", "helper", "app"]
+members = ["core", "write", "helper", "app"]
 
 [workspace.package]
 version = "0.1.0"
@@ -11,6 +11,7 @@ rust-version = "1.92"
 
 [workspace.dependencies]
 kakehashi-core = { path = "core" }
+kakehashi-write = { path = "write" }
 # Sekka's typestate support, by path from Aizome's crates.
 aizome-typestate = { path = "../../desktop/aizome/crates/aizome-typestate" }
 anyhow = "1"

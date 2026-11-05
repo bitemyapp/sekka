@@ -1,39 +1,32 @@
-//! Windows: drives from the storage IOCTLs of each `\\.\PhysicalDriveN`,
-//! written unbuffered after the volumes on them are locked and dismounted.
+//! Windows: drives from the storage IOCTLs of each `\\.\PhysicalDriveN`, and
+//! the handle and IOCTL primitives the helper's write step uses.
 
 // Windows' own names for the storage bus types.
 #![allow(non_upper_case_globals)]
 
-use super::Device;
 use crate::drive::Drive;
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::Result;
 use std::collections::HashMap;
 use std::ffi::c_void;
-use std::fs::File;
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::io::{FromRawHandle, OwnedHandle};
 use std::path::Path;
-use windows::Win32::Foundation::{ERROR_WRITE_PROTECT, GENERIC_READ, GENERIC_WRITE, HANDLE};
+use windows::Win32::Foundation::{ERROR_WRITE_PROTECT, HANDLE};
 use windows::Win32::Storage::FileSystem::{
     BusTypeFileBackedVirtual, BusTypeMmc, BusTypeNvme, BusTypeRAID, BusTypeSas, BusTypeSata, BusTypeScsi, BusTypeSd,
-    BusTypeSpaces, BusTypeUsb, BusTypeVirtual, CreateFileW, FILE_FLAG_NO_BUFFERING, FILE_FLAG_WRITE_THROUGH,
-    FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, FindFirstVolumeW, FindNextVolumeW, FindVolumeClose,
-    GetVolumeNameForVolumeMountPointW, GetVolumePathNameW, GetVolumePathNamesForVolumeNameW,
-    IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, OPEN_EXISTING, STORAGE_BUS_TYPE,
+    BusTypeSpaces, BusTypeUsb, BusTypeVirtual, CreateFileW, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_READ,
+    FILE_SHARE_WRITE, FindFirstVolumeW, FindNextVolumeW, FindVolumeClose, GetVolumeNameForVolumeMountPointW,
+    GetVolumePathNameW, GetVolumePathNamesForVolumeNameW, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS, OPEN_EXISTING,
+    STORAGE_BUS_TYPE,
 };
 use windows::Win32::System::IO::DeviceIoControl;
 use windows::Win32::System::Ioctl::{
-    DISK_GEOMETRY_EX, FSCTL_DISMOUNT_VOLUME, FSCTL_LOCK_VOLUME, GET_LENGTH_INFORMATION, IOCTL_DISK_DELETE_DRIVE_LAYOUT,
-    IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, IOCTL_DISK_GET_LENGTH_INFO, IOCTL_DISK_IS_WRITABLE, IOCTL_DISK_UPDATE_PROPERTIES,
-    IOCTL_STORAGE_EJECT_MEDIA, IOCTL_STORAGE_QUERY_PROPERTY, PropertyStandardQuery, STORAGE_DEVICE_DESCRIPTOR,
-    STORAGE_PROPERTY_QUERY, StorageDeviceProperty, VOLUME_DISK_EXTENTS,
+    DISK_GEOMETRY_EX, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, IOCTL_DISK_IS_WRITABLE, IOCTL_STORAGE_QUERY_PROPERTY,
+    PropertyStandardQuery, STORAGE_DEVICE_DESCRIPTOR, STORAGE_PROPERTY_QUERY, StorageDeviceProperty,
+    VOLUME_DISK_EXTENTS,
 };
 use windows::Win32::System::SystemInformation::GetSystemWindowsDirectoryW;
 use windows::core::PCWSTR;
-
-/// The volumes on the drive, locked and dismounted, which must stay open
-/// while it is written.
-pub(crate) type Held = Vec<OwnedHandle>;
 
 /// Physical drives are numbered from zero; this many are looked for.
 const MOST_DRIVES: u32 = 64;
@@ -48,7 +41,7 @@ fn from_wide(buf: &[u16]) -> String {
 }
 
 /// A handle closed when dropped.
-fn open_raw(path: &str, access: u32, flags: FILE_FLAGS_AND_ATTRIBUTES) -> windows::core::Result<OwnedHandle> {
+pub fn open_raw(path: &str, access: u32, flags: FILE_FLAGS_AND_ATTRIBUTES) -> windows::core::Result<OwnedHandle> {
     let path = wide(path);
     // SAFETY: `path` is NUL-terminated and outlives the call.
     let handle = unsafe {
@@ -72,7 +65,7 @@ fn raw(handle: &OwnedHandle) -> HANDLE {
 }
 
 /// One IOCTL with an optional input, filling `out`.
-fn ioctl<I, O>(handle: &OwnedHandle, code: u32, input: Option<&I>, out: &mut O) -> windows::core::Result<u32> {
+pub fn ioctl<I, O>(handle: &OwnedHandle, code: u32, input: Option<&I>, out: &mut O) -> windows::core::Result<u32> {
     ioctl_bytes(
         handle,
         code,
@@ -104,7 +97,7 @@ fn ioctl_bytes(
     Ok(returned)
 }
 
-fn no_output(handle: &OwnedHandle, code: u32) -> windows::core::Result<()> {
+pub fn no_output(handle: &OwnedHandle, code: u32) -> windows::core::Result<()> {
     ioctl_bytes(handle, code, None, (std::ptr::null_mut(), 0)).map(|_| ())
 }
 
@@ -136,7 +129,7 @@ fn bus_name(bus: STORAGE_BUS_TYPE) -> &'static str {
 
 /// Every volume's GUID path (`\\?\Volume{…}\`) and mount points, by the
 /// number of each drive it lives on.
-fn volumes() -> HashMap<u32, Vec<(String, Vec<String>)>> {
+pub fn volumes() -> HashMap<u32, Vec<(String, Vec<String>)>> {
     let mut by_disk: HashMap<u32, Vec<(String, Vec<String>)>> = HashMap::new();
     let mut name = [0u16; 512];
     // SAFETY: the buffer is valid for its length.
@@ -254,14 +247,6 @@ pub(crate) fn drives() -> Result<Vec<Drive>> {
     Ok((0..MOST_DRIVES).filter_map(|n| describe(n, &volumes, &root)).collect())
 }
 
-fn number_of(drive: &Drive) -> Result<u32> {
-    drive
-        .name
-        .strip_prefix("PhysicalDrive")
-        .and_then(|n| n.parse().ok())
-        .with_context(|| format!("{} is not a physical drive", drive.name))
-}
-
 pub(crate) fn image_drive(image: &Path) -> Option<String> {
     let path: Vec<u16> = image.as_os_str().encode_wide().chain(Some(0)).collect();
     let mut root = [0u16; 512];
@@ -271,62 +256,4 @@ pub(crate) fn image_drive(image: &Path) -> Option<String> {
     // SAFETY: as above.
     unsafe { GetVolumeNameForVolumeMountPointW(PCWSTR(root.as_ptr()), &mut volume) }.ok()?;
     disks_of(&from_wide(&volume)).first().map(|n| format!("PhysicalDrive{n}"))
-}
-
-/// Volumes are locked and dismounted when the drive is opened.
-pub(crate) fn unmount(_drive: &Drive) -> Result<()> {
-    Ok(())
-}
-
-/// Lock and dismount every volume on the drive, keeping the locks, then
-/// open the drive itself unbuffered and remove its partition table, so
-/// Windows does not mount anything on it while it is written.
-pub(crate) fn open(drive: &Drive) -> Result<Device> {
-    let number = number_of(drive)?;
-    let mut held = Vec::new();
-    for (volume, _) in volumes().remove(&number).unwrap_or_default() {
-        let handle =
-            open_raw(volume.trim_end_matches('\\'), GENERIC_READ.0 | GENERIC_WRITE.0, FILE_FLAGS_AND_ATTRIBUTES(0))
-                .with_context(|| format!("could not open the volume {volume}"))?;
-        let mut locked = false;
-        for _ in 0..20 {
-            if no_output(&handle, FSCTL_LOCK_VOLUME).is_ok() {
-                locked = true;
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(250));
-        }
-        ensure!(locked, "could not lock {volume}: close anything using the drive and try again");
-        no_output(&handle, FSCTL_DISMOUNT_VOLUME).with_context(|| format!("could not dismount {volume}"))?;
-        held.push(handle);
-    }
-    let handle = open_raw(
-        &format!("\\\\.\\PhysicalDrive{number}"),
-        GENERIC_READ.0 | GENERIC_WRITE.0,
-        FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH,
-    )
-    .with_context(|| format!("could not open {}", drive.name))?;
-    let _ = no_output(&handle, IOCTL_DISK_DELETE_DRIVE_LAYOUT);
-    let mut length = GET_LENGTH_INFORMATION::default();
-    ioctl(&handle, IOCTL_DISK_GET_LENGTH_INFO, None::<&()>, &mut length).context("could not read the size")?;
-    let mut geometry = DISK_GEOMETRY_EX::default();
-    ioctl(&handle, IOCTL_DISK_GET_DRIVE_GEOMETRY_EX, None::<&()>, &mut geometry)
-        .context("could not read the geometry")?;
-    let sector = geometry.Geometry.BytesPerSector as u64;
-    ensure!(sector.is_power_of_two() && (512..=4096).contains(&sector), "unexpected sector size {sector}");
-    Ok(Device { file: File::from(handle), bytes: length.Length as u64, sector, held })
-}
-
-/// The drive was written unbuffered: there is nothing cached to forget.
-pub(crate) fn drop_cache(_device: &Device) {}
-
-pub(crate) fn eject(drive: &Drive) -> Result<()> {
-    let number = number_of(drive)?;
-    let handle = open_raw(&format!("\\\\.\\PhysicalDrive{number}"), GENERIC_READ.0, FILE_FLAGS_AND_ATTRIBUTES(0))?;
-    // Windows reads the new partition table, then the drive is ejected.
-    let _ = no_output(&handle, IOCTL_DISK_UPDATE_PROPERTIES);
-    if no_output(&handle, IOCTL_STORAGE_EJECT_MEDIA).is_err() {
-        bail!("it could not be ejected, but it is written, so you can unplug it");
-    }
-    Ok(())
 }

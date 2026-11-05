@@ -100,3 +100,15 @@ pub fn run(helper: &Path, plan: &Path, progress: &Path) -> Ran {
 pub fn run(_helper: &Path, _plan: &Path, _progress: &Path) -> Ran {
     Ran::Failed("Kakehashi writes drives on Linux, macOS and Windows".into())
 }
+
+#[cfg(test)]
+mod tests {
+    /// The window starts the helper and never links its write step, which
+    /// would let it write a drive in its own process (on macOS the helper
+    /// runs as the person, so nothing else would stop it).
+    #[test]
+    fn the_window_does_not_depend_on_the_write_step() {
+        let manifest = include_str!("../Cargo.toml");
+        assert!(!manifest.contains("kakehashi-write"), "the window's Cargo.toml must not name kakehashi-write");
+    }
+}

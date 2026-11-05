@@ -47,6 +47,7 @@ in
         (source + "/Cargo.toml")
         (source + "/Cargo.lock")
         (source + "/core")
+        (source + "/write")
         (source + "/helper")
         (source + "/app")
         (source + "/linux")
