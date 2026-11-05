@@ -275,7 +275,14 @@ impl fmt::Display for Tally {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Scores {
     pub date: String,
-    /// Diagnostics in the bare tool loop (Tasuke's own loop).
+    /// Diagnostics in Tasuke itself (`run.py --agent tasuke`): the product's
+    /// own agent, prompt, skills and policy. What the ranking prefers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tasuke: Option<Tally>,
+    /// Desktop tasks in Tasuke, with set-of-marks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub computer_use_tasuke: Option<Tally>,
+    /// Diagnostics in the evaluations' bare tool loop.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub diagnostics: Option<Tally>,
     /// Diagnostics in oh-my-pi.
@@ -290,7 +297,18 @@ pub struct Scores {
 }
 
 impl Scores {
-    /// Both diagnostics harnesses pooled: what the assistant role ranks by.
+    /// What the assistant role ranks by: Tasuke's own result when measured,
+    /// else both evaluation harnesses pooled.
+    pub fn assistant(&self) -> Option<Tally> {
+        self.tasuke.or_else(|| self.diagnostics_pooled())
+    }
+
+    /// What the desktop role ranks by: Tasuke's own result when measured.
+    pub fn desktop(&self) -> Option<Tally> {
+        self.computer_use_tasuke.or(self.computer_use).or(self.computer_use_text)
+    }
+
+    /// Both diagnostics harnesses pooled.
     pub fn diagnostics_pooled(&self) -> Option<Tally> {
         match (self.diagnostics, self.diagnostics_omp) {
             (Some(a), Some(b)) => Some(a.plus(b)),

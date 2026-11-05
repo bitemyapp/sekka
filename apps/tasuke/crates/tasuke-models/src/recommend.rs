@@ -13,8 +13,8 @@
 //!   destructive incidents), then by the better placement, then by score and
 //!   speed.
 //! - Unevaluated entries follow, by placement and speed.
-//! - The catalog's curated default for the machine's tier is marked
-//!   ([`Recommendation::curated_default`]) wherever it ranks, with its reason.
+//! - The catalog's curated default for the machine's tier comes first
+//!   ([`Recommendation::curated_default`]), with its reason.
 
 use serde::{Deserialize, Serialize};
 
@@ -59,8 +59,8 @@ pub struct Recommendation {
 pub fn role_score(entry: &Entry, role: Role) -> Option<Tally> {
     let s = entry.scores.as_ref()?;
     match role {
-        Role::Assistant | Role::Fast => s.diagnostics_pooled(),
-        Role::Desktop => s.computer_use,
+        Role::Assistant | Role::Fast => s.assistant(),
+        Role::Desktop => s.desktop(),
     }
 }
 
@@ -122,6 +122,11 @@ pub fn recommend(hw: &Hardware, catalog: &Catalog, role: Role, prefs: &Preferenc
         })
         .collect();
     rank(&mut recs, role);
+    // The curated choice leads: it is what first run downloads.
+    if let Some(i) = recs.iter().position(|r| r.curated_default) {
+        let r = recs.remove(i);
+        recs.insert(0, r);
+    }
     for r in &mut recs {
         let e = catalog.get(&r.id).expect("from the catalog");
         r.why = why(e, r, role, hw, default.filter(|d| d.model == r.id).map(|d| d.why.as_str()));
