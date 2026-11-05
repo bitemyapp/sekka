@@ -701,15 +701,20 @@ still can't rule out.
 
 A destructive step that a person must agree to also takes their press, which
 only the toolkit makes. In Aizome's kit, a button built with
-`on_agree(target, msg)` (or an alert's `agree_button`) is drawn destructive
-and carries what the view shows it acts on. When a person presses it, with
-the pointer or with Space or Return while it has the focus, the engine sends
-`msg` with an `agree::Agreed<target>`. It never answers Return or Escape for
-its sheet. The step takes the `Agreed` by value and acts on its target.
-aizome-sys's disk confirmations, Tansu's Apply, Hako's Replace and Genkan's
-Erase Disk and Install take one. Kakehashi, on GPUI, has its own
+`on_agree(target, msg)` (or an alert's `agree_button`) carries what the view
+shows it acts on; its style is the caller's. When a person presses it (a
+press and a release on it, or Space or Return while it has the focus), the
+engine sends `msg` with an `agree::Agreed<target>`. It never answers Return
+or Escape for its sheet. The step takes the `Agreed` by value and acts on its
+target. aizome-sys's disk confirmations, Tansu's Apply, Hako's Replace and
+Genkan's Erase Disk and Install take one. Kakehashi, on GPUI, has its own
 `dialog::Pressed`, made in the "Erase …?" dialog's OK handler, and starts
-the helper only for a plan holding one (`elevate::PlanFile`).
+the helper only for a plan holding one (`elevate::PlanFile`, spent by
+`elevate::run`). GPUI's public input dispatch (`dispatch_action`,
+`dispatch_keystroke`, `dispatch_event`) would let the window's code press OK
+itself; `apps/kakehashi/app/clippy.toml` denies it, the window forbids the
+lint, and the Nix package's check runs it. Being a lint, it doesn't run in a
+plain `cargo build`.
 
 A press shows that the toolkit received the input, not who made it. Whatever
 the compositor or the system accepts as input (a virtual pointer, `uinput`,
@@ -720,9 +725,13 @@ two ways. `Harness::allow_agreements()` lets the harness's clicks agree, and
 `agree::testing` makes agreements directly. Both exist only in the kit's
 own tests and with its `testing` feature, which only dev-dependencies turn
 on. Kakehashi's `Pressed::for_tests` has its own `test-util` feature. These
-features only add items, so a build that unifies them, as `cargo test` does,
-runs the same code as one without. The shipped builds don't enable them:
-`cargo tree -e normal,features -i aizome-kit` doesn't list `testing`.
+features only add items. Shipped builds don't enable them:
+`cargo tree -e normal,features -i aizome-kit` doesn't list `testing`. A test
+build unifies them, and `cargo test` relinks the binaries it builds for
+integration tests with them. So the packages install the binaries their
+build phase made: nixpkgs' `cargoInstallHook` (Genkan, Kakehashi) copies
+them aside before the checks, and Aizome's package does the same at the
+end of its `buildPhase`.
 
 The retained VM tooling is available through `nix build .#tools`. Run `result/bin/respin-tools qemu-test --help` for its firmware, storage, desktop, and application options. The Genkan fixture now builds from `installer/genkan/tests/vm-fixture`, not a remote installer revision. The rootless builder's static guest tools require the Rust musl target. The older reports in `TESTING.md`, `installer/genkan/RUST-TESTING.md`, and `docs/test-results/` describe their named predecessor revisions only.
 
