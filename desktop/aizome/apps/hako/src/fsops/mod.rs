@@ -67,12 +67,10 @@ impl Conflict {
     }
 }
 
-/// What to do about a [`Conflict`].
+/// What to do about a [`Conflict`], short of replacing what's there, which
+/// takes the person's [`Consent`] ([`Choice::Replace`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Resolution {
-    /// The new item takes the name; the old one goes (only once the new
-    /// one is in place).
-    Replace,
     /// Leave both as they are; the new one doesn't come.
     Skip,
     /// The new one comes under a name of its own ("name 2.txt").
@@ -82,6 +80,80 @@ pub enum Resolution {
     Merge,
     /// Stop the whole operation.
     Cancel,
+}
+
+/// An [`Asker`]'s answer to a [`Conflict`].
+#[derive(Debug)]
+pub enum Choice {
+    /// The new item takes the name; the old one goes (only once the new
+    /// one is in place, and to the Trash), with the person's consent.
+    Replace(Consent),
+    /// Anything else.
+    Other(Resolution),
+}
+
+impl From<Resolution> for Choice {
+    fn from(r: Resolution) -> Choice {
+        Choice::Other(r)
+    }
+}
+
+/// What the conflict sheet's Replace button agrees to: the item there now,
+/// at `target`, and with `all`, every item a later conflict of the same
+/// operation finds (the sheet's "Apply to all").
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Replacing {
+    pub target: PathBuf,
+    pub all: bool,
+}
+
+/// The person's consent to replace the item at a conflict's target. Only
+/// their press of the conflict sheet's Replace button makes one (the kit's
+/// agreement to a [`Replacing`], [`Consent::to`]), so an [`Asker`] that
+/// answers for itself can't replace anything, as [`Always`] once could:
+///
+/// ```compile_fail,E0599
+/// use hako::fsops::{Always, ErrorChoice, Resolution};
+/// let _ = Always(Resolution::Replace, ErrorChoice::Skip);
+/// ```
+///
+/// ```
+/// use hako::fsops::{Always, ErrorChoice, Resolution};
+/// let _ = Always(Resolution::KeepBoth, ErrorChoice::Skip);
+/// ```
+///
+/// Nor can one be written:
+///
+/// ```compile_fail,E0603
+/// let _ = hako::fsops::Consent(());
+/// ```
+#[derive(Debug)]
+pub struct Consent(());
+
+impl Consent {
+    /// The consent the person's press gave for `conflict`: the conflict it
+    /// named, or with "Apply to all", any of the operation's conflicts (keep
+    /// the agreement with the operation's [`Asker`], so it's no other's).
+    /// None for another conflict.
+    ///
+    /// ```
+    /// use aizome_kit::agree::Agreed;
+    /// use hako::fsops::{Choice, Conflict, Consent, Replacing};
+    /// fn answer(agreed: &Agreed<Replacing>, conflict: &Conflict) -> Option<Choice> {
+    ///     Consent::to(agreed, conflict).map(Choice::Replace)
+    /// }
+    /// ```
+    #[cfg(feature = "gui")]
+    pub fn to(agreed: &aizome_kit::agree::Agreed<Replacing>, conflict: &Conflict) -> Option<Consent> {
+        let r = agreed.target();
+        (r.all || r.target == conflict.target).then_some(Consent(()))
+    }
+
+    /// A consent for this crate's tests, as if the person had agreed.
+    #[cfg(test)]
+    pub(crate) fn for_tests() -> Consent {
+        Consent(())
+    }
 }
 
 /// What to do about an error on one item.
@@ -129,17 +201,20 @@ pub fn describe(error: &std::io::Error) -> String {
 /// the worker until they answer, and remembering "apply to all");
 /// tests' answer at once.
 pub trait Asker {
-    fn conflict(&mut self, conflict: &Conflict) -> Resolution;
+    /// What to do about `conflict`: replacing what's there takes the
+    /// person's [`Consent`].
+    fn conflict(&mut self, conflict: &Conflict) -> Choice;
     fn error(&mut self, failure: &Failure) -> ErrorChoice;
 }
 
-/// An [`Asker`] that always gives the same answers.
+/// An [`Asker`] that always gives the same answers: never Replace, which
+/// takes a person's consent.
 #[derive(Clone, Copy, Debug)]
 pub struct Always(pub Resolution, pub ErrorChoice);
 
 impl Asker for Always {
-    fn conflict(&mut self, c: &Conflict) -> Resolution {
-        if self.0 == Resolution::Merge && !c.can_merge() { Resolution::KeepBoth } else { self.0 }
+    fn conflict(&mut self, c: &Conflict) -> Choice {
+        Choice::Other(if self.0 == Resolution::Merge && !c.can_merge() { Resolution::KeepBoth } else { self.0 })
     }
 
     fn error(&mut self, _: &Failure) -> ErrorChoice {

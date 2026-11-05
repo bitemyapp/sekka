@@ -44,3 +44,8 @@ zbus = { version = "5.19", default-features = false, features = ["async-io", "bl
 # PNGs' text chunks.
 md5 = "0.8"
 png = "0.18"
+
+[dev-dependencies]
+# Agreements as if a person had pressed Replace, and harness presses that
+# make them (the kit's `testing`; never in the app's own build).
+aizome-kit = { workspace = true, features = ["testing"] }
