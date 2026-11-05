@@ -12,6 +12,7 @@
 //! helper's events go through the real `Msg::Session` handler, with the
 //! review's ticket, in the order the helper sends them for this case:
 //! `Failed`, then the exit (status 1).
+use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
 use aizome_kit::testing::Harness;
 use aizome_kit::theme::{Appearance, ThemeChoice};
 use calamares_nixos::install::Event;
@@ -212,4 +213,36 @@ fn only_a_press_of_the_button_confirms() {
     h.allow_agreements();
     press_confirm(&mut h);
     assert_eq!(h.program().step, Step::Install, "the person's press");
+}
+
+/// A keyboard-only person: Return in the phrase field moves to Erase Disk
+/// and Install without confirming, and Return there confirms.
+#[test]
+fn return_in_the_phrase_field_moves_to_the_button_which_confirms() {
+    let mut h = Harness::with(
+        Genkan::new(Some("review".into())),
+        Appearance::default(),
+        false,
+    );
+    h.allow_agreements();
+    let w = h.window();
+    h.send(Msg::Consent(true));
+    let phrase = h.program().phrase.clone();
+    let field = h.find_id(w, "erase").expect("the phrase field").center();
+    h.click(w, field);
+    h.type_text(w, &phrase);
+    assert_eq!(h.program().erase, phrase);
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(
+        h.program().step,
+        Step::Review,
+        "Return in the field confirms nothing"
+    );
+    assert_eq!(h.focused_name(w).as_deref(), Some("next"));
+    h.named(w, NamedKey::Enter, Modifiers::NONE);
+    assert_eq!(
+        h.program().step,
+        Step::Install,
+        "Return on the button is the person's press"
+    );
 }
