@@ -208,3 +208,23 @@ The window follows Omperor's principles (`~/work/omperor-aizome/docs/PRODUCT_DIR
 - **Routines.** `tasuke checkup [--notify]` runs the read-only `sekka-checkup` skill with Act off; the module's opt-in weekly timer notifies only when something needs attention.
 - **The helper** is installed in `libexec` and found through `tasuke_agent::root::find_helper` (the path the polkit action names).
 - **Evaluation.** `run.py --agent tasuke` grades this agent in the VM; when the turn ends on a question, the harness answers "Yes, please go ahead." once and keeps the first turn's result apart.
+
+## Prior art: Omperor and Hermes Agent
+
+Both were read closely on 2026-11-05 before deciding what Tasuke takes from them.
+
+**Omperor** (`github.com/bitemyapp/omperor`, its `aizome` branch, and Sekka PR #133) is a native Aizome front end to oh-my-pi, a cloud coding agent run as a child process. Tasuke doesn't embed it or depend on it:
+- its agent's fixed prompt prefix is about 7K tokens, too much for the 32K contexts of 8 GiB-class models, and its job (coding with cloud models) isn't Tasuke's;
+- oh-my-pi builds from source with patches and a downloaded Python, which doesn't fit how Sekka packages software;
+- it has no approvals, which Tasuke's design centres on.
+
+What Tasuke took, with attribution where code came over (Omperor is MIT OR Apache-2.0): the product direction for the window (conversation first, evidence inline, nothing modal but short decisions), its Markdown rendering approach, and its discipline about the prompt cache (a stable prefix and a summary that keeps the person's words). Once PR #133 lands its kit features (selectable text with links, `scroll.follow_end`, a growing text editor), the window's stand-ins in `widgets/{follow,prose,composer}.rs` should give way to them.
+
+**Hermes Agent** (Nous Research, MIT, Python) is a general agent with a learning loop. Tasuke took:
+- **session search** (`search_conversations`), but answering from the saved conversations directly rather than through a second model;
+- a **prompt prefix that stays fixed** while a turn runs (new memory takes effect next turn);
+- **summaries that keep the person's request word for word**, with a summary built without the model when the model's fails;
+- **routines that skip the model when there's nothing to say** (`tasuke checkup` looks first);
+- skills read **by section**, so a small model doesn't spend a third of its context on one guide.
+
+What Tasuke deliberately didn't take: skills the agent writes for itself (what enters the context must be checked against the source, and small models write unreliable procedures), approval by a second model (weaker than the default-deny policy), messaging gateways (a remote way in to an agent that can act as root), and a 64K-token minimum context.
