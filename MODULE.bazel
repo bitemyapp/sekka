@@ -224,6 +224,8 @@ crate.annotation(
 crate.annotation(
     build_script_env = {
         "CXXFLAGS": "-x none",
+        "CMAKE_PREFIX_PATH": "$(CMAKE_PREFIX_PATH)",
+        "NIXPKGS_CMAKE_PREFIX_PATH": "$(NIXPKGS_CMAKE_PREFIX_PATH)",
         "BINDGEN_EXTRA_CLANG_ARGS": "$(BINDGEN_EXTRA_CLANG_ARGS)",
         "LIBCLANG_PATH": "$(LIBCLANG_PATH)",
         "BLAS_INCLUDE_DIRS": "$(BLAS_INCLUDE_DIRS)",

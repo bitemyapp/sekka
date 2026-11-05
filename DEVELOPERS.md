@@ -223,16 +223,43 @@ Release publication settings are unrelated and remain unchanged.
 
 ## Build and check
 
-Its first stages are in the tree: `nix develop .#bazel` builds and tests
-Aizome's workspace with Bazel (`bazel build --config=dev //desktop/aizome/...`)
-on the root lock's toolchains and C libraries. Each Aizome, Hotaru, Yukimi
-and Sukumo crate has a generated `BUILD.bazel`, which Nix's package sources
-leave out. After changing a Cargo manifest, `desktop/aizome/Cargo.lock` or a
-crate annotation in `MODULE.bazel`, run `python3 build/bazel/repin.py` in
-that shell; `python3 build/bazel/generate.py --check` fails while the BUILD
-files are out of date. The plan's
-[implementation status](docs/bazel-build-plan.md#implementation-status) lists
-what is done, what differs from the Nix package, and what comes next.
+### Cargo workspaces through Bazel
+
+`scripts/sekka-bazel` realizes and roots the root-lock-pinned client once.
+Subsequent source edits do not enter a Nix shell or evaluate the root flake.
+Independent worktrees get separate output bases and share the configured action
+cache. Frontend options precede the command; backend flags and application
+arguments after it pass through unchanged:
+
+```sh
+scripts/sekka-bazel build
+scripts/sekka-bazel --profile release build
+scripts/sekka-bazel --profile release-lto run -- --build-info
+scripts/sekka-bazel check
+```
+
+The default build covers the Aizome workspace, including its first-party Hotaru,
+Yukimi and Sukumo dependencies. Public executable targets include their runtime
+files and paired compositor logic library; `NAME__bin` selects the raw executable
+when inspecting bytes. `nix run .#sekka-bazel -- build` and `nix develop .#bazel`
+use the same pinned toolchains. `--workspace CHECKOUT` selects another checkout.
+
+Cargo manifests and `desktop/aizome/Cargo.lock` remain authoritative. After a
+manifest, lock, feature or crate-annotation change, run
+`scripts/sekka-bazel generate`; ordinary commands reject stale graphs without
+running Cargo or contacting its index. `check` also regenerates the graph for
+comparison. Explicit feature selection is recorded by generation, for example:
+
+```sh
+scripts/sekka-bazel generate --features aizome-koe/openblas,aizome-koe/vulkan
+```
+
+Development, release and mixed-LTO workspace builds, the portable test groups,
+default compositor startup, cross-machine cache restoration and a real
+remote-execution dependency graph have passed component smoke checks. These are
+not ISO qualification or a completed performance/storage comparison. Nix's
+shipping packages remain separate outputs; selecting a development profile does
+not silently select shipping features.
 
 Build metadata is not a Cargo package input. The shared source filter excludes
 generated Bazel/Buck files; real Rust sources and Cargo manifests still change

@@ -105,6 +105,8 @@ let
   # give Cargo in the package's build, joined across host and build roles.
   nativeVariables = [
     "PKG_CONFIG_PATH"
+    "CMAKE_PREFIX_PATH"
+    "NIXPKGS_CMAKE_PREFIX_PATH"
     "NIX_CFLAGS_COMPILE"
     "NIX_LDFLAGS"
     "BINDGEN_EXTRA_CLANG_ARGS"
@@ -214,6 +216,8 @@ rec {
       jq -n --arg pkg_config "$out/bin/pkg-config" --arg tools "$tools" --arg libraries "$libraries" '
         ($ENV | with_entries(select(.key | startswith("SEKKA_")) | .key |= ltrimstr("SEKKA_")))
         | .PKG_CONFIG_PATH |= (split(" ") | map(select(. != "") | split(":")[]) | map(select(. != "")) | unique | join(":"))
+        | .CMAKE_PREFIX_PATH |= (split(" ") | map(select(. != "") | split(":")[]) | map(select(. != "")) | unique | join(":"))
+        | .NIXPKGS_CMAKE_PREFIX_PATH |= (split(" ") | map(select(. != "") | split(":")[]) | map(select(. != "")) | unique | join(":"))
         | .LIBCLANG_PATH |= (split(" ") | map(select(. != "")) | first // "")
         | map_values(if type == "string" then gsub("^ +| +$"; "") else . end)
         | . + {PKG_CONFIG: $pkg_config, BUILD_PATH: $tools, LIBRARY_PATH: $libraries}

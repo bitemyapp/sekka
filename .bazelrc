@@ -47,6 +47,11 @@ build:release --@rules_rust//rust/settings:codegen_units=4
 # loaded compositor. Rust cannot perform LTO when linking its Rust dylibs.
 build:release-lto --config=release
 build:release-lto --@rules_rust//rust/settings:lto=thin
+# Retain both native objects and embedded bitcode in rlibs: the compositor
+# links without LTO, while apps consume the same libraries with thin LTO.
+# rules_rust otherwise emits bitcode-only rlibs for this configuration.
+build:release-lto --@rules_rust//rust/settings:extra_rustc_flag=-Clinker-plugin-lto=no
+build:release-lto --@rules_rust//rust/settings:extra_rustc_flag=-Cembed-bitcode=yes
 build:release-lto --@rules_rust//rust/settings:per_crate_rustc_flag=desktop/aizome/crates/aizome-comp@-Clto=off
 
 # Where actions run and what they reuse (the build plan's configuration

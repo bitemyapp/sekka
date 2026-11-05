@@ -15,8 +15,13 @@ def main():
     parser.add_argument("--remote-rc", type=Path, help="private rc from scripts/build-service client; required for remote domains")
     parser.add_argument("--output-base", type=Path, help="override this worktree's mutable Bazel state")
     parser.add_argument("--disk-cache", type=Path, help="shared immutable near-cache; never share across trust domains")
-    parser.add_argument("command", choices=("generate", "check", "query", "cquery", "aquery", "build", "test", "run", "info", "shutdown", "clean", "fetch"))
-    args, rest = parser.parse_known_args()
+    commands = ("generate", "check", "query", "cquery", "aquery", "build", "test", "run", "info", "shutdown", "clean", "fetch")
+    parser.add_argument("command_args", nargs=argparse.REMAINDER, metavar="COMMAND [BAZEL_ARGS...]",
+                        help="command (" + ", ".join(commands) + "); following arguments pass verbatim")
+    args = parser.parse_args()
+    if not args.command_args or args.command_args[0] not in commands:
+        parser.error("select a command: " + ", ".join(commands))
+    args.command, *rest = args.command_args
     root = args.workspace
     if root is None:
         root = next((p for p in [Path.cwd(), *Path.cwd().parents]
@@ -63,10 +68,12 @@ def main():
             options += ["--remote_accept_cached"]
             if args.cache == "untrusted":
                 options.append("--noremote_upload_local_results")
-        if not rest or all(x.startswith("-") for x in rest):
-            rest += [("//desktop/aizome/crates/aizome-comp:aizome" if args.command == "run"
+        target_args = rest[:rest.index("--")] if "--" in rest else rest
+        if not target_args or all(x.startswith("-") for x in target_args):
+            target = ("//desktop/aizome/crates/aizome-comp:aizome" if args.command == "run"
                       else "//desktop/aizome/..." if args.command == "test"
-                      else "//desktop/aizome:workspace")]
+                      else "//desktop/aizome:workspace")
+            rest = [target, *rest]
     os.execvp("bazel", ["bazel", *startup, args.command, *options, *rest])
 
 

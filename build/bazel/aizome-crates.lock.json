@@ -1,5 +1,5 @@
 {
-  "checksum": "263fdbbefc54c0139bc55e6735c59a257af4f4ef5bc7e29b6eac80bd75cfa164",
+  "checksum": "df74e05418c1d17030f9663675c0bfe70193aa681500b5b28cd05bdd65196cfa",
   "conditions": {
     "aarch64-linux-android": [],
     "aarch64-pc-windows-gnullvm": [],
@@ -25789,6 +25789,7 @@
         "build_script_env": {
           "BINDGEN_EXTRA_CLANG_ARGS": "$(BINDGEN_EXTRA_CLANG_ARGS)",
           "BLAS_INCLUDE_DIRS": "$(BLAS_INCLUDE_DIRS)",
+          "CMAKE_PREFIX_PATH": "$(CMAKE_PREFIX_PATH)",
           "CXXFLAGS": "-x none",
           "GGML_AVX": "$(GGML_AVX)",
           "GGML_AVX2": "$(GGML_AVX2)",
@@ -25796,6 +25797,7 @@
           "GGML_FMA": "$(GGML_FMA)",
           "GGML_NATIVE": "$(GGML_NATIVE)",
           "LIBCLANG_PATH": "$(LIBCLANG_PATH)",
+          "NIXPKGS_CMAKE_PREFIX_PATH": "$(NIXPKGS_CMAKE_PREFIX_PATH)",
           "OPENBLAS_PATH": "$(OPENBLAS_PATH)",
           "PATH": "$(BUILD_PATH)",
           "PKG_CONFIG": "$(PKG_CONFIG)",
