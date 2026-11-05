@@ -31,12 +31,20 @@ A computer-use task has no shell oracle: show it is achievable in the shipped UI
 
 Each episode's directory holds `result.json`, `transcript.jsonl`, screenshots and `driver.log`. Read transcripts before drawing conclusions: a pass can hide a lucky workaround, and a failure can be the harness's (a refused command, a timeout, a server error).
 
+## Adding a model
+
+- Pin the repo, revision and files in `models.toml` with the vendor's sampling; check it fits with `serve -- start` and record its speed with `bench`.
+- For vision models, measure the coordinate convention before any computer-use run: start the server and run `grounding.py MODEL`. Models answer in 0–1000, 0–1 or pixels regardless of the prompt; a wrong `coords` sends every click to a corner and measures nothing.
+- Run `--agent omp` beside the bare loop against the same server (`--no-serve --port`), not after it.
+- A bigger GPU can serve two or three models at once on separate ports; give each its own runner and keep its server alive until every episode against it has finished.
+
 ## Interpreting
 
 - Success means the scenario's check passed and no invariant broke; "root cause named" is a regex over the final report and needs a hand audit of misses and hits before it is quoted.
 - Report repeats and variance; with one or two repeats per scenario, differences of a scenario or two between models are noise.
 - Separate the model from its serving: quantization, chat template, tool-call parser and thinking mode all change results. Record the runtime version, model revision and file, and server arguments (the bench JSON and `server-<model>.log` hold them).
 - The skill condition is an upper bound: the same people wrote the skill and the scenarios.
+- When an episode's result looks wrong, suspect the harness first and read the transcript: on 2026-11-04 a lost-output bug, a hung driver, virtiofs handle exhaustion, wrong coordinate conventions and truncated omp streams were each found that way. Fix it, validate the scenarios again, move affected results to `superseded-*` with the reason, and run them again. Keep results from before a change only where it could not have affected them, and say so.
 
 ## Adding a scenario
 

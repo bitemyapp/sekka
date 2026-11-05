@@ -59,7 +59,15 @@ Every scenario is validated before it scores a model: with no agent its check fa
 
 ## The agent
 
-`harness/agent.py` is a plain tool-calling loop over the OpenAI chat API, with no framework, so the comparison is between models and not between scaffolds. Diagnostics get one `shell` tool (root, 60 s default timeout, output clipped to 6,000 characters) and `finish`. Computer use gets `click`, `drag`, `scroll`, `type_text`, `key`, `wait`, `look` and `finish`, acting through the compositor's input (`aizomectl input`) as a person's would, and sees a screenshot after every action (the last three are kept), the windows' element lists (`--observe elements`, for models without vision), or both. Models that write a tool call as text rather than through the API still get it run, and the rate is reported. With `--skill`, diagnostics also get [the troubleshooting skill](../../.agents/skills/sekka-troubleshooting/SKILL.md).
+`harness/agent.py` is a plain tool-calling loop over the OpenAI chat API, with no framework, so the comparison is between models and not between scaffolds. Diagnostics get one `shell` tool (root, 60 s default timeout, output clipped to 6,000 characters) and `finish`. Computer use gets `click`, `drag`, `scroll`, `type_text`, `key`, `wait`, `look` and `finish`, acting through the compositor's input (`aizomectl input`) as a person's would, and sees a screenshot after every action (the last three are kept), the windows' element lists (`--observe elements`, for models without vision), or both. Models that write a tool call as text rather than through the API still get it run, and the rate is reported. With `--skill`, diagnostics also get [the troubleshooting skill](../../.agents/skills/sekka-troubleshooting/SKILL.md). Commands that stop the test driver's console (`backdoor.service`, which models take for malware) are refused too.
+
+### oh-my-pi
+
+`--agent omp` runs the diagnostics through [oh-my-pi](https://github.com/can1357/oh-my-pi) instead (the flake's pinned `omp` input, installed in the VM): `omp -p --mode json` as root inside the VM, against the same model server on the host (QEMU's user network reaches the host's loopback at 10.0.2.2), with omp's own system prompt and tools and the diagnostics brief appended. It runs with a 30-minute limit and no turn limit, and its event stream, without the streaming updates, is the transcript (`omp-events.jsonl`). Run it beside a bare-loop run against one server with more slots (`--no-serve`, `--port`), so the comparison costs no extra wall-clock time.
+
+### Screen coordinates
+
+Vision models answer in their own coordinate conventions, whatever they are told: 0–1000 of each axis (Qwen3.x, Holo4, Muse Glimmer), 0–1 (Nemotron Bolt) or pixels (Gemma). `grounding.py MODEL` asks a running server where three known things are on a real screenshot and prints the convention that fits; put it in the model's `coords` in `models.toml` (or `--coords` for a run).
 
 ## Running
 
@@ -76,6 +84,12 @@ python3 tests/agent-evals/report.py .work/evals/runs/<run> > report.md
 ```
 
 Episodes run in parallel, each in its own VM (4 GB, 4 cores) and runtime directory, all against one model server with as many slots. Four at once suit a 32 GB GPU. Results go under `.work/evals/runs/<run>/`: per episode `result.json`, `transcript.jsonl` (every request, response and tool output), screenshots and the driver's log.
+
+`review.py RUN…` prints each episode's outcome, report and the commands that changed the machine, for reading results by hand; `speeds.py RUN…` tabulates the benchmarks recorded before each model's episodes; `report.py --jsonl FILE` exports the results.
+
+A GPU with room for several models (the RTX PRO 6000's 96 GB holds three of these) can serve them at once on different ports, each with its own runner (`sekka-model-server start MODEL --port 8081 --parallel 8`, then `--no-serve --port 8081`); the machine needs about 3 GB of memory per VM.
+
+`harness/demo.py` and `agent-evals.demo-driver` record a demonstration instead of grading: the machine on a 1920×1080 screen, a fault, then omp started in Hotaru and the user's complaint typed, as a person would, while Aizome's screen recorder runs ([docs/agent-evals](../../docs/agent-evals/README.md#the-demonstration)).
 
 While changing the harness, `SEKKA_EVAL_LIVE_HARNESS=1` makes the packaged driver use the checkout's `harness/` without a rebuild. A changed `machine.nix` needs `nix build .#agent-evals.driver`.
 
