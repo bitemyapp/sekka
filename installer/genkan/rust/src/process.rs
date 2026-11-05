@@ -3,19 +3,99 @@
 use anyhow::{Context, Result, ensure};
 use std::os::unix::process::CommandExt;
 use std::{
+    fmt,
     io::Read,
     process::{Command, Stdio},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU8, Ordering},
     thread,
     time::{Duration, Instant},
 };
 
-/// Set only while non-destructive preparation may be abandoned (the GUI
-/// closed its request pipe before confirming). Never set after confirmation.
-pub static CANCEL: AtomicBool = AtomicBool::new(false);
+/// Whether preparation may still be abandoned. A latch starts open; the
+/// GUI's withdrawal closes it as cancelled, the installation's start as
+/// committed, and whichever comes first wins: a committed installation can't
+/// be cancelled, and a cancelled preparation can't be committed to. A helper
+/// process prepares once, so its latch never reopens.
+pub struct Latch {
+    state: AtomicU8,
+    /// Set once the latch is cancelled: what subprocesses and cache warming
+    /// poll.
+    cancel: AtomicBool,
+}
+
+const OPEN: u8 = 0;
+const CANCELLED: u8 = 1;
+const COMMITTED: u8 = 2;
+
+impl Latch {
+    pub const fn new() -> Self {
+        Self {
+            state: AtomicU8::new(OPEN),
+            cancel: AtomicBool::new(false),
+        }
+    }
+
+    pub fn cancelled(&self) -> bool {
+        self.cancel.load(Ordering::Relaxed)
+    }
+
+    /// Abandons preparation: running and later subprocesses stop. Refused,
+    /// returning false, once the installation is committed.
+    pub fn cancel(&self) -> bool {
+        let won = self
+            .state
+            .compare_exchange(OPEN, CANCELLED, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok();
+        if won {
+            self.cancel.store(true, Ordering::Relaxed);
+        }
+        won
+    }
+
+    /// Commits to the installation: nothing can cancel it from now on. Fails
+    /// if preparation was cancelled first.
+    pub fn commit(&self) -> Result<()> {
+        match self
+            .state
+            .compare_exchange(OPEN, COMMITTED, Ordering::AcqRel, Ordering::Acquire)
+        {
+            Ok(_) | Err(COMMITTED) => Ok(()),
+            Err(_) => Err(Cancelled.into()),
+        }
+    }
+
+    /// The flag cache warming polls.
+    pub(crate) fn flag(&self) -> &AtomicBool {
+        &self.cancel
+    }
+}
+
+impl Default for Latch {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// This process's preparation.
+pub static LATCH: Latch = Latch::new();
 
 pub fn cancelled() -> bool {
-    CANCEL.load(Ordering::Relaxed)
+    LATCH.cancelled()
+}
+
+/// Preparation stopped because it was cancelled, as opposed to failing.
+#[derive(Debug)]
+pub struct Cancelled;
+impl fmt::Display for Cancelled {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Preparation was cancelled")
+    }
+}
+impl std::error::Error for Cancelled {}
+
+/// Whether `error` is a cancellation, beneath whatever context it gathered.
+pub fn is_cancellation(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| cause.is::<Cancelled>())
 }
 
 pub fn command(program: &str) -> Command {
@@ -120,7 +200,9 @@ fn run(
     on_line: Option<&(dyn Fn(&str) + Sync)>,
     capture: Capture,
 ) -> Result<String> {
-    ensure!(!cancelled(), "Preparation was cancelled");
+    if cancelled() {
+        return Err(Cancelled.into());
+    }
     let mut child = command
         .args(args)
         .process_group(0)
@@ -178,7 +260,7 @@ fn run(
                 Ok(None) if Instant::now() >= end => {
                     anyhow::anyhow!("{program} timed out; installation is incomplete")
                 }
-                Ok(None) if cancelled() => anyhow::anyhow!("Preparation was cancelled"),
+                Ok(None) if cancelled() => Cancelled.into(),
                 Ok(None) => {
                     thread::sleep(Duration::from_millis(50));
                     continue;

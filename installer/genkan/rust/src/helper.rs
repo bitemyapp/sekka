@@ -1,62 +1,34 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-use anyhow::{Context, Result, ensure};
+use anyhow::{Result, ensure};
 use calamares_nixos::{
     RawRequest, Settings, disk,
     install::{self, Event, InstallMode},
-    process,
-    session::{Confirmation, read_line},
+    session::{Preparing, REQUEST_LIMIT},
 };
-use std::{
-    io::{BufReader, Read},
-    sync::{atomic::Ordering, mpsc},
-    thread,
-};
+use std::io::{BufReader, Read};
 use zeroize::Zeroizing;
-
-const REQUEST_LIMIT: usize = 1048576;
 
 fn parse_request(input: &[u8]) -> Result<RawRequest> {
     serde_json::from_slice(input).map_err(|_| anyhow::anyhow!("Invalid installation request"))
 }
 
 /// Prepare while the user reviews, then install only after a separate typed
-/// confirmation line. Closing stdin before confirming cancels without writes.
+/// confirmation line, which is read only once preparation has finished.
+/// Closing stdin before confirming cancels without writes.
 fn session() -> Result<()> {
-    let mut stdin = BufReader::new(std::io::stdin());
-    let line = read_line(&mut stdin, REQUEST_LIMIT)?.context("Missing installation request")?;
-    let request = parse_request(&line)?;
-    drop(line);
-    ensure!(
-        request.confirmation.is_empty(),
-        "A preparation request must not carry a confirmation"
-    );
+    let (request, preparing) = Preparing::begin(BufReader::new(std::io::stdin()))?;
     let plan = request.parse(&Settings::load()?)?;
-    let (send, confirmation) = mpsc::channel();
-    thread::spawn(move || {
-        let line = read_line(&mut stdin, 4096).ok().flatten();
-        if line.is_none() {
-            process::CANCEL.store(true, Ordering::Relaxed);
-        }
-        let _ = send.send(line);
-    });
     let prepared = match install::prepare(&plan) {
         Ok(prepared) => prepared,
-        Err(_) if process::cancelled() => {
-            install::event(Event::Cancelled);
-            return Ok(());
-        }
-        Err(error) => return Err(error),
+        Err(error) => return preparing.failed(error),
     };
-    install::event(Event::Prepared {
-        summary: prepared.summary().clone(),
-    });
-    let Ok(Some(line)) = confirmation.recv() else {
-        install::event(Event::Cancelled);
+    let Some(awaiting) = preparing.prepared(&prepared)? else {
         return Ok(());
     };
-    let confirmation: Confirmation =
-        serde_json::from_slice(&line).context("Invalid confirmation message")?;
-    install::execute(plan.confirm(&confirmation.confirmation)?, prepared)
+    let Some(phrase) = awaiting.confirmation()? else {
+        return Ok(());
+    };
+    install::execute(plan.confirm(&phrase)?, prepared)
 }
 
 fn run() -> Result<()> {

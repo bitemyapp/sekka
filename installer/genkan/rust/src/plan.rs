@@ -374,6 +374,9 @@ impl ConfirmedInstall {
     pub(crate) fn into_plan(self) -> InstallPlan {
         self.0
     }
+    pub(crate) fn plan(&self) -> &InstallPlan {
+        &self.0
+    }
 
     /// Downgrade at IPC: the receiver must parse and confirm it again. Secrets
     /// remain in zeroizing owners until moved into the short-lived wire DTO.
