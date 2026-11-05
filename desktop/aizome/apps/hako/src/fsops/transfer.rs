@@ -166,7 +166,15 @@ pub fn restore(entries: &[trash::Entry], trash: &Trash, env: &mut Env) -> Report
         }
         match w.place_top(&item.source, &item.target) {
             Ok(Placed::Done(to)) => {
-                trash.forget(entry);
+                // A folder merged in part (a conflict in it skipped) is
+                // still in the can with what's left: it keeps its info.
+                match entry.gone() {
+                    Some(gone) => trash.forget(gone),
+                    None => w.problems.push((
+                        item.target.clone(),
+                        "some of what it held is still in the Trash, where it can be put back from".into(),
+                    )),
+                }
                 report.done.push((item.source.clone(), to));
             }
             Ok(Placed::Skipped) => report.skipped.push(item.source.clone()),
@@ -211,14 +219,14 @@ pub fn erase(entries: &[trash::Entry], trash: &Trash, env: &mut Env) -> Report {
             reporter.report(progress);
         });
         match r {
-            Ok(r) if r.failed.is_empty() => {
-                trash.forget(e);
-                report.done.push((e.file.clone(), e.file.clone()));
-            }
-            Ok(r) => {
-                let (p, why) = r.failed[0].clone();
-                report.failed.push((e.file.clone(), format!("{}: {why}", p.display())));
-            }
+            Ok(r) => match (r.failed.first(), e.gone()) {
+                (None, Some(gone)) => {
+                    trash.forget(gone);
+                    report.done.push((e.file.clone(), e.file.clone()));
+                }
+                (Some((p, why)), _) => report.failed.push((e.file.clone(), format!("{}: {why}", p.display()))),
+                (None, None) => report.failed.push((e.file.clone(), "it's still in the Trash".into())),
+            },
             Err(Cancelled) => {
                 report.cancelled = true;
                 break;
@@ -233,22 +241,7 @@ pub fn empty_trash(trash: &Trash, env: &mut Env) -> Report {
     let entries = trash.list();
     let report = erase(&entries, trash, env);
     if !report.cancelled {
-        for can in trash.cans() {
-            if let Ok(rd) = fs::read_dir(can.info()) {
-                for e in rd.flatten() {
-                    let name = e.file_name();
-                    let n = name.as_encoded_bytes();
-                    if let Some(stem) = n.strip_suffix(b".trashinfo") {
-                        // SAFETY: a prefix of an OsStr's encoded bytes,
-                        // cut at an ASCII suffix, is valid encoded bytes.
-                        let stem = unsafe { OsStr::from_encoded_bytes_unchecked(stem) };
-                        if fs::symlink_metadata(can.files().join(stem)).is_err() {
-                            let _ = fs::remove_file(e.path());
-                        }
-                    }
-                }
-            }
-        }
+        trash.forget_ghosts();
     }
     report
 }
