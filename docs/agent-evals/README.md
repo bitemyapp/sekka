@@ -36,7 +36,7 @@ Which models, at which quantizations, help on a GPU with 8 GiB of memory, the mo
 
 | Model (file) | Made by (lineage) | Licence | Diagnostics, bare loop | Diagnostics, oh-my-pi | Computer use | Peak GPU memory | Decode |
 |---|---|---|---:|---:|---:|---:|---:|
-| Gemma 4 26B-A4B (QAT Q4_0, 15.6 GB; experts of 24 layers in RAM) | Google | Apache-2.0 | **14/16 (88%)** | **13/16 (81%)** | **5/9 (56%)** | 7,736 MiB | 15 tok/s |
+| Gemma 4 26B-A4B (QAT Q4_0, 15.6 GB; experts of 24 layers in RAM) | Google | Apache-2.0 | **14/16 (88%)** | **13/16 (81%)** | **5/9 (56%)** | 7,704 MiB | 47 tok/s |
 | Gemma 4 12B (IQ4_XS, 6.5 GB) | Google | Apache-2.0 | 3/16 (19%)¹ | 12/16 (75%) | 3/9 (33%) | 7,808 MiB | 150 tok/s |
 | Qwen3.5 9B (Q4_K_M, 6.6 GB) | Alibaba | Apache-2.0 | 9/16 (56%) | 10/14 (71%) | 0/9 | 7,550 MiB | 213 tok/s |
 | Nemotron 3.5 Lightning 30B-A3B (Q4_0, 18.9 GB; experts of 40 layers in RAM) | NVIDIA | OpenMDW-1.1 | 8/16 (50%) | 9/15 (60%) | text only: 4/9 (44%) | 7,696 MiB | 62 tok/s³ |
@@ -47,7 +47,7 @@ Counts are valid episodes; six omp episodes were lost to the harness (broken pip
 
 ¹ Gemma 4 12B often answers a tool result with its channel markers (`<channel|><|channel>thought`) over and over until the 6,144-token limit: 14 of its 16 bare-loop episodes ended that way within two or three steps. oh-my-pi recovers from it, and so does Tasuke, which cuts a looping reply off and samples again; the bare loop doesn't. ³ Measured on the RTX PRO 6000 while other jobs used it, since these two weren't on the 5090's machine.
 
-- **Gemma 4 26B-A4B is the 8 GiB model to beat, and it is Google's.** It fixed 14 of 16 faults in the bare loop with nothing harmed, did 5 of 9 desktop tasks from screenshots in pixel coordinates, and fits in 7.7 GiB with the experts of 24 of its layers in system RAM. The cost is speed: 47 tokens/s here with the experts on the CPU, against 150 for the 12B, which fits whole. In oh-my-pi it once ended alice's session to apply a keyboard layout, the failure Qwen3.6-35B-A3B showed.
+- **Gemma 4 26B-A4B is the 8 GiB model to beat, and it is Google's.** It fixed 14 of 16 faults in the bare loop with nothing harmed, did 5 of 9 desktop tasks from screenshots in pixel coordinates, and fits in 7.5 GiB with the experts of 24 of its layers in system RAM. The cost is speed: 47 tokens/s here with the experts on the CPU, against 150 for the 12B, which fits whole. In oh-my-pi it once ended alice's session to apply a keyboard layout, the failure Qwen3.6-35B-A3B showed.
 - **Gemma 4 12B is the fast choice.** Everything stays on the GPU, so it decodes several times faster, and with a harness that survives its loops it fixes three quarters of the faults (12 of 16 in omp) without harming anything.
 - **The rest damaged things or did little.** Qwen3.5 9B deleted alice's older backup to free space and ended her session once each; Nemotron 3.5 Lightning, in omp, deleted that backup once and ended her session twice, and needs 40 of its layers' experts in RAM to fit; Holo3.1 4B and LFM2.5 fixed fewer than half.
 
