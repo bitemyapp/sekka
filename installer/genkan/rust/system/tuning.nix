@@ -219,8 +219,8 @@ in
       };
       nix.daemonCPUSchedPolicy = lib.mkDefault "idle";
       nix.daemonIOSchedClass = lib.mkDefault "idle";
-      # Kill the largest offender under sustained memory pressure instead of
-      # letting the desktop thrash.
+      # Relieve sustained memory pressure as a last resort. oomd ranks
+      # eligible cgroups by reclaim activity, not simply resident size.
       systemd.oomd = {
         enable = true;
         enableSystemSlice = true;

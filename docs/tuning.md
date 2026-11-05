@@ -134,6 +134,50 @@ Nix builders belong to the daemon rather than the calling agent. Sekka sets
 daemon's CPU/IO weights to 20 as overridable defaults. This also covers
 Determinate Nix. Nix evaluations within agent jobs stay in their work scopes.
 
+### Keeping the desktop resident
+
+CPU priority cannot help a compositor waiting for swapped-out pages. Aizome's
+NixOS module gives `session.slice` a shared `MemoryLow=1G` reserve for the
+compositor, shell, audio and portals. It also sets the corresponding reserve
+on `user.slice`, the `user-.slice` drop-in (every user's slice), and
+`user@.service`: a child-only setting would have no effective protection
+against global reclaim. The systemd cgroup-v2 hierarchy uses recursive memory
+protection, sharing the session reserve with its descendants. Multiple users
+share the top-level 1 GiB reserve rather than receiving additive guarantees.
+
+This is best-effort reclaim protection, not preallocation, `mlock`, a hard
+minimum or a limit on applications. Unused memory remains available to jobs;
+the kernel can reclaim protected memory as a last resort. These are
+overridable NixOS defaults in Aizome's module, independent of
+`calamares.tuning.enable`. When changing the reserve, adjust the ancestor
+allocations as well as `systemd.user.slices.session.sliceConfig.MemoryLow`.
+
+The reserve changes where reclaim happens: unprotected workloads can lose
+pages and run more slowly before the desktop does. It introduces no new OOM
+threshold, hard workload cap or proactive job termination. Sekka's existing
+oomd fallback remains unchanged (80% sustained pressure for 30 seconds with
+the pinned defaults). Genuine exhaustion can still trigger oomd or the kernel
+OOM killer; keeping the desktop resident does not guarantee that every job
+survives, and concentrating reclaim on workloads can increase their pressure.
+
+Validation covers the generated ancestor allocations, administrator overrides
+and disabled-module behavior. A bounded cgroup reclaim experiment showed that
+protected pages remained resident while an unprotected control was evicted.
+An isolated installed compositor also handled input and rendered its recovery
+overlay. These are mechanism and smoke checks, not a before/after measurement
+of the full desktop under the original workload. The 1 GiB reserve is an
+overridable starting policy, not a demonstrated latency bound; ordinary
+applications outside `session.slice` do not receive this reserve.
+
+Inspect `oomctl`, `/proc/pressure/{memory,io,cpu}` and the desktop's
+`memory.low`, `memory.swap.current` and `memory.pressure` cgroup files when
+diagnosing a freeze. Large swap use alone does not prove current thrashing;
+combine pressure samples, swap traffic and compositor stall logs. A full
+`nix flake check --no-build` still evaluates every check and can consume tens
+of GiB: use focused component evaluations during concurrent development.
+Neither memory protection nor oomd establishes a frame-latency guarantee or
+fixes unrelated GPU stalls and blocking compositor operations.
+
 ### Launcher and ananicy repairs
 
 Aizome's desktop-entry launcher already uses app scopes, but its keybinding

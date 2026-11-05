@@ -10,6 +10,25 @@ are from this laptop, debug builds unless said (dependencies at
 `opt-level = 2`, the workspace's own crates unoptimised), so they're upper
 bounds. Exceptions to the budget are written up with their reasons.
 
+## Responsiveness under memory pressure
+
+CPU frame cost is not input latency: a swapped-out compositor can miss seconds
+of input despite high CPU weight. The NixOS module keeps the session's existing
+CPU/I/O weights and adds a shared, best-effort 1 GiB `MemoryLow` reserve through
+`user.slice`, each `user-UID.slice`, `user@UID.service` and `session.slice`.
+This protects the compositor, shell and session helpers from reclaim before
+unprotected applications, while leaving unused RAM available to workloads.
+It does not pin memory or guarantee that a session survives exhaustion.
+
+This protection does not introduce earlier OOM killing or hard workload caps.
+Unprotected workloads may reclaim more and run more slowly; Sekka's existing
+last-resort oomd policy remains unchanged. The policy, override points and
+validation limits are documented in
+[Sekka's tuning guide](../../../docs/tuning.md#keeping-the-desktop-resident).
+Inspect PSI, swap traffic and the compositor's stall warnings alongside frame
+statistics; neither the frame-budget measurements below nor CPU weights alone
+certify wall-clock responsiveness under memory or GPU contention.
+
 ## At a glance
 
 Every part below was measured again on 18 October 2026 between 00:00 and

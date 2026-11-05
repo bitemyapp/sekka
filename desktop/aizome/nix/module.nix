@@ -243,14 +243,26 @@ in
       ];
     };
 
-    # Under load, the session (the compositor, which also weighs 1000 within
-    # it, pipewire, the portals) runs before apps, so the desktop keeps
-    # drawing and answering and Ctrl+Alt+Del opens at once. Raising
-    # session.slice rather than lowering app.slice keeps apps ahead of
-    # background.slice (30): 400 : 100 : 30.
+    # CPU/I/O weights help only while the session's working set is resident.
+    # Give the session a shared, best-effort 1 GiB reclaim reserve, propagated
+    # through every ancestor. This is not preallocated or pinned memory:
+    # unused protection stays available, and global OOM may still reclaim it.
+    # Multiple users share user.slice's reserve rather than multiplying it.
+    systemd.slices.user.sliceConfig.MemoryLow = lib.mkDefault "1G";
+    systemd.slices."user-" = {
+      overrideStrategy = "asDropin";
+      sliceConfig.MemoryLow = lib.mkDefault "1G";
+    };
+    systemd.services."user@" = {
+      overrideStrategy = "asDropin";
+      serviceConfig.MemoryLow = lib.mkDefault "1G";
+    };
+    # Keep the compositor, shell, audio and portals ahead of applications
+    # for CPU/I/O too: session : app : background = 400 : 100 : 30.
     systemd.user.slices.session.sliceConfig = {
       CPUWeight = lib.mkDefault 400;
       IOWeight = lib.mkDefault 400;
+      MemoryLow = lib.mkDefault "1G";
     };
 
     # In Aizome, Settings owns the time zone and the computer's name:
