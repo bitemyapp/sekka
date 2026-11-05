@@ -182,6 +182,9 @@ mod parts {
         pub(super) failed: u32,
         /// What to send greetd, in order.
         pub(super) out: Vec<Request>,
+        /// The field's text while Return is routed: only `Asking::answer`
+        /// takes it.
+        pub(super) field: String,
     }
 
     impl Ctx {
@@ -740,9 +743,9 @@ impl<'s, W: Who> Waiting<'s, W> {
 
 impl<'s, W: Who> Asking<'s, W> {
     /// Return: the field's text answers the question, and leaves the field.
-    pub fn answer(self, field: &mut String) -> Returned<'s> {
+    pub fn answer(self) -> Returned<'s> {
         let Asking { ctx, who, ticket, .. } = self;
-        let response = Some(std::mem::take(field));
+        let response = Some(std::mem::take(&mut ctx.field));
         ctx.message = None;
         ctx.ask(Pending::Login(ticket), Request::PostAuthMessageResponse { response });
         Returned::clear(Waiting { ctx, who, ticket, asked: Asked::Answer })
@@ -901,14 +904,14 @@ pub enum Screen<'a> {
     People { people: &'a [User], selected: usize },
     /// The user name, as typed so far.
     Name { typed: &'a str },
-    /// Someone's login: who, how far, and its way back, which only the
-    /// login block that draws it takes (`view::block::with_way_back`).
+    /// Someone's login: who, how far, and its way back. The block that
+    /// draws the way back reads it from the greeter's own login.
     Login { person: Person<'a>, progress: Progress<'a>, way_back: WayBack },
 }
 
 /// A login's way back, as the model decides it: only this module makes
-/// one, and it isn't `Copy` or `Clone`, so the view hands the one it was
-/// given to the block that draws the link and binds Escape.
+/// one. The view draws it only through `view::block::with_way_back`, which
+/// reads it from the greeter's own login, so no other login's will do.
 #[derive(Debug)]
 pub struct WayBack(EscapeTo);
 
@@ -963,6 +966,7 @@ impl Login {
             message: None,
             failed: 0,
             out: Vec::new(),
+            field: String::new(),
         })
     }
 
@@ -1051,18 +1055,50 @@ impl Login {
     }
 
     /// Return in `field`, routed by `route`: it hands back what one of
-    /// Return's transitions made. The field keeps what was typed when that
-    /// did nothing, and is emptied when a login began or was answered.
-    /// What to ask greetd.
+    /// Return's transitions made. The route never sees the field: only
+    /// `Asking::answer` takes its text. The field keeps what was typed when
+    /// Return did nothing, and is emptied when a login began or was
+    /// answered. What to ask greetd.
+    ///
+    /// So a route can't empty the field where its transition kept it:
+    ///
+    /// ```compile_fail,E0593
+    /// use aizome_greeter::login::{Login, LoginAny, Returned};
+    /// fn route<'s>(state: LoginAny<'s>, field: &mut String) -> Returned<'s> {
+    ///     field.clear();
+    ///     match state {
+    ///         LoginAny::People(people) => people.pick(),
+    ///         _ => unimplemented!(),
+    ///     }
+    /// }
+    /// fn on_return(login: &mut Login, field: &mut String) {
+    ///     let _ = login.on_return(field, route);
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// use aizome_greeter::login::{Login, LoginAny, Returned};
+    /// fn route(state: LoginAny<'_>) -> Returned<'_> {
+    ///     match state {
+    ///         LoginAny::People(people) => people.pick(),
+    ///         _ => unimplemented!(),
+    ///     }
+    /// }
+    /// fn on_return(login: &mut Login, field: &mut String) {
+    ///     let _ = login.on_return(field, route);
+    /// }
+    /// ```
     pub fn on_return(
         &mut self,
         field: &mut String,
-        route: impl for<'s> FnOnce(LoginAny<'s>, &mut String) -> Returned<'s>,
+        route: impl for<'s> FnOnce(LoginAny<'s>) -> Returned<'s>,
     ) -> Vec<Request> {
+        self.ctx.field = std::mem::take(field);
         let after = self.with_typed(|state| {
-            let returned = route(state, field);
+            let returned = route(state);
             (returned.next, returned.field)
         });
+        *field = std::mem::take(&mut self.ctx.field);
         settle_field(field, after);
         self.sent()
     }

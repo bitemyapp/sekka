@@ -19,7 +19,7 @@ use aizome_kit::{Icon, Image};
 use aizome_theme::{NIGHT, Rgba, typeface};
 
 use crate::app::{Greeter, Msg};
-use crate::login::{EscapeTo, Person, Progress, Screen, Tone, WayBack};
+use crate::login::{EscapeTo, Person, Progress, Screen, Tone};
 use crate::users::User;
 
 const FIELD_W: f64 = 260.0;
@@ -43,7 +43,7 @@ pub fn view(g: &Greeter, _window: WindowKey, output: Option<u32>) -> Element<Msg
             Screen::Unstarted => (aizome_kit::column(Vec::new()).into(), 0.0),
             Screen::People { people: list, selected } => people(g, size, list, selected),
             Screen::Name { typed } => name(g, size, typed),
-            Screen::Login { person, progress, way_back } => password(g, size, person, progress, way_back).into_parts(),
+            Screen::Login { person, progress, .. } => password(g, size, person, progress).into_parts(),
         };
         column.push(content);
         block_h += h;
@@ -212,14 +212,8 @@ fn named(k: &KeyEvent) -> Option<NamedKey> {
 }
 
 /// The person logging in, the field, their session, what's to say, and
-/// the way back the model gave the login.
-fn password(
-    g: &Greeter,
-    size: Size,
-    person: Person<'_>,
-    progress: Progress<'_>,
-    way_back: WayBack,
-) -> block::LoginBlock {
+/// its way back.
+fn password(g: &Greeter, size: Size, person: Person<'_>, progress: Progress<'_>) -> block::LoginBlock {
     let (real, initial, pic) = match person {
         Person::Listed(u) => (u.real_name.clone(), u.initial(), g.avatar(&u.name)),
         Person::Typed(n) => {
@@ -285,7 +279,7 @@ fn password(
     let parts: Vec<Element<Msg>> = vec![who.into(), field_row.into(), chooser.into(), message(g, size)];
     let h = WHO_H + FIELD_H + 4.0 + LINE_H + LINE_H;
     let power = g.offers_power();
-    block::with_way_back(way_back, parts, h, size.width, move |k| match named(k) {
+    block::with_way_back(g, parts, h, size.width, move |k| match named(k) {
         Some(NamedKey::F(2)) if several => Some(Msg::SessionMenu),
         Some(NamedKey::F(3)) if power => Some(Msg::PowerMenu),
         _ => None,
@@ -293,12 +287,12 @@ fn password(
 }
 
 /// What the login screen shows of a login, with its way back. Only
-/// [`with_way_back`](block::with_way_back) makes one, from the
-/// [`WayBack`] the model put in the [`Screen`]: the view can't show a
-/// login without the way back the model decided on. It once decided that
-/// itself, from the configuration, the number of people and its own idea
-/// of the stage, and left a typed name with neither the link nor Escape
-/// (SVC-05):
+/// [`with_way_back`](block::with_way_back) makes one, and it reads the way
+/// back from the greeter's own login: the view can't show a login without
+/// the way back the model decided on, or with another login's. It once
+/// decided that itself, from the configuration, the number of people and
+/// its own idea of the stage, and left a typed name with neither the link
+/// nor Escape (SVC-05):
 ///
 /// ```compile_fail,E0451
 /// use aizome_greeter::app::Msg;
@@ -309,13 +303,25 @@ fn password(
 /// }
 /// ```
 ///
-/// ```
+/// A way back taken from some other login (a throwaway one, started for
+/// the only person listed, has none) doesn't do either:
+///
+/// ```compile_fail,E0308
 /// use aizome_greeter::app::Msg;
 /// use aizome_greeter::login::WayBack;
 /// use aizome_greeter::view::block::{LoginBlock, with_way_back};
 /// use aizome_kit::element::Element;
-/// fn login_block(way_back: WayBack, body: Vec<Element<Msg>>, height: f64) -> LoginBlock {
-///     with_way_back(way_back, body, height, 1440.0, |_| None)
+/// fn login_block(other: WayBack, body: Vec<Element<Msg>>, height: f64) -> LoginBlock {
+///     with_way_back(other, body, height, 1440.0, |_| None)
+/// }
+/// ```
+///
+/// ```
+/// use aizome_greeter::app::{Greeter, Msg};
+/// use aizome_greeter::view::block::{LoginBlock, with_way_back};
+/// use aizome_kit::element::Element;
+/// fn login_block(g: &Greeter, body: Vec<Element<Msg>>, height: f64) -> LoginBlock {
+///     with_way_back(g, body, height, 1440.0, |_| None)
 /// }
 /// ```
 pub mod block {
@@ -333,18 +339,22 @@ pub mod block {
         }
     }
 
-    /// The login's `body` (`height` tall, `width` wide) with its way back:
-    /// "Log in as someone else" where the model offers one, and Escape
-    /// always, which the model makes do nothing where there's none. Other
-    /// keys go to `keys_of`.
+    /// The login's `body` (`height` tall, `width` wide) with the way back
+    /// of `g`'s login: "Log in as someone else" where the model offers one,
+    /// and Escape always, which the model makes do nothing where there's
+    /// none. Other keys go to `keys_of`.
     pub fn with_way_back(
-        way_back: WayBack,
+        g: &Greeter,
         mut body: Vec<Element<Msg>>,
         mut height: f64,
         width: f64,
         keys_of: impl Fn(&KeyEvent) -> Option<Msg> + 'static,
     ) -> LoginBlock {
-        match way_back.to() {
+        let escape = match g.login().screen() {
+            Screen::Login { way_back, .. } => way_back.to(),
+            Screen::Unstarted | Screen::People { .. } | Screen::Name { .. } => EscapeTo::Nowhere,
+        };
+        match escape {
             EscapeTo::People | EscapeTo::Name => {
                 body.push(someone_else(width));
                 height += LINE_H;
