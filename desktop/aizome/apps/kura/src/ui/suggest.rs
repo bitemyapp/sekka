@@ -98,6 +98,7 @@ pub fn ordered(paths: &[HintPath], order: PathOrder) -> Vec<&HintPath> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Age {
     Day,
+    ThreeDays,
     Week,
     TwoWeeks,
     Month,
@@ -110,6 +111,7 @@ impl Age {
     pub fn days(self) -> i64 {
         match self {
             Age::Day => 1,
+            Age::ThreeDays => 3,
             Age::Week => 7,
             Age::TwoWeeks => 14,
             Age::Month => 30,
@@ -123,6 +125,7 @@ impl Age {
     pub fn words(self) -> &'static str {
         match self {
             Age::Day => "a day",
+            Age::ThreeDays => "3 days",
             Age::Week => "a week",
             Age::TwoWeeks => "2 weeks",
             Age::Month => "a month",
@@ -174,8 +177,10 @@ pub fn cuts(paths: &[HintPath], order: PathOrder, now: i64) -> Vec<(Cut, usize, 
     use Age::*;
     let lines: Vec<Cut> = match order {
         PathOrder::Largest => [10 * GB, GB, 100 * MB, 10 * MB, MB].map(Cut::AtLeast).into(),
-        PathOrder::Newest => [Day, Week, TwoWeeks, Month, ThreeMonths].map(Cut::Within).into(),
-        PathOrder::Oldest => [Year, SixMonths, ThreeMonths, Month, TwoWeeks, Week].map(Cut::OlderThan).into(),
+        PathOrder::Newest => [Day, ThreeDays, Week, TwoWeeks, Month, ThreeMonths].map(Cut::Within).into(),
+        PathOrder::Oldest => {
+            [Year, SixMonths, ThreeMonths, Month, TwoWeeks, Week, ThreeDays].map(Cut::OlderThan).into()
+        }
     };
     let mut out = Vec::new();
     let mut last = 0;
@@ -663,6 +668,7 @@ mod tests {
                 (Cut::OlderThan(Age::Year), 1, 2_500 * MB),
                 (Cut::OlderThan(Age::SixMonths), 2, 2_800 * MB),
                 (Cut::OlderThan(Age::Month), 3, 2_840 * MB),
+                (Cut::OlderThan(Age::ThreeDays), 4, 2_845 * MB),
                 all,
             ]
         );

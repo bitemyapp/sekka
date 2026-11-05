@@ -538,9 +538,9 @@ last modified, newest or oldest first; ticked by default when safe or
 low risk, never when they're the person's to decide; the first 40 shown,
 the rest a click away) and its action. Ticks go in runs: a Select
 pull-down offers runs from the top in the list's order (older than a
-month, modified in the last week, 1 GB or larger), each saying how many
-paths it ticks and what that frees, and shows any it ticks past the
-first 40; Select None clears them; and a Shift-click ticks or unticks
+month or 3 days, modified in the last week, 1 GB or larger), each
+saying how many paths it ticks and what that frees, and shows any it
+ticks past the first 40; Select None clears them; and a Shift-click ticks or unticks
 everything from the last box clicked. The actions: Move to Trash for
 caches, build outputs, logs and old downloads; Empty Trash; Open Yukimi's Storage for Nix; the command to
 run, with Copy, for containers and Flatpak; and for duplicates, the
