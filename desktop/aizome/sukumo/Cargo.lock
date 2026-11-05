@@ -972,6 +972,7 @@ dependencies = [
  "aizome-typestate",
  "kurbo",
  "sidestep-engine",
+ "sidestep-ui",
  "smithay-client-toolkit",
  "tiny-skia",
 ]

@@ -1071,11 +1071,6 @@ impl Cx {
         self.locking.is_locked()
     }
 
-    /// The session lock asked for or held (`testing`).
-    pub(crate) fn session_lock_request(&self) -> Option<crate::session_lock::LockTicket> {
-        self.locking.request()
-    }
-
     fn close_lock_windows(&mut self) {
         let locks: Vec<WindowId> = self.windows.values().filter(|w| w.lock_output().is_some()).map(|w| w.id).collect();
         for id in locks {

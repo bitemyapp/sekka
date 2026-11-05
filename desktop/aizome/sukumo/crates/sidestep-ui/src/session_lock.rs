@@ -5,12 +5,14 @@
 //! thread hears from the compositor.
 //!
 //! Each request is a ticket of a [`Generation`], sent with
-//! `ToRender::LockSession`, and the render thread's answers name the
-//! request they answer. A transition that applies an answer takes it only
-//! as [`Fresh`], which only the comparison with the current request makes,
-//! so the compositor's `finished` for a lock the program has withdrawn
-//! can't end the lock it asks for next. Unlocking retires the request, so
-//! nothing heard about it afterwards is fresh.
+//! `ToRender::LockSession` as a [`LockRequest`], and the render thread's
+//! answers are [`LockAnswer`]s naming the request they answer. Only the
+//! render thread makes an answer, so the main thread can't apply one for
+//! a request it picks itself. A transition that applies an answer takes it
+//! only as [`Fresh`], which only the comparison with the current request
+//! makes, so the compositor's `finished` for a lock the program has
+//! withdrawn can't end the lock it asks for next. Unlocking retires the
+//! request, so nothing heard about it afterwards is fresh.
 //!
 //! Ending a lock without checking which request the answer is for, as
 //! `SessionLockFinished` used to, doesn't compile:
@@ -22,11 +24,11 @@
 //! }
 //! ```
 //!
-//! nor with the request's ticket in place of the proof:
+//! nor with the request in place of the proof:
 //!
 //! ```compile_fail,E0308
-//! use sidestep_ui::session_lock::{Asked, LockTicket};
-//! fn session_lock_finished(asked: Asked<'_>, lock: LockTicket) {
+//! use sidestep_ui::session_lock::{Asked, LockRequest};
+//! fn session_lock_finished(asked: Asked<'_>, lock: LockRequest) {
 //!     let _unlocked = asked.ended(lock);
 //! }
 //! ```
@@ -41,17 +43,40 @@
 //! }
 //! ```
 //!
-//! and an answer can't be made outside this module:
+//! An answer can't be made outside this module:
 //!
 //! ```compile_fail,E0423
-//! use sidestep_ui::session_lock::{Ended, LockTicket};
-//! fn heard(lock: LockTicket) -> Ended {
+//! use sidestep_ui::session_lock::{Ended, LockAnswer};
+//! fn heard(lock: LockAnswer) -> Ended {
 //!     Ended(lock)
 //! }
 //! ```
 //!
-//! What compiles is ending the lock with the answer proven to be this
-//! request's:
+//! and the render thread's answer can't be made for a request the router
+//! picks, such as the one it asks for now: taking a finished for the
+//! current lock's is the UIW-27 mistake.
+//!
+//! ```compile_fail,E0624
+//! use sidestep_ui::session_lock::{LockAnswer, LockRequest};
+//! fn finished_for(current: LockRequest) -> LockAnswer {
+//!     LockAnswer::heard(current)
+//! }
+//! ```
+//!
+//! What compiles takes the answer the render thread sent:
+//!
+//! ```
+//! use sidestep_engine::protocol::FromRender;
+//! use sidestep_ui::session_lock::LockAnswer;
+//! fn finished(message: FromRender) -> Option<LockAnswer> {
+//!     match message {
+//!         FromRender::SessionLockFinished { lock } => Some(lock),
+//!         _ => None,
+//!     }
+//! }
+//! ```
+//!
+//! and ends the lock with the answer proven to be this request's:
 //!
 //! ```
 //! use aizome_typestate::Fresh;
@@ -63,19 +88,24 @@
 //!     }
 //! }
 //! ```
+//!
+//! (With the `testing` feature, which only tests enable,
+//! `LockAnswer::forged` makes any answer: tests play the compositor.)
 
 #![deny(clippy::wildcard_enum_match_arm)]
 
-use aizome_typestate::{Answer, Fresh, Generation};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use aizome_typestate::{Answer, Fresh, Generation, Ticket};
 use sidestep_engine::protocol::ToRender;
-pub use sidestep_engine::protocol::{LockTicket, SessionLockRequest};
+pub use sidestep_engine::protocol::{LockAnswer, LockRequest, SessionLockRequest};
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::window::send;
 
 aizome_typestate::machine! {
-    /// The session lock's state, over the generation of lock requests.
-    pub struct SessionLock over Generation<SessionLockRequest> {
+    /// The session lock's state, over this machine's lock requests.
+    pub struct SessionLock over Requests {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         stored(Copy) Stored;
         /// The session lock's state, typed: what [`Cx`](crate::Cx)'s
@@ -85,53 +115,77 @@ aizome_typestate::machine! {
             /// Neither asked for nor held.
             Unlocked,
             /// Asked for under this request, not confirmed yet.
-            Asked(LockTicket),
+            Asked(LockRequest),
             /// The compositor locked the session for this request.
-            Locked(LockTicket),
+            Locked(LockRequest),
         }
         access(private);
-        new(pub(crate));
+        new(private);
         with_typed(pub(crate));
     }
 }
 
+/// The requests of one lock machine: its number in the process, and its
+/// tickets.
+pub struct Requests {
+    machine: u64,
+    tickets: Generation<SessionLockRequest>,
+}
+
+/// Numbers each lock machine in the process. One made again counts its
+/// tickets from 1 too, and an answer to the old one's must not pass for
+/// the new one's.
+static MACHINES: AtomicU64 = AtomicU64::new(0);
+
 /// The compositor locked the session for a request (`SessionLocked`).
 #[derive(Debug)]
-pub struct Confirmed(LockTicket);
+pub struct Confirmed(LockAnswer);
 
 /// The compositor refused or ended the lock asked for under a request
 /// (`SessionLockFinished`).
 #[derive(Debug)]
-pub struct Ended(LockTicket);
+pub struct Ended(LockAnswer);
 
 impl Answer<SessionLockRequest> for Confirmed {
-    fn ticket(&self) -> LockTicket {
-        self.0
+    fn ticket(&self) -> Ticket<SessionLockRequest> {
+        self.0.request().ticket
     }
 }
 
 impl Answer<SessionLockRequest> for Ended {
-    fn ticket(&self) -> LockTicket {
-        self.0
+    fn ticket(&self) -> Ticket<SessionLockRequest> {
+        self.0.request().ticket
     }
 }
 
 impl SessionLock {
-    /// No lock yet.
+    /// No lock yet: for `App::run`'s `Cx`, and only there. Made again in
+    /// place of a lock asked for or held, it forgets that lock (the
+    /// compositor keeps it, its surfaces close) and the program believes
+    /// it unlocked, which is UIW-27's outcome; routing a `finished` to
+    /// `unlock_session` is too. What the render thread says about the old
+    /// machine's requests is refused: they're another machine's.
     pub(crate) fn unlocked() -> SessionLock {
-        SessionLock::new(Generation::new())
+        SessionLock::new(Requests { machine: MACHINES.fetch_add(1, Ordering::Relaxed) + 1, tickets: Generation::new() })
     }
 
-    /// The render thread's `SessionLocked` for `lock`, if it answers the
-    /// current request; `None` for a request since withdrawn.
-    pub(crate) fn confirmed(&self, lock: LockTicket) -> Option<Fresh<SessionLockRequest, Confirmed>> {
-        self.ctx().check_answer(Confirmed(lock)).ok()
+    /// The render thread's `SessionLocked`, if it answers the current
+    /// request; `None` for one since withdrawn or another machine's.
+    pub(crate) fn confirmed(&self, heard: LockAnswer) -> Option<Fresh<SessionLockRequest, Confirmed>> {
+        if heard.request().machine != self.ctx().machine {
+            return None;
+        }
+        self.ctx().tickets.check_answer(Confirmed(heard)).ok()
     }
 
-    /// The render thread's `SessionLockFinished` for `lock`, if it answers
-    /// the current request; `None` for a request since withdrawn.
-    pub(crate) fn ended(&self, lock: LockTicket) -> Option<Fresh<SessionLockRequest, Ended>> {
-        self.ctx().check_answer(Ended(lock)).ok()
+    /// The render thread's `SessionLockFinished`, if it answers the
+    /// current request; `None` for one since withdrawn or another
+    /// machine's.
+    pub(crate) fn ended(&self, heard: LockAnswer) -> Option<Fresh<SessionLockRequest, Ended>> {
+        if heard.request().machine != self.ctx().machine {
+            return None;
+        }
+        self.ctx().tickets.check_answer(Ended(heard)).ok()
     }
 
     /// Whether the compositor holds the lock for the current request.
@@ -141,20 +195,12 @@ impl SessionLock {
             Stored::Unlocked(()) | Stored::Asked(_) => false,
         }
     }
-
-    /// The request asked for or held (`testing`).
-    pub(crate) fn request(&self) -> Option<LockTicket> {
-        match *self.stored() {
-            Stored::Unlocked(()) => None,
-            Stored::Asked(lock) | Stored::Locked(lock) => Some(lock),
-        }
-    }
 }
 
 impl<'s> Unlocked<'s> {
     /// Ask the compositor for the lock, under a new request.
     pub fn lock(self, tx: &Sender<ToRender>) -> Asked<'s> {
-        let lock = self.ctx.issue();
+        let lock = LockRequest { machine: self.ctx.machine, ticket: self.ctx.tickets.issue() };
         send(tx, ToRender::LockSession { lock });
         Asked::enter(self.ctx, lock)
     }
@@ -164,13 +210,13 @@ impl<'s> Asked<'s> {
     /// The compositor locked the session for this request; a proof made
     /// for an earlier request gives the state back.
     pub fn confirmed(self, heard: Fresh<SessionLockRequest, Confirmed>) -> Result<Locked<'s>, Asked<'s>> {
-        if self.answers(heard.answer()) { Ok(Locked::enter(self.ctx, self.data)) } else { Err(self) }
+        if answers(self.ctx, self.data, &heard.answer().0) { Ok(Locked::enter(self.ctx, self.data)) } else { Err(self) }
     }
 
     /// The compositor refused the lock asked for under this request; a
     /// proof made for an earlier request gives the state back.
     pub fn ended(self, heard: Fresh<SessionLockRequest, Ended>) -> Result<Unlocked<'s>, Asked<'s>> {
-        if self.answers(heard.answer()) { Ok(withdrawn(self.ctx)) } else { Err(self) }
+        if answers(self.ctx, self.data, &heard.answer().0) { Ok(withdrawn(self.ctx)) } else { Err(self) }
     }
 
     /// Stop asking: the render thread withdraws the lock, and whatever
@@ -179,23 +225,13 @@ impl<'s> Asked<'s> {
         send(tx, ToRender::UnlockSession);
         withdrawn(self.ctx)
     }
-
-    fn answers(&self, heard: &impl Answer<SessionLockRequest>) -> bool {
-        // A proof is fresh when it's made; one kept until a later request
-        // isn't this request's.
-        heard.ticket() == self.data && self.ctx.is_current(self.data)
-    }
 }
 
 impl<'s> Locked<'s> {
     /// The compositor ended the lock held for this request; a proof made
     /// for an earlier request gives the state back.
     pub fn ended(self, heard: Fresh<SessionLockRequest, Ended>) -> Result<Unlocked<'s>, Locked<'s>> {
-        if heard.answer().ticket() == self.data && self.ctx.is_current(self.data) {
-            Ok(withdrawn(self.ctx))
-        } else {
-            Err(self)
-        }
+        if answers(self.ctx, self.data, &heard.answer().0) { Ok(withdrawn(self.ctx)) } else { Err(self) }
     }
 
     /// Unlock: whatever the render thread hears about this request from
@@ -206,8 +242,15 @@ impl<'s> Locked<'s> {
     }
 }
 
+/// Whether `heard` answers `request`, the state's, and that's still the
+/// current request: a proof is fresh when it's made, and one kept until a
+/// later request isn't this request's.
+fn answers(requests: &Requests, request: LockRequest, heard: &LockAnswer) -> bool {
+    heard.request() == request && requests.tickets.is_current(request.ticket)
+}
+
 /// Unlocked, with the request over.
-fn withdrawn(requests: &mut Generation<SessionLockRequest>) -> Unlocked<'_> {
-    requests.retire();
+fn withdrawn(requests: &mut Requests) -> Unlocked<'_> {
+    requests.tickets.retire();
     Unlocked::enter(requests, ())
 }

@@ -30,8 +30,8 @@
 //!
 //! ```compile_fail,E0599
 //! use aizome_shell::lock::screen::{Checking, Note};
-//! fn refused(checking: Checking<'_>) {
-//!     let _locked = checking.refused(Note::WrongPassword);
+//! fn refused(checking: Checking<'_>, note: Note) {
+//!     let _locked = checking.refused(note);
 //! }
 //! ```
 //!
@@ -43,6 +43,24 @@
 //! }
 //! ```
 //!
+//! and the view shows only a note the machine made, which can't be made
+//! elsewhere:
+//!
+//! ```compile_fail,E0423
+//! use aizome_shell::lock::LockView;
+//! use aizome_shell::lock::screen::Note;
+//! fn refused(view: &mut LockView, wrong: Note) {
+//!     view.error = Some(Note(wrong.0));
+//! }
+//! ```
+//!
+//! ```
+//! use aizome_shell::lock::LockView;
+//! fn refused(view: &mut LockView, shell: &aizome_shell::shell::Shell) {
+//!     view.error = shell.lock.note().cloned();
+//! }
+//! ```
+//!
 //! The answer can't be made up instead of PAM's:
 //!
 //! ```compile_fail,E0451
@@ -50,7 +68,7 @@
 //! use aizome_shell::pam::{Code, Reply, Step};
 //! fn answer(ticket: aizome_typestate::Ticket<aizome_shell::lock::screen::PamCheck>) -> Checked {
 //!     let reply = Reply::Refused { step: Step::Authenticate, code: Code::AUTH_ERR, said: vec![], reason: String::new() };
-//!     Checked { ticket, reply }
+//!     Checked { prompt: 1, ticket, reply }
 //! }
 //! ```
 //!
@@ -104,6 +122,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use aizome_kit::prelude::*;
@@ -148,8 +167,11 @@ aizome_typestate::machine! {
 }
 
 /// What the prompt shows, shared by the states.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Prompt {
+    /// This lock screen's number (`PROMPTS`): checks are counted per lock
+    /// screen, so an answer to another's is never this one's.
+    prompt: u64,
     checks: Generation<PamCheck>,
     password: String,
     caps: bool,
@@ -161,9 +183,18 @@ pub struct Prompt {
     surfaces: Vec<(WindowKey, u32)>,
 }
 
-/// What the prompt says after a check that didn't unlock.
+/// Numbers each lock screen in the process. A lock screen made again (in
+/// place of one with a check running) counts its checks from 1 too, and
+/// the old check's answer must not pass for the new one's.
+static PROMPTS: AtomicU64 = AtomicU64::new(0);
+
+/// What the prompt says after a check that didn't unlock: only
+/// [`Checking::pam_done`] makes one, from PAM's verdict.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Note {
+pub struct Note(Told);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Told {
     WrongPassword,
     /// PAM refused for another reason, in its words.
     Refused(Refusal),
@@ -171,9 +202,9 @@ pub enum Note {
 
 impl Note {
     pub fn text(&self) -> &str {
-        match self {
-            Note::WrongPassword => "That password didn't work. Try again.",
-            Note::Refused(r) => r.text(),
+        match &self.0 {
+            Told::WrongPassword => "That password didn't work. Try again.",
+            Told::Refused(r) => r.text(),
         }
     }
 }
@@ -181,6 +212,7 @@ impl Note {
 /// PAM's answer to one check: only [`Locked::submit`]'s thread makes one.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Checked {
+    prompt: u64,
     ticket: Ticket<PamCheck>,
     reply: Reply,
 }
@@ -219,9 +251,19 @@ impl<'a, 'c> Io<'a, 'c> {
 }
 
 impl LockState {
-    /// No lock yet: for the shell's start.
+    /// No lock yet: for the shell's start, and only there. Made again in
+    /// place of a lock, it forgets that lock (the compositor keeps it);
+    /// the old check's answer is refused, as another lock screen's.
     pub(crate) fn unlocked() -> LockState {
-        LockState::new(Prompt::default())
+        LockState::new(Prompt {
+            prompt: PROMPTS.fetch_add(1, Ordering::Relaxed) + 1,
+            checks: Generation::new(),
+            password: String::new(),
+            caps: false,
+            shake: 0,
+            since: 0,
+            surfaces: Vec::new(),
+        })
     }
 
     /// Where locking is, to read (the states change only through the
@@ -241,11 +283,16 @@ impl LockState {
     }
 
     /// What the prompt says under the field: the last check's note.
-    pub fn error(&self) -> Option<&str> {
+    pub fn note(&self) -> Option<&Note> {
         match self.stored() {
-            Stored::Locked(note) => note.as_ref().map(Note::text),
+            Stored::Locked(note) => note.as_ref(),
             Stored::Unlocked(()) | Stored::Locking(_) | Stored::Checking(_) => None,
         }
+    }
+
+    /// The note's words.
+    pub fn error(&self) -> Option<&str> {
+        self.note().map(Note::text)
     }
 
     /// Whether a sleep waits for this lock to be confirmed.
@@ -292,6 +339,9 @@ impl LockState {
     /// PAM's answer, proven to answer the check running now; back again
     /// when a newer check or the lock's end made it stale.
     pub(crate) fn check(&self, heard: Checked) -> Result<Fresh<PamCheck, Checked>, Checked> {
+        if heard.prompt != self.ctx().prompt {
+            return Err(heard);
+        }
         self.ctx().checks.check_answer(heard)
     }
 }
@@ -381,11 +431,12 @@ impl<'s> Locked<'s> {
             return Submitted::Locked(self);
         }
         let ticket = self.ctx.checks.issue();
+        let prompt = self.ctx.prompt;
         let user = user.to_owned();
         let password = std::mem::take(&mut self.ctx.password);
         io.cx.spawn(move || {
             let reply = auth.authenticate(&user, &password);
-            Msg::Lock(LockMsg::Checked(Checked { ticket, reply }))
+            Msg::Lock(LockMsg::Checked(Checked { prompt, ticket, reply }))
         });
         Submitted::Checking(Checking::enter(self.ctx, ticket))
     }
@@ -418,19 +469,23 @@ impl<'s> Checking<'s> {
     ) -> Result<Answered<'s>, Checking<'s>> {
         // A proof is fresh when it's made; one kept until a later check
         // isn't this check's.
-        if heard.answer().ticket != self.data || !self.ctx.checks.is_current(self.data) {
+        let answer = heard.answer();
+        if answer.prompt != self.ctx.prompt || answer.ticket != self.data || !self.ctx.checks.is_current(self.data) {
             return Err(self);
         }
         self.ctx.checks.retire();
-        let note = match heard.into_answer().reply.verdict() {
+        let reply = heard.into_answer().reply;
+        let note = match reply.verdict() {
             Verdict::Accepted => {
                 io.cx.unlock_session();
                 return Ok(Answered::Unlocked(ended(self.ctx, io)));
             }
-            Verdict::WrongPassword => Note::WrongPassword,
-            Verdict::Refused(r) => Note::Refused(r),
+            Verdict::WrongPassword => Note(Told::WrongPassword),
+            Verdict::Refused(r) => Note(Told::Refused(r)),
         };
-        log::info!("unlocking: {}", note.text());
+        // What PAM said, as it said it (the step, code, pam_strerror and
+        // the modules' messages; never the password).
+        log::info!("unlocking: refused, {reply:?}");
         if motion {
             self.ctx.shake = 1;
             io.cx.after(Duration::from_millis(30), Msg::Lock(LockMsg::Shake(2)));

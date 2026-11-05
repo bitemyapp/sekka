@@ -36,6 +36,7 @@ use crate::error::{Error, Result};
 use crate::service::{Model, Stop, Task, Wake, lock, service_handle};
 use aizome_typestate::{Generation, Ticket};
 use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use zbus::zvariant::{OwnedFd, OwnedObjectPath};
@@ -122,7 +123,10 @@ pub enum SessionEvent {
     /// Unlock the screen (`loginctl unlock-session`).
     Unlock,
     /// The machine is about to sleep: lock, then give the sleep back to
-    /// [`Logind::sleep_ready`].
+    /// [`Logind::sleep_ready`] once the screen is locked. A program with a
+    /// lock screen hands the sleep to its lock (Aizome's shell: the lock
+    /// screen's `lock_for_sleep`), which decides when it may go: giving it
+    /// back before the lock is confirmed lets the machine sleep unlocked.
     PrepareForSleep(SleepCycle),
     /// The machine woke up: the last sleep is over.
     Resumed,
@@ -177,7 +181,18 @@ enum Sleep {}
 /// ```compile_fail,E0451
 /// use aizome_sys::power::SleepCycle;
 /// fn forge() -> SleepCycle {
-///     SleepCycle { ticket: aizome_typestate::Generation::new().issue() }
+///     SleepCycle { follower: 1, ticket: aizome_typestate::Generation::new().issue() }
+/// }
+/// ```
+///
+/// There is no other way to let go of the delay. Dropping it without
+/// naming the sleep, at the lock's confirmation, would let go of the one
+/// held for the next sleep:
+///
+/// ```compile_fail,E0599
+/// use aizome_sys::power::Logind;
+/// fn lock_confirmed(logind: &Logind) {
+///     logind.release_sleep_delay();
 /// }
 /// ```
 ///
@@ -199,17 +214,25 @@ enum Sleep {}
 /// ```
 ///
 /// Whether the sleep is over when it comes back is logind's to say, at
-/// run time: a sleep given back after its resume releases nothing.
+/// run time: a sleep given back after its resume releases nothing, and
+/// neither does one another follower announced.
 #[derive(PartialEq, Eq)]
 pub struct SleepCycle {
+    /// The follower that announced it: the [`Logind`]s in one process
+    /// count their sleeps apart, each from 1.
+    follower: u64,
     ticket: Ticket<Sleep>,
 }
 
 impl fmt::Debug for SleepCycle {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("SleepCycle").field(&self.ticket).finish()
+        f.debug_tuple("SleepCycle").field(&self.follower).field(&self.ticket).finish()
     }
 }
+
+/// Numbers each follower in the process, so a sleep one announced is
+/// never current for another.
+static FOLLOWERS: AtomicU64 = AtomicU64::new(0);
 
 /// A held inhibitor (`systemd-inhibit`): released when dropped.
 #[derive(Debug)]
@@ -241,6 +264,8 @@ struct Shared {
     /// The sleep logind announced last: current until the machine
     /// resumes, or logind goes away.
     sleeps: Generation<Sleep>,
+    /// This follower's number (`FOLLOWERS`).
+    follower: u64,
 }
 
 /// systemd-logind.
@@ -274,7 +299,8 @@ impl Logind {
     /// user's graphical session).
     pub fn with_bus(bus: Bus, wake: Wake, session: Option<String>) -> Logind {
         let model = Arc::new(Model::new(LogindState::default(), wake));
-        let shared: Arc<Mutex<Shared>> = Arc::default();
+        let follower = FOLLOWERS.fetch_add(1, Ordering::Relaxed) + 1;
+        let shared = Arc::new(Mutex::new(Shared { follower, ..Shared::default() }));
         let stop = Stop::default();
         let follower = model.clone();
         let fshared = shared.clone();
@@ -364,8 +390,8 @@ impl Logind {
                             manager.insert("PreparingForSleep".into(), zbus::zvariant::OwnedValue::from(start));
                             let mut shared = lock(&fshared);
                             if start {
-                                let ticket = shared.sleeps.issue();
-                                shared.events.push(SessionEvent::PrepareForSleep(SleepCycle { ticket }));
+                                let sleep = SleepCycle { follower: shared.follower, ticket: shared.sleeps.issue() };
+                                shared.events.push(SessionEvent::PrepareForSleep(sleep));
                                 // Nobody will release it: don't hold up sleep.
                                 if !shared.want_delay {
                                     shared.delay = None;
@@ -499,22 +525,18 @@ impl Logind {
 
     /// The screen is locked for `sleep`: let the machine sleep. A sleep
     /// that's over (the machine slept and woke since, or logind went
-    /// away) releases nothing: the delay held now is for the next sleep.
+    /// away), or another follower's, releases nothing: the delay held now
+    /// is for the next sleep. This is the only way to let go of the delay.
+    ///
+    /// Call it from the lock screen, once its lock is confirmed (or won't
+    /// be), not from the code that routes the session's events: given
+    /// back early, the sleep doesn't wait for the lock.
     pub fn sleep_ready(&self, sleep: SleepCycle) {
         let mut shared = lock(&self.shared);
-        if !shared.sleeps.is_current(sleep.ticket) {
+        if sleep.follower != shared.follower || !shared.sleeps.is_current(sleep.ticket) {
             log::debug!("logind's sleep delay: kept for the next sleep; {sleep:?} is over");
             return;
         }
-        shared.delay = None;
-        drop(shared);
-        self.model.update(|s| s.sleep_delay_held = false);
-    }
-
-    /// Stop delaying sleep altogether.
-    pub fn release_sleep_delay(&self) {
-        let mut shared = lock(&self.shared);
-        shared.want_delay = false;
         shared.delay = None;
         drop(shared);
         self.model.update(|s| s.sleep_delay_held = false);
