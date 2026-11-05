@@ -10,67 +10,67 @@ cargo_source(
 
 alias(
     name = "aizome_shashin-build-dev",
-    actual = "//build/buck2/graph/dev:28535ce4a25a6b5b369f",
+    actual = "//build/buck2/graph/dev:1117994dbed961f20c07",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-shashin-build-dev",
-    actual = "//build/buck2/graph/dev:7653fc2cd2eeb3d0ed7d",
+    actual = "//build/buck2/graph/dev:cfbb0c24686bc195f657",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_shashin-build-release",
-    actual = "//build/buck2/graph/release:6c797df7f942b0b7bd7c",
+    actual = "//build/buck2/graph/release:b21145ad473a92fd7f39",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-shashin-build-release",
-    actual = "//build/buck2/graph/release:bdb90b66fdc2801e2e5b",
+    actual = "//build/buck2/graph/release:f3ea28967ce1adf24b14",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_shashin-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:4a7f4d3878f731678ead",
+    actual = "//build/buck2/graph/release-lto:688dbf0f9cb49bd17706",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-shashin-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:4511780050696ba83236",
+    actual = "//build/buck2/graph/release-lto:8f11f91788d886feb5ef",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_shashin-test-test-lib",
-    actual = "//build/buck2/graph/test:94a9ff9ab8f33f857d77",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-shashin-test-test-bin",
-    actual = "//build/buck2/graph/test:0c7956fc966e455fbe5b",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "budget-test-test-test",
-    actual = "//build/buck2/graph/test:66b3fb02049ec360b4b5",
+    actual = "//build/buck2/graph/test:2cbffc74ca8e4129ea43",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "modal_commands-test-test-test",
-    actual = "//build/buck2/graph/test:7f2b197d7d5811d79b9e",
+    actual = "//build/buck2/graph/test:3f41d7f9764abb6f4460",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-shashin-test-test-bin",
+    actual = "//build/buck2/graph/test:3fe9e0495724c0d44444",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "shashin-test-test-test",
-    actual = "//build/buck2/graph/test:5efce954ab482ecc537e",
+    actual = "//build/buck2/graph/test:610bdaee4055787cc064",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "budget-test-test-test",
+    actual = "//build/buck2/graph/test:d252106db8eb78a1a2bb",
     visibility = ["PUBLIC"],
 )
 

@@ -9,56 +9,56 @@ cargo_source(
 )
 
 alias(
-    name = "aizome_tokei-build-dev",
-    actual = "//build/buck2/graph/dev:f8c01b995230fa1c08bf",
+    name = "aizome-tokei-build-dev",
+    actual = "//build/buck2/graph/dev:25cb94243741aa54fef0",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome-tokei-build-dev",
-    actual = "//build/buck2/graph/dev:e9bdddc4097119e343e7",
+    name = "aizome_tokei-build-dev",
+    actual = "//build/buck2/graph/dev:3f0dac2d6d2257167359",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_tokei-build-release",
-    actual = "//build/buck2/graph/release:e6824972094fa770e63f",
+    actual = "//build/buck2/graph/release:1615872866f32855abd3",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-tokei-build-release",
-    actual = "//build/buck2/graph/release:60ce0f56d9991649c5ab",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_tokei-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:0b5c23fe8facdede1fc9",
+    actual = "//build/buck2/graph/release:3005ebed5e2475a5225e",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-tokei-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:85152ce388ce3ade5c4d",
+    actual = "//build/buck2/graph/release-lto:e8173540843b0af9e3ad",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_tokei-test-test-lib",
-    actual = "//build/buck2/graph/test:40a686515fa800b109e1",
+    name = "aizome_tokei-build-release-lto",
+    actual = "//build/buck2/graph/release-lto:eba2d40f011853bb6aad",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-tokei-test-test-bin",
-    actual = "//build/buck2/graph/test:dd3ae46345b97fa10760",
+    actual = "//build/buck2/graph/test:46f00a5c3443f7c665f3",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "tokei-test-test-test",
-    actual = "//build/buck2/graph/test:b65296e8172a58c1644e",
+    actual = "//build/buck2/graph/test:c212f680bbb7ec7cd59e",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_tokei-test-test-lib",
+    actual = "//build/buck2/graph/test:efa6143453684e74e337",
     visibility = ["PUBLIC"],
 )
 

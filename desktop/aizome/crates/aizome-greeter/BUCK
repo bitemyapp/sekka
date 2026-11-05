@@ -10,61 +10,61 @@ cargo_source(
 
 alias(
     name = "aizome_greeter-build-dev",
-    actual = "//build/buck2/graph/dev:586591b618b68ef0c377",
+    actual = "//build/buck2/graph/dev:14a4db9305f91b61f18c",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-greeter-build-dev",
-    actual = "//build/buck2/graph/dev:4f3fc83f0ac91af68976",
+    actual = "//build/buck2/graph/dev:e180f1e057737e8b5206",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_greeter-build-release",
-    actual = "//build/buck2/graph/release:ec54678cc4dd3059fea0",
+    actual = "//build/buck2/graph/release:aaf2a7f50f469099a237",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-greeter-build-release",
-    actual = "//build/buck2/graph/release:8b1adcbdc2b267f51023",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_greeter-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:464e5a432ecb7d57855a",
+    actual = "//build/buck2/graph/release:ac0aa2fdfd3b2060ea1c",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-greeter-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:b2803a52b455be756a9b",
+    actual = "//build/buck2/graph/release-lto:1479fdb1030c95aa7754",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_greeter-test-test-lib",
-    actual = "//build/buck2/graph/test:52fc05b33a94d8929e0c",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-greeter-test-test-bin",
-    actual = "//build/buck2/graph/test:2cc55e6fa09389a07719",
+    name = "aizome_greeter-build-release-lto",
+    actual = "//build/buck2/graph/release-lto:ed72c200052f6faa575d",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "budget-test-test-test",
-    actual = "//build/buck2/graph/test:2527a45e90e8d3a13dc6",
+    actual = "//build/buck2/graph/test:3025e232b6221b51d9e5",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-greeter-test-test-bin",
+    actual = "//build/buck2/graph/test:366dece455d22b6fe1a2",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "screens-test-test-test",
-    actual = "//build/buck2/graph/test:9323cb7eb912b34fea5e",
+    actual = "//build/buck2/graph/test:399ca8d68d1c85051089",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_greeter-test-test-lib",
+    actual = "//build/buck2/graph/test:ccf2596b17ecf8a72557",
     visibility = ["PUBLIC"],
 )
 

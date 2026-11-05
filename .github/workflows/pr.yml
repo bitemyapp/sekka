@@ -59,8 +59,9 @@ jobs:
             -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
   build:
-    needs: trust
-    if: needs.trust.outputs.allowed == 'true'
+    needs: [trust, shared-inputs]
+    # A client-package failure must not suppress independent component checks.
+    if: always() && !cancelled() && needs.trust.outputs.allowed == 'true'
     runs-on: [self-hosted, linux, x64, sekka-builder]
     timeout-minutes: 720
     # No environment, publishing secrets, write token or persisted checkout
@@ -94,7 +95,7 @@ jobs:
           test "$ALLOWED" = true
           test "$CURRENT_MERGE" = "$EXPECTED_MERGE"
       # Main's retention wrapper, kept outside the workspace the merge
-      # checkout replaces: PR code runs only in Nix's evaluator and build
+      # checkout replaces: candidate code in this pool runs only in Nix's
       # sandbox, never beside the GC roots main's jobs share.
       - name: Keep main's retention wrapper
         run: install -m 0644 scripts/ci-retain.py "$RUNNER_TEMP/ci-retain.py"
@@ -127,8 +128,120 @@ jobs:
           python3 "$RUNNER_TEMP/ci-retain.py" pr checks flake check --keep-going --no-update-lock-file --print-build-logs
           git diff --exit-code
 
+  shared-inputs:
+    needs: trust
+    if: needs.trust.outputs.allowed == 'true'
+    runs-on: [self-hosted, linux, x64, sekka-builder]
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      bundle: ${{ steps.clients.outputs.bundle }}
+      attempt: ${{ steps.clients.outputs.attempt }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            /scripts/check-pr-trust.py
+            /scripts/ci-retain.py
+            /scripts/ci-shared-builds.py
+          sparse-checkout-cone-mode: false
+      - name: Recheck trust before realizing candidate inputs
+        id: recheck
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr }}
+          EXPECTED_HEAD: ${{ needs.trust.outputs.head }}
+        run: python3 scripts/check-pr-trust.py
+      - name: Require the same admitted merge and keep main's helpers
+        env:
+          ALLOWED: ${{ steps.recheck.outputs.allowed }}
+          CURRENT_MERGE: ${{ steps.recheck.outputs.merge }}
+          EXPECTED_MERGE: ${{ needs.trust.outputs.merge }}
+        run: |
+          test "$ALLOWED" = true
+          test "$CURRENT_MERGE" = "$EXPECTED_MERGE"
+          install -m 0644 scripts/ci-retain.py scripts/ci-shared-builds.py "$RUNNER_TEMP/"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.trust.outputs.merge }}
+          persist-credentials: false
+          sparse-checkout: /*
+          sparse-checkout-cone-mode: false
+      - name: Realize and retain candidate source and client closures
+        id: clients
+        run: python3 "$RUNNER_TEMP/ci-shared-builds.py" prepare
+
+  shared-build:
+    needs: [trust, shared-inputs]
+    if: needs.trust.outputs.allowed == 'true'
+    runs-on: [self-hosted, linux, x64, sekka-build-client]
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: [bazel, buck2]
+    # This separate pool has no daemon, shared GC roots, host home or Docker
+    # socket. Only a bounded private workspace and authenticated cache readers.
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            /scripts/check-pr-trust.py
+            /scripts/ci-shared-builds.py
+          sparse-checkout-cone-mode: false
+      - name: Recheck trust after waiting for the isolated client
+        id: recheck
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr }}
+          EXPECTED_HEAD: ${{ needs.trust.outputs.head }}
+        run: python3 scripts/check-pr-trust.py
+      - name: Build and test in the isolated client container
+        env:
+          ALLOWED: ${{ steps.recheck.outputs.allowed }}
+          CURRENT_MERGE: ${{ steps.recheck.outputs.merge }}
+          EXPECTED_MERGE: ${{ needs.trust.outputs.merge }}
+          CANDIDATE_BUNDLE: ${{ needs.shared-inputs.outputs.bundle }}
+          PREPARED_ATTEMPT: ${{ needs.shared-inputs.outputs.attempt }}
+          BUILD_TOOL: ${{ matrix.tool }}
+        run: |
+          test "$ALLOWED" = true
+          test "$CURRENT_MERGE" = "$EXPECTED_MERGE"
+          python3 scripts/ci-shared-builds.py run --bundle "$CANDIDATE_BUNDLE" --tool "$BUILD_TOOL" --prepared-attempt "$PREPARED_ATTEMPT"
+      - name: Retain frontend command results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: shared-build-${{ matrix.tool }}
+          path: ${{ runner.temp }}/shared-build-${{ matrix.tool }}-*/result.json
+          retention-days: 7
+
+  shared-release:
+    needs: [trust, shared-inputs, shared-build]
+    if: always() && needs.trust.outputs.allowed == 'true'
+    runs-on: [self-hosted, linux, x64, sekka-builder]
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+          sparse-checkout: /scripts/ci-retain.py
+          sparse-checkout-cone-mode: false
+      - name: Release this attempt's queued-client lease
+        run: python3 scripts/ci-retain.py release-consumers
+
   result:
-    needs: [trust, build]
+    needs: [trust, build, shared-inputs, shared-build, shared-release]
     if: always() && needs.trust.outputs.allowed == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -140,13 +253,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ needs.trust.outputs.head }}
           BUILD_RESULT: ${{ needs.build.result }}
+          INPUT_RESULT: ${{ needs.shared-inputs.result }}
+          CLIENT_RESULT: ${{ needs.shared-build.result }}
+          LEASE_RESULT: ${{ needs.shared-release.result }}
         run: |
-          case "$BUILD_RESULT" in
-            success) state=success ;;
-            failure) state=failure ;;
+          case "$BUILD_RESULT $INPUT_RESULT $CLIENT_RESULT $LEASE_RESULT" in
+            'success success success success') state=success ;;
+            *failure*) state=failure ;;
             *) state=error ;;
           esac
           gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" \
             -f "state=$state" -f context='Trusted PR / build and tests' \
-            -f "description=Build and tests: $BUILD_RESULT" \
+            -f "description=Components: $BUILD_RESULT; shared clients: $CLIENT_RESULT" \
             -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

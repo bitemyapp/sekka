@@ -20,7 +20,11 @@ let
   controller = pkgs.writeShellApplication {
     name = "sekka-build-service";
     runtimeInputs = [ pkgs.python3 pkgs.openssh ];
-    text = ''exec python3 ${../../scripts/build-service} "$@"'';
+    text = ''
+      export SEKKA_BUILD_SERVICE_SHELL=${pkgs.bashInteractive}/bin/bash
+      export SEKKA_BUILD_SERVICE_ENV=${pkgs.coreutils}/bin/env
+      exec python3 ${../../scripts/build-service} "$@"
+    '';
   };
   qualificationPython = pkgs.python3.withPackages (p: [ p.grpcio ]);
   qualifier = pkgs.writeShellApplication {

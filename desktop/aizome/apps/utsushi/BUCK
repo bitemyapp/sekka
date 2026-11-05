@@ -10,55 +10,55 @@ cargo_source(
 
 alias(
     name = "aizome_utsushi-build-dev",
-    actual = "//build/buck2/graph/dev:246beb4799a4f3b8cad9",
+    actual = "//build/buck2/graph/dev:b8f35e2b4f7bf190d6ee",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-utsushi-build-dev",
-    actual = "//build/buck2/graph/dev:bf613a730ed8325297cf",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_utsushi-build-release",
-    actual = "//build/buck2/graph/release:9cd36e6a97df710d0521",
+    actual = "//build/buck2/graph/dev:d2e3924d94b23e4047ce",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-utsushi-build-release",
-    actual = "//build/buck2/graph/release:f5da0173cd1cf68141a3",
+    actual = "//build/buck2/graph/release:1389d15d4e4dc0a894bb",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_utsushi-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:0093d2e9b4dab81a2927",
+    name = "aizome_utsushi-build-release",
+    actual = "//build/buck2/graph/release:bfcb84a4953f70de0cd4",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-utsushi-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:d5dff16787bed1230199",
+    actual = "//build/buck2/graph/release-lto:ba4ebef491aa23f34e15",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_utsushi-test-test-lib",
-    actual = "//build/buck2/graph/test:e4d26365d563b8423cfa",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-utsushi-test-test-bin",
-    actual = "//build/buck2/graph/test:06de4a62a825903a8b13",
+    name = "aizome_utsushi-build-release-lto",
+    actual = "//build/buck2/graph/release-lto:fef5efd51184a9ba579e",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "utsushi-test-test-test",
-    actual = "//build/buck2/graph/test:2e56439d6a9e68e6e636",
+    actual = "//build/buck2/graph/test:67d4ed31ca0c87d0bf10",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-utsushi-test-test-bin",
+    actual = "//build/buck2/graph/test:948d60f6e23a30809b5a",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_utsushi-test-test-lib",
+    actual = "//build/buck2/graph/test:b4063dddb7cf19a5f173",
     visibility = ["PUBLIC"],
 )
 

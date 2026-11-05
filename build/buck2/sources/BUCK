@@ -3,67 +3,67 @@ load("//build/buck2:units.bzl", "cargo_source")
 
 cargo_source(
     name = "source-47384334ff733908e225",
-    store_path = "/nix/store/yy9bsrcnf3278lklj6vgqli0r49pw0xz-hayro-0.8.0",
+    store_path = "/nix/store/qccdps4g7xszyys658dx0wjq6706v7by-hayro-0.8.0",
     visibility = ["PUBLIC"],
 )
 
 cargo_source(
     name = "source-24af1af18fd67c409880",
-    store_path = "/nix/store/4fx0bxi4j21zlyfq2p1cn86jxvnbbsvp-hayro-ccitt-0.4.0",
+    store_path = "/nix/store/hy6j1npmkvpjcm2jfk4l4cgnl5l3z12n-hayro-ccitt-0.4.0",
     visibility = ["PUBLIC"],
 )
 
 cargo_source(
     name = "source-5d769c5feb4b32558d62",
-    store_path = "/nix/store/xn7s84lbk4waf79cilj8wpq8f5fbcjqf-hayro-cmap-0.1.0",
+    store_path = "/nix/store/n7l3n8zwkb2xfn3zi7afmr6ya10xn06b-hayro-cmap-0.1.0",
     visibility = ["PUBLIC"],
 )
 
 cargo_source(
     name = "source-4f3293d876edd822db28",
-    store_path = "/nix/store/pzhaliigfvniz3hnmw5dkakw0rdhn129-hayro-interpret-0.8.0",
+    store_path = "/nix/store/7yvqliq2v0yzgf2ls4pail7jgdsqvbg2-hayro-interpret-0.8.0",
     visibility = ["PUBLIC"],
 )
 
 cargo_source(
     name = "source-4dc34046819ca5c819aa",
-    store_path = "/nix/store/65ac2v1bng30cd6blwpnrjs1zn38f7ym-hayro-jbig2-0.3.1",
+    store_path = "/nix/store/3dc57b6r4xz385adqch4c7a7id7x65sc-hayro-jbig2-0.3.1",
     visibility = ["PUBLIC"],
 )
 
 cargo_source(
     name = "source-3612d8648289378684a3",
-    store_path = "/nix/store/5akkqbzj9qy56g75hh57rxfpkijk9mjx-hayro-jpeg2000-0.4.1",
+    store_path = "/nix/store/i444ppq3rr8yq63r63jwlx784c413ncd-hayro-jpeg2000-0.4.1",
     visibility = ["PUBLIC"],
 )
 
 cargo_source(
     name = "source-ea033e4e692e9b9763d3",
-    store_path = "/nix/store/7zvffn76vfsqr1b031qnnwxhky9j04wc-hayro-postscript-0.1.0",
+    store_path = "/nix/store/02ak6kkh3xng6zbp3caci2ivqiddmdkp-hayro-postscript-0.1.0",
     visibility = ["PUBLIC"],
 )
 
 cargo_source(
     name = "source-256e992fe3959453d599",
-    store_path = "/nix/store/00apc4f8aby07lkl777y1f4w3sgank5g-hayro-syntax-0.8.0",
+    store_path = "/nix/store/9wz1kc4ciyrqnw07m4zma2k7cnwl6lbh-hayro-syntax-0.8.0",
     visibility = ["PUBLIC"],
 )
 
 cargo_source(
     name = "source-81e28ea9cd33287cfd0b",
-    store_path = "/nix/store/f0xkjs1yxwwwgp432hp0hiv668pxnz3b-moxcms-0.8.1",
+    store_path = "/nix/store/0kj76fhyjkk1913q8mj8k3xb07yl2js0-moxcms-0.8.1",
     visibility = ["PUBLIC"],
 )
 
 cargo_source(
     name = "source-79cb6c89a96752ad6fa2",
-    store_path = "/nix/store/5qyrlgc5b52xwycs291y6dx3pasnms0d-zune-core-0.5.3",
+    store_path = "/nix/store/sbcbhviv1w6id41ifpi85nw59lr7p7p9-zune-core-0.5.3",
     visibility = ["PUBLIC"],
 )
 
 cargo_source(
     name = "source-c17f784ac6c92c9a7bcf",
-    store_path = "/nix/store/k1pifd4awm2g895pgcx8b03b8qcp7rh7-zune-jpeg-0.5.16-rc3",
+    store_path = "/nix/store/c2v8yqz4adpk1skp1grrgf0g08z7d1r6-zune-jpeg-0.5.16-rc3",
     visibility = ["PUBLIC"],
 )
 

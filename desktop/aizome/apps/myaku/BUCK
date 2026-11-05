@@ -10,79 +10,79 @@ cargo_source(
 
 alias(
     name = "myaku-build-dev",
-    actual = "//build/buck2/graph/dev:0c83405d47060a5436b8",
+    actual = "//build/buck2/graph/dev:358ad4d42e660cb58660",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-myaku-build-dev",
-    actual = "//build/buck2/graph/dev:d65f7cc83afb18976e82",
+    actual = "//build/buck2/graph/dev:f440ff8ed0fcaf5ff7e5",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "myaku-build-release",
-    actual = "//build/buck2/graph/release:e3b1a4156c74edac8805",
+    actual = "//build/buck2/graph/release:1fc145e3cc0ffc13261c",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-myaku-build-release",
-    actual = "//build/buck2/graph/release:09f3010b5eaa2f4ca854",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "myaku-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:88ba6183b7aec5ae5821",
+    actual = "//build/buck2/graph/release:85537806a1d6b43d0f09",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-myaku-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:72d4a372d42de417e6c6",
+    actual = "//build/buck2/graph/release-lto:02e2ef39ff482509c5b1",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "myaku-test-test-lib",
-    actual = "//build/buck2/graph/test:06d8d867c22f453514f2",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-myaku-test-test-bin",
-    actual = "//build/buck2/graph/test:12c8f5bc8ee8a825947b",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "energy-test-test-test",
-    actual = "//build/buck2/graph/test:927a5dc5c1d8c435668f",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "gpu-test-test-test",
-    actual = "//build/buck2/graph/test:3ababc34643133543e3c",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "look-test-test-test",
-    actual = "//build/buck2/graph/test:94dc01a6339d574ba2b2",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "perf-test-test-test",
-    actual = "//build/buck2/graph/test:f8d2bf1b0f00e37ade63",
+    name = "myaku-build-release-lto",
+    actual = "//build/buck2/graph/release-lto:3fcf308bfe73d266f46c",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "ui-test-test-test",
-    actual = "//build/buck2/graph/test:a1fbec20d5bfee835163",
+    actual = "//build/buck2/graph/test:5129d13b80f28349f628",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "myaku-test-test-lib",
+    actual = "//build/buck2/graph/test:7744efa671ef90f9448d",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "gpu-test-test-test",
+    actual = "//build/buck2/graph/test:99bb22f4da2667208e2d",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "perf-test-test-test",
+    actual = "//build/buck2/graph/test:a5ebf5ca79b7b905b464",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-myaku-test-test-bin",
+    actual = "//build/buck2/graph/test:aa15ef9970caa47b24db",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "look-test-test-test",
+    actual = "//build/buck2/graph/test:e520adbc10f4d29a333b",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "energy-test-test-test",
+    actual = "//build/buck2/graph/test:ffce1622a8cc42d715a2",
     visibility = ["PUBLIC"],
 )
 

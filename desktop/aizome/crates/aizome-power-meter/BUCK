@@ -10,25 +10,25 @@ cargo_source(
 
 alias(
     name = "aizome-power-meter-build-dev",
-    actual = "//build/buck2/graph/dev:41fb3bdf61f6bb7c3c40",
+    actual = "//build/buck2/graph/dev:174721c88c13a9b9b426",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-power-meter-build-release",
-    actual = "//build/buck2/graph/release:d166e3c745ccadef7e46",
+    actual = "//build/buck2/graph/release:1f12e99ec93e463de294",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-power-meter-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:304ec0dcd65a3861671c",
+    actual = "//build/buck2/graph/release-lto:0fb83383d2ddb9874b37",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-power-meter-test-test-bin",
-    actual = "//build/buck2/graph/test:edfc5509cf9a1f0c73f7",
+    actual = "//build/buck2/graph/test:75134217883d8a4f0071",
     visibility = ["PUBLIC"],
 )
 

@@ -6,8 +6,6 @@ import os
 from pathlib import Path
 import shlex
 import subprocess
-import sys
-import tempfile
 
 ROOT_TOKEN = "${SEKKA_EXEC_ROOT}"
 
@@ -53,8 +51,15 @@ def profile_flags(unit):
     flags = ["-C", "opt-level=" + profile["opt_level"], "-C", "debuginfo=" + str(profile["debuginfo"]), "-C", "debug-assertions=" + str(profile["debug_assertions"]).lower(), "-C", "overflow-checks=" + str(profile["overflow_checks"]).lower(), "-C", "panic=" + profile["panic"]]
     if profile.get("codegen_units"):
         flags += ["-C", "codegen-units=" + str(profile["codegen_units"])]
-    if profile["lto"] not in [False, "false", "off"]:
-        flags += ["-C", "lto=" + str(profile["lto"]).lower()]
+    lto = unit["lto_mode"]
+    if lto.startswith("run:"):
+        flags += ["-C", "lto=" + lto[4:]]
+    elif lto == "off":
+        flags += ["-C", "lto=off"]
+    elif lto == "object":
+        flags += ["-C", "embed-bitcode=no"]
+    elif lto == "bitcode":
+        flags += ["-C", "linker-plugin-lto"]
     if profile.get("rpath"):
         flags += ["-C", "rpath"]
     if unit["package"]["name"] == "aizome-comp-core":
@@ -130,9 +135,12 @@ def run_script(payload, output, env, tools, root):
     env.update(package_environment(unit, manifest))
     out_dir = output / "out"
     out_dir.mkdir()
-    flags = profile_flags(unit)
+    codegen = dict(unit, **unit["abi_target"]) if "abi_target" in unit else unit
+    flags = profile_flags(codegen)
+    if "abi_target" in unit:
+        flags += ["-C", "metadata=" + codegen["key"], "-C", "extra-filename=-" + codegen["key"]]
     env.update(cfg_environment(tools, flags))
-    env.update(OUT_DIR=str(out_dir), HOST=tools["target"], TARGET=unit.get("platform") or tools["target"], PROFILE="debug" if unit["profile"]["name"] in ["dev", "test"] else "release", OPT_LEVEL=unit["profile"]["opt_level"], DEBUG=str(unit["profile"]["debuginfo"] not in [0, "none"]).lower(), NUM_JOBS="1", CARGO_ENCODED_RUSTFLAGS="\x1f".join(flags))
+    env.update(OUT_DIR=str(out_dir), HOST=tools["target"], TARGET=unit.get("platform") or tools["target"], PROFILE="debug" if codegen["profile"]["name"] in ["dev", "test"] else "release", OPT_LEVEL=codegen["profile"]["opt_level"], DEBUG=str(codegen["profile"]["debuginfo"] not in [0, "none"]).lower(), NUM_JOBS="1", CARGO_ENCODED_RUSTFLAGS="\x1f".join(flags))
     for feature in unit["features"]:
         env["CARGO_FEATURE_" + feature.upper().replace("-", "_")] = "1"
     executable = None
@@ -235,33 +243,24 @@ def compile_unit(payload, output, env, tools, root):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--environment", required=True)
-    parser.add_argument("--runtime")
-    parser.add_argument("--spec")
-    parser.add_argument("--output")
-    parser.add_argument("--run")
-    parser.add_argument("--test-run", action="store_true")
-    args, extra = parser.parse_known_args()
+    parser.add_argument("--spec", required=True)
+    parser.add_argument("--output", required=True)
+    args = parser.parse_args()
     tools = load(args.environment)
     root = Path.cwd()
     env = native_environment(tools)
-    if args.run:
-        output = Path(args.run).absolute()
-        info = relocate(load(output / "unit.json"), root)
-        runtime = load(args.runtime or tools["runtime"])
-        env.update(runtime)
-        env["LD_LIBRARY_PATH"] = ":".join([*info["library_paths"], tools["rustlib"], runtime.get("LD_LIBRARY_PATH", "")])
-        env.update({key: value for key, value in os.environ.items() if key.startswith(("AIZOME_", "XDG_", "WAYLAND_", "DBUS_")) or key in {"HOME", "TMPDIR", "RUST_BACKTRACE"}})
-        if args.test_run:
-            with tempfile.TemporaryDirectory(prefix="sb-", dir="/tmp") as private:
-                for name in ["home", "run", "tmp", "target"]:
-                    Path(private, name).mkdir(mode=0o700)
-                env.update(HOME=private + "/home", XDG_RUNTIME_DIR=private + "/run", TMPDIR=private + "/tmp", CARGO_TARGET_DIR=private + "/target", DBUS_SESSION_BUS_ADDRESS="unix:path=" + private + "/no-session-bus", DBUS_SYSTEM_BUS_ADDRESS="unix:path=" + private + "/no-system-bus")
-                raise SystemExit(subprocess.run([str(output / info["filename"]), *extra], env=env).returncode)
-        os.execve(str(output / info["filename"]), [str(output / info["filename"]), *extra], env)
     payload = load(args.spec)
     output = Path(args.output).absolute()
     output.mkdir(parents=True, exist_ok=True)
     library_paths = [str(Path(p).absolute()) for p in payload["closure"]]
+    for directory in payload["closure"]:
+        instructions = Path(directory) / "build-script.json"
+        if instructions.exists():
+            for search in relocate(load(instructions), root)["search"]:
+                kind, separator, path = search.partition("=")
+                path = path if separator and kind in {"native", "dependency", "all", "crate", "framework"} else search
+                if path not in library_paths:
+                    library_paths.append(path)
     env["LD_LIBRARY_PATH"] = ":".join([*library_paths, tools["rustlib"], tools.get("LIBRARY_PATH", "")])
     env["NIX_CFLAGS_COMPILE"] = env.get("NIX_CFLAGS_COMPILE", "") + " -ffile-prefix-map=" + str(root) + "=. -fdebug-prefix-map=" + str(root) + "=."
     env["ZERO_AR_DATE"] = "1"

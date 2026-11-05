@@ -1,14 +1,27 @@
 # The root flake supplies pkgs: no independent toolchain lock or checkout source.
-{ pkgs }:
+{ pkgs, rustOverlay ? null }:
 let
   inherit (pkgs) lib;
   shared = import ../bazel/toolchains.nix { inherit pkgs; };
+  buck2 = import ./engine.nix { inherit pkgs rustOverlay; };
   scripts = lib.fileset.toSource {
     root = ../../build/buck2;
     fileset = lib.fileset.unions [
       ../../build/buck2/client.py
       ../../build/buck2/generate.py
       ../../build/buck2/action.py
+      ../../build/buck2/run.py
+      ../../build/buck2/CARGO-LICENSE-MIT
+    ];
+  };
+  backendTestSource = lib.fileset.toSource {
+    root = ../../build/buck2;
+    fileset = lib.fileset.unions [
+      ../../build/buck2/generate.py
+      ../../build/buck2/action.py
+      ../../build/buck2/run.py
+      ../../build/buck2/test_backend.py
+      ../../build/buck2/CARGO-LICENSE-MIT
     ];
   };
   vendor = pkgs.rustPlatform.importCargoLock {
@@ -47,21 +60,29 @@ let
     export SEKKA_BUCK2_ENV=${environment}/env.json
     export SEKKA_BUCK2_VENDOR=${vendor}
     export SEKKA_BUCK2_CONFIG=${environment}/buckconfig
-    export SEKKA_BUCK2_BIN=${pkgs.buck2}/bin/buck2
+    export SEKKA_BUCK2_BIN=${buck2}/bin/buck2
     export SEKKA_BUCK2_RUNTIME=${shared.testEnv}/env.json
     exec ${pkgs.python3}/bin/python3 ${scripts}/client.py "$@"
   '';
+  backendTest = pkgs.runCommand "sekka-buck2-backend-test" {
+    SEKKA_BUCK2_ENV = "${environment}/env.json";
+    SEKKA_BUCK2_RUNTIME = "${shared.testEnv}/env.json";
+    PYTHONDONTWRITEBYTECODE = "1";
+  } ''
+    ${pkgs.python3}/bin/python3 ${backendTestSource}/test_backend.py
+    touch "$out"
+  '';
 in {
-  inherit (pkgs) buck2;
-  inherit vendor environment generator client;
+  inherit buck2;
+  inherit vendor environment generator client backendTest;
   inherit (shared) native rust cc;
   runtime = shared.testEnv;
   shell = pkgs.mkShell {
-    packages = [ client generator pkgs.buck2 pkgs.python3 shared.rust ];
+    packages = [ client generator buck2 pkgs.python3 shared.rust ];
     SEKKA_BUCK2_ENV = "${environment}/env.json";
     SEKKA_BUCK2_VENDOR = toString vendor;
     SEKKA_BUCK2_CONFIG = "${environment}/buckconfig";
-    SEKKA_BUCK2_BIN = "${pkgs.buck2}/bin/buck2";
+    SEKKA_BUCK2_BIN = "${buck2}/bin/buck2";
     SEKKA_BUCK2_RUNTIME = "${shared.testEnv}/env.json";
   };
 }

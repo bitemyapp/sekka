@@ -9,80 +9,80 @@ cargo_source(
 )
 
 alias(
-    name = "hako-build-dev",
-    actual = "//build/buck2/graph/dev:e19391849f93dcabcaae",
-    visibility = ["PUBLIC"],
-)
-
-alias(
     name = "aizome-hako-build-dev",
-    actual = "//build/buck2/graph/dev:dfbfa7a737d9016affb2",
+    actual = "//build/buck2/graph/dev:d847f01bd9dbf480170c",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "hako-build-release",
-    actual = "//build/buck2/graph/release:77fadb8b56f0de655b36",
+    name = "hako-build-dev",
+    actual = "//build/buck2/graph/dev:f44e708fecf6e4fb001c",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-hako-build-release",
-    actual = "//build/buck2/graph/release:c0fa985f1e276351fd42",
+    actual = "//build/buck2/graph/release:0232aaad9b3ee1efee6b",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "hako-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:2a095d2a0f7f7fc288c2",
+    name = "hako-build-release",
+    actual = "//build/buck2/graph/release:ef6199fadd7353a0d888",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-hako-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:199a60770818e6a7da4e",
+    actual = "//build/buck2/graph/release-lto:1165925488c00cf1dc2f",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "hako-test-test-lib",
-    actual = "//build/buck2/graph/test:3b53ff620a1b7a01f594",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-hako-test-test-bin",
-    actual = "//build/buck2/graph/test:8d6074aec76ceb3567f4",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "file_manager-test-test-test",
-    actual = "//build/buck2/graph/test:88182671caf7046ae8b4",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "files-test-test-test",
-    actual = "//build/buck2/graph/test:0e83c1927047e002f1a1",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "goldens-test-test-test",
-    actual = "//build/buck2/graph/test:ec43560aa3c62732a3e0",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "perf-test-test-test",
-    actual = "//build/buck2/graph/test:aab4d1c90c5af79c3ba1",
+    name = "hako-build-release-lto",
+    actual = "//build/buck2/graph/release-lto:9954be4d44ed0c81b586",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "window-test-test-test",
-    actual = "//build/buck2/graph/test:1f59c6d746b0630a2f53",
+    actual = "//build/buck2/graph/test:1eb3006a15253eafd37b",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "files-test-test-test",
+    actual = "//build/buck2/graph/test:3ce5a95fbf48b6df067b",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "hako-test-test-lib",
+    actual = "//build/buck2/graph/test:8a915220f7e14454842a",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-hako-test-test-bin",
+    actual = "//build/buck2/graph/test:9509a1763d15d183e728",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "goldens-test-test-test",
+    actual = "//build/buck2/graph/test:9fbf741b50f13a5dd654",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "perf-test-test-test",
+    actual = "//build/buck2/graph/test:a7b65e0bf854a598eaa3",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "file_manager-test-test-test",
+    actual = "//build/buck2/graph/test:cf044e98853453f20500",
     visibility = ["PUBLIC"],
 )
 

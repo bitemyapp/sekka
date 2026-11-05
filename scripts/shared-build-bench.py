@@ -10,17 +10,46 @@ fragments. A failed/interrupted cold trial remains cold; resume never replaces i
 Configuration keys: tool, repo, commit (full frozen SHA), root, client (argv),
 environment (explicit overrides), profiles (dev/release/release-lto, each with
 features and targets), artifacts (leaf/shared/icon selectors), setup (argv lists),
-service (identity, metrics/restart/eviction argv), storage (roots, command),
-test_groups (nine named argv suffixes), soroban_tests, startup (argv),
+service (identity, inventory/metrics/restart/eviction/restore_capacity argv and APIs),
+storage (roots, immutable_roots, command, optional max_active_union_bytes),
+test_groups (nine named argv suffixes), soroban_tests, correctness_behavior
+(argv producing the eleven real libtest results), startup (private headless argv),
+startup_result (test-startup.py result.json path; exact executables and PNGs checked),
+runtime_artifacts (Bazel runtime placeholder -> artifact selector key) or
+runtime_targets (Buck runtime placeholder -> target name; ergonomic runtime API),
 nix_identity (evidence paths), variants (client/service/source identity metadata).
-Artifact selectors have target, optional file_regex and member (e.g. icons.rs).
+Artifact selectors have target, optional file_regex, output_group and member
+(e.g. icons.rs); selectors may be keyed by profile. Runtime artifact placeholders
+include compositor/shell/ctl/koe. The compositor also runs --build-info.
+Bitcode-only rlibs require bitcode_decoder (argv with {member}/{decoded}, e.g.
+matching clang -S -emit-llvm -x ir {member} -o {decoded}); inspection decodes the
+actual archive members outside build timing and preserves inputs/IR/command logs.
+
+Buck configuration requires buck_engine (native argv), buck_telemetry_flags
+including --buck-arg=--build-report={telemetry}.report.json and
+--buck-arg=--event-log={telemetry}.events.json-lines.gz. Keep buck_isolation
+identical across clients: it enters action paths. Output-loss recovery stops only
+the owned daemon and quarantines mutable output state, preserving its original
+action path and all cache data. Quarantine is evidence, not active workload.
+
 Storage command must emit compsize's compression-aware TOTAL row and receives
-ALL storage roots in ONE invocation. No component sums or df deltas are used.
-All placeholders are whole argument/substring replacements: {tree}, {root},
-{profile}, {jobs}, {trial}, {state}, {output}, {python}. See plan --help.
+ALL selected roots in ONE invocation. Roots may use glob:PATH; unmatched roots
+fail. Separate active/immutable unions are never summed. The sharing denominator
+is the one-tree post-edit/revert workload, not the smaller original cold cache.
+Optional cargo_baseline JSON supplies commit, features, leaf/shared/icon median
+seconds; differing commits additionally require equal comparison_identity.
+Credentials belong in private client rc/manifest files, not literal argv tokens.
+Placeholders: {tree}, {root}, {profile}, {jobs}, {trial}, {state}, {output},
+{python}; these are literal substitutions, never shell expansions.
+
+Examples: shared-build-bench.py plan
+          shared-build-bench.py smoke config.json --kind shared --edit
+          shared-build-bench.py run config.json --go
+          shared-build-bench.py summarize /owned/run/root
 """
 import argparse
 import concurrent.futures
+import contextlib
 import fcntl
 import hashlib
 import json
@@ -61,14 +90,22 @@ def canonical(value):
 
 
 def save(path, value):
-    """Create-only observations: collisions are errors, including on resume."""
+    """Atomically publish create-only observations; retain pending writes on failure."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open('x') as stream:
+    temporary = path.with_name('.' + path.name + '.pending-' + uuid.uuid4().hex)
+    with temporary.open('x') as stream:
         json.dump(value, stream, indent=2, sort_keys=True)
         stream.write('\n')
         stream.flush()
         os.fsync(stream.fileno())
+    os.link(temporary, path)  # Atomic publication, refusing an existing observation.
+    temporary.unlink()
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
 
 
 def load(path):
@@ -107,6 +144,7 @@ def plan():
     add('dev-restart-edited', edits={'shared': 'shared-1'})
     add('dev-restart-original', reference='dev-cold')
     add('dev-primed-output-loss', reference='dev-cold', storage=True, output_loss=True)
+    add('service-restore-capacity', operation='restore_capacity')
     for profile in ('release', 'release-lto'):
         add(f'{profile}-first', profile=profile)
         add(f'{profile}-noop', profile=profile)
@@ -137,16 +175,28 @@ def expand(argv, values):
 
 
 def json_stream(path):
-    text = Path(path).read_text()
+    """Decode JSONL or concatenated pretty objects without retaining giant logs."""
     decoder = json.JSONDecoder()
-    pos = 0
-    while pos < len(text):
-        while pos < len(text) and text[pos].isspace():
-            pos += 1
-        if pos == len(text):
-            break
-        value, pos = decoder.raw_decode(text, pos)
-        yield value
+    text = ''
+    eof = False
+    with Path(path).open() as stream:
+        while True:
+            text = text.lstrip()
+            if not text and eof:
+                return
+            try:
+                value, end = decoder.raw_decode(text)
+            except json.JSONDecodeError:
+                if eof:
+                    raise
+                chunk = stream.read(1024 * 1024)
+                if chunk:
+                    text += chunk
+                else:
+                    eof = True
+                continue
+            yield value
+            text = text[end:]
 
 
 def bazel_telemetry(prefix):
@@ -163,6 +213,7 @@ def bazel_telemetry(prefix):
                 result.setdefault('test_summaries', []).append(event['testSummary'])
     if execution.exists():
         actions, runners, hits, keys = {}, {}, 0, []
+        memory_peaks = []
         for action in json_stream(execution):
             runner = action.get('runner', 'unknown')
             runners[runner] = runners.get(runner, 0) + 1
@@ -171,12 +222,29 @@ def bazel_telemetry(prefix):
             else:
                 mnemonic = action.get('mnemonic', 'unknown')
                 actions[mnemonic] = actions.get(mnemonic, 0) + 1
-            keys.append({k: action[k] for k in ('digest', 'mnemonic', 'targetLabel', 'runner', 'cacheHit') if k in action})
+                peak = action.get('metrics', {}).get('measuredMemoryPeakBytes')
+                if peak is not None:
+                    memory_peaks.append(int(peak))
+            keys.append({k: action[k] for k in ('digest', 'mnemonic', 'targetLabel', 'runner', 'cacheHit', 'metrics') if k in action})
         result.update(executed_mnemonics=actions, runners=runners, remote_or_disk_hits=hits,
                       compiler_executions=sum(n for key, n in actions.items() if 'Rustc' in key or key == 'CppCompile'),
                       action_keys=keys)
+        result['maximum_executed_action_memory_bytes'] = max(memory_peaks) if memory_peaks else None
+        result['memory_sample_count'] = len(memory_peaks)
+        result['memory_method'] = 'largest individually measured executed action, not concurrent aggregate RSS; cache-hit metadata excluded'
     result['action_cpu_seconds'] = None
     result['action_cpu_reason'] = 'not inferred from client CPU or summed wall time; native raw telemetry retained'
+    cpu_by_mnemonic = {}
+    for action in result.get('build_metrics', {}).get('actionSummary', {}).get('actionData', []):
+        mnemonic = action.get('mnemonic')
+        if mnemonic in result.get('executed_mnemonics', {}) and ('userTime' in action or 'systemTime' in action):
+            cpu_by_mnemonic[mnemonic] = sum(float(action.get(key, '0s').removesuffix('s'))
+                                            for key in ('userTime', 'systemTime'))
+    result['action_cpu_seconds_by_mnemonic'] = cpu_by_mnemonic
+    result['action_cpu_seconds_reported_sum'] = sum(cpu_by_mnemonic.values()) if cpu_by_mnemonic else None
+    if set(result.get('executed_mnemonics', {})) == set(cpu_by_mnemonic) and execution.exists():
+        result['action_cpu_seconds'] = sum(cpu_by_mnemonic.values())
+        result['action_cpu_reason'] = 'BEP actionSummary.actionData userTime+systemTime for every executed spawn mnemonic; not JVM/client CPU'
     return result
 
 
@@ -195,6 +263,7 @@ def buck_telemetry(path):
               'action_keys': [], 'failed_actions': 0, 'native_compiler_subprocesses': None,
               'compiler_count_definition': 'one rustc per executed cargo_build/cargo_test action; buildscript native subprocesses unmeasured',
               'native_event_json': str(path), 'snapshots': []}
+    memory_peaks = []
     commands_complete = False
     for row in json_stream(path):
         event = row.get('Event', {}).get('data', {})
@@ -203,7 +272,8 @@ def buck_telemetry(path):
             commands_complete = True
         snapshot = event.get('Instant', {}).get('data', {}).get('Snapshot')
         if snapshot:
-            result['snapshots'].append(snapshot)
+            result['snapshots'].append({key: value for key, value in snapshot.items()
+                                        if not isinstance(value, (dict, list))})
         action = end.get('ActionExecution')
         if not action:
             continue
@@ -220,6 +290,9 @@ def buck_telemetry(path):
         digests = []
         for command in action.get('commands', []):
             variants = command.get('details', {}).get('command_kind', {}).get('command', {})
+            stats = command.get('details', {}).get('metadata', {}).get('execution_stats') or {}
+            if kind in (1, 2, 8, 11) and stats.get('memory_peak') is not None:
+                memory_peaks.append(int(stats['memory_peak']))
             for detail in variants.values():
                 if isinstance(detail, dict) and detail.get('action_digest'):
                     digests.append(detail['action_digest'])
@@ -232,12 +305,62 @@ def buck_telemetry(path):
         result['compiler_executions'] = None
     # Endpoints suffice for daemon metrics; all original samples remain in JSON.
     result['snapshots'] = result['snapshots'][:1] + result['snapshots'][-1:]
+    result['maximum_executed_action_memory_bytes'] = max(memory_peaks) if memory_peaks else None
+    result['memory_sample_count'] = len(memory_peaks)
+    result['action_cpu_seconds'] = None
+    result['action_cpu_reason'] = 'not inferred from client CPU or summed wall time; per-command native worker details retained when reported'
     return result
+
+
+def artifact_markers(data, directory, decoder, command):
+    """Inspect native bytes and real LLVM archive members, never source text."""
+    pattern = rb'sekka-bench-(?:(?!sekka-bench-)[a-zA-Z0-9-])+?-END'
+    found = set(re.findall(pattern, data))
+    members = []
+    if data.startswith(b'!<arch>\n'):
+        offset = 8
+        while offset < len(data):
+            header = data[offset:offset + 60]
+            if len(header) != 60 or header[58:] != b'`\n':
+                raise RuntimeError('malformed rlib archive member header')
+            size = int(header[48:58])
+            start = offset + 60
+            end = start + size
+            if size < 0 or end > len(data):
+                raise RuntimeError('truncated rlib archive member')
+            name = header[:16].rstrip().decode('ascii')
+            payload = data[start:end]
+            if name.startswith('#1/'):
+                name_size = int(name[3:])
+                if name_size > len(payload):
+                    raise RuntimeError('truncated BSD archive member name')
+                name = payload[:name_size].rstrip(b'\0').decode('utf-8')
+                payload = payload[name_size:]
+            if payload.startswith((b'BC\xc0\xde', b'\xde\xc0\x17\x0b')):
+                if not decoder:
+                    raise RuntimeError('bitcode-only rlib requires matching bitcode_decoder argv')
+                prefix = Path(directory) / ('bitcode-' + str(len(members)))
+                source = prefix.with_suffix('.bc')
+                decoded = prefix.with_suffix('.ll')
+                source.parent.mkdir(parents=True, exist_ok=True)
+                with source.open('xb') as stream:
+                    stream.write(payload)
+                rec = command(expand(decoder, {'member': source, 'decoded': decoded}), prefix.name)
+                if rec['exit_status'] or not decoded.is_file():
+                    raise RuntimeError(f'actual rlib bitcode decoding failed: {source}')
+                ir = decoded.read_bytes()
+                found.update(re.findall(pattern, ir))
+                members.append({'archive_name': name, 'archive_offset': start,
+                                'bitcode': str(source), 'sha256': digest(payload),
+                                'decoded': str(decoded), 'decoded_sha256': digest(ir), 'command': rec})
+            offset = end + size % 2
+    return {'markers': sorted(value.decode() for value in found), 'bitcode_members': members}
 
 
 class Bench:
     def __init__(self, config):
         self.config = config
+        self.driver_sha256 = file_digest(__file__)
         self.root = Path(config['root']).resolve()
         self.repo = Path(config['repo']).resolve()
         self.commit = config['commit']
@@ -247,7 +370,7 @@ class Bench:
             raise ValueError('tool must be bazel or buck2')
         self.env = dict(os.environ, **config.get('environment', {}))
         self.fingerprint = digest(canonical(config))
-        self.root.mkdir(parents=True, exist_ok=True)
+        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         marker = self.root / OWNER
         if marker.exists():
             self.owner = load(marker)
@@ -266,27 +389,34 @@ class Bench:
         self.original = {}
         for relative in (LEAF, SHARED):
             self.original[relative] = subprocess.check_output(['git', '-C', str(self.repo), 'show', f'{self.commit}:{relative}'])
-        self.write_lock = threading.Lock()
 
     def values(self, tree='a', profile='dev', jobs=16, trial='setup'):
         return {'tree': self.root / 'trees' / tree, 'root': self.root, 'profile': profile,
                 'jobs': jobs, 'trial': self.root / 'trials' / trial, 'state': self.root / 'state' / tree,
                 'output': self.root / 'state' / tree / 'outputs', 'python': sys.executable}
 
-    def command(self, argv, cwd, directory, name, *, timeout=None, env=None):
+    def command(self, argv, cwd, directory, name, *, timeout=None, env=None, start_barrier=None, separate_stderr=False):
         directory = Path(directory)
         directory.mkdir(parents=True, exist_ok=True)
         log = directory / (name + '.log')
-        start = time.time()
-        mono = time.monotonic()
-        record = {'argv': argv, 'cwd': str(cwd), 'start_unix': start,
+        record = {'argv': argv, 'cwd': str(cwd), 'intent_unix': time.time(),
                   'load_before': list(os.getloadavg()), 'log': str(log)}
+        if separate_stderr:
+            record['stderr_log'] = str(directory / (name + '.stderr.log'))
         # The intent is durable before spawning, so interruption remains visible.
         save(directory / (name + '.intent.json'), record)
+        # Evidence publication/fsync is not charged to the build.
+        if start_barrier is not None:
+            start_barrier.wait(timeout=self.config.get('barrier_timeout_seconds', 300))
+        mono = time.monotonic()
+        record.update(start_unix=time.time(), start_monotonic=mono)
         try:
-            with log.open('xb') as stream:
+            with contextlib.ExitStack() as stack:
+                stream = stack.enter_context(log.open('xb'))
+                stderr = (stack.enter_context(Path(record['stderr_log']).open('xb'))
+                          if separate_stderr else subprocess.STDOUT)
                 proc = subprocess.Popen(argv, cwd=cwd, env=env or self.env, stdout=stream,
-                                        stderr=subprocess.STDOUT, start_new_session=True)
+                                        stderr=stderr, start_new_session=True)
                 try:
                     status = proc.wait(timeout=timeout or self.config.get('timeout_seconds', 7200))
                 except subprocess.TimeoutExpired:
@@ -302,13 +432,16 @@ class Bench:
         except OSError as exc:
             status = 127
             record['launch_error'] = str(exc)
-        record.update(exit_status=status, wall_seconds=time.monotonic() - mono,
+        ended = time.monotonic()
+        record.update(exit_status=status, wall_seconds=ended - mono, end_monotonic=ended,
                       end_unix=time.time(), load_after=list(os.getloadavg()))
         save(directory / (name + '.json'), record)
         return record
 
     def tree(self, name):
         path = self.root / 'trees' / name
+        if path.is_symlink() or not path.resolve().is_relative_to(self.root):
+            raise RuntimeError(f'refusing unowned/symlink worktree: {path}')
         if path.exists():
             head = subprocess.check_output(['git', '-C', str(path), 'rev-parse', 'HEAD'], text=True).strip()
             if head != self.commit:
@@ -325,7 +458,7 @@ class Bench:
             raise RuntimeError(f'checkout failed: {attempt}')
         return path
 
-    def client(self, values, operation, extra=()):
+    def client(self, values, operation, extra=(), frontend_extra=()):
         config = self.config
         base = expand(config['client'], values)
         profile = str(values['profile'])
@@ -333,13 +466,13 @@ class Bench:
             base += ['--profile', profile, '--output-base', str(values['output']),
                      '--disk-cache', str(self.root / 'cache' / 'bazel')]
             base += expand(config.get('client_flags', []), values)
-            return base + [operation] + list(extra)
+            return base + list(frontend_extra) + [operation] + list(extra)
         # Isolation participates in Buck action paths: keep it identical across
         # fresh trees, machines, and output-loss recovery, not random per run.
         isolation = config.get('buck_isolation', 'shared-bench')
         base += ['--profile', profile, '--isolation-dir', isolation, '-j', str(values['jobs'])]
         base += expand(config.get('client_flags', []), values)
-        return base + [operation] + list(extra)
+        return base + list(frontend_extra) + [operation] + list(extra)
 
     def prepare(self):
         complete = self.root / 'setup' / 'complete.json'
@@ -359,9 +492,14 @@ class Bench:
                   'nix_identity': self.config.get('nix_identity', []), 'variants': self.config.get('variants', []),
                   'service_identity': self.config.get('service', {}).get('identity'),
                   'setup_records': records, 'excluded_from_build_timings': True}
+        source['driver_sha256'] = self.driver_sha256
         source['nix_identity_files'] = [
             {'path': str(path), 'sha256': file_digest(path)}
             for path in self.config.get('nix_identity', [])]
+        if self.config.get('cargo_baseline'):
+            source['cargo_baseline'] = {'path': self.config['cargo_baseline'],
+                                        'sha256': file_digest(self.config['cargo_baseline'])}
+        source['comparison_identity'] = self.config.get('comparison_identity')
         source['locks'] = {rel: file_digest(tree / rel) for rel in self.config.get('source_locks', ['flake.lock', 'desktop/aizome/Cargo.lock'])}
         save(complete, source)
 
@@ -392,6 +530,8 @@ class Bench:
         changes = []
         for rel in sorted(set(updates) | icon_paths):
             path = tree / rel
+            if path.is_symlink() or not path.resolve().is_relative_to(tree.resolve()):
+                raise RuntimeError(f'refusing source path outside owned worktree: {path}')
             before = path.read_bytes() if path.exists() else None
             expected = state['files'].get(rel)
             if expected is not None and (before is None or digest(before) != expected):
@@ -410,28 +550,54 @@ class Bench:
             changes.append({'path': rel, 'before': digest(before) if before is not None else None,
                             'after': digest(after) if after is not None else None})
         new_state = {'files': {rel: digest(data) for rel, data in updates.items()}, 'icons': new_icons}
-        temporary = old_state.with_suffix('.tmp')
-        temporary.write_bytes(canonical(new_state))
-        temporary.replace(old_state)
+        if new_state != state or not old_state.exists():
+            temporary = old_state.with_suffix('.tmp')
+            temporary.write_bytes(canonical(new_state))
+            temporary.replace(old_state)
         return markers, changes
 
-    def artifact(self, kind, values, directory):
+    def collect_telemetry(self, prefix, values, directory, name='telemetry'):
+        if self.config['tool'] == 'bazel':
+            return bazel_telemetry(prefix)
+        event_path = Path(str(prefix) + '.events.json-lines.gz')
+        if not event_path.exists():
+            return {'compiler_executions': None, 'native_event_log_missing': str(event_path)}
+        engine = self.config.get('buck_engine')
+        if not engine and self.env.get('SEKKA_BUCK2_BIN'):
+            engine = [self.env['SEKKA_BUCK2_BIN']]
+        if not engine:
+            raise RuntimeError('buck_engine argv required to decode native events')
+        decoded = self.command(expand(engine, values) + ['log', 'show', str(event_path)],
+                               values['tree'], directory, name)
+        if decoded['exit_status']:
+            raise RuntimeError('native Buck event decoding failed')
+        telemetry = buck_telemetry(decoded['log'])
+        telemetry['collection'] = decoded
+        return telemetry
+
+    def artifact(self, kind, values, directory, require_cached=True):
         selector = self.config['artifacts'][kind]
         selector = selector.get(str(values['profile']), selector)
         target = selector['target']
+        prefix = directory / (kind + '-materialize-native')
         if self.config['tool'] == 'bazel':
-            materialize = self.client(values, 'build', ['--remote_download_outputs=all', target])
+            groups = ['--output_groups=' + selector['output_group']] if selector.get('output_group') else []
+            # Only the inspected declared output is forced local, never its
+            # deliberately lazy dependency closure.
+            flags = [f'--build_event_json_file={prefix}.bep.json', f'--execution_log_json_file={prefix}.exec.json']
+            materialize = self.client(values, 'build', ['--remote_download_outputs=toplevel', *flags, *groups, target])
             rec = self.command(materialize, values['tree'], directory, kind + '-materialize')
             if rec['exit_status']:
                 raise RuntimeError(f'artifact materialization failed: {kind}')
-            argv = self.client(values, 'cquery', ['--output=files', target])
-            query = self.command(argv, values['tree'], directory, kind + '-declared')
+            argv = self.client(values, 'cquery', ['--output=files', *groups, target])
+            query = self.command(argv, values['tree'], directory, kind + '-declared', separate_stderr=True)
             if query['exit_status']:
                 raise RuntimeError(f'artifact declaration query failed: {kind}')
             lines = Path(query['log']).read_text().splitlines()
             candidates = [Path(values['tree']) / line for line in lines if line.startswith(('bazel-out/', '/'))]
         else:
-            argv = self.client(values, 'outputs', [target])
+            flags = expand(self.config['buck_telemetry_flags'], dict(values, telemetry=prefix))
+            argv = self.client(values, 'outputs', [*flags, target])
             rec = self.command(argv, values['tree'], directory, kind + '-declared-materialize')
             if rec['exit_status']:
                 raise RuntimeError(f'artifact declaration/materialization failed: {kind}')
@@ -454,6 +620,13 @@ class Bench:
                     elif isinstance(value, list):
                         paths.extend(x for x in value if isinstance(x, str))
             candidates = [Path(values['tree']) / value for value in paths]
+        telemetry = self.collect_telemetry(prefix, values, directory, kind + '-materialize-telemetry')
+        work = sum(telemetry.get('executed_mnemonics', telemetry.get('executed_categories', {})).values())
+        save(directory / (kind + '-materialization.json'), {
+            'telemetry': telemetry, 'executed_work_actions': work, 'require_cached': require_cached,
+            'note': 'verification cannot silently rebuild missing CAS outputs outside the measured build'})
+        if telemetry.get('compiler_executions') is None or (require_cached and work):
+            raise RuntimeError(f'{kind}: artifact verification executed {work} work actions or lacks native telemetry')
         pattern = selector.get('file_regex')
         if pattern:
             candidates = [path for path in candidates if re.search(pattern, str(path))]
@@ -473,11 +646,15 @@ class Bench:
             path = self.artifact(kind, values, directory)
             data = path.read_bytes()
             marker = markers.get(kind)
-            # Bounded known marker language; trailing -END prevents 1 matching 10.
-            found = sorted(set(x.decode() for x in re.findall(rb'sekka-bench-[a-zA-Z0-9-]+-END', data)))
+            inspection = artifact_markers(
+                data, directory / (kind + '-inspection'),
+                expand(self.config.get('bitcode_decoder', []), values),
+                lambda argv, name: self.command(argv, values['tree'], directory / (kind + '-inspection'), name))
+            found = inspection['markers']
             expected = [marker] if marker else []
             check = {'artifact': str(path), 'sha256': digest(data), 'bytes': len(data),
                      'markers': found, 'expected': expected, 'passed': found == expected}
+            check['bitcode_members'] = inspection['bitcode_members']
             if kind == 'leaf' and marker:
                 selector = self.config['artifacts'][kind]
                 selector = selector.get(str(values['profile']), selector)
@@ -531,14 +708,14 @@ class Bench:
             'same_action_path_on_recovery': True, 'cache_deleted': False,
             'note': 'mutable state moved out of active roots, not destroyed; exclude retained evidence from active union'})
 
-    def trial(self, stage, name, directory):
+    def trial(self, stage, name, directory, prepared=None, start_barrier=None):
         values = self.values(name, stage['profile'], stage['jobs'], stage['id'] + '-' + name)
         tree = self.tree(name)
-        markers, changes = self.edit_source(name, stage)
+        markers, changes = prepared if prepared is not None else self.edit_source(name, stage)
         if stage.get('output_loss'):
             self.lose_outputs(values, directory)
         profile = self.config['profiles'][stage['profile']]
-        targets = profile['targets']
+        targets = stage.get('targets', profile['targets'])
         operation = stage['operation']
         extra = list(targets)
         if operation == 'test':
@@ -546,8 +723,30 @@ class Bench:
         elif operation == 'soroban':
             extra = self.config['soroban_tests']['args']
         prefix = directory / 'native'
+        build_info = None
         if operation == 'startup':
+            if self.config['tool'] == 'buck2':
+                runtime_dir = directory / 'runtime'
+                runtime = self.command(
+                    self.client(values, 'runtime', frontend_extra=['--runtime-dir', str(runtime_dir)]),
+                    tree, directory, 'runtime-discovery')
+                if runtime['exit_status']:
+                    raise RuntimeError('ergonomic Buck runtime materialization failed')
+                manifest = load(runtime_dir / 'runtime.json')
+                for runtime_name, target_name in self.config['runtime_targets'].items():
+                    path = Path(manifest['binaries'][target_name])
+                    if not path.is_file():
+                        raise RuntimeError(f'declared runtime launcher missing: {path}')
+                    values[runtime_name] = path
+            else:
+                for runtime_name, selector in self.config['runtime_artifacts'].items():
+                    values[runtime_name] = self.artifact(selector, values, directory, require_cached=False)
+            if 'compositor' in values:
+                build_info = self.command([str(values['compositor']), '--build-info'], tree, directory, 'build-info')
             argv = expand(self.config['startup'], values)
+            startup_result = Path(expand([self.config['startup_result']], values)[0])
+            if startup_result.exists():
+                raise RuntimeError(f'refusing stale private startup evidence: {startup_result}')
         else:
             native_operation = 'test' if operation in ('test', 'soroban') else 'build'
             if self.config['tool'] == 'bazel':
@@ -573,31 +772,20 @@ class Bench:
             'commit': self.commit, 'patch': source['tracked_patch_sha256'],
             'untracked': source['untracked_files']}))
         before = self.metrics(values, directory, 'metrics-before')
-        rec = self.command(argv, tree, directory, 'build')
+        rec = self.command(argv, tree, directory, 'build', start_barrier=start_barrier)
         result = {'schema': SCHEMA, 'stage': stage, 'tree': name, 'tool': self.config['tool'],
                   'profile': stage['profile'], 'features': profile['features'], 'source': source,
                   'host': socket.gethostname(), 'service': self.config.get('service', {}).get('identity'),
                   'variants': self.config.get('variants', []), 'build': rec,
                   'metrics_before': before, 'metrics_after': self.metrics(values, directory, 'metrics-after')}
+        result['driver_sha256'] = self.driver_sha256
+        if build_info is not None:
+            result['build_info'] = build_info
         try:
-            if self.config['tool'] == 'bazel':
-                result['telemetry'] = bazel_telemetry(prefix)
-            else:
-                event_path = Path(str(prefix) + '.events.json-lines.gz')
-                if event_path.exists():
-                    engine = self.config.get('buck_engine')
-                    if not engine and self.env.get('SEKKA_BUCK2_BIN'):
-                        engine = [self.env['SEKKA_BUCK2_BIN']]
-                    if not engine:
-                        raise RuntimeError('buck_engine argv required to decode native events')
-                    decoded = self.command(expand(engine, values) + ['log', 'show', str(event_path)],
-                                           tree, directory, 'telemetry')
-                    result['telemetry_collection'] = decoded
-                    if decoded['exit_status']:
-                        raise RuntimeError('native Buck event decoding failed')
-                    result['telemetry'] = buck_telemetry(decoded['log'])
-                else:
-                    result['telemetry'] = {'compiler_executions': None, 'native_event_log_missing': str(event_path)}
+            result['telemetry'] = (self.collect_telemetry(prefix, values, directory) if operation != 'startup'
+                                   else {'compiler_executions': None, 'not_applicable': 'runtime execution'})
+            if operation != 'startup' and rec['exit_status'] == 0 and result['telemetry'].get('compiler_executions') is None:
+                raise RuntimeError('successful build lacks complete native compiler-action telemetry')
         except Exception as exc:
             result['telemetry_error'] = str(exc)
         try:
@@ -605,6 +793,22 @@ class Bench:
                 reference = self.reference(stage.get('reference'))
                 result['correctness'] = self.check(markers, values, directory, reference,
                                                    stage.get('checks', ('leaf', 'shared', 'icon')))
+            elif rec['exit_status'] == 0 and operation == 'startup':
+                report = load(startup_result)
+                executables_match = all(
+                    report.get('executables', {}).get(runtime_name) == str(Path(values[runtime_name]).resolve())
+                    for runtime_name in ('compositor', 'shell', 'ctl', 'koe'))
+                screenshots = {}
+                for filename in ('koe-window-live.png', 'startup-success-live.png'):
+                    image = startup_result.parent / filename
+                    with image.open('rb') as stream:
+                        screenshots[filename] = stream.read(8) == b'\x89PNG\r\n\x1a\n' and image.stat().st_size > 8
+                result['startup_evidence'] = {
+                    'result_path': str(startup_result), 'sha256': file_digest(startup_result),
+                    'coverage': report.get('coverage'), 'executables_match': executables_match,
+                    'screenshots': screenshots}
+                result['startup_passed'] = (executables_match and all(screenshots.values())
+                                             and report.get('coverage', '').startswith('private headless compositor;'))
             elif rec['exit_status'] == 0 and operation in ('test', 'soroban'):
                 result['test_evidence'] = self.test_counts(directory / 'build.log')
                 result['test_count_passed'] = result['test_evidence']['summaries'] > 0 and result['test_evidence']['failed'] == 0
@@ -612,7 +816,9 @@ class Bench:
                     result['test_count_passed'] = result['test_evidence']['passed'] == stage['expected_tests'] and result['test_evidence']['failed'] == 0
             result['passed'] = (rec['exit_status'] == 0 and not result.get('telemetry_error')
                                 and all(c['passed'] for c in result.get('correctness', {}).values())
-                                and result.get('test_count_passed', True))
+                                and result.get('test_count_passed', True)
+                                and result.get('startup_passed', True)
+                                and (build_info is None or build_info['exit_status'] == 0))
         except Exception as exc:
             result['postprocess_error'] = str(exc)
             result['passed'] = False
@@ -675,9 +881,14 @@ class Bench:
 
     def run(self, selected):
         self.prepare()
-        for stage in plan():
+        stages = plan()
+        for index, stage in enumerate(stages):
             if selected and stage['id'] not in selected:
                 continue
+            missing_prior = [prior['id'] for prior in stages[:index]
+                             if not (self.root / 'stages' / prior['id']).exists()]
+            if missing_prior:
+                raise RuntimeError(f'cannot relabel an unprimed build as {stage["id"]}; missing prior observations: {missing_prior}')
             directory = self.root / 'stages' / stage['id']
             if (directory / 'complete.json').exists():
                 continue
@@ -687,20 +898,70 @@ class Bench:
                      {'passed': False, 'reason': 'prior stage began but did not finish; original evidence preserved', 'time': time.time()})
                 continue
             directory.mkdir(parents=True)
-            save(directory / 'intent.json', {'stage': stage, 'start': time.time()})
+            save(directory / 'intent.json', {'stage': stage, 'start': time.time(), 'driver_sha256': self.driver_sha256})
             started = time.monotonic()
             try:
                 operation = stage['operation']
-                if operation in ('eviction', 'restart'):
+                if operation in ('eviction', 'restart', 'restore_capacity'):
                     service = self.config['service']
-                    rec = self.command(expand(service[operation], self.values()), self.tree('a'), directory, operation)
-                    results = [{'passed': rec['exit_status'] == 0, 'service_operation': rec,
-                                'supported_api': service.get(operation + '_api')}]
+                    values = self.values()
+                    tree = self.tree('a')
+                    inventory_argv = expand(service['inventory'], values)
+                    before = self.command(inventory_argv, tree, directory, 'inventory-before')
+                    if before['exit_status']:
+                        raise RuntimeError('cannot inventory owned service cache before operation')
+                    before_files = load(before['log'])
+                    metrics_before = self.metrics(values, directory, 'service-metrics-before')
+                    rec = self.command(expand(service[operation], values), tree, directory, operation)
+                    after = self.command(inventory_argv, tree, directory, 'inventory-after')
+                    if after['exit_status']:
+                        raise RuntimeError('cannot inventory owned service cache after operation')
+                    after_files = load(after['log'])
+                    if before_files['roots'] != after_files['roots']:
+                        raise RuntimeError('service operation changed cache roots; not matched eviction/restart evidence')
+                    removed = sorted(set(before_files['files']) - set(after_files['files']))
+                    retained = all(after_files['files'].get(key) == size for key, size in before_files['files'].items())
+                    cache_proof = bool(removed) if operation == 'eviction' else bool(before_files['files']) and retained
+                    cap = service.get('eviction_max_apparent_bytes')
+                    if operation == 'eviction' and cap is not None:
+                        cache_proof &= after_files['apparent_bytes'] <= cap
+                    metrics_after = self.metrics(values, directory, 'service-metrics-after')
+                    results = [{
+                        'passed': rec['exit_status'] == 0 and cache_proof
+                                  and metrics_before.get('exit_status') == 0 and metrics_after.get('exit_status') == 0,
+                        'service_operation': rec, 'supported_api': service.get(operation + '_api'),
+                        'cache_inventory_before': before, 'cache_inventory_after': after,
+                        'removed_cache_entries': removed, 'prior_cache_entries_retained': retained,
+                        'cache_apparent_bytes_before': before_files['apparent_bytes'],
+                        'cache_apparent_bytes_after': after_files['apparent_bytes'],
+                        'metrics_before': metrics_before, 'metrics_after': metrics_after,
+                        'note': 'inventory proves API removal/persistence; physical union measured separately'}]
                 else:
+                    preparation_start = time.monotonic()
+                    prepared = {name: self.edit_source(name, stage) for name in stage['trees']}
+                    save(directory / 'source-preparation.json', {
+                        'wall_seconds': time.monotonic() - preparation_start,
+                        'trees': prepared, 'excluded_from_build_timings': True})
+                    start_barrier = threading.Barrier(len(stage['trees']))
+
+                    def invoke(name):
+                        try:
+                            return self.trial(stage, name, directory / name, prepared[name], start_barrier)
+                        except BaseException:
+                            start_barrier.abort()
+                            raise
+
                     with concurrent.futures.ThreadPoolExecutor(max_workers=len(stage['trees'])) as pool:
-                        futures = [pool.submit(self.trial, stage, name, directory / name) for name in stage['trees']]
+                        futures = [pool.submit(invoke, name) for name in stage['trees']]
                         results = [future.result() for future in futures]
-                summary = {'stage': stage, 'wall_makespan_seconds': time.monotonic() - started,
+                builds = [row['build'] for row in results if 'build' in row]
+                makespan = (max(row['end_monotonic'] for row in builds) - min(row['start_monotonic'] for row in builds)
+                            if builds else results[0]['service_operation']['wall_seconds'])
+                launch_spread = (max(row['start_monotonic'] for row in builds) - min(row['start_monotonic'] for row in builds)
+                                 if builds else None)
+                summary = {'stage': stage, 'wall_makespan_seconds': makespan,
+                           'orchestration_wall_seconds': time.monotonic() - started,
+                           'concurrent_launch_spread_seconds': launch_spread,
                            'passed': all(row['passed'] for row in results), 'results': results}
                 if stage.get('storage'):
                     summary['storage'] = self.storage(stage, directory)
@@ -739,8 +1000,11 @@ def qualification_gates(root):
     record('warm_identical_wall', ratios, all(value <= .2 for value in ratios) if len(ratios) == 4 else None,
            'each identical fresh build <=20% of original cold observation')
     baseline = load(config['cargo_baseline']) if config.get('cargo_baseline') else None
-    if baseline and (baseline.get('commit') != config['commit'] or baseline.get('features') != config['profiles']['dev']['features']):
-        baseline = None
+    if baseline:
+        same_commit = baseline.get('commit') == config['commit']
+        same_inputs = bool(config.get('comparison_identity')) and baseline.get('comparison_identity') == config['comparison_identity']
+        if not (same_commit or same_inputs) or baseline.get('features') != config['profiles']['dev']['features']:
+            baseline = None
     for kind in ('leaf', 'shared', 'icon'):
         selected = [trial for trial in trials if re.fullmatch(f'dev-{kind}-[1-5]', trial['stage']['id'])]
         values = [trial['build']['wall_seconds'] for trial in selected]
@@ -811,6 +1075,11 @@ def summarize(root):
                'missing_stages': [stage['id'] for stage in plan() if not (root / 'stages' / stage['id']).exists()],
                'groups': {}, 'gates': {'all_required_stages_passed': len(rows) == len(plan()) and all(row['passed'] for row in rows),
                                      'host_load_gating': False, 'global_host_gc': False}}
+    summary['raw_failed_build_commands'] = sum(
+        load(path)['exit_status'] != 0 for path in (root / 'stages').glob('*/*/build.json'))
+    summary['raw_failed_correctness_observations'] = sum(
+        not load(path)['passed'] for path in (root / 'stages').glob('*/*/result.json'))
+    summary['qualification_gates'] = qualification_gates(root)
     for key, trials in groups.items():
         times = [row['build']['wall_seconds'] for row in trials]
         passed_times = [row['build']['wall_seconds'] for row in trials if row['passed']]
@@ -843,10 +1112,15 @@ def validate(config, full):
             raise ValueError('Buck native engine argv required for same-path output-loss recovery')
         if len(config.get('test_groups', [])) != 9:
             raise ValueError('full matrix requires exactly nine explicit package test groups')
-        for key in ('soroban_tests', 'startup', 'storage', 'nix_identity', 'variants'):
+        runtime_key = 'runtime_targets' if config['tool'] == 'buck2' else 'runtime_artifacts'
+        for key in ('soroban_tests', 'startup', 'startup_result', runtime_key, 'correctness_behavior', 'storage', 'nix_identity', 'variants'):
             if not config.get(key):
                 raise ValueError(f'full matrix requires {key}')
-        for key in ('restart', 'eviction', 'restart_api', 'eviction_api', 'identity'):
+        if set(config[runtime_key]) != {'compositor', 'shell', 'ctl', 'koe'}:
+            raise ValueError('private startup requires exact compositor/shell/ctl/koe artifact identities')
+        if not config['storage'].get('immutable_roots'):
+            raise ValueError('full matrix requires separately measured matched immutable union roots')
+        for key in ('restart', 'eviction', 'restore_capacity', 'restart_api', 'eviction_api', 'restore_capacity_api', 'identity', 'inventory', 'metrics'):
             if not config.get('service', {}).get(key):
                 raise ValueError(f'full matrix requires supported service {key}')
 
@@ -857,12 +1131,14 @@ def main():
     sub.add_parser('plan', help='print exact required scenarios as JSON')
     execute = sub.add_parser('run', help='run/resume frozen configuration; no automatic reruns')
     execute.add_argument('config', type=Path)
-    execute.add_argument('--stage', action='append', help='targeted smoke stage; omitted means full matrix')
+    execute.add_argument('--stage', action='append', help='execute/resume explicit ordered matrix stages')
     execute.add_argument('--go', action='store_true', help='acknowledge parent freeze/GO for full matrix')
     smoke = sub.add_parser('smoke', help='isolated real client/artifact exercise, never a full-matrix observation')
     smoke.add_argument('config', type=Path)
     smoke.add_argument('--kind', choices=('leaf', 'shared', 'icon'), default='shared')
+    smoke.add_argument('--profile', choices=PROFILES, default='dev')
     smoke.add_argument('--edit', action='store_true', help='exercise surgical source edit and correctness check')
+    smoke.add_argument('--target', action='append', help='explicit target for this targeted smoke only')
     report = sub.add_parser('summarize')
     report.add_argument('root', type=Path)
     args = parser.parse_args()
@@ -876,9 +1152,11 @@ def main():
         bench = Bench(config)
         bench.prepare()
         ident = 'smoke-' + str(time.time_ns())
-        stage = {'id': ident, 'trees': ['a'], 'profile': 'dev', 'jobs': 4,
+        stage = {'id': ident, 'trees': ['a'], 'profile': args.profile, 'jobs': 4,
                  'edits': {args.kind: ident} if args.edit else {},
                  'operation': 'build', 'checks': [args.kind]}
+        if args.target:
+            stage['targets'] = args.target
         trial = bench.trial(stage, 'a', bench.root / 'smoke' / ident)
         value = {'result_path': str(bench.root / 'smoke' / ident / 'result.json'),
                  'passed': trial['passed'], 'compiler_executions': trial.get('telemetry', {}).get('compiler_executions'),
@@ -886,11 +1164,11 @@ def main():
                  'qualification': 'targeted driver smoke only; not matrix or performance evidence'}
     else:
         config = load(args.config)
-        if not args.stage and not args.go:
-            parser.error('full matrix requires explicit --go after qualified implementation freeze')
+        if not args.go:
+            parser.error('matrix stages require explicit --go after qualified implementation freeze; use smoke before GO')
         if args.stage and set(args.stage) - {stage['id'] for stage in plan()}:
             parser.error('unknown stage')
-        validate(config, not args.stage)
+        validate(config, True)
         value = Bench(config).run(set(args.stage or []))
     print(json.dumps(value, indent=2, sort_keys=True))
     if args.command == 'plan':

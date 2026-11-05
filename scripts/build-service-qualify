@@ -77,8 +77,8 @@ def digest(data):
 
 
 class Client:
-    def __init__(self, port, token):
-        self.channel = grpc.insecure_channel(f"127.0.0.1:{port}", options=[("grpc.max_receive_message_length", 32 * 1024**2)])
+    def __init__(self, port, token, host="127.0.0.1"):
+        self.channel = grpc.insecure_channel(f"{host}:{port}", options=[("grpc.max_receive_message_length", 32 * 1024**2)])
         self.metadata = [("authorization", "Bearer " + token)] if token else []
 
     def call(self, service, method, request, stream=False):
@@ -121,13 +121,15 @@ def denied(fn):
 
 def compile_remote(client, compiler, shell, evidence):
     source = b'pub fn qualification_sum(values: &[u64]) -> u64 { values.iter().sum() }\n'
-    directory = field(1, field(1, "qualification.rs") + field(2, digest(source)))
     invocation = 'exec "$1" "--remap-path-prefix=$PWD=/build" --crate-type=rlib --edition=2024 qualification.rs -o qualification.rlib'
-    command = b"".join(field(1, arg) for arg in [shell, "-c", invocation, "qualification", compiler])
+    wrapper = ("#!" + shell + "\n" + invocation + "\n").encode()
+    directory = field(1, field(1, "compile.sh") + field(2, digest(wrapper)) + field(4, 1))
+    directory += field(1, field(1, "qualification.rs") + field(2, digest(source)))
+    command = field(1, "./compile.sh") + field(1, compiler)
     command += field(7, "qualification.rlib")
     platform = b"".join(field(1, field(1, key) + field(2, value)) for key, value in [("ISA", "x86-64"), ("OSFamily", "linux"), ("cpu_count", "1")])
     action = field(1, digest(command)) + field(2, digest(directory)) + field(6, field(1, 60)) + field(10, platform)
-    for data in (source, directory, command, action):
+    for data in (source, wrapper, directory, command, action):
         assert client.upload(data) == 0
     request = field(1, "sekka") + field(3, 1) + field(6, digest(action))
     operations = list(client.call("Execution", "Execute", request, stream=True))

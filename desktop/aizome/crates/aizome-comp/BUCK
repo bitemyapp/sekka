@@ -10,193 +10,199 @@ cargo_source(
 
 alias(
     name = "aizome-build-dev",
-    actual = "//build/buck2/graph/dev:7bdee634ba6db80f30bd",
+    actual = "//build/buck2/graph/dev:711f1c6b1ed355869553",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-build-release",
-    actual = "//build/buck2/graph/release:63f12100f0edacb1ea0f",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-test-test-bin",
-    actual = "//build/buck2/graph/test:076c6200bf80a5ed841c",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "chromium-test-test-test",
-    actual = "//build/buck2/graph/test:ee24732f36465533a3d8",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "churn-test-test-test",
-    actual = "//build/buck2/graph/test:fbd387f17821ef56946b",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "context_menus-test-test-test",
-    actual = "//build/buck2/graph/test:2d0f087296efc3a51515",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "displays-test-test-test",
-    actual = "//build/buck2/graph/test:44d62b4f913ae2e9cb0c",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "focus-test-test-test",
-    actual = "//build/buck2/graph/test:51ca27215d7b65fdd82f",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "fullscreen-test-test-test",
-    actual = "//build/buck2/graph/test:ff607f4d03e968c5d5ce",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "fullscreen_frames-test-test-test",
-    actual = "//build/buck2/graph/test:235beb05a841792a9b7e",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "headless-test-test-test",
-    actual = "//build/buck2/graph/test:9f9a71d4283934bafbb4",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "idle_inhibit-test-test-test",
-    actual = "//build/buck2/graph/test:0143a75c7e424586c949",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "image_copy_capture-test-test-test",
-    actual = "//build/buck2/graph/test:183e59bc7ceadbb1c24e",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "input_method-test-test-test",
-    actual = "//build/buck2/graph/test:49452e4bcd4bf605b270",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "keys-test-test-test",
-    actual = "//build/buck2/graph/test:45aee17bcde90ff9cd5c",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "layout-test-test-test",
-    actual = "//build/buck2/graph/test:65bf9f9e7ca16f3de9f6",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "layout_desktop-test-test-test",
-    actual = "//build/buck2/graph/test:9961db4925d725280bb3",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "lock_displays-test-test-test",
-    actual = "//build/buck2/graph/test:636e37996ede4dae7d77",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "marking_edges-test-test-test",
-    actual = "//build/buck2/graph/test:ad0d6f9207a7b899f526",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "notebook_desktop-test-test-test",
-    actual = "//build/buck2/graph/test:fd2beb3c8f9c8e7665a8",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "overlays-test-test-test",
-    actual = "//build/buck2/graph/test:85e43fd0b3cfa86dd979",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "pacing-test-test-test",
-    actual = "//build/buck2/graph/test:8d71ddc514b7631f4800",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "picker_cursor-test-test-test",
-    actual = "//build/buck2/graph/test:679decd734ab2c24b1ba",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "portal-test-test-test",
-    actual = "//build/buck2/graph/test:786021225abf889fb1fa",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "protocols-test-test-test",
-    actual = "//build/buck2/graph/test:1a29542223da2502809a",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "recovery-test-test-test",
-    actual = "//build/buck2/graph/test:4346601aa70149075a55",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "reload-test-test-test",
-    actual = "//build/buck2/graph/test:fb9016f5003848b3b9ba",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "scales-test-test-test",
-    actual = "//build/buck2/graph/test:9341922591e0e26c60ac",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "screencopy-test-test-test",
-    actual = "//build/buck2/graph/test:76b30f58afb5bb02492a",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "screens-test-test-test",
-    actual = "//build/buck2/graph/test:dfe735b52d41fa700602",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "settings-test-test-test",
-    actual = "//build/buck2/graph/test:947565cc19d25b938fe2",
+    actual = "//build/buck2/graph/release:9dfdcd9fd1d66051d822",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "sidestep-test-test-test",
-    actual = "//build/buck2/graph/test:57d1bd3df9e138a5d7c8",
+    actual = "//build/buck2/graph/test:0e433db08f54d7c6cb79",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "image_copy_capture-test-test-test",
+    actual = "//build/buck2/graph/test:0fa1c73a8a3f160212c2",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "lock_displays-test-test-test",
+    actual = "//build/buck2/graph/test:16dc74d1a5ca33faa671",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "displays-test-test-test",
+    actual = "//build/buck2/graph/test:44e106272228e6a523ac",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "fullscreen-test-test-test",
+    actual = "//build/buck2/graph/test:6217eadcfe027ba8bb4a",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "pacing-test-test-test",
+    actual = "//build/buck2/graph/test:661ba62b03ec12f3b4ef",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "headless-test-test-test",
+    actual = "//build/buck2/graph/test:6e5431fd3a2682521add",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "idle_inhibit-test-test-test",
+    actual = "//build/buck2/graph/test:744b4fccd33f3033f3fd",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "screencopy-test-test-test",
+    actual = "//build/buck2/graph/test:7ba8836f0e3acd3f595f",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "portal-test-test-test",
+    actual = "//build/buck2/graph/test:91fabba4c04e23f84bc7",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "keys-test-test-test",
+    actual = "//build/buck2/graph/test:94cdcd9729fc26eb79f7",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "layout-test-test-test",
+    actual = "//build/buck2/graph/test:961144210492147be977",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "input_method-test-test-test",
+    actual = "//build/buck2/graph/test:96a3fb06badfd1ca0cd0",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "chromium-test-test-test",
+    actual = "//build/buck2/graph/test:9de6aed96cfef246ef7a",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "notebook_desktop-test-test-test",
+    actual = "//build/buck2/graph/test:abe9aab38b9f8decf205",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-test-test-bin",
+    actual = "//build/buck2/graph/test:b4e992b04ddfda3dd3a9",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "context_menus-test-test-test",
+    actual = "//build/buck2/graph/test:b51bd3abe28a4b13f386",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "fullscreen_frames-test-test-test",
+    actual = "//build/buck2/graph/test:b72e31036bc94ecaf194",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "marking_edges-test-test-test",
+    actual = "//build/buck2/graph/test:bd3be2232e086abeccde",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "scales-test-test-test",
+    actual = "//build/buck2/graph/test:be5dd15be8ba7f063072",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "settings-test-test-test",
+    actual = "//build/buck2/graph/test:c3030ed8bb568c309489",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "screens-test-test-test",
+    actual = "//build/buck2/graph/test:c35348063a31f5e1f14e",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "overlays-test-test-test",
+    actual = "//build/buck2/graph/test:c448ca396d60260b9f23",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "layout_desktop-test-test-test",
+    actual = "//build/buck2/graph/test:c8ff732c5fcbbfea8715",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "churn-test-test-test",
+    actual = "//build/buck2/graph/test:cad76dc24f2e8346f1bb",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "protocols-test-test-test",
+    actual = "//build/buck2/graph/test:d07d3d7f884f32d76b98",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "reload-test-test-test",
+    actual = "//build/buck2/graph/test:d585b4677731af174796",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "recovery-test-test-test",
+    actual = "//build/buck2/graph/test:fdaf2ef9c445669d74bd",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "focus-test-test-test",
+    actual = "//build/buck2/graph/test:fe9da5f7d8e5c7080f70",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "picker_cursor-test-test-test",
+    actual = "//build/buck2/graph/test:ff86ea7676f96eafe3fe",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-build-release-lto",
+    actual = "//build/buck2/graph/release:9dfdcd9fd1d66051d822",
     visibility = ["PUBLIC"],
 )
 

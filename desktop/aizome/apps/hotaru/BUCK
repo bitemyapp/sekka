@@ -10,67 +10,67 @@ cargo_source(
 
 alias(
     name = "aizome_hotaru-build-dev",
-    actual = "//build/buck2/graph/dev:444b0ba998c769cec8ef",
+    actual = "//build/buck2/graph/dev:22598f25cbf0be879ade",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-hotaru-build-dev",
-    actual = "//build/buck2/graph/dev:c7a03414e8e8fc0c50a2",
+    actual = "//build/buck2/graph/dev:9b28eff8c610cf9856f8",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_hotaru-build-release",
-    actual = "//build/buck2/graph/release:23e0e6600e1e17173932",
+    actual = "//build/buck2/graph/release:3085251044bb057d7d62",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-hotaru-build-release",
-    actual = "//build/buck2/graph/release:73dd473ffb940e579cf2",
+    actual = "//build/buck2/graph/release:b378e17eccda7670b3a5",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_hotaru-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:6e08dcdbfd8a40c83c01",
+    actual = "//build/buck2/graph/release-lto:4b0f74fafe0e870ffe5e",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-hotaru-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:b8d2d6c2e68f7cd3f958",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_hotaru-test-test-lib",
-    actual = "//build/buck2/graph/test:ad5af0949fa55af8e3d8",
+    actual = "//build/buck2/graph/release-lto:f05b01abb8a67b037466",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-hotaru-test-test-bin",
-    actual = "//build/buck2/graph/test:51f5ff844650ab2371d3",
+    actual = "//build/buck2/graph/test:2586097cb01ab93d66a2",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "cursor-test-test-test",
-    actual = "//build/buck2/graph/test:2269549a16d0e91496d8",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "native-test-test-test",
-    actual = "//build/buck2/graph/test:46dfd07f1983438cf132",
+    name = "aizome_hotaru-test-test-lib",
+    actual = "//build/buck2/graph/test:50242d0c41545c1b6bde",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "pixel_scroll-test-test-test",
-    actual = "//build/buck2/graph/test:6909a50f1c69de641fbc",
+    actual = "//build/buck2/graph/test:8187401a75c417f06576",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "cursor-test-test-test",
+    actual = "//build/buck2/graph/test:b595705133a71fb3e513",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "native-test-test-test",
+    actual = "//build/buck2/graph/test:f2dabbf6757081dd7745",
     visibility = ["PUBLIC"],
 )
 

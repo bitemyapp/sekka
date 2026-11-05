@@ -10,31 +10,31 @@ cargo_source(
 
 alias(
     name = "hotaru_link_regex-build-dev",
-    actual = "//build/buck2/graph/dev:600a44e885cbc605f5af",
+    actual = "//build/buck2/graph/dev:e79033e8890b1e646cef",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "hotaru_link_regex-build-release",
-    actual = "//build/buck2/graph/release:e4bee36489a9015877c0",
+    actual = "//build/buck2/graph/release:f8e526dc9ae8cd84e813",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "hotaru_link_regex-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:12abd11ea16d7a6e779d",
+    actual = "//build/buck2/graph/release-lto:579f4e365c1f978ea2b4",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "hotaru_link_regex-test-test-lib",
-    actual = "//build/buck2/graph/test:a8b19ccb0e496076a469",
+    actual = "//build/buck2/graph/test:51568f7c97f35f3a8561",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "matching-test-test-test",
-    actual = "//build/buck2/graph/test:5a9e9ada883e492fca33",
+    actual = "//build/buck2/graph/test:d15faa98701ff496efa6",
     visibility = ["PUBLIC"],
 )
 

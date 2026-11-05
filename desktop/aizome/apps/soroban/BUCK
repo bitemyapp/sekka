@@ -10,55 +10,55 @@ cargo_source(
 
 alias(
     name = "aizome_soroban-build-dev",
-    actual = "//build/buck2/graph/dev:0f2652e1830aec824492",
+    actual = "//build/buck2/graph/dev:81dbe28b81813aa24b44",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-soroban-build-dev",
-    actual = "//build/buck2/graph/dev:48ea13ef22cccce1c9e1",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_soroban-build-release",
-    actual = "//build/buck2/graph/release:4430df7ee0a0936632a8",
+    actual = "//build/buck2/graph/dev:843c5740c95fa0204df9",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-soroban-build-release",
-    actual = "//build/buck2/graph/release:80cfba1b2751e675f17f",
+    actual = "//build/buck2/graph/release:4ac34893ec87ae5750a1",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_soroban-build-release",
+    actual = "//build/buck2/graph/release:f6c3680438452960e185",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_soroban-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:6fa49aaa5b07a7b0662d",
+    actual = "//build/buck2/graph/release-lto:20facf8bea2fc84d6d38",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-soroban-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:e4face41adff70983d79",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_soroban-test-test-lib",
-    actual = "//build/buck2/graph/test:aa2911747b37b360eac5",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-soroban-test-test-bin",
-    actual = "//build/buck2/graph/test:d73170884cfaedd5abac",
+    actual = "//build/buck2/graph/release-lto:72009d20aea8642f8cb4",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "soroban-test-test-test",
-    actual = "//build/buck2/graph/test:313aab66eb4afd0253c9",
+    actual = "//build/buck2/graph/test:4ddba3a1574f7b5d7c0f",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-soroban-test-test-bin",
+    actual = "//build/buck2/graph/test:6212422603940b10ebd7",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_soroban-test-test-lib",
+    actual = "//build/buck2/graph/test:db26fd935f4657ed2185",
     visibility = ["PUBLIC"],
 )
 

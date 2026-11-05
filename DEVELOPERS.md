@@ -273,6 +273,119 @@ reverts. Run it with:
 nix build .#checks.x86_64-linux.build-input-stability --no-update-lock-file
 ```
 
+### Cargo workspaces through Buck2
+
+`scripts/sekka-buck2` roots a pinned client closure once, then executes it
+without reevaluating the root flake on ordinary source edits. Cargo manifests,
+lockfiles and feature resolution remain authoritative; no Reindeer manifest
+or parallel dependency list is maintained. After `cargo add`, `cargo update`,
+removal or a feature change, run `scripts/sekka-buck2 generate`. The pinned
+Cargo unit graph becomes individual Rust compiler and build-script actions,
+not an action that invokes a whole Cargo build. Registry and Git dependencies
+come from Nix's locked vendor closure; new Git dependencies do not require
+manually maintained output hashes.
+
+```sh
+scripts/sekka-buck2 generate
+scripts/sekka-buck2 check
+scripts/sekka-buck2 targets
+scripts/sekka-buck2 build
+scripts/sekka-buck2 --profile release-lto build
+scripts/sekka-buck2 test //desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib
+scripts/sekka-buck2 run //desktop/aizome/crates/aizome-comp:aizome-build-dev -- --build-info
+```
+
+`-p PACKAGE` narrows discovery/builds; `outputs` reports artifact paths and
+`runtime` creates launchers referencing outputs in place, including the
+matching compositor logic library. Application arguments after `--` are
+preserved. `--buck-arg=--FLAG` forwards an exact engine option. Generate with
+`--features PACKAGE/FEATURE,...` and/or `--no-default-features` to change the
+recorded Cargo feature selection. Ordinary commands reject stale graphs;
+runtime-launcher and frontend-only changes do not invalidate compiler actions.
+Release-LTO follows Cargo's per-unit LTO decisions, including mixed non-LTO
+compositor/dynamic-library roots, proc macros and build scripts.
+
+The engine includes a per-user content store for immutable artifact data.
+The frontend enables shared reflinks automatically where supported; separate
+worktrees retain separate mutable daemon state. Defaults are 10 GiB and
+100,000 stored objects. `--local-content-store off` disables it;
+`--local-content-store PATH`, `--local-content-store-max-bytes N` and
+`--local-content-store-max-entries N` select an explicit store and bounds.
+Evicting store objects does not invalidate existing reflinked outputs.
+Private cache configuration, TLS material and store settings participate in
+daemon startup identity so a long-lived daemon does not silently retain old
+credentials or settings. Keep the same `--isolation-dir` across cooperating
+remote-cache clients because it enters action paths.
+
+The backend depends on the pinned Cargo unit-graph API and its LTO planning
+semantics; changing Cargo requires requalification, not just a version bump.
+`nix build .#checks.x86_64-linux.buck2-backend` exercises real proc macros,
+build scripts, native/Rust dynamic libraries, thin LTO and runtime argument
+forwarding in a network-disabled Nix sandbox. This is a component check, not
+an ISO or hardware qualification.
+
+### Authenticated workstation cache and remote execution
+
+`nix run .#build-service -- --manifest PRIVATE.json COMMAND` controls an owned
+NativeLink 1.8.3 deployment on `wx-workstation` over SSH. Provision once with
+`init --domains trusted --port 17841`, then `up`. The manifest contains writer
+and reader credentials and must remain mode 0600; never mount it into CI or
+commit it. `status`, `metrics`, `logs`, `restart` and `stop` operate only on
+that deployment. Publication workflows and host firewall policy are unchanged.
+
+The gateway binds host loopback. From another machine, forward it explicitly:
+
+```sh
+ssh -N -L 17841:127.0.0.1:17841 wx-workstation
+```
+
+Generate private client files with `umask 077` and
+`client --domain trusted --access writer --format bazel` or `--format buck2`,
+redirecting stdout to a private file. Omit `--access writer` for read-only
+credentials. These files are used by
+`scripts/sekka-bazel --cache trusted --remote-rc FILE build` and
+`scripts/sekka-buck2 --cache cache --cache-write --config-file FILE build`;
+omit Buck2's `--cache-write` for readers. Buck2's `--cache remote` requests
+execution as well as cache access. Bazel execution additionally needs
+`--remote_executor=grpc://127.0.0.1:17841` on the build command.
+Workers require the exact immutable toolchain/native closures: realize them
+on the workstation and use `retain /nix/store/CLIENT /nix/store/VENDOR`.
+`retain` does not evaluate sources or import unsigned arbitrary build outputs.
+
+Readers are denied CAS, ByteStream and action-cache writes and `Execute` by
+the server, not merely by client flags. Normal CI uses this reader access.
+A writable CI experiment instead needs its own
+`init --domains ci --port UNUSED` deployment, credentials and cache for that
+job; never share its writer namespace across jobs. Its backend data, including
+incomplete uploads, is bounded by a tmpfs quota and is lost on restart.
+Trusted persistent caches default to 64 GiB CAS and 1 GiB action-cache LRU
+retention with a seven-day age policy; these are retained-object limits,
+not hard bounds on in-progress trusted uploads. `resize --cas-bytes N
+--ac-bytes N` drains workers and adjusts the existing cache without deleting
+individual objects. Docker logs are bounded separately.
+
+Each domain has an owned frontend bridge and a stable namespace-owner
+container. CI joins that bridge with its own network namespace; it never
+joins the worker's namespace or reaches the unauthenticated backend.
+`connection-info --domain trusted` prints nonsecret network/DNS information;
+`client --domain trusted --frontend --format bazel|buck2` emits a reader
+configuration for that network. Gateway restarts preserve the namespace;
+`up` repairs dependents after namespace-owner replacement. `destroy` refuses
+to remove a network with foreign jobs still attached; `--purge-state`
+additionally removes the validated owned deployment directory.
+
+`scripts/shared-build-bench.py plan` lists the qualification matrix.
+`run CONFIG.json --go` requires an explicit frozen source/client/service
+configuration and a new owned evidence directory. Timed builds, artifact
+inspection, runtime probes and physical-storage measurements are recorded
+separately. Failed cold trials remain failed cold trials; resuming does not
+rewrite their observations. Compression-aware physical accounting measures
+all selected worktrees and shared stores in one union, not a sum of `du`
+results. Service protocol checks alone do not establish frontend correctness,
+full-matrix performance or ISO qualification.
+
+### Component builds
+
 Sekka's PipeWire service uses `sekka-pipewire-daemon`, with the X11 bell
 disconnect fix in `nix/patches/pipewire-x11-bell-disconnect.patch`. Xlib can
 report a lost display more than once during logout. The fix makes removal of
@@ -3066,6 +3179,41 @@ main after its fixes are merged; rerunning an old job uses its old workflow,
 which may still publish ISOs. The current nightly intentionally updates inputs,
 builds and checks, uploads the binary cache, then advances main/nightly; it does
 not publish an ISO or qualify the workstation's already frozen image.
+
+### Isolated Bazel and Buck2 CI clients
+
+The trusted PR workflow prepares `.#shared-build-inputs` on the Nix runner,
+then runs each frontend on a separate `sekka-build-client` pool. Its image
+comes from `.#build-client-runner`: read-only store/root, UID 30500, no
+capabilities, no privilege escalation, 64 GiB memory, 32 CPUs, 32 GiB private
+home tmpfs and 8 GiB temporary tmpfs. Unlike the Nix pool, it has no daemon
+socket, shared GC roots, Git cache, Docker socket or host home mount.
+The main-owned helper copies the candidate source into private writable
+storage and runs the workspace build, portable test groups and compositor
+build-info check. Bazel uses standalone action execution inside this outer
+container; nested user namespaces are not required.
+
+Input preparation creates a run-and-attempt-specific consumer lease before
+releasing the retention lock. Count/low-space pruning preserves leased roots
+until the main-only finalizer releases them after both clients finish.
+Abandoned leases expire after 72 hours. **Use Re-run all jobs**, not Re-run
+failed jobs or an individual client job: partial reruns reuse prior-attempt
+outputs whose lease may already be released and are rejected before candidate
+execution. Full reruns prepare a fresh protected bundle.
+
+Deploy this additional pool without replacing the existing Nix supervisor:
+build and root `.#build-client-runner`, load its `job-image.tar.gz` and
+`supervisor-image.tar.gz`, and launch `sekka-build-client-supervisor:latest`
+as `sekka-build-client-supervisor`. Use the existing supervisor's restricted
+Docker/store/token mounts, but omit the Git-cache mount. Set
+`SEKKA_BUILD_NETWORK` to the network from `connection-info` and
+`SEKKA_BUILD_READER_DIR` to a host-private mode-0700 directory containing
+frontend reader configurations named `trusted.bazelrc` and
+`trusted.buckconfig`. Make those two files mode 0444 so the individual
+read-only file binds are readable by UID 30500; the parent directory remains
+private. The helper copies them into its private workspace with mode 0600.
+Never substitute writer configurations. The supervisor token remains outside
+job containers, as in the Nix pool.
 
 ### Setting up the builder
 

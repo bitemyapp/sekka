@@ -10,73 +10,73 @@ cargo_source(
 
 alias(
     name = "koyomi-build-dev",
-    actual = "//build/buck2/graph/dev:f7d64200370c29e2dff3",
+    actual = "//build/buck2/graph/dev:042a068e9586e1557d64",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-koyomi-build-dev",
-    actual = "//build/buck2/graph/dev:e368eb112230d90183f8",
+    actual = "//build/buck2/graph/dev:04df323741970e155038",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "koyomi-build-release",
-    actual = "//build/buck2/graph/release:423384f355fdb30cd650",
+    actual = "//build/buck2/graph/release:7f6354485c4c8e845e7b",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-koyomi-build-release",
-    actual = "//build/buck2/graph/release:9c0e0676980b7e2f4033",
+    actual = "//build/buck2/graph/release:e76afa89ecac521e56ab",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "koyomi-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:6fe85dfafab9fe49937e",
+    actual = "//build/buck2/graph/release-lto:22398370b2f82ac98004",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-koyomi-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:87e886848da07c73ca52",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "koyomi-test-test-lib",
-    actual = "//build/buck2/graph/test:0ba515baa44f4afb4949",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-koyomi-test-test-bin",
-    actual = "//build/buck2/graph/test:2995b59a290146592270",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "agent-test-test-test",
-    actual = "//build/buck2/graph/test:27ecbc8183d710984597",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "app-test-test-test",
-    actual = "//build/buck2/graph/test:f1b5fc4dd659c86ed75a",
+    actual = "//build/buck2/graph/release-lto:da964bce5aa69cf8acb9",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "ics-test-test-test",
-    actual = "//build/buck2/graph/test:8fa5dc45414ed9724ce2",
+    actual = "//build/buck2/graph/test:9647a8987b20d121ff3d",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-koyomi-test-test-bin",
+    actual = "//build/buck2/graph/test:a8bf4d82418dd6df1747",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "app-test-test-test",
+    actual = "//build/buck2/graph/test:b57ea6b1c2f1df3ed90d",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "agent-test-test-test",
+    actual = "//build/buck2/graph/test:b8a2e88ae92d2f2f62be",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "koyomi-test-test-lib",
+    actual = "//build/buck2/graph/test:d27e64d0293fda7d9218",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "perf-test-test-test",
-    actual = "//build/buck2/graph/test:7a96ae9f9d3305e5f33c",
+    actual = "//build/buck2/graph/test:d4e6c628dc4db9660a8b",
     visibility = ["PUBLIC"],
 )
 

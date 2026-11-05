@@ -10,49 +10,49 @@ cargo_source(
 
 alias(
     name = "aizome_awake-build-dev",
-    actual = "//build/buck2/graph/dev:5d38977b6e37d037c789",
+    actual = "//build/buck2/graph/dev:8008b14f13fa73d30148",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-awake-build-dev",
-    actual = "//build/buck2/graph/dev:340fba270e489ebdd96e",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_awake-build-release",
-    actual = "//build/buck2/graph/release:eb0aa401e3a0bfd9c682",
+    actual = "//build/buck2/graph/dev:fbe4ff466df7ccad2cd8",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-awake-build-release",
-    actual = "//build/buck2/graph/release:0466321a57a82e62ba12",
+    actual = "//build/buck2/graph/release:4725c85b3cdb1f0382fd",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_awake-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:385030f59d277945e2c8",
+    name = "aizome_awake-build-release",
+    actual = "//build/buck2/graph/release:64230fe05343a8f4b32a",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-awake-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:b2b6fd83f3d85ff0990f",
+    actual = "//build/buck2/graph/release-lto:32cc1b98dcfdf1597d84",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_awake-test-test-lib",
-    actual = "//build/buck2/graph/test:cd58aa867e485b06af80",
+    name = "aizome_awake-build-release-lto",
+    actual = "//build/buck2/graph/release-lto:d65da0cb2c73a4f53575",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-awake-test-test-bin",
-    actual = "//build/buck2/graph/test:1f5ef3f5fbf30f07298a",
+    actual = "//build/buck2/graph/test:e1588306ea90ac92119d",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_awake-test-test-lib",
+    actual = "//build/buck2/graph/test:ebb66850fb111d766d35",
     visibility = ["PUBLIC"],
 )
 

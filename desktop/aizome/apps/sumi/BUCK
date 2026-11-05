@@ -9,56 +9,56 @@ cargo_source(
 )
 
 alias(
-    name = "aizome_sumi-build-dev",
-    actual = "//build/buck2/graph/dev:28afb4ddaeab26f96dd4",
-    visibility = ["PUBLIC"],
-)
-
-alias(
     name = "aizome-sumi-build-dev",
-    actual = "//build/buck2/graph/dev:a7f681d2f1056032b376",
+    actual = "//build/buck2/graph/dev:6fefc0318c1a3f41d13c",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_sumi-build-release",
-    actual = "//build/buck2/graph/release:6114afa5c269acc23813",
+    name = "aizome_sumi-build-dev",
+    actual = "//build/buck2/graph/dev:acb5d3313a2d5d1068e9",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-sumi-build-release",
-    actual = "//build/buck2/graph/release:e82a9720d4578b6c6194",
+    actual = "//build/buck2/graph/release:d6310d58384a55c1c4e9",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_sumi-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:7d018a69377ae5f2b680",
+    name = "aizome_sumi-build-release",
+    actual = "//build/buck2/graph/release:dc60f6ca1966ad055b0c",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-sumi-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:908c8f96c84fb8da5854",
+    actual = "//build/buck2/graph/release-lto:b4d5554129b3a87180e2",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_sumi-test-test-lib",
-    actual = "//build/buck2/graph/test:829d46e99a900c673ab9",
+    name = "aizome_sumi-build-release-lto",
+    actual = "//build/buck2/graph/release-lto:fb2a5889901a20c83564",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-sumi-test-test-bin",
-    actual = "//build/buck2/graph/test:7618332ccf923475b487",
+    actual = "//build/buck2/graph/test:040ae22c162302c7861b",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "sumi-test-test-test",
-    actual = "//build/buck2/graph/test:a064d69a94cbfb4b2b66",
+    actual = "//build/buck2/graph/test:c70b6ec9da7be389b82b",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_sumi-test-test-lib",
+    actual = "//build/buck2/graph/test:f2ab7f3daf4d8e14c9e5",
     visibility = ["PUBLIC"],
 )
 

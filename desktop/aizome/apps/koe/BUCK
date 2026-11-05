@@ -10,91 +10,91 @@ cargo_source(
 
 alias(
     name = "koe-build-dev",
-    actual = "//build/buck2/graph/dev:d1e47fbd5323abcdb9ab",
+    actual = "//build/buck2/graph/dev:171ed8587e08e8f139e2",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-koe-build-dev",
-    actual = "//build/buck2/graph/dev:04ab7fe72a7646c4c478",
+    actual = "//build/buck2/graph/dev:6684dd8ad5dfd1d41e5f",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "koe-build-release",
-    actual = "//build/buck2/graph/release:0b0cf388ae9c47beb2cb",
+    actual = "//build/buck2/graph/release:b94b38756e1442c56964",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-koe-build-release",
-    actual = "//build/buck2/graph/release:1c627b073503862bfe40",
+    actual = "//build/buck2/graph/release:d9aa7e7c5b51f6833c61",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "koe-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:18b6d3828c14a92ba703",
+    actual = "//build/buck2/graph/release-lto:ce87b2a1df4ac805e0ba",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-koe-build-release-lto",
-    actual = "//build/buck2/graph/release-lto:c6a1d5c46fcfd506f338",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "koe-test-test-lib",
-    actual = "//build/buck2/graph/test:0160f57d475546062922",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-koe-test-test-bin",
-    actual = "//build/buck2/graph/test:71cf719ba97ddaa03a39",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-test-test-test",
-    actual = "//build/buck2/graph/test:06e14689190f55928f7c",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "core-test-test-test",
-    actual = "//build/buck2/graph/test:2aab69c2e9516ca1b7aa",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "daemon-test-test-test",
-    actual = "//build/buck2/graph/test:e2673e74f20c4f2c54c7",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "look-test-test-test",
-    actual = "//build/buck2/graph/test:4bbc144b6da7e93e716b",
+    actual = "//build/buck2/graph/release-lto:d403dea5433b91b01772",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "setup-test-test-test",
-    actual = "//build/buck2/graph/test:be3a8d8392e319200922",
+    actual = "//build/buck2/graph/test:07b1f05e3a8fd132cc7d",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "tray-test-test-test",
-    actual = "//build/buck2/graph/test:20206e9b665c69f411c5",
+    actual = "//build/buck2/graph/test:37e3ece2edcb4a6fbca6",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "vocabulary-test-test-test",
-    actual = "//build/buck2/graph/test:051926f669f3d87e450b",
+    actual = "//build/buck2/graph/test:44d393df0489ab460794",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "look-test-test-test",
+    actual = "//build/buck2/graph/test:9dd08b8a4a432522a24c",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-koe-test-test-bin",
+    actual = "//build/buck2/graph/test:beaf0b8acec7260dcd95",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "daemon-test-test-test",
+    actual = "//build/buck2/graph/test:c9275fc45e76d7091ad4",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "koe-test-test-lib",
+    actual = "//build/buck2/graph/test:d6cdf6c5efe6d26d666c",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-test-test-test",
+    actual = "//build/buck2/graph/test:f3a8071546a77de0e0e2",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "core-test-test-test",
+    actual = "//build/buck2/graph/test:fcef92f45697eb9173fd",
     visibility = ["PUBLIC"],
 )
 
