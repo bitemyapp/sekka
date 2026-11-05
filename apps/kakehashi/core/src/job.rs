@@ -16,10 +16,11 @@
 //! # let stick = Drive { name: "sdb".into(), bytes: 32_000_000_000, serial: "4C53".into(), usb_or_removable: true, ..Drive::default() };
 //! # let mut list = DriveList::new();
 //! # let listing = list.request(Instant::now()).unwrap();
-//! # list.listed(listing, Ok(vec![stick.clone()]));
+//! # list.listed(kakehashi_core::choice::DriveListing::new(listing, Ok(vec![stick.clone()])));
 //! # list.choose(&stick);
-//! # let reviewed = list.review(None).unwrap();
-//! # let plan = Plan::new("sekka.iso".into(), "0".repeat(64), list.confirm(reviewed, None).unwrap());
+//! # let image = kakehashi_core::choice::ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
+//! # let (review, _) = list.open_review(None, image.clone()).unwrap();
+//! # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
 //! # let dir = tempfile::tempdir().unwrap();
 //! # let path = dir.path().join("progress");
 //! use kakehashi_core::job::{End, Event, Job, JobState, ProgressFile, Ran, Write};
@@ -317,10 +318,11 @@ impl<'s> Running<'s> {
     /// # let stick = Drive { name: "sdb".into(), bytes: 32_000_000_000, serial: "4C53".into(), usb_or_removable: true, ..Drive::default() };
     /// # let mut list = DriveList::new();
     /// # let listing = list.request(Instant::now()).unwrap();
-    /// # list.listed(listing, Ok(vec![stick.clone()]));
+    /// # list.listed(kakehashi_core::choice::DriveListing::new(listing, Ok(vec![stick.clone()])));
     /// # list.choose(&stick);
-    /// # let reviewed = list.review(None).unwrap();
-    /// # let plan = Plan::new("sekka.iso".into(), "0".repeat(64), list.confirm(reviewed, None).unwrap());
+    /// # let image = kakehashi_core::choice::ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
+    /// # let (review, _) = list.open_review(None, image.clone()).unwrap();
+    /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
     /// # let dir = tempfile::tempdir().unwrap();
     /// # let path = dir.path().join("progress");
     /// # std::fs::write(&path, "{\"stage\":\"writing\",\"done\":1073741824,\"total\":4294967296}\n").unwrap();
@@ -346,10 +348,11 @@ impl<'s> Running<'s> {
     /// # let stick = Drive { name: "sdb".into(), bytes: 32_000_000_000, serial: "4C53".into(), usb_or_removable: true, ..Drive::default() };
     /// # let mut list = DriveList::new();
     /// # let listing = list.request(Instant::now()).unwrap();
-    /// # list.listed(listing, Ok(vec![stick.clone()]));
+    /// # list.listed(kakehashi_core::choice::DriveListing::new(listing, Ok(vec![stick.clone()])));
     /// # list.choose(&stick);
-    /// # let reviewed = list.review(None).unwrap();
-    /// # let plan = Plan::new("sekka.iso".into(), "0".repeat(64), list.confirm(reviewed, None).unwrap());
+    /// # let image = kakehashi_core::choice::ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
+    /// # let (review, _) = list.open_review(None, image.clone()).unwrap();
+    /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
     /// # let dir = tempfile::tempdir().unwrap();
     /// # let path = dir.path().join("progress");
     /// # std::fs::write(&path, "{\"stage\":\"writing\",\"done\":1073741824,\"total\":4294967296}\n").unwrap();
@@ -451,7 +454,7 @@ impl Job {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::choice::DriveList;
+    use crate::choice::{DriveList, DriveListing, ImageId};
     use std::time::Duration;
 
     fn job(cancel: PathBuf) -> Job {
@@ -464,10 +467,11 @@ mod tests {
         };
         let mut list = DriveList::new();
         let listing = list.request(Instant::now()).unwrap();
-        list.listed(listing, Ok(vec![stick.clone()]));
+        list.listed(DriveListing::new(listing, Ok(vec![stick.clone()])));
         list.choose(&stick);
-        let reviewed = list.review(None).unwrap();
-        let plan = Plan::new("/images/sekka.iso".into(), "0".repeat(64), list.confirm(reviewed, None).unwrap());
+        let image = ImageId { path: "/images/sekka.iso".into(), sha256: "0".repeat(64) };
+        let (review, _) = list.open_review(None, image.clone()).unwrap();
+        let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
         Job::new(Write::new(&plan, cancel))
     }
 
