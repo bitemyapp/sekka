@@ -104,10 +104,21 @@ impl Entry {
     }
 
     /// The proof that its item has left its can (put back, or deleted),
-    /// if it has: nothing is at its name in `files/` any more.
+    /// if it has: nothing is at its name in its can's `files/`. An entry
+    /// whose paths aren't its can's own for its name (one edited to point
+    /// elsewhere) proves nothing.
     pub fn gone(&self) -> Option<Gone> {
-        match fs::symlink_metadata(&self.file) {
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Some(Gone { entry: self.clone() }),
+        let (file, info) = (self.can.files().join(&self.name), self.can.info().join(info_name(&self.name)));
+        if self.file != file || self.info.as_ref().is_some_and(|i| *i != info) {
+            return None;
+        }
+        match fs::symlink_metadata(&file) {
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                // The info as it is now, so that forgetting takes only it,
+                // not one a later item made under the name.
+                let info = fs::symlink_metadata(&info).ok().map(|m| (m.dev(), m.ino()));
+                Some(Gone { can: self.can.clone(), name: self.name.clone(), info })
+            }
             _ => None,
         }
     }
@@ -121,13 +132,16 @@ impl Entry {
 /// ```compile_fail,E0451
 /// use hako::fsops::trash::{Entry, Gone};
 /// fn forge(entry: Entry) -> Gone {
-///     Gone { entry }
+///     Gone { can: entry.can, name: entry.name, info: None }
 /// }
 /// ```
 #[derive(Debug)]
 #[must_use = "a gone entry is for forgetting"]
 pub struct Gone {
-    entry: Entry,
+    can: Can,
+    name: OsString,
+    /// Its info's device and inode when the item was found gone.
+    info: Option<(u64, u64)>,
 }
 
 impl Trash {
@@ -406,12 +420,19 @@ impl Trash {
     /// }
     /// ```
     pub fn forget(&self, gone: Gone) {
-        let Gone { entry } = gone;
-        if let Some(info) = &entry.info {
-            let _ = fs::remove_file(info);
+        let Gone { can, name, info } = gone;
+        let path = can.info().join(info_name(&name));
+        // Only the info found with it: a later item may have the name now.
+        let ours = info.is_some_and(|id| fs::symlink_metadata(&path).is_ok_and(|m| (m.dev(), m.ino()) == id));
+        if ours {
+            let _ = fs::remove_file(&path);
         }
-        let key = encode_name(&entry.name);
-        let _ = edit_sizes(&entry.can, |lines| lines.retain(|l| l.rsplit(' ').next() != Some(key.as_str())));
+        let still_gone =
+            fs::symlink_metadata(can.files().join(&name)).is_err_and(|e| e.kind() == io::ErrorKind::NotFound);
+        if ours || (info.is_none() && still_gone) {
+            let key = encode_name(&name);
+            let _ = edit_sizes(&can, |lines| lines.retain(|l| l.rsplit(' ').next() != Some(key.as_str())));
+        }
     }
 
     /// Remove the infos whose items are gone from every can: ghosts a
@@ -931,6 +952,29 @@ mod tests {
         tr.forget_ghosts();
         assert!(!t.join("data/Trash/info/ghost.trashinfo").exists());
         assert!(t.join("data/Trash/files/stray").exists());
+    }
+
+    #[test]
+    fn only_a_gone_item_s_own_info_is_forgotten() {
+        let t = TempDir::new("trash-gone");
+        let tr = trash_in(&t);
+        let a = t.file("home/a", "a");
+        tr.trash(&a).unwrap();
+        let e = tr.list().into_iter().next().unwrap();
+        // An entry pointed elsewhere proves nothing about its item.
+        let mut elsewhere = e.clone();
+        elsewhere.file = t.join("home/nowhere");
+        assert!(elsewhere.gone().is_none());
+        // Two proofs of one entry: the second mustn't take the info of an
+        // item trashed under the name since.
+        fs::remove_file(&e.file).unwrap();
+        let (first, second) = (e.gone().unwrap(), e.gone().unwrap());
+        tr.forget(first);
+        let b = t.file("home/a", "b");
+        tr.trash(&b).unwrap();
+        tr.forget(second);
+        let later = tr.list().into_iter().find(|e| e.name == "a").expect("the later item");
+        assert_eq!(later.original.as_deref(), Some(a.as_path()), "it keeps its info");
     }
 
     #[test]
