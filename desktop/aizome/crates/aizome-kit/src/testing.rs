@@ -516,6 +516,16 @@ impl<P: Program> Harness<P> {
         Harness { rt, platform }
     }
 
+    /// Have this harness's presses of agreeing buttons make their
+    /// agreements ([`crate::agree`]), as a person's do on a display. Without
+    /// this a press sends nothing. Only the kit's own tests and builds with
+    /// its `testing` feature (tests' dev-dependencies) have it, so a shipped
+    /// program can't run itself in a harness to press its own buttons.
+    #[cfg(any(test, feature = "testing"))]
+    pub fn allow_agreements(&mut self) {
+        self.rt.core.agreeing = true;
+    }
+
     /// The drags started out of the windows, with what they carry, in
     /// order.
     pub fn drags(&self) -> Vec<(crate::program::DragId, &sidestep_ui::DragSource)> {

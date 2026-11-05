@@ -732,6 +732,9 @@ pub(crate) struct Out {
     pub begin_move: bool,
     pub drag: Option<sidestep_ui::DragSource>,
     pub handled_by: Option<usize>,
+    /// Agreeing buttons a person pressed: the engine makes their agreements
+    /// ([`crate::agree`]) when it applies this, if presses make them.
+    pub agreements: Vec<(usize, crate::agree::AgreeFn)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -763,6 +766,12 @@ impl EventCx<'_, '_> {
 
     pub(crate) fn emit_any(&mut self, msg: AnyMsg) {
         self.out.msgs.push((self.node, msg));
+    }
+
+    /// An agreeing button was pressed: the engine makes its agreement and
+    /// message, from input only ([`crate::agree`]).
+    pub(crate) fn agree(&mut self, f: &crate::agree::AgreeFn) {
+        self.out.agreements.push((self.node, f.clone()));
     }
 
     pub fn id(&self) -> NodeId {
