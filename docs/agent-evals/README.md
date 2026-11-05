@@ -4,11 +4,31 @@ Can a model that runs on one RTX 5090 fix a broken Sekka machine, or use the Aiz
 
 ## Results
 
-SUMMARY_TABLE
+| Model | Made by (lineage) | Licence | Diagnostics, bare loop | Diagnostics, oh-my-pi | Computer use | Decode |
+|---|---|---|---:|---:|---:|---:|
+| Qwen3.8-27B | Alibaba | Apache-2.0 | **30/31 (97%)** | 14/15 (93%) | 16/18 (89%) | 112 tok/s |
+| Gemma 4 31B | Google | Apache-2.0 | 15/16 (94%) | **16/16 (100%)** | 2/9 (22%) | 70 tok/s |
+| Nemotron 3.5 Bolt 74B-A9B | NVIDIA | OpenMDW-1.1 | 14/16 (88%) | 14/15 (93%) | 7/9 (78%) | 153 tok/s |
+| Qwen3.6-35B-A3B | Alibaba | Apache-2.0 | 13/15 (87%) | 13/16 (81%) | **9/9 (100%)** | 231 tok/s |
+| Ornith-1.5-35B-A3B | Ornith (Qwen3.6 fine-tune) | MIT | 13/16 (81%) | 15/16 (94%) | 8/9 (89%) | 248 tok/s |
+| gpt-oss-20b | OpenAI | Apache-2.0 | 24/32 (75%); 14/16 (88%) with the skill | 10/16 (62%) | text only: 12/18 (67%) | 331 tok/s |
+| Muse Glimmer 30B | Meta | Apache-2.0 | 9/16 (56%) | 6/16 (38%) | 8/9 (89%) | 69 tok/s |
+| Holo4-35B-A3B | H Company (Qwen3.6 fine-tune) | Apache-2.0 | 11/16 (69%) | – | 7/18 (39%) | 178–255 tok/s |
+| Holo4-27B | H Company (Qwen3.8 fine-tune) | CC-BY-NC-4.0 | – | – | 8/9 (89%) | 78 tok/s |
 
 Diagnostics: the share of the sixteen injected faults fixed with nothing else harmed (the scenario's check passes, every invariant holds), once or twice per scenario. Computer use: the share of the nine desktop tasks done, from screenshots. Decode: single-stream tokens per second on the RTX 5090.
 
-SUMMARY_BULLETS
+Three candidates, weighing trustworthiness (what a model did to the machine, and where it comes from) as heavily as scores:
+
+1. **Gemma 4 31B (Google): the assistant for diagnostics and conversation.** In oh-my-pi it fixed all sixteen faults, in a median 2.8 minutes and 2,500 output tokens, the most economical of the strong models, and 15 of 16 in the bare loop. It never damaged anything. Its weakness is the desktop, 2 of 9, although it reads the screen in correct pixel coordinates (`grounding.py`): it navigates poorly, so that is what tuning should target.
+2. **Nemotron 3.5 Bolt 74B-A9B (NVIDIA): the fast all-rounder without Chinese lineage.** 88–93% of the faults, 7 of 9 desktop tasks once its 0–1 coordinates were understood, and 153 tokens/s from a 2-bit QAT file that fits in 24 GB. One episode in oh-my-pi left alice's Notes folder empty, so it needs the same guard rails as any model, and its licence (OpenMDW) needs a read before shipping.
+3. **Qwen3.8-27B (Alibaba): the best outcomes, the reference.** The most capable at both: 30 of 31 faults in the bare loop, 14 of 15 in omp, 16 of 18 desktop tasks, and no damage in any episode. It is the slowest and most thorough (13,000 output tokens per fault), and of Chinese lineage. Qwen3.6-35B-A3B is the fastest strong desktop agent (9 of 9) but twice ended alice's session to apply a fix, the least trustworthy behaviour seen in the valid runs.
+
+To make a model without Chinese lineage beat the field, the gap to close is Gemma's computer use: its diagnostics already match or exceed Qwen3.8's. Bolt is the one non-Chinese model that is good at both today.
+
+- **gpt-oss-20b** is the fast, small baseline (75% without vision, in under a minute per fault), and gains most from Sekka's [troubleshooting skill](../../.agents/skills/sekka-troubleshooting/SKILL.md): 88% with it.
+- **For the desktop alone,** Holo4-27B and Muse Glimmer did 8 of 9 tasks each, Holo4-27B in under a minute, Muse in 16; Holo4's licence is non-commercial, and Muse is weak at diagnostics.
+- **Every model ran far above 10 tokens/s** on the 5090: the slowest, the dense ~30B models, decode about 70.
 
 ## What was measured
 
@@ -32,15 +52,19 @@ Read from the transcripts (`review.py` prints each episode's report and every co
 - **Not stopping.** The fault is fixed early and the model keeps checking until its turns run out, without reporting: the user's problem is solved, but nobody tells them what was wrong. Muse Glimmer fixed ssh-permissions at its sixth turn and spent 34 more; gpt-oss did this in seven episodes, Qwen3.8 in four. They count as fixed, not as naming the cause.
 - **Over-investigating.** Under the first prompt Qwen3.8 spent whole budgets finding who had changed something: 29 turns reading Aizome's source in the Nix store to learn what had set the time zone, and a grep of the store for the stray DNS server, without fixing either. One sentence in the prompt ("once you know what is wrong, fix it; if you can't tell who made a bad change, say so") turned both into passes. Even then, dns-nameserver took it 21 minutes, and once it ran out of its 48K-token context.
 - **Searching without a map.** gpt-oss looked for where Notes keeps its files in `/usr/share`, flatpaks and disk quotas, never `~/Notes`, and looped. The skill names these places.
-- **Destructive fixes.** To apply a repaired keyboard layout, Qwen3.6 killed the session's processes and tried to start the greeter by hand, ending alice's session, in both harnesses; Aizome reloads its settings by itself. Muse replaced alice's `authorized_keys` with a test key to check sshd, then wrote the original back from memory. BOLT_FILES In a run discarded for a harness bug, Holo4-35B deleted alice's only earlier backup to free space.
-- **Acting on what looks suspicious.** Two models built on Qwen3.6 (Ornith-1.5 and Qwen3.6 itself), in runs later discarded, found the test driver's console, a unit named `backdoor.service`, and stopped it as malware, outside anything the user asked about; the shell tool now refuses that.
+- **Destructive fixes.** To apply a repaired keyboard layout, Qwen3.6 killed the session's processes and tried to start the greeter by hand, ending alice's session, in both harnesses; Aizome reloads its settings by itself. Muse replaced alice's `authorized_keys` with a test key to check sshd, then wrote the original back from memory. Under omp, Bolt ended notes-owned-by-root with alice's Notes folder empty, her Groceries note gone; its cut-off transcript doesn't show the command. In a run discarded for a harness bug, Holo4-35B deleted alice's only earlier backup to free space.
+- **Acting on what looks suspicious.** Two models built on Qwen3.6 (Ornith-1.5 and Qwen3.6 itself) found the test driver's console, a unit named `backdoor.service`, and stopped it as malware, outside anything the user asked about. The shell tool now refuses that; Qwen3.6 then killed its shell by PID instead (that episode is excluded, and the tool refuses that too). It is the environment's artifact, but the impulse, acting on anything that looks wrong whether or not the user asked, is a real risk on a real machine.
 - **Loops.** Greedy decoding with no thinking, as H Company recommends Holo4 for one-shot grounding, repeats the same click whenever the screen doesn't change: half of Holo4-35B's actions repeated the one before.
 - **Reading what it expects.** The logs task's error says `/srv/data/backpus`. Qwen3.8 reported `/srv/data/backups`, in both repeats, normalising the typo it was asked to find ([its screen](screenshots/logs-backpus.png)).
 - **Malformed tool calls.** A long heredoc with unescaped quotes made Qwen3.8's arguments invalid JSON once; llama-server answers that with HTTP 500. The bare loop now tells the model and continues, as omp does.
 
 ## Prompt, skill, harness and observation
 
-ABLATIONS
+- **Prompt.** Qwen3.8 fixed 19 of 21 under the first prompt and 30 of 31 under the second; the two first-prompt failures were the over-investigations above, and its median episode fell from 10.5 to 3.5 minutes.
+- **Skill.** gpt-oss fixed 88% with the troubleshooting skill against 75% without, and named the cause in 94% against 66%. The skill was written by the same author as the scenarios, so this is an upper bound on what documentation gives.
+- **Harness.** oh-my-pi helped Gemma (16 of 16 against 15 of 16) and Ornith (15 against 13 of 16), left Qwen3.8, Qwen3.6 and Bolt within a scenario of the bare loop, and hurt the two weakest (gpt-oss 62% against 75%, Muse 38% against 56%), which lose their way in its larger prompt (about 7,000 tokens) and tool set. Where omp's transcripts are complete, its reports named the cause more often than the bare loop's; a third of them were cut off before the harness kept them whole, so that comparison is thin.
+- **Observation.** From element lists instead of screenshots, Qwen3.8 did 6 of 9 desktop tasks rather than 16 of 18: the list leaves out menus and pop-ups. gpt-oss, which has no vision, did 12 of 18 that way.
+- **Coordinates.** Muse Glimmer did 3 of 9 desktop tasks while its 0–1000 answers were read as pixels and 8 of 9 once they weren't; Bolt went from 0 of 7 to 7 of 9 the same way.
 
 ## What the harness needed
 
