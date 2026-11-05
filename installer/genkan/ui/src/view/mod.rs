@@ -126,12 +126,12 @@ fn computer(app: &Genkan) -> Element<Msg> {
         .spacing(7.0)
     ]
     .spacing(4.0);
-    if app.disks.is_empty() && app.scanning {
+    if app.disks.is_empty() && app.scanning() {
         lines = lines.push(text("Looking for disks…").size(11.0).role(Role::Text3));
     } else {
         lines = lines.push(text(firmware).mono().size(11.0).role(Role::Text3));
     }
-    if let Some(memory) = app.memory {
+    if let crate::ram::MemoryState::Known(memory) = app.memory() {
         lines = lines.push(
             text(format!("{} of memory", size(memory.total)))
                 .mono()

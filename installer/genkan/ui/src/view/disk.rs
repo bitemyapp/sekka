@@ -3,6 +3,7 @@
 use super::{FIELD, group, note_row, partitions, sections};
 use crate::app::{Field, Genkan, Msg};
 use crate::format::size;
+use crate::ram::MemoryState;
 use aizome_kit::prelude::*;
 use aizome_kit::row;
 use calamares_nixos::{Filesystem, memory};
@@ -72,7 +73,7 @@ pub fn page(app: &Genkan) -> Element<Msg> {
             }
         }
     }
-    if app.disks.is_empty() && !app.scanning {
+    if app.disks.is_empty() && !app.scanning() {
         disks.push(
             form_row("No disks found", space(0.0))
                 .description("Connect a disk, then rescan.")
@@ -80,7 +81,7 @@ pub fn page(app: &Genkan) -> Element<Msg> {
         );
     }
     let mut rescan = row![].spacing(10.0).padding([8.0, 12.0]).width(Fill);
-    if app.scanning {
+    if app.scanning() {
         rescan = rescan
             .push(progress_indeterminate().width(64.0))
             .push(text("Looking for disks…").size(12.0).role(Role::Text3));
@@ -90,7 +91,7 @@ pub fn page(app: &Genkan) -> Element<Msg> {
             .icon(Icon::RefreshCw)
             .compact()
             .on_press(Msg::Rescan)
-            .enabled(!app.scanning)
+            .enabled(!app.scanning())
             .tooltip("Rescan disks"),
     );
     disks.push(rescan.into());
@@ -111,13 +112,21 @@ pub fn page(app: &Genkan) -> Element<Msg> {
             Filesystem::Xfs => "High-performance journaling for large files and parallel I/O.",
         })
         .into(),
-        form_row("Swap sized to memory, with zswap", toggle(app.swap).on_toggle(Msg::Swap))
-            .description(match app.memory {
-                Some(info) => format!(
+        form_row(
+            "Swap sized to memory, with zswap",
+            toggle(app.swap)
+                .on_toggle(Msg::Swap)
+                .enabled(!matches!(app.memory(), MemoryState::Unreadable(_))),
+        )
+            .description(match app.memory() {
+                MemoryState::Known(info) => format!(
                     "A {} swap partition matching installed memory. zswap compresses pages in RAM before they reach the disk, and hibernation can resume from it.",
                     size(memory::swap_bytes(info.total))
                 ),
-                None => "Matches installed memory. zswap compresses pages in RAM before they reach the disk, and hibernation can resume from it.".into(),
+                MemoryState::Unreadable(error) => format!(
+                    "Installed memory could not be read ({error}), so a swap partition can't be sized and stays off."
+                ),
+                MemoryState::Unasked(()) | MemoryState::Reading(()) => "Matches installed memory. zswap compresses pages in RAM before they reach the disk, and hibernation can resume from it.".into(),
             })
             .into(),
         form_row(
