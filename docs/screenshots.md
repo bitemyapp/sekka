@@ -68,7 +68,8 @@ build from 5 November 2026, each running alone on one of its launch
 fixtures under a private headless sway, with nothing clicked or typed.
 The machines, conversations, command outputs and notes are made up; the
 model catalog and the fit and recommendation code are the real ones. The
-agent loop isn't written yet, so the conversations are scripted. That
+fixtures play scripted conversations and run neither the agent nor a
+model. That
 directory's README.md says what each shows and how it was made.
 
 Desktops are captured whole. An application is captured on its own: the
