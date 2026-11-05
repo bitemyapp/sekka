@@ -16,10 +16,11 @@
 //! - Nothing in use (mounted, active swap, unlocked) is changed, and a
 //!   new partition table drops what was pending for the old partitions.
 
-use aizome_sys::disks::{DisksState, Encryption, Erase, TableKind, format_size};
+use aizome_sys::disks::{Change, DisksState, Encryption, Erase, Holds, Identity, Seen, TableKind, format_size};
+use aizome_typestate::Reviewed;
 
 use crate::fs;
-use crate::layout::{self, Flags, Layout, MIB, Mark, Seg, SegKind, Target};
+use crate::layout::{self, Flags, Here, Layout, MIB, Mark, Seg, SegKind, Target};
 
 /// What an operation does.
 #[derive(Clone, Debug, PartialEq)]
@@ -71,9 +72,79 @@ pub struct Op {
     pub target: String,
     pub device: String,
     pub kind: OpKind,
+    /// The device acted on, as it was when the operation was queued: its
+    /// confirmations hold the device to this, so it never follows another
+    /// device to the same names.
+    seen: Identity,
+}
+
+/// The brand of a review of a pending operation's device ([`Op::review`]):
+/// only this module makes one, from the device as an operation was queued
+/// on it.
+#[derive(Debug)]
+pub struct Queued(());
+
+impl OpKind {
+    /// What the operation holds its device to, from queueing it to running
+    /// it: as its confirmation will ([`aizome_sys::disks::Change::HOLDS`]).
+    pub fn holds(&self) -> Holds {
+        match self {
+            OpKind::NewTable { .. } | OpKind::Delete | OpKind::Format(_) | OpKind::Repair => Holds::Exactly,
+            OpKind::Resize { .. } | OpKind::Label { .. } => Holds::Contents,
+            OpKind::Create(_) | OpKind::Flags { .. } => Holds::Place,
+        }
+    }
 }
 
 impl Op {
+    /// The device acted on, as it was when the operation was queued.
+    pub fn seen(&self) -> &Identity {
+        &self.seen
+    }
+
+    /// Whether the device it acts on is still the one it was queued for.
+    pub fn still_there(&self, state: &DisksState) -> bool {
+        state.identity(&self.target).is_some_and(|now| self.seen.same(&now, self.kind.holds()))
+    }
+
+    /// The review of its device as it was queued, for a confirmation of a
+    /// step `O` of it (each step spends its own). The backend takes only
+    /// confirmations branded [`Queued`], so the run can't confirm whatever
+    /// has the device's names when the person applies (TSH-25: a stick
+    /// swapped for another of the same model got the first one's format):
+    ///
+    /// ```compile_fail,E0423
+    /// use aizome_sys::disks::{Confirm, DisksState, Format, Seen};
+    /// use aizome_typestate::Reviewed;
+    /// use tansu::plan::{Op, Queued};
+    /// fn confirm_what_is_there(state: &DisksState, op: &Op) -> Confirm<Format, Queued> {
+    ///     let now = state.identity(&op.target).unwrap();
+    ///     Confirm::new(Reviewed::new(Seen::new(now), Queued(())))
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// use aizome_sys::disks::{Confirm, DisksState, Format};
+    /// use tansu::plan::{Op, Queued};
+    /// fn confirm_as_queued(op: &Op) -> Confirm<Format, Queued> {
+    ///     Confirm::new(op.review())
+    /// }
+    /// ```
+    pub fn review<O: Change>(&self) -> Reviewed<Seen<O>, Queued> {
+        Reviewed::new(Seen::new(self.seen.clone()), Queued(()))
+    }
+
+    /// The review of a partition this operation made (a new partition, for
+    /// the steps after making it): no one saw it before it was made, so it
+    /// is taken as it is, if it's a partition of the disk the operation was
+    /// queued for, and that disk is still the one.
+    pub fn review_made<O: Change>(&self, state: &DisksState, made: &str) -> Option<Reviewed<Seen<O>, Queued>> {
+        let on_disk = state.block(made)?.partition.as_ref().is_some_and(|p| p.table == self.target);
+        let disk_same = state.identity(&self.target).is_some_and(|now| self.seen.same(&now, Holds::Place));
+        let made = state.identity(made).filter(|_| on_disk && disk_same)?;
+        Some(Reviewed::new(Seen::new(made), Queued(())))
+    }
+
     /// Whether it needs a confirmation token ([`aizome_sys::disks::Confirm`])
     /// to run: whether it can lose data.
     pub fn is_destructive(&self) -> bool {
@@ -406,14 +477,17 @@ impl Plan {
 
     // --- Queueing ---------------------------------------------------------
 
-    fn op(&mut self, layout: &Layout, target: &str, device: &str, kind: OpKind) -> Op {
+    /// An operation on `on` (the disk of `layout`, or a device on it), as
+    /// it is now.
+    fn op(&mut self, layout: &Layout, on: &Identity, kind: OpKind) -> Op {
         Op {
             id: self.id(),
             disk: layout.disk.clone(),
             disk_device: layout.device.clone(),
-            target: target.to_owned(),
-            device: device.to_owned(),
+            target: on.path().to_owned(),
+            device: on.device().to_owned(),
             kind,
+            seen: on.clone(),
         }
     }
 
@@ -425,17 +499,20 @@ impl Plan {
         })
     }
 
-    /// A new partition table on the disk: what was pending there goes.
-    pub fn new_table(&mut self, state: &DisksState, layout: &Layout, kind: TableKind) -> Check {
+    /// A new partition table on the disk `at` is on: what was pending there
+    /// goes.
+    pub fn new_table(&mut self, state: &DisksState, at: Here<'_>, kind: TableKind) -> Check {
+        let layout = at.layout();
         self.can_new_table(state, layout)?;
         self.ops.retain(|o| o.disk != layout.disk);
-        let op = self.op(layout, &layout.disk, &layout.device, OpKind::NewTable { kind });
+        let op = self.op(layout, at.disk(), OpKind::NewTable { kind });
         self.ops.push(op);
         Ok(())
     }
 
-    /// A partition in the free space at `i`.
-    pub fn create(&mut self, layout: &Layout, i: usize, p: NewPartition) -> Result<u64, String> {
+    /// A partition in the free space `at`.
+    pub fn create(&mut self, at: Here<'_>, p: NewPartition) -> Result<u64, String> {
+        let (layout, i) = located(&at)?;
         self.can(layout, i, Action::New)?;
         let free = &layout.segs[i];
         if p.size < MIB || p.offset < free.offset || p.offset + p.size > free.end() {
@@ -447,14 +524,15 @@ impl Plan {
             return Err("Only GPT partitions have names.".into());
         }
         let p = NewPartition { logical: free.logical, ..p };
-        let op = self.op(layout, &layout.disk, &layout.device, OpKind::Create(p));
+        let op = self.op(layout, at.disk(), OpKind::Create(p));
         let id = op.id;
         self.ops.push(op);
         Ok(id)
     }
 
     /// Delete the partition at `i` (or undo the one that would make it).
-    pub fn delete(&mut self, layout: &Layout, i: usize) -> Check {
+    pub fn delete(&mut self, at: Here<'_>) -> Check {
+        let (layout, i) = located(&at)?;
         self.can(layout, i, Action::Delete)?;
         let seg = &layout.segs[i];
         match seg.target.clone() {
@@ -464,7 +542,7 @@ impl Plan {
             }
             Some(Target::Block(path)) => {
                 self.ops.retain(|o| o.target != path);
-                let op = self.op(layout, &path, &seg.device, OpKind::Delete);
+                let op = self.op(layout, device(&at)?, OpKind::Delete);
                 self.ops.push(op);
                 Ok(())
             }
@@ -474,7 +552,8 @@ impl Plan {
 
     /// Format the device at `i` (or change what a pending new partition
     /// will hold).
-    pub fn format(&mut self, layout: &Layout, i: usize, spec: NewFs) -> Check {
+    pub fn format(&mut self, at: Here<'_>, spec: NewFs) -> Check {
+        let (layout, i) = located(&at)?;
         self.can(layout, i, Action::Format)?;
         check_label(&spec.fs, &spec.label)?;
         check_encryption(&spec.fs, spec.encrypt.as_ref())?;
@@ -490,7 +569,7 @@ impl Plan {
             Some(Target::Block(path)) => {
                 // A new format replaces the old; the label goes with it.
                 self.ops.retain(|o| !(o.target == path && matches!(o.kind, OpKind::Format(_) | OpKind::Label { .. })));
-                let op = self.op(layout, &path, &seg.device, OpKind::Format(spec));
+                let op = self.op(layout, device(&at)?, OpKind::Format(spec));
                 self.ops.push(op);
                 Ok(())
             }
@@ -522,7 +601,8 @@ impl Plan {
     }
 
     /// Move the end of the partition at `i` so it is `to` bytes long.
-    pub fn resize(&mut self, layout: &Layout, i: usize, to: u64) -> Check {
+    pub fn resize(&mut self, at: Here<'_>, to: u64) -> Check {
+        let (layout, i) = located(&at)?;
         self.can(layout, i, Action::Resize)?;
         let seg = &layout.segs[i];
         let to = to / MIB * MIB;
@@ -541,8 +621,8 @@ impl Plan {
                 self.creation(id).ok_or("The new partition is gone.")?.size = to;
                 Ok(())
             }
-            Some(Target::Block(path)) => {
-                let op = self.op(layout, &path, &seg.device, OpKind::Resize { from: seg.size, to });
+            Some(Target::Block(_)) => {
+                let op = self.op(layout, device(&at)?, OpKind::Resize { from: seg.size, to });
                 self.ops.push(op);
                 Ok(())
             }
@@ -552,7 +632,8 @@ impl Plan {
 
     /// Change the label of the filesystem at `i` (`state` tells the label
     /// it has now: setting that one again only drops a pending change).
-    pub fn label(&mut self, state: &DisksState, layout: &Layout, i: usize, label: &str) -> Check {
+    pub fn label(&mut self, state: &DisksState, at: Here<'_>, label: &str) -> Check {
+        let (layout, i) = located(&at)?;
         self.can(layout, i, Action::Label)?;
         let seg = &layout.segs[i];
         check_label(&seg.fs, label)?;
@@ -574,7 +655,7 @@ impl Plan {
                 self.ops.retain(|o| !(o.target == path && matches!(o.kind, OpKind::Label { .. })));
                 let now = state.block(&path).map(|b| b.id_label.as_str());
                 if now != Some(label) {
-                    let op = self.op(layout, &path, &seg.device, OpKind::Label { label: label.to_owned() });
+                    let op = self.op(layout, device(&at)?, OpKind::Label { label: label.to_owned() });
                     self.ops.push(op);
                 }
                 Ok(())
@@ -584,7 +665,8 @@ impl Plan {
     }
 
     /// Set the flags of the partition at `i`.
-    pub fn flags(&mut self, layout: &Layout, i: usize, to: Flags) -> Check {
+    pub fn flags(&mut self, at: Here<'_>, to: Flags) -> Check {
+        let (layout, i) = located(&at)?;
         self.can(layout, i, Action::Flags)?;
         let seg = &layout.segs[i];
         if to.bios_grub && layout.table == "dos" {
@@ -606,7 +688,7 @@ impl Plan {
                 };
                 self.ops.retain(|o| !(o.target == path && matches!(o.kind, OpKind::Flags { .. })));
                 if from != to {
-                    let op = self.op(layout, &path, &seg.device, OpKind::Flags { from, to });
+                    let op = self.op(layout, device(&at)?, OpKind::Flags { from, to });
                     self.ops.push(op);
                 }
                 Ok(())
@@ -616,24 +698,26 @@ impl Plan {
     }
 
     /// Repair the filesystem at `i`.
-    pub fn repair(&mut self, layout: &Layout, i: usize) -> Check {
+    pub fn repair(&mut self, at: Here<'_>) -> Check {
+        let (layout, i) = located(&at)?;
         self.can(layout, i, Action::Repair)?;
         let seg = &layout.segs[i];
         let path = seg.block().ok_or("There's no filesystem to repair here.")?.to_owned();
         if self.ops.iter().any(|o| o.target == path && o.rewrites()) {
             return Err(format!("{} already has a pending change: apply or undo it first.", seg.short_name()));
         }
-        let op = self.op(layout, &path, &seg.device, OpKind::Repair);
+        let op = self.op(layout, device(&at)?, OpKind::Repair);
         self.ops.push(op);
         Ok(())
     }
 
-    /// Drop operations whose disk or device is gone (unplugged, detached):
-    /// the words for those dropped.
+    /// Drop operations whose disk or device is gone (unplugged, detached)
+    /// or isn't the one they were queued for (another stick at the same
+    /// names, another tool's new filesystem): the words for those dropped.
     pub fn prune(&mut self, state: &DisksState) -> Vec<String> {
         let mut dropped = Vec::new();
         self.ops.retain(|o| {
-            let ok = state.block(&o.disk).is_some() && state.block(&o.target).is_some();
+            let ok = state.block(&o.disk).is_some() && o.still_there(state);
             if !ok {
                 dropped.push(format!("{} {}", verb(&o.kind), o.device));
             }
@@ -651,6 +735,10 @@ impl Plan {
                 out.push(format!("{} is gone.", o.device));
                 continue;
             };
+            if !o.still_there(state) {
+                out.push(format!("{} isn't the device this was queued for: undo it.", o.device));
+                continue;
+            }
             let busy = match &o.kind {
                 OpKind::NewTable { .. } => state.in_use(&o.target),
                 OpKind::Create(_) | OpKind::Flags { .. } => false,
@@ -828,6 +916,16 @@ impl Plan {
     }
 }
 
+/// The layout and the segment an operation is queued at.
+fn located<'l>(at: &Here<'l>) -> Result<(&'l Layout, usize), String> {
+    Ok((at.layout(), at.index().ok_or("Select a partition or unallocated space.")?))
+}
+
+/// The device an operation is queued on, as it is now.
+fn device<'a>(at: &'a Here<'_>) -> Result<&'a Identity, String> {
+    at.device().ok_or_else(|| "Select a partition.".to_owned())
+}
+
 fn seg_on_whole(l: Option<&Layout>) -> String {
     l.and_then(|l| l.segs.iter().find(|s| s.kind() == SegKind::Whole)).map(what_is_on).unwrap_or_default()
 }
@@ -994,6 +1092,16 @@ mod tests {
             .unwrap_or_else(|| panic!("{short} in {:?}", l.segs.iter().map(|s| s.short_name()).collect::<Vec<_>>()))
     }
 
+    /// Segment `i` of `l`, chosen and found now.
+    fn here<'l>(s: &DisksState, l: &'l Layout, i: usize) -> Here<'l> {
+        l.at(s, i).unwrap_or_else(|| panic!("segment {i}"))
+    }
+
+    /// The disk of `l`, chosen and found now.
+    fn disk_here<'l>(s: &DisksState, l: &'l Layout) -> Here<'l> {
+        l.locate(s, &l.choose_disk(s).expect("the disk")).expect("the disk")
+    }
+
     /// The largest stretch of free space.
     fn free(l: &Layout) -> usize {
         (0..l.segs.len()).filter(|&i| l.segs[i].is_free()).max_by_key(|&i| l.segs[i].size).expect("free space")
@@ -1033,8 +1141,7 @@ mod tests {
         let room = l.segs[f].clone();
         let id = p
             .create(
-                &l,
-                f,
+                here(&s, &l, f),
                 NewPartition {
                     offset: room.offset,
                     size: 10 * GIB,
@@ -1052,10 +1159,10 @@ mod tests {
         assert_eq!(l.segs[new].pending, [Mark::New]);
         assert!(l.segs.iter().any(|s| s.is_free() && s.offset == room.offset + 10 * GIB), "the rest stays free");
         // Formatting, labelling, resizing and flagging it edit the one operation.
-        p.format(&l, new, NewFs { fs: "xfs".into(), ..ext4("") }).unwrap();
-        p.label(&s, &l, new, "media").unwrap();
-        p.resize(&l, new, 12 * GIB).unwrap();
-        p.flags(&l, new, Flags { hidden: true, ..Flags::default() }).unwrap();
+        p.format(here(&s, &l, new), NewFs { fs: "xfs".into(), ..ext4("") }).unwrap();
+        p.label(&s, here(&s, &l, new), "media").unwrap();
+        p.resize(here(&s, &l, new), 12 * GIB).unwrap();
+        p.flags(here(&s, &l, new), Flags { hidden: true, ..Flags::default() }).unwrap();
         assert_eq!(p.len(), 1);
         let OpKind::Create(made) = &p.ops[0].kind else { panic!() };
         assert_eq!(
@@ -1064,7 +1171,7 @@ mod tests {
         );
         // Deleting it undoes it.
         let l = p.preview(&s, &disk("sda")).unwrap();
-        p.delete(&l, l.find(&Target::New(id)).unwrap()).unwrap();
+        p.delete(here(&s, &l, l.find(&Target::New(id)).unwrap())).unwrap();
         assert!(p.is_empty());
     }
 
@@ -1074,19 +1181,19 @@ mod tests {
         let mut p = Plan::default();
         let l = p.preview(&s, &disk("sdc")).unwrap();
         let stick = at(&l, "sdc1");
-        p.format(&l, stick, ext4("one")).unwrap();
+        p.format(here(&s, &l, stick), ext4("one")).unwrap();
         let l = p.preview(&s, &disk("sdc")).unwrap();
         // A second format replaces the first; a label joins it.
-        p.format(&l, stick, ext4("two")).unwrap();
-        p.label(&s, &l, stick, "three").unwrap();
+        p.format(here(&s, &l, stick), ext4("two")).unwrap();
+        p.label(&s, here(&s, &l, stick), "three").unwrap();
         assert_eq!(p.len(), 1);
         let OpKind::Format(f) = &p.ops[0].kind else { panic!() };
         assert_eq!(f.label, "three");
         // A resize waits for the format.
         let l = p.preview(&s, &disk("sdc")).unwrap();
-        assert!(p.resize(&l, stick, 8 * GIB).unwrap_err().contains("pending format"));
+        assert!(p.resize(here(&s, &l, stick), 8 * GIB).unwrap_err().contains("pending format"));
         // Deleting drops the format.
-        p.delete(&l, stick).unwrap();
+        p.delete(here(&s, &l, stick)).unwrap();
         assert_eq!(p.len(), 1);
         assert_eq!(p.ops[0].kind, OpKind::Delete);
         let l = p.preview(&s, &disk("sdc")).unwrap();
@@ -1099,18 +1206,18 @@ mod tests {
         let mut p = Plan::default();
         let l = p.preview(&s, &disk("sdc")).unwrap();
         let stick = at(&l, "sdc1");
-        p.label(&s, &l, stick, "NEW").unwrap();
+        p.label(&s, here(&s, &l, stick), "NEW").unwrap();
         assert_eq!(p.len(), 1);
-        p.label(&s, &l, stick, "STICK").unwrap();
+        p.label(&s, here(&s, &l, stick), "STICK").unwrap();
         assert!(p.is_empty(), "back to the label it has");
-        assert!(p.label(&s, &l, stick, "MUCH TOO LONG FOR FAT").unwrap_err().contains("11 bytes"));
+        assert!(p.label(&s, here(&s, &l, stick), "MUCH TOO LONG FOR FAT").unwrap_err().contains("11 bytes"));
         let was = Flags::of("dos", "0x0c", 0x80);
         assert!(was.boot);
-        p.flags(&l, stick, Flags { boot: false, ..was }).unwrap();
+        p.flags(here(&s, &l, stick), Flags { boot: false, ..was }).unwrap();
         let l = p.preview(&s, &disk("sdc")).unwrap();
-        p.flags(&l, stick, was).unwrap();
+        p.flags(here(&s, &l, stick), was).unwrap();
         assert!(p.is_empty());
-        assert!(p.flags(&l, stick, Flags { bios_grub: true, ..was }).unwrap_err().contains("GPT"));
+        assert!(p.flags(here(&s, &l, stick), Flags { bios_grub: true, ..was }).unwrap_err().contains("GPT"));
     }
 
     #[test]
@@ -1118,10 +1225,10 @@ mod tests {
         let s = sample();
         let mut p = Plan::default();
         let l = p.preview(&s, &disk("mmcblk0")).unwrap();
-        p.label(&s, &l, at(&l, "mmcblk0p2"), "root").unwrap();
+        p.label(&s, here(&s, &l, at(&l, "mmcblk0p2")), "root").unwrap();
         let sdc = p.preview(&s, &disk("sdc")).unwrap();
-        p.label(&s, &sdc, at(&sdc, "sdc1"), "KEEP").unwrap();
-        p.new_table(&s, &l, TableKind::Gpt).unwrap();
+        p.label(&s, here(&s, &sdc, at(&sdc, "sdc1")), "KEEP").unwrap();
+        p.new_table(&s, disk_here(&s, &l), TableKind::Gpt).unwrap();
         assert_eq!(p.len(), 2, "the other disk's operation stays");
         let l = p.preview(&s, &disk("mmcblk0")).unwrap();
         assert!(l.new_table && l.table == "gpt");
@@ -1140,8 +1247,8 @@ mod tests {
         let (min, max) = p.resize_range(&l, root);
         assert_eq!(max, l.segs[root].size + l.room_after(root));
         assert!(min < l.segs[root].size);
-        assert!(p.resize(&l, root, max + GIB).unwrap_err().contains("at most"));
-        p.resize(&l, root, 16 * GIB).unwrap();
+        assert!(p.resize(here(&s, &l, root), max + GIB).unwrap_err().contains("at most"));
+        p.resize(here(&s, &l, root), 16 * GIB).unwrap();
         let l = p.preview(&s, &disk("mmcblk0")).unwrap();
         assert_eq!(l.segs[at(&l, "mmcblk0p2")].size, 16 * GIB);
         let w = p.words(&p.ops[0], &s);
@@ -1158,8 +1265,7 @@ mod tests {
         let mut p = Plan::default();
         let l = p.preview(&s, &disk("sda")).unwrap();
         p.format(
-            &l,
-            at(&l, "sda2"),
+            here(&s, &l, at(&l, "sda2")),
             NewFs { encrypt: Some(Encryption { passphrase: "x".into(), luks1: false }), ..ext4("vault") },
         )
         .unwrap();
@@ -1180,8 +1286,7 @@ mod tests {
             let f = free(&l);
             let room = l.segs[f].clone();
             p.create(
-                &l,
-                f,
+                here(&s, &l, f),
                 NewPartition {
                     offset: room.offset,
                     size: GIB,
@@ -1200,8 +1305,7 @@ mod tests {
         assert!(p.can(&l, free(&l), Action::New).unwrap_err().contains("four primary"));
         assert!(
             p.create(
-                &l,
-                free(&l),
+                here(&s, &l, free(&l)),
                 NewPartition {
                     offset: l.segs[free(&l)].offset,
                     size: GIB,
@@ -1222,9 +1326,48 @@ mod tests {
         let mut s = sample();
         let mut p = Plan::default();
         let l = p.preview(&s, &disk("sdc")).unwrap();
-        p.label(&s, &l, at(&l, "sdc1"), "X").unwrap();
+        p.label(&s, here(&s, &l, at(&l, "sdc1")), "X").unwrap();
         s.blocks.retain(|b| !b.device.starts_with("/dev/sdc"));
         assert_eq!(p.prune(&s), ["Label /dev/sdc1"]);
         assert!(p.is_empty());
+    }
+
+    #[test]
+    fn prune_drops_what_another_device_took_the_place_of() {
+        let mut s = sample();
+        let mut p = Plan::default();
+        let l = p.preview(&s, &disk("sdc")).unwrap();
+        p.format(here(&s, &l, at(&l, "sdc1")), ext4("one")).unwrap();
+        let l = p.preview(&s, &disk("sdc")).unwrap();
+        p.flags(here(&s, &l, at(&l, "sdc1")), Flags { hidden: true, ..Flags::of("dos", "0x0c", 0x80) }).unwrap();
+        let l = p.preview(&s, &disk("sda")).unwrap();
+        let free_on_sda = free(&l);
+        p.create(
+            here(&s, &l, free_on_sda),
+            NewPartition {
+                offset: l.segs[free_on_sda].offset,
+                size: GIB,
+                fs: String::new(),
+                label: String::new(),
+                name: String::new(),
+                encrypt: None,
+                flags: Flags::default(),
+                logical: false,
+            },
+        )
+        .unwrap();
+        // A new label is no new device: nothing goes.
+        s.blocks.iter_mut().find(|b| b.device == "/dev/sda3").unwrap().id_label = "renamed".into();
+        assert!(p.prune(&s).is_empty());
+        assert!(p.problems(&s).is_empty());
+        // Another tool makes a new filesystem on sdc1: the format and the
+        // flags were for the partition, the format for its filesystem too.
+        s.blocks.iter_mut().find(|b| b.device == "/dev/sdc1").unwrap().id_uuid = "another".into();
+        assert_eq!(p.problems(&s), ["/dev/sdc1 isn't the device this was queued for: undo it."]);
+        assert_eq!(p.prune(&s), ["Format /dev/sdc1"]);
+        // Another stick of the same model comes up at the same names.
+        s.drives.iter_mut().find(|d| d.model == "Cruzer Blade").unwrap().time_detected += 1;
+        assert_eq!(p.prune(&s), ["Flags on /dev/sdc1"]);
+        assert_eq!(p.len(), 1, "the new partition on the SSD stays");
     }
 }

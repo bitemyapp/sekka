@@ -26,7 +26,7 @@ fn fixture(fs: &str, to: u64) -> (Mock, Run) {
     let mut plan = Plan::default();
     let layout = plan.preview(&mock.snapshot(), DISK).unwrap();
     let index = layout.segs.iter().position(|s| s.short_name() == "sda3").unwrap();
-    plan.resize(&layout, index, to).unwrap();
+    plan.resize(layout.at(&mock.snapshot(), index).unwrap(), to).unwrap();
     let run = Run::agree(&plan, &mock.snapshot());
     (mock, run)
 }

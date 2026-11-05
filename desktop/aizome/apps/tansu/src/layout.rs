@@ -4,7 +4,7 @@
 //! operations have run (see [`crate::plan::Plan::preview`]).
 
 use aizome_sys::disks::types::{flag_names, flags as bits};
-use aizome_sys::disks::{BlockDevice, DisksState};
+use aizome_sys::disks::{BlockDevice, DisksState, Holds, Identity};
 
 pub const MIB: u64 = 1 << 20;
 
@@ -358,6 +358,229 @@ pub fn current(state: &DisksState, disk: &str) -> Option<Layout> {
         layout.segs.push(blank);
     }
     Some(layout)
+}
+
+/// What a sheet acts on: a segment of a disk (or the disk itself) as the
+/// person chose it, with the identity of the devices then. A sheet holds
+/// this, not an index into the layout: the layout is made again whenever
+/// UDisks reports a change, and an index taken before then may name what
+/// took the segment's place, even on another disk.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Chosen {
+    /// The disk's block device, and its identity then.
+    disk: String,
+    disk_seen: Identity,
+    spot: Spot,
+    /// The segment's device, for a device UDisks has: its identity then.
+    seen: Option<Identity>,
+    /// What the segment was called (`sdc2`).
+    name: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum Spot {
+    /// The disk itself (for a new partition table).
+    Disk,
+    /// A partition, a filesystem on the whole disk, or a pending new
+    /// partition.
+    Seg(Target),
+    /// Unallocated space, by where it started.
+    Free { offset: u64, logical: bool },
+}
+
+impl Chosen {
+    /// What the segment was called when it was chosen (`sdc2`).
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+/// Proof that a segment of this layout (or its disk) is the one the person
+/// chose, re-identified now. Only [`Layout::locate`] and [`Layout::at`] make
+/// one, and it borrows the layout it was found in, so it can't be kept
+/// across a refresh. [`Plan`](crate::plan::Plan)'s operations are queued
+/// only at one, so a sheet can't queue at an index it took before the
+/// layout changed (TSH-25: the stick's Format sheet queued a format of the
+/// partition at the same index on the drive Tansu fell back to):
+///
+/// ```compile_fail,E0506
+/// use aizome_sys::disks::{DisksState, Erase};
+/// use tansu::layout::Layout;
+/// use tansu::plan::{NewFs, Plan};
+/// fn format_after_a_refresh(state: &DisksState, mut layout: Layout, now: Layout, plan: &mut Plan) {
+///     let at = layout.at(state, 1).expect("the stick's sdc2");
+///     // UDisks reports the stick gone: the layout is made again.
+///     layout = now;
+///     let ext4 = NewFs { fs: "ext4".into(), label: String::new(), erase: Erase::Quick, encrypt: None };
+///     let _ = plan.format(at, ext4);
+/// }
+/// ```
+///
+/// nor at a bare index:
+///
+/// ```compile_fail,E0308
+/// use aizome_sys::disks::Erase;
+/// use tansu::layout::Layout;
+/// use tansu::plan::{NewFs, Plan};
+/// fn format_at(layout: &Layout, seg: usize, plan: &mut Plan) {
+///     let ext4 = NewFs { fs: "ext4".into(), label: String::new(), erase: Erase::Quick, encrypt: None };
+///     let _ = plan.format(seg, ext4);
+/// }
+/// ```
+///
+/// and one can't be made from an index without finding it:
+///
+/// ```compile_fail,E0451
+/// use tansu::layout::{Here, Layout};
+/// fn forge(layout: &Layout, seg: usize) -> Here<'_> {
+///     Here { layout, i: Some(seg), ..todo!() }
+/// }
+/// ```
+///
+/// A sheet keeps what was chosen and finds it again in the layout as it is
+/// when the person submits; once its stick is gone, it isn't there:
+///
+/// ```
+/// use std::rc::Rc;
+/// use aizome_sys::disks::Erase;
+/// use tansu::backend::Backend;
+/// use tansu::mock::{self, Mock};
+/// use tansu::plan::{NewFs, Plan};
+/// let mock = Mock::new(mock::sample());
+/// let stick = "/org/freedesktop/UDisks2/block_devices/sdc";
+/// let (state, mut plan) = (mock.snapshot(), Plan::default());
+/// let layout = plan.preview(&state, stick).unwrap();
+/// let i = layout.segs.iter().position(|s| s.short_name() == "sdc1").unwrap();
+/// let chosen = layout.choose(&state, i).unwrap();
+/// let ext4 = || NewFs { fs: "ext4".into(), label: String::new(), erase: Erase::Quick, encrypt: None };
+/// plan.format(layout.locate(&state, &chosen).unwrap(), ext4()).unwrap();
+/// assert_eq!(plan.ops[0].device, "/dev/sdc1");
+///
+/// let _ = mock.power_off("/org/freedesktop/UDisks2/drives/cruzer");
+/// let state = mock.snapshot();
+/// let fallback = plan.preview(&state, "/org/freedesktop/UDisks2/block_devices/mmcblk0").unwrap();
+/// assert!(fallback.locate(&state, &chosen).is_err());
+/// ```
+pub struct Here<'l> {
+    layout: &'l Layout,
+    i: Option<usize>,
+    /// The disk's identity now.
+    disk_seen: Identity,
+    /// The segment's device's identity now, for a device UDisks has.
+    seen: Option<Identity>,
+}
+
+impl<'l> Here<'l> {
+    /// The layout it was found in.
+    pub fn layout(&self) -> &'l Layout {
+        self.layout
+    }
+
+    /// The segment's index in that layout (none for the disk itself).
+    pub fn index(&self) -> Option<usize> {
+        self.i
+    }
+
+    pub fn seg(&self) -> Option<&'l Seg> {
+        self.i.and_then(|i| self.layout.segs.get(i))
+    }
+
+    /// The disk, as it is now: what a new table or partition is queued on.
+    pub fn disk(&self) -> &Identity {
+        &self.disk_seen
+    }
+
+    /// The segment's device, as it is now: what an operation on it is
+    /// queued on.
+    pub fn device(&self) -> Option<&Identity> {
+        self.seen.as_ref()
+    }
+}
+
+impl Layout {
+    /// The segment at `i` of this layout, as the person chooses it now to act
+    /// on it once they've filled in a sheet (`state` is what the layout
+    /// shows).
+    pub fn choose(&self, state: &DisksState, i: usize) -> Option<Chosen> {
+        let seg = self.segs.get(i)?;
+        let spot = match &seg.target {
+            Some(t) => Spot::Seg(t.clone()),
+            None => Spot::Free { offset: seg.offset, logical: seg.logical },
+        };
+        let seen = match &seg.target {
+            Some(Target::Block(path)) => Some(state.identity(path)?),
+            _ => None,
+        };
+        let name = match seg.kind() {
+            SegKind::Free => format!("The unallocated space on {}", self.device.trim_start_matches("/dev/")),
+            _ => seg.short_name(),
+        };
+        Some(Chosen { disk: self.disk.clone(), disk_seen: state.identity(&self.disk)?, spot, seen, name })
+    }
+
+    /// The disk itself, as the person chooses it now (for a new partition
+    /// table).
+    pub fn choose_disk(&self, state: &DisksState) -> Option<Chosen> {
+        Some(Chosen {
+            disk: self.disk.clone(),
+            disk_seen: state.identity(&self.disk)?,
+            spot: Spot::Disk,
+            seen: None,
+            name: self.device.trim_start_matches("/dev/").to_owned(),
+        })
+    }
+
+    /// Where `chosen` is in this layout, if it's still what the person
+    /// chose: on the same disk (the same drive at the same names), and the
+    /// same device with the same filesystem on it, or for the disk itself, the
+    /// same partition table.
+    pub fn locate<'l>(&'l self, state: &DisksState, chosen: &Chosen) -> Result<Here<'l>, String> {
+        let gone = || format!("{} is no longer there: close this and choose again.", chosen.name);
+        let changed = || format!("{} changed since you chose it: close this and choose again.", chosen.name);
+        if self.disk != chosen.disk {
+            return Err(gone());
+        }
+        let disk_seen = state.identity(&self.disk).ok_or_else(gone)?;
+        if !chosen.disk_seen.same(&disk_seen, Holds::Place) {
+            return Err(gone());
+        }
+        // For the disk itself, also the partition table the person saw.
+        if chosen.spot == Spot::Disk && !chosen.disk_seen.same(&disk_seen, Holds::Contents) {
+            return Err(changed());
+        }
+        let (i, seen) = match &chosen.spot {
+            Spot::Disk => (None, None),
+            Spot::Seg(target) => {
+                let i = self.find(target).ok_or_else(gone)?;
+                let seen = match target {
+                    Target::Block(path) => {
+                        let now = state.identity(path).ok_or_else(gone)?;
+                        if !chosen.seen.as_ref().is_some_and(|seen| seen.same(&now, Holds::Contents)) {
+                            return Err(changed());
+                        }
+                        Some(now)
+                    }
+                    Target::New(_) => None,
+                };
+                (Some(i), seen)
+            }
+            Spot::Free { offset, logical } => {
+                let i = self
+                    .segs
+                    .iter()
+                    .position(|s| s.is_free() && s.logical == *logical && s.offset <= *offset && *offset < s.end())
+                    .ok_or_else(gone)?;
+                (Some(i), None)
+            }
+        };
+        Ok(Here { layout: self, i, disk_seen, seen })
+    }
+
+    /// The segment at `i` of this layout, chosen and found now: for an
+    /// action on the selection that needs no sheet.
+    pub fn at<'l>(&'l self, state: &DisksState, i: usize) -> Option<Here<'l>> {
+        self.locate(state, &self.choose(state, i)?).ok()
+    }
 }
 
 /// A partition's flags, as Tansu offers them: the boot flag, an EFI

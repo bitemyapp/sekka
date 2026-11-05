@@ -15,7 +15,7 @@ use aizome_sys::disks::{
 use aizome_sys::{Error, Task};
 
 use crate::backend::Backend;
-use crate::run::Agreed;
+use crate::plan::Queued;
 
 const MIB: u64 = 1 << 20;
 const GIB: u64 = 1 << 30;
@@ -111,7 +111,7 @@ impl Mock {
     /// The device a confirmation names, checked as UDisks's client checks
     /// it: the same device as confirmed and, for an operation that destroys
     /// data, not in use.
-    fn confirmed<Op: Change>(&self, confirm: Confirm<Op, Agreed>) -> Result<BlockDevice, Error> {
+    fn confirmed<Op: Change>(&self, confirm: Confirm<Op, Queued>) -> Result<BlockDevice, Error> {
         let s = self.state.borrow();
         let target = confirm.check(&s)?;
         let path = target.target().path();
@@ -399,7 +399,7 @@ impl Backend for Mock {
         ready(Ok(if ok { (true, String::new()) } else { (false, format!("mkfs.{fs}")) }))
     }
 
-    fn create_partition_table(&self, confirm: Confirm<NewPartitionTable, Agreed>, kind: TableKind) -> Task<()> {
+    fn create_partition_table(&self, confirm: Confirm<NewPartitionTable, Queued>, kind: TableKind) -> Task<()> {
         let path = confirm.block().to_owned();
         let r = self
             .call(format!("Format({}) on {}", if kind == TableKind::Gpt { "gpt" } else { "dos" }, self.device(&path)))
@@ -432,7 +432,7 @@ impl Backend for Mock {
 
     fn create_partition(
         &self,
-        confirm: Confirm<CreatePartition, Agreed>,
+        confirm: Confirm<CreatePartition, Queued>,
         offset: u64,
         size: u64,
         type_id: Option<&str>,
@@ -500,7 +500,7 @@ impl Backend for Mock {
         ready(r)
     }
 
-    fn delete_partition(&self, confirm: Confirm<DeletePartition, Agreed>) -> Task<()> {
+    fn delete_partition(&self, confirm: Confirm<DeletePartition, Queued>) -> Task<()> {
         let path = confirm.block().to_owned();
         let r = self.call(format!("Delete {}", self.device(&path))).and_then(|()| {
             let b = self.confirmed(confirm)?;
@@ -515,7 +515,7 @@ impl Backend for Mock {
         ready(r)
     }
 
-    fn format(&self, confirm: Confirm<Format, Agreed>, spec: FormatSpec) -> Task<()> {
+    fn format(&self, confirm: Confirm<Format, Queued>, spec: FormatSpec) -> Task<()> {
         let path = confirm.block().to_owned();
         let r = self.call(format!("Format({}) on {}", spec.fs_type, self.device(&path))).and_then(|()| {
             self.confirmed(confirm)?;
@@ -533,7 +533,7 @@ impl Backend for Mock {
         ready(r)
     }
 
-    fn resize_partition(&self, confirm: Confirm<Resize, Agreed>, size: u64) -> Task<()> {
+    fn resize_partition(&self, confirm: Confirm<Resize, Queued>, size: u64) -> Task<()> {
         let path = confirm.block().to_owned();
         let r = self.call(format!("ResizePartition({size}) {}", self.device(&path))).and_then(|()| {
             let b = self.confirmed(confirm)?;
@@ -563,7 +563,7 @@ impl Backend for Mock {
         ready(r)
     }
 
-    fn resize_filesystem(&self, confirm: Confirm<Resize, Agreed>, size: u64) -> Task<()> {
+    fn resize_filesystem(&self, confirm: Confirm<Resize, Queued>, size: u64) -> Task<()> {
         let path = confirm.block().to_owned();
         let r = self.call(format!("ResizeFilesystem({size}) {}", self.device(&path))).and_then(|()| {
             self.confirmed(confirm)?;
@@ -580,14 +580,14 @@ impl Backend for Mock {
         ready(r)
     }
 
-    fn repair(&self, confirm: Confirm<Repair, Agreed>) -> Task<bool> {
+    fn repair(&self, confirm: Confirm<Repair, Queued>) -> Task<bool> {
         let path = confirm.block().to_owned();
         let r =
             self.call(format!("Repair {}", self.device(&path))).and_then(|()| self.confirmed(confirm).map(|_| true));
         ready(r)
     }
 
-    fn set_label(&self, confirm: Confirm<Relabel, Agreed>, label: &str) -> Task<()> {
+    fn set_label(&self, confirm: Confirm<Relabel, Queued>, label: &str) -> Task<()> {
         let block = confirm.block().to_owned();
         let r = self.call(format!("SetLabel({label}) {}", self.device(&block))).and_then(|()| {
             self.confirmed(confirm)?;
@@ -601,7 +601,7 @@ impl Backend for Mock {
         ready(r)
     }
 
-    fn set_partition_type(&self, confirm: Confirm<PartitionEntry, Agreed>, type_id: &str) -> Task<()> {
+    fn set_partition_type(&self, confirm: Confirm<PartitionEntry, Queued>, type_id: &str) -> Task<()> {
         let block = confirm.block().to_owned();
         let r = self.call(format!("SetType({type_id}) {}", self.device(&block))).and_then(|()| {
             self.confirmed(confirm)?;
@@ -616,7 +616,7 @@ impl Backend for Mock {
         ready(r)
     }
 
-    fn set_partition_flags(&self, confirm: Confirm<PartitionEntry, Agreed>, flags: u64) -> Task<()> {
+    fn set_partition_flags(&self, confirm: Confirm<PartitionEntry, Queued>, flags: u64) -> Task<()> {
         let block = confirm.block().to_owned();
         let block = block.as_str();
         let r = self.call(format!("SetFlags({flags:#x}) {}", self.device(block))).and_then(|()| {
