@@ -2,15 +2,14 @@
 //! What the window asks of NetworkManager and changes in it, through nmcli.
 //! These calls block: the window runs them on worker threads. Reading never
 //! waits for a Wi-Fi scan; a scan is requested and its results arrive with
-//! the next reading. Passwords reach nmcli in a file only the user can read
-//! (`passwd-file`), never on a command line.
+//! the next reading. Passwords reach nmcli through a pipe on its standard
+//! input (`passwd-file /dev/stdin`), never on a command line or in a file.
 //!
 //! With TATAMI_NETWORK_DRY_RUN set, changes are printed, not made.
 use crate::model::{self, Snapshot};
 use std::{
     fs,
     io::{BufRead, BufReader, Write},
-    path::PathBuf,
     process::{Command, Stdio},
 };
 
@@ -19,10 +18,31 @@ fn dry_run() -> bool {
 }
 
 fn output(args: &[&str]) -> Result<String, String> {
-    let out = Command::new("nmcli")
+    output_with(args, None)
+}
+
+/// nmcli with `secret` written to its standard input; with none, that is
+/// empty.
+fn output_with(args: &[&str], secret: Option<&Secret>) -> Result<String, String> {
+    let mut child = Command::new("nmcli")
         .args(args)
-        .stdin(Stdio::null())
-        .output()
+        .stdin(if secret.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("nmcli: {error}"))?;
+    if let (Some(secret), Some(mut stdin)) = (secret, child.stdin.take()) {
+        // The pipe holds it until nmcli reads it, before it activates
+        // anything; closing it here ends what nmcli reads. An nmcli that
+        // exits first reports its own error.
+        let _ = stdin.write_all(secret.0.as_bytes());
+    }
+    let out = child
+        .wait_with_output()
         .map_err(|error| format!("nmcli: {error}"))?;
     if out.status.success() {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
@@ -38,6 +58,17 @@ fn change(args: &[&str]) -> Result<(), String> {
         return Ok(());
     }
     output(args).map(drop)
+}
+
+/// A change that needs a secret, which nmcli reads from a pipe on its
+/// standard input (`passwd-file /dev/stdin`).
+fn change_with(args: &[&str], secret: &Secret) -> Result<(), String> {
+    let args = [args, &["passwd-file", "/dev/stdin"]].concat();
+    if dry_run() {
+        println!("nmcli {}", args.join(" "));
+        return Ok(());
+    }
+    output_with(&args, Some(secret)).map(drop)
 }
 
 /// Everything the window shows, in two rounds of questions asked at once:
@@ -157,48 +188,19 @@ pub fn set_wifi(on: bool) -> Result<(), String> {
     change(&["radio", "wifi", if on { "on" } else { "off" }])
 }
 
-/// A secret for `nmcli … passwd-file`: in the user's runtime directory
-/// (memory only, mode 0700), readable by them alone, removed when dropped.
-pub struct Secret(PathBuf);
+/// A secret for `nmcli … passwd-file`, a line of that file. It is only
+/// ever written to a pipe nmcli reads (`change_with`): a file would stay
+/// behind, password and all, when this program ends before nmcli does.
+pub struct Secret(String);
 
 impl Secret {
     /// `setting` is the secret's property, such as
     /// `802-11-wireless-security.psk`.
     pub fn new(setting: &str, value: &str) -> Result<Secret, String> {
-        use std::os::unix::fs::OpenOptionsExt;
         if value.contains('\n') {
             return Err("A password cannot contain a line break".into());
         }
-        let dir = std::env::var("XDG_RUNTIME_DIR")
-            .ok()
-            .filter(|dir| dir.starts_with('/'))
-            .ok_or("No runtime directory for the password")?;
-        let nonce = fs::read_to_string("/proc/sys/kernel/random/uuid").unwrap_or_default();
-        let path = PathBuf::from(dir).join(format!(
-            "tatami-network-{}-{}",
-            std::process::id(),
-            nonce.trim()
-        ));
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&path)
-            .map_err(|error| error.to_string())?;
-        let secret = Secret(path);
-        file.write_all(format!("{setting}:{value}\n").as_bytes())
-            .map_err(|error| error.to_string())?;
-        Ok(secret)
-    }
-
-    fn path(&self) -> &str {
-        self.0.to_str().unwrap_or_default()
-    }
-}
-
-impl Drop for Secret {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.0);
+        Ok(Secret(format!("{setting}:{value}\n")))
     }
 }
 
@@ -212,10 +214,10 @@ pub fn connect(uuid: &str, device: Option<&str>, secret: Option<&Secret>) -> Res
     if let Some(device) = device {
         args.extend(["ifname", device]);
     }
-    if let Some(secret) = secret {
-        args.extend(["passwd-file", secret.path()]);
+    match secret {
+        Some(secret) => change_with(&args, secret),
+        None => change(&args),
     }
-    change(&args)
 }
 
 pub fn disconnect(uuid: &str) -> Result<(), String> {
