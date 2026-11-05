@@ -101,6 +101,32 @@ let
     EOF
     done
   '';
+  # Reclaim protection (MemoryLow) for the services the desktop waits on
+  # (programs.aizome.memoryReserve), as drop-ins: they apply to whichever
+  # package or module defines the unit, and do nothing where it isn't
+  # installed. A unit is protected only as far as its parent is, so the
+  # slices and user manager above these services get the sums.
+  reserve = lib.mapAttrs (_: lib.filterAttrs (_: mib: mib > 0)) cfg.memoryReserve;
+  reserveSum = units: "${toString (lib.foldl' builtins.add 0 (lib.attrValues units))}M";
+  memoryDropIns = pkgs.runCommand "aizome-memory-reserve" { } (
+    lib.concatStrings (
+      lib.concatLists (
+        lib.mapAttrsToList
+          (
+            manager: units:
+            lib.mapAttrsToList (unit: mib: ''
+              dir="$out/lib/systemd/${manager}/"${lib.escapeShellArg "${unit}.d"}
+              mkdir -p "$dir"
+              printf '[Service]\nMemoryLow=%sM\n' ${toString mib} > "$dir/aizome-memory.conf"
+            '') units
+          )
+          {
+            user = reserve.session;
+            system = reserve.system;
+          }
+      )
+    )
+  );
   # wf-recorder (the fallback recorder) puts its wl_shm buffers in files in
   # /tmp, which on most NixOS systems is on disk: every frame the compositor
   # copies would be written out (over 1 GB/s at 2880 × 1800 and 60 fps) and
@@ -191,6 +217,49 @@ in
         description = "The Day theme's default wallpaper.";
       };
     };
+    memoryReserve = {
+      session = lib.mkOption {
+        type = lib.types.attrsOf lib.types.ints.unsigned;
+        default = { };
+        defaultText = lib.literalMD ''
+          `aizome.service` 1024, `aizome-portal.service` 32, the session bus
+          16, `xdg-desktop-portal.service` 16, and PipeWire's `pipewire`,
+          `pipewire-pulse` and `wireplumber` services 32, 48 and 32, each
+          where installed.
+        '';
+        example = {
+          "aizome.service" = 1536;
+          "aizome-portal.service" = 0;
+        };
+        description = ''
+          Best-effort reclaim protection (`MemoryLow`), in MiB, for user
+          services in `session.slice` that the desktop waits on: drawing and
+          input, audio, the session bus and the portals. The defaults cover
+          what each service keeps resident, not the reclaimable caches
+          charged alongside it. `session.slice`, `user@.service`, every
+          `user-UID.slice` and `user.slice` get the sum, which people logged
+          in at the same time share. 0 removes a service. Unused protection
+          stays available to other programs, and the kernel reclaims
+          protected memory rather than run out.
+        '';
+      };
+      system = lib.mkOption {
+        type = lib.types.attrsOf lib.types.ints.unsigned;
+        default = { };
+        defaultText = lib.literalMD ''
+          `systemd-logind.service` 16, `systemd-udevd.service` 64, the system
+          bus 32, and, where enabled, `rtkit-daemon.service` 8,
+          `bluetooth.service` 16 and `systemd-oomd.service` 64.
+        '';
+        description = ''
+          The same, for system services the desktop waits on: logind (the
+          compositor's seat and input and display devices), udev (hotplug),
+          the system bus, RealtimeKit (realtime audio threads), BlueZ
+          (Bluetooth keyboards and mice deliver every event through it) and
+          systemd-oomd. `system.slice` gets the sum.
+        '';
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -234,6 +303,7 @@ in
     systemd.packages = [
       cfg.package
       nmAppletDropIns
+      memoryDropIns
     ];
     systemd.user.services.xdg-desktop-portal-wlr = {
       overrideStrategy = "asDropin";
@@ -243,26 +313,81 @@ in
       ];
     };
 
-    # CPU/I/O weights help only while the session's working set is resident.
-    # Give the session a shared, best-effort 1 GiB reclaim reserve, propagated
-    # through every ancestor. This is not preallocated or pinned memory:
-    # unused protection stays available, and global OOM may still reclaim it.
-    # Multiple users share user.slice's reserve rather than multiplying it.
-    systemd.slices.user.sliceConfig.MemoryLow = lib.mkDefault "1G";
+    # CPU/I/O weights help only while what these services run on is
+    # resident: a compositor waiting on swapped-out pages misses input
+    # whatever its weight. Each budget covers what that service keeps
+    # resident on a 4K workstation (measured peaks, and resident plus
+    # swapped memory under heavy load), with headroom, so reclaim takes
+    # applications' pages and the caches charged to these services first.
+    assertions = [
+      {
+        assertion = lib.all (lib.hasSuffix ".service") (
+          lib.attrNames (cfg.memoryReserve.session // cfg.memoryReserve.system)
+        );
+        message = "programs.aizome.memoryReserve names services (unit names ending in .service).";
+      }
+    ];
+    programs.aizome.memoryReserve =
+      let
+        bus =
+          if config.services.dbus.implementation == "broker" then "dbus-broker.service" else "dbus.service";
+        pipewire = config.services.pipewire;
+      in
+      {
+        session = lib.mapAttrs (_: lib.mkDefault) (
+          {
+            # The compositor, shell, Xwayland and xwayland-satellite: about
+            # 800 MiB of heap, mapped code and the shell's shared buffers.
+            "aizome.service" = 1024;
+            "aizome-portal.service" = 32;
+            ${bus} = 16;
+          }
+          # Apps ask the Settings portal for the color scheme as they start.
+          // lib.optionalAttrs config.xdg.portal.enable { "xdg-desktop-portal.service" = 16; }
+          // lib.optionalAttrs pipewire.enable (
+            {
+              "pipewire.service" = 32;
+            }
+            // lib.optionalAttrs pipewire.pulse.enable { "pipewire-pulse.service" = 48; }
+            // lib.optionalAttrs pipewire.wireplumber.enable { "wireplumber.service" = 32; }
+          )
+        );
+        system = lib.mapAttrs (_: lib.mkDefault) (
+          {
+            # Through libseat, logind opens the compositor's input and DRM
+            # devices, pauses and resumes them across VT switches and sleep.
+            "systemd-logind.service" = 16;
+            # Hotplugged keyboards, mice and displays reach libinput and the
+            # compositor only after udev has processed them.
+            "systemd-udevd.service" = 64;
+            # Carries logind's signals to the compositor.
+            ${bus} = 32;
+          }
+          // lib.optionalAttrs config.security.rtkit.enable { "rtkit-daemon.service" = 8; }
+          # Bluetooth LE keyboards and mice deliver every event through BlueZ.
+          // lib.optionalAttrs config.hardware.bluetooth.enable { "bluetooth.service" = 16; }
+          # oomd's own unit asks for 64 MiB, which has no effect unless
+          # system.slice grants it.
+          // lib.optionalAttrs config.systemd.oomd.enable { "systemd-oomd.service" = 64; }
+        );
+      };
+    systemd.slices.system.sliceConfig.MemoryLow = lib.mkDefault (reserveSum reserve.system);
+    # People logged in at the same time share user.slice's reserve.
+    systemd.slices.user.sliceConfig.MemoryLow = lib.mkDefault (reserveSum reserve.session);
     systemd.slices."user-" = {
       overrideStrategy = "asDropin";
-      sliceConfig.MemoryLow = lib.mkDefault "1G";
+      sliceConfig.MemoryLow = lib.mkDefault (reserveSum reserve.session);
     };
     systemd.services."user@" = {
       overrideStrategy = "asDropin";
-      serviceConfig.MemoryLow = lib.mkDefault "1G";
+      serviceConfig.MemoryLow = lib.mkDefault (reserveSum reserve.session);
     };
     # Keep the compositor, shell, audio and portals ahead of applications
     # for CPU/I/O too: session : app : background = 400 : 100 : 30.
     systemd.user.slices.session.sliceConfig = {
       CPUWeight = lib.mkDefault 400;
       IOWeight = lib.mkDefault 400;
-      MemoryLow = lib.mkDefault "1G";
+      MemoryLow = lib.mkDefault (reserveSum reserve.session);
     };
 
     # In Aizome, Settings owns the time zone and the computer's name:

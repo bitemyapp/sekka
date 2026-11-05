@@ -14,11 +14,16 @@ bounds. Exceptions to the budget are written up with their reasons.
 
 CPU frame cost is not input latency: a swapped-out compositor can miss seconds
 of input despite high CPU weight. The NixOS module keeps the session's existing
-CPU/I/O weights and adds a shared, best-effort 1 GiB `MemoryLow` reserve through
-`user.slice`, each `user-UID.slice`, `user@UID.service` and `session.slice`.
-This protects the compositor, shell and session helpers from reclaim before
-unprotected applications, while leaving unused RAM available to workloads.
-It does not pin memory or guarantee that a session survives exhaustion.
+CPU/I/O weights and gives each service the desktop waits on a best-effort
+`MemoryLow` reserve sized to what it keeps resident
+(`programs.aizome.memoryReserve`): 1 GiB for the compositor, shell and
+Xwayland, smaller ones for audio, the input method, the portals and the
+session bus, and, among system services, logind, udev, the system bus,
+RealtimeKit, BlueZ and systemd-oomd. Their slices and the user manager get the
+sums, since a reserve counts only as far as every ancestor grants it. Reclaim
+takes applications' pages first, while unused RAM stays available to
+workloads. It does not pin memory or guarantee that a session survives
+exhaustion.
 
 This protection does not introduce earlier OOM killing or hard workload caps.
 Unprotected workloads may reclaim more and run more slowly; Sekka's existing
