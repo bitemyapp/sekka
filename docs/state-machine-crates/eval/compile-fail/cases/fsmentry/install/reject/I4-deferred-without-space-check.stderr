@@ -1,0 +1,5 @@
+error[E0451]: field `deferred` of struct `Route` is private
+ --> $WORKSPACE/compile-fail/cases/fsmentry/install/reject/I4-deferred-without-space-check.rs
+  |
+  |         preparing.prepared(Route { deferred: true });
+  |                                    ^^^^^^^^ private field

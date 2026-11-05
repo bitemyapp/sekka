@@ -20,7 +20,7 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `site/` | The sekka.computer website generator |
 | `aizome-site/` | The aizome.computer website generator |
 | `tests/` | Generated-system configuration matrices, integration checks and [performance harnesses](docs/performance/README.md) |
-| `docs/` | Architecture, migration notes, screenshots, historical evidence, [incident records](docs/incidents/README.md), [performance records](docs/performance/README.md), the [implicit state machine catalog](docs/implicit-state-machines.md), brand, patches sent upstream |
+| `docs/` | Architecture, migration notes, screenshots, historical evidence, [incident records](docs/incidents/README.md), [performance records](docs/performance/README.md), the [implicit state machine catalog](docs/implicit-state-machines.md) and the [state-machine crate evaluation](docs/state-machine-crates.md), brand, patches sent upstream |
 
 The initial import preserves component layouts and separate Cargo workspaces, and Aizome, which joined later, keeps its own workspace in `desktop/aizome` ([migration record](docs/migration.md#aizome)). There are no submodules or remote first-party flake inputs. Sukumo, Aizome's toolkit, is a workspace of its own inside `desktop/aizome` ([Sukumo](#sukumo)). `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
 
@@ -355,7 +355,11 @@ reproduced with tests ([reproductions](docs/implicit-state-machines/reproduction
 which a fix can adopt as its regression test; the rest are leads. When a
 change reifies, removes or reshapes a machine,
 update its entry and its follow-up status in the index; add new files to their
-slice's ledger as `pending` until audited.
+slice's ledger as `pending` until audited. Reify a machine as hand-written
+typestate, following the design rules in the
+[state-machine crate evaluation](docs/state-machine-crates.md): states hold only
+their own data and borrow the shared context, instance checks take a proof
+value, and the typed transitions are the only way to change state.
 
 The retained VM tooling is available through `nix build .#tools`. Run `result/bin/respin-tools qemu-test --help` for its firmware, storage, desktop, and application options. The Genkan fixture now builds from `installer/genkan/tests/vm-fixture`, not a remote installer revision. The rootless builder's static guest tools require the Rust musl target. The older reports in `TESTING.md`, `installer/genkan/RUST-TESTING.md`, and `docs/test-results/` describe their named predecessor revisions only.
 

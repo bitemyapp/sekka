@@ -1,0 +1,5 @@
+error[E0026]: variant `impl_statig::pointer::State::NativeDrag` does not have a field named `owner`
+ --> $WORKSPACE/compile-fail/cases/statig/pointer/reject/P2-owner-after-native-drag.rs
+  |
+  |     if let State::NativeDrag { owner } = m.state_enum() {
+  |                                ^^^^^ variant `impl_statig::pointer::State::NativeDrag` does not have this field

@@ -1,0 +1,16 @@
+[package]
+name = "impl-state-machines"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+spec.workspace = true
+state-machines = "=0.34.0"
+
+[dev-dependencies]
+compile-fail.workspace = true
+spec = { workspace = true, features = ["testing"] }
+impl-enum.workspace = true
+proptest.workspace = true

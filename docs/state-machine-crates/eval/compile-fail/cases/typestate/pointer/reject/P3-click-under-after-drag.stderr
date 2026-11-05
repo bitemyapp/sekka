@@ -1,0 +1,5 @@
+error[E0599]: no method named `beneath` found for struct `impl_typestate::pointer::EdgeDragging` in the current scope
+ --> $WORKSPACE/compile-fail/cases/typestate/pointer/reject/P3-click-under-after-drag.rs
+  |
+  |     let _ = dragging.beneath();
+  |                      ^^^^^^^ method not found in `impl_typestate::pointer::EdgeDragging`

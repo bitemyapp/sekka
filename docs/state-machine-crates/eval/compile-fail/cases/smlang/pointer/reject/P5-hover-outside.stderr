@@ -1,0 +1,7 @@
+error[E0618]: expected function, found `impl_smlang::pointer::States`
+ --> $WORKSPACE/compile-fail/cases/smlang/pointer/reject/P5-hover-outside.rs
+  |
+  |     let _ = States::Outside(Hover::default());
+  |             ^^^^^^^^^^^^^^^------------------
+  |             |
+  |             call expression requires function

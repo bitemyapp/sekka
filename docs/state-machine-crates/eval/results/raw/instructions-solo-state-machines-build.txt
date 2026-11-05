@@ -1,0 +1,6 @@
+   Compiling state-machines-macro v0.34.0
+   Compiling state-machines v0.34.0
+   Compiling impl-state-machines v0.1.0 (/tmp/claude-1000/tk/sme/impl-state-machines)
+   Compiling bench v0.1.0 (/tmp/claude-1000/tk/sme/bench)
+    Finished `bench` profile [optimized] target(s) in 9.03s
+  Executable benches/instructions.rs (/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-0b180d03ff31c821)

@@ -1,0 +1,7 @@
+error[E0599]: no method named `retry_timer` found for struct `Auth<impl_state_machines::polkit::Starting>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/polkit/reject/K5-retry-timer-outside-wait.rs
+  |
+  |     let _ = starting.retry_timer();
+  |                      ^^^^^^^^^^^ method not found in `Auth<impl_state_machines::polkit::Starting>`
+  |
+  = note: the method was found for `Auth<impl_state_machines::polkit::RetryWait>`

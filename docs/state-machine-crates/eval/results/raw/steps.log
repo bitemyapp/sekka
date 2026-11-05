@@ -1,0 +1,56 @@
+2026-11-04T17:02:56-06:00 step env
+2026-11-04T17:02:56-06:00 step env done
+2026-11-04T17:03:00-06:00 step conformance
+2026-11-04T17:03:32-06:00 step conformance done
+2026-11-04T17:03:32-06:00 step fmt
+2026-11-04T17:03:32-06:00 step fmt done
+2026-11-04T17:03:36-06:00 step proptest
+2026-11-04T17:07:05-06:00 step proptest done
+2026-11-04T17:07:05-06:00 step compile-fail
+2026-11-04T17:07:35-06:00 step compile-fail done
+2026-11-04T17:07:35-06:00 step loc
+2026-11-04T17:07:35-06:00 step loc done
+2026-11-04T17:07:35-06:00 step sizes
+2026-11-04T17:07:42-06:00 step sizes done
+2026-11-04T17:07:42-06:00 step counts
+2026-11-04T17:07:42-06:00 step counts done
+2026-11-04T17:07:56-06:00 step proptest-cases
+2026-11-04T17:07:59-06:00 step proptest-cases done
+2026-11-04T17:08:06-06:00 step proptest-cases
+2026-11-04T17:08:09-06:00 step proptest-cases done
+2026-11-04T17:08:14-06:00 step compile
+2026-11-04T17:11:50-06:00 step compile done
+2026-11-04T17:11:50-06:00 step smoke
+2026-11-04T17:11:57-06:00 step smoke done
+2026-11-04T17:11:57-06:00 step instructions
+2026-11-04T17:12:58-06:00 step instructions done
+2026-11-04T17:12:58-06:00 step criterion
+2026-11-04T17:15:03-06:00 step instructions-solo
+2026-11-04T17:22:55-06:00 step instructions-lto
+2026-11-04T17:29:04-06:00 step instructions-lto done
+2026-11-04T17:37:44-06:00 step instructions-solo done
+2026-11-04T17:38:44-06:00 step perf-check
+2026-11-04T17:38:48-06:00 step perf-check done
+2026-11-04T17:59:43-06:00 step criterion done
+2026-11-04T17:59:56-06:00 step criterion-lto
+2026-11-04T18:00:38-06:00 step perf-check
+2026-11-04T18:00:53-06:00 step perf-check done
+2026-11-04T18:01:28-06:00 step tables
+2026-11-04T18:01:28-06:00 step tables done
+2026-11-04T18:01:39-06:00 step tables
+2026-11-04T18:01:39-06:00 step tables done
+2026-11-04T18:01:50-06:00 step tables
+2026-11-04T18:01:50-06:00 step tables done
+2026-11-04T18:02:07-06:00 step tables
+2026-11-04T18:02:07-06:00 step tables done
+2026-11-04T18:02:19-06:00 step tables
+2026-11-04T18:02:19-06:00 step tables done
+2026-11-04T18:32:16-06:00 step criterion-lto done
+2026-11-04T18:32:24-06:00 step tables
+2026-11-04T18:32:25-06:00 step tables done
+2026-11-04T18:32:38-06:00 step tables
+2026-11-04T18:32:39-06:00 step tables done
+2026-11-04T18:32:47-06:00 step tables
+2026-11-04T18:32:47-06:00 step tables done
+2026-11-04T18:32:58-06:00 step tables
+2026-11-04T18:32:58-06:00 step tables done

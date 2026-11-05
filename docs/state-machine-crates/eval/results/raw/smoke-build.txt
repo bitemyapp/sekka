@@ -1,0 +1,15 @@
+   Compiling impl-fsmentry v0.1.0 (/tmp/claude-1000/tk/sme/impl-fsmentry)
+   Compiling impl-smlang v0.1.0 (/tmp/claude-1000/tk/sme/impl-smlang)
+   Compiling impl-rust-fsm v0.1.0 (/tmp/claude-1000/tk/sme/impl-rust-fsm)
+   Compiling impl-finny v0.1.0 (/tmp/claude-1000/tk/sme/impl-finny)
+   Compiling impl-statig v0.1.0 (/tmp/claude-1000/tk/sme/impl-statig)
+   Compiling impl-sml v0.1.0 (/tmp/claude-1000/tk/sme/impl-sml)
+   Compiling impl-state-machines v0.1.0 (/tmp/claude-1000/tk/sme/impl-state-machines)
+   Compiling impl-statum v0.1.0 (/tmp/claude-1000/tk/sme/impl-statum)
+   Compiling impl-typestate v0.1.0 (/tmp/claude-1000/tk/sme/impl-typestate)
+   Compiling impl-enum v0.1.0 (/tmp/claude-1000/tk/sme/impl-enum)
+   Compiling impl-implicit v0.1.0 (/tmp/claude-1000/tk/sme/impl-implicit)
+   Compiling bench v0.1.0 (/tmp/claude-1000/tk/sme/bench)
+    Finished `release` profile [optimized] target(s) in 2.63s
+warning: the following packages contain code that will be rejected by a future version of Rust: proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`

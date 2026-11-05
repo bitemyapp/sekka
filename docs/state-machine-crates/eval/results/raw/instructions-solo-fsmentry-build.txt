@@ -1,0 +1,4 @@
+   Compiling impl-fsmentry v0.1.0 (/tmp/claude-1000/tk/sme/impl-fsmentry)
+   Compiling bench v0.1.0 (/tmp/claude-1000/tk/sme/bench)
+    Finished `bench` profile [optimized] target(s) in 6.94s
+  Executable benches/instructions.rs (/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-8357c9f11e272536)

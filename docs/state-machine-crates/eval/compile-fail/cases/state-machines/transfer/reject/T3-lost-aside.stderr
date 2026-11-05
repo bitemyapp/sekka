@@ -1,0 +1,7 @@
+error[E0599]: no method named `probed` found for struct `Job<impl_state_machines::transfer::Restoring>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/transfer/reject/T3-lost-aside.rs
+  |
+  |     let _ = restoring.probed((ItemId(1), Found::Same));
+  |                       ^^^^^^ method not found in `Job<impl_state_machines::transfer::Restoring>`
+  |
+  = note: the method was found for `Job<impl_state_machines::transfer::Probing>`

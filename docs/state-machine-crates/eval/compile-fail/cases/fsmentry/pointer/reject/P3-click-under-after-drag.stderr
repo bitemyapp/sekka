@@ -1,0 +1,7 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/fsmentry/pointer/reject/P3-click-under-after-drag.rs
+  |
+  |         let EdgePress { beneath, .. } = dragging.release();
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^   ------------------ this expression has type `Node`
+  |             |
+  |             expected `Node`, found `EdgePress`

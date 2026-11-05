@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/state-machines/lock/reject/L1-release-delay-before-confirmed.rs
+  |
+  |     let _ = Delay::<Held>::sleep(pending, LockPhase::Locked);
+  |             -------------------- ^^^^^^^ expected `Delay<Held>`, found `Delay<SleepPending>`
+  |             |
+  |             arguments to this function are incorrect
+  |
+  = note: expected struct `Delay<impl_state_machines::lock::Held>`
+             found struct `Delay<impl_state_machines::lock::SleepPending>`
+note: method defined here
+ --> src/lock.rs
+  |
+  |             sleep {
+  |             ^^^^^

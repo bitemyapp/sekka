@@ -1,0 +1,76 @@
+== impl-implicit
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+== impl-enum
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+== impl-typestate
+differential pointer: 20000 cases, 5989624 tape choices
+differential polkit: 20000 cases, 5982887 tape choices
+differential install: 20000 cases, 6001809 tape choices
+differential transfer: 20000 cases, 6009960 tape choices
+differential lock: 20000 cases, 6011390 tape choices
+differential wrap: 20000 cases, 5982219 tape choices
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.23s
+== impl-statig
+differential pointer: 20000 cases, 6020837 tape choices
+differential polkit: 20000 cases, 5954526 tape choices
+differential transfer: 20000 cases, 6012745 tape choices
+differential install: 20000 cases, 5993988 tape choices
+differential wrap: 20000 cases, 5966824 tape choices
+differential lock: 20000 cases, 5960910 tape choices
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.25s
+== impl-smlang
+differential pointer: 20000 cases, 5968695 tape choices
+differential polkit: 20000 cases, 5994819 tape choices
+differential transfer: 20000 cases, 6038254 tape choices
+differential install: 20000 cases, 5974887 tape choices
+differential lock: 20000 cases, 6025510 tape choices
+differential wrap: 20000 cases, 5970400 tape choices
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.22s
+== impl-sml
+differential pointer: 20000 cases, 5970575 tape choices
+differential polkit: 20000 cases, 5997826 tape choices
+differential transfer: 20000 cases, 5954018 tape choices
+differential install: 20000 cases, 6065231 tape choices
+differential wrap: 20000 cases, 6001839 tape choices
+differential lock: 20000 cases, 5961568 tape choices
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.23s
+== impl-finny
+differential pointer: 20000 cases, 5980101 tape choices
+differential polkit: 20000 cases, 5974744 tape choices
+differential transfer: 20000 cases, 5989068 tape choices
+differential install: 20000 cases, 6020983 tape choices
+differential wrap: 20000 cases, 5997671 tape choices
+differential lock: 20000 cases, 5971537 tape choices
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.24s
+== impl-fsmentry
+differential pointer: 20000 cases, 5997166 tape choices
+differential polkit: 20000 cases, 5988084 tape choices
+differential install: 20000 cases, 6010428 tape choices
+differential transfer: 20000 cases, 6000076 tape choices
+differential lock: 20000 cases, 6038229 tape choices
+differential wrap: 20000 cases, 5972433 tape choices
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.21s
+== impl-statum
+differential pointer: 20000 cases, 5986452 tape choices
+differential polkit: 20000 cases, 5958550 tape choices
+differential install: 20000 cases, 5988899 tape choices
+differential transfer: 20000 cases, 5939002 tape choices
+differential lock: 20000 cases, 5950678 tape choices
+differential wrap: 20000 cases, 6031068 tape choices
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.23s
+== impl-state-machines
+differential pointer: 20000 cases, 6034307 tape choices
+differential polkit: 20000 cases, 5993757 tape choices
+differential lock: 20000 cases, 5966879 tape choices
+differential install: 20000 cases, 6017683 tape choices
+differential transfer: 20000 cases, 5949805 tape choices
+differential wrap: 20000 cases, 5998411 tape choices
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.26s
+== impl-rust-fsm
+differential pointer: 20000 cases, 5952810 tape choices
+differential polkit: 20000 cases, 5994265 tape choices
+differential transfer: 20000 cases, 6007122 tape choices
+differential install: 20000 cases, 6027417 tape choices
+differential lock: 20000 cases, 5989514 tape choices
+differential wrap: 20000 cases, 5988280 tape choices
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.23s

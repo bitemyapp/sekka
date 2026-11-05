@@ -1,0 +1,24 @@
+error[E0382]: use of moved value: `prompted`
+ --> $WORKSPACE/compile-fail/cases/statum/polkit/reject/K4-double-reply.rs
+  |
+  | fn reply_twice(prompted: Session<Prompted>, out: &mut Vec<Effect>) {
+  |                -------- move occurs because `prompted` has type `Session<impl_statum::polkit::Prompted>`, which does not implement the `Copy` trait
+  |     let _ = prompted.succeed(out);
+  |                      ------------ `prompted` moved due to this method call
+  |     let _ = prompted.end(out);
+  |             ^^^^^^^^ value used here after move
+  |
+note: `impl_statum::polkit::Session::<impl_statum::polkit::Prompted>::succeed` takes ownership of the receiver `self`, which moves `prompted`
+ --> src/polkit.rs
+  |
+  |               pub fn succeed(self, out: &mut impl Sink<Effect>) -> Session<Idle> {
+  |                              ^^^^
+...
+  | / conversing!(Prompted {
+  | |     pub fn answer(self, out: &mut impl Sink<Effect>) -> Session<Checking> {
+  | |         out.push(Effect::WriteAnswer { conv: self.state_data.conv.0 });
+  | |         self.transition_map(|PromptedData { req, conv }| CheckingData { req, conv })
+... |
+  | | });
+  | |__- in this macro invocation
+  = note: this error originates in the macro `conversing` (in Nightly builds, run with -Z macro-backtrace for more info)

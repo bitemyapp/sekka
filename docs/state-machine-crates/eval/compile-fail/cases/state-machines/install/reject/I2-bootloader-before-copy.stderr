@@ -1,0 +1,5 @@
+error[E0599]: no variant, associated function, or constant named `Bootloader` found for enum `InstallerFilesStepDoneOutcome` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/install/reject/I2-bootloader-before-copy.rs
+  |
+  |         InstallerFilesStepDoneOutcome::Bootloader(_early) => {}
+  |                                        ^^^^^^^^^^ variant, associated function, or constant not found in `InstallerFilesStepDoneOutcome`

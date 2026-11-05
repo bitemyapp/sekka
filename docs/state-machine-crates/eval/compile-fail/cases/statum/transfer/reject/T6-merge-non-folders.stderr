@@ -1,0 +1,7 @@
+error[E0599]: no method named `merge` found for struct `Job<impl_statum::transfer::AskingFiles>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/statum/transfer/reject/T6-merge-non-folders.rs
+  |
+  |     let _ = asking.merge(out);
+  |                    ^^^^^ method not found in `Job<impl_statum::transfer::AskingFiles>`
+  |
+  = note: the method was found for `Job<impl_statum::transfer::AskingFolders>`

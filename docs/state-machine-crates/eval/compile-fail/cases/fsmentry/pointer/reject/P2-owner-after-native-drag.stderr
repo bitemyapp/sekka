@@ -1,0 +1,5 @@
+error[E0599]: no method named `as_ref` found for struct `impl_fsmentry::pointer::window::NativeDrag<'state>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/fsmentry/pointer/reject/P2-owner-after-native-drag.rs
+  |
+  |         let _owner: &Node = drag.as_ref();
+  |                                  ^^^^^^ method not found in `impl_fsmentry::pointer::window::NativeDrag<'_>`

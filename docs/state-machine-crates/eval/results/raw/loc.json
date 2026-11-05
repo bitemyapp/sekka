@@ -1,0 +1,123 @@
+[
+ {
+  "impl": "implicit",
+  "shared": 7,
+  "pointer": 220,
+  "wrap": 179,
+  "polkit": 245,
+  "transfer": 282,
+  "lock": 248,
+  "install": 241,
+  "total": 1422
+ },
+ {
+  "impl": "enum",
+  "shared": 6,
+  "pointer": 208,
+  "wrap": 190,
+  "polkit": 176,
+  "transfer": 189,
+  "lock": 211,
+  "install": 215,
+  "total": 1195
+ },
+ {
+  "impl": "typestate",
+  "shared": 6,
+  "pointer": 409,
+  "wrap": 383,
+  "polkit": 341,
+  "transfer": 304,
+  "lock": 313,
+  "install": 383,
+  "total": 2139
+ },
+ {
+  "impl": "statig",
+  "shared": 20,
+  "pointer": 274,
+  "wrap": 229,
+  "polkit": 221,
+  "transfer": 259,
+  "lock": 275,
+  "install": 318,
+  "total": 1596
+ },
+ {
+  "impl": "smlang",
+  "shared": 6,
+  "pointer": 313,
+  "wrap": 266,
+  "polkit": 328,
+  "transfer": 387,
+  "lock": 367,
+  "install": 299,
+  "total": 1966
+ },
+ {
+  "impl": "sml",
+  "shared": 15,
+  "pointer": 299,
+  "wrap": 319,
+  "polkit": 256,
+  "transfer": 304,
+  "lock": 244,
+  "install": 292,
+  "total": 1729
+ },
+ {
+  "impl": "finny",
+  "shared": 34,
+  "pointer": 336,
+  "wrap": 330,
+  "polkit": 408,
+  "transfer": 462,
+  "lock": 344,
+  "install": 397,
+  "total": 2311
+ },
+ {
+  "impl": "fsmentry",
+  "shared": 6,
+  "pointer": 212,
+  "wrap": 195,
+  "polkit": 220,
+  "transfer": 293,
+  "lock": 271,
+  "install": 290,
+  "total": 1487
+ },
+ {
+  "impl": "statum",
+  "shared": 15,
+  "pointer": 418,
+  "wrap": 390,
+  "polkit": 368,
+  "transfer": 361,
+  "lock": 363,
+  "install": 413,
+  "total": 2328
+ },
+ {
+  "impl": "state-machines",
+  "shared": 15,
+  "pointer": 318,
+  "wrap": 331,
+  "polkit": 336,
+  "transfer": 416,
+  "lock": 361,
+  "install": 385,
+  "total": 2162
+ },
+ {
+  "impl": "rust-fsm",
+  "shared": 6,
+  "pointer": 245,
+  "wrap": 282,
+  "polkit": 240,
+  "transfer": 234,
+  "lock": 236,
+  "install": 253,
+  "total": 1496
+ }
+]

@@ -1,0 +1,5 @@
+error[E0609]: no field `owner` on type `NativeDragTok`
+ --> $WORKSPACE/compile-fail/cases/statum/pointer/reject/P2-owner-after-native-drag.rs
+  |
+  |     let _ = dragging.state_data.owner;
+  |                                 ^^^^^ unknown field

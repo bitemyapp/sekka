@@ -1,0 +1,5 @@
+error[E0599]: no method named `answer` found for struct `impl_typestate::polkit::Starting` in the current scope
+ --> $WORKSPACE/compile-fail/cases/typestate/polkit/reject/K1-answer-without-prompt.rs
+  |
+  |     let _ = starting.answer(out);
+  |                      ^^^^^^ method not found in `impl_typestate::polkit::Starting`

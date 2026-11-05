@@ -1,0 +1,5 @@
+error[E0599]: no variant, associated function, or constant named `Starting` found for enum `AuthStartingFailureOutcome` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/polkit/reject/K3-restart-without-backoff.rs
+  |
+  |         AuthStartingFailureOutcome::Starting(_restarted) => {}
+  |                                     ^^^^^^^^ variant, associated function, or constant not found in `AuthStartingFailureOutcome`

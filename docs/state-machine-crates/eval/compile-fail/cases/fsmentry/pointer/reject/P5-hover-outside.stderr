@@ -1,0 +1,5 @@
+error[E0599]: no method named `as_mut` found for struct `impl_fsmentry::pointer::window::Outside<'state>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/fsmentry/pointer/reject/P5-hover-outside.rs
+  |
+  |         let _hover: &mut Over = outside.as_mut();
+  |                                         ^^^^^^ method not found in `impl_fsmentry::pointer::window::Outside<'_>`

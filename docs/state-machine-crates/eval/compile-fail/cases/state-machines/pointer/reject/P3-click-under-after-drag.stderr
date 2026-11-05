@@ -1,0 +1,11 @@
+error[E0599]: no method named `drags_only_pressed_data` found for struct `Router<impl_state_machines::pointer::DragsOnlyDragging>` in the current scope
+  --> $WORKSPACE/compile-fail/cases/state-machines/pointer/reject/P3-click-under-after-drag.rs
+   |
+   |     let _ = dragging.drags_only_pressed_data();
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+help: there is a method `drags_only_dragging_data` with a similar name
+   |
+15 -     let _ = dragging.drags_only_pressed_data();
+15 +     let _ = dragging.drags_only_dragging_data();
+   |

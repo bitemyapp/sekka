@@ -1,0 +1,5 @@
+error[E0599]: no method named `cancel` found for struct `impl_typestate::install::Erase` in the current scope
+ --> $WORKSPACE/compile-fail/cases/typestate/install/reject/I5-cancel-after-erase.rs
+  |
+  |     let _ = erase.cancel(&mut out);
+  |                   ^^^^^^ method not found in `impl_typestate::install::Erase`

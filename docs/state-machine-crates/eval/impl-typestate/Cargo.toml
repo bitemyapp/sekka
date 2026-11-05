@@ -1,0 +1,15 @@
+[package]
+name = "impl-typestate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+spec.workspace = true
+
+[dev-dependencies]
+compile-fail.workspace = true
+spec = { workspace = true, features = ["testing"] }
+impl-enum.workspace = true
+proptest.workspace = true

@@ -1,0 +1,5 @@
+error[E0599]: no method named `retry` found for struct `impl_typestate::polkit::Unavailable` in the current scope
+ --> $WORKSPACE/compile-fail/cases/typestate/polkit/reject/K6-conversation-after-unavailable.rs
+  |
+  |     let _ = unavailable.retry(ctx, out);
+  |                         ^^^^^ method not found in `impl_typestate::polkit::Unavailable`

@@ -1,0 +1,7 @@
+error[E0618]: expected function, found `LockStates`
+ --> $WORKSPACE/compile-fail/cases/smlang/lock/reject/L6-shake-outside-locked.rs
+  |
+  |     let _ = LockStates::Locking(Field { has_text: false, shake: 1 });
+  |             ^^^^^^^^^^^^^^^^^^^-------------------------------------
+  |             |
+  |             call expression requires function

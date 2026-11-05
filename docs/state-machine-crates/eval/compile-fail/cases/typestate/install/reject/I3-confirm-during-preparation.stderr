@@ -1,0 +1,15 @@
+error[E0599]: no method named `confirm` found for struct `impl_typestate::install::Evaluation` in the current scope
+ --> $WORKSPACE/compile-fail/cases/typestate/install/reject/I3-confirm-during-preparation.rs
+  |
+  |     let _ = evaluation.confirm(true, &mut out);
+  |                        ^^^^^^^
+  |
+help: there is a method `confirm_early` with a similar name, but with different arguments
+ --> src/install.rs
+  |
+  |             pub fn confirm_early(self, out: &mut impl Sink<Effect>) -> End {
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+  | preparing!(Checks, Configuration, Evaluation, Build, Cache);
+  | ----------------------------------------------------------- in this macro invocation
+  = note: this error originates in the macro `preparing` (in Nightly builds, run with -Z macro-backtrace for more info)

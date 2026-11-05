@@ -1,0 +1,5 @@
+error[E0063]: missing field `owner` in initializer of `Press`
+ --> $WORKSPACE/compile-fail/cases/enum/pointer/reject/P6-owner-mismatch.rs
+  |
+  |     let _ = Press::Owned {};
+  |             ^^^^^^^^^^^^ missing `owner`

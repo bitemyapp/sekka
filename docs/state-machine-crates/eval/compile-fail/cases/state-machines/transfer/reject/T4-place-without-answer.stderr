@@ -1,0 +1,9 @@
+error[E0599]: no method named `placed` found for struct `Job<impl_state_machines::transfer::AskingMergeable>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/transfer/reject/T4-place-without-answer.rs
+  |
+  |     let _ = asking.placed((item, Placed::Ok));
+  |                    ^^^^^^ method not found in `Job<impl_state_machines::transfer::AskingMergeable>`
+  |
+  = note: the method was found for
+          - `Job<impl_state_machines::transfer::Placing>`
+          - `Job<impl_state_machines::transfer::PlacingReplacement>`

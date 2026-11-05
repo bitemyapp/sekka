@@ -1,0 +1,5 @@
+error[E0599]: no method named `confirm` found for struct `impl_fsmentry::install::session::Preparing<'state>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/fsmentry/install/reject/I3-confirm-during-preparation.rs
+  |
+  |         preparing.confirm(steps);
+  |                   ^^^^^^^ method not found in `impl_fsmentry::install::session::Preparing<'_>`

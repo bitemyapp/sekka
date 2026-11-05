@@ -1,0 +1,5 @@
+error[E0026]: variant `impl_enum::pointer::State::NativeDrag` does not have a field named `owner`
+ --> $WORKSPACE/compile-fail/cases/enum/pointer/reject/P2-owner-after-native-drag.rs
+  |
+  |     if let State::NativeDrag { owner } = m.typed() {
+  |                                ^^^^^ variant `impl_enum::pointer::State::NativeDrag` does not have this field

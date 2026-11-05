@@ -1,0 +1,7 @@
+suite	workload	events	print_events	repeat_events	puts	effects
+instructions	pointer-stream	20000	-	-	-	-
+criterion	pointer-stream	1000000	-	-	-	-
+instructions	wrap-80	208510	200388	82	201227	204201
+instructions	wrap-200	213282	207449	56	208057	209113
+criterion	wrap-80	10341953	9975163	2559	10001175	10192904
+criterion	wrap-200	10274797	9984736	2925	10014434	10061189

@@ -1,0 +1,5 @@
+error[E0026]: variant `EdgeDragging` does not have a field named `beneath`
+ --> $WORKSPACE/compile-fail/cases/statig/pointer/reject/P3-click-under-after-drag.rs
+  |
+  |     if let State::EdgeDragging { beneath, .. } = m.state_enum() {
+  |                                  ^^^^^^^ variant `EdgeDragging` does not have this field

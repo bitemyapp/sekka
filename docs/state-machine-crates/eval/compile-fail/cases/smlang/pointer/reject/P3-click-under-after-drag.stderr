@@ -1,0 +1,7 @@
+error[E0609]: no field `beneath` on type `&impl_smlang::pointer::Owned`
+ --> $WORKSPACE/compile-fail/cases/smlang/pointer/reject/P3-click-under-after-drag.rs
+  |
+  |         let _ = edge.beneath;
+  |                      ^^^^^^^ unknown field
+  |
+  = note: available fields are: `hover`, `owner`

@@ -1,0 +1,5 @@
+error[E0026]: variant `impl_enum::pointer::Press::Owned` does not have a field named `at`
+ --> $WORKSPACE/compile-fail/cases/enum/pointer/reject/P4-press-point-outside-edge-press.rs
+  |
+  |     if let State::Inside { press: Press::Owned { owner, at }, .. } = m.typed() {
+  |                                                         ^^ variant `impl_enum::pointer::Press::Owned` does not have this field

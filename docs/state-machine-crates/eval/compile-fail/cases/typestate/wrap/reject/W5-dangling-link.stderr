@@ -1,0 +1,5 @@
+error[E0599]: no method named `soft_wrap` found for struct `impl_typestate::wrap::Pending` in the current scope
+ --> $WORKSPACE/compile-fail/cases/typestate/wrap/reject/W5-dangling-link.rs
+  |
+  |     let _ = pending.soft_wrap(&mut out);
+  |                     ^^^^^^^^^ method not found in `impl_typestate::wrap::Pending`

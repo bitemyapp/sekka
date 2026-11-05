@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Run a command in a clean environment with one of the root flake's dev
+# shells (the runner the bug catalog's reproductions use, copied).
+#
+#   isolate <shell> <scratch-dir> <command...>
+#
+# <shell> is a dev shell of the root flake: aizome, default or kakehashi.
+# The command starts from an empty environment with that dev shell, a
+# private HOME, XDG directories and XDG_RUNTIME_DIR under <scratch-dir>, no
+# Wayland or X11 display, session and system D-Bus addresses that point at
+# nothing (tests that need a bus start a private dbus-daemon), and no setuid
+# wrappers (/run/wrappers/bin) on PATH. It runs from the repository root.
+# Lean builds (no debuginfo, no incremental cache) keep target dirs small.
+set -eo pipefail
+repo=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
+if [[ -z ${ISOLATE_CLEAN:-} ]]; then
+  exec env -i ISOLATE_CLEAN=1 __NIXOS_SET_ENVIRONMENT_DONE=1 REAL_HOME="$HOME" \
+    USER="$USER" LOGNAME="$USER" TERM="${TERM:-dumb}" LANG=C.UTF-8 \
+    PATH=/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin \
+    CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-}" "$0" "$@"
+fi
+shell=$1 base=$(realpath -m "$2"); shift 2
+mkdir -p "$base/env" "$base/home" "$base/rt" "$base/tmp"
+envfile=$base/env/$shell.sh
+if [[ ! -s $envfile ]]; then
+  # --profile keeps the shell's inputs alive across garbage collection.
+  nix print-dev-env --no-update-lock-file --profile "$base/env/$shell-profile" \
+    "$repo#$shell" > "$envfile"
+fi
+# shellcheck disable=SC1090
+source "$envfile"
+set +u
+export PATH="$PATH:/run/current-system/sw/bin"
+export CARGO_HOME=$REAL_HOME/.cargo
+export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-$base/target-$shell}
+export CARGO_PROFILE_DEV_DEBUG=0 CARGO_PROFILE_TEST_DEBUG=0 CARGO_INCREMENTAL=0
+chmod 700 "$base/rt"
+export HOME=$base/home XDG_CONFIG_HOME=$base/home/.config \
+  XDG_DATA_HOME=$base/home/.local/share XDG_STATE_HOME=$base/home/.local/state \
+  XDG_CACHE_HOME=$base/home/.cache XDG_RUNTIME_DIR=$base/rt TMPDIR=$base/tmp
+export DBUS_SESSION_BUS_ADDRESS=unix:path=$base/rt/no-session-bus
+export DBUS_SYSTEM_BUS_ADDRESS=unix:path=$base/rt/no-system-bus
+export ISOLATE_SCRATCH=$base
+unset REAL_HOME
+cd "$repo"
+exec "$@"

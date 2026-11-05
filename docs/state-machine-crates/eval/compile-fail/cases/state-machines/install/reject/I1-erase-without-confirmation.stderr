@@ -1,0 +1,12 @@
+error[E0599]: no method named `step_done` found for struct `Installer<impl_state_machines::install::Prepared>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/install/reject/I1-erase-without-confirmation.rs
+  |
+  |     let _ = prepared.step_done();
+  |                      ^^^^^^^^^ method not found in `Installer<impl_state_machines::install::Prepared>`
+  |
+  = note: the method was found for
+          - `Installer<impl_state_machines::install::Bootloader>`
+          - `Installer<impl_state_machines::install::BuildOnTarget>`
+          - `Installer<impl_state_machines::install::Cancelling>`
+          - `Installer<impl_state_machines::install::Copy>`
+          and 5 more types

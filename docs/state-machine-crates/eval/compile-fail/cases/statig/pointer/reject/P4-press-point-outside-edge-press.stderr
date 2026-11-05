@@ -1,0 +1,5 @@
+error[E0026]: variant `impl_statig::pointer::State::Pressed` does not have a field named `at`
+ --> $WORKSPACE/compile-fail/cases/statig/pointer/reject/P4-press-point-outside-edge-press.rs
+  |
+  |     if let State::Pressed { at, .. } = m.state_enum() {
+  |                             ^^ variant `impl_statig::pointer::State::Pressed` does not have this field

@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/statum/transfer/reject/T4-place-without-answer.rs
+  |
+  |     let _ = Job::<SettingAside>::set_aside(asking, AsideId(9), out);
+  |             ------------------------------ ^^^^^^ expected `Job<SettingAside>`, found `Job<AskingFiles>`
+  |             |
+  |             arguments to this function are incorrect
+  |
+  = note: expected struct `Job<impl_statum::transfer::SettingAside>`
+             found struct `Job<impl_statum::transfer::AskingFiles>`
+note: method defined here
+ --> src/transfer.rs
+  |
+  |     pub fn set_aside(self, aside: AsideId, out: &mut impl Sink<Effect>) -> Job<PlacingReplacement> {
+  |            ^^^^^^^^^

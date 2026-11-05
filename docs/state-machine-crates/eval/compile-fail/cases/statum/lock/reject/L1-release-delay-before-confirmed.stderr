@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/statum/lock/reject/L1-release-delay-before-confirmed.rs
+  |
+  |     (locking, Inhibitor::<Held>::release(pending, out))
+  |               -------------------------- ^^^^^^^ expected `Inhibitor<Held>`, found `Inhibitor<SleepPending>`
+  |               |
+  |               arguments to this function are incorrect
+  |
+  = note: expected struct `Inhibitor<impl_statum::lock::Held>`
+             found struct `Inhibitor<impl_statum::lock::SleepPending>`
+note: method defined here
+ --> src/lock.rs
+  |
+  |     pub fn release(self, out: &mut impl Sink<Effect>) -> Inhibitor<NotHeld> {
+  |            ^^^^^^^

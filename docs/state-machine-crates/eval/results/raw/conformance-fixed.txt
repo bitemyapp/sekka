@@ -1,0 +1,25 @@
+impl-implicit: tests pass
+impl-enum: tests pass
+impl-typestate: tests pass
+impl-statig: tests pass
+impl-smlang: tests pass
+impl-sml: tests pass
+impl-finny: tests pass
+impl-fsmentry: tests pass
+impl-statum: tests pass
+impl-state-machines: tests pass
+impl-rust-fsm: tests pass
+
+| impl | pointer | wrap | polkit | transfer | lock | install |
+|---|---|---|---|---|---|---|
+| impl_implicit | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_enum | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_typestate | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_statig | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_smlang | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_sml | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_finny | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_fsmentry | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_statum | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_state_machines | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |
+| impl_rust_fsm | 21/21 | 14/14 | 16/16 | 20/20 | 18/18 | 16/16 |

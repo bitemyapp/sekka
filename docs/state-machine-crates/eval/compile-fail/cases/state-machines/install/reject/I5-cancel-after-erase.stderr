@@ -1,0 +1,12 @@
+error[E0599]: no method named `cancel` found for struct `Installer<impl_state_machines::install::Erase>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/install/reject/I5-cancel-after-erase.rs
+  |
+  |     let _ = erase.cancel();
+  |                   ^^^^^^ method not found in `Installer<impl_state_machines::install::Erase>`
+  |
+  = note: the method was found for
+          - `Installer<impl_state_machines::install::Build>`
+          - `Installer<impl_state_machines::install::Cache>`
+          - `Installer<impl_state_machines::install::Checks>`
+          - `Installer<impl_state_machines::install::Configuration>`
+          and 3 more types

@@ -1,0 +1,5 @@
+error[E0599]: no method named `place_at` found for struct `impl_typestate::transfer::AskingFiles` in the current scope
+ --> $WORKSPACE/compile-fail/cases/typestate/transfer/reject/T4-place-without-answer.rs
+  |
+  |     asking.place_at(Name::Target, out)
+  |            ^^^^^^^^ method not found in `impl_typestate::transfer::AskingFiles`

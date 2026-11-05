@@ -1,0 +1,15 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/statum/install/reject/I4-deferred-without-space-check.rs
+  |
+  |     Route::Deferred(evaluation)
+  |     --------------- ^^^^^^^^^^ expected `Helper<Prepared>`, found `Helper<Evaluation>`
+  |     |
+  |     arguments to this enum variant are incorrect
+  |
+  = note: expected struct `Helper<impl_statum::install::Prepared>`
+             found struct `Helper<impl_statum::install::Evaluation>`
+note: tuple variant defined here
+ --> src/install.rs
+  |
+  |     Deferred(Helper<Prepared>),
+  |     ^^^^^^^^

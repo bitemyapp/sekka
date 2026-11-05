@@ -1,0 +1,13 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/typestate/wrap/reject/W1-pending-off-the-edge.rs
+  |
+  |     let _ = Any::Pending(normal);
+  |             ------------ ^^^^^^ expected `Pending`, found `Normal`
+  |             |
+  |             arguments to this enum variant are incorrect
+  |
+note: tuple variant defined here
+ --> src/wrap.rs
+  |
+  |     Pending(Pending),
+  |     ^^^^^^^

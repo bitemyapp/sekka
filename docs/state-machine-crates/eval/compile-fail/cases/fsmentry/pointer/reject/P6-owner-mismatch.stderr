@@ -1,0 +1,15 @@
+error[E0061]: this method takes 1 argument but 0 arguments were supplied
+ --> $WORKSPACE/compile-fail/cases/fsmentry/pointer/reject/P6-owner-mismatch.rs
+  |
+  |         hovering.press();
+  |                  ^^^^^-- argument #1 of type `spec::pointer::Node` is missing
+  |
+note: method defined here
+ --> src/pointer.rs
+  |
+  |             Hovering -press-> Pressed(Node),
+  |                       ^^^^^
+help: provide the argument
+  |
+8 |         hovering.press(/* Node */);
+  |                        ++++++++++

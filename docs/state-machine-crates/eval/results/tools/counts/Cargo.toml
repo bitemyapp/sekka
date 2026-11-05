@@ -1,0 +1,14 @@
+# Workload sizes for normalising the benchmark numbers: events per workload,
+# and printed cells (Put effects of the reference, impl-enum) for wrap.
+# Its own workspace, outside the measured one; path dependencies only.
+[package]
+name = "sme-counts"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+spec = { path = "../../../spec" }
+impl-enum = { path = "../../../impl-enum" }
+
+[workspace]

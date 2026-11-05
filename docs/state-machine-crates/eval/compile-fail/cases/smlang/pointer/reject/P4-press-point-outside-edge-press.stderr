@@ -1,0 +1,7 @@
+error[E0609]: no field `at` on type `&impl_smlang::pointer::Owned`
+ --> $WORKSPACE/compile-fail/cases/smlang/pointer/reject/P4-press-point-outside-edge-press.rs
+  |
+  |         let _ = owner.at;
+  |                       ^^ unknown field
+  |
+  = note: available fields are: `hover`, `owner`

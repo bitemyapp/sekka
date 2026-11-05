@@ -1,0 +1,5 @@
+error[E0599]: no method named `retry` found for struct `impl_fsmentry::polkit::phase::Unavailable<'state>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/fsmentry/polkit/reject/K6-conversation-after-unavailable.rs
+  |
+  |         unavailable.retry(2);
+  |                     ^^^^^ method not found in `impl_fsmentry::polkit::phase::Unavailable<'_>`

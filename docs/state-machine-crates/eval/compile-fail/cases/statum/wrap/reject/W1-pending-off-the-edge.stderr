@@ -1,0 +1,16 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/statum/wrap/reject/W1-pending-off-the-edge.rs
+  |
+  |     let _ = SomeState::Pending(normal);
+  |             ------------------ ^^^^^^ expected `Screen<Pending>`, found `Screen<Normal>`
+  |             |
+  |             arguments to this enum variant are incorrect
+  |
+  = note: expected struct `Screen<impl_statum::wrap::Pending>`
+             found struct `Screen<impl_statum::wrap::Normal>`
+note: tuple variant defined here
+ --> src/wrap.rs
+  |
+  | #[machine]
+  | ^^^^^^^^^^
+  = note: this error originates in the attribute macro `machine` (in Nightly builds, run with -Z macro-backtrace for more info)

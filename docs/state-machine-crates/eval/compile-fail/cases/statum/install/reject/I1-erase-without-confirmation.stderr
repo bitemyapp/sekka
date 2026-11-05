@@ -1,0 +1,5 @@
+error[E0599]: no method named `erase` found for struct `Helper<InstallState>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/statum/install/reject/I1-erase-without-confirmation.rs
+  |
+  |     let _ = prepared.erase(&mut out);
+  |                      ^^^^^ method not found in `Helper<impl_statum::install::Prepared>`

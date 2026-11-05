@@ -1,0 +1,5 @@
+error[E0609]: no field `closure` on type `PreparedData`
+ --> $WORKSPACE/compile-fail/cases/statum/install/reject/I6-closure-on-deferred-route.rs
+  |
+  |     let _ = prepared.state_data.closure;
+  |                                 ^^^^^^^ unknown field

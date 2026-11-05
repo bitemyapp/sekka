@@ -1,0 +1,13 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/typestate/wrap/reject/W2-wrap-without-autowrap.rs
+  |
+  |     let _ = Pending::print(off, false, &mut out);
+  |             -------------- ^^^ expected `Pending`, found `PendingNoWrap`
+  |             |
+  |             arguments to this function are incorrect
+  |
+note: method defined here
+ --> src/wrap.rs
+  |
+  |     pub fn print(mut self, wide: bool, out: &mut impl Sink<Effect>) -> Ready {
+  |            ^^^^^

@@ -1,0 +1,7 @@
+error[E0599]: no method named `retry` found for struct `Session<impl_statum::polkit::Starting>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/statum/polkit/reject/K5-retry-timer-outside-wait.rs
+  |
+  |     let _ = starting.retry(out);
+  |                      ^^^^^ method not found in `Session<impl_statum::polkit::Starting>`
+  |
+  = note: the method was found for `Session<impl_statum::polkit::RetryWait>`
