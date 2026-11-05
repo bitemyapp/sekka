@@ -32,6 +32,12 @@ def native_environment(tools):
     return env
 
 
+def test_tmp_path(unit):
+    if any(kind in {"test", "bench"} for kind in unit["target"]["kind"]):
+        return Path(".buckal/test-tmp") / unit["key"]
+    return None
+
+
 def package_environment(unit, manifest):
     package = unit["package"]
     version = package["version"].split("-", 1)
@@ -44,6 +50,9 @@ def package_environment(unit, manifest):
         env["CARGO_MANIFEST_LINKS"] = package["links"]
     if "bin" in unit["target"]["kind"]:
         env["CARGO_BIN_NAME"] = unit["target"]["name"]
+    temporary = test_tmp_path(unit)
+    if temporary is not None:
+        env["CARGO_TARGET_TMPDIR"] = str(Path("/proc/self/cwd") / temporary)
     return env
 
 
@@ -188,7 +197,7 @@ def compile_unit(payload, output, env, tools, root):
             args += ["-L", flag[2:]]
     for feature in unit["features"]:
         args += ["--cfg", 'feature="' + feature + '"']
-    args += ["--check-cfg", 'cfg(feature, values(' + ",".join(json.dumps(f) for f in unit["package"]["features"]) + '))']
+    args += ["--check-cfg", "cfg(docsrs,test)", "--check-cfg", 'cfg(feature, values(' + ",".join(json.dumps(f) for f in unit["package"]["features"]) + '))']
     for directory in payload["closure"]:
         directory = Path(directory).absolute()
         args += ["-L", "dependency=" + str(directory)]
@@ -269,7 +278,11 @@ def main():
         run_script(payload, output, env, tools, root)
     else:
         compile_unit(payload, output, env, tools, root)
-    (output / "unit.json").write_text(json.dumps(relocate({"filename": payload["unit"]["filename"], "library_paths": library_paths}, root, encode=True), sort_keys=True))
+    info = {"filename": payload["unit"]["filename"], "library_paths": library_paths}
+    temporary = test_tmp_path(payload["unit"])
+    if temporary is not None:
+        info["test_tmp"] = str(temporary)
+    (output / "unit.json").write_text(json.dumps(relocate(info, root, encode=True), sort_keys=True))
 
 
 if __name__ == "__main__":

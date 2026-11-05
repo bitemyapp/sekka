@@ -112,7 +112,7 @@ def stage_runtime(root, directory, targets, outputs):
             continue
         output = Path(paths[target["label"]])
         launcher = directory / target["target"]
-        arguments = [tools["python"], str(root / "build/buck2/run.py"), "--environment", os.environ["SEKKA_BUCK2_ENV"], "--runtime", os.environ["SEKKA_BUCK2_RUNTIME"], "--run", str(output.parent), "--"]
+        arguments = [tools["python"], str(root / "build/buck2/run.py"), "--action-module", str(root / "build/buck2/action.py"), "--environment", os.environ["SEKKA_BUCK2_ENV"], "--runtime", os.environ["SEKKA_BUCK2_RUNTIME"], "--run", str(output.parent), "--"]
         script = "#!" + tools["python"] + "\nimport os, sys\nos.chdir(" + repr(str(root)) + ")\n"
         if logic:
             script += "os.environ.setdefault('AIZOME_LOGIC', " + repr(logic) + ")\n"
