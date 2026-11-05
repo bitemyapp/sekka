@@ -43,7 +43,10 @@ pub(crate) enum LlmError {
     ToolCallParse(String),
     /// The prompt is longer than the context.
     ContextFull(String),
-    Http { status: u16, body: String },
+    Http {
+        status: u16,
+        body: String,
+    },
     /// The stream broke off or made no sense.
     Stream(String),
     /// The model got stuck repeating itself (twice in a row).
@@ -114,7 +117,8 @@ impl Client {
 
     /// The context size the server gives each request (`n_ctx` in `/props`).
     pub(crate) fn context_size(&self) -> Option<Tokens> {
-        let urls = [format!("{}/props?model={}", self.root(), url_escape(&self.model)), format!("{}/props", self.root())];
+        let urls =
+            [format!("{}/props?model={}", self.root(), url_escape(&self.model)), format!("{}/props", self.root())];
         for url in urls {
             let mut req = self.agent.get(&url).config().timeout_global(Some(Duration::from_secs(5))).build();
             if let Some(k) = &self.api_key {
@@ -321,7 +325,10 @@ fn stream_request(agent: ureq::Agent, url: String, key: Option<String>, body: Ve
         Err(e) => {
             let connect = matches!(
                 e,
-                ureq::Error::ConnectionFailed | ureq::Error::HostNotFound | ureq::Error::Io(_) | ureq::Error::Timeout(_)
+                ureq::Error::ConnectionFailed
+                    | ureq::Error::HostNotFound
+                    | ureq::Error::Io(_)
+                    | ureq::Error::Timeout(_)
             );
             let _ = tx.send(if connect { Chunk::Connect(e.to_string()) } else { Chunk::Broken(e.to_string()) });
             return;
@@ -617,7 +624,8 @@ mod tests {
         assert!(looping(&"x".repeat(2000)).is_some());
         let prose: String = (0..300).map(|i| format!("line {i} of a log\n")).collect();
         assert_eq!(looping(&prose), None);
-        let table = "| a | b |\n|---|---|\n".to_owned() + &(0..200).map(|i| format!("| {i} | {} |\n", i * 7)).collect::<String>();
+        let table = "| a | b |\n|---|---|\n".to_owned()
+            + &(0..200).map(|i| format!("| {i} | {} |\n", i * 7)).collect::<String>();
         assert_eq!(looping(&table), None);
         assert_eq!(looping("short"), None);
     }
@@ -678,7 +686,10 @@ mod tests {
 
     #[test]
     fn errors_are_classified() {
-        assert!(matches!(classify_error(500, "Failed to parse tool call arguments as JSON"), Attempt::ParseToolCall(_)));
+        assert!(matches!(
+            classify_error(500, "Failed to parse tool call arguments as JSON"),
+            Attempt::ParseToolCall(_)
+        ));
         assert!(matches!(classify_error(503, "{\"error\":\"Loading model\"}"), Attempt::Loading(_)));
         assert!(matches!(
             classify_error(400, "the request exceeds the available context size, try increasing it"),
@@ -742,7 +753,11 @@ mod tests {
                     if let Some(end) = text.find("\r\n\r\n") {
                         let len = text
                             .lines()
-                            .find_map(|l| l.to_lowercase().strip_prefix("content-length:").map(|v| v.trim().parse::<usize>().unwrap()))
+                            .find_map(|l| {
+                                l.to_lowercase()
+                                    .strip_prefix("content-length:")
+                                    .map(|v| v.trim().parse::<usize>().unwrap())
+                            })
                             .unwrap_or(0);
                         if buf.len() >= end + 4 + len {
                             break;
@@ -806,7 +821,8 @@ mod tests {
     #[test]
     fn an_unparseable_tool_call_is_resampled_once_then_reported() {
         let bad = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 46\r\nConnection: close\r\n\r\n{\"error\":{\"message\":\"Failed to parse tool call\"}}";
-        let bad = bad.replace("Content-Length: 46", &format!("Content-Length: {}", bad.split("\r\n\r\n").nth(1).unwrap().len()));
+        let bad = bad
+            .replace("Content-Length: 46", &format!("Content-Length: {}", bad.split("\r\n\r\n").nth(1).unwrap().len()));
         let (url, server) = serve(vec![bad.clone(), bad]);
         let c = Client::new(&url, "m", None, Duration::from_secs(30));
         let body = request_body("m", &[Message::user("hi")], &[], Tokens(10), &Map::new(), false);

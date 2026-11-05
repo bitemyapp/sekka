@@ -187,7 +187,10 @@ impl<'a> Loop<'a> {
             // old outputs once the context is half full, summarize at 3/4.
             context::drop_old_images(history, KEEP_IMAGES);
             if self.fill(history, &system, n_ctx) > TRIM_AT && context::stub_old_outputs(history, KEEP_OUTPUTS) > 0 {
-                out.send(Event::Notice { level: Level::Info, text: "Trimmed older command output to make room.".into() });
+                out.send(Event::Notice {
+                    level: Level::Info,
+                    text: "Trimmed older command output to make room.".into(),
+                });
             }
             if self.fill(history, &system, n_ctx) > SUMMARIZE_AT && !summarized {
                 summarized = true;
@@ -199,7 +202,8 @@ impl<'a> Loop<'a> {
             let mut messages = Vec::with_capacity(history.len() + 1);
             messages.push(Message::system(system.clone()));
             messages.extend(history.iter().cloned());
-            let body = request_body(&o.model, &messages, &offered, o.max_output_tokens, &o.request_params, o.keep_reasoning);
+            let body =
+                request_body(&o.model, &messages, &offered, o.max_output_tokens, &o.request_params, o.keep_reasoning);
             let reply = {
                 let ctl = self.ctl;
                 let mut deltas = Vec::new();
@@ -362,7 +366,10 @@ impl<'a> Loop<'a> {
                 }
             }
             if malformed > MALFORMED_LIMIT * 2 {
-                out.send(Event::Error { text: "The model kept making tool calls that don't work.".into(), retryable: false });
+                out.send(Event::Error {
+                    text: "The model kept making tool calls that don't work.".into(),
+                    retryable: false,
+                });
                 return (FinishReason::Failed, tps);
             }
             // Screenshots go after the results: chat templates take images
@@ -482,7 +489,8 @@ mod tests {
                 }
                 seen.push(String::from_utf8(body).unwrap());
                 let Some(reply) = replies.next() else {
-                    let _ = s.write_all(b"HTTP/1.1 400 Bad Request\r\ncontent-length: 2\r\nconnection: close\r\n\r\nno");
+                    let _ =
+                        s.write_all(b"HTTP/1.1 400 Bad Request\r\ncontent-length: 2\r\nconnection: close\r\n\r\nno");
                     break;
                 };
                 let head = format!(
@@ -583,7 +591,9 @@ mod tests {
     #[test]
     fn text_calls_run_and_cancel_stops_at_a_question() {
         let (url, _server) = serve(vec![
-            sse_text("<tool_call>{\"name\": \"run_command\", \"arguments\": {\"command\": \"echo hi\", \"purpose\": \"x\"}}</tool_call>"),
+            sse_text(
+                "<tool_call>{\"name\": \"run_command\", \"arguments\": {\"command\": \"echo hi\", \"purpose\": \"x\"}}</tool_call>",
+            ),
             sse_call("run_as_root", serde_json::json!({"command": "systemctl restart x", "purpose": "fix"})),
         ]);
         let (o, dir) = options(&url);
@@ -599,7 +609,10 @@ mod tests {
             events.push(e);
         }
         assert!(events.iter().any(|e| matches!(e, Event::ToolOutput { output, .. } if output.text.contains("hi"))));
-        assert!(matches!(events.last(), Some(Event::TurnFinished { reason: FinishReason::Cancelled, .. })), "{events:?}");
+        assert!(
+            matches!(events.last(), Some(Event::TurnFinished { reason: FinishReason::Cancelled, .. })),
+            "{events:?}"
+        );
         std::fs::remove_dir_all(dir.path()).ok();
     }
 
@@ -611,7 +624,10 @@ mod tests {
         o.step_budget = crate::StepBudget(2);
         let session = Session::create(&dir).unwrap();
         let events = drain(&crate::Agent::start(&session, "loop", o), |_| None);
-        assert!(matches!(events.last(), Some(Event::TurnFinished { reason: FinishReason::StepBudget, .. })), "{events:?}");
+        assert!(
+            matches!(events.last(), Some(Event::TurnFinished { reason: FinishReason::StepBudget, .. })),
+            "{events:?}"
+        );
         std::fs::remove_dir_all(dir.path()).ok();
     }
 

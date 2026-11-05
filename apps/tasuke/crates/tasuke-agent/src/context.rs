@@ -286,7 +286,9 @@ mod tests {
         o.environment_note = Some("Evaluation.".into());
         let e = environment_block(&o);
         assert!(e.starts_with("<environment>") && e.ends_with("</environment>"));
-        assert!(e.contains("Local time: ") && e.contains("Act: on. Desktop control: off.") && e.contains("Evaluation."));
+        assert!(
+            e.contains("Local time: ") && e.contains("Act: on. Desktop control: off.") && e.contains("Evaluation.")
+        );
     }
 
     fn tool(text: &str) -> Message {
@@ -318,7 +320,15 @@ mod tests {
     fn a_summary_cut_lands_on_a_user_message() {
         let mut call = Message::assistant("");
         call.tool_calls.push(crate::chat::WireCall { id: CallId::new("c"), name: "x".into(), arguments: "{}".into() });
-        let m = vec![Message::user("a"), call.clone(), tool("o"), Message::assistant("done"), Message::user("b"), call, tool("o")];
+        let m = vec![
+            Message::user("a"),
+            call.clone(),
+            tool("o"),
+            Message::assistant("done"),
+            Message::user("b"),
+            call,
+            tool("o"),
+        ];
         assert_eq!(summary_cut(&m, 2), Some(4));
         assert_eq!(summary_cut(&m, 6), None);
     }

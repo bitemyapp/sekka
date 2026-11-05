@@ -5448,7 +5448,9 @@ mod tests {
         // The helper checks from `/` with root's home: the owner or mode
         // must not be read as a top-level folder there.
         let (root, slash) = (Path::new("/root"), Path::new("/"));
-        for ok in ["chown -R alice:users /home/alice/Notes", "chmod -R u+w /home/alice/Notes", "chgrp -R users /home/alice/x"] {
+        for ok in
+            ["chown -R alice:users /home/alice/Notes", "chmod -R u+w /home/alice/Notes", "chgrp -R users /home/alice/x"]
+        {
             assert_eq!(refused_from(ok, root, slash), None, "{ok}");
         }
         for bad in ["chown -R alice:users /", "chmod -R 777 /etc", "chown -R alice /home/alice"] {

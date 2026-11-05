@@ -107,11 +107,7 @@ impl<'a> Desktop<'a> {
         let mut argv = self.options.aizomectl.clone();
         argv.extend(args.iter().map(|s| (*s).to_owned()));
         let run = exec::run(&argv, None, &[], None, Duration::from_secs(30), self.cancel).map_err(|e| e.to_string())?;
-        if run.exit_code == Some(0) {
-            Ok(run.output)
-        } else {
-            Err(run.output.trim().chars().take(400).collect())
-        }
+        if run.exit_code == Some(0) { Ok(run.output) } else { Err(run.output.trim().chars().take(400).collect()) }
     }
 
     fn json(&self, what: &str) -> Option<Value> {
@@ -120,7 +116,10 @@ impl<'a> Desktop<'a> {
     }
 
     fn windows(&self) -> Vec<Value> {
-        self.json("windows").and_then(|v| v.get("windows").cloned()).and_then(|w| w.as_array().cloned()).unwrap_or_default()
+        self.json("windows")
+            .and_then(|v| v.get("windows").cloned())
+            .and_then(|w| w.as_array().cloned())
+            .unwrap_or_default()
     }
 
     /// The display screenshots show: the primary one (else the first).
@@ -129,7 +128,9 @@ impl<'a> Desktop<'a> {
         let outputs = v.get("outputs")?.as_array()?;
         let pick = outputs
             .iter()
-            .filter(|o| o.get("enabled").and_then(Value::as_bool).unwrap_or(true) && o.get("mirror").is_none_or(Value::is_null))
+            .filter(|o| {
+                o.get("enabled").and_then(Value::as_bool).unwrap_or(true) && o.get("mirror").is_none_or(Value::is_null)
+            })
             .max_by_key(|o| o.get("primary").and_then(Value::as_bool).unwrap_or(false))?;
         let l = pick.get("logical")?;
         let f = |k: &str| l.get(k).and_then(Value::as_f64).unwrap_or(0.0);
@@ -222,7 +223,9 @@ impl<'a> Desktop<'a> {
                     let items: Vec<&str> = d
                         .get("elements")
                         .and_then(Value::as_array)
-                        .map(|es| es.iter().filter_map(|e| e.get("label").or_else(|| e.get("text"))?.as_str()).collect())
+                        .map(|es| {
+                            es.iter().filter_map(|e| e.get("label").or_else(|| e.get("text"))?.as_str()).collect()
+                        })
                         .unwrap_or_default();
                     lines.push(format!(
                         "(a menu is open but its place isn't known, so its items aren't numbered: {}. Choose with the \
@@ -251,7 +254,10 @@ impl<'a> Desktop<'a> {
         std::fs::create_dir_all(&self.shots).map_err(|e| format!("{}: {e}", self.shots.display()))?;
         self.shot_count += 1;
         // The compositor writes it, as the person: somewhere they can write.
-        let tmp = std::env::var_os("XDG_RUNTIME_DIR").filter(|v| !v.is_empty()).map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+        let tmp = std::env::var_os("XDG_RUNTIME_DIR")
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir);
         let raw = tmp.join(format!("tasuke-shot-{}-{}.png", std::process::id(), self.shot_count));
         let (output, area) = self.screen().unwrap_or((String::new(), Area { x: 0.0, y: 0.0, w: 1440.0, h: 900.0 }));
         let raw_s = raw.to_string_lossy().into_owned();
@@ -442,7 +448,9 @@ fn add_marks(d: &Value, ox: f64, oy: f64, place: &str, marks: &mut Vec<Mark>, li
             .or_else(|| e.get("text"))
             .and_then(Value::as_str)
             .map(str::to_owned)
-            .or_else(|| (!role.is_empty()).then(|| e.get("name").and_then(Value::as_str).unwrap_or("").replace(['-', '_'], " ")))
+            .or_else(|| {
+                (!role.is_empty()).then(|| e.get("name").and_then(Value::as_str).unwrap_or("").replace(['-', '_'], " "))
+            })
             .unwrap_or_default();
         let label: String = label.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(60).collect();
         let mut state = Vec::new();
@@ -451,15 +459,28 @@ fn add_marks(d: &Value, ox: f64, oy: f64, place: &str, marks: &mut Vec<Mark>, li
                 state.push(k.to_owned());
             }
         }
-        if let Some(v) = e.get("value").and_then(|v| v.as_str().map(str::to_owned).or_else(|| v.as_f64().map(|f| f.to_string()))) {
+        if let Some(v) =
+            e.get("value").and_then(|v| v.as_str().map(str::to_owned).or_else(|| v.as_f64().map(|f| f.to_string())))
+        {
             state.push(format!("value \"{}\"", v.chars().take(40).collect::<String>()));
         }
         let area = Area { x: ox + x, y: oy + y, w, h };
         let markable = !role.is_empty() && !MARKED_ROLES_EXCLUDED.contains(&role) && !label.is_empty();
         if markable {
             let id = MarkId(marks.len() as u32 + 1);
-            lines.push(format!("  [{id}] {role} \"{label}\"{}{}", if state.is_empty() { "" } else { " " }, state.join(" ")));
-            marks.push(Mark { id, role: role.into(), label: label.clone(), state: state.join(" "), area, place: place.into() });
+            lines.push(format!(
+                "  [{id}] {role} \"{label}\"{}{}",
+                if state.is_empty() { "" } else { " " },
+                state.join(" ")
+            ));
+            marks.push(Mark {
+                id,
+                role: role.into(),
+                label: label.clone(),
+                state: state.join(" "),
+                area,
+                place: place.into(),
+            });
         } else if !label.is_empty() && role.is_empty() {
             lines.push(format!("  text \"{label}\""));
         }
