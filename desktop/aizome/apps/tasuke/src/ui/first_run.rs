@@ -137,10 +137,10 @@ pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
                         );
                     }
                     let card = container(column_of(lines).spacing(8.0).width(Fill))
-                    .padding([14.0, 16.0])
-                    .fill(Tone::Chrome)
-                    .border(Edge::Line2)
-                    .width(Fill);
+                        .padding([14.0, 16.0])
+                        .fill(Tone::Chrome)
+                        .border(Edge::Line2)
+                        .width(Fill);
                     parts.push(card.into());
                     let total = e.download_size();
                     parts.push(

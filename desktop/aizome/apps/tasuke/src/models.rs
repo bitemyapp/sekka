@@ -660,7 +660,11 @@ mod tests {
         let bar = FitBar::of(e, &f, &hw);
         assert_eq!(bar.verdict, Verdict::Split, "{f:?}");
         let w = bar.words();
-        assert!(w.starts_with("Runs on the RTX 4060 Laptop GPU with ") && w.ends_with(" of it in system memory, which is slower"), "{w}");
+        assert!(
+            w.starts_with("Runs on the RTX 4060 Laptop GPU with ")
+                && w.ends_with(" of it in system memory, which is slower"),
+            "{w}"
+        );
         let ram = bar.ram_parts().expect("the memory side");
         let total: u64 = ram.iter().map(|(_, b)| b.0).sum();
         assert_eq!(total, bar.ram_budget.unwrap().0);
