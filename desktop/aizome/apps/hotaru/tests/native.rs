@@ -1837,7 +1837,8 @@ fn a_selection_drag_past_the_top_scrolls_and_copies_from_history() {
         vec!["-c".into(), "i=0; while [ $i -lt 100 ]; do printf 'Line %03d\\n' \"$i\"; i=$((i + 1)); done".into()];
     let mut h = Harness::new(keeping(command));
     assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().ended));
-    settle_frame(&mut h);
+    // Begin the drag after the pane reflows to the window: a reflow ends a drag.
+    settle_grid(&mut h);
     let win = h.window();
     let pane = h.program().active_pane().unwrap();
     let metrics = pane.font_metrics().unwrap();

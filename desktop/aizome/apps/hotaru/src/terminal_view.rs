@@ -226,6 +226,23 @@ impl TextSelection {
     pub fn text(&self, snapshot: &Snapshot) -> String {
         self.visible(snapshot).map(|selection| selection.text(snapshot)).unwrap_or_default()
     }
+    /// The plain text from `start` to `end` (from `in_content`) of a capture
+    /// of all the content, its first `rows` rows at most.
+    pub fn content_text(content: &ContentSnapshot, start: (usize, usize), end: (usize, usize), rows: usize) -> String {
+        use hotaru_core::formatter::{self, CopyFormat, FormatOptions};
+        let end = if end.0 - start.0 >= rows { (start.0 + rows, 0) } else { end };
+        let options = FormatOptions {
+            format: CopyFormat::Plain,
+            selection: Some(formatter::Selection { start, end, rectangle: false }),
+            ..FormatOptions::default()
+        };
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        formatter::format_copy(content, &options, &cancel)
+            .ok()
+            .and_then(|formatted| formatted.plain)
+            .map(|plain| String::from_utf8_lossy(&plain).into_owned())
+            .unwrap_or_default()
+    }
 }
 
 #[allow(clippy::too_many_arguments)] // The terminal's immutable view inputs travel together.
@@ -343,10 +360,13 @@ struct ViewState {
     scale_pending: bool,
     font_epoch: Option<u64>,
     font_metrics: Option<aizome_kit::sidestep_ui::grid::Metrics>,
-    /// Where a selection drag began, on the text.
-    drag: Option<TextPoint>,
+    /// Where a selection drag began, on the text of a content epoch.
+    drag: Option<(ContentEpoch, TextPoint)>,
     /// Where the pointer is during a selection drag.
     drag_pointer: Option<Point>,
+    /// Whether the drag's scroll timer is running: moving the pointer
+    /// doesn't postpone it.
+    drag_timer: bool,
     preedit: String,
     scroll_fraction: f64,
     resize_pending: bool,
@@ -625,12 +645,34 @@ impl TerminalView {
         }
     }
     /// A selection drag's end moves to `pos`, on the text this view shows.
-    fn drag_to(&self, cx: &mut EventCx, pos: Point) {
+    /// A reflow, reset or other screen since it began ends the drag: false.
+    fn drag_to(&self, cx: &mut EventCx, pos: Point) -> bool {
         let st = cx.state::<ViewState>();
-        let Some(anchor) = st.drag else { return };
+        let Some((epoch, anchor)) = st.drag.clone() else { return false };
+        if epoch != self.snapshot.position.epoch {
+            Self::end_drag(cx);
+            return false;
+        }
         let end = TextPoint::at(self.point(pos, st), &self.snapshot.position);
-        let selection = TextSelection { epoch: self.snapshot.position.epoch.clone(), anchor, end };
-        emit(cx, Msg::Select(self.id, selection));
+        emit(cx, Msg::Select(self.id, TextSelection { epoch, anchor, end }));
+        true
+    }
+    /// Start the drag's scroll timer, unless it's running.
+    fn arm_drag_timer(cx: &mut EventCx) {
+        let st = cx.state::<ViewState>();
+        if !st.drag_timer {
+            st.drag_timer = true;
+            cx.set_timer(DRAG_TIMER, DRAG_INTERVAL);
+        }
+    }
+    /// Forget a selection drag and stop its timer; the drag's selection stays.
+    fn end_drag(cx: &mut EventCx) -> bool {
+        let st = cx.state::<ViewState>();
+        let dragged = st.drag.take().is_some();
+        st.drag_pointer = None;
+        st.drag_timer = false;
+        cx.cancel_timer(DRAG_TIMER);
+        dragged
     }
     /// The lines a selection drag at `pos` scrolls: back into the history
     /// above the text, forward below it, none where it can't go further.
@@ -1150,13 +1192,16 @@ impl Widget for TerminalView {
         match event {
             Event::Timer(DRAG_TIMER) => {
                 let st = cx.state::<ViewState>();
-                let Some(pos) = st.drag.and(st.drag_pointer) else { return Status::Handled };
+                st.drag_timer = false;
+                let Some(pos) = st.drag.as_ref().and(st.drag_pointer) else { return Status::Handled };
                 // The end follows the pointer onto the text the last scroll showed.
-                self.drag_to(cx, pos);
+                if !self.drag_to(cx, pos) {
+                    return Status::Handled;
+                }
                 let lines = self.drag_scroll(cx.state::<ViewState>(), pos);
                 if lines != 0 {
                     emit(cx, Msg::Scroll(self.id, lines));
-                    cx.set_timer(DRAG_TIMER, DRAG_INTERVAL);
+                    Self::arm_drag_timer(cx);
                 }
             }
             Event::Timer(CURSOR_TIMER) => {
@@ -1300,7 +1345,7 @@ impl Widget for TerminalView {
                     _ => None,
                 };
                 if select && picked.is_none() {
-                    st.drag = Some(TextPoint::at(p, &self.snapshot.position));
+                    st.drag = Some((self.snapshot.position.epoch.clone(), TextPoint::at(p, &self.snapshot.position)));
                     st.drag_pointer = Some(*pos);
                 }
                 cx.request_focus();
@@ -1332,12 +1377,9 @@ impl Widget for TerminalView {
                 if !mods.shift() {
                     emit(cx, Msg::Mouse(self.id, pointer));
                 }
-                if dragging {
-                    self.drag_to(cx, *pos);
-                    // Past the top or bottom of the text, the drag scrolls.
-                    if self.drag_scroll(cx.state::<ViewState>(), *pos) != 0 {
-                        cx.set_timer(DRAG_TIMER, DRAG_INTERVAL);
-                    }
+                // Past the top or bottom of the text, the drag scrolls.
+                if dragging && self.drag_to(cx, *pos) && self.drag_scroll(cx.state::<ViewState>(), *pos) != 0 {
+                    Self::arm_drag_timer(cx);
                 }
             }
             Event::PointerUp { pos, button, mods, .. } => {
@@ -1355,10 +1397,8 @@ impl Widget for TerminalView {
                 let st = cx.state::<ViewState>();
                 let button = input::mouse_button(*button);
                 st.buttons.retain(|held| Some(*held) != button);
-                let dragged = st.drag.take().is_some();
-                st.drag_pointer = None;
                 let pointer = self.mouse_input(st, *pos, *mods, vt::MouseAction::Release, button);
-                cx.cancel_timer(DRAG_TIMER);
+                let dragged = Self::end_drag(cx);
                 if !mods.shift() {
                     emit(cx, Msg::Mouse(self.id, pointer));
                 }
@@ -1384,7 +1424,7 @@ impl Widget for TerminalView {
                 let pointer = self.mouse_input(st, *pos, *mods, vt::MouseAction::Press, None);
                 if lines != 0 && st.drag.is_some() {
                     // A selection drag's end follows the text the wheel shows.
-                    cx.set_timer(DRAG_TIMER, DRAG_INTERVAL);
+                    Self::arm_drag_timer(cx);
                 }
                 if lines != 0 {
                     if mods.shift() {
