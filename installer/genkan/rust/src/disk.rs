@@ -87,84 +87,82 @@ pub fn parse(text: &str) -> Result<Vec<Disk>> {
     Ok(disks)
 }
 
+/// Every disk, for choosing one. A disk whose node or sysfs entry
+/// misbehaves while it's checked (unplugged, re-enumerated) is listed as
+/// unavailable rather than failing the others' listing.
 pub fn discover() -> Result<Vec<Disk>> {
-    discover_with_mappings(&[])
-}
-fn discover_with_mappings(mappings: &[String]) -> Result<Vec<Disk>> {
-    let allowed: Vec<_> = mappings
-        .iter()
-        .map(|path| -> Result<_> {
-            let meta = fs::metadata(path)?;
-            ensure!(
-                meta.file_type().is_block_device(),
-                "Mapping is not a block device"
-            );
-            Ok(Path::new("/sys/dev/block")
-                .join(format!(
-                    "{}:{}",
-                    libc::major(device_number(&meta)),
-                    libc::minor(device_number(&meta))
-                ))
-                .canonicalize()?)
-        })
-        .collect::<Result<_>>()?;
-    let text = output(
-        "lsblk",
-        &[
-            "--json",
-            "--tree",
-            "--bytes",
-            "--paths",
-            "--output",
-            "PATH,TYPE,SIZE,RO,MODEL,SERIAL,WWN,MAJ:MIN,MOUNTPOINTS",
-        ],
-        30,
-    )?;
-    let mut disks = parse(&text)?;
     let firmware = crate::Firmware::current();
+    let mut disks = list(None)?;
     for disk in &mut disks {
-        let p = Path::new(&disk.identity.path);
-        let meta = fs::metadata(p)?;
-        ensure!(
-            meta.file_type().is_block_device() && p.canonicalize()? == p,
-            "Noncanonical block device"
-        );
-        let major = libc::major(device_number(&meta));
-        let minor = libc::minor(device_number(&meta));
-        ensure!(
-            disk.identity.major_minor == format!("{major}:{minor}"),
-            "Disk changed during discovery"
-        );
-        let sys = Path::new("/sys/dev/block")
-            .join(&disk.identity.major_minor)
-            .canonicalize()?;
-        let logical_sector_size = fs::read_to_string(sys.join("queue/logical_block_size"))?
-            .trim()
-            .parse::<u64>()?;
-        if let Some(reason) = boot_sector_block(firmware, logical_sector_size) {
-            disk.blocked = Some(reason.into());
-        }
-        if sys.starts_with("/sys/devices/virtual/block") {
-            disk.blocked =
-                Some("Virtual memory or logical block device is not an installation target".into());
-        }
-        // Holders (LVM, dm-crypt, RAID) must block the whole drive even when
-        // no filesystem on the logical device is currently mounted.
-        for node in std::iter::once(sys.clone()).chain(
-            fs::read_dir(&sys)?
-                .filter_map(|e| e.ok().map(|e| e.path()))
-                .filter(|p| p.join("partition").exists()),
-        ) {
-            let holders = fs::read_dir(node.join("holders"))?
-                .map(|entry| Ok(entry?.path().canonicalize()?))
-                .collect::<Result<Vec<_>>>()?;
-            if holders.iter().any(|holder| !allowed.contains(holder)) {
-                disk.blocked =
-                    Some("Device or partition is used by LVM, encryption or RAID".into());
-            }
+        if let Err(error) = inspect(disk, firmware, &[]) {
+            disk.blocked = Some(format!("Could not be checked: {error:#}"));
         }
     }
     Ok(disks)
+}
+
+/// lsblk's device tree: every disk, or only `device`'s.
+fn list(device: Option<&str>) -> Result<Vec<Disk>> {
+    let mut args = vec![
+        "--json",
+        "--tree",
+        "--bytes",
+        "--paths",
+        "--output",
+        "PATH,TYPE,SIZE,RO,MODEL,SERIAL,WWN,MAJ:MIN,MOUNTPOINTS",
+    ];
+    args.extend(device);
+    parse(&output("lsblk", &args, 30)?)
+}
+
+/// The checks lsblk can't make: the node is the disk lsblk named, and its
+/// sysfs entry says it's a usable target. Holders other than `allowed`
+/// (sysfs paths of this installation's own mappings) block it.
+fn inspect(
+    disk: &mut Disk,
+    firmware: crate::Firmware,
+    allowed: &[std::path::PathBuf],
+) -> Result<()> {
+    let p = Path::new(&disk.identity.path);
+    let meta = fs::metadata(p)?;
+    ensure!(
+        meta.file_type().is_block_device() && p.canonicalize()? == p,
+        "Noncanonical block device"
+    );
+    let major = libc::major(device_number(&meta));
+    let minor = libc::minor(device_number(&meta));
+    ensure!(
+        disk.identity.major_minor == format!("{major}:{minor}"),
+        "Disk changed during discovery"
+    );
+    let sys = Path::new("/sys/dev/block")
+        .join(&disk.identity.major_minor)
+        .canonicalize()?;
+    let logical_sector_size = fs::read_to_string(sys.join("queue/logical_block_size"))?
+        .trim()
+        .parse::<u64>()?;
+    if let Some(reason) = boot_sector_block(firmware, logical_sector_size) {
+        disk.blocked = Some(reason.into());
+    }
+    if sys.starts_with("/sys/devices/virtual/block") {
+        disk.blocked =
+            Some("Virtual memory or logical block device is not an installation target".into());
+    }
+    // Holders (LVM, dm-crypt, RAID) must block the whole drive even when
+    // no filesystem on the logical device is currently mounted.
+    for node in std::iter::once(sys.clone()).chain(
+        fs::read_dir(&sys)?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.join("partition").exists()),
+    ) {
+        let holders = fs::read_dir(node.join("holders"))?
+            .map(|entry| Ok(entry?.path().canonicalize()?))
+            .collect::<Result<Vec<_>>>()?;
+        if holders.iter().any(|holder| !allowed.contains(holder)) {
+            disk.blocked = Some("Device or partition is used by LVM, encryption or RAID".into());
+        }
+    }
+    Ok(())
 }
 
 fn boot_sector_block(firmware: crate::Firmware, logical_sector_size: u64) -> Option<&'static str> {
@@ -176,25 +174,166 @@ fn boot_sector_block(firmware: crate::Firmware, logical_sector_size: u64) -> Opt
     )
 }
 
-pub fn revalidate(identity: &Identity) -> Result<()> {
-    revalidate_with_mappings(identity, &[])
+/// Two readings name the same disk only if everything about it matches.
+/// The path alone never does (another disk can take it over), and a disk
+/// with no serial, WWN or model still has its device numbers and size.
+impl aizome_typestate::SameTarget for Identity {
+    fn same_target(&self, fresh: &Self) -> bool {
+        self == fresh
+    }
 }
-pub(crate) fn revalidate_with_mappings(identity: &Identity, mappings: &[String]) -> Result<()> {
-    let disks = discover_with_mappings(mappings)?;
-    let current = disks
-        .iter()
-        .find(|d| d.identity.path == identity.path)
+
+/// One disk as it is now: the only thing [`Reviewed::confirm`] accepts.
+/// Only [`read`] makes one, from that disk alone.
+#[derive(Debug)]
+pub struct Reading {
+    disk: Disk,
+}
+
+impl Reading {
+    pub fn identity(&self) -> &Identity {
+        &self.disk.identity
+    }
+    pub fn blocked(&self) -> Option<&str> {
+        self.disk.blocked.as_deref()
+    }
+}
+
+/// Reads the disk at `path`, and only it: lsblk for that device, then its
+/// own node and sysfs entry. Nothing about another disk can make it fail.
+pub fn read(path: &str) -> Result<Reading> {
+    read_allowing(path, &[])
+}
+
+fn read_allowing(path: &str, allowed: &[std::path::PathBuf]) -> Result<Reading> {
+    let mut disk = list(Some(path))
+        .context("Selected disk disappeared")?
+        .into_iter()
+        .find(|d| d.identity.path == path)
         .context("Selected disk disappeared")?;
-    ensure!(
-        &current.identity == identity,
-        "Disk identity changed; rescan and review again"
-    );
-    ensure!(
-        current.blocked.is_none(),
-        "Disk is unavailable: {}",
-        current.blocked.as_deref().unwrap_or("")
-    );
-    Ok(())
+    inspect(&mut disk, crate::Firmware::current(), allowed)?;
+    Ok(Reading { disk })
+}
+
+/// The disk the person reviewed, which the erase phrase names: a parsed
+/// plan's. Every check before and during the installation compares a fresh
+/// reading of that disk alone with it (GEN-03). Only a parsed plan makes a
+/// review, so other code can't claim one for a disk it picked:
+///
+/// ```compile_fail,E0624
+/// use calamares_nixos::disk::{Identity, Reviewed};
+/// fn claim(disk: Identity) -> Reviewed {
+///     Reviewed::new(disk)
+/// }
+/// ```
+///
+/// ```
+/// use calamares_nixos::{InstallPlan, disk::Reviewed};
+/// fn review(plan: &InstallPlan) -> Reviewed {
+///     Reviewed::of(plan)
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct Reviewed(Identity);
+
+/// The brand of a disk's review: only this module makes one, so a
+/// [`Confirmed`] disk comes only from [`Reviewed::confirm`].
+#[derive(Debug)]
+pub struct DiskReview(());
+
+impl Reviewed {
+    /// The plan's disk: what the review showed and the erase phrase names.
+    pub fn of(plan: &crate::InstallPlan) -> Self {
+        Self::new(plan.disk().clone())
+    }
+    pub(crate) fn new(identity: Identity) -> Self {
+        Self(identity)
+    }
+    pub fn identity(&self) -> &Identity {
+        &self.0
+    }
+
+    /// Reads the reviewed disk again and checks it's the same disk and
+    /// still usable.
+    pub fn revalidate(&self) -> Result<Confirmed> {
+        self.confirm(read(&self.0.path)?)
+    }
+
+    /// Checks a fresh reading against what the person reviewed. It takes a
+    /// [`Reading`] of one disk, which [`read`] makes from that disk alone,
+    /// so a check of the selected disk can't fail because another disk was
+    /// unplugged or renumbered meanwhile, as a full rediscovery could. Once
+    /// the disk has been partitioned, that failure abandoned a half-written
+    /// installation (GEN-03):
+    ///
+    /// ```compile_fail,E0308
+    /// use calamares_nixos::disk;
+    /// fn recheck(reviewed: &disk::Reviewed) -> anyhow::Result<disk::Confirmed> {
+    ///     let fresh = disk::discover()?
+    ///         .into_iter()
+    ///         .find(|d| d.identity.path == reviewed.identity().path)
+    ///         .ok_or_else(|| anyhow::anyhow!("Selected disk disappeared"))?;
+    ///     reviewed.confirm(fresh)
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// use calamares_nixos::disk;
+    /// fn recheck(reviewed: &disk::Reviewed) -> anyhow::Result<disk::Confirmed> {
+    ///     reviewed.confirm(disk::read(&reviewed.identity().path)?)
+    /// }
+    /// ```
+    pub fn confirm(&self, fresh: Reading) -> Result<Confirmed> {
+        let Reading { disk } = fresh;
+        let now = aizome_typestate::Reviewed::new(self.0.clone(), DiskReview(()))
+            .confirm(disk.identity)
+            .map_err(|_| anyhow::anyhow!("Disk identity changed; rescan and review again"))?;
+        ensure!(
+            disk.blocked.is_none(),
+            "Disk is unavailable: {}",
+            disk.blocked.as_deref().unwrap_or("")
+        );
+        Ok(Confirmed(now))
+    }
+}
+
+/// Proof that the disk is the one the person reviewed, read again just now.
+/// Only [`Reviewed::confirm`] makes one; the destructive steps take it and
+/// act on its path.
+#[derive(Debug)]
+pub struct Confirmed(aizome_typestate::Confirmed<Identity, DiskReview>);
+
+impl Confirmed {
+    pub fn identity(&self) -> &Identity {
+        self.0.target()
+    }
+    pub fn path(&self) -> &str {
+        &self.identity().path
+    }
+
+    /// Reads the confirmed disk alone again after a write, accepting
+    /// `mappings` (this installation's own device-mapper nodes) as holders.
+    pub fn recheck(self, mappings: &[String]) -> Result<Confirmed> {
+        let allowed: Vec<_> = mappings
+            .iter()
+            .map(|path| -> Result<_> {
+                let meta = fs::metadata(path)?;
+                ensure!(
+                    meta.file_type().is_block_device(),
+                    "Mapping is not a block device"
+                );
+                Ok(Path::new("/sys/dev/block")
+                    .join(format!(
+                        "{}:{}",
+                        libc::major(device_number(&meta)),
+                        libc::minor(device_number(&meta))
+                    ))
+                    .canonicalize()?)
+            })
+            .collect::<Result<_>>()?;
+        let fresh = read_allowing(self.path(), &allowed)?;
+        Reviewed(self.identity().clone()).confirm(fresh)
+    }
 }
 
 pub fn partition(path: &str, index: u8) -> String {
@@ -455,13 +594,16 @@ mod tests {
                 .contains("Restart the installation media in UEFI mode")
         );
         assert!(
-            revalidate(&native.identity)
+            Reviewed::new(native.identity.clone())
+                .revalidate()
                 .unwrap_err()
                 .to_string()
                 .contains("512-byte logical sectors")
         );
         assert!(emulated.blocked.is_none());
-        revalidate(&emulated.identity).unwrap();
+        Reviewed::new(emulated.identity.clone())
+            .revalidate()
+            .unwrap();
     }
     #[test]
     fn layout_reserves_ram_sized_swap_at_the_end() {

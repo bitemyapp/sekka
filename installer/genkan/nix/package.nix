@@ -31,14 +31,17 @@ let
     # NixOS installs the setuid entry point here; the store binary is not setuid.
     CALAMARES_PKEXEC = "/run/wrappers/bin/pkexec";
   };
+  # The backend at its place in Sekka, beside the typestate support its path
+  # dependency names (Aizome's crate, which has no dependencies).
   backend = lib.fileset.toSource {
-    root = ../rust;
+    root = ../../..;
     fileset = lib.fileset.unions [
       ../rust/Cargo.toml
       ../rust/Cargo.lock
       ../rust/data
       ../rust/reference.nix
       ../rust/src
+      ../../../desktop/aizome/crates/aizome-typestate
     ];
   };
   helper = pkgs.rustPlatform.buildRustPackage (
@@ -47,6 +50,9 @@ let
       pname = "calamares-nixos-helper";
       version = "0.1.0";
       src = backend;
+      postUnpack = ''
+        sourceRoot="$sourceRoot/installer/genkan/rust"
+      '';
       cargoLock.lockFile = ../rust/Cargo.lock;
       nativeBuildInputs = [ pkgs.pkg-config ];
       buildInputs = [
@@ -75,6 +81,8 @@ let
       (aizome + "/crates/aizome-shell-proto")
       # The compositor's IPC, for the keyboard step's key.
       (aizome + "/crates/aizome-ipc")
+      # The typestate support the window and the backend share.
+      (aizome + "/crates/aizome-typestate")
       # Sukumo, which the kit draws with: its workspace manifest and crates.
       (aizome + "/sukumo/Cargo.toml")
       (aizome + "/sukumo/crates")
@@ -93,7 +101,7 @@ let
   source = pkgs.runCommand "genkan-source" { } ''
     mkdir -p $out/installer/genkan $out/desktop
     cp -r ${ui} $out/installer/genkan/ui
-    cp -r ${backend} $out/installer/genkan/rust
+    cp -r ${backend}/installer/genkan/rust $out/installer/genkan/rust
     cp -r ${kit} $out/desktop/aizome
   '';
   # Opened at run time rather than linked (Sukumo's text and windows).
