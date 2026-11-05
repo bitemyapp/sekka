@@ -266,6 +266,9 @@ impl<'a> Desktop<'a> {
             args.extend(["--output", output.as_str()]);
         }
         args.push(&raw_s);
+        // No "Screenshot saved" notification for each look. After the path,
+        // so an aizomectl from before --quiet ignores it.
+        args.push("--quiet");
         self.aizomectl(&args)?;
         let mut img = Image::read(&raw)?;
         let _ = std::fs::remove_file(&raw);
@@ -465,7 +468,11 @@ fn add_marks(d: &Value, ox: f64, oy: f64, place: &str, marks: &mut Vec<Mark>, li
             state.push(format!("value \"{}\"", v.chars().take(40).collect::<String>()));
         }
         let area = Area { x: ox + x, y: oy + y, w, h };
-        let markable = !role.is_empty() && !MARKED_ROLES_EXCLUDED.contains(&role) && !label.is_empty();
+        // An icon or image inside a control that already has a number is
+        // part of it: a second tag there only hides the first.
+        let inside_mark =
+            matches!(role, "image" | "img" | "icon" | "graphic") && marks.iter().any(|m| contains(&m.area, &area));
+        let markable = !role.is_empty() && !MARKED_ROLES_EXCLUDED.contains(&role) && !label.is_empty() && !inside_mark;
         if markable {
             let id = MarkId(marks.len() as u32 + 1);
             lines.push(format!(
@@ -507,6 +514,14 @@ fn add_marks(d: &Value, ox: f64, oy: f64, place: &str, marks: &mut Vec<Mark>, li
             }
         }
     }
+}
+
+/// Whether `inner` lies within `outer` (a point of slack for rounding).
+fn contains(outer: &Area, inner: &Area) -> bool {
+    inner.x >= outer.x - 1.0
+        && inner.y >= outer.y - 1.0
+        && inner.x + inner.w <= outer.x + outer.w + 1.0
+        && inner.y + inner.h <= outer.y + outer.h + 1.0
 }
 
 /// `ctrl+A`, `Super + Space`, `enter` → aizomectl's names.
@@ -728,6 +743,18 @@ const DIGITS: [[u8; 5]; 10] = [
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn an_icon_inside_a_numbered_row_gets_no_number_of_its_own() {
+        let doc = json!({"elements": [
+            {"rect": [0, 0, 200, 28], "shown": [0, 0, 200, 28], "role": "listitem", "label": "Network"},
+            {"rect": [4, 4, 20, 20], "shown": [4, 4, 20, 20], "role": "image", "label": "Network"},
+            {"rect": [0, 40, 20, 20], "shown": [0, 40, 20, 20], "role": "image", "label": "Avatar"}]});
+        let (mut marks, mut lines) = (Vec::new(), Vec::new());
+        add_marks(&doc, 0.0, 0.0, "Settings", &mut marks, &mut lines);
+        let labels: Vec<&str> = marks.iter().map(|m| m.label.as_str()).collect();
+        assert_eq!(labels, ["Network", "Avatar"], "{lines:?}");
+    }
 
     #[test]
     fn an_open_menu_is_placed_from_the_pointer() {
