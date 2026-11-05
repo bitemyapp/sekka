@@ -3134,20 +3134,29 @@ The window's side of a write is typestate in `core`, on Aizome's
 that directory. `core::choice` lists the drives every two seconds while no
 write runs and keeps the chosen drive as the drive itself, compared with
 `Drive::same` at each listing, so a stick swapped for one that gets the same
-name (`sdb`, `disk4`) is no longer chosen. The "Erase …?" dialog describes a
-`ReviewedDrive`; OK finds that drive again in the current list, and only the
-`ConfirmedDrive` that yields makes a `Plan`. If the drive was unplugged or
-replaced, nothing is written and the window says why. `core::job` follows the
-helper: before it starts, a failure means nothing was written; once it has
-reported, its final report decides, and a helper that exits without one
-(killed, or an unexplained exit code) leaves the drive marked as partly
-written. Reports reach the job only through `ProgressFile`. The `compile_fail`
-doctests on `Plan::new`, `ConfirmedDrive`, `Running::exited`, `Failure` and
-`Report` show the mistakes these types rule out; `RUSTC_BOOTSTRAP=1 cargo test
---doc -p kakehashi-core` checks their error codes. `app/repro_ktl_03.sh` and
-`app/repro_ktl_04.sh` run the window's real write worker and `elevate::run`
-against a fake `pkexec` in bubblewrap, for a helper killed mid-write and a
-stick swapped under the dialog; they never run the helper or open a device.
+name (`sdb`, `disk4`) is no longer chosen. Opening the "Erase …?" dialog
+takes a review of the drive and the image, named by a ticket its OK hands
+back; cancelling, opening another dialog or choosing again makes the ticket
+stale. OK finds the drive again in the current list and checks that the
+window's image is still the one described, and only the `ConfirmedWrite` that
+yields makes a `Plan`. If either changed, nothing is written and the window
+says why. `Plan` is only serialized: the helper reads `plan.json`, with the
+same fields, as a `Requested`, checks its drive against the drive as it is
+(`still_there`), and unmounts or opens only with that check's proof. The
+helper's first report must be written before it does anything. `core::job`
+follows the helper: before it starts, or if it reported nothing, nothing was
+written; once it has reported, its final report decides, and a helper that
+exits without one (killed, or an unexplained exit code) leaves the drive
+marked as partly written. Reports reach the job only through `ProgressFile`,
+and the helper's exit only with the lines still unread. The `compile_fail`
+doctests on `Plan::new`, `ConfirmedWrite`, `Running::exited`, `Exit`,
+`Failure` and `Report` show the mistakes these types rule out;
+`RUSTC_BOOTSTRAP=1 cargo test --doc -p kakehashi-core` checks their error
+codes. `app/repro_ktl_03.sh` and `app/repro_ktl_04.sh` run the window's real
+write worker and `elevate::run` against a fake `pkexec` in bubblewrap, for a
+helper killed mid-write and a stick swapped under the dialog; they never run
+the helper or open a device. Run `cargo fmt` with `-p` for Kakehashi's
+packages: `--all` follows the path dependency into Aizome's workspace.
 
 On macOS the GUI first stages the selected image in that private temporary
 directory, on a worker thread. Administrator authorization alone does not
