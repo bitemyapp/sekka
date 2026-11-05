@@ -114,7 +114,8 @@ impl<Msg: Clone + Send + 'static> Button<Msg> {
     }
 
     /// Asks the person to agree to `target`, what the view around the button
-    /// shows it acts on: it's drawn destructive, and when a person presses it
+    /// shows it acts on (its style is the caller's: `.destructive()` when it
+    /// destroys something). When a person presses it
     /// (pointer, or Space or Return while it has the focus) it sends `msg`
     /// with an [`Agreed`](crate::agree::Agreed) of `target`. It never answers
     /// Return for its sheet, so Return in a field doesn't press it.
@@ -129,7 +130,6 @@ impl<Msg: Clone + Send + 'static> Button<Msg> {
     pub fn on_agree<T: Clone + Send + 'static>(mut self, target: T, msg: impl Fn(Pressed<T>) -> Msg + 'static) -> Self {
         self.agree = Some(AgreeFn::new(target, msg));
         self.on_press = None;
-        self.destructive = true;
         self
     }
 }

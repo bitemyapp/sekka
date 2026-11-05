@@ -1,8 +1,8 @@
 //! A person's agreement to a destructive step.
 //!
 //! A button made with [`Button::on_agree`](crate::widgets::controls::Button::on_agree)
-//! (or an alert's [`agree_button`](crate::Alert::agree_button)) is drawn
-//! destructive and carries a target: what the alert, sheet or page shows
+//! (or an alert's [`agree_button`](crate::Alert::agree_button), drawn
+//! destructive) carries a target: what the alert, sheet or page shows
 //! the person it will act on. When a person activates it, with the
 //! pointer (a press and a release over it) or the keyboard (Space, or
 //! Return while it has the focus), the kit makes an [`Agreed`] of that
@@ -282,7 +282,7 @@ mod tests {
     use crate::column;
     use crate::prelude::*;
     use crate::testing::Harness;
-    use sidestep_ui::{Key, Modifiers, NamedKey};
+    use sidestep_ui::{Key, Modifiers, NamedKey, PointerButton};
 
     /// A window with a field, an Erase button agreeing to the disk it names,
     /// and an alert asking the same.
@@ -331,7 +331,10 @@ mod tests {
             column![
                 text_field(&self.name).on_change(Msg::Name).on_submit(Msg::Ask).id("name"),
                 button("Ask").on_press(Msg::Ask),
-                button(format!("Erase {}", self.disk)).on_agree(self.disk.clone(), Msg::Erase).id("erase"),
+                button(format!("Erase {}", self.disk))
+                    .destructive()
+                    .on_agree(self.disk.clone(), Msg::Erase)
+                    .id("erase"),
             ]
             .spacing(8.0)
             .padding(16.0)
@@ -412,6 +415,22 @@ mod tests {
         assert!(h.click_text(w, "Erase Disk"));
         assert!(h.program().erased.is_empty() && h.program().empty == 0);
         assert!(!h.texts(w).iter().any(|t| t == "Erase sdb?"));
+    }
+
+    /// The pointer must press the button as well as release over it: a press
+    /// that began on nothing and was released over it agrees to nothing.
+    #[test]
+    fn a_release_over_the_button_after_a_press_elsewhere_agrees_to_nothing() {
+        let (mut h, w) = harness(true);
+        let on = h.find(w, "Erase sdb").expect("the button").center();
+        let size = h.size(w);
+        let empty = crate::layout::Point::new(size.width - 4.0, size.height - 4.0);
+        h.press(w, empty, PointerButton::Left, 1);
+        h.move_to(w, on);
+        h.release(w, on, PointerButton::Left);
+        assert!(h.program().erased.is_empty(), "the press wasn't the button's");
+        assert!(h.click_text(w, "Erase sdb"));
+        assert_eq!(h.program().erased, ["sdb"]);
     }
 
     #[test]
