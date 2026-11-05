@@ -189,6 +189,7 @@
         agent-evals = import ./tests/agent-evals {
           inherit pkgs localModels;
           desktopsModule = inputs.calamares.nixosModules.desktops;
+          ompPackage = inputs.omp.packages.${system}.omp;
         };
       };
       apps.${system} = {

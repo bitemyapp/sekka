@@ -8,6 +8,7 @@
   pkgs,
   desktopsModule,
   localModels,
+  ompPackage ? null,
 }:
 let
   lib = pkgs.lib;
@@ -24,7 +25,7 @@ let
     name = "sekka-agent-eval";
     globalTimeout = 3 * 3600;
     node.pkgsReadOnly = false;
-    nodes.machine = import ./machine.nix { inherit desktopsModule sshKeys; };
+    nodes.machine = import ./machine.nix { inherit desktopsModule sshKeys ompPackage; };
     skipLint = true;
     skipTypeCheck = true;
     # $SEKKA_EVAL_HARNESS runs a checkout's harness without rebuilding.

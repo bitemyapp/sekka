@@ -42,6 +42,60 @@ The computer runs Sekka with the Aizome desktop. Its menu bar runs along the top
 After each action you see the screen as it is then. Do the task with the mouse and keyboard, check on the screen that it took effect, then call `finish`. If the task asks a question, put the answer in `finish`."""
 
 
+def run_omp(vm, cfg, s, result, out):
+    """The same task through oh-my-pi (omp), a full agent harness, run as
+    root inside the VM against the host's model server (QEMU's user network
+    reaches the host's loopback at 10.0.2.2). omp has its own system prompt
+    and tools; the diagnostics brief is appended, asking for the report at
+    the end, since there is no `finish` tool. Its JSON event stream is the
+    transcript."""
+    import shlex as sh
+
+    m = cfg["model"]
+    minutes = max(1, cfg.get("max_seconds", 1800) // 60)
+    brief = DIAGNOSTICS_SYSTEM.replace(
+        "- Then call `finish` with the root cause, the evidence, and exactly what you changed.",
+        "- Then end with your report to her: the root cause, the evidence, and exactly what you changed.")
+    if cfg.get("skill"):
+        brief += "\n\n# Reference: troubleshooting Sekka and Aizome\n\n" + cfg["skill"]
+    vm.sh("mkdir -p /root/.omp-eval && cat > /root/.omp-eval/brief.md <<'EOF_BRIEF'\n" + brief + "\nEOF_BRIEF")
+    command = (f"cd /root && HOME=/root LLAMA_CPP_BASE_URL={sh.quote(m['omp_base_url'])} omp -p --no-session "
+               f"--auto-approve --mode json --model {sh.quote('llama.cpp/' + m['name'])} --max-time {minutes}m "
+               f"--append-system-prompt /root/.omp-eval/brief.md {sh.quote(s.prompt)} "
+               f"> /root/.omp-eval/events.jsonl 2> /root/.omp-eval/stderr.txt")
+    t0 = time.monotonic()
+    status, _ = vm.sh(command, timeout=minutes * 60 + 120)
+    seconds = time.monotonic() - t0
+    events = vm.out_of("cat /root/.omp-eval/events.jsonl", timeout=60)
+    with open(os.path.join(out, "omp-events.jsonl"), "w") as f:
+        f.write(events)
+    with open(os.path.join(out, "omp-stderr.txt"), "w") as f:
+        f.write(vm.out_of("tail -c 20000 /root/.omp-eval/stderr.txt"))
+    stats = {"steps": 0, "tool_calls": 0, "completion_tokens": 0, "prompt_tokens": 0, "seconds": round(seconds, 1)}
+    last_text, ended = "", False
+    for line in events.splitlines():
+        try:
+            e = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if e.get("type") == "agent_end":
+            ended = True
+        msg = e.get("message") or {}
+        if e.get("type") == "message_end" and msg.get("role") == "assistant":
+            stats["steps"] += 1
+            u = msg.get("usage") or {}
+            stats["completion_tokens"] += u.get("output") or 0
+            stats["prompt_tokens"] += (u.get("input") or 0) + (u.get("cacheRead") or 0)
+            texts = [c.get("text", "") for c in msg.get("content") or [] if c.get("type") == "text"]
+            stats["tool_calls"] += sum(c.get("type") == "toolCall" for c in msg.get("content") or [])
+            if any(t.strip() for t in texts):
+                last_text = "\n".join(texts)
+    result["stats"] = stats
+    result["omp_exit"] = status
+    result["ended"] = "finished" if ended and status == 0 else ("time" if status in (124, 137) else f"exit {status}")
+    return {"root_cause": last_text, "changes": "", "fixed": None}
+
+
 def load_config():
     with open(os.environ["SEKKA_EVAL_CONFIG"]) as f:
         return json.load(f)
@@ -80,7 +134,9 @@ def run(machine):
             result["invalid"] = "the check passed before the agent ran"
         before_shot = vm.screenshot_png("before")
         final = None
-        if cfg["agent"] == "oracle":
+        if cfg["agent"] == "omp":
+            final = run_omp(vm, cfg, s, result, out)
+        elif cfg["agent"] == "oracle":
             s.oracle(vm)
             final = {"root_cause": "oracle", "changes": "oracle", "fixed": True}
             result["ended"] = "oracle"

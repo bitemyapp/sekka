@@ -92,6 +92,9 @@ def selected(args):
         chosen = [s for s in chosen if s.id in want]
     if args.agent == "oracle":
         chosen = [s for s in chosen if s.oracle]
+    if args.agent == "omp":
+        # omp drives a shell, not the screen.
+        chosen = [s for s in chosen if s.track == "diagnostics"]
     return chosen
 
 
@@ -134,7 +137,8 @@ def run_batch(args, drv, run_dir, label, model_cfg, chosen, results):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--agent", choices=["model", "none", "oracle"], default="model")
+    ap.add_argument("--agent", choices=["model", "omp", "none", "oracle"], default="model",
+                    help="model: the bare tool loop; omp: oh-my-pi in the VM, against the same server")
     ap.add_argument("--models", default="", help="comma-separated names from models.toml")
     ap.add_argument("--scenarios", default="all")
     ap.add_argument("--track", choices=["diagnostics", "computer-use"])
@@ -162,7 +166,7 @@ def main():
     chosen = selected(args)
     drv = driver()
     results = []
-    if args.agent != "model":
+    if args.agent in ("none", "oracle"):
         run_batch(args, drv, run_dir, args.agent, None, chosen, results)
         return
     with open(MODELS_TOML, "rb") as f:
@@ -173,7 +177,9 @@ def main():
         model_cfg = {"name": name, "base_url": base, "params": m.get("params", {}),
                      "coords": args.coords or m.get("coords", "pixel"),
                      "vision": m.get("vision", False), "keep_reasoning": m.get("keep_reasoning", False),
-                     "max_tokens": m.get("max_tokens", 6144), "engine": m["engine"]}
+                     "max_tokens": m.get("max_tokens", 6144), "engine": m["engine"],
+                     # Where the VM reaches the host's server (omp runs in the VM).
+                     "omp_base_url": f"http://10.0.2.2:{args.port}"}
         if not args.no_serve:
             subprocess.run(server_cmd() + ["start", name, "--port", str(args.port), "--parallel", str(args.parallel),
                                            "--ctx", str(args.ctx)], check=True)
@@ -182,7 +188,8 @@ def main():
             (run_dir / f"bench-{name}.json").write_text(bench.stdout)
             print(bench.stdout, flush=True)
         try:
-            run_batch(args, drv, run_dir, name + ("+skill" if args.skill else ""), model_cfg, chosen, results)
+            label = name + ("+omp" if args.agent == "omp" else "") + ("+skill" if args.skill else "")
+            run_batch(args, drv, run_dir, label, model_cfg, chosen, results)
         finally:
             if not args.no_serve:
                 subprocess.run(server_cmd() + ["stop"])

@@ -9,6 +9,8 @@
   desktopsModule,
   # A key pair for the SSH scenario: a test fixture, made at build time.
   sshKeys,
+  # oh-my-pi, for the `--agent omp` condition (the flake's pinned input).
+  ompPackage ? null,
 }:
 {
   config,
@@ -113,7 +115,7 @@ in
   systemd.user.settings.Manager.DefaultEnvironment = "AIZOME_KIT_INSPECT=/run/user/1000/inspect";
   systemd.user.tmpfiles.rules = [ "d %t/inspect 0700 - - -" ];
 
-  environment.systemPackages = [
+  environment.systemPackages = lib.optional (ompPackage != null) ompPackage ++ [
     asAlice
     python
     pkgs.curl
