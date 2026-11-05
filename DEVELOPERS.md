@@ -243,6 +243,11 @@ Yukimi and Sukumo dependencies. Public executable targets include their runtime
 files and paired compositor logic library; `NAME__bin` selects the raw executable
 when inspecting bytes. `nix run .#sekka-bazel -- build` and `nix develop .#bazel`
 use the same pinned toolchains. `--workspace CHECKOUT` selects another checkout.
+Crate-universe repository evaluation also uses the root-pinned Cargo and rustc
+through `host_tools`; registering compiler action toolchains alone does not
+control repository subprocesses. Changing that tool version can legitimately
+change the generated crate-universe checksum without changing Cargo.lock or
+dependency versions; regenerate rather than bypassing the checksum.
 
 Cargo manifests and `desktop/aizome/Cargo.lock` remain authoritative. After a
 manifest, lock, feature or crate-annotation change, run
@@ -276,11 +281,14 @@ nix build .#checks.x86_64-linux.build-input-stability --no-update-lock-file
 Warm frontend execution is deliberately outside Nix evaluation. On
 `wx-workstation`, execution tracing of five real no-op theme builds found
 zero Nix invocations for either frontend. Traced Bazel runs took
-1.19–1.28 seconds; Buck2 runs took 0.44–0.49 seconds. Initial client rooting
-from already-realized store closures took 4.90 and 2.37 seconds respectively;
-these are not cold toolchain-build timings. Source and generated-metadata
-edits preserved the client GC-root identity. Toolchain, native-input and
-lockfile changes still invalidate the relevant declared inputs.
+1.19–1.28 seconds; Buck2 runs took 0.45–0.56 seconds. Initial client rooting
+from already-realized store closures took 4.90 and 9.52 seconds respectively.
+The Buck2 trial used a fresh private XDG cache and included a real Git fetch
+during Nix evaluation; an earlier trial with different source-cache state took
+2.37 seconds. These are traced bootstrap measurements, not cold toolchain-build
+timings or the full-workspace benchmark. Source and generated-metadata edits
+preserved the client GC-root identity. Toolchain, native-input and lockfile
+changes still invalidate the relevant declared inputs.
 
 Full root-check evaluation remains substantially heavier than selecting a
 development client. Identical Tatami reference configurations are shared
@@ -356,6 +364,16 @@ NativeLink 1.8.3 deployment on `wx-workstation` over SSH. Provision once with
 and reader credentials and must remain mode 0600; never mount it into CI or
 commit it. `status`, `metrics`, `logs`, `restart` and `stop` operate only on
 that deployment. Publication workflows and host firewall policy are unchanged.
+
+On the deployment host, add global `--local` before the command to administer
+the same manifest directly, without SSH or agent forwarding. `inventory`
+discovers owned deployment data, container metadata/logs, referenced overlay
+snapshots and OCI image blobs without starting or mutating the service.
+Union those roots with workload/client state for physical extent accounting;
+shared image roots must be counted once. Retained native Nix closures are
+enumerated separately. Shared Docker/network/builder and Nix database metadata
+are explicitly outside exclusive attribution, not asserted to occupy zero
+space. Inventory discovers paths; it does not itself measure compressed bytes.
 
 The gateway binds host loopback. From another machine, forward it explicitly:
 
@@ -3116,10 +3134,12 @@ comes from `.#build-client-runner`: read-only store/root, UID 30500, no
 capabilities, no privilege escalation, 64 GiB memory, 32 CPUs, 32 GiB private
 home tmpfs and 8 GiB temporary tmpfs. Unlike the Nix pool, it has no daemon
 socket, shared GC roots, Git cache, Docker socket or host home mount.
-The main-owned helper copies the candidate source into private writable
-storage and runs the workspace build, portable test groups and compositor
-build-info check. Bazel uses standalone action execution inside this outer
-container; nested user namespaces are not required.
+Job containers use Docker's `--init` to reap orphaned application children;
+the runner listener is not a substitute for an init process. The main-owned
+helper copies the candidate source into private writable storage and runs the
+workspace build, nine portable test groups, Soroban's library and integration
+tests, and the compositor build-info check. Bazel uses standalone action
+execution inside this outer container; nested user namespaces are not required.
 
 Input preparation creates a run-and-attempt-specific consumer lease before
 releasing the retention lock. Count/low-space pruning preserves leased roots

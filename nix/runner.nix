@@ -198,6 +198,7 @@ let
         docker run --rm --name ${runnerName}-job \
           --env-file "$secrets/job.env" \
           ${lib.optionalString clientOnly ''--network "$build_network"''} \
+          ${lib.optionalString clientOnly "--init"} \
           --user ${toString uid}:${toString uid} \
           --cap-drop ALL \
           --security-opt no-new-privileges \
