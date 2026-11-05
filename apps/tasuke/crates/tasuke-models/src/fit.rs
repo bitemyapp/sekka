@@ -368,7 +368,7 @@ pub fn estimate_decode(entry: &Entry, fit: &Fit, hw: &Hardware, reference: &Refe
             let gpu_bw = gpu_bw(gpu)?;
             // Per token, the active share of the moved experts is read from RAM.
             let moved = expert_bytes.0 as f64 * f64::from(cpu_expert_layers.0) / f64::from(expert_layers.max(1));
-            let ram_bytes = moved * entry.architecture.active_fraction();
+            let ram_bytes = moved * entry.architecture.expert_read_fraction();
             let gpu_bytes = (active.0 as f64 - ram_bytes).max(0.0);
             let secs = gpu_bytes / (gpu_bw.0 * DECODE_EFFICIENCY) + ram_bytes / (ASSUMED_RAM_BANDWIDTH.0 * DECODE_EFFICIENCY);
             Some(TokensPerSecond((1.0 / secs) as f32))

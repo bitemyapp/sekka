@@ -162,10 +162,26 @@ pub enum Architecture {
         expert_layers: u32,
         #[serde(rename = "expert_mib", with = "mib")]
         expert_bytes: Bytes,
+        /// Experts per layer, and how many each token is routed to (the
+        /// GGUF's `expert_count` and `expert_used_count`): the share of the
+        /// experts' weights read per token. Without them the model's active
+        /// fraction stands in, which overstates it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        experts: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        experts_used: Option<u32>,
     },
 }
 
 impl Architecture {
+    /// The share of a mixture of experts' expert weights read per token.
+    pub fn expert_read_fraction(&self) -> f64 {
+        match *self {
+            Architecture::Moe { experts: Some(n), experts_used: Some(k), .. } if n > 0 => f64::from(k) / f64::from(n),
+            _ => self.active_fraction(),
+        }
+    }
+
     pub fn is_moe(&self) -> bool {
         matches!(self, Architecture::Moe { .. })
     }

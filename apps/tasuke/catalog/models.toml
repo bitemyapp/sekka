@@ -200,7 +200,7 @@ license = "Apache-2.0"
 quant = "MXFP4 (ggml-org)"
 roles = ["assistant", "fast"]
 evaluated = true
-architecture = { kind = "moe", total = 21, active = 3.6, expert_layers = 24, expert_mib = 10800 }
+architecture = { kind = "moe", total = 21, active = 3.6, expert_layers = 24, expert_mib = 10800, experts = 32, experts_used = 4 }
 context = { default = 65536, max = 131072, min = 32768 }
 kv = { per_token = 24576, swa_per_token = 24576, swa_window = 128 }
 compute_buffer_mib = 600
@@ -339,7 +339,7 @@ license = "Apache-2.0"
 quant = "Q4_0 QAT (Google)"
 roles = ["assistant", "desktop", "fast"]
 evaluated = true
-architecture = { kind = "moe", total = 26, active = 4, expert_layers = 30, expert_mib = 12000 }
+architecture = { kind = "moe", total = 26, active = 4, expert_layers = 30, expert_mib = 12000, experts = 128, experts_used = 8 }
 context = { default = 65536, max = 262144, min = 32768 }
 kv = { per_token = 65536, swa_per_token = 163840, swa_window = 1024 }
 compute_buffer_mib = 900
@@ -368,7 +368,7 @@ license_note = "Read the OpenMDW licence before shipping it."
 quant = "Q4_0 (ggml-org)"
 roles = ["assistant", "fast"]
 evaluated = true
-architecture = { kind = "moe", total = 30, active = 3, expert_layers = 23, expert_mib = 16000 }
+architecture = { kind = "moe", total = 30, active = 3, expert_layers = 23, expert_mib = 16000, experts = 128, experts_used = 6 }
 context = { default = 65536, max = 262144, min = 32768 }
 kv = { per_token = 12288, recurrent_mib = 50 }
 compute_buffer_mib = 700
@@ -393,7 +393,7 @@ license_note = "Commercial use by companies above $10M revenue is restricted."
 quant = "Q4_K_M (Liquid AI)"
 roles = ["assistant", "fast"]
 evaluated = true
-architecture = { kind = "moe", total = 24, active = 2, expert_layers = 26, expert_mib = 12500 }
+architecture = { kind = "moe", total = 24, active = 2, expert_layers = 26, expert_mib = 12500, experts = 64, experts_used = 4 }
 context = { default = 65536, max = 131072, min = 32768 }
 kv = { per_token = 16384, recurrent_mib = 10 }
 compute_buffer_mib = 600
