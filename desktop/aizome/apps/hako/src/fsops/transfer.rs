@@ -2,6 +2,10 @@
 //! (trashing, restoring, deleting from it): see the module above for the
 //! rules they keep.
 
+// Typestate code: every state and every case is named, so a new one
+// added later can't fall into an arm written for others.
+#![deny(clippy::wildcard_enum_match_arm)]
+
 use std::ffi::OsStr;
 use std::fs::{self, File, FileTimes, OpenOptions};
 use std::io;
@@ -341,7 +345,7 @@ impl Worker<'_, '_> {
         let Some(dir) = target.parent() else { return false };
         match (sys::device(source), fs::metadata(dir)) {
             (Ok(a), Ok(b)) => a == b.dev(),
-            _ => false,
+            (Err(_), _) | (_, Err(_)) => false,
         }
     }
 
