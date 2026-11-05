@@ -86,6 +86,7 @@ fn a_mirror_shows_its_source_scaled_to_fit() {
         window: None,
         area: None,
         clipboard: false,
+        quiet: false,
     });
     let img = Image::load(&path);
     keep(&img, "displays-mirror");

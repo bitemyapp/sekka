@@ -39,7 +39,7 @@ impl State {
                 let pid = crate::session::spawn(&self.az, &argv, cwd)?;
                 Response::Spawned { pid }
             }
-            Request::Screenshot { output, path, window, area, clipboard } => {
+            Request::Screenshot { output, path, window, area, clipboard, quiet } => {
                 use crate::screenshot::What;
                 let what = if let Some(id) = window {
                     if !self.az.windows.contains_key(&id) {
@@ -58,7 +58,7 @@ impl State {
                 } else {
                     What::Screen
                 };
-                let path = crate::screenshot::take(self, what, path.map(std::path::PathBuf::from), clipboard)?;
+                let path = crate::screenshot::take_with(self, what, path.map(std::path::PathBuf::from), clipboard, !quiet)?;
                 Response::Screenshot { path: path.to_string_lossy().into_owned() }
             }
             Request::ReloadConfig => {
