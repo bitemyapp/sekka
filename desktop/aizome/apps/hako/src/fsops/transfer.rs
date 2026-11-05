@@ -11,10 +11,10 @@ use std::path::{Path, PathBuf};
 use super::delete;
 use super::names;
 use super::place::{self, Copied, InPlace, Unsynced};
-use super::replace::{Displaced, NotSetAside, Occupant, Replaced, SetAside};
+use super::replace::{self, Answer, NotSetAside, Occupant, Replaced, SetAside};
 use super::sys;
 use super::trash::{self, Trash};
-use super::{Cancelled, Conflict, Env, ErrorChoice, Failure, Report, Resolution, is_within};
+use super::{Cancelled, Conflict, Env, ErrorChoice, Failure, Report, is_within};
 
 /// Copy, or move.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -31,19 +31,36 @@ pub struct Item {
 }
 
 /// Copy or move `sources` into the folder `dest`, each under its own
-/// name. Replaced items go as `displaced` says, once their replacements
-/// are in place.
-pub fn transfer(sources: &[PathBuf], dest: &Path, mode: Mode, env: &mut Env, displaced: Displaced) -> Report {
+/// name. Replaced items go to `trash`, once their replacements are in
+/// place. No caller can have them deleted instead:
+///
+/// ```compile_fail,E0432
+/// // What the bug amounted to, as a choice: delete what's replaced.
+/// use hako::fsops::replace::Displaced;
+/// use hako::fsops::transfer::{Mode, transfer};
+/// fn put_back_like(sources: &[std::path::PathBuf], dest: &std::path::Path, env: &mut hako::fsops::Env) {
+///     let _ = transfer(sources, dest, Mode::Move, env, Displaced::DeleteForGood);
+/// }
+/// ```
+///
+/// ```
+/// use hako::fsops::transfer::{Mode, transfer};
+/// use hako::fsops::trash::Trash;
+/// fn put_back_like(sources: &[std::path::PathBuf], dest: &std::path::Path, env: &mut hako::fsops::Env, trash: &Trash) {
+///     let _ = transfer(sources, dest, Mode::Move, env, trash);
+/// }
+/// ```
+pub fn transfer(sources: &[PathBuf], dest: &Path, mode: Mode, env: &mut Env, trash: &Trash) -> Report {
     let items: Vec<Item> = sources
         .iter()
         .map(|s| Item { source: s.clone(), target: dest.join(s.file_name().unwrap_or(OsStr::new("item"))) })
         .collect();
-    transfer_items(&items, mode, env, displaced)
+    transfer_items(&items, mode, env, trash)
 }
 
 /// Copy each of `sources` beside itself, as "name copy" (free, unless
 /// another program takes the name meanwhile).
-pub fn duplicate(sources: &[PathBuf], env: &mut Env, displaced: Displaced) -> Report {
+pub fn duplicate(sources: &[PathBuf], env: &mut Env, trash: &Trash) -> Report {
     let items: Vec<Item> = sources
         .iter()
         .filter_map(|s| {
@@ -52,13 +69,13 @@ pub fn duplicate(sources: &[PathBuf], env: &mut Env, displaced: Displaced) -> Re
             Some(Item { source: s.clone(), target: dir.join(names::duplicate_name(dir, s.file_name()?, is_dir)) })
         })
         .collect();
-    transfer_items(&items, Mode::Copy, env, displaced)
+    transfer_items(&items, Mode::Copy, env, trash)
 }
 
 /// Copy or move each item to its target.
-pub fn transfer_items(items: &[Item], mode: Mode, env: &mut Env, displaced: Displaced) -> Report {
+pub fn transfer_items(items: &[Item], mode: Mode, env: &mut Env, trash: &Trash) -> Report {
     let mut report = Report::default();
-    let mut w = Worker { env, mode, displaced, problems: Vec::new() };
+    let mut w = Worker { env, mode, trash, problems: Vec::new() };
     if w.count(items).is_err() {
         report.cancelled = true;
         return report;
@@ -142,7 +159,7 @@ pub fn restore(entries: &[trash::Entry], trash: &Trash, env: &mut Env) -> Report
             None => report.failed.push((e.file.clone(), "where it came from isn't known".into())),
         }
     }
-    let mut w = Worker { env, mode: Mode::Move, displaced: Displaced::ToTrash(trash), problems: Vec::new() };
+    let mut w = Worker { env, mode: Mode::Move, trash, problems: Vec::new() };
     let plain: Vec<Item> = items.iter().map(|(_, i)| i.clone()).collect();
     if w.count(&plain).is_err() {
         report.cancelled = true;
@@ -264,8 +281,8 @@ type Step<T> = Result<T, Stop>;
 struct Worker<'x, 'a> {
     env: &'x mut Env<'a>,
     mode: Mode,
-    /// What becomes of the items replacements displace.
-    displaced: Displaced<'x>,
+    /// Where the items replacements displace go.
+    trash: &'x Trash,
     problems: Vec<(PathBuf, String)>,
 }
 
@@ -387,22 +404,22 @@ impl Worker<'_, '_> {
                     source_modified: smeta.modified().ok(),
                     target_modified: tmeta.modified().ok(),
                 };
-                match self.env.asker.conflict(&conflict) {
-                    Resolution::Skip => return Ok(Placed::Skipped),
-                    Resolution::Cancel => return Err(Stop::Cancel),
-                    Resolution::KeepBoth => {
+                match replace::ask(&mut *self.env.asker, &conflict, &tmeta) {
+                    Answer::Skip => return Ok(Placed::Skipped),
+                    Answer::Cancel => return Err(Stop::Cancel),
+                    Answer::KeepBoth => {
                         target =
                             dest.join(names::free_name(&dest, target.file_name().unwrap_or_default(), smeta.is_dir()));
                     }
-                    Resolution::Merge if conflict.can_merge() => {
+                    Answer::Merge => {
                         self.merge(source, &target)?;
                         return Ok(Placed::Done(target));
                     }
-                    Resolution::Replace | Resolution::Merge => {
+                    Answer::Replace(o) => {
                         if is_within(&src_n, &target) {
                             return Err(Stop::Skip("it can't replace a folder it's inside".into()));
                         }
-                        occupant = Some(Occupant::seen(&target, &tmeta));
+                        occupant = Some(o);
                     }
                 }
             }
@@ -413,8 +430,16 @@ impl Worker<'_, '_> {
         };
         match self.place(source, &target, &smeta) {
             Ok(placed) => {
-                if let Some(aside) = aside {
-                    self.dispose(aside.replaced(placed));
+                match aside.map(|a| a.replaced(placed)) {
+                    Some(Ok(replaced)) => self.dispose(replaced),
+                    // Placed elsewhere than the item it was to replace
+                    // (which doesn't happen): that one goes back.
+                    Some(Err(aside)) => {
+                        if let Err(stranded) = aside.put_back() {
+                            self.problems.push(stranded.problem());
+                        }
+                    }
+                    None => {}
                 }
                 Ok(Placed::Done(target))
             }
@@ -451,9 +476,9 @@ impl Worker<'_, '_> {
         }
     }
 
-    /// A replaced item goes as the operation decided.
+    /// A replaced item goes to the Trash.
     fn dispose(&mut self, replaced: Replaced) {
-        if let Err(kept) = replaced.dispose(self.displaced) {
+        if let Err(kept) = replaced.dispose(self.trash) {
             self.problems.push(kept.problem());
         }
     }
@@ -705,7 +730,7 @@ impl Worker<'_, '_> {
 mod tests {
     use super::*;
     use crate::fsops::testing::{TempDir, is_root, read};
-    use crate::fsops::{Always, Control, Progress};
+    use crate::fsops::{Always, Control, Progress, Resolution};
     use std::collections::VecDeque;
 
     /// Answers from a script, and remembers what it was asked.
@@ -728,12 +753,18 @@ mod tests {
         }
     }
 
+    /// A Trash inside `t` (no mount points looked at).
+    fn sandbox_trash(t: &TempDir) -> Trash {
+        Trash { home: t.join("Trash"), home_dir: Some(t.join("home")), uid: sys::uid(), topdirs: Some(Vec::new()) }
+    }
+
     fn run(sources: &[PathBuf], dest: &Path, mode: Mode, asker: &mut dyn crate::fsops::Asker) -> Report {
         let control = Control::new();
         let mut last = Progress::default();
         let mut reporter = |p: &Progress| last = p.clone();
         let mut env = Env::new(&control, asker, &mut reporter);
-        transfer(sources, dest, mode, &mut env, Displaced::DeleteForGood)
+        let trash = TempDir::new("trash");
+        transfer(sources, dest, mode, &mut env, &sandbox_trash(&trash))
     }
 
     fn quiet(sources: &[PathBuf], dest: &Path, mode: Mode) -> Report {
@@ -790,7 +821,7 @@ mod tests {
         let r = duplicate(
             std::slice::from_ref(&f),
             &mut Env::new(&Control::new(), &mut Always(Resolution::Cancel, ErrorChoice::Cancel), &mut ()),
-            Displaced::DeleteForGood,
+            &sandbox_trash(&t),
         );
         assert_eq!(r.done, vec![(f, t.join("doc copy 2.txt"))]);
     }
@@ -870,8 +901,7 @@ mod tests {
         let mut asker = Always(Resolution::Replace, ErrorChoice::Cancel);
         let mut quiet = ();
         let mut env = Env::new(&control, &mut asker, &mut quiet);
-        let r =
-            transfer(&[src.parent().unwrap().to_path_buf()], &dest, Mode::Copy, &mut env, Displaced::ToTrash(&trash));
+        let r = transfer(&[src.parent().unwrap().to_path_buf()], &dest, Mode::Copy, &mut env, &trash);
         assert!(r.is_clean(), "{r:?}");
         assert_eq!(read(dest.join("folder/new.txt")), "new");
         assert!(!dest.join("folder/old-only.txt").exists(), "a folder replaced is replaced, not merged");
@@ -899,15 +929,14 @@ mod tests {
         let mut asker = Always(Resolution::Replace, ErrorChoice::Cancel);
         let mut quiet = ();
         let mut env = Env::new(&control, &mut asker, &mut quiet);
-        let r = transfer(std::slice::from_ref(&a), &dest, Mode::Copy, &mut env, Displaced::ToTrash(&trash));
+        let r = transfer(std::slice::from_ref(&a), &dest, Mode::Copy, &mut env, &trash);
         assert_eq!(r.done, vec![(a, dest.join("a.txt"))]);
         assert_eq!(read(dest.join("a.txt")), "new a");
         assert_eq!(r.problems.len(), 1, "{r:?}");
-        assert!(r.problems[0].1.contains("kept as") && r.problems[0].1.contains("Trash"), "{r:?}");
-        let kept: Vec<_> =
-            fs::read_dir(&dest).unwrap().flatten().filter(|e| names::is_temporary(&e.file_name())).collect();
-        assert_eq!(kept.len(), 1, "the old item is kept, not deleted");
-        assert_eq!(read(kept[0].path()), "old a");
+        assert!(r.problems[0].1.contains("kept beside it as “a (replaced).txt”"), "{r:?}");
+        assert!(r.problems[0].1.contains("Trash"), "{r:?}");
+        assert_eq!(read(dest.join("a (replaced).txt")), "old a", "the old item is kept, where it can be seen");
+        no_temporaries(&dest);
     }
 
     #[test]
@@ -1051,7 +1080,7 @@ mod tests {
             }
         };
         let mut env = Env::new(&control, &mut asker, &mut reporter);
-        let r = transfer(std::slice::from_ref(&big), &dest, Mode::Copy, &mut env, Displaced::DeleteForGood);
+        let r = transfer(std::slice::from_ref(&big), &dest, Mode::Copy, &mut env, &sandbox_trash(&t));
         assert!(r.cancelled);
         assert_eq!(fs::read_dir(&dest).unwrap().count(), 0, "the partial file is gone");
         assert!(big.exists(), "the source stays");
@@ -1082,7 +1111,7 @@ mod tests {
         let mut seen = Vec::new();
         let mut reporter = |p: &Progress| seen.push(p.clone());
         let mut env = Env::new(&control, &mut asker, &mut reporter);
-        transfer(&[src], &t.dir("dest"), Mode::Copy, &mut env, Displaced::DeleteForGood);
+        transfer(&[src], &t.dir("dest"), Mode::Copy, &mut env, &sandbox_trash(&t));
         let last = seen.last().unwrap();
         assert_eq!(last.bytes_total, 5 + 5 + 7);
         assert_eq!(last.bytes_done, last.bytes_total);
