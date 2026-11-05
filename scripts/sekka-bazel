@@ -12,6 +12,7 @@ inputs=(
   nix/libsecret-dh-padding.nix nix/patches/libsecret-gnutls-dh-padding.patch
   desktop/aizome/nix/fonts.nix desktop/aizome/nix/aizome-fonts.nix
   desktop/aizome/nix/hotaru-fonts.nix build/bazel/workflow.py
+  build/bazel/credential_helper.py
 )
 key=$(sha256sum "${inputs[@]}" | sha256sum)
 key=${key%% *}

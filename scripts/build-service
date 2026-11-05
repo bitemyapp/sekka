@@ -533,7 +533,9 @@ def main():
         token = d["token" if args.access == "writer" else "reader_token"]
         if args.format == "bazel":
             print(f'build --remote_cache={endpoint}\nbuild --remote_instance_name=sekka')
-            print('build "--remote_header=authorization=Bearer ' + token + '"')
+            # Bazel includes rc options in routine BEP and option-error output.
+            # A comment is private file data, never a native --remote_header.
+            print("# sekka-bazel-credential-v1 " + json.dumps({"endpoint": endpoint, "token": token}))
             if args.access == "read-only":
                 print("build --remote_upload_local_results=false")
         elif args.format == "buck2":
