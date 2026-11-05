@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![forbid(unsafe_code)]
 //! Genkan's window, on Aizome's kit. The kit owns the window and its
 //! widgets; disk discovery, validation, Wi-Fi snapshots, page cache warming,
 //! authorization and installation run on worker threads that answer with

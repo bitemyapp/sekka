@@ -61,9 +61,33 @@ let
       # The installer runs programs only through its library, which names
       # them; rust/clippy.toml denies the other ways to start one. Only that
       # lint fails the build, so a toolchain's new lints don't.
+      #
+      # Unsafe code and that ban may be allowed only where the crate says:
+      # unsafe_code in sys.rs (system calls) and wifi/nm.rs (libnm's FFI),
+      # the ban in process.rs (where programs start). The check takes every
+      # line under src/ that names either lint outside a // comment (any
+      # attribute, cfg_attr or multi-line one included), drops its line
+      # number, and fails unless the sorted lines are exactly these.
       preCheck = ''
         cargo clippy --offline --locked --all-targets -- \
           -A clippy::all -D clippy::disallowed_methods
+        found=$(grep -rnE --include='*.rs' '(unsafe_code|disallowed_methods)' src \
+          | grep -vE '^[^:]+:[0-9]+:\s*//' | sed -E 's/:[0-9]+:\s*/: /' | sort)
+        expected=$(printf '%s\n' \
+          'src/helper.rs: #![forbid(clippy::disallowed_methods)]' \
+          'src/helper.rs: #![forbid(unsafe_code)]' \
+          'src/lib.rs: #![deny(clippy::disallowed_methods)]' \
+          'src/lib.rs: #![deny(unsafe_code)]' \
+          'src/process.rs: #[allow(clippy::disallowed_methods)]' \
+          'src/process.rs: #[allow(clippy::disallowed_methods)]' \
+          'src/process.rs: #[allow(clippy::disallowed_methods)]' \
+          'src/sys.rs: #![allow(unsafe_code)]' \
+          'src/wifi/nm.rs: #![allow(unsafe_code)]' | sort)
+        if [ "$found" != "$expected" ]; then
+          echo "unsafe_code or the program ban is allowed where it may not be:"
+          diff <(echo "$expected") <(echo "$found") || true
+          exit 1
+        fi
       '';
       buildInputs = [
         pkgs.glib

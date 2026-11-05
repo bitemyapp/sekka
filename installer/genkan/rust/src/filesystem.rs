@@ -664,10 +664,7 @@ mod tests {
     #[test]
     #[ignore = "requires Linux root, loop devices and filesystem tools"]
     fn real_reformat_mount_matrix() -> Result<()> {
-        ensure!(
-            unsafe { libc::geteuid() } == 0,
-            "Needs disposable Linux root"
-        );
+        ensure!(crate::sys::is_root(), "Needs disposable Linux root");
         struct Image {
             device: String,
             dir: std::path::PathBuf,

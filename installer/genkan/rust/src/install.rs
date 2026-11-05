@@ -23,7 +23,7 @@ use std::{
     cell::Cell,
     fs,
     io::Write,
-    os::{fd::AsRawFd, unix::fs::PermissionsExt},
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     sync::Mutex,
     thread,
@@ -194,7 +194,7 @@ fn ram_live_guard() -> Result<()> {
 
 pub fn live_guard(settings: &Settings) -> Result<()> {
     ensure!(
-        unsafe { libc::geteuid() } == 0,
+        crate::sys::is_root(),
         "The install helper requires root (use the GUI's authorization dialog)"
     );
     ensure!(
@@ -354,7 +354,7 @@ fn installer_lock() -> Result<fs::File> {
         .open("/run/calamares-nixos.lock")?;
     // A preparation the GUI just withdrew may still be exiting.
     let deadline = Instant::now() + Duration::from_secs(30);
-    while unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
+    while !crate::sys::try_lock_exclusive(&lock) {
         ensure!(
             Instant::now() < deadline,
             "Another installation is already running"
