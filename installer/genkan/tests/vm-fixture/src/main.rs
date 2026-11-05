@@ -913,14 +913,14 @@ fn main() -> Result<()> {
                     "zswap is not enabled"
                 );
                 ensure!(
-                    fs::read_to_string("/proc/sys/vm/swappiness")?.trim() == "100",
-                    "Swappiness is not 100"
+                    fs::read_to_string("/proc/sys/vm/swappiness")?.trim() == "60",
+                    "Swappiness is not 60"
                 );
                 ensure!(
                     fs::read_to_string("/proc/cmdline")?.contains("resume="),
                     "Hibernation resume device missing"
                 );
-                println!("SWAP=partition,{size},zswap,swappiness=100,resume");
+                println!("SWAP=partition,{size},zswap,swappiness=60,resume");
             }
             // The helper leaves its stage timings for hardware measurements.
             let record: serde_json::Value =

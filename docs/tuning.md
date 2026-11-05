@@ -23,9 +23,19 @@ erasure and verified from its header. The installed configuration contains:
   compressed pages in RAM and writes cold ones to the partition. nixpkgs'
   `boot.zswap` module is deliberately not used: it also sets `zswap.zpool`,
   which Linux 6.18 removed.
-- `vm.swappiness = 100`, the CachyOS value. Swapping first lands in
-  compressed memory, so anonymous memory is reclaimed as readily as file
-  cache.
+- `vm.swappiness = 60`, the kernel default rather than CachyOS's 100. Under
+  sustained pressure, zswap's shrinker writes most swapped pages out to the
+  partition, so anonymous memory is no cheaper to reclaim than file cache.
+  On a workstation with 60 GiB of usable RAM running heavy agent workloads,
+  two days of swap wrote 211 GiB to the partition and read 113 GiB back,
+  while the compressed pool held about 1 GiB. 65% of swapped pages were
+  needed again, against 11% of evicted file cache, and at one point about
+  16 GiB of anonymous memory sat only on disk beside 18 GiB of page cache. At 60, reclaim drops cache before it
+  swaps. Much lower values strip programs' code from memory before anything
+  is swapped, and at 1 or below the kernel reclaims file pages alone. With
+  the desktop's own services protected (see
+  [Keeping the desktop resident](#keeping-the-desktop-resident)), swappiness
+  decides only which applications' pages pay.
 - `vm.page-cluster = 1`. CachyOS uses 0 for zram. Pages that zswap writes back
   live on an SSD, where a small readahead still helps.
 

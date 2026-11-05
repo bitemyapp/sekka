@@ -56,9 +56,13 @@ in
         "zswap.shrinker_enabled=1"
       ];
       boot.kernel.sysctl = {
-        # Swapping first lands in compressed RAM, so reclaim anonymous memory
-        # as readily as file cache (CachyOS: 100).
-        "vm.swappiness" = 100;
+        # The kernel's default, not CachyOS's 100: under sustained pressure
+        # zswap's shrinker writes most swapped pages to the partition, so
+        # anonymous memory is no cheaper to reclaim than file cache (on a
+        # workstation under agent workloads, 65% of swapped pages were needed
+        # again, against 11% of evicted file cache). Much lower values strip
+        # programs' code from memory before anything is swapped.
+        "vm.swappiness" = 60;
         # CachyOS uses 0 for zram. Pages written back by zswap live on an SSD,
         # where small readahead still helps.
         "vm.page-cluster" = 1;
