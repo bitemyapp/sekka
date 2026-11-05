@@ -146,6 +146,7 @@
         tatami = inputs.tatami.nixosModules.default;
         yukimi = inputs.yukimi.nixosModules.default;
         aizome = inputs.aizome.nixosModules.default;
+        tasuke = inputs.tasuke.nixosModules.default;
       };
       lib = {
         inherit installedLock;
@@ -260,6 +261,7 @@
           wallpapers
           ;
         inherit (inputs.yukimi.packages.${system}) yukimi;
+        inherit (inputs.tasuke.packages.${system}) tasuke;
         installed-lock = pkgs.writeText "sekka-installed-flake.lock" (builtins.toJSON installedLock);
         # An installed system for every desktop the media offers, one with all
         # of those desktops together, and one with every free application in
@@ -845,6 +847,15 @@
               touch $out
             '';
         yukimi = self.packages.${system}.yukimi;
+        # Tasuke: its tests (in the build), and its module, helper, polkit
+        # action, model server unit and `tasuke ask` in a VM with a scripted
+        # model (apps/tasuke/nix/vm-test.nix).
+        tasuke = self.packages.${system}.tasuke;
+        tasuke-vm = import ./apps/tasuke/nix/vm-test.nix {
+          inherit pkgs;
+          inherit (self.packages.${system}) tasuke;
+          tasukeModule = inputs.tasuke.nixosModules.default;
+        };
         yukimi-tatami = self.packages.${system}.yukimi-discover;
         yukimi-x11 = import ./nix/yukimi-x11-test.nix {
           inherit pkgs;

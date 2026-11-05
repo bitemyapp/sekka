@@ -94,10 +94,16 @@ impl std::error::Error for RootError {}
 
 /// The installed `tasuke-helper`: `$TASUKE_HELPER`, else the program the
 /// polkit action names (pkexec only accepts that exact path), else the one
-/// beside this program (`../libexec/tasuke-helper`).
+/// the package was built with (`$TASUKE_HELPER_PATH` at build time, the
+/// same path), else the one beside this program (`../libexec/tasuke-helper`).
 pub fn find_helper() -> Option<PathBuf> {
-    if let Some(p) = std::env::var_os("TASUKE_HELPER") {
+    if let Some(p) = std::env::var_os("TASUKE_HELPER").filter(|v| !v.is_empty()) {
         return Some(PathBuf::from(p));
+    }
+    if let Some(p) = option_env!("TASUKE_HELPER_PATH").map(PathBuf::from)
+        && p.is_file()
+    {
+        return Some(p);
     }
     let dirs = ACTION_DIRS.map(Path::new);
     for dir in dirs {

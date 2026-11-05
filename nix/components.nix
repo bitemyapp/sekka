@@ -35,6 +35,13 @@ rec {
       nativeYukimi = aizome.packages.${system}.aizome.yukimi;
     };
   };
+  # Tasuke, the local assistant: its command, root helper and model server.
+  # Its window is Aizome's.
+  tasuke = {
+    outPath = ../apps/tasuke;
+    nixosModules.default = import ../apps/tasuke/nix/module.nix tasuke;
+    packages.${system}.tasuke = pkgs.callPackage ../apps/tasuke/nix/package.nix { };
+  };
   kakehashi = {
     outPath = ../apps/kakehashi;
     packages.${system}.kakehashi = (import ./kakehashi.nix { inherit pkgs; }).package;
