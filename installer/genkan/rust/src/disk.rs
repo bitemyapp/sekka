@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     fs,
-    os::unix::fs::{FileTypeExt, MetadataExt},
+    os::{
+        fd::AsRawFd,
+        unix::fs::{FileTypeExt, MetadataExt},
+    },
     path::Path,
 };
 
@@ -259,6 +262,28 @@ impl Reviewed {
         self.0.target()
     }
 
+    /// Locks the reviewed disk for its first writes: opens it by the reviewed
+    /// path, takes the partition-table lock, reads it again, and checks that
+    /// the locked node is the confirmed disk. Only this makes the [`Locked`]
+    /// disk the writes take, so they can't act on a proof made earlier.
+    pub fn lock(&self) -> Result<Locked> {
+        let device = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&self.identity().path)?;
+        ensure!(
+            unsafe { libc::flock(device.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0,
+            "Disk is locked by another installer"
+        );
+        let disk = self.revalidate()?;
+        let rdev = device_number(&device.metadata()?);
+        ensure!(
+            format!("{}:{}", libc::major(rdev), libc::minor(rdev)) == disk.identity().major_minor,
+            "The locked device is not the confirmed disk"
+        );
+        Ok(Locked { device, disk })
+    }
+
     /// Reads the reviewed disk again and checks it's the same disk and
     /// still usable.
     pub fn revalidate(&self) -> Result<Confirmed> {
@@ -352,20 +377,40 @@ impl Confirmed {
         Self::usable(now)
     }
 
-    /// Checks that `device`, opened (and locked) by the reviewed path, is
-    /// this disk's node: the path can't have changed hands in between.
-    pub(crate) fn holds(&self, device: &fs::File) -> Result<()> {
-        let rdev = device_number(&device.metadata()?);
-        ensure!(
-            format!("{}:{}", libc::major(rdev), libc::minor(rdev)) == self.identity().major_minor,
-            "The locked device is not the confirmed disk"
-        );
-        Ok(())
-    }
-
     /// Partition `index` of this disk.
     pub fn partition(&self, index: u8) -> Device {
         Device(partition(self.path(), index))
+    }
+}
+
+/// The confirmed disk, opened and holding the partition-table lock, read
+/// again after the lock was taken: what the first writes take. Only
+/// [`Reviewed::lock`] makes one.
+#[derive(Debug)]
+pub struct Locked {
+    device: fs::File,
+    disk: Confirmed,
+}
+
+impl Locked {
+    pub fn disk(&self) -> &Confirmed {
+        &self.disk
+    }
+
+    /// Reads the disk alone again while it's locked, after a write.
+    pub fn recheck(self, mappings: &[String]) -> Result<Locked> {
+        let Locked { device, disk } = self;
+        Ok(Locked {
+            device,
+            disk: disk.recheck(mappings)?,
+        })
+    }
+
+    /// Flushes and releases the lock (udev holds back its events for a
+    /// locked disk): the confirmed disk, for what follows.
+    pub fn release(self) -> Result<Confirmed> {
+        self.device.sync_all()?;
+        Ok(self.disk)
     }
 }
 
@@ -392,9 +437,11 @@ impl Device {
 }
 
 impl Layout {
-    /// Erases the confirmed disk's signatures and writes this layout's GPT,
+    /// Erases the locked disk's signatures and writes this layout's GPT,
     /// then has the kernel read it. The first writes of an installation:
-    /// they take the proof, so they can't erase a disk named any other way.
+    /// they take the disk locked and confirmed just now ([`Locked`]), so they
+    /// can't erase a disk named any other way, nor reuse a proof made before
+    /// the lock:
     ///
     /// ```compile_fail,E0308
     /// use calamares_nixos::{Filesystem, Firmware, InstallPlan, disk::Layout};
@@ -403,19 +450,28 @@ impl Layout {
     /// }
     /// ```
     ///
+    /// ```compile_fail,E0308
+    /// use calamares_nixos::{Filesystem, Firmware, disk::{Layout, Reviewed}};
+    /// fn erase(reviewed: &Reviewed, layout: &Layout) -> anyhow::Result<()> {
+    ///     // Confirmed at review, without the lock, then written to later.
+    ///     let confirmed = reviewed.revalidate()?;
+    ///     layout.write(&confirmed, Firmware::Uefi, Filesystem::Ext4)
+    /// }
+    /// ```
+    ///
     /// ```
     /// use calamares_nixos::{Filesystem, Firmware, InstallPlan, disk::{Layout, Reviewed}};
     /// fn erase(plan: &InstallPlan, layout: &Layout) -> anyhow::Result<()> {
-    ///     layout.write(&Reviewed::of(plan).revalidate()?, Firmware::Uefi, Filesystem::Ext4)
+    ///     layout.write(&Reviewed::of(plan).lock()?, Firmware::Uefi, Filesystem::Ext4)
     /// }
     /// ```
     pub fn write(
         &self,
-        disk: &Confirmed,
+        disk: &Locked,
         firmware: crate::Firmware,
         filesystem: crate::Filesystem,
     ) -> Result<()> {
-        let dev = disk.path();
+        let dev = disk.disk().path();
         output(Program::WIPEFS, &["--all", "--force", dev], 60)?;
         let script = self.parted_script(firmware, filesystem.name());
         let mut args = vec!["--script", dev];

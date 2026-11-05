@@ -908,38 +908,22 @@ fn prepare_storage(
     mappings: &mut crate::encryption::Mappings,
 ) -> Result<()> {
     let firmware = request.firmware();
-    // Lock while editing the partition table. Re-read the disk's stable
-    // identity and its mount and holder state immediately before the first
-    // write; every write acts on the disk that confirmed, through the proof.
-    let mut device = Some(
-        fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&reviewed.identity().path)?,
-    );
-    ensure!(
-        unsafe {
-            libc::flock(
-                device.as_ref().unwrap().as_raw_fd(),
-                libc::LOCK_EX | libc::LOCK_NB,
-            )
-        } == 0,
-        "Disk is locked by another installer"
-    );
-    let disk = reviewed.revalidate()?;
-    disk.holds(device.as_ref().unwrap())?;
+    // Lock while editing the partition table. The lock re-reads the disk's
+    // stable identity and its mount and holder state immediately before the
+    // first write; every write acts on the locked disk, through the proof.
+    let locked = reviewed.lock()?;
     // For diagnostics and udev only: every write takes the proof.
-    let path = disk.path().to_owned();
+    let path = locked.disk().path().to_owned();
     let mount = target.0.to_str().context("Target path encoding")?;
     let storage = (|| -> Result<()> {
         progress(
             1,
             "Erasing the selected disk and creating a GPT partition table",
         );
-        layout.write(&disk, firmware, request.filesystem())?;
+        layout.write(&locked, firmware, request.filesystem())?;
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
-            match disk::verify_layout(disk.identity(), layout) {
+            match disk::verify_layout(locked.disk().identity(), layout) {
                 Ok(()) => break,
                 Err(error) if Instant::now() >= deadline => {
                     return Err(error.context("Kernel partition layout did not become ready"));
@@ -949,7 +933,8 @@ fn prepare_storage(
         }
         // From here the disk is half written: only the target is read again,
         // so another disk coming or going can't abandon it.
-        let disk = disk.recheck(&[])?;
+        let locked = locked.recheck(&[])?;
+        let disk = locked.disk();
         progress(2, "Formatting, verifying and mounting the new filesystems");
         let boot = disk.partition(1);
         let root = disk.partition(2);
@@ -988,9 +973,7 @@ fn prepare_storage(
         // triggering. A fresh explicit change event updates UUID/type
         // information, including events skipped while locked. Never rely on
         // pre-format udev/blkid caches.
-        if let Some(device) = device.take() {
-            device.sync_all()?;
-        }
+        let disk = locked.release()?;
         let mut changed = vec![
             "trigger",
             "--action=change",
@@ -1020,8 +1003,7 @@ fn prepare_storage(
         }
         Ok(())
     })();
-    // Also releases the lock if storage preparation failed while holding it.
-    drop(device);
+    // A failure while locked has released the lock with the Locked disk.
     storage.map_err(|error| filesystem::diagnose(error, &path))?;
     Ok(())
 }
