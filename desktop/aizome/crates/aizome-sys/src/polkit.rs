@@ -14,22 +14,26 @@
 //! ([`Said::Prompt`]), PAM's messages, and how each attempt ended. Each
 //! event names the conversation it's about, and the UI reads one only
 //! after [`AuthRequest::check`] proves it's about the latest
-//! ([`conversation::said`]); it answers a prompt with
-//! [`AuthRequest::respond`], which takes that prompt's [`Asked`]. When PAM
-//! succeeds the helper itself tells polkitd (`AuthenticationAgentResponse2`),
-//! prints `SUCCESS`, and the agent completes `BeginAuthentication`
-//! ([`AuthEvent::Done`]). Dismissing the dialog is [`AuthRequest::cancel`];
-//! polkitd's `CancelAuthentication` (the application gave up) ends it too.
+//! ([`conversation::said`]); it answers a prompt with [`Asked::answer`],
+//! which goes to the request and the prompt the `Asked` came from, as one
+//! line the helper reads whole. When PAM succeeds the helper itself tells
+//! polkitd (`AuthenticationAgentResponse2`), prints `SUCCESS`, and the agent
+//! completes `BeginAuthentication` ([`AuthEvent::Done`]). Dismissing the
+//! dialog is [`AuthRequest::cancel`]; polkitd's `CancelAuthentication` (the
+//! application gave up) ends it too.
 //!
-//! The agent starts the next attempt itself. After a refused answer
-//! (`FAILURE`) it starts at once ([`Said::Refused`]): the person types
-//! again. After an attempt that ended with no answer written (the helper
-//! couldn't be reached, or stopped or refused before anyone answered) it
-//! waits half a second, then a second ([`Said::Retrying`]); after a third
-//! it stops ([`Said::Unavailable`]) until the UI asks again, and every
-//! later start waits out a floor of up to four seconds. So no UI, however
-//! it answers events, makes the agent start helpers faster than that. The
-//! states and their proofs are in [`conversation`].
+//! The agent starts the next attempt itself, when its floor allows. Every
+//! attempt that ends without success, however it ended (a refused answer,
+//! the helper unreachable or stopping before anyone answered, a change of
+//! identity), delays the next one: half a second, then 1, 2 and 4 seconds.
+//! The floor is the agent's, shared by all its requests, and starts afresh
+//! only after a success or a minute without a failure. A refused answer
+//! starts the next attempt as soon as the floor allows ([`Said::Refused`]);
+//! after three attempts in a row with no answer written it stops
+//! ([`Said::Unavailable`]) until the UI asks again. So no UI, whether it
+//! answers prompts, asks again or switches identities on every event,
+//! makes the agent start helpers faster than one every four seconds once
+//! a few have failed. The states and their proofs are in [`conversation`].
 //!
 //! # The helper
 //!
@@ -60,9 +64,9 @@ use crate::bus::{Bus, Opts, value_u64, with_timeout};
 use crate::error::{Error, Result};
 use crate::oneshot;
 use crate::service::lock;
-use aizome_typestate::Fresh;
-pub use conversation::{Asked, Heard, RequestId, Said, Talk, said};
-use conversation::{ConvAny, Conversation, Converse, Ctx, Dialed, Due, Line, Reply, Then, Wake};
+
+pub use conversation::{Asked, Checked, Heard, MAX_ANSWER, RequestId, Said, Talk, Unsendable, Unsent, said};
+use conversation::{ConvAny, Conversation, Converse, Ctx, Dialed, Due, Line, Reply, SharedFloor, Then, Wake};
 use futures_lite::StreamExt;
 use std::collections::HashMap;
 use std::io::BufRead;
@@ -187,16 +191,8 @@ impl AuthRequest {
     /// The proof that `heard` is about this request's latest conversation,
     /// or the event back when it's another request's, or about one a newer
     /// conversation superseded. Read it with [`said`].
-    pub fn check(&self, heard: Heard) -> std::result::Result<Fresh<Talk, Heard>, Heard> {
+    pub fn check(&self, heard: Heard) -> std::result::Result<Checked, Heard> {
         lock(&self.session.inner).conversation.check_heard(heard)
-    }
-
-    /// Answer the prompt `asked`. The text is written to the helper only if
-    /// that prompt is still the one waiting, and the agent's copy is
-    /// overwritten.
-    pub fn respond(&self, asked: Asked, text: &str) {
-        let reply = Reply::new(asked, text);
-        self.session.step(move |state| (answer(state, reply), ()));
     }
 
     /// The person dismissed the dialog.
@@ -253,7 +249,7 @@ fn answer(state: ConvAny<'_>, reply: Reply) -> conversation::Step<'_> {
     let Ok(now) = state.check(reply) else { return (state, Then::Nothing) };
     let next = match state {
         ConvAny::Prompted(s) => match s.answer(now) {
-            Ok(checking) => checking.into(),
+            Ok((checking, answering)) => return (checking.into(), Then::Answer(answering)),
             Err(prompted) => prompted.into(),
         },
         // The conversation's ticket, but its prompt is answered already.
@@ -338,9 +334,9 @@ fn cancel(state: ConvAny<'_>) -> conversation::Step<'_> {
 impl Session {
     /// Runs one step of the conversation under its lock, then, with the lock
     /// released, tells the UI what it said and does the work it left
-    /// (starting a helper, a thread, a timer). Nothing waits on I/O under
-    /// the lock, and a proof the step checked ([`conversation::Now`]) can't
-    /// outlive it.
+    /// (starting a helper, writing an answer, a thread, a timer). Nothing
+    /// waits on I/O under the lock, and a proof the step checked
+    /// ([`conversation::Now`]) can't outlive it.
     fn step<R>(self: &Arc<Self>, f: impl for<'s> FnOnce(ConvAny<'s>) -> ((ConvAny<'s>, Then), R)) -> R {
         let (then, r) = lock(&self.inner).conversation.with_typed(|state| {
             let ((next, then), r) = f(state);
@@ -353,6 +349,11 @@ impl Session {
 
     fn cancel(self: &Arc<Self>) {
         self.step(|state| (cancel(state), ()));
+    }
+
+    /// An answer to one of this session's prompts ([`Asked::answer`]).
+    fn answer(self: &Arc<Self>, reply: Reply) {
+        self.step(move |state| (answer(state, reply), ()));
     }
 
     /// Hands the UI what the conversation said, in order, without the lock:
@@ -402,6 +403,7 @@ impl Session {
             Then::Wake(wake) => self.wake(wake),
             Then::Converse(conversation) => self.converse(conversation),
             Then::Abandon(dialed) => dialed.abandon(),
+            Then::Answer(answering) => answering.send(),
         }
     }
 
@@ -660,6 +662,8 @@ struct Agent {
     ui: Ui,
     helper: Helper,
     state: Arc<Mutex<AgentState>>,
+    /// When the next helper may start, for every request.
+    floor: SharedFloor,
 }
 
 #[derive(Default)]
@@ -718,13 +722,13 @@ impl Agent {
         }
         let (tx, rx) = oneshot::channel();
         let id = RequestId::next();
-        let session = Arc::new(Session {
+        let session = Arc::new_cyclic(|session| Session {
             cookie: cookie.clone(),
             id,
             ui: self.ui.clone(),
             helper: self.helper.clone(),
             inner: Mutex::new(SessionInner {
-                conversation: Conversation::new(Ctx::new(id, cookie.clone(), tx)),
+                conversation: Conversation::new(Ctx::new(id, cookie.clone(), tx, self.floor.clone(), session.clone())),
                 telling: false,
             }),
         });
@@ -892,7 +896,7 @@ fn serve(bus: &Bus, helper: Helper, ui: Ui) -> Result<(Arc<Mutex<AgentState>>, z
     ))
     .ok_or(Error::Timeout)??;
     let state = Arc::new(Mutex::new(AgentState::default()));
-    let agent = Agent { ui, helper, state: state.clone() };
+    let agent = Agent { ui, helper, state: state.clone(), floor: SharedFloor::default() };
     // ObjectServer::at atomically refuses an existing interface; a
     // second handle must never remove the first one's served object.
     if !zbus::block_on(bus.connection().object_server().at(AGENT_PATH, agent))? {

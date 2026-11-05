@@ -740,20 +740,25 @@ The polkit agent (`aizome-sys`) asks the shell: an overlay dialog with the
 mark, the action's message, the identity (a dropdown if several admins), a
 password field, Cancel and Authenticate, PAM's prompts and errors inline.
 
-The agent decides when an attempt starts, not the dialog. A refused
-password starts the next attempt at once ("That didn't work. Try
-again."). An attempt that ends before anyone answers (polkit's helper
-missing or refusing, PAM giving up before its prompt) is tried again after
-half a second, then a second ("Trying again…"); after a third the dialog
-says authentication isn't available and Authenticate becomes Try Again.
-From then on each attempt, whoever asks for it, waits out a floor of up to
-four seconds, so nothing can start polkit's root helper in a loop. A
-password submitted before the helper's first prompt answers that prompt
-(if it hides what's typed), and an answer goes only to the prompt it
-answers, once. Events from a conversation that a newer one replaced are
-dropped by both the agent and the dialog: their types need a proof, made
-by checking the event against the latest conversation, before they can
-apply one (`aizome-sys/src/polkit/conversation.rs`,
+The agent decides when an attempt starts, not the dialog. Every attempt
+that ends without success, however it ended (a refused password,
+polkit's helper missing or refusing, PAM giving up before its prompt, a
+change of identity), delays the next: half a second, then 1, 2 and 4
+seconds. The delay is the agent's, across all its requests, and starts
+afresh only after a success or a minute without a failure, so nothing,
+however it answers or asks again, can start polkit's root helper in a
+loop. A refused password shows "That didn't work. Try again."; an
+attempt that ends before anyone answers shows "Trying again…", and after
+a third in a row the dialog says authentication isn't available and
+Authenticate becomes Try Again. A password submitted before the helper's
+prompt answers that prompt (if it hides what's typed). An answer goes
+only to the prompt it answers, of the request it came from, once, and
+one with a line break, a NUL or over 510 bytes is refused in the dialog
+rather than split across prompts. Events from a conversation that a newer
+one replaced are dropped by both the agent and the dialog: their types
+need a proof, made by checking the event against the latest
+conversation, before they can apply one
+(`aizome-sys/src/polkit/conversation.rs`,
 `aizome-shell/src/auth/dialog.rs`). If the dialog's output goes, the
 dialog opens again on the focused screen, keeping what was typed; with no
 screen at all it waits for one.
