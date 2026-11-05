@@ -19,13 +19,13 @@ use gpui_kit::{
 };
 use kakehashi_core::choice::{DriveList, Listed, ListingTicket, ReviewedDrive};
 use kakehashi_core::image::{self, Cancelled};
+use kakehashi_core::job::{self, End, Event, Job, JobState, ProgressFile};
 use kakehashi_core::nightly::{self, Build, Fetch, NIGHTLY};
 use kakehashi_core::write::{Plan, Progress, TAIL};
 use kakehashi_core::{Drive, human, platform};
 use std::cell::Cell;
 use std::fs::{self, File};
-use std::io::{Read, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
@@ -42,9 +42,7 @@ enum Msg {
     Holds { path: PathBuf, drive: Option<String> },
     Fetch { id: String, fetch: Fetch },
     Fetched { id: String, result: Result<PathBuf, String> },
-    Authorizing,
-    Job(Progress),
-    JobEnded(Ran),
+    Job(Event),
 }
 
 enum Loading<T> {
@@ -89,24 +87,6 @@ struct Download {
     /// Bytes and time when downloading began, for the rate.
     from: Option<(u64, Instant)>,
     cancel: Arc<AtomicBool>,
-}
-
-enum Stage {
-    PreparingImage,
-    Authorizing,
-    Running(Progress),
-    Declined,
-}
-
-struct Job {
-    drive: Drive,
-    image: String,
-    stage: Stage,
-    /// The writing or verifying phase's start, for the rate.
-    phase: Option<(bool, u64, Instant)>,
-    cancel: PathBuf,
-    cancelling: bool,
-    ended: bool,
 }
 
 pub struct Kakehashi {
@@ -196,7 +176,7 @@ impl Kakehashi {
             self.apply(msg);
             changed = true;
         }
-        let busy = self.job.as_ref().is_some_and(|j| !j.ended);
+        let busy = self.job.as_ref().is_some_and(|j| !j.is_ended());
         if !busy {
             self.list_drives();
         }
@@ -267,42 +247,13 @@ impl Kakehashi {
                     }
                 }
             }
-            Msg::Authorizing => {
+            Msg::Job(event) => {
                 if let Some(job) = self.job.as_mut() {
-                    job.stage = Stage::Authorizing;
-                }
-            }
-            Msg::Job(progress) => {
-                if let Some(job) = self.job.as_mut() {
-                    match &progress {
-                        Progress::Writing { done, .. } | Progress::Verifying { done, .. } => {
-                            let verifying = matches!(progress, Progress::Verifying { .. });
-                            if job.phase.is_none_or(|(v, _, _)| v != verifying) {
-                                job.phase = Some((verifying, *done, Instant::now()));
-                            }
-                        }
-                        _ => {}
-                    }
-                    job.stage = Stage::Running(progress);
-                }
-            }
-            Msg::JobEnded(ran) => {
-                if let Some(job) = self.job.as_mut() {
-                    job.ended = true;
-                    let reported =
-                        matches!(job.stage, Stage::Running(Progress::Finished { .. } | Progress::Failed { .. }));
-                    if !reported {
-                        job.stage = match ran {
-                            Ran::Declined => Stage::Declined,
-                            Ran::Failed(message) => Stage::Running(Progress::Failed { message, touched: false }),
-                            Ran::Exited(code) => Stage::Running(Progress::Failed {
-                                message: format!("The helper stopped (code {code}) without saying why."),
-                                touched: !matches!(job.stage, Stage::PreparingImage | Stage::Authorizing),
-                            }),
-                        };
+                    job.handle(event, Instant::now());
+                    if job.is_ended() {
+                        self.drives.refresh_soon();
                     }
                 }
-                self.drives.refresh_soon();
             }
         }
     }
@@ -508,15 +459,7 @@ impl Kakehashi {
             }
         };
         let cancel = PathBuf::from(format!("{}.cancel", progress.display()));
-        self.job = Some(Job {
-            drive: plan.drive().clone(),
-            image: image.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
-            stage: Stage::PreparingImage,
-            phase: None,
-            cancel: cancel.clone(),
-            cancelling: false,
-            ended: false,
-        });
+        self.job = Some(Job::new(job::Write::new(&plan, cancel.clone())));
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             // The worker owns the staged image until the helper exits, then
@@ -541,24 +484,25 @@ impl Kakehashi {
                 } else {
                     format!("{e:#}")
                 };
-                let _ = tx.send(Msg::JobEnded(Ran::Failed(message)));
+                let _ = tx.send(Msg::Job(Event::NotStarted(message)));
                 return;
             }
             let helper = match elevate::helper_path() {
                 Ok(helper) => helper,
                 Err(e) => {
-                    let _ = tx.send(Msg::JobEnded(Ran::Failed(format!("could not find the helper: {e}"))));
+                    let _ = tx.send(Msg::Job(Event::NotStarted(format!("could not find the helper: {e}"))));
                     return;
                 }
             };
-            let _ = tx.send(Msg::Authorizing);
+            let _ = tx.send(Msg::Job(Event::Authorizing));
             let (p, q) = (plan_path.clone(), progress.clone());
             let runner = std::thread::spawn(move || elevate::run(&helper, &p, &q));
-            let mut offset = 0u64;
-            let mut pending = String::new();
+            let mut reports = ProgressFile::new(progress);
             loop {
                 let finished = runner.is_finished();
-                read_progress(&progress, &mut offset, &mut pending, &tx);
+                for report in reports.read() {
+                    let _ = tx.send(Msg::Job(Event::Report(report)));
+                }
                 if finished {
                     break;
                 }
@@ -566,33 +510,14 @@ impl Kakehashi {
             }
             let ran = runner.join().unwrap_or(Ran::Failed("the helper's thread failed".into()));
             drop(dir);
-            let _ = tx.send(Msg::JobEnded(ran));
+            // After the last of its lines: how it ended follows from them.
+            let _ = tx.send(Msg::Job(Event::Exited(ran)));
         });
     }
 
     fn cancel_write(&mut self) {
         if let Some(job) = self.job.as_mut() {
-            job.cancelling = true;
-            let _ = File::create(&job.cancel);
-        }
-    }
-}
-
-/// Send on whatever whole lines the helper appended since `offset`.
-fn read_progress(path: &Path, offset: &mut u64, pending: &mut String, tx: &mpsc::Sender<Msg>) {
-    let Ok(mut file) = File::open(path) else { return };
-    if file.seek(SeekFrom::Start(*offset)).is_err() {
-        return;
-    }
-    let mut new = String::new();
-    if let Ok(n) = file.read_to_string(&mut new) {
-        *offset += n as u64;
-        pending.push_str(&new);
-        while let Some(end) = pending.find('\n') {
-            let line: String = pending.drain(..=end).collect();
-            if let Ok(progress) = serde_json::from_str::<Progress>(line.trim()) {
-                let _ = tx.send(Msg::Job(progress));
-            }
+            job.stop();
         }
     }
 }
@@ -967,10 +892,43 @@ impl Kakehashi {
     fn render_job(&self, cx: &mut Context<Self>) -> AnyElement {
         let theme = cx.theme().clone();
         let Some(job) = &self.job else { return div().into_any_element() };
-        let mut s = section(&format!("Writing {} to {}", job.image, job.drive.label()), cx);
-        let running = !job.ended;
-        match &job.stage {
-            Stage::PreparingImage => {
+        let write = job.ctx();
+        let mut s = section(&format!("Writing {} to {}", write.image(), write.drive().label()), cx);
+        let finished =
+            |ejected: bool, note: &Option<String>| {
+                let tail = if ejected {
+                    "It has been ejected; you can unplug it.".to_owned()
+                } else {
+                    note.clone().unwrap_or_else(|| "You can unplug it.".into())
+                };
+                v_flex()
+                    .gap_2()
+                    .child(h_flex().gap_2().child(Tag::success().child("Done")).child(div().text_sm().child(format!(
+                        "{} is written, and every byte was read back and matched.",
+                        write.drive().label()
+                    ))))
+                    .child(div().text_sm().child(tail))
+            };
+        let failed = |message: &str, touched: bool| {
+            v_flex()
+                .gap_2()
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .child(Tag::danger().child("Not written"))
+                        .child(div().flex_1().min_w_0().text_sm().child(message.to_owned())),
+                )
+                .when(touched, |c| {
+                    c.child(
+                        div()
+                            .text_sm()
+                            .text_color(theme.muted_foreground)
+                            .child("The drive was partly written: write it again before using it, or format it."),
+                    )
+                })
+        };
+        match job.stored() {
+            JobState::Preparing(()) => {
                 s = s.child(
                     h_flex()
                         .gap_2()
@@ -978,7 +936,7 @@ impl Kakehashi {
                         .child(div().text_sm().child("Preparing and checking the image…")),
                 )
             }
-            Stage::Authorizing => {
+            JobState::Authorizing(()) => {
                 s = s.child(
                     h_flex()
                         .gap_2()
@@ -986,8 +944,12 @@ impl Kakehashi {
                         .child(div().text_sm().child("Waiting for an administrator's permission…")),
                 )
             }
-            Stage::Declined => s = s.child(div().text_sm().child("Permission wasn't given, so nothing was written.")),
-            Stage::Running(progress) => match progress {
+            JobState::Ended(End::Declined) => {
+                s = s.child(div().text_sm().child("Permission wasn't given, so nothing was written."))
+            }
+            JobState::Ended(End::Finished { ejected, note }) => s = s.child(finished(*ejected, note)),
+            JobState::Ended(End::Failed(failure)) => s = s.child(failed(failure.message(), failure.touched())),
+            JobState::Running(pass) => match pass.last() {
                 Progress::Preparing => {
                     s = s.child(h_flex().gap_2().child(Spinner::new().small()).child(div().text_sm().child(
                         if cfg!(target_os = "macos") {
@@ -997,67 +959,40 @@ impl Kakehashi {
                         },
                     )))
                 }
-                Progress::Writing { done, total } | Progress::Verifying { done, total } => {
+                progress @ (Progress::Writing { done, total } | Progress::Verifying { done, total }) => {
                     let verifying = matches!(progress, Progress::Verifying { .. });
-                    let from = job.phase.filter(|(v, _, _)| *v == verifying).map(|(_, d, at)| (d, at));
-                    s =
-                        s.child(div().text_sm().child(if verifying {
+                    s = s
+                        .child(div().text_sm().child(if verifying {
                             "Reading every byte back and comparing (2 of 2)"
                         } else {
                             "Writing (1 of 2)"
                         }))
                         .child(Bar::new("job").value(*done as f32 * 100.0 / (*total).max(1) as f32))
-                        .child(div().text_xs().text_color(theme.muted_foreground).child(
-                            format!("{} of {}  {}", human(*done), human(*total), speed_and_left(*done, *total, from)),
-                        ))
+                        .child(div().text_xs().text_color(theme.muted_foreground).child(format!(
+                            "{} of {}  {}",
+                            human(*done),
+                            human(*total),
+                            speed_and_left(*done, *total, pass.from())
+                        )))
                 }
-                Progress::Finished { ejected, note } => {
-                    let tail = if *ejected {
-                        "It has been ejected; you can unplug it.".to_owned()
-                    } else {
-                        note.clone().unwrap_or_else(|| "You can unplug it.".into())
-                    };
-                    s = s.child(
-                        v_flex()
-                            .gap_2()
-                            .child(h_flex().gap_2().child(Tag::success().child("Done")).child(div().text_sm().child(
-                                format!("{} is written, and every byte was read back and matched.", job.drive.label()),
-                            )))
-                            .child(div().text_sm().child(tail)),
-                    )
-                }
-                Progress::Failed { message, touched } => {
-                    s = s.child(
-                        v_flex()
-                            .gap_2()
-                            .child(
-                                h_flex()
-                                    .gap_2()
-                                    .child(Tag::danger().child("Not written"))
-                                    .child(div().flex_1().min_w_0().text_sm().child(message.clone())),
-                            )
-                            .when(*touched, |c| {
-                                c.child(div().text_sm().text_color(theme.muted_foreground).child(
-                                    "The drive was partly written: write it again before using it, or format it.",
-                                ))
-                            }),
-                    )
-                }
+                // The helper's final report, before it has exited.
+                Progress::Finished { ejected, note } => s = s.child(finished(*ejected, note)),
+                Progress::Failed { message, touched } => s = s.child(failed(message, *touched)),
             },
         }
-        if running && !matches!(job.stage, Stage::Authorizing) {
+        if job.can_stop() {
             s = s.child(
                 Button::new("cancel")
-                    .label(if job.cancelling { "Stopping…" } else { "Stop" })
+                    .label(if write.cancelling() { "Stopping…" } else { "Stop" })
                     .small()
-                    .disabled(job.cancelling)
+                    .disabled(write.cancelling())
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.cancel_write();
                         cx.notify();
                     })),
             );
         }
-        if job.ended {
+        if job.is_ended() {
             s = s.child(Button::new("again").label("Write another drive").small().primary().on_click(cx.listener(
                 |this, _, _, cx| {
                     this.job = None;
@@ -1071,8 +1006,11 @@ impl Kakehashi {
     }
 }
 
-// The window's regression for a stick swapped for another under the
-// confirmation dialog (KTL-04).
+// The window's regressions: a helper killed mid-write (KTL-03), and a stick
+// swapped for another under the confirmation dialog (KTL-04).
+#[cfg(test)]
+#[path = "repro_ktl_03.rs"]
+mod repro_ktl_03;
 #[cfg(test)]
 #[path = "repro_ktl_04.rs"]
 mod repro_ktl_04;
