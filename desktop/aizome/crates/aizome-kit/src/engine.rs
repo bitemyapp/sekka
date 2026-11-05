@@ -1473,6 +1473,7 @@ impl Core {
                 key: None,
                 id: Some(crate::shell::WINDOW_LIST + win),
                 icon: None,
+                swatch: None,
             }));
         }
         spec.items.splice(at..at + 1, items);

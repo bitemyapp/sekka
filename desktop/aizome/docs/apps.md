@@ -365,6 +365,10 @@ a preview line; the editor is the kit's text editor with light Markdown
 styling. Any note can float as a sticky (a small always-on-top window in
 the note's colour). Takes "New Note with Selection" from the Services menu.
 
+The toolbar's colour dropdown shows an 8pt square beside each option,
+using the same flat dye square as the note list. The selected option keeps
+its checkmark beside the square; hovering does not change the dye.
+
 As built (`apps/fusen`): `~/Notes` is made when the first note is
 written; a note's file is named after its title (and renamed with it,
 when Fusen named it), folders are its subdirectories, and pins and
