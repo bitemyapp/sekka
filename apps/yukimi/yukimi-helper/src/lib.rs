@@ -13,6 +13,8 @@
 //!
 //! Starting a program other than through [`process::command`] is denied
 //! (`clippy.toml`), here and in the helper's programs.
+// Denied, not forbidden: process.rs makes the one command, under an allow
+// that the Nix check permits nowhere else. The programs forbid it.
 #![deny(clippy::disallowed_methods)]
 #![forbid(unsafe_code)]
 pub mod change;
