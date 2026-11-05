@@ -6,16 +6,13 @@ use std::path::Path;
 use aizome_kit::prelude::*;
 use aizome_kit::{column, mouse_area, row};
 
-use super::suggest::{HintAction, action_of, sections};
-use super::{IndexState, Kura, Msg, Side, hint_key};
+use super::suggest::{HintAction, SHOWN, action_of, sections};
+use super::{IndexState, Kura, Msg, PathOrder, Side, hint_key};
 use crate::format;
-use crate::hints::{Hint, Risk};
+use crate::hints::{Hint, HintPath, Risk};
 
 /// The panel's width (wider than the folder's list: paths and copies).
 pub const WIDTH: f64 = 460.0;
-
-/// Paths a hint lists in the window at most (the index has them all).
-const SHOWN: usize = 40;
 
 /// The toolbar's way in: what could be freed.
 pub fn toolbar_button(k: &Kura) -> Element<Msg> {
@@ -157,7 +154,7 @@ fn card(k: &Kura, i: usize) -> Element<Msg> {
         if action == HintAction::Duplicates {
             body.extend(duplicate_sets(k, i, h));
         } else {
-            body.extend(path_rows(k, h, action == HintAction::Trash));
+            body.extend(path_rows(k, i, h, action == HintAction::Trash));
         }
     }
     body.push(actions(k, i, h, action));
@@ -169,35 +166,72 @@ fn card(k: &Kura, i: usize) -> Element<Msg> {
     mouse_area(card).on_press(Msg::FocusHint(if picked { None } else { Some(i) })).key(key).into()
 }
 
-/// A hint's paths, each with a tick when its action can leave it out.
-fn path_rows(k: &Kura, h: &Hint, ticks: bool) -> Vec<Element<Msg>> {
-    let mut rows: Vec<Element<Msg>> = h
-        .paths
-        .iter()
-        .take(SHOWN)
-        .map(|p| {
-            let path = Path::new(&p.path);
-            let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.path.clone());
-            let mut under = path.parent().map(format::path).unwrap_or_default();
-            if let Some(note) = &p.note {
-                under = format!("{under} · {note}");
-            }
-            let size = if p.allocated_bytes > 0 { format::size(p.allocated_bytes) } else { String::new() };
-            let mut r: Vec<Element<Msg>> = Vec::new();
-            if ticks {
-                let key = p.path.clone();
-                r.push(checkbox("", k.chosen(h, &p.path)).on_toggle(move |on| Msg::Choose(key.clone(), on)).into());
-            }
-            r.push(
-                column![text(name).size(12.5), text(under).size(11.0).role(Role::Text3)]
-                    .spacing(1.0)
-                    .width(Length::Fill)
-                    .into(),
-            );
-            r.push(text(size).size(11.5).tabular().role(Role::Text2).into());
-            aizome_kit::row(r).spacing(6.0).width(Length::Fill).key(p.path.clone()).into()
-        })
-        .collect();
+/// Above a hint's paths: tick those shown or none, and their order.
+fn list_controls(k: &Kura, i: usize, h: &Hint, shown: &[&HintPath], ticks: bool, order: PathOrder) -> Element<Msg> {
+    let mut r: Vec<Element<Msg>> = Vec::new();
+    if ticks {
+        let all = shown.iter().all(|p| k.chosen(h, &p.path));
+        let none = !h.paths.iter().any(|p| k.chosen(h, &p.path));
+        r.push(button("Select All").compact().on_press_maybe((!all).then_some(Msg::ChooseAll(i, true))).into());
+        r.push(button("Select None").compact().on_press_maybe((!none).then_some(Msg::ChooseAll(i, false))).into());
+    }
+    r.push(spacer().into());
+    let labels = PathOrder::ALL.map(|o| match o {
+        PathOrder::Largest => "Largest first",
+        PathOrder::Newest => "Newest first",
+        PathOrder::Oldest => "Oldest first",
+    });
+    r.push(
+        dropdown(labels, PathOrder::ALL.iter().position(|&o| o == order))
+            .compact()
+            .on_select(move |j| Msg::SortPaths(i, PathOrder::ALL[j]))
+            .tooltip("By size, or by when each was last modified")
+            .label("Sort")
+            .into(),
+    );
+    aizome_kit::row(r).spacing(6.0).align(Align::Center).width(Length::Fill).into()
+}
+
+/// A hint's paths, each with when it was last modified, and a tick when
+/// its action can leave it out.
+fn path_rows(k: &Kura, i: usize, h: &Hint, ticks: bool) -> Vec<Element<Msg>> {
+    let shown = k.shown_paths(h);
+    let mut rows: Vec<Element<Msg>> = Vec::new();
+    if h.paths.len() > 1 {
+        rows.push(list_controls(k, i, h, &shown, ticks, k.path_order(h)));
+    }
+    rows.extend(shown.into_iter().map(|p| {
+        let path = Path::new(&p.path);
+        let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.path.clone());
+        let mut under = path.parent().map(format::path).unwrap_or_default();
+        if let Some(note) = &p.note {
+            under = format!("{under} · {note}");
+        }
+        let size = if p.allocated_bytes > 0 { format::size(p.allocated_bytes) } else { String::new() };
+        // The day of the RFC 3339 time, in UTC as the index has it.
+        let day = p.modified.as_deref().and_then(|m| m.get(..10)).unwrap_or_default();
+        let mut r: Vec<Element<Msg>> = Vec::new();
+        if ticks {
+            let key = p.path.clone();
+            r.push(checkbox("", k.chosen(h, &p.path)).on_toggle(move |on| Msg::Choose(key.clone(), on)).into());
+        }
+        r.push(
+            column![text(name).size(12.5), text(under).size(11.0).role(Role::Text3)]
+                .spacing(1.0)
+                .width(Length::Fill)
+                .into(),
+        );
+        r.push(
+            column![
+                text(size).size(11.5).tabular().role(Role::Text2),
+                text(day.to_owned()).size(11.0).tabular().role(Role::Text3),
+            ]
+            .spacing(1.0)
+            .align(Align::End)
+            .into(),
+        );
+        aizome_kit::row(r).spacing(6.0).width(Length::Fill).key(p.path.clone()).into()
+    }));
     let more = h.paths.len().saturating_sub(SHOWN) as u64 + h.more_paths;
     if more > 0 {
         rows.push(

@@ -12,9 +12,9 @@ use std::sync::Arc;
 use aizome_kit::prelude::*;
 
 use super::sunburst::Mark;
-use super::{Kura, Msg, Pending, hint_key};
+use super::{Kura, Msg, PathOrder, Pending, hint_key};
 use crate::format;
-use crate::hints::{Hint, Risk};
+use crate::hints::{Hint, HintPath, Risk};
 use crate::scan::{self, Progress, ScanOptions};
 use crate::tree::{NodeId, Tree};
 
@@ -74,7 +74,50 @@ pub fn sections(hints: &[Hint]) -> Vec<(&'static str, Vec<usize>)> {
     out
 }
 
+/// Paths a hint lists in the window at most (the index has them all).
+pub const SHOWN: usize = 40;
+
+/// A hint's paths in `order`. Those modified at the same time keep the
+/// index's order, and those with no time go last either way.
+pub fn ordered(paths: &[HintPath], order: PathOrder) -> Vec<&HintPath> {
+    let mut out: Vec<&HintPath> = paths.iter().collect();
+    // RFC 3339 in UTC, always the same width: the strings sort as the times
+    // do. `None` sorts before any time, so it's put last by hand going up.
+    match order {
+        PathOrder::Largest => {}
+        PathOrder::Newest => out.sort_by(|a, b| b.modified.cmp(&a.modified)),
+        PathOrder::Oldest => {
+            out.sort_by(|a, b| (a.modified.is_none(), &a.modified).cmp(&(b.modified.is_none(), &b.modified)))
+        }
+    }
+    out
+}
+
 impl Kura {
+    /// How a hint's paths are listed: as the person chose, else largest
+    /// first.
+    pub fn path_order(&self, h: &Hint) -> PathOrder {
+        self.order.get(&hint_key(h)).copied().unwrap_or_default()
+    }
+
+    /// The paths a hint lists in the window, in the person's order.
+    pub fn shown_paths<'h>(&self, h: &'h Hint) -> Vec<&'h HintPath> {
+        let mut out = ordered(&h.paths, self.path_order(h));
+        out.truncate(SHOWN);
+        out
+    }
+
+    /// Tick every path the hint shows (none the person can't see), or
+    /// untick every one of its paths.
+    pub(super) fn choose_all(&mut self, i: usize, on: bool) {
+        let hints = self.analysis.hints.clone();
+        let Some(h) = hints.get(i) else { return };
+        let paths = if on { self.shown_paths(h) } else { h.paths.iter().collect() };
+        for p in paths {
+            self.choice.insert(p.path.clone(), on);
+        }
+    }
+
     /// Whether `path` is in its hint's action: as the person chose, else
     /// yes for safe and low-risk hints and no for the rest.
     pub fn chosen(&self, h: &Hint, path: &str) -> bool {
@@ -425,5 +468,36 @@ impl Kura {
         self.outer_segs = None;
         self.refresh_rows();
         self.refresh_highlight();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn at(path: &str, modified: Option<&str>) -> HintPath {
+        HintPath {
+            path: path.into(),
+            allocated_bytes: 0,
+            apparent_bytes: 0,
+            modified: modified.map(Into::into),
+            note: None,
+            command: None,
+        }
+    }
+
+    #[test]
+    fn paths_order_by_when_they_were_modified() {
+        let paths = [
+            at("a", Some("2025-03-01T00:00:00Z")),
+            at("b", None),
+            at("c", Some("2024-12-31T23:59:59Z")),
+            at("d", Some("2025-11-02T08:00:00Z")),
+            at("e", Some("2025-03-01T00:00:00Z")),
+        ];
+        let names = |o| ordered(&paths, o).iter().map(|p| p.path.as_str()).collect::<Vec<_>>();
+        assert_eq!(names(PathOrder::Largest), ["a", "b", "c", "d", "e"]);
+        assert_eq!(names(PathOrder::Newest), ["d", "a", "e", "c", "b"]);
+        assert_eq!(names(PathOrder::Oldest), ["c", "a", "e", "d", "b"]);
     }
 }

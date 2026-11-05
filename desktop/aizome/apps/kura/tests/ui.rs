@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aizome_kit::sidestep_ui::PointerButton;
+use aizome_kit::sidestep_ui::{Key, Modifiers, NamedKey, PointerButton};
 use aizome_kit::testing::{Harness, assert_golden};
 use aizome_kit::theme::{Appearance, ThemeChoice};
 use aizome_kit::{Point, Size};
@@ -15,7 +15,7 @@ use kura::nix::StoreSize;
 use kura::scan::{ProgressSnapshot, Scan, ScanOptions};
 use kura::tree::{Entry, Kind, NodeId, Tree};
 use kura::ui::rings::{self, Geometry, RINGS};
-use kura::ui::{Kura, Msg, Page};
+use kura::ui::{Kura, Msg, Page, PathOrder};
 
 const GB: u64 = 1_000_000_000;
 const MB: u64 = 1_000_000;
@@ -943,7 +943,7 @@ fn fake_hints() -> Vec<kura::hints::Hint> {
         K::Command,
         vec![hp("/home/sekka/.cache/google-chrome", 1900 * MB, Some("Chrome's cache"))],
     );
-    let downloads = hint(
+    let mut downloads = hint(
         "old-downloads",
         "Old downloads in /home/sekka/Downloads",
         "Files in Downloads not changed for 90 days. Installers and disk images are often done with, but these are yours: choose.",
@@ -954,6 +954,8 @@ fn fake_hints() -> Vec<kura::hints::Hint> {
             hp("/home/sekka/Downloads/old-backup.zip", 1200 * MB, Some("Archives, untouched 1 year ago")),
         ],
     );
+    downloads.paths[0].modified = Some("2025-07-02T09:14:00Z".into());
+    downloads.paths[1].modified = Some("2024-10-15T18:30:00Z".into());
     let mut dupes = hint(
         "duplicates",
         "Duplicate files",
@@ -1092,6 +1094,83 @@ fn suggestions_list_the_hints_and_light_their_paths() {
     assert!(h.program().pending.is_none());
 }
 
+#[test]
+fn a_hints_paths_tick_all_or_none_and_sort_by_when_modified() {
+    let out = scratch("suggest-sort");
+    let mut h = kura(&out, night());
+    with_results(&mut h);
+    let w = h.window();
+    // A third download: the smallest, and modified between the other two.
+    let mut a = fake_analysis();
+    let hints = Arc::make_mut(&mut a.hints);
+    let d = hints.iter().position(|x| x.id == "old-downloads").unwrap();
+    let mut p = hp("/home/sekka/Downloads/installer.AppImage", 400 * MB, Some("Apps, untouched 7 months ago"));
+    p.modified = Some("2025-03-20T12:00:00Z".into());
+    hints[d].paths.push(p);
+    hints[d].reclaimable_bytes += 400 * MB;
+    h.send(Msg::Indexed(Ok(a)));
+    h.send(Msg::ShowSide(kura::ui::Side::Suggestions));
+    h.send(Msg::ExpandHint(d, true));
+    // The names from the top of the list down.
+    let listed = |h: &Harness<Kura>| {
+        let mut at = ["sekka-nightly.iso", "old-backup.zip", "installer.AppImage"]
+            .map(|n| (h.find(w, n).unwrap_or_else(|| panic!("{n} shows")).y0, n));
+        at.sort_by(|a, b| a.0.total_cmp(&b.0));
+        at.map(|(_, n)| n)
+    };
+    assert_eq!(listed(&h), ["sekka-nightly.iso", "old-backup.zip", "installer.AppImage"], "largest first");
+    assert!(h.texts(w).iter().any(|t| t == "2024-10-15"), "each says when it was last modified");
+
+    // The person's call, so none is ticked: all of them, then none again.
+    assert!(h.texts(w).iter().any(|x| x == "Tick what to move first"));
+    assert!(h.click_text(w, "Select All"));
+    assert!(h.texts(w).iter().any(|x| x == "Move 3 items to Trash…"));
+    assert!(h.click_text(w, "Select None"));
+    assert!(h.texts(w).iter().any(|x| x == "Tick what to move first"));
+    h.send(Msg::Choose("/home/sekka/Downloads/old-backup.zip".into(), true));
+
+    // Oldest first, through the dropdown; the ticks stay as they were.
+    assert!(h.click_text(w, "Largest first"));
+    let popup = h.popups(w).last().map(|(p, _)| *p).expect("the sort menu");
+    h.popup_keyboard(popup, Key::Named(NamedKey::Home), Modifiers::default());
+    for _ in 0..2 {
+        h.popup_keyboard(popup, Key::Named(NamedKey::ArrowDown), Modifiers::default());
+    }
+    h.popup_keyboard(popup, Key::Named(NamedKey::Enter), Modifiers::default());
+    assert!(h.popups(w).is_empty());
+    assert_eq!(listed(&h), ["old-backup.zip", "installer.AppImage", "sekka-nightly.iso"], "oldest first");
+    assert!(h.texts(w).iter().any(|x| x == "Move 1 item to Trash…"));
+    golden_settled(&mut h, w, golden("suggestions-sorted-night.png"), 2.0);
+    h.set_appearance(day());
+    golden_settled(&mut h, w, golden("suggestions-sorted-day.png"), 2.0);
+    h.set_appearance(night());
+
+    h.send(Msg::SortPaths(d, PathOrder::Newest));
+    assert_eq!(listed(&h), ["sekka-nightly.iso", "installer.AppImage", "old-backup.zip"], "newest first");
+    // Each hint keeps its own order.
+    let k = h.program();
+    assert_eq!(k.path_order(&k.analysis.hints[hint_named(&h, "package-caches")]), PathOrder::Largest);
+
+    // More paths than the window lists: Select All ticks only those that
+    // show, and Select None unticks them all.
+    let mut a = fake_analysis();
+    let hints = Arc::make_mut(&mut a.hints);
+    hints[d].paths =
+        (0..45u64).map(|n| hp(&format!("/home/sekka/Downloads/file-{n:02}.bin"), (50 - n) * MB, None)).collect();
+    h.send(Msg::Indexed(Ok(a)));
+    h.send(Msg::ChooseAll(d, true));
+    let chosen = |h: &Harness<Kura>| {
+        let k = h.program();
+        k.chosen_paths(&k.analysis.hints[d]).0
+    };
+    let ticked = chosen(&h);
+    assert_eq!(ticked.len(), 40, "the 40 shown");
+    assert!(!ticked.contains(&PathBuf::from("/home/sekka/Downloads/file-44.bin")), "not the smallest, unseen");
+    h.send(Msg::Choose("/home/sekka/Downloads/file-44.bin".into(), true));
+    h.send(Msg::ChooseAll(d, false));
+    assert!(chosen(&h).is_empty());
+}
+
 /// A home with one of each kind of hint, in a folder of the test's own.
 fn suggest_home(out: &Path) -> (PathBuf, kura::hints::Context) {
     let h = out.join("home");
@@ -1225,6 +1304,7 @@ fn suggestions_fit_the_frame_budget() {
     let mut pick = Vec::new();
     let mut open = Vec::new();
     let mut tick = Vec::new();
+    let mut sort = Vec::new();
     for round in 0..4 {
         for i in 0..n {
             if let Some(d) = frame(&mut h, |h| h.send(Msg::FocusHint(Some(i)))) {
@@ -1239,10 +1319,14 @@ fn suggestions_fit_the_frame_budget() {
         if let Some(t) = frame(&mut h, |h| h.send(Msg::Choose(p.clone(), round % 2 == 0))) {
             tick.push(t);
         }
+        if let Some(t) = frame(&mut h, |h| h.send(Msg::SortPaths(d, PathOrder::ALL[round % 3]))) {
+            sort.push(t);
+        }
     }
     let pick50 = report("picking a hint (the rings move and dim)", pick);
     let open50 = report("opening or closing a hint", open);
     report("ticking a path", tick);
+    report("sorting a hint's paths", sort);
     if !cfg!(debug_assertions) {
         assert!(open50 < Duration::from_millis(4), "opening p50 {open50:?}");
         let _ = pick50;

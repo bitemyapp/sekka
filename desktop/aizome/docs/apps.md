@@ -532,9 +532,11 @@ another, refuses anything in the Nix store, totals what it holds, and
 specification. Suggestions (the side panel's other half, and the
 toolbar's "179 GB to free") show the index's hints by kind, most
 reclaimable first: each with what it frees, its risk as a badge (safe,
-low risk, your call), what it is in plain words, its paths (ticked by
-default when safe or low risk, never when they're the person's to
-decide) and its action: Move to Trash for caches, build outputs, logs and
+low risk, your call), what it is in plain words, its paths (each with
+its size and the day it was last modified; ticked by default when safe
+or low risk, never when they're the person's to decide, with Select All
+for those listed and Select None above them; largest first, or by when
+last modified, newest or oldest first) and its action: Move to Trash for caches, build outputs, logs and
 old downloads; Empty Trash; Open Yukimi's Storage for Nix; the command to
 run, with Copy, for containers and Flatpak; and for duplicates, the
 copies of each set side by side to keep one. Every action asks first.

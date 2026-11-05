@@ -97,6 +97,22 @@ pub enum Side {
     Suggestions,
 }
 
+/// How a hint's paths are listed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PathOrder {
+    /// As the index lists them.
+    #[default]
+    Largest,
+    /// The most recently modified first.
+    Newest,
+    /// The least recently modified first.
+    Oldest,
+}
+
+impl PathOrder {
+    pub const ALL: [PathOrder; 3] = [PathOrder::Largest, PathOrder::Newest, PathOrder::Oldest];
+}
+
 /// An action waiting for the person's yes.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Pending {
@@ -162,6 +178,11 @@ pub enum Msg {
     ExpandHint(usize, bool),
     /// Include a path in its hint's action, or leave it out.
     Choose(String, bool),
+    /// Include every path a hint shows in its action, or leave all of its
+    /// paths out.
+    ChooseAll(usize, bool),
+    /// List a hint's paths in this order.
+    SortPaths(usize, PathOrder),
     /// Which copy of a set of duplicates stays (the set's hash, the copy).
     Keep(String, usize),
     /// Ask to carry out a hint's action.
@@ -243,6 +264,8 @@ pub struct Kura {
     pub expanded: std::collections::HashSet<String>,
     /// Paths put in or left out of their hint's action (else by its risk).
     pub choice: std::collections::HashMap<String, bool>,
+    /// How each hint's paths are listed, by key (else largest first).
+    pub order: std::collections::HashMap<String, PathOrder>,
     /// The copy kept of each set of duplicates, by the set's hash.
     pub keep: std::collections::HashMap<String, usize>,
     pub pending: Option<Pending>,
@@ -311,6 +334,7 @@ impl Kura {
             focus_hint: None,
             expanded: Default::default(),
             choice: Default::default(),
+            order: Default::default(),
             keep: Default::default(),
             pending: None,
             highlight: Rc::new(Vec::new()),
@@ -757,6 +781,12 @@ impl Program for Kura {
             }
             Msg::Choose(path, on) => {
                 self.choice.insert(path, on);
+            }
+            Msg::ChooseAll(i, on) => self.choose_all(i, on),
+            Msg::SortPaths(i, order) => {
+                if let Some(h) = self.analysis.hints.get(i) {
+                    self.order.insert(hint_key(h), order);
+                }
             }
             Msg::Keep(hash, i) => {
                 self.keep.insert(hash, i);
