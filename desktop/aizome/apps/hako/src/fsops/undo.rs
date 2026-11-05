@@ -17,7 +17,7 @@
 
 use std::path::PathBuf;
 
-use aizome_typestate::{Current, Generation, Ticket};
+use aizome_typestate::{Answer, Fresh, Generation, Ticket};
 
 use super::transfer::{self, Item, Mode};
 use super::trash::{Trash, Trashed};
@@ -75,38 +75,43 @@ const DEPTH: usize = 64;
 /// [`Ticket`]s.
 pub enum Inverting {}
 
+/// A step in a stack, and whether the last try to undo (or redo) it
+/// carried out nothing.
+#[derive(Debug)]
+struct Held {
+    step: Step,
+    failed: bool,
+}
+
 /// The undo and redo stacks: what the history's states share.
 #[derive(Debug, Default)]
-pub struct Stacks {
-    undo: Vec<Step>,
-    redo: Vec<Step>,
+struct Stacks {
+    undo: Vec<Held>,
+    redo: Vec<Held>,
     inversions: Generation<Inverting>,
 }
 
-impl Stacks {
-    /// Put `step` on top of the undo stack: whether that pushed the oldest
-    /// step out.
-    fn push_undo(&mut self, step: Step) -> bool {
-        self.undo.push(step);
-        let full = self.undo.len() > DEPTH;
-        if full {
-            self.undo.remove(0);
-        }
-        full
+/// Put `held` in `stack` at `at` (its top, if `at` is past it), within
+/// the depth: whether the oldest step went to make room.
+fn put(stack: &mut Vec<Held>, at: usize, held: Held) -> bool {
+    stack.insert(at.min(stack.len()), held);
+    let full = stack.len() > DEPTH;
+    if full {
+        stack.remove(0);
     }
+    full
 }
 
 /// The step being undone or redone. It stays in the history, here, until
 /// its result comes back: only that takes it out.
 #[derive(Debug)]
-pub struct InFlight {
-    ticket: Ticket<Inverting>,
-    step: Step,
+struct InFlight {
+    held: Held,
     /// Its place in the stack it came from, where what isn't carried out
     /// goes back.
     at: usize,
-    /// For a redo: a new action since made what's left of it impossible
-    /// to redo.
+    /// A new action since made what this would leave to redo impossible
+    /// to redo (an undo's inverse, or what's left of a redo).
     forgotten: bool,
 }
 
@@ -114,30 +119,32 @@ aizome_typestate::machine! {
     /// The undo and redo stacks, and the undo or redo being carried out
     /// (one at a time). A step leaves the history only through the result
     /// of its inversion ([`Undoing::finish`]): what was carried out can be
-    /// redone (or undone again), and what wasn't stays where it was.
+    /// redone (or undone again), and what wasn't stays where it was, unless
+    /// a second try carried out nothing either, when it's left out and the
+    /// person told ([`Filed::Dropped`]).
     #[derive(Debug)]
     pub struct History over Stacks {
-        /// Where the history is.
         #[derive(Debug)]
         stored HistoryState;
         /// The history's state, typed.
         typed HistoryAny;
         states {
-            /// Nothing is being undone or redone. Only the end of an undo or redo
-            /// comes back here; giving one up can't:
+            /// Nothing is being undone or redone. Only the end of an undo or
+            /// redo comes back here; giving one up can't:
             ///
             /// ```compile_fail,E0624
-            /// use hako::fsops::undo::{Idle, Stacks};
+            /// use hako::fsops::undo::{Idle, Undoing};
             /// // Back to idle without the undo's result: its step would be lost.
-            /// fn give_up(stacks: &mut Stacks) -> Idle<'_> {
-            ///     Idle::enter(stacks, ())
+            /// fn give_up<'s>(undoing: Undoing<'s>) -> Idle<'s> {
+            ///     Idle::enter(undoing.ctx, ())
             /// }
             /// ```
             ///
             /// ```
-            /// use hako::fsops::undo::{Fresh, Idle, Undoing};
-            /// fn done<'s>(undoing: Undoing<'s>, fresh: Fresh) -> Idle<'s> {
-            ///     undoing.finish(fresh)
+            /// use aizome_typestate::Fresh;
+            /// use hako::fsops::undo::{Idle, Inverted, Inverting, Undoing};
+            /// fn done<'s>(undoing: Undoing<'s>, fresh: Fresh<Inverting, Inverted>) -> Idle<'s> {
+            ///     undoing.finish(fresh).0
             /// }
             /// ```
             Idle,
@@ -146,7 +153,9 @@ aizome_typestate::machine! {
             /// A step being redone.
             Redoing(InFlight),
         }
+        // The stacks and the stored state stay this module's;
         // `History::default()` is the way in.
+        access(private);
         new(private);
     }
 }
@@ -155,6 +164,21 @@ impl Default for History {
     fn default() -> History {
         History::new(Stacks::default())
     }
+}
+
+/// What became of a step when its undo or redo came back.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Filed {
+    /// All or part of it was carried out; what's left stays to try again.
+    Done,
+    /// Nothing of it was carried out: it stays to try again.
+    Kept,
+    /// Nothing of it was carried out a second time in a row: it's left out
+    /// of the history, so the steps before it can be reached. What to tell
+    /// the person.
+    Dropped(String),
+    /// It wasn't the undo or redo in flight: nothing changed.
+    Stale,
 }
 
 /// An undo or redo to carry out ([`invert`]): a copy of its step's record
@@ -176,6 +200,13 @@ impl Inversion {
     /// A redo, not an undo.
     pub fn is_redo(&self) -> bool {
         self.redo
+    }
+
+    /// The result of this undo or redo if it never ran, or stopped without
+    /// a result (its job couldn't start, or panicked): nothing carried out,
+    /// all of it left. The history keeps its step.
+    pub(crate) fn abandoned(&self) -> Inverted {
+        Inverted { ticket: self.ticket, inverse: None, left: Some(self.record.clone()) }
     }
 }
 
@@ -208,30 +239,9 @@ pub struct Inverted {
     left: Option<Record>,
 }
 
-/// Proof that an [`Inverted`] is the result of the undo or redo in
-/// flight, not a stale one: only [`Undoing::check`] and
-/// [`Redoing::check`] make one.
-#[derive(Debug)]
-pub struct Fresh {
-    current: Current<Inverting>,
-    inverted: Inverted,
-}
-
-fn check(ctx: &Stacks, flight: &InFlight, inverted: Inverted) -> Result<Fresh, Inverted> {
-    match ctx.inversions.check(inverted.ticket) {
-        Some(current) if current.ticket() == flight.ticket => Ok(Fresh { current, inverted }),
-        _ => Err(inverted),
-    }
-}
-
-/// `step`'s record, as what's left of it: in the stack at `at` (or its
-/// top), within the depth.
-fn put_back(stack: &mut Vec<Step>, at: usize, left: Option<Record>, label: &str) {
-    if let Some(record) = left {
-        stack.insert(at.min(stack.len()), Step { record, label: label.to_owned() });
-        if stack.len() > DEPTH {
-            stack.remove(0);
-        }
+impl Answer<Inverting> for Inverted {
+    fn ticket(&self) -> Ticket<Inverting> {
+        self.ticket
     }
 }
 
@@ -239,7 +249,8 @@ impl<'s> Idle<'s> {
     /// Something was done: it can be undone, and what was undone before
     /// can't be redone any more.
     pub fn push(self, step: Step) -> Idle<'s> {
-        self.ctx.push_undo(step);
+        let at = self.ctx.undo.len();
+        put(&mut self.ctx.undo, at, Held { step, failed: false });
         self.ctx.redo.clear();
         self
     }
@@ -247,45 +258,72 @@ impl<'s> Idle<'s> {
     /// Begin undoing the last step. It stays in the history (in
     /// [`Undoing`]) until its result comes back; the job gets a copy.
     pub fn undo(self) -> Result<(Undoing<'s>, Inversion), Idle<'s>> {
-        let Some(step) = self.ctx.undo.pop() else { return Err(self) };
+        let Some(held) = self.ctx.undo.pop() else { return Err(self) };
         let at = self.ctx.undo.len();
-        let ticket = self.ctx.inversions.issue();
-        let inversion = Inversion { ticket, record: step.record.clone(), label: step.label.clone(), redo: false };
-        Ok((Undoing::enter(self.ctx, InFlight { ticket, step, at, forgotten: false }), inversion))
+        let inversion = self.ctx.inversion(&held.step, false);
+        Ok((Undoing::enter(self.ctx, InFlight { held, at, forgotten: false }), inversion))
     }
 
     /// Begin redoing the last step undone, the same way.
     pub fn redo(self) -> Result<(Redoing<'s>, Inversion), Idle<'s>> {
-        let Some(step) = self.ctx.redo.pop() else { return Err(self) };
+        let Some(held) = self.ctx.redo.pop() else { return Err(self) };
         let at = self.ctx.redo.len();
-        let ticket = self.ctx.inversions.issue();
-        let inversion = Inversion { ticket, record: step.record.clone(), label: step.label.clone(), redo: true };
-        Ok((Redoing::enter(self.ctx, InFlight { ticket, step, at, forgotten: false }), inversion))
+        let inversion = self.ctx.inversion(&held.step, true);
+        Ok((Redoing::enter(self.ctx, InFlight { held, at, forgotten: false }), inversion))
+    }
+}
+
+impl Stacks {
+    /// The request to undo or redo `step`, with a fresh ticket.
+    fn inversion(&mut self, step: &Step, redo: bool) -> Inversion {
+        Inversion { ticket: self.inversions.issue(), record: step.record.clone(), label: step.label.clone(), redo }
+    }
+
+    /// What's left of a step, back in `stack` at `at`, or dropped when a
+    /// second try carried out nothing either.
+    fn refile(stack: &mut Vec<Held>, at: usize, held: Held, inverted: &Inverted, redo: bool) -> Filed {
+        let carried = inverted.inverse.is_some();
+        match &inverted.left {
+            None => Filed::Done,
+            Some(_) if !carried && held.failed => {
+                let (done, menu) = if redo { ("redone", "Redo") } else { ("undone", "Undo") };
+                let label = held.step.label;
+                Filed::Dropped(format!("“{label}” couldn't be {done} a second time, so it's left out of {menu}."))
+            }
+            Some(record) => {
+                let step = Step { record: record.clone(), label: held.step.label };
+                put(stack, at, Held { step, failed: !carried });
+                if carried { Filed::Done } else { Filed::Kept }
+            }
+        }
     }
 }
 
 impl<'s> Undoing<'s> {
     /// Something was done meanwhile: it goes on top, and the step being
-    /// undone keeps its place below it.
+    /// undone keeps its place below it. What the undo carries out can't be
+    /// redone after it.
     pub fn push(mut self, step: Step) -> Undoing<'s> {
-        if self.ctx.push_undo(step) {
+        let at = self.ctx.undo.len();
+        if put(&mut self.ctx.undo, at, Held { step, failed: false }) {
             self.data.at = self.data.at.saturating_sub(1);
         }
         self.ctx.redo.clear();
+        self.data.forgotten = true;
         self
     }
 
     /// The proof that `inverted` is this undo's result.
-    pub fn check(&self, inverted: Inverted) -> Result<Fresh, Inverted> {
-        check(self.ctx, &self.data, inverted)
+    pub fn check(&self, inverted: Inverted) -> Result<Fresh<Inverting, Inverted>, Inverted> {
+        self.ctx.inversions.check_answer(inverted)
     }
 
     /// The undo's result: what it undid can be redone, and what it didn't
     /// stays to undo, where it was. Only a result checked fresh will do:
     ///
     /// ```compile_fail,E0308
-    /// use hako::fsops::undo::{Idle, Inverted, Undoing};
-    /// fn apply<'s>(undoing: Undoing<'s>, inverted: Inverted) -> Idle<'s> {
+    /// use hako::fsops::undo::{Filed, Idle, Inverted, Undoing};
+    /// fn apply<'s>(undoing: Undoing<'s>, inverted: Inverted) -> (Idle<'s>, Filed) {
     ///     undoing.finish(inverted)
     /// }
     /// ```
@@ -294,20 +332,24 @@ impl<'s> Undoing<'s> {
     /// use hako::fsops::undo::{HistoryAny, Inverted, Undoing};
     /// fn apply<'s>(undoing: Undoing<'s>, inverted: Inverted) -> HistoryAny<'s> {
     ///     match undoing.check(inverted) {
-    ///         Ok(fresh) => undoing.finish(fresh).into(),
+    ///         Ok(fresh) => undoing.finish(fresh).0.into(),
     ///         Err(_stale) => undoing.into(),
     ///     }
     /// }
     /// ```
-    pub fn finish(self, fresh: Fresh) -> Idle<'s> {
-        let Fresh { current, inverted } = fresh;
-        let InFlight { ticket, step, at, .. } = self.data;
-        debug_assert!(current.ticket() == ticket && inverted.ticket == ticket);
-        put_back(&mut self.ctx.undo, at, inverted.left, &step.label);
-        if let Some(record) = inverted.inverse {
-            self.ctx.redo.push(Step { record, label: step.label });
+    pub fn finish(self, fresh: Fresh<Inverting, Inverted>) -> (Idle<'s>, Filed) {
+        let inverted = fresh.into_answer();
+        // Its ticket is spent: a copy of this result can't be filed again.
+        self.ctx.inversions.retire();
+        let InFlight { held, at, forgotten } = self.data;
+        let label = held.step.label.clone();
+        let filed = Stacks::refile(&mut self.ctx.undo, at, held, &inverted, false);
+        if let Some(record) = inverted.inverse
+            && !forgotten
+        {
+            self.ctx.redo.push(Held { step: Step { record, label }, failed: false });
         }
-        Idle::enter(self.ctx, ())
+        (Idle::enter(self.ctx, ()), filed)
     }
 }
 
@@ -315,30 +357,32 @@ impl<'s> Redoing<'s> {
     /// Something was done meanwhile: it can be undone, and nothing undone
     /// before can be redone any more, what's left of this redo included.
     pub fn push(mut self, step: Step) -> Redoing<'s> {
-        self.ctx.push_undo(step);
+        let at = self.ctx.undo.len();
+        put(&mut self.ctx.undo, at, Held { step, failed: false });
         self.ctx.redo.clear();
         self.data.forgotten = true;
         self
     }
 
     /// The proof that `inverted` is this redo's result.
-    pub fn check(&self, inverted: Inverted) -> Result<Fresh, Inverted> {
-        check(self.ctx, &self.data, inverted)
+    pub fn check(&self, inverted: Inverted) -> Result<Fresh<Inverting, Inverted>, Inverted> {
+        self.ctx.inversions.check_answer(inverted)
     }
 
     /// The redo's result: what it redid can be undone again, and what it
     /// didn't stays to redo (unless something done since forgot it).
-    pub fn finish(self, fresh: Fresh) -> Idle<'s> {
-        let Fresh { current, inverted } = fresh;
-        let InFlight { ticket, step, at, forgotten } = self.data;
-        debug_assert!(current.ticket() == ticket && inverted.ticket == ticket);
-        if !forgotten {
-            put_back(&mut self.ctx.redo, at, inverted.left, &step.label);
-        }
+    pub fn finish(self, fresh: Fresh<Inverting, Inverted>) -> (Idle<'s>, Filed) {
+        let inverted = fresh.into_answer();
+        self.ctx.inversions.retire();
+        let InFlight { held, at, forgotten } = self.data;
+        let label = held.step.label.clone();
+        // Something done since forgot what this would leave to redo.
+        let filed = if forgotten { Filed::Done } else { Stacks::refile(&mut self.ctx.redo, at, held, &inverted, true) };
         if let Some(record) = inverted.inverse {
-            self.ctx.push_undo(Step { record, label: step.label });
+            let at = self.ctx.undo.len();
+            put(&mut self.ctx.undo, at, Held { step: Step { record, label }, failed: false });
         }
-        Idle::enter(self.ctx, ())
+        (Idle::enter(self.ctx, ()), filed)
     }
 }
 
@@ -362,7 +406,7 @@ impl History {
     /// What Undo would undo, unless an undo or redo is being carried out.
     pub fn undo_label(&self) -> Option<&str> {
         match self.stored() {
-            HistoryState::Idle(()) => self.ctx().undo.last().map(|s| s.label.as_str()),
+            HistoryState::Idle(()) => self.ctx().undo.last().map(|h| h.step.label.as_str()),
             _ => None,
         }
     }
@@ -370,7 +414,7 @@ impl History {
     /// What Redo would redo, unless an undo or redo is being carried out.
     pub fn redo_label(&self) -> Option<&str> {
         match self.stored() {
-            HistoryState::Idle(()) => self.ctx().redo.last().map(|s| s.label.as_str()),
+            HistoryState::Idle(()) => self.ctx().redo.last().map(|h| h.step.label.as_str()),
             _ => None,
         }
     }
@@ -400,21 +444,24 @@ impl History {
 
     /// An undo's or redo's result came back: filed if it's the one in
     /// flight, else ignored.
-    pub fn finished(&mut self, inverted: Inverted) {
-        self.with_typed(|s| {
-            let next = match s {
-                HistoryAny::Undoing(s) => match s.check(inverted) {
-                    Ok(fresh) => s.finish(fresh).into(),
-                    Err(_) => s.into(),
-                },
-                HistoryAny::Redoing(s) => match s.check(inverted) {
-                    Ok(fresh) => s.finish(fresh).into(),
-                    Err(_) => s.into(),
-                },
-                idle => idle,
-            };
-            (next, ())
-        });
+    pub fn finished(&mut self, inverted: Inverted) -> Filed {
+        self.with_typed(|s| match s {
+            HistoryAny::Undoing(s) => match s.check(inverted) {
+                Ok(fresh) => {
+                    let (idle, filed) = s.finish(fresh);
+                    (idle.into(), filed)
+                }
+                Err(_) => (s.into(), Filed::Stale),
+            },
+            HistoryAny::Redoing(s) => match s.check(inverted) {
+                Ok(fresh) => {
+                    let (idle, filed) = s.finish(fresh);
+                    (idle.into(), filed)
+                }
+                Err(_) => (s.into(), Filed::Stale),
+            },
+            idle => (idle, Filed::Stale),
+        })
     }
 }
 
@@ -640,10 +687,10 @@ mod tests {
         h.push(step(Record::Made { paths: vec![t.join("new")] }, "Newer"));
         let (r, inverted) = run(inversion, &tr);
         assert_eq!(r.failed.len(), 1);
-        h.finished(inverted.clone());
+        assert_eq!(h.finished(inverted.clone()), Filed::Kept);
         assert_eq!(h.undo_label(), Some("Newer"));
         // A result that isn't the one in flight changes nothing.
-        h.finished(inverted);
+        assert_eq!(h.finished(inverted), Filed::Stale);
         assert_eq!(h.undo_label(), Some("Newer"));
         let _newer = h.begin_undo().unwrap();
         assert!(h.begin_redo().is_none(), "no redo while an undo runs");
@@ -660,7 +707,10 @@ mod tests {
         // A full stack can't take the redo yet...
         let mut full = Vec::new();
         for i in 0..DEPTH {
-            full.push(step(Record::Made { paths: vec![PathBuf::from(format!("/nowhere/{i}"))] }, "filler"));
+            full.push(Held {
+                step: step(Record::Made { paths: vec![PathBuf::from(format!("/nowhere/{i}"))] }, "filler"),
+                failed: false,
+            });
         }
         h.with_typed(|s| match s {
             HistoryAny::Idle(s) => {
@@ -672,5 +722,53 @@ mod tests {
         assert!(redo(&mut h, &tr).is_clean());
         assert_eq!(h.ctx().undo.len(), DEPTH, "the oldest step makes room");
         assert_eq!(h.undo_label(), Some("Made"));
+    }
+
+    #[test]
+    fn a_step_that_keeps_failing_is_left_out_and_said() {
+        let t = TempDir::new("undo-keeps-failing");
+        let tr = trash(&t);
+        let (a, b) = (t.file("a.txt", "a"), t.join("b.txt"));
+        std::fs::rename(&a, &b).unwrap();
+        t.file("a.txt", "newer");
+        let mut h = History::default();
+        h.push(step(Record::Made { paths: vec![t.join("old")] }, "Older"));
+        h.push(step(Record::Rename { from: a.clone(), to: b.clone() }, "Rename"));
+        // The name is taken: the first failure keeps the step to try again.
+        let (_, inverted) = run(h.begin_undo().unwrap(), &tr);
+        assert_eq!(h.finished(inverted), Filed::Kept);
+        assert_eq!(h.undo_label(), Some("Rename"));
+        // Still taken: the second leaves it out, and says so.
+        let (_, inverted) = run(h.begin_undo().unwrap(), &tr);
+        let Filed::Dropped(note) = h.finished(inverted) else { panic!("a second failure drops the step") };
+        assert!(note.contains("“Rename”") && note.contains("left out of Undo"), "{note}");
+        assert_eq!(h.undo_label(), Some("Older"), "the steps before it can be reached");
+        assert_eq!(read(&b), "a");
+    }
+
+    #[test]
+    fn an_abandoned_undo_keeps_its_step() {
+        let mut h = History::default();
+        h.push(step(Record::Made { paths: vec![PathBuf::from("/nowhere/made")] }, "Copy"));
+        let inversion = h.begin_undo().unwrap();
+        // Its job couldn't start, or panicked: no result but this.
+        assert_eq!(h.finished(inversion.abandoned()), Filed::Kept);
+        assert_eq!((h.undo_label(), h.redo_label()), (Some("Copy"), None));
+    }
+
+    #[test]
+    fn an_undo_that_lands_after_a_new_action_isn_t_redone() {
+        let t = TempDir::new("undo-after-action");
+        let tr = trash(&t);
+        let (a, b) = (t.file("a.txt", "a"), t.join("b.txt"));
+        std::fs::rename(&a, &b).unwrap();
+        let mut h = History::default();
+        h.push(step(Record::Rename { from: a.clone(), to: b.clone() }, "Rename"));
+        let inversion = h.begin_undo().unwrap();
+        h.push(step(Record::Made { paths: vec![t.join("new")] }, "Newer"));
+        let (r, inverted) = run(inversion, &tr);
+        assert!(r.is_clean(), "{r:?}");
+        assert_eq!(h.finished(inverted), Filed::Done);
+        assert_eq!((h.undo_label(), h.redo_label()), (Some("Newer"), None), "a new action forgets redo");
     }
 }

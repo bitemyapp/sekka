@@ -194,18 +194,39 @@ pub fn start<Msg: Send + 'static>(
     let (atx, arx) = mpsc::channel::<Answer>();
     let c = control.clone();
     let wrap = Arc::new(wrap);
-    let _ = std::thread::Builder::new().name(format!("hako-job-{id}")).spawn(move || {
+    // An undo's or redo's result, should the job not give one: the history
+    // keeps the step either way.
+    let title = work.title();
+    let abandoned = match &work {
+        Work::Invert(inversion) => Some(inversion.abandoned()),
+        _ => None,
+    };
+    let (tx_spawn, wrap_spawn) = (tx.clone(), wrap.clone());
+    let (title_spawn, abandoned_spawn) = (title.clone(), abandoned.clone());
+    let spawned = std::thread::Builder::new().name(format!("hako-job-{id}")).spawn(move || {
         let send = {
             let (tx, wrap) = (tx.clone(), wrap.clone());
             move |e: JobEvent| tx.send(wrap(id, e))
         };
         let mut asker = UiAsker { send: &send, answers: arx, conflicts: None, errors: None };
         let mut reporter = Throttle { send: &send, last: None };
-        let mut env = Env::new(&c, &mut asker, &mut reporter);
-        let done = run(work, &trash, &mut env);
+        let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut env = Env::new(&c, &mut asker, &mut reporter);
+            run(work, &trash, &mut env)
+        }));
+        let done = ran.unwrap_or_else(|_| stopped(&title, abandoned));
         send(JobEvent::Done(Arc::new(done)));
     });
+    if spawned.is_err() {
+        let _ = tx_spawn.send(wrap_spawn(id, JobEvent::Done(Arc::new(stopped(&title_spawn, abandoned_spawn)))));
+    }
     (control, atx)
+}
+
+/// What a job that stopped without a result did, as far as anyone knows.
+fn stopped(title: &str, inverted: Option<Inverted>) -> Done {
+    let failed = vec![(PathBuf::from(title), "it stopped unexpectedly, partway or before it began".into())];
+    Done { report: Report { failed, ..Report::default() }, step: None, inverted, changed: Vec::new() }
 }
 
 /// Carry out `work`.
