@@ -349,9 +349,12 @@ impl InstallPlan {
         request
     }
 
-    /// Pure, cheap comparison: safe in a GUI callback. This is not authorization
-    /// or a disk-state proof; the helper repeats parsing and the live checks.
-    pub fn confirm(self, phrase: &str) -> Result<ConfirmedInstall> {
+    /// Pure, cheap comparison. This is not authorization or a disk-state proof;
+    /// the helper repeats parsing and the live checks. Crate-private: a
+    /// session confirms its plan only through `session::Awaiting::confirm`,
+    /// once preparation has finished, and the one-shot path through
+    /// `RawRequest::parse_confirmed`, with the phrase its request carried.
+    pub(crate) fn confirm(self, phrase: &str) -> Result<ConfirmedInstall> {
         ensure!(
             phrase == format!("ERASE {}", self.disk.path),
             "Type ERASE followed by the selected device path to confirm"
@@ -360,7 +363,9 @@ impl InstallPlan {
     }
 }
 
-/// Only a matching erase phrase can produce this value.
+/// Only a matching erase phrase can produce this value: `session::Awaiting`
+/// makes one from the phrase the GUI sent after preparation, and
+/// `RawRequest::parse_confirmed` from a one-shot request's own.
 /// ```compile_fail
 /// use calamares_nixos::{InstallPlan, install::{self, InstallMode}};
 /// fn bypass(plan: InstallPlan) { install::install(plan, InstallMode::Execute).unwrap(); }

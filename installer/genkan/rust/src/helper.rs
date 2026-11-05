@@ -25,10 +25,10 @@ fn session() -> Result<()> {
     let Some(awaiting) = preparing.prepared(&prepared)? else {
         return Ok(());
     };
-    let Some(phrase) = awaiting.confirmation()? else {
+    let Some(confirmed) = awaiting.confirm(plan)? else {
         return Ok(());
     };
-    install::execute(plan.confirm(&phrase)?, prepared)
+    install::execute(confirmed, prepared)
 }
 
 fn run() -> Result<()> {

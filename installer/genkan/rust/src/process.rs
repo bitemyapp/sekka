@@ -16,7 +16,7 @@ use std::{
 /// committed, and whichever comes first wins: a committed installation can't
 /// be cancelled, and a cancelled preparation can't be committed to. A helper
 /// process prepares once, so its latch never reopens.
-pub struct Latch {
+pub(crate) struct Latch {
     state: AtomicU8,
     /// Set once the latch is cancelled: what subprocesses and cache warming
     /// poll.
@@ -77,7 +77,7 @@ impl Default for Latch {
 }
 
 /// This process's preparation.
-pub static LATCH: Latch = Latch::new();
+pub(crate) static LATCH: Latch = Latch::new();
 
 pub fn cancelled() -> bool {
     LATCH.cancelled()
