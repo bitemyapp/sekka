@@ -18,7 +18,8 @@ and nothing here was rerun by us.
 What came of it: the throughput floods in terminals.md were measured again
 with history in every terminal
 ([Throughput with history](../../../terminals.md#throughput-with-history)).
-Hotaru's slowdown as its history grows is the subject of PR #261.
+PR #261 fixed Hotaru's slowdown as its history grows, in its core: each
+evicted row now prefetches the rows that later evictions will reach.
 
 ## Files
 
