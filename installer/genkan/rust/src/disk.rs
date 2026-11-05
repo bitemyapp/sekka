@@ -5,10 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     fs,
-    os::{
-        fd::AsRawFd,
-        unix::fs::{FileTypeExt, MetadataExt},
-    },
+    os::unix::fs::{FileTypeExt, MetadataExt},
     path::Path,
 };
 
@@ -272,7 +269,7 @@ impl Reviewed {
             .write(true)
             .open(&self.identity().path)?;
         ensure!(
-            unsafe { libc::flock(device.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0,
+            crate::sys::try_lock_exclusive(&device),
             "Disk is locked by another installer"
         );
         let disk = self.revalidate()?;

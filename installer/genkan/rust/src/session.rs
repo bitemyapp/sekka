@@ -21,7 +21,7 @@ use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::{
     io::{BufRead, BufReader, Write},
-    process::{Command, Stdio},
+    process::Stdio,
     sync::{
         Arc,
         atomic::{AtomicU8, AtomicU64, Ordering},
@@ -315,10 +315,7 @@ impl Session {
             .parent()
             .context("Installer location")?
             .join("calamares-nixos-helper");
-        // The window starting the helper through Polkit: it runs no disk tool.
-        #[allow(clippy::disallowed_methods)]
-        let mut child = Command::new(option_env!("CALAMARES_PKEXEC").unwrap_or("pkexec"))
-            .arg(helper)
+        let mut child = process::pkexec(&helper)
             .arg("session")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
