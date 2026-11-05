@@ -224,6 +224,7 @@ fn footer(app: &Genkan) -> Element<Msg> {
             // the phrase as typed: only that confirms (`Msg::Install`).
             (Step::Review, Some(erasing)) => next
                 .on_agree(erasing, Msg::Install)
+                .destructive()
                 .enabled(app.next_enabled())
                 .into(),
             (Step::Review, None) => next.destructive().enabled(false).into(),

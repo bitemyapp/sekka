@@ -377,6 +377,9 @@ pub enum Msg {
     /// The Review page's Erase Disk and Install button: the person agreed to
     /// the review it showed, with the phrase typed.
     Install(Pressed<Erasing>),
+    /// Return in the phrase field: on to the Erase Disk and Install button,
+    /// which only a press of its own confirms.
+    ToConfirm,
     Consent(bool),
     Tick,
     ToggleLog,
@@ -2725,6 +2728,11 @@ impl Program for Genkan {
                 }
             }
             Msg::Erase(text) => self.erase = text,
+            Msg::ToConfirm => {
+                if self.confirmation_ready() {
+                    cx.focus("next");
+                }
+            }
             Msg::Consent(on) => self.consent = on,
             Msg::Tick => {
                 if let Some(started) = self.started
