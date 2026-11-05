@@ -78,7 +78,10 @@ One question shows at a time; another program's request meanwhile is refused.
 Selecting text with the pointer makes it the primary selection, which a middle
 click pastes, here and in other programs; Copy on select in Settings turns
 that off. A double click selects a word (Ghostty's word boundaries), a triple
-click the whole line across soft wraps. A right click opens a menu of the
+click the whole line across soft wraps. A selection stays on its text while
+output and scrolling move that text; dragging above or below the pane scrolls
+it, and a selection longer than the screen copies whole from the scrollback.
+A right click opens a menu of the
 pane's commands, with Open Link and Copy Link over a link. While a program
 tracks the mouse, these clicks are the program's; Shift takes them back.
 Files dropped on a pane paste as their paths, quoted for the shell; dropped

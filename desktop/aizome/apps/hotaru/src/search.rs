@@ -217,7 +217,7 @@ mod tests {
         assert_eq!(h.program().front().unwrap().find_state.copy.as_ref().unwrap().1, 1);
         assert!(!h.program().front().unwrap().find_state.in_flight);
         assert!(h.program().front().unwrap().find_state.dirty);
-        h.send(Msg::Select(id, crate::terminal_view::Selection::default()));
+        h.send(Msg::Select(id, crate::terminal_view::TextSelection::default()));
         assert!(h.program().front().unwrap().find_state.copy.is_none());
         assert!(h.program().front().unwrap().find_state.caches[0].as_ref().unwrap().selected.is_none());
     }
@@ -287,7 +287,7 @@ mod tests {
         assert!(h.program().front().unwrap().find_state.copy.is_none());
         h.send(Msg::Frame(id, Arc::new(terminal.snapshot())));
         assert_eq!(h.program().front().unwrap().find_state.copy.as_ref().unwrap().1, selected);
-        h.send(Msg::Select(id, crate::terminal_view::Selection::default()));
+        h.send(Msg::Select(id, crate::terminal_view::TextSelection::default()));
         h.send(Msg::Frame(id, Arc::new(terminal.snapshot())));
         assert!(h.program().front().unwrap().find_state.copy.is_none());
     }
