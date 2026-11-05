@@ -426,7 +426,7 @@ mod tests {
         let undone = run(work, &tr, &mut env);
         assert!(undone.report.is_clean());
         assert!(a.exists());
-        history.finished(undone.inverted.clone().expect("an undo's result"));
+        history.finished(undone.inverted.clone().expect("an undo's result"), |note| panic!("{note}"));
         assert_eq!((history.undo_label(), history.redo_label()), (None, Some("Move of “a.txt”")));
         assert_eq!(Work::Trash { paths: vec![a.clone()] }.title(), "Moving “a.txt” to the Trash");
         assert_eq!(drop_mode(&[a], &dest, false), Mode::Move);
