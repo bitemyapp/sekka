@@ -50,7 +50,18 @@ def _unit_impl(ctx):
         "closure": closure.values(),
         "extra_sources": {key: value[SourceInfo].path for key, value in ctx.attrs.extra_sources.items()},
     }
-    manifest = ctx.actions.write_json("action.json", payload, with_inputs = True)
+    # Dependencies remain unconditional; only the compiler's source inputs may
+    # be filtered by rustc's dep-info. Do not visit them again through the JSON.
+    manifest = ctx.actions.write_json("action.json", payload, with_inputs = False)
+    source_inputs = ctx.attrs.source[SourceInfo].inputs
+    dep_files = {}
+    dep_file_args = []
+    if spec["mode"] != "run-custom-build" and source_inputs:
+        source_tag = ctx.actions.artifact_tag()
+        source_inputs = source_tag.tag_artifacts(cmd_args(source_inputs))
+        dep_file = ctx.actions.declare_output("rust.dependencies")
+        dep_file_args = ["--dep-file", source_tag.tag_artifacts(dep_file.as_output())]
+        dep_files["rust"] = source_tag
     python = read_root_config("sekka", "python")
     environment = read_root_config("sekka", "environment")
     if not python or not environment:
@@ -65,13 +76,16 @@ def _unit_impl(ctx):
             manifest,
             "--output",
             output.as_output(),
+            dep_file_args,
             # A projected crate path omits declared sibling resources from the
             # remote input tree. Retain the complete, narrowly assembled tree.
-            hidden = [ctx.attrs.source[SourceInfo].inputs] + [source[SourceInfo].inputs for source in ctx.attrs.extra_sources.values()],
+            hidden = [source_inputs, closure.values()] + [source[SourceInfo].inputs for source in ctx.attrs.extra_sources.values()],
         ),
         category = "cargo_" + spec["mode"].replace("-", "_"),
         identifier = spec["package"]["name"] + "-" + spec["target"]["name"],
         allow_cache_upload = True,
+        dep_files = dep_files,
+        allow_dep_file_cache_upload = True,
     )
     executable = output.project(spec["filename"]) if spec["filename"] else None
     providers = [
