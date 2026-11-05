@@ -280,7 +280,7 @@ fn get(url: &str, limit: usize, headers: &[&str]) -> Result<(u16, String)> {
         args.extend(["--cacert", ca]);
     }
     args.extend(["--url", url]);
-    let output = crate::process::output_full("curl", &args, 15)
+    let output = crate::process::output_full(crate::process::Program::CURL, &args, 15)
         .map_err(|_| anyhow::anyhow!("Could not reach GitHub. Check the network connection."))?;
     let (body, status) = output.rsplit_once('\n').context("No answer from GitHub")?;
     Ok((

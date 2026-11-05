@@ -18,6 +18,8 @@
 //! export CALAMARES_TOOL_PATH=$scratch/tools GENKAN_FAKE_TOOLS=$scratch/tools
 //! cargo test --test revalidation -- --ignored
 //! ```
+// The test re-runs itself in a namespace; it is no part of the installer.
+#![allow(clippy::disallowed_methods)]
 use calamares_nixos::disk::{self, Identity, Reviewed};
 use std::{fs, os::unix::fs::PermissionsExt, path::Path, process::Command};
 
