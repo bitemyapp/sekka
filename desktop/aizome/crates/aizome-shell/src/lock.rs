@@ -67,7 +67,8 @@ pub struct LockView {
     pub picture: Option<Image>,
     pub password: String,
     pub busy: bool,
-    pub error: Option<String>,
+    /// What the last check said: only the lock screen's machine makes one.
+    pub error: Option<screen::Note>,
     pub caps: bool,
     pub shake: f64,
     pub wallpaper: Option<Image>,
@@ -252,7 +253,7 @@ pub fn view(v: &LockView) -> Element<LockMsg> {
         let row = aizome_kit::container(boxed).padding([0.0, 0.0, 0.0, ((size.width - FIELD_W) / 2.0 + off).max(0.0)]);
         column.push(row.into());
         let msg = if let Some(e) = &v.error {
-            Some((e.clone(), Hue::Red))
+            Some((e.text().to_owned(), Hue::Red))
         } else if v.caps {
             Some(("Caps Lock is on".to_owned(), Hue::Amber))
         } else {
@@ -332,6 +333,12 @@ impl Shell {
 
     /// logind announced a sleep: lock first, if `[lock] before_sleep`
     /// says so, and let it sleep once the lock is confirmed.
+    ///
+    /// Every sleep goes here: the lock decides when it may go (at once
+    /// when already locked or not locking for sleep, else at the lock's
+    /// confirmation or end). Code that routes logind's events must not
+    /// give a sleep back itself (`Logind::sleep_ready`): while the lock
+    /// isn't confirmed yet, that lets the machine sleep unlocked.
     pub(crate) fn lock_for_sleep(&mut self, sleep: SleepCycle, cx: &mut Cx<Msg>) {
         let before_sleep = self.lock_cfg.before_sleep;
         if before_sleep && self.lock.phase() == Phase::Unlocked {
@@ -534,7 +541,7 @@ impl Shell {
             picture,
             password: self.lock.password().to_owned(),
             busy: self.lock.phase() == Phase::Checking,
-            error: self.lock.error().map(str::to_owned),
+            error: self.lock.note().cloned(),
             caps: self.lock.caps(),
             shake: shake_offset(self.lock.shake()),
             wallpaper: self.wallpaper_for(output).map(|(i, _)| i),

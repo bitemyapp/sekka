@@ -2365,6 +2365,7 @@ impl Shell {
             match e {
                 SessionEvent::Lock => self.lock(cx),
                 SessionEvent::Unlock => self.unlock(cx),
+                // The lock screen decides when the sleep may go.
                 SessionEvent::PrepareForSleep(sleep) => self.lock_for_sleep(sleep, cx),
                 SessionEvent::Resumed => {
                     // A sleep that waited for the lock is over.

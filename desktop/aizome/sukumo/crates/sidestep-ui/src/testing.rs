@@ -14,6 +14,8 @@ use kurbo::{Point, Vec2};
 use sidestep_engine::backend::null;
 use sidestep_engine::keys::modifier;
 use sidestep_engine::protocol::{self, Button, FromRender, ScrollPhase};
+#[cfg(feature = "testing")]
+use sidestep_engine::protocol::{LockAnswer, LockRequest};
 
 pub use sidestep_engine::backend::null::{PaintedText, Seen};
 /// A layer surface's placement as the render thread was given it (in
@@ -296,26 +298,33 @@ pub fn inject_outputs(cx: &mut Cx, outputs: &[crate::Output]) {
     cx.inject(FromRender::ScreensChanged);
 }
 
-/// The compositor ending the session lock the program asks for or holds
-/// now (or refusing it) without the program unlocking. Nothing without
-/// one.
+/// The compositor ending the session lock the null render thread holds
+/// (or refusing it) without the program unlocking. Nothing without one.
+/// It forges the render thread's answer, so only tests have it (the
+/// `testing` feature).
+#[cfg(feature = "testing")]
 pub fn inject_session_lock_finished(cx: &mut Cx) {
-    if let Some(lock) = cx.session_lock_request() {
-        cx.inject(FromRender::SessionLockFinished { lock });
+    let held = null::LOCK.lock().unwrap_or_else(|e| e.into_inner()).take();
+    if let Some(lock) = held {
+        cx.inject(FromRender::SessionLockFinished { lock: LockAnswer::forged(lock) });
     }
 }
 
-/// The session lock request the program asks for or holds now, to name
-/// in [`inject_session_lock_finished_for`] later.
-pub fn session_lock_request(cx: &Cx) -> Option<crate::session_lock::LockTicket> {
-    cx.session_lock_request()
+/// The session lock request the null render thread holds now, as it was
+/// asked for it (`ToRender::LockSession`), to name in
+/// [`inject_session_lock_finished_for`] later (the `testing` feature).
+#[cfg(feature = "testing")]
+pub fn session_lock_held() -> Option<LockRequest> {
+    *null::LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// The compositor ending (or refusing) the lock asked for under `lock`,
 /// which may be a request the program has withdrawn since: its `finished`
-/// was already on its way.
-pub fn inject_session_lock_finished_for(cx: &mut Cx, lock: crate::session_lock::LockTicket) {
-    cx.inject(FromRender::SessionLockFinished { lock });
+/// was already on its way. It forges the render thread's answer, so only
+/// tests have it (the `testing` feature).
+#[cfg(feature = "testing")]
+pub fn inject_session_lock_finished_for(cx: &mut Cx, lock: LockRequest) {
+    cx.inject(FromRender::SessionLockFinished { lock: LockAnswer::forged(lock) });
 }
 
 /// A destination asking for the data drag `drag` (out of one of the

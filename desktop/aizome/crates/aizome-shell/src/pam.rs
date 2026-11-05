@@ -7,8 +7,15 @@ use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
 
 /// Checks a password for a user.
+///
+/// This is where the lock screen's types end: what it tells the person is
+/// only as true as the [`Reply`]. An implementation must pass on the step
+/// and code that refused and every message the modules said, as PAM gave
+/// them. One that turns every refusal into a silent `PAM_AUTH_ERR`, or
+/// drops `said`, compiles and tells a lockout as a wrong password again
+/// (SHB-12): no type can know what PAM said.
 pub trait Authenticator: Send + Sync + 'static {
-    /// What PAM answered about `user`'s `password`.
+    /// What PAM answered about `user`'s `password`, unabridged.
     fn authenticate(&self, user: &str, password: &str) -> Reply;
 }
 
@@ -243,6 +250,10 @@ extern "C" fn converse(
 }
 
 impl Authenticator for Pam {
+    /// `pam_authenticate`, then `pam_acct_mgmt`. A refusal keeps which of
+    /// the two refused, its code, `pam_strerror`'s text and everything the
+    /// modules said (errors and information alike: faillock tells a
+    /// lockout as information), so [`Reply::verdict`] sees what PAM said.
     fn authenticate(&self, user: &str, password: &str) -> Reply {
         let Ok(service) = CString::new(self.service.as_str()) else {
             return Reply::Unasked(format!("PAM's service name {:?} holds a NUL", self.service));
