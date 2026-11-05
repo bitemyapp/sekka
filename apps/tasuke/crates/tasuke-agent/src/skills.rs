@@ -312,17 +312,15 @@ mod tests {
     }
 
     #[test]
-    fn real_skills_parse_when_present() {
-        // The skills being written for the assistant, when this machine has them.
-        let dir = PathBuf::from("/home/callen/work/sekka-open-model-evals/assistant/skills");
-        let dev = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
-        for d in [dir, dev] {
-            let skills = Skills::discover_in(std::slice::from_ref(&d));
-            for s in skills.index() {
-                assert!(!s.description.is_empty(), "{}", s.name);
-                assert!(!s.description.starts_with('>'), "{}", s.name);
-                assert!(skills.load(&s.name).unwrap().len() > 100, "{}", s.name);
-            }
+    fn real_skills_parse() {
+        // The skills Tasuke ships (apps/tasuke/skills).
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills");
+        let skills = Skills::discover_in(std::slice::from_ref(&dir));
+        assert!(!skills.index().is_empty(), "no skills in {}", dir.display());
+        for s in skills.index() {
+            assert!(!s.description.is_empty(), "{}", s.name);
+            assert!(!s.description.starts_with('>'), "{}", s.name);
+            assert!(skills.load(&s.name).unwrap().len() > 100, "{}", s.name);
         }
     }
 }
