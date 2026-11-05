@@ -21,6 +21,7 @@ platform.buildRustPackage {
     ./patches/local-live-views.patch
     ./patches/cas-recovery.patch
     ./patches/critical-path-priority.patch
+    ./patches/incremental-source-cache.patch
   ];
   # Cargo loads Git patch manifests even when the lock records them as unused.
   # Remove this dead patch in both source and vendoring; no resolved dep changes.
@@ -55,7 +56,7 @@ platform.buildRustPackage {
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- local_content_store::download_tests
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- local_content_store::linux::tests::hint_
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p remote_execution -- client::tests
-    for filter in re::error::tests re::remote_action_result::tests; do
+    for filter in re::error::tests re::remote_action_result::tests entry::tests; do
       cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute -- "$filter"
     done
     if [ "$(stat -f -c %T "$TMPDIR")" = btrfs ]; then

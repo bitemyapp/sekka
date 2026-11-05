@@ -351,10 +351,32 @@ Compiler actions use rustc's dep-info to distinguish a target's actual source
 and included resources from other files in its narrowly assembled source tree.
 An unused source edit can reuse the native depfile cache; edits to a reachable
 module or sibling `include_str!` resource still rebuild. Resolved dependency
-outputs and build-script inputs remain unconditional. This is selective action
-caching, not Cargo's mutable incremental-codegen cache. Dependency paths that
+outputs and build-script inputs remain unconditional. Dependency paths that
 cross a directory symlink with `..` are rejected when lexical normalization
 would name a different file, rather than silently caching the wrong inputs.
+
+Cargo's resolved `profile.incremental` separately enables compiler-managed
+incremental state for Rust compilation; build-script execution is not made
+incremental. State has its own declared output, excluded from consumer inputs
+and ordinary output providers. Incremental actions retain that advisory state
+but clear ordinary artifacts and depfiles before compilation and on failure.
+Missing, incompatible or failed-session state must remain safe to rebuild.
+Rustc owns session cleanup; there is no additional per-action state-byte quota.
+
+Execution-root compiler paths use `/proc/self/cwd` and stable working-directory
+remapping so cached state and binaries can move between worktrees. This includes
+joined native search options and build-script metadata; a root substring inside
+an external path is not treated as owned. Imported read-only state is atomically
+replaced with writable owned files before rustc runs, using reflinks where
+available and preserving sparse allocation in the fallback. Native post-action
+mode normalization also detaches shared inodes, including on early failure.
+
+Successful local or remote incremental execution publishes a source-key cache
+alias so a fresh worktree can hit the warm result. Action/executor write policy
+and upload-size limits still apply; failed actions do not publish successful
+aliases. Actual LAN probes cover fresh-root hits, disabled writes, compiler
+failures, reverts and shared-donor preservation. These are correctness checks,
+not proof of a full-workspace performance or storage win.
 
 Ready local compiler actions are prioritized by their longest reverse
 dependency path in Cargo's resolved unit graph. A dependency can retain a
@@ -428,8 +450,9 @@ real service eviction from native fault-injection checks of the retry bound.
 The backend depends on the pinned Cargo unit-graph API and its LTO planning
 semantics; changing Cargo requires requalification, not just a version bump.
 `nix build .#checks.x86_64-linux.buck2-backend` exercises real proc macros,
-build scripts, native/Rust dynamic libraries, thin LTO and runtime argument
-forwarding in a network-disabled Nix sandbox. This is a component check, not
+build scripts, native/Rust dynamic libraries, thin LTO, copied-binary runtime
+paths, argument forwarding and dense/sparse incremental-state ownership in a
+network-disabled Nix sandbox. This is a component check, not
 an ISO or hardware qualification.
 
 ### Authenticated workstation cache and remote execution

@@ -1,0 +1,306 @@
+diff --git a/app/buck2_action_impl/src/actions/impls/run.rs b/app/buck2_action_impl/src/actions/impls/run.rs
+index 22cda87..9f29b1d 100644
+--- a/app/buck2_action_impl/src/actions/impls/run.rs
++++ b/app/buck2_action_impl/src/actions/impls/run.rs
+@@ -1325,6 +1325,7 @@ impl RunAction {
+         let (result, req, action_and_blobs) = match result {
+             ControlFlow::Break(res) => (res, req, prepared_action.action_and_blobs),
+             ControlFlow::Continue(mut manager) => {
++                let mut source_action_and_blobs = None;
+                 manager
+                     .inner
+                     .waiting_data
+@@ -1345,6 +1346,9 @@ impl RunAction {
+                             ctx.run_action_knobs().action_paths_interner.as_ref(),
+                         )?;
+                         let override_prepared_action = ctx.prepare_action(&override_req, true)?;
++                        // Prior outputs are advisory execution inputs, not part
++                        // of the source-only key used by the cache lookup.
++                        source_action_and_blobs = Some(prepared_action.action_and_blobs);
+                         (override_req, override_prepared_action)
+                     } else {
+                         (req, prepared_action)
+@@ -1353,7 +1357,11 @@ impl RunAction {
+                     (req, prepared_action)
+                 };
+                 let execution_result = ctx.exec_cmd(manager, &req, &prepared_action).await;
+-                (execution_result, req, prepared_action.action_and_blobs)
++                (
++                    execution_result,
++                    req,
++                    source_action_and_blobs.unwrap_or(prepared_action.action_and_blobs),
++                )
+             }
+         };
+ 
+diff --git a/app/buck2_execute/src/entry.rs b/app/buck2_execute/src/entry.rs
+index 26caaa0..303d3b3 100644
+--- a/app/buck2_execute/src/entry.rs
++++ b/app/buck2_execute/src/entry.rs
+@@ -10,6 +10,8 @@
+ 
+ use std::ops::Add as _;
+ #[cfg(unix)]
++use std::os::unix::fs::MetadataExt;
++#[cfg(unix)]
+ use std::os::unix::fs::PermissionsExt;
+ use std::sync::LazyLock;
+ use std::time::Duration;
+@@ -21,6 +23,8 @@ use buck2_common::file_ops::metadata::FileDigestConfig;
+ use buck2_common::file_ops::metadata::FileMetadata;
+ use buck2_common::file_ops::metadata::FileType;
+ use buck2_common::file_ops::metadata::TrackedFileDigest;
++#[cfg(unix)]
++use buck2_common::temp_path::TempPath;
+ use buck2_directory::directory::entry::DirectoryEntry;
+ use buck2_error::BuckErrorContext;
+ use buck2_error::BuckErrorOptionContext;
+@@ -90,7 +94,19 @@ fn do_normalize_permissions(path: &AbsNormPathBuf) -> buck2_error::Result<()> {
+             };
+         if mode != perms.mode() {
+             perms.set_mode(mode);
+-            fs_util::set_permissions(path, perms).categorize_input()?;
++            if m.is_file() && m.nlink() > 1 {
++                // Incremental outputs can still be read-only hardlinks to remote
++                // inputs, including when the action fails before touching them.
++                // Never chmod a shared inode. The copy preserves sparse files
++                // and shares extents where supported.
++                let copy =
++                    TempPath::new_in(path.parent().internal_error("output has no parent")?)?;
++                fs_util::copy(path, copy.path()).categorize_input()?;
++                fs_util::set_permissions(copy.path(), perms).categorize_input()?;
++                fs_util::rename(copy.path(), path).categorize_input()?;
++            } else {
++                fs_util::set_permissions(path, perms).categorize_input()?;
++            }
+         }
+     }
+     #[cfg(not(unix))]
+@@ -325,3 +341,30 @@ fn create_symlink(
+     }
+     new_symlink(symlink_target)
+ }
++
++#[cfg(all(test, unix))]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn normalizing_shared_output_preserves_donor() -> buck2_error::Result<()> {
++        let dir = tempfile::tempdir()?;
++        let donor = dir.path().join("donor");
++        let output = AbsNormPathBuf::new(dir.path().join("output"))?;
++        std::fs::write(&donor, b"cached state")?;
++        std::fs::set_permissions(&donor, std::fs::Permissions::from_mode(0o444))?;
++        std::fs::hard_link(&donor, &output)?;
++        let donor_inode = std::fs::metadata(&donor)?.ino();
++
++        do_normalize_permissions(&output)?;
++
++        let donor_metadata = std::fs::metadata(&donor)?;
++        assert_eq!(donor_metadata.ino(), donor_inode);
++        assert_eq!(donor_metadata.permissions().mode() & 0o777, 0o444);
++        assert_eq!(std::fs::metadata(&output)?.permissions().mode() & 0o777, 0o644);
++        assert_ne!(std::fs::metadata(&output)?.ino(), donor_inode);
++        std::fs::write(&output, b"next session")?;
++        assert_eq!(std::fs::read(&donor)?, b"cached state");
++        Ok(())
++    }
++}
+diff --git a/app/buck2_execute/src/execute/cache_uploader.rs b/app/buck2_execute/src/execute/cache_uploader.rs
+index 28ed030..efc65c3 100644
+--- a/app/buck2_execute/src/execute/cache_uploader.rs
++++ b/app/buck2_execute/src/execute/cache_uploader.rs
+@@ -31,8 +31,8 @@ pub struct CacheUploadInfo<'a> {
+     pub digest_config: DigestConfig,
+     pub mergebase: &'a Option<String>,
+     pub re_platform: &'a remote_execution::Platform,
+-    /// Whether locally produced results may be published. Results that came from RE
+-    /// (remote executions and action-cache hits) are already published.
++    /// Whether local results or source-only aliases for incremental RE results
++    /// may be published. Ordinary RE results are already published.
+     pub allow_cache_upload: bool,
+ }
+ 
+diff --git a/app/buck2_execute/src/re/client.rs b/app/buck2_execute/src/re/client.rs
+index c9fe0ca..2e759b2 100644
+--- a/app/buck2_execute/src/re/client.rs
++++ b/app/buck2_execute/src/re/client.rs
+@@ -122,6 +122,7 @@ use crate::re::uploader::Uploader;
+ 
+ pub enum ActionCacheWriteType {
+     LocalCacheUpload,
++    IncrementalSourceAlias,
+     PermissionCheck,
+     RemoteDepFile,
+ }
+@@ -129,6 +130,7 @@ impl ActionCacheWriteType {
+     fn as_str(&self) -> &'static str {
+         match *self {
+             ActionCacheWriteType::LocalCacheUpload => "local_cache_upload",
++            ActionCacheWriteType::IncrementalSourceAlias => "incremental_source_alias",
+             ActionCacheWriteType::PermissionCheck => "permission_check",
+             ActionCacheWriteType::RemoteDepFile => "remote_dep_file",
+         }
+diff --git a/app/buck2_execute_impl/src/executors/caching.rs b/app/buck2_execute_impl/src/executors/caching.rs
+index c46ff3e..9ae8bdc 100644
+--- a/app/buck2_execute_impl/src/executors/caching.rs
++++ b/app/buck2_execute_impl/src/executors/caching.rs
+@@ -34,7 +34,9 @@ use buck2_execute::execute::cache_uploader::CacheUploadResults;
+ use buck2_execute::execute::cache_uploader::DepFileCacheUploadOutcome;
+ use buck2_execute::execute::cache_uploader::IntoRemoteDepFile;
+ use buck2_execute::execute::cache_uploader::UploadCache;
++use buck2_execute::execute::kind::CommandExecutionKind;
+ use buck2_execute::execute::result::CommandExecutionResult;
++use buck2_execute::execute::result::CommandExecutionStatus;
+ use buck2_execute::materialize::materializer::MaterializationPurpose;
+ use buck2_execute::materialize::materializer::MaterializeRequest;
+ use buck2_execute::materialize::materializer::Materializer;
+@@ -100,21 +102,26 @@ impl CacheUploader {
+         }
+     }
+ 
+-    /// Upload an action result to the RE action cache, assuming conditions for the upload are met:
+-    /// the action must have been successful and must have run locally (not much point in caching
+-    /// something that ran on RE and is already cached), and cache uploads must be enabled for this particular action.
+-    /// The CacheUploader should only be used if cache uploads are enabled.
+-    async fn upload_local_outputs(
++    /// Publish successful outputs under the lookup key. Local outputs must be
++    /// uploaded first; an incremental RE result already has its outputs in CAS
++    /// but may need publication under the source-only key.
++    async fn upload_outputs(
+         &self,
+         info: &CacheUploadInfo<'_>,
+         result: &CommandExecutionResult,
+         action_digest_and_blobs: &ActionDigestAndBlobs,
+         error_on_cache_upload: bool,
+         has_depfile_entry: bool,
++        remote_result: Option<&mut TActionResult2>,
+     ) -> buck2_error::Result<(CacheUploadOutcome, Option<TActionResult2>)> {
+         let digest = action_digest_and_blobs.action;
+         let digest_str = digest.to_string();
+         let output_bytes = result.calc_output_size_bytes();
++        let write_type = if remote_result.is_some() {
++            ActionCacheWriteType::IncrementalSourceAlias
++        } else {
++            ActionCacheWriteType::LocalCacheUpload
++        };
+ 
+         let (outcome, action_result_for_dep_file) = span_async(
+             buck2_data::CacheUploadStart {
+@@ -164,29 +171,34 @@ impl CacheUploader {
+                         );
+                     }
+ 
+-                    // upload ActionResult to ActionCache
+-                    let mut result: TActionResult2 = match self
+-                        .upload_files_and_directories(
+-                            result,
+-                            &mut file_digests,
+-                            &mut tree_digests,
+-                            info.digest_config,
+-                        )
+-                        .await
+-                    {
+-                        Ok(Ok(result)) => result,
+-                        Ok(Err(outcome)) => return (outcome, None),
+-                        Err(error) => {
+-                            return (CacheUploadOutcome::FailedUploadOutputs { error }, None);
+-                        }
++                    let mut local_result = None;
++                    let action_result = if let Some(remote_result) = remote_result {
++                        remote_result
++                    } else {
++                        let uploaded = match self
++                            .upload_files_and_directories(
++                                result,
++                                &mut file_digests,
++                                &mut tree_digests,
++                                info.digest_config,
++                            )
++                            .await
++                        {
++                            Ok(Ok(result)) => result,
++                            Ok(Err(outcome)) => return (outcome, None),
++                            Err(error) => {
++                                return (CacheUploadOutcome::FailedUploadOutputs { error }, None);
++                            }
++                        };
++                        local_result.insert(uploaded)
+                     };
+                     if let Err(error) = self
+                         .re_client
+                         .write_action_result(
+                             digest,
+-                            &mut result,
++                            action_result,
+                             &self.platform.to_re_platform(),
+-                            ActionCacheWriteType::LocalCacheUpload,
++                            write_type,
+                         )
+                         .await
+                     {
+@@ -200,7 +212,7 @@ impl CacheUploader {
+ 
+                     (
+                         CacheUploadOutcome::Success,
+-                        has_depfile_entry.then_some(result),
++                        if has_depfile_entry { local_result } else { None },
+                     )
+                 }
+                 .await;
+@@ -559,29 +571,47 @@ impl UploadCache for CacheUploader {
+         &self,
+         info: &CacheUploadInfo<'_>,
+         res: &CommandExecutionResult,
+-        re_result: Option<&mut TActionResult2>,
++        mut re_result: Option<&mut TActionResult2>,
+         dep_file_bundle: Option<&mut dyn IntoRemoteDepFile>,
+         action_digest_and_blobs: &ActionDigestAndBlobs,
+     ) -> buck2_error::Result<CacheUploadResults> {
+         let error_on_cache_upload = error_on_cache_upload().buck_error_context("cache_upload")?;
+ 
+-        // Local results need the action's permission; RE-produced results are already published.
++        let remote_alias_required = matches!(
++            &res.report.status,
++            CommandExecutionStatus::Success {
++                execution_kind: CommandExecutionKind::Remote { details, .. }
++                    | CommandExecutionKind::ActionCache { details },
++            } if details.action_digest != action_digest_and_blobs.action
++        );
++        // Ordinary RE results are already published. A source-only alias is a
++        // new publication and must obey the action's upload permission.
+         let local_upload_allowed = !res.was_locally_executed() || info.allow_cache_upload;
+-        let (cache_upload_outcome, mut local_result) = if !local_upload_allowed {
++        let (cache_upload_outcome, mut local_result) = if
++            (res.was_locally_executed() || remote_alias_required) && !info.allow_cache_upload
++        {
+             (CacheUploadOutcome::ActionUploadNotAllowed, None)
+-        } else if res.was_locally_executed() {
++        } else if res.was_locally_executed() || remote_alias_required {
+             tracing::debug!(
+                 "Uploading action result for `{}`",
+                 action_digest_and_blobs.action
+             );
+-            // TODO(bobyf, torozco) should these be critical sections?
+-            // Boxed so the common non-local paths do not carry the local-upload future.
+-            self.upload_local_outputs(
++            let remote_result = if remote_alias_required {
++                Some(re_result.as_deref_mut().ok_or_else(|| buck2_error::buck2_error!(
++                    buck2_error::ErrorTag::Tier0,
++                    "Remote incremental action returned no action result"
++                ))?)
++            } else {
++                None
++            };
++            // Boxed so ordinary remote hits do not carry the upload future.
++            self.upload_outputs(
+                 info,
+                 res,
+                 action_digest_and_blobs,
+                 error_on_cache_upload,
+                 dep_file_bundle.is_some(),
++                remote_result,
+             )
+             .boxed()
+             .await?
