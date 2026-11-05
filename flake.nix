@@ -192,6 +192,15 @@
           desktopsModule = inputs.calamares.nixosModules.desktops;
           ompPackage = inputs.omp.packages.${system}.omp;
         };
+        # The Assistant window's first run downloading a real model from
+        # Hugging Face (apps/tasuke/nix/vm-download-test.nix). Not among
+        # `checks`: it needs the internet. Run its driver outside the sandbox.
+        tasuke-download = import ./apps/tasuke/nix/vm-download-test.nix {
+          inherit pkgs;
+          inherit (self.packages.${system}) tasuke;
+          tasukeModule = inputs.tasuke.nixosModules.default;
+          aizomeModule = inputs.aizome.nixosModules.default;
+        };
       };
       apps.${system} = {
         update = {
@@ -855,6 +864,14 @@
           inherit pkgs;
           inherit (self.packages.${system}) tasuke;
           tasukeModule = inputs.tasuke.nixosModules.default;
+        };
+        # The Assistant window on Aizome, through the real polkit password
+        # dialog (apps/tasuke/nix/vm-dialog-test.nix).
+        tasuke-dialog = import ./apps/tasuke/nix/vm-dialog-test.nix {
+          inherit pkgs;
+          inherit (self.packages.${system}) tasuke;
+          tasukeModule = inputs.tasuke.nixosModules.default;
+          aizomeModule = inputs.aizome.nixosModules.default;
         };
         yukimi-tatami = self.packages.${system}.yukimi-discover;
         yukimi-x11 = import ./nix/yukimi-x11-test.nix {

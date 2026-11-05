@@ -2333,6 +2333,12 @@ and not part of `calamares.nixosModules.desktops`.
 bash -c 'cd apps/tasuke && cargo test'
 bash -c 'cd desktop/aizome && cargo test -p aizome-tasuke'
 nix build .#checks.x86_64-linux.tasuke-vm
+# The window on Aizome: Run as administrator, and a password typed into the
+# shell's real polkit dialog (no rule stands in for it)
+nix build .#checks.x86_64-linux.tasuke-dialog
+# First run downloading a real model from Hugging Face through the window
+# (needs the internet, so not a check: run the driver outside the sandbox)
+nix build .#tasuke-download.driver && ./result/bin/nixos-test-driver
 ```
 
 The evaluations grade the product itself: `run.py --agent tasuke` runs
