@@ -9,8 +9,10 @@ use std::time::{Duration, Instant};
 
 use smithay::backend::allocator::Fourcc;
 use smithay::backend::allocator::dmabuf::Dmabuf;
+use smithay::backend::egl::EGLContext;
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::element::RenderElementStates;
+use smithay::backend::renderer::gles::{Capability, GlesError, GlesRenderer};
 use smithay::backend::renderer::{Bind, ExportMem, ImportAll, ImportMem, Offscreen, Renderer};
 use smithay::desktop::layer_map_for_output;
 use smithay::desktop::utils::{
@@ -245,6 +247,31 @@ impl Backend {
             u.change_vt(vt);
         }
     }
+}
+
+/// A GLES renderer that draws textures without GL fences.
+///
+/// With `Capability::Fencing`, smithay puts a `glFenceSync` after every
+/// texture upload and every draw that reads a texture, and waits on and
+/// deletes the one before, so a context sharing the texture knows when it
+/// is free. Aizome's contexts aren't shared and draw on one thread, where
+/// GL already keeps uploads and draws in order, so those fences are only
+/// driver calls; on NVIDIA (615.78) each one also leaks 16–42 bytes the
+/// driver never gives back, which grew to 410 MiB in two days on a 240 Hz
+/// display. Frames still end with an EGL fence (`Capability::ExportFence`),
+/// which DRM waits on.
+///
+/// # Safety
+///
+/// As [`GlesRenderer::new`]: the context mustn't be current on another
+/// thread.
+pub unsafe fn gles_renderer(context: EGLContext) -> Result<GlesRenderer, GlesError> {
+    // A shared context needs the fences; without them smithay would
+    // glFinish after every draw instead.
+    let shared = context.is_shared();
+    let capabilities = unsafe { GlesRenderer::supported_capabilities(&context) }?;
+    let capabilities = capabilities.into_iter().filter(|c| shared || *c != Capability::Fencing);
+    unsafe { GlesRenderer::with_capabilities(context, capabilities) }
 }
 
 /// The outcome of drawing one frame.
