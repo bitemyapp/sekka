@@ -33,8 +33,13 @@ including --buck-arg=--build-report={telemetry}.report.json and
 identical across clients: it enters action paths. Output-loss recovery stops only
 the owned daemon and quarantines mutable output state, preserving its original
 action path and all cache data. Quarantine is evidence, not active workload.
-Buck libtest acceptance additionally requires native executed-test records from
-log what-ran against that exact event-log path, never an implicit latest log.
+Buck telemetry adds --write-build-id and binds the final trace to that file.
+Every Build ID in the exact invocation log is retained before postprocessing;
+native retries can leave --event-log pointing at an earlier failed attempt.
+Compiler totals cover all attempts, remain unknown if any failed compiler action
+could have stopped before rustc, and expose final-attempt counts separately.
+Buck libtest acceptance requires native executed-test records from log what-ran
+against retained exact-attempt events, never an implicit latest log.
 Native test.run records retain their executor identity: real executed tests may
 run remotely, and do not by themselves prove local runtime or manager coverage.
 Libtest counts are retained even for failed test commands, never only successes.
@@ -297,8 +302,23 @@ def buck_telemetry(path):
               'native_event_json': str(path), 'snapshots': []}
     memory_peaks = []
     memory_unmeasured = 0
+    trace_ids = set()
     commands_complete = False
     for row in json_stream(path):
+        # CommandEnd.is_success is deprecated and defaults false even on success.
+        # CommandResult is authoritative for these native build/test operations.
+        response = row.get('Result', {}).get('result', {})
+        if 'build_response' in response:
+            result['command_success'] = not response['build_response'].get('errors')
+        elif 'test_response' in response:
+            test = response['test_response']
+            result['command_success'] = (test.get('executor_exit_code') == 0
+                                         and not test.get('build_errors') and not test.get('test_errors'))
+        elif 'error' in response:
+            result['command_success'] = False
+        trace_id = row.get('Event', {}).get('trace_id')
+        if trace_id:
+            trace_ids.add(trace_id)
         event = row.get('Event', {}).get('data', {})
         end = event.get('SpanEnd', {}).get('data', {})
         if 'Command' in end:
@@ -337,10 +357,16 @@ def buck_telemetry(path):
                 if isinstance(detail, dict) and detail.get('action_digest'):
                     digests.append(detail['action_digest'])
         result['action_keys'].append({'key': action.get('key'), 'category': category,
+                                      'failed': bool(action.get('failed')),
                                       'execution_kind': name, 'action_digests': digests,
                                       'commands': action.get('commands', []),
                                       'cache_upload_result': action.get('cache_upload_result')})
     result['command_end_observed'] = commands_complete
+    result['trace_ids'] = sorted(trace_ids)
+    result['successful_compiler_actions'] = result['compiler_executions'] - sum(
+        action.get('category') in ('cargo_build', 'cargo_test') and action.get('failed', False)
+        and action['execution_kind'] in ('local', 'remote', 'local_worker', 'remote_worker')
+        for action in result['action_keys'])
     if not commands_complete or result['failed_compiler_actions']:
         result['compiler_executions'] = None
     # Endpoints suffice for daemon metrics; all original samples remain in JSON.
@@ -609,40 +635,135 @@ class Bench:
             temporary.replace(old_state)
         return markers, changes
 
-    def collect_telemetry(self, prefix, values, directory, name='telemetry'):
+    def telemetry_flags(self, prefix, values):
+        flags = expand(self.config['buck_telemetry_flags'], dict(values, telemetry=prefix))
+        if any(flag.startswith('--buck-arg=--write-build-id') for flag in flags):
+            raise ValueError('write-build-id is owned by the harness, not buck_telemetry_flags')
+        return flags + [f'--buck-arg=--write-build-id={prefix}.build-id']
+
+    def collect_telemetry(self, prefix, values, directory, name='telemetry', invocation=None):
         if self.config['tool'] == 'bazel':
             return bazel_telemetry(prefix)
         event_path = Path(str(prefix) + '.events.json-lines.gz')
-        if not event_path.exists():
-            return {'compiler_executions': None, 'native_event_log_missing': str(event_path)}
+        build_id_path = Path(str(prefix) + '.build-id')
+        final_id = build_id_path.read_text().strip() if build_id_path.exists() else None
+        uuid_pattern = r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
+        if final_id is not None and not re.fullmatch(uuid_pattern, final_id):
+            raise RuntimeError('invalid native write-build-id identity')
+        attempt_ids = []
+        for key in ('log', 'stderr_log'):
+            if invocation and invocation.get(key):
+                for ident in re.findall(r'Build ID: (' + uuid_pattern + r')',
+                                        Path(invocation[key]).read_text(errors='replace')):
+                    if ident not in attempt_ids:
+                        attempt_ids.append(ident)
+        logged_attempt_ids = list(attempt_ids)
+        if final_id and final_id not in attempt_ids:
+            attempt_ids.append(final_id)
         engine = self.config.get('buck_engine')
         if not engine and self.env.get('SEKKA_BUCK2_BIN'):
             engine = [self.env['SEKKA_BUCK2_BIN']]
         if not engine:
             raise RuntimeError('buck_engine argv required to decode native events')
-        decoded = self.command(expand(engine, values) + ['log', 'show', str(event_path)],
-                               values['tree'], directory, name, separate_stderr=True)
-        if decoded['exit_status']:
-            raise RuntimeError('native Buck event decoding failed')
-        telemetry = buck_telemetry(decoded['log'])
-        telemetry['collection'] = decoded
-        executed = self.command(
-            expand(engine, values) + ['log', 'what-ran', '--format', 'json', '--skip-cache-hits', str(event_path)],
-            values['tree'], directory, name + '-executed', separate_stderr=True)
-        if executed['exit_status']:
-            raise RuntimeError('native Buck execution-record decoding failed')
-        test_executions = []
-        reasons = {}
-        for row in json_stream(executed['log']):
-            reason = row.get('reason', 'unknown')
-            reasons[reason] = reasons.get(reason, 0) + 1
-            if reason == 'test.run':
-                test_executions.append(row)
-        telemetry['execution_records'] = executed
-        telemetry['execution_reasons'] = reasons
-        telemetry['test_execution_count'] = len(test_executions)
-        telemetry['test_executions'] = test_executions
-        return telemetry
+        engine = expand(engine, values) + [
+            '--isolation-dir', self.config.get('buck_isolation', 'shared-bench')]
+        attempts = []
+        errors = []
+        # Preserve the explicitly requested file even when native retry left it
+        # pointing at the FIRST attempt. Never ask Buck for an implicit latest log.
+        if event_path.exists():
+            decoded = self.command(engine + ['log', 'show', str(event_path)],
+                                   values['tree'], directory, name + '-requested', separate_stderr=True)
+            if decoded['exit_status'] == 0:
+                telemetry = buck_telemetry(decoded['log'])
+                telemetry['collection'] = decoded
+                if len(telemetry['trace_ids']) == 1:
+                    ident = telemetry['trace_ids'][0]
+                    attempts.append(dict(trace_id=ident, telemetry=telemetry))
+                    if ident not in attempt_ids:
+                        attempt_ids.insert(0, ident)
+                else:
+                    errors.append('requested event file does not identify exactly one trace')
+            else:
+                errors.append('requested native event file could not be decoded')
+        for ident in attempt_ids:
+            if any(attempt['trace_id'] == ident for attempt in attempts):
+                continue
+            decoded = self.command(engine + ['log', 'show', '--trace-id', ident, '--no-remote'],
+                                   values['tree'], directory, name + '-' + ident, separate_stderr=True)
+            if decoded['exit_status']:
+                attempts.append({'trace_id': ident, 'collection': decoded,
+                                 'error': 'exact attempt event log unavailable; execution remains unmeasured'})
+                continue
+            telemetry = buck_telemetry(decoded['log'])
+            telemetry['collection'] = decoded
+            if telemetry['trace_ids'] != [ident]:
+                attempts.append({'trace_id': ident, 'collection': decoded,
+                                 'error': 'decoded event identity differs from requested trace'})
+                continue
+            attempts.append(dict(trace_id=ident, telemetry=telemetry))
+        # Decode what-ran from our already retained exact JSON, not the rotating
+        # daemon log directory. Capture ALL events before any additional commands.
+        for attempt in attempts:
+            telemetry = attempt.get('telemetry')
+            if telemetry is None:
+                continue
+            retained = Path(directory) / (name + '-' + attempt['trace_id'] + '.json-lines')
+            os.link(telemetry['native_event_json'], retained)
+            telemetry['retained_native_event_json'] = str(retained)
+            executed = self.command(
+                engine + ['log', 'what-ran', '--format', 'json', '--skip-cache-hits',
+                          str(retained)],
+                values['tree'], directory, name + '-' + attempt['trace_id'] + '-executed', separate_stderr=True)
+            telemetry['execution_records'] = executed
+            if executed['exit_status']:
+                attempt['error'] = 'native exact-attempt execution-record decoding failed'
+                continue
+            records = list(json_stream(executed['log']))
+            telemetry['execution_reasons'] = {}
+            for row in records:
+                reason = row.get('reason', 'unknown')
+                telemetry['execution_reasons'][reason] = telemetry['execution_reasons'].get(reason, 0) + 1
+            telemetry['test_executions'] = [row for row in records if row.get('reason') == 'test.run']
+            telemetry['test_execution_count'] = len(telemetry['test_executions'])
+        by_id = {attempt['trace_id']: attempt for attempt in attempts}
+        attempts = [by_id[ident] for ident in attempt_ids if ident in by_id]
+        final = by_id.get(final_id, {}).get('telemetry', {})
+        complete = bool(final_id and logged_attempt_ids and logged_attempt_ids[-1] == final_id
+                        and attempts and final) and not errors and all(
+            'error' not in attempt and attempt.get('telemetry', {}).get('command_end_observed')
+            and attempt['telemetry'].get('command_success') is not None
+            for attempt in attempts)
+        result = dict(final)
+        result.update(attempts=attempts, final_trace_id=final_id, build_id_path=str(build_id_path),
+                      collection_errors=errors, complete_attempt_collection=complete,
+                      final_compiler_executions=final.get('compiler_executions'),
+                      compiler_count_definition='total across every retained attempt; unknown if any attempt is incomplete or has failed compiler actions; final attempt reported separately')
+        result['logged_attempt_ids'] = logged_attempt_ids
+        counts = [attempt.get('telemetry', {}).get('compiler_executions') for attempt in attempts]
+        result['compiler_executions'] = sum(counts) if complete and None not in counts else None
+        result['failed_native_attempts'] = sum(
+            attempt.get('telemetry', {}).get('command_success') is False for attempt in attempts)
+        peaks = [attempt.get('telemetry', {}).get('maximum_executed_action_memory_bytes') for attempt in attempts]
+        result['maximum_executed_action_memory_bytes'] = max((peak for peak in peaks if peak is not None), default=None)
+        for key in ('memory_sample_count', 'memory_unmeasured_command_count'):
+            result[key] = sum(attempt.get('telemetry', {}).get(key, 0) for attempt in attempts)
+        for key in ('compiler_action_attempts', 'successful_compiler_actions', 'failed_compiler_actions', 'failed_actions'):
+            result[key] = sum(attempt.get('telemetry', {}).get(key, 0) for attempt in attempts)
+        result['observed_work_counts_complete'] = complete
+        result['execution_kinds'] = {}
+        result['executed_categories'] = {}
+        result['action_keys'] = []
+        for attempt in attempts:
+            telemetry = attempt.get('telemetry', {})
+            for kind, count in telemetry.get('execution_kinds', {}).items():
+                result['execution_kinds'][kind] = result['execution_kinds'].get(kind, 0) + count
+            for category, count in telemetry.get('executed_categories', {}).items():
+                result['executed_categories'][category] = result['executed_categories'].get(category, 0) + count
+            result['action_keys'].extend(dict(action, trace_id=attempt['trace_id'])
+                                         for action in telemetry.get('action_keys', []))
+        save(Path(directory) / (name + '-attempts.json'), result)
+        return result
 
     def artifact(self, kind, values, directory, require_cached=True):
         selector = self.config['artifacts'][kind]
@@ -665,7 +786,7 @@ class Bench:
             lines = Path(query['log']).read_text().splitlines()
             candidates = [Path(values['tree']) / line for line in lines if line.startswith(('bazel-out/', '/'))]
         else:
-            flags = expand(self.config['buck_telemetry_flags'], dict(values, telemetry=prefix))
+            flags = self.telemetry_flags(prefix, values)
             argv = self.client(values, 'outputs', [*flags, target])
             rec = self.command(argv, values['tree'], directory, kind + '-declared-materialize')
             if rec['exit_status']:
@@ -689,7 +810,7 @@ class Bench:
                     elif isinstance(value, list):
                         paths.extend(x for x in value if isinstance(x, str))
             candidates = [Path(values['tree']) / value for value in paths]
-        telemetry = self.collect_telemetry(prefix, values, directory, kind + '-materialize-telemetry')
+        telemetry = self.collect_telemetry(prefix, values, directory, kind + '-materialize-telemetry', invocation=rec)
         work = sum(telemetry.get('executed_mnemonics', telemetry.get('executed_categories', {})).values())
         save(directory / (kind + '-materialization.json'), {
             'telemetry': telemetry, 'executed_work_actions': work, 'require_cached': require_cached,
@@ -742,16 +863,17 @@ class Bench:
             behavior = expand(self.config['correctness_behavior'], values)
             behavior_prefix = directory / 'original-behavior-native'
             if self.config['tool'] == 'buck2':
-                behavior += expand(self.config['buck_telemetry_flags'], dict(values, telemetry=behavior_prefix))
+                behavior += self.telemetry_flags(behavior_prefix, values)
             rec = self.command(behavior, values['tree'], directory, 'original-behavior')
             counts = self.test_counts(rec['log'])
             checks['original_behavior'] = {
                 'command': rec, 'test_counts': counts,
                 'passed': rec['exit_status'] == 0 and counts['passed'] == 11 and counts['failed'] == 0}
             if self.config['tool'] == 'buck2':
-                telemetry = self.collect_telemetry(behavior_prefix, values, directory, 'original-behavior-telemetry')
+                telemetry = self.collect_telemetry(behavior_prefix, values, directory, 'original-behavior-telemetry', invocation=rec)
                 checks['original_behavior']['telemetry'] = telemetry
-                checks['original_behavior']['passed'] &= telemetry.get('test_execution_count', 0) > 0
+                checks['original_behavior']['passed'] &= (telemetry.get('test_execution_count', 0) > 0
+                    and telemetry.get('complete_attempt_collection', False) and telemetry.get('command_success') is True)
         return checks
 
     def metrics(self, values, directory, name):
@@ -831,7 +953,7 @@ class Bench:
                 if native_operation == 'test':
                     telemetry_flags += ['--nocache_test_results', '--test_output=all']
             else:
-                telemetry_flags = expand(self.config['buck_telemetry_flags'], dict(values, telemetry=prefix))
+                telemetry_flags = self.telemetry_flags(prefix, values)
             argv = self.client(values, native_operation, telemetry_flags + extra)
         patch = subprocess.check_output(['git', '-C', str(tree), 'diff', '--binary', 'HEAD'])
         directory.mkdir(parents=True, exist_ok=True)
@@ -862,10 +984,15 @@ class Bench:
         if build_info is not None:
             result['build_info'] = build_info
         try:
-            result['telemetry'] = (self.collect_telemetry(prefix, values, directory) if operation != 'startup'
+            result['telemetry'] = (self.collect_telemetry(prefix, values, directory, invocation=rec) if operation != 'startup'
                                    else {'compiler_executions': None, 'not_applicable': 'runtime execution'})
-            if operation != 'startup' and rec['exit_status'] == 0 and result['telemetry'].get('compiler_executions') is None:
-                raise RuntimeError('successful build lacks complete native compiler-action telemetry')
+            if operation != 'startup' and rec['exit_status'] == 0:
+                telemetry = result['telemetry']
+                if self.config['tool'] == 'buck2':
+                    if not telemetry.get('complete_attempt_collection') or telemetry.get('command_success') is not True:
+                        raise RuntimeError('successful build lacks complete exact-attempt native telemetry and successful final trace')
+                elif telemetry.get('compiler_executions') is None:
+                    raise RuntimeError('successful build lacks complete native compiler-action telemetry')
         except Exception as exc:
             result['telemetry_error'] = str(exc)
         try:
@@ -1214,6 +1341,9 @@ def summarize(root):
         load(path)['exit_status'] != 0 for path in (root / 'stages').glob('*/*/build.json'))
     summary['raw_failed_correctness_observations'] = sum(
         not load(path)['passed'] for path in (root / 'stages').glob('*/*/result.json'))
+    summary['observed_failed_native_attempts'] = sum(
+        trial.get('telemetry', {}).get('failed_native_attempts', 0)
+        for trials in groups.values() for trial in trials)
     summary['qualification_gates'] = qualification_gates(root)
     for key, trials in groups.items():
         times = [row['build']['wall_seconds'] for row in trials]
@@ -1222,7 +1352,9 @@ def summarize(root):
                                   'all_wall_median': statistics.median(times), 'all_wall_range': [min(times), max(times)],
                                   'passed_wall_median': statistics.median(passed_times) if passed_times else None,
                                   'passed_wall_range': [min(passed_times), max(passed_times)] if passed_times else None,
-                                  'compiler_executions': [row.get('telemetry', {}).get('compiler_executions') for row in trials]}
+                                  'compiler_executions': [row.get('telemetry', {}).get('compiler_executions') for row in trials],
+                                  'final_attempt_compiler_executions': [row.get('telemetry', {}).get('final_compiler_executions') for row in trials],
+                                  'observed_failed_native_attempts': [row.get('telemetry', {}).get('failed_native_attempts') for row in trials]}
     save(root / 'summaries' / (str(time.time_ns()) + '.json'), summary)
     return summary
 

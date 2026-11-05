@@ -544,6 +544,17 @@ does not establish local runtime/manager coverage. A server filtering stale
 action-cache entries establishes only that server path, not client recovery
 from an already accepted cache hit with missing CAS data.
 
+Native recovery may leave `--event-log` naming the failed first attempt while
+`--write-build-id` names the successful retry. The harness owns the latter flag,
+captures each invocation's explicit Build IDs, and immediately retains every
+exact trace before further postprocessing. It selects the final trace by that
+written identity, never by an implicit latest log. Native `CommandResult`
+determines success; deprecated `CommandEnd.is_success` does not. Timings include
+retries, so total observed action attempts and failures are retained separately
+from final-attempt compiler counts. Total compiler executions remain unknown
+when any failed compiler action may have stopped before rustc. Missing/expired
+attempt events fail collection rather than becoming zero work or a warm rerun.
+
 Physical sharing uses the post-edit/revert one-tree immutable union as its
 denominator. All roots must share a Btrfs filesystem UUID (subvolume device
 numbers may differ); failed measurements cannot pass storage gates. Finite
