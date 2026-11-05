@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use sidestep_ui::{
-    Background, Canvas, Cursor, Drag, DropResponse, PopupPosition, ScrollDelta, TimerId, WindowEvent, WindowId,
-    WindowOptions,
+    Background, Canvas, Cursor, Drag, DropResponse, PopupPosition, ScrollDelta, TextPurpose, TimerId, WindowEvent,
+    WindowId, WindowOptions,
 };
 
 use crate::cx::{Cx, Pool};
@@ -556,9 +556,15 @@ impl Platform for SidestepPlatform<'_> {
         }
     }
 
-    fn set_text_input(&mut self, id: WinId, wanted: bool, caret: Option<Rect>) {
+    fn set_text_input(&mut self, id: WinId, wanted: bool, purpose: TextPurpose, caret: Option<Rect>) {
         if let Some(mut w) = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s)) {
-            w.set_text_input(wanted, caret);
+            w.set_text_input(wanted, purpose, caret);
+        }
+    }
+
+    fn reset_text_input(&mut self, id: WinId) {
+        if let Some(mut w) = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s)) {
+            w.reset_text_input();
         }
     }
 

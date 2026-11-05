@@ -63,6 +63,10 @@ pub struct TestPlatform {
     pub quit: bool,
     pub cursors: HashMap<WinId, Cursor>,
     pub text_input: HashMap<WinId, (bool, Option<Rect>)>,
+    /// What text each window last asked input methods for.
+    pub text_purposes: HashMap<WinId, sidestep_ui::TextPurpose>,
+    /// Windows that told input methods to start over, in order.
+    pub text_input_resets: Vec<WinId>,
     pub requested_sizes: HashMap<WinId, Size>,
     pub minimized: Vec<WinId>,
     /// Layer surfaces' changes, in order.
@@ -127,6 +131,8 @@ impl TestPlatform {
             quit: false,
             cursors: HashMap::new(),
             text_input: HashMap::new(),
+            text_purposes: HashMap::new(),
+            text_input_resets: Vec::new(),
             requested_sizes: HashMap::new(),
             minimized: Vec::new(),
             layer_changes: Vec::new(),
@@ -224,8 +230,13 @@ impl Platform for TestPlatform {
         self.cursors.insert(id, cursor);
     }
 
-    fn set_text_input(&mut self, id: WinId, wanted: bool, caret: Option<Rect>) {
+    fn set_text_input(&mut self, id: WinId, wanted: bool, purpose: sidestep_ui::TextPurpose, caret: Option<Rect>) {
         self.text_input.insert(id, (wanted, caret));
+        self.text_purposes.insert(id, purpose);
+    }
+
+    fn reset_text_input(&mut self, id: WinId) {
+        self.text_input_resets.push(id);
     }
 
     fn request_size(&mut self, id: WinId, size: Size) {
