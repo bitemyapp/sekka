@@ -5,7 +5,8 @@
 mod common;
 
 use aizome_sys::disks::{
-    Confirm, DeletePartition, Disks, Erase, Format, FormatSpec, NewPartitionTable, Repair, TableKind,
+    Change, Confirm, CreatePartition, DeletePartition, Disks, Erase, Format, FormatSpec, Identity, NewPartitionTable,
+    Repair, Seen, TableKind,
 };
 use aizome_sys::{Error, Wake};
 use common::{eventually, path};
@@ -552,6 +553,16 @@ fn calls(log: &Shared) -> Vec<String> {
     log.lock().unwrap().calls.clone()
 }
 
+/// The device at `path` as the person sees it now.
+fn seen(disks: &Disks, path: &str) -> Identity {
+    disks.snapshot().identity(path).unwrap_or_else(|| panic!("{path}"))
+}
+
+/// A confirmation of the device as the test sees it (any brand will do).
+fn agree<Op: Change>(seen: Identity) -> Confirm<Op, ()> {
+    Confirm::new(aizome_typestate::Reviewed::new(Seen::new(seen), ()))
+}
+
 fn start(bus: &common::TestBus) -> Disks {
     let disks = Disks::with_bus(Some(bus.bus()), Wake::none());
     assert!(eventually(|| disks.snapshot().blocks.len() == 3), "{:?}", disks.snapshot());
@@ -613,14 +624,12 @@ fn formatting_needs_a_fresh_confirmation_and_shows_progress() {
     let (_fake, log) = serve(&bus);
     let disks = start(&bus);
     let stick = disks.snapshot().block(&block_path("sdb1")).unwrap().clone();
+    let fat = seen(&disks, &stick.path);
 
     // Mounted: refused before UDisks is asked.
     disks.mount(&stick.path).wait().unwrap();
     assert!(eventually(|| disks.snapshot().in_use(&stick.path)));
-    let refused = disks.format(
-        Confirm::<Format>::new(&disks.snapshot().block(&stick.path).unwrap().clone()),
-        FormatSpec::new("ext4", "DATA"),
-    );
+    let refused = disks.format(agree::<Format>(seen(&disks, &stick.path)), FormatSpec::new("ext4", "DATA"));
     assert!(matches!(refused.wait(), Err(Error::InvalidArgument(m)) if m.contains("in use")));
     disks.unmount(&stick.path, false).wait().unwrap();
     assert!(eventually(|| !disks.snapshot().in_use(&stick.path)));
@@ -628,7 +637,7 @@ fn formatting_needs_a_fresh_confirmation_and_shows_progress() {
     // Erasing shows a job with progress while it runs.
     let mut spec = FormatSpec::new("ext4", "DATA");
     spec.erase = Erase::Zeros;
-    let task = disks.format(Confirm::<Format>::new(&stick), spec);
+    let task = disks.format(agree::<Format>(fat.clone()), spec);
     assert!(eventually(|| disks.snapshot().jobs_for(&stick.path).any(|j| j.progress == Some(0.5))));
     task.wait().unwrap();
     {
@@ -642,16 +651,16 @@ fn formatting_needs_a_fresh_confirmation_and_shows_progress() {
     assert!(eventually(|| disks.snapshot().block(&stick.path).is_some_and(|b| b.id_type == "ext4")));
 
     // The old confirmation was for the FAT filesystem that is gone.
-    let stale = Confirm::<Format>::new(&stick);
+    let stale = agree::<Format>(fat);
     assert!(
         matches!(disks.format(stale, FormatSpec::new("vfat", "X")).wait(), Err(Error::InvalidArgument(m)) if m.contains("changed"))
     );
     // A filesystem this system can't make is refused.
-    let now = disks.snapshot().block(&stick.path).unwrap().clone();
-    assert!(disks.format(Confirm::<Format>::new(&now), FormatSpec::new("zfs", "")).wait().is_err());
+    let now = seen(&disks, &stick.path);
+    assert!(disks.format(agree::<Format>(now.clone()), FormatSpec::new("zfs", "")).wait().is_err());
     // Repair needs its own confirmation.
-    assert!(disks.repair(Confirm::<Repair>::new(&now)).wait().unwrap());
-    assert!(disks.check(&now.path).wait().unwrap());
+    assert!(disks.repair(agree::<Repair>(now)).wait().unwrap());
+    assert!(disks.check(&stick.path).wait().unwrap());
 }
 
 #[test]
@@ -661,8 +670,13 @@ fn partitions_are_made_in_free_space_and_deleted_on_confirmation() {
     let disks = start(&bus);
     let disk = block_path("sdb");
     // Over an existing partition: refused without asking UDisks.
-    assert!(disks.create_partition(&disk, MIB, GIB, None, "", None).wait().is_err());
-    let made = disks.create_partition(&disk, 2 * GIB, GIB, None, "Data", None).wait().unwrap();
+    assert!(
+        disks.create_partition(agree::<CreatePartition>(seen(&disks, &disk)), MIB, GIB, None, "", None).wait().is_err()
+    );
+    let made = disks
+        .create_partition(agree::<CreatePartition>(seen(&disks, &disk)), 2 * GIB, GIB, None, "Data", None)
+        .wait()
+        .unwrap();
     assert_eq!(made, block_path("sdb2"));
     assert!(calls(&log).contains(&format!(
         "CreatePartition({}, {}, 0fc63daf-8483-4772-8e79-3d69d8477de4, Data)",
@@ -670,16 +684,14 @@ fn partitions_are_made_in_free_space_and_deleted_on_confirmation() {
         GIB
     )));
     assert!(eventually(|| disks.snapshot().partitions(&disk).len() == 3));
-    let new = disks.snapshot().block(&made).unwrap().clone();
-    disks.delete_partition(Confirm::<DeletePartition>::new(&new)).wait().unwrap();
+    disks.delete_partition(agree::<DeletePartition>(seen(&disks, &made))).wait().unwrap();
     assert!(eventually(|| disks.snapshot().partitions(&disk).len() == 2));
     // A new partition table on the whole disk.
-    let whole = disks.snapshot().block(&disk).unwrap().clone();
-    disks.create_partition_table(Confirm::<NewPartitionTable>::new(&whole), TableKind::Dos).wait().unwrap();
+    disks.create_partition_table(agree::<NewPartitionTable>(seen(&disks, &disk)), TableKind::Dos).wait().unwrap();
     assert!(calls(&log).contains(&format!("Format(dos) on {disk}")));
     // …but not on a partition.
-    let part = disks.snapshot().block(&block_path("sdb1")).unwrap().clone();
-    assert!(disks.create_partition_table(Confirm::<NewPartitionTable>::new(&part), TableKind::Gpt).wait().is_err());
+    let part = seen(&disks, &block_path("sdb1"));
+    assert!(disks.create_partition_table(agree::<NewPartitionTable>(part), TableKind::Gpt).wait().is_err());
 }
 
 #[test]

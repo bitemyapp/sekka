@@ -22,6 +22,9 @@ aizome-face = { path = "crates/aizome-face" }
 aizome-kit = { path = "crates/aizome-kit" }
 aizome-apps = { path = "crates/aizome-apps" }
 aizome-sys = { path = "crates/aizome-sys" }
+# Typestate support: one type per state, and proofs for the checks a
+# transition must not skip.
+aizome-typestate = { path = "crates/aizome-typestate" }
 aizome-search = { path = "crates/aizome-search" }
 # Sukumo's crates, which keep the names they had in Sidestep, the
 # toolkit Sukumo came from (sukumo/README.md). The path stays inside the

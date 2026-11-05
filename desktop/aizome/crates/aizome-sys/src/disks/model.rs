@@ -362,6 +362,11 @@ pub struct Drive {
     pub serial: String,
     pub wwn: String,
     pub id: String,
+    /// When UDisks first saw the drive, and the medium in it (microseconds
+    /// since 1970; 0 for no medium): another stick in the same port, or
+    /// another card in the same reader, is seen anew.
+    pub time_detected: u64,
+    pub time_media_detected: u64,
     pub size: u64,
     pub rotation: Rotation,
     /// The media can be removed (a card reader, an optical drive).
@@ -810,6 +815,8 @@ fn drive(path: &str, p: &Props, ata: Option<&Props>, nvme: Option<&Props>) -> Dr
         serial: p.str("Serial"),
         wwn: p.str("WWN"),
         id: p.str("Id"),
+        time_detected: p.u64("TimeDetected"),
+        time_media_detected: p.u64("TimeMediaDetected"),
         size: p.u64("Size"),
         rotation,
         media_removable: p.bool("MediaRemovable"),
