@@ -534,6 +534,7 @@ version = "0.1.0"
 dependencies = [
  "aizome-ipc",
  "aizome-kit",
+ "aizome-typestate",
  "anyhow",
  "calamares-nixos",
  "jiff",

@@ -162,7 +162,7 @@ pub fn show(app: &mut Genkan, cx: &mut Cx<Msg>, page: &str) {
         return;
     }
     app.activity = None;
-    app.show_review(Review {
+    app.show_sample_review(Review {
         encrypt: false,
         disk: sample_disk(
             "/dev/nvme0n1",

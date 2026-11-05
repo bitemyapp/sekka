@@ -77,7 +77,7 @@ pub fn failure(message: &str) -> Element<Msg> {
 
 fn preparation(app: &Genkan) -> Element<Msg> {
     let prep = &app.preparation;
-    let status: Element<Msg> = match prep.state {
+    let status: Element<Msg> = match app.prep_state() {
         PrepState::Working => progress_indeterminate().width(40.0).into(),
         PrepState::Done => icon(Icon::CircleCheck)
             .size(18.0)
@@ -127,7 +127,7 @@ fn preparation(app: &Genkan) -> Element<Msg> {
 }
 
 pub fn page(app: &Genkan) -> Element<Msg> {
-    let Some(review) = &app.review else {
+    let Some(review) = app.review() else {
         return text("Checking your settings…").role(Role::Text3).into();
     };
     let disk = &review.disk;

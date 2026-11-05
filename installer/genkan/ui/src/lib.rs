@@ -7,6 +7,7 @@
 //! The library is the program, so tests can drive it headlessly
 //! (`aizome_kit::testing::Harness`); `main.rs` only runs it.
 pub mod app;
+pub mod flow;
 pub mod format;
 pub mod media;
 pub mod preview;

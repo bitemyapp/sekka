@@ -6,13 +6,22 @@
 //! The helper prepares the installation as soon as it receives the plan and
 //! reports `install::Event`s on stdout. Closing stdin before confirming
 //! cancels preparation; nothing has been written to any disk at that point.
-use crate::{InstallPlan, install::Event};
+//!
+//! The GUI sends the confirmation only with the helper's proof that it has
+//! prepared ([`Ready`]), never while it still prepares.
+use crate::{
+    InstallPlan,
+    install::{Event, Summary},
+};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::{
     io::{BufRead, BufReader, Write},
     process::{Command, Stdio},
-    sync::mpsc::{self, Sender},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        mpsc::{self, Sender},
+    },
     thread,
 };
 use zeroize::Zeroizing;
@@ -48,12 +57,50 @@ pub fn read_line(reader: &mut impl BufRead, limit: usize) -> Result<Option<Zeroi
 
 pub enum Update {
     Event(Event),
+    /// The helper prepared the installation and waits for the confirmation:
+    /// the proof [`Session::confirm`] takes.
+    Prepared(Ready),
     /// The helper exited: `Ok` when its exit status was success.
     Finished(Result<(), String>),
 }
 
+/// Proof that a session's helper reported `Prepared`. Only the session's
+/// reader makes one, from the helper's own event, so the GUI can't send the
+/// confirmation while the helper still prepares:
+///
+/// ```compile_fail,E0451
+/// use calamares_nixos::{install::Summary, session::{Ready, Session}};
+/// fn early(session: &Session) -> anyhow::Result<()> {
+///     let ready = Ready { session: 0, summary: Summary::default() };
+///     session.confirm(&ready, "ERASE /dev/sdb")
+/// }
+/// ```
+///
+/// ```
+/// use calamares_nixos::session::{Ready, Session};
+/// fn prepared(session: &Session, ready: &Ready) -> anyhow::Result<()> {
+///     session.confirm(ready, "ERASE /dev/sdb")
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct Ready {
+    session: u64,
+    summary: Summary,
+}
+
+impl Ready {
+    /// What preparation established.
+    pub fn summary(&self) -> &Summary {
+        &self.summary
+    }
+}
+
+/// Numbers the sessions, so one's [`Ready`] can't confirm another.
+static SESSIONS: AtomicU64 = AtomicU64::new(0);
+
 /// A running helper. Dropping it without confirming cancels preparation.
 pub struct Session {
+    id: u64,
     writer: Sender<Option<String>>,
 }
 impl Session {
@@ -78,6 +125,7 @@ impl Session {
         let stdout = child.stdout.take().context("Helper stdout")?;
         let mut request = Zeroizing::new(serde_json::to_vec(&plan.into_request())?);
         request.push(b'\n');
+        let id = SESSIONS.fetch_add(1, Ordering::Relaxed) + 1;
         let (writer, confirmations) = mpsc::channel::<Option<String>>();
         // Writes can block until Polkit authorizes and the helper reads; keep
         // them off the caller's thread.
@@ -100,8 +148,13 @@ impl Session {
         thread::spawn(move || {
             for line in BufReader::new(stdout).lines() {
                 let Ok(line) = line else { break };
-                if let Ok(event) = serde_json::from_str(&line) {
-                    on_update(Update::Event(event));
+                match serde_json::from_str(&line) {
+                    Ok(Event::Prepared { summary }) => on_update(Update::Prepared(Ready {
+                        session: id,
+                        summary,
+                    })),
+                    Ok(event) => on_update(Update::Event(event)),
+                    Err(_) => {}
                 }
             }
             on_update(Update::Finished(match child.wait() {
@@ -112,12 +165,19 @@ impl Session {
                 Err(error) => Err(error.to_string()),
             }));
         });
-        Ok(Self { writer })
+        Ok(Self { id, writer })
     }
-    /// Send the typed phrase. The helper checks it against its own parsed
-    /// plan; destructive work starts only if it matches.
-    pub fn confirm(&self, phrase: &str) {
-        let _ = self.writer.send(Some(phrase.to_owned()));
+    /// Send the typed phrase, once the helper has prepared. The helper
+    /// checks it against its own parsed plan; destructive work starts only
+    /// if it matches.
+    pub fn confirm(&self, ready: &Ready, phrase: &str) -> Result<()> {
+        ensure!(
+            ready.session == self.id,
+            "That preparation belongs to another installation helper"
+        );
+        self.writer
+            .send(Some(phrase.to_owned()))
+            .map_err(|_| anyhow::anyhow!("The installation helper is no longer running"))
     }
     /// Withdraw an unconfirmed request. Has no effect after confirming.
     pub fn cancel(&self) {
@@ -133,6 +193,7 @@ impl Drop for Session {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn lines_are_bounded_and_terminated() {
         let mut input = std::io::Cursor::new(b"{\"a\":1}\nsecond\n".to_vec());
