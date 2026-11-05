@@ -98,8 +98,14 @@ pub fn is_cancellation(error: &anyhow::Error) -> bool {
     error.chain().any(|cause| cause.is::<Cancelled>())
 }
 
-pub fn command(program: &str) -> Command {
-    let mut command = Command::new(program);
+pub use crate::storage::Program;
+
+/// A command for `program`, with the tool path and nothing else of the
+/// caller's environment.
+// The one place the installer starts a program (clippy.toml).
+#[allow(clippy::disallowed_methods)]
+pub fn command(program: Program) -> Command {
+    let mut command = Command::new(program.name());
     command
         .stdin(Stdio::null())
         .env_clear()
@@ -114,10 +120,10 @@ pub fn command(program: &str) -> Command {
     command
 }
 
-pub fn output(program: &str, args: &[&str], seconds: u64) -> Result<String> {
+pub fn output(program: Program, args: &[&str], seconds: u64) -> Result<String> {
     run(
         command(program),
-        program,
+        program.name(),
         args,
         seconds,
         None,
@@ -128,7 +134,7 @@ pub fn output(program: &str, args: &[&str], seconds: u64) -> Result<String> {
 /// Secret input is an anonymous memory file, never argv, environment or a path.
 /// The file descriptor is closed when the child exits; callers own zeroizing buffers.
 pub(crate) fn output_secret(
-    program: &str,
+    program: Program,
     args: &[&str],
     secret: &[u8],
     seconds: u64,
@@ -149,15 +155,15 @@ pub(crate) fn output_secret(
     input.rewind()?;
     let mut cmd = command(program);
     cmd.stdin(Stdio::from(input));
-    run(cmd, program, args, seconds, None, Capture::Tail)
+    run(cmd, program.name(), args, seconds, None, Capture::Tail)
 }
 
 /// As `output`, but returns all of stdout (up to 256 MiB) instead of its tail.
 /// For machine-readable listings such as a system's closure.
-pub fn output_full(program: &str, args: &[&str], seconds: u64) -> Result<String> {
+pub fn output_full(program: Program, args: &[&str], seconds: u64) -> Result<String> {
     run(
         command(program),
-        program,
+        program.name(),
         args,
         seconds,
         None,
@@ -177,14 +183,14 @@ const FULL_LIMIT: usize = 256 << 20;
 /// As `output`, also passing each complete stderr line (up to 64 KiB) to
 /// `on_line` as it arrives, e.g. Nix `--log-format internal-json` progress.
 pub fn output_lines(
-    program: &str,
+    program: Program,
     args: &[&str],
     seconds: u64,
     on_line: &(dyn Fn(&str) + Sync),
 ) -> Result<String> {
     run(
         command(program),
-        program,
+        program.name(),
         args,
         seconds,
         Some(on_line),
@@ -293,6 +299,7 @@ fn run(
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_methods)]
 mod tests {
     use super::*;
     use std::sync::Mutex;
