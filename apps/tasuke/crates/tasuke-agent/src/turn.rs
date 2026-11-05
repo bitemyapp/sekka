@@ -125,6 +125,19 @@ impl<'a> Loop<'a> {
         Loop { options, ctl, client, desktop, started: Instant::now() }
     }
 
+    /// Tasuke's own server is a user unit; if it isn't answering, start it
+    /// (router mode loads the model on the first request).
+    fn ensure_server(&self, out: &mut Out<'_>) {
+        let own = format!("http://127.0.0.1:{}/v1", crate::options::DEFAULT_PORT);
+        if self.options.base_url.trim_end_matches('/') != own || self.client.reachable() {
+            return;
+        }
+        out.send(Event::Notice { level: Level::Info, text: "Starting the model server…".into() });
+        let argv: Vec<String> =
+            ["systemctl", "--user", "start", "tasuke-llm.service"].iter().map(|s| (*s).to_owned()).collect();
+        let _ = crate::exec::run(&argv, None, &[], None, std::time::Duration::from_secs(20), self.ctl.cancel_flag());
+    }
+
     fn fill(&self, history: &[Message], system: &str, n_ctx: Tokens) -> f64 {
         let est = context::estimate(history).0 + system.len() as u64 / 3 + 1500;
         est as f64 / n_ctx.0.max(1) as f64
@@ -132,6 +145,7 @@ impl<'a> Loop<'a> {
 
     fn run(&mut self, out: &mut Out<'_>, history: &mut Vec<Message>, usage: &mut Usage) -> (FinishReason, Option<f32>) {
         let o = self.options;
+        self.ensure_server(out);
         let n_ctx = self.client.context_size().unwrap_or(o.context_fallback);
         let memory = Memory::load(&o.data_dir).map(|m| m.prompt_block()).unwrap_or_default();
         let mut system = context::system_prompt(o, &memory);

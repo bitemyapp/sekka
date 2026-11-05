@@ -106,6 +106,12 @@ impl Client {
         self.base_url.strip_suffix("/v1").unwrap_or(&self.base_url)
     }
 
+    /// Whether anything answers at the server's address (any HTTP status).
+    pub(crate) fn reachable(&self) -> bool {
+        let url = format!("{}/health", self.root());
+        self.agent.get(&url).config().timeout_global(Some(Duration::from_secs(2))).build().call().is_ok()
+    }
+
     /// The context size the server gives each request (`n_ctx` in `/props`).
     pub(crate) fn context_size(&self) -> Option<Tokens> {
         let urls = [format!("{}/props?model={}", self.root(), url_escape(&self.model)), format!("{}/props", self.root())];
@@ -159,7 +165,9 @@ impl Client {
                     if connect_failures > CONNECT_RETRIES {
                         return Err(LlmError::Unreachable(e));
                     }
-                    sleep_unless_cancelled(Duration::from_secs(2u64 << connect_failures.min(4)), cancel)?;
+                    // 1, 2, 4, 8 s: long enough for a server that is starting, short
+                    // enough that a stopped one is reported soon.
+                    sleep_unless_cancelled(Duration::from_millis(500u64 << connect_failures.min(4)), cancel)?;
                 }
                 Err(Attempt::Loading(msg)) => {
                     let since = *loading_since.get_or_insert_with(|| {
