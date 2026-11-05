@@ -695,8 +695,9 @@ What follows from that, against the results:
   separate threads and both coalesce frames during a flood, so frames
   aren't the bottleneck. With history Ghostty's main branch is faster on
   every corpus; that's its VT core (its paged screen, and recent styled
-  and Unicode work), and history eviction, which Hotaru has since fixed
-  (#261).
+  and Unicode work), and history eviction, which slows Hotaru's core as
+  its history grows (#261, not merged when these were measured, works on
+  it).
 - **The compositor pays for Hotaru's buffers.** Ghostty's frames are
   already on the GPU; each of Hotaru's damaged regions has to be copied
   from shared memory into a texture by the compositor. That's why sway
