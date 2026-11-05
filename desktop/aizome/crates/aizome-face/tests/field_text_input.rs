@@ -86,3 +86,13 @@ fn a_committed_composition_is_typed_as_dots() {
     assert_eq!(h.program().password, "パ");
     assert!(h.platform.text_input_resets.is_empty());
 }
+
+#[test]
+fn a_prompt_that_stops_echoing_arrives_before_the_next_blink() {
+    let (mut h, w) = focused("", false);
+    h.send(M::Secure(true));
+    h.advance(std::time::Duration::ZERO);
+    assert_eq!(purpose(&h), Some(TextPurpose::Password), "told at once, not at the caret's next blink");
+    h.ime(w, Some("k"), "");
+    assert_eq!(h.program().password, "k", "what the input method sends after that is typed");
+}
