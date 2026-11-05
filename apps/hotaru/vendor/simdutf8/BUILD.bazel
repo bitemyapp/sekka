@@ -29,5 +29,5 @@ rust_library(
     rustc_env = {
         "CARGO_PKG_NAME": "simdutf8",
     },
-    deps = ["@nix_native//:link_search"],
+    link_deps = ["@nix_native//:link_search"],
 )

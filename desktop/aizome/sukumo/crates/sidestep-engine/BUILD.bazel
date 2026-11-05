@@ -42,6 +42,6 @@ rust_library(
         "@aizome_crates//:swash-0.2.10",
         "@aizome_crates//:tiny-skia-0.12.0",
         "@aizome_crates//:wayland-cursor-0.31.14",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )

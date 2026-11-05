@@ -31,6 +31,6 @@ rust_library(
         "@aizome_crates//:compact_str-0.10.0",
         "@aizome_crates//:lz4_flex-0.14.0",
         "@aizome_crates//:triomphe-0.1.17",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )

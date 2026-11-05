@@ -5,16 +5,19 @@
 { pkgs }:
 let
   toolchains = import ./toolchains.nix { inherit pkgs; };
+  client = import ./client.nix { inherit pkgs; };
+  repositories = import ./repositories.nix { inherit pkgs; };
   # Only the checked-in settings (.bazelrc): not the host's or the user's,
   # nor the Nixpkgs system rc, whose one setting is the server's JDK.
   bazel = pkgs.writeShellScriptBin "bazel" ''
     exec ${pkgs.bazel_9}/bin/bazel --nosystem_rc --nohome_rc \
-      --server_javabase=${pkgs.jdk21_headless} "$@"
+      --server_javabase=${pkgs.jdk21_headless} --bazelrc=${repositories} "$@"
   '';
 in
 pkgs.mkShell {
   packages = [
     bazel
+    client
     pkgs.bazel-buildtools
     pkgs.python3
     # Aizome's Rust, for build/bazel/generate.py's `cargo metadata` and for
@@ -23,4 +26,6 @@ pkgs.mkShell {
   ];
   SEKKA_BAZEL_RUST_TOOLCHAIN = toolchains.rust;
   SEKKA_BAZEL_NATIVE_ENV = toolchains.native;
+  SEKKA_BAZEL_RUNTIME_ENV = toolchains.testEnv;
+  SEKKA_BAZEL_REPOSITORIES_RC = repositories;
 }

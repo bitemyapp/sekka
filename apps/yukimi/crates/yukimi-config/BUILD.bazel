@@ -32,6 +32,6 @@ rust_library(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:serde_json-1.0.154",
         "@aizome_crates//:thiserror-2.0.21",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )

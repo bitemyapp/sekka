@@ -32,8 +32,8 @@ rust_library(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:serde_json-1.0.154",
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -83,7 +83,7 @@ rust_test(
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:serde_json-1.0.154",
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
-        "@nix_native//:link_search",
         ":aizome_config",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )

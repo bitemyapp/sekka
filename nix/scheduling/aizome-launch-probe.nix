@@ -1,6 +1,14 @@
 # Compile Aizome's actual spawn/which functions in a small driver. This
 # exercises the launcher with a real user manager without booting a GPU.
 { pkgs, source }:
+let
+  # This probe compiles one source file, not the entire desktop checkout.
+  # Build-graph metadata and unrelated apps must not invalidate its VM test.
+  sessionSource = builtins.path {
+    path = source + "/crates/aizome-comp-core/src/session.rs";
+    name = "aizome-session.rs";
+  };
+in
 pkgs.runCommand "aizome-launch-probe"
   {
     nativeBuildInputs = [
@@ -10,7 +18,7 @@ pkgs.runCommand "aizome-launch-probe"
     ];
   }
   ''
-    cp ${source}/crates/aizome-comp-core/src/session.rs session.rs
+    cp ${sessionSource} session.rs
     python3 - <<'PY'
     from pathlib import Path
     source = Path('session.rs').read_text()

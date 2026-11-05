@@ -43,9 +43,11 @@ build:dev --@rules_rust//rust/settings:per_crate_rustc_flag=external/rules_rust+
 build:release -c opt
 build:release --@rules_rust//rust/settings:codegen_units=4
 
-# `release-lto`: `release` with thin LTO.
+# `release-lto`: thin LTO for apps, ordinary release for the dynamically
+# loaded compositor. Rust cannot perform LTO when linking its Rust dylibs.
 build:release-lto --config=release
 build:release-lto --@rules_rust//rust/settings:lto=thin
+build:release-lto --@rules_rust//rust/settings:per_crate_rustc_flag=desktop/aizome/crates/aizome-comp@-Clto=off
 
 # Where actions run and what they reuse (the build plan's configuration
 # contract; the others follow with their services).

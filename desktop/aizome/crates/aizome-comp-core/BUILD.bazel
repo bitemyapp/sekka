@@ -28,7 +28,10 @@ cargo_build_script(
         "@aizome_crates//:toml-0.9.12+spec-1.1.0",
     ],
     data = glob(["**"], exclude = [
+        "BUILD",
         "BUILD.bazel",
+        "BUCK",
+        "PACKAGE",
         "target/**",
     ], allow_empty = True) + [
         "//desktop/aizome:Cargo.lock",
@@ -120,8 +123,8 @@ rust_dylib_library(
         "@aizome_crates//:x11rb-0.13.2",
         "@aizome_crates//:xcursor-0.3.11",
         ":build_script",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
@@ -183,7 +186,7 @@ rust_test(
         "@aizome_crates//:x11rb-0.13.2",
         "@aizome_crates//:xcursor-0.3.11",
         ":build_script",
-        "@nix_native//:link_search",
         ":aizome_comp_core",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )

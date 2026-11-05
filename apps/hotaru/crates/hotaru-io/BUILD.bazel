@@ -26,7 +26,8 @@ rust_library(
         "CARGO_PKG_NAME": "hotaru-io",
     },
     deps = [
+        "//apps/hotaru/crates/hotaru-core:hotaru_core",
         "@aizome_crates//:libc-0.2.191",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )

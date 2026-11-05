@@ -1,5 +1,5 @@
 {
-  "checksum": "409fcb9760ad049904f5c9cd2e7929b7e8d8620e9dafe977cbad9883b99c532f",
+  "checksum": "263fdbbefc54c0139bc55e6735c59a257af4f4ef5bc7e29b6eac80bd75cfa164",
   "conditions": {
     "aarch64-linux-android": [],
     "aarch64-pc-windows-gnullvm": [],
@@ -1418,6 +1418,10 @@
           {
             "id": "env_logger 0.11.11",
             "target": "env_logger"
+          },
+          {
+            "id": "jiff 0.2.38",
+            "target": "jiff"
           },
           {
             "id": "libc 0.2.191",

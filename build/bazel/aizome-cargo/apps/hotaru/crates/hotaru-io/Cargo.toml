@@ -9,4 +9,5 @@ edition = "2024"
 path = "../../../../empty.rs"
 
 [dependencies]
+hotaru-core = { path = "../hotaru-core" }
 libc = { version = "^0.2" }

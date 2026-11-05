@@ -29,8 +29,8 @@ rust_library(
     deps = [
         "@aizome_crates//:libc-0.2.191",
         "@aizome_crates//:log-0.4.34",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(

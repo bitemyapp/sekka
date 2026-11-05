@@ -25,10 +25,8 @@ rust_library(
     rustc_env = {
         "CARGO_PKG_NAME": "aizome-theme",
     },
-    deps = [
-        "@aizome_crates//:serde-1.0.229",
-        "@nix_native//:link_search",
-    ],
+    deps = ["@aizome_crates//:serde-1.0.229"],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(

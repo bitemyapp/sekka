@@ -29,6 +29,6 @@ rust_library(
     deps = [
         "@aizome_crates//:rusqlite-0.40.2",
         "@aizome_crates//:thiserror-2.0.21",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )

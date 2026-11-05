@@ -31,6 +31,6 @@ rust_library(
         "@aizome_crates//:kurbo-0.13.1",
         "@aizome_crates//:smithay-client-toolkit-0.19.2",
         "@aizome_crates//:tiny-skia-0.12.0",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )

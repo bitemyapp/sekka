@@ -28,8 +28,8 @@ rust_library(
     deps = [
         "@aizome_crates//:serde-1.0.229",
         "@aizome_crates//:serde_json-1.0.154",
-        "@nix_native//:link_search",
     ],
+    link_deps = ["@nix_native//:link_search"],
 )
 
 rust_test(
