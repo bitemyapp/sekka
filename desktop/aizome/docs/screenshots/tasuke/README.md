@@ -42,10 +42,13 @@ then.
 - **Build**: the dev profile (`cargo build -p aizome-tasuke`) on
   `feat/assistant`, with the repository's Aizome dev shell, at four
   commits:
-  - `d1d906f6` for `models-8gb`, taken again when the catalog gained the
-    8 GiB models' measured speeds and a corrected note on Gemma 4 26B-A4B.
-    `first-run` and `downloading` were taken again then too and came out
-    pixel for pixel the same, so they were kept.
+  - `17a003f0` for `models-8gb`, taken again when the library's speed
+    estimate for a model with experts in system memory was corrected (its
+    card now says about 33 tokens/s here). It was taken before that at
+    `d1d906f6`, when the catalog gained the 8 GiB models' measured speeds
+    and a corrected note on Gemma 4 26B-A4B. Both times `first-run` and
+    `downloading` were taken again too and came out pixel for pixel the
+    same, so they were kept.
   - `c2b06120` for `first-run` and `downloading` on the 8 GB laptop,
     taken again when the catalog's 8 GiB round made Gemma 4 26B-A4B its
     choice and the window learned to show a model split between the GPU
