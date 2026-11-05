@@ -8,7 +8,9 @@
 //! a digit when a second passes. See `aizome-media` for the engine.
 
 pub mod app;
+pub mod captions;
 pub mod instance;
+pub mod lyrics;
 pub mod mpris;
 pub mod picture;
 pub mod store;

@@ -10,6 +10,20 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+/// Times are relative to the supplied PCM, in seconds. A turn boundary is
+/// not a persistent speaker identity.
+#[derive(Debug)]
+pub struct CaptionSegment {
+    pub start: f64,
+    pub end: f64,
+    pub text: String,
+    pub turn_next: bool,
+}
+
+enum Recognition {
+    Dictation(String),
+    Captions(Vec<CaptionSegment>),
+}
 #[derive(Clone)]
 pub struct Recognizer {
     config: Engine,
@@ -47,6 +61,7 @@ pub fn gpu_available() -> bool {
 struct Resident {
     model: whisper_rs::WhisperContext,
     state: whisper_rs::WhisperState,
+    tdrz_verified: bool,
 }
 
 #[cfg(feature = "local")]
@@ -108,19 +123,48 @@ impl Recognizer {
         match self.config.backend {
             Backend::Local => {
                 let this = self.clone();
-                tokio::task::spawn_blocking(move || this.local(&samples, cancel))
+                match tokio::task::spawn_blocking(move || this.local(&samples, cancel, None))
                     .await
-                    .context("recognizer worker failed")?
+                    .context("recognizer worker failed")??
+                {
+                    Recognition::Dictation(text) => Ok(text),
+                    Recognition::Captions(_) => unreachable!("dictation requests text"),
+                }
             }
             Backend::Http => self.http(&samples, cancel).await,
         }
     }
+    /// Timestamped recognition always stays local and reuses resident buffers.
+    pub async fn captions(
+        &self,
+        samples: Vec<f32>,
+        diarize: bool,
+        cancel: Arc<AtomicBool>,
+    ) -> Result<Vec<CaptionSegment>> {
+        ensure!(
+            self.config.backend == Backend::Local,
+            "captions require the local Whisper backend; HTTP is unsupported"
+        );
+        ensure!(
+            !diarize || ((!self.config.translate) && matches!(self.config.language.as_str(), "en" | "auto")),
+            "tinydiarize captions require English and translation disabled"
+        );
+        ensure!(!cancel.load(Ordering::Relaxed), "cancelled");
+        let this = self.clone();
+        match tokio::task::spawn_blocking(move || this.local(&samples, cancel, Some(diarize)))
+            .await
+            .context("caption recognizer worker failed")??
+        {
+            Recognition::Captions(segments) => Ok(segments),
+            Recognition::Dictation(_) => unreachable!("captions request segments"),
+        }
+    }
     #[cfg(not(feature = "local"))]
-    fn local(&self, _: &[f32], _: Arc<AtomicBool>) -> Result<String> {
+    fn local(&self, _: &[f32], _: Arc<AtomicBool>, _: Option<bool>) -> Result<Recognition> {
         bail!("this build has no local backend; build with the default local feature");
     }
     #[cfg(feature = "local")]
-    fn local(&self, samples: &[f32], cancel: Arc<AtomicBool>) -> Result<String> {
+    fn local(&self, samples: &[f32], cancel: Arc<AtomicBool>, captions: Option<bool>) -> Result<Recognition> {
         use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
         ensure!(
             self.config.language == "auto" || whisper_rs::get_lang_id(&self.config.language).is_some(),
@@ -128,6 +172,16 @@ impl Recognizer {
         );
         let mut context = self.context.lock().map_err(|_| anyhow::anyhow!("recognizer mutex poisoned"))?;
         ensure!(!cancel.load(Ordering::Relaxed), "cancelled");
+        let diarize = captions == Some(true);
+        let mut tdrz_verified = context.as_ref().is_some_and(|resident| resident.tdrz_verified);
+        if diarize && !tdrz_verified {
+            // A filename is not evidence of model capability: verify the
+            // pinned tinydiarize weights before enabling its special token.
+            let model = crate::models::find("small.en-tdrz")?;
+            crate::models::verify(&self.config.model, &model)
+                .context("--diarize requires the verified small.en-tdrz model; select it in Koe")?;
+            tdrz_verified = true;
+        }
         if context.is_none() {
             ensure!(
                 self.config.model.is_file(),
@@ -142,7 +196,7 @@ impl Recognizer {
             let loaded =
                 WhisperContext::new_with_params(self.config.model.to_str().context("model path is not UTF-8")?, params)
                     .context("cannot load Whisper model")?;
-            *context = Some(Resident { state: loaded.create_state()?, model: loaded });
+            *context = Some(Resident { state: loaded.create_state()?, model: loaded, tdrz_verified });
             self.gpu.store(gpu, Ordering::Relaxed);
             self.loaded.store(true, Ordering::Relaxed);
         }
@@ -150,6 +204,7 @@ impl Recognizer {
         // Keep the inference state resident as well as the weights. Recreating
         // it on every utterance repeats GPU allocation and pipeline setup.
         let resident = context.as_mut().unwrap();
+        resident.tdrz_verified = tdrz_verified;
         let hint_limit = resident.model.n_text_ctx() as usize / 2;
         let tokens = resident.model.tokenize(&self.config.prompt, self.config.prompt.len() + 1)?;
         ensure!(
@@ -159,10 +214,17 @@ impl Recognizer {
         let state = &mut resident.state;
         let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
         params.set_n_threads(self.config.threads as i32);
-        params.set_language(if self.config.language == "auto" { None } else { Some(&self.config.language) });
+        params.set_language(if diarize {
+            Some("en")
+        } else if self.config.language == "auto" {
+            None
+        } else {
+            Some(&self.config.language)
+        });
         params.set_translate(self.config.translate);
         params.set_no_context(true);
-        params.set_no_timestamps(true);
+        params.set_no_timestamps(captions.is_none());
+        params.set_tdrz_enable(diarize);
         params.set_print_special(false);
         params.set_print_progress(false);
         params.set_print_realtime(false);
@@ -180,7 +242,22 @@ impl Recognizer {
         }
         state.full(params, samples).context("Whisper inference failed")?;
         ensure!(!cancel.load(Ordering::Relaxed), "cancelled");
-        Ok(state.as_iter().map(|s| s.to_string()).collect::<String>())
+        if captions.is_some() {
+            Ok(Recognition::Captions(
+                state
+                    .as_iter()
+                    .filter(|segment| segment.no_speech_probability() < 0.6)
+                    .map(|segment| CaptionSegment {
+                        start: segment.start_timestamp() as f64 / 100.0,
+                        end: segment.end_timestamp() as f64 / 100.0,
+                        text: segment.to_string(),
+                        turn_next: diarize && segment.next_segment_speaker_turn(),
+                    })
+                    .collect(),
+            ))
+        } else {
+            Ok(Recognition::Dictation(state.as_iter().map(|s| s.to_string()).collect::<String>()))
+        }
     }
     async fn http(&self, samples: &[f32], cancel: Arc<AtomicBool>) -> Result<String> {
         let c = &self.config.http;

@@ -3,7 +3,7 @@ Type=Application
 Name=Koe
 GenericName=Dictation
 Comment=Speak, and your words are typed into the app you're using
-Keywords=dictation;voice;speech;speech to text;microphone;transcribe;whisper;vocabulary;
+Keywords=dictation;voice;speech;speech to text;microphone;transcribe;whisper;vocabulary;captions;subtitles;
 Categories=Utility;Accessibility;
 Icon=org.aizome.Koe
 Exec=aizome-koe
@@ -11,7 +11,7 @@ Terminal=false
 StartupNotify=true
 StartupWMClass=org.aizome.Koe
 DBusActivatable=false
-Actions=Dictate;Cancel;Vocabulary;
+Actions=Dictate;Cancel;Vocabulary;Captions;
 
 [Desktop Action Dictate]
 Name=Start or Stop Dictation
@@ -24,3 +24,7 @@ Exec=aizome-koe record cancel
 [Desktop Action Vocabulary]
 Name=Vocabulary and Teaching
 Exec=aizome-koe --page vocabulary
+
+[Desktop Action Captions]
+Name=Live Captions
+Exec=aizome-koe captions

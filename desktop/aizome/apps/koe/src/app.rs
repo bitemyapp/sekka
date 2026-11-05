@@ -137,6 +137,8 @@ pub enum Msg {
     OpenSettings(&'static str),
     /// The models' folder, in Hako.
     ShowModels,
+    /// Open opt-in system-output captions, independently of dictation.
+    OpenCaptions,
     /// Clear the service's error.
     Dismiss,
     AskReset,
@@ -427,7 +429,12 @@ impl Koe {
         let cancel = Arc::new(AtomicBool::new(false));
         self.download = Some(Download { model: model.clone(), done: 0, cancel: cancel.clone(), then_enable });
         self.message = None;
-        let (base, dir, tx) = (self.paths.model_source.clone(), self.paths.models.clone(), cx.stream());
+        let base = if self.paths.model_source == models::source() {
+            models::source_for(&model)
+        } else {
+            self.paths.model_source.clone()
+        };
+        let (dir, tx) = (self.paths.models.clone(), cx.stream());
         let title = model.title();
         // A thread of its own: a download can take minutes.
         let spawned = std::thread::Builder::new().name("koe-download".into()).spawn(move || {
@@ -736,6 +743,10 @@ impl Program for Koe {
                 }
             }
             Msg::OpenSettings(pane) => self.run("Settings", "aizome-settei", &["--pane", pane]),
+            Msg::OpenCaptions => {
+                let config = self.paths.config.to_string_lossy().into_owned();
+                self.run("Live Captions", "aizome-koe", &["--config", &config, "captions"]);
+            }
             Msg::ShowModels => {
                 let dir = self.paths.models.display().to_string();
                 self.run("Files", "aizome-hako", &[&dir]);
@@ -803,7 +814,17 @@ impl Program for Koe {
     }
 
     fn view(&self, _window: WindowKey) -> Element<Msg> {
-        crate::dictation::window(self)
+        aizome_kit::column![
+            aizome_kit::toolbar(vec![
+                text("Captions work without turning dictation on").role(Role::Text2).into(),
+                spacer().into(),
+                button("Open Live Captions").on_press(Msg::OpenCaptions).id("open-live-captions").into(),
+            ]),
+            crate::dictation::window(self),
+        ]
+        .width(Fill)
+        .height(Fill)
+        .into()
     }
 
     fn menus(&self) -> MenuBar<Msg> {
@@ -813,6 +834,7 @@ impl Program for Koe {
             .item(role("About Koe", MenuRole::About))
             .separator()
             .item(MenuItem::new("Settings…", Msg::Page(Page::Dictation)).shortcut(Shortcut::cmd(',')))
+            .item(MenuItem::new("Open Live Captions", Msg::OpenCaptions))
             .separator()
             .submenu(Menu::new("Services").item(role("No Services Apply", MenuRole::Services).enabled(false)))
             .separator()

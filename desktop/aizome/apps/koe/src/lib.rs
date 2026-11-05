@@ -3,6 +3,8 @@
 //! up (`app`), and the vocabulary packs that steer recognition.
 pub mod app;
 pub mod audio;
+pub mod caption_app;
+pub mod captions;
 pub mod config;
 pub mod daemon;
 pub mod desktop;

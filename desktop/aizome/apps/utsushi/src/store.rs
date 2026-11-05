@@ -158,9 +158,12 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     fn temp() -> PathBuf {
-        let d = std::env::temp_dir().join(format!("utsushi-store-{}-{}", std::process::id(), now()));
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let unique = NEXT.fetch_add(1, Ordering::Relaxed);
+        let d = std::env::temp_dir().join(format!("utsushi-store-{}-{}-{unique}", std::process::id(), now()));
         let _ = std::fs::remove_dir_all(&d);
         d
     }

@@ -1819,6 +1819,86 @@ of the instance. The UI tests check that reveal requests select the files,
 one window to a folder, and that the last window takes the token. These are
 component checks, not browser or ISO qualification.
 
+### Koe captions and Utsushi lyrics
+
+Koe's `captions --json` is a local-only NDJSON interface, separate from
+dictation and its clipboard/typing path. `apps/koe/src/captions.rs` owns
+PipeWire output capture or FFmpeg file decoding; `engine.rs` reuses its
+resident Whisper model for timestamped segments. The protocol, model
+selection, privacy boundary and user-visible limits are in
+[Koe's notes](desktop/aizome/docs/koe.md#live-captions).
+
+Live output capture uses six-second windows and a two-window queue. It
+drops old audio with an explicit gap when recognition cannot keep up.
+Files use thirty-second windows and backpressure instead: the longer
+context avoids some boundary errors seen with six-second file chunks.
+Neither policy guarantees word-perfect joins. FFmpeg accepts local files,
+not network protocols. Capture targets the default PipeWire sink, with
+fallback and automatic moves disabled; it does not inherit dictation's
+microphone selection. Stop, process cancellation and parent death terminate
+the owned audio subprocess.
+
+`apps/koe/src/caption_app.rs` is the opt-in, high-contrast system-output
+window. `apps/utsushi/src/captions.rs` consumes the same CLI without linking
+Whisper into the player. Bounded queues and playback generations prevent
+old cues from surviving pause, seek, source/track changes or file changes.
+The player maps cues to media time, including playback speed, and never
+captures unrelated application audio. `lyrics.rs` reads bounded local LRC
+sidecars, multiple timestamps and signed offsets; a blank cue clears the
+display. The player offers authored subtitles, generated captions, detected
+turns, generated lyrics and local synchronized lyrics as exclusive sources.
+
+Speaker turns require the hash-verified, pinned `small.en-tdrz` weights,
+English and translation off. They use Whisper's native tinydiarize turn
+predictions, not silence or alternating labels. Turn numbering restarts
+within each recognition chunk: this is experimental turn segmentation,
+not persistent speaker identification. Large v3 and its 8-bit Turbo variant
+are optional model downloads for ordinary captions; neither detects turns.
+No model is downloaded merely by opening a caption surface.
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-koe -p aizome-utsushi
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-koe --no-default-features --lib
+nix shell --inputs-from . nixpkgs#python3 -c python3 desktop/aizome/scripts/test-evaluate-captions.py
+```
+
+The evaluator's module documentation specifies its input manifest. Keep
+downloaded media, genuine YouTube `kind=asr` subtitle tracks, reference
+provenance and captured Koe NDJSON outside the source tree, then run:
+
+```sh
+python3 desktop/aizome/scripts/evaluate-captions.py /path/to/manifest.json --output /path/to/report.json
+```
+
+It reports substitutions, deletions, insertions and WER for every video,
+plus an aggregate. The strict gate requires lower Koe WER on **every**
+listed video; a tie or regression fails. Missing inputs, ambiguous caption
+alignment, gaps/errors in Koe output and unvalidated references cannot
+produce a passing gate. Publisher-human transcripts remain provisional
+until independently checked against the exact audio interval. An
+audio-model transcription alone is not automatically validated truth.
+Preserve failures and each candidate model's results; do not drop difficult
+clips or use aggregate improvement to hide regressions.
+
+The [2026-11-05 comparison](docs/test-results/koe-captions-2026-11-05.json)
+records three real YouTube clips, native ASR-track hashes, publisher
+references, pinned model hashes and per-video error counts. Both Large v3
+and Turbo provisionally beat YouTube on two clips and lose on the technical
+interview. Full Large v3 reduced that clip's provisional WER from Turbo's
+7.34% to 5.57%, still above YouTube's 5.06%. **The strict gate failed.**
+Two blind Qwen2-Audio-7B-Instruct passes over every clip exposed publisher
+omissions but also disagreed with each other, including a spoken number.
+Those outputs were not substituted for ground truth. All three references
+remain unvalidated; this record does not establish YouTube superiority in
+either direction.
+
+Component smoke checks use a private headless Aizome session and PipeWire
+null output, not the host microphone. Actual local-model inference,
+sink-to-capture graph links, visible captions/turns/lyrics, media seeks and
+speed, and Stop/close cleanup are distinct evidence from parser and
+lifecycle tests. These checks do not qualify a Sekka ISO or physical
+hearing-accessibility deployment.
+
 ### Sukumo
 
 Sukumo, Aizome's toolkit, is in `desktop/aizome/sukumo`: the Wayland engine
