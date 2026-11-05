@@ -421,6 +421,11 @@ impl Trash {
     /// ```
     pub fn forget(&self, gone: Gone) {
         let Gone { can, name, info } = gone;
+        // Only in one of this Trash's cans (an entry's can is a public
+        // field, so a proof could name any folder).
+        if !self.cans().contains(&can) {
+            return;
+        }
         let path = can.info().join(info_name(&name));
         // Only the info found with it: a later item may have the name now.
         let ours = info.is_some_and(|id| fs::symlink_metadata(&path).is_ok_and(|m| (m.dev(), m.ino()) == id));

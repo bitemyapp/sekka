@@ -625,7 +625,9 @@ impl Worker<'_, '_> {
             }
         }
         self.env.progress.items_done += 1;
-        item.link();
+        if let Err(e) = item.link() {
+            return Err(Stop::Skip(super::describe(&e)));
+        }
         Ok(())
     }
 
