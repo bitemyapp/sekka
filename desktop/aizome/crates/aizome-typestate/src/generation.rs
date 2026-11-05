@@ -68,6 +68,79 @@ impl<K> Generation<K> {
     pub fn is_current(&self, ticket: Ticket<K>) -> bool {
         self.check(ticket).is_some()
     }
+
+    /// The answer, proven fresh, or the answer back when a newer request
+    /// superseded it. Prefer this to [`check`](Self::check): the proof and
+    /// the answer travel together, so a transition can't be handed the proof
+    /// of one answer with another answer.
+    ///
+    /// ```
+    /// use aizome_typestate::{Answer, Generation, Ticket};
+    /// enum Scan {}
+    /// struct Scanned { ticket: Ticket<Scan>, disks: u32 }
+    /// impl Answer<Scan> for Scanned {
+    ///     fn ticket(&self) -> Ticket<Scan> { self.ticket }
+    /// }
+    /// let mut scans = Generation::new();
+    /// let old = scans.issue();
+    /// let new = scans.issue();
+    /// assert!(scans.check_answer(Scanned { ticket: old, disks: 1 }).is_err());
+    /// let fresh = scans.check_answer(Scanned { ticket: new, disks: 2 }).ok().unwrap();
+    /// assert_eq!(fresh.answer().disks, 2);
+    /// ```
+    #[inline]
+    pub fn check_answer<A: Answer<K>>(&self, answer: A) -> Result<Fresh<K, A>, A> {
+        match self.check(answer.ticket()) {
+            Some(current) => Ok(Fresh { current, answer }),
+            None => Err(answer),
+        }
+    }
+}
+
+/// An answer that names the request it answers.
+pub trait Answer<K> {
+    fn ticket(&self) -> Ticket<K>;
+}
+
+/// An answer proven to belong to the latest request: only
+/// [`Generation::check_answer`] makes one.
+///
+/// ```compile_fail,E0451
+/// use aizome_typestate::{Current, Fresh};
+/// enum Scan {}
+/// fn forge(current: Current<Scan>, answer: u32) -> Fresh<Scan, u32> {
+///     Fresh { current, answer }
+/// }
+/// ```
+#[must_use = "a Fresh answer is for the transition that applies it"]
+pub struct Fresh<K, A> {
+    current: Current<K>,
+    answer: A,
+}
+
+impl<K, A> Fresh<K, A> {
+    #[inline]
+    pub fn answer(&self) -> &A {
+        &self.answer
+    }
+
+    /// The answer, spending the proof.
+    #[inline]
+    pub fn into_answer(self) -> A {
+        self.answer
+    }
+
+    /// The proof that came with it.
+    #[inline]
+    pub fn current(&self) -> &Current<K> {
+        &self.current
+    }
+}
+
+impl<K, A: fmt::Debug> fmt::Debug for Fresh<K, A> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Fresh").field("ticket", &self.current.ticket.n).field("answer", &self.answer).finish()
+    }
 }
 
 impl<K> Default for Generation<K> {
