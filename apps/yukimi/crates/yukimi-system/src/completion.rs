@@ -64,14 +64,27 @@ pub enum ReceiptState {
     Activated,
 }
 
+/// This boot, as the kernel names it. Only [`ThisBoot::read`] makes one, so
+/// a receipt is judged against the boot that is running, never against an
+/// id the caller picked: an empty one would keep every failed activation
+/// standing, and so restate the old rule.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ThisBoot(String);
+
+impl ThisBoot {
+    pub fn read() -> ThisBoot {
+        ThisBoot(boot_id())
+    }
+}
+
 /// The helper's record of its last activation ([`RECEIPT`]).
 ///
 /// What a receipt still says depends on the boot reading it: an activation
 /// that didn't finish says something only in the boot it ran in, since any
 /// later boot started whichever system it started from scratch. So the
 /// advice reads a receipt only through [`bearing`](Self::bearing), and the
-/// fields are private. Deciding from the receipt's own state and system,
-/// as Yukimi once did, doesn't compile:
+/// receipt tells nothing else: not its state, and not which system it
+/// names. Deciding from those, as Yukimi once did, doesn't compile:
 ///
 /// ```compile_fail,E0616
 /// use yukimi_system::completion::{Receipt, ReceiptState};
@@ -82,14 +95,29 @@ pub enum ReceiptState {
 /// }
 /// ```
 ///
+/// ```compile_fail,E0599
+/// use yukimi_system::completion::{Receipt, ThisBoot};
+/// // The same rule through the bearing, adding back the system it named.
+/// fn still_failed(receipt: &Receipt, selected: &std::path::Path) -> bool {
+///     receipt.bearing(&ThisBoot::read()).is_unfinished() || receipt.system() != selected
+/// }
 /// ```
-/// use yukimi_system::completion::{Bearing, Receipt};
+///
+/// ```compile_fail,E0308
+/// use yukimi_system::completion::Receipt;
+/// // Without a boot id, every activation that failed still stands.
+/// fn still_failed(receipt: &Receipt) -> bool {
+///     receipt.bearing("").is_unfinished()
+/// }
+/// ```
+///
+/// ```
+/// use yukimi_system::completion::{Receipt, ThisBoot};
 /// let receipt: Receipt = serde_json::from_str(
-///     r#"{"system":"/nix/store/s1","boot_id":"boot-1","state":"activating","reasons":[]}"#,
+///     r#"{"system":"/nix/store/s1","boot_id":"boot-1","state":"activated","reasons":[]}"#,
 /// )
 /// .unwrap();
-/// assert!(matches!(receipt.bearing("boot-1"), Bearing::Unfinished));
-/// assert!(matches!(receipt.bearing("boot-2"), Bearing::Settled));
+/// assert!(!receipt.bearing(&ThisBoot::read()).is_unfinished());
 /// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Receipt {
@@ -106,21 +134,16 @@ impl Receipt {
         Activating(Receipt { system, boot_id: boot_id(), state: ReceiptState::Activating, reasons })
     }
 
-    /// The system activated.
-    pub fn system(&self) -> &Path {
-        &self.system
-    }
-
-    /// What the receipt says in the boot whose id is `this_boot`. It takes
-    /// nothing else: an unfinished activation stands or falls by the boot
-    /// alone, whichever system is selected or running.
-    pub fn bearing(&self, this_boot: &str) -> Bearing<'_> {
-        match self.state {
+    /// What the receipt says in this boot. It takes nothing else: an
+    /// unfinished activation stands or falls by the boot alone, whichever
+    /// system is selected or running.
+    pub fn bearing(&self, this_boot: &ThisBoot) -> Bearing<'_> {
+        Bearing(match self.state {
             // Without this boot's id, nothing shows a boot since.
-            ReceiptState::Activating if this_boot.is_empty() || self.boot_id == this_boot => Bearing::Unfinished,
-            ReceiptState::Prepared => Bearing::Prepared { system: &self.system, reasons: &self.reasons },
-            ReceiptState::Activating | ReceiptState::Activated => Bearing::Settled,
-        }
+            ReceiptState::Activating if this_boot.0.is_empty() || self.boot_id == this_boot.0 => Said::Unfinished,
+            ReceiptState::Prepared => Said::Prepared { system: &self.system, reasons: &self.reasons },
+            ReceiptState::Activating | ReceiptState::Activated => Said::Settled,
+        })
     }
 }
 
@@ -147,28 +170,28 @@ impl Activating {
     }
 }
 
-/// What a [`Receipt`] says about the system in the boot reading it.
+/// What a [`Receipt`] says about the system in this boot. Only
+/// [`Receipt::bearing`] and [`no_receipt`](Self::no_receipt) make one, and
+/// an unfinished activation carries no system: whether it still stands
+/// doesn't depend on which system it named. Claiming one is unfinished
+/// from anything else doesn't compile:
 ///
-/// An unfinished activation carries no system: whether it still stands
-/// doesn't depend on which system it named, so the advice can't compare
-/// that with the system selected now:
-///
-/// ```compile_fail,E0026
+/// ```compile_fail,E0599
 /// use yukimi_system::completion::Bearing;
-/// fn stands(bearing: Bearing<'_>, selected: &std::path::Path) -> bool {
-///     matches!(bearing, Bearing::Unfinished { system } if system != selected)
+/// fn bearing<'r>(named: &std::path::Path, selected: &std::path::Path) -> Bearing<'r> {
+///     if named != selected { Bearing::Unfinished } else { Bearing::no_receipt() }
 /// }
 /// ```
 ///
 /// ```
 /// use yukimi_system::completion::Bearing;
-/// fn stands(bearing: Bearing<'_>) -> bool {
-///     matches!(bearing, Bearing::Unfinished)
-/// }
-/// assert!(!stands(Bearing::Settled));
+/// assert!(!Bearing::no_receipt().is_unfinished());
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Bearing<'r> {
+pub struct Bearing<'r>(Said<'r>);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Said<'r> {
     /// An activation in this boot didn't finish.
     Unfinished,
     /// `system` is set up for the next start.
@@ -176,6 +199,18 @@ pub enum Bearing<'r> {
     /// Nothing the systems themselves don't show: the last activation
     /// finished, or a boot came after it, or there is no receipt.
     Settled,
+}
+
+impl Bearing<'_> {
+    /// There is no receipt: the systems say it all.
+    pub fn no_receipt() -> Bearing<'static> {
+        Bearing(Said::Settled)
+    }
+
+    /// An activation in this boot didn't finish.
+    pub fn is_unfinished(&self) -> bool {
+        self.0 == Said::Unfinished
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -601,11 +636,24 @@ const LOGIN_SCREEN_LIST: &str = "The login screen updates its list of desktops a
 ///     let _ = system_state(system, system, system, Some(receipt));
 /// }
 /// ```
+///
+/// ```
+/// use yukimi_system::completion::{Action, Receipt, ThisBoot, system_state};
+/// use std::path::Path;
+/// // Prepared for the next start, and running the previous system.
+/// let receipt: Receipt = serde_json::from_str(
+///     r#"{"system":"/nix/store/s1","boot_id":"boot-1","state":"prepared","reasons":[]}"#,
+/// )
+/// .unwrap();
+/// let (s0, s1) = (Path::new("/nix/store/s0"), Path::new("/nix/store/s1"));
+/// let advice = system_state(s0, s0, s1, receipt.bearing(&ThisBoot::read()));
+/// assert_eq!(advice.action, Action::Reboot);
+/// ```
 pub fn system_state(booted: &Path, active: &Path, selected: &Path, receipt: Bearing<'_>) -> Completion {
     // A boot since an activation that didn't finish supersedes it, whichever
     // system that boot started (a repair with nixos-rebuild, or the previous
     // system again): what the systems show now is what counts.
-    if receipt == Bearing::Unfinished {
+    if receipt.is_unfinished() {
         return Completion::new(
             Action::Unknown,
             "Activation did not finish successfully. Review the update log before restarting.",
@@ -615,7 +663,7 @@ pub fn system_state(booted: &Path, active: &Path, selected: &Path, receipt: Bear
         return Completion::default();
     }
     if active != selected {
-        if let Bearing::Prepared { system, reasons } = receipt
+        if let Said::Prepared { system, reasons } = receipt.0
             && system == selected
         {
             return Completion {
@@ -744,8 +792,8 @@ fn read_with_session(include_session: bool) -> Completion {
             "The update record could not be read. Completion has not been verified.",
         );
     }
-    let this_boot = boot_id();
-    let bearing = receipt.as_ref().map_or(Bearing::Settled, |r| r.bearing(&this_boot));
+    let this_boot = ThisBoot::read();
+    let bearing = receipt.as_ref().map_or(Bearing::no_receipt(), |r| r.bearing(&this_boot));
     let system = system_state(&booted, &active, &selected, bearing);
     with_session(system, include_session, || {
         if in_aizome() {
@@ -890,6 +938,51 @@ mod tests {
             let _ = std::fs::remove_dir_all(&self.root);
         }
     }
+    /// A boot with the id `id`; outside the crate only the running one.
+    fn boot(id: &str) -> ThisBoot {
+        ThisBoot(id.into())
+    }
+    /// What the helper leaves when `switch-to-configuration` (or `nix-env
+    /// --set`) fails after commit: `activating` for the system it built, in
+    /// the boot it ran in, as `read` finds it on disk.
+    fn failed_activation(system: &Path) -> Receipt {
+        let record = serde_json::json!({"system": system, "boot_id": "boot-1", "state": "activating", "reasons": []});
+        serde_json::from_value(record).unwrap()
+    }
+    /// YUK-02: the person repaired the system with `nixos-rebuild switch`
+    /// to S2 (here `old`) and restarted into it; the receipt names S1.
+    #[test]
+    fn repro_yuk_02_rebuilt_and_rebooted_into_another_system() {
+        let f = Fixture::new();
+        let receipt = failed_activation(&f.new);
+        let after = system_state(&f.old, &f.old, &f.old, receipt.bearing(&boot("boot-2")));
+        assert_ne!(after.action, Action::Unknown, "a later healthy boot still reports S1's failure: {after:?}");
+    }
+    /// YUK-02: `nix-env --set` failed, so the profile still selects S0, and
+    /// the person restarted into S0.
+    #[test]
+    fn repro_yuk_02_rebooted_into_the_previous_system() {
+        let f = Fixture::new();
+        let receipt = failed_activation(&f.new);
+        let after = system_state(&f.old, &f.old, &f.old, receipt.bearing(&boot("boot-2")));
+        assert_eq!(after, Completion::default());
+        // Restarted into the failed system itself, which the profile selects.
+        let after = system_state(&f.new, &f.new, &f.new, receipt.bearing(&boot("boot-2")));
+        assert_eq!(after, Completion::default());
+    }
+    /// YUK-02: until a restart the failure is the last word, even after a
+    /// repair in the same boot, and without a boot id it always is.
+    #[test]
+    fn repro_yuk_02_the_failed_boot_itself_still_reports_it() {
+        let f = Fixture::new();
+        let receipt = failed_activation(&f.new);
+        for (booted, active) in [(&f.new, &f.new), (&f.old, &f.old), (&f.old, &f.new)] {
+            for id in ["boot-1", ""] {
+                let now = system_state(booted, active, active, receipt.bearing(&boot(id)));
+                assert_eq!(now.action, Action::Unknown, "{id:?} {now:?}");
+            }
+        }
+    }
     fn session() -> SessionManifest {
         SessionManifest {
             version: 1,
@@ -907,7 +1000,7 @@ mod tests {
         let f = Fixture::new();
         assert!(plan(&f.old, &f.old, &f.new).is_empty());
         assert_eq!(
-            system_state(&f.old, &f.new, &f.new, f.receipt(ReceiptState::Activated).bearing("before")).action,
+            system_state(&f.old, &f.new, &f.new, f.receipt(ReceiptState::Activated).bearing(&boot("before"))).action,
             Action::None
         );
         assert_eq!(session_state(&session(), &session(), "boot", true).action, Action::None);
@@ -916,17 +1009,17 @@ mod tests {
     fn staged_update_needs_one_reboot_even_with_identical_kernel() {
         let f = Fixture::new();
         let r = f.receipt(ReceiptState::Prepared);
-        assert_eq!(system_state(&f.old, &f.old, &f.new, r.bearing("before")).action, Action::Reboot);
-        assert_eq!(system_state(&f.new, &f.new, &f.new, r.bearing("after")).action, Action::None);
+        assert_eq!(system_state(&f.old, &f.old, &f.new, r.bearing(&boot("before"))).action, Action::Reboot);
+        assert_eq!(system_state(&f.new, &f.new, &f.new, r.bearing(&boot("after"))).action, Action::None);
         // Reopening Yukimi again does not resurrect the request.
-        assert_eq!(system_state(&f.new, &f.new, &f.new, r.bearing("after")).action, Action::None);
+        assert_eq!(system_state(&f.new, &f.new, &f.new, r.bearing(&boot("after"))).action, Action::None);
     }
     #[test]
     fn kernel_and_boot_settings_are_compared_to_what_booted() {
         let f = Fixture::new();
         std::fs::write(f.new.join("kernel-params"), "quiet loglevel=4 new-setting=1").unwrap();
         assert!(!plan(&f.old, &f.old, &f.new).is_empty());
-        assert_eq!(system_state(&f.old, &f.new, &f.new, Bearing::Settled).action, Action::Reboot);
+        assert_eq!(system_state(&f.old, &f.new, &f.new, Bearing::no_receipt()).action, Action::Reboot);
     }
     #[test]
     fn critical_transitions_are_prepared_before_live_activation() {
@@ -1121,24 +1214,24 @@ mod tests {
         display_manager(&f.new, &sessions(&f.root, "same-desktops", &[gnome]), SERVICE);
         // Other store paths, the same entries.
         assert_eq!(
-            system_state(&f.old, &f.new, &f.new, f.receipt(ReceiptState::Activated).bearing("before")),
+            system_state(&f.old, &f.new, &f.new, f.receipt(ReceiptState::Activated).bearing(&boot("before"))),
             Completion::default()
         );
         let xfce = ("xsessions/xfce.desktop", "Name=Xfce Session\nExec=/new/xsession\n");
         display_manager(&f.new, &sessions(&f.root, "more-desktops", &[gnome, xfce]), SERVICE);
-        let state = system_state(&f.old, &f.new, &f.new, f.receipt(ReceiptState::Activated).bearing("before"));
+        let state = system_state(&f.old, &f.new, &f.new, f.receipt(ReceiptState::Activated).bearing(&boot("before")));
         assert_eq!(state.action, Action::None);
         assert!(state.description().starts_with("System changes are active."));
         assert!(state.description().ends_with(LOGIN_SCREEN_LIST));
         // Starting the updated system takes it up.
         assert_eq!(
-            system_state(&f.new, &f.new, &f.new, f.receipt(ReceiptState::Activated).bearing("after")),
+            system_state(&f.new, &f.new, &f.new, f.receipt(ReceiptState::Activated).bearing(&boot("after"))),
             Completion::default()
         );
         // A switch made outside Yukimi's planner can change an entry the login screen still starts.
         let gnome = ("wayland-sessions/gnome.desktop", "Name=GNOME\nExec=/new/gnome-session\n");
         display_manager(&f.new, &sessions(&f.root, "new-desktops", &[gnome]), SERVICE);
-        let state = system_state(&f.old, &f.new, &f.new, f.receipt(ReceiptState::Activated).bearing("before"));
+        let state = system_state(&f.old, &f.new, &f.new, f.receipt(ReceiptState::Activated).bearing(&boot("before")));
         assert_eq!(state.action, Action::Reboot);
         assert!(
             state.description().starts_with(
@@ -1150,27 +1243,27 @@ mod tests {
     fn missing_evidence_and_failed_activation_never_claim_success() {
         let f = Fixture::new();
         assert_eq!(
-            system_state(&f.old, &f.old, &f.old, f.receipt(ReceiptState::Activating).bearing("before")).action,
+            system_state(&f.old, &f.old, &f.old, f.receipt(ReceiptState::Activating).bearing(&boot("before"))).action,
             Action::Unknown
         );
-        assert_eq!(system_state(&f.old, &f.old, &f.new, Bearing::Settled).action, Action::Unknown);
+        assert_eq!(system_state(&f.old, &f.old, &f.new, Bearing::no_receipt()).action, Action::Unknown);
         assert_eq!(
-            system_state(&f.old, &f.new, &f.new, f.receipt(ReceiptState::Activating).bearing("before")).action,
+            system_state(&f.old, &f.new, &f.new, f.receipt(ReceiptState::Activating).bearing(&boot("before"))).action,
             Action::Unknown
         );
         std::fs::remove_file(f.old.join("kernel")).unwrap();
-        assert_eq!(system_state(&f.old, &f.new, &f.new, Bearing::Settled).action, Action::Unknown);
+        assert_eq!(system_state(&f.old, &f.new, &f.new, Bearing::no_receipt()).action, Action::Unknown);
         assert!(!plan(&f.old, &f.old, &f.new).is_empty());
     }
     #[test]
     fn booting_successfully_finishes_an_interrupted_receipt() {
         let f = Fixture::new();
         assert_eq!(
-            system_state(&f.new, &f.new, &f.new, f.receipt(ReceiptState::Activating).bearing("after")).action,
+            system_state(&f.new, &f.new, &f.new, f.receipt(ReceiptState::Activating).bearing(&boot("after"))).action,
             Action::None
         );
         assert_eq!(
-            system_state(&f.new, &f.new, &f.new, f.receipt(ReceiptState::Activating).bearing("before")).action,
+            system_state(&f.new, &f.new, &f.new, f.receipt(ReceiptState::Activating).bearing(&boot("before"))).action,
             Action::Unknown
         );
     }
@@ -1178,7 +1271,7 @@ mod tests {
     fn rollback_does_not_resurrect_an_unrelated_update_request() {
         let f = Fixture::new();
         assert_eq!(
-            system_state(&f.old, &f.old, &f.old, f.receipt(ReceiptState::Prepared).bearing("boot")).action,
+            system_state(&f.old, &f.old, &f.old, f.receipt(ReceiptState::Prepared).bearing(&boot("boot"))).action,
             Action::None
         );
     }
