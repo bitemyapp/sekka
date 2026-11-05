@@ -119,7 +119,7 @@ def denied(fn):
     raise AssertionError("Unauthorized operation succeeded")
 
 
-def compile_remote(client, compiler, shell, evidence):
+def compile_remote(client, compiler, shell, worker_runtime, evidence):
     source = b'pub fn qualification_sum(values: &[u64]) -> u64 { values.iter().sum() }\n'
     invocation = 'exec "$1" "--remap-path-prefix=$PWD=/build" --crate-type=rlib --edition=2024 qualification.rs -o qualification.rlib'
     wrapper = ("#!" + shell + "\n" + invocation + "\n").encode()
@@ -127,7 +127,8 @@ def compile_remote(client, compiler, shell, evidence):
     directory += field(1, field(1, "qualification.rs") + field(2, digest(source)))
     command = field(1, "./compile.sh") + field(1, compiler)
     command += field(7, "qualification.rlib")
-    platform = b"".join(field(1, field(1, key) + field(2, value)) for key, value in [("ISA", "x86-64"), ("OSFamily", "linux"), ("cpu_count", "1")])
+    platform = b"".join(field(1, field(1, key) + field(2, value)) for key, value in [
+        ("ISA", "x86-64"), ("OSFamily", "linux"), ("cpu_count", "1"), ("sekka.worker-runtime", worker_runtime)])
     action = field(1, digest(command)) + field(2, digest(directory)) + field(6, field(1, 60)) + field(10, platform)
     for data in (source, wrapper, directory, command, action):
         assert client.upload(data) == 0
@@ -225,8 +226,8 @@ def main():
         assert list(pool.map(lambda _: trusted.upload(blob), range(32))) == [0] * 32
     report["concurrent_identical_uploads"] = 32
     if args.compiler:
-        report["remote_compile"] = compile_remote(trusted, args.compiler, args.shell, args.evidence)
-        repeated = compile_remote(trusted, args.compiler, args.shell, args.evidence)
+        report["remote_compile"] = compile_remote(trusted, args.compiler, args.shell, manifest["worker_runtime"], args.evidence)
+        repeated = compile_remote(trusted, args.compiler, args.shell, manifest["worker_runtime"], args.evidence)
         assert repeated["action_hash"] == report["remote_compile"]["action_hash"]
         assert repeated["sha256"] == report["remote_compile"]["sha256"], "Remote compiler output was not reproducible"
         report["remote_compile"]["repeat_operation"] = repeated["operation"]
@@ -276,7 +277,7 @@ def main():
         if args.compiler:
             job_evidence = args.evidence / "job"
             job_evidence.mkdir()
-            report["ci_job_remote_compile"] = compile_remote(job, args.compiler, args.shell, job_evidence)
+            report["ci_job_remote_compile"] = compile_remote(job, args.compiler, args.shell, job_manifest["worker_runtime"], job_evidence)
         if args.exhaust_job:
             assert job_manifest.get("ephemeral_cache")
             cap = job_manifest["backend_data_bytes"]

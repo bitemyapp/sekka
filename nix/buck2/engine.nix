@@ -16,6 +16,10 @@ platform.buildRustPackage {
     ./patches/local-content-store.patch
     ./patches/external-startup-config.patch
     ./patches/http2-goaway.patch
+    ./patches/reproducible-generation.patch
+    ./patches/private-config-telemetry.patch
+    ./patches/local-live-views.patch
+    ./patches/cas-recovery.patch
   ];
   # Cargo loads Git patch manifests even when the lock records them as unused.
   # Remove this dead patch in both source and vendoring; no resolved dep changes.
@@ -25,14 +29,35 @@ platform.buildRustPackage {
   cargoBuildFlags = [ "--bin" "buck2" ];
   RUSTFLAGS = "--cfg tokio_unstable -C linker=clang -C link-arg=-fuse-ld=mold";
   CARGO_PROFILE_RELEASE_INCREMENTAL = "false";
-  # Startup identity must work from subdirectories and must never retain stale
-  # credentials/store settings. These tests need no services or reflink mount.
-  # The materializer suite is separately qualified on real Btrfs/Aizome outputs.
+  # jemalloc otherwise runs CPUID during configure and emits different pointer
+  # layouts on 48-bit and 57-bit hosts. Use its portable x86-64 fallback.
+  JEMALLOC_SYS_WITH_LG_VADDR = "57";
+  # Auth/config and download-integrity regressions run on every builder.
+  # Reflink tests additionally run on Btrfs; ext4 builders explicitly report
+  # that coverage limit. Real Aizome extent sharing is qualified separately.
   doCheck = true;
   checkPhase = ''
     runHook preCheck
-    cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_common init::tests
-    cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_client_ctx immediate_config::tests
+    for filter in init::tests argv::tests legacy_configs::telemetry::tests legacy_configs::args::tests settings::args::tests; do
+      cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_common -- "$filter"
+    done
+    for filter in immediate_config::tests common::tests; do
+      cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_client_ctx -- "$filter"
+    done
+    cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_re_configuration -- privacy_tests
+    cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_server_ctx -- ctx::telemetry_tests
+    cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2 --lib -- tests::cli_
+    cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- local_content_store::download_tests
+    cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- local_content_store::linux::tests::hint_
+    cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p remote_execution -- client::tests
+    for filter in re::error::tests re::remote_action_result::tests; do
+      cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute -- "$filter"
+    done
+    if [ "$(stat -f -c %T "$TMPDIR")" = btrfs ]; then
+      cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- local_content_store::linux::tests
+    else
+      echo "Reflink-store execution not checked: this builder is not on Btrfs."
+    fi
     runHook postCheck
   '';
   meta = {

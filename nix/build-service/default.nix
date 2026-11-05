@@ -17,14 +17,41 @@ let
     '';
     meta.platforms = [ "x86_64-linux" ];
   };
+  # Match nix/bazel/toolchains.nix:testEnv's root-locked pkgs.dbus. Only private
+  # session-bus policy and service-owned identities enter the worker, never host
+  # NSS, bus sockets, or homes. This identity also covers the /bin interpreter
+  # and /usr/bin/env mounts, so changing either invalidates remote action keys.
+  workerRuntime = pkgs.runCommand "sekka-build-worker-runtime" { } ''
+    mkdir -p $out/bin $out/etc/dbus-1/session.d
+    ln -s ${pkgs.dbus}/bin/* $out/bin/
+    ln -s ${pkgs.bashInteractive}/bin/bash $out/bin/bash
+    ln -s ${pkgs.coreutils}/bin/env $out/bin/env
+    cp ${pkgs.dbus}/share/dbus-1/session.conf $out/etc/dbus-1/session.conf
+    # Nixpkgs installs the primary policy in share/, but its daemon loads /etc/.
+    # Remove the legacy include that would recurse after this relocation.
+    substituteInPlace $out/etc/dbus-1/session.conf \
+      --replace-fail '<include ignore_missing="yes">/etc/dbus-1/session.conf</include>' ""
+    cat > $out/etc/passwd <<'EOF'
+    root:x:0:0:root:/nonexistent:/bin/sh
+    sekka-builder:x:30501:30501:Sekka build worker:/scratch:/bin/sh
+    EOF
+    cat > $out/etc/group <<'EOF'
+    root:x:0:
+    sekka-builder:x:30501:
+    EOF
+    cat > $out/etc/nsswitch.conf <<'EOF'
+    passwd: files
+    group: files
+    hosts: files dns
+    EOF
+  '';
   controller = pkgs.writeShellApplication {
     name = "sekka-build-service";
     # Use the deployment host's installed nix-store, matching its daemon/config.
     runtimeInputs = [ pkgs.python3 pkgs.openssh pkgs.coreutils pkgs.docker-client ];
     text = ''
-      export SEKKA_BUILD_SERVICE_SHELL=${pkgs.bashInteractive}/bin/bash
-      export SEKKA_BUILD_SERVICE_ENV=${pkgs.coreutils}/bin/env
       export SEKKA_BUILD_SERVICE_INVENTORY=${./inventory.py}
+      export SEKKA_BUILD_SERVICE_WORKER_RUNTIME=${workerRuntime}
       exec python3 ${../../scripts/build-service} "$@"
     '';
   };
@@ -35,5 +62,5 @@ let
   };
 in
 {
-  inherit nativelink controller qualifier qualificationPython;
+  inherit nativelink controller qualifier qualificationPython workerRuntime;
 }

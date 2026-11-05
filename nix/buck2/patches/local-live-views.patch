@@ -1,0 +1,489 @@
+diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
+index 483e907..7ebfe87 100644
+--- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
++++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
+@@ -20,6 +20,7 @@ mod linux {
+     use std::fs::Permissions;
+     use std::fs::{self};
+     use std::io::ErrorKind;
++    use std::io::Read;
+     use std::io::Seek;
+     use std::io::SeekFrom;
+     use std::os::fd::AsRawFd;
+@@ -36,11 +37,13 @@ mod linux {
+     use buck2_error::BuckErrorContext;
+     use buck2_execute::digest_config::DigestConfig;
+     use rusqlite::Connection;
++    use rusqlite::OptionalExtension;
+     use rusqlite::params;
+ 
+-    // Linux UAPI FICLONE and O_NOFOLLOW, independent of architecture.
++    // Linux x86-64 UAPI.
+     const FICLONE: std::ffi::c_ulong = 0x40049409;
+     const O_NOFOLLOW: i32 = 0x20000;
++    const O_NONBLOCK: i32 = 0x800;
+     unsafe extern "C" {
+         fn ioctl(fd: i32, request: std::ffi::c_ulong, ...) -> i32;
+         fn geteuid() -> u32;
+@@ -53,7 +56,7 @@ mod linux {
+     fn open_file(path: &Path) -> buck2_error::Result<File> {
+         let file = OpenOptions::new()
+             .read(true)
+-            .custom_flags(O_NOFOLLOW)
++            .custom_flags(O_NOFOLLOW | O_NONBLOCK)
+             .open(path)?;
+         if !file.metadata()?.is_file() {
+             return Err(error(format!(
+@@ -82,11 +85,23 @@ mod linux {
+         config: DigestConfig,
+     ) -> buck2_error::Result<()> {
+         file.seek(SeekFrom::Start(0))?;
++        let size = file.metadata()?.len();
++        if size != expected.size() {
++            return Err(error(format!(
++                "Local content store size mismatch: expected {}, got {size}",
++                expected.size()
++            )));
++        }
+         let algorithm = config
+             .cas_digest_config()
+             .algorithm_for_family(expected.raw_digest().algorithm())
+             .ok_or_else(|| error("Content digest algorithm is not enabled"))?;
+-        let actual = FileDigest::from_reader_for_algorithm(file, algorithm)?;
++        // A mutable hint can grow after metadata was checked. Never scan beyond
++        // the expected artifact plus the byte needed to reject an oversized file.
++        let actual = FileDigest::from_reader_for_algorithm(
++            file.take(expected.size().saturating_add(1)),
++            algorithm,
++        )?;
+         if actual != *expected {
+             return Err(error(format!(
+                 "Local content store digest mismatch: expected {expected}, got {actual}"
+@@ -174,6 +189,15 @@ mod linux {
+                 INSERT OR IGNORE INTO totals SELECT 1,COALESCE(SUM(size),0),COUNT(*) FROM objects;
+                 CREATE TRIGGER IF NOT EXISTS object_added AFTER INSERT ON objects BEGIN UPDATE totals SET bytes=bytes+NEW.size,entries=entries+1 WHERE id=1; END;
+                 CREATE TRIGGER IF NOT EXISTS object_removed AFTER DELETE ON objects BEGIN UPDATE totals SET bytes=bytes-OLD.size,entries=entries-1 WHERE id=1; END;")?;
++            // Weak references do not retain file data. Keep them after object
++            // eviction so a live worktree can preserve the old extent generation.
++            db.execute_batch("CREATE TABLE IF NOT EXISTS views (path TEXT PRIMARY KEY, key TEXT NOT NULL, used INTEGER NOT NULL);
++                CREATE INDEX IF NOT EXISTS views_by_key ON views(key,used DESC,path);
++                CREATE INDEX IF NOT EXISTS views_lru ON views(used,path);
++                CREATE TABLE IF NOT EXISTS view_totals (id INTEGER PRIMARY KEY CHECK(id=1), entries INTEGER NOT NULL);
++                INSERT OR IGNORE INTO view_totals SELECT 1,COUNT(*) FROM views;
++                CREATE TRIGGER IF NOT EXISTS view_added AFTER INSERT ON views BEGIN UPDATE view_totals SET entries=entries+1 WHERE id=1; END;
++                CREATE TRIGGER IF NOT EXISTS view_removed AFTER DELETE ON views BEGIN UPDATE view_totals SET entries=entries-1 WHERE id=1; END;")?;
+             let store = Self {
+                 root,
+                 lock,
+@@ -183,6 +207,7 @@ mod linux {
+             };
+             store.reconcile()?;
+             store.evict(0, 0)?;
++            store.prune_views()?;
+             store.lock.unlock()?;
+             Ok(store)
+         }
+@@ -303,6 +328,74 @@ mod linux {
+             Ok(())
+         }
+ 
++        fn prune_views(&self) -> buck2_error::Result<()> {
++            let excess: u64 = self.db.query_row(
++                "SELECT MAX(entries-?1,0) FROM view_totals WHERE id=1",
++                [self.max_entries],
++                |row| row.get(0),
++            )?;
++            if excess != 0 {
++                self.db.execute(
++                    "DELETE FROM views WHERE path IN (SELECT path FROM views ORDER BY used,path LIMIT ?1)",
++                    [excess],
++                )?;
++            }
++            Ok(())
++        }
++
++        fn remember_view(&self, destination: &Path, key: &str) -> buck2_error::Result<()> {
++            let path = destination
++                .to_str()
++                .ok_or_else(|| error("Non-UTF-8 artifact view path"))?;
++            let transaction = self.db.unchecked_transaction()?;
++            transaction.execute(
++                "INSERT INTO views VALUES(?1,?2,(SELECT tick FROM clock WHERE id=1))
++                 ON CONFLICT(path) DO UPDATE SET key=excluded.key,used=excluded.used",
++                params![path, key],
++            )?;
++            self.prune_views()?;
++            transaction.commit()?;
++            Ok(())
++        }
++
++        fn restore_view(
++            &self,
++            destination: &Path,
++            key: &str,
++            digest: &FileDigest,
++            executable: bool,
++            config: DigestConfig,
++        ) -> buck2_error::Result<bool> {
++            loop {
++                let candidate: Option<String> = self.db.query_row(
++                    "SELECT path FROM views WHERE key=?1 ORDER BY used DESC,path LIMIT 1",
++                    [key],
++                    |row| row.get(0),
++                ).optional()?;
++                let Some(candidate) = candidate else {
++                    return Ok(false);
++                };
++                let path = Path::new(&candidate);
++                // These are weak, untrusted hints: a tree may have disappeared,
++                // changed its output or replaced it with a symlink.
++                if path.is_absolute() {
++                    if let Ok(mut source) = open_file(path) {
++                        match self.publish(&source, destination, digest, executable, config) {
++                            Ok(()) => return Ok(true),
++                            Err(error) => {
++                                // A valid candidate must not hide destination I/O
++                                // or reflink errors as an ordinary cache miss.
++                                if verify(&mut source, digest, config).is_ok() {
++                                    return Err(error);
++                                }
++                            }
++                        }
++                    }
++                }
++                self.db.execute("DELETE FROM views WHERE path=?1", [&candidate])?;
++            }
++        }
++
+         fn access(
+             &self,
+             destination: &Path,
+@@ -340,6 +433,7 @@ mod linux {
+                             return Err(e);
+                         }
+                         self.touch(&key)?;
++                        self.remember_view(destination, &key)?;
+                         return Ok(true);
+                     }
+                     Err(e) => {
+@@ -350,7 +444,8 @@ mod linux {
+                     }
+                 }
+             }
+-            if !ingest {
++            let restored = self.restore_view(destination, &key, digest, executable, config)?;
++            if !ingest && !restored {
+                 return Ok(false);
+             }
+             self.evict(digest.size(), 1)?;
+@@ -376,6 +471,7 @@ mod linux {
+             fs::rename(&pending, &object)?;
+             File::open(&self.root)?.sync_all()?;
+             self.touch(&key)?;
++            self.remember_view(destination, &key)?;
+             // The original output already shares this object's extents. It is
+             // not hardlinked and must retain its existing executable mode.
+             Ok(true)
+@@ -413,26 +509,19 @@ mod linux {
+             .map_err(|e| format!("{e:#}"))
+     });
+ 
+-    pub(super) fn access(
+-        destination: &Path,
+-        digest: &FileDigest,
+-        executable: bool,
+-        config: DigestConfig,
+-        ingest: bool,
+-    ) -> buck2_error::Result<bool> {
++    fn with_store<T>(
++        absent: T,
++        operation: impl FnOnce(&Store) -> buck2_error::Result<T>,
++    ) -> buck2_error::Result<T> {
+         let store = STORE.as_ref().map_err(error)?;
+         let Some(store) = store else {
+-            return Ok(false);
++            return Ok(absent);
+         };
+         let store = store
+             .lock()
+             .map_err(|_| error("Local content store mutex poisoned"))?;
+         store.lock.lock()?;
+-        let result = (|| {
+-            remove(&store.root.join("pending"))?;
+-            store.evict(0, 0)?;
+-            store.access(destination, digest, executable, config, ingest)
+-        })();
++        let result = operation(&store);
+         let unlock = store.lock.unlock();
+         result
+             .buck_error_context("Buck2 verified local content store")
+@@ -442,12 +531,150 @@ mod linux {
+             })
+     }
+ 
++    pub(super) fn access(
++        destination: &Path,
++        digest: &FileDigest,
++        executable: bool,
++        config: DigestConfig,
++        ingest: bool,
++    ) -> buck2_error::Result<bool> {
++        with_store(false, |store| {
++            remove(&store.root.join("pending"))?;
++            store.evict(0, 0)?;
++            store.access(destination, digest, executable, config, ingest)
++        })
++    }
++
++    pub(super) fn published(
++        temporary: &Path,
++        destination: &Path,
++        digest: &FileDigest,
++    ) -> buck2_error::Result<()> {
++        with_store((), |store| {
++            store.db.execute(
++                "DELETE FROM views WHERE path=?1",
++                [temporary.to_str().ok_or_else(|| error("Non-UTF-8 temporary artifact path"))?],
++            )?;
++            store.remember_view(destination, &Store::key(digest))
++        })
++    }
++
+     #[cfg(test)]
+     mod tests {
+         use buck2_common::cas_digest::DigestAlgorithm;
+ 
+         use super::*;
+ 
++        #[test]
++        fn hint_open_rejects_fifo_without_waiting() -> buck2_error::Result<()> {
++            unsafe extern "C" {
++                fn mkfifo(path: *const std::ffi::c_char, mode: u32) -> i32;
++            }
++            let temp = tempfile::tempdir()?;
++            let path = temp.path().join("stale-view");
++            let c_path = std::ffi::CString::new(path.as_os_str().as_encoded_bytes())
++                .expect("temporary path contains no NUL");
++            assert_eq!(unsafe { mkfifo(c_path.as_ptr(), 0o600) }, 0);
++            let (send, receive) = std::sync::mpsc::channel();
++            std::thread::spawn(move || {
++                let _ = send.send(open_file(&path).is_err());
++            });
++            assert!(
++                receive
++                    .recv_timeout(std::time::Duration::from_secs(5))
++                    .expect("opening a stale FIFO must not wait for a writer")
++            );
++            Ok(())
++        }
++
++        #[test]
++        fn hint_verification_bounds_reads_by_expected_size() -> buck2_error::Result<()> {
++            let mut file = tempfile::tempfile()?;
++            file.set_len(16 * 1024 * 1024)?;
++            let config = DigestConfig::leak_new(vec![DigestAlgorithm::Sha256], None)?;
++            let digest = FileDigest::from_content(b"expected", config.cas_digest_config());
++            assert!(verify(&mut file, &digest, config).is_err());
++            assert!(file.stream_position()? <= digest.size() + 1);
++            Ok(())
++        }
++
++        #[test]
++        fn reflink_downloads_respect_descriptor_limit() -> buck2_error::Result<()> {
++            super::super::download_tests::check_descriptor_limit(
++                true,
++                "materializers::local_content_store::linux::tests::reflink_downloads_respect_descriptor_limit",
++            )
++        }
++
++        #[test]
++        fn reflink_store_recovers_evicted_objects_from_live_views() -> buck2_error::Result<()> {
++            let temp = tempfile::tempdir()?;
++            let root = temp.path().join("store");
++            let config = DigestConfig::leak_new(vec![DigestAlgorithm::Sha256], None)?;
++            let bytes = vec![41u8; 128 * 1024];
++            let other = vec![42u8; 128 * 1024];
++            let digest = FileDigest::from_content(&bytes, config.cas_digest_config());
++            let other_digest = FileDigest::from_content(&other, config.cas_digest_config());
++            let a = temp.path().join("a");
++            let b = temp.path().join("b");
++            let c = temp.path().join("c");
++            fs::write(&a, &bytes)?;
++            fs::write(&b, &other)?;
++            let store = Store::open(root.clone(), 128 * 1024, 8)?;
++            store.access(&a, &digest, false, config, true)?;
++            store.access(&b, &other_digest, false, config, true)?;
++            assert!(!root.join(Store::key(&digest)).exists());
++            drop(store);
++
++            let store = Store::open(root.clone(), 128 * 1024, 8)?;
++            // No ingest/download: the still-live original view supplies the
++            // verified COW snapshot even after canonical eviction and restart.
++            assert!(store.access(&c, &digest, true, config, false)?);
++            assert_eq!(fs::read(&c)?, bytes);
++            assert_ne!(fs::metadata(&a)?.ino(), fs::metadata(&c)?.ino());
++            assert_eq!(fs::metadata(&c)?.mode() & 0o777, 0o755);
++            assert!(root.join(Store::key(&digest)).exists());
++            assert!(!root.join(Store::key(&other_digest)).exists());
++            fs::write(&c, b"changed new view")?;
++            assert_eq!(fs::read(&a)?, bytes);
++            Ok(())
++        }
++
++        #[test]
++        fn reflink_store_discards_stale_and_symlinked_view_hints() -> buck2_error::Result<()> {
++            let temp = tempfile::tempdir()?;
++            let root = temp.path().join("store");
++            let config = DigestConfig::leak_new(vec![DigestAlgorithm::Sha256], None)?;
++            let bytes = vec![51u8; 128 * 1024];
++            let other = vec![52u8; 128 * 1024];
++            let digest = FileDigest::from_content(&bytes, config.cas_digest_config());
++            let other_digest = FileDigest::from_content(&other, config.cas_digest_config());
++            let a = temp.path().join("a");
++            let b = temp.path().join("b");
++            let c = temp.path().join("c");
++            let d = temp.path().join("d");
++            let victim = temp.path().join("victim");
++            let output = temp.path().join("output");
++            fs::write(&a, &bytes)?;
++            fs::write(&d, &other)?;
++            fs::write(&victim, &bytes)?;
++            let store = Store::open(root.clone(), 128 * 1024, 8)?;
++            store.access(&a, &digest, false, config, true)?;
++            assert!(store.access(&b, &digest, false, config, false)?);
++            assert!(store.access(&c, &digest, false, config, false)?);
++            store.access(&d, &other_digest, false, config, true)?;
++            assert!(!root.join(Store::key(&digest)).exists());
++            fs::write(&a, b"edited original")?;
++            fs::remove_file(&b)?;
++            fs::remove_file(&c)?;
++            std::os::unix::fs::symlink(&victim, &c)?;
++            assert!(!store.access(&output, &digest, false, config, false)?);
++            assert!(!output.exists());
++            assert_eq!(fs::read(&victim)?, bytes);
++            assert_eq!(fs::read(&a)?, b"edited original");
++            Ok(())
++        }
++
+         #[test]
+         fn reflink_store_restart_eviction_corruption_and_modes() -> buck2_error::Result<()> {
+             // This test requires the same Linux reflink filesystem as production;
+@@ -539,6 +766,13 @@ mod linux {
+                 |r| Ok((r.get(0)?, r.get(1)?)),
+             )?;
+             assert_eq!((bytes, entries), actual);
++            let (views, actual_views): (u64, u64) = store.db.query_row(
++                "SELECT (SELECT entries FROM view_totals WHERE id=1),COUNT(*) FROM views",
++                [],
++                |row| Ok((row.get(0)?, row.get(1)?)),
++            )?;
++            assert!(views <= 4);
++            assert_eq!(views, actual_views);
+             Ok(())
+         }
+ 
+@@ -762,6 +996,12 @@ impl Download {
+         self.temporary
+             .persist(self.destination.as_path())
+             .map_err(|e| e.error)?;
++        #[cfg(target_os = "linux")]
++        linux::published(
++            path.as_path(),
++            self.destination.as_path(),
++            self.metadata.digest.data(),
++        )?;
+         Ok(())
+     }
+ }
+@@ -806,6 +1046,17 @@ mod download_tests {
+     #[cfg(target_os = "linux")]
+     #[test]
+     fn many_pending_downloads_respect_descriptor_limit() -> buck2_error::Result<()> {
++        check_descriptor_limit(
++            false,
++            "materializers::local_content_store::download_tests::many_pending_downloads_respect_descriptor_limit",
++        )
++    }
++
++    #[cfg(target_os = "linux")]
++    pub(super) fn check_descriptor_limit(
++        shared_store: bool,
++        test_name: &str,
++    ) -> buck2_error::Result<()> {
+         const CHILD: &str = "BUCK2_MATERIALIZER_FD_REGRESSION_CHILD";
+         if std::env::var_os(CHILD).is_none() {
+             use std::os::unix::process::CommandExt;
+@@ -819,43 +1070,37 @@ mod download_tests {
+                 fn setrlimit(resource: i32, limit: *const Limit) -> i32;
+             }
+ 
+-            for shared_store in [false, true] {
+-                let temp = tempfile::tempdir()?;
+-                let mut command = std::process::Command::new(std::env::current_exe()?);
+-                command.args([
+-                    "--exact",
+-                    "materializers::local_content_store::download_tests::many_pending_downloads_respect_descriptor_limit",
+-                    "--nocapture",
+-                ]);
+-                command.env(CHILD, "1");
+-                command.env_remove("BUCK2_LOCAL_CONTENT_STORE");
+-                if shared_store {
+-                    command.env("BUCK2_LOCAL_CONTENT_STORE", temp.path().join("store"));
+-                }
+-                // Apply the limit only in the child, never in the parallel
+-                // parent test harness. setrlimit is async-signal-safe.
+-                unsafe {
+-                    command.pre_exec(|| {
+-                        if setrlimit(
+-                            7,
+-                            &Limit {
+-                                current: 64,
+-                                maximum: 64,
+-                            },
+-                        ) != 0
+-                        {
+-                            return Err(std::io::Error::last_os_error());
+-                        }
+-                        Ok(())
+-                    });
+-                }
+-                let result = command.output()?;
+-                assert!(
+-                    result.status.success(),
+-                    "shared_store={shared_store}: {}",
+-                    String::from_utf8_lossy(&result.stderr)
+-                );
++            let temp = tempfile::tempdir()?;
++            let mut command = std::process::Command::new(std::env::current_exe()?);
++            command.args(["--exact", test_name, "--nocapture"]);
++            command.env(CHILD, "1");
++            command.env_remove("BUCK2_LOCAL_CONTENT_STORE");
++            if shared_store {
++                command.env("BUCK2_LOCAL_CONTENT_STORE", temp.path().join("store"));
+             }
++            // Apply the limit only in the child, never in the parallel
++            // parent test harness. setrlimit is async-signal-safe.
++            unsafe {
++                command.pre_exec(|| {
++                    if setrlimit(
++                        7,
++                        &Limit {
++                            current: 64,
++                            maximum: 64,
++                        },
++                    ) != 0
++                    {
++                        return Err(std::io::Error::last_os_error());
++                    }
++                    Ok(())
++                });
++            }
++            let result = command.output()?;
++            assert!(
++                result.status.success(),
++                "shared_store={shared_store}: {}",
++                String::from_utf8_lossy(&result.stderr)
++            );
+             return Ok(());
+         }
+ 

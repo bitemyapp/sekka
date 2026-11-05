@@ -26,6 +26,11 @@ network/DNS endpoint without credentials. Teardown refuses attached foreign jobs
 Use global --local when administering on the deployment host; manifests remain
 portable and no SSH/agent forwarding is required. inventory emits explicit
 persistent roots for physical-union accounting without traversing other services.
+Workers use bounded executable private tmpfs and a retained root-locked runtime
+for NSS identities and private-session D-Bus policy, never the host's /etc or bus.
+runtime explicitly migrates old manifests, replaces owned workers and restarts
+their schedulers. Regenerate clients afterward: sekka.worker-runtime is part of
+remote action identity.
 
 Tunnel with: ssh -N -L 17841:127.0.0.1:17841 -L 17842:127.0.0.1:17842 HOST
 """
@@ -143,7 +148,7 @@ def backend_config(m):
         {"name": "ac", "completeness_checking": {"backend": filesystem("/data/ac", m["ac_bytes"]),
                                                  "cas_store": {"ref_store": {"name": "cas"}}}}],
         "schedulers": [{"name": "scheduler", "simple": {"supported_platform_properties": {
-            "OSFamily": "exact", "ISA": "exact", "cpu_count": "minimum"}}}],
+            "OSFamily": "exact", "ISA": "exact", "cpu_count": "minimum", "sekka.worker-runtime": "exact"}}}],
         "servers": [{"name": "reapi", "listener": {"http": {"socket_address": "127.0.0.1:50051"}},
                      "services": services},
                     {"name": "workers", "listener": {"http": {"socket_address": "127.0.0.1:50061"}},
@@ -167,7 +172,8 @@ def worker_config(m):
                                     "orphan_sweep_interval_s": 60, "drain_on_shutdown": True,
                                     "platform_properties": {"OSFamily": {"values": ["linux"]},
                                                             "ISA": {"values": ["x86-64"]},
-                                                            "cpu_count": {"values": [str(m["jobs"])]}}}}],
+                                                            "cpu_count": {"values": [str(m["jobs"])]},
+                                                            "sekka.worker-runtime": {"values": [m["worker_runtime"]]}}}}],
             "servers": [], "global": {"max_open_files": 16384}}
 
 
@@ -278,22 +284,24 @@ def run_container(m, domain, role, *args, network_generation=None):
            "--log-driver=json-file", "--log-opt=max-size=10m", "--log-opt=max-file=3", *args)
 
 
-def runtime_paths(shell, env):
-    paths = {"worker_shell": shell, "worker_env": env}
-    for path in paths.values():
-        if not path or not path.startswith("/nix/store/") or ".." in Path(path).parts:
-            raise SystemExit("Use the Nix-packaged controller or pass --shell and --env immutable Nix executables")
-    return paths
+def runtime_paths(worker_runtime):
+    if (not worker_runtime or Path(worker_runtime).parent != Path("/nix/store")
+            or ".." in Path(worker_runtime).parts):
+        raise SystemExit("Missing immutable worker runtime: use the Nix-packaged controller runtime command "
+                         "(or --worker-runtime /nix/store/ROOT), then regenerate client configs")
+    return {"worker_runtime": worker_runtime,
+            "worker_shell": worker_runtime + "/bin/bash", "worker_env": worker_runtime + "/bin/env"}
 
 
 def retain_runtime(m):
     remote(m, "mkdir", "-p", m["directory"] + "/roots")
-    for key in ("worker_shell", "worker_env"):
-        path = m[key]
-        remote(m, "test", "-x", path)
-        store = "/" + "/".join(Path(path).parts[1:4])
-        remote(m, "nix-store", "--realise", store, "--add-root",
-               m["directory"] + "/roots/" + Path(store).name, "--indirect")
+    runtime = m["worker_runtime"]
+    for relative in ("etc/passwd", "etc/group", "etc/nsswitch.conf", "etc/dbus-1/session.conf"):
+        remote(m, "test", "-r", runtime + "/" + relative)
+    for executable in ("bash", "env", "dbus-daemon", "dbus-run-session", "dbus-send"):
+        remote(m, "test", "-x", runtime + "/bin/" + executable)
+    remote(m, "nix-store", "--realise", runtime, "--add-root",
+           m["directory"] + "/roots/" + Path(runtime).name, "--indirect")
 
 
 def init(args):
@@ -306,7 +314,7 @@ def init(args):
          "scratch_bytes": args.scratch_bytes, "worker_cache_bytes": args.scratch_bytes // 4,
          "domains": {d: {"port": args.port + i, "token": secrets.token_hex(32),
                          "reader_token": secrets.token_hex(32)} for i, d in enumerate(args.domains)}}
-    m.update(runtime_paths(args.shell, args.env))
+    m.update(runtime_paths(args.worker_runtime))
     # Untrusted writable jobs must not fill the host filesystem through active
     # uploads outside the retained-object LRU. Their entire CAS/AC/temp area is
     # a size-limited tmpfs and disappears on restart; a miss rebuilds correctly.
@@ -391,11 +399,15 @@ def up(m):
         run_container(m, d, "worker", "--network", network, "--user", "30501:30501",
                       "--memory", str(m["scratch_bytes"] + 8 * 1024**3), "--cpus", str(m["jobs"]),
                       "--tmpfs", f'/scratch:rw,exec,nosuid,nodev,size={m["scratch_bytes"]},uid=30501,gid=30501,mode=0700',
-                      "--tmpfs", "/tmp:rw,nosuid,nodev,size=1g,uid=30501,gid=30501,mode=1777",
+                      "--tmpfs", "/tmp:rw,exec,nosuid,nodev,size=1g,uid=30501,gid=30501,mode=1777",
                       "-v", "/nix/store:/nix/store:ro", "-v", base + "/worker.json:/config.json:ro",
                       "-v", m["worker_shell"] + ":/bin/sh:ro",
                       "-v", m["worker_shell"] + ":/bin/bash:ro",
                       "-v", m["worker_env"] + ":/usr/bin/env:ro",
+                      "-v", m["worker_runtime"] + "/etc/passwd:/etc/passwd:ro",
+                      "-v", m["worker_runtime"] + "/etc/group:/etc/group:ro",
+                      "-v", m["worker_runtime"] + "/etc/nsswitch.conf:/etc/nsswitch.conf:ro",
+                      "-v", m["worker_runtime"] + "/etc/dbus-1:/etc/dbus-1:ro",
                       "-e", "RUST_LOG=info", m["image"], "/config.json", network_generation=generation)
 
 
@@ -414,10 +426,10 @@ def main():
     create.add_argument("--cas-bytes", type=int, default=64 * 1024**3)
     create.add_argument("--ac-bytes", type=int, default=1024**3)
     create.add_argument("--scratch-bytes", type=int, default=32 * 1024**3)
-    runtime = sub.add_parser("runtime", help="Retain new immutable interpreter paths and replace only owned workers")
+    runtime = sub.add_parser("runtime", help="Retain immutable interpreters/NSS/DBus runtime, replace owned workers and restart schedulers")
     for command in (create, runtime):
-        command.add_argument("--shell", default=os.environ.get("SEKKA_BUILD_SERVICE_SHELL"))
-        command.add_argument("--env", default=os.environ.get("SEKKA_BUILD_SERVICE_ENV"))
+        command.add_argument("--worker-runtime", default=os.environ.get("SEKKA_BUILD_SERVICE_WORKER_RUNTIME"),
+                             help="Root-locked service worker runtime store root (Nix wrapper supplies default)")
     for command in ("up", "stop", "restart", "logs", "status", "issue-reader", "metrics", "inventory"):
         sub.add_parser(command)
     destroy = sub.add_parser("destroy")
@@ -444,6 +456,10 @@ def main():
     if args.manifest.stat().st_mode & 0o077:
         raise SystemExit("Credential manifest must be mode 0600")
     m = json.loads(args.manifest.read_text())
+    if args.command in ("up", "restart", "resize", "client"):
+        expected = runtime_paths(m.get("worker_runtime"))
+        if any(m.get(key) != value for key, value in expected.items()):
+            raise SystemExit("Manifest interpreters must come from worker_runtime; run runtime and regenerate clients")
     if args.command == "inventory":
         script = os.environ.get("SEKKA_BUILD_SERVICE_INVENTORY",
                                 str(Path(__file__).resolve().parents[1] / "nix/build-service/inventory.py"))
@@ -454,7 +470,7 @@ def main():
         print(json.dumps(connection_info(m, args.domain)))
         return
     if args.command == "runtime":
-        m.update(runtime_paths(args.shell, args.env))
+        m.update(runtime_paths(args.worker_runtime))
         retain_runtime(m)
         args.manifest.write_text(json.dumps(m, indent=2) + "\n")
         for domain in m["domains"]:
@@ -462,6 +478,10 @@ def main():
             assert_owned(m, container)
             docker(m, "stop", "--timeout", "3600", container)
             docker(m, "rm", container)
+            # The scheduler must load the matching runtime platform property.
+            backend = name(m, domain, "backend")
+            assert_owned(m, backend)
+            docker(m, "stop", "--timeout", "30", backend)
         up(m)
         return
     if args.command == "restart":
@@ -533,6 +553,9 @@ def main():
         token = d["token" if args.access == "writer" else "reader_token"]
         if args.format == "bazel":
             print(f'build --remote_cache={endpoint}\nbuild --remote_instance_name=sekka')
+            print("build --remote_default_exec_properties=OSFamily=linux")
+            print("build --remote_default_exec_properties=ISA=x86-64")
+            print("build --remote_default_exec_properties=sekka.worker-runtime=" + m["worker_runtime"])
             # Bazel includes rc options in routine BEP and option-error output.
             # A comment is private file data, never a native --remote_header.
             print("# sekka-bazel-credential-v1 " + json.dumps({"endpoint": endpoint, "token": token}))
@@ -544,9 +567,10 @@ def main():
                 print(f"{address} = {endpoint}")
             print("tls = false\ninstance_name = sekka")
             print("http_headers = authorization: Bearer " + token)
+            print("\n[sekka]\nworker_runtime = " + m["worker_runtime"])
         else:
             print(json.dumps({"endpoint": endpoint, "instance": "sekka", "authorization": "Bearer " + token,
-                              "access": args.access}))
+                              "access": args.access, "worker_runtime": m["worker_runtime"]}))
     else:
         if args.command == "destroy":
             for domain in m["domains"]:
