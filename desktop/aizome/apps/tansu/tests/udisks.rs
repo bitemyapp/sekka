@@ -13,8 +13,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use aizome_sys::Wake;
-use aizome_sys::disks::{Disks, Erase};
+use aizome_sys::disks::{Disks, DisksState, Erase};
 use tansu::backend::Backend;
+use tansu::layout::{Here, Layout, Sel};
 use tansu::plan::{NewFs, Plan};
 use tansu::run::{Outcome, Run};
 use zbus::fdo;
@@ -331,19 +332,24 @@ fn finish(run: &mut Run, backend: &dyn Backend) -> Outcome {
     run.outcome.clone().expect("the run ended")
 }
 
+/// Segment `i` of `l`, chosen and found now.
+fn here<'l>(state: &DisksState, l: &'l Layout, i: usize) -> Here<'l> {
+    l.locate(state, &l.choose(state, &Sel::of(&l.segs[i])).unwrap()).unwrap()
+}
+
 fn format_and_delete(d: &Disks) -> Plan {
     let state = d.snapshot();
     let mut plan = Plan::default();
     let l = plan.preview(&state, &format!("{B}sdx")).unwrap();
     let one = l.segs.iter().position(|s| s.short_name() == "sdx1").unwrap();
     plan.format(
-        l.at(&state, one).unwrap(),
+        here(&state, &l, one),
         NewFs { fs: "ext4".into(), label: "DATA".into(), erase: Erase::Quick, encrypt: None },
     )
     .unwrap();
     let l = plan.preview(&state, &format!("{B}sdx")).unwrap();
     let two = l.segs.iter().position(|s| s.short_name() == "sdx2").unwrap();
-    plan.delete(l.at(&state, two).unwrap()).unwrap();
+    plan.delete(here(&state, &l, two)).unwrap();
     plan
 }
 

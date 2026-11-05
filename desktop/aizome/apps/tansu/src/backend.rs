@@ -11,6 +11,7 @@ use aizome_sys::disks::{
     PartitionEntry, Relabel, Repair, Resize, SelfTest, SmartAttribute, TableKind,
 };
 
+use crate::layout::Volume;
 use crate::plan::Queued;
 
 /// The operations Tansu uses. Every one that changes what is on a disk
@@ -23,7 +24,8 @@ pub trait Backend {
     // Done at once.
     fn mount(&self, block: &str) -> Task<String>;
     fn unmount(&self, block: &str) -> Task<()>;
-    fn unlock(&self, block: &str, passphrase: &str) -> Task<String>;
+    /// Unlock the volume found where the person chose it.
+    fn unlock(&self, volume: Volume<'_>, passphrase: &str) -> Task<String>;
     fn lock(&self, block: &str) -> Task<()>;
     fn set_swap(&self, block: &str, on: bool) -> Task<()>;
     fn power_off(&self, drive: &str) -> Task<()>;
@@ -54,6 +56,8 @@ pub trait Backend {
     fn resize_partition(&self, confirm: Confirm<Resize, Queued>, size: u64) -> Task<()>;
     fn resize_filesystem(&self, confirm: Confirm<Resize, Queued>, size: u64) -> Task<()>;
     fn repair(&self, confirm: Confirm<Repair, Queued>) -> Task<bool>;
+    /// The check and repair that starts an ext resize, held as the resize is.
+    fn repair_before_resize(&self, confirm: Confirm<Resize, Queued>) -> Task<bool>;
     fn set_label(&self, confirm: Confirm<Relabel, Queued>, label: &str) -> Task<()>;
     fn set_partition_type(&self, confirm: Confirm<PartitionEntry, Queued>, type_id: &str) -> Task<()>;
     fn set_partition_flags(&self, confirm: Confirm<PartitionEntry, Queued>, flags: u64) -> Task<()>;
@@ -72,8 +76,8 @@ impl Backend for Disks {
     fn unmount(&self, block: &str) -> Task<()> {
         Disks::unmount(self, block, false)
     }
-    fn unlock(&self, block: &str, passphrase: &str) -> Task<String> {
-        Disks::unlock(self, block, passphrase)
+    fn unlock(&self, volume: Volume<'_>, passphrase: &str) -> Task<String> {
+        Disks::unlock(self, volume.path(), passphrase)
     }
     fn lock(&self, block: &str) -> Task<()> {
         Disks::lock(self, block)
@@ -136,6 +140,9 @@ impl Backend for Disks {
     }
     fn repair(&self, confirm: Confirm<Repair, Queued>) -> Task<bool> {
         Disks::repair(self, confirm)
+    }
+    fn repair_before_resize(&self, confirm: Confirm<Resize, Queued>) -> Task<bool> {
+        Disks::repair_before_resize(self, confirm)
     }
     fn set_label(&self, confirm: Confirm<Relabel, Queued>, label: &str) -> Task<()> {
         Disks::set_label(self, confirm, label)

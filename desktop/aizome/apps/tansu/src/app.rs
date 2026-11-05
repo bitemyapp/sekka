@@ -18,12 +18,7 @@ use crate::run::{Outcome, Run};
 
 pub const APP_ID: &str = "org.aizome.Tansu";
 
-/// What the selection names, so it survives the layout changing.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Sel {
-    Target(Target),
-    Free { offset: u64, logical: bool },
-}
+pub use crate::layout::Sel;
 
 /// The size units the create and resize sheets offer.
 pub const UNITS: [(&str, u64); 2] = [("MB", 1_000_000), ("GB", 1_000_000_000)];
@@ -372,41 +367,12 @@ impl Tansu {
     }
 
     fn sel_of(&self, i: usize) -> Sel {
-        let s = &self.layout.segs[i];
-        match &s.target {
-            Some(t) => Sel::Target(t.clone()),
-            None => Sel::Free { offset: s.offset, logical: s.logical },
-        }
+        Sel::of(&self.layout.segs[i])
     }
 
     /// The selected segment's index in the layout.
     pub fn selected(&self) -> Option<usize> {
-        match self.sel.as_ref()? {
-            Sel::Target(t) => self.layout.find(t),
-            Sel::Free { offset, logical } => {
-                // Free space moves as partitions change: the stretch that
-                // holds the old start, else the nearest.
-                let free = |s: &&crate::layout::Seg| s.is_free() && s.logical == *logical;
-                let holds = |s: &crate::layout::Seg| s.logical == *logical && s.offset <= *offset && *offset < s.end();
-                self.layout
-                    .segs
-                    .iter()
-                    .position(|s| free(&s) && holds(s))
-                    // A partition back where it was (an undone deletion).
-                    .or_else(|| {
-                        self.layout.segs.iter().position(|s| holds(s) && s.kind() != crate::layout::SegKind::Extended)
-                    })
-                    .or_else(|| {
-                        self.layout
-                            .segs
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, s)| free(s))
-                            .min_by_key(|(_, s)| s.offset.abs_diff(*offset))
-                            .map(|(i, _)| i)
-                    })
-            }
-        }
+        self.layout.position(self.sel.as_ref()?)
     }
 
     /// Whether `action` can be done to the selection now.
@@ -590,7 +556,7 @@ impl Tansu {
         let b = self.backend.clone();
         // What a sheet acts on once it's filled in: the segment as chosen
         // now, found again when the person submits.
-        let Some(target) = self.layout.choose(&self.state, i) else {
+        let Some(target) = self.sel.as_ref().and_then(|sel| self.layout.choose(&self.state, sel)) else {
             self.say(format!("{name} is gone."), true);
             return;
         };
@@ -879,17 +845,17 @@ impl Tansu {
                     return;
                 }
                 // The passphrase goes only to the volume chosen.
-                let block = match self.layout.locate(&state, target) {
-                    Ok(at) => at.device().map(|d| d.path().to_owned()),
+                let at = match self.layout.locate(&state, target) {
+                    Ok(at) => at,
                     Err(why) => {
                         sheet.error = Some(why);
                         return;
                     }
                 };
-                let Some(block) = block else { return };
+                let Some(volume) = at.volume() else { return };
                 let name = target.name().to_owned();
                 let pass = std::mem::take(pass);
-                let task = self.backend.unlock(&block, &pass);
+                let task = self.backend.unlock(volume, &pass);
                 self.close_sheet(cx);
                 self.start(format!("Unlocking {name}…"), format!("{name} is unlocked."), BusyTask::Text(task));
             }
