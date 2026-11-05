@@ -110,6 +110,10 @@
         fonts = inputs.aizome.packages.${system}.fonts;
       };
       applicationCatalog = import ./nix/applications.nix { inherit inputs; };
+      tatamiReference = (import ./nix/reference-systems.nix {
+        inherit inputs applicationCatalog;
+        desktops = [ "tatami" ];
+      }).systems.tatami.config;
       installer = nixpkgs.lib.nixosSystem {
         inherit system;
         specialArgs = {
@@ -631,11 +635,7 @@
         binary-cache =
           let
             advertised = (import ./flake.nix).nixConfig;
-            installed =
-              (import ./nix/reference-systems.nix {
-                inherit inputs applicationCatalog;
-                desktops = [ "tatami" ];
-              }).systems.tatami.config;
+            installed = tatamiReference;
             uses =
               c:
               builtins.all (name: builtins.all (v: builtins.elem v c.nix.settings.${name}) advertised.${name}) [
@@ -669,11 +669,7 @@
         tatami-session-entry =
           let
             inherit (pkgs) lib;
-            installed =
-              (import ./nix/reference-systems.nix {
-                inherit inputs applicationCatalog;
-                desktops = [ "tatami" ];
-              }).systems.tatami.config;
+            installed = tatamiReference;
             entry = lib.findFirst (
               p: p.name == "tatami-session"
             ) (throw "Tatami offers no login session") installed.services.displayManager.sessionPackages;

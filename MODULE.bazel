@@ -57,6 +57,9 @@ crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
 crate.from_cargo(
     name = "aizome_crates",
     cargo_lockfile = "//desktop/aizome:Cargo.lock",
+    # Repository evaluation must use the same Nix-pinned Cargo/rustc as actions;
+    # upstream downloaded host tools require an ambient non-Nix ELF loader.
+    host_tools = "@nix_rust//:BUILD.bazel",
     lockfile = "//build/bazel:aizome-crates.lock.json",
     manifests = ["//build/bazel/aizome-cargo:Cargo.toml"],
     supported_platform_triples = ["x86_64-unknown-linux-gnu"],

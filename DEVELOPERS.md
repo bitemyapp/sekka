@@ -273,6 +273,24 @@ reverts. Run it with:
 nix build .#checks.x86_64-linux.build-input-stability --no-update-lock-file
 ```
 
+Warm frontend execution is deliberately outside Nix evaluation. On
+`wx-workstation`, execution tracing of five real no-op theme builds found
+zero Nix invocations for either frontend. Traced Bazel runs took
+1.19–1.28 seconds; Buck2 runs took 0.44–0.49 seconds. Initial client rooting
+from already-realized store closures took 4.90 and 2.37 seconds respectively;
+these are not cold toolchain-build timings. Source and generated-metadata
+edits preserved the client GC-root identity. Toolchain, native-input and
+lockfile changes still invalidate the relevant declared inputs.
+
+Full root-check evaluation remains substantially heavier than selecting a
+development client. Identical Tatami reference configurations are shared
+between checks rather than evaluated twice. Three interleaved uncached
+eight-evaluator-thread trials measured median wall time 89.1 → 84.3 seconds
+and peak RSS 42.5 → 40.6 GiB. Ranges overlap under concurrent workstation
+load; this is not an isolated speedup claim. All non-provenance check
+derivations stayed identical; site revision strings and the installed-lock
+provenance account for the other changes. No checks were removed.
+
 ### Cargo workspaces through Buck2
 
 `scripts/sekka-buck2` roots a pinned client closure once, then executes it
@@ -316,6 +334,12 @@ Private cache configuration, TLS material and store settings participate in
 daemon startup identity so a long-lived daemon does not silently retain old
 credentials or settings. Keep the same `--isolation-dir` across cooperating
 remote-cache clients because it enters action paths.
+
+The corresponding engine source is published in
+[the qualified Buck2 fork](https://github.com/bitemyapp/buck2/pull/1).
+Its committed tree matches the three source patches in `nix/buck2/engine.nix`;
+Nix keeps the qualified upstream revision plus those patches. The separate
+unused-bindgen manifest patch affects packaging only.
 
 The backend depends on the pinned Cargo unit-graph API and its LTO planning
 semantics; changing Cargo requires requalification, not just a version bump.
@@ -3214,6 +3238,30 @@ read-only file binds are readable by UID 30500; the parent directory remains
 private. The helper copies them into its private workspace with mode 0600.
 Never substitute writer configurations. The supervisor token remains outside
 job containers, as in the Nix pool.
+
+After preparing those reader files and exporting the two variables, run on
+the builder:
+
+```sh
+nix build .#build-client-runner --out-link ~/sekka-build-client/current
+docker load -i ~/sekka-build-client/current/job-image.tar.gz
+docker load -i ~/sekka-build-client/current/supervisor-image.tar.gz
+docker run -d --name sekka-build-client-supervisor --restart unless-stopped \
+  --user "$(id -u):$(id -g)" --group-add "$(stat -c %g /var/run/docker.sock)" \
+  --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /nix/store:/nix/store:ro \
+  -v "$HOME/.config/sekka-runner:/run/secrets:ro" \
+  -e SEKKA_BUILD_NETWORK -e SEKKA_BUILD_READER_DIR \
+  sekka-build-client-supervisor:latest
+```
+
+The additional pool has been registered and observed online with the
+`sekka-build-client` label. Workflow changes still require a reviewed merge
+to `main`; registering a runner does not bypass that trust gate or enable
+publication. Before deliberately destroying its cache service, drain and
+stop this pool: the service correctly refuses teardown while its waiting
+job remains attached to the frontend network.
 
 ### Setting up the builder
 
