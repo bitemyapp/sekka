@@ -183,6 +183,9 @@ pub struct Options {
     pub data_dir: DataDir,
     /// `tasuke-helper`, run through pkexec for `run_as_root`.
     pub helper: PathBuf,
+    /// How `run_command` runs, before `bash -c`: empty normally; `as-alice`
+    /// in the eval VM, where Tasuke runs as root and commands run as the person.
+    pub user_command_prefix: Vec<String>,
     /// How to run `aizomectl` (a prefix: as root in the eval VM it is `as-alice aizomectl`).
     pub aizomectl: Vec<String>,
     /// Where kit apps write what their windows show (`AIZOME_KIT_INSPECT`), if anywhere.
@@ -213,6 +216,7 @@ impl Options {
             skills: Skills::default(),
             data_dir: DataDir::user(),
             helper: default_helper(),
+            user_command_prefix: Vec::new(),
             aizomectl: vec!["aizomectl".into()],
             inspect_dir: std::env::var_os("AIZOME_KIT_INSPECT").filter(|v| !v.is_empty()).map(PathBuf::from),
             environment_note: None,

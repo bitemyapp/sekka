@@ -21,12 +21,19 @@
 
 mod agent;
 pub mod chat;
+mod context;
+mod desktop;
 mod event;
+mod exec;
 mod ids;
+mod llm;
 pub mod memory;
 mod options;
+pub mod policy;
 pub mod session;
 pub mod skills;
+mod textcalls;
+mod tools;
 mod turn;
 
 pub use agent::{Agent, TurnHandle};

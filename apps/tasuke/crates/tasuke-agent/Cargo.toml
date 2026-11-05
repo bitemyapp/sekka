@@ -14,3 +14,4 @@ libc = { workspace = true }
 ureq = { workspace = true }
 png = { workspace = true }
 similar = { workspace = true }
+log = { workspace = true }
