@@ -144,7 +144,8 @@ enum Step {
 
 impl Run {
     /// Run what the person agreed to with the Apply sheet's button: its
-    /// operations, as it showed them, if `plan` still has exactly those (an
+    /// operations, as it showed them, if `plan` is the plan it listed them
+    /// from and still has exactly those (an
     /// operation dropped as its device went means what they agreed to isn't
     /// what would run). Each step's confirmation is made when it starts, from
     /// that agreement: of the operation's device as it was queued (not
@@ -195,7 +196,7 @@ impl Run {
     /// }
     /// ```
     pub fn agree(agreed: Agreed<Vec<Shown>>, plan: &Plan, state: &DisksState) -> Result<Run, PlanChanged> {
-        if agreed.target().iter().map(Shown::op).ne(plan.ops.iter()) {
+        if !plan.is(agreed.target()) {
             return Err(PlanChanged);
         }
         let items = agreed
