@@ -97,13 +97,13 @@ apps, as ⌘ does on a Mac. The system takes only:
 | ⌃❖1…9 | Show Desk N on the display with the focus (one another display shows swaps with it); with ⇧, take the window along |
 | ⌃❖←, ⌃❖→ | Previous, next Desk on this display (past those other displays show); with ⇧, take the window along |
 | ⌃❖↑ | Desks overview |
-| ⌃❖↓ | Hide or show the Deskbar (the menu bar's Hide Deskbar / `N apps` controls) |
 | ⌥❖↑, ⌥❖↓, ⌥❖←, ⌥❖→ | Fill, park (minimise), split left, split right: the marking menu's verbs |
 | ⌃❖Space | The marking menu of the focused window, from the keyboard |
 | ⌃❖S; with ⇧ | Stack with the window behind; take the tab out of its group |
 | ❖⇧[, ❖⇧] | Previous, next tab of the window's group (⌘⇧[ ⌘⇧] on a Mac) |
 | ⌃⇧❖[, ⌃⇧❖] | Move the tab left, right in its group |
 | ⌃❖F | Full screen |
+| ⌃❖D | Hide or show the Deskbar (the menu bar's Hide Deskbar / `N apps` controls) |
 | ❖Return | Terminal (Hotaru, or the one chosen in Settei) in the Desk's folder |
 | ⌃❖Q | Lock |
 | ⌃⌥Del | Recovery: force quit stuck apps, reset input, restart the shell (`docs/recovery.md`) |

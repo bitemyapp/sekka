@@ -56,8 +56,7 @@ fn the_deskbar_folds_into_the_bar() {
 fn the_deskbar_key_hides_and_shows_the_deskbar() {
     use aizome_ipc::Event;
     use aizome_shell::ipc::IpcEvent;
-    let key =
-        || Msg::Ipc(IpcEvent::Event(Event::Binding { action: "toggle-deskbar".into(), pointer: None, output: None }));
+    let key = || Msg::Ipc(IpcEvent::Event(Event::Binding { action: "deskbar".into(), pointer: None, output: None }));
     let mut h = scene(false);
     h.send(key());
     assert!(h.program().deskbar_cfg.collapsed);
@@ -73,8 +72,7 @@ fn the_deskbar_key_hides_and_shows_the_deskbar() {
 fn the_deskbar_key_folds_an_auto_hidden_deskbar_for_good() {
     use aizome_ipc::Event;
     use aizome_shell::ipc::IpcEvent;
-    let key =
-        || Msg::Ipc(IpcEvent::Event(Event::Binding { action: "toggle-deskbar".into(), pointer: None, output: None }));
+    let key = || Msg::Ipc(IpcEvent::Event(Event::Binding { action: "deskbar".into(), pointer: None, output: None }));
     let mut h = scene(false);
     let mut config = h.program().settings.deskbar_settings();
     config.auto_hide = true;

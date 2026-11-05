@@ -323,7 +323,7 @@ Sent to subscribers as `binding` events, for the shell:
 | ❖Space | `palette` |
 | ❖⌥Space | `toolchest` |
 | ❖⌥M; F10 over Aizome's apps (`org.aizome.…`) and the desktop (other apps keep F10) | `menu-bar` (focus the menu bar) |
-| ⌃❖↓ | `toggle-deskbar` (fold the Deskbar into the bar, or bring it back) |
+| ⌃❖D | `deskbar` (fold the Deskbar into the bar, or bring it back) |
 | XF86PowerOff (the power key, when logind leaves it to the session) | `power-key` |
 | a client rings xdg-system-bell | `bell`, with the `output` (its window's, else the pointer's) |
 | ⌃❖Q | `lock` |
