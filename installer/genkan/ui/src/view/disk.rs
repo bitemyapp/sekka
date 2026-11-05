@@ -3,7 +3,7 @@
 use super::{FIELD, group, note_row, partitions, sections};
 use crate::app::{Field, Genkan, Msg};
 use crate::format::size;
-use crate::ram::SwapUnsized;
+use crate::ram::SwapSize;
 use aizome_kit::prelude::*;
 use aizome_kit::row;
 use calamares_nixos::Filesystem;
@@ -118,7 +118,7 @@ pub fn page(app: &Genkan) -> Element<Msg> {
                 .on_toggle(Msg::Swap)
                 .enabled(!matches!(
                     app.memory().swap_size(true),
-                    Err(SwapUnsized::Unreadable(_))
+                    SwapSize::Unreadable(_)
                 )),
         )
         .description(app.memory().swap_note())
