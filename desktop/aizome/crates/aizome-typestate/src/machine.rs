@@ -8,7 +8,7 @@
 ///     pub struct Wrap over Cursor {
 ///         /// Where the machine is: its state and that state's data.
 ///         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-///         stored WrapState;
+///         stored(Copy) WrapState;
 ///         /// The machine's typed state, holding the cursor.
 ///         typed WrapAny;
 ///         states {
@@ -66,7 +66,9 @@
 ///   that take `self` and return the next state or a branch.
 /// - **The stored state** (`stored`): an enum with one variant per state
 ///   carrying that state's data. A machine whose states carry no data stores
-///   one byte.
+///   one byte. Write `stored(Copy) Name;` when it derives `Copy`: `with_typed`
+///   then copies it instead of storing a placeholder while the typed state
+///   runs, one store fewer per event.
 /// - **The typed state** (`typed`): an enum with one variant per state
 ///   struct. Each state converts into it with `From`. `open(stored, ctx)` and
 ///   `close(self)` (both private) move between the stored and typed states.
@@ -130,7 +132,7 @@ macro_rules! machine {
         $(#[$meta:meta])*
         $vis:vis struct $name:ident over $ctx:ty {
             $(#[$smeta:meta])*
-            stored $stored:ident;
+            stored $(($copy:ident))? $stored:ident;
             $(#[$ameta:meta])*
             typed $any:ident;
             states { $($states:tt)* }
@@ -141,7 +143,7 @@ macro_rules! machine {
         $crate::machine!(@norm
             [
                 [$(#[$meta])*] [$vis] $name [$ctx]
-                [$(#[$smeta])*] $stored [$(#[$ameta])*] $any
+                [$(#[$smeta])*] [$($copy)?] $stored [$(#[$ameta])*] $any
                 [$($($branches)*)?] [$($($wvis)*)?]
             ]
             []
@@ -163,7 +165,7 @@ macro_rules! machine {
     (@emit
         [
             [$(#[$meta:meta])*] [$vis:vis] $name:ident [$ctx:ty]
-            [$(#[$smeta:meta])*] $stored:ident [$(#[$ameta:meta])*] $any:ident
+            [$(#[$smeta:meta])*] [$($copy:ident)?] $stored:ident [$(#[$ameta:meta])*] $any:ident
             [$($bname:ident = $($bstate:ident)|+ ;)*] [$($wvis:tt)*]
         ]
         [[$(#[$fm:meta])*] $first:ident [$fd:ty]]
@@ -240,7 +242,7 @@ macro_rules! machine {
             #[inline]
             #[allow(dead_code)]
             $($wvis)* fn with_typed<R>(&mut self, f: impl for<'s> FnOnce($any<'s>) -> ($any<'s>, R)) -> R {
-                let stored = ::core::mem::replace(&mut self.stored, $stored::$first(()));
+                let stored = $crate::machine!(@take [$($copy)?] self.stored, $stored::$first(()));
                 let (next, r) = f($any::open(stored, &mut self.ctx));
                 self.stored = next.close();
                 r
@@ -262,6 +264,15 @@ macro_rules! machine {
                 }
             }
         )*
+    };
+
+    // Takes the stored state out for `with_typed`: a `Copy` one is copied,
+    // any other is replaced by the first state while the typed state runs.
+    (@take [Copy] $place:expr, $first:expr) => {
+        $place
+    };
+    (@take [] $place:expr, $first:expr) => {
+        ::core::mem::replace(&mut $place, $first)
     };
 
     (@state [$(#[$m:meta])*] [$vis:vis] $s:ident [$d:ty] [$ctx:ty] $any:ident) => {
