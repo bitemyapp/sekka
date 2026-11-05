@@ -61,10 +61,12 @@ Could a light fine-tune make Gemma better at Sekka's faults without teaching it 
 | Gemma 4 12B, bare loop, 16 faults × 2 | 4/32 | **17/32** |
 | Gemma 4 12B in Tasuke, 16 faults × 2 | 20/31 | 19/31 |
 | Gemma 4 12B in Tasuke, desktop with marks, 9 tasks × 2 | 11/18 | 13/18 |
-| Gemma 4 31B, bare loop, 16 faults × 2 | (running) | (running) |
+| Gemma 4 31B, bare loop, 16 faults × 2 | 28/32 | 27/32 |
+| GSM8K, 100 problems, no thinking: Gemma 4 12B | 97 | 96 |
+| GSM8K, 100 problems, no thinking: Gemma 4 31B | 99 | 99 |
 
-General ability (100 GSM8K problems, the same server settings for base and adapter): being measured.
+General ability is GSM8K's grade-school problems (`tests/agent-evals/regression.py`), the same 100 for every model, without thinking: with thinking on, half of Gemma 4 12B's answers didn't finish inside 16K tokens, which measures its looping, not its reasoning.
 
-**The adapter fixed Gemma 4 12B's loops, which Tasuke already fixes another way.** In the bare loop, which has no defence against a reply that repeats its channel markers until the token limit, the adapter took the 12B from 4 to 17 of 32: it learned the shape of a clean tool turn from 16 examples. Inside Tasuke, which cuts such replies off and samples again, the base and the adapter are level on diagnostics (20 and 19 of 31), and the adapter's 13 of 18 desktop tasks against 11 is within what a second run can change, though it saw no desktop examples.
+**The adapter fixed Gemma 4 12B's loops, which Tasuke already fixes another way.** In the bare loop, which has no defence against a reply that repeats its channel markers until the token limit, the adapter took the 12B from 4 to 17 of 32: it learned the shape of a clean tool turn from 16 examples. Inside Tasuke, which cuts such replies off and samples again, the base and the adapter are level on diagnostics (20 and 19 of 31), and the adapter's 13 of 18 desktop tasks against 11 is within what a second run can change, though it saw no desktop examples. Gemma 4 31B, already reliable, didn't move (28 and 27 of 32), and neither model lost general ability (GSM8K 97 against 96, 99 against 99).
 
 The adapters are not shipped: they don't beat the base model inside the product. If they are wanted later, they are `~/work/lora/out/gguf/sekka-{12b,31b}-r16.gguf` on wx-workstation (about 240 MB and 450 MB), ready for the R2 bucket.
