@@ -6,7 +6,7 @@ mod common;
 
 use aizome_sys::disks::{
     Change, Confirm, CreatePartition, DeletePartition, Disks, Erase, Format, FormatSpec, Identity, NewPartitionTable,
-    Repair, TableKind,
+    Relabel, Repair, TableKind,
 };
 use aizome_sys::{Error, Wake};
 use common::{eventually, path};
@@ -156,6 +156,7 @@ struct FakeBlock {
     id_label: String,
     id_uuid: String,
     crypto_backing: Option<OwnedObjectPath>,
+    symlinks: Vec<String>,
     log: Shared,
 }
 
@@ -169,6 +170,7 @@ impl FakeBlock {
             id_label: label.into(),
             id_uuid: format!("uuid-{device}"),
             crypto_backing: None,
+            symlinks: Vec::new(),
             log,
         }
     }
@@ -211,6 +213,10 @@ impl FakeBlock {
     #[zbus(property)]
     fn crypto_backing_device(&self) -> OwnedObjectPath {
         self.crypto_backing.clone().unwrap_or_else(|| path("/"))
+    }
+    #[zbus(property)]
+    fn symlinks(&self) -> Vec<Vec<u8>> {
+        self.symlinks.iter().map(|s| bytes(s)).collect()
     }
 
     /// Format: with erase, a job shows progress for a moment first.
@@ -519,7 +525,13 @@ fn serve(bus: &common::TestBus) -> (zbus::blocking::Connection, Shared) {
         .unwrap()
         .serve_at(DRIVE, FakeDrive { log: log.clone() })
         .unwrap()
-        .serve_at(block_path("sdb"), FakeBlock::new("/dev/sdb", 8 * GIB, Some(DRIVE), "", "", log.clone()))
+        .serve_at(
+            block_path("sdb"),
+            FakeBlock {
+                symlinks: vec![port(2)],
+                ..FakeBlock::new("/dev/sdb", 8 * GIB, Some(DRIVE), "", "", log.clone())
+            },
+        )
         .unwrap()
         .serve_at(
             block_path("sdb"),
@@ -810,4 +822,52 @@ fn without_udisks() {
     std::thread::sleep(Duration::from_millis(200));
     assert!(!disks.available());
     assert!(disks.mount("/org/freedesktop/UDisks2/block_devices/sda1").wait().is_err());
+}
+
+/// The stick's whole-disk link in `/dev/disk/by-path`, in USB port `n`.
+fn port(n: u8) -> String {
+    format!("/dev/disk/by-path/pci-0000:00:14.0-usb-0:{n}:1.0-scsi-0:0:0:0")
+}
+
+/// udev names the stick's whole disk by another USB port.
+fn plug_into(fake: &zbus::blocking::Connection, links: Vec<String>) {
+    let iface = fake.object_server().interface::<_, FakeBlock>(block_path("sdb").as_str()).unwrap();
+    let mut b = iface.get_mut();
+    b.symlinks = links;
+    zbus::block_on(b.symlinks_changed(iface.signal_emitter())).unwrap();
+}
+
+#[test]
+fn a_stick_in_the_same_port_is_the_one_confirmed() {
+    let bus = test_bus!();
+    let (_fake, log) = serve(&bus);
+    let disks = start(&bus);
+    let stick = block_path("sdb1");
+    assert!(eventually(|| disks.snapshot().block(&block_path("sdb")).is_some_and(|b| b.symlinks == [port(2)])));
+    let in_port_2 = seen(&disks, &stick);
+    disks.set_label(agree::<Relabel>(in_port_2), "SAME").wait().unwrap();
+    assert!(calls(&log).contains(&"SetLabel(SAME)".to_owned()));
+}
+
+#[test]
+fn a_stick_in_another_port_is_another_stick() {
+    let bus = test_bus!();
+    let (fake, log) = serve(&bus);
+    let disks = start(&bus);
+    let stick = block_path("sdb1");
+    assert!(eventually(|| disks.snapshot().block(&block_path("sdb")).is_some_and(|b| b.symlinks == [port(2)])));
+    let in_port_2 = seen(&disks, &stick);
+    // Another stick alike in every other way, or this one moved: port 3.
+    plug_into(&fake, vec![port(3)]);
+    assert!(eventually(|| disks.snapshot().block(&block_path("sdb")).is_some_and(|b| b.symlinks == [port(3)])));
+    let refused = disks.set_label(agree::<Relabel>(in_port_2.clone()), "MOVED").wait();
+    assert!(matches!(&refused, Err(Error::InvalidArgument(m)) if m.contains("changed")), "{refused:?}");
+    let refused = disks.format(agree::<Format>(in_port_2.clone()), FormatSpec::new("ext4", "")).wait();
+    assert!(matches!(&refused, Err(Error::InvalidArgument(m)) if m.contains("changed")), "{refused:?}");
+    assert!(calls(&log).iter().all(|c| !c.starts_with("SetLabel") && !c.starts_with("Format")), "{:?}", calls(&log));
+    // udev between links (probing the disk again) lists none: nothing to
+    // compare, so the port doesn't refuse it.
+    plug_into(&fake, Vec::new());
+    assert!(eventually(|| disks.snapshot().block(&block_path("sdb")).is_some_and(|b| b.symlinks.is_empty())));
+    disks.set_label(agree::<Relabel>(in_port_2), "PROBED").wait().unwrap();
 }
