@@ -27,6 +27,7 @@ GROUPS = [
     ("apps/yukimi", "look", "look-test-test-test"),
     ("apps/yukimi", "headless", "headless-test-test-test"),
     ("apps/yukimi", "golden", "golden-test-test-test"),
+    ("apps/soroban", "lib_test", "aizome_soroban-test-test-lib"),
     ("apps/soroban", "soroban", "soroban-test-test-test"),
 ]
 

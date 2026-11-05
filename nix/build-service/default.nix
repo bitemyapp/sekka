@@ -19,10 +19,12 @@ let
   };
   controller = pkgs.writeShellApplication {
     name = "sekka-build-service";
-    runtimeInputs = [ pkgs.python3 pkgs.openssh ];
+    # Use the deployment host's installed nix-store, matching its daemon/config.
+    runtimeInputs = [ pkgs.python3 pkgs.openssh pkgs.coreutils pkgs.docker-client ];
     text = ''
       export SEKKA_BUILD_SERVICE_SHELL=${pkgs.bashInteractive}/bin/bash
       export SEKKA_BUILD_SERVICE_ENV=${pkgs.coreutils}/bin/env
+      export SEKKA_BUILD_SERVICE_INVENTORY=${./inventory.py}
       exec python3 ${../../scripts/build-service} "$@"
     '';
   };

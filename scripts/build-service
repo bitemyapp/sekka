@@ -23,6 +23,9 @@ an owner restart or recreation, draining and replacing stale dependents.
 Host publication stays loopback-only. CI joins an owned frontend bridge as a
 separate container and uses client --frontend; connection-info prints its stable
 network/DNS endpoint without credentials. Teardown refuses attached foreign jobs.
+Use global --local when administering on the deployment host; manifests remain
+portable and no SSH/agent forwarding is required. inventory emits explicit
+persistent roots for physical-union accounting without traversing other services.
 
 Tunnel with: ssh -N -L 17841:127.0.0.1:17841 -L 17842:127.0.0.1:17842 HOST
 """
@@ -33,7 +36,9 @@ import os
 from pathlib import Path
 import secrets
 import shlex
+import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import urllib.request
@@ -44,10 +49,12 @@ NGINX = "nginx@sha256:30f1c0d78e0ad60901648be663a710bdadf19e4c10ac6782c235200619
 DOCKER = ["docker", "-H", "unix:///run/docker.sock"]
 LABEL = "computer.sekka.shared-build-service"
 NETWORK_LABEL = LABEL + ".network-generation"
+LOCAL = False
 
 
 def remote(m, *args, capture=False, input=None):
-    return subprocess.run(["ssh", m["host"], shlex.join(map(str, args))],
+    command = list(map(str, args)) if LOCAL else ["ssh", m["host"], shlex.join(map(str, args))]
+    return subprocess.run(command,
                           check=True, text=True, capture_output=capture, input=input).stdout
 
 
@@ -86,12 +93,37 @@ def connection_info(m, domain):
             "endpoint": "grpc://" + name(m, domain, "network") + ":50050", "instance": "sekka"}
 
 
+def copy_file(m, source, relative):
+    if LOCAL:
+        shutil.copy2(source, Path(m["directory"]) / relative)
+    else:
+        subprocess.run(["scp", "-q", str(source), f'{m["host"]}:{m["directory"]}/{relative}'], check=True)
+
+
+def assert_owned_directory(m):
+    expected = "/home/callen/sekka-work/" + m["name"]
+    suffix = m["name"].removeprefix("shared-build-service-")
+    if (not m["name"].startswith("shared-build-service-") or len(suffix) != 12
+            or any(c not in "0123456789abcdef" for c in suffix) or m["directory"] != expected):
+        raise SystemExit("Refusing non-owned deployment path")
+    if remote(m, "realpath", "-e", expected, capture=True).strip() != expected:
+        raise SystemExit("Refusing symlinked deployment directory")
+    owner = json.loads(remote(m, "cat", expected + "/owner.json", capture=True))
+    if owner != {"name": m["name"], "schema": 1}:
+        raise SystemExit("Deployment ownership marker mismatch")
+
+
 def put(m, relative, content, mode=0o600):
+    if LOCAL:
+        target = Path(m["directory"]) / relative
+        target.write_text(content)
+        target.chmod(mode)
+        return
     with tempfile.TemporaryDirectory(prefix="sekka-service-") as tmp:
         file = Path(tmp) / "payload"
         file.write_text(content)
         file.chmod(mode)
-        subprocess.run(["scp", "-q", str(file), f'{m["host"]}:{m["directory"]}/{relative}'], check=True)
+        copy_file(m, file, relative)
 
 
 def filesystem(path, limit):
@@ -300,7 +332,7 @@ def init(args):
             payload = Path(tmp) / "nativelink"
             payload.write_bytes(tar.extractfile(binary).read())
             payload.chmod(0o755)
-        subprocess.run(["scp", "-q", str(payload), f'{m["host"]}:{m["directory"]}/image/nativelink'], check=True)
+        copy_file(m, payload, "image/nativelink")
     put(m, "image/Dockerfile", 'FROM scratch\nCOPY nativelink /bin/nativelink\nENTRYPOINT ["/bin/nativelink"]\n')
     docker(m, "build", "-t", m["image"], m["directory"] + "/image")
     docker(m, "pull", NGINX)
@@ -368,8 +400,10 @@ def up(m):
 
 
 def main():
+    global LOCAL
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--local", action="store_true", help="Execute administration directly on this deployment host, without SSH")
     sub = parser.add_subparsers(dest="command", required=True)
     create = sub.add_parser("init")
     create.add_argument("--host", default="wx-workstation")
@@ -384,7 +418,7 @@ def main():
     for command in (create, runtime):
         command.add_argument("--shell", default=os.environ.get("SEKKA_BUILD_SERVICE_SHELL"))
         command.add_argument("--env", default=os.environ.get("SEKKA_BUILD_SERVICE_ENV"))
-    for command in ("up", "stop", "restart", "logs", "status", "issue-reader", "metrics"):
+    for command in ("up", "stop", "restart", "logs", "status", "issue-reader", "metrics", "inventory"):
         sub.add_parser(command)
     destroy = sub.add_parser("destroy")
     destroy.add_argument("--purge-state", action="store_true", help="Remove only the validated owned deployment directory after stopping containers")
@@ -403,12 +437,19 @@ def main():
     connection = sub.add_parser("connection-info", help="Print nonsecret Docker network and authenticated gateway DNS endpoint")
     connection.add_argument("--domain", choices=("trusted", "ci"), required=True)
     args = parser.parse_args()
+    LOCAL = args.local
     if args.command == "init":
         init(args)
         return
     if args.manifest.stat().st_mode & 0o077:
         raise SystemExit("Credential manifest must be mode 0600")
     m = json.loads(args.manifest.read_text())
+    if args.command == "inventory":
+        script = os.environ.get("SEKKA_BUILD_SERVICE_INVENTORY",
+                                str(Path(__file__).resolve().parents[1] / "nix/build-service/inventory.py"))
+        subprocess.run([sys.executable, script, "--controller", str(Path(__file__).resolve()),
+                        "--manifest", str(args.manifest), *(["--local"] if LOCAL else [])], check=True)
+        return
     if args.command == "connection-info":
         print(json.dumps(connection_info(m, args.domain)))
         return
@@ -463,15 +504,7 @@ def main():
                           "containers": [json.loads(line) for line in stats.splitlines()]}, indent=2))
         return
     if args.command == "destroy" and args.purge_state:
-        expected = "/home/callen/sekka-work/" + m["name"]
-        suffix = m["name"].removeprefix("shared-build-service-")
-        if len(suffix) != 12 or any(c not in "0123456789abcdef" for c in suffix) or m["directory"] != expected:
-            raise SystemExit("Refusing non-owned deployment path")
-        if remote(m, "realpath", "-e", expected, capture=True).strip() != expected:
-            raise SystemExit("Refusing symlinked deployment directory")
-        owner = json.loads(remote(m, "cat", expected + "/owner.json", capture=True))
-        if owner != {"name": m["name"], "schema": 1}:
-            raise SystemExit("Deployment ownership marker mismatch")
+        assert_owned_directory(m)
     if args.command == "issue-reader":
         for d, settings in m["domains"].items():
             settings.setdefault("reader_token", secrets.token_hex(32))
