@@ -438,6 +438,15 @@ rlib/metadata bytes at 1/8/16 frontend threads, macro hygiene, incremental
 replay, compiler compatibility and actual Clippy/rustfmt/rustdoc execution;
 it is not a whole-workspace performance or whole-Rust qualification.
 
+Bundled BPF standard libraries also use compiler-only `--jobs-backend=1`.
+LLVM 21's process-global passthrough sequence counter is not thread-safe;
+concurrent BPF optimization changed bitcode IDs and ThinLTO symbol hashes.
+The bootstrap patch retains all targets, CGUs and optimization, leaves ordinary
+host/user compilation unchanged, and does not pass the flag to rustdoc.
+Independent workstation builds now match the compiler, manpage and wrapper
+NARs. Auxiliary reference HTML still differs in grammar-section ordering;
+that documentation output is outside the SDK closure, not claimed reproducible.
+
 The native cache path makes authoritative CAS presence checks and rejects
 cached results whose required outputs are missing. Rejected action-cache
 results remain rejected across depfile verification and hybrid fallback.
