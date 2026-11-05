@@ -684,10 +684,13 @@ fn partitions_are_made_in_free_space_and_deleted_on_confirmation() {
     let disk = block_path("sdb");
     // Over an existing partition: refused without asking UDisks.
     assert!(
-        disks.create_partition(agree::<CreatePartition>(seen(&disks, &disk)), MIB, GIB, None, "", None).wait().is_err()
+        disks
+            .create_partition(agree::<CreatePartition>(seen(&disks, &disk)), MIB, GIB, None, "", None, 0)
+            .wait()
+            .is_err()
     );
     let made = disks
-        .create_partition(agree::<CreatePartition>(seen(&disks, &disk)), 2 * GIB, GIB, None, "Data", None)
+        .create_partition(agree::<CreatePartition>(seen(&disks, &disk)), 2 * GIB, GIB, None, "Data", None, 0)
         .wait()
         .unwrap();
     assert_eq!(made, block_path("sdb2"));

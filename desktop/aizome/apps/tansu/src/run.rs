@@ -24,7 +24,7 @@ use aizome_sys::disks::{BlockDevice, DisksState, Erase, FormatSpec};
 use crate::backend::Backend;
 use crate::fs;
 use crate::layout::MIB;
-use crate::plan::{self, Agreement, Creating, Made, Op, OpKind, Shown, Words};
+use crate::plan::{self, Agreement, Creating, Made, Op, OpKind, Plan, Shown, Words};
 use aizome_kit::agree::Agreed;
 
 /// How long a step waits for UDisks to report what it did.
@@ -108,6 +108,17 @@ pub enum Outcome {
     Stopped,
 }
 
+/// The plan changed since the Apply sheet listed it (an operation dropped
+/// as its device went): what the person agreed to isn't what would run.
+#[derive(Debug, PartialEq, Eq)]
+pub struct PlanChanged;
+
+impl std::fmt::Display for PlanChanged {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("The pending operations changed: review them and apply again.")
+    }
+}
+
 pub struct Run {
     pub items: Vec<Item>,
     pub current: usize,
@@ -133,9 +144,11 @@ enum Step {
 
 impl Run {
     /// Run what the person agreed to with the Apply sheet's button: its
-    /// operations, as it showed them. Each step's confirmation is made when
-    /// it starts, from that agreement: of the operation's device as it was
-    /// queued (not whatever has its names now).
+    /// operations, as it showed them, if `plan` still has exactly those (an
+    /// operation dropped as its device went means what they agreed to isn't
+    /// what would run). Each step's confirmation is made when it starts, from
+    /// that agreement: of the operation's device as it was queued (not
+    /// whatever has its names now).
     ///
     /// Only the person's press makes the agreement, so the plan can't run as
     /// the sheet merely lists it:
@@ -143,19 +156,19 @@ impl Run {
     /// ```compile_fail,E0308
     /// use aizome_sys::disks::DisksState;
     /// use tansu::plan::Plan;
-    /// use tansu::run::Run;
-    /// fn apply_unasked(plan: &Plan, state: &DisksState) -> Run {
-    ///     Run::agree(plan.shown(state), state)
+    /// use tansu::run::{PlanChanged, Run};
+    /// fn apply_unasked(plan: &Plan, state: &DisksState) -> Result<Run, PlanChanged> {
+    ///     Run::agree(plan.shown(state), plan, state)
     /// }
     /// ```
     ///
     /// nor as it once did, from the plan alone:
     ///
-    /// ```compile_fail,E0308
+    /// ```compile_fail,E0061
     /// use aizome_sys::disks::DisksState;
     /// use tansu::plan::Plan;
-    /// use tansu::run::Run;
-    /// fn apply_unasked(plan: &Plan, state: &DisksState) -> Run {
+    /// use tansu::run::{PlanChanged, Run};
+    /// fn apply_unasked(plan: &Plan, state: &DisksState) -> Result<Run, PlanChanged> {
     ///     Run::agree(plan, state)
     /// }
     /// ```
@@ -165,23 +178,26 @@ impl Run {
     /// ```compile_fail,E0382
     /// use aizome_kit::agree::Agreed;
     /// use aizome_sys::disks::DisksState;
-    /// use tansu::plan::Shown;
-    /// use tansu::run::Run;
-    /// fn apply_twice(agreed: Agreed<Vec<Shown>>, state: &DisksState) -> (Run, Run) {
-    ///     (Run::agree(agreed, state), Run::agree(agreed, state))
+    /// use tansu::plan::{Plan, Shown};
+    /// use tansu::run::{PlanChanged, Run};
+    /// fn apply_twice(agreed: Agreed<Vec<Shown>>, plan: &Plan, state: &DisksState) -> Result<(Run, Run), PlanChanged> {
+    ///     Ok((Run::agree(agreed, plan, state)?, Run::agree(agreed, plan, state)?))
     /// }
     /// ```
     ///
     /// ```
     /// use aizome_kit::agree::Agreed;
     /// use aizome_sys::disks::DisksState;
-    /// use tansu::plan::Shown;
-    /// use tansu::run::Run;
-    /// fn apply(agreed: Agreed<Vec<Shown>>, state: &DisksState) -> Run {
-    ///     Run::agree(agreed, state)
+    /// use tansu::plan::{Plan, Shown};
+    /// use tansu::run::{PlanChanged, Run};
+    /// fn apply(agreed: Agreed<Vec<Shown>>, plan: &Plan, state: &DisksState) -> Result<Run, PlanChanged> {
+    ///     Run::agree(agreed, plan, state)
     /// }
     /// ```
-    pub fn agree(agreed: Agreed<Vec<Shown>>, state: &DisksState) -> Run {
+    pub fn agree(agreed: Agreed<Vec<Shown>>, plan: &Plan, state: &DisksState) -> Result<Run, PlanChanged> {
+        if agreed.target().iter().map(Shown::op).ne(plan.ops.iter()) {
+            return Err(PlanChanged);
+        }
         let items = agreed
             .split()
             .into_iter()
@@ -193,7 +209,7 @@ impl Run {
                 made: None,
             })
             .collect();
-        Run {
+        Ok(Run {
             items,
             current: 0,
             step: 0,
@@ -204,7 +220,7 @@ impl Run {
             stop_requested: false,
             held: false,
             started: Instant::now(),
-        }
+        })
     }
 
     pub fn is_running(&self) -> bool {
@@ -332,31 +348,13 @@ impl Run {
                 }
                 _ => Ok(Step::Finished),
             },
-            OpKind::Create(p) => match step {
+            // One step: the partition is made with its flags, which UDisks's
+            // client sets on the partition it made (no later confirmation
+            // names it).
+            OpKind::Create(_) => match step {
                 0 => {
                     let creating = plan::start_create(&item.agreed, backend, &state)?;
                     Ok(Step::Start(InFlight::Made(creating), None, "Making the partition…".into()))
-                }
-                1 => {
-                    let made = item.made.as_ref().ok_or("The new partition didn't appear.")?;
-                    let table = state
-                        .block(&target)
-                        .and_then(|b| b.partition_table.as_ref())
-                        .map(|t| t.kind.clone())
-                        .unwrap_or_default();
-                    let (_, bits) = p.flags.apply(&table, &p.fs, "", 0);
-                    if bits == 0 {
-                        return Ok(Step::Finished);
-                    }
-                    // What the first step made, where it made it.
-                    let c = plan::made_flags(&item.agreed, &state, made)
-                        .ok_or("The new partition isn't where it was made.")?;
-                    let block = made.path().to_owned();
-                    unit(
-                        backend.set_partition_flags(c, bits),
-                        Some(Expect::Partition { block, type_id: None, flags: Some(bits) }),
-                        "Setting its flags…",
-                    )
                 }
                 _ => Ok(Step::Finished),
             },

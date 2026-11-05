@@ -111,8 +111,8 @@ pub struct Resize;
 /// Repair a filesystem: the repair may discard what it can't save.
 pub struct Repair;
 /// Make a partition in a disk's free space (and perhaps a filesystem in
-/// it). Held to the disk, not its partitions, which earlier operations of
-/// the same plan may have changed.
+/// it, and its flags, set on the partition made). Held to the disk, not its
+/// partitions, which earlier operations of the same plan may have changed.
 pub struct CreatePartition;
 /// Change a filesystem's label.
 pub struct Relabel;
@@ -620,21 +620,6 @@ impl<Op: Change, B> Confirm<Op, B> {
     }
 }
 
-impl<B> Confirm<PartitionEntry, B> {
-    /// The confirmation for the entry of a partition made after the person
-    /// agreed, on the disk they agreed to make it on (`disk`). No one saw the
-    /// partition before it was made, so it is taken as `made` reads it, if it
-    /// is in that disk's partition table, on the same drive in the same port:
-    /// a partition elsewhere, or read from another disk, isn't confirmed.
-    pub fn made_on<T: AsRef<Identity>>(disk: &Agreed<T>, made: Identity, brand: B) -> Option<Self> {
-        let disk = disk.target().as_ref();
-        let on_it = made.place.as_ref().is_some_and(|p| p.table == disk.path)
-            && made.medium == disk.medium
-            && made.port.as_ref().zip(disk.port.as_ref()).is_none_or(|(made, seen)| made == seen);
-        on_it.then(|| Confirm::of(made, brand))
-    }
-}
-
 /// A confirmation of `identity`, as a test agrees to it (any brand will do).
 #[cfg(test)]
 fn confirm<Op: AsSeen>(identity: Identity) -> Confirm<Op, ()> {
@@ -816,39 +801,6 @@ mod tests {
         assert!(matches!(grow().check(&at(200 * MIB)), Err(Error::InvalidArgument(_))));
         // Or shrank it, to neither size.
         assert!(grow().check(&at(80 * MIB)).is_err());
-    }
-
-    #[test]
-    fn a_partition_made_after_agreeing_is_confirmed_only_on_the_disk_agreed_to() {
-        let disk = |path: &str, drive: &str| BlockDevice {
-            path: path.into(),
-            device: format!("/dev/{}", path.rsplit('/').next().unwrap()),
-            size: 1 << 30,
-            drive: Some(drive.into()),
-            ..Default::default()
-        };
-        let part = |path: &str, table: &str| BlockDevice {
-            path: path.into(),
-            partition: Some(Partition { table: table.into(), number: 1, ..Default::default() }),
-            drive: None,
-            ..block("aaaa")
-        };
-        let other = Drive { path: "/d/other".into(), serial: "B".into(), ..stick() };
-        let state = DisksState {
-            drives: vec![stick(), other],
-            blocks: vec![
-                disk("/b/sdb", DRIVE),
-                part("/b/sdb1", "/b/sdb"),
-                disk("/b/sdc", "/d/other"),
-                part("/b/sdc1", "/b/sdc"),
-            ],
-            ..Default::default()
-        };
-        let agreed = aizome_kit::agree::testing::agreed(state.identity("/b/sdb").unwrap());
-        let made = |path: &str| Confirm::made_on(&agreed, state.identity(path).unwrap(), ());
-        assert!(made("/b/sdb1").is_some_and(|c| c.check(&state).is_ok()), "made on the disk agreed to");
-        assert!(made("/b/sdc1").is_none(), "a partition on another disk");
-        assert!(made("/b/sdb").is_none(), "the disk itself isn't a partition made on it");
     }
 }
 #[cfg(test)]
