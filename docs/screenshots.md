@@ -62,6 +62,15 @@ window, not by pointer input. They are not cropped or scaled. The Night and Day 
 in `desktop/aizome/apps/nisshi/tests/snapshots/` are headless renders from
 the kit's offscreen renderer, not window captures.
 
+The captures in `desktop/aizome/docs/screenshots/tasuke/` are original
+1440 × 900 `grim` captures, at scale 1, of the Assistant window's dev
+build from 5 November 2026, each running alone on one of its launch
+fixtures under a private headless sway, with nothing clicked or typed.
+The machines, conversations, command outputs and notes are made up; the
+model catalog and the fit and recommendation code are the real ones. The
+agent loop isn't written yet, so the conversations are scripted. That
+directory's README.md says what each shows and how it was made.
+
 Desktops are captured whole. An application is captured on its own: the
 virtual display is captured with nothing else on it, then cropped to the
 application's window, in the display's own pixels. A crop is a rectangle of
