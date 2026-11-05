@@ -278,7 +278,7 @@ impl Shell {
                         Err(prompted) => prompted.into(),
                     },
                     DialogAny::Waiting(s) => s.submit().into(),
-                    DialogAny::Unavailable(s) => s.try_again().into(),
+                    DialogAny::Unavailable(s) => s.try_again(),
                     // An answer is being checked, or waits for its prompt.
                     s @ (DialogAny::Eager(_) | DialogAny::Checking(_)) => s,
                 };

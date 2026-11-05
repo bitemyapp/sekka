@@ -801,12 +801,12 @@ fn an_identity_another_request_offered_is_refused() {
     };
     let from_a = req_a.identities()[0].clone();
     assert_eq!(from_a.request(), req_a.id());
-    req_b.authenticate(&from_a);
+    assert_eq!(req_b.authenticate(&from_a), Err(aizome_sys::polkit::NotOffered), "refused, visibly");
     std::thread::sleep(std::time::Duration::from_millis(300));
     let started = script.parent().unwrap().join("started");
     assert!(!started.exists(), "B started a helper for A's identity");
     // B's own identity starts its helper.
-    req_b.authenticate(&req_b.identities()[0]);
+    req_b.authenticate(&req_b.identities()[0]).unwrap();
     assert!(eventually(|| std::fs::read_to_string(&started).is_ok_and(|s| s.starts_with("cookie-B "))));
     req_a.cancel();
     req_b.cancel();

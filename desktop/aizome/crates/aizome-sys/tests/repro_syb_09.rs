@@ -116,7 +116,7 @@ fn drive(helper: Helper, window: Duration) -> Option<Run> {
         match event {
             AuthEvent::Begin(r) => {
                 let id = r.default_identity().cloned().unwrap();
-                r.authenticate(&id);
+                r.authenticate(&id).unwrap();
                 request = Some(r);
             }
             AuthEvent::Heard(heard) => {
@@ -143,7 +143,7 @@ fn drive(helper: Helper, window: Duration) -> Option<Run> {
                     }
                     // The old shell's handler: clear, say so, start again at once.
                     let id = r.default_identity().cloned().unwrap();
-                    r.authenticate(&id);
+                    r.authenticate(&id).unwrap();
                 }
             }
             AuthEvent::Done { .. } => {}
