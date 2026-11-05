@@ -223,6 +223,8 @@ pub enum Msg {
     Thumb(PathBuf, Thumb),
     OpenLink(String),
     Copy(String),
+    /// The pointer came onto a suggestion, or left them.
+    Hover(Option<&'static str>),
     /// The clock moved on: relative times say so.
     Tick,
     // Models.
@@ -295,6 +297,8 @@ pub struct Tasuke {
     wanted: Vec<PathBuf>,
     /// The fixture launched, for its title in tests.
     pub fixture: Option<String>,
+    /// The suggestion under the pointer.
+    pub hovered: Option<&'static str>,
 }
 
 /// The fixtures `--fixture` takes.
@@ -340,6 +344,7 @@ impl Tasuke {
             stream: None,
             wanted: Vec::new(),
             fixture: None,
+            hovered: None,
         }
     }
 
@@ -854,6 +859,7 @@ impl Program for Tasuke {
                 self.thumbs.insert(path, thumb);
             }
             Msg::OpenLink(url) => cx.open_url(&url),
+            Msg::Hover(which) => self.hovered = which,
             Msg::Copy(text) => cx.set_clipboard_text(&text),
             Msg::Tick => {
                 if !self.fixed_clock {

@@ -36,7 +36,7 @@ struct Suggestion {
     kind: &'static str,
 }
 
-const SUGGESTIONS: [Suggestion; 6] = [
+static SUGGESTIONS: [Suggestion; 6] = [
     Suggestion { icon: Icon::Activity, text: "Give my computer a check-up", kind: "Check-up" },
     Suggestion { icon: Icon::HardDrive, text: "Why is my disk filling up?", kind: "Find a problem" },
     Suggestion { icon: Icon::Sun, text: "Switch to the Day theme", kind: "Do it for me" },
@@ -45,7 +45,7 @@ const SUGGESTIONS: [Suggestion; 6] = [
     Suggestion { icon: Icon::MessageSquare, text: "What's a swap file?", kind: "Just ask" },
 ];
 
-fn suggestion(id: ConvId, s: &Suggestion) -> Element<Msg> {
+fn suggestion(id: ConvId, s: &'static Suggestion, hovered: bool) -> Element<Msg> {
     let card = container(
         row![
             icon(s.icon).size(16.0).role(Role::Accent),
@@ -54,11 +54,13 @@ fn suggestion(id: ConvId, s: &Suggestion) -> Element<Msg> {
         .spacing(12.0),
     )
     .padding([10.0, 14.0])
-    .fill(Tone::Chrome)
-    .border(Edge::Line)
+    .fill(if hovered { Tone::Raised } else { Tone::Chrome })
+    .border(if hovered { Edge::Line2 } else { Edge::Line })
     .width(Fill);
+    let which = s.text;
     mouse_area(card)
         .on_press(Msg::Suggest(id, s.text.to_owned()))
+        .on_hover(move |inside| Msg::Hover(inside.then_some(which)))
         .cursor(aizome_kit::sidestep_ui::Cursor::Pointer)
         .width(Fill)
         .key(s.text)
@@ -68,10 +70,14 @@ fn suggestion(id: ConvId, s: &Suggestion) -> Element<Msg> {
 /// The model as a line: "Gemma 4 31B runs on this computer · asleep".
 fn model_line(app: &Tasuke) -> Element<Msg> {
     let (glyph, role) = state_glyph(app.chip.state);
-    let words = if app.chip.name.is_empty() {
-        "No model yet: choose one in Models".to_owned()
-    } else {
-        format!("{} runs on this computer · {}", app.chip.name, app.chip.state.words())
+    let name = &app.chip.name;
+    let words = match app.chip.state {
+        _ if name.is_empty() => "No model is downloaded yet. Choose one in Models.".to_owned(),
+        ModelState::Ready => format!("{name} is ready, here on this computer."),
+        ModelState::Asleep => format!("{name} is asleep here on this computer. It wakes when you send something."),
+        ModelState::Loading => format!("{name} is waking up…"),
+        ModelState::Missing => format!("{name} isn't downloaded yet. Models has it."),
+        ModelState::Off => "The model server isn't running.".to_owned(),
     };
     row![icon(glyph).size(13.0).role(role), text(words).size(12.0).role(Role::Text3)].spacing(6.0).into()
 }
@@ -80,7 +86,7 @@ fn home(app: &Tasuke, c: &Conversation) -> Element<Msg> {
     let id = c.id;
     let pairs: Vec<Element<Msg>> = SUGGESTIONS
         .chunks(2)
-        .map(|pair| row_of(pair.iter().map(|s| suggestion(id, s)).collect()).spacing(10.0).width(Fill).into())
+        .map(|pair| row_of(pair.iter().map(|s| suggestion(id, s, app.hovered == Some(s.text))).collect()).spacing(10.0).width(Fill).into())
         .collect();
     let greeting = format!("{}.", app.clock().greeting());
     let content = column![

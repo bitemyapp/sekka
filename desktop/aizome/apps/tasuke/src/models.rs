@@ -111,37 +111,46 @@ pub fn devices(hw: &Hardware) -> Vec<Device> {
 /// Where a model can live on this machine, and how much of it: the
 /// sentence under the summary.
 pub fn budget_words(hw: &Hardware) -> String {
-    let best = hw
+    // As `fit` places models: a GPU with its own memory first (the largest
+    // budget), then unified memory, then the processor.
+    let dedicated = hw
         .gpus
         .iter()
-        .filter_map(|g| {
-            let dedicated = fit::gpu_budget(g, fit::MemoryBasis::Total).map(|b| (b, g, false));
-            dedicated.or_else(|| fit::unified_budget(g, hw).map(|b| (b, g, true)))
-        })
-        .max_by_key(|(b, _, _)| *b);
-    match best {
-        Some((b, g, false)) => {
+        .filter_map(|g| fit::gpu_budget(g, fit::MemoryBasis::Total).map(|b| (b, g)))
+        .max_by_key(|(b, _)| *b);
+    let unified =
+        hw.gpus.iter().filter_map(|g| fit::unified_budget(g, hw).map(|b| (b, g))).max_by_key(|(b, _)| *b);
+    match (dedicated, unified) {
+        (Some((b, g)), shared) => {
             let total = g.dedicated_total().unwrap_or_default();
             let reserve = if g.drives_display {
                 format!(", less {} kept for the display", size(fit::DISPLAY_RESERVE))
             } else {
                 String::new()
             };
-            format!(
+            let mut s = format!(
                 "A model can use up to {} on the {}: {:.0}% of its {}{reserve}.",
                 size(b),
                 short_gpu_name(g),
                 fit::GPU_MARGIN * 100.0,
                 installed_size(total)
-            )
+            );
+            if let Some((ub, ug)) = shared {
+                s.push_str(&format!(
+                    " One that doesn't fit there can use up to {} of the memory the {} shares, more slowly.",
+                    size(ub),
+                    short_gpu_name(ug)
+                ));
+            }
+            s
         }
-        Some((b, g, true)) => format!(
+        (None, Some((b, g))) => format!(
             "A model can use up to {} of the memory the {} shares, leaving {} for everything else.",
             size(b),
             short_gpu_name(g),
             size(hw.ram.total.saturating_sub(b))
         ),
-        None => format!(
+        (None, None) => format!(
             "No GPU a model can use was found, so models run on the processor, in up to {} of memory.",
             size(fit::ram_budget(hw))
         ),
@@ -572,6 +581,12 @@ mod tests {
         let apu = fixture::apu_128gb();
         assert_eq!(devices(&apu)[0].kind, DeviceKind::UnifiedGpu);
         assert!(budget_words(&apu).contains("of the memory the Radeon 8060S shares"), "{}", budget_words(&apu));
+        // A GPU with its own memory comes first; shared memory beside it is the fallback.
+        let mut both = fixture::desktop_32gb();
+        both.gpus.push(fixture::apu_128gb().gpus.remove(0));
+        let w = budget_words(&both);
+        assert!(w.starts_with("A model can use up to 27.8 GB on the RTX 5090"), "{w}");
+        assert!(w.contains("doesn't fit there can use up to"), "{w}");
     }
 
     #[test]
