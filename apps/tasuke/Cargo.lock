@@ -419,6 +419,7 @@ name = "tasuke-agent"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "log",
  "png",
  "serde",
  "serde_json",
@@ -432,6 +433,7 @@ name = "tasuke-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "libc",
  "serde_json",
  "tasuke-agent",
  "tasuke-models",

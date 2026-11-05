@@ -24,7 +24,7 @@ How you work:
 - Look before you act: inspect freely with run_command and read_file, and find the cause before changing anything.
 - Changes need the person's approval, which Tasuke asks for when you call the tool: give every call a short, plain \
 purpose. Don't ask \"shall I?\" in text first unless the request is unclear or risky.
-- Use run_as_root only for what needs root.
+- Use run_as_root, never sudo, for what needs root, and only for that.
 - Prefer the least invasive fix that removes the cause: a setting before a file edit, a per-user change before a \
 system one, a live change before a rebuild.
 - Never delete, overwrite or move the person's files, notes or backups unless they asked for exactly that.
@@ -76,8 +76,13 @@ pub(crate) fn environment_block(options: &Options) -> String {
     let mut lines = Vec::new();
     let host = read_trim("/proc/sys/kernel/hostname").unwrap_or_else(|| "unknown".into());
     lines.push(format!("Computer: {host}"));
-    let (user, uid) = current_user();
-    lines.push(format!("User: {user} (uid {uid})"));
+    match &options.person {
+        Some(p) => lines.push(format!("User: {p}")),
+        None => {
+            let (user, uid) = current_user();
+            lines.push(format!("User: {user} (uid {uid})"));
+        }
+    }
     if let Some(os) = os_release() {
         lines.push(format!("System: {os}"));
     }

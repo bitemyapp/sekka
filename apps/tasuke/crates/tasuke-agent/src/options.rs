@@ -190,6 +190,9 @@ pub struct Options {
     pub aizomectl: Vec<String>,
     /// Where kit apps write what their windows show (`AIZOME_KIT_INSPECT`), if anywhere.
     pub inspect_dir: Option<PathBuf>,
+    /// Who the person is, when Tasuke doesn't run as them (the eval VM runs
+    /// it as root for alice): the environment block names them instead.
+    pub person: Option<String>,
     /// A line added to the environment block (the eval says whose machine it is).
     pub environment_note: Option<String>,
     /// How long one model request may take before it is abandoned.
@@ -219,6 +222,7 @@ impl Options {
             user_command_prefix: Vec::new(),
             aizomectl: vec!["aizomectl".into()],
             inspect_dir: std::env::var_os("AIZOME_KIT_INSPECT").filter(|v| !v.is_empty()).map(PathBuf::from),
+            person: None,
             environment_note: None,
             request_timeout: Duration::from_secs(900),
         }
