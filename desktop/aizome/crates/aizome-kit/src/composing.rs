@@ -12,18 +12,24 @@
 //!
 //! [`Focus`] is what goes with the focus: the caret's blink and the
 //! composition. Both live only while the field has the focus, so losing
-//! it drops them, and an input method's event applies only through
-//! [`Focus::hear`], which drops one that belongs to a composition the
-//! field already dropped.
+//! it drops them. A widget reaches its `Focus` only through itself
+//! ([`Composes`]), keyed by its own mode, and changes it through a
+//! [`Composer`]: taking the focus tells input methods the mode's purpose,
+//! an input method's event applies only through [`Composer::hear`], and a
+//! composition the field dropped (text the program set, or the field's
+//! other mode) discards the input method's next event and tells the input
+//! method to start over.
 
 #![deny(clippy::wildcard_enum_match_arm)]
 
 use std::borrow::Cow;
+use std::marker::PhantomData;
 
 use sidestep_ui::TextPurpose;
 
 use crate::editing::floor;
-use crate::widget::{EventCx, SemanticRole};
+use crate::layout::Rect;
+use crate::widget::{EventCx, LayoutCx, PaintCx, SemanticRole};
 
 /// How a password's characters show.
 pub const BULLET: char = '•';
@@ -201,76 +207,137 @@ mod sealed {
     impl Sealed for super::Plain {}
     impl Sealed for super::Secret {}
 
+    /// A proof that the kit is making a kept composition: no code outside
+    /// this module can make one, so [`Keep::keep`] can't be called from
+    /// outside the kit, even through a generic bound.
+    pub struct Token(());
+
     /// How a mode keeps an input method's composition: made only here.
     pub trait Keep {
         /// Kept of `text`, with the input method's caret `caret` bytes
         /// into it.
-        fn keep(text: &str, caret: Option<usize>) -> Self;
+        fn keep(text: &str, caret: Option<usize>, _: Token) -> Self;
     }
 
     impl Keep for super::Preedit {
-        fn keep(text: &str, caret: Option<usize>) -> Self {
+        fn keep(text: &str, caret: Option<usize>, _: Token) -> Self {
             super::Preedit { text: text.to_owned(), caret: caret.filter(|c| text.is_char_boundary(*c)) }
         }
     }
 
     impl Keep for super::Masked {
-        fn keep(text: &str, caret: Option<usize>) -> Self {
+        fn keep(text: &str, caret: Option<usize>, _: Token) -> Self {
             let caret = caret.and_then(|c| text.get(..c)).map(|s| s.chars().count());
             super::Masked { chars: text.chars().count(), caret }
         }
     }
+
+    pub(super) fn keep<K: Keep>(text: &str, caret: Option<usize>) -> K {
+        K::keep(text, caret, Token(()))
+    }
+}
+
+/// A widget that keeps an input method's composition as its mode
+/// decides. Its [`Focus`] is reached only through the widget itself
+/// ([`EventCx::composition`], [`EventCx::composer`], and `composition` on
+/// the layout and paint contexts), so a widget of one mode can't keep its
+/// composition in another mode's.
+pub trait Composes {
+    type Mode: Mode;
 }
 
 /// Whether a field has the focus, and what goes with it: the caret's blink
 /// and what an input method is composing, kept as the field's mode keeps
 /// it. Away, it keeps neither.
 ///
-/// An input method's event applies only through [`hear`](Focus::hear), so
-/// it can't be applied to a composition the field dropped (text the
-/// program set). Composing without hearing doesn't compile:
+/// It's kept for the widget, keyed by the widget's own mode: there's no
+/// public way to make one, so a password field can't fetch a plain one, as
+/// a maintainer could by changing one type when `Focus` had a public
+/// `Default`:
 ///
-/// ```compile_fail,E0599
-/// use aizome_kit::composing::{Focus, Secret};
-/// let mut focus = Focus::<Secret>::default();
-/// focus.came();
-/// focus.compose("WW", None);
+/// ```compile_fail,E0308
+/// use aizome_kit::composing::{Composes, Focus, Plain, Secret};
+/// use aizome_kit::widget::EventCx;
+/// struct PasswordInput;
+/// impl Composes for PasswordInput {
+///     type Mode = Secret;
+/// }
+/// fn ime(cx: &mut EventCx, w: &PasswordInput) {
+///     let focus: &mut Focus<Plain> = cx.composition(w);
+/// }
 /// ```
 ///
-/// nor does typing what a dropped composition commits:
+/// ```compile_fail,E0277
+/// use aizome_kit::composing::{Focus, Plain};
+/// use aizome_kit::widget::EventCx;
+/// fn ime(cx: &mut EventCx) {
+///     let focus = cx.state::<Focus<Plain>>();
+/// }
+/// ```
+///
+/// An input method's event applies only through [`Composer::hear`], which
+/// drops one that belongs to a composition the field dropped (text the
+/// program set, or the field's other mode) and tells the input method to
+/// start over itself. Composing without hearing doesn't compile, nor does
+/// applying what `hear` found stale:
 ///
 /// ```compile_fail,E0599
-/// use aizome_kit::composing::{Focus, Heard, Secret};
-/// fn commit(focus: &mut Focus<Secret>) {
-///     match focus.hear() {
-///         Heard::InStep(composing) => composing.commit(),
-///         Heard::Stale(start_over) => start_over.commit(),
+/// use aizome_kit::composing::{Composes, Secret};
+/// use aizome_kit::widget::EventCx;
+/// struct PasswordInput;
+/// impl Composes for PasswordInput {
+///     type Mode = Secret;
+/// }
+/// fn ime(cx: &mut EventCx, w: &PasswordInput) {
+///     cx.composition(w).compose("WW", None);
+/// }
+/// ```
+///
+/// ```compile_fail,E0599
+/// use aizome_kit::composing::{Composes, Secret};
+/// use aizome_kit::widget::EventCx;
+/// struct PasswordInput;
+/// impl Composes for PasswordInput {
+///     type Mode = Secret;
+/// }
+/// fn ime(cx: &mut EventCx, w: &PasswordInput) {
+///     cx.composer(w).hear().commit();
+/// }
+/// ```
+///
+/// Nor does entering the focus other than through
+/// [`Composer::arrive`], which drops what the other mode was composing:
+///
+/// ```compile_fail,E0599
+/// use aizome_kit::composing::{Composes, Secret};
+/// use aizome_kit::widget::EventCx;
+/// struct PasswordInput;
+/// impl Composes for PasswordInput {
+///     type Mode = Secret;
+/// }
+/// fn focused(cx: &mut EventCx, w: &PasswordInput) {
+///     cx.composition(w).came();
+/// }
+/// ```
+///
+/// The widget's own mode, through the widget:
+///
+/// ```
+/// use aizome_kit::composing::{Composes, Focus, Secret};
+/// use aizome_kit::widget::EventCx;
+/// struct PasswordInput;
+/// impl Composes for PasswordInput {
+///     type Mode = Secret;
+/// }
+/// fn focused(cx: &mut EventCx, w: &PasswordInput) {
+///     cx.composer(w).arrive(None);
+/// }
+/// fn ime(cx: &mut EventCx, w: &PasswordInput) {
+///     let _: &mut Focus<Secret> = cx.composition(w);
+///     if let Some(composing) = cx.composer(w).hear() {
+///         composing.compose("WW", None);
 ///     }
 /// }
-/// ```
-///
-/// Heard, an event applies; text the program sets drops the composition,
-/// and the input method's next event for it is stale; losing the focus
-/// drops it too:
-///
-/// ```
-/// use aizome_kit::composing::{Focus, Heard, Secret};
-/// let mut focus = Focus::<Secret>::default();
-/// focus.came();
-/// match focus.hear() {
-///     Heard::InStep(composing) => composing.compose("WW", None),
-///     Heard::Stale(_) => unreachable!(),
-/// }
-/// assert_eq!(focus.composing().map(|m| m.chars()), Some(2));
-/// focus.value_changed();
-/// assert!(focus.composing().is_none());
-/// assert!(matches!(focus.hear(), Heard::Stale(_)));
-/// match focus.hear() {
-///     Heard::InStep(composing) => composing.compose("x", None),
-///     Heard::Stale(_) => unreachable!("told once"),
-/// }
-/// focus.went();
-/// assert!(focus.composing().is_none());
 /// ```
 pub struct Focus<M: Mode>(Option<Here<M::Kept>>);
 
@@ -286,20 +353,20 @@ enum Composing<K> {
     /// An input method's composition, into the value as the field last
     /// saw it.
     Now(K),
-    /// The program changed the value under a composition: it no longer
-    /// shows, and the input method is yet to be told to start over.
+    /// The field dropped a composition the input method may still have
+    /// (the program set the text, or the field changed mode): nothing
+    /// shows, and the input method's next event for it is discarded and
+    /// the input method told to start over.
     Dropped,
 }
 
-impl<K> Here<K> {
-    fn new() -> Self {
-        Here { blink_off: false, composing: Composing::Idle }
-    }
-}
+/// Where the kit keeps a widget's [`Focus`], under the widget's mode: not
+/// nameable outside this module.
+struct Slot<M: Mode>(Focus<M>);
 
-impl<M: Mode> Default for Focus<M> {
+impl<M: Mode> Default for Slot<M> {
     fn default() -> Self {
-        Focus(None)
+        Slot(Focus(None))
     }
 }
 
@@ -310,64 +377,12 @@ pub enum Place {
     Here,
 }
 
-/// What an input method's event finds.
-pub enum Heard<'f, M: Mode> {
-    /// The field is in step with the input method: the event applies.
-    InStep(InStep<'f, M>),
-    /// The event belongs to a composition the field dropped: the input
-    /// method is to start over, and the event goes no further.
-    Stale(StartOver),
-}
-
-/// A composition the field dropped, which the input method still has: it's
-/// told to start over.
-#[must_use = "tell the input method to start over"]
-pub struct StartOver(());
-
-impl StartOver {
-    pub fn tell(self, cx: &mut EventCx) {
-        cx.reset_text_input();
-    }
-}
-
-/// The composition, in step with the input method: its event applies.
-pub struct InStep<'f, M: Mode>(&'f mut Composing<M::Kept>);
-
-impl<M: Mode> InStep<'_, M> {
-    /// The input method composes `text` ("" when it stops), with its caret
-    /// `caret` bytes into it, kept as the field's mode keeps it.
-    pub fn compose(self, text: &str, caret: Option<usize>) {
-        *self.0 = if text.is_empty() {
-            Composing::Idle
-        } else {
-            Composing::Now(<M::Kept as sealed::Keep>::keep(text, caret))
-        };
-    }
-
-    /// The input method commits its text (the field types it): nothing is
-    /// being composed.
-    pub fn commit(self) {
-        *self.0 = Composing::Idle;
-    }
-}
-
 impl<M: Mode> Focus<M> {
     pub fn place(&self) -> Place {
         match self.0 {
             None => Place::Away,
             Some(_) => Place::Here,
         }
-    }
-
-    /// The field took the focus: the caret shows, nothing is composed yet.
-    pub fn came(&mut self) {
-        self.0 = Some(Here::new());
-    }
-
-    /// It lost the focus. The kit turns text input off, which ends the
-    /// input method's composition; the field's goes with the focus.
-    pub fn went(&mut self) {
-        self.0 = None;
     }
 
     /// The caret blinks.
@@ -407,30 +422,150 @@ impl<M: Mode> Focus<M> {
             }
         }
     }
+}
 
-    /// At an event other than the input method's: if the field dropped a
-    /// composition, the input method is to start over now.
-    pub fn owed(&mut self) -> Option<StartOver> {
-        let h = self.0.as_mut()?;
-        match h.composing {
-            Composing::Dropped => {
-                h.composing = Composing::Idle;
-                Some(StartOver(()))
-            }
-            Composing::Idle | Composing::Now(_) => None,
+/// The composition, in step with the input method: its event applies.
+pub struct InStep<'f, M: Mode>(&'f mut Composing<M::Kept>);
+
+impl<M: Mode> InStep<'_, M> {
+    /// The input method composes `text` ("" when it stops), with its caret
+    /// `caret` bytes into it, kept as the field's mode keeps it.
+    pub fn compose(self, text: &str, caret: Option<usize>) {
+        *self.0 = if text.is_empty() { Composing::Idle } else { Composing::Now(sealed::keep(text, caret)) };
+    }
+
+    /// The input method commits its text (the field types it): nothing is
+    /// being composed.
+    pub fn commit(self) {
+        *self.0 = Composing::Idle;
+    }
+}
+
+/// A widget's focus at an event, with what it tells input methods:
+/// [`EventCx::composer`].
+pub struct Composer<'c, 'a, 'e, M: Mode> {
+    cx: &'c mut EventCx<'a, 'e>,
+    _mode: PhantomData<fn() -> M>,
+}
+
+impl<'c, M: Mode> Composer<'c, '_, '_, M> {
+    fn slot<N: Mode>(&mut self) -> &mut Focus<N> {
+        &mut self.cx.state::<Slot<N>>().0
+    }
+
+    /// Into the focus. If the widget had it in its other mode (a prompt
+    /// that stopped or started echoing, "Show password"), what was being
+    /// composed there is dropped: the input method was restarted with the
+    /// new purpose, and its next event, sent for the old composition, is
+    /// discarded.
+    fn enter(&mut self) {
+        let other = self.slot::<M::Other>();
+        let changed_mode = match other.place() {
+            Place::Here => Composing::Dropped,
+            Place::Away => Composing::Idle,
+        };
+        other.0 = None;
+        self.slot::<M>().0 = Some(Here { blink_off: false, composing: changed_mode });
+    }
+
+    /// The widget took the focus, or found it had it (after changing
+    /// mode): the caret shows, and input methods are told what it takes,
+    /// with the caret at `caret`, in the widget's coordinates.
+    pub fn arrive(mut self, caret: Option<Rect>) {
+        self.enter();
+        self.cx.set_text_input_as(M::PURPOSE, true, caret);
+    }
+
+    /// The caret moved: input methods are told where it is, while the
+    /// widget has the focus.
+    pub fn tell_caret(mut self, caret: Option<Rect>) {
+        match self.slot::<M>().place() {
+            Place::Here => self.cx.set_text_input_as(M::PURPOSE, true, caret),
+            Place::Away => {}
         }
     }
 
-    /// An event of the input method's. It comes only to the focused
-    /// widget, so the field is here if it hadn't heard.
-    pub fn hear(&mut self) -> Heard<'_, M> {
-        let h = self.0.get_or_insert_with(Here::new);
-        match h.composing {
-            Composing::Dropped => {
-                h.composing = Composing::Idle;
-                Heard::Stale(StartOver(()))
-            }
-            Composing::Idle | Composing::Now(_) => Heard::InStep(InStep(&mut h.composing)),
+    /// The widget lost the focus: input methods stop, and what was being
+    /// composed goes with the focus.
+    pub fn went(mut self) {
+        self.slot::<M>().0 = None;
+        self.cx.set_text_input_as(M::PURPOSE, false, None);
+    }
+
+    /// At an event other than the input method's: if the widget dropped a
+    /// composition, the input method starts over now.
+    pub fn catch_up(mut self) {
+        self.start_over_if_dropped();
+    }
+
+    /// If the widget dropped a composition, it's idle again and the input
+    /// method starts over: what the input method sends next is its own.
+    /// Whether it did.
+    fn start_over_if_dropped(&mut self) -> Started {
+        let started = match &mut self.slot::<M>().0 {
+            Some(h) => match h.composing {
+                Composing::Dropped => {
+                    h.composing = Composing::Idle;
+                    Started::Over
+                }
+                Composing::Idle | Composing::Now(_) => Started::Already,
+            },
+            None => Started::Already,
+        };
+        match started {
+            Started::Over => self.cx.reset_text_input(),
+            Started::Already => {}
         }
+        started
+    }
+
+    /// An input method's event: the composition, if the event applies.
+    /// One for a composition the widget dropped is `None`, and the input
+    /// method has been told to start over. It comes only to the focused
+    /// widget, so the widget is here if it hadn't heard.
+    pub fn hear(mut self) -> Option<InStep<'c, M>> {
+        if let Place::Away = self.slot::<M>().place() {
+            self.enter();
+        }
+        match self.start_over_if_dropped() {
+            Started::Over => None,
+            Started::Already => {
+                let cx = self.cx;
+                let h = cx.state::<Slot<M>>().0.0.as_mut()?;
+                Some(InStep(&mut h.composing))
+            }
+        }
+    }
+}
+
+/// Whether the input method was just told to start over.
+enum Started {
+    Over,
+    Already,
+}
+
+impl<'a, 'e> EventCx<'a, 'e> {
+    /// `w`'s focus and composition, as its own mode keeps them.
+    pub fn composition<W: Composes>(&mut self, _: &W) -> &mut Focus<W::Mode> {
+        &mut self.state::<Slot<W::Mode>>().0
+    }
+
+    /// `w`'s focus at this event, with what it tells input methods.
+    pub fn composer<W: Composes>(&mut self, _: &W) -> Composer<'_, 'a, 'e, W::Mode> {
+        Composer { cx: self, _mode: PhantomData }
+    }
+}
+
+impl LayoutCx<'_, '_> {
+    /// `w`'s focus and composition, as its own mode keeps them.
+    pub fn composition<W: Composes>(&mut self, _: &W) -> &mut Focus<W::Mode> {
+        &mut self.state::<Slot<W::Mode>>().0
+    }
+}
+
+impl<'a> PaintCx<'a> {
+    /// `w`'s focus and composition, as its own mode keeps them.
+    pub fn composition<W: Composes>(&self, _: &W) -> Option<&'a Focus<W::Mode>> {
+        self.state::<Slot<W::Mode>>().map(|s| &s.0)
     }
 }

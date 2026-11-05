@@ -8,7 +8,8 @@
 //! plain field holding the dots "••" with the same composition: before,
 //! they were pixel for pixel the same. A password field now keeps only a
 //! count of what's composed, drawn as dots. Text the program sets drops
-//! the composition, as losing the focus did already.
+//! the composition, as losing the focus did already, and so does ticking
+//! "Show password" while composing.
 //!
 //! These build on the field before and after it was made a typestate, so
 //! they run against both.
@@ -51,4 +52,31 @@ fn the_programs_text_drops_what_a_password_field_was_composing() {
     let clean = fresh.render_rgba(fw, 2.0);
     eprintln!("cleared vs clean: {}", differ(&cleared, &clean));
     assert_eq!(differ(&cleared, &clean), 0, "the cleared field shows nothing of the composition");
+}
+
+#[test]
+fn showing_the_password_shows_nothing_composed_while_hidden() {
+    let (mut h, w) = focused("", false);
+    h.ime(w, None, "WW");
+    h.send(Msg::Show(true));
+    // The input method's next event, sent for the composition it started
+    // while the password was hidden.
+    h.ime(w, None, "WWX");
+    let after = h.render_rgba(w, 2.0);
+    let (mut fresh, fw) = focused("", true);
+    let empty = fresh.render_rgba(fw, 2.0);
+    eprintln!("after Show Password vs an empty shown field: {}", differ(&after, &empty));
+    assert_eq!(differ(&after, &empty), 0, "nothing composed while hidden shows in clear");
+}
+
+#[test]
+fn showing_the_password_types_nothing_composed_while_hidden() {
+    let (mut h, w) = focused("", false);
+    h.ime(w, None, "WW");
+    h.send(Msg::Show(true));
+    h.ime(w, Some("WW"), "");
+    eprintln!("the shown field's text: {:?}", h.program().secret);
+    assert_eq!(h.program().secret, "", "the hidden composition isn't typed once shown");
+    h.ime(w, Some("x"), "");
+    assert_eq!(h.program().secret, "x", "then what the input method commits is typed");
 }

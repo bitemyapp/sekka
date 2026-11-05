@@ -21,7 +21,7 @@ use aizome_kit::widget::{
     EditCommand, Event, EventCx, FocusRing, Focusable, LayoutCx, PaintCx, Semantics, Status, Widget,
 };
 
-use aizome_kit::composing::{Focus, Heard, Kept as _, Place};
+use aizome_kit::composing::{Composes, Kept as _, Place};
 pub use aizome_kit::composing::{Masked, Mode, Plain, Preedit, Secret};
 
 type Spec = Rc<dyn Fn(&aizome_kit::Theme) -> TextSpec>;
@@ -166,22 +166,24 @@ struct FieldWidget<M> {
     _mode: std::marker::PhantomData<fn() -> M>,
 }
 
-/// What the field keeps between views: the caret and the selection's
-/// other end, as byte offsets, the value they were for, and the focus with
-/// what goes with it. A field that changes mode starts afresh: each mode
-/// keeps its own.
-struct FieldState<M: Mode> {
+/// What the field keeps between views, whatever its mode: the caret and
+/// the selection's other end, as byte offsets, the value they were for,
+/// and Caps Lock as keys showed it. What goes with the focus (the caret's
+/// blink, what an input method is composing) is its mode's
+/// [`Focus`](aizome_kit::composing::Focus), which the kit keeps beside it.
+#[derive(Default)]
+struct FieldState {
     caret: usize,
     anchor: usize,
     seen: String,
-    focus: Focus<M>,
     caps: Option<bool>,
 }
 
-impl<M: Mode> Default for FieldState<M> {
-    fn default() -> Self {
-        FieldState { caret: 0, anchor: 0, seen: String::new(), focus: Focus::default(), caps: None }
-    }
+/// Whether the value was the field's last view of it, or text the program
+/// set.
+enum Seen {
+    Same,
+    Set,
 }
 
 fn prev_boundary(s: &str, i: usize) -> usize {
@@ -225,7 +227,8 @@ impl FieldWidget<Plain> {
 /// The widget the kit keeps for a field. The kit tells elements apart by
 /// their widget's type, so it's one type for both modes: a field that
 /// stops echoing (a PAM prompt for a code, then the password) is the same
-/// element, and keeps the focus. Each mode keeps its own state, and only
+/// element, and keeps the focus, caret and Caps Lock state. Each mode keeps
+/// its own composition, and only
 /// [`From<SecretField>`](Element) makes the secret one.
 enum FieldNode {
     Plain(FieldWidget<Plain>),
@@ -307,18 +310,23 @@ impl Widget for FieldNode {
     }
 }
 
+impl<M: Mode> Composes for FieldWidget<M> {
+    type Mode = M;
+}
+
 impl<M: Mode> FieldWidget<M> {
     /// The state, settled against the value (the program may have
-    /// changed it).
-    fn settle(&self, st: &mut FieldState<M>) {
-        if st.seen != self.value {
-            // Text the program set: the caret goes to its end, and what
-            // was being composed into the old text is dropped.
+    /// changed it): the caret goes to the end of text the program set.
+    #[must_use = "what was being composed into text the program replaced is dropped"]
+    fn settle(&self, st: &mut FieldState) -> Seen {
+        let seen = if st.seen != self.value {
             st.caret = self.value.len();
             st.anchor = st.caret;
             st.seen = self.value.clone();
-            st.focus.value_changed();
-        }
+            Seen::Set
+        } else {
+            Seen::Same
+        };
         st.caret = st.caret.min(self.value.len());
         st.anchor = st.anchor.min(self.value.len());
         while !self.value.is_char_boundary(st.caret) {
@@ -327,29 +335,28 @@ impl<M: Mode> FieldWidget<M> {
         while !self.value.is_char_boundary(st.anchor) {
             st.anchor -= 1;
         }
+        seen
     }
 
     /// The field has the focus: input methods are told what it takes, and
-    /// the caret shows, then blinks. What the field kept in its other mode
-    /// (a prompt that echoed, then one that doesn't) is dropped.
+    /// the caret shows, then blinks. What it was composing in its other
+    /// mode (a prompt that echoed, then one that doesn't) is dropped.
     fn arrive(&self, cx: &mut EventCx) {
-        cx.state::<FieldState<M>>().focus.came();
-        *cx.state::<FieldState<M::Other>>() = FieldState::default();
-        cx.set_text_input_as(M::PURPOSE, true, Some(Rect::new(0.0, 0.0, 2.0, self.height)));
+        cx.composer(self).arrive(Some(Rect::new(0.0, 0.0, 2.0, self.height)));
         cx.request_tick(BLINK);
     }
 
     /// Replace the selection with `with`.
     fn replace(&self, cx: &mut EventCx, with: &str) {
         let (caret, anchor) = {
-            let st = cx.state::<FieldState<M>>();
+            let st = cx.state::<FieldState>();
             (st.caret, st.anchor)
         };
         let (a, b) = (caret.min(anchor), caret.max(anchor));
         let mut v = self.value.clone();
         v.replace_range(a..b, with);
         let at = a + with.len();
-        let st = cx.state::<FieldState<M>>();
+        let st = cx.state::<FieldState>();
         st.caret = at;
         st.anchor = at;
         st.seen = v.clone();
@@ -366,17 +373,17 @@ impl<M: Mode> FieldWidget<M> {
     }
 
     fn move_to(&self, cx: &mut EventCx, to: usize, extend: bool) {
-        let st = cx.state::<FieldState<M>>();
+        let st = cx.state::<FieldState>();
         st.caret = to;
         if !extend {
             st.anchor = to;
         }
-        st.focus.wake();
+        cx.composition(self).wake();
         cx.invalidate();
     }
 
     fn selected(&self, cx: &mut EventCx) -> Option<String> {
-        let st = cx.state::<FieldState<M>>();
+        let st = cx.state::<FieldState>();
         let (a, b) = (st.caret.min(st.anchor), st.caret.max(st.anchor));
         M::exposed(&self.value[a..b]).map(str::to_owned)
     }
@@ -384,18 +391,16 @@ impl<M: Mode> FieldWidget<M> {
     /// An input method's event: what it composes shows as the mode keeps
     /// it; what it commits is typed.
     fn ime(&self, cx: &mut EventCx, ime: &Ime) -> Status {
-        match cx.state::<FieldState<M>>().focus.hear() {
-            Heard::Stale(start_over) => start_over.tell(cx),
-            Heard::InStep(composing) => match ime {
-                Ime::Commit(s) => {
-                    composing.commit();
-                    self.replace(cx, s);
-                }
-                Ime::Preedit { text, selection } => {
-                    composing.compose(text, selection.as_ref().map(|r| r.end));
-                    cx.invalidate();
-                }
-            },
+        let Some(composing) = cx.composer(self).hear() else { return Status::Handled };
+        match ime {
+            Ime::Commit(s) => {
+                composing.commit();
+                self.replace(cx, s);
+            }
+            Ime::Preedit { text, selection } => {
+                composing.compose(text, selection.as_ref().map(|r| r.end));
+                cx.invalidate();
+            }
         }
         Status::Handled
     }
@@ -407,8 +412,10 @@ impl<M: Mode> Widget for FieldWidget<M> {
     }
 
     fn layout(&mut self, cx: &mut LayoutCx, bc: Constraints) -> Size {
-        let st = cx.state::<FieldState<M>>();
-        self.settle(st);
+        let st = cx.state::<FieldState>();
+        if let Seen::Set = self.settle(st) {
+            cx.composition(self).value_changed();
+        }
         bc.constrain(Size::new(bc.max.width.min(1e5), self.height))
     }
 
@@ -416,14 +423,16 @@ impl<M: Mode> Widget for FieldWidget<M> {
         let t = cx.theme();
         let b = cx.bounds();
         let spec = (self.spec)(t);
-        let st = cx.state::<FieldState<M>>();
-        let (caret, anchor, blink_off) = match st {
-            Some(s) => (s.caret.min(self.value.len()), s.anchor.min(self.value.len()), s.focus.blink_off()),
-            None => (self.value.len(), self.value.len(), false),
+        let st = cx.state::<FieldState>();
+        let (caret, anchor) = match st {
+            Some(s) => (s.caret.min(self.value.len()), s.anchor.min(self.value.len())),
+            None => (self.value.len(), self.value.len()),
         };
         // What an input method is composing, as the mode keeps it: a
         // password's as dots.
-        let composing = st.and_then(|s| s.focus.composing()).map(|k| k.drawn());
+        let focus = cx.composition(self);
+        let blink_off = focus.is_some_and(|f| f.blink_off());
+        let composing = focus.and_then(|f| f.composing()).map(|k| k.drawn());
         let composing = composing.as_deref().unwrap_or("");
         let focused = cx.is_focused();
         if self.value.is_empty() && composing.is_empty() {
@@ -486,8 +495,10 @@ impl<M: Mode> Widget for FieldWidget<M> {
 
     fn event(&mut self, cx: &mut EventCx, event: &Event) -> Status {
         {
-            let st = cx.state::<FieldState<M>>();
-            self.settle(st);
+            let st = cx.state::<FieldState>();
+            if let Seen::Set = self.settle(st) {
+                cx.composition(self).value_changed();
+            }
         }
         match event {
             Event::Focus(true) => {
@@ -496,8 +507,7 @@ impl<M: Mode> Widget for FieldWidget<M> {
                 return Status::Handled;
             }
             Event::Focus(false) => {
-                cx.state::<FieldState<M>>().focus.went();
-                cx.set_text_input_as(M::PURPOSE, false, Some(Rect::new(0.0, 0.0, 2.0, self.height)));
+                cx.composer(self).went();
                 if let Some(msg) = &self.on_blur {
                     cx.emit(msg);
                 }
@@ -509,18 +519,16 @@ impl<M: Mode> Widget for FieldWidget<M> {
         // Focused without having heard so (the field changed mode while
         // focused): input methods are told what it takes now.
         if cx.is_focused()
-            && let Place::Away = cx.state::<FieldState<M>>().focus.place()
+            && let Place::Away = cx.composition(self).place()
         {
             self.arrive(cx);
         }
         if let Event::Ime(ime) = event {
             return self.ime(cx, ime);
         }
-        // A composition the program's change dropped: the input method
-        // starts over.
-        if let Some(start_over) = cx.state::<FieldState<M>>().focus.owed() {
-            start_over.tell(cx);
-        }
+        // A composition the field dropped (the program set the text, or it
+        // changed mode): the input method starts over.
+        cx.composer(self).catch_up();
         match event {
             Event::PointerDown { .. } => {
                 cx.request_focus();
@@ -535,7 +543,7 @@ impl<M: Mode> Widget for FieldWidget<M> {
             },
             Event::Tick => {
                 if cx.is_focused() {
-                    cx.state::<FieldState<M>>().focus.blink();
+                    cx.composition(self).blink();
                     cx.request_tick(BLINK);
                     cx.invalidate();
                 }
@@ -544,17 +552,17 @@ impl<M: Mode> Widget for FieldWidget<M> {
             Event::Key(k) if k.pressed => {
                 let m = k.modifiers;
                 let caps = m.contains(aizome_kit::sidestep_ui::Modifiers::CAPS_LOCK);
-                if cx.state::<FieldState<M>>().caps != Some(caps) {
-                    cx.state::<FieldState<M>>().caps = Some(caps);
+                if cx.state::<FieldState>().caps != Some(caps) {
+                    cx.state::<FieldState>().caps = Some(caps);
                     if let Some(f) = &self.on_caps {
                         let msg = f.make(caps);
                         let cell = std::cell::RefCell::new(Some(msg));
                         cx.emit(&MsgFn::from_fn(move || cell.borrow_mut().take().expect("once")));
                     }
                 }
+                cx.composition(self).wake();
                 let (caret, anchor) = {
-                    let st = cx.state::<FieldState<M>>();
-                    st.focus.wake();
+                    let st = cx.state::<FieldState>();
                     (st.caret, st.anchor)
                 };
                 let v = &self.value;
@@ -570,7 +578,7 @@ impl<M: Mode> Widget for FieldWidget<M> {
                             } else {
                                 prev_boundary(v, caret)
                             };
-                            cx.state::<FieldState<M>>().anchor = from;
+                            cx.state::<FieldState>().anchor = from;
                         }
                         self.replace(cx, "");
                         Status::Handled
@@ -578,7 +586,7 @@ impl<M: Mode> Widget for FieldWidget<M> {
                     Key::Named(NamedKey::Delete) => {
                         if caret == anchor {
                             let to = if word { word_right(v, caret) } else { next_boundary(v, caret) };
-                            cx.state::<FieldState<M>>().anchor = to;
+                            cx.state::<FieldState>().anchor = to;
                         }
                         self.replace(cx, "");
                         Status::Handled
@@ -625,7 +633,7 @@ impl<M: Mode> Widget for FieldWidget<M> {
                         _ => Status::Ignored,
                     },
                     Key::Character(c) if m.super_key() && c.eq_ignore_ascii_case("a") => {
-                        let st = cx.state::<FieldState<M>>();
+                        let st = cx.state::<FieldState>();
                         st.anchor = 0;
                         st.caret = self.value.len();
                         cx.invalidate();
@@ -647,8 +655,10 @@ impl<M: Mode> Widget for FieldWidget<M> {
 
     fn command(&mut self, cx: &mut EventCx, command: EditCommand) -> bool {
         {
-            let st = cx.state::<FieldState<M>>();
-            self.settle(st);
+            let st = cx.state::<FieldState>();
+            if let Seen::Set = self.settle(st) {
+                cx.composition(self).value_changed();
+            }
         }
         match command {
             EditCommand::Paste | EditCommand::PasteAsPlainText => {
@@ -670,7 +680,7 @@ impl<M: Mode> Widget for FieldWidget<M> {
                 true
             }
             EditCommand::SelectAll => {
-                let st = cx.state::<FieldState<M>>();
+                let st = cx.state::<FieldState>();
                 st.anchor = 0;
                 st.caret = self.value.len();
                 cx.invalidate();
@@ -693,7 +703,7 @@ impl<M: Mode> Widget for FieldWidget<M> {
     }
 
     fn selection(&self, state: aizome_kit::widget::StateView) -> Option<String> {
-        let st = state.get::<FieldState<M>>()?;
+        let st = state.get::<FieldState>()?;
         let (a, b) = (st.caret.min(st.anchor).min(self.value.len()), st.caret.max(st.anchor).min(self.value.len()));
         (a < b).then(|| M::exposed(&self.value[a..b]).map(str::to_owned)).flatten()
     }
