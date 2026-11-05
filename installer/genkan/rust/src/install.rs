@@ -263,7 +263,9 @@ pub enum InstallMode {
     Execute,
 }
 
-/// Everything established before confirmation. Only `execute` consumes it.
+/// Everything established before confirmation. Only `execute` consumes it,
+/// and only the end of a preparation route makes it, with the proof that the
+/// root filesystem has room for the system ([`room::check`]).
 pub struct Prepared {
     // Held until the installation finishes: one installer at a time.
     _lock: fs::File,
@@ -276,10 +278,42 @@ pub struct Prepared {
     derivation: String,
     system: String,
     summary: Summary,
+    _room: room::Room,
 }
 impl Prepared {
     pub fn summary(&self) -> &Summary {
         &self.summary
+    }
+
+    /// What every stage established, once a route has found room for the
+    /// system. `summary` has what the route measured.
+    fn new(evaluated: Evaluated<'_>, room: room::Room, mut summary: Summary) -> Self {
+        let Evaluated {
+            configured,
+            derivation,
+            system,
+            ..
+        } = evaluated;
+        let Configured {
+            checked,
+            staging,
+            configuration,
+        } = configured;
+        summary.root_bytes = checked.layout.root_bytes();
+        summary.swap_bytes = checked.layout.swap_bytes().unwrap_or(0);
+        summary.seconds = checked.started.elapsed().as_secs_f64();
+        Self {
+            _lock: checked.lock,
+            staging,
+            template: checked.template,
+            ids: checked.ids,
+            layout: checked.layout,
+            configuration,
+            derivation,
+            system,
+            summary,
+            _room: room,
+        }
     }
 }
 
@@ -321,8 +355,33 @@ fn nix_activity(tracker: &Mutex<nixlog::Tracker>) -> impl Fn(&str) + Sync + '_ {
     }
 }
 
-/// Non-destructive preparation. No disk is written; the plan stays reviewable.
+/// Non-destructive preparation. No disk is written; the plan stays
+/// reviewable. Each stage's type has only its successor, and both routes
+/// after evaluation reach `Prepared` only by checking that the root
+/// filesystem has room for the system.
 pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
+    match check(plan)?.configure()?.evaluate()?.route()? {
+        Route::InMemory(build) => build.build(),
+        Route::Deferred(deferred) => deferred.check_room(),
+    }
+}
+
+/// Preparation's first stage: the live system, the selected disk and the
+/// tools are fit to install with, and the layout and filesystem identities
+/// are chosen.
+pub struct Checked<'p> {
+    plan: &'p InstallPlan,
+    started: Instant,
+    lock: fs::File,
+    layout: Layout,
+    ids: Identities,
+    template: Template,
+    ram_total: u64,
+}
+
+/// Checks the live system, the selected disk and the tools, and chooses
+/// the layout and the filesystem identities.
+pub fn check(plan: &InstallPlan) -> Result<Checked<'_>> {
     let started = Instant::now();
     let settings = plan.settings();
     let stage = Stage::start("checks");
@@ -363,85 +422,149 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
     let ids = Identities::generate_for(plan.firmware(), plan.swap(), plan.encrypt())?;
     let template = Template::load(settings, plan.hostname())?;
     stage.done();
+    Ok(Checked {
+        plan,
+        started,
+        lock,
+        layout,
+        ids,
+        template,
+        ram_total: ram.total,
+    })
+}
 
-    let stage = Stage::start("configuration");
-    preparing("Detecting hardware and writing the pinned Determinate flake");
-    // Root-only (0700) staging directory: it receives no secrets, but its
-    // configuration must not be replaced by another local user.
-    let staging = tempfile::Builder::new()
-        .prefix("calamares-prepare-")
-        .tempdir_in("/run")?;
-    template.write(staging.path())?;
-    // Hardware detection does not depend on the target's future filesystems:
-    // they are declared explicitly in configuration.nix with chosen identities.
-    let hardware = output(
-        "nixos-generate-config",
-        &["--show-hardware-config", "--no-filesystems"],
-        120,
-    )?;
-    fs::write(staging.path().join("hardware-configuration.nix"), &hardware)?;
-    let configuration = config::configuration(plan, &ids)?;
-    fs::write(staging.path().join("configuration.nix"), &configuration)?;
-    stage.done();
+/// The second stage: the hardware configuration and the pinned flake,
+/// staged with the installed system's `configuration.nix`.
+pub struct Configured<'p> {
+    checked: Checked<'p>,
+    staging: tempfile::TempDir,
+    configuration: String,
+}
 
-    let stage = Stage::start("evaluation");
-    preparing("Evaluating the installed system");
-    let attribute = format!(
-        "path:{}#nixosConfigurations.{}.config.system.build.toplevel",
-        staging.path().display(),
-        plan.hostname().as_str()
-    );
-    // One evaluation answers both what to build and how much it downloads.
-    let report = Mutex::new(String::new());
-    let dry = output_lines(
-        "nix",
-        &[
-            "build",
-            "--dry-run",
-            "--json",
-            "--no-link",
-            "--no-write-lock-file",
-            &attribute,
-        ],
-        1800,
-        &|line: &str| {
-            let mut report = report.lock().unwrap();
-            if report.len() < 1 << 20 {
-                report.push_str(line);
-                report.push('\n');
-            }
-        },
-    )
-    .context(
-        "The selected configuration could not be evaluated; the target disk has not been erased",
-    )?;
-    let (derivation, system) = nixlog::build_result(&dry)?;
-    let missing = nixlog::dry_run(&report.into_inner().unwrap())?;
-    ensure!(
-        fs::read(staging.path().join("flake.lock"))? == template.lock,
-        "Nix modified the pinned lock"
-    );
-    stage.done();
+impl<'p> Checked<'p> {
+    /// Detects the hardware and writes the pinned Determinate flake.
+    pub fn configure(self) -> Result<Configured<'p>> {
+        let stage = Stage::start("configuration");
+        preparing("Detecting hardware and writing the pinned Determinate flake");
+        // Root-only (0700) staging directory: it receives no secrets, but its
+        // configuration must not be replaced by another local user.
+        let staging = tempfile::Builder::new()
+            .prefix("calamares-prepare-")
+            .tempdir_in("/run")?;
+        self.template.write(staging.path())?;
+        // Hardware detection does not depend on the target's future filesystems:
+        // they are declared explicitly in configuration.nix with chosen identities.
+        let hardware = output(
+            "nixos-generate-config",
+            &["--show-hardware-config", "--no-filesystems"],
+            120,
+        )?;
+        fs::write(staging.path().join("hardware-configuration.nix"), &hardware)?;
+        let configuration = config::configuration(self.plan, &self.ids)?;
+        fs::write(staging.path().join("configuration.nix"), &configuration)?;
+        stage.done();
+        Ok(Configured {
+            checked: self,
+            staging,
+            configuration,
+        })
+    }
+}
 
-    // Downloads land in the live store, which is RAM. Build there only when
-    // the unpacked size leaves the memory reserve free; otherwise build on
-    // the target after formatting, where space is not memory.
-    let budget = memory::read()?
-        .available
-        .saturating_sub(memory::reserve(ram.total));
-    let deferred = missing.fetch_bytes > budget;
-    let mut summary = Summary {
-        root_bytes: layout.root_bytes(),
-        swap_bytes: layout.swap_bytes().unwrap_or(0),
-        deferred,
-        ..Summary::default()
-    };
-    if deferred {
-        preparing(&format!(
-            "The selection needs {:.1} GiB of downloads, more than fits in memory: the system will be built on the target disk after formatting",
-            missing.fetch_bytes as f64 / memory::GIB as f64
-        ));
-    } else {
+/// The third stage: what the installed system is, and what building it
+/// takes.
+pub struct Evaluated<'p> {
+    configured: Configured<'p>,
+    derivation: String,
+    system: String,
+    missing: nixlog::DryRun,
+}
+
+impl<'p> Configured<'p> {
+    /// Evaluates the installed system. One evaluation answers both what to
+    /// build and how much it downloads.
+    pub fn evaluate(self) -> Result<Evaluated<'p>> {
+        let stage = Stage::start("evaluation");
+        preparing("Evaluating the installed system");
+        let attribute = format!(
+            "path:{}#nixosConfigurations.{}.config.system.build.toplevel",
+            self.staging.path().display(),
+            self.checked.plan.hostname().as_str()
+        );
+        let report = Mutex::new(String::new());
+        let dry = output_lines(
+            "nix",
+            &[
+                "build",
+                "--dry-run",
+                "--json",
+                "--no-link",
+                "--no-write-lock-file",
+                &attribute,
+            ],
+            1800,
+            &|line: &str| {
+                let mut report = report.lock().unwrap();
+                if report.len() < 1 << 20 {
+                    report.push_str(line);
+                    report.push('\n');
+                }
+            },
+        )
+        .context(
+            "The selected configuration could not be evaluated; the target disk has not been erased",
+        )?;
+        let (derivation, system) = nixlog::build_result(&dry)?;
+        let missing = nixlog::dry_run(&report.into_inner().unwrap())?;
+        ensure!(
+            fs::read(self.staging.path().join("flake.lock"))? == self.checked.template.lock,
+            "Nix modified the pinned lock"
+        );
+        stage.done();
+        Ok(Evaluated {
+            configured: self,
+            derivation,
+            system,
+            missing,
+        })
+    }
+}
+
+/// Where evaluation leads.
+pub enum Route<'p> {
+    /// The downloads fit in memory: build the system in the live store now.
+    InMemory(InMemory<'p>),
+    /// They don't: build it on the target after formatting.
+    Deferred(Deferred<'p>),
+}
+
+impl<'p> Evaluated<'p> {
+    /// Downloads land in the live store, which is RAM. Build there only when
+    /// the unpacked size leaves the memory reserve free; otherwise build on
+    /// the target after formatting, where space is not memory.
+    pub fn route(self) -> Result<Route<'p>> {
+        let budget = memory::read()?
+            .available
+            .saturating_sub(memory::reserve(self.configured.checked.ram_total));
+        Ok(if self.missing.fetch_bytes > budget {
+            Route::Deferred(Deferred(self))
+        } else {
+            Route::InMemory(InMemory(self))
+        })
+    }
+}
+
+/// The in-memory route: the system is built in the live store before
+/// confirmation.
+pub struct InMemory<'p>(Evaluated<'p>);
+
+impl InMemory<'_> {
+    /// Builds the system, checks that it fits on the root filesystem, and
+    /// reads it into the page cache.
+    pub fn build(self) -> Result<Prepared> {
+        let evaluated = self.0;
+        let staging = evaluated.configured.staging.path();
+        let missing = evaluated.missing;
         let stage = Stage::start("build");
         preparing(&format!(
             "Building the installed system ({} builds, {:.0} MiB to download)",
@@ -456,28 +579,107 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
                 "--log-format",
                 "internal-json",
                 "--out-link",
-                staging.path().join("system").to_str().unwrap(),
-                &format!("{derivation}^out"),
+                staging.join("system").to_str().unwrap(),
+                &format!("{}^out", evaluated.derivation),
             ],
             7200,
             &nix_activity(&tracker),
         )
         .map_err(|error| nix_failure(error, &tracker))
         .context("The installed system could not be built; the target disk has not been erased")?;
+        let system = &evaluated.system;
         ensure!(
-            fs::canonicalize(staging.path().join("system"))? == Path::new(&system),
+            fs::canonicalize(staging.join("system"))? == Path::new(system),
             "The built system differs from the evaluated system"
         );
-        summary.downloaded_bytes = missing.fetch_bytes;
         let closure_info: serde_json::Value = serde_json::from_str(&output(
             "nix",
-            &["path-info", "--json", "--closure-size", &system],
+            &["path-info", "--json", "--closure-size", system],
             300,
         )?)?;
-        summary.closure_bytes = closure_size(&closure_info)?;
+        let closure_bytes = closure_size(&closure_info)?;
+        let room = room::check(&evaluated.configured.checked.layout, closure_bytes)?;
+        stage.done();
+
+        let stage = Stage::start("cache");
+        preparing("Caching the installed system in memory");
+        let closure: Vec<PathBuf> =
+            process::output_full("nix", &["path-info", "--recursive", system], 300)?
+                .lines()
+                .filter_map(precache::store_path)
+                .collect();
+        let outcome = precache::warm(&closure, &process::CANCEL, |read, total| {
+            event(Event::Caching { read, total })
+        })?;
+        ensure!(!process::cancelled(), "Preparation was cancelled");
+        stage.done();
+        let summary = Summary {
+            closure_bytes,
+            cached_bytes: outcome.bytes,
+            cache_limited: outcome.limited,
+            downloaded_bytes: missing.fetch_bytes,
+            ..Summary::default()
+        };
+        Ok(Prepared::new(evaluated, room, summary))
+    }
+}
+
+/// The deferred route: the downloads don't fit in memory, so the system is
+/// built on the target after formatting. Its size isn't known before then,
+/// but the downloads it needs are, and they must fit on the root filesystem
+/// too: it becomes `Prepared` only by checking that, as the in-memory route
+/// does with the built system. Executing it unchecked doesn't compile; the
+/// check was missing from this route (GEN-07):
+///
+/// ```compile_fail,E0308
+/// use calamares_nixos::{ConfirmedInstall, install::{self, Deferred}};
+/// fn skip_the_check(confirmed: ConfirmedInstall, deferred: Deferred<'_>) -> anyhow::Result<()> {
+///     install::execute(confirmed, deferred)
+/// }
+/// ```
+///
+/// ```
+/// use calamares_nixos::{ConfirmedInstall, install::{self, Deferred}};
+/// fn check_first(confirmed: ConfirmedInstall, deferred: Deferred<'_>) -> anyhow::Result<()> {
+///     install::execute(confirmed, deferred.check_room()?)
+/// }
+/// ```
+pub struct Deferred<'p>(Evaluated<'p>);
+
+impl Deferred<'_> {
+    /// Checks that the root filesystem has room for the downloads, the
+    /// least the system will take.
+    pub fn check_room(self) -> Result<Prepared> {
+        let evaluated = self.0;
+        let downloads = evaluated.missing.fetch_bytes;
+        let room = room::check(&evaluated.configured.checked.layout, downloads)?;
+        preparing(&format!(
+            "The selection needs {:.1} GiB of downloads, more than fits in memory: the system will be built on the target disk after formatting",
+            downloads as f64 / memory::GIB as f64
+        ));
+        let summary = Summary {
+            deferred: true,
+            ..Summary::default()
+        };
+        Ok(Prepared::new(evaluated, room, summary))
+    }
+}
+
+/// The root filesystem's room for the installed system.
+mod room {
+    use super::{Layout, memory};
+    use anyhow::{Context, Result, ensure};
+
+    /// Proof that the root filesystem has room for the selected system, with
+    /// space left for updates and the installation's own work. Only
+    /// [`check`] makes one, and `Prepared` can't be made without one.
+    pub(super) struct Room(());
+
+    /// `system` is the installed system's store size or, on the deferred
+    /// route where it isn't built yet, the unpacked downloads it needs.
+    pub(super) fn check(layout: &Layout, system: u64) -> Result<Room> {
         // Reserve room for updates and the installation workspace.
-        let required = summary
-            .closure_bytes
+        let required = system
             .checked_add(8 * memory::GIB)
             .context("Disk requirement overflow")?;
         ensure!(
@@ -486,35 +688,8 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
             required as f64 / memory::GIB as f64,
             layout.root_bytes() as f64 / memory::GIB as f64
         );
-        stage.done();
-
-        let stage = Stage::start("cache");
-        preparing("Caching the installed system in memory");
-        let closure: Vec<PathBuf> =
-            process::output_full("nix", &["path-info", "--recursive", &system], 300)?
-                .lines()
-                .filter_map(precache::store_path)
-                .collect();
-        let outcome = precache::warm(&closure, &process::CANCEL, |read, total| {
-            event(Event::Caching { read, total })
-        })?;
-        ensure!(!process::cancelled(), "Preparation was cancelled");
-        summary.cached_bytes = outcome.bytes;
-        summary.cache_limited = outcome.limited;
-        stage.done();
+        Ok(Room(()))
     }
-    summary.seconds = started.elapsed().as_secs_f64();
-    Ok(Prepared {
-        _lock: lock,
-        staging,
-        template,
-        ids,
-        layout,
-        configuration,
-        derivation,
-        system,
-        summary,
-    })
 }
 
 /// The target's `/nix/var/nix/builds`, the installed system's own build
