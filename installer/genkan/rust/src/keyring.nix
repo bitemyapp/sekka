@@ -22,6 +22,7 @@ let
     "google-chrome"
     "chatgpt"
     "claude-desktop"
+    "t3code"
     "vscode"
     "obsidian"
     "discord"
