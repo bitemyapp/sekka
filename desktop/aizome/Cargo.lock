@@ -447,6 +447,7 @@ dependencies = [
  "aizome-shell-proto",
  "aizome-sys",
  "aizome-theme",
+ "aizome-typestate",
  "env_logger",
  "jiff",
  "libc",
