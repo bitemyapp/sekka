@@ -35,12 +35,12 @@ class MonitorTests(unittest.TestCase):
             monitor.deliver_pending(self.state, self.store, self.discord, now)
         return pending
 
-    def journal(self, records, state=None, capped=False):
+    def journal(self, records, state=None, capped=False, lan=()):
         raw = b"".join(json.dumps(record).encode() + b"\n" for record in records)
         runner = mock.Mock(return_value=(raw, 0, capped))
         observations = {}
         with mock.patch.object(monitor.os, "geteuid", return_value=0):
-            monitor.observe_journal(state or self.state, observations, runner)
+            monitor.observe_journal(state or self.state, observations, runner, lan)
         return observations, runner
 
     @staticmethod
@@ -172,6 +172,32 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(observations["ssh_success"], 1)
         self.assertEqual(observations["ssh_failure"], 1)
         self.assertEqual(observations["sudo"], 1)
+
+    def test_lan_ssh_success_is_quiet_but_tunnel_internet_and_failures_are_reported(self):
+        lan = monitor.lan_networks("192.168.1.0/24 fd00::/8")
+        accepted = "Accepted publickey for callen from {} port 52814 ssh2: ED25519 SHA256:secret"
+        observations, _ = self.journal([
+            self.record(1, accepted.format("192.168.1.116"), _COMM="sshd-session"),
+            self.record(2, accepted.format("::ffff:192.168.1.116"), _COMM="sshd-session"),
+            self.record(3, accepted.format("fd00::5"), _COMM="sshd-session"),
+            self.record(4, "Failed publickey for callen from 192.168.1.116 port 52815 ssh2", _COMM="sshd-session"),
+        ], lan=lan)
+        self.assertNotIn("ssh_success", observations)
+        self.assertEqual(observations["ssh_failure"], 1)
+        observations, _ = self.journal([
+            self.record(5, accepted.format("127.0.0.1"), _COMM="sshd-session"),
+            self.record(6, accepted.format("::1"), _COMM="sshd-session"),
+            self.record(7, accepted.format("203.0.113.9"), _COMM="sshd-session"),
+            self.record(8, accepted.format("172.17.0.2"), _COMM="sshd-session"),
+            self.record(9, accepted.format("lan-host.example"), _COMM="sshd-session"),
+            self.record(10, "Accepted publickey for two words from 192.168.1.116 port 1 ssh2", _COMM="sshd"),
+        ], lan=monitor.lan_networks("192.168.1.0/24 127.0.0.0/8"))
+        self.assertEqual(observations["ssh_success"], 6)
+
+    def test_lan_networks_reject_addresses_with_host_bits(self):
+        self.assertEqual(monitor.lan_networks(""), ())
+        with self.assertRaises(monitor.MonitorError):
+            monitor.lan_networks("192.168.1.153/24")
 
     def test_journal_record_cap_preserves_last_consumed_cursor(self):
         records = [self.record(i, "SECURITY webhook_rejections count=2")

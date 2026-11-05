@@ -7,6 +7,7 @@ import functools
 import grp
 import hashlib
 import http.client
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -54,6 +55,7 @@ EVENT_KEYS = {"bot_restart", "tunnel_restart", "journal_gap", "journal_record",
               "webhook", "unresolved", "catchup", "dispatch", "ssh_failure",
               "ssh_success", "sudo", "egress"}
 COUNT_MAX = 10**12
+SSH_ACCEPTED = re.compile(r"Accepted [^ ]+ for [^ ]+ from ([^ ]+) port [0-9]{1,5} ssh2(?::|$)")
 
 
 class MonitorError(Exception):
@@ -422,7 +424,28 @@ def journal_command(state, cursor=True):
     return args
 
 
-def classify(record, counts):
+def lan_networks(value):
+    try:
+        return tuple(ipaddress.ip_network(entry) for entry in value.split())
+    except ValueError:
+        raise MonitorError("SEKKA_MONITOR_LAN_NETWORKS must list network prefixes such as 192.168.1.0/24") from None
+
+
+def from_lan(message, lan):
+    """Unparsed origins are not LAN; loopback never is, since tunnel connectors arrive there."""
+    origin = SSH_ACCEPTED.match(message)
+    if not lan or not origin:
+        return False
+    try:
+        address = ipaddress.ip_address(origin[1])
+    except ValueError:
+        return False
+    if address.version == 6 and address.ipv4_mapped:
+        address = address.ipv4_mapped
+    return not address.is_loopback and any(address in network for network in lan)
+
+
+def classify(record, counts, lan=()):
     message = record.get("MESSAGE")
     if not isinstance(message, str):
         counts["journal_record"] += 1
@@ -445,13 +468,13 @@ def classify(record, counts):
     if comm in ("sshd", "sshd-session") or identifier == "sshd":
         if message.startswith(("Failed ", "Invalid user ", "error: PAM:", "maximum authentication attempts exceeded")) or "authentication failure" in message:
             counts["ssh_failure"] += 1
-        if message.startswith("Accepted "):
+        if message.startswith("Accepted ") and not from_lan(message, lan):
             counts["ssh_success"] += 1
     if comm == "sudo" or identifier == "sudo":
         counts["sudo"] += 1
 
 
-def observe_journal(state, observations, runner=bounded_command):
+def observe_journal(state, observations, runner=bounded_command, lan=()):
     counts = dict.fromkeys(EVENT_KEYS, 0)
     try:
         if os.geteuid() != 0 and grp.getgrnam("systemd-journal").gr_gid not in os.getgroups():
@@ -480,7 +503,7 @@ def observe_journal(state, observations, runner=bounded_command):
                 fingerprint = hashlib.sha256(cursor.encode()).hexdigest()[:16]
                 if cursor == state["cursor"] or fingerprint in state["recent_cursors"]:
                     continue
-                classify(record, counts)
+                classify(record, counts, lan)
                 state["recent_cursors"].append(fingerprint)
                 state["recent_cursors"] = state["recent_cursors"][-1024:]
                 state["cursor"] = cursor
@@ -496,7 +519,7 @@ def observe_journal(state, observations, runner=bounded_command):
             observations[key] = min(COUNT_MAX, count)
 
 
-def collect(state, directory, runner=bounded_command):
+def collect(state, directory, runner=bounded_command, lan=()):
     observations = {}
     observe_units(state, observations, runner)
     observations["health"] = int(not check_loopback(8787, "/healthz"))
@@ -506,7 +529,7 @@ def collect(state, directory, runner=bounded_command):
         observations["disk"] = int(disk.free < 512 * 1024 * 1024 or disk.free < disk.total * 0.05)
     except OSError:
         observations["disk"] = 1
-    observe_journal(state, observations, runner)
+    observe_journal(state, observations, runner, lan)
     return observations
 
 
@@ -594,6 +617,7 @@ def main(argv=None):
         directory = os.environ.get("SEKKA_MONITOR_STATE_DIR", "")
         if not numeric_id(recipient) or not token_file or not directory or not os.path.isabs(directory):
             raise MonitorError("Set numeric DISCORD_ALERT_USER_ID, DISCORD_TOKEN_FILE and absolute SEKKA_MONITOR_STATE_DIR")
+        lan = lan_networks(os.environ.get("SEKKA_MONITOR_LAN_NETWORKS", ""))
         with Store(directory) as store:
             discord = Discord(read_token(token_file), recipient)
             if args.smoke:
@@ -602,7 +626,7 @@ def main(argv=None):
                 return 0
             state = store.load()
             now = time.time()
-            observations = collect(state, directory)
+            observations = collect(state, directory, lan=lan)
             update_incidents(state, observations, now)
             queue_pending(state, now)
             store.save(state)

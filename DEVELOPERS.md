@@ -163,6 +163,7 @@ Configure a NixOS host with the root flake's module and package:
     enable = true;
     package = inputs.sekka.packages.x86_64-linux.sekka-discord;
     alertUserId = "869288104790458388";
+    lanNetworks = [ "192.168.1.0/24" ];
     credentialsDirectory = "/etc/sekka-discord";
   };
 }
@@ -261,7 +262,12 @@ notifications channel. It reports:
 - Bot/tunnel inactivity, failed loopback health/readiness checks and automatic
   restarts.
 - Rejected webhooks, denied egress, SSH authentication failures/successes and
-  sudo activity.
+  sudo activity. Successful SSH logins from `lanNetworks` prefixes are not
+  reported; failures from them still are. Loopback logins are always reported,
+  because a Cloudflare connector forwarding SSH arrives from loopback, as are
+  origins sshd logs as host names. IPv6 LAN peers have global addresses: list the
+  delegated prefix too if they connect over IPv6, and expect reports to resume
+  if the ISP changes it.
 - Catch-up/dispatch errors and unresolved Discord sends.
 - Less than 512 MiB or 5% free space on the state filesystem.
 - Journal coverage failures, retention gaps and collection backlogs.
