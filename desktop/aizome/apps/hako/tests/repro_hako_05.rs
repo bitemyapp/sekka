@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use hako::fsops::transfer::{restore, trash_items};
 use hako::fsops::trash::Trash;
 use hako::fsops::undo::{History, Record, Step, invert};
-use hako::fsops::{Asker, Choice, Conflict, Control, Env, ErrorChoice, Failure, ReplaceAll, Replacing};
+use hako::fsops::{Asker, Choice, Conflict, Control, Env, ErrorChoice, Failure, JobKey, ReplaceAll, Replacing};
 
 /// A folder of the test's own under the private TMPDIR, removed when dropped.
 struct Tmp(PathBuf);
@@ -50,7 +50,7 @@ impl Asker for Replacer {
 
 fn replace_all() -> Replacer {
     let agreed = aizome_kit::agree::testing::agreed(Replacing { job: 1, target: PathBuf::new(), all: true });
-    Replacer(ReplaceAll::new(agreed, 1).expect("an \"Apply to all\" Replace for job 1"))
+    Replacer(ReplaceAll::new(agreed, &JobKey::for_tests(1)).expect("an \"Apply to all\" Replace for job 1"))
 }
 
 /// A Trash entirely inside the test folder (no mount points looked at).

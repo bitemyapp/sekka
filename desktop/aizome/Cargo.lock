@@ -191,6 +191,7 @@ name = "aizome-hako"
 version = "0.1.0"
 dependencies = [
  "aizome-config",
+ "aizome-hako",
  "aizome-ipc",
  "aizome-kit",
  "aizome-search",
