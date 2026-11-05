@@ -715,7 +715,7 @@ index 36790ec..0b86cb3 100644
  
  impl FromResidual<ControlFlow<Self, Infallible>> for DownloadResult {
 diff --git a/remote_execution/oss/re_grpc/src/client.rs b/remote_execution/oss/re_grpc/src/client.rs
-index adc3a30..050da26 100644
+index adc3a30..c412866 100644
 --- a/remote_execution/oss/re_grpc/src/client.rs
 +++ b/remote_execution/oss/re_grpc/src/client.rs
 @@ -125,16 +125,91 @@ fn tstatus_ok() -> TStatus {
@@ -815,7 +815,56 @@ index adc3a30..050da26 100644
  }
  
  fn ttimestamp_to(ts: &TTimestamp) -> ::prost_types::Timestamp {
-@@ -416,15 +491,23 @@ impl InjectHeadersInterceptor {
+@@ -243,6 +318,26 @@ pub struct REClientBuilder;
+ 
+ impl REClientBuilder {
+     pub async fn build_and_connect(opts: &Buck2OssReConfiguration) -> anyhow::Result<REClient> {
++        let missing_address = |message: &str| REClientError {
++            code: TCode::INVALID_ARGUMENT,
++            message: message.to_owned(),
++            group: TCodeReasonGroup::UNKNOWN,
++        };
++        // Missing endpoints cannot recover through connection retries. Validate
++        // all three before reading TLS files or contacting the capabilities API.
++        let engine_address = opts
++            .engine_address
++            .as_ref()
++            .ok_or_else(|| missing_address("No engine address"))?;
++        let cas_address = opts
++            .cas_address
++            .clone()
++            .ok_or_else(|| missing_address("No CAS address"))?;
++        let action_cache_address = opts
++            .action_cache_address
++            .clone()
++            .ok_or_else(|| missing_address("No action cache address"))?;
++
+         // Create channel config once (reads TLS files)
+         let channel_config = ChannelConfig::new(opts)
+             .await
+@@ -250,7 +345,6 @@ impl REClientBuilder {
+ 
+         // Create a single channel for fetching capabilities. Other channels are created
+         // on-demand through the connection pool.
+-        let engine_address = opts.engine_address.as_ref().context("No engine address")?;
+         let capabilities_channel = create_channel(&channel_config, engine_address)
+             .context("Error creating Capabilities channel")?;
+ 
+@@ -310,13 +404,6 @@ impl REClientBuilder {
+             None
+         };
+ 
+-        // Extract addresses
+-        let cas_address = opts.cas_address.clone().context("No CAS address")?;
+-        let action_cache_address = opts
+-            .action_cache_address
+-            .clone()
+-            .context("No action cache address")?;
+-
+         // Create connection pool
+         let min_connections = opts.min_connections.unwrap_or(1).max(1);
+         let max_connections = opts.max_connections.unwrap_or(100).max(min_connections);
+@@ -416,15 +503,23 @@ impl InjectHeadersInterceptor {
                  let value = substitute_env_vars(&h.value)?;
  
                  let key = MetadataKey::<metadata::Ascii>::from_bytes(key.as_bytes())
@@ -843,7 +892,7 @@ index adc3a30..050da26 100644
  
          Ok(Self {
              headers: Arc::new(headers),
-@@ -453,9 +536,9 @@ enum DigestRemoteState {
+@@ -453,9 +548,9 @@ enum DigestRemoteState {
  }
  
  struct FindMissingCache {
@@ -856,7 +905,7 @@ index adc3a30..050da26 100644
      ttl: Duration,
      last_check: Instant,
  }
-@@ -468,14 +551,28 @@ impl FindMissingCache {
+@@ -468,14 +563,28 @@ impl FindMissingCache {
          }
      }
  
@@ -888,7 +937,7 @@ index adc3a30..050da26 100644
      }
  }
  
-@@ -638,10 +735,17 @@ fn normalize_re_error(err: anyhow::Error) -> anyhow::Error {
+@@ -638,10 +747,17 @@ fn normalize_re_error(err: anyhow::Error) -> anyhow::Error {
      }) else {
          return err;
      };
@@ -907,7 +956,7 @@ index adc3a30..050da26 100644
      };
      err.context(re_error)
  }
-@@ -846,12 +950,7 @@ impl REClient {
+@@ -846,12 +962,7 @@ impl REClient {
                      .context("Missing `result` when message was `done`")?
                  {
                      OpResult::Error(rpc_status) => {
@@ -921,7 +970,7 @@ index adc3a30..050da26 100644
                      }
                      OpResult::Response(any) => {
                          let execute_response_grpc: GExecuteResponse =
-@@ -1070,7 +1169,9 @@ impl REClient {
+@@ -1070,7 +1181,9 @@ impl REClient {
              {
                  let mut find_missing_cache = self.find_missing_cache.lock().unwrap();
                  for digest in digest_iter.by_ref() {
@@ -932,7 +981,7 @@ index adc3a30..050da26 100644
                          // We have our final result already cached
                          remote_results.insert(digest.clone(), rs);
                      } else {
-@@ -1967,7 +2068,14 @@ fn substitute_env_vars_impl(
+@@ -1967,7 +2080,14 @@ fn substitute_env_vars_impl(
      for mat in ENV_REGEX.find_iter(s) {
          out.push_str(&s[last_idx..mat.start()]);
          let var = &mat.as_str()[1..];
@@ -948,7 +997,7 @@ index adc3a30..050da26 100644
          out.push_str(&val);
          last_idx = mat.end();
      }
-@@ -1989,6 +2097,160 @@ mod tests {
+@@ -1989,6 +2109,160 @@ mod tests {
  
      use super::*;
  
@@ -1109,10 +1158,36 @@ index adc3a30..050da26 100644
      // Exercise h2's actual frame handling: Error::from(Reason) does not retain
      // whether an error was a GOAWAY, a reset, or remotely initiated.
      async fn remote_h2_error(reason: h2::Reason, reset: bool) -> h2::Error {
-@@ -3243,6 +3505,54 @@ mod tests {
+@@ -3243,6 +3517,80 @@ mod tests {
          Ok(())
      }
  
++    #[tokio::test]
++    async fn test_missing_addresses_are_configuration_errors() {
++        for missing in 0..3 {
++            let mut opts = Buck2OssReConfiguration {
++                engine_address: Some("invalid endpoint".to_owned()),
++                cas_address: Some("invalid endpoint".to_owned()),
++                action_cache_address: Some("invalid endpoint".to_owned()),
++                ..Default::default()
++            };
++            match missing {
++                0 => opts.engine_address = None,
++                1 => opts.cas_address = None,
++                2 => opts.action_cache_address = None,
++                _ => unreachable!(),
++            }
++            let error = REClientBuilder::build_and_connect(&opts)
++                .await
++                .err()
++                .expect("missing endpoint must fail before connecting");
++            assert_eq!(
++                error.downcast_ref::<REClientError>().unwrap().code,
++                TCode::INVALID_ARGUMENT,
++            );
++        }
++    }
++
 +    #[test]
 +    fn test_header_credentials_are_sensitive() {
 +        let secret = "private-header-credential";

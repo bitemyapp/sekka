@@ -7,6 +7,7 @@ resolver 3 host/target features, build scripts, profiles and dependency renames.
 """
 import argparse
 import hashlib
+from collections import deque
 import json
 import os
 from pathlib import Path
@@ -143,6 +144,50 @@ def lto_modes(graph):
         modes[index] = mode
         pending.extend((dep["index"], mode) for dep in unit["dependencies"])
     return modes
+
+
+def scheduling_priorities(graph):
+    """Longest remaining dependency path to any root in Cargo's complete graph.
+
+    A root has rank zero unless another root depends on it. Walking consumer
+    edges in reverse gives dependencies larger ranks, independent of names or
+    source paths. Ranks are scheduling hints, not part of unit/source identity
+    or the serialized compiler action; selecting fewer roots keeps static ranks.
+    """
+    units = graph["units"]
+    count = len(units)
+    consumers = [0] * count
+    dependencies = []
+
+    def checked_index(index):
+        if type(index) is not int or not 0 <= index < count:
+            raise ValueError("Cargo unit graph index out of range")
+        return index
+
+    for unit in units:
+        edges = [checked_index(dep["index"]) for dep in unit["dependencies"]]
+        dependencies.append(edges)
+        for dependency in edges:
+            consumers[dependency] += 1
+    priorities = [-1] * count
+    for root in graph["roots"]:
+        priorities[checked_index(root)] = 0
+    pending = deque(index for index, degree in enumerate(consumers) if degree == 0)
+    visited = 0
+    while pending:
+        index = pending.popleft()
+        visited += 1
+        for dependency in dependencies[index]:
+            if priorities[index] >= 0:
+                priorities[dependency] = max(priorities[dependency], priorities[index] + 1)
+            consumers[dependency] -= 1
+            if consumers[dependency] == 0:
+                pending.append(dependency)
+    if visited != count:
+        raise ValueError("Cargo unit graph unexpectedly cyclic")
+    if any(priority < 0 for priority in priorities):
+        raise ValueError("Cargo unit graph contains units unreachable from its roots")
+    return priorities
 
 
 def units_from_graph(graph, packages, meta):
@@ -311,6 +356,7 @@ def main():
                     command += ["--exclude", package["name"]]
                     excluded_lto_packages.add(package["name"])
         graph = cargo_command(tools, vendor, command, root)
+        priorities = scheduling_priorities(graph)
         units, keys = units_from_graph(graph, packages, meta)
         graph_path = "build/buck2/graph/" + profile
         text = GENERATED + 'load("//build/buck2:units.bzl", "cargo_unit")\n\n'
@@ -334,7 +380,7 @@ def main():
                     package = packages[pkgid]
                     if not package["external"] and package["id"] != spec["package"]["id"]:
                         extras[package["path"]] = sources[pkgid]
-            text += rule("cargo_unit", name=spec["key"], spec=canonical(spec), source=sources[graph["units"][index]["pkg_id"]], deps=deps, extra_sources=extras, visibility=["PUBLIC"])
+            text += rule("cargo_unit", name=spec["key"], spec=canonical(spec), source=sources[graph["units"][index]["pkg_id"]], deps=deps, extra_sources=extras, priority=priorities[index], visibility=["PUBLIC"])
             discovery[profile].append({"label": "//" + graph_path + ":" + spec["key"], "package": spec["package"]["name"], "package_id": spec["package"]["id"], "target": spec["target"]["name"], "kind": spec["target"]["kind"], "mode": spec["mode"], "filename": spec["filename"], "features": spec["features"], "dependencies": ["//" + graph_path + dep for dep in deps]})
         files[graph_path + "/BUCK"] = text
         for index in sorted(graph["roots"], key=lambda item: units[item]["key"]):

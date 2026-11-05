@@ -9,8 +9,40 @@ import sys
 import tempfile
 import unittest
 
-from generate import outside_data, package_records, units_from_graph
+from generate import outside_data, package_records, scheduling_priorities, units_from_graph
 from action import OUTPUT_TOKEN, ROOT_TOKEN, relocate, write_dependencies
+
+
+class SchedulingContract(unittest.TestCase):
+    def graph(self, edges, roots):
+        return {"units": [{"dependencies": [{"index": index} for index in deps]} for deps in edges], "roots": roots}
+
+    def test_reverse_dag_longest_path_and_root_subset(self):
+        graph = self.graph([[2], [3], [3], []], [0, 1])
+        original = json.dumps(graph, sort_keys=True)
+        self.assertEqual(scheduling_priorities(graph), [0, 0, 1, 2])
+        self.assertEqual(json.dumps(graph, sort_keys=True), original)
+        # A unit can itself be requested and still feed a longer root path.
+        self.assertEqual(scheduling_priorities(self.graph([[1], [2], []], [0, 1])), [0, 1, 2])
+
+    def test_graph_indices_cycles_and_reachability_are_validated(self):
+        for graph in [
+            self.graph([[1], [0]], [0]),
+            self.graph([[-1]], [0]),
+            self.graph([[1]], [0]),
+            self.graph([[]], [True]),
+            self.graph([[]], [1]),
+            self.graph([[], []], [0]),
+        ]:
+            with self.subTest(graph=graph), self.assertRaises(ValueError):
+                scheduling_priorities(graph)
+
+    def test_names_and_source_paths_do_not_affect_rank(self):
+        graph = self.graph([[1, 2], [2], []], [0])
+        expected = scheduling_priorities(graph)
+        for index, unit in enumerate(graph["units"]):
+            unit.update(pkg_id="arbitrary-" + str(index), target={"name": "renamed", "src_path": "/other/source"})
+        self.assertEqual(scheduling_priorities(graph), expected)
 
 
 class CompilerContract(unittest.TestCase):
@@ -168,27 +200,30 @@ export_file(name = "run.py", visibility = ["PUBLIC"])
             )
             trace_file = Path(temporary) / "build-id"
             try:
-                for relative, contents, expected, executions in [
+                for trial, (relative, contents, expected, executions) in enumerate([
                     (None, None, initial, 1),
                     ("icons/sample.svg", changed, changed, 1),
                     ("library/src/unused.rs", "// An unrelated target changed.\n", changed, 0),
                     ("unrelated/secret.txt", "still not an input\n", changed, 0),
                     ("library/src/part with spaces.rs", 'pub fn prefix() -> &\'static str { "module changed: " }\n', "module changed: " + changed, 1),
-                ]:
+                ]):
                     if relative is not None:
                         (root / relative).write_text(contents)
+                    event_file = Path(temporary) / f"build-{trial}.json-lines"
                     outputs = json.loads(self.checked(
-                        [engine, "build", "//:unit", "--show-full-json-output", "--write-build-id", str(trace_file), "--config-file", str(environment.with_name("buckconfig"))],
+                        [engine, "build", "//:unit", "--show-full-json-output", "--write-build-id", str(trace_file), "--event-log", str(event_file), "--config-file", str(environment.with_name("buckconfig"))],
                         cwd=root, env=env,
                     ))
                     executable = next(iter(outputs.values()))
                     self.assertEqual(self.checked([executable], cwd=root, env=env), expected)
                     # Local symlinks can hide a missing sibling input. A real
                     # resource edit must invalidate the action, not reuse stale bytes.
-                    # Select this exact invocation, not filesystem-dependent
-                    # "latest" log ordering for several builds in one second.
+                    # Retain this invocation explicitly rather than depending
+                    # on the daemon's rotating event-log index.
                     trace_id = trace_file.read_text().strip()
-                    commands = self.checked([engine, "log", "what-ran", "--trace-id", trace_id, "--format", "json"], cwd=root, env=env)
+                    events = [json.loads(line) for line in event_file.read_text().splitlines()]
+                    self.assertEqual({item["Event"]["trace_id"] for item in events if "Event" in item}, {trace_id})
+                    commands = self.checked([engine, "log", "what-ran", str(event_file), "--format", "json"], cwd=root, env=env)
                     commands = [json.loads(line) for line in commands.splitlines()]
                     commands = [command for command in commands if command["reproducer"]["executor"] != "LocalDepFileCache"]
                     self.assertEqual(len(commands), executions, (relative, trace_id, commands))

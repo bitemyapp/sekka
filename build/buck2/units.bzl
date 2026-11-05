@@ -83,6 +83,7 @@ def _unit_impl(ctx):
         ),
         category = "cargo_" + spec["mode"].replace("-", "_"),
         identifier = spec["package"]["name"] + "-" + spec["target"]["name"],
+        priority = ctx.attrs.priority,
         allow_cache_upload = True,
         dep_files = dep_files,
         allow_dep_file_cache_upload = True,
@@ -110,6 +111,7 @@ cargo_unit = rule(
     impl = _unit_impl,
     attrs = {
         "spec": attrs.string(),
+        "priority": attrs.int(default = 0),
         "source": attrs.dep(providers = [SourceInfo]),
         "deps": attrs.list(attrs.dep(providers = [CargoUnitInfo]), default = []),
         "extra_sources": attrs.dict(attrs.string(), attrs.dep(providers = [SourceInfo]), default = {}),

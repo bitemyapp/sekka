@@ -356,6 +356,15 @@ caching, not Cargo's mutable incremental-codegen cache. Dependency paths that
 cross a directory symlink with `..` are rejected when lexical normalization
 would name a different file, rather than silently caching the wrong inputs.
 
+Ready local compiler actions are prioritized by their longest reverse
+dependency path in Cargo's resolved unit graph. A dependency can retain a
+higher rank even when it is also a requested root. Higher-ranked ready actions
+pass queued lower-ranked work; running work is never preempted, resource
+weights remain unchanged, and equal-priority admission follows the configured
+host-sharing policy. This scheduling hint does not enter compiler action
+identity or change the remote scheduler's policy. The native queued-process
+smoke proves ordering and permit retention, not an end-to-end latency win.
+
 Portable Buck tests deliberately use private home, runtime and D-Bus paths.
 They do not certify integration with the host's user manager, even when
 explicit environment arguments name its bus. The real `through_systemd`
@@ -377,6 +386,9 @@ reflink without allocating a second physical extent generation. These hints
 retain no file data; missing, changed, symlinked or nonregular paths are
 discarded. Opens are nonblocking and verification reads are bounded by the
 expected artifact size. Mutable daemon state remains worktree-local.
+LRU and weak-view updates share a durable SQLite transaction rather than
+committing each update separately. Object accounting still commits before
+canonical publication, and file/directory synchronization remains enabled.
 Private cache configuration, TLS material and store settings participate in
 daemon startup identity so a long-lived daemon does not silently retain old
 credentials or settings. Keep the same `--isolation-dir` across cooperating
@@ -391,14 +403,27 @@ allocator's configure step probes the builder CPU and emits different pointer
 layouts on 48-bit and 57-bit hosts. Source-generation ordering is deterministic
 as well; disabling incremental compilation alone is insufficient.
 
+Both backend toolchains apply `nix/patches/rustc-reproducible-hygiene.patch`
+to the root-locked compiler. It encodes syntax contexts with per-encoder
+identifiers rather than parallel-session interning IDs, which otherwise make
+identical compilations produce different crate metadata. The normal sysroot,
+targets and compiler development outputs are retained; Clippy and rustfmt
+are rebuilt against that compiler. Cargo and rust-analyzer remain root-locked
+and unchanged. Aizome's ordinary package and development shell are not
+switched to this patched compiler. Focused qualification covers identical
+rlib/metadata bytes at 1/8/16 frontend threads, macro hygiene, incremental
+replay, compiler compatibility and actual Clippy/rustfmt/rustdoc execution;
+it is not a whole-workspace performance or whole-Rust qualification.
+
 The native cache path makes authoritative CAS presence checks and rejects
 cached results whose required outputs are missing. Rejected action-cache
 results remain rejected across depfile verification and hybrid fallback.
 Typed missing-content failures use Buck's existing bounded, single-restart
 recovery; this repository explicitly enables the restarter. Authentication,
 permission and invalid-configuration failures are not transient connection
-failures. Recovery qualification distinguishes real service eviction from
-native fault-injection checks of the retry bound.
+failures. Missing engine, CAS or action-cache endpoints are rejected before
+TLS/network setup rather than retried. Recovery qualification distinguishes
+real service eviction from native fault-injection checks of the retry bound.
 
 The backend depends on the pinned Cargo unit-graph API and its LTO planning
 semantics; changing Cargo requires requalification, not just a version bump.

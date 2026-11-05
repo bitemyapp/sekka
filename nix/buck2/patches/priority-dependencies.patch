@@ -1,0 +1,24 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 78f404a..78afa44 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -6202,6 +6202,7 @@ dependencies = [
+  "dashmap 6.2.1",
+  "futures-intrusive",
+  "pagable",
++ "parking_lot 0.12.5",
+  "starlark_map",
+ ]
+ 
+diff --git a/host_sharing/Cargo.toml b/host_sharing/Cargo.toml
+index 72ade36..96f8a53 100644
+--- a/host_sharing/Cargo.toml
++++ b/host_sharing/Cargo.toml
+@@ -13,6 +13,7 @@ anyhow.workspace = true
+ dashmap.workspace = true
+ futures-intrusive.workspace = true
+ pagable.workspace = true
++parking_lot.workspace = true
+ starlark_map.workspace = true
+ 
+ [lints]
