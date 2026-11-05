@@ -6,6 +6,11 @@
 //! composing, how far the text is scrolled, its undo history — lives in
 //! its state, under its key.
 //!
+//! A password field is a type of its own, [`PasswordField`]: its
+//! [`Mode`] decides what it draws, what leaves it and what input methods
+//! are told, and it keeps only a count of what they compose
+//! ([`Masked`](crate::composing::Masked)).
+//!
 //! Keys are macOS's with ❖ as command: ←/→ by character, ⌥←/→ by word,
 //! ❖←/→ (and Home/End) to the ends, ⇧ to extend; ⌫ and ⌦ by character,
 //! with ⌥ by word and ❖ to the start; ❖A, ❖C, ❖X, ❖V, ❖Z, ⇧❖Z. Return
@@ -18,9 +23,10 @@ use std::time::{Duration, Instant};
 
 use sidestep_ui::{Cursor, Ime, Key, NamedKey, PointerButton, TextLayout, Wrap};
 
+use crate::composing::{Focus, Heard, Kept as _, Mode, Place, Plain, Secret};
 use crate::draw;
 use crate::editing::{floor, next_char, next_word, prev_char, prev_word, word_at};
-use crate::element::{Common, Element, MsgFn, MsgMap, RawElement};
+use crate::element::{Common, Element, Layoutable, MsgFn, MsgMap, RawElement};
 use crate::hash::PaintHasher;
 use crate::icons::Icon;
 use crate::layout::{Constraints, Length, Point, Rect, Size};
@@ -35,26 +41,31 @@ use crate::widget::{
 pub(crate) const BLINK: Duration = Duration::from_millis(530);
 /// Typing within this of the last keystroke undoes with it.
 const GROUP: Duration = Duration::from_millis(1000);
-const BULLET: char = '•';
 
 /// One line of text: `text_field(&self.name).placeholder("Name").on_change(Msg::Name)`.
-pub struct TextField<Msg> {
+pub struct TextField<Msg, M = Plain> {
     pub(crate) common: Common,
     value: Arc<str>,
     placeholder: Option<Arc<str>>,
     on_change: Option<MsgMap<String>>,
     on_submit: Option<MsgFn>,
     on_blur: Option<MsgFn>,
-    password: bool,
     search: bool,
     error: Option<Arc<str>>,
     enabled: bool,
     mono: bool,
     select_on_focus: Option<Range<usize>>,
-    _m: PhantomData<fn() -> Msg>,
+    _m: PhantomData<fn() -> (Msg, M)>,
 }
 
-crate::builder!(TextField);
+/// A password field ([`TextField::password`]).
+pub type PasswordField<Msg> = TextField<Msg, Secret>;
+
+impl<Msg, M: Mode> Layoutable for TextField<Msg, M> {
+    fn common_mut(&mut self) -> &mut Common {
+        &mut self.common
+    }
+}
 
 pub fn text_field<Msg>(value: &str) -> TextField<Msg> {
     TextField {
@@ -64,7 +75,6 @@ pub fn text_field<Msg>(value: &str) -> TextField<Msg> {
         on_change: None,
         on_submit: None,
         on_blur: None,
-        password: false,
         search: false,
         error: None,
         enabled: true,
@@ -79,7 +89,7 @@ pub fn search_field<Msg>(value: &str) -> TextField<Msg> {
     TextField { search: true, placeholder: Some("Search".into()), ..text_field(value) }
 }
 
-impl<Msg: Clone + Send + 'static> TextField<Msg> {
+impl<Msg: Clone + Send + 'static, M: Mode> TextField<Msg, M> {
     pub fn on_change(mut self, f: impl Fn(String) -> Msg + 'static) -> Self {
         self.on_change = Some(MsgMap::new(f));
         self
@@ -100,14 +110,67 @@ impl<Msg: Clone + Send + 'static> TextField<Msg> {
 }
 
 impl<Msg> TextField<Msg> {
-    pub fn placeholder(mut self, text: impl Into<Arc<str>>) -> Self {
-        self.placeholder = Some(text.into());
-        self
+    /// A password field: dots for the characters, nothing copies or drags
+    /// out, input methods are told it's a password, and of what they
+    /// compose it keeps only how many characters, drawn as dots.
+    ///
+    /// It's a field of another type, so it can't be kept or drawn as a
+    /// plain one:
+    ///
+    /// ```compile_fail,E0308
+    /// use aizome_kit::widgets::text_field::{text_field, TextField};
+    /// let f: TextField<()> = text_field("").password();
+    /// ```
+    ///
+    /// ```
+    /// use aizome_kit::element::Element;
+    /// use aizome_kit::widgets::text_field::{text_field, PasswordField};
+    /// let f: PasswordField<()> = text_field("").password().placeholder("Password");
+    /// let _: Element<()> = f.into();
+    /// ```
+    pub fn password(self) -> PasswordField<Msg> {
+        let TextField {
+            common,
+            value,
+            placeholder,
+            on_change,
+            on_submit,
+            on_blur,
+            search,
+            error,
+            enabled,
+            mono,
+            select_on_focus,
+            _m,
+        } = self;
+        TextField {
+            common,
+            value,
+            placeholder,
+            on_change,
+            on_submit,
+            on_blur,
+            search,
+            error,
+            enabled,
+            mono,
+            select_on_focus,
+            _m: PhantomData,
+        }
     }
 
-    /// Dots for the characters; nothing copies out.
-    pub fn password(mut self) -> Self {
-        self.password = true;
+    /// A password field if `secret`, else this one: for a field shown or
+    /// hidden as the person asks ("Show password"), or as the network
+    /// says. Either way it's the same element to the kit, so it keeps its
+    /// caret and undo history when it changes.
+    pub fn password_when(self, secret: bool) -> MaybePassword<Msg> {
+        if secret { MaybePassword::Password(self.password()) } else { MaybePassword::Plain(self) }
+    }
+}
+
+impl<Msg, M: Mode> TextField<Msg, M> {
+    pub fn placeholder(mut self, text: impl Into<Arc<str>>) -> Self {
+        self.placeholder = Some(text.into());
         self
     }
 
@@ -141,30 +204,58 @@ impl<Msg> TextField<Msg> {
         self.select_on_focus = Some(range);
         self
     }
-}
 
-impl<Msg> From<TextField<Msg>> for Element<Msg> {
-    fn from(f: TextField<Msg>) -> Element<Msg> {
+    fn widget(self) -> (FieldWidget<M>, Common) {
         let w = FieldWidget {
-            value: f.value,
-            placeholder: f.placeholder,
-            on_change: f.on_change,
-            on_submit: f.on_submit,
-            on_blur: f.on_blur,
-            password: f.password,
-            search: f.search,
-            error: f.error,
-            enabled: f.enabled,
-            mono: f.mono,
-            select_on_focus: f.select_on_focus,
+            value: self.value,
+            placeholder: self.placeholder,
+            on_change: self.on_change,
+            on_submit: self.on_submit,
+            on_blur: self.on_blur,
+            search: self.search,
+            error: self.error,
+            enabled: self.enabled,
+            mono: self.mono,
+            select_on_focus: self.select_on_focus,
             laid: None,
             shown: String::new(),
             caret: 0,
             sel: 0..0,
             preedit: 0..0,
             scroll: 0.0,
+            _mode: PhantomData,
         };
-        Element::from_raw(RawElement::new(w, f.common, Vec::new()))
+        (w, self.common)
+    }
+}
+
+impl<Msg> From<TextField<Msg>> for Element<Msg> {
+    fn from(f: TextField<Msg>) -> Element<Msg> {
+        let (w, common) = f.widget();
+        Element::from_raw(RawElement::new(FieldNode::Plain(w), common, Vec::new()))
+    }
+}
+
+impl<Msg> From<PasswordField<Msg>> for Element<Msg> {
+    fn from(f: PasswordField<Msg>) -> Element<Msg> {
+        let (w, common) = f.widget();
+        Element::from_raw(RawElement::new(FieldNode::Secret(w), common, Vec::new()))
+    }
+}
+
+/// A text field that's a password field or not as the program decides
+/// ([`TextField::password_when`]).
+pub enum MaybePassword<Msg> {
+    Plain(TextField<Msg>),
+    Password(PasswordField<Msg>),
+}
+
+impl<Msg> From<MaybePassword<Msg>> for Element<Msg> {
+    fn from(f: MaybePassword<Msg>) -> Element<Msg> {
+        match f {
+            MaybePassword::Plain(f) => f.into(),
+            MaybePassword::Password(f) => f.into(),
+        }
     }
 }
 
@@ -178,21 +269,22 @@ enum EditKind {
 /// How far a press on the selection moves before it drags the text out.
 const DRAG_SLOP: f64 = 4.0;
 
-/// What a field remembers between views.
+/// What a field remembers between views, whatever its mode. What goes
+/// with the focus (the caret's blink, what an input method is composing)
+/// is its mode's [`Focus`], kept beside it.
 #[derive(Default)]
 pub(crate) struct FieldState {
     caret: usize,
     anchor: usize,
     scroll: f64,
-    preedit: String,
-    preedit_caret: Option<usize>,
-    blink_off: bool,
+    /// The text as the field last saw it or set it: another is text the
+    /// program set.
+    seen: String,
     selecting: bool,
     /// A press inside the selection, where and at which offset: moved far
     /// enough, the selected text is dragged out; released, the caret goes
     /// there.
     drag_text: Option<(Point, usize)>,
-    focused: bool,
     history: Vec<(String, usize, usize)>,
     future: Vec<(String, usize, usize)>,
     last_edit: Option<(Instant, EditKind)>,
@@ -200,13 +292,101 @@ pub(crate) struct FieldState {
     primed: bool,
 }
 
-struct FieldWidget {
+/// The widget the kit keeps for a text field. The kit tells elements apart
+/// by their widget's type, so it's one type for both modes: a field that
+/// turns into a password field ("Show password" unticked) is the same
+/// element, and keeps its caret, undo history and focus. Only
+/// [`From<PasswordField>`](Element) makes the secret one.
+enum FieldNode {
+    Plain(FieldWidget<Plain>),
+    Secret(FieldWidget<Secret>),
+}
+
+impl FieldNode {
+    fn get(&self) -> &dyn Widget {
+        match self {
+            FieldNode::Plain(w) => w,
+            FieldNode::Secret(w) => w,
+        }
+    }
+
+    fn get_mut(&mut self) -> &mut dyn Widget {
+        match self {
+            FieldNode::Plain(w) => w,
+            FieldNode::Secret(w) => w,
+        }
+    }
+}
+
+/// Every method [`FieldWidget`] has of its own, passed to the mode's.
+impl Widget for FieldNode {
+    fn name(&self) -> &'static str {
+        self.get().name()
+    }
+
+    fn layout(&mut self, cx: &mut LayoutCx, bc: Constraints) -> Size {
+        self.get_mut().layout(cx, bc)
+    }
+
+    fn paint(&self, cx: &mut PaintCx) {
+        self.get().paint(cx)
+    }
+
+    fn hash(&self, h: &mut PaintHasher) {
+        self.get().hash(h)
+    }
+
+    fn hit(&self) -> bool {
+        self.get().hit()
+    }
+
+    fn hover_paints(&self) -> bool {
+        self.get().hover_paints()
+    }
+
+    fn cursor(&self) -> Option<Cursor> {
+        self.get().cursor()
+    }
+
+    fn focusable(&self) -> Focusable {
+        self.get().focusable()
+    }
+
+    fn focus_ring(&self) -> FocusRing {
+        self.get().focus_ring()
+    }
+
+    fn event(&mut self, cx: &mut EventCx, event: &Event) -> Status {
+        self.get_mut().event(cx, event)
+    }
+
+    fn command(&mut self, cx: &mut EventCx, command: EditCommand) -> bool {
+        self.get_mut().command(cx, command)
+    }
+
+    fn can(&self, state: crate::widget::StateView, command: EditCommand) -> bool {
+        self.get().can(state, command)
+    }
+
+    fn selection(&self, state: crate::widget::StateView) -> Option<String> {
+        self.get().selection(state)
+    }
+
+    fn semantics(&self) -> Option<Semantics> {
+        self.get().semantics()
+    }
+
+    fn text(&self) -> Option<&str> {
+        self.get().text()
+    }
+}
+
+struct FieldWidget<M> {
     value: Arc<str>,
     placeholder: Option<Arc<str>>,
     on_change: Option<MsgMap<String>>,
     on_submit: Option<MsgFn>,
     on_blur: Option<MsgFn>,
-    password: bool,
     search: bool,
     error: Option<Arc<str>>,
     enabled: bool,
@@ -220,9 +400,10 @@ struct FieldWidget {
     sel: Range<usize>,
     preedit: Range<usize>,
     scroll: f64,
+    _mode: PhantomData<fn() -> M>,
 }
 
-impl FieldWidget {
+impl<M: Mode> FieldWidget<M> {
     fn spec(&self, t: &Theme, color: sidestep_ui::Color) -> TextSpec {
         let f = if self.mono { FontSpec::mono(t.metrics.body) } else { FontSpec::ui(t.metrics.body) };
         TextSpec { wrap: Wrap::None, ..TextSpec::new(f, color) }
@@ -251,22 +432,13 @@ impl FieldWidget {
 
     /// A value offset as an offset in the text shown.
     fn shown_offset(&self, value_offset: usize, preedit: &str, caret: usize) -> usize {
-        let base = if self.password {
-            self.value[..value_offset.min(self.value.len())].chars().count() * BULLET.len_utf8()
-        } else {
-            value_offset
-        };
+        let base = M::shown_len(&self.value[..value_offset.min(self.value.len())]);
         if !preedit.is_empty() && value_offset > caret { base + preedit.len() } else { base }
     }
 
     /// An offset in the text shown as a value offset.
     fn value_offset(&self, shown: usize) -> usize {
-        if self.password {
-            let n = shown / BULLET.len_utf8();
-            self.value.char_indices().nth(n).map_or(self.value.len(), |(i, _)| i)
-        } else {
-            floor(&self.value, shown)
-        }
+        M::value_offset(&self.value, shown)
     }
 
     fn hit(&self, p: Point, t: &Theme) -> usize {
@@ -284,7 +456,7 @@ impl FieldWidget {
     fn on_selection(&self, st: &FieldState, p: Point) -> bool {
         let r = Self::selection(st);
         let r = r.start.min(self.value.len())..r.end.min(self.value.len());
-        if self.password || r.is_empty() {
+        if M::exposed(&self.value).is_none() || r.is_empty() {
             return false;
         }
         let Some(l) = &self.laid else { return false };
@@ -318,11 +490,14 @@ impl FieldWidget {
         let at = range.start + with.len();
         st.caret = at;
         st.anchor = at;
-        st.blink_off = false;
+        cx.state::<Focus<M>>().wake();
         self.emit(cx, new);
     }
 
     fn emit(&self, cx: &mut EventCx, new: String) {
+        // The field's own edit: when the program takes it, it isn't text
+        // the program set.
+        cx.state::<FieldState>().seen.clone_from(&new);
         if let Some(f) = &self.on_change {
             cx.emit_any(f.make(new));
         }
@@ -335,8 +510,8 @@ impl FieldWidget {
         if !extend {
             st.anchor = at;
         }
-        st.blink_off = false;
         st.last_edit = None;
+        cx.state::<Focus<M>>().wake();
         cx.relayout();
         cx.invalidate();
         self.follow_caret(cx);
@@ -359,18 +534,56 @@ impl FieldWidget {
         st.scroll = st.scroll.clamp(0.0, (l.size().width - visible + 2.0).max(0.0));
         let h = self.box_height(&t);
         let caret_rect = Rect::new(self.left() + x - st.scroll, 3.0, self.left() + x - st.scroll + 2.0, h - 3.0);
-        if st.focused {
-            cx.set_text_input(true, Some(caret_rect));
+        match cx.state::<Focus<M>>().place() {
+            Place::Here => cx.set_text_input_as(M::PURPOSE, true, Some(caret_rect)),
+            Place::Away => {}
         }
+    }
+
+    /// The field has the focus: its starting selection, input methods told
+    /// what it takes, and the caret, which shows, then blinks. What it kept
+    /// in its other mode is dropped.
+    fn arrive(&self, cx: &mut EventCx) {
+        cx.state::<Focus<M>>().came();
+        *cx.state::<Focus<M::Other>>() = Focus::default();
+        let st = cx.state::<FieldState>();
+        if !std::mem::replace(&mut st.primed, true)
+            && let Some(r) = &self.select_on_focus
+        {
+            let v = &self.value;
+            let (a, b) = (floor(v, r.start.min(v.len())), floor(v, r.end.min(v.len())));
+            st.anchor = a.min(b);
+            st.caret = a.max(b);
+        }
+        cx.request_tick(BLINK);
+        self.follow_caret(cx);
+    }
+
+    /// An input method's event: what it composes shows as the mode keeps
+    /// it; what it commits is typed.
+    fn ime(&self, cx: &mut EventCx, ime: &Ime) -> Status {
+        match cx.state::<Focus<M>>().hear() {
+            Heard::Stale(start_over) => start_over.tell(cx),
+            Heard::InStep(composing) => match ime {
+                Ime::Commit(text) => {
+                    composing.commit();
+                    self.replace(cx, text, EditKind::Typing);
+                }
+                Ime::Preedit { text, selection } => {
+                    composing.compose(text, selection.as_ref().map(|r| r.end));
+                    cx.rebuild();
+                    cx.invalidate();
+                }
+            },
+        }
+        Status::Handled
     }
 
     fn copy(&self, cx: &mut EventCx) -> bool {
         let st = cx.state::<FieldState>();
-        let r = FieldWidget::selection(st);
-        if self.password || r.is_empty() || r.end > self.value.len() {
-            return false;
-        }
-        let text = self.value[r].to_owned();
+        let r = Self::selection(st);
+        let Some(text) = self.value.get(r).filter(|t| !t.is_empty()).and_then(M::exposed) else { return false };
+        let text = text.to_owned();
         cx.set_clipboard_text(&text);
         true
     }
@@ -474,7 +687,7 @@ impl FieldWidget {
     }
 }
 
-impl Widget for FieldWidget {
+impl<M: Mode> Widget for FieldWidget<M> {
     fn name(&self) -> &'static str {
         "text-field"
     }
@@ -486,14 +699,28 @@ impl Widget for FieldWidget {
         let anchor = floor(&self.value, st.anchor);
         st.caret = caret;
         st.anchor = anchor;
-        let preedit = st.preedit.clone();
-        let preedit_caret = st.preedit_caret;
         let mut scroll = st.scroll;
-        let focused = st.focused;
+        // Text the program set: what was being composed into the old text
+        // is dropped.
+        let set = st.seen != *self.value;
+        if set {
+            st.seen = self.value.to_string();
+        }
+        let focus = cx.state::<Focus<M>>();
+        if set {
+            focus.value_changed();
+        }
+        let focused = match focus.place() {
+            Place::Here => true,
+            Place::Away => false,
+        };
+        // What an input method is composing, as the mode keeps it: a
+        // password's as dots, with the input method's caret in it.
+        let (preedit, preedit_caret) =
+            focus.composing().map_or((String::new(), None), |k| (k.drawn().into_owned(), k.drawn_caret()));
         // What shows: the text (as dots for a password) with what an input
         // method is composing at the caret.
-        let mut shown: String =
-            if self.password { BULLET.to_string().repeat(self.value.chars().count()) } else { self.value.to_string() };
+        let mut shown = M::shown(&self.value).into_owned();
         let at = self.shown_offset(caret, "", caret);
         if !preedit.is_empty() {
             shown.insert_str(at, &preedit);
@@ -578,7 +805,7 @@ impl Widget for FieldWidget {
                 cx.canvas.fill_rect(Rect::new(s.x0, s.y1 - 1.0, s.x1, s.y1), t.text());
             }
         }
-        let blink_off = cx.state::<FieldState>().is_some_and(|s| s.blink_off);
+        let blink_off = cx.state::<Focus<M>>().is_some_and(|f| f.blink_off());
         if focused && self.sel.is_empty() && !blink_off && self.editable() {
             let c = l.caret(self.caret, false);
             let x = (origin.x + c.x).round().max(inner.x0 + 1.0);
@@ -600,7 +827,7 @@ impl Widget for FieldWidget {
             self.preedit.clone(),
             self.enabled,
             self.search,
-            self.password,
+            M::PURPOSE,
         ));
         h.f64(self.scroll).add(&self.error.as_deref()).add(&self.placeholder.as_deref());
     }
@@ -630,6 +857,39 @@ impl Widget for FieldWidget {
             return Status::Ignored;
         }
         let t = cx.theme().clone();
+        match event {
+            Event::Focus(true) => {
+                self.arrive(cx);
+                cx.rebuild();
+                cx.invalidate();
+                return Status::Handled;
+            }
+            Event::Focus(false) => {
+                cx.state::<Focus<M>>().went();
+                if let Some(msg) = &self.on_blur {
+                    cx.emit(msg);
+                }
+                cx.rebuild();
+                cx.invalidate();
+                return Status::Handled;
+            }
+            _ => {}
+        }
+        // Focused without having heard so (the field changed mode while
+        // focused): input methods are told what it takes now.
+        if cx.is_focused()
+            && let Place::Away = cx.state::<Focus<M>>().place()
+        {
+            self.arrive(cx);
+        }
+        if let Event::Ime(ime) = event {
+            return self.ime(cx, ime);
+        }
+        // A composition the program's change dropped: the input method
+        // starts over.
+        if let Some(start_over) = cx.state::<Focus<M>>().owed() {
+            start_over.tell(cx);
+        }
         match event {
             Event::PointerDown { pos, button: PointerButton::Left, clicks, mods } => {
                 if self.search && !self.value.is_empty() && self.clear_button(cx.size(), &t).contains(*pos) {
@@ -667,7 +927,7 @@ impl Widget for FieldWidget {
                         st.selecting = true;
                     }
                 }
-                st.blink_off = false;
+                cx.state::<Focus<M>>().wake();
                 cx.relayout();
                 cx.invalidate();
                 Status::Handled
@@ -678,8 +938,10 @@ impl Widget for FieldWidget {
                         let st = cx.state::<FieldState>();
                         st.drag_text = None;
                         let r = Self::selection(st);
-                        let text = self.value.get(r).unwrap_or_default().to_owned();
-                        cx.start_drag(sidestep_ui::DragSource::new().text(&text).actions(true, false));
+                        if let Some(text) = self.value.get(r).and_then(M::exposed) {
+                            let text = text.to_owned();
+                            cx.start_drag(sidestep_ui::DragSource::new().text(&text).actions(true, false));
+                        }
                     }
                     return Status::Handled;
                 }
@@ -699,58 +961,17 @@ impl Widget for FieldWidget {
                 if let Some((_, at)) = st.drag_text.take() {
                     st.caret = at;
                     st.anchor = at;
-                    st.blink_off = false;
+                    cx.state::<Focus<M>>().wake();
                     cx.relayout();
                     cx.invalidate();
                 }
                 Status::Handled
             }
             Event::Key(k) if k.pressed => self.key(cx, k),
-            Event::Ime(Ime::Commit(text)) => {
-                cx.state::<FieldState>().preedit.clear();
-                self.replace(cx, text, EditKind::Typing);
-                Status::Handled
-            }
-            Event::Ime(Ime::Preedit { text, selection }) => {
-                let st = cx.state::<FieldState>();
-                st.preedit = text.clone();
-                st.preedit_caret = selection.as_ref().map(|r| r.end);
-                cx.rebuild();
-                cx.invalidate();
-                Status::Handled
-            }
-            Event::Focus(on) => {
-                let st = cx.state::<FieldState>();
-                st.focused = *on;
-                st.blink_off = false;
-                if *on
-                    && !std::mem::replace(&mut st.primed, true)
-                    && let Some(r) = &self.select_on_focus
-                {
-                    let v = &self.value;
-                    let (a, b) = (floor(v, r.start.min(v.len())), floor(v, r.end.min(v.len())));
-                    st.anchor = a.min(b);
-                    st.caret = a.max(b);
-                }
-                if *on {
-                    cx.request_tick(BLINK);
-                    self.follow_caret(cx);
-                } else {
-                    cx.state::<FieldState>().preedit.clear();
-                    if let Some(msg) = &self.on_blur {
-                        cx.emit(msg);
-                    }
-                }
-                cx.rebuild();
-                cx.invalidate();
-                Status::Handled
-            }
             Event::Tick => {
-                let st = cx.state::<FieldState>();
-                if st.focused {
+                if let Place::Here = cx.state::<Focus<M>>().place() {
                     if cx.theme().motion() {
-                        let st = cx.state::<FieldState>();
-                        st.blink_off = !st.blink_off;
+                        cx.state::<Focus<M>>().blink();
                     }
                     cx.invalidate();
                     cx.request_tick(BLINK);
@@ -803,9 +1024,10 @@ impl Widget for FieldWidget {
     fn can(&self, state: crate::widget::StateView, command: EditCommand) -> bool {
         let st = state.get::<FieldState>();
         let sel = st.is_some_and(|s| s.caret != s.anchor);
+        let copies = M::exposed(&self.value).is_some();
         match command {
-            EditCommand::Copy => sel && !self.password,
-            EditCommand::Cut => sel && !self.password && self.editable(),
+            EditCommand::Copy => sel && copies,
+            EditCommand::Cut => sel && copies && self.editable(),
             EditCommand::Delete => sel && self.editable(),
             EditCommand::Paste | EditCommand::PasteAsPlainText => self.editable(),
             EditCommand::SelectAll => !self.value.is_empty(),
@@ -818,20 +1040,17 @@ impl Widget for FieldWidget {
     fn selection(&self, state: crate::widget::StateView) -> Option<String> {
         let st = state.get::<FieldState>()?;
         let r = st.caret.min(st.anchor)..st.caret.max(st.anchor);
-        (!self.password && !r.is_empty() && r.end <= self.value.len()).then(|| self.value[r].to_owned())
+        self.value.get(r).filter(|t| !t.is_empty()).and_then(M::exposed).map(str::to_owned)
     }
 
     fn semantics(&self) -> Option<Semantics> {
         Some(Semantics {
-            role: if self.password {
-                SemanticRole::PasswordInput
-            } else if self.search {
-                SemanticRole::SearchInput
-            } else {
-                SemanticRole::TextInput
+            role: match M::ROLE {
+                SemanticRole::TextInput if self.search => SemanticRole::SearchInput,
+                role => role,
             },
             label: self.placeholder.as_deref().map(str::to_owned),
-            value: (!self.password).then(|| self.value.to_string()),
+            value: M::exposed(&self.value).map(str::to_owned),
             disabled: !self.enabled,
             actions: vec![SemanticAction::Focus, SemanticAction::SetValue],
             ..Default::default()
@@ -841,6 +1060,6 @@ impl Widget for FieldWidget {
     fn text(&self) -> Option<&str> {
         // Inspection and search may describe a password field, but must
         // never publish its contents (including credentials in dialogs).
-        (!self.password).then_some(&self.value)
+        M::exposed(&self.value)
     }
 }

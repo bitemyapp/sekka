@@ -6,7 +6,8 @@
 //!
 //! A password field is a type of its own, [`SecretField`]: its [`Mode`]
 //! decides what it draws, what leaves it and what input methods are told,
-//! and it keeps only a count of what they compose ([`Masked`]).
+//! and it keeps only a count of what they compose ([`Masked`]). Both come
+//! from [`aizome_kit::composing`], shared with the kit's `text_field`.
 
 use std::rc::Rc;
 use std::time::Duration;
@@ -20,12 +21,8 @@ use aizome_kit::widget::{
     EditCommand, Event, EventCx, FocusRing, Focusable, LayoutCx, PaintCx, Semantics, Status, Widget,
 };
 
-mod focus;
-mod mode;
-
-use focus::{Focus, Heard, Place};
-use mode::sealed::Kept as _;
-pub use mode::{Masked, Mode, Plain, Preedit, Secret};
+use aizome_kit::composing::{Focus, Heard, Kept as _, Place};
+pub use aizome_kit::composing::{Masked, Mode, Plain, Preedit, Secret};
 
 type Spec = Rc<dyn Fn(&aizome_kit::Theme) -> TextSpec>;
 
@@ -166,7 +163,7 @@ struct FieldState<M: Mode> {
     caret: usize,
     anchor: usize,
     seen: String,
-    focus: Focus<M::Kept>,
+    focus: Focus<M>,
     caps: Option<bool>,
 }
 
@@ -373,8 +370,8 @@ impl<M: Mode> FieldWidget<M> {
                     composing.commit();
                     self.replace(cx, s);
                 }
-                Ime::Preedit { text, .. } => {
-                    composing.compose(text);
+                Ime::Preedit { text, selection } => {
+                    composing.compose(text, selection.as_ref().map(|r| r.end));
                     cx.invalidate();
                 }
             },
