@@ -478,7 +478,12 @@ impl Chanoma {
                 rows.push((Row::new("Lock now", Value::Action).detail("Back to kids' mode"), Act::Lock));
             }
             _ => {
-                rows.push((Row::new("Leave Chanoma", Value::Action).detail("Back to the desktop"), Act::Leave));
+                let leave = if self.config.tv {
+                    Row::new("Log Out", Value::Action).detail("Back to the login screen")
+                } else {
+                    Row::new("Leave Chanoma", Value::Action).detail("Back to the desktop")
+                };
+                rows.push((leave, Act::Leave));
                 rows.push((Row::new("Version", Value::Note(env!("CARGO_PKG_VERSION").into())), Act::None));
                 // The databases' licence asks for their credit.
                 rows.push((

@@ -140,7 +140,11 @@ palette. Search filters the sidebar and highlights options.
   configuration sets it, so the row shows it without changing it (greetd's
   `[initial_session]` from the active service's configuration, including
   NixOS's store path). Only other systems use AccountsService's flag
-  (GDM's).
+  (GDM's). Where Chanoma is installed, the pane also has the TV account
+  (set up, how it signs in: nothing, a PIN or a password; forget its Chanoma's
+  PIN; remove), through `aizome-tv-account` as root (`docs/chanoma.md`, "The TV
+  account"). Its shell is nologin, so it isn't among those offered for
+  automatic login.
 - **Keyboard**: layouts (searchable list from `aizome-sys`'s xkb data, with
   variants), switching shortcut, key repeat delay and rate, modifier keys
   (swap Alt/Super, Control/Super or Control/Alt on both sides or just one),

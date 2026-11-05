@@ -171,6 +171,8 @@ impl Chanoma {
             family,
             ok: self.ok_button(family),
             back: self.back_button(family),
+            // Typing goes on at the end: the shoulders move nothing here.
+            fixed_caret: true,
             field: Some(Field {
                 label: "Search games, films and shows".into(),
                 text: s.query.clone(),

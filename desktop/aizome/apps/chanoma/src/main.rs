@@ -13,7 +13,9 @@ all from a controller, with a grown-up's PIN on what kids may do.
   --no-controllers
                  read no controllers (a preview beside a desktop that has them)
   --reset-pin    forget the grown-ups' PIN (the next start asks for a new
-                 one), for a grown-up who has forgotten it";
+                 one), for a grown-up who has forgotten it
+  --tv           the TV account's Chanoma (its session is Chanoma alone):
+                 leaving logs out, and kids may log out too";
 
 fn main() {
     // Before any thread starts: a signal to stop then puts things away.
@@ -45,6 +47,7 @@ fn main() {
     config.grab = !args.iter().any(|a| a == "--no-grab");
     config.silent = args.iter().any(|a| a == "--silent");
     config.pads = !args.iter().any(|a| a == "--no-controllers");
+    config.tv = args.iter().any(|a| a == "--tv");
     config.signals = true;
     let mut app = Chanoma::new(config);
     match aizome_chanoma::instance::claim() {

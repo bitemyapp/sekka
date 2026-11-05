@@ -358,20 +358,10 @@ impl Chanoma {
                     },
                     Act::Lock,
                 ),
-                (
-                    Tile {
-                        label: "Leave Chanoma".into(),
-                        sub: "Back to the desktop".into(),
-                        look: TileLook::Symbol { symbol: Symbol::Door },
-                        badge: None,
-                        progress: None,
-                        more: String::new(),
-                    },
-                    Act::Leave,
-                ),
+                self.leave_tile(),
             ]
         } else {
-            vec![(
+            let mut v = vec![(
                 Tile {
                     label: "Grown-ups".into(),
                     sub: "Needs the PIN".into(),
@@ -381,10 +371,38 @@ impl Chanoma {
                     more: String::new(),
                 },
                 Act::GrownUps,
-            )]
+            )];
+            // The TV account's kids may log out: the login screen is all
+            // there is beyond, and anyone else's account asks for its own
+            // password.
+            if self.config.tv {
+                v.push(self.leave_tile());
+            }
+            v
         };
         out.push(shelf("More", TileSize::Wide, more));
         out
+    }
+
+    /// The way out: to the desktop, or for the TV account, to the login
+    /// screen.
+    fn leave_tile(&self) -> (Tile, Act) {
+        let (label, sub) = if self.config.tv {
+            ("Log Out", "Back to the login screen")
+        } else {
+            ("Leave Chanoma", "Back to the desktop")
+        };
+        (
+            Tile {
+                label: label.into(),
+                sub: sub.into(),
+                look: TileLook::Symbol { symbol: Symbol::Door },
+                badge: None,
+                progress: None,
+                more: String::new(),
+            },
+            Act::Leave,
+        )
     }
 
     /// Home as drawn.

@@ -292,6 +292,29 @@ pub fn from_kernel(caps: &Caps) -> Mapping {
     key(BTN_DPAD_DOWN, Button::Down);
     key(BTN_DPAD_LEFT, Button::Left);
     key(BTN_DPAD_RIGHT, Button::Right);
+    // A pad without the gamepad codes (cheap USB pads report BTN_TRIGGER
+    // and on, as joysticks do): its buttons in order, as SDL guesses for a
+    // pad it doesn't know. Which is where varies by maker; a grown-up can
+    // set it up in Chanoma.
+    if !caps.keys.has(BTN_SOUTH) {
+        let order = [
+            Output::Button(Button::South),
+            Output::Button(Button::East),
+            Output::Button(Button::West),
+            Output::Button(Button::North),
+            Output::Button(Button::L1),
+            Output::Button(Button::R1),
+            Output::HalfAxis(Axis::L2, 1),
+            Output::HalfAxis(Axis::R2, 1),
+            Output::Button(Button::Select),
+            Output::Button(Button::Start),
+            Output::Button(Button::L3),
+            Output::Button(Button::R3),
+            Output::Button(Button::Guide),
+        ];
+        let codes = numbering(caps).buttons.into_iter().filter(|c| (BTN_JOYSTICK..BTN_JOYSTICK + 16).contains(c));
+        binds.extend(codes.zip(order).map(|(c, out)| (Input::Key(c), out)));
+    }
     let abs = |code: u16| Input::Abs { code, half: 0, invert: false };
     let has = |code: u16| caps.abs.has(code);
     if has(ABS_X) {
@@ -323,6 +346,14 @@ pub fn from_kernel(caps: &Caps) -> Mapping {
         for (mask, b) in [(1, Button::Up), (2, Button::Right), (4, Button::Down), (8, Button::Left)] {
             binds.push((Input::Hat { hat: 0, mask }, Output::Button(b)));
         }
+    } else if !caps.keys.has(BTN_DPAD_UP) && has(ABS_X) && has(ABS_Y) {
+        // No direction pad of its own: a cheap pad's is often its X and Y
+        // axes. They're the arrows too (a PIN's 1 to 4, a retro game's pad).
+        let half = |code: u16, half: i8| Input::Abs { code, half, invert: false };
+        binds.push((half(ABS_Y, -1), Output::Button(Button::Up)));
+        binds.push((half(ABS_Y, 1), Output::Button(Button::Down)));
+        binds.push((half(ABS_X, -1), Output::Button(Button::Left)));
+        binds.push((half(ABS_X, 1), Output::Button(Button::Right)));
     }
     Mapping { binds, source: Source::Kernel }
 }
@@ -444,6 +475,32 @@ mod tests {
         let snes = from_kernel(&snes).buttons();
         assert_eq!(snes & (Button::L2.bit() | Button::R2.bit() | Button::Guide.bit()), 0);
         assert!(snes & Button::L1.bit() != 0 && snes & Button::Left.bit() != 0);
+        // A cheap pad whose direction pad is its X and Y axes: they're the
+        // arrows, pressed when pushed most of the way.
+        let mut caps = Caps {
+            keys: Bits::with(&(BTN_JOYSTICK..BTN_JOYSTICK + 10).collect::<Vec<u16>>()),
+            abs: Bits::with(&[ABS_X, ABS_Y]),
+            ..Caps::default()
+        };
+        caps.absinfo = vec![
+            (ABS_X, AbsInfo { minimum: 0, maximum: 255, ..AbsInfo::default() }),
+            (ABS_Y, AbsInfo { minimum: 0, maximum: 255, ..AbsInfo::default() }),
+        ];
+        let m = from_kernel(&caps);
+        assert!(m.buttons() & Button::Up.bit() != 0 && m.buttons() & Button::Right.bit() != 0);
+        // Its buttons, joystick codes, in SDL's order: yes, no and the rest.
+        assert_eq!(bind(&m, Output::Button(Button::South)), Some(Input::Key(BTN_JOYSTICK)));
+        assert_eq!(bind(&m, Output::Button(Button::East)), Some(Input::Key(BTN_JOYSTICK + 1)));
+        assert_eq!(bind(&m, Output::HalfAxis(Axis::L2, 1)), Some(Input::Key(BTN_JOYSTICK + 6)));
+        assert_eq!(bind(&m, Output::Button(Button::Start)), Some(Input::Key(BTN_JOYSTICK + 9)));
+        assert_eq!(m.buttons() & Button::Guide.bit(), 0, "ten buttons: no Home");
+        let mut s = crate::PadState::default();
+        let ev = |code, value| InputEvent { kind: EV_ABS, code, value, ..InputEvent::default() };
+        s.feed(&ev(ABS_X, 255), &caps, &m);
+        s.feed(&ev(ABS_Y, 127), &caps, &m);
+        assert_eq!(s.buttons() & (Button::Right.bit() | Button::Up.bit()), Button::Right.bit());
+        s.feed(&ev(ABS_X, 127), &caps, &m);
+        assert_eq!(s.buttons() & Button::Right.bit(), 0);
     }
 
     #[test]

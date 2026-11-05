@@ -274,6 +274,7 @@ fn config(dirs: Dirs, cores: PathBuf, clock: ManualClock) -> Config {
         home: root.join("home"),
         mounts: vec![root.join("media")],
         mpris: false,
+        tv: false,
     }
 }
 
@@ -1645,4 +1646,38 @@ fn search_finds_what_names_start_with_and_only_what_kids_may_open() {
     shot(&mut h, "21b-search-results");
     input(&mut h, Input::Dir(Dir::Up));
     assert!(h.program().search.as_ref().is_some_and(|s| s.keys.is_some()));
+}
+
+#[test]
+fn the_tv_accounts_kids_may_log_out_and_a_forgotten_pin_is_a_grown_ups_to_forget() {
+    // The TV account's Chanoma: kids' mode as ever, but leaving is
+    // logging out, which kids may do; and its own password can't reset
+    // the PIN (it may be none, or the PIN a kid logs in with).
+    let (dirs, cores) = household("tv", |_| {});
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut cfg = config(dirs, cores, clock);
+    cfg.tv = true;
+    let mut h = harness(cfg);
+    assert_eq!(h.program().screen, Screen::Home);
+    assert!(!h.program().is_grownup());
+    let more: Vec<String> =
+        h.program().home_view().shelves.last().unwrap().tiles.iter().map(|t| t.label.clone()).collect();
+    assert_eq!(more, ["Grown-ups", "Log Out"]);
+    shot(&mut h, "30-tv-kids");
+    // The grown-ups' PIN, forgotten: no sign-in here, but who can help.
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    assert!(matches!(h.program().modal, Some(Modal::Pin { .. })));
+    input(&mut h, Input::Menu);
+    assert!(h.program().reset.is_none(), "no signing in with the TV account's password");
+    assert!(
+        matches!(&h.program().screen, Screen::Problem(t, b) if t == "Forgot the PIN?" && b.contains("Users & Groups"))
+    );
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::Home);
+    // Log Out: Chanoma ends, and with it the TV account's session.
+    input(&mut h, Input::Dir(Dir::Right));
+    input(&mut h, Input::Ok);
+    assert!(h.platform.quit, "left");
 }
