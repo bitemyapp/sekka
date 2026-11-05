@@ -7,6 +7,8 @@
 //! this module's: the rest of the window asks what it needs (the swap
 //! partition's size, or why there is none; the pages' lines), and this
 //! module alone decides what each state means.
+// Every stage and answer is matched by name: a new one forces a decision.
+#![deny(clippy::wildcard_enum_match_arm)]
 use crate::format::size;
 use aizome_typestate::{Answer, Fresh, Generation, Ticket};
 use calamares_nixos::memory::{self, MemInfo};
@@ -107,7 +109,9 @@ impl Memory {
                 let (reading, ticket) = unasked.ask();
                 (reading.into(), Some(ticket))
             }
-            other => (other, None),
+            other @ (MemoryAny::Reading(_) | MemoryAny::Known(_) | MemoryAny::Unreadable(_)) => {
+                (other, None)
+            }
         })
     }
 
