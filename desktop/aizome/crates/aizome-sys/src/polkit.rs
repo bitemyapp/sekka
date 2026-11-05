@@ -136,9 +136,11 @@ struct Person {
 ///
 /// ```
 /// use aizome_sys::polkit::AuthRequest;
-/// fn first(request: &AuthRequest) {
-///     if let Some(identity) = request.identities().first() {
-///         request.authenticate(identity);
+/// use aizome_sys::polkit::NotOffered;
+/// fn first(request: &AuthRequest) -> Result<(), NotOffered> {
+///     match request.identities().first() {
+///         Some(identity) => request.authenticate(identity),
+///         None => Ok(()),
 ///     }
 /// }
 /// ```
@@ -176,6 +178,17 @@ impl Identity {
     /// The request that offered it.
     pub fn request(&self) -> RequestId {
         self.request
+    }
+}
+
+/// [`AuthRequest::authenticate`] was given an identity another request
+/// offered: no attempt starts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NotOffered;
+
+impl std::fmt::Display for NotOffered {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("polkitd didn't offer that identity for this request")
     }
 }
 
@@ -237,15 +250,17 @@ impl AuthRequest {
     /// or one more after [`Said::Unavailable`]. The agent starts it when its
     /// floor allows (at once, unless attempts have been ending with no
     /// answer); a call while an attempt waits for the floor changes only
-    /// whom it's for. An identity another request offered is refused: the
-    /// helper runs PAM only for someone polkitd named for this request.
-    pub fn authenticate(&self, identity: &Identity) {
+    /// whom it's for. An identity another request offered is refused
+    /// ([`NotOffered`]), and nothing starts: the helper runs PAM only for
+    /// someone polkitd named for this request.
+    pub fn authenticate(&self, identity: &Identity) -> std::result::Result<(), NotOffered> {
         if identity.request != self.session.id {
             log::warn!("aizome-sys: polkit: refused an identity another request offered");
-            return;
+            return Err(NotOffered);
         }
         let user = identity.name.clone();
         self.session.step(move |state| (start(state, user), ()));
+        Ok(())
     }
 
     /// The proof that `heard` is about this request's latest conversation,
@@ -901,10 +916,14 @@ impl PolkitAgent {
         mut connect: impl FnMut() -> Result<(Bus, String, Helper)> + Send + 'static,
     ) -> Result<PolkitAgent> {
         let ui: Ui = Arc::new(ui);
+        // One floor for the handle's life: a replaced bus connection keeps the
+        // backoff, so a flapping bus can't reset it.
+        let floor = SharedFloor::default();
         Self::spawn(move |mut stopped| {
             loop {
                 let setup = connect().and_then(|(bus, session_id, helper)| {
-                    serve(&bus, helper, ui.clone()).map(|(state, changes)| (bus, session_id, state, changes))
+                    serve(&bus, helper, ui.clone(), floor.clone())
+                        .map(|(state, changes)| (bus, session_id, state, changes))
                 });
                 match setup {
                     Ok((bus, session_id, state, changes)) => {
@@ -932,7 +951,7 @@ impl PolkitAgent {
         helper: Helper,
         ui: impl Fn(AuthEvent) + Send + Sync + 'static,
     ) -> Result<PolkitAgent> {
-        let (state, changes) = serve(&bus, helper, Arc::new(ui))?;
+        let (state, changes) = serve(&bus, helper, Arc::new(ui), SharedFloor::default())?;
         let worker_bus = bus.clone();
         match Self::spawn(move |mut stopped| {
             maintain(worker_bus, session_id, state, changes, &mut stopped);
@@ -958,7 +977,12 @@ impl PolkitAgent {
     }
 }
 
-fn serve(bus: &Bus, helper: Helper, ui: Ui) -> Result<(Arc<Mutex<AgentState>>, zbus::MessageStream)> {
+fn serve(
+    bus: &Bus,
+    helper: Helper,
+    ui: Ui,
+    floor: SharedFloor,
+) -> Result<(Arc<Mutex<AgentState>>, zbus::MessageStream)> {
     // Subscribe before querying the owner or registering. The stream
     // owns its match rule and releases it when the worker stops.
     let rule = zbus::MatchRule::builder()
@@ -974,7 +998,7 @@ fn serve(bus: &Bus, helper: Helper, ui: Ui) -> Result<(Arc<Mutex<AgentState>>, z
     ))
     .ok_or(Error::Timeout)??;
     let state = Arc::new(Mutex::new(AgentState::default()));
-    let agent = Agent { ui, helper, state: state.clone(), floor: SharedFloor::default() };
+    let agent = Agent { ui, helper, state: state.clone(), floor };
     // ObjectServer::at atomically refuses an existing interface; a
     // second handle must never remove the first one's served object.
     if !zbus::block_on(bus.connection().object_server().at(AGENT_PATH, agent))? {
@@ -1181,9 +1205,17 @@ mod tests {
         };
         let first_bus = rx.recv_timeout(Duration::from_secs(5)).unwrap();
         wait_serving(&first_bus);
+        let floor_of = |bus: &Bus| {
+            let agent = zbus::block_on(bus.connection().object_server().interface::<_, Agent>(AGENT_PATH)).unwrap();
+            zbus::block_on(agent.get()).floor.clone()
+        };
+        let first_floor = floor_of(&first_bus);
         drop(first);
         let second_bus = rx.recv_timeout(Duration::from_secs(7)).unwrap();
         wait_serving(&second_bus);
+        // The new connection's agent keeps the floor: a flapping bus can't
+        // reset the backoff.
+        assert!(Arc::ptr_eq(&first_floor, &floor_of(&second_bus)), "one floor across reconnects");
         assert!(agent.is_running());
         drop(agent);
         assert!(zbus::block_on(second_bus.connection().object_server().interface::<_, Agent>(AGENT_PATH)).is_err());
