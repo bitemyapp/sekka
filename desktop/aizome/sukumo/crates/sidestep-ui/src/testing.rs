@@ -15,7 +15,7 @@ use sidestep_engine::backend::null;
 use sidestep_engine::keys::modifier;
 use sidestep_engine::protocol::{self, Button, FromRender, ScrollPhase};
 #[cfg(feature = "testing")]
-use sidestep_engine::protocol::{LockAnswer, LockRequest};
+use sidestep_engine::protocol::{LockFinished, LockRequest};
 
 pub use sidestep_engine::backend::null::{PaintedText, Seen};
 /// A layer surface's placement as the render thread was given it (in
@@ -306,7 +306,7 @@ pub fn inject_outputs(cx: &mut Cx, outputs: &[crate::Output]) {
 pub fn inject_session_lock_finished(cx: &mut Cx) {
     let held = null::LOCK.lock().unwrap_or_else(|e| e.into_inner()).take();
     if let Some(lock) = held {
-        cx.inject(FromRender::SessionLockFinished { lock: LockAnswer::forged(lock) });
+        cx.inject(FromRender::SessionLockFinished { lock: LockFinished::forged(lock) });
     }
 }
 
@@ -324,7 +324,7 @@ pub fn session_lock_held() -> Option<LockRequest> {
 /// tests have it (the `testing` feature).
 #[cfg(feature = "testing")]
 pub fn inject_session_lock_finished_for(cx: &mut Cx, lock: LockRequest) {
-    cx.inject(FromRender::SessionLockFinished { lock: LockAnswer::forged(lock) });
+    cx.inject(FromRender::SessionLockFinished { lock: LockFinished::forged(lock) });
 }
 
 /// A destination asking for the data drag `drag` (out of one of the

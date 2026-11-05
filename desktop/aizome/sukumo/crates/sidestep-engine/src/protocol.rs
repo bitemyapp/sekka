@@ -693,32 +693,51 @@ pub struct LockRequest {
     pub ticket: aizome_typestate::Ticket<SessionLockRequest>,
 }
 
-/// What the render thread heard from the compositor about a request
-/// (`FromRender::SessionLocked`, `SessionLockFinished`). Only the render
-/// thread makes one, so the main thread can apply only an answer it was
-/// sent, never one for a request it picks itself (say, the one it asks
-/// for now).
-#[derive(Debug)]
-pub struct LockAnswer {
-    request: LockRequest,
+/// What the render thread heard from the compositor about a request, one
+/// type for each answer: [`LockConfirmed`] (`FromRender::SessionLocked`)
+/// and [`LockFinished`] (`SessionLockFinished`). Only the render thread
+/// makes one, so the main thread can apply only an answer it was sent,
+/// never one for a request it picks itself (say, the one it asks for
+/// now), and never one answer as the other (a refusal as a confirmation
+/// would have it believe the session locked).
+macro_rules! lock_answer {
+    ($(#[$doc:meta])* $name:ident) => {
+        $(#[$doc])*
+        #[derive(Debug)]
+        pub struct $name {
+            request: LockRequest,
+        }
+
+        impl $name {
+            pub(crate) fn heard(request: LockRequest) -> $name {
+                $name { request }
+            }
+
+            /// The request it answers.
+            pub fn request(&self) -> LockRequest {
+                self.request
+            }
+
+            /// An answer no render thread gave, for tests that play the
+            /// compositor (the `testing` feature, which only tests enable).
+            #[cfg(feature = "testing")]
+            pub fn forged(request: LockRequest) -> $name {
+                $name { request }
+            }
+        }
+    };
 }
 
-impl LockAnswer {
-    pub(crate) fn heard(request: LockRequest) -> LockAnswer {
-        LockAnswer { request }
-    }
+lock_answer! {
+    /// The compositor locked the session for a request
+    /// (`FromRender::SessionLocked`).
+    LockConfirmed
+}
 
-    /// The request it answers.
-    pub fn request(&self) -> LockRequest {
-        self.request
-    }
-
-    /// An answer no render thread gave, for tests that play the
-    /// compositor (the `testing` feature, which only tests enable).
-    #[cfg(feature = "testing")]
-    pub fn forged(request: LockRequest) -> LockAnswer {
-        LockAnswer { request }
-    }
+lock_answer! {
+    /// The compositor refused or ended the lock asked for under a request
+    /// (`FromRender::SessionLockFinished`).
+    LockFinished
 }
 
 pub enum ToRender {
@@ -1203,7 +1222,7 @@ pub enum FromRender {
     /// The compositor locked the session, as `ToRender::LockSession` asked
     /// under the request `lock` answers.
     SessionLocked {
-        lock: LockAnswer,
+        lock: LockConfirmed,
     },
     /// A destination wants the data drag `drag` promised as `mime`: answer
     /// `ToRender::SelectionData` under `token`.
@@ -1229,7 +1248,7 @@ pub enum FromRender {
     /// or it has no ext-session-lock) or ended it. Its surfaces show
     /// nothing more.
     SessionLockFinished {
-        lock: LockAnswer,
+        lock: LockFinished,
     },
     /// Parts of a target the render thread can't draw again on its own (a
     /// layer animated outside where its tree was recorded): the main

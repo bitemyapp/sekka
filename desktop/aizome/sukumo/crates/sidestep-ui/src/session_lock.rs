@@ -6,13 +6,15 @@
 //!
 //! Each request is a ticket of a [`Generation`], sent with
 //! `ToRender::LockSession` as a [`LockRequest`], and the render thread's
-//! answers are [`LockAnswer`]s naming the request they answer. Only the
-//! render thread makes an answer, so the main thread can't apply one for
-//! a request it picks itself. A transition that applies an answer takes it
-//! only as [`Fresh`], which only the comparison with the current request
-//! makes, so the compositor's `finished` for a lock the program has
-//! withdrawn can't end the lock it asks for next. Unlocking retires the
-//! request, so nothing heard about it afterwards is fresh.
+//! answers name the request they answer: [`LockConfirmed`] for a lock the
+//! compositor took, [`LockFinished`] for one it refused or ended. Only
+//! the render thread makes an answer, so the main thread can't apply one
+//! for a request it picks itself, nor take one answer for the other. A
+//! transition that applies an answer takes it only as [`Fresh`], which
+//! only the comparison with the current request makes, so the
+//! compositor's `finished` for a lock the program has withdrawn can't end
+//! the lock it asks for next. Unlocking retires the request, so nothing
+//! heard about it afterwards is fresh.
 //!
 //! Ending a lock without checking which request the answer is for, as
 //! `SessionLockFinished` used to, doesn't compile:
@@ -46,8 +48,8 @@
 //! An answer can't be made outside this module:
 //!
 //! ```compile_fail,E0423
-//! use sidestep_ui::session_lock::{Ended, LockAnswer};
-//! fn heard(lock: LockAnswer) -> Ended {
+//! use sidestep_ui::session_lock::{Ended, LockFinished};
+//! fn heard(lock: LockFinished) -> Ended {
 //!     Ended(lock)
 //! }
 //! ```
@@ -57,18 +59,51 @@
 //! current lock's is the UIW-27 mistake.
 //!
 //! ```compile_fail,E0624
-//! use sidestep_ui::session_lock::{LockAnswer, LockRequest};
-//! fn finished_for(current: LockRequest) -> LockAnswer {
-//!     LockAnswer::heard(current)
+//! use sidestep_ui::session_lock::{LockFinished, LockRequest};
+//! fn finished_for(current: LockRequest) -> LockFinished {
+//!     LockFinished::heard(current)
 //! }
 //! ```
 //!
-//! What compiles takes the answer the render thread sent:
+//! One answer can't be taken for the other: the compositor's refusal as
+//! its confirmation (the program would believe the session locked),
+//!
+//! ```compile_fail,E0308
+//! use sidestep_engine::protocol::FromRender;
+//! use sidestep_ui::session_lock::LockConfirmed;
+//! fn confirmed(message: FromRender) -> Option<LockConfirmed> {
+//!     match message {
+//!         FromRender::SessionLocked { lock } | FromRender::SessionLockFinished { lock } => Some(lock),
+//!         _ => None,
+//!     }
+//! }
+//! ```
+//!
+//! or its confirmation as an end:
+//!
+//! ```compile_fail,E0308
+//! use sidestep_engine::protocol::FromRender;
+//! use sidestep_ui::session_lock::LockFinished;
+//! fn finished(message: FromRender) -> Option<LockFinished> {
+//!     match message {
+//!         FromRender::SessionLocked { lock } => Some(lock),
+//!         _ => None,
+//!     }
+//! }
+//! ```
+//!
+//! What compiles takes each answer the render thread sent as itself:
 //!
 //! ```
 //! use sidestep_engine::protocol::FromRender;
-//! use sidestep_ui::session_lock::LockAnswer;
-//! fn finished(message: FromRender) -> Option<LockAnswer> {
+//! use sidestep_ui::session_lock::{LockConfirmed, LockFinished};
+//! fn confirmed(message: &FromRender) -> Option<&LockConfirmed> {
+//!     match message {
+//!         FromRender::SessionLocked { lock } => Some(lock),
+//!         _ => None,
+//!     }
+//! }
+//! fn finished(message: FromRender) -> Option<LockFinished> {
 //!     match message {
 //!         FromRender::SessionLockFinished { lock } => Some(lock),
 //!         _ => None,
@@ -90,7 +125,8 @@
 //! ```
 //!
 //! (With the `testing` feature, which only tests enable,
-//! `LockAnswer::forged` makes any answer: tests play the compositor.)
+//! `LockConfirmed::forged` and `LockFinished::forged` make any answer:
+//! tests play the compositor.)
 
 #![deny(clippy::wildcard_enum_match_arm)]
 
@@ -98,7 +134,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use aizome_typestate::{Answer, Fresh, Generation, Ticket};
 use sidestep_engine::protocol::ToRender;
-pub use sidestep_engine::protocol::{LockAnswer, LockRequest, SessionLockRequest};
+pub use sidestep_engine::protocol::{LockConfirmed, LockFinished, LockRequest, SessionLockRequest};
 use smithay_client_toolkit::reexports::calloop::channel::Sender;
 
 use crate::window::send;
@@ -139,12 +175,12 @@ static MACHINES: AtomicU64 = AtomicU64::new(0);
 
 /// The compositor locked the session for a request (`SessionLocked`).
 #[derive(Debug)]
-pub struct Confirmed(LockAnswer);
+pub struct Confirmed(LockConfirmed);
 
 /// The compositor refused or ended the lock asked for under a request
 /// (`SessionLockFinished`).
 #[derive(Debug)]
-pub struct Ended(LockAnswer);
+pub struct Ended(LockFinished);
 
 impl Answer<SessionLockRequest> for Confirmed {
     fn ticket(&self) -> Ticket<SessionLockRequest> {
@@ -171,7 +207,7 @@ impl SessionLock {
 
     /// The render thread's `SessionLocked`, if it answers the current
     /// request; `None` for one since withdrawn or another machine's.
-    pub(crate) fn confirmed(&self, heard: LockAnswer) -> Option<Fresh<SessionLockRequest, Confirmed>> {
+    pub(crate) fn confirmed(&self, heard: LockConfirmed) -> Option<Fresh<SessionLockRequest, Confirmed>> {
         if heard.request().machine != self.ctx().machine {
             return None;
         }
@@ -181,7 +217,7 @@ impl SessionLock {
     /// The render thread's `SessionLockFinished`, if it answers the
     /// current request; `None` for one since withdrawn or another
     /// machine's.
-    pub(crate) fn ended(&self, heard: LockAnswer) -> Option<Fresh<SessionLockRequest, Ended>> {
+    pub(crate) fn ended(&self, heard: LockFinished) -> Option<Fresh<SessionLockRequest, Ended>> {
         if heard.request().machine != self.ctx().machine {
             return None;
         }
@@ -210,13 +246,17 @@ impl<'s> Asked<'s> {
     /// The compositor locked the session for this request; a proof made
     /// for an earlier request gives the state back.
     pub fn confirmed(self, heard: Fresh<SessionLockRequest, Confirmed>) -> Result<Locked<'s>, Asked<'s>> {
-        if answers(self.ctx, self.data, &heard.answer().0) { Ok(Locked::enter(self.ctx, self.data)) } else { Err(self) }
+        if answers(self.ctx, self.data, heard.answer().0.request()) {
+            Ok(Locked::enter(self.ctx, self.data))
+        } else {
+            Err(self)
+        }
     }
 
     /// The compositor refused the lock asked for under this request; a
     /// proof made for an earlier request gives the state back.
     pub fn ended(self, heard: Fresh<SessionLockRequest, Ended>) -> Result<Unlocked<'s>, Asked<'s>> {
-        if answers(self.ctx, self.data, &heard.answer().0) { Ok(withdrawn(self.ctx)) } else { Err(self) }
+        if answers(self.ctx, self.data, heard.answer().0.request()) { Ok(withdrawn(self.ctx)) } else { Err(self) }
     }
 
     /// Stop asking: the render thread withdraws the lock, and whatever
@@ -231,7 +271,7 @@ impl<'s> Locked<'s> {
     /// The compositor ended the lock held for this request; a proof made
     /// for an earlier request gives the state back.
     pub fn ended(self, heard: Fresh<SessionLockRequest, Ended>) -> Result<Unlocked<'s>, Locked<'s>> {
-        if answers(self.ctx, self.data, &heard.answer().0) { Ok(withdrawn(self.ctx)) } else { Err(self) }
+        if answers(self.ctx, self.data, heard.answer().0.request()) { Ok(withdrawn(self.ctx)) } else { Err(self) }
     }
 
     /// Unlock: whatever the render thread hears about this request from
@@ -245,8 +285,8 @@ impl<'s> Locked<'s> {
 /// Whether `heard` answers `request`, the state's, and that's still the
 /// current request: a proof is fresh when it's made, and one kept until a
 /// later request isn't this request's.
-fn answers(requests: &Requests, request: LockRequest, heard: &LockAnswer) -> bool {
-    heard.request() == request && requests.tickets.is_current(request.ticket)
+fn answers(requests: &Requests, request: LockRequest, heard: LockRequest) -> bool {
+    heard == request && requests.tickets.is_current(request.ticket)
 }
 
 /// Unlocked, with the request over.
