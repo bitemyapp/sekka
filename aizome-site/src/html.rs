@@ -24,6 +24,8 @@ pub const REPO: &str = "https://github.com/bitemyapp/sekka";
 pub const SOURCE: &str = "https://github.com/bitemyapp/sekka/tree/main/desktop/aizome";
 pub const SEKKA: &str = "https://sekka.computer/";
 pub const SEKKA_DOWNLOAD: &str = "https://sekka.computer/download/";
+/// An invite to the Sekka Community Discord server.
+pub const DISCORD: &str = "https://discord.gg/baTc5rfqs";
 
 /// The bar's menus: the site's sections, as an app's menus sit in the bar.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -143,7 +145,7 @@ pub fn shell(site: &Site, page: &Page) -> Result<String> {
     <p class="foot-sekka"><strong>Aizome is Sekka's desktop.</strong> The installer, the download and the rest of the system are at <a href="{SEKKA}">sekka.computer</a>. <a href="{SEKKA_DOWNLOAD}">Get Aizome with Sekka</a>.</p>
     <p><strong>No cookies, no analytics.</strong> The one script remembers Night or Day in your browser and sends it nowhere. Every page, script, font and image here is served from this site; nothing is loaded from anywhere else.</p>
     <p>Aizome is MIT or Apache-2.0, at your option. Archivo and IBM Plex Mono are under the <a href="/fonts/">SIL Open Font License</a>; the kanji and key glyphs are outlines drawn from Noto fonts. Screenshots are real captures, never upscaled; each caption says where it came from.</p>
-    <p><a href="{SOURCE}">Source</a> · <a href="{REPO}/issues">Issues</a> · <a href="/fonts/">Fonts</a> · <a href="{SEKKA}">sekka.computer</a></p>
+    <p><a href="{SOURCE}">Source</a> · <a href="{REPO}/issues">Issues</a> · <a href="{DISCORD}">Discord</a> · <a href="/fonts/">Fonts</a> · <a href="{SEKKA}">sekka.computer</a></p>
   </div>
 </footer>
 </body>
