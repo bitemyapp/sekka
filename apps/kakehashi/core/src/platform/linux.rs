@@ -4,6 +4,7 @@ use super::sys::run;
 use crate::drive::Drive;
 use anyhow::Result;
 use serde_json::Value;
+use std::fs;
 use std::path::Path;
 
 /// Mount points the running system needs.
@@ -62,6 +63,7 @@ pub(crate) fn parse(json: &[u8]) -> Result<Vec<Drive>> {
             mounts: points,
             bus: if tran.is_empty() { String::new() } else { tran.to_uppercase() },
             name,
+            port: None,
         });
     }
     Ok(drives)
@@ -73,7 +75,24 @@ pub(crate) fn drives() -> Result<Vec<Drive>> {
     // only one.
     let out = run("lsblk", &["-J", "-b", "-o", &format!("{columns},MOUNTPOINTS")])
         .or_else(|_| run("lsblk", &["-J", "-b", "-o", &format!("{columns},MOUNTPOINT")]))?;
-    parse(&out)
+    let mut drives = parse(&out)?;
+    for drive in &mut drives {
+        drive.port = fs::canonicalize(Path::new("/sys/block").join(&drive.name)).ok().and_then(|p| usb_port(&p));
+    }
+    Ok(drives)
+}
+
+/// The USB port in a block device's sysfs path: the last USB device on the
+/// way to it, `2-1.3` in `…/usb2/2-1/2-1.3/2-1.3:1.0/host6/…/block/sdb`
+/// (bus 2, port 1, then port 3 of the hub there).
+fn usb_port(sysfs: &Path) -> Option<String> {
+    let is_port = |name: &&str| {
+        name.split_once('-').is_some_and(|(bus, ports)| {
+            let number = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+            number(bus) && ports.split('.').all(number)
+        })
+    };
+    sysfs.components().filter_map(|c| c.as_os_str().to_str()).rfind(is_port).map(str::to_owned)
 }
 
 fn parent(device: &str) -> Option<String> {
@@ -113,5 +132,18 @@ mod tests {
         assert_eq!(stick.bus, "USB");
         assert_eq!(stick.mounts, vec!["/run/media/me/STICK"]);
         assert_eq!(stick.excluded(None, false), None);
+    }
+
+    #[test]
+    fn finds_the_usb_port_in_sysfs() {
+        let stick = Path::new(
+            "/sys/devices/pci0000:00/0000:00:14.0/usb2/2-1/2-1.3/2-1.3:1.0/host6/target6:0:0/6:0:0:0/block/sdb",
+        );
+        assert_eq!(usb_port(stick).as_deref(), Some("2-1.3"));
+        let direct =
+            Path::new("/sys/devices/pci0000:00/0000:00:14.0/usb3/3-4/3-4:1.0/host7/target7:0:0/7:0:0:0/block/sdc");
+        assert_eq!(usb_port(direct).as_deref(), Some("3-4"));
+        let ssd = Path::new("/sys/devices/pci0000:00/0000:00:1d.0/0000:3d:00.0/nvme/nvme0/nvme0n1");
+        assert_eq!(usb_port(ssd), None);
     }
 }

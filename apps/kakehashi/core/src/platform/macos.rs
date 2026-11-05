@@ -20,18 +20,17 @@ fn flag(dict: &plist::Dictionary, key: &str) -> bool {
     dict.get(key).and_then(Value::as_boolean).unwrap_or(false)
 }
 
-/// USB vendor, product and serial for each whole disk, from the I/O
-/// Registry: the nearest USB device above each disk's media.
-fn usb_details() -> HashMap<String, (String, String, String)> {
+/// A USB device's vendor, product, serial and location ID (its port).
+type Usb = (String, String, String, String);
+
+/// USB vendor, product, serial and location ID for each whole disk, from
+/// the I/O Registry: the nearest USB device above each disk's media.
+fn usb_details() -> HashMap<String, Usb> {
     let mut found = HashMap::new();
     let Ok(tree) = plist(&["/usr/sbin/ioreg", "-p", "IOService", "-l", "-a"]) else {
         return found;
     };
-    fn walk(
-        node: &Value,
-        usb: Option<(String, String, String)>,
-        found: &mut HashMap<String, (String, String, String)>,
-    ) {
+    fn walk(node: &Value, usb: Option<Usb>, found: &mut HashMap<String, Usb>) {
         let Some(dict) = node.as_dictionary() else {
             if let Some(list) = node.as_array() {
                 for child in list {
@@ -49,6 +48,11 @@ fn usb_details() -> HashMap<String, (String, String, String)> {
                 pick(&["USB Vendor Name", "kUSBVendorString"]),
                 pick(&["USB Product Name", "kUSBProductString"]),
                 serial,
+                // The port, as macOS names it (System Information shows it).
+                dict.get("locationID")
+                    .and_then(Value::as_unsigned_integer)
+                    .map(|id| format!("{id:#010x}"))
+                    .unwrap_or_default(),
             ))
         };
         if flag(dict, "Whole")
@@ -105,7 +109,7 @@ pub(crate) fn drives() -> Result<Vec<Drive>> {
             ["Size", "TotalSize"].iter().find_map(|k| info.get(k).and_then(Value::as_unsigned_integer)).unwrap_or(0);
         let bus = text(info, "BusProtocol");
         let points = mounts.remove(&name).unwrap_or_default();
-        let (vendor, product, serial) = usb.get(&name).cloned().unwrap_or_default();
+        let (vendor, product, serial, location) = usb.get(&name).cloned().unwrap_or_default();
         drives.push(Drive {
             bytes,
             vendor,
@@ -122,6 +126,7 @@ pub(crate) fn drives() -> Result<Vec<Drive>> {
             mounts: points,
             bus,
             name,
+            port: Some(location).filter(|l| !l.is_empty()),
         });
     }
     Ok(drives)

@@ -56,6 +56,8 @@ pkgs.testers.runNixOSTest {
     usb = next(d for d in drives if d["name"] == "sda")
     system = next(d for d in drives if d["system"])
     assert usb["usb_or_removable"] and not usb["system"] and usb["serial"] == "KAKEHASHI1", usb
+    # Its USB port, from where sysfs puts the disk.
+    assert usb.get("port"), usb
 
     def plan(drive):
         return json.dumps({"image": "/images/test.iso", "sha256": image_sha, "drive": drive})
@@ -95,6 +97,11 @@ pkgs.testers.runNixOSTest {
 
     with subtest("refuses a drive that is not the one in the plan"):
         status, lines = write(dict(usb, serial="SOMEONE-ELSE"), "other")
+        assert status != 0 and "no longer the drive you picked" in lines[-1]["message"], lines
+        assert not lines[-1]["touched"], lines
+
+    with subtest("refuses the drive the plan names when it is in another port"):
+        status, lines = write(dict(usb, port="9-9"), "moved")
         assert status != 0 and "no longer the drive you picked" in lines[-1]["message"], lines
         assert not lines[-1]["touched"], lines
 

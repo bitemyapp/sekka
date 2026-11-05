@@ -404,9 +404,9 @@ impl fmt::Display for Unconfirmed {
                 f,
                 "{} ({}) was replaced by {} ({}); nothing was written. Choose the drive again.",
                 changed.reviewed.drive.label(),
-                changed.reviewed.drive.serial_hint(),
+                changed.reviewed.drive.identity_hint(),
                 changed.found.drive.label(),
-                changed.found.drive.serial_hint()
+                changed.found.drive.identity_hint()
             ),
             Unconfirmed::Changed(changed) => write!(
                 f,
@@ -556,6 +556,23 @@ mod tests {
         l.listed(DriveListing::new(ticket, Err("lsblk failed".into())));
         let err = l.confirm(review, None, Some(image("sekka.iso"))).unwrap_err();
         assert!(matches!(err, Unconfirmed::Unlisted(_)) && err.to_string().contains("couldn't be read"), "{err}");
+    }
+
+    #[test]
+    fn confirm_refuses_a_stick_just_like_it_in_another_port() {
+        let t0 = Instant::now();
+        let in_port = |port: &str| Drive { serial: String::new(), port: Some(port.into()), ..stick("sdb", "") };
+        let mut l = DriveList::new();
+        list(&mut l, t0, vec![in_port("2-1")]);
+        l.choose(&in_port("2-1"));
+        let (review, _) = l.open_review(None, image("sekka.iso")).unwrap();
+        // Pulled, and one just like it, without a serial either, plugged into
+        // another port, where it took the name sdb.
+        list(&mut l, t0 + REFRESH, vec![in_port("2-2")]);
+        assert!(l.chosen(None).is_none());
+        let err = l.confirm(review, None, Some(image("sekka.iso"))).unwrap_err();
+        assert!(matches!(err, Unconfirmed::Changed(_)), "{err:?}");
+        assert!(err.to_string().contains("(no serial, USB port 2-1) was replaced by"), "{err}");
     }
 
     #[test]

@@ -24,6 +24,12 @@ pub struct Drive {
     /// Holds a filesystem the running system needs.
     pub system: bool,
     pub mounts: Vec<String>,
+    /// The USB port it is plugged into, as the system names it: `2-1.3` on
+    /// Linux (bus 2, port 1, then port 3 of the hub there), the location ID
+    /// `0x14200000` on macOS. `None` when it is not on USB or the system
+    /// doesn't say (Windows). Plans without it still read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub port: Option<String>,
 }
 
 /// Why a drive is not offered.
@@ -75,6 +81,20 @@ impl Drive {
         }
     }
 
+    /// The port in words, if the system named one.
+    pub fn port_hint(&self) -> Option<String> {
+        self.port.as_ref().map(|port| format!("USB port {port}"))
+    }
+
+    /// What tells it from another drive of the same make: its serial, and
+    /// its port if known.
+    pub fn identity_hint(&self) -> String {
+        match self.port_hint() {
+            Some(port) => format!("{}, {port}", self.serial_hint()),
+            None => self.serial_hint(),
+        }
+    }
+
     /// Why this drive is not offered, if it isn't. `all` offers external
     /// drives that are not USB or removable, or are large.
     pub fn excluded(&self, image_drive: Option<&str>, all: bool) -> Option<Excluded> {
@@ -100,15 +120,19 @@ impl Drive {
     }
 
     /// The same physical drive: compared before writing, so a drive that
-    /// was unplugged and replaced in the meantime is not erased.
+    /// was unplugged and replaced in the meantime is not erased. The port
+    /// counts when both readings have one, so a stick moved to another port,
+    /// or a stick just like it without a serial in another port, isn't the
+    /// same.
     pub fn same(&self, other: &Drive) -> bool {
         (&self.name, self.bytes, &self.vendor, &self.model, &self.serial, &self.bus)
             == (&other.name, other.bytes, &other.vendor, &other.model, &other.serial, &other.bus)
+            && self.port.as_ref().zip(other.port.as_ref()).is_none_or(|(a, b)| a == b)
     }
 }
 
 /// A drive is the same target when [`Drive::same`] says so: its serial,
-/// size, vendor, model and bus, as well as its name, which alone another
+/// size, vendor, model, bus and port, as well as its name, which alone another
 /// drive can take over.
 impl SameTarget for Drive {
     fn same_target(&self, fresh: &Drive) -> bool {
@@ -183,6 +207,33 @@ mod tests {
         assert!(stick().same(&other));
         other.serial = "different".into();
         assert!(!stick().same(&other));
+    }
+
+    #[test]
+    fn a_serial_less_stick_in_another_port_is_not_the_same() {
+        let in_port = |port: Option<&str>| Drive { serial: String::new(), port: port.map(str::to_owned), ..stick() };
+        // Two of the same make, neither with a serial, the second plugged in
+        // after the first was pulled, so it got the same name.
+        assert!(!in_port(Some("2-1")).same(&in_port(Some("2-2"))));
+        assert!(in_port(Some("2-1")).same(&in_port(Some("2-1"))));
+        // The same stick, moved to another port.
+        assert!(!Drive { port: Some("2-1".into()), ..stick() }.same(&Drive { port: Some("3-4".into()), ..stick() }));
+        // A reading without a port (Windows, an older plan) leaves it out.
+        assert!(in_port(Some("2-1")).same(&in_port(None)));
+        assert_eq!(in_port(Some("2-1")).identity_hint(), "no serial, USB port 2-1");
+    }
+
+    #[test]
+    fn a_plan_without_a_port_still_reads() {
+        let mut json = serde_json::to_value(stick()).unwrap();
+        assert!(json.get("port").is_none(), "no port, no key: {json}");
+        json.as_object_mut().unwrap().remove("port");
+        let back: Drive = serde_json::from_value(json).unwrap();
+        assert_eq!(back, stick());
+        let with: Drive =
+            serde_json::from_value(serde_json::to_value(Drive { port: Some("2-1".into()), ..stick() }).unwrap())
+                .unwrap();
+        assert_eq!(with.port.as_deref(), Some("2-1"));
     }
 
     #[test]

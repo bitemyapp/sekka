@@ -238,6 +238,8 @@ fn describe(number: u32, volumes: &HashMap<u32, Vec<(String, Vec<String>)>>, roo
         read_only,
         system: mounts.iter().any(|p| p.eq_ignore_ascii_case(root)),
         mounts,
+        // Its location path would take SetupAPI; the serial and the rest identify it.
+        port: None,
     })
 }
 
