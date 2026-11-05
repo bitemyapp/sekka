@@ -63,9 +63,11 @@
 //! today's link. A clock set back between the two writes can make a good
 //! copy look older. Being wrong that way only hides the copy (History shows
 //! no revisions for it, and going back doesn't restore it), so the rule
-//! never deletes: [`prune`] keeps an unrecorded copy while its generation
-//! exists, and the helper records the system of each such copy once it is
-//! taken ([`Snapshot::record_system`]), so the times decide it only once.
+//! never deletes one while its generation exists: [`prune`] keeps it, and a
+//! new copy for its generation ([`Saving::finish`]) sets it aside as
+//! `generation-<n>.unrecorded`, which nothing reads and `prune` forgets with
+//! the generation. The helper records the system of each such copy once it
+//! is taken ([`Snapshot::record_system`]), so the times decide it only once.
 use std::io::ErrorKind::NotFound;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
@@ -78,6 +80,10 @@ use crate::generations::{Generation, generation_number};
 /// The file in each copy that names the system the copy was made for. A
 /// copy of the configuration never has it: hidden files aren't copied.
 const MADE_FOR: &str = ".system";
+
+/// The extension of a copy that recorded no system and was replaced: set
+/// aside, read by nothing, and forgotten with its generation.
+const UNRECORDED: &str = "unrecorded";
 
 /// A system generation, as it was when read: its number, its link, and
 /// the system the link pointed at. [`Snapshot::of`] checks it against the
@@ -256,6 +262,13 @@ impl Saving {
         }
         mark(self.partial.get(), &self.generation)?;
         let partial = self.partial.settle();
+        // A copy that records no system may have been hidden by the time
+        // rule only: set it aside rather than lose it.
+        if matches!(made_for(&self.dir), MadeFor::Unrecorded) && self.dir.is_dir() {
+            let aside = self.dir.with_extension(UNRECORDED);
+            let _ = std::fs::remove_dir_all(&aside);
+            let _ = std::fs::rename(&self.dir, &aside);
+        }
         let _ = std::fs::remove_dir_all(&self.dir);
         if let Err(e) = std::fs::rename(&partial, &self.dir) {
             remove_partial(partial);
@@ -276,7 +289,15 @@ pub fn prune(root: &Path, profile: &Path) {
     };
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
-        let number = name.strip_prefix("generation-").and_then(|n| n.parse::<u32>().ok());
+        let number = name.strip_prefix("generation-");
+        // Set aside: kept with its generation.
+        if let Some(n) = number.and_then(|n| n.strip_suffix(&format!(".{UNRECORDED}"))) {
+            if n.parse::<u32>().ok().and_then(|n| GenerationId::read(profile, n)).is_none() {
+                let _ = std::fs::remove_dir_all(entry.path());
+            }
+            continue;
+        }
+        let number = number.and_then(|n| n.parse::<u32>().ok());
         let keep = match number.and_then(|n| GenerationId::read(profile, n)) {
             None => false,
             Some(generation) => match Snapshot::of(root, &generation) {
@@ -406,6 +427,29 @@ mod tests {
         f.link(2, "/nix/store/s2-rebuilt");
         prune(&f.root(), &f.profile());
         assert_eq!(f.names(), ["generation-3", "generation-6"]);
+    }
+
+    #[test]
+    fn a_hidden_unrecorded_copy_is_set_aside_not_lost_when_replaced() {
+        let f = Fixture::new("aside");
+        // A copy that records no system, hidden by a clock set back.
+        let generation = f.link(6, "/nix/store/s6");
+        let copy = directory(&f.root(), &generation);
+        std::fs::create_dir_all(&copy).unwrap();
+        std::fs::write(copy.join("flake.lock"), "made by hand long ago").unwrap();
+        set_link_time(&f.dir.join("profiles/system-6-link"), 60);
+        assert!(Snapshot::of(&f.root(), &generation).is_none());
+        // The next change keeps the configuration as it is now.
+        let saving = Saving::begin(&f.root(), &generation).unwrap();
+        std::fs::write(saving.dir().join("flake.lock"), "now").unwrap();
+        saving.finish().unwrap();
+        let aside = f.root().join("generation-6.unrecorded/flake.lock");
+        assert_eq!(std::fs::read_to_string(aside).unwrap(), "made by hand long ago");
+        prune(&f.root(), &f.profile());
+        assert_eq!(f.names(), ["generation-6", "generation-6.unrecorded"]);
+        std::fs::remove_file(f.dir.join("profiles/system-6-link")).unwrap();
+        prune(&f.root(), &f.profile());
+        assert!(f.names().is_empty(), "{:?}", f.names());
     }
 
     #[test]

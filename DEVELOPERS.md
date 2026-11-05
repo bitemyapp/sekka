@@ -1169,9 +1169,10 @@ the system it was kept for, and is used only for that generation, because Nix
 reuses the numbers of deleted generations. A copy from before copies recorded
 their system counts when it is no older than its generation's link; the
 helper then records its system once, and never deletes such a copy while its
-generation exists. Activation is allowed to finish once started; it never
-initiates a reboot. Clean Up deletes old generations and rewrites the boot
-menu as one step that Stop waits for, and only then collects garbage.
+generation exists: a new copy for that generation sets it aside as
+`generation-<n>.unrecorded`. Activation is allowed to finish once started; it
+never initiates a reboot. Clean Up deletes old generations and rewrites the
+boot menu as one step that Stop waits for, and only then collects garbage.
 
 The helper's typed steps live in its library (`yukimi_helper`), each
 guarantee shown by a `compile_fail` doctest. The helper runs programs only

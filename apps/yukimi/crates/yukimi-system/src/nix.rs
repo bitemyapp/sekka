@@ -34,16 +34,6 @@ pub fn command() -> Command {
     command
 }
 
-/// Run Nix and parse its output as JSON.
-pub fn json(args: &[&str]) -> Result<serde_json::Value> {
-    let output = command().args(args).stdin(Stdio::null()).output().map_err(|e| Error::Spawn("nix".into(), e))?;
-    if !output.status.success() {
-        let stderr = crate::log::strip_ansi(&String::from_utf8_lossy(&output.stderr));
-        return Err(Error::Failed(last_error(&stderr)));
-    }
-    Ok(serde_json::from_slice(&output.stdout)?)
-}
-
 /// One of Nix's settings, as `nix config show` gives it.
 pub fn setting(name: &str) -> Option<String> {
     let output = command().args(["config", "show", name]).stdin(Stdio::null()).stderr(Stdio::null()).output().ok()?;
