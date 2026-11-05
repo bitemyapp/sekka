@@ -1,19 +1,68 @@
-//! `tasuke`: the assistant's headless interface. See apps/tasuke/DESIGN.md.
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//! `tasuke`: the assistant's headless interface. See apps/tasuke/DESIGN.md
+//! ("CLI").
 //!
 //! Subcommands live in their own modules: models.rs (hardware, recommend,
 //! models, download, remove, use, server) and ask.rs (ask).
 
-mod ask;
-mod checkup;
+use std::process::ExitCode;
 
-fn main() -> anyhow::Result<()> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    match args.first().map(String::as_str) {
-        Some("ask") => std::process::exit(ask::run(&args[1..])),
-        Some("checkup") => std::process::exit(checkup::run(&args[1..])),
-        _ => {
-            eprintln!("usage: tasuke hardware|recommend|models|download|remove|use|server|ask …");
-            std::process::exit(2);
+mod args;
+mod ask;
+mod models;
+mod table;
+
+const USAGE: &str = "\
+usage: tasuke COMMAND [options]
+
+  hardware [--json]                    what this machine has for running models
+  recommend [--role ROLE] [--json]     the models to use here, best first
+                                       (ROLE: assistant, desktop or fast)
+  models [--json]                      the catalog, with fit and download state
+  download ID                          download a model (progress on stderr)
+  remove ID                            delete a downloaded model
+  use ID                               make it the assistant's model
+  server start [--foreground]          start the model server (the user unit
+                                       tasuke-llm.service, or here and now)
+  server stop                          stop it
+  server status [--json]               whether it runs, and what it serves
+  server exec                          become the model server (the unit runs this)
+  ask [--act] [--desktop] [--approve never|ask|all]
+      [--base-url URL --model NAME] \"request\"
+                                       ask the assistant from the terminal
+";
+
+fn main() -> ExitCode {
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    let Some((command, rest)) = argv.split_first() else {
+        eprint!("{USAGE}");
+        return ExitCode::from(2);
+    };
+    let code = match command.as_str() {
+        "help" | "--help" | "-h" => {
+            print!("{USAGE}");
+            0
         }
-    }
+        "ask" => ask::run(rest),
+        "hardware" | "recommend" | "models" | "download" | "remove" | "use" | "server" => {
+            match models::run(command, rest.to_vec()) {
+                Ok(()) => 0,
+                Err(models::Failure::Usage(e)) => {
+                    eprintln!("tasuke {command}: {e}");
+                    eprint!("{USAGE}");
+                    2
+                }
+                Err(models::Failure::Failed(e)) => {
+                    eprintln!("tasuke {command}: {e}");
+                    1
+                }
+            }
+        }
+        other => {
+            eprintln!("tasuke: unknown command {other:?}");
+            eprint!("{USAGE}");
+            2
+        }
+    };
+    ExitCode::from(u8::try_from(code).unwrap_or(1))
 }
