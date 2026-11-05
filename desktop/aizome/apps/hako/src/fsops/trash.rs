@@ -102,6 +102,32 @@ impl Entry {
             .map(names::display)
             .unwrap_or_else(|| names::display(&self.name))
     }
+
+    /// The proof that its item has left its can (put back, or deleted),
+    /// if it has: nothing is at its name in `files/` any more.
+    pub fn gone(&self) -> Option<Gone> {
+        match fs::symlink_metadata(&self.file) {
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Some(Gone { entry: self.clone() }),
+            _ => None,
+        }
+    }
+}
+
+/// Proof that an entry's item is no longer in its can. Only
+/// [`Entry::gone`] makes one, by looking, and [`Trash::forget`] takes it,
+/// so an item that's still there (a folder put back in part) keeps its
+/// info and where it came from:
+///
+/// ```compile_fail,E0451
+/// use hako::fsops::trash::{Entry, Gone};
+/// fn forge(entry: Entry) -> Gone {
+///     Gone { entry }
+/// }
+/// ```
+#[derive(Debug)]
+#[must_use = "a gone entry is for forgetting"]
+pub struct Gone {
+    entry: Entry,
 }
 
 impl Trash {
@@ -316,41 +342,21 @@ impl Trash {
                         && fs::symlink_metadata(info.join(info_name(n))).is_err()
                 });
             }
-            if fs::symlink_metadata(files.join(&name)).is_ok() {
-                continue;
-            }
-            let info_path = info.join(info_name(&name));
-            let mut f = match OpenOptions::new().write(true).create_new(true).mode_private().open(&info_path) {
-                Ok(f) => f,
-                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
-                Err(e) => return Err(e),
-            };
-            if let Err(e) = f.write_all(body.as_bytes()).and_then(|()| f.sync_all()) {
-                let _ = fs::remove_file(&info_path);
-                return Err(e);
-            }
-            drop(f);
-            let target = files.join(&name);
-            match sys::rename_noreplace(path, &target) {
-                Ok(()) => {
+            let Some(claim) = Claim::make(&can, &name, &body)? else { continue };
+            match claim.fill(path) {
+                Ok((file, info_path)) => {
                     let _ = sys::sync_dir(&files);
                     let _ = sys::sync_dir(&info);
                     if meta.is_dir()
-                        && let Some((_, bytes)) = super::delete::measure(&target, &super::Control::new(), 20_000)
+                        && let Some((_, bytes)) = super::delete::measure(&file, &super::Control::new(), 20_000)
                     {
                         let mtime = fs::metadata(&info_path).map(|m| m.mtime()).unwrap_or(0);
                         let _ = edit_sizes(&can, |lines| lines.push(format!("{bytes} {mtime} {}", encode_name(&name))));
                     }
-                    return Ok(Trashed { original, file: target, info: info_path });
+                    return Ok(Trashed { original, file, info: info_path });
                 }
-                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
-                    let _ = fs::remove_file(&info_path);
-                    continue;
-                }
-                Err(e) => {
-                    let _ = fs::remove_file(&info_path);
-                    return Err(e);
-                }
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(e),
             }
         }
     }
@@ -379,13 +385,95 @@ impl Trash {
     }
 
     /// Take an entry's info (and its folder size) out of its can, once
-    /// its item has gone (restored or deleted).
-    pub fn forget(&self, entry: &Entry) {
+    /// its item has gone (put back or deleted). An entry whose Put Back
+    /// left something in the can isn't gone, so it can't be forgotten:
+    ///
+    /// ```compile_fail,E0308
+    /// use hako::fsops::trash::{Entry, Trash};
+    /// // What Put Back did once the placement reported Done, though a
+    /// // merge had skipped some of the folder.
+    /// fn put_back(trash: &Trash, entry: &Entry) {
+    ///     trash.forget(entry);
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// use hako::fsops::trash::{Entry, Trash};
+    /// fn put_back(trash: &Trash, entry: &Entry) {
+    ///     if let Some(gone) = entry.gone() {
+    ///         trash.forget(gone);
+    ///     }
+    /// }
+    /// ```
+    pub fn forget(&self, gone: Gone) {
+        let Gone { entry } = gone;
         if let Some(info) = &entry.info {
             let _ = fs::remove_file(info);
         }
         let key = encode_name(&entry.name);
         let _ = edit_sizes(&entry.can, |lines| lines.retain(|l| l.rsplit(' ').next() != Some(key.as_str())));
+    }
+
+    /// Remove the infos whose items are gone from every can: ghosts a
+    /// crash between claiming a name and trashing left (or another
+    /// program's), which [`list`](Self::list) doesn't show.
+    pub fn forget_ghosts(&self) {
+        for can in self.cans() {
+            let Ok(rd) = fs::read_dir(can.info()) else { continue };
+            for e in rd.flatten() {
+                let fname = e.file_name();
+                if let Some(name) = fname.as_bytes().strip_suffix(b".trashinfo")
+                    && fs::symlink_metadata(can.files().join(OsStr::from_bytes(name)))
+                        .is_err_and(|e| e.kind() == io::ErrorKind::NotFound)
+                {
+                    let _ = fs::remove_file(e.path());
+                }
+            }
+        }
+    }
+}
+
+/// A name claimed in a can: its `.trashinfo`, made with `O_EXCL` and
+/// written. It becomes the info of the item renamed in under the name
+/// ([`fill`](Self::fill)); dropped unfilled, it takes the info back, so no
+/// failed trashing leaves a ghost behind.
+struct Claim {
+    info: Option<PathBuf>,
+    file: PathBuf,
+}
+
+impl Claim {
+    /// Claim `name` in `can`, its info saying `body`: `None` if the name
+    /// is taken.
+    fn make(can: &Can, name: &OsStr, body: &str) -> io::Result<Option<Claim>> {
+        let file = can.files().join(name);
+        if fs::symlink_metadata(&file).is_ok() {
+            return Ok(None);
+        }
+        let info = can.info().join(info_name(name));
+        let mut f = match OpenOptions::new().write(true).create_new(true).mode_private().open(&info) {
+            Ok(f) => f,
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => return Ok(None),
+            Err(e) => return Err(e),
+        };
+        let claim = Claim { info: Some(info), file };
+        f.write_all(body.as_bytes()).and_then(|()| f.sync_all())?;
+        Ok(Some(claim))
+    }
+
+    /// Rename `item` in under the claimed name: its file and info.
+    fn fill(mut self, item: &Path) -> io::Result<(PathBuf, PathBuf)> {
+        sys::rename_noreplace(item, &self.file)?;
+        let info = self.info.take().expect("a claim is filled once");
+        Ok((std::mem::take(&mut self.file), info))
+    }
+}
+
+impl Drop for Claim {
+    fn drop(&mut self) {
+        if let Some(info) = self.info.take() {
+            let _ = fs::remove_file(info);
+        }
     }
 }
 
@@ -835,9 +923,30 @@ mod tests {
         let a = t.file("home/a", "a");
         tr.trash(&a).unwrap();
         let e = tr.entry_for(&t.join("data/Trash/files/a")).unwrap();
+        assert!(e.gone().is_none(), "it's still in the can");
         fs::remove_file(&e.file).unwrap();
-        tr.forget(&e);
+        tr.forget(e.gone().expect("it's gone now"));
         assert!(!t.join("data/Trash/info/a.trashinfo").exists());
+        // Ghost infos go only once their items have.
+        tr.forget_ghosts();
+        assert!(!t.join("data/Trash/info/ghost.trashinfo").exists());
+        assert!(t.join("data/Trash/files/stray").exists());
+    }
+
+    #[test]
+    fn a_failed_trashing_takes_its_claim_back() {
+        if crate::fsops::testing::is_root() {
+            return;
+        }
+        let t = TempDir::new("trash-claim");
+        let tr = trash_in(&t);
+        t.dir("data/Trash/info");
+        let a = t.file("home/locked/a.txt", "a");
+        // The item can't be renamed out of a folder it can't write to.
+        fs::set_permissions(t.join("home/locked"), fs::Permissions::from_mode(0o555)).unwrap();
+        assert!(tr.trash(&a).is_err());
+        assert_eq!(fs::read_dir(t.join("data/Trash/info")).unwrap().count(), 0, "no ghost info is left");
+        assert!(a.exists());
     }
 
     #[test]
