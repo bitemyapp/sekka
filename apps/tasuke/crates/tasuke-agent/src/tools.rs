@@ -414,7 +414,9 @@ pub(crate) fn execute(call: &ToolCall, o: &Options, desktop: &mut Desktop<'_>, c
     match call {
         ToolCall::RunCommand { command, timeout_seconds, .. } => {
             let mut argv = o.user_command_prefix.clone();
-            argv.extend(["bash".into(), "-c".into(), command.clone()]);
+            // No profile, no rc file, no inherited functions: the policy judged
+            // the command as written, so nothing may redefine its programs.
+            argv.extend(["bash".into(), "--noprofile".into(), "--norc".into(), "-c".into(), command.clone()]);
             let timeout = Duration::from_secs(u64::from(*timeout_seconds));
             match exec::run(&argv, Some(&home_dir()), COMMAND_ENV, None, timeout, cancel) {
                 Ok(run) => Outcome::text(run_output(&run, timeout)),
@@ -422,7 +424,7 @@ pub(crate) fn execute(call: &ToolCall, o: &Options, desktop: &mut Desktop<'_>, c
             }
         }
         ToolCall::RunAsRoot { command, purpose, timeout_seconds } => {
-            Outcome::text(run_as_root(command, purpose, *timeout_seconds, o, cancel))
+            Outcome::text(run_as_root(command, purpose, *timeout_seconds))
         }
         ToolCall::ReadFile { path, offset, limit } => Outcome::text(read_file(path, *offset, *limit)),
         ToolCall::WriteFile { path, content, .. } => Outcome::text(match write_file(path, content) {
@@ -514,48 +516,34 @@ fn after_action(desktop: &mut Desktop<'_>, done: Result<String, String>) -> Outc
     }
 }
 
-fn run_as_root(command: &str, purpose: &str, timeout_seconds: u32, o: &Options, cancel: &AtomicBool) -> ToolOutput {
-    let timeout = Duration::from_secs(u64::from(timeout_seconds));
-    // SAFETY: geteuid can't fail.
-    if unsafe { libc::geteuid() } == 0 {
-        let argv = vec!["bash".to_owned(), "-c".to_owned(), command.to_owned()];
-        return match exec::run(&argv, Some(&home_dir()), COMMAND_ENV, None, timeout, cancel) {
-            Ok(run) => run_output(&run, timeout),
-            Err(e) => ToolOutput::failed(format!("couldn't start bash: {e}")),
-        };
-    }
-    let request = json!({"command": command, "purpose": purpose, "timeout_seconds": timeout_seconds}).to_string();
-    let argv = vec!["pkexec".to_owned(), o.helper.to_string_lossy().into_owned(), "run".to_owned()];
-    // The password dialog's time on top of the command's.
-    let run = match exec::run(&argv, None, &[], Some(request.as_bytes()), timeout + Duration::from_secs(180), cancel) {
-        Ok(run) => run,
-        Err(e) => return ToolOutput::failed(format!("couldn't start pkexec: {e}")),
-    };
-    if run.cancelled {
-        return ToolOutput::with_status(ToolStatus::Cancelled, "stopped: the person cancelled");
-    }
-    let reply: Option<Value> = run.output.lines().rev().find_map(|l| serde_json::from_str(l.trim()).ok());
-    match (run.exit_code, reply) {
-        (_, Some(v)) if v.get("output").is_some() => {
-            let exit_code = v.get("exit_code").and_then(Value::as_i64).map(|c| c as i32);
-            let r = exec::Run {
-                exit_code,
-                output: v.get("output").and_then(Value::as_str).unwrap_or("").to_owned(),
-                truncated: v.get("truncated").and_then(Value::as_bool).unwrap_or(false),
-                timed_out: v.get("timed_out").and_then(Value::as_bool).unwrap_or(false),
+/// Through tasuke-helper: pkexec asks for the password, or directly when
+/// Tasuke itself runs as root (the evaluation VM). It can't be cancelled
+/// part-way: the person can't signal a root process.
+fn run_as_root(command: &str, purpose: &str, timeout_seconds: u32) -> ToolOutput {
+    use crate::root::{RootError, RootRequest};
+    let request = RootRequest { command: command.to_owned(), purpose: purpose.to_owned(), timeout_seconds };
+    match crate::root::run_as_root(&request) {
+        Ok(r) if r.refused.is_some() => {
+            ToolOutput::with_status(ToolStatus::Refused, r.refused.unwrap_or_default())
+        }
+        Ok(r) => {
+            let run = exec::Run {
+                exit_code: r.exit_code,
+                output: r.output,
+                truncated: r.truncated,
+                timed_out: r.timed_out,
                 cancelled: false,
             };
-            run_output(&r, timeout)
+            run_output(&run, Duration::from_secs(u64::from(timeout_seconds)))
         }
-        (_, Some(v)) if v.get("error").is_some() => {
-            ToolOutput::with_status(ToolStatus::Refused, v["error"].as_str().unwrap_or("refused").to_owned())
+        Err(RootError::Dismissed) => {
+            ToolOutput::with_status(ToolStatus::Denied, "The person closed the password dialog; nothing ran.")
         }
-        (Some(126), _) => ToolOutput::with_status(ToolStatus::Denied, "The person closed the password dialog; nothing ran."),
-        (Some(127), _) => ToolOutput::with_status(
+        Err(RootError::NotAuthorized) => ToolOutput::with_status(
             ToolStatus::Denied,
             "The administrator password wasn't given or wasn't accepted; nothing ran.",
         ),
-        _ => ToolOutput::failed(format!("tasuke-helper failed: {}", run.output.trim().chars().take(400).collect::<String>())),
+        Err(e) => ToolOutput::failed(e.to_string()),
     }
 }
 

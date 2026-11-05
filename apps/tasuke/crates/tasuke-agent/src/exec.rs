@@ -87,6 +87,14 @@ pub(crate) fn run(
         .stdout(writer.try_clone()?)
         .stderr(writer)
         .process_group(0);
+    // Nothing inherited may redefine the programs a command names (the
+    // policy judged it as written): no BASH_ENV, ENV or exported functions.
+    cmd.env_remove("BASH_ENV").env_remove("ENV");
+    for (k, _) in std::env::vars_os() {
+        if k.to_string_lossy().starts_with("BASH_FUNC_") {
+            cmd.env_remove(&k);
+        }
+    }
     if let Some(dir) = cwd.filter(|d| d.is_dir()) {
         cmd.current_dir(dir);
     }
