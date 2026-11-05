@@ -120,14 +120,12 @@ pub fn view(v: &AuthView) -> Element<AuthMsg> {
             Align::Start,
         );
     });
-    let mut f = field(&v.password, |t| look::ui(14.0 * t.metrics.factor, typeface::WEIGHT_REGULAR, t.text()))
+    let f = field(&v.password, |t| look::ui(14.0 * t.metrics.factor, typeface::WEIGHT_REGULAR, t.text()))
         .placeholder(if v.busy { "Checking…" } else { "" })
         .height(28.0)
         .on_change(AuthMsg::Password)
         .on_submit(AuthMsg::Authenticate);
-    if !v.echo {
-        f = f.secure();
-    }
+    let f = f.secure_when(!v.echo);
     let boxed = around(
         Element::from(f).id("auth-password"),
         [0.0, 10.0, 0.0, 12.0],
