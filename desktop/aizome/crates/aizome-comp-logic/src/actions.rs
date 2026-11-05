@@ -3,6 +3,7 @@
 //! happens when windows come and go, and the logic taking in the windows
 //! the core has when it starts (after a reload, say).
 
+use aizome_comp_core::aizome_config::StackNewWindows;
 use aizome_comp_core::aizome_ipc::{DeskInfo, Event, Rect as IpcRect, WindowInfo};
 use aizome_comp_core::logic::{MapInfo, ToplevelRequest};
 use smithay::backend::renderer::utils::with_renderer_surface_state;
@@ -954,6 +955,35 @@ pub fn first_configure(st: &mut State, toplevel: &ToplevelSurface) {
     });
 }
 
+/// The focused window whose group a new one joins, as `[windows]
+/// stack_new_windows` says; dialogs never do. Another app's window joins
+/// only a window it can share a frame with: not a dialog, full screen,
+/// floating, on every Desk or of a fixed size. Nor does it join opening
+/// full screen, or when it can't grow to the frame, which the whole group
+/// would follow. A window that needs more room grows the frame, within
+/// what the focused window allows.
+fn stack_target(st: &State, id: WinId, info: &MapInfo) -> Option<WinId> {
+    let how = st.az.settings.windows.stack_new_windows;
+    if how == StackNewWindows::None || info.parent.is_some() {
+        return None;
+    }
+    let l = st.lg.r();
+    let f = l.wm.focused().filter(|f| *f != id)?;
+    let w = l.wm.get(f)?;
+    if w.app_id == info.app_id {
+        return Some(f);
+    }
+    if how != StackNewWindows::AnyApp || info.fullscreen || w.parent.is_some() || w.fullscreen() || w.float || w.sticky
+    {
+        return None;
+    }
+    let (min, max) = crate::grabs::size_limits(st, id);
+    let (f_min, f_max) = crate::grabs::size_limits(st, f);
+    let grows = max.0 >= w.rect.w && max.1 >= w.rect.h;
+    let room = min.0 <= f_max.0 && min.1 <= f_max.1;
+    (grows && room && f_min != f_max).then_some(f)
+}
+
 /// A toplevel drew its first frame: it joins the desktop.
 pub fn window_mapped(st: &mut State, id: WinId, info: &MapInfo) {
     let l = st.lg.m();
@@ -964,14 +994,7 @@ pub fn window_mapped(st: &mut State, id: WinId, info: &MapInfo) {
     l.wins.insert(id, Default::default());
     place_new_window(st, id, info.size, info.parent);
 
-    // A new window of the focused app joins its group, when asked for.
-    let l = st.lg.r();
-    let focused = l.wm.focused();
-    let same_app = focused.filter(|f| l.wm.get(*f).is_some_and(|w| w.app_id == info.app_id && w.id != id));
-    if st.az.settings.windows.stack_new_windows_of_same_app
-        && info.parent.is_none()
-        && let Some(f) = same_app
-    {
+    if let Some(f) = stack_target(st, id, info) {
         st.stack(f, id);
     }
     if info.fullscreen {

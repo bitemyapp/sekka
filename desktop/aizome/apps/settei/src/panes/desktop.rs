@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-use aizome_config::{DESKBAR_SIZES, DeskConfig, DeskbarSide, FocusFollows};
+use aizome_config::{DESKBAR_SIZES, DeskConfig, DeskbarSide, FocusFollows, StackNewWindows};
 use aizome_kit::prelude::*;
 use aizome_kit::row;
 use aizome_sys::apps::AppIndex;
@@ -48,7 +48,7 @@ pub enum Msg {
     Pin(usize),
     Unpin(String),
     Icon(&'static str, bool),
-    Stack(bool),
+    Stack(usize),
     DoubleClick(usize),
     FocusFollows(bool),
     Remember(bool),
@@ -60,6 +60,18 @@ type DeskEdit = Box<dyn FnOnce(&mut Vec<DeskConfig>)>;
 
 pub const DOUBLE_CLICK: [(&str, &str); 3] =
     [("fill", "Fill the screen"), ("minimise", "Minimise"), ("nothing", "Nothing")];
+
+/// Which new windows stack, as named in the dropdown, with what that does.
+pub const STACK_NEW: [(StackNewWindows, &str, &str); 3] = [
+    (StackNewWindows::None, "None", "A new window opens on its own. Drop a tab among another window's to stack them."),
+    (StackNewWindows::SameApp, "Same app", "A new window joins the app's window as a tab, as in Haiku."),
+    (
+        StackNewWindows::AnyApp,
+        "All windows of any app",
+        "A new window joins the focused window as a tab, whatever its app. Dialogs and full-screen, \
+         floating or fixed-size windows open on their own.",
+    ),
+];
 
 fn sample_apps() -> Vec<(String, String)> {
     [
@@ -121,7 +133,14 @@ impl Pane for Desktop {
                 "compact",
             ]),
             SettingEntry::new("desktop-icons", "Icons on the desktop").keywords(&["home", "disks", "trash"]),
-            SettingEntry::new("stack-new", "Stack new windows of the same app").keywords(&["tabs", "tab groups"]),
+            SettingEntry::new("stack-new", "Stack new windows").keywords(&[
+                "tabs",
+                "tab groups",
+                "same app",
+                "any app",
+                "all windows",
+                "tabbed",
+            ]),
             SettingEntry::new("double-click", "Double-click a tab").keywords(&[
                 "zoom",
                 "maximise",
@@ -281,7 +300,7 @@ impl Pane for Desktop {
                 s.set_shell_section("deskbar", &d);
             }),
             Msg::Icon(key, on) => cx.change(|s| extra::set(extra::section(s, "desktop"), key, on)),
-            Msg::Stack(on) => cx.change(|s| s.windows.stack_new_windows_of_same_app = on),
+            Msg::Stack(i) => cx.change(|s| s.windows.stack_new_windows = STACK_NEW[i.min(2)].0),
             Msg::DoubleClick(i) => {
                 cx.change(|s| extra::set(&mut s.windows.extra, "tab_double_click", DOUBLE_CLICK[i.min(2)].0))
             }
@@ -424,13 +443,11 @@ impl Pane for Desktop {
         let w = &s.windows;
         let dc = extra::get_str(&w.extra, "tab_double_click").unwrap_or("fill");
         let dc_i = DOUBLE_CLICK.iter().position(|(k, _)| *k == dc).unwrap_or(0);
+        let stack_i = STACK_NEW.iter().position(|(k, ..)| *k == w.stack_new_windows).unwrap_or(1);
         let windows = vec![
-            form::row(
-                "Stack new windows of the same app",
-                toggle(w.stack_new_windows_of_same_app).on_toggle(Msg::Stack),
-            )
-            .entry("stack-new")
-            .help("A new window joins the app's window as a tab, as in Haiku."),
+            form::row("Stack new windows", form::choice(&STACK_NEW.map(|s| s.1), stack_i, Msg::Stack))
+                .entry("stack-new")
+                .help(STACK_NEW[stack_i].2),
             form::row("Double-click a tab to", form::choice(&DOUBLE_CLICK.map(|d| d.1), dc_i, Msg::DoubleClick))
                 .entry("double-click"),
             form::row(

@@ -108,8 +108,9 @@ palette. Search filters the sidebar and highlights options.
   Each theme remembers its own choice, including after logout.
 - **Desktop & Deskbar**: Desks (names, folders, add/remove), Deskbar
   (collapsed, pinned apps, show the Shelf), desktop icons (show disks,
-  Home, Trash), windows (stack new windows of the same app, double-click on a
-  tab: fill or minimise, command key for all apps).
+  Home, Trash), windows (stack new windows: none, the same app's, or all
+  windows of any app; double-click on a tab: fill or minimise, command key
+  for all apps).
 - **Menu Bar**: clock (24h, seconds, date), which systray widgets and meters
   show.
 - **Search**: palette scopes on and off, file index folders and

@@ -1,5 +1,5 @@
-//! Settings keys Settei writes, honoured: whether new windows of the same
-//! app stack, what double-clicking a tab does, scrolling distance, each
+//! Settings keys Settei writes, honoured: which new windows stack (the
+//! same app's, any app's, none), what double-clicking a tab does, scrolling distance, each
 //! keyboard's own modifier keys, sticky keys and slow keys.
 
 mod common;
@@ -50,17 +50,104 @@ fn new_windows_of_the_focused_app_stack_unless_the_settings_say_not() {
     let v = c.wait_window("org.example.viewer");
     assert!(v.group.is_none(), "{v:?}");
 
-    let c = Compositor::start(Options {
-        settings: "[windows]\nstack_new_windows_of_same_app = false\n",
-        ..Default::default()
+    // None, and the switch it replaced turned off.
+    for settings in ["[windows]\nstack_new_windows = \"none\"\n", "[windows]\nstack_new_windows_of_same_app = false\n"]
+    {
+        let c = Compositor::start(Options { settings, ..Default::default() });
+        let _a = c.client(Spec::new("org.example.editor", 0x2222cc));
+        c.wait_window("org.example.editor");
+        let _b = c.client(Spec::new("org.example.editor", 0x22cc22));
+        c.wait_windows("two windows", |ws| ws.len() == 2);
+        c.settle();
+        let ws = c.windows();
+        assert!(ws.iter().all(|w| w.group.is_none()), "{settings}: {ws:?}");
+    }
+}
+
+const ANY_APP: &str = "[windows]\nstack_new_windows = \"any-app\"\n";
+
+#[test]
+fn with_any_app_a_new_window_joins_the_focused_one_in_its_frame() {
+    let c = Compositor::start(Options { settings: ANY_APP, ..Default::default() });
+    let _a = c.client(Spec::new("org.example.editor", 0x2222cc).size(500, 400));
+    let a = c.wait_window("org.example.editor");
+    let v_client = c.client(Spec::new("org.example.viewer", 0xcc2222).size(300, 200));
+    let ws = c.wait_windows("stacked", |ws| ws.len() == 2 && ws.iter().all(|w| w.group.is_some()));
+    let v = ws.iter().find(|w| w.app_id == "org.example.viewer").unwrap().clone();
+    assert!(v.group_active && v.focused, "the new window shows: {v:?}");
+    assert_eq!(v.geometry, a.geometry, "it takes the group's frame: {ws:?}");
+    v_client.wait_seen("the group's size", |s| s.size == (500, 400));
+    // One that needs more room joins too, and the frame grows to it.
+    let _wide = c.client(Spec::new("org.example.sheets", 0x2222cc).size(700, 500).min_size(640, 480));
+    let ws = c.wait_windows("the frame grown", |ws| {
+        ws.len() == 3 && ws.iter().all(|w| w.group == v.group && (w.geometry.w, w.geometry.h) == (640, 480))
     });
-    let _a = c.client(Spec::new("org.example.editor", 0x2222cc));
-    c.wait_window("org.example.editor");
+    let wide = ws.iter().find(|w| w.app_id == "org.example.sheets").unwrap().id;
+    v_client.wait_seen("the grown frame", |s| s.size == (640, 480));
+    // Another window of the same app stacks too, after the others' tabs.
     let _b = c.client(Spec::new("org.example.editor", 0x22cc22));
-    c.wait_windows("two windows", |ws| ws.len() == 2);
+    let ws = c.wait_windows("four stacked", |ws| ws.len() == 4 && ws.iter().all(|w| w.group == v.group));
+    let b = ws.iter().find(|w| w.app_id == "org.example.editor" && w.id != a.id).unwrap();
+    assert_eq!(b.group_members, vec![a.id, v.id, wide, b.id], "{ws:?}");
+    // A dialog opens on its own, over its window, and another app's
+    // window doesn't join the dialog.
+    v_client.send(Cmd::Dialog("Open".into(), 0xcccc22));
+    let ws = c.wait_windows("a dialog", |ws| ws.iter().any(|w| w.parent.is_some() && w.focused));
+    assert_eq!(ws.len(), 5, "{ws:?}");
+    let d = ws.iter().find(|w| w.parent.is_some()).unwrap();
+    assert!(d.group.is_none(), "{d:?}");
+    let _chat = c.client(Spec::new("org.example.chat", 0x22cccc));
+    let chat = c.wait_window("org.example.chat");
     c.settle();
-    let ws = c.windows();
+    assert!(c.window("org.example.chat").unwrap().group.is_none(), "{chat:?}");
+}
+
+#[test]
+fn with_any_app_windows_that_cant_share_a_frame_open_on_their_own() {
+    let c = Compositor::start(Options { settings: ANY_APP, ..Default::default() });
+    let _a = c.client(Spec::new("org.example.editor", 0x2222cc).size(500, 400));
+    let a = c.wait_window("org.example.editor");
+    let alone = |app_id: &str| {
+        c.wait_window(app_id);
+        c.settle();
+        let ws = c.windows();
+        assert!(ws.iter().all(|w| w.group.is_none()), "{app_id} opens on its own: {ws:?}");
+        let editor = ws.iter().find(|w| w.id == a.id).unwrap();
+        assert_eq!(editor.geometry, a.geometry, "{app_id} leaves the editor's frame alone");
+    };
+    let focus_editor = || c.ok(Request::Focus { id: a.id });
+
+    // A window of a fixed size, which the group would shrink to.
+    let _login = c.client(Spec::new("org.example.login", 0xcc2222).fixed_size(240, 160));
+    alone("org.example.login");
+    // Nor does another join it when it has the focus, a frame held to its size.
+    let _notes = c.client(Spec::new("org.example.notes", 0x22cc22));
+    alone("org.example.notes");
+    // Nor one needing more room than the focused window can grow to.
+    let _panel = c.client(Spec::new("org.example.panel", 0x2222cc).size(300, 250).max_size(320, 260));
+    alone("org.example.panel");
+    let _sheets = c.client(Spec::new("org.example.sheets", 0xcccccc).size(700, 500).min_size(640, 480));
+    alone("org.example.sheets");
+    // A window opening full screen, which the group would follow.
+    focus_editor();
+    let _game = c.client(Spec::new("org.example.game", 0xcccc22).fullscreen(None));
+    let ws = c.wait_windows("full screen", |ws| ws.iter().any(|w| w.app_id == "org.example.game" && w.fullscreen));
     assert!(ws.iter().all(|w| w.group.is_none()), "{ws:?}");
+    let game = ws.iter().find(|w| w.app_id == "org.example.game").unwrap().id;
+    // Nor does another join a full-screen, floating or every-Desk window.
+    let _chat = c.client(Spec::new("org.example.chat", 0x22cccc));
+    alone("org.example.chat");
+    c.ok(Request::Close { id: Some(game) });
+    c.wait_windows("the game gone", |ws| ws.iter().all(|w| w.id != game));
+    c.ok(Request::Float { id: Some(a.id), state: Some(true) });
+    focus_editor();
+    let _mail = c.client(Spec::new("org.example.mail", 0xcc22cc));
+    alone("org.example.mail");
+    c.ok(Request::Float { id: Some(a.id), state: Some(false) });
+    c.ok(Request::Sticky { id: Some(a.id), state: Some(true) });
+    focus_editor();
+    let _music = c.client(Spec::new("org.example.music", 0x888888));
+    alone("org.example.music");
 }
 
 #[test]

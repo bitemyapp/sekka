@@ -359,6 +359,20 @@ Notes for client authors:
   showing tab out; ❖⇧[ and ❖⇧] show the previous and next tab, and
   ⌃⇧❖[ and ⌃⇧❖] move the showing one along; IPC `stack`/`unstack`
   (`stack` adds at the end).
+- **New windows** join the focused window's group, after its tabs, as
+  `[windows] stack_new_windows` says: `same-app` (the default) when it's
+  of the same app, `any-app` for any app, `none` never. Dialogs always
+  open on their own. With `any-app`, another app's window opens on its own
+  when the focused window is a dialog, full screen, floating, on every
+  Desk or of a fixed size, or when it opens full screen itself or can't
+  grow to the group's frame: the group would follow it to full screen or
+  shrink to it. One that needs more room joins and grows the frame,
+  unless the focused window can't grow with it. Windows join only as they
+  open: changing the choice leaves groups as they are. The switch this
+  replaced, `stack_new_windows_of_same_app`, is
+  still written beside it (off only for `none`), for a compositor from
+  before the choice that's still running after an update or booted from
+  an older generation; a file without `stack_new_windows` goes by it.
 - **Desks**: four by default (settings `[[desks]]`). Each display shows a
   Desk of its own, as XMonad's screens show workspaces: the main display
   starts on the first, the others on the next ones. The current Desk is

@@ -42,6 +42,7 @@ pub struct Settings {
     /// The Desks, in order. Empty means the four defaults.
     pub desks: Vec<DeskConfig>,
     pub keys: Keys,
+    #[serde(serialize_with = "Windows::serialize_with_old_switch")]
     pub windows: Windows,
     pub idle: Idle,
     /// Warmer colours at night.
@@ -576,11 +577,30 @@ pub enum FocusFollows {
     Mouse,
 }
 
+/// Which new windows join the focused window's tab group.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum StackNewWindows {
+    /// Every new window opens on its own.
+    None,
+    /// A new window of the focused window's app (the default).
+    #[default]
+    SameApp,
+    /// A new window of any app, when it can share the focused window's
+    /// frame (the compositor decides which can).
+    AnyApp,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Windows {
-    /// A new window of the focused app joins its tab group.
-    pub stack_new_windows_of_same_app: bool,
+    pub stack_new_windows: StackNewWindows,
+    /// The switch `stack_new_windows` replaced, for the same app's windows
+    /// alone: off reads as `None` in a file without the choice (see
+    /// [`Settings::from_toml`]). It's written from the choice, not from
+    /// here (see [`Windows::serialize_with_old_switch`]).
+    #[serde(rename = "stack_new_windows_of_same_app", skip_serializing)]
+    pub legacy_stack_same_app: Option<bool>,
     pub focus_follows: FocusFollows,
     /// Reopen windows where their app last left them.
     pub remember_geometry: bool,
@@ -591,11 +611,28 @@ pub struct Windows {
 impl Default for Windows {
     fn default() -> Self {
         Windows {
-            stack_new_windows_of_same_app: true,
+            stack_new_windows: StackNewWindows::SameApp,
+            legacy_stack_same_app: None,
             focus_follows: FocusFollows::Click,
             remember_geometry: true,
             extra: toml::Table::new(),
         }
+    }
+}
+
+impl Windows {
+    /// The section, with the old switch first: a compositor from before
+    /// the choice (still running after an update, or an older generation
+    /// booted) stacks the same app's windows unless the choice is `None`.
+    fn serialize_with_old_switch<S: serde::Serializer>(w: &Windows, s: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        struct WithOldSwitch<'a> {
+            stack_new_windows_of_same_app: bool,
+            #[serde(flatten)]
+            windows: &'a Windows,
+        }
+        let stack_new_windows_of_same_app = w.stack_new_windows != StackNewWindows::None;
+        WithOldSwitch { stack_new_windows_of_same_app, windows: w }.serialize(s)
     }
 }
 
@@ -670,8 +707,20 @@ impl Settings {
         })
     }
 
+    /// Parses settings. A file from before `stack_new_windows` has only
+    /// the switch it replaced, which every Settei wrote; where it's off
+    /// and the choice absent, the choice is `None`.
     pub fn from_toml(text: &str) -> Result<Settings, Error> {
-        toml::from_str(text).map_err(Error::Parse)
+        let mut s: Settings = toml::from_str(text).map_err(Error::Parse)?;
+        if s.windows.legacy_stack_same_app.take() == Some(false) {
+            let doc: toml::Table = toml::from_str(text).map_err(Error::Parse)?;
+            let chosen =
+                doc.get("windows").and_then(toml::Value::as_table).is_some_and(|w| w.contains_key("stack_new_windows"));
+            if !chosen {
+                s.windows.stack_new_windows = StackNewWindows::None;
+            }
+        }
+        Ok(s)
     }
 
     pub fn to_toml(&self) -> Result<String, Error> {
@@ -862,7 +911,7 @@ mod tests {
         assert_eq!(s.desks_or_default().len(), 4);
         assert_eq!(s.desks_or_default()[0].name, "1");
         assert!(s.keys.command_key_for_all_apps);
-        assert!(s.windows.stack_new_windows_of_same_app);
+        assert_eq!(s.windows.stack_new_windows, StackNewWindows::SameApp);
         assert_eq!(s.appearance.cursor_theme, "Adwaita");
         assert_eq!(s.appearance.motion_ms(), 80);
     }
@@ -1009,7 +1058,7 @@ backlight = "dim"
         let dir = std::env::temp_dir().join(format!("aizome-config-test-{}", std::process::id()));
         let path = dir.join("settings.toml");
         let mut s = Settings::default();
-        s.windows.stack_new_windows_of_same_app = false;
+        s.windows.stack_new_windows = StackNewWindows::AnyApp;
         s.desks = vec![
             DeskConfig::named("Mail"),
             DeskConfig { name: "Build".into(), folder: Some("~/work".into()), ..Default::default() },
@@ -1018,6 +1067,38 @@ backlight = "dim"
         let back = Settings::load_from(&path).unwrap();
         assert_eq!(back, s);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_old_stacking_switch_is_read_and_written_for_older_compositors() {
+        let stack = |text: &str| Settings::from_toml(text).unwrap().windows.stack_new_windows;
+        assert_eq!(stack("[windows]\nstack_new_windows_of_same_app = false\n"), StackNewWindows::None);
+        assert_eq!(stack("[windows]\nstack_new_windows_of_same_app = true\n"), StackNewWindows::SameApp);
+        for choice in ["none", "same-app", "any-app"] {
+            for old in [false, true] {
+                let text =
+                    format!("[windows]\nstack_new_windows = \"{choice}\"\nstack_new_windows_of_same_app = {old}\n");
+                assert_eq!(toml::Value::try_from(stack(&text)).unwrap().as_str(), Some(choice), "the choice wins");
+            }
+        }
+        for (choice, old) in
+            [(StackNewWindows::None, false), (StackNewWindows::SameApp, true), (StackNewWindows::AnyApp, true)]
+        {
+            let mut s = Settings::default();
+            s.windows.stack_new_windows = choice;
+            let text = s.to_toml().unwrap();
+            assert!(text.contains(&format!("stack_new_windows_of_same_app = {old}\n")), "{text}");
+            let back = Settings::from_toml(&text).unwrap();
+            assert_eq!(back, s, "{text}");
+            assert_eq!(back.windows.legacy_stack_same_app, None, "taken up");
+        }
+        // Keys and tables of a later Aizome's stay with it.
+        let s = Settings::from_toml(
+            "[windows]\nstack_new_windows = \"any-app\"\nlater = 1\n[windows.later_still]\nx = 2\n",
+        )
+        .unwrap();
+        let text = s.to_toml().unwrap();
+        assert_eq!(Settings::from_toml(&text).unwrap(), s, "{text}");
     }
 
     #[test]
