@@ -8,7 +8,7 @@ the Toolchest, the palette and the Deskbar show beside it and search by.
 | App | Generic name | Crate | Binary | App ID | What the name means |
 |---|---|---|---|---|---|
 | Settei 設定 | Settings | `apps/settei` | `aizome-settei` | `org.aizome.Settei` | settings |
-| Yukimi 雪見 | Software | `apps/yukimi` | `aizome-yukimi` | `org.aizome.Yukimi` | snow-viewing, through a shōji's low pane of glass (Sekka's Nix software manager, made native) |
+| Yukimi 雪見 | Package Manager | `apps/yukimi` | `aizome-yukimi` | `org.aizome.Yukimi` | snow-viewing, through a shōji's low pane of glass (Sekka's Nix software manager, made native) |
 | Hako 箱 | Files | `apps/hako` | `aizome-hako` | `org.aizome.Hako` | box |
 | Sumi 墨 | Text Editor | `apps/sumi` | `aizome-sumi` | `org.aizome.Sumi` | ink |
 | Fusen 付箋 | Notes | `apps/fusen` | `aizome-fusen` | `org.aizome.Fusen` | sticky notes |
