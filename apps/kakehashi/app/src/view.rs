@@ -415,7 +415,7 @@ impl Kakehashi {
             drive.label(),
             human(drive.bytes),
             drive.name,
-            drive.serial_hint(),
+            drive.identity_hint(),
             name
         );
         // OK writes the drive and image described here, found again when it
