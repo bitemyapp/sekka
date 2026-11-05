@@ -26,6 +26,8 @@ Three candidates, weighing trustworthiness (what a model did to the machine, and
 
 To make a model without Chinese lineage beat the field, the gap to close is Gemma's computer use: its diagnostics already match or exceed Qwen3.8's. Bolt is the one non-Chinese model that is good at both today.
 
+That gap has since closed. Inside Tasuke, Sekka's assistant, whose desktop tools number the controls on the screen, Gemma 4 31B fixed 28 of 32 faults and did all 18 desktop tasks without harming anything, matching Qwen3.8-27B (27 of 32, 18 of 18): see [tasuke.md](tasuke.md).
+
 - **gpt-oss-20b** is the fast, small baseline (75% without vision, in under a minute per fault), and gains most from Sekka's [troubleshooting skill](../../.agents/skills/sekka-troubleshooting/SKILL.md): 88% with it.
 - **For the desktop alone,** Holo4-27B and Muse Glimmer did 8 of 9 tasks each, Holo4-27B in under a minute, Muse in 16; Holo4's licence is non-commercial, and Muse is weak at diagnostics.
 - **Every model ran far above 10 tokens/s** on the 5090: the slowest, the dense ~30B models, decode about 70.
