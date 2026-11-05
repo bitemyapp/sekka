@@ -628,6 +628,7 @@ pub struct Checkbox<Msg> {
     label: Arc<str>,
     checked: bool,
     on_toggle: Option<MsgMap<bool>>,
+    on_shift_toggle: Option<MsgMap<bool>>,
     enabled: bool,
     _m: PhantomData<fn() -> Msg>,
 }
@@ -640,6 +641,7 @@ pub fn checkbox<Msg>(label: impl Into<Arc<str>>, checked: bool) -> Checkbox<Msg>
         label: label.into(),
         checked,
         on_toggle: None,
+        on_shift_toggle: None,
         enabled: true,
         _m: PhantomData,
     }
@@ -648,6 +650,14 @@ pub fn checkbox<Msg>(label: impl Into<Arc<str>>, checked: bool) -> Checkbox<Msg>
 impl<Msg: Send + 'static> Checkbox<Msg> {
     pub fn on_toggle(mut self, f: impl Fn(bool) -> Msg + 'static) -> Self {
         self.on_toggle = Some(MsgMap::new(f));
+        self
+    }
+
+    /// A Shift-click, with what the box becomes: for a list that ticks a
+    /// run of boxes from the one last clicked to this one. Without it a
+    /// Shift-click toggles as any click does.
+    pub fn on_shift_toggle(mut self, f: impl Fn(bool) -> Msg + 'static) -> Self {
+        self.on_shift_toggle = Some(MsgMap::new(f));
         self
     }
 }
@@ -666,6 +676,7 @@ impl<Msg> From<Checkbox<Msg>> for Element<Msg> {
             kind: CheckKind::Box,
             on: c.checked,
             on_toggle: c.on_toggle,
+            on_shift_toggle: c.on_shift_toggle,
             on_select: None,
             enabled: c.enabled,
         };
@@ -727,6 +738,7 @@ impl<Msg, V> From<Radio<Msg, V>> for Element<Msg> {
             kind: CheckKind::Radio,
             on: r.selected,
             on_toggle: None,
+            on_shift_toggle: None,
             on_select: r.on_select,
             enabled: r.enabled,
         };
@@ -745,6 +757,7 @@ struct Check {
     kind: CheckKind,
     on: bool,
     on_toggle: Option<MsgMap<bool>>,
+    on_shift_toggle: Option<MsgMap<bool>>,
     on_select: Option<MsgFn>,
     enabled: bool,
 }
@@ -754,8 +767,10 @@ impl Check {
         self.enabled && (self.on_toggle.is_some() || self.on_select.is_some())
     }
 
-    fn fire(&self, cx: &mut EventCx) {
-        if let Some(f) = &self.on_toggle {
+    fn fire(&self, cx: &mut EventCx, shift: bool) {
+        if let Some(f) = self.on_shift_toggle.as_ref().filter(|_| shift) {
+            cx.emit_any(f.make(!self.on));
+        } else if let Some(f) = &self.on_toggle {
             cx.emit_any(f.make(!self.on));
         } else if let Some(m) = &self.on_select
             && !self.on
@@ -855,9 +870,9 @@ impl Widget for Check {
     fn event(&mut self, cx: &mut EventCx, event: &Event) -> Status {
         match event {
             Event::PointerDown { button: PointerButton::Left, .. } if self.usable() => Status::Handled,
-            Event::PointerUp { pos, button: PointerButton::Left, .. } if self.usable() => {
+            Event::PointerUp { pos, button: PointerButton::Left, mods } if self.usable() => {
                 if cx.bounds().contains(*pos) {
-                    self.fire(cx);
+                    self.fire(cx, mods.shift());
                 }
                 Status::Handled
             }
@@ -867,7 +882,7 @@ impl Widget for Check {
 
     fn activate(&mut self, cx: &mut EventCx) -> bool {
         if self.usable() {
-            self.fire(cx);
+            self.fire(cx, false);
         }
         self.usable()
     }
@@ -1669,6 +1684,7 @@ pub struct Dropdown<Msg> {
     on_select: Option<MsgMap<usize>>,
     enabled: bool,
     compact: bool,
+    pull_down: bool,
     _m: PhantomData<fn() -> Msg>,
 }
 
@@ -1686,6 +1702,7 @@ pub fn dropdown<Msg, S: Into<String>>(
         on_select: None,
         enabled: true,
         compact: false,
+        pull_down: false,
         _m: PhantomData,
     }
 }
@@ -1724,17 +1741,26 @@ impl<Msg> Dropdown<Msg> {
         self.compact = true;
         self
     }
+
+    /// A pull-down menu of actions rather than a choice: the placeholder
+    /// is its title, drawn as plainly as a button's and as wide as itself
+    /// (not the widest item), and no item is ever shown as chosen.
+    pub fn pull_down(mut self) -> Self {
+        self.pull_down = true;
+        self
+    }
 }
 
 impl<Msg> From<Dropdown<Msg>> for Element<Msg> {
     fn from(d: Dropdown<Msg>) -> Element<Msg> {
         let w = DropdownWidget {
             options: d.options,
-            selected: d.selected,
+            selected: if d.pull_down { None } else { d.selected },
             placeholder: d.placeholder,
             on_select: d.on_select,
             enabled: d.enabled,
             compact: d.compact,
+            pull_down: d.pull_down,
         };
         Element::from_raw(RawElement::new(w, d.common, Vec::new()))
     }
@@ -1747,6 +1773,7 @@ struct DropdownWidget {
     on_select: Option<MsgMap<usize>>,
     enabled: bool,
     compact: bool,
+    pull_down: bool,
 }
 
 impl DropdownWidget {
@@ -1806,13 +1833,11 @@ impl Widget for DropdownWidget {
     fn layout(&mut self, cx: &mut LayoutCx, bc: Constraints) -> Size {
         let t = cx.env.theme;
         let spec = self.spec(t, t.text());
-        let widest = self
-            .options
-            .iter()
-            .map(|o| o.label.as_str())
-            .chain(self.placeholder.as_deref())
-            .map(|o| cx.measure(o, &spec).width)
-            .fold(0.0f64, f64::max);
+        // A pop-up stays as wide as its widest choice, so it doesn't jump
+        // as the choice changes; a pull-down's title never does.
+        let items = self.options.iter().filter(|_| !self.pull_down).map(|o| o.label.as_str());
+        let widest =
+            items.chain(self.placeholder.as_deref()).map(|o| cx.measure(o, &spec).width).fold(0.0f64, f64::max);
         let w = (widest + 8.0 + 6.0 + 10.0 + 8.0).ceil().max(48.0);
         bc.constrain(Size::new(w, t.metrics.control))
     }
@@ -1837,7 +1862,7 @@ impl Widget for DropdownWidget {
         }
         let color = if !usable {
             t.faint()
-        } else if self.selected.is_none() {
+        } else if self.selected.is_none() && !self.pull_down {
             t.text3()
         } else {
             t.text()
@@ -1853,7 +1878,7 @@ impl Widget for DropdownWidget {
     }
 
     fn hash(&self, h: &mut PaintHasher) {
-        h.str(self.label()).add(&(self.usable(), self.compact, self.selected));
+        h.str(self.label()).add(&(self.usable(), self.compact, self.selected, self.pull_down));
     }
 
     fn hit(&self) -> bool {

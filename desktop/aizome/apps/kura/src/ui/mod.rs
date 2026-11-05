@@ -25,6 +25,7 @@ use crate::scan::{self, Progress, ProgressSnapshot, Scan, ScanOptions};
 use crate::tree::NodeId;
 use drag::{DragEvent, ZoneCell};
 use rings::{RINGS, Seg};
+pub use suggest::{Age, Cut};
 use sunburst::{FRAME, Labels, RingCache, RingJob, Target, Transition};
 
 /// Open the window (scanning `paths[0]` if given), as the one instance.
@@ -178,11 +179,17 @@ pub enum Msg {
     ExpandHint(usize, bool),
     /// Include a path in its hint's action, or leave it out.
     Choose(String, bool),
-    /// Include every path a hint shows in its action, or leave all of its
-    /// paths out.
-    ChooseAll(usize, bool),
+    /// A Shift-click on a path's tick: the run from the last one clicked
+    /// to it (the hint, the path, what they become).
+    ChooseRun(usize, String, bool),
+    /// Tick the paths a cut takes, and untick the rest.
+    ChooseCut(usize, Cut),
+    /// Leave all of a hint's paths out.
+    ChooseNone(usize),
     /// List a hint's paths in this order.
     SortPaths(usize, PathOrder),
+    /// List all of a hint's paths, not only the first few.
+    ShowAllPaths(usize),
     /// Which copy of a set of duplicates stays (the set's hash, the copy).
     Keep(String, usize),
     /// Ask to carry out a hint's action.
@@ -266,6 +273,13 @@ pub struct Kura {
     pub choice: std::collections::HashMap<String, bool>,
     /// How each hint's paths are listed, by key (else largest first).
     pub order: std::collections::HashMap<String, PathOrder>,
+    /// Hints listing all their paths, by key.
+    pub show_all: std::collections::HashSet<String>,
+    /// The path last ticked or unticked by hand: where a Shift-click's run
+    /// starts.
+    pub anchor: Option<String>,
+    /// When ages count from, in Unix seconds (`None`: the clock).
+    pub now: Option<i64>,
     /// The copy kept of each set of duplicates, by the set's hash.
     pub keep: std::collections::HashMap<String, usize>,
     pub pending: Option<Pending>,
@@ -335,6 +349,9 @@ impl Kura {
             expanded: Default::default(),
             choice: Default::default(),
             order: Default::default(),
+            show_all: Default::default(),
+            anchor: None,
+            now: None,
             keep: Default::default(),
             pending: None,
             highlight: Rc::new(Vec::new()),
@@ -779,13 +796,18 @@ impl Program for Kura {
                     }
                 }
             }
-            Msg::Choose(path, on) => {
-                self.choice.insert(path, on);
-            }
-            Msg::ChooseAll(i, on) => self.choose_all(i, on),
+            Msg::Choose(path, on) => self.choose(path, on),
+            Msg::ChooseRun(i, path, on) => self.choose_run(i, path, on),
+            Msg::ChooseCut(i, cut) => self.choose_cut(i, cut),
+            Msg::ChooseNone(i) => self.choose_none(i),
             Msg::SortPaths(i, order) => {
                 if let Some(h) = self.analysis.hints.get(i) {
                     self.order.insert(hint_key(h), order);
+                }
+            }
+            Msg::ShowAllPaths(i) => {
+                if let Some(h) = self.analysis.hints.get(i) {
+                    self.show_all.insert(hint_key(h));
                 }
             }
             Msg::Keep(hash, i) => {

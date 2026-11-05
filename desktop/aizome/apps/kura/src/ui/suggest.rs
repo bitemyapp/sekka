@@ -16,6 +16,7 @@ use super::{Kura, Msg, PathOrder, Pending, hint_key};
 use crate::format;
 use crate::hints::{Hint, HintPath, Risk};
 use crate::scan::{self, Progress, ScanOptions};
+use crate::time;
 use crate::tree::{NodeId, Tree};
 
 /// What a hint's button does.
@@ -93,29 +94,171 @@ pub fn ordered(paths: &[HintPath], order: PathOrder) -> Vec<&HintPath> {
     out
 }
 
+/// How long ago, in the steps a cut offers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Age {
+    Day,
+    Week,
+    TwoWeeks,
+    Month,
+    ThreeMonths,
+    SixMonths,
+    Year,
+}
+
+impl Age {
+    pub fn days(self) -> i64 {
+        match self {
+            Age::Day => 1,
+            Age::Week => 7,
+            Age::TwoWeeks => 14,
+            Age::Month => 30,
+            Age::ThreeMonths => 91,
+            Age::SixMonths => 182,
+            Age::Year => 365,
+        }
+    }
+
+    /// "a week", "3 months".
+    pub fn words(self) -> &'static str {
+        match self {
+            Age::Day => "a day",
+            Age::Week => "a week",
+            Age::TwoWeeks => "2 weeks",
+            Age::Month => "a month",
+            Age::ThreeMonths => "3 months",
+            Age::SixMonths => "6 months",
+            Age::Year => "a year",
+        }
+    }
+}
+
+/// Paths ticked at once: in the order that offers it, a run from the top
+/// of the list down to a line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cut {
+    All,
+    /// Not modified for this long (oldest first).
+    OlderThan(Age),
+    /// Modified within this long (newest first).
+    Within(Age),
+    /// This many bytes or more (largest first).
+    AtLeast(u64),
+}
+
+const MB: u64 = 1_000_000;
+const GB: u64 = 1_000_000_000;
+
+impl Cut {
+    /// Whether the cut takes a path, `now` in Unix seconds.
+    pub fn test(self, now: i64) -> impl Fn(&HintPath) -> bool {
+        // RFC 3339 in UTC, as `modified` is: the strings compare as the
+        // times do.
+        let line = match self {
+            Cut::OlderThan(a) | Cut::Within(a) => time::rfc3339(now - a.days() * time::DAY),
+            Cut::All | Cut::AtLeast(_) => String::new(),
+        };
+        move |p| match self {
+            Cut::All => true,
+            Cut::OlderThan(_) => p.modified.as_deref().is_some_and(|m| m < line.as_str()),
+            Cut::Within(_) => p.modified.as_deref().is_some_and(|m| m >= line.as_str()),
+            Cut::AtLeast(bytes) => p.allocated_bytes >= bytes,
+        }
+    }
+}
+
+/// The cuts worth offering in `order`, each with how many paths it takes
+/// and their bytes: those taking some but not all, each more than the one
+/// before, then all of them.
+pub fn cuts(paths: &[HintPath], order: PathOrder, now: i64) -> Vec<(Cut, usize, u64)> {
+    use Age::*;
+    let lines: Vec<Cut> = match order {
+        PathOrder::Largest => [10 * GB, GB, 100 * MB, 10 * MB, MB].map(Cut::AtLeast).into(),
+        PathOrder::Newest => [Day, Week, TwoWeeks, Month, ThreeMonths].map(Cut::Within).into(),
+        PathOrder::Oldest => [Year, SixMonths, ThreeMonths, Month, TwoWeeks, Week].map(Cut::OlderThan).into(),
+    };
+    let mut out = Vec::new();
+    let mut last = 0;
+    for cut in lines.into_iter().chain([Cut::All]) {
+        let takes = cut.test(now);
+        let (n, bytes) =
+            paths.iter().filter(|p| takes(p)).fold((0, 0), |(n, bytes), p| (n + 1, bytes + p.allocated_bytes));
+        if n > last && (n < paths.len() || cut == Cut::All) {
+            out.push((cut, n, bytes));
+            last = n;
+        }
+    }
+    out
+}
+
 impl Kura {
+    /// When ages count from: the clock, unless a test fixed it.
+    pub fn now(&self) -> i64 {
+        self.now.unwrap_or_else(time::now_unix)
+    }
+
     /// How a hint's paths are listed: as the person chose, else largest
     /// first.
     pub fn path_order(&self, h: &Hint) -> PathOrder {
         self.order.get(&hint_key(h)).copied().unwrap_or_default()
     }
 
-    /// The paths a hint lists in the window, in the person's order.
+    /// The paths a hint lists in the window, in the person's order: the
+    /// first [`SHOWN`], unless the person (or a cut) asked for them all.
     pub fn shown_paths<'h>(&self, h: &'h Hint) -> Vec<&'h HintPath> {
         let mut out = ordered(&h.paths, self.path_order(h));
-        out.truncate(SHOWN);
+        if !self.show_all.contains(&hint_key(h)) {
+            out.truncate(SHOWN);
+        }
         out
     }
 
-    /// Tick every path the hint shows (none the person can't see), or
-    /// untick every one of its paths.
-    pub(super) fn choose_all(&mut self, i: usize, on: bool) {
+    /// A path ticked or unticked by hand: a run's first end.
+    pub(super) fn choose(&mut self, path: String, on: bool) {
+        self.choice.insert(path.clone(), on);
+        self.anchor = Some(path);
+    }
+
+    /// A Shift-click on a path's tick: it and every path shown between it
+    /// and the one last clicked become `on`.
+    pub(super) fn choose_run(&mut self, i: usize, path: String, on: bool) {
         let hints = self.analysis.hints.clone();
         let Some(h) = hints.get(i) else { return };
-        let paths = if on { self.shown_paths(h) } else { h.paths.iter().collect() };
-        for p in paths {
+        let shown = self.shown_paths(h);
+        let at = |q: &str| shown.iter().position(|p| p.path == q);
+        let run = match (self.anchor.as_deref().and_then(at), at(&path)) {
+            (Some(a), Some(b)) => &shown[a.min(b)..=a.max(b)],
+            _ => &[],
+        };
+        for p in run {
             self.choice.insert(p.path.clone(), on);
         }
+        self.choose(path, on);
+    }
+
+    /// Tick the paths `cut` takes and untick the rest. Nothing is ticked
+    /// out of sight: if it takes paths past those shown, they all show.
+    pub(super) fn choose_cut(&mut self, i: usize, cut: Cut) {
+        let hints = self.analysis.hints.clone();
+        let Some(h) = hints.get(i) else { return };
+        let takes = cut.test(self.now());
+        for p in &h.paths {
+            self.choice.insert(p.path.clone(), takes(p));
+        }
+        if ordered(&h.paths, self.path_order(h)).iter().skip(SHOWN).any(|p| takes(p)) {
+            self.show_all.insert(hint_key(h));
+        }
+        self.anchor = None;
+    }
+
+    /// Untick all of a hint's paths, shown or not.
+    pub(super) fn choose_none(&mut self, i: usize) {
+        let hints = self.analysis.hints.clone();
+        let Some(h) = hints.get(i) else { return };
+        for p in &h.paths {
+            self.choice.insert(p.path.clone(), false);
+        }
+        self.anchor = None;
     }
 
     /// Whether `path` is in its hint's action: as the person chose, else
@@ -499,5 +642,51 @@ mod tests {
         assert_eq!(names(PathOrder::Largest), ["a", "b", "c", "d", "e"]);
         assert_eq!(names(PathOrder::Newest), ["d", "a", "e", "c", "b"]);
         assert_eq!(names(PathOrder::Oldest), ["c", "a", "e", "d", "b"]);
+    }
+
+    #[test]
+    fn cuts_follow_the_order_and_skip_those_that_add_nothing() {
+        const NOW: i64 = 1_762_300_800;
+        assert_eq!(time::rfc3339(NOW), "2025-11-05T00:00:00Z");
+        let sized = |path, bytes, modified| HintPath { allocated_bytes: bytes, ..at(path, modified) };
+        let paths = [
+            sized("a", 2_500 * MB, Some("2024-06-01T00:00:00Z")),
+            sized("b", 300 * MB, Some("2025-04-01T00:00:00Z")),
+            sized("c", 40 * MB, Some("2025-10-01T00:00:00Z")),
+            sized("d", 5 * MB, Some("2025-10-30T00:00:00Z")),
+            sized("e", 200_000, None),
+        ];
+        let all = (Cut::All, 5, 2_845 * MB + 200_000);
+        assert_eq!(
+            cuts(&paths, PathOrder::Oldest, NOW),
+            [
+                (Cut::OlderThan(Age::Year), 1, 2_500 * MB),
+                (Cut::OlderThan(Age::SixMonths), 2, 2_800 * MB),
+                (Cut::OlderThan(Age::Month), 3, 2_840 * MB),
+                all,
+            ]
+        );
+        assert_eq!(
+            cuts(&paths, PathOrder::Newest, NOW),
+            [(Cut::Within(Age::Week), 1, 5 * MB), (Cut::Within(Age::ThreeMonths), 2, 45 * MB), all]
+        );
+        assert_eq!(
+            cuts(&paths, PathOrder::Largest, NOW),
+            [
+                (Cut::AtLeast(GB), 1, 2_500 * MB),
+                (Cut::AtLeast(100 * MB), 2, 2_800 * MB),
+                (Cut::AtLeast(10 * MB), 3, 2_840 * MB),
+                (Cut::AtLeast(MB), 4, 2_845 * MB),
+                all,
+            ]
+        );
+        // Each cut is a run from the top of its order.
+        for order in PathOrder::ALL {
+            for (cut, n, _) in cuts(&paths, order, NOW) {
+                let takes = cut.test(NOW);
+                assert!(ordered(&paths, order).iter().take(n).all(|p| takes(p)), "{cut:?} in {order:?}");
+            }
+        }
+        assert!(cuts(&[], PathOrder::Oldest, NOW).is_empty());
     }
 }
