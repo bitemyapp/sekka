@@ -171,21 +171,21 @@ fn launch_for(sessions: &[Session], session_of: &HashMap<String, String>, cfg: &
 /// What Return does: picks in the row, logs in the name typed, answers
 /// PAM's question, or begins a failed login again. Nothing while greetd is
 /// asked or the session starts.
-pub(crate) fn on_return<'s>(state: LoginAny<'s>, field: &mut String) -> Returned<'s> {
+pub(crate) fn on_return(state: LoginAny<'_>) -> Returned<'_> {
     match state {
         LoginAny::Unstarted(unstarted) => unstarted.busy(),
         LoginAny::People(people) => people.pick(),
         LoginAny::Name(name) => name.submit(),
-        LoginAny::ChosenLogin(login) => step_return(login.step(), field),
-        LoginAny::OnlyLogin(login) => step_return(login.step(), field),
-        LoginAny::TypedLogin(login) => step_return(login.step(), field),
+        LoginAny::ChosenLogin(login) => step_return(login.step()),
+        LoginAny::OnlyLogin(login) => step_return(login.step()),
+        LoginAny::TypedLogin(login) => step_return(login.step()),
     }
 }
 
-fn step_return<'s, W: Who>(step: Step<'s, W>, field: &mut String) -> Returned<'s> {
+fn step_return<'s, W: Who>(step: Step<'s, W>) -> Returned<'s> {
     match step {
         Step::Waiting(waiting) => waiting.busy(),
-        Step::Asking(asking) => asking.answer(field),
+        Step::Asking(asking) => asking.answer(),
         Step::Starting(starting) => starting.busy(),
         Step::Failed(failed) => failed.retry(),
         Step::Done(done) => done.busy(),
