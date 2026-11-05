@@ -13,7 +13,7 @@
 //! ([`Awaiting`]). A line before then is a protocol error that cancels
 //! preparation, rather than a confirmation saved for when it finishes.
 use crate::{
-    InstallPlan, RawRequest,
+    ConfirmedInstall, InstallPlan, RawRequest,
     install::{self, Event, Prepared, Summary},
     process::{self, Latch},
 };
@@ -39,7 +39,10 @@ pub struct Confirmation {
 
 /// Read one newline-terminated line of at most `limit` bytes. `None` at a
 /// clean end of input; a partial final line or oversized line is an error.
-pub fn read_line(reader: &mut impl BufRead, limit: usize) -> Result<Option<Zeroizing<Vec<u8>>>> {
+pub(crate) fn read_line(
+    reader: &mut impl BufRead,
+    limit: usize,
+) -> Result<Option<Zeroizing<Vec<u8>>>> {
     let mut line = Zeroizing::new(Vec::new());
     loop {
         let buffer = reader.fill_buf()?;
@@ -83,18 +86,18 @@ const EARLY: u8 = 3;
 /// taken while preparation runs:
 ///
 /// ```compile_fail,E0599
-/// use calamares_nixos::session::Preparing;
-/// fn early(preparing: Preparing) -> anyhow::Result<()> {
-///     let _phrase = preparing.confirmation()?;
+/// use calamares_nixos::{InstallPlan, session::Preparing};
+/// fn early(preparing: Preparing, plan: InstallPlan) -> anyhow::Result<()> {
+///     let _confirmed = preparing.confirm(plan)?;
 ///     Ok(())
 /// }
 /// ```
 ///
 /// ```
-/// use calamares_nixos::{install::Prepared, session::Preparing};
-/// fn after(preparing: Preparing, prepared: &Prepared) -> anyhow::Result<()> {
+/// use calamares_nixos::{InstallPlan, install::Prepared, session::Preparing};
+/// fn after(preparing: Preparing, prepared: &Prepared, plan: InstallPlan) -> anyhow::Result<()> {
 ///     if let Some(awaiting) = preparing.prepared(prepared)? {
-///         let _phrase = awaiting.confirmation()?;
+///         let _confirmed = awaiting.confirm(plan)?;
 ///     }
 ///     Ok(())
 /// }
@@ -201,14 +204,47 @@ pub struct Awaiting {
 }
 
 impl Awaiting {
-    /// The typed phrase, or `None` when the GUI withdrew instead (reported
-    /// as `Cancelled`). Stdin isn't read after it.
-    pub fn confirmation(self) -> Result<Option<Zeroizing<String>>> {
+    /// Confirms `plan` with the phrase the GUI sends, or `None` when the GUI
+    /// withdrew instead (reported as `Cancelled`). Stdin isn't read after
+    /// it. A session confirms its plan only here, once the helper has
+    /// reported `Prepared`: the helper's old session, which read the
+    /// confirmation on a thread while preparing and confirmed the plan
+    /// itself with whatever line came, so that an early confirmation was
+    /// acted on the moment preparation ended (GEN-06), doesn't compile:
+    ///
+    /// ```compile_fail,E0624
+    /// use calamares_nixos::{InstallPlan, install, session::Confirmation};
+    /// use std::{io::BufRead, sync::mpsc, thread};
+    /// fn session(plan: InstallPlan) -> anyhow::Result<()> {
+    ///     let (send, confirmation) = mpsc::channel();
+    ///     thread::spawn(move || {
+    ///         let mut line = String::new();
+    ///         let read = std::io::stdin().lock().read_line(&mut line).unwrap_or(0);
+    ///         let _ = send.send((read > 0).then_some(line));
+    ///     });
+    ///     let prepared = install::prepare(&plan)?;
+    ///     install::event(install::Event::Prepared { summary: prepared.summary().clone() });
+    ///     let Ok(Some(line)) = confirmation.recv() else { return Ok(()) };
+    ///     let confirmation: Confirmation = serde_json::from_str(&line)?;
+    ///     install::execute(plan.confirm(&confirmation.confirmation)?, prepared)
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// use calamares_nixos::{InstallPlan, install, session::Preparing};
+    /// fn session(preparing: Preparing, plan: InstallPlan) -> anyhow::Result<()> {
+    ///     let prepared = install::prepare(&plan)?;
+    ///     let Some(awaiting) = preparing.prepared(&prepared)? else { return Ok(()) };
+    ///     let Some(confirmed) = awaiting.confirm(plan)? else { return Ok(()) };
+    ///     install::execute(confirmed, prepared)
+    /// }
+    /// ```
+    pub fn confirm(self, plan: InstallPlan) -> Result<Option<ConfirmedInstall>> {
         match self.heard.recv() {
             Ok(Some(line)) => {
                 let confirmation: Confirmation =
                     serde_json::from_slice(&line).context("Invalid confirmation message")?;
-                Ok(Some(Zeroizing::new(confirmation.confirmation)))
+                Ok(Some(plan.confirm(&confirmation.confirmation)?))
             }
             _ => {
                 install::event(Event::Cancelled);
