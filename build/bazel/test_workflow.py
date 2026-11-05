@@ -21,6 +21,7 @@ class WorkflowTests(unittest.TestCase):
         self.environment = patch.dict(os.environ, {
             "SEKKA_BAZEL_STATE": str(self.root / "state"),
             "SEKKA_BAZEL_REPOSITORIES_RC": "/nix/store/test-repositories.bazelrc",
+            "SEKKA_BAZEL_CREDENTIALS_RC": "/nix/store/test-credentials.bazelrc",
         })
         self.environment.start()
         self.addCleanup(self.environment.stop)
@@ -62,6 +63,7 @@ class WorkflowTests(unittest.TestCase):
     def test_untrusted_near_cache_is_separate_and_uploads_disabled(self):
         rc = self.root / "private.bazelrc"
         rc.touch(mode=0o600)
+        rc.write_text('# sekka-bazel-credential-v1 {"endpoint":"grpc://127.0.0.1:17841","token":"fixture-token"}\n')
         argv = self.invoke("--cache", "untrusted", "--remote-rc", str(rc), "build")
         self.assertIn("--noremote_upload_local_results", argv)
         self.assertIn(f"--disk_cache={self.root}/state/cache/untrusted", argv)

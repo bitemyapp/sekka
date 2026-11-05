@@ -6,6 +6,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+from credential_helper import CONFIG_ENV, load_config
+
 
 def main():
     parser = argparse.ArgumentParser(prog="sekka-bazel", description=__doc__, allow_abbrev=False)
@@ -39,7 +41,12 @@ def main():
         rc = args.remote_rc.resolve()
         if rc.stat().st_mode & 0o077:
             parser.error("--remote-rc must be private (chmod 600); it may contain credentials")
-        startup.append(f"--bazelrc={rc}")
+        try:
+            load_config(rc)
+        except ValueError as error:
+            parser.error(str(error))
+        os.environ[CONFIG_ENV] = str(rc)
+        startup += [f"--bazelrc={rc}", f"--bazelrc={os.environ['SEKKA_BAZEL_CREDENTIALS_RC']}"]
     if args.cache != "local" and not args.remote_rc:
         parser.error("remote domains require --remote-rc from scripts/build-service client")
     if args.cache == "local" and args.remote_rc:

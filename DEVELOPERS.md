@@ -347,6 +347,14 @@ runtime-launcher and frontend-only changes do not invalidate compiler actions.
 Release-LTO follows Cargo's per-unit LTO decisions, including mixed non-LTO
 compositor/dynamic-library roots, proc macros and build scripts.
 
+Portable Buck tests deliberately use private home, runtime and D-Bus paths.
+They do not certify integration with the host's user manager, even when
+explicit environment arguments name its bus. The real `through_systemd`
+probe also passed separately through the ordinary runtime wrapper using the
+exact Buck-produced test artifact and the workstation's user bus, without
+the wrapper's `--test-run` isolation. Keep that host-runtime check separate
+from portable test and remote-worker results.
+
 The engine includes a per-user content store for immutable artifact data.
 The frontend enables shared reflinks automatically where supported; separate
 worktrees retain separate mutable daemon state. Defaults are 10 GiB and
@@ -409,6 +417,19 @@ execution as well as cache access. Bazel execution additionally needs
 Workers require the exact immutable toolchain/native closures: realize them
 on the workstation and use `retain /nix/store/CLIENT /nix/store/VENDOR`.
 `retain` does not evaluate sources or import unsigned arbitrary build outputs.
+
+Bazel credentials are private comment metadata consumed by a pinned
+credential helper, not native header options. Old inline-header client files
+and imported rc files are rejected; regenerate them with the current
+`build-service client --format bazel`. Bazel copies native rc options into
+routine build-event logs and some option-error diagnostics, so keep logs
+from the old format private and rotate any credential exposed outside its
+intended audience. The helper scopes credentials by host, effective port and
+HTTP versus HTTPS/gRPC metadata origin; native credential caching is disabled
+so same-path rotation takes effect on the next request. An authenticated
+native smoke covered real remote execution, invalid/restored same-path
+credentials, fresh reader cache hits, rc announcements, invalid options and
+a complete client-file token scan.
 
 Readers are denied CAS, ByteStream and action-cache writes and `Execute` by
 the server, not merely by client flags. Normal CI uses this reader access.
@@ -3272,6 +3293,10 @@ frontend reader configurations named `trusted.bazelrc` and
 `trusted.buckconfig`. Make those two files mode 0444 so the individual
 read-only file binds are readable by UID 30500; the parent directory remains
 private. The helper copies them into its private workspace with mode 0600.
+When migrating an already deployed Bazel reader file to the helper format,
+first ensure its runner is idle. Preserve its inode when updating an existing
+file bind, or replace the owned idle job container after an atomic file
+replacement; an existing bind otherwise continues reading the old inode.
 Never substitute writer configurations. The supervisor token remains outside
 job containers, as in the Nix pool.
 
