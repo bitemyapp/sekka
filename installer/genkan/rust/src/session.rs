@@ -12,6 +12,8 @@
 //! `Prepared` ([`Ready`]), and the helper reads it only after reporting that
 //! ([`Awaiting`]). A line before then is a protocol error that cancels
 //! preparation, rather than a confirmation saved for when it finishes.
+// Every stage and answer is matched by name: a new one forces a decision.
+#![deny(clippy::wildcard_enum_match_arm)]
 use crate::{
     ConfirmedInstall, InstallPlan, RawRequest,
     install::{self, Event, Prepared, Summary},
@@ -246,7 +248,7 @@ impl Awaiting {
                     serde_json::from_slice(&line).context("Invalid confirmation message")?;
                 Ok(Some(plan.confirm(&confirmation.confirmation)?))
             }
-            _ => {
+            Ok(None) | Err(_) => {
                 install::event(Event::Cancelled);
                 Ok(None)
             }

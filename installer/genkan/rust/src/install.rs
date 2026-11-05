@@ -8,6 +8,8 @@
 //! confirmation it partitions, formats, copies the prepared system to the
 //! target and installs the bootloader, so the time after clicking Install is
 //! dominated by writing the target disk.
+// Every stage and answer is matched by name: a new one forces a decision.
+#![deny(clippy::wildcard_enum_match_arm)]
 use crate::{
     ConfirmedInstall, Firmware, InstallPlan, RawRequest, Settings,
     config::{self, Template},
@@ -746,7 +748,10 @@ fn nar_sizes(value: &serde_json::Value) -> Result<u64> {
     let entries: Vec<_> = match value {
         serde_json::Value::Array(entries) => entries.iter().collect(),
         serde_json::Value::Object(entries) => entries.values().collect(),
-        _ => anyhow::bail!("Invalid path information"),
+        serde_json::Value::Null
+        | serde_json::Value::Bool(_)
+        | serde_json::Value::Number(_)
+        | serde_json::Value::String(_) => anyhow::bail!("Invalid path information"),
     };
     entries.iter().try_fold(0u64, |sum, entry| {
         let size = entry["narSize"].as_u64().context("Missing path size")?;
@@ -1246,7 +1251,10 @@ fn closure_size(value: &serde_json::Value) -> Result<u64> {
     let entries: Vec<_> = match value {
         serde_json::Value::Array(entries) => entries.iter().collect(),
         serde_json::Value::Object(entries) => entries.values().collect(),
-        _ => anyhow::bail!("Invalid closure information"),
+        serde_json::Value::Null
+        | serde_json::Value::Bool(_)
+        | serde_json::Value::Number(_)
+        | serde_json::Value::String(_) => anyhow::bail!("Invalid closure information"),
     };
     ensure!(entries.len() == 1, "Expected one system closure");
     entries[0]["closureSize"]
@@ -1420,10 +1428,10 @@ mod tests {
         })
         .unwrap();
         assert!(text.starts_with(r#"{"kind":"prepared""#));
-        match serde_json::from_str(&text).unwrap() {
-            Event::Prepared { summary: parsed } => assert_eq!(parsed, summary),
-            other => panic!("{other:?}"),
-        }
+        let Event::Prepared { summary: parsed } = serde_json::from_str(&text).unwrap() else {
+            panic!("{text}")
+        };
+        assert_eq!(parsed, summary);
         assert_eq!(
             serde_json::to_string(&Event::Complete).unwrap(),
             r#"{"kind":"complete"}"#
@@ -1489,7 +1497,7 @@ mod encryption_tests {
         let firmware = match std::env::var("GENKAN_TEST_FIRMWARE").as_deref() {
             Ok("bios") => Firmware::Bios,
             Ok("uefi") => Firmware::Uefi,
-            _ => anyhow::bail!("Missing firmware choice"),
+            Ok(_) | Err(_) => anyhow::bail!("Missing firmware choice"),
         };
         // Ext4 last: the VM reboots onto this root after the matrix.
         for filesystem in [Filesystem::Btrfs, Filesystem::Xfs, Filesystem::Ext4] {

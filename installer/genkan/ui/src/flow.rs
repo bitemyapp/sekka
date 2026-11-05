@@ -22,6 +22,8 @@
 //! that answer, so it can't be handed another answer's proof.
 //!
 //! [`session::Ready`]: calamares_nixos::session::Ready
+// Every stage and answer is matched by name: a new one forces a decision.
+#![deny(clippy::wildcard_enum_match_arm)]
 use crate::app::{Helper, Review};
 use aizome_typestate::{Answer, Fresh, Generation, Ticket};
 use calamares_nixos::{
@@ -320,7 +322,7 @@ impl<'s> Preparing<'s> {
                     summary,
                 }),
             )),
-            link => Err(Preparing::enter(
+            link @ Link::Running(_) => Err(Preparing::enter(
                 self.ctx,
                 Pending {
                     link,
@@ -454,7 +456,7 @@ impl<'s> Queued<'s> {
                     step: None,
                 },
             )),
-            link => Err(Queued::enter(
+            link @ Link::Running(_) => Err(Queued::enter(
                 self.ctx,
                 Pending {
                     link,
@@ -566,13 +568,27 @@ mod tests {
                 let (checking, ticket) = editing.review();
                 (checking.into(), ticket)
             }
-            _ => unreachable!(),
+            FlowAny::Checking(_)
+            | FlowAny::Preparing(_)
+            | FlowAny::Ready(_)
+            | FlowAny::Unprepared(_)
+            | FlowAny::Queued(_)
+            | FlowAny::Installing(_)
+            | FlowAny::Installed(_)
+            | FlowAny::Failed(_) => unreachable!("a new flow starts on the pages"),
         });
         let exited = HelperAnswer::new(ticket, Helper::Finished(Err("pkexec failed".into())));
         let said = flow.ctx().check_answer(exited).ok().unwrap();
         flow.with_typed(|state| match state {
             FlowAny::Checking(checking) => (checking.stopped(&said).ok().unwrap().into(), ()),
-            other => (other, ()),
+            other @ (FlowAny::Editing(_)
+            | FlowAny::Preparing(_)
+            | FlowAny::Ready(_)
+            | FlowAny::Unprepared(_)
+            | FlowAny::Queued(_)
+            | FlowAny::Installing(_)
+            | FlowAny::Installed(_)
+            | FlowAny::Failed(_)) => (other, ()),
         });
         assert!(matches!(flow.stored(), FlowState::Editing(())));
         let late = ReviewAnswer::new(ticket, Err("late".into()));
