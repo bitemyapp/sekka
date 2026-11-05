@@ -41,7 +41,10 @@ pub fn try_run<P: Program>(program: P) -> Result<P, sidestep_ui::Error> {
     let info = program.info();
     let quit = program.quit_when_last_window_closes();
     let app = sidestep_ui::App::new().app_id(info.app_id.clone()).quit_when_last_window_closes(quit);
-    let glue = Glue { rt: Runtime::new(program, Appearance::load()), maps: Maps::default() };
+    let mut glue = Glue { rt: Runtime::new(program, Appearance::load()), maps: Maps::default() };
+    // Input comes from the compositor here: a press of an agreeing button
+    // is a person's (or what the compositor takes for one), and agrees.
+    glue.rt.core.agreeing = true;
     app.run(glue).map(|g| g.rt.program)
 }
 

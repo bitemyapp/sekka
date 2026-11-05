@@ -32,6 +32,7 @@
 //! See `docs/kit.md` for the guide.
 
 pub mod a11y;
+pub mod agree;
 pub mod ahead;
 mod app;
 pub mod composing;

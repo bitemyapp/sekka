@@ -319,6 +319,11 @@ pub(crate) struct Core {
     /// The keys that are down, by their codes and what they are, since the
     /// keyboard last came to a window or left one ([`Core::first_press`]).
     keys_down: Vec<(u32, Key)>,
+    /// Whether a press of an agreeing button makes its agreement
+    /// ([`crate::agree`]): in a program run on a display, where presses come
+    /// from the compositor's input; in the testing harness only when a test
+    /// build asks.
+    pub agreeing: bool,
 }
 
 impl Core {
@@ -351,6 +356,7 @@ impl Core {
             quit: false,
             wm: None,
             keys_down: Vec::new(),
+            agreeing: false,
         }
     }
 
@@ -1743,6 +1749,7 @@ impl Core {
             reveal,
             begin_move,
             drag,
+            agreements,
             ..
         } = out;
         if let Some(source) = drag {
@@ -1759,6 +1766,17 @@ impl Core {
             w.relayout.push(n.id);
         }
         for (node, msg) in msgs {
+            let msg = self.map_up(win, node, msg);
+            self.queue.push_back(msg);
+        }
+        // Only buttons push these, and only as a person presses them: their
+        // `event` for the pointer's release, their `activate` for the keys.
+        for (node, agree) in agreements {
+            if !self.agreeing {
+                log::warn!("an agreeing button was pressed where presses make no agreement (a test harness)");
+                continue;
+            }
+            let msg = agree.make(crate::agree::Mint::by_input());
             let msg = self.map_up(win, node, msg);
             self.queue.push_back(msg);
         }

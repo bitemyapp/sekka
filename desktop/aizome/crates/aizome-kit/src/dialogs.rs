@@ -41,6 +41,8 @@ pub(crate) struct AlertButton {
     pub label: String,
     pub msg: Option<MsgFn>,
     pub kind: ButtonKind,
+    /// An agreeing button's agreement ([`Alert::agree_button`]).
+    pub agree: Option<crate::agree::AgreeFn>,
 }
 
 /// An alert: `Alert::new("Delete “notes.md”?", "It goes to the Trash.")
@@ -64,7 +66,7 @@ impl<Msg: Clone + Send + 'static> Alert<Msg> {
     }
 
     fn push(mut self, label: impl Into<String>, msg: Option<Msg>, kind: ButtonKind) -> Self {
-        self.buttons.push(AlertButton { label: label.into(), msg: msg.map(MsgFn::new), kind });
+        self.buttons.push(AlertButton { label: label.into(), msg: msg.map(MsgFn::new), kind, agree: None });
         self
     }
 
@@ -91,10 +93,36 @@ impl<Msg: Clone + Send + 'static> Alert<Msg> {
         self.push(label, Some(msg), ButtonKind::Destructive)
     }
 
+    /// The destructive button, asking the person to agree to `target`, what
+    /// the alert says it acts on: a person's press closes the alert and sends
+    /// `msg` with an [`Agreed`](crate::agree::Agreed) of it
+    /// ([`Button::on_agree`](crate::widgets::controls::Button::on_agree)).
+    ///
+    /// ```
+    /// use aizome_kit::agree::Pressed;
+    /// use aizome_kit::prelude::*;
+    /// #[derive(Clone, Debug)]
+    /// enum Msg { Empty(Pressed<u64>) }
+    /// let items = 12_u64;
+    /// let _ = Alert::new("Empty the Trash?", format!("Its {items} items will be deleted for good."))
+    ///     .agree_button("Empty Trash", items, Msg::Empty)
+    ///     .cancel_button("Cancel");
+    /// ```
+    pub fn agree_button<T: Clone + Send + 'static>(
+        mut self,
+        label: impl Into<String>,
+        target: T,
+        msg: impl Fn(crate::agree::Pressed<T>) -> Msg + 'static,
+    ) -> Self {
+        let agree = Some(crate::agree::AgreeFn::new(target, msg));
+        self.buttons.push(AlertButton { label: label.into(), msg: None, kind: ButtonKind::Destructive, agree });
+        self
+    }
+
     pub(crate) fn into_spec(self) -> AlertSpec {
         let mut buttons = self.buttons;
         if buttons.is_empty() {
-            buttons.push(AlertButton { label: "OK".into(), msg: None, kind: ButtonKind::Default });
+            buttons.push(AlertButton { label: "OK".into(), msg: None, kind: ButtonKind::Default, agree: None });
         }
         AlertSpec { title: self.title, message: self.message, buttons }
     }
@@ -123,7 +151,7 @@ pub(crate) fn show_about(core: &mut Core, win: WinId) {
     let spec = AlertSpec {
         title: info.name.clone(),
         message,
-        buttons: vec![AlertButton { label: "OK".into(), msg: None, kind: ButtonKind::Default }],
+        buttons: vec![AlertButton { label: "OK".into(), msg: None, kind: ButtonKind::Default, agree: None }],
     };
     show_alert(core, win, spec);
 }
@@ -150,6 +178,11 @@ pub(crate) fn alert_element(core: &Core, id: u64) -> Option<RawElement> {
             ButtonKind::Destructive => el.destructive(),
             ButtonKind::Normal => el,
         };
+        // Its press closes the alert (the choice, with no message) and sends
+        // the agreement, which the engine makes from input only.
+        if let Some(agree) = &b.agree {
+            el = el.agree_raw(agree.clone());
+        }
         buttons.push(Element::from(el).into_raw());
     }
     let actions = Element::from_raw(RawElement::new(
