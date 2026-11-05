@@ -7,7 +7,7 @@ use aizome_kit::{column, row};
 use super::app::{Confirm, Hako, Msg, Sheet};
 use super::jobs::{Answer, Question};
 use super::look;
-use crate::fsops::{Conflict, ErrorChoice, Resolution};
+use crate::fsops::{Conflict, ErrorChoice, Replacing, Resolution};
 use crate::model::entry::{Entry, Kind};
 use crate::model::format;
 
@@ -313,7 +313,10 @@ fn conflict(job: u64, c: &Conflict, all: bool, name: &str, doing: &str, now: i64
     if c.can_merge() {
         buttons.push(button("Merge").on_press(answer(Resolution::Merge)).into());
     }
-    buttons.push(button("Replace").destructive().on_press(answer(Resolution::Replace)).into());
+    // Its press is the person's agreement to replace what's there, and with
+    // "Apply to all" as shown, what the job finds later: nothing else replaces.
+    let replacing = Replacing { target: c.target.clone(), all };
+    buttons.push(button("Replace").on_agree(replacing, move |p| Msg::Replace(job, p)).into());
     column![
         row![
             icon(Icon::Copy).size(32.0).role(Role::Accent),

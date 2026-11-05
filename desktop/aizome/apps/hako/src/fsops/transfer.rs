@@ -740,26 +740,63 @@ impl Worker<'_, '_> {
 mod tests {
     use super::*;
     use crate::fsops::testing::{TempDir, is_root, read};
-    use crate::fsops::{Always, Control, Progress, Resolution};
+    use crate::fsops::{Always, Choice, Consent, Control, Progress, Resolution};
     use std::collections::VecDeque;
 
     /// Answers from a script, and remembers what it was asked.
     #[derive(Default)]
     struct Script {
-        conflicts: VecDeque<Resolution>,
+        conflicts: VecDeque<Say>,
         errors: VecDeque<ErrorChoice>,
         asked: Vec<String>,
     }
 
     impl crate::fsops::Asker for Script {
-        fn conflict(&mut self, c: &Conflict) -> Resolution {
+        fn conflict(&mut self, c: &Conflict) -> Choice {
             self.asked.push(format!("conflict {}", c.target.file_name().unwrap().to_string_lossy()));
-            self.conflicts.pop_front().expect("an answer for the conflict")
+            self.conflicts.pop_front().expect("an answer for the conflict").choice()
         }
 
         fn error(&mut self, f: &Failure) -> ErrorChoice {
             self.asked.push(format!("error {} {}", f.action, f.path.file_name().unwrap_or_default().to_string_lossy()));
             self.errors.pop_front().expect("an answer for the error")
+        }
+    }
+
+    /// A scripted answer to a conflict: Replace comes with a test's consent,
+    /// as if the person had pressed it.
+    #[derive(Clone, Copy, Debug)]
+    enum Say {
+        Replace,
+        Skip,
+        KeepBoth,
+        Merge,
+        Cancel,
+    }
+
+    impl Say {
+        fn choice(self) -> Choice {
+            match self {
+                Say::Replace => Choice::Replace(Consent::for_tests()),
+                Say::Skip => Resolution::Skip.into(),
+                Say::KeepBoth => Resolution::KeepBoth.into(),
+                Say::Merge => Resolution::Merge.into(),
+                Say::Cancel => Resolution::Cancel.into(),
+            }
+        }
+    }
+
+    /// Replaces at every conflict, as if the person had pressed Replace with
+    /// "Apply to all".
+    struct ReplaceAll(ErrorChoice);
+
+    impl crate::fsops::Asker for ReplaceAll {
+        fn conflict(&mut self, _: &Conflict) -> Choice {
+            Choice::Replace(Consent::for_tests())
+        }
+
+        fn error(&mut self, _: &Failure) -> ErrorChoice {
+            self.0
         }
     }
 
@@ -877,10 +914,7 @@ mod tests {
         let a = t.file("new/a.txt", "new a");
         let b = t.file("new/b.txt", "new b");
         let c = t.file("new/c.txt", "new c");
-        let mut s = Script {
-            conflicts: [Resolution::Skip, Resolution::KeepBoth, Resolution::Replace].into(),
-            ..Default::default()
-        };
+        let mut s = Script { conflicts: [Say::Skip, Say::KeepBoth, Say::Replace].into(), ..Default::default() };
         let r = run(&[a.clone(), b.clone(), c.clone()], &dest, Mode::Copy, &mut s);
         assert_eq!(s.asked, ["conflict a.txt", "conflict b.txt", "conflict c.txt"]);
         assert_eq!(r.skipped, vec![a]);
@@ -893,7 +927,7 @@ mod tests {
         // Cancel stops everything after it.
         let d = t.file("new2/a.txt", "x");
         let e = t.file("new2/zzz.txt", "y");
-        let mut s = Script { conflicts: [Resolution::Cancel].into(), ..Default::default() };
+        let mut s = Script { conflicts: [Say::Cancel].into(), ..Default::default() };
         let r = run(&[d, e], &dest, Mode::Copy, &mut s);
         assert!(r.cancelled);
         assert!(!dest.join("zzz.txt").exists());
@@ -908,7 +942,7 @@ mod tests {
         t.file("dest/folder/old-only.txt", "kept in the trash");
         let src = t.file("new/folder/new.txt", "new");
         let control = Control::new();
-        let mut asker = Always(Resolution::Replace, ErrorChoice::Cancel);
+        let mut asker = ReplaceAll(ErrorChoice::Cancel);
         let mut quiet = ();
         let mut env = Env::new(&control, &mut asker, &mut quiet);
         let r = transfer(&[src.parent().unwrap().to_path_buf()], &dest, Mode::Copy, &mut env, &trash);
@@ -936,7 +970,7 @@ mod tests {
         t.file("dest/a.txt", "old a");
         let a = t.file("new/a.txt", "new a");
         let control = Control::new();
-        let mut asker = Always(Resolution::Replace, ErrorChoice::Cancel);
+        let mut asker = ReplaceAll(ErrorChoice::Cancel);
         let mut quiet = ();
         let mut env = Env::new(&control, &mut asker, &mut quiet);
         let r = transfer(std::slice::from_ref(&a), &dest, Mode::Copy, &mut env, &trash);
@@ -954,11 +988,11 @@ mod tests {
         /// Answers Replace, after another program swapped what's there.
         struct Swap;
         impl crate::fsops::Asker for Swap {
-            fn conflict(&mut self, c: &Conflict) -> Resolution {
+            fn conflict(&mut self, c: &Conflict) -> Choice {
                 let fresh = c.target.with_extension("fresh");
                 fs::write(&fresh, "newest").unwrap();
                 fs::rename(&fresh, &c.target).unwrap();
-                Resolution::Replace
+                Choice::Replace(Consent::for_tests())
             }
             fn error(&mut self, _: &Failure) -> ErrorChoice {
                 ErrorChoice::Cancel
@@ -983,7 +1017,7 @@ mod tests {
         t.file("dest/f/same.txt", "old");
         t.file("src/f/same.txt", "new");
         t.file("src/f/added.txt", "added");
-        let mut s = Script { conflicts: [Resolution::Merge, Resolution::Replace].into(), ..Default::default() };
+        let mut s = Script { conflicts: [Say::Merge, Say::Replace].into(), ..Default::default() };
         let r = run(&[t.join("src/f")], &dest, Mode::Move, &mut s);
         assert!(r.is_clean(), "{r:?}");
         assert_eq!(s.asked, ["conflict f", "conflict same.txt"]);
@@ -1010,7 +1044,7 @@ mod tests {
         no_temporaries(other.path());
         // And back, with a conflict replaced there.
         t.file("src/a.txt", "stale");
-        let mut s = Script { conflicts: [Resolution::Merge, Resolution::Replace].into(), ..Default::default() };
+        let mut s = Script { conflicts: [Say::Merge, Say::Replace].into(), ..Default::default() };
         let r = run(&[other.join("src")], t.path(), Mode::Move, &mut s);
         assert!(r.is_clean(), "{r:?}");
         assert_tree(&src);

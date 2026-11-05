@@ -14,11 +14,13 @@ use super::app::{Hako, Msg, Sheet};
 use super::browser::{Drag, Load, Loc, Search};
 use super::dnd::{Dest, DragEvent, Target};
 use super::fileview::{Layout, ViewKey};
-use super::jobs::{Answer, Work, drop_mode};
+use super::jobs::{Answer, Reply, Work, drop_mode};
+use crate::fsops::Replacing;
 use crate::fsops::is_within;
 use crate::fsops::transfer::Mode;
 use crate::model::entry::{self, Entry};
 use crate::model::uri;
+use aizome_kit::agree::Agreed;
 
 impl Hako {
     /// Go to a path: a folder, or a file in its folder.
@@ -572,13 +574,28 @@ impl Hako {
 
     /// Answer job `id`'s question (none: cancel it).
     pub(crate) fn answer(&mut self, cx: &mut Cx<Msg>, id: u64, a: Option<Answer>) {
-        let Some(j) = self.jobs.iter_mut().find(|j| j.id == id) else { return };
-        let Some(q) = j.question.take() else { return };
+        let Some(j) = self.jobs.iter().find(|j| j.id == id) else { return };
+        let Some(q) = &j.question else { return };
         let a = a.unwrap_or(match q {
             super::jobs::Question::Conflict(_) => Answer::Conflict(crate::fsops::Resolution::Cancel, false),
             super::jobs::Question::Failure(_) => Answer::Error(crate::fsops::ErrorChoice::Cancel, false),
         });
-        let _ = j.answers.send(a);
+        self.reply(cx, id, Reply::Answer(a));
+    }
+
+    /// Job `id`'s conflict: the person pressed Replace, agreeing to replace
+    /// what the sheet showed (and with "Apply to all", what the job finds
+    /// later).
+    pub(crate) fn replace(&mut self, cx: &mut Cx<Msg>, id: u64, agreed: Agreed<Replacing>) {
+        self.reply(cx, id, Reply::Replace(agreed));
+    }
+
+    fn reply(&mut self, cx: &mut Cx<Msg>, id: u64, reply: Reply) {
+        let Some(j) = self.jobs.iter_mut().find(|j| j.id == id) else { return };
+        if j.question.take().is_none() {
+            return;
+        }
+        let _ = j.answers.send(reply);
         if let Some(s) = j.sheet.take() {
             self.sheets.remove(&s);
             cx.close_window(s);
