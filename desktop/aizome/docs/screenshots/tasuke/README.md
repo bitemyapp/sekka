@@ -1,6 +1,6 @@
-# Assistant (Tasuke) screenshots
+# Tasuke screenshots
 
-Original 1440 × 900 `grim` captures, at scale 1, of the Assistant window
+Original 1440 × 900 `grim` captures, at scale 1, of Tasuke's window
 (`aizome-tasuke`) on its launch fixtures, each in Night and Day. They are
 not cropped or scaled, and nothing in them was edited; the files were only
 recompressed losslessly with oxipng (checked pixel-identical with
@@ -40,26 +40,12 @@ then.
 
 - **Date**: 5 November 2026.
 - **Build**: the dev profile (`cargo build -p aizome-tasuke`) on
-  `feat/assistant`, with the repository's Aizome dev shell, at five
-  commits:
-  - `85a3e01b` for `first-run`, taken again when the recommended model's
-    incidents joined its card. Only `first-run` was taken again.
-  - `17a003f0` for `models-8gb`, taken again when the library's speed
-    estimate for a model with experts in system memory was corrected (its
-    card now says about 33 tokens/s here). It was taken before that at
-    `d1d906f6`, when the catalog gained the 8 GiB models' measured speeds
-    and a corrected note on Gemma 4 26B-A4B. Both times `first-run` and
-    `downloading` were taken again too and came out pixel for pixel the
-    same, so they were kept.
-  - `c2b06120` for `first-run` and `downloading` on the 8 GB laptop,
-    taken again when the catalog's 8 GiB round made Gemma 4 26B-A4B its
-    choice and the window learned to show a model split between the GPU
-    and system memory. `models-32gb` and `models-unified` were taken again
-    then too and came out pixel for pixel the same, so they were kept.
-  - `70d629b2` for the check-up and server-down pictures and the Day theme
-    pair, taken again then because a finished answer had gained its Copy
-    button. The others were taken again then too and came out the same.
-  - `41266f94` for the rest.
+  `feat/assistant`, with the repository's Aizome dev shell, at `58e13304`,
+  when the window took Tasuke as its name. All twenty-four were taken
+  again then. Against the earlier takes (from `41266f94` to `85a3e01b`),
+  ImageMagick's `compare` finds changes only in the menu bar's app name,
+  the heading that names the app and, on the Models pages, the first
+  sentence.
 - **Display**: a private headless sway 1.12 with the pixman renderer
   (`desktop/aizome/sukumo/scripts/headless-wayland`, `SIZE=1440x900`),
   with `WAYLAND_DISPLAY`, `DISPLAY` and `AIZOME_SHELL_SOCKET` unset. The
@@ -108,5 +94,5 @@ password dialog, and the download is real. What stands in is said below.
 
 | File | Test | What it shows |
 | --- | --- | --- |
-| `vm-password-dialog.png` | `checks.x86_64-linux.tasuke-dialog`, built at `b5fd05ff` | After **Run as administrator**, Aizome's own polkit dialog asking for alice's password (`test-only`, typed next). The model is a script (`apps/tasuke/nix/fake-openai.py`); "Gemma 4 12B" names sparse stand-in files, and no model ran |
-| `vm-download-paused.png` | `legacyPackages.x86_64-linux.tasuke-download`, built at `5737fdd1` with that test's files from `fc640dc4` (the page is drawn the same since) | First run's download from Hugging Face, paused at 335 MB of Qwen3.5 9B's 6.1 GB; first run recommended it for a stand-in `nvidia-smi`'s 8 GB laptop GPU and the VM's 3.8 GB of memory |
+| `vm-password-dialog.png` | `checks.x86_64-linux.tasuke-dialog`, built at `58e13304` | After **Run as administrator**, Aizome's own polkit dialog asking for alice's password (`test-only`, typed next). The model is a script (`apps/tasuke/nix/fake-openai.py`); "Gemma 4 12B" names sparse stand-in files, and no model ran |
+| `vm-download-paused.png` | `legacyPackages.x86_64-linux.tasuke-download`, built at `58e13304` | First run's download from Hugging Face, paused at 372 MB of Qwen3.5 9B's 6.1 GB; first run recommended it for a stand-in `nvidia-smi`'s 8 GB laptop GPU and the VM's 3.8 GB of memory |
