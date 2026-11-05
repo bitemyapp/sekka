@@ -16,7 +16,6 @@ use yukimi_system::SAVED_CONFIGURATIONS;
 use yukimi_system::generations::SYSTEM_PROFILE;
 
 use crate::process::{self, Failure, Result, Unstoppable};
-use crate::snapshots;
 
 /// The system profile's generations, held for a clean-up: from now until
 /// the boot menu is updated, a stop waits.
@@ -39,7 +38,7 @@ impl Generations {
         let mut delete = process::command("nix-env");
         delete.args(["-p", SYSTEM_PROFILE, "--delete-generations", &format!("{days}d")]);
         let deleting = process::run(delete, "Deleting old generations");
-        snapshots::prune(Path::new(SAVED_CONFIGURATIONS), Path::new(SYSTEM_PROFILE));
+        yukimi_system::saved::prune(Path::new(SAVED_CONFIGURATIONS), Path::new(SYSTEM_PROFILE));
         process::stage_done(1);
         Deleted { step: Some(self.step), deleting }
     }
@@ -52,7 +51,7 @@ impl Generations {
         let mut delete = process::command("nix-env");
         delete.args(["-p", SYSTEM_PROFILE, "--delete-generations"]).args(numbers.iter().map(u32::to_string));
         let deleting = process::run(delete, "Deleting the generation");
-        snapshots::prune(Path::new(SAVED_CONFIGURATIONS), Path::new(SYSTEM_PROFILE));
+        yukimi_system::saved::prune(Path::new(SAVED_CONFIGURATIONS), Path::new(SYSTEM_PROFILE));
         process::stage_done(1);
         Deleted { step: Some(self.step), deleting }
     }

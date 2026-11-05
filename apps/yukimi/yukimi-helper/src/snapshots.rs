@@ -6,7 +6,7 @@
 //! next one.
 use std::path::{Path, PathBuf};
 
-use yukimi_system::saved::{self, GenerationId, Snapshot};
+use yukimi_system::saved::{GenerationId, Saving, Snapshot};
 use yukimi_system::setup::Setup;
 
 use crate::process::Result;
@@ -72,7 +72,10 @@ pub fn copy_configuration(from: &Path, to: &Path) -> Result<()> {
 /// # Ok::<(), yukimi_helper::process::Failure>(())
 /// ```
 pub fn keep(setup: &Setup, root: &Path, generation: &GenerationId) -> Result<()> {
-    if Snapshot::of(root, generation).is_some() {
+    if let Some(kept) = Snapshot::of(root, generation) {
+        // A copy from before copies recorded their system, taken for this
+        // generation by its time: from now on it says so itself.
+        let _ = kept.record_system();
         return Ok(());
     }
     save(setup, root, generation)
@@ -81,13 +84,9 @@ pub fn keep(setup: &Setup, root: &Path, generation: &GenerationId) -> Result<()>
 /// Keeps the configuration as `generation`'s, in `root`, in place of any
 /// copy: it is the configuration that just built it.
 pub fn save(setup: &Setup, root: &Path, generation: &GenerationId) -> Result<()> {
-    let dir = saved::directory(root, generation);
-    let partial = dir.with_extension("new");
-    let _ = std::fs::remove_dir_all(&partial);
-    copy_configuration(&setup.dir, &partial)?;
-    saved::mark(&partial, generation)?;
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::rename(&partial, &dir)?;
+    let saving = Saving::begin(root, generation)?;
+    copy_configuration(&setup.dir, saving.dir())?;
+    saving.finish()?;
     Ok(())
 }
 
@@ -119,24 +118,6 @@ pub fn restore_choices(setup: &Setup, kept: &Snapshot, running: Option<&Snapshot
         };
     }
     left
-}
-
-/// Forget the configurations of generations that no longer exist, or that
-/// were kept for an earlier generation with the same number.
-pub fn prune(root: &Path, profile: &Path) {
-    let Ok(entries) = std::fs::read_dir(root) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let generation = name.strip_prefix("generation-").and_then(|n| n.parse::<u32>().ok());
-        let kept = generation
-            .and_then(|n| GenerationId::read(profile, n))
-            .is_some_and(|generation| Snapshot::of(root, &generation).is_some());
-        if !kept {
-            let _ = std::fs::remove_dir_all(entry.path());
-        }
-    }
 }
 
 #[cfg(test)]
@@ -209,25 +190,6 @@ mod tests {
     }
 
     #[test]
-    fn pruning_forgets_deleted_and_replaced_generations() {
-        let f = Fixture::new("prune");
-        std::fs::write(f.nixos().join("flake.lock"), "lock").unwrap();
-        for (n, system) in [(1, "/nix/store/s1"), (2, "/nix/store/s2"), (3, "/nix/store/s3")] {
-            save(&f.setup(), &f.root(), &f.generation(n, system)).unwrap();
-        }
-        std::fs::create_dir_all(f.root().join("generation-4.new")).unwrap();
-        std::fs::remove_file(f.dir.join("profiles/system-1-link")).unwrap();
-        f.generation(2, "/nix/store/s2-rebuilt");
-        prune(&f.root(), &f.profile());
-        let mut left: Vec<String> = std::fs::read_dir(f.root())
-            .unwrap()
-            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-            .collect();
-        left.sort();
-        assert_eq!(left, ["generation-3"]);
-    }
-
-    #[test]
     fn configurations_copy_without_hidden_or_large_files() {
         let f = Fixture::new("copy");
         let (from, to) = (f.nixos(), f.dir.join("saved"));
@@ -254,12 +216,9 @@ mod tests {
         let f = Fixture::new("restore");
         let (older, running) = (f.generation(1, "/nix/store/s1"), f.generation(2, "/nix/store/s2"));
         let config = f.nixos();
-        let dirs = [saved::directory(&f.root(), &older), saved::directory(&f.root(), &running)];
-        for (dir, generation) in dirs.iter().zip([&older, &running]) {
-            std::fs::create_dir_all(dir).unwrap();
-            saved::mark(dir, generation).unwrap();
-        }
-        let [older_dir, running_dir] = &dirs;
+        let (older_copy, running_copy) =
+            (Saving::begin(&f.root(), &older).unwrap(), Saving::begin(&f.root(), &running).unwrap());
+        let (older_dir, running_dir) = (older_copy.dir().to_owned(), running_copy.dir().to_owned());
         // Migration changes flake.nix too; it must go back with its lock.
         std::fs::write(older_dir.join("flake.nix"), "old repositories").unwrap();
         std::fs::write(running_dir.join("flake.nix"), "sekka").unwrap();
@@ -275,7 +234,7 @@ mod tests {
         // yukimi.nix: generation 1 had none.
         std::fs::write(running_dir.join("yukimi.nix"), "{ }").unwrap();
         std::fs::write(config.join("yukimi.nix"), "{ }").unwrap();
-        let (kept, from) = (Snapshot::of(&f.root(), &older).unwrap(), Snapshot::of(&f.root(), &running).unwrap());
+        let (kept, from) = (older_copy.finish().unwrap(), running_copy.finish().unwrap());
         let left = restore_choices(&f.setup(), &kept, Some(&from));
         assert_eq!(std::fs::read_to_string(config.join("flake.nix")).unwrap(), "old repositories");
         assert_eq!(std::fs::read_to_string(config.join("flake.lock")).unwrap(), "lock 1");
