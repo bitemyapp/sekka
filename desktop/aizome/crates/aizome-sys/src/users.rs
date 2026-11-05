@@ -368,6 +368,12 @@ impl Users {
         self.user_call(user, "SetAccountType", (account_type.as_i32(),))
     }
 
+    /// Set up, change or remove the TV account ([`crate::tv`]), through its
+    /// helper as root.
+    pub fn change_tv(&self, change: crate::tv::Change) -> Task<()> {
+        crate::tv::change(&self.model.wake(), change)
+    }
+
     pub fn set_automatic_login(&self, user: &User, on: bool) -> Task<()> {
         self.user_call(user, "SetAutomaticLogin", (on,))
     }

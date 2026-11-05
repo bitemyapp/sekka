@@ -132,6 +132,9 @@ pub struct Keyboard {
     pub family: Family,
     pub ok: Button,
     pub back: Button,
+    /// The caret stays at the end of what's typed (a password the program
+    /// keeps itself): the shoulders don't move it, and no hint says so.
+    pub fixed_caret: bool,
 }
 
 /// A key's height, the gap between keys, and a tenth of a row.
@@ -232,8 +235,8 @@ impl Keyboard {
             Button::North => Action::Key(Key::Space),
             Button::L2 => Action::Key(Key::Shift),
             Button::R2 => Action::Key(Key::Page),
-            Button::L1 => Action::Edit(Edit::Left),
-            Button::R1 => Action::Edit(Edit::Right),
+            Button::L1 if !self.fixed_caret => Action::Edit(Edit::Left),
+            Button::R1 if !self.fixed_caret => Action::Edit(Edit::Right),
             Button::Start => Action::Key(Key::Enter),
             Button::Select => Action::Close,
             _ => return None,
@@ -306,11 +309,16 @@ impl Keyboard {
         x = hint(c, theme, self.family, self.ok, "Type", x, y);
         x = hint(c, theme, self.family, Button::West, "Delete", x, y);
         x = hint(c, theme, self.family, Button::North, "Space", x, y);
-        let w = glyph_width(theme, self.family, Button::L1, 22.0);
-        button_glyph(c, theme, self.family, Button::L1, Point::new(x + w / 2.0, y), 22.0);
-        x += w + 10.0;
-        x = hint(c, theme, self.family, Button::R1, "Move", x, y);
+        if !self.fixed_caret {
+            let w = glyph_width(theme, self.family, Button::L1, 22.0);
+            button_glyph(c, theme, self.family, Button::L1, Point::new(x + w / 2.0, y), 22.0);
+            x += w + 10.0;
+            x = hint(c, theme, self.family, Button::R1, "Move", x, y);
+        }
         x = hint(c, theme, self.family, Button::L2, "Shift", x, y);
+        if self.fixed_caret {
+            x = hint(c, theme, self.family, Button::R2, "Symbols", x, y);
+        }
         x = hint(c, theme, self.family, Button::Start, "Enter", x, y);
         hint(c, theme, self.family, self.back, "Close", x, y);
     }

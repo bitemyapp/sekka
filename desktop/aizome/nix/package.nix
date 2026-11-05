@@ -255,6 +255,7 @@ let
         ${test} --no-run -p aizome-kit --lib
         ${test} --no-run -p aizome-sys -p aizome-shell -p aizome-hako --lib
         ${test} --no-run -p aizome-chanoma --lib
+        ${test} --no-run -p aizome-gamepad -p aizome-sofa -p aizome-greeter --lib
         ${cargo}/bin/cargo test --offline --target ${target} --release --no-run -p aizome-comp-process-tests --lib
         runHook postCheck
       '';
@@ -300,6 +301,11 @@ rustPlatform.buildRustPackage (
       # Chanoma: its rules, controllers and frontend, and whole evenings
       # played through a core of its tests' own (tests/chanoma.rs).
       ${test} -p aizome-chanoma --lib --test chanoma
+      # Controllers and the login screen with one: layouts, the PIN's ten
+      # digits and chords, common pads through SDL's own database, and the
+      # greeter's screens.
+      AIZOME_GAMECONTROLLERDB=${sdl_gamecontrollerdb}/share/gamecontrollerdb.txt \
+        ${test} -p aizome-gamepad -p aizome-sofa -p aizome-greeter --lib --test real_pads --test screens
       runHook postCheck
     '';
 
@@ -354,6 +360,10 @@ rustPlatform.buildRustPackage (
       mv $out/bin/aizome-nisshi-helper $out/libexec/
       substitute apps/nisshi/data/org.aizome.Nisshi.policy.in $out/share/polkit-1/actions/org.aizome.Nisshi.policy \
         --subst-var-by helper $out/libexec/aizome-nisshi-helper
+      # The TV account's helper (Settings › Users & Groups), likewise.
+      mv $out/bin/aizome-tv-account $out/libexec/
+      substitute apps/settei/data/org.aizome.TvAccount.policy.in $out/share/polkit-1/actions/org.aizome.TvAccount.policy \
+        --subst-var-by helper $out/libexec/aizome-tv-account
       install -Dm644 apps/hotaru/data/org.aizome.Hotaru.svg $out/share/icons/hicolor/scalable/apps/org.aizome.Hotaru.svg
       install -Dm644 ${ghosttyLicense} $out/share/licenses/hotaru/Ghostty-MIT.txt
       install -m644 crates/hotaru-link-regex/vendor/oniguruma/LICENSE $out/share/licenses/hotaru/Oniguruma-BSD-2-Clause.txt
@@ -380,6 +390,11 @@ rustPlatform.buildRustPackage (
       mv $out/bin/aizome-chanoma $chanoma/bin/
       mv $out/share/applications/org.aizome.Chanoma.desktop $chanoma/share/applications/
       mv $out/share/icons/hicolor/scalable/apps/org.aizome.Chanoma.svg $chanoma/share/icons/hicolor/scalable/apps/
+      # The TV account's session: the compositor alone with Chanoma.
+      install -Dm755 apps/chanoma/data/aizome-chanoma-session $chanoma/bin/aizome-chanoma-session
+      substituteInPlace $chanoma/bin/aizome-chanoma-session \
+        --subst-var-by aizome $out/bin/aizome \
+        --subst-var-by chanoma $chanoma/bin/aizome-chanoma
       runHook postInstall
     '';
 

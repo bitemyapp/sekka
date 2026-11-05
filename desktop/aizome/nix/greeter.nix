@@ -44,7 +44,10 @@ let
         "${x11Session}"
       ];
       hidden_users = config.services.displayManager.hiddenUsers;
-      inherit (g) power;
+      inherit (g) power controllers;
+      # SDL's controller database: buttons by where they are, for
+      # controllers whose drivers name them their own way.
+      controller_database = "${pkgs.sdl_gamecontrollerdb}/share/gamecontrollerdb.txt";
       compositor = [
         "${cfg.package}/bin/aizome"
         "--backend"
@@ -103,6 +106,15 @@ in
       type = lib.types.bool;
       default = true;
       description = "Offer Sleep, Restart and Shut Down on the login screen.";
+    };
+    controllers = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Let a game controller work the login screen: nothing shows until
+        one of its buttons is pressed, then it moves between the people
+        and types passwords on an on-screen keyboard (and the TV account's
+        PIN on Chanoma's PIN pad). A button at the top right says how.'';
     };
   };
 
