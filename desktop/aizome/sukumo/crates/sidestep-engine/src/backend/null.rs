@@ -26,7 +26,7 @@ use smithay_client_toolkit::reexports::calloop::channel::{self, Channel};
 
 use super::{Backend, MainSender, Waker};
 use crate::protocol::{
-    FromRender, LayerKeyboard, LayerPlacement, LockAnswer, LockRequest, Op, ToRender, WindowId, WindowRequest,
+    FromRender, LayerKeyboard, LayerPlacement, LockConfirmed, LockRequest, Op, ToRender, WindowId, WindowRequest,
     WindowState,
 };
 
@@ -441,7 +441,7 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
             ToRender::LockSession { lock } => {
                 *LOCK.lock().unwrap_or_else(|e| e.into_inner()) = Some(lock);
                 note(Seen::SessionLock { locked: true });
-                send(FromRender::SessionLocked { lock: LockAnswer::heard(lock) });
+                send(FromRender::SessionLocked { lock: LockConfirmed::heard(lock) });
             }
             ToRender::UnlockSession => {
                 *LOCK.lock().unwrap_or_else(|e| e.into_inner()) = None;
