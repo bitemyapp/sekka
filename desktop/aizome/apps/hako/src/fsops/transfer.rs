@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use super::delete;
 use super::names;
-use super::place::{self, Copied, InPlace, Unsynced};
+use super::place::{self, InPlace, Item as CopyItem, Move};
 use super::replace::{self, Answer, NotSetAside, Occupant, Replaced, SetAside};
 use super::sys;
 use super::trash::{self, Trash};
@@ -515,14 +515,17 @@ impl Worker<'_, '_> {
         }
         let dest = target.parent().unwrap_or(Path::new("/"));
         let partial = dest.join(names::partial_name(target.file_name().unwrap_or_default()));
-        let sync = self.mode == Mode::Move;
-        let copied = match self.copy_any(source, &partial, sync) {
-            Ok(copied) => copied,
-            Err(stop) => {
-                delete::remove_quietly(&partial);
-                return Err(stop);
-            }
+        // A move records, in each folder its copy makes, the sources it may
+        // delete once they're committed.
+        let mut moving = (self.mode == Mode::Move).then(|| Move::new(source, &partial));
+        let item = match moving.as_mut() {
+            Some(m) => m.item(),
+            None => CopyItem::copying(source, &partial),
         };
+        if let Err(stop) = self.copy_any(item) {
+            delete::remove_quietly(&partial);
+            return Err(stop);
+        }
         let placed = loop {
             match place::rename(&partial, target) {
                 Ok(placed) => break placed,
@@ -542,8 +545,8 @@ impl Worker<'_, '_> {
             }
         };
         // A move's sources go once the folder the copy is in is synced.
-        if let Some(copied) = copied {
-            match copied.commit(&placed) {
+        if let Some(moving) = moving {
+            match moving.commit(&placed) {
                 Ok(committed) => self.problems.extend(committed.delete_sources()),
                 // The copy may not be on the disk: keep the source.
                 Err(e) => {
@@ -592,23 +595,21 @@ impl Worker<'_, '_> {
         }
     }
 
-    /// Copy whatever `source` is to `dest` (which isn't there). With
-    /// `sync` (a move), its data is synced, and what it copied is the
-    /// sources the move may delete once the copy is committed.
-    fn copy_any(&mut self, source: &Path, dest: &Path, sync: bool) -> Step<Option<Copied>> {
+    /// Copy whatever `item`'s source is to its copy (which isn't there).
+    fn copy_any(&mut self, item: CopyItem<'_>) -> Step<()> {
         self.checkpoint()?;
-        let meta = self.source_meta(source)?;
-        self.env.progress.current = Some(source.to_path_buf());
+        let meta = self.source_meta(item.source())?;
+        self.env.progress.current = Some(item.source().to_path_buf());
         let ft = meta.file_type();
         if ft.is_symlink() {
-            self.copy_link(source, dest, sync)
+            self.copy_link(item)
         } else if ft.is_dir() {
-            self.copy_dir(source, dest, &meta, sync)
+            self.copy_dir(item, &meta)
         } else if ft.is_file() {
-            self.copy_file(source, dest, &meta, sync)
+            self.copy_file(item, &meta)
         } else {
             self.ask(Failure::because(
-                source,
+                item.source(),
                 "copy",
                 "it's a special file (a pipe, socket or device), which can't be copied",
             ))?;
@@ -616,45 +617,52 @@ impl Worker<'_, '_> {
         }
     }
 
-    fn copy_link(&mut self, source: &Path, dest: &Path, sync: bool) -> Step<Option<Copied>> {
+    fn copy_link(&mut self, item: CopyItem<'_>) -> Step<()> {
         loop {
-            match fs::read_link(source).and_then(|to| std::os::unix::fs::symlink(to, dest)) {
+            match fs::read_link(item.source()).and_then(|to| std::os::unix::fs::symlink(to, item.copy())) {
                 Ok(()) => break,
-                Err(e) => self.ask(Failure::new(source, "copy the link", &e))?,
+                Err(e) => self.ask(Failure::new(item.source(), "copy the link", &e))?,
             }
         }
         self.env.progress.items_done += 1;
-        Ok(sync.then(|| Copied::link(source)))
+        item.link();
+        Ok(())
     }
 
-    fn copy_file(&mut self, source: &Path, dest: &Path, meta: &fs::Metadata, sync: bool) -> Step<Option<Copied>> {
-        let copied = loop {
+    fn copy_file(&mut self, mut item: CopyItem<'_>, meta: &fs::Metadata) -> Step<()> {
+        loop {
             let mut counted = 0u64;
-            match self.try_copy_file(source, dest, meta, sync, &mut counted) {
-                Ok(copied) => break copied,
-                Err((action, e)) => {
-                    let _ = fs::remove_file(dest);
-                    self.env.progress.bytes_done = self.env.progress.bytes_done.saturating_sub(counted);
-                    if is_cancel(&e) {
-                        return Err(Stop::Cancel);
+            let (action, e) = match self.try_copy_file(item.source(), item.copy(), meta, &mut counted) {
+                // In a move, its data is synced too.
+                Ok(file) => match item.file(&file) {
+                    Ok(()) => break,
+                    Err((back, e)) => {
+                        item = back;
+                        ("write", e)
                     }
-                    self.ask(Failure::new(source, action, &e))?;
-                }
+                },
+                Err(failed) => failed,
+            };
+            let _ = fs::remove_file(item.copy());
+            self.env.progress.bytes_done = self.env.progress.bytes_done.saturating_sub(counted);
+            if is_cancel(&e) {
+                return Err(Stop::Cancel);
             }
-        };
+            self.ask(Failure::new(item.source(), action, &e))?;
+        }
         self.env.progress.items_done += 1;
         self.env.report();
-        Ok(copied)
+        Ok(())
     }
 
+    /// Copy the file `source` to `dest`: the copy, its data not synced.
     fn try_copy_file(
         &mut self,
         source: &Path,
         dest: &Path,
         meta: &fs::Metadata,
-        sync: bool,
         counted: &mut u64,
-    ) -> Result<Option<Copied>, (&'static str, io::Error)> {
+    ) -> Result<File, (&'static str, io::Error)> {
         let mut from = File::open(source).map_err(|e| ("read", e))?;
         let mut to =
             OpenOptions::new().write(true).create_new(true).mode(0o600).open(dest).map_err(|e| ("write", e))?;
@@ -671,58 +679,54 @@ impl Worker<'_, '_> {
         if let (Ok(a), Ok(m)) = (meta.accessed(), meta.modified()) {
             let _ = to.set_times(FileTimes::new().set_accessed(a).set_modified(m));
         }
-        if !sync {
-            return Ok(None);
-        }
-        Copied::file(source, &to).map(Some).map_err(|e| ("write", e))
+        Ok(to)
     }
 
-    fn copy_dir(&mut self, source: &Path, dest: &Path, meta: &fs::Metadata, sync: bool) -> Step<Option<Copied>> {
+    fn copy_dir(&mut self, item: CopyItem<'_>, meta: &fs::Metadata) -> Step<()> {
         loop {
-            match fs::DirBuilder::new().mode(0o700).create(dest) {
+            match fs::DirBuilder::new().mode(0o700).create(item.copy()) {
                 Ok(()) => break,
-                Err(e) => self.ask(Failure::new(dest, "make the folder", &e))?,
+                Err(e) => self.ask(Failure::new(item.copy(), "make the folder", &e))?,
             }
         }
-        let names = match self.read_names(source) {
+        let names = match self.read_names(item.source()) {
             Ok(n) => n,
             Err(stop) => {
-                let _ = fs::remove_dir(dest);
+                let _ = fs::remove_dir(item.copy());
                 return Err(stop);
             }
         };
-        let mut folder = sync.then(|| Unsynced::new(source, dest));
+        let source = item.source().to_path_buf();
+        let mut folder = item.folder();
         for name in names {
-            let (s, d) = (source.join(&name), dest.join(&name));
-            match self.copy_any(&s, &d, sync) {
-                Ok(copied) => {
-                    if let (Some(folder), Some(copied)) = (folder.as_mut(), copied) {
-                        folder.add(copied);
-                    }
-                }
+            let child = folder.child(&name);
+            let s = child.source().to_path_buf();
+            match self.copy_any(child) {
+                Ok(()) => {}
                 Err(Stop::Skip(why)) => self.problems.push((s, why)),
                 Err(Stop::Cancel) => return Err(Stop::Cancel),
             }
         }
         // The folder's own permissions and times, now that it's full.
-        if let Err(e) = fs::set_permissions(dest, fs::Permissions::from_mode(meta.mode() & 0o1777)) {
+        let dest = folder.copy().to_path_buf();
+        if let Err(e) = fs::set_permissions(&dest, fs::Permissions::from_mode(meta.mode() & 0o1777)) {
             self.problems
-                .push((source.to_path_buf(), format!("its permissions couldn't be copied: {}", super::describe(&e))));
+                .push((source.clone(), format!("its permissions couldn't be copied: {}", super::describe(&e))));
         }
-        if let (Ok(a), Ok(m), Ok(f)) = (meta.accessed(), meta.modified(), File::open(dest)) {
+        if let (Ok(a), Ok(m), Ok(f)) = (meta.accessed(), meta.modified(), File::open(&dest)) {
             let _ = f.set_times(FileTimes::new().set_accessed(a).set_modified(m));
         }
-        let copied = match folder.map(Unsynced::sync).transpose() {
-            Ok(copied) => copied,
-            Err(e) => {
-                // Its copy may not be on the disk: it doesn't come, and
-                // the sources of all it holds stay.
-                delete::remove_quietly(dest);
-                return Err(Stop::Skip(format!("it couldn't be written safely: {}", super::describe(&e))));
+        if let Err(e) = folder.sync() {
+            // Its copy may not be on the disk: it doesn't come, and the
+            // sources of all it holds stay.
+            if let Some((p, why)) = delete::remove_quietly(&dest).failed.first() {
+                let msg = format!("part of its unsafe copy couldn't be removed ({}: {why})", p.display());
+                self.problems.push((source, msg));
             }
-        };
+            return Err(Stop::Skip(format!("it couldn't be written safely: {}", super::describe(&e))));
+        }
         self.env.progress.items_done += 1;
-        Ok(copied)
+        Ok(())
     }
 }
 
