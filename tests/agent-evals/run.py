@@ -150,6 +150,8 @@ def main():
     ap.add_argument("--skill", action="store_true", help="give diagnostics the troubleshooting skill")
     ap.add_argument("--marks", action="store_true",
                     help="tasuke: number the controls on screenshots (set-of-marks) and offer click_element")
+    ap.add_argument("--desktop-only", action="store_true",
+                    help="tasuke: offer only the desktop tools, to measure operating the screen alone")
     ap.add_argument("--coords",
                     help="override the model's coordinate convention (grounding.py measures it): pixel, norm1000, norm1, "
                          "or for tasuke affine:XSCALE,XOFFSET,YSCALE,YOFFSET")
@@ -183,7 +185,7 @@ def main():
                      "vision": m.get("vision", False), "keep_reasoning": m.get("keep_reasoning", False),
                      "max_tokens": m.get("max_tokens", 6144), "engine": m["engine"],
                      # Where the VM reaches the host's server (omp runs in the VM).
-                     "omp_base_url": f"http://10.0.2.2:{args.port}", "marks": args.marks}
+                     "omp_base_url": f"http://10.0.2.2:{args.port}", "marks": args.marks, "desktop_only": args.desktop_only}
         if not args.no_serve:
             subprocess.run(server_cmd() + ["start", name, "--port", str(args.port), "--parallel", str(args.parallel),
                                            "--ctx", str(args.ctx)], check=True)
@@ -192,7 +194,7 @@ def main():
             (run_dir / f"bench-{name}.json").write_text(bench.stdout)
             print(bench.stdout, flush=True)
         try:
-            label = name + {"omp": "+omp", "tasuke": "+tasuke"}.get(args.agent, "") + ("+marks" if args.marks else "") + ("+skill" if args.skill else "")
+            label = name + {"omp": "+omp", "tasuke": "+tasuke"}.get(args.agent, "") + ("+marks" if args.marks else "") + ("+gui" if args.desktop_only else "") + ("+skill" if args.skill else "")
             run_batch(args, drv, run_dir, label, model_cfg, chosen, results)
         finally:
             if not args.no_serve:

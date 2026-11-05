@@ -27,7 +27,7 @@ usage: tasuke ask [options] REQUEST…   (REQUEST - reads it from stdin)
   --answer-file PATH       also write the final answer there
   --base-url URL --model NAME --api-key KEY
                            a server other than Tasuke's own
-  --vision --coords pixel|norm1000|norm1|affine:XS,XO,YS,YO --marks
+  --vision --coords pixel|norm1000|norm1|affine:XS,XO,YS,YO --marks --desktop-only
   --max-steps N --max-seconds N --context N --max-tokens N
   --param KEY=JSON         an extra request field (repeatable)
   --keep-reasoning --skills-dir DIR --data-dir DIR --inspect-dir DIR
@@ -106,6 +106,7 @@ fn ask(args: &[String]) -> Result<i32, String> {
                 explicit_coords = true;
             }
             "--marks" => o.set_of_marks = true,
+            "--desktop-only" => o.desktop_only = true,
             "--max-steps" => o.step_budget = StepBudget(val(a)?.parse().map_err(|_| "--max-steps takes a number")?),
             "--max-seconds" => {
                 o.time_limit = Some(Duration::from_secs(val(a)?.parse().map_err(|_| "--max-seconds takes a number")?))

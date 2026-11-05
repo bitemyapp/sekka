@@ -90,10 +90,9 @@ impl<'de> Deserialize<'de> for Coords {
         }
         match Form::deserialize(d)? {
             Form::Name(n) => Coords::parse(&n).ok_or_else(|| serde::de::Error::custom(format!("unknown coords {n:?}"))),
-            Form::Affine { x, y } => Ok(Coords::Affine {
-                x: Axis { scale: x[0], offset: x[1] },
-                y: Axis { scale: y[0], offset: y[1] },
-            }),
+            Form::Affine { x, y } => {
+                Ok(Coords::Affine { x: Axis { scale: x[0], offset: x[1] }, y: Axis { scale: y[0], offset: y[1] } })
+            }
         }
     }
 }
@@ -171,6 +170,9 @@ pub struct Options {
     /// them on the screenshot, list them, and offer `click_element` and
     /// `type_into` (x/y clicks stay for windows without that information).
     pub set_of_marks: bool,
+    /// Offer only the desktop tools (and skills): an evaluation knob that
+    /// measures operating the screen alone, as the screen-only harness does.
+    pub desktop_only: bool,
     /// The context size to assume when the server's `/props` doesn't say.
     pub context_fallback: Tokens,
     /// The most tokens one reply may have.
@@ -212,6 +214,7 @@ impl Options {
             vision: false,
             coords: Coords::Pixel,
             set_of_marks: false,
+            desktop_only: false,
             context_fallback: Tokens(32768),
             max_output_tokens: Tokens(8192),
             request_params: serde_json::Map::new(),

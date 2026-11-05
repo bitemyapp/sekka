@@ -130,6 +130,8 @@ def run_tasuke(vm, cfg, s, result, out):
             args += ["--vision", "--coords", m.get("coords", "pixel")]
         if m.get("marks"):
             args.append("--marks")
+        if m.get("desktop_only"):
+            args.append("--desktop-only")
     if m.get("keep_reasoning"):
         args.append("--keep-reasoning")
     for k, v in (m.get("params") or {}).items():

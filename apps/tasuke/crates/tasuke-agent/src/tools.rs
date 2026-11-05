@@ -29,10 +29,12 @@ fn function(name: &str, description: &str, properties: Value, required: &[&str])
 /// The tools offered for these options, in a stable order (the prompt cache).
 pub(crate) fn schemas(o: &Options, screen: (u32, u32)) -> Vec<Value> {
     let mut t = Vec::new();
+    let shell_tools = !o.desktop_only;
     let purpose = json!({"type": "string",
         "description": "Why, in a few plain words the person sees, e.g. \"See why the sound service stopped\"."});
     let timeout = json!({"type": "integer", "description": "Seconds before it is stopped (default 60, at most 300)."});
-    t.push(function(
+    if shell_tools {
+        t.push(function(
         "run_command",
         if o.act {
             "Run a bash command as the user and get its exit status and output (stdout and stderr, cut when long). \
@@ -45,37 +47,38 @@ pub(crate) fn schemas(o: &Options, screen: (u32, u32)) -> Vec<Value> {
         json!({"command": {"type": "string", "description": "The bash command line."}, "purpose": purpose, "timeout": timeout}),
         &["command", "purpose"],
     ));
-    if o.act {
-        t.push(function(
+        if o.act {
+            t.push(function(
             "run_as_root",
             "Run a bash command as root (administrator): for system services, system files and logs only root can \
              read. The person approves it and then enters their password.",
             json!({"command": {"type": "string", "description": "The bash command line."}, "purpose": purpose, "timeout": timeout}),
             &["command", "purpose"],
         ));
-    }
-    t.push(function(
-        "read_file",
-        "Read a text file, up to 400 lines at a time.",
-        json!({"path": {"type": "string", "description": "Absolute, or relative to the home folder; ~ works."},
+        }
+        t.push(function(
+            "read_file",
+            "Read a text file, up to 400 lines at a time.",
+            json!({"path": {"type": "string", "description": "Absolute, or relative to the home folder; ~ works."},
                "offset": {"type": "integer", "description": "The first line to read, from 1."},
                "limit": {"type": "integer", "description": "How many lines (at most 400)."}}),
-        &["path"],
-    ));
-    if o.act {
-        t.push(function(
-            "write_file",
-            "Create a file or replace its whole content. The person sees the change and approves it.",
-            json!({"path": {"type": "string"}, "content": {"type": "string"}}),
-            &["path", "content"],
+            &["path"],
         ));
-        t.push(function(
+        if o.act {
+            t.push(function(
+                "write_file",
+                "Create a file or replace its whole content. The person sees the change and approves it.",
+                json!({"path": {"type": "string"}, "content": {"type": "string"}}),
+                &["path", "content"],
+            ));
+            t.push(function(
             "edit_file",
             "Replace one exact piece of text in a file (it must occur once). The person sees the change and approves it.",
             json!({"path": {"type": "string"}, "old": {"type": "string", "description": "The exact text to replace."},
                    "new": {"type": "string", "description": "What replaces it."}}),
             &["path", "old", "new"],
         ));
+        }
     }
     if !o.skills.is_empty() {
         let names: Vec<&str> = o.skills.index().iter().map(|s| s.name.as_str()).collect();
@@ -107,12 +110,7 @@ pub(crate) fn schemas(o: &Options, screen: (u32, u32)) -> Vec<Value> {
         if o.vision {
             t.push(function("screenshot", "Look at the screen again.", json!({}), &[]));
         }
-        t.push(function(
-            "ui_elements",
-            "List the windows and the numbered controls on screen.",
-            json!({}),
-            &[],
-        ));
+        t.push(function("ui_elements", "List the windows and the numbered controls on screen.", json!({}), &[]));
         if o.act {
             if o.set_of_marks {
                 t.push(function(
@@ -167,7 +165,12 @@ pub(crate) fn schemas(o: &Options, screen: (u32, u32)) -> Vec<Value> {
                 &["name"],
             ));
         }
-        t.push(function("wait", "Wait for the screen to settle (seconds, at most 10).", json!({"seconds": {"type": "number"}}), &["seconds"]));
+        t.push(function(
+            "wait",
+            "Wait for the screen to settle (seconds, at most 10).",
+            json!({"seconds": {"type": "number"}}),
+            &["seconds"],
+        ));
     }
     t
 }
@@ -214,7 +217,11 @@ pub(crate) fn expand_path(raw: &str, home: &Path) -> PathBuf {
 /// Parse the model's call into a typed one (or an `Invalid` saying why).
 pub(crate) fn parse(name: &str, arguments: &str, offered: &[String], desktop: &Desktop<'_>) -> ToolCall {
     if !offered.iter().any(|n| n == name) {
-        return invalid(name, arguments, format!("there is no tool named {name:?}; the tools are: {}", offered.join(", ")));
+        return invalid(
+            name,
+            arguments,
+            format!("there is no tool named {name:?}; the tools are: {}", offered.join(", ")),
+        );
     }
     let args: Map<String, Value> = if arguments.trim().is_empty() {
         Map::new()
@@ -276,9 +283,19 @@ pub(crate) fn parse(name: &str, arguments: &str, offered: &[String], desktop: &D
                 let (old, new) = (need("old")?, need("new")?);
                 let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
                 match text.matches(old.as_str()).count() {
-                    0 => return Err(format!("the text to replace isn't in {}; read the file and copy it exactly", path.display())),
+                    0 => {
+                        return Err(format!(
+                            "the text to replace isn't in {}; read the file and copy it exactly",
+                            path.display()
+                        ));
+                    }
                     1 => {}
-                    n => return Err(format!("the text to replace occurs {n} times in {}; include more of its surroundings", path.display())),
+                    n => {
+                        return Err(format!(
+                            "the text to replace occurs {n} times in {}; include more of its surroundings",
+                            path.display()
+                        ));
+                    }
                 }
                 let diff = unified_diff(&text, &text.replacen(old.as_str(), &new, 1), &path);
                 ToolCall::EditFile { path, old, new, diff }
@@ -305,7 +322,8 @@ pub(crate) fn parse(name: &str, arguments: &str, offered: &[String], desktop: &D
             "double_click" => ToolCall::DoubleClick { at: point("x", "y")? },
             "drag" => ToolCall::Drag { from: point("x", "y")?, to: point("to_x", "to_y")? },
             "scroll" => {
-                let lines = number_arg(&args, "lines").or_else(|| number_arg(&args, "dy")).ok_or("scroll needs \"lines\"")?;
+                let lines =
+                    number_arg(&args, "lines").or_else(|| number_arg(&args, "dy")).ok_or("scroll needs \"lines\"")?;
                 ToolCall::Scroll { at: point("x", "y")?, lines: lines.clamp(-50.0, 50.0) }
             }
             "type_text" => ToolCall::TypeText { text: need("text")? },
@@ -342,7 +360,9 @@ pub(crate) fn approval(call: &ToolCall, o: &Options, desktop_asked: bool) -> App
             }
             match policy::refused(command, &home) {
                 Some(reason) => Approval::Refused { reason },
-                None => Approval::AskRoot { reason: "It runs as administrator, with full control of the system.".into() },
+                None => {
+                    Approval::AskRoot { reason: "It runs as administrator, with full control of the system.".into() }
+                }
             }
         }
         ToolCall::ReadFile { path, .. } => policy::classify_read(path, &home),
@@ -408,7 +428,13 @@ fn run_output(run: &exec::Run, timeout: Duration) -> ToolOutput {
     } else {
         ToolStatus::Done
     };
-    ToolOutput { status, text: exec::describe(run, timeout), exit_code: run.exit_code, image: None, truncated: run.truncated }
+    ToolOutput {
+        status,
+        text: exec::describe(run, timeout),
+        exit_code: run.exit_code,
+        image: None,
+        truncated: run.truncated,
+    }
 }
 
 /// Run an allowed call.
@@ -434,10 +460,12 @@ pub(crate) fn execute(call: &ToolCall, o: &Options, desktop: &mut Desktop<'_>, c
             Err(e) => ToolOutput::failed(e),
         }),
         ToolCall::EditFile { path, old, new, .. } => Outcome::text(match std::fs::read_to_string(path) {
-            Ok(text) if text.matches(old.as_str()).count() == 1 => match write_file(path, &text.replacen(old.as_str(), new, 1)) {
-                Ok(()) => ToolOutput::done(format!("Edited {}.", path.display())),
-                Err(e) => ToolOutput::failed(e),
-            },
+            Ok(text) if text.matches(old.as_str()).count() == 1 => {
+                match write_file(path, &text.replacen(old.as_str(), new, 1)) {
+                    Ok(()) => ToolOutput::done(format!("Edited {}.", path.display())),
+                    Err(e) => ToolOutput::failed(e),
+                }
+            }
             Ok(_) => ToolOutput::failed(format!("{} changed since; read it again", path.display())),
             Err(e) => ToolOutput::failed(format!("{}: {e}", path.display())),
         }),
@@ -448,10 +476,9 @@ pub(crate) fn execute(call: &ToolCall, o: &Options, desktop: &mut Desktop<'_>, c
         ToolCall::Remember { text } => {
             let r = Memory::load(&o.data_dir).and_then(|mut m| m.add(text));
             match r {
-                Ok(id) => Outcome {
-                    memory_changed: true,
-                    ..Outcome::text(ToolOutput::done(format!("Remembered as {id}.")))
-                },
+                Ok(id) => {
+                    Outcome { memory_changed: true, ..Outcome::text(ToolOutput::done(format!("Remembered as {id}."))) }
+                }
                 Err(e) => Outcome::text(ToolOutput::failed(e.to_string())),
             }
         }
@@ -476,11 +503,17 @@ pub(crate) fn execute(call: &ToolCall, o: &Options, desktop: &mut Desktop<'_>, c
         ToolCall::Invalid { error, .. } => Outcome::text(ToolOutput::failed(error.clone())),
         action => {
             let done = match action {
-                ToolCall::Click { at, button } => desktop.click(*at, *button, 1).map(|()| format!("Clicked at ({:.0}, {:.0}).", at.x, at.y)),
-                ToolCall::DoubleClick { at } => desktop.click(*at, MouseButton::Left, 2).map(|()| format!("Double-clicked at ({:.0}, {:.0}).", at.x, at.y)),
+                ToolCall::Click { at, button } => {
+                    desktop.click(*at, *button, 1).map(|()| format!("Clicked at ({:.0}, {:.0}).", at.x, at.y))
+                }
+                ToolCall::DoubleClick { at } => desktop
+                    .click(*at, MouseButton::Left, 2)
+                    .map(|()| format!("Double-clicked at ({:.0}, {:.0}).", at.x, at.y)),
                 ToolCall::Drag { from, to } => desktop.drag(*from, *to).map(|()| "Dragged.".to_owned()),
                 ToolCall::Scroll { at, lines } => desktop.scroll(*at, *lines).map(|()| format!("Scrolled {lines:+}.")),
-                ToolCall::TypeText { text } => desktop.type_text(text).map(|()| format!("Typed {} characters.", text.chars().count())),
+                ToolCall::TypeText { text } => {
+                    desktop.type_text(text).map(|()| format!("Typed {} characters.", text.chars().count()))
+                }
                 ToolCall::Key { keys } => desktop.key(keys).map(|k| format!("Pressed {k}.")),
                 ToolCall::OpenApp { name } => desktop.open_app(name).map(|n| {
                     std::thread::sleep(Duration::from_millis(1200));
@@ -525,9 +558,7 @@ fn run_as_root(command: &str, purpose: &str, timeout_seconds: u32) -> ToolOutput
     use crate::root::{RootError, RootRequest};
     let request = RootRequest { command: command.to_owned(), purpose: purpose.to_owned(), timeout_seconds };
     match crate::root::run_as_root(&request) {
-        Ok(r) if r.refused.is_some() => {
-            ToolOutput::with_status(ToolStatus::Refused, r.refused.unwrap_or_default())
-        }
+        Ok(r) if r.refused.is_some() => ToolOutput::with_status(ToolStatus::Refused, r.refused.unwrap_or_default()),
         Ok(r) => {
             let run = exec::Run {
                 exit_code: r.exit_code,
@@ -594,10 +625,12 @@ fn write_file(path: &Path, content: &str) -> Result<(), String> {
     let dir = path.parent().ok_or("no folder")?;
     std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let existing = std::fs::metadata(path).ok();
-    let owner = existing.as_ref().map(|m| (m.uid(), m.gid())).or_else(|| {
-        std::fs::metadata(dir).ok().map(|m| (m.uid(), m.gid()))
-    });
-    let tmp = dir.join(format!(".{}.tasuke-{}", path.file_name().unwrap_or_default().to_string_lossy(), std::process::id()));
+    let owner = existing
+        .as_ref()
+        .map(|m| (m.uid(), m.gid()))
+        .or_else(|| std::fs::metadata(dir).ok().map(|m| (m.uid(), m.gid())));
+    let tmp =
+        dir.join(format!(".{}.tasuke-{}", path.file_name().unwrap_or_default().to_string_lossy(), std::process::id()));
     std::fs::write(&tmp, content).map_err(|e| format!("{}: {e}", tmp.display()))?;
     if let Some(m) = &existing {
         let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(m.mode() & 0o7777));
@@ -710,7 +743,9 @@ mod tests {
         let f = dir.join("l.txt");
         std::fs::write(&f, (1..=1000).map(|i| format!("line {i}\n")).collect::<String>()).unwrap();
         let o = read_file(&f, Some(10), Some(5));
-        assert!(o.text.contains("(lines 10–14 of 1000)") && o.text.contains("line 14\n") && !o.text.contains("line 15"));
+        assert!(
+            o.text.contains("(lines 10–14 of 1000)") && o.text.contains("line 14\n") && !o.text.contains("line 15")
+        );
         assert!(o.truncated);
         std::fs::write(&f, b"\x00\x01binary").unwrap();
         assert!(read_file(&f, None, None).text.contains("binary file"));
@@ -720,7 +755,8 @@ mod tests {
     #[test]
     fn approvals_follow_the_modes() {
         let mut o = opts();
-        let root = ToolCall::RunAsRoot { command: "systemctl restart x".into(), purpose: String::new(), timeout_seconds: 60 };
+        let root =
+            ToolCall::RunAsRoot { command: "systemctl restart x".into(), purpose: String::new(), timeout_seconds: 60 };
         assert!(matches!(approval(&root, &o, false), Approval::AskRoot { .. }));
         let click = ToolCall::Click { at: ScreenPoint { x: 1.0, y: 1.0 }, button: MouseButton::Left };
         assert!(matches!(approval(&click, &o, false), Approval::Refused { .. }));
