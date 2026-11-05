@@ -16,8 +16,10 @@
 //! - **Nothing is replaced unasked.** Renames refuse to overwrite
 //!   (`renameat2(RENAME_NOREPLACE)`); an existing name is a [`Conflict`]
 //!   the [`Asker`] answers (replace, skip, keep both, merge folders). A
-//!   replaced item is set aside and removed only after its replacement
-//!   is in place, and put back if that fails.
+//!   replaced item is set aside and goes only after its replacement is
+//!   in place, and as the operation decided (to the Trash, for all of
+//!   Hako's), or is put back if its replacement doesn't come
+//!   ([`replace`]).
 //! - **Deleting is for the Trash.** [`delete`] removes items only as
 //!   [`trash`] lets it: what's in a trash, emptied or deleted from it.
 //!
@@ -30,6 +32,8 @@ pub mod archive;
 pub mod control;
 pub mod delete;
 pub mod names;
+pub mod place;
+pub mod replace;
 pub mod sys;
 pub mod transfer;
 pub mod trash;
