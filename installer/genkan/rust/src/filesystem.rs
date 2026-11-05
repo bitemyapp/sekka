@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Closed filesystem choices and the shared format/probe/mount protocol.
-use crate::{Firmware, process::output};
+use crate::{Firmware, disk::Device, process::output};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Write};
@@ -50,14 +50,32 @@ impl Filesystem {
             Self::Ext4 | Self::Xfs => &["noatime"],
         }
     }
-    pub(crate) fn format(self, device: &str, uuid: &str) -> Result<()> {
+    /// Formats a device on the confirmed disk, with the chosen identity. It
+    /// takes a [`Device`], which only the confirmed disk yields, so it can't
+    /// format a partition named from a path passed beside the proof (GEN-03):
+    ///
+    /// ```compile_fail,E0308
+    /// use calamares_nixos::{Filesystem, InstallPlan, disk};
+    /// fn format(plan: &InstallPlan, uuid: &str) -> anyhow::Result<()> {
+    ///     Filesystem::Ext4.format(&disk::partition(&plan.disk().path, 2), uuid)
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// use calamares_nixos::{Filesystem, disk::Confirmed};
+    /// fn format(disk: &Confirmed, uuid: &str) -> anyhow::Result<()> {
+    ///     Filesystem::Ext4.format(&disk.partition(2), uuid)
+    /// }
+    /// ```
+    pub fn format(self, device: &Device, uuid: &str) -> Result<()> {
+        let device = device.path();
         format_with(self, device, uuid, output)
             .with_context(|| format!("Formatting {device} as {}", self.name()))
     }
-    pub(crate) fn mount(self, device: &str, target: &str) -> Result<()> {
+    pub(crate) fn mount(self, device: &Device, target: &str) -> Result<()> {
         mount_with(
             self.name(),
-            device,
+            device.path(),
             target,
             &self.mount_options().join(","),
             output,
@@ -277,8 +295,8 @@ fn format_with(
     verify_with(device, filesystem.name(), &mut run)?;
     verify_identity(device, filesystem.name(), uuid, &mut run)
 }
-pub(crate) fn format_efi(device: &str, serial: &str) -> Result<()> {
-    format_efi_with(device, serial, output)
+pub(crate) fn format_efi(device: &Device, serial: &str) -> Result<()> {
+    format_efi_with(device.path(), serial, output)
 }
 fn format_efi_with(
     device: &str,
@@ -295,8 +313,12 @@ fn format_efi_with(
     verify_with(device, "vfat", &mut run)?;
     verify_identity(device, "vfat", serial, &mut run)
 }
-pub(crate) fn format_swap(device: &str, uuid: &str) -> Result<()> {
-    format_swap_with(device, uuid, output)
+pub(crate) fn format_swap(device: &Device, uuid: &str) -> Result<()> {
+    format_swap_with(device.path(), uuid, output)
+}
+/// Erases a device's signatures (a BIOS boot partition keeps none).
+pub(crate) fn wipe(device: &Device) -> Result<()> {
+    output("wipefs", &["--all", "--force", device.path()], 60).map(drop)
 }
 fn format_swap_with(
     device: &str,
@@ -325,8 +347,8 @@ fn verify_identity(
     );
     Ok(())
 }
-pub(crate) fn mount_efi(device: &str, target: &str) -> Result<()> {
-    mount_with("vfat", device, target, "umask=0077", output)
+pub(crate) fn mount_efi(device: &Device, target: &str) -> Result<()> {
+    mount_with("vfat", device.path(), target, "umask=0077", output)
 }
 fn mount_with(
     kind: &str,
@@ -661,6 +683,7 @@ mod tests {
             .trim()
             .to_owned();
             let image = Image { device, dir };
+            let device = crate::disk::Device::for_test(&image.device);
             ensure!(
                 image.device.starts_with("/dev/loop"),
                 "Unexpected test device"
@@ -680,16 +703,16 @@ mod tests {
             for previous in Filesystem::ALL {
                 for next in Filesystem::ALL {
                     let old_uuid = uuid_v4(random()?);
-                    previous.format(&image.device, &old_uuid)?;
+                    previous.format(&device, &old_uuid)?;
                     // Prime the ordinary userspace probe before replacing it.
                     output("blkid", &[&image.device], 30)?;
                     let new_uuid = uuid_v4(random()?);
-                    next.format(&image.device, &new_uuid)?;
+                    next.format(&device, &new_uuid)?;
                     ensure!(
                         probe_uuid(&image.device, next.name())? == new_uuid,
                         "Reformat did not apply the requested UUID"
                     );
-                    next.mount(&image.device, mount)?;
+                    next.mount(&device, mount)?;
                     ensure!(
                         output(
                             "findmnt",
@@ -706,7 +729,7 @@ mod tests {
                     )?;
                     output("sync", &[], 30)?;
                     output("umount", &[mount], 30)?;
-                    next.mount(&image.device, mount)?;
+                    next.mount(&device, mount)?;
                     ensure!(
                         fs::read(std::path::Path::new(mount).join("sentinel"))?
                             == b"persistent storage",
@@ -720,15 +743,15 @@ mod tests {
                     );
                 }
             }
-            format_efi(&image.device, &vfat_serial(random()?))?;
+            format_efi(&device, &vfat_serial(random()?))?;
             output("blkid", &[&image.device], 30)?;
             let serial = vfat_serial(random()?);
-            format_efi(&image.device, &serial)?;
+            format_efi(&device, &serial)?;
             ensure!(
                 probe_uuid(&image.device, "vfat")? == serial,
                 "FAT reformat did not apply the requested serial"
             );
-            mount_efi(&image.device, mount)?;
+            mount_efi(&device, mount)?;
             ensure!(
                 output(
                     "findmnt",
@@ -742,7 +765,7 @@ mod tests {
             output("umount", &[mount], 30)?;
             // Swap replaces the FAT signature and must carry the chosen UUID.
             let swap = uuid_v4(random()?);
-            format_swap(&image.device, &swap)?;
+            format_swap(&device, &swap)?;
             ensure!(
                 probe_uuid(&image.device, "swap")? == swap,
                 "Swap format did not apply the requested UUID"

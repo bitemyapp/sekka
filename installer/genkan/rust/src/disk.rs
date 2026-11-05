@@ -177,9 +177,14 @@ fn boot_sector_block(firmware: crate::Firmware, logical_sector_size: u64) -> Opt
 /// Two readings name the same disk only if everything about it matches.
 /// The path alone never does (another disk can take it over), and a disk
 /// with no serial, WWN or model still has its device numbers and size.
-impl aizome_typestate::SameTarget for Identity {
+impl aizome_typestate::SameTarget<Reading> for Identity {
+    fn same_target(&self, fresh: &Reading) -> bool {
+        *self == fresh.disk.identity
+    }
+}
+impl aizome_typestate::SameTarget for Reading {
     fn same_target(&self, fresh: &Self) -> bool {
-        self == fresh
+        self.disk.identity == fresh.disk.identity
     }
 }
 
@@ -215,6 +220,12 @@ fn read_allowing(path: &str, allowed: &[std::path::PathBuf]) -> Result<Reading> 
     Ok(Reading { disk })
 }
 
+/// The brand of a disk's review: only this module makes one, so a
+/// [`Confirmed`] disk comes only from [`Reviewed::confirm`]. A review is
+/// confirmed again before each phase of the installation, so it can be kept.
+#[derive(Clone, Debug)]
+pub struct DiskReview(());
+
 /// The disk the person reviewed, which the erase phrase names: a parsed
 /// plan's. Every check before and during the installation compares a fresh
 /// reading of that disk alone with it (GEN-03). Only a parsed plan makes a
@@ -234,12 +245,7 @@ fn read_allowing(path: &str, allowed: &[std::path::PathBuf]) -> Result<Reading> 
 /// }
 /// ```
 #[derive(Clone, Debug)]
-pub struct Reviewed(Identity);
-
-/// The brand of a disk's review: only this module makes one, so a
-/// [`Confirmed`] disk comes only from [`Reviewed::confirm`].
-#[derive(Debug)]
-pub struct DiskReview(());
+pub struct Reviewed(aizome_typestate::Reviewed<Identity, DiskReview>);
 
 impl Reviewed {
     /// The plan's disk: what the review showed and the erase phrase names.
@@ -247,16 +253,16 @@ impl Reviewed {
         Self::new(plan.disk().clone())
     }
     pub(crate) fn new(identity: Identity) -> Self {
-        Self(identity)
+        Self(aizome_typestate::Reviewed::new(identity, DiskReview(())))
     }
     pub fn identity(&self) -> &Identity {
-        &self.0
+        self.0.target()
     }
 
     /// Reads the reviewed disk again and checks it's the same disk and
     /// still usable.
     pub fn revalidate(&self) -> Result<Confirmed> {
-        self.confirm(read(&self.0.path)?)
+        self.confirm(read(&self.identity().path)?)
     }
 
     /// Checks a fresh reading against what the person reviewed. It takes a
@@ -284,28 +290,35 @@ impl Reviewed {
     /// }
     /// ```
     pub fn confirm(&self, fresh: Reading) -> Result<Confirmed> {
-        let Reading { disk } = fresh;
-        let now = aizome_typestate::Reviewed::new(self.0.clone(), DiskReview(()))
-            .confirm(disk.identity)
+        let now = self
+            .0
+            .clone()
+            .confirm(fresh)
             .map_err(|_| anyhow::anyhow!("Disk identity changed; rescan and review again"))?;
-        ensure!(
-            disk.blocked.is_none(),
-            "Disk is unavailable: {}",
-            disk.blocked.as_deref().unwrap_or("")
-        );
-        Ok(Confirmed(now))
+        Confirmed::usable(now)
     }
 }
 
 /// Proof that the disk is the one the person reviewed, read again just now.
-/// Only [`Reviewed::confirm`] makes one; the destructive steps take it and
-/// act on its path.
+/// Only [`Reviewed::confirm`] makes one, and the destructive steps take it
+/// (or a [`Device`] only it yields): they act on the disk it carries, never
+/// on a path passed beside it.
 #[derive(Debug)]
-pub struct Confirmed(aizome_typestate::Confirmed<Identity, DiskReview>);
+pub struct Confirmed(aizome_typestate::Confirmed<Reading, DiskReview>);
 
 impl Confirmed {
+    fn usable(now: aizome_typestate::Confirmed<Reading, DiskReview>) -> Result<Self> {
+        let blocked = now.target().blocked();
+        ensure!(
+            blocked.is_none(),
+            "Disk is unavailable: {}",
+            blocked.unwrap_or("")
+        );
+        Ok(Self(now))
+    }
+
     pub fn identity(&self) -> &Identity {
-        self.0.target()
+        self.0.target().identity()
     }
     pub fn path(&self) -> &str {
         &self.identity().path
@@ -332,7 +345,86 @@ impl Confirmed {
             })
             .collect::<Result<_>>()?;
         let fresh = read_allowing(self.path(), &allowed)?;
-        Reviewed(self.identity().clone()).confirm(fresh)
+        let now = self
+            .0
+            .recheck(fresh)
+            .map_err(|_| anyhow::anyhow!("Disk identity changed during installation"))?;
+        Self::usable(now)
+    }
+
+    /// Checks that `device`, opened (and locked) by the reviewed path, is
+    /// this disk's node: the path can't have changed hands in between.
+    pub(crate) fn holds(&self, device: &fs::File) -> Result<()> {
+        let rdev = device_number(&device.metadata()?);
+        ensure!(
+            format!("{}:{}", libc::major(rdev), libc::minor(rdev)) == self.identity().major_minor,
+            "The locked device is not the confirmed disk"
+        );
+        Ok(())
+    }
+
+    /// Partition `index` of this disk.
+    pub fn partition(&self, index: u8) -> Device {
+        Device(partition(self.path(), index))
+    }
+}
+
+/// A block device on the confirmed disk: one of its partitions, or an
+/// encrypted mapping over one. Only [`Confirmed::partition`] makes one, so
+/// formatting can't be pointed at a device named from a path passed beside
+/// the proof.
+#[derive(Clone, Debug)]
+pub struct Device(String);
+
+impl Device {
+    pub fn path(&self) -> &str {
+        &self.0
+    }
+    /// The device-mapper node `name`, opened over this device.
+    pub(crate) fn mapping(&self, name: &str) -> Device {
+        Device(format!("/dev/mapper/{name}"))
+    }
+    /// A disposable test device (a loop device, a VM disk's partition).
+    #[cfg(test)]
+    pub(crate) fn for_test(path: &str) -> Device {
+        Device(path.into())
+    }
+}
+
+impl Layout {
+    /// Erases the confirmed disk's signatures and writes this layout's GPT,
+    /// then has the kernel read it. The first writes of an installation:
+    /// they take the proof, so they can't erase a disk named any other way.
+    ///
+    /// ```compile_fail,E0308
+    /// use calamares_nixos::{Filesystem, Firmware, InstallPlan, disk::Layout};
+    /// fn erase(plan: &InstallPlan, layout: &Layout) -> anyhow::Result<()> {
+    ///     layout.write(&plan.disk().path, Firmware::Uefi, Filesystem::Ext4)
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// use calamares_nixos::{Filesystem, Firmware, InstallPlan, disk::{Layout, Reviewed}};
+    /// fn erase(plan: &InstallPlan, layout: &Layout) -> anyhow::Result<()> {
+    ///     layout.write(&Reviewed::of(plan).revalidate()?, Firmware::Uefi, Filesystem::Ext4)
+    /// }
+    /// ```
+    pub fn write(
+        &self,
+        disk: &Confirmed,
+        firmware: crate::Firmware,
+        filesystem: crate::Filesystem,
+    ) -> Result<()> {
+        let dev = disk.path();
+        output("wipefs", &["--all", "--force", dev], 60)?;
+        let script = self.parted_script(firmware, filesystem.name());
+        let mut args = vec!["--script", dev];
+        args.extend(script.iter().map(String::as_str));
+        output("parted", &args, 60)?;
+        // Keep udev from observing partially written superblocks. Partition nodes
+        // come from the kernel/devtmpfs; do not wait for udev while holding its lock.
+        output("blockdev", &["--rereadpt", dev], 30)?;
+        Ok(())
     }
 }
 
