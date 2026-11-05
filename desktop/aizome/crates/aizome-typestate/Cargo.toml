@@ -1,0 +1,12 @@
+[package]
+name = "aizome-typestate"
+description = "Typestate support for Sekka's state machines: borrowed-context machines, request generations, and confirmed targets"
+# Not inherited from Aizome's workspace: Genkan, Kakehashi and Yukimi build it
+# from their own workspaces, with only this directory in their sources.
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/bitemyapp/sekka"
+
+[dependencies]

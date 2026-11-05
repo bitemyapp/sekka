@@ -573,6 +573,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "aizome-typestate"
+version = "0.1.0"
+
+[[package]]
 name = "aizome-utsushi"
 version = "0.1.0"
 dependencies = [
