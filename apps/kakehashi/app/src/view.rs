@@ -19,11 +19,11 @@ use gpui_kit::{
 };
 use kakehashi_core::choice::{DriveList, DriveListing, ImageId, Listed, ReviewTicket};
 use kakehashi_core::image::{self, Cancelled};
-use kakehashi_core::job::{End, Event, Job, JobState, ProgressFile};
+use kakehashi_core::job::{End, Event, Job, JobDir, JobState, ProgressFile};
 use kakehashi_core::nightly::{self, Build, Fetch, NIGHTLY};
 use kakehashi_core::write::{Plan, Progress, TAIL};
 use kakehashi_core::{Drive, human, platform};
-use std::fs::{self, File};
+use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
@@ -455,27 +455,21 @@ impl Kakehashi {
                 return;
             }
         };
-        let started = (|| -> anyhow::Result<(tempfile::TempDir, PathBuf, PathBuf)> {
-            let dir = tempfile::Builder::new().prefix("kakehashi-").tempdir()?;
-            let plan_path = dir.path().join("plan.json");
-            let progress = dir.path().join("progress");
-            File::create(&progress)?;
-            Ok((dir, plan_path, progress))
-        })();
-        let (dir, plan_path, progress) = match started {
-            Ok(started) => started,
+        let dir = match JobDir::new() {
+            Ok(dir) => dir,
             Err(e) => {
                 self.error = Some(format!("Could not prepare the write: {e:#}"));
                 return;
             }
         };
-        let cancel = PathBuf::from(format!("{}.cancel", progress.display()));
-        self.job = Some(Job::start(&plan, cancel.clone()));
+        self.job = Some(Job::start(&plan, &dir));
         let tx = self.tx.clone();
         std::thread::spawn(move || {
-            // The worker owns the staged image until the helper exits, then
-            // removes it on success, cancellation and failure alike.
+            // The worker owns the job's directory, with the staged image,
+            // until the helper exits, then removes it on success,
+            // cancellation and failure alike.
             let dir = dir;
+            let cancel = dir.cancel();
             let prepared = (|| -> anyhow::Result<()> {
                 #[cfg(target_os = "macos")]
                 let plan = {
@@ -486,7 +480,7 @@ impl Kakehashi {
                 if cancel.exists() {
                     anyhow::bail!(Cancelled);
                 }
-                fs::write(&plan_path, serde_json::to_string(&plan)?)?;
+                fs::write(dir.plan(), serde_json::to_string(&plan)?)?;
                 Ok(())
             })();
             if let Err(e) = prepared {
@@ -506,9 +500,9 @@ impl Kakehashi {
                 }
             };
             let _ = tx.send(Msg::Job(Event::Authorizing));
-            let (p, q) = (plan_path.clone(), progress.clone());
+            let (p, q) = (dir.plan(), dir.progress());
             let runner = std::thread::spawn(move || elevate::run(&helper, &p, &q));
-            let mut reports = ProgressFile::new(progress);
+            let mut reports = ProgressFile::new(&dir);
             while !runner.is_finished() {
                 for report in reports.read() {
                     let _ = tx.send(Msg::Job(Event::Report(report)));
@@ -516,8 +510,8 @@ impl Kakehashi {
                 std::thread::sleep(REPORT);
             }
             let ran = runner.join().unwrap_or(Ran::Failed("the helper's thread failed".into()));
-            // The helper's last lines come with its exit, before its
-            // directory goes.
+            // The helper's last lines come with its exit; the directory goes
+            // only after them.
             let exit = reports.finish(ran);
             drop(dir);
             let _ = tx.send(Msg::Job(Event::Exited(exit)));
