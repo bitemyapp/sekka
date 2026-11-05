@@ -13,6 +13,8 @@ anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+# The job's private directory.
+tempfile = "3"
 
 # TLS for downloads: rustls on Linux; the system's own on macOS and Windows,
 # with its certificate store and no C library to build.
@@ -38,6 +40,3 @@ features = [
     "Win32_System_Ioctl",
     "Win32_System_SystemInformation",
 ]
-
-[dev-dependencies]
-tempfile = "3"
