@@ -113,6 +113,12 @@ in
       type = lib.types.strMatching "[0-9]+";
       description = "Explicit Discord user ID receiving private security alerts.";
     };
+    lanNetworks = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      example = [ "192.168.1.0/24" ];
+      description = "Home-network prefixes whose successful SSH logins are not reported. Failures from them, and loopback logins such as a tunnel connector's, still are.";
+    };
     credentialsDirectory = lib.mkOption {
       type = lib.types.str;
       default = "/etc/sekka-discord";
@@ -190,6 +196,7 @@ in
         DISCORD_TOKEN_FILE = "%d/bot-token";
         DISCORD_ALERT_USER_ID = cfg.alertUserId;
         SEKKA_MONITOR_STATE_DIR = "/var/lib/sekka-discord-monitor";
+        SEKKA_MONITOR_LAN_NETWORKS = lib.concatStringsSep " " cfg.lanNetworks;
         SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
       };
       serviceConfig = sandbox // {
