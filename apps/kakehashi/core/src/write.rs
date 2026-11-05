@@ -2,7 +2,7 @@
 //! drive as it is now, write the image, clear the drive's end, read every
 //! byte back and compare, and eject.
 
-use crate::choice::ConfirmedDrive;
+use crate::choice::ConfirmedWrite;
 use crate::drive::{Drive, human};
 use crate::image::{CHUNK, Cancelled, hex};
 use crate::platform;
@@ -19,13 +19,12 @@ use std::path::{Path, PathBuf};
 /// the last sectors, and would confuse firmware.
 pub const TAIL: u64 = 1024 * 1024;
 
-/// What the window asks the helper to do.
+/// What the window asks the helper to do, as the window writes it to
+/// `plan.json`. The helper reads the file as a [`Requested`].
 ///
-/// The window makes one only for the drive the person confirmed, found
-/// again when they agreed ([`ConfirmedDrive`]); the helper reads it from
-/// the file the window wrote and checks its drive against the drive as it
-/// is then ([`still_there`]).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// The window makes one only from the drive and image the open dialog
+/// described, found again when OK was pressed ([`ConfirmedWrite`]).
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct Plan {
     image: PathBuf,
     /// The image's SHA-256 as the window computed it: what is written and
@@ -35,7 +34,7 @@ pub struct Plan {
 }
 
 impl Plan {
-    /// The write of `image` onto the drive the person confirmed.
+    /// The write the person confirmed: that image onto that drive.
     ///
     /// A plan for the drive chosen in the list as it is now, rather than
     /// the one the confirmation dialog named, doesn't compile (KTL-04): the
@@ -44,26 +43,38 @@ impl Plan {
     ///
     /// ```compile_fail,E0308
     /// use kakehashi_core::{Drive, choice::DriveList, write::Plan};
-    /// fn ok_pressed(list: &DriveList, image: std::path::PathBuf, sha256: String) -> Option<Plan> {
+    /// fn ok_pressed(list: &DriveList) -> Option<Plan> {
     ///     let chosen_now: Drive = list.chosen(None)?.clone();
-    ///     Some(Plan::new(image, sha256, chosen_now))
+    ///     Some(Plan::new(chosen_now))
     /// }
     /// ```
     ///
-    /// The dialog's drive, found again in the list when OK is pressed:
+    /// Nor does reading one from JSON naming any drive:
     ///
-    /// ```
-    /// use kakehashi_core::{choice::{DriveList, ReviewedDrive}, write::Plan};
-    /// fn ok_pressed(list: &DriveList, reviewed: ReviewedDrive, image: std::path::PathBuf, sha256: String) -> Option<Plan> {
-    ///     Some(Plan::new(image, sha256, list.confirm(reviewed, None).ok()?))
+    /// ```compile_fail,E0277
+    /// use kakehashi_core::{Drive, write::Plan};
+    /// fn ok_pressed(chosen_now: &Drive) -> Plan {
+    ///     let json = serde_json::json!({ "image": "sekka.iso", "sha256": "0", "drive": chosen_now });
+    ///     serde_json::from_value::<Plan>(json).unwrap()
     /// }
     /// ```
-    pub fn new(image: PathBuf, sha256: String, drive: ConfirmedDrive) -> Plan {
-        Plan { image, sha256, drive: drive.drive().clone() }
+    ///
+    /// The open dialog's drive and image, found again when OK is pressed:
+    ///
+    /// ```
+    /// use kakehashi_core::choice::{DriveList, ImageId, ReviewTicket};
+    /// use kakehashi_core::write::Plan;
+    /// fn ok_pressed(list: &mut DriveList, review: ReviewTicket, image: ImageId) -> Option<Plan> {
+    ///     Some(Plan::new(list.confirm(review, None, Some(image)).ok()?))
+    /// }
+    /// ```
+    pub fn new(write: ConfirmedWrite) -> Plan {
+        let (drive, image) = write.into_target().into_parts();
+        Plan { image: image.path, sha256: image.sha256, drive }
     }
 
     /// The same write from a copy of the image (on macOS, one the helper
-    /// may read).
+    /// may read). The checksum stays: the copy must have it.
     pub fn with_image(self, image: PathBuf) -> Plan {
         Plan { image, ..self }
     }
@@ -77,6 +88,31 @@ impl Plan {
     }
 
     /// The drive as the person confirmed it.
+    pub fn drive(&self) -> &Drive {
+        &self.drive
+    }
+}
+
+/// A [`Plan`] as the helper reads it from the window's file. Anything may
+/// have written that file, so it is only a request: the helper checks its
+/// drive against the drive as it is ([`still_there`]) before it unmounts
+/// or opens anything.
+#[derive(Debug, Deserialize)]
+pub struct Requested {
+    image: PathBuf,
+    sha256: String,
+    drive: Drive,
+}
+
+impl Requested {
+    pub fn image(&self) -> &Path {
+        &self.image
+    }
+
+    pub fn sha256(&self) -> &str {
+        &self.sha256
+    }
+
     pub fn drive(&self) -> &Drive {
         &self.drive
     }
@@ -106,13 +142,21 @@ pub enum Progress {
     },
 }
 
-/// The drive named in the plan, as it is now, if it is still the same one
-/// ([`Drive::same`]) and still one that may be written. Unmounting and
-/// opening a drive take the proof, so the helper can't reach a drive
-/// without this check.
-pub fn still_there(plan: &Plan) -> Result<Confirmed<Drive>> {
-    // The plan carries the drive as the person confirmed it in the window.
-    let reviewed = Reviewed::new(plan.drive.clone());
+/// The brand of the helper's re-check. Only this module makes one, in
+/// [`still_there`], so the rest of the core can't unmount or open a drive
+/// without the check.
+#[derive(Debug)]
+pub struct Recheck(());
+
+/// The requested drive, found again as it is now.
+pub type StillThere = Confirmed<Drive, Recheck>;
+
+/// The drive named in the request, as it is now, if it is still the same
+/// one ([`Drive::same`]) and still one that may be written. Unmounting and
+/// opening a drive take the proof.
+pub fn still_there(plan: &Requested) -> Result<StillThere> {
+    // The request carries the drive as the person confirmed it in the window.
+    let reviewed = Reviewed::new(plan.drive.clone(), Recheck(()));
     let now = platform::drives()?
         .into_iter()
         .find(|d| d.name == plan.drive.name)
@@ -227,15 +271,19 @@ pub struct Outcome {
     pub ejected: bool,
     pub note: Option<String>,
 }
-
 /// The privileged step. `touched` is set once the drive may have changed.
+///
+/// `report` sends a stage to the window. The first, `Preparing`, must reach
+/// it: the window takes a helper that reported nothing as one that never
+/// looked at the drive, so if that report fails nothing is done. Later
+/// reports that fail are dropped rather than stop a write half done.
 pub fn execute(
-    plan: &Plan,
-    report: &mut dyn FnMut(Progress),
+    plan: &Requested,
+    report: &mut dyn FnMut(Progress) -> std::io::Result<()>,
     cancelled: &dyn Fn() -> bool,
     touched: &mut bool,
 ) -> Result<Outcome> {
-    report(Progress::Preparing);
+    report(Progress::Preparing).context("could not report to the window, so nothing was done")?;
     let confirmed = still_there(plan)?;
     let mut image = File::open(&plan.image).with_context(|| format!("could not open {}", plan.image.display()))?;
     let len = image.metadata()?.len();
@@ -264,7 +312,9 @@ pub fn execute(
         &mut device.file,
         len,
         sector,
-        &mut |done| report(Progress::Writing { done, total: len }),
+        &mut |done| {
+            let _ = report(Progress::Writing { done, total: len });
+        },
         cancelled,
     )?;
     ensure!(written == plan.sha256, "the image changed while it was being written (SHA-256 {written})");
@@ -282,7 +332,9 @@ pub fn execute(
         &mut device.file,
         len,
         sector,
-        &mut |done| report(Progress::Verifying { done, total: len }),
+        &mut |done| {
+            let _ = report(Progress::Verifying { done, total: len });
+        },
         cancelled,
     )?;
     ensure!(read == plan.sha256, "what was read back has SHA-256 {read}");
@@ -347,5 +399,60 @@ mod tests {
         assert_eq!(line, r#"{"stage":"writing","done":1,"total":2}"#);
         let back: Progress = serde_json::from_str(&line).unwrap();
         assert_eq!(back, Progress::Writing { done: 1, total: 2 });
+    }
+
+    fn requested(drive: &Drive) -> Requested {
+        use crate::choice::{DriveList, DriveListing, ImageId};
+        let mut list = DriveList::new();
+        let listing = list.request(std::time::Instant::now()).unwrap();
+        list.listed(DriveListing::new(listing, Ok(vec![drive.clone()])));
+        list.choose(drive);
+        let image = ImageId { path: "/images/sekka.iso".into(), sha256: "ab".repeat(32) };
+        let (review, _) = list.open_review(None, image.clone()).unwrap();
+        let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
+        serde_json::from_str(&serde_json::to_string(&plan).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn the_helper_reads_the_plan_the_window_writes() {
+        let drive = Drive {
+            name: "sdzz".into(),
+            bytes: 1 << 30,
+            serial: "K1".into(),
+            usb_or_removable: true,
+            ..Drive::default()
+        };
+        let back = requested(&drive);
+        assert_eq!(
+            (back.image(), back.sha256(), back.drive()),
+            (Path::new("/images/sekka.iso"), &*"ab".repeat(32), &drive)
+        );
+    }
+
+    #[test]
+    fn nothing_is_done_if_the_window_cant_be_told() {
+        let drive = Drive {
+            name: "sdzz".into(),
+            bytes: 1 << 30,
+            serial: "K1".into(),
+            usb_or_removable: true,
+            ..Drive::default()
+        };
+        let mut touched = false;
+        let mut reports = 0;
+        let err = execute(
+            &requested(&drive),
+            &mut |_| {
+                reports += 1;
+                Err(std::io::Error::other("no space left"))
+            },
+            &|| false,
+            &mut touched,
+        )
+        .err()
+        .expect("the write went on");
+        // Not "sdzz is gone": it stopped before looking for the drive.
+        assert!(format!("{err:#}").starts_with("could not report to the window"), "{err:#}");
+        assert_eq!((reports, touched), (1, false));
     }
 }

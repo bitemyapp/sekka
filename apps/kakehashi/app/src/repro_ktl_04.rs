@@ -12,6 +12,7 @@
 //! and the helper are never run; no device is opened.
 
 use super::*;
+use kakehashi_core::write::Requested;
 
 const FAKE_PKEXEC: &str = "KAKEHASHI-REPRO-FAKE-PKEXEC";
 
@@ -55,7 +56,7 @@ fn run_to_end(k: &mut Kakehashi) {
 /// A listing of `drives`, as the window's listing thread sends it.
 fn listed(k: &mut Kakehashi, at: Instant, drives: Vec<Drive>) {
     let ticket = k.drives.request(at).expect("a listing is due");
-    k.apply(Msg::Drives(ticket, Ok(drives)));
+    k.apply(Msg::Drives(DriveListing::new(ticket, Ok(drives))));
 }
 
 #[test]
@@ -90,9 +91,10 @@ fn repro_ktl_04_ok_writes_the_drive_the_dialog_named() {
     listed(&mut k, t0, vec![first.clone()]);
     k.drives.choose(&first);
 
-    // The dialog opens: confirm describes the reviewed drive.
-    let reviewed = k.drives.review(None).expect("the stick is offered");
-    let named = reviewed.drive().clone();
+    // The dialog opens: confirm describes the reviewed drive and image.
+    let image = k.image_id().expect("the image is checked");
+    let (review, target) = k.drives.open_review(None, image).expect("the stick is offered");
+    let named = target.drive().clone();
 
     // Under the modal the 2 s refresh goes on: the stick was swapped for
     // another, which the kernel named sdb as well.
@@ -110,12 +112,12 @@ fn repro_ktl_04_ok_writes_the_drive_the_dialog_named() {
     let still_chosen = k.drives.chosen(None).map(|d| d.name.clone());
 
     // OK in the dialog.
-    k.start_write(reviewed);
+    k.start_write(review);
     let started = k.job.as_ref().map(|j| j.ctx().drive().clone());
     if started.is_some() {
         run_to_end(&mut k);
     }
-    let plan: Option<Plan> =
+    let plan: Option<Requested> =
         fs::read_to_string(out.join("plan.json")).ok().map(|text| serde_json::from_str(&text).unwrap());
     let erased = plan.as_ref().map(|p| p.drive().clone()).or(started.clone());
 

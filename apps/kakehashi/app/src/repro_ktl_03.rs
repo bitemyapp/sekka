@@ -50,7 +50,7 @@ fn stick(serial: &str) -> Drive {
 /// Lists `drive` and chooses it, as the window's listing and a click do.
 fn list_and_choose(k: &mut Kakehashi, drive: Drive) {
     let ticket = k.drives.request(Instant::now()).expect("a listing is due");
-    k.apply(Msg::Drives(ticket, Ok(vec![drive.clone()])));
+    k.apply(Msg::Drives(DriveListing::new(ticket, Ok(vec![drive.clone()]))));
     k.drives.choose(&drive);
 }
 
@@ -65,8 +65,9 @@ fn failure(k: &Kakehashi) -> (String, bool) {
 fn repro_ktl_03_killed_mid_write_is_reported_as_partly_written() {
     let mut k = window();
     list_and_choose(&mut k, stick("4C530001230529115034"));
-    let reviewed = k.drives.review(None).expect("the stick is chosen");
-    let plan = Plan::new("sekka.iso".into(), "0".repeat(64), k.drives.confirm(reviewed, None).unwrap());
+    let image = ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
+    let (review, _) = k.drives.open_review(None, image.clone()).expect("the stick is chosen");
+    let plan = Plan::new(k.drives.confirm(review, None, Some(image)).unwrap());
     // As start_write leaves it, and the lines the helper wrote before it
     // was killed, as the worker reads them.
     let dir = tempfile::tempdir().unwrap();
@@ -140,8 +141,9 @@ fn repro_ktl_03_killed_helper_through_start_write_and_elevate() {
     let dir = tempfile::tempdir().unwrap();
     let mut k = window();
     ready(&mut k, stick("KTL03-KILLED"), dir.path());
-    let reviewed = k.drives.review(None).expect("the stick is chosen");
-    k.start_write(reviewed);
+    let image = k.image_id().expect("the image is checked");
+    let (review, _) = k.drives.open_review(None, image).expect("the stick is chosen");
+    k.start_write(review);
     assert!(k.job.is_some(), "start_write did not start a job: {:?}", k.error);
     let seen = run_to_end(&mut k);
     assert!(seen.iter().any(|s| s.starts_with("Writing")), "the fake helper's Writing line was not read: {seen:?}");
