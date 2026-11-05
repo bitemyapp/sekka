@@ -390,10 +390,10 @@ rustPlatform.buildRustPackage (
         fi
       done
       # SDL's controller database, for the buttons of controllers whose
-      # drivers name them their own way (apps/chanoma/src/pad/mapping.rs).
+      # drivers name them their own way (crates/aizome-gamepad/src/mapping.rs).
       wrapProgram $chanoma/bin/aizome-chanoma \
         --set-default AIZOME_FONT_DIR ${fonts} \
-        --set-default CHANOMA_GAMECONTROLLERDB ${sdl_gamecontrollerdb}/share/gamecontrollerdb.txt
+        --set-default AIZOME_GAMECONTROLLERDB ${sdl_gamecontrollerdb}/share/gamecontrollerdb.txt
       wrapProgram $out/bin/aizome-hotaru \
         --set-default AIZOME_FONT_DIR ${fonts} \
         --set-default HOTARU_FONT_DIR ${hotaruFonts} \

@@ -1,7 +1,8 @@
-//! Chanoma's look: Aizome's, seen from the sofa. A television across a
-//! room reads about as a laptop's screen at arm's length does at twice
-//! the size, so Aizome's points are doubled here ([`K`]): its 1pt edges
-//! and bevels are 2, the 2pt focus ring 4, the 3pt hard shadow 6.
+//! Aizome's look seen from the sofa: Chanoma's, and the login screen's
+//! when a controller drives it. A television across a room reads about as
+//! a laptop's screen at arm's length does at twice the size, so Aizome's
+//! points are doubled here ([`K`]): its 1pt edges and bevels are 2, the
+//! 2pt focus ring 4, the 3pt hard shadow 6.
 //! Everything else is as the desktop draws it: the theme's colours (Night,
 //! Day or High contrast, and the focus colour chosen in Settings), square
 //! corners, flat faces with a highlight along the top, Archivo for words,
@@ -22,7 +23,7 @@ use aizome_kit::sidestep_ui::kurbo::{BezPath, Circle};
 use aizome_kit::sidestep_ui::{Canvas, Color, LineCap, StrokeStyle, TextStyle};
 use aizome_kit::theme::{FontSpec, Role, Theme};
 
-use crate::pad::{Button, Family};
+use aizome_gamepad::{Button, Family};
 
 /// Aizome's points in the design's: everything twice its desktop size.
 pub const K: f64 = 2.0;
@@ -368,10 +369,30 @@ fn cap_label(family: Family, b: Button) -> &'static str {
 
 /// How wide button `b`'s glyph is at radius `r`.
 pub fn glyph_width(theme: &Theme, family: Family, b: Button, r: f64) -> f64 {
-    if is_cap(family, b) {
-        (measure(theme, cap_label(family, b), mono(r * 0.8, MEDIUM)).width + r * 1.1).max(r * 2.0)
-    } else {
-        r * 2.0
+    if is_cap(family, b) { keycap_width(theme, cap_label(family, b), r) } else { r * 2.0 }
+}
+
+/// How wide a keycap labelled `label` is at radius `r`.
+pub fn keycap_width(theme: &Theme, label: &str, r: f64) -> f64 {
+    (measure(theme, label, mono(r * 0.8, MEDIUM)).width + r * 1.1).max(r * 2.0)
+}
+
+/// A keycap labelled `label` (a shoulder's name, a keyboard's key),
+/// centred on `at`, `r` its radius.
+pub fn keycap(c: &mut Canvas, theme: &Theme, label: &str, at: Point, r: f64) {
+    keycap_with(c, theme, label, None, at, r);
+}
+
+fn keycap_with(c: &mut Canvas, theme: &Theme, label: &str, arrow: Option<Icon>, at: Point, r: f64) {
+    let edge = (r / 11.0).max(EDGE).round();
+    let w = keycap_width(theme, label, r);
+    let cap = Rect::new(at.x - w / 2.0, at.y - r * 0.85, at.x + w / 2.0, at.y + r * 0.85);
+    let cap = Rect::new(cap.x0.round(), cap.y0.round(), cap.x1.round(), cap.y1.round());
+    c.fill_rect(cap, theme.raised());
+    border(c, cap, theme.line2(), edge);
+    match arrow {
+        Some(i) => icon(c, i, at, r * 1.05, theme.text()),
+        None => text_centred(c, theme, label, at, mono(r * 0.8, MEDIUM), theme.text()),
     }
 }
 
@@ -380,16 +401,7 @@ pub fn glyph_width(theme: &Theme, family: Family, b: Button, r: f64) -> f64 {
 pub fn button_glyph(c: &mut Canvas, theme: &Theme, family: Family, b: Button, at: Point, r: f64) {
     let edge = (r / 11.0).max(EDGE).round();
     if is_cap(family, b) {
-        let w = glyph_width(theme, family, b, r);
-        let cap = Rect::new(at.x - w / 2.0, at.y - r * 0.85, at.x + w / 2.0, at.y + r * 0.85);
-        let cap = Rect::new(cap.x0.round(), cap.y0.round(), cap.x1.round(), cap.y1.round());
-        c.fill_rect(cap, theme.raised());
-        border(c, cap, theme.line2(), edge);
-        match arrow(b) {
-            Some(i) => icon(c, i, at, r * 1.05, theme.text()),
-            None => text_centred(c, theme, cap_label(family, b), at, mono(r * 0.8, MEDIUM), theme.text()),
-        }
-        return;
+        return keycap_with(c, theme, cap_label(family, b), arrow(b), at, r);
     }
     if arrow(b).is_some() {
         return dpad(c, theme, b, at, r, edge);

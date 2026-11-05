@@ -39,7 +39,7 @@ use crate::clock::{Clock, Local, SystemClock};
 use crate::library::Library;
 use crate::pad::mapping::{Database, Mapping};
 use crate::pad::{Button, Dir, Family, PadEvent, PadInfo, Pads, Shared};
-use crate::rules::{Confirm, Gate, Lockout, Settings, Usage};
+use crate::rules::{Gate, Lockout, Settings, Usage};
 use crate::store::Dirs;
 use crate::ui::{self, Chrome, Focus, Overlay, PadBadge, Scene, Target, View};
 use state::Recent;
@@ -317,9 +317,7 @@ impl Config {
                     .filter(|u| !u.is_empty())
                     .unwrap_or_else(|| crate::art::THUMBNAILS.to_owned()),
             ),
-            database: std::env::var_os("CHANOMA_GAMECONTROLLERDB")
-                .map(PathBuf::from)
-                .or_else(|| std::env::var_os("SDL_GAMECONTROLLERCONFIG_FILE").map(PathBuf::from)),
+            database: Database::standard_path(),
             fullscreen: true,
             scan: true,
             core_override: None,
@@ -358,6 +356,11 @@ pub struct Chanoma {
     pub controllers: Vec<PadInfo>,
     /// The controller used last: whose buttons the hints show.
     pub family: Family,
+    /// And which one it was, for the buttons it has.
+    pub in_hand: Option<u32>,
+    /// Each controller's shift on the PIN pad, for the digits a pad
+    /// short of buttons presses as chords.
+    pub chords: ui::pinpad::Chords,
     pub window: WindowKey,
     /// The overlay over a page in the browser.
     pub hud: Option<WindowKey>,
@@ -461,6 +464,8 @@ impl Chanoma {
             shared: Arc::new(Shared::default()),
             controllers: Vec::new(),
             family: Family::Generic,
+            in_hand: None,
+            chords: ui::pinpad::Chords::default(),
             window: WindowKey::default(),
             hud: None,
             hud_menu: false,
@@ -537,18 +542,20 @@ impl Chanoma {
 
     /// The button that says yes on a controller of `family`.
     pub fn ok_button(&self, family: Family) -> Button {
-        match (self.settings.confirm, family) {
-            (Confirm::Right, _) | (Confirm::Auto, Family::Nintendo) => Button::East,
-            _ => Button::South,
-        }
+        self.settings.confirm.ok(family)
     }
 
     pub fn back_button(&self, family: Family) -> Button {
-        if self.ok_button(family) == Button::East { Button::South } else { Button::East }
+        self.settings.confirm.back(family)
     }
 
     fn family_of(&self, id: u32) -> Family {
         self.controllers.iter().find(|p| p.id == id).map_or(Family::Generic, |p| p.family)
+    }
+
+    /// The buttons controller `id` has (every one, for one not known).
+    fn buttons_of(&self, id: u32) -> u32 {
+        self.controllers.iter().find(|p| p.id == id).map_or(Button::all_bits(), |p| p.buttons)
     }
 
     /// Show `screen`, focus at its start.
@@ -783,6 +790,7 @@ impl Chanoma {
                 let player_one = info.slot == 0;
                 self.controllers.retain(|p| p.id != info.id);
                 self.family = info.family;
+                self.in_hand = Some(info.id);
                 self.controllers.push(info);
                 self.controllers.sort_by_key(|p| p.slot);
                 // Player 1 back: the game carries on by itself.
@@ -797,6 +805,7 @@ impl Chanoma {
             PadEvent::Disconnected { id, slot } => {
                 let marks = self.home_marks();
                 self.controllers.retain(|p| p.id != id);
+                self.chords.forget(id);
                 self.restore_home_marks(&marks);
                 // A game whose player 1 went: wait for them.
                 if self.screen == Screen::Playing && slot == 0 && self.modal.is_none() {
@@ -814,6 +823,7 @@ impl Chanoma {
                     return;
                 }
                 self.family = self.family_of(id);
+                self.in_hand = Some(id);
                 // A PIN's arrows are the direction pad's presses, once
                 // each: not the stick, nor a press held.
                 if matches!(self.modal, Some(Modal::Pin { .. })) {
@@ -837,15 +847,23 @@ impl Chanoma {
                 }
                 let family = self.family_of(id);
                 self.family = family;
+                self.in_hand = Some(id);
                 if self.screen == Screen::Watching && self.modal.is_none() && button != Button::Guide {
                     self.page_button(button, family, pressed, cx);
                     return;
                 }
+                // The PIN hears Select (shift, on a pad short of buttons)
+                // go down and up, as well as presses.
+                if matches!(self.modal, Some(Modal::Pin { .. })) {
+                    let have = self.buttons_of(id);
+                    return match self.chords.button(id, have, button, pressed) {
+                        ui::pinpad::Chorded::Digit(b) => self.pin_key(ui::pinpad::Key::Press(b), cx),
+                        ui::pinpad::Chorded::Other(b) => self.pin_button(b, family, cx),
+                        ui::pinpad::Chorded::Nothing => {}
+                    };
+                }
                 if !pressed {
                     return;
-                }
-                if matches!(self.modal, Some(Modal::Pin { .. })) {
-                    return self.pin_button(button, family, cx);
                 }
                 match (self.screen.clone(), self.button_input(button, family)) {
                     // A game takes every button but Home.
@@ -1121,8 +1139,9 @@ impl Chanoma {
         let _ = cx;
     }
 
-    /// The keyboard on the PIN pad: the legend's numbers, or its keys (the
-    /// arrows, Page Up and Down, Tab and Space); Backspace, Return, and Esc.
+    /// The keyboard on the PIN pad: the legend's numbers (1 to 9 and 0),
+    /// or its keys (the arrows, Page Up and Down, Tab and Space);
+    /// Backspace, Return, and Esc.
     fn pin_input(&mut self, i: Input, cx: &mut Cx<Msg>) {
         use ui::pinpad::Key;
         let key = match i {
@@ -1134,8 +1153,8 @@ impl Chanoma {
             Input::Next => Key::Press(Button::R1),
             Input::Alt => Key::Press(Button::North),
             Input::Space => Key::Press(Button::West),
-            Input::Digit(d) => match usize::from(d).checked_sub(1).and_then(|i| ui::pinpad::BUTTONS.get(i)) {
-                Some(b) => Key::Press(*b),
+            Input::Digit(d) => match ui::pinpad::button_of(d) {
+                Some(b) => Key::Press(b),
                 None => return,
             },
             Input::Erase => Key::Delete,
@@ -1147,8 +1166,9 @@ impl Chanoma {
         self.pin_key(key, cx);
     }
 
-    /// A controller's button on the PIN pad: one of the legend's is a
-    /// press, wherever the controller is from; yes is Done, no is Delete.
+    /// A controller's button on the PIN pad that isn't one of the
+    /// legend's ([`ui::pinpad::Chords`] has said which those are): yes is
+    /// Done, no is Delete.
     fn pin_button(&mut self, b: Button, family: Family, cx: &mut Cx<Msg>) {
         use ui::pinpad::Key;
         if b == self.ok_button(family) {
@@ -1157,8 +1177,6 @@ impl Chanoma {
             self.pin_back(cx);
         } else if b == Button::Start {
             self.pin_key(Key::Forgot, cx);
-        } else if ui::pinpad::digit(b).is_some() {
-            self.pin_key(Key::Press(b), cx);
         }
     }
 
@@ -1463,7 +1481,7 @@ impl Chanoma {
         h
     }
 
-    fn overlay(&self) -> Option<Overlay> {
+    pub fn overlay(&self) -> Option<Overlay> {
         match &self.modal {
             Some(Modal::Pin { pin, .. }) => {
                 let (title, prompt) = if pin.new {
@@ -1487,6 +1505,7 @@ impl Chanoma {
                     wait: self.lockout.wait(self.now_secs()),
                     checking: pin.checking,
                     family,
+                    have: self.in_hand.map_or(Button::all_bits(), |id| self.buttons_of(id)),
                     ok: self.ok_button(family),
                     back: self.back_button(family),
                     done: pin.new || self.pin_length().is_none(),

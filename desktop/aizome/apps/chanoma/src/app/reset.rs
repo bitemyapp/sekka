@@ -132,10 +132,10 @@ impl Chanoma {
         let Some(r) = &mut self.reset else { return };
         match r.keys.press(key) {
             Some(Typed::Text(t)) => self.reset_type(&t),
-            Some(Typed::Key(crate::devtools::Key::Backspace)) => {
+            Some(Typed::Edit(crate::devtools::Key::Backspace)) => {
                 r.password.pop();
             }
-            Some(Typed::Key(crate::devtools::Key::Enter)) => self.sign_in(cx),
+            Some(Typed::Edit(crate::devtools::Key::Enter)) => self.sign_in(cx),
             _ => {}
         }
     }

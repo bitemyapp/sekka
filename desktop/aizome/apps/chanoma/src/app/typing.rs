@@ -21,7 +21,7 @@ use aizome_kit::Cx;
 use super::{Chanoma, Msg};
 use crate::devtools::{Ask, Field, Focused};
 use crate::pad::{Button, Dir, Family};
-use crate::ui::keyboard::{Key, Keyboard, Typed};
+use crate::ui::keyboard::{Action, Key, Keyboard, Typed};
 
 /// How long after a choice the page is asked what has its keyboard: time
 /// for the click to land and the page to answer it.
@@ -149,24 +149,20 @@ impl Chanoma {
     /// A button while the keyboard is up. Select and Start count alone,
     /// when let go (together they're Home).
     pub fn keyboard_button(&mut self, b: Button, family: Family, pressed: bool, alone: bool, cx: &mut Cx<Msg>) {
-        let key = match b {
-            Button::Select if alone => return self.close_keyboard(cx),
-            Button::Start if alone => Key::Enter,
-            _ if !pressed => return,
-            _ if b == self.ok_button(family) => match &self.page {
-                Some(p) => p.typing.as_ref().map_or(Key::Space, |t| t.keys.key()),
-                None => return,
-            },
-            _ if b == self.back_button(family) => return self.close_keyboard(cx),
-            Button::West => Key::Backspace,
-            Button::North => Key::Space,
-            Button::L2 => Key::Shift,
-            Button::R2 => Key::Page,
-            Button::L1 => return self.keyboard_send(Typed::Key(crate::devtools::Key::Left), cx),
-            Button::R1 => return self.keyboard_send(Typed::Key(crate::devtools::Key::Right), cx),
-            _ => return,
-        };
-        self.keyboard_key(key, cx);
+        let (ok, back) = (self.ok_button(family), self.back_button(family));
+        let Some(t) = self.page.as_mut().and_then(|p| p.typing.as_mut()) else { return };
+        let let_go = matches!(b, Button::Select | Button::Start);
+        if (let_go && !alone) || (!let_go && !pressed) {
+            return;
+        }
+        t.keys.ok = ok;
+        t.keys.back = back;
+        match t.keys.action(b) {
+            Some(Action::Key(key)) => self.keyboard_key(key, cx),
+            Some(Action::Edit(e)) => self.keyboard_send(Typed::Edit(e), cx),
+            Some(Action::Close) => self.close_keyboard(cx),
+            None => {}
+        }
     }
 
     /// The arrows or the stick, between the keys.
@@ -196,10 +192,10 @@ impl Chanoma {
     /// what's typed, and the keyboard goes.
     fn keyboard_send(&mut self, typed: Typed, cx: &mut Cx<Msg>) {
         let Some(p) = &self.page else { return };
-        let enter = typed == Typed::Key(crate::devtools::Key::Enter);
+        let enter = typed == Typed::Edit(crate::devtools::Key::Enter);
         p.browser.ask(match typed {
             Typed::Text(s) => Ask::Type(s),
-            Typed::Key(k) => Ask::Key(k),
+            Typed::Edit(k) => Ask::Key(k),
         });
         if enter {
             self.close_keyboard(cx);

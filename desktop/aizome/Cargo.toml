@@ -23,6 +23,8 @@ aizome-kit = { path = "crates/aizome-kit" }
 aizome-apps = { path = "crates/aizome-apps" }
 aizome-sys = { path = "crates/aizome-sys" }
 aizome-search = { path = "crates/aizome-search" }
+aizome-gamepad = { path = "crates/aizome-gamepad" }
+aizome-sofa = { path = "crates/aizome-sofa" }
 # Sukumo's crates, which keep the names they had in Sidestep, the
 # toolkit Sukumo came from (sukumo/README.md). The path stays inside the
 # workspace so Cargo hashes it relative to the workspace, and a build of
