@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use aizome_hotaru::app::{Hotaru, Msg};
 use aizome_hotaru::panes::{Axis, Direction};
-use aizome_kit::testing::Harness;
+use aizome_kit::testing::{FakeShell, Harness, menu_item};
 use aizome_kit::theme::{Appearance, ThemeChoice};
 use hotaru_core::Terminal;
 use hotaru_io::PtyCommand;
@@ -2266,6 +2266,130 @@ fn a_right_click_opens_the_pane_menu_and_dropped_files_paste_as_quoted_paths() {
     assert!(h.settle(Duration::from_secs(5), |app| {
         app.active_pane().unwrap().snapshot.plain_text().contains("'/tmp/two words.txt' /etc/hosts")
     }));
+}
+
+/// Choose item `id` from Hotaru's menus as the shell does, and let the
+/// focus follow.
+fn choose(h: &mut Harness<Hotaru>, shell: &mut FakeShell, id: u32) {
+    shell.activate(h, id);
+    h.advance(Duration::ZERO);
+}
+
+/// Three tabs whose rows in the Window menu read the same, chosen from the
+/// shell by the ids it was sent (as it keeps them in a menu still open)
+/// after the second's title changes, or a tab before it closes.
+fn tab_menu_survives_change(rename: bool) {
+    let mut shell = FakeShell::new();
+    let mut h = shell.launch(Hotaru::preview());
+    let window = h.window();
+    h.focus_window(window, true);
+
+    let first = h.program().active;
+    h.send(Msg::Title(pane_for(&h, first), "Same title".into()));
+    h.send(Msg::NewTab);
+    let second = h.program().active;
+    h.send(Msg::Split(Axis::Right));
+    let pane = h.program().active_pane().unwrap().id;
+    assert_ne!(second.get(), pane.get(), "a tab's identity differs from its focused split");
+    h.send(Msg::Title(pane, "Same title".into()));
+    h.send(Msg::NewTab);
+    let third = h.program().active;
+    h.send(Msg::Title(pane_for(&h, third), "Same title".into()));
+    h.advance(Duration::from_millis(50));
+    let menus = shell.menus();
+    let window_menu = &menus.iter().find(|m| m.title == "Window").unwrap().items;
+    let tabs: Vec<_> = window_menu.iter().filter(|item| item.label == "Same title").collect();
+    assert_eq!(tabs.len(), 3);
+    let ids: Vec<_> = tabs.iter().map(|item| item.id).collect();
+    assert_ne!(ids[0], ids[1]);
+    assert_ne!(ids[1], ids[2]);
+    assert_eq!(tabs.iter().map(|item| item.checked).collect::<Vec<_>>(), [false, false, true]);
+
+    // Duplicate titles still select the right tab, and its focused split.
+    choose(&mut h, &mut shell, ids[1]);
+    assert_eq!(h.program().active, second);
+    assert_eq!(h.program().active_pane().unwrap().id, pane);
+    assert_eq!(h.focused_name(window), Some(format!("terminal-{pane}")));
+    choose(&mut h, &mut shell, ids[2]);
+    assert_eq!(h.program().active, third);
+
+    // Output changes a title, or another tab closes and the rows shift.
+    if rename {
+        h.send(Msg::Title(pane, "New title from OSC 2".into()));
+    } else {
+        h.send(Msg::SelectTab(first));
+        h.send(Msg::CloseTab);
+        h.send(Msg::SelectTab(third));
+    }
+    choose(&mut h, &mut shell, ids[1]);
+    assert_eq!(h.program().active, second, "the displayed menu item must still select its original tab");
+    assert_eq!(h.program().active_pane().unwrap().id, pane);
+    assert_eq!(h.focused_name(window), Some(format!("terminal-{pane}")));
+
+    h.advance(Duration::from_millis(50));
+    let menus = shell.menus();
+    let selected =
+        menus.iter().find(|m| m.title == "Window").unwrap().items.iter().find(|item| item.id == ids[1]).unwrap();
+    assert!(selected.checked);
+    assert_eq!(selected.label, if rename { "New title from OSC 2" } else { "Same title" });
+
+    // The closed tab's id is no other row's, whichever tab is in front,
+    // even a new one with the same title in its place.
+    h.send(Msg::CloseTab);
+    h.send(Msg::NewTab);
+    let replacement = h.program().active;
+    h.send(Msg::Title(pane_for(&h, replacement), "Same title".into()));
+    choose(&mut h, &mut shell, ids[2]);
+    assert_eq!(h.program().active, third);
+    h.advance(Duration::from_millis(50));
+    let menus = shell.menus();
+    assert!(menus.iter().flat_map(|m| &m.items).all(|item| item.id != ids[1]));
+    let open: Vec<TabId> = h.program().tabs.iter().map(|tab| tab.id).collect();
+    assert!(open.len() >= 2);
+    for tab in open {
+        h.send(Msg::SelectTab(tab));
+        choose(&mut h, &mut shell, ids[1]);
+        assert_eq!(h.program().active, tab, "a closed tab's menu action must be ignored");
+    }
+}
+
+#[test]
+fn window_menu_selects_the_same_tab_after_its_title_changes() {
+    tab_menu_survives_change(true);
+}
+
+#[test]
+fn window_menu_selects_the_same_tab_after_a_preceding_tab_closes() {
+    tab_menu_survives_change(false);
+}
+
+#[test]
+fn window_menu_brings_the_terminal_forward_over_settings() {
+    use aizome_hotaru::settings::Action;
+    let mut shell = FakeShell::new();
+    let mut h = shell.launch(Hotaru::preview());
+    let terminal = h.window();
+    h.focus_window(terminal, true);
+    let first = h.program().active;
+    h.send(Msg::Title(pane_for(&h, first), "First".into()));
+    h.send(Msg::NewTab);
+    h.send(Msg::Action(Action::Settings));
+    let settings = h.program().settings_window.expect("Settings open");
+    h.focus_window(terminal, false);
+    h.focus_window(settings, true);
+    h.advance(Duration::from_millis(50));
+    let row = menu_item(&shell.menus(), "First").id;
+    let before = h.activations(terminal);
+    choose(&mut h, &mut shell, row);
+    assert_eq!(h.program().active, first);
+    assert_eq!(h.activations(terminal), before + 1, "the tab's window comes forward over Settings");
+    // With the terminal in front already, nothing else is asked.
+    h.focus_window(settings, false);
+    h.focus_window(terminal, true);
+    h.send(Msg::NewTab);
+    choose(&mut h, &mut shell, row);
+    assert_eq!(h.program().active, first);
+    assert_eq!(h.activations(terminal), before + 1);
 }
 
 fn tab_for(h: &Harness<Hotaru>, pane: PaneId) -> TabId {

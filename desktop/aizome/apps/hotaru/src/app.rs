@@ -1,4 +1,5 @@
 use crate::ids::{PaneId, RequestId, SplitId, TabId};
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -13,6 +14,8 @@ use crate::preferences::{Notice, Page};
 use crate::session::{Command, Defaults, Session};
 use crate::settings::{self, Access, Action, Bindings, Settings};
 use crate::terminal_view::{Selection, colors_for, terminal_view};
+
+const TAB_MENU_TITLE_LIMIT: NonZeroUsize = NonZeroUsize::new(48).unwrap();
 
 #[derive(Clone)]
 pub enum Msg {
@@ -1809,6 +1812,11 @@ impl Program for Hotaru {
                 if self.tabs.iter().any(|tab| tab.id == id) {
                     self.active = id;
                     self.focus_after_rebuild(cx);
+                    // Chosen from the Window menu, or by its keys, while
+                    // Settings has the keyboard: show it.
+                    if cx.key_window() != Some(self.window) {
+                        cx.activate(self.window);
+                    }
                 }
             }
             Msg::CloseTab => self.close_tab(cx),
@@ -2620,11 +2628,17 @@ impl Program for Hotaru {
         for (index, tab) in self.tabs.iter().enumerate() {
             let title =
                 self.panes.iter().find(|pane| pane.id == tab.active).map_or("Shell", |pane| pane.title.as_str());
-            let title: String = title.chars().take(48).collect();
-            window = window.item(self.keyed(
-                MenuItem::new(title, Msg::SelectTab(tab.id)).checked(tab.id == self.active),
-                self.tab_shortcut(index),
-            ));
+            let title = aizome_kit::text::clip(title, TAB_MENU_TITLE_LIMIT);
+            window = window.item(
+                self.keyed(
+                    MenuItem::new(title, Msg::SelectTab(tab.id))
+                        // A menu the shell has open keeps choosing this tab while
+                        // its title changes or tabs before it close.
+                        .key(tab.id)
+                        .checked(tab.id == self.active),
+                    self.tab_shortcut(index),
+                ),
+            );
         }
         let window = window
             .separator()

@@ -6,6 +6,7 @@
 //! change.
 
 use std::hash::{Hash, Hasher};
+use std::num::NonZeroUsize;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -401,6 +402,22 @@ pub struct Text<Msg> {
 }
 
 crate::builder!(Text);
+
+/// `s` at most `most` characters long as people count them (a flag, an
+/// emoji with its skin tone or a letter with its accents is one), the last
+/// an ellipsis if any were left out: for text with no width to fit, such
+/// as a label for the shell's menus. The positive limit includes the ellipsis.
+pub fn clip(s: &str, most: NonZeroUsize) -> std::borrow::Cow<'_, str> {
+    use unicode_segmentation::UnicodeSegmentation;
+    let mut graphemes = s.grapheme_indices(true);
+    let Some((end, _)) = graphemes.nth(most.get() - 1) else {
+        return s.into();
+    };
+    if graphemes.next().is_none() {
+        return s.into();
+    }
+    format!("{}…", s[..end].trim_end()).into()
+}
 
 /// Text: `text("Hello").size(15.0).weight(600.0)`. One line, ending in an
 /// ellipsis where it doesn't fit, unless it [`wrap`](Text::wrap)s.
@@ -822,5 +839,26 @@ mod tests {
         assert_eq!(lines.len(), 2);
         // The last line holds the rest, cut short by the ellipsis.
         assert_eq!(lines[1].range.end, text.len(), "{lines:?}");
+    }
+
+    #[test]
+    fn clipping_keeps_whole_characters_and_says_so() {
+        assert!(matches!(clip("Kirby", NonZeroUsize::new(5).unwrap()), std::borrow::Cow::Borrowed("Kirby")));
+        assert_eq!(clip(&"a".repeat(49), NonZeroUsize::new(48).unwrap()), format!("{}…", "a".repeat(47)));
+        // A family is one character, and so is a letter with its accent.
+        let family = "👨\u{200d}👩\u{200d}👧\u{200d}👦";
+        assert_eq!(clip(&format!("ab{family}cd"), NonZeroUsize::new(4).unwrap()), format!("ab{family}…"));
+        assert_eq!(clip(&"e\u{301}".repeat(5), NonZeroUsize::new(3).unwrap()), "e\u{301}e\u{301}…");
+        assert_eq!(clip("🇯🇵🇫🇷🇩🇪", NonZeroUsize::new(2).unwrap()), "🇯🇵…");
+        // No space before the ellipsis.
+        assert_eq!(clip("one two three", NonZeroUsize::new(5).unwrap()), "one…");
+    }
+
+    #[test]
+    fn clipping_to_one_grapheme_keeps_short_text_or_only_the_ellipsis() {
+        let one = NonZeroUsize::MIN;
+        assert!(matches!(clip("", one), std::borrow::Cow::Borrowed("")));
+        assert!(matches!(clip("🇯🇵", one), std::borrow::Cow::Borrowed("🇯🇵")));
+        assert_eq!(clip("🇯🇵🇫🇷", one), "…");
     }
 }

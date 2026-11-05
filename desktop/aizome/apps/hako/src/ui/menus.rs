@@ -171,7 +171,7 @@ pub fn menu_bar(h: &Hako) -> MenuBar<Msg> {
         _ => None,
     };
     for p in &h.places {
-        let mut i = item(&p.name, Msg::Go(w, Loc::Folder(p.path.clone())));
+        let mut i = item(&p.name, Msg::Go(w, Loc::Folder(p.path.clone()))).key(&p.path);
         if let Some(s) = shortcut_for(p.kind) {
             i = i.shortcut(s);
         }
@@ -225,7 +225,7 @@ fn open_with_menu(h: &Hako, w: WindowKey, sel: &[PathBuf]) -> Option<Menu<Msg>> 
     for (i, id) in ids.iter().take(12).enumerate() {
         if let Some(app) = apps.get(id) {
             let label = if i == 0 { format!("{} (default)", app.name) } else { app.name.clone() };
-            m = m.item(MenuItem::new(label, Msg::OpenWith(w, sel[0].clone(), id.clone())));
+            m = m.item(MenuItem::new(label, Msg::OpenWith(w, sel[0].clone(), id.clone())).key(id));
         }
     }
     if ids.is_empty() {

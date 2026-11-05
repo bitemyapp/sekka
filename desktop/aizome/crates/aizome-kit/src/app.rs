@@ -121,7 +121,7 @@ impl<P: Program> Runtime<P> {
             self.menus_go_in_windows(false, platform);
         }
         // The menus as they are now, at once.
-        let published = crate::shell::published(&self.core);
+        let published = crate::shell::published(&mut self.core);
         self.menus_published = hash_of(&serde_json::to_string(&published).unwrap_or_default());
         if let Some(s) = &mut self.shell {
             s.send_menus(published);
@@ -255,7 +255,7 @@ impl<P: Program> Runtime<P> {
     pub fn refresh_menus(&mut self, platform: &mut dyn Platform) {
         self.core.menubar = self.program.menus().into_specs();
         if self.shell.is_some() {
-            let published = crate::shell::published(&self.core);
+            let published = crate::shell::published(&mut self.core);
             let h = hash_of(&serde_json::to_string(&published).unwrap_or_default());
             if h != self.menus_published {
                 self.menus_published = h;
@@ -271,7 +271,7 @@ impl<P: Program> Runtime<P> {
     /// Send the menus to the shell now.
     pub fn publish_menus(&mut self) {
         if let Some(shell) = &mut self.shell {
-            let menus = crate::shell::published(&self.core);
+            let menus = crate::shell::published(&mut self.core);
             shell.send_menus(menus);
         }
     }

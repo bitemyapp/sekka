@@ -178,7 +178,7 @@ pub fn menus(k: &Koyomi) -> MenuBar<Msg> {
         .item(MenuItem::role_item(format!("Quit {name}"), MenuRole::Quit).shortcut(Shortcut::cmd('Q')));
     let mut export = Menu::new("Export Calendar");
     for c in &k.store.calendars {
-        export = export.item(MenuItem::new(format!("{}…", c.name), Msg::Export(c.id.clone())));
+        export = export.item(MenuItem::new(format!("{}…", c.name), Msg::Export(c.id.clone())).key(&c.id));
     }
     let file = Menu::new("File")
         .item(MenuItem::new("New Event", Msg::NewEvent).shortcut(Shortcut::cmd('N')))

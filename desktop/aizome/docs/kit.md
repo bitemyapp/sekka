@@ -149,6 +149,12 @@ when the weight is written in the code, so that zero fails to build), and points
 
 ❖ ⇧ ⌥ ⌃ ⌘ ⎋ ⌫ ⇥ ↩ in any text are set in Noto Sans Symbols 2.
 
+Text with no width to fit to, such as a menu label sent to the shell, is cut
+with `aizome_kit::text::clip(s, n)`: at most `n` characters as people count
+them (a flag, an emoji with its skin tone or a letter with its accents is
+one), the last an ellipsis if any were left out. The limit `n` is a
+`std::num::NonZeroUsize`; its positive budget includes the ellipsis.
+
 ### Controls
 
 All at least 24pt tall to the pointer, square, edged in 1pt; Tab reaches
@@ -464,9 +470,18 @@ fn menus(&self) -> MenuBar<Msg> {
 `.replace(title, menu)`, `.remove(title)`, `.extend(title, items)`,
 `.insert(i, menu)` change the standard ones. Items: `MenuItem::new(label,
 msg)`, `.shortcut(Shortcut::cmd('N').shift().alt().ctrl())`, `.enabled`,
-`.checked`, `.icon`, `.id(n)` (a stable id for the shell), `.role(MenuRole::..)`;
+`.checked`, `.icon`, `.key(k)`, `.role(MenuRole::..)`;
 `MenuItem::role_item(label, role)` for an item the kit carries out itself;
 `Menu::separator()`, `.submenu(menu)`, `.header(text)`.
+
+The shell knows an item by an id the kit gives it, made from its menu and
+label (and which of the items labelled alike it is): right for items that
+are always there, wherever rows before them come and go. A row of a list
+that changes (tabs, recent files, places) takes `.key(k)`, what it is for
+(a tab's number, a file's path): its id follows the key while the label
+changes or rows around it come and go, and is never another key's, so a
+menu the shell still shows from before chooses what that row was for or
+nothing, never its neighbour. Keys are unique within their menu.
 
 Roles: the Edit roles go to the focused text widget (an item with a message
 too gets it only when no widget takes the command); Quit asks each window's
@@ -615,7 +630,13 @@ them). Popups:
 `drop(window, at, urls, text)`. The theme: `set_appearance`. For the shell:
 `set_outputs`, `confirm_lock`, `finish_lock`, `activation_token`, and
 `Harness::with_shell(program, socket)` with `pump_shell(wait)` to talk to a
-stand-in shell over a real socket.
+shell over a real socket. `FakeShell` is that shell: `FakeShell::new()`,
+`launch(program)`, `menus()` (the next published), `activate(&mut h, id)`,
+`read`, `send`, and `unheard()`, `listen`, `accept` and `hang_up` for one that
+comes late or goes; `menu_item(&menus, label)` finds an item. It keeps its
+socket in a directory of its own, removed with it, and gives up waiting for
+the app after five seconds. `activations(window)` counts the program's asks
+to bring a window forward.
 
 `crates/aizome-kit/examples/gallery` shows every element on five pages
 (Controls, Text & Fields, Lists & Tables, a Settings pane, the Editor) with

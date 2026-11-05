@@ -1770,6 +1770,7 @@ impl DropdownWidget {
                     enabled: true,
                     checked: self.selected == Some(i),
                     role: None,
+                    key: None,
                     id: None,
                     icon: None,
                 })

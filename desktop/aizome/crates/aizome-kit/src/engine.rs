@@ -289,6 +289,8 @@ pub(crate) struct Core {
     pub queue: VecDeque<AnyMsg>,
     pub timers: HashMap<u64, TimerUse>,
     pub menubar: Vec<MenuSpec>,
+    /// The shell's ids for the items the app keys.
+    pub keyed_ids: crate::shell::KeyedIds,
     pub info: AppInfo,
     /// No Aizome shell: draw the menu bar along each window's top.
     pub in_window_menus: bool,
@@ -323,6 +325,7 @@ impl Core {
             queue: VecDeque::new(),
             timers: HashMap::new(),
             menubar: Vec::new(),
+            keyed_ids: Default::default(),
             info,
             in_window_menus: std::env::var_os("AIZOME_SHELL_SOCKET").is_none(),
             mods: Modifiers::NONE,
@@ -1467,7 +1470,8 @@ impl Core {
                 enabled: true,
                 checked: self.key_window == Some(win),
                 role: Some(MenuRole::WindowList),
-                id: Some(0x5700_0000 + win),
+                key: None,
+                id: Some(crate::shell::WINDOW_LIST + win),
                 icon: None,
             }));
         }
@@ -2624,7 +2628,7 @@ impl Core {
                 None => platform.minimize(app),
             },
             MenuRole::WindowList => {
-                if let Some(target) = id.and_then(|i| i.checked_sub(0x5700_0000)) {
+                if let Some(target) = id.and_then(|i| i.checked_sub(crate::shell::WINDOW_LIST)) {
                     platform.activate(target);
                 }
             }

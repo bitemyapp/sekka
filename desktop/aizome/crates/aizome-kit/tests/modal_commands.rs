@@ -1,12 +1,9 @@
 //! A modal owns editing; app commands must not reach its covered document.
-use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::UnixListener;
 use std::time::Duration;
 
 use aizome_kit::prelude::*;
 use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
-use aizome_kit::testing::Harness;
-use aizome_shell_proto as proto;
+use aizome_kit::testing::{FakeShell, Harness, menu_item};
 
 #[derive(Default)]
 struct Editor {
@@ -180,56 +177,33 @@ fn opening_a_modal_dismisses_armed_background_menus() {
     h.named(w, NamedKey::Enter, Modifiers::NONE);
     assert_eq!(h.program().log, ["apply"]);
 }
-fn read_menus(lines: &mut impl Iterator<Item = std::io::Result<String>>) -> Vec<proto::Menu> {
-    loop {
-        let msg: proto::AppMessage = proto::decode(&lines.next().expect("message").unwrap()).unwrap();
-        if let proto::AppMessage::Menus { menus } = msg {
-            return menus;
-        }
-    }
-}
-fn item<'a>(menus: &'a [proto::Menu], label: &str) -> &'a proto::Item {
-    menus.iter().flat_map(|m| &m.items).find(|i| i.label == label).unwrap()
-}
 #[test]
 fn shell_activation_rechecks_scope_and_publishes_dismissal() {
-    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("modal-shell-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("shell.sock");
-    let _ = std::fs::remove_file(&path);
-    let listener = UnixListener::bind(&path).unwrap();
-    let mut h = Harness::with_shell(Editor::default(), &path);
+    let mut shell = FakeShell::new();
+    let mut h = shell.launch(Editor::default());
     let w = h.window();
     h.focus_window(w, true);
-    let (stream, _) = listener.accept().unwrap();
-    stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
-    let mut writer = stream.try_clone().unwrap();
-    let mut lines = BufReader::new(stream).lines();
     h.advance(Duration::from_millis(50));
-    let menus = read_menus(&mut lines);
-    let save = item(&menus, "Save").id;
-    let undo = item(&menus, "Undo").id;
-    assert!(item(&menus, "Save").enabled);
+    let menus = shell.menus();
+    let save = menu_item(&menus, "Save").id;
+    let undo = menu_item(&menus, "Undo").id;
+    assert!(menu_item(&menus, "Save").enabled);
     h.send(Msg::Alert);
     h.advance(Duration::from_millis(50));
-    let menus = read_menus(&mut lines);
-    assert!(!item(&menus, "Save").enabled);
-    assert!(!item(&menus, "Undo").enabled);
-    assert!(!item(&menus, "Close Window").enabled);
-    assert!(item(&menus, "Minimise").enabled);
+    let menus = shell.menus();
+    assert!(!menu_item(&menus, "Save").enabled);
+    assert!(!menu_item(&menus, "Undo").enabled);
+    assert!(!menu_item(&menus, "Close Window").enabled);
+    assert!(menu_item(&menus, "Minimise").enabled);
     for id in [save, undo] {
-        writer.write_all(proto::encode(&proto::ShellMessage::Activate { id }).as_bytes()).unwrap();
-        assert_eq!(h.pump_shell(Duration::from_secs(3)), 1);
+        shell.activate(&mut h, id);
     }
     assert!(h.program().log.is_empty(), "stale shell IDs must not bypass the modal");
     h.named(w, NamedKey::Escape, Modifiers::NONE);
     h.advance(Duration::from_millis(50));
-    let menus = read_menus(&mut lines);
-    assert!(item(&menus, "Save").enabled);
-    assert!(item(&menus, "Undo").enabled);
-    writer.write_all(proto::encode(&proto::ShellMessage::Activate { id: save }).as_bytes()).unwrap();
-    assert_eq!(h.pump_shell(Duration::from_secs(3)), 1);
+    let menus = shell.menus();
+    assert!(menu_item(&menus, "Save").enabled);
+    assert!(menu_item(&menus, "Undo").enabled);
+    shell.activate(&mut h, save);
     assert_eq!(h.program().log, ["save"]);
-    drop(h);
-    std::fs::remove_dir_all(dir).unwrap();
 }
