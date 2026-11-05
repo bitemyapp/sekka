@@ -89,7 +89,15 @@ pkgs.testers.runNixOSTest {
                 raise
             self.signature = machine.succeed("basename /run/user/1000/hypr/*").strip()
             self.wayland = ""
-            self.wayland = json.loads(self.run("hyprctl -j instances"))[0]["wl_socket"]
+            # The command socket appears before the instance's lock metadata,
+            # and until then hyprctl prints "\n]" (it pops its own "[").
+            def instance_ready():
+                raw = self.run("hyprctl -j instances").strip()
+                if raw in ("", "]"):
+                    return False
+                self.wayland = json.loads(raw)[0]["wl_socket"]
+                return bool(self.wayland)
+            self.wait_for(instance_ready, seconds=60)
             self.run("hyprctl output create headless SHARED-1")
             self.wait_for(lambda: any(m["name"] == "SHARED-1" and m["scale"] == 2 and not m["disabled"]
                                       for m in json.loads(self.run("hyprctl -j monitors all"))))
