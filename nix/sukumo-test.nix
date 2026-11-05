@@ -8,14 +8,17 @@
 let
   inherit (pkgs) lib;
   root = ../desktop/aizome/sukumo;
+  # Sukumo, and the one Aizome crate its crates take by path: the typestate
+  # support (the session lock's requests).
   src = lib.fileset.toSource {
-    inherit root;
+    root = ../desktop/aizome;
     fileset = lib.fileset.unions [
       (root + "/Cargo.toml")
       (root + "/Cargo.lock")
       (root + "/crates")
       (root + "/fixtures")
       (root + "/scripts")
+      ../desktop/aizome/crates/aizome-typestate
     ];
   };
   # Fonts for shaping, fallback and emoji, with fontconfig's own aliases:
@@ -44,6 +47,9 @@ pkgs.rustPlatform.buildRustPackage {
   pname = "sukumo-tests";
   version = "0.0.1";
   inherit src;
+  postUnpack = ''
+    sourceRoot="$sourceRoot/sukumo"
+  '';
   cargoLock.lockFile = root + "/Cargo.lock";
   nativeBuildInputs = with pkgs; [
     sway
@@ -70,7 +76,8 @@ pkgs.rustPlatform.buildRustPackage {
     flags=(--offline --locked -j "$NIX_BUILD_CORES")
     cargo test "''${flags[@]}" -p sidestep-engine --lib
     cargo test "''${flags[@]}" -p sidestep-ui --lib \
-      --test headless --test offscreen --test desktop --test scrolling --test drag_out
+      --test headless --test offscreen --test desktop --test scrolling --test drag_out \
+      --test repro_uiw_27
     # The doctests of every crate with one that must not compile, their
     # error codes checked.
     source ${./checked-doctests.sh}

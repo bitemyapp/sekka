@@ -334,7 +334,7 @@ fn run(channel: Channel<ToRender>, to_main: MainSender) {
     // A program that stops while it holds the session lock leaves the
     // session locked: the lock goes with the connection, not destroyed
     // (a protocol error while locked).
-    if let Some(lock) = state.session_lock.take().filter(SessionLock::is_locked) {
+    if let Some(lock) = state.session_lock.take().map(|held| held.lock).filter(SessionLock::is_locked) {
         std::mem::forget(lock);
     }
 }
@@ -353,9 +353,10 @@ pub struct State {
     activation: Option<ActivationState>,
     /// wlr-layer-shell, where the compositor offers it (see `layer`).
     layer_shell: Option<LayerShell>,
-    /// ext-session-lock (see `lock`), and the lock asked for or held.
+    /// ext-session-lock (see `lock`), and the lock asked for or held,
+    /// with the request it is for.
     session_locks: SessionLockState,
-    session_lock: Option<SessionLock>,
+    session_lock: Option<lock::Held>,
     compositor: CompositorState,
     subcompositor: SubcompositorState,
     viewporter: SimpleGlobal<WpViewporter, 1>,
@@ -1010,7 +1011,7 @@ impl State {
                 }
             }
             ToRender::ReserveBuffers { bytes } => self.reserve_buffers(bytes),
-            ToRender::LockSession => lock::lock(self),
+            ToRender::LockSession { lock } => lock::lock(self, lock),
             ToRender::UnlockSession => lock::unlock(self),
             ToRender::RequestActivationToken { request, app_id } => self.request_token(request, app_id),
             ToRender::StartDrag { window, drag, contents, actions, icon } => {
