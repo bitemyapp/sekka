@@ -40,8 +40,10 @@ then.
 
 - **Date**: 5 November 2026.
 - **Build**: the dev profile (`cargo build -p aizome-tasuke`) on
-  `feat/assistant`, with the repository's Aizome dev shell, at four
+  `feat/assistant`, with the repository's Aizome dev shell, at five
   commits:
+  - `85a3e01b` for `first-run`, taken again when the recommended model's
+    incidents joined its card. Only `first-run` was taken again.
   - `17a003f0` for `models-8gb`, taken again when the library's speed
     estimate for a model with experts in system memory was corrected (its
     card now says about 33 tokens/s here). It was taken before that at
@@ -86,7 +88,7 @@ then.
 | `night-models-8gb.png`, `day-models-8gb.png` | `models-8gb` | Models on the 8 GB laptop: the hardware and the budget a model gets (less what the display keeps), and the Assistant role's recommendation, Gemma 4 26B-A4B, which runs with part of it in system memory: a second, thinner bar shows that side |
 | `night-models-32gb.png`, `day-models-32gb.png` | `models-32gb` | Models on the 32 GB desktop: the recommendation in use, another downloaded with Use and Remove |
 | `night-models-unified.png`, `day-models-unified.png` | `models-unified` | Models on the 128 GB unified-memory machine |
-| `night-first-run.png`, `day-first-run.png` | `first-run` | First run on the 8 GB laptop: the hardware, the recommendation (Gemma 4 26B-A4B) with both its fit bars, Download with how long it takes at 100 Mbit/s |
+| `night-first-run.png`, `day-first-run.png` | `first-run` | First run on the 8 GB laptop: the hardware, the recommendation (Gemma 4 26B-A4B) with both its fit bars and its incident from the evaluations, Download with how long it takes at 100 Mbit/s |
 | `night-downloading.png`, `day-downloading.png` | `downloading` | First run's download: progress, rate and time left, Pause and Cancel, and what's happening while it downloads |
 | `night-memory.png`, `day-memory.png` | `memory` | Memory: the notes, when each was made, Remove, and that they're background, not instructions |
 
