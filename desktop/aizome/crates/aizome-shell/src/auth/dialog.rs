@@ -17,10 +17,10 @@
 //! types hold to:
 //!
 //! - **Only an event proven to be about the request's latest conversation
-//!   moves the dialog.** [`DialogAny::heard`] takes a `Fresh<Talk, Heard>`,
-//!   which only the agent's check ([`Dialog::check`], through
-//!   `Generation::check_answer`) makes, and the event's payload is read only
-//!   from it.
+//!   moves the dialog.** [`DialogAny::heard`] takes a `Checked`, which only
+//!   the agent's check ([`Dialog::check`], through `Generation::check_answer`)
+//!   makes, and the event's payload is read only from it. An event of
+//!   another request's is refused too.
 //! - **Nothing here starts a conversation on an event.** An attempt that
 //!   ended with no answer leaves the dialog [`Waiting`] or [`Unavailable`];
 //!   the agent starts the next one when its floor allows. Only the person
@@ -36,8 +36,7 @@
 #![deny(clippy::wildcard_enum_match_arm)]
 
 use aizome_kit::prelude::WindowKey;
-use aizome_sys::polkit::{Asked, AuthRequest, Heard, RequestId, Said, Talk, said};
-use aizome_typestate::Fresh;
+use aizome_sys::polkit::{Asked, AuthRequest, Checked, Heard, RequestId, Said, Unsendable, Unsent, said};
 
 use super::{AuthView, Submit};
 
@@ -89,7 +88,7 @@ aizome_typestate::machine! {
             ///
             /// ```
             /// use aizome_shell::auth::dialog::{Checking, Prompted};
-            /// fn answer(prompted: Prompted<'_>) -> Checking<'_> {
+            /// fn answer(prompted: Prompted<'_>) -> Result<Checking<'_>, Prompted<'_>> {
             ///     prompted.submit()
             /// }
             /// ```
@@ -121,9 +120,8 @@ aizome_typestate::machine! {
             ///
             /// ```
             /// use aizome_shell::auth::dialog::{DialogAny, Waiting};
-            /// use aizome_sys::polkit::{Heard, Talk};
-            /// use aizome_typestate::Fresh;
-            /// fn failed<'s>(waiting: Waiting<'s>, next: Option<Fresh<Talk, Heard>>) -> DialogAny<'s> {
+            /// use aizome_sys::polkit::Checked;
+            /// fn failed<'s>(waiting: Waiting<'s>, next: Option<Checked>) -> DialogAny<'s> {
             ///     let dialog = DialogAny::from(waiting);
             ///     match next {
             ///         Some(fresh) => dialog.heard(fresh),
@@ -155,7 +153,7 @@ impl Dialog {
 
     /// The proof that `heard` is about this dialog's request and its latest
     /// conversation, for [`DialogAny::heard`].
-    pub fn check(&self, heard: Heard) -> Result<Fresh<Talk, Heard>, Heard> {
+    pub fn check(&self, heard: Heard) -> Result<Checked, Heard> {
         self.ctx.request.check(heard)
     }
 
@@ -201,7 +199,7 @@ impl Dialog {
             DialogState::Prompted(asked) => (asked.text().to_owned(), asked.echo(), false, Submit::Answer),
             DialogState::Starting(()) => (shown(), false, false, Submit::Answer),
             DialogState::Eager(_) | DialogState::Checking(()) => (shown(), false, true, Submit::Wait),
-            DialogState::Waiting(()) => (shown(), false, false, Submit::Wait),
+            DialogState::Waiting(()) => (shown(), false, false, Submit::Answer),
             DialogState::Unavailable(()) => (shown(), false, false, Submit::TryAgain),
         };
         let note = c.note.as_ref().map(|n| match n {
@@ -273,17 +271,20 @@ impl<'s> DialogAny<'s> {
     ///
     /// ```
     /// use aizome_shell::auth::dialog::{Dialog, DialogAny};
-    /// use aizome_sys::polkit::{Heard, Talk};
-    /// use aizome_typestate::Fresh;
-    /// fn check(dialog: &Dialog, heard: Heard) -> Option<Fresh<Talk, Heard>> {
+    /// use aizome_sys::polkit::{Checked, Heard};
+    /// fn check(dialog: &Dialog, heard: Heard) -> Option<Checked> {
     ///     dialog.check(heard).ok()
     /// }
-    /// fn hear<'s>(dialog: DialogAny<'s>, fresh: Fresh<Talk, Heard>) -> DialogAny<'s> {
-    ///     dialog.heard(fresh)
+    /// fn hear<'s>(dialog: DialogAny<'s>, checked: Checked) -> DialogAny<'s> {
+    ///     dialog.heard(checked)
     /// }
     /// ```
-    pub fn heard(self, fresh: Fresh<Talk, Heard>) -> DialogAny<'s> {
-        match said(fresh) {
+    pub fn heard(self, checked: Checked) -> DialogAny<'s> {
+        // Checked against another dialog's request: not this one's to apply.
+        if checked.request() != self.ctx().request.id() {
+            return self;
+        }
+        match said(checked) {
             Said::Prompt(asked) => match self {
                 DialogAny::Eager(eager) => eager.asked(asked),
                 s @ (DialogAny::Starting(_)
@@ -350,6 +351,27 @@ impl<'s> Starting<'s> {
     }
 }
 
+impl<'s> Waiting<'s> {
+    /// The person submitted while the agent waits to try again: the
+    /// password waits for the next attempt's first prompt.
+    pub fn submit(self) -> Eager<'s> {
+        let password = std::mem::take(&mut self.ctx.password);
+        Eager::enter(self.ctx, Held(password))
+    }
+}
+
+/// What the line under the field says about an answer that wasn't sent.
+fn unsent(why: Unsendable) -> Note {
+    Note::Error(
+        match why {
+            Unsendable::LineBreak => "The answer can't contain a line break.",
+            Unsendable::Nul => "The answer can't contain that character.",
+            Unsendable::TooLong => "The answer is too long.",
+        }
+        .into(),
+    )
+}
+
 impl<'s> Eager<'s> {
     /// The helper asked: a hidden prompt takes the held password; a visible
     /// one (a user name) is shown, and the password isn't put in its field.
@@ -357,21 +379,35 @@ impl<'s> Eager<'s> {
         let Eager { ctx, data: Held(password) } = self;
         ctx.prompt = Some(asked.text().to_owned());
         if asked.echo() {
-            Prompted::enter(ctx, asked).into()
-        } else {
-            ctx.request.respond(asked, &password);
-            Checking::enter(ctx, ()).into()
+            return Prompted::enter(ctx, asked).into();
+        }
+        match asked.answer(&password) {
+            Ok(()) => Checking::enter(ctx, ()).into(),
+            Err(Unsent { asked, why }) => {
+                ctx.note = Some(unsent(why));
+                Prompted::enter(ctx, asked).into()
+            }
         }
     }
 }
 
 impl<'s> Prompted<'s> {
-    /// The person answered the prompt shown.
-    pub fn submit(self) -> Checking<'s> {
-        let password = std::mem::take(&mut self.ctx.password);
-        self.ctx.note = None;
-        self.ctx.request.respond(self.data, &password);
-        Checking::enter(self.ctx, ())
+    /// The person answered the prompt shown, or the answer can't be sent
+    /// and the prompt stays, saying why.
+    pub fn submit(self) -> Result<Checking<'s>, Prompted<'s>> {
+        let Prompted { ctx, data: asked } = self;
+        let password = std::mem::take(&mut ctx.password);
+        match asked.answer(&password) {
+            Ok(()) => {
+                ctx.note = None;
+                Ok(Checking::enter(ctx, ()))
+            }
+            Err(Unsent { asked, why }) => {
+                ctx.password = password;
+                ctx.note = Some(unsent(why));
+                Err(Prompted::enter(ctx, asked))
+            }
+        }
     }
 }
 

@@ -193,7 +193,7 @@ fn answering_ui(answers: Vec<&'static str>, events: Arc<Mutex<Vec<String>>>) -> 
                                 std::thread::spawn(move || request.cancel());
                             }
                             Some(answer) => {
-                                std::thread::spawn(move || request.respond(asked, answer));
+                                std::thread::spawn(move || asked.answer(answer).unwrap());
                             }
                         }
                     }
@@ -253,6 +253,7 @@ fn the_conversation_retries_after_a_wrong_password() {
             "prompt Password:  false".into(),
             "error Authentication failure".into(),
             "refused".into(),
+            "retrying".into(),
             format!("info Authenticating {user}"),
             "prompt Password:  false".into(),
             "done true".into(),
@@ -552,10 +553,10 @@ fn an_answer_goes_only_to_the_prompt_it_answers() {
                         if asked.text().starts_with("Password") {
                             // Return pressed twice: the second answer is
                             // for a prompt already answered.
-                            request.respond(asked.clone(), "secret");
-                            request.respond(asked, "secret");
+                            asked.clone().answer("secret").unwrap();
+                            asked.answer("secret").unwrap();
                         } else {
-                            request.respond(asked, "123456");
+                            asked.answer("123456").unwrap();
                         }
                     });
                 }
@@ -569,4 +570,195 @@ fn an_answer_goes_only_to_the_prompt_it_answers() {
     let answers = std::fs::read_to_string(dir.join("answers")).unwrap();
     assert_eq!(answers.trim(), "secret,123456", "the second prompt got its own answer");
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// A helper script in a fresh directory of its own.
+fn script_in(body: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("aizome-sys-polkit-{}-{}", std::process::id(), rand_suffix()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let script = dir.join("polkit-agent-helper-1");
+    std::fs::write(&script, body).unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    script
+}
+
+/// polkitd's call for `cookie`, on a thread of its own.
+fn ask(polkitd: &zbus::blocking::Connection, agent: &str, cookie: &'static str) -> std::thread::JoinHandle<bool> {
+    let (polkitd, agent) = (polkitd.clone(), agent.to_owned());
+    std::thread::spawn(move || begin(&polkitd, &agent, cookie).is_ok())
+}
+
+/// The review's cross-request probe: two requests at prompts, and the
+/// person answers A's. The answer goes to A's helper, never B's, which
+/// polkitd would then authorize. (On the base, `b.respond("secret")` put
+/// A's password in B's helper and polkitd authorized B.)
+#[test]
+fn an_answer_reaches_only_its_own_requests_helper() {
+    let bus = test_bus!();
+    if !has_passwd_entry() {
+        eprintln!("skipping: no passwd entry for this uid");
+        return;
+    }
+    let (polkitd, log) = serve_polkitd(&bus);
+    let script = script_in(
+        "#!/bin/sh\nread cookie\necho \"PAM_PROMPT_ECHO_OFF Password: \"\nread password\n\
+         echo \"$cookie got $password\" >> \"$(dirname \"$0\")/got\"\n\
+         if [ \"$password\" = secret ]; then echo SUCCESS; else echo FAILURE; fi\n",
+    );
+    type Seen = Arc<Mutex<Vec<(AuthRequest, Option<aizome_sys::polkit::Asked>)>>>;
+    let seen: Seen = Arc::default();
+    let agent_bus = bus.bus();
+    let agent_name = agent_bus.unique_name().unwrap();
+    let _agent = PolkitAgent::register_with(agent_bus, "7".into(), Helper::Program(script.clone()), {
+        let seen = seen.clone();
+        move |event| match event {
+            AuthEvent::Begin(r) => {
+                let id = r.default_identity().cloned().unwrap();
+                seen.lock().unwrap().push((r.clone(), None));
+                std::thread::spawn(move || r.authenticate(&id));
+            }
+            AuthEvent::Heard(heard) => {
+                for (r, asked) in seen.lock().unwrap().iter_mut() {
+                    if let Ok(fresh) = r.check(heard.clone())
+                        && let Said::Prompt(a) = said(fresh)
+                    {
+                        *asked = Some(a);
+                    }
+                }
+            }
+            AuthEvent::Done { .. } => {}
+        }
+    })
+    .unwrap();
+    assert!(eventually(|| log.lock().unwrap().agents.len() == 1));
+    let a = ask(&polkitd, &agent_name, "cookie-A");
+    assert!(eventually(|| seen.lock().unwrap().first().is_some_and(|(_, a)| a.is_some())));
+    let b = ask(&polkitd, &agent_name, "cookie-B");
+    assert!(eventually(|| seen.lock().unwrap().get(1).is_some_and(|(_, a)| a.is_some())));
+    let (asked_a, req_b) = {
+        let s = seen.lock().unwrap();
+        (s[0].1.clone().unwrap(), s[1].0.clone())
+    };
+    // Both requests' first prompts are prompt 1 of conversation 1.
+    asked_a.answer("secret").unwrap();
+    let authorized_a = a.join().unwrap();
+    req_b.cancel();
+    let authorized_b = b.join().unwrap();
+    let got = std::fs::read_to_string(script.parent().unwrap().join("got")).unwrap_or_default();
+    eprintln!("helpers got {got:?}; A -> {authorized_a}; B -> {authorized_b}");
+    assert_eq!(got.trim(), "cookie-A got secret");
+    assert!(authorized_a && !authorized_b);
+    std::fs::remove_dir_all(script.parent().unwrap()).unwrap();
+}
+
+/// The review's spin probe: a UI that answers every prompt itself, and a
+/// helper that refuses at once. Refusals count against the floor too, so
+/// helpers start at 0, 0.5 and 1.5 s, not in a loop. (On the branch before
+/// this, 398 started in 2 s.)
+#[test]
+fn a_ui_that_answers_every_prompt_cannot_spin_the_helper() {
+    let bus = test_bus!();
+    if !has_passwd_entry() {
+        eprintln!("skipping: no passwd entry for this uid");
+        return;
+    }
+    let (polkitd, log) = serve_polkitd(&bus);
+    let script = script_in(
+        "#!/bin/sh\nread cookie\necho x >> \"$(dirname \"$0\")/spawns\"\necho \"PAM_PROMPT_ECHO_OFF Password: \"\n\
+         read password\necho FAILURE\n",
+    );
+    let current = Arc::new(Mutex::new(None::<AuthRequest>));
+    let agent_bus = bus.bus();
+    let agent_name = agent_bus.unique_name().unwrap();
+    let _agent = PolkitAgent::register_with(agent_bus, "7".into(), Helper::Program(script.clone()), {
+        let current = current.clone();
+        move |event| match event {
+            AuthEvent::Begin(r) => {
+                let id = r.default_identity().cloned().unwrap();
+                *current.lock().unwrap() = Some(r.clone());
+                std::thread::spawn(move || r.authenticate(&id));
+            }
+            AuthEvent::Heard(heard) => {
+                let Some(r) = current.lock().unwrap().clone() else { return };
+                if let Ok(fresh) = r.check(heard)
+                    && let Said::Prompt(asked) = said(fresh)
+                {
+                    std::thread::spawn(move || asked.answer("guess").unwrap());
+                }
+            }
+            AuthEvent::Done { .. } => {}
+        }
+    })
+    .unwrap();
+    assert!(eventually(|| log.lock().unwrap().agents.len() == 1));
+    let call = ask(&polkitd, &agent_name, "cookie-spin");
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    let spawns = std::fs::read_to_string(script.parent().unwrap().join("spawns")).unwrap_or_default().lines().count();
+    current.lock().unwrap().clone().unwrap().cancel();
+    assert!(!call.join().unwrap());
+    eprintln!("a UI answering every prompt: {spawns} helpers started in 2 s");
+    std::fs::remove_dir_all(script.parent().unwrap()).unwrap();
+    assert!((1..=3).contains(&spawns), "{spawns} helpers started in 2 s by a UI that answers every prompt");
+}
+
+/// The review's newline and long-answer probes: an answer the helper can't
+/// read as one line is refused before it's written, and the caller isn't
+/// kept waiting on the helper's pipe.
+#[test]
+fn an_answer_the_helper_cannot_read_as_one_line_is_refused() {
+    let bus = test_bus!();
+    if !has_passwd_entry() {
+        eprintln!("skipping: no passwd entry for this uid");
+        return;
+    }
+    let (polkitd, log) = serve_polkitd(&bus);
+    let script = script_in(
+        "#!/bin/sh\nread cookie\necho \"PAM_PROMPT_ECHO_OFF Password: \"\nread p1\n\
+         echo \"PAM_PROMPT_ECHO_OFF Verification code: \"\nread p2\n\
+         echo \"p1=$p1 p2=$p2\" > \"$(dirname \"$0\")/got\"\n\
+         if [ \"$p1\" = pw ] && [ \"$p2\" = 123456 ]; then echo SUCCESS; else echo FAILURE; fi\n",
+    );
+    let prompts = Arc::new(Mutex::new(Vec::<aizome_sys::polkit::Asked>::new()));
+    let current = Arc::new(Mutex::new(None::<AuthRequest>));
+    let agent_bus = bus.bus();
+    let agent_name = agent_bus.unique_name().unwrap();
+    let _agent = PolkitAgent::register_with(agent_bus, "7".into(), Helper::Program(script.clone()), {
+        let (prompts, current) = (prompts.clone(), current.clone());
+        move |event| match event {
+            AuthEvent::Begin(r) => {
+                let id = r.default_identity().cloned().unwrap();
+                *current.lock().unwrap() = Some(r.clone());
+                std::thread::spawn(move || r.authenticate(&id));
+            }
+            AuthEvent::Heard(heard) => {
+                let Some(r) = current.lock().unwrap().clone() else { return };
+                if let Ok(fresh) = r.check(heard)
+                    && let Said::Prompt(asked) = said(fresh)
+                {
+                    prompts.lock().unwrap().push(asked);
+                }
+            }
+            AuthEvent::Done { .. } => {}
+        }
+    })
+    .unwrap();
+    assert!(eventually(|| log.lock().unwrap().agents.len() == 1));
+    let call = ask(&polkitd, &agent_name, "cookie-lines");
+    assert!(eventually(|| prompts.lock().unwrap().len() == 1));
+    let asked = prompts.lock().unwrap()[0].clone();
+    use aizome_sys::polkit::Unsendable;
+    let refused = |text: &str| asked.clone().answer(text).map_err(|unsent| unsent.why);
+    assert_eq!(refused("pw\n123456"), Err(Unsendable::LineBreak));
+    assert_eq!(refused("pw\r"), Err(Unsendable::LineBreak));
+    assert_eq!(refused("pw\0rest"), Err(Unsendable::Nul));
+    let started = std::time::Instant::now();
+    assert_eq!(refused(&"a".repeat(300 * 1024)), Err(Unsendable::TooLong));
+    assert!(started.elapsed() < std::time::Duration::from_millis(100));
+    assert_eq!(refused(&"a".repeat(aizome_sys::polkit::MAX_ANSWER)), Ok(()), "the longest answer is taken");
+    // That answer went to the first prompt; the second still waits.
+    assert!(eventually(|| prompts.lock().unwrap().len() == 2));
+    current.lock().unwrap().clone().unwrap().cancel();
+    assert!(!call.join().unwrap(), "nothing answered the second prompt");
+    assert!(!script.parent().unwrap().join("got").exists());
+    std::fs::remove_dir_all(script.parent().unwrap()).unwrap();
 }
