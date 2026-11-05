@@ -1899,6 +1899,16 @@ speed, and Stop/close cleanup are distinct evidence from parser and
 lifecycle tests. These checks do not qualify a Sekka ISO or physical
 hearing-accessibility deployment.
 
+Original 1440×1000 screenshots from that private headless component session:
+[system-output captions](docs/test-results/koe-system-captions-2026-11-05.png)
+use whisper.cpp's JFK sample through the null sink;
+[generated lyrics](docs/test-results/utsushi-generated-lyrics-2026-11-05.png)
+use [Bautsch's CC0 sung Auld Lang Syne](https://commons.wikimedia.org/wiki/File:AuldLangSyne.ogg),
+Large v3 Turbo and 0.5× playback while the build host was busy. The images
+are unaltered; recognition errors remain visible. They show working
+surfaces and wrapping, not word-perfect transcription or guaranteed live
+latency.
+
 ### Sukumo
 
 Sukumo, Aizome's toolkit, is in `desktop/aizome/sukumo`: the Wayland engine
