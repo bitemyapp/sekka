@@ -13,4 +13,10 @@ disallowed-methods = [
   { path = "gpui::App::dispatch_action", reason = "presses dialogs' buttons for the program; only a person presses OK" },
   { path = "gpui::FocusHandle::dispatch_action", reason = "presses dialogs' buttons for the program; only a person presses OK" },
   { path = "gpui::PlatformInputHandler::dispatch_input", reason = "types text for the program" },
+  # Windows' dock (jump list) menu: its items' actions reach GPUI's own
+  # App::dispatch_action, and perform_dock_menu_action runs one for the
+  # program. The window has no dock menu, so neither sets one.
+  { path = "gpui::App::set_dock_menu", reason = "a dock menu's action is dispatched for the program (perform_dock_menu_action)" },
+  { path = "gpui::App::update_jump_list", reason = "sets the dock menu on Windows, whose actions the program can run" },
+  { path = "gpui::App::perform_dock_menu_action", reason = "dispatches a dock menu item's action for the program" },
 ]

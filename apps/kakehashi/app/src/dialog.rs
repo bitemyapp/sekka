@@ -39,7 +39,9 @@
 //!
 //! What no type rules out, and a lint does: GPUI's public input API.
 //! `Window::dispatch_action`, `dispatch_keystroke` and `dispatch_event`,
-//! `App::dispatch_action` and `FocusHandle::dispatch_action` would let the
+//! `App::dispatch_action` and `FocusHandle::dispatch_action`, and on Windows a
+//! dock menu (`App::set_dock_menu`, `update_jump_list`) whose item
+//! `App::perform_dock_menu_action` runs, would let the
 //! window's code press OK itself (the dialog's `Confirm` action, an Enter
 //! keystroke, a synthetic click). `app/clippy.toml` denies them, this
 //! library and the binary forbid the lint, and the Nix package's check runs
