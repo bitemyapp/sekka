@@ -2225,12 +2225,18 @@ impl Core {
         let Some(w) = self.wins.get_mut(&win) else { return };
         let active = w.active.take().and_then(|a| w.tree.get(a));
         let ev = Event::PointerUp { pos: p, button: PointerButton::Left, mods };
+        // Nothing under the drags-only widget took the press: the release
+        // goes to what's under the pointer now, which no press began on, so
+        // it agrees to nothing.
+        let unpressed = active.is_none();
         let target = active.or_else(|| w.tree.path_under(p, w.modal()).last().copied());
         if let Some(i) = target {
             if w.tree.nodes[i].widget.hover_paints() {
                 platform.invalidate(win, w.tree.nodes[i].own_rect());
             }
+            self.unpressed_release = unpressed;
             self.bubble(win, i, &ev, platform);
+            self.unpressed_release = false;
         }
     }
 
