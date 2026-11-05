@@ -58,6 +58,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — data-loss consequences, several on-disk phases, outcome decided by a far-away constructor argument
 - **Suspected bug:** Put Back (and Undo of Move to Trash, `undo.rs:167`) runs `restore` with `trash: None`, so when an item of that name is now at the original location and the person picks Replace (the sheet says "Replacing moves the one there to the Trash", `sheets.rs:322-326`), the newer item is permanently deleted by `remove_quietly` (`transfer.rs:469`) (confidence: high)
 - **Reproduction:** Confirmed (integration): [test and output](reproductions.md#hako-05)
+- **Follow-up:** reified as typestate in [#290](https://github.com/bitemyapp/sekka/pull/290). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="hako-06"></a>
 
@@ -70,6 +71,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — the module's "a move deletes only what arrived" promise (`fsops/mod.rs:10-15`) rests on implicit bookkeeping across a recursion
 - **Suspected bug:** in a cross-filesystem move, when a nested folder's `sync_dir` fails (`transfer.rs:758-760`, e.g. EIO on a flaky USB stick) the folder is reported as "couldn't be written safely", but the files under it were already pushed to `arrived.leaves`; if the top-level partial and its parent still sync, `place` deletes those source files (`transfer.rs:543-551`), emptying a source folder the report says was kept (confidence: medium)
 - **Reproduction:** Confirmed (integration): [test and output](reproductions.md#hako-06)
+- **Follow-up:** reified as typestate in [#290](https://github.com/bitemyapp/sekka/pull/290). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="hako-07"></a>
 
@@ -92,6 +94,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — persisted multi-file phases with crash windows; a suspected bug
 - **Suspected bug:** Put Back of a folder onto an existing folder with Merge, skipping a conflicting child: `merge` returns Ok, `place_top` reports Done, and `restore` calls `trash.forget(entry)` (`transfer.rs:164-166`) though the skipped child is still in `files/<name>/`; its info is gone, so it lists as an orphan of unknown origin that Put Back refuses ("where it came from isn't known", `transfer.rs:138`) (confidence: high)
 - **Reproduction:** Confirmed (integration): [test and output](reproductions.md#hako-08)
+- **Follow-up:** reified as typestate in [#290](https://github.com/bitemyapp/sekka/pull/290). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="hako-09"></a>
 
@@ -104,6 +107,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — history state split between stacks and running jobs, user-visible ordering
 - **Suspected bug:** an undo that fails or is stopped (rename back onto a name taken since, or Stop at a move's conflict prompt) yields an empty inverse that `undone` discards (`undo.rs:108`), so the step is gone from both stacks and the next ⌘Z silently undoes the step before it (confidence: medium)
 - **Reproduction:** Confirmed (integration): [test and output](reproductions.md#hako-09)
+- **Follow-up:** reified as typestate in [#290](https://github.com/bitemyapp/sekka/pull/290). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="hako-10"></a>
 

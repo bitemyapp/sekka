@@ -150,6 +150,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — a data-loss guard; the gaps are in what the token records
 - **Suspected bug:** a UI that holds a `Confirm<NewPartitionTable>` made for USB stick A (32 GB, GPT) while A is swapped for an identical-size partitioned stick B that comes up as `sdb` again: path, device, size and empty id fields all match, so B is wiped (confidence: low; no app makes these tokens yet)
 - **Reproduction:** Confirmed (unit): [test and output](reproductions.md#sya-13)
+- **Follow-up:** reified as typestate in [#290](https://github.com/bitemyapp/sekka/pull/290). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="sya-14"></a>
 

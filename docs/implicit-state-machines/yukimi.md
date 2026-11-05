@@ -29,6 +29,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** after a Yukimi activation fails past the commit point (`switch-to-configuration` or `nix-env --set` failing at `apps/yukimi/yukimi-helper/src/main.rs:984`), the receipt stays `activating` for system S1; if the user repairs things with `nixos-rebuild switch` to a different system S2 and even reboots into it, `system_state` still returns Unknown "Activation did not finish successfully" on every read (`apps/yukimi/crates/yukimi-system/src/completion.rs:484-495`) until another Yukimi operation rewrites the receipt. (confidence: medium)
 - **Related:** privileged helper `apps/yukimi/yukimi-helper/src/main.rs` (sole writer); GUI `desktop/aizome/apps/yukimi/src/model.rs:163`; CLI `apps/yukimi/yukimi-helper/src/bin/sekka-update.rs:17`
 - **Reproduction:** Confirmed (unit): [test and output](reproductions.md#yuk-02)
+- **Follow-up:** reified as typestate in [#290](https://github.com/bitemyapp/sekka/pull/290). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="yuk-03"></a>
 
@@ -107,6 +108,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** `--channels` runs `nix-channel --update` (`apps/yukimi/yukimi-helper/src/main.rs:951-956`), but root's channels profile isn't in the backup, so after a failed or stopped build only files are put back: the channels stay advanced, the Updates page calls them current, and the next unrelated change (installing a package) silently rebuilds the whole system on the new channel. (confidence: medium)
 - **Related:** GUI `desktop/aizome/apps/yukimi/src/ops.rs:186` (`helper_args`) and `:289` (prepared lock); CLI `apps/yukimi/yukimi-helper/src/bin/sekka-update.rs:74`
 - **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#yuk-09)
+- **Follow-up:** reified as typestate in [#290](https://github.com/bitemyapp/sekka/pull/290). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="yuk-10"></a>
 
@@ -120,6 +122,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** return to generation N, run `nix-collect-garbage -d` (deletes N+1…, leaves `generation-<N+1>`), then `nixos-rebuild switch` makes a new N+1; the next Yukimi change calls `save_configuration(N+1, false)` and keeps the stale copy (`apps/yukimi/yukimi-helper/src/main.rs:329-331`), so History and Updates show the old build's revisions and a later return to N+1 restores another build's flake.lock and configuration. (confidence: low)
 - **Related:** GUI `desktop/aizome/apps/yukimi/src/update_history.rs:17`
 - **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#yuk-10)
+- **Follow-up:** reified as typestate in [#290](https://github.com/bitemyapp/sekka/pull/290). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="yuk-11"></a>
 
@@ -132,6 +135,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — irreversible steps before an uncancellable commit point, suspected bug
 - **Suspected bug:** Clean Up with "older than a week", then Stop during the long `nix-store --gc`: `wait()` returns "Stopped" (`apps/yukimi/yukimi-helper/src/main.rs:1095`) before `commit()` and `switch-to-configuration boot` (`:1106-1107`), so the generations are deleted but the boot menu still lists them; the next collection removes their closures and those entries no longer boot. The same happens if GC fails. (confidence: medium)
 - **Reproduction:** Confirmed (end-to-end): [test and output](reproductions.md#yuk-11)
+- **Follow-up:** reified as typestate in [#290](https://github.com/bitemyapp/sekka/pull/290). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="yuk-12"></a>
 

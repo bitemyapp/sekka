@@ -40,6 +40,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** when the helper dies by a signal mid-write on Linux (OOM killer, `kill`), `elevate::run` returns `Ran::Failed("the helper was killed")` (`apps/kakehashi/app/src/elevate.rs:51`) and `JobEnded` maps every `Ran::Failed` to `Failed { touched: false }` (`apps/kakehashi/app/src/view.rs:319`) whatever the last `Running(Writing|Verifying)` stage was, so the window says "Not written" without the "partly written" warning (confidence: high)
 - **Related:** helper side `apps/kakehashi/helper/src/main.rs:111` and `apps/kakehashi/core/src/write.rs:171` (KTL-12)
 - **Reproduction:** Confirmed (unit): [test and output](reproductions.md#ktl-03)
+- **Follow-up:** reified as typestate in [#290](https://github.com/bitemyapp/sekka/pull/290). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="ktl-04"></a>
 
@@ -52,6 +53,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — suspected bug; the selection feeds an erase and is keyed by a reusable name
 - **Suspected bug:** `confirm` describes the drive captured when the dialog opens (`apps/kakehashi/app/src/view.rs:479-490`), but OK calls `start_write` (`apps/kakehashi/app/src/view.rs:502`), which re-reads `chosen_drive()` (`apps/kakehashi/app/src/view.rs:511`) from a list that keeps refreshing under the modal; if the stick is swapped for another that gets the same name (`sdb`, `disk4`) between two refreshes, the plan and the helper's `still_there` both use the new drive, and a drive other than the one named in "Erase …?" is erased (confidence: medium)
 - **Reproduction:** Confirmed (integration): [test and output](reproductions.md#ktl-04)
+- **Follow-up:** reified as typestate in [#290](https://github.com/bitemyapp/sekka/pull/290). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="ktl-05"></a>
 

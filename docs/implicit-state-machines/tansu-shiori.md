@@ -273,6 +273,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** open Format… on a USB stick's partition, then unplug the stick (or let another tool repartition the disk). `refresh` falls back to the first drive (`desktop/aizome/apps/tansu/src/app.rs:308-311`), so the open sheet's `seg` now indexes that drive's layout. The sheet's title quietly changes to the other partition (`desktop/aizome/apps/tansu/src/ui/sheets.rs:137-140`), and Add to Pending queues a format of it (`desktop/aizome/apps/tansu/src/app.rs:732`); if the fallback is another removable disk, Apply asks for no typed name. Resize, Label and Flags behave the same, and Unlock tries the passphrase on another volume (`:871-873`). (confidence: medium)
 - **Reify:** High — index-based identity across a mutable layout, with data-loss consequences
 - **Reproduction:** Confirmed (integration): [test and output](reproductions.md#tsh-25)
+- **Follow-up:** reified as typestate in [#290](https://github.com/bitemyapp/sekka/pull/290). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="tsh-26"></a>
 
