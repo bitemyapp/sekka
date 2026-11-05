@@ -261,8 +261,8 @@ impl DisksState {
 }
 
 /// A device's identity as the person saw it, compared as `Op` needs it
-/// ([`Change::HOLDS`]) with a fresh reading. Private: a review made for one
-/// operation can't be rebuilt as another's.
+/// ([`Change::HOLDS`]) with a fresh reading. Private, so a confirmation
+/// made for one operation can't be rebuilt as another's.
 struct Seen<Op> {
     identity: Identity,
     op: PhantomData<fn() -> Op>,
@@ -331,8 +331,13 @@ impl<Op: Change, B> Confirm<Op, B> {
     /// }
     /// ```
     ///
-    /// and a review made for one operation can't be rebuilt for another
-    /// (one held only to a partition's place, for its flags, as a format's):
+    /// and a confirmation made for one operation can't be rebuilt as another's
+    /// (one held only to a partition's place, for its flags, as a format's): its
+    /// review is private, and its brand can't be moved out. An [`Identity`]
+    /// carries no operation, though: any `Confirm<Op, B>` takes one, with any
+    /// brand its caller can make. So the caller's brand must be made only
+    /// where each operation is reviewed, for that operation (Tansu: only
+    /// `plan.rs` makes `Queued`, of each operation's own kind).
     ///
     /// ```compile_fail,E0603
     /// use aizome_sys::disks::{Format, Identity};

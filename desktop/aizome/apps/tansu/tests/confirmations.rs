@@ -14,6 +14,7 @@ use aizome_sys::disks::{
     Confirm, CreatePartition, DeletePartition, DisksState, Erase, Format, FormatSpec, NewPartitionTable,
     PartitionEntry, Relabel, Repair, Resize, SelfTest, SmartAttribute, TableKind,
 };
+use tansu::app::Opening;
 use tansu::backend::Backend;
 use tansu::layout::{Flags, Layout, Sel, Volume};
 use tansu::mock::Mock;
@@ -137,7 +138,7 @@ const STICK: &str = "/org/freedesktop/UDisks2/block_devices/sdc";
 
 fn at<'l>(state: &DisksState, layout: &'l Layout, name: &str) -> tansu::layout::Here<'l> {
     let seg = layout.segs.iter().find(|s| s.short_name() == name).expect(name);
-    layout.locate(state, &layout.choose(state, &Sel::of(seg)).expect(name)).expect(name)
+    layout.locate(state, &layout.choose(state, &Sel::of(seg), &Opening::for_tests()).expect(name)).expect(name)
 }
 
 #[test]

@@ -132,7 +132,7 @@ impl Run {
                 op: op.clone(),
                 words: plan.words(op, state),
                 status: Status::Waiting,
-                agreed: state.block(&op.target).cloned(),
+                agreed: state.block(op.target()).cloned(),
                 made: None,
             })
             .collect();
@@ -156,13 +156,13 @@ impl Run {
 
     /// The ids of the operations that ran to the end.
     pub fn done_ids(&self) -> Vec<u64> {
-        self.items.iter().filter(|i| i.status == Status::Done).map(|i| i.op.id).collect()
+        self.items.iter().filter(|i| i.status == Status::Done).map(|i| i.op.id()).collect()
     }
 
     /// The device the running operation works on (to find its UDisks job).
     pub fn working_on(&self) -> Option<&str> {
         let item = self.items.get(self.current)?;
-        Some(item.made.as_ref().map_or(item.op.target.as_str(), |m| m.path()))
+        Some(item.made.as_ref().map_or(item.op.target(), |m| m.path()))
     }
 
     /// Move the run along as far as it can go now: collect finished
@@ -259,10 +259,10 @@ impl Run {
         let state = backend.snapshot();
         let step = self.step;
         let item = &mut self.items[self.current];
-        let target = item.op.target.clone();
+        let target = item.op.target().to_owned();
         let unit = |t: Task<()>, e: Option<Expect>, what: &str| Ok(Step::Start(InFlight::Unit(t), e, what.to_owned()));
         let unconfirmed = || no_token(&item.op);
-        match item.op.kind.clone() {
+        match item.op.kind().clone() {
             OpKind::NewTable { kind } => match step {
                 0 => {
                     let Agreement::NewTable(c) = item.op.agreement() else { return Err(unconfirmed()) };
@@ -420,7 +420,7 @@ impl Run {
 }
 
 fn no_token(op: &Op) -> String {
-    format!("{} wasn't confirmed as it is now: review and apply again.", op.device)
+    format!("{} wasn't confirmed as it is now: review and apply again.", op.device())
 }
 
 impl Run {

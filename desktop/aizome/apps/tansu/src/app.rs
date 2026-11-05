@@ -400,9 +400,9 @@ impl Tansu {
     pub fn disks_to_type(&self) -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
         for op in self.plan.ops.iter().filter(|o| o.is_destructive()) {
-            let entry = self.drives.iter().find(|e| e.disk.as_deref() == Some(op.disk.as_str()));
+            let entry = self.drives.iter().find(|e| e.disk.as_deref() == Some(op.disk()));
             if entry.is_some_and(|e| !e.removable) {
-                let name = op.disk_device.trim_start_matches("/dev/").to_owned();
+                let name = op.disk_device().trim_start_matches("/dev/").to_owned();
                 if !out.contains(&name) {
                     out.push(name);
                 }
@@ -523,7 +523,7 @@ impl Tansu {
         let run = self.run.as_ref().expect("a run");
         let done = run.done_ids();
         let outcome = run.outcome.clone();
-        self.plan.ops.retain(|o| !done.contains(&o.id));
+        self.plan.ops.retain(|o| !done.contains(&o.id()));
         self.history.clear();
         if let Some(t) = self.run_timer.take() {
             cx.cancel(t);
@@ -540,141 +540,6 @@ impl Tansu {
         }
         self.seen = u64::MAX;
         self.refresh();
-    }
-
-    fn act(&mut self, action: Action, cx: &mut Cx<Msg>) {
-        let i = match self.can(action) {
-            Ok(i) => i,
-            Err(e) => {
-                self.say(e, true);
-                return;
-            }
-        };
-        let seg = self.layout.segs[i].clone();
-        let name = seg.short_name();
-        let block = seg.block().map(str::to_owned);
-        let b = self.backend.clone();
-        // What a sheet acts on once it's filled in: the segment as chosen
-        // now, found again when the person submits.
-        let Some(target) = self.sel.as_ref().and_then(|sel| self.layout.choose(&self.state, sel)) else {
-            self.say(format!("{name} is gone."), true);
-            return;
-        };
-        match action {
-            Action::Mount => {
-                if let Some(target) = self.mount_target(i) {
-                    self.start(
-                        format!("Mounting {name}…"),
-                        format!("{name} is mounted at {{}}."),
-                        BusyTask::Text(b.mount(&target)),
-                    );
-                }
-            }
-            Action::Unmount => {
-                if let Some(target) = self.mount_target(i) {
-                    self.start(
-                        format!("Unmounting {name}…"),
-                        format!("{name} is unmounted."),
-                        BusyTask::Unit(b.unmount(&target)),
-                    );
-                }
-            }
-            Action::Lock => {
-                if let Some(p) = block {
-                    self.start(format!("Locking {name}…"), format!("{name} is locked."), BusyTask::Unit(b.lock(&p)));
-                }
-            }
-            Action::SwapOn | Action::SwapOff => {
-                if let Some(p) = block {
-                    let on = action == Action::SwapOn;
-                    let done = if on {
-                        format!("{name} is in use as swap.")
-                    } else {
-                        format!("{name} is no longer used as swap.")
-                    };
-                    self.start(
-                        format!("{} {name}…", if on { "Turning on swap on" } else { "Turning off swap on" }),
-                        done,
-                        BusyTask::Unit(b.set_swap(&p, on)),
-                    );
-                }
-            }
-            Action::Check => {
-                if let Some(p) = block {
-                    self.start(
-                        format!("Checking {name}…"),
-                        format!("{name} is consistent."),
-                        BusyTask::Check(b.check(&p)),
-                    );
-                }
-            }
-            Action::Unlock => {
-                self.open_sheet(SheetKind::Unlock { target, pass: String::new() }, cx, Some("unlock-pass"))
-            }
-            Action::New => {
-                let size = seg.size;
-                let text = size_text(size, 1);
-                let form = CreateForm {
-                    target,
-                    offset: seg.offset,
-                    max: seg.size,
-                    size,
-                    size_text: text,
-                    size_error: None,
-                    unit: 1,
-                    fs: 0,
-                    label: String::new(),
-                    name: String::new(),
-                    encrypt: false,
-                    pass: String::new(),
-                    pass2: String::new(),
-                };
-                self.open_sheet(SheetKind::Create(form), cx, Some("create-size"));
-            }
-            Action::Delete => {
-                self.queue(|p, s, l| p.delete(l.locate(s, &target)?));
-            }
-            Action::Format => {
-                let current = fs::FORMATS.iter().position(|f| *f == seg.fs).unwrap_or(0);
-                let form = FormatForm {
-                    target,
-                    fs: current,
-                    label: if seg.is_locked() { String::new() } else { seg.label.clone() },
-                    erase: false,
-                    encrypt: seg.fs == "crypto_LUKS",
-                    pass: String::new(),
-                    pass2: String::new(),
-                };
-                self.open_sheet(SheetKind::Format(form), cx, Some("format-label"));
-            }
-            Action::Resize => {
-                let last = self.last_used(&seg);
-                let (min, max) = self.plan.resize_range_knowing(&self.layout, i, last);
-                let unit = if seg.size >= 10_000_000_000 { 1 } else { 0 };
-                let form = ResizeForm {
-                    target,
-                    from: seg.size,
-                    min,
-                    max,
-                    size: seg.size,
-                    size_text: size_text(seg.size, unit),
-                    size_error: None,
-                    unit,
-                    last_used: last,
-                };
-                self.open_sheet(SheetKind::Resize(form), cx, Some("resize-size"));
-            }
-            Action::Label => {
-                self.open_sheet(SheetKind::Label { target, label: seg.label.clone() }, cx, Some("label-field"))
-            }
-            Action::Flags => {
-                let flags = Flags::of(&self.layout.table, &seg.type_id, seg.flag_bits);
-                self.open_sheet(SheetKind::Flags { target, flags }, cx, None);
-            }
-            Action::Repair => {
-                self.queue(|p, s, l| p.repair(l.locate(s, &target)?));
-            }
-        }
     }
 
     fn sheet_msg(&mut self, m: SheetMsg, cx: &mut Cx<Msg>) {
@@ -1119,20 +984,7 @@ impl Program for Tansu {
                 }
             }
             Msg::Do(a) => self.act(a, cx),
-            Msg::NewTable => match self
-                .can_new_table()
-                .and_then(|()| self.layout.choose_disk(&self.state).ok_or_else(|| "The disk is gone.".to_owned()))
-            {
-                Ok(target) => {
-                    let kind = if self.layout.table == "dos" && self.layout.size < (2u64 << 40) {
-                        TableKind::Dos
-                    } else {
-                        TableKind::Gpt
-                    };
-                    self.open_sheet(SheetKind::Table { target, kind }, cx, None);
-                }
-                Err(e) => self.say(e, true),
-            },
+            Msg::NewTable => self.open_new_table(cx),
             Msg::AttachImage => {
                 self.open_sheet(SheetKind::Attach { path: String::new(), read_only: true }, cx, Some("attach-path"))
             }
@@ -1152,7 +1004,7 @@ impl Program for Tansu {
             }
             Msg::PowerOff => {
                 if let Some(e) = self.entry().filter(|e| e.can_power_off).cloned() {
-                    if self.plan.ops.iter().any(|o| Some(&o.disk) == e.disk.as_ref()) {
+                    if self.plan.ops.iter().any(|o| Some(o.disk()) == e.disk.as_deref()) {
                         self.say("Apply or clear the pending operations on it first.", true);
                     } else {
                         let task = self.backend.power_off(&e.key);
@@ -1331,6 +1183,193 @@ impl Tansu {
         }
         (!fs.is_empty() && !self.state.supported_filesystems.iter().any(|s| s == fs))
             .then(|| format!("This system can't make {} filesystems.", crate::fs::name(fs)))
+    }
+}
+
+pub use opening::Opening;
+
+/// Where the person acts on what they see now: an action on the selection,
+/// which may open a sheet. Only here is an [`Opening`] made, and only with
+/// one is a [`Chosen`] made ([`Layout::choose`]), so a sheet's target is
+/// taken as the sheet opens, never when it is submitted (TSH-25: a sheet
+/// that resolved what it acts on at Submit acted on what had taken its
+/// place).
+mod opening {
+    use super::*;
+
+    /// The moment a sheet opens, or an action on the selection is taken at
+    /// once: what [`Layout::choose`] reads now is what the person is looking
+    /// at. Only this module makes one (and Tansu's own tests, with the
+    /// `test-util` feature, which the app isn't built with).
+    pub struct Opening(());
+
+    impl Opening {
+        /// For Tansu's own tests, which choose segments with no sheet.
+        #[cfg(any(test, feature = "test-util"))]
+        pub fn for_tests() -> Opening {
+            Opening(())
+        }
+    }
+
+    impl Tansu {
+        pub(super) fn act(&mut self, action: Action, cx: &mut Cx<Msg>) {
+            let opening = Opening(());
+            let i = match self.can(action) {
+                Ok(i) => i,
+                Err(e) => {
+                    self.say(e, true);
+                    return;
+                }
+            };
+            let seg = self.layout.segs[i].clone();
+            let name = seg.short_name();
+            let block = seg.block().map(str::to_owned);
+            let b = self.backend.clone();
+            // What a sheet acts on once it's filled in: the segment as chosen
+            // now, found again when the person submits.
+            let Some(target) = self.sel.as_ref().and_then(|sel| self.layout.choose(&self.state, sel, &opening)) else {
+                self.say(format!("{name} is gone."), true);
+                return;
+            };
+            match action {
+                Action::Mount => {
+                    if let Some(target) = self.mount_target(i) {
+                        self.start(
+                            format!("Mounting {name}…"),
+                            format!("{name} is mounted at {{}}."),
+                            BusyTask::Text(b.mount(&target)),
+                        );
+                    }
+                }
+                Action::Unmount => {
+                    if let Some(target) = self.mount_target(i) {
+                        self.start(
+                            format!("Unmounting {name}…"),
+                            format!("{name} is unmounted."),
+                            BusyTask::Unit(b.unmount(&target)),
+                        );
+                    }
+                }
+                Action::Lock => {
+                    if let Some(p) = block {
+                        self.start(
+                            format!("Locking {name}…"),
+                            format!("{name} is locked."),
+                            BusyTask::Unit(b.lock(&p)),
+                        );
+                    }
+                }
+                Action::SwapOn | Action::SwapOff => {
+                    if let Some(p) = block {
+                        let on = action == Action::SwapOn;
+                        let done = if on {
+                            format!("{name} is in use as swap.")
+                        } else {
+                            format!("{name} is no longer used as swap.")
+                        };
+                        self.start(
+                            format!("{} {name}…", if on { "Turning on swap on" } else { "Turning off swap on" }),
+                            done,
+                            BusyTask::Unit(b.set_swap(&p, on)),
+                        );
+                    }
+                }
+                Action::Check => {
+                    if let Some(p) = block {
+                        self.start(
+                            format!("Checking {name}…"),
+                            format!("{name} is consistent."),
+                            BusyTask::Check(b.check(&p)),
+                        );
+                    }
+                }
+                Action::Unlock => {
+                    self.open_sheet(SheetKind::Unlock { target, pass: String::new() }, cx, Some("unlock-pass"))
+                }
+                Action::New => {
+                    let size = seg.size;
+                    let text = size_text(size, 1);
+                    let form = CreateForm {
+                        target,
+                        offset: seg.offset,
+                        max: seg.size,
+                        size,
+                        size_text: text,
+                        size_error: None,
+                        unit: 1,
+                        fs: 0,
+                        label: String::new(),
+                        name: String::new(),
+                        encrypt: false,
+                        pass: String::new(),
+                        pass2: String::new(),
+                    };
+                    self.open_sheet(SheetKind::Create(form), cx, Some("create-size"));
+                }
+                Action::Delete => {
+                    self.queue(|p, s, l| p.delete(l.locate(s, &target)?));
+                }
+                Action::Format => {
+                    let current = fs::FORMATS.iter().position(|f| *f == seg.fs).unwrap_or(0);
+                    let form = FormatForm {
+                        target,
+                        fs: current,
+                        label: if seg.is_locked() { String::new() } else { seg.label.clone() },
+                        erase: false,
+                        encrypt: seg.fs == "crypto_LUKS",
+                        pass: String::new(),
+                        pass2: String::new(),
+                    };
+                    self.open_sheet(SheetKind::Format(form), cx, Some("format-label"));
+                }
+                Action::Resize => {
+                    let last = self.last_used(&seg);
+                    let (min, max) = self.plan.resize_range_knowing(&self.layout, i, last);
+                    let unit = if seg.size >= 10_000_000_000 { 1 } else { 0 };
+                    let form = ResizeForm {
+                        target,
+                        from: seg.size,
+                        min,
+                        max,
+                        size: seg.size,
+                        size_text: size_text(seg.size, unit),
+                        size_error: None,
+                        unit,
+                        last_used: last,
+                    };
+                    self.open_sheet(SheetKind::Resize(form), cx, Some("resize-size"));
+                }
+                Action::Label => {
+                    self.open_sheet(SheetKind::Label { target, label: seg.label.clone() }, cx, Some("label-field"))
+                }
+                Action::Flags => {
+                    let flags = Flags::of(&self.layout.table, &seg.type_id, seg.flag_bits);
+                    self.open_sheet(SheetKind::Flags { target, flags }, cx, None);
+                }
+                Action::Repair => {
+                    self.queue(|p, s, l| p.repair(l.locate(s, &target)?));
+                }
+            }
+        }
+
+        /// The New Partition Table sheet, for the disk shown.
+        pub(super) fn open_new_table(&mut self, cx: &mut Cx<Msg>) {
+            let opening = Opening(());
+            let target = self.can_new_table().and_then(|()| {
+                self.layout.choose_disk(&self.state, &opening).ok_or_else(|| "The disk is gone.".to_owned())
+            });
+            match target {
+                Ok(target) => {
+                    let kind = if self.layout.table == "dos" && self.layout.size < (2u64 << 40) {
+                        TableKind::Dos
+                    } else {
+                        TableKind::Gpt
+                    };
+                    self.open_sheet(SheetKind::Table { target, kind }, cx, None);
+                }
+                Err(e) => self.say(e, true),
+            }
+        }
     }
 }
 
