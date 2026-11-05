@@ -253,15 +253,16 @@ fn stat(line: &str) -> Option<(String, u64)> {
 }
 
 /// The kernel cuts a process's name to 15 bytes; the command line's first
-/// word has the whole one.
+/// word has the whole one. A program NixOS wraps runs as `.NAME-wrapped`
+/// while its command line still says NAME.
 fn name(comm: &str, cmdline: &[u8]) -> String {
-    if comm.len() < 15 {
+    if comm.len() < 15 && !comm.starts_with('.') {
         return comm.to_owned();
     }
     let argv0 = cmdline.split(|&b| b == 0).next().unwrap_or_default();
     let base = argv0.rsplit(|&b| b == b'/').next().unwrap_or_default();
     match std::str::from_utf8(base) {
-        Ok(s) if s.starts_with(comm) => s.to_owned(),
+        Ok(s) if !s.is_empty() && (s.starts_with(comm) || format!(".{s}-wrapped").starts_with(comm)) => s.to_owned(),
         _ => comm.to_owned(),
     }
 }
@@ -342,6 +343,12 @@ mod tests {
         assert_eq!(name("xdg-desktop-por", b"/nix/store/x/libexec/xdg-desktop-portal-gtk\0"), "xdg-desktop-portal-gtk");
         // A renamed process keeps its own name.
         assert_eq!(name("abcdefghijklmno", b"/usr/bin/python3\0x.py"), "abcdefghijklmno");
+        // NixOS's wrappers, cut short or not.
+        assert_eq!(name(".xdg-desktop-po", b"/nix/store/x/libexec/xdg-desktop-portal\0"), "xdg-desktop-portal");
+        assert_eq!(name(".firefox-wrappe", b"/run/current-system/sw/bin/firefox\0"), "firefox");
+        assert_eq!(name(".foo-wrapped", b"/x/bin/foo\0"), "foo");
+        assert_eq!(name(".foo-wrapped", b""), ".foo-wrapped");
+        assert_eq!(name(".hidden", b"/x/bin/other\0"), ".hidden");
     }
 
     #[test]
