@@ -95,7 +95,7 @@ in
 pkgs.testers.runNixOSTest {
   name = "sekka-screenshots";
   globalTimeout = 2400;
-  # Sekka's desktop module adds its Aquamarine fix as a Nixpkgs overlay, as
+  # Sekka's desktop module adds its Hyprland fixes as Nixpkgs overlays, as
   # on installed systems.
   node.pkgsReadOnly = false;
   nodes = {

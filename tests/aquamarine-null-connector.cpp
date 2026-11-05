@@ -14,6 +14,6 @@ int main() {
 
     drm.flushAsyncCommitEvents();
     drm.connectors = {nullptr, nullptr};
-    drm.flushAsyncCommitEvents(); // Unpatched 0.15.1 segfaults here.
+    drm.flushAsyncCommitEvents(); // Segfaults without the fix (0.15.1).
     drm.connectors.clear();      // No hardware connectors to disconnect.
 }

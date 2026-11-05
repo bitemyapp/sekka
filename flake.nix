@@ -253,7 +253,7 @@
         # of those desktops together, and one with every free application in
         # the catalog, with unfree packages refused.
         # push-cache publishes their closures, so whatever Sekka's modules
-        # change (Hyprland and all that uses its patched Aquamarine) and
+        # change (Hyprland, Hyprtoolkit and all that uses them) and
         # whatever a catalog application needs downloads rather than compiles.
         installed-systems =
           let
@@ -415,7 +415,6 @@
         aquamarine = import ./nix/aquamarine-test.nix {
           inherit pkgs;
           inherit (hyprlandPkgs) aquamarine hyprland;
-          unpatchedAquamarine = pkgs.aquamarine;
         };
         native-installer = calamares;
         storage = calamares.storageTest;
