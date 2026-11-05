@@ -363,8 +363,6 @@ code { font-size: 0.88em; color: var(--text); overflow-wrap: anywhere; }
 .charts { display: grid; gap: 0 var(--pad); grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); }
 .charts + p, .chart + p, .table-wrap + p, .stats + p { margin-top: 1.4em; }
 .costs + p, [aria-labelledby="method"] .cols + p { margin-top: 1.2em; }
-.decisions { margin: 1.2em 0 0; padding-left: 1.4em; display: grid; gap: 0.8em; max-width: 80ch; }
-.decisions li::marker { color: var(--text3); font-family: var(--mono); }
 .costs { margin: 1.2em 0 0; padding-left: 1.2em; display: grid; gap: 0.7em; max-width: 80ch; }
 .costs li::marker { color: var(--text3); }
 .multiples { grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 0 calc(var(--pad) * 0.75); }

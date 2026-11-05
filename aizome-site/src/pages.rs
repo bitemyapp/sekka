@@ -141,7 +141,7 @@ pub fn home(site: &Site) -> Result<Page> {
         (
             "idea-fast",
             "Fast by construction",
-            "Integer scaling, opaque surfaces, redraws of only what changed, and a 4 ms budget for every frame of the desktop and its apps. Apps show their window in about 19 ms, and an idle desktop draws just one frame a minute, for the clock.",
+            "Integer scaling, opaque surfaces, redraws of only what changed, and a 4 ms budget for every frame of the desktop and its apps. Apps show their window in about 19 ms, and an idle desktop draws about one frame a minute, for the clock.",
             "/performance/",
             "Measured against GNOME and KDE",
         ),
