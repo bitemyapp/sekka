@@ -570,9 +570,10 @@ fn seen(disks: &Disks, path: &str) -> Identity {
     disks.snapshot().identity(path).unwrap_or_else(|| panic!("{path}"))
 }
 
-/// A confirmation of the device as the test sees it (any brand will do).
+/// A confirmation of the device as the test sees it, agreed to as a person
+/// would (any brand will do).
 fn agree<Op: AsSeen>(seen: Identity) -> Confirm<Op, ()> {
-    Confirm::new(seen, ())
+    Confirm::new(&aizome_kit::agree::testing::agreed(seen), ())
 }
 
 fn start(bus: &common::TestBus) -> Disks {

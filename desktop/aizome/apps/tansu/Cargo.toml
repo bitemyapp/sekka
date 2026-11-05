@@ -30,6 +30,9 @@ test-util = []
 [dev-dependencies]
 # Itself, with test-util, for its integration tests and doctests.
 aizome-tansu = { path = ".", features = ["test-util"] }
+# Agreements as if a person had pressed Apply, and harness presses that
+# make them (the kit's `testing`; never in the app's own build).
+aizome-kit = { workspace = true, features = ["testing"] }
 # A fake UDisks2 on a private bus, for the tests that run plans through
 # aizome-sys's real client (already in aizome-sys's tree).
 zbus = { version = "5.19", default-features = false, features = ["async-io", "blocking-api"] }

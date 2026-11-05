@@ -20,6 +20,7 @@
 // error here, not a case quietly taken by `_`.
 #![deny(clippy::wildcard_enum_match_arm)]
 
+use aizome_kit::agree::Agreed;
 use aizome_sys::Task;
 use aizome_sys::disks::{
     Confirm, CreatePartition, DeletePartition, DisksState, Encryption, Erase, Format, FormatSpec, Holds, Identity,
@@ -119,7 +120,7 @@ impl Op {
 }
 
 /// The brand of a confirmation of a pending operation's device
-/// ([`Op::agreement`]): only this module makes one, from the device as the
+/// ([`agreement`]): only this module makes one, from the device as the
 /// operation was queued on it.
 #[derive(Debug)]
 pub struct Queued(());
@@ -140,25 +141,8 @@ pub enum Agreement {
     Repair(Confirm<Repair, Queued>),
 }
 
-impl Agreement {
-    /// Whether the device as `state` has it is still the one agreed to, as
-    /// the step's check would find it, without spending the agreement.
-    pub fn matches(&self, state: &DisksState) -> bool {
-        match self {
-            Agreement::NewTable(c) => c.matches(state),
-            Agreement::Create(c) => c.matches(state),
-            Agreement::Delete(c) => c.matches(state),
-            Agreement::Format(c) => c.matches(state),
-            Agreement::Resize(c) => c.matches(state),
-            Agreement::Label(c) => c.matches(state),
-            Agreement::Flags(c) => c.matches(state),
-            Agreement::Repair(c) => c.matches(state),
-        }
-    }
-}
-
 /// A new partition being made by a [`OpKind::Create`]'s first step: only
-/// [`Op::start_create`] starts one.
+/// [`start_create`] starts one.
 pub struct Creating {
     op: u64,
     task: Task<String>,
@@ -197,135 +181,21 @@ impl Op {
     }
 
     /// Whether the device it acts on is still the one it was queued for,
-    /// held as its steps' confirmations hold it ([`agreement`](Self::agreement)):
-    /// a resize's partition also at the size it was queued at or the one it
+    /// held as its steps' confirmations will hold it ([`agreement`]): a
+    /// resize's partition also at the size it was queued at or the one it
     /// goes to.
     pub fn still_there(&self, state: &DisksState) -> bool {
-        self.agreement().matches(state)
-    }
-
-    /// The confirmation for a step of it, made now, of its device as it was
-    /// queued, of the one kind of change this operation's kind makes. The
-    /// run makes one as each step starts, so an operation late in a long run
-    /// isn't refused as too old.
-    ///
-    /// The backend takes only confirmations branded [`Queued`], which only
-    /// this module makes, so the run can't confirm whatever has the device's
-    /// names when the person applies (TSH-25: a stick swapped for another of
-    /// the same model got the first one's format):
-    ///
-    /// ```compile_fail,E0423
-    /// use aizome_sys::disks::{Confirm, DisksState, Format};
-    /// use tansu::plan::{Op, Queued};
-    /// fn confirm_what_is_there(state: &DisksState, op: &Op) -> Confirm<Format, Queued> {
-    ///     Confirm::new(state.identity(&op.target).unwrap(), Queued(()))
-    /// }
-    /// ```
-    ///
-    /// A label's review can't become a format's confirmation, neither as the
-    /// review once was:
-    ///
-    /// ```compile_fail,E0599
-    /// use aizome_sys::disks::{Confirm, Format, FormatSpec};
-    /// use tansu::backend::Backend;
-    /// use tansu::plan::Op;
-    /// fn f(backend: &dyn Backend, label_op: &Op) {
-    ///     let _ = backend.format(Confirm::<Format, _>::new(label_op.review()), FormatSpec::new("ext4", ""));
-    /// }
-    /// ```
-    ///
-    /// nor as the agreement is:
-    ///
-    /// ```compile_fail,E0308
-    /// use aizome_sys::disks::FormatSpec;
-    /// use tansu::backend::Backend;
-    /// use tansu::plan::Op;
-    /// fn f(backend: &dyn Backend, label_op: &Op) {
-    ///     let _ = backend.format(label_op.agreement(), FormatSpec::new("ext4", ""));
-    /// }
-    /// ```
-    ///
-    /// ```
-    /// use aizome_sys::disks::FormatSpec;
-    /// use tansu::backend::Backend;
-    /// use tansu::plan::{Agreement, Op};
-    /// fn format(backend: &dyn Backend, op: &Op) {
-    ///     if let Agreement::Format(c) = op.agreement() {
-    ///         let _ = backend.format(c, FormatSpec::new("ext4", ""));
-    ///     }
-    /// }
-    /// ```
-    pub fn agreement(&self) -> Agreement {
-        let seen = || self.seen.clone();
+        let seen = &self.seen;
         match self.kind {
-            OpKind::NewTable { .. } => Agreement::NewTable(Confirm::new(seen(), Queued(()))),
-            OpKind::Create(_) => Agreement::Create(Confirm::new(seen(), Queued(()))),
-            OpKind::Delete => Agreement::Delete(Confirm::new(seen(), Queued(()))),
-            OpKind::Format(_) => Agreement::Format(Confirm::new(seen(), Queued(()))),
-            OpKind::Resize { from, to } => Agreement::Resize(Confirm::resize(seen(), from, to, Queued(()))),
-            OpKind::Label { .. } => Agreement::Label(Confirm::new(seen(), Queued(()))),
-            OpKind::Flags { .. } => Agreement::Flags(Confirm::new(seen(), Queued(()))),
-            OpKind::Repair => Agreement::Repair(Confirm::new(seen(), Queued(()))),
+            OpKind::NewTable { .. } => seen.still_there::<NewPartitionTable>(state),
+            OpKind::Create(_) => seen.still_there::<CreatePartition>(state),
+            OpKind::Delete => seen.still_there::<DeletePartition>(state),
+            OpKind::Format(_) => seen.still_there::<Format>(state),
+            OpKind::Resize { from, to } => seen.still_there_to_resize(state, from, to),
+            OpKind::Label { .. } => seen.still_there::<Relabel>(state),
+            OpKind::Flags { .. } => seen.still_there::<PartitionEntry>(state),
+            OpKind::Repair => seen.still_there::<Repair>(state),
         }
-    }
-
-    /// Starts making the new partition of a [`OpKind::Create`], on its disk
-    /// as it was queued.
-    pub fn start_create(&self, backend: &dyn Backend, state: &DisksState) -> Result<Creating, String> {
-        let OpKind::Create(p) = &self.kind else { return Err("It doesn't make a partition.".into()) };
-        let table = state
-            .block(&self.target)
-            .and_then(|b| b.partition_table.as_ref())
-            .map(|t| t.kind.clone())
-            .unwrap_or_default();
-        let (type_id, _) = p.flags.apply(&table, &p.fs, "", 0);
-        let format =
-            (!p.fs.is_empty()).then(|| FormatSpec { encrypt: p.encrypt.clone(), ..FormatSpec::new(&p.fs, &p.label) });
-        let confirm = Confirm::new(self.seen.clone(), Queued(()));
-        let task = backend.create_partition(confirm, p.offset, p.size, Some(&type_id), &p.name, format);
-        Ok(Creating { op: self.id, task })
-    }
-
-    /// The confirmation for setting the flags of the partition this
-    /// operation made. No one saw it before it was made, so it is taken as
-    /// it is, if it is where this operation made it: in the space it asked
-    /// for, on its disk, which is still the one it was queued for. Only
-    /// what the create step gave can name it, not any partition:
-    ///
-    /// ```compile_fail,E0599
-    /// use aizome_sys::disks::{Confirm, DeletePartition, DisksState};
-    /// use tansu::backend::Backend;
-    /// use tansu::plan::Op;
-    /// fn f(backend: &dyn Backend, state: &DisksState, create_op: &Op, other_partition: &str) {
-    ///     let c: Confirm<DeletePartition, _> = Confirm::new(create_op.review_made(state, other_partition).unwrap());
-    ///     let _ = backend.delete_partition(c);
-    /// }
-    /// ```
-    ///
-    /// ```compile_fail,E0308
-    /// use aizome_sys::disks::DisksState;
-    /// use tansu::backend::Backend;
-    /// use tansu::plan::Op;
-    /// fn f(backend: &dyn Backend, state: &DisksState, create_op: &Op, other_partition: &str) {
-    ///     let c = create_op.made_flags(state, other_partition).unwrap();
-    ///     let _ = backend.set_partition_flags(c, 0x80);
-    /// }
-    /// ```
-    ///
-    /// ```compile_fail,E0451
-    /// use tansu::plan::Made;
-    /// let _ = Made { op: 1, path: "/org/freedesktop/UDisks2/block_devices/sda1".into() };
-    /// ```
-    pub fn made_flags(&self, state: &DisksState, made: &Made) -> Option<Confirm<PartitionEntry, Queued>> {
-        let OpKind::Create(p) = &self.kind else { return None };
-        if made.op != self.id {
-            return None;
-        }
-        let part = state.block(&made.path)?.partition.as_ref()?;
-        let in_place = part.table == self.target && part.offset >= p.offset && part.offset < p.offset + p.size;
-        let disk_same = state.identity(&self.target).is_some_and(|now| self.seen.same(&now, Holds::Place));
-        let made = state.identity(&made.path).filter(|_| in_place && disk_same)?;
-        Some(Confirm::new(made, Queued(())))
     }
 
     /// Whether it needs a confirmation token ([`aizome_sys::disks::Confirm`])
@@ -340,6 +210,174 @@ impl Op {
     fn rewrites(&self) -> bool {
         matches!(self.kind, OpKind::Delete | OpKind::Format(_) | OpKind::Resize { .. } | OpKind::Repair)
     }
+}
+
+/// An operation as the Apply sheet shows it: what it does, and the words
+/// the sheet says about it. The sheet lists [`Plan::shown`], and its Apply
+/// button agrees to that list ([`Button::on_agree`](aizome_kit::widgets::controls::Button::on_agree)); only an
+/// agreement to an operation makes the confirmations its steps need
+/// ([`agreement`]).
+#[derive(Clone, Debug)]
+pub struct Shown {
+    op: Op,
+    words: Words,
+}
+
+impl Shown {
+    pub fn op(&self) -> &Op {
+        &self.op
+    }
+
+    pub fn words(&self) -> &Words {
+        &self.words
+    }
+}
+
+/// What the person agreed to of an operation's device: its identity as the
+/// operation was queued on it.
+impl AsRef<Identity> for Shown {
+    fn as_ref(&self) -> &Identity {
+        &self.op.seen
+    }
+}
+
+/// The confirmation for a step of an operation the person agreed to, made
+/// now, of its device as it was queued, of the one kind of change the
+/// operation's kind makes. The run makes one as each step starts, so an
+/// operation late in a long run isn't refused as too old.
+///
+/// It takes the person's agreement to the operation as the Apply sheet showed
+/// it, which only their press of its Apply button makes, so code can't
+/// confirm an operation nobody agreed to, as the plan once could
+/// (`op.agreement()`):
+///
+/// ```compile_fail,E0599
+/// use tansu::plan::{Agreement, Op};
+/// fn confirm_unagreed(op: &Op) -> Agreement {
+///     op.agreement()
+/// }
+/// ```
+///
+/// The backend takes only confirmations branded [`Queued`], which only
+/// this module makes, so the run can't confirm whatever has the device's
+/// names when the person applies (TSH-25: a stick swapped for another of
+/// the same model got the first one's format):
+///
+/// ```compile_fail,E0423
+/// use aizome_sys::disks::{Confirm, DisksState, Format};
+/// use tansu::plan::{Op, Queued};
+/// fn confirm_what_is_there(state: &DisksState, op: &Op) -> Confirm<Format, Queued> {
+///     Confirm::new(state.identity(&op.target).unwrap(), Queued(()))
+/// }
+/// ```
+///
+/// A label's agreement can't become a format's confirmation, neither as the
+/// review once was:
+///
+/// ```compile_fail,E0599
+/// use aizome_sys::disks::{Confirm, Format, FormatSpec};
+/// use tansu::backend::Backend;
+/// use tansu::plan::Op;
+/// fn f(backend: &dyn Backend, label_op: &Op) {
+///     let _ = backend.format(Confirm::<Format, _>::new(label_op.review()), FormatSpec::new("ext4", ""));
+/// }
+/// ```
+///
+/// nor as the agreement is:
+///
+/// ```compile_fail,E0308
+/// use aizome_kit::agree::Agreed;
+/// use aizome_sys::disks::FormatSpec;
+/// use tansu::backend::Backend;
+/// use tansu::plan::{Shown, agreement};
+/// fn f(backend: &dyn Backend, label_op: &Agreed<Shown>) {
+///     let _ = backend.format(agreement(label_op), FormatSpec::new("ext4", ""));
+/// }
+/// ```
+///
+/// ```
+/// use aizome_kit::agree::Agreed;
+/// use aizome_sys::disks::FormatSpec;
+/// use tansu::backend::Backend;
+/// use tansu::plan::{Agreement, Shown, agreement};
+/// fn format(backend: &dyn Backend, op: &Agreed<Shown>) {
+///     if let Agreement::Format(c) = agreement(op) {
+///         let _ = backend.format(c, FormatSpec::new("ext4", ""));
+///     }
+/// }
+/// ```
+pub fn agreement(agreed: &Agreed<Shown>) -> Agreement {
+    match agreed.target().op.kind {
+        OpKind::NewTable { .. } => Agreement::NewTable(Confirm::new(agreed, Queued(()))),
+        OpKind::Create(_) => Agreement::Create(Confirm::new(agreed, Queued(()))),
+        OpKind::Delete => Agreement::Delete(Confirm::new(agreed, Queued(()))),
+        OpKind::Format(_) => Agreement::Format(Confirm::new(agreed, Queued(()))),
+        OpKind::Resize { from, to } => Agreement::Resize(Confirm::resize(agreed, from, to, Queued(()))),
+        OpKind::Label { .. } => Agreement::Label(Confirm::new(agreed, Queued(()))),
+        OpKind::Flags { .. } => Agreement::Flags(Confirm::new(agreed, Queued(()))),
+        OpKind::Repair => Agreement::Repair(Confirm::new(agreed, Queued(()))),
+    }
+}
+
+/// Starts making the new partition of a [`OpKind::Create`] the person
+/// agreed to, on its disk as it was queued.
+pub fn start_create(agreed: &Agreed<Shown>, backend: &dyn Backend, state: &DisksState) -> Result<Creating, String> {
+    let op = &agreed.target().op;
+    let OpKind::Create(p) = &op.kind else { return Err("It doesn't make a partition.".into()) };
+    let table =
+        state.block(&op.target).and_then(|b| b.partition_table.as_ref()).map(|t| t.kind.clone()).unwrap_or_default();
+    let (type_id, _) = p.flags.apply(&table, &p.fs, "", 0);
+    let format =
+        (!p.fs.is_empty()).then(|| FormatSpec { encrypt: p.encrypt.clone(), ..FormatSpec::new(&p.fs, &p.label) });
+    let confirm = Confirm::new(agreed, Queued(()));
+    let task = backend.create_partition(confirm, p.offset, p.size, Some(&type_id), &p.name, format);
+    Ok(Creating { op: op.id, task })
+}
+
+/// The confirmation for setting the flags of the partition an agreed
+/// [`OpKind::Create`] made. No one saw it before it was made, so it is
+/// taken as it is, if it is where the operation made it: in the space it
+/// asked for, in its disk's table, on the disk the person agreed to, which
+/// is still the one it was queued for. Only what the create step gave can
+/// name it, not any partition:
+///
+/// ```compile_fail,E0599
+/// use aizome_kit::agree::Agreed;
+/// use aizome_sys::disks::{Confirm, DeletePartition, DisksState};
+/// use tansu::backend::Backend;
+/// use tansu::plan::Shown;
+/// fn f(backend: &dyn Backend, state: &DisksState, create_op: &Agreed<Shown>, other_partition: &str) {
+///     let c: Confirm<DeletePartition, _> = Confirm::new(create_op.review_made(state, other_partition).unwrap());
+///     let _ = backend.delete_partition(c);
+/// }
+/// ```
+///
+/// ```compile_fail,E0308
+/// use aizome_kit::agree::Agreed;
+/// use aizome_sys::disks::DisksState;
+/// use tansu::backend::Backend;
+/// use tansu::plan::{Shown, made_flags};
+/// fn f(backend: &dyn Backend, state: &DisksState, create_op: &Agreed<Shown>, other_partition: &str) {
+///     let c = made_flags(create_op, state, other_partition).unwrap();
+///     let _ = backend.set_partition_flags(c, 0x80);
+/// }
+/// ```
+///
+/// ```compile_fail,E0451
+/// use tansu::plan::Made;
+/// let _ = Made { op: 1, path: "/org/freedesktop/UDisks2/block_devices/sda1".into() };
+/// ```
+pub fn made_flags(agreed: &Agreed<Shown>, state: &DisksState, made: &Made) -> Option<Confirm<PartitionEntry, Queued>> {
+    let op = &agreed.target().op;
+    let OpKind::Create(p) = &op.kind else { return None };
+    if made.op != op.id {
+        return None;
+    }
+    let part = state.block(&made.path)?.partition.as_ref()?;
+    let in_place = part.table == op.target && part.offset >= p.offset && part.offset < p.offset + p.size;
+    let disk_same = state.identity(&op.target).is_some_and(|now| op.seen.same(&now, Holds::Place));
+    let made = state.identity(&made.path).filter(|_| in_place && disk_same)?;
+    Confirm::made_on(agreed, made, Queued(()))
 }
 
 /// What the person can do to a segment (or its disk).
@@ -414,6 +452,12 @@ impl Plan {
 
     pub fn is_empty(&self) -> bool {
         self.ops.is_empty()
+    }
+
+    /// The operations as the Apply sheet lists them, in order, with their
+    /// words from the disk as `state` has it: what its Apply button agrees to.
+    pub fn shown(&self, state: &DisksState) -> Vec<Shown> {
+        self.ops.iter().map(|op| Shown { op: op.clone(), words: self.words(op, state) }).collect()
     }
 
     pub fn on_disk<'a>(&'a self, disk: &'a str) -> impl Iterator<Item = &'a Op> + 'a {

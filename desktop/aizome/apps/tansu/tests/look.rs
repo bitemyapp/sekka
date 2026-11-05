@@ -142,7 +142,7 @@ fn a_run_under_way() {
         // Hold the run at the format, erasing, as UDisks's job would show.
         mock.add_job("format-erase", "/org/freedesktop/UDisks2/block_devices/sdc1", 0.42, 38_000_000);
         let t = h.program_mut();
-        let mut run = Run::agree(&t.plan, &t.state);
+        let mut run = Run::agree(aizome_kit::agree::testing::agreed(t.plan.shown(&t.state)), &t.state);
         run.picture(2, "Erasing, then formatting…");
         t.run = Some(run);
         if let Some(s) = &mut t.sheet {
