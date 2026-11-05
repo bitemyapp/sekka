@@ -74,6 +74,14 @@ impl<T, B> Reviewed<T, B> {
 }
 
 impl<T: SameTarget, B> Reviewed<T, B> {
+    /// Whether a fresh reading is still the target the person saw, without
+    /// spending the review: for a sheet that re-checks each time it's drawn.
+    /// The step that acts still needs [`confirm`](Self::confirm).
+    #[inline]
+    pub fn matches(&self, fresh: &T) -> bool {
+        self.target.same_target(fresh)
+    }
+
     /// Checks a fresh reading of the target against what the person saw. The
     /// proof carries the fresh reading, so the step that takes it acts on the
     /// target as it is now (its current path), and only if it's the same one.
@@ -84,6 +92,16 @@ impl<T: SameTarget, B> Reviewed<T, B> {
         } else {
             Err(Changed { reviewed: self.target, found: fresh })
         }
+    }
+}
+
+/// A review can be kept for a retry (a refused submit keeps its sheet's
+/// review) when its brand allows it: a brand that doesn't derive `Clone`
+/// makes each review single-use.
+impl<T: Clone, B: Clone> Clone for Reviewed<T, B> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Reviewed { target: self.target.clone(), brand: self.brand.clone() }
     }
 }
 
@@ -160,6 +178,14 @@ mod tests {
         let c = Reviewed::new(D("/dev/sdb", 7), Brand).confirm(D("/dev/sdc", 7)).unwrap();
         assert_eq!(c.target(), &D("/dev/sdc", 7));
         assert_eq!(c.into_target(), D("/dev/sdc", 7));
+    }
+
+    #[test]
+    fn matching_keeps_the_review() {
+        let r = Reviewed::new(D("/dev/sdb", 7), Brand);
+        assert!(r.matches(&D("/dev/sdc", 7)));
+        assert!(!r.matches(&D("/dev/sdb", 8)));
+        assert!(r.confirm(D("/dev/sdb", 7)).is_ok());
     }
 
     #[test]
