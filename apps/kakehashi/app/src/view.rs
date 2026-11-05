@@ -19,7 +19,7 @@ use gpui_kit::{
 };
 use kakehashi_core::choice::{DriveList, DriveListing, ImageId, Listed, ReviewTicket};
 use kakehashi_core::image::{self, Cancelled};
-use kakehashi_core::job::{self, End, Event, Job, JobState, ProgressFile};
+use kakehashi_core::job::{End, Event, Job, JobState, ProgressFile};
 use kakehashi_core::nightly::{self, Build, Fetch, NIGHTLY};
 use kakehashi_core::write::{Plan, Progress, TAIL};
 use kakehashi_core::{Drive, human, platform};
@@ -470,7 +470,7 @@ impl Kakehashi {
             }
         };
         let cancel = PathBuf::from(format!("{}.cancel", progress.display()));
-        self.job = Some(Job::new(job::Write::new(&plan, cancel.clone())));
+        self.job = Some(Job::start(&plan, cancel.clone()));
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             // The worker owns the staged image until the helper exits, then
@@ -509,20 +509,18 @@ impl Kakehashi {
             let (p, q) = (plan_path.clone(), progress.clone());
             let runner = std::thread::spawn(move || elevate::run(&helper, &p, &q));
             let mut reports = ProgressFile::new(progress);
-            loop {
-                let finished = runner.is_finished();
+            while !runner.is_finished() {
                 for report in reports.read() {
                     let _ = tx.send(Msg::Job(Event::Report(report)));
-                }
-                if finished {
-                    break;
                 }
                 std::thread::sleep(REPORT);
             }
             let ran = runner.join().unwrap_or(Ran::Failed("the helper's thread failed".into()));
+            // The helper's last lines come with its exit, before its
+            // directory goes.
+            let exit = reports.finish(ran);
             drop(dir);
-            // After the last of its lines: how it ended follows from them.
-            let _ = tx.send(Msg::Job(Event::Exited(ran)));
+            let _ = tx.send(Msg::Job(Event::Exited(exit)));
         });
     }
 

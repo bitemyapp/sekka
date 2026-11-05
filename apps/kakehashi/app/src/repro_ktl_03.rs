@@ -77,13 +77,14 @@ fn repro_ktl_03_killed_mid_write_is_reported_as_partly_written() {
         concat!(r#"{"stage":"preparing"}"#, "\n", r#"{"stage":"writing","done":1073741824,"total":4294967296}"#, "\n"),
     )
     .unwrap();
-    k.job = Some(Job::new(job::Write::new(&plan, dir.path().join("progress.cancel"))));
+    k.job = Some(Job::start(&plan, dir.path().join("progress.cancel")));
     k.apply(Msg::Job(Event::Authorizing));
-    for report in ProgressFile::new(progress).read() {
+    let mut reports = ProgressFile::new(progress);
+    for report in reports.read() {
         k.apply(Msg::Job(Event::Report(report)));
     }
     // What elevate::run returns when the helper dies by a signal.
-    k.apply(Msg::Job(Event::Exited(Ran::Failed("the helper was killed".into()))));
+    k.apply(Msg::Job(Event::Exited(reports.finish(Ran::Failed("the helper was killed".into())))));
     let (message, touched) = failure(&k);
     assert!(
         touched,
@@ -146,7 +147,8 @@ fn repro_ktl_03_killed_helper_through_start_write_and_elevate() {
     k.start_write(review);
     assert!(k.job.is_some(), "start_write did not start a job: {:?}", k.error);
     let seen = run_to_end(&mut k);
-    assert!(seen.iter().any(|s| s.starts_with("Writing")), "the fake helper's Writing line was not read: {seen:?}");
+    // The Writing line comes as a report, or with the exit.
+    assert!(seen.iter().any(|s| s.contains("Writing")), "the fake helper's Writing line was not read: {seen:?}");
     let (message, touched) = failure(&k);
     assert!(
         touched,
