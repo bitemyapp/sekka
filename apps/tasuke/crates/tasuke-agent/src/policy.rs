@@ -2325,6 +2325,9 @@ fn rule(ctx: &mut Ctx, prog: &str, args: &[Arg]) -> Result<Vec<Use>, String> {
             if args.iter().any(|a| a.text.starts_with("--pre")) {
                 return Err("It runs another program on each file (--pre).".into());
             }
+            if args.iter().any(|a| a.text.starts_with("--hostname-bin")) {
+                return Err("It runs another program to find the computer's name (--hostname-bin).".into());
+            }
             let p = getopt(
                 args,
                 &Spec {
@@ -2387,6 +2390,14 @@ fn rule(ctx: &mut Ctx, prog: &str, args: &[Arg]) -> Result<Vec<Use>, String> {
         "ss" => {
             for a in args {
                 let t = a.text.as_str();
+                // getopt_long takes any unambiguous prefix: --dia=FILE is --diag.
+                let long = t.strip_prefix("--").map(|l| l.split('=').next().unwrap_or(l)).unwrap_or("");
+                if !long.is_empty() && ["kill", "diag"].iter().any(|o| o.starts_with(long)) {
+                    return Err("It closes network connections or writes to a file.".into());
+                }
+                if !long.is_empty() && "events".starts_with(long) {
+                    return Err(never_ends());
+                }
                 if matches!(t, "--kill" | "--events") || t.starts_with("--diag") {
                     return Err(if t == "--events" {
                         never_ends()
@@ -2541,12 +2552,17 @@ fn rule(ctx: &mut Ctx, prog: &str, args: &[Arg]) -> Result<Vec<Use>, String> {
             }
         }
         "busctl" => {
+            // A bus address can be `unixexec:path=PROGRAM,argv1=…`, which runs it.
+            if args.iter().any(|a| a.text.len() > 3 && "--address".starts_with(a.text.split('=').next().unwrap_or("")))
+            {
+                return Err("It connects to a bus address, which can start any program.".into());
+            }
             let p = getopt(
                 args,
                 &Spec {
                     sv: "M",
                     sf: "lqj",
-                    lv: &["machine", "address", "timeout", "match", "size", "destination"],
+                    lv: &["machine", "timeout", "match", "size", "destination"],
                     lf: &[
                         "user",
                         "system",
@@ -4194,6 +4210,25 @@ fn basename(t: &str) -> &str {
     t.rsplit('/').next().unwrap_or(t)
 }
 
+/// A D-Bus address value, with its `%XX` escapes decoded.
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%'
+            && let Some(v) = s.get(i + 1..i + 3).and_then(|h| u8::from_str_radix(h, 16).ok())
+        {
+            out.push(v);
+            i += 3;
+            continue;
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 /// Reserved words that may come before a command (`then reboot`).
 fn is_reserved(t: &str) -> bool {
     matches!(
@@ -4350,6 +4385,39 @@ fn refuse_command(args: &[Arg], ctx: &Ctx, depth: u32) -> Option<String> {
             } else {
                 None
             }
+        }
+        "rg" => {
+            // rg --hostname-bin=PROGRAM runs it.
+            let k = rest.iter().position(|a| a.text.starts_with("--hostname-bin"))?;
+            let program = match rest[k].text.split_once('=') {
+                Some((_, p)) => Arg::literal(p),
+                None => rest.get(k + 1)?.clone(),
+            };
+            refuse_command(&[program], ctx, depth + 1)
+        }
+        _ if prog == "busctl" && texts.iter().any(|t| t.contains("unixexec:")) => {
+            // busctl --address=unixexec:path=PROGRAM,argv1=…: what it runs.
+            let address = texts.iter().find_map(|t| t.split_once("unixexec:").map(|(_, a)| a))?;
+            let mut path = String::new();
+            let mut argv: Vec<(u32, String)> = Vec::new();
+            for field in address.split(',') {
+                let (key, value) = field.split_once('=').unwrap_or((field, ""));
+                let value = percent_decode(value);
+                match key {
+                    "path" => path = value,
+                    k => {
+                        if let Some(n) = k.strip_prefix("argv").and_then(|n| n.parse().ok()) {
+                            argv.push((n, value));
+                        }
+                    }
+                }
+            }
+            argv.sort();
+            let words: Vec<Arg> = std::iter::once(path)
+                .chain(argv.into_iter().filter(|(n, _)| *n > 0).map(|(_, v)| v))
+                .map(|w| Arg::literal(&w))
+                .collect();
+            refuse_command(&words, ctx, depth + 1)
         }
         "busctl" | "dbus-send" | "gdbus" | "qdbus" | "dbus" => {
             let login1 = texts.iter().any(|t| t.contains("login1"));
@@ -5063,6 +5131,7 @@ mod tests {
             ("ip route get 1.1.1.1", "run"),
             ("ip -s link show dev eth0", "run"),
             ("ss -tulpn", "run"),
+            ("ss -t --extended", "run"),
             ("nmcli", "run"),
             ("nmcli device status", "run"),
             ("nmcli c show", "run"),
@@ -5321,6 +5390,19 @@ mod tests {
             ("unknownprogram --help", "ask"),
             ("rg --pre cat foo", "ask"),
             ("rg --pre=sh foo", "ask"),
+            // Options that run another program or write a file.
+            ("rg --hostname-bin=/tmp/x --hyperlink-format=default x /etc/hostname", "ask"),
+            ("rg --hostname-bin /tmp/x --hyperlink-format=default x /etc/hostname", "ask"),
+            ("rg --hostname-bin=reboot --hyperlink-format=default x /etc/hostname", "refuse"),
+            ("busctl --address=unixexec:path=/bin/sh,argv1=-c,argv2=touch%20x list", "ask"),
+            ("busctl --addr=unixexec:path=/bin/sh list", "ask"),
+            ("busctl --address unix:path=/run/dbus/system_bus_socket list", "ask"),
+            ("busctl --address=unixexec:path=/bin/sh,argv1=-c,argv2=reboot list", "refuse"),
+            ("busctl --address=unixexec:path=systemctl,argv1=power%6fff list", "refuse"),
+            ("ss --dia=/home/alice/.bashrc", "ask"),
+            ("ss --di /tmp/x", "ask"),
+            ("ss --ki dst 1.2.3.4", "ask"),
+            ("ss --even", "ask"),
             ("diff <(ls a) <(ls b)", "ask"),
             ("dd if=/dev/zero of=/tmp/x bs=1M count=1", "ask"),
             ("crontab -l", "ask"),
