@@ -601,6 +601,12 @@ previous package and profile defaults without undoing user preferences.
 
 The root lock retains distinct base-system and application Nixpkgs inputs, plus Determinate Nix, FlakeHub CLI, AI applications, and upstream oh-my-pi. First-party code comes directly from this checkout.
 
+The `omp` input tracks upstream oh-my-pi's `main` branch, including unreleased
+changes. The nightly's existing `nix flake update` advances its locked revision;
+a release-tag URL would remain on that release. To update only this input, run
+`nix flake update omp`. The nightly publishes the resulting lock only after its
+checks and cache gates pass; installed systems continue to follow `sekka/omp`.
+
 Plasma Login Manager's generic X11 startup script bypasses NixOS's session
 wrapper. Xfce can then run while `graphical-session.target` remains inactive,
 preventing portal activation. Sekka's default package sets the upstream CMake
