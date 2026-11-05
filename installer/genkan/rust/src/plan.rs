@@ -258,7 +258,10 @@ impl RawRequest {
     }
 
     /// The helper independently parses every byte received over stdin.
-    pub fn parse_confirmed(mut self, settings: &Settings) -> Result<ConfirmedInstall> {
+    /// Crate-private: the one-shot path (`install::install`) confirms its
+    /// own request with it, and nothing else may mint a confirmation from a
+    /// request.
+    pub(crate) fn parse_confirmed(mut self, settings: &Settings) -> Result<ConfirmedInstall> {
         let phrase = std::mem::take(&mut self.confirmation);
         self.parse(settings)?.confirm(&phrase)
     }
@@ -365,10 +368,10 @@ impl InstallPlan {
 
 /// Only a matching erase phrase can produce this value: `session::Awaiting`
 /// makes one from the phrase the GUI sent after preparation, and
-/// `RawRequest::parse_confirmed` from a one-shot request's own.
+/// `install::install` from a one-shot request's own.
 /// ```compile_fail
-/// use calamares_nixos::{InstallPlan, install::{self, InstallMode}};
-/// fn bypass(plan: InstallPlan) { install::install(plan, InstallMode::Execute).unwrap(); }
+/// use calamares_nixos::{InstallPlan, Settings, install::{self, InstallMode}};
+/// fn bypass(plan: InstallPlan, settings: &Settings) { install::install(plan, settings, InstallMode::Execute).unwrap(); }
 /// ```
 /// ```compile_fail
 /// use calamares_nixos::ConfirmedInstall;
