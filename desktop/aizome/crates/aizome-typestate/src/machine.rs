@@ -75,7 +75,9 @@
 /// - **The machine**, `struct Name { ctx, stored }`, starting in the first
 ///   state listed, which must carry no data. `new(ctx)` (with the machine's
 ///   visibility, or the one `new(pub(crate));` or `new(private);` gives),
-///   `ctx()` and `stored()` (read-only), and `with_typed(f)`: `f` gets the current typed
+///   `ctx()` and `stored()` (read-only; they and the stored enum take the
+///   visibility `access(...)` gives, so a public machine can keep its
+///   context and stored state crate-private), and `with_typed(f)`: `f` gets the current typed
 ///   state and must hand back the state it ends in. Its `for<'s>` ties both
 ///   to this machine's context, so a state can't move between machines.
 ///   `with_typed` is private unless `with_typed(pub)` or another visibility
@@ -138,6 +140,7 @@ macro_rules! machine {
             typed $any:ident;
             states { $($states:tt)* }
             $(branches { $($branches:tt)* })?
+            $(access($($avis:tt)*);)?
             $(new($($nvis:tt)*);)?
             $(with_typed($($wvis:tt)*);)?
         }
@@ -147,7 +150,7 @@ macro_rules! machine {
                 [$(#[$meta])*] [$vis] $name [$ctx]
                 [$(#[$smeta])*] [$($copy)?] $stored [$(#[$ameta])*] $any
                 [$($($branches)*)?] [$($($wvis)*)?]
-                [$($($nvis)*)?] [$vis]
+                [$($($nvis)*)?] [$vis] [$($($avis)*)?]
             ]
             []
             $($states)*
@@ -170,7 +173,7 @@ macro_rules! machine {
             [$(#[$meta:meta])*] [$vis:vis] $name:ident [$ctx:ty]
             [$(#[$smeta:meta])*] [$($copy:ident)?] $stored:ident [$(#[$ameta:meta])*] $any:ident
             [$($bname:ident = $($bstate:ident)|+ ;)*] [$($wvis:tt)*]
-            [$($nvis:tt)*] [$dvis:vis]
+            [$($nvis:tt)*] [$dvis:vis] [$($avis:tt)*]
         ]
         [[$(#[$fm:meta])*] $first:ident [$fd:ty]]
         $([[$(#[$m:meta])*] $s:ident [$d:ty]])*
@@ -178,11 +181,12 @@ macro_rules! machine {
         $crate::machine!(@state [$(#[$fm])*] [$vis] $first [$fd] [$ctx] $any);
         $( $crate::machine!(@state [$(#[$m])*] [$vis] $s [$d] [$ctx] $any); )*
 
-        $(#[$smeta])*
-        $vis enum $stored {
-            $first($fd),
-            $( $s($d), )*
-        }
+        $crate::machine!(@item [$($avis)*] [$dvis] [$(#[$smeta])*]
+            enum $stored {
+                $first($fd),
+                $( $s($d), )*
+            }
+        );
 
         $(#[$ameta])*
         $vis enum $any<'s> {
@@ -219,21 +223,35 @@ macro_rules! machine {
         }
 
         impl $name {
-            $crate::machine!(@new [$($nvis)*] [$dvis] $name $ctx, $stored::$first(()));
+            $crate::machine!(@item [$($nvis)*] [$dvis] [
+                #[doc = "The machine in its first state."]
+                #[inline]
+                #[allow(dead_code)]
+            ]
+                fn new(ctx: $ctx) -> Self {
+                    $name { ctx, stored: $stored::$first(()) }
+                }
+            );
 
-            /// The shared context, read-only.
-            #[inline]
-            #[allow(dead_code)]
-            $vis fn ctx(&self) -> &$ctx {
-                &self.ctx
-            }
+            $crate::machine!(@item [$($avis)*] [$dvis] [
+                #[doc = "The shared context, read-only."]
+                #[inline]
+                #[allow(dead_code)]
+            ]
+                fn ctx(&self) -> &$ctx {
+                    &self.ctx
+                }
+            );
 
-            /// The current state, read-only.
-            #[inline]
-            #[allow(dead_code)]
-            $vis fn stored(&self) -> &$stored {
-                &self.stored
-            }
+            $crate::machine!(@item [$($avis)*] [$dvis] [
+                #[doc = "The current state, read-only."]
+                #[inline]
+                #[allow(dead_code)]
+            ]
+                fn stored(&self) -> &$stored {
+                    &self.stored
+                }
+            );
 
             /// Runs typed transitions on the current state. `f` must hand back
             /// the state it ends in: one reached from the state it was given,
@@ -265,23 +283,16 @@ macro_rules! machine {
         )*
     };
 
-    // `new`, with the visibility `new(...)` gave, or the machine's.
-    (@new [] [$dvis:vis] $name:ident $ctx:ty, $first:expr) => {
-        $crate::machine!(@new_fn [$dvis] $name $ctx, $first);
+    // An item with the visibility an option gave (`private` for none), or
+    // the machine's when the option is absent.
+    (@item [] [$dvis:vis] [$($attr:tt)*] $($item:tt)*) => {
+        $($attr)* $dvis $($item)*
     };
-    (@new [private] [$dvis:vis] $name:ident $ctx:ty, $first:expr) => {
-        $crate::machine!(@new_fn [] $name $ctx, $first);
+    (@item [private] [$dvis:vis] [$($attr:tt)*] $($item:tt)*) => {
+        $($attr)* $($item)*
     };
-    (@new [$($nvis:tt)+] [$dvis:vis] $name:ident $ctx:ty, $first:expr) => {
-        $crate::machine!(@new_fn [$($nvis)+] $name $ctx, $first);
-    };
-    (@new_fn [$($v:tt)*] $name:ident $ctx:ty, $first:expr) => {
-        /// The machine in its first state.
-        #[inline]
-        #[allow(dead_code)]
-        $($v)* fn new(ctx: $ctx) -> Self {
-            $name { ctx, stored: $first }
-        }
+    (@item [$($v:tt)+] [$dvis:vis] [$($attr:tt)*] $($item:tt)*) => {
+        $($attr)* $($v)+ $($item)*
     };
 
     // Takes the stored state out for `with_typed`: a `Copy` one is copied,
@@ -399,5 +410,34 @@ mod visibility {
     fn a_private_constructor_still_builds_inside_the_module() {
         let g = m::gate();
         assert_eq!(*g.ctx(), 3);
+    }
+}
+
+#[cfg(test)]
+mod access {
+    mod m {
+        // The context and the stored state stay private to the module.
+        struct Inner(u8);
+        crate::machine! {
+            pub struct Valve over Inner {
+                stored ValveState;
+                typed ValveAny;
+                states { Closed, Open }
+                access(private);
+                new(private);
+                with_typed(pub);
+            }
+        }
+        pub fn valve() -> Valve {
+            Valve::new(Inner(1))
+        }
+        pub fn level(v: &Valve) -> u8 {
+            v.ctx().0
+        }
+    }
+
+    #[test]
+    fn a_public_machine_keeps_a_private_context() {
+        assert_eq!(m::level(&m::valve()), 1);
     }
 }
