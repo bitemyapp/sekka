@@ -740,6 +740,19 @@ lock_answer! {
     LockFinished
 }
 
+/// What a text input takes, as input methods are told it
+/// (zwp_text_input_v3's content type).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum TextPurpose {
+    /// Any text.
+    #[default]
+    Normal,
+    /// A password or another secret: hidden as it's typed, nothing to
+    /// learn, predict or keep. Input methods that honour it type it
+    /// directly, without composing.
+    Password,
+}
+
 pub enum ToRender {
     CreateWindow {
         window: WindowId,
@@ -887,10 +900,12 @@ pub enum ToRender {
     /// thread, when a program asks for screens before showing a window).
     PublishOutputs,
     /// Whether the window's first responder takes text from input methods,
-    /// and where its caret is, in points from the top left of the content.
+    /// what text it takes, and where its caret is, in points from the top
+    /// left of the content.
     TextInput {
         window: WindowId,
         wanted: bool,
+        purpose: TextPurpose,
         caret: Option<Rect>,
     },
     /// The program dropped the text being composed: the input method starts

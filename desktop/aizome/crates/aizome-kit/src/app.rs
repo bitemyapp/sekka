@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use sidestep_ui::{
-    Background, Canvas, Cursor, Drag, DropResponse, PopupPosition, ScrollDelta, TimerId, WindowEvent, WindowId,
-    WindowOptions,
+    Background, Canvas, Cursor, Drag, DropResponse, PopupPosition, ScrollDelta, TextPurpose, TimerId, WindowEvent,
+    WindowId, WindowOptions,
 };
 
 use crate::cx::{Cx, Pool};
@@ -514,9 +514,15 @@ impl Platform for SidestepPlatform<'_> {
         }
     }
 
-    fn set_text_input(&mut self, id: WinId, wanted: bool, caret: Option<Rect>) {
+    fn set_text_input(&mut self, id: WinId, wanted: bool, purpose: TextPurpose, caret: Option<Rect>) {
         if let Some(mut w) = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s)) {
-            w.set_text_input(wanted, caret);
+            w.set_text_input(wanted, purpose, caret);
+        }
+    }
+
+    fn reset_text_input(&mut self, id: WinId) {
+        if let Some(mut w) = self.maps.to_side.get(&id).and_then(|s| self.sx.window(*s)) {
+            w.reset_text_input();
         }
     }
 
@@ -812,8 +818,11 @@ impl<P: Program> sidestep_ui::Handler for Glue<P> {
                 core.pinch(win, position, 1.0 + magnification, phase, &mut p);
             }
             WindowEvent::StateChanged(s) => {
-                let state =
-                    crate::program::WindowState { fullscreen: s.fullscreen, maximized: s.maximized, suspended: s.suspended };
+                let state = crate::program::WindowState {
+                    fullscreen: s.fullscreen,
+                    maximized: s.maximized,
+                    suspended: s.suspended,
+                };
                 rt.window_state(win, state, &mut p);
                 return;
             }

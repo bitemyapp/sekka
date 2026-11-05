@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
-use sidestep_ui::{Canvas, Cursor, Ime, Key, KeyEvent, Modifiers, NamedKey, PointerButton, ScrollPhase};
+use sidestep_ui::{Canvas, Cursor, Ime, Key, KeyEvent, Modifiers, NamedKey, PointerButton, ScrollPhase, TextPurpose};
 
 use crate::element::{AnyMsg, Common, Mapper, MsgFn, RawElement};
 use crate::layout::{Length, Point, Rect, Size, Vec2};
@@ -158,7 +158,7 @@ pub(crate) struct Win {
     pub tooltip_shown: Option<WinId>,
     /// The nearest tooltip under the pointer, including one dismissed by a click.
     tooltip_target: Option<(NodeId, Arc<str>)>,
-    pub ime: (bool, Option<Rect>),
+    pub ime: (bool, TextPurpose, Option<Rect>),
     pub title: String,
     /// Popups open over it, in order.
     pub popups: Vec<WinId>,
@@ -217,7 +217,7 @@ impl Win {
             tooltip: None,
             tooltip_shown: None,
             tooltip_target: None,
-            ime: (false, None),
+            ime: (false, TextPurpose::Normal, None),
             title: String::new(),
             popups: Vec::new(),
             built: false,
@@ -776,8 +776,8 @@ impl Core {
         if focus_gone {
             w.focused = None;
             if w.ime.0 {
-                w.ime = (false, None);
-                platform.set_text_input(win, false, None);
+                w.ime = (false, TextPurpose::Normal, None);
+                platform.set_text_input(win, false, TextPurpose::Normal, None);
             }
         }
         self.restore_modal_focus(win, platform);
@@ -1626,6 +1626,7 @@ impl Core {
             capture,
             cursor,
             ime,
+            ime_reset,
             ticks,
             widget_timers,
             menus,
@@ -1691,7 +1692,10 @@ impl Core {
                 && i != w.ime
             {
                 w.ime = i;
-                platform.set_text_input(win, i.0, i.1);
+                platform.set_text_input(win, i.0, i.1, i.2);
+            }
+            if ime_reset && w.ime.0 {
+                platform.reset_text_input(win);
             }
         }
         for (node, after) in ticks {
@@ -1874,8 +1878,8 @@ impl Core {
         if let Some(w) = self.wins.get_mut(&win)
             && w.ime.0
         {
-            w.ime = (false, None);
-            platform.set_text_input(win, false, None);
+            w.ime = (false, TextPurpose::Normal, None);
+            platform.set_text_input(win, false, TextPurpose::Normal, None);
         }
         if let Some(i) = new_idx {
             self.send(win, i, &Event::Focus(true), platform);
