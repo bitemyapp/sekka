@@ -886,7 +886,7 @@ impl EventCx<'_, '_> {
     /// Take text of `purpose` from input methods, with the caret at `caret`
     /// (its own coordinates), or stop. A password's purpose asks them not
     /// to compose, predict or learn what's typed.
-    pub fn set_text_input_as(&mut self, purpose: TextPurpose, wanted: bool, caret: Option<Rect>) {
+    pub(crate) fn set_text_input_as(&mut self, purpose: TextPurpose, wanted: bool, caret: Option<Rect>) {
         let origin = self.tree.nodes[self.node].rect.origin().to_vec2();
         self.out.ime = Some((wanted, purpose, caret.map(|r| r + origin)));
     }

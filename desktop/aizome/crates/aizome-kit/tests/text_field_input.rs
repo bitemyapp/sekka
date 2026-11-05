@@ -71,3 +71,13 @@ fn losing_the_focus_drops_what_was_being_composed() {
     let (mut fresh, fw) = focused("pa", false);
     assert_eq!(support::differ(&back, &fresh.render_rgba(fw, 2.0)), 0);
 }
+
+#[test]
+fn after_showing_the_password_the_field_arrives_before_the_next_blink() {
+    let (mut h, w) = focused("", false);
+    h.send(Msg::Show(true));
+    h.advance(std::time::Duration::ZERO);
+    assert_eq!(purpose(&h), Some(TextPurpose::Normal), "told at once, not at the caret's next blink");
+    h.ime(w, Some("k"), "");
+    assert_eq!(h.program().secret, "k", "what the input method sends after that is typed");
+}

@@ -27,6 +27,9 @@ pub use aizome_kit::composing::{Masked, Mode, Plain, Preedit, Secret};
 type Spec = Rc<dyn Fn(&aizome_kit::Theme) -> TextSpec>;
 
 const BLINK: Duration = Duration::from_millis(530);
+/// The timer that brings a field that changed mode while focused its
+/// arrival.
+const ARRIVE: u32 = 0;
 
 /// A field showing `value`, plain unless [`secure`](Field::secure).
 pub struct Field<Msg, M = Plain> {
@@ -293,7 +296,10 @@ impl<M: Mode> Composes for FieldWidget<M> {
     type Mode = M;
 }
 
-impl<M: Mode> FieldWidget<M> {
+impl<M: Mode> FieldWidget<M>
+where
+    Self: Composes<Mode = M>,
+{
     /// The state, settled against the value (the program may have
     /// changed it): the caret goes to the end of text the program set.
     #[must_use = "what was being composed into text the program replaced is dropped"]
@@ -385,7 +391,10 @@ impl<M: Mode> FieldWidget<M> {
     }
 }
 
-impl<M: Mode> Widget for FieldWidget<M> {
+impl<M: Mode> Widget for FieldWidget<M>
+where
+    Self: Composes<Mode = M>,
+{
     fn name(&self) -> &'static str {
         "field"
     }
@@ -394,6 +403,14 @@ impl<M: Mode> Widget for FieldWidget<M> {
         let st = cx.state::<FieldState>();
         if let Seen::Set = self.settle(st) {
             cx.composition(self).value_changed();
+        }
+        // Focused in a mode that hasn't arrived (the field just changed
+        // mode): it arrives at once, not at the caret's next blink, so few
+        // of the input method's events from the old mode reach it.
+        if cx.is_focused()
+            && let Place::Away = cx.composition(self).place()
+        {
+            cx.set_timer(ARRIVE, Duration::ZERO);
         }
         bc.constrain(Size::new(bc.max.width.min(1e5), self.height))
     }
