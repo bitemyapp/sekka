@@ -136,15 +136,17 @@ pub enum Said {
     Error(String),
     /// PAM's message ("Touch the fingerprint reader").
     Info(String),
-    /// The answer was refused; the next attempt has started.
-    Refused,
+    /// The answer was refused; the next attempt starts when the floor
+    /// allows. `pam` is what PAM's modules last said in that attempt (a
+    /// lockout, an expired password), if anything.
+    Refused { pam: Option<String> },
     /// The next attempt starts after `after`: the last one ended with no
-    /// answer (`failed` says how), or the floor holds a start the UI asked
-    /// for (`failed` is `None`).
-    Retrying { after: Duration, failed: Option<String> },
+    /// answer (`failed` says how, and `pam` what PAM's modules last said),
+    /// or the floor holds a start the UI asked for (`failed` is `None`).
+    Retrying { after: Duration, failed: Option<String>, pam: Option<String> },
     /// Attempts keep ending with no answer, so none starts until the UI asks
-    /// again ([`AuthRequest::authenticate`]).
-    Unavailable { failed: String },
+    /// again ([`AuthRequest::authenticate`]); `pam` as in `Retrying`.
+    Unavailable { failed: String, pam: Option<String> },
 }
 
 /// An event proven, by its request's [`AuthRequest::check`], to be about
@@ -371,6 +373,11 @@ impl Wake {
     pub(super) fn fire(self) -> Due {
         Due { ticket: self.ticket }
     }
+
+    /// What to tell the request if the timer can't be set.
+    pub(super) fn missed(&self) -> Missed {
+        Missed { ticket: self.ticket }
+    }
 }
 
 /// A retry's timer went off.
@@ -379,6 +386,17 @@ pub struct Due {
 }
 
 impl Answer<Talk> for Due {
+    fn ticket(&self) -> Ticket<Talk> {
+        self.ticket
+    }
+}
+
+/// A retry's timer that couldn't be set.
+pub struct Missed {
+    ticket: Ticket<Talk>,
+}
+
+impl Answer<Talk> for Missed {
     fn ticket(&self) -> Ticket<Talk> {
         self.ticket
     }
@@ -531,6 +549,8 @@ pub(super) struct Running {
     user: String,
     writer: Input,
     ender: Ender,
+    /// What PAM's modules last said in this attempt, for its end.
+    pam: Option<String>,
 }
 
 impl Drop for Running {
@@ -656,25 +676,25 @@ fn attempt(ctx: &mut Ctx, ticket: Ticket<Talk>, user: String) -> Step<'_> {
         }
         Err(at) => {
             let after = at.saturating_duration_since(Instant::now());
-            ctx.tell(ticket, Said::Retrying { after, failed: None });
+            ctx.tell(ticket, Said::Retrying { after, failed: None, pam: None });
             (Cooling::enter(ctx, Planned { ticket, user, at }).into(), Then::Wake(Wake { ticket, at }))
         }
     }
 }
 
 /// An attempt ended with no answer written: the next waits, or none starts.
-fn unanswered(ctx: &mut Ctx, user: String, failed: String) -> Step<'_> {
+fn unanswered(ctx: &mut Ctx, user: String, failed: String, pam: Option<String>) -> Step<'_> {
     log::warn!("aizome-sys: polkit authentication: {failed}");
     let ticket = ctx.talks.issue();
     let retry = ctx.floor().unanswered();
     match retry {
         Retry::After(after) => {
             let at = Instant::now() + after;
-            ctx.tell(ticket, Said::Retrying { after, failed: Some(failed) });
+            ctx.tell(ticket, Said::Retrying { after, failed: Some(failed), pam });
             (Cooling::enter(ctx, Planned { ticket, user, at }).into(), Then::Wake(Wake { ticket, at }))
         }
         Retry::Stop => {
-            ctx.tell(ticket, Said::Unavailable { failed });
+            ctx.tell(ticket, Said::Unavailable { failed, pam });
             (Unavailable::enter(ctx, ()).into(), Then::Nothing)
         }
     }
@@ -683,10 +703,10 @@ fn unanswered(ctx: &mut Ctx, user: String, failed: String) -> Step<'_> {
 /// An attempt ended after an answer: polkit refused it. The next starts as
 /// soon as the floor allows: a refusal counts as a failure too, so a UI
 /// that answers every prompt by itself can't start helpers in a loop.
-fn refused(ctx: &mut Ctx, user: String) -> Step<'_> {
+fn refused(ctx: &mut Ctx, user: String, pam: Option<String>) -> Step<'_> {
     ctx.floor().failed();
     let ticket = ctx.talks.issue();
-    ctx.tell(ticket, Said::Refused);
+    ctx.tell(ticket, Said::Refused { pam });
     attempt(ctx, ticket, user)
 }
 
@@ -785,9 +805,12 @@ impl<'s> Dialing<'s> {
             Ok(Pipe { reader, writer, ender }) => {
                 let converse = Converse { lines: Lines { ticket }, reader, ender: ender.clone() };
                 let writer = Arc::new(Mutex::new(writer));
-                (Starting::enter(ctx, Running { ticket, user, writer, ender }).into(), Then::Converse(converse))
+                (
+                    Starting::enter(ctx, Running { ticket, user, writer, ender, pam: None }).into(),
+                    Then::Converse(converse),
+                )
             }
-            Err(error) => unanswered(ctx, user, format!("polkit's helper: {}", error.describe())),
+            Err(error) => unanswered(ctx, user, format!("polkit's helper: {}", error.describe()), None),
         }
     }
 
@@ -836,6 +859,7 @@ impl<'s> Starting<'s> {
         match line {
             Some(HelperLine::Prompt { text, echo }) => prompt(ctx, running, text, echo, Spoken::Silent),
             Some(HelperLine::Error(text)) => {
+                running.pam = Some(text.clone());
                 ctx.tell(running.ticket, Said::Error(text));
                 (Starting::enter(ctx, running).into(), Then::Nothing)
             }
@@ -850,8 +874,9 @@ impl<'s> Starting<'s> {
             Some(HelperLine::Failure | HelperLine::Unknown(_)) | None => {
                 let why = ended(&line);
                 let user = std::mem::take(&mut running.user);
+                let pam = running.pam.take();
                 drop(running);
-                unanswered(ctx, user, format!("{why} before asking anything"))
+                unanswered(ctx, user, format!("{why} before asking anything"), pam)
             }
         }
     }
@@ -924,6 +949,7 @@ impl<'s> Prompted<'s> {
         match line {
             Some(HelperLine::Prompt { text, echo }) => prompt(ctx, running, text, echo, after),
             Some(HelperLine::Error(text)) => {
+                running.pam = Some(text.clone());
                 ctx.tell(running.ticket, Said::Error(text));
                 (Prompted::enter(ctx, Prompting { running, seq, after }).into(), Then::Nothing)
             }
@@ -938,10 +964,11 @@ impl<'s> Prompted<'s> {
             Some(HelperLine::Failure | HelperLine::Unknown(_)) | None => {
                 let why = ended(&line);
                 let user = std::mem::take(&mut running.user);
+                let pam = running.pam.take();
                 drop(running);
                 match after {
-                    Spoken::Answered => refused(ctx, user),
-                    Spoken::Silent => unanswered(ctx, user, format!("{why} before the prompt was answered")),
+                    Spoken::Answered => refused(ctx, user, pam),
+                    Spoken::Silent => unanswered(ctx, user, format!("{why} before the prompt was answered"), pam),
                 }
             }
         }
@@ -970,6 +997,7 @@ impl<'s> Checking<'s> {
         match line {
             Some(HelperLine::Prompt { text, echo }) => prompt(ctx, running, text, echo, Spoken::Answered),
             Some(HelperLine::Error(text)) => {
+                running.pam = Some(text.clone());
                 ctx.tell(running.ticket, Said::Error(text));
                 (Checking::enter(ctx, running).into(), Then::Nothing)
             }
@@ -986,8 +1014,9 @@ impl<'s> Checking<'s> {
                     log::warn!("aizome-sys: unknown line from the polkit helper: {text:?}");
                 }
                 let user = std::mem::take(&mut running.user);
+                let pam = running.pam.take();
                 drop(running);
-                refused(ctx, user)
+                refused(ctx, user, pam)
             }
         }
     }
@@ -1052,6 +1081,21 @@ impl<'s> Cooling<'s> {
                 (Cooling::enter(ctx, Planned { ticket, user, at }).into(), Then::Wake(Wake { ticket, at }))
             }
         }
+    }
+
+    /// The retry's timer couldn't be set (no thread for it), so the planned
+    /// attempt won't come by itself: the request ends up unavailable, saying
+    /// why, and the UI may ask again.
+    pub fn missed(self, now: Now<'s, Missed>, why: String) -> Step<'s> {
+        if !now.names(self.data.ticket) {
+            return (self.into(), Then::Nothing);
+        }
+        let Cooling { ctx, data } = self;
+        drop(data);
+        log::warn!("aizome-sys: polkit retry: {why}");
+        let ticket = ctx.talks.issue();
+        ctx.tell(ticket, Said::Unavailable { failed: why, pam: None });
+        (Unavailable::enter(ctx, ()).into(), Then::Nothing)
     }
 
     pub fn cancel(self) -> Over<'s> {
@@ -1450,5 +1494,50 @@ mod tests {
         helper.set_nonblocking(true).unwrap();
         let mut got = [0u8; 64];
         assert!(std::io::Read::read(&mut helper, &mut got).is_err(), "the helper got nothing");
+    }
+
+    #[test]
+    fn a_retry_that_cannot_be_timed_ends_unavailable() {
+        let mut c = conversation();
+        let Then::Dial(dial) = c.with_typed(|s| match s {
+            ConvAny::Idle(s) => s.start("me".into()),
+            other => (other, Then::Nothing),
+        }) else {
+            panic!()
+        };
+        let failed = Dialed { ticket: dial.ticket(), pipe: Err(Error::NotFound("no socket".into())) };
+        let Then::Wake(wake) = c.with_typed(|s| {
+            let now = s.check(failed).ok().unwrap();
+            match s {
+                ConvAny::Dialing(s) => s.dialed(now),
+                other => (other, Then::Nothing),
+            }
+        }) else {
+            panic!("an unreachable helper is retried later")
+        };
+        while c.next_event().is_some() {}
+        // The retry's thread couldn't be started.
+        let missed = wake.missed();
+        let then = c.with_typed(|s| {
+            let now = s.check(missed).ok().unwrap();
+            match s {
+                ConvAny::Cooling(s) => s.missed(now, "no thread".into()),
+                other => (other, Then::Nothing),
+            }
+        });
+        assert!(matches!(then, Then::Nothing));
+        assert_eq!(name(&c), "unavailable");
+        let told = c.next_event();
+        assert!(
+            matches!(&told, Some(AuthEvent::Heard(Heard { said: Said::Unavailable { failed, .. }, .. })) if failed == "no thread"),
+            "{told:?}"
+        );
+        // The timer, had it fired after all, now does nothing.
+        let late = wake.fire();
+        let stale = c.with_typed(|s| {
+            let stale = s.check(late).is_err();
+            (s, stale)
+        });
+        assert!(stale);
     }
 }

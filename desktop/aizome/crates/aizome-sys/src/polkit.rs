@@ -66,7 +66,7 @@ use crate::oneshot;
 use crate::service::lock;
 
 pub use conversation::{Asked, Checked, Heard, MAX_ANSWER, RequestId, Said, Talk, Unsendable, Unsent, said};
-use conversation::{ConvAny, Conversation, Converse, Ctx, Dialed, Due, Line, Reply, SharedFloor, Then, Wake};
+use conversation::{ConvAny, Conversation, Converse, Ctx, Dialed, Due, Line, Missed, Reply, SharedFloor, Then, Wake};
 use futures_lite::StreamExt;
 use std::collections::HashMap;
 use std::io::BufRead;
@@ -112,19 +112,70 @@ impl Helper {
     }
 }
 
-/// Who may authenticate.
+/// A person from the password database.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Person {
+    uid: u32,
+    name: String,
+    real_name: String,
+}
+
+/// Someone polkitd offered to authenticate one request. Only the request
+/// hands these out ([`AuthRequest::identities`]), and
+/// [`AuthRequest::authenticate`] takes only its own, so the helper runs PAM
+/// only for a person polkitd named for that request.
+///
+/// ```compile_fail,E0451
+/// use aizome_sys::polkit::{AuthRequest, Identity};
+/// // Authenticate as root, whom polkitd didn't offer.
+/// fn root(request: &AuthRequest, other: &Identity) {
+///     let root = Identity { uid: 0, name: "root".into(), real_name: String::new(), request: other.request() };
+///     request.authenticate(&root);
+/// }
+/// ```
+///
+/// ```
+/// use aizome_sys::polkit::AuthRequest;
+/// fn first(request: &AuthRequest) {
+///     if let Some(identity) = request.identities().first() {
+///         request.authenticate(identity);
+///     }
+/// }
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Identity {
-    pub uid: u32,
-    /// The login name.
-    pub name: String,
-    /// The real name from the password database's GECOS field.
-    pub real_name: String,
+    uid: u32,
+    name: String,
+    real_name: String,
+    request: RequestId,
 }
 
 impl Identity {
+    fn offered(person: Person, request: RequestId) -> Identity {
+        Identity { uid: person.uid, name: person.name, real_name: person.real_name, request }
+    }
+
+    pub fn uid(&self) -> u32 {
+        self.uid
+    }
+
+    /// The login name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// The real name from the password database's GECOS field.
+    pub fn real_name(&self) -> &str {
+        &self.real_name
+    }
+
     pub fn display_name(&self) -> &str {
         if self.real_name.is_empty() { &self.name } else { &self.real_name }
+    }
+
+    /// The request that offered it.
+    pub fn request(&self) -> RequestId {
+        self.request
     }
 }
 
@@ -153,9 +204,7 @@ pub struct AuthRequest {
     pub icon_name: String,
     /// Details polkit passes (`polkit.subject-pid`, `program`…).
     pub details: HashMap<String, String>,
-    /// Who may authenticate; [`default_identity`](AuthRequest::default_identity)
-    /// suggests one.
-    pub identities: Vec<Identity>,
+    identities: Vec<Identity>,
     session: Arc<Session>,
 }
 
@@ -170,6 +219,12 @@ impl std::fmt::Debug for AuthRequest {
 }
 
 impl AuthRequest {
+    /// Who may authenticate, as polkitd named them for this request;
+    /// [`default_identity`](AuthRequest::default_identity) suggests one.
+    pub fn identities(&self) -> &[Identity] {
+        &self.identities
+    }
+
     /// The identity to preselect: the person at the screen if they may
     /// authenticate, else the first one.
     pub fn default_identity(&self) -> Option<&Identity> {
@@ -182,8 +237,13 @@ impl AuthRequest {
     /// or one more after [`Said::Unavailable`]. The agent starts it when its
     /// floor allows (at once, unless attempts have been ending with no
     /// answer); a call while an attempt waits for the floor changes only
-    /// whom it's for.
+    /// whom it's for. An identity another request offered is refused: the
+    /// helper runs PAM only for someone polkitd named for this request.
     pub fn authenticate(&self, identity: &Identity) {
+        if identity.request != self.session.id {
+            log::warn!("aizome-sys: polkit: refused an identity another request offered");
+            return;
+        }
         let user = identity.name.clone();
         self.session.step(move |state| (start(state, user), ()));
     }
@@ -316,6 +376,22 @@ fn due(state: ConvAny<'_>, due: Due) -> conversation::Step<'_> {
     }
 }
 
+/// A retry's timer couldn't be set.
+fn missed(state: ConvAny<'_>, missed: Missed, why: String) -> conversation::Step<'_> {
+    let Ok(now) = state.check(missed) else { return (state, Then::Nothing) };
+    match state {
+        ConvAny::Cooling(s) => s.missed(now, why),
+        // A current timer names the planned attempt, which waits in Cooling.
+        s @ (ConvAny::Idle(_)
+        | ConvAny::Dialing(_)
+        | ConvAny::Starting(_)
+        | ConvAny::Prompted(_)
+        | ConvAny::Checking(_)
+        | ConvAny::Unavailable(_)
+        | ConvAny::Over(_)) => (s, Then::Nothing),
+    }
+}
+
 /// The request ends, unauthorized.
 fn cancel(state: ConvAny<'_>) -> conversation::Step<'_> {
     let over = match state {
@@ -411,6 +487,7 @@ impl Session {
     /// is still there and the attempt still wanted).
     fn wake(self: &Arc<Self>, wake: Wake) {
         let session = Arc::downgrade(self);
+        let missed_timer = wake.missed();
         let spawned = std::thread::Builder::new().name("aizome-sys polkit retry".into()).spawn(move || {
             std::thread::sleep(wake.at().saturating_duration_since(Instant::now()));
             if let Some(session) = session.upgrade() {
@@ -419,7 +496,8 @@ impl Session {
             }
         });
         if let Err(error) = spawned {
-            log::warn!("aizome-sys: polkit retry: {error}");
+            // No thread, so no retry: say so, rather than wait for ever.
+            self.step(move |state| (missed(state, missed_timer, format!("no thread for the retry: {error}")), ()));
         }
     }
 
@@ -583,7 +661,7 @@ pub(crate) fn parse_line(line: &str) -> HelperLine {
 }
 
 /// A user from the password database.
-fn user_by_uid(uid: u32) -> Option<Identity> {
+fn user_by_uid(uid: u32) -> Option<Person> {
     let mut pwd: libc::passwd = unsafe { std::mem::zeroed() };
     let mut buf = vec![0u8; 4096];
     let mut result: *mut libc::passwd = std::ptr::null_mut();
@@ -598,7 +676,7 @@ fn user_by_uid(uid: u32) -> Option<Identity> {
         if p.is_null() { String::new() } else { std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned() }
     };
     let gecos = text(pwd.pw_gecos);
-    Some(Identity { uid, name: text(pwd.pw_name), real_name: gecos.split(',').next().unwrap_or("").to_owned() })
+    Some(Person { uid, name: text(pwd.pw_name), real_name: gecos.split(',').next().unwrap_or("").to_owned() })
 }
 
 /// The members of a group (by name in the group database).
@@ -623,7 +701,7 @@ fn group_members(gid: u32) -> Vec<String> {
     members
 }
 
-fn user_by_name(name: &str) -> Option<Identity> {
+fn user_by_name(name: &str) -> Option<Person> {
     let name = std::ffi::CString::new(name).ok()?;
     let mut pwd: libc::passwd = unsafe { std::mem::zeroed() };
     let mut buf = vec![0u8; 4096];
@@ -638,12 +716,12 @@ fn user_by_name(name: &str) -> Option<Identity> {
 
 /// The people behind polkit's identities: users as they are, groups
 /// (`wheel`) as their members.
-fn identities(raw: &[(String, HashMap<String, OwnedValue>)]) -> Vec<Identity> {
-    let mut found: Vec<Identity> = Vec::new();
+fn identities(raw: &[(String, HashMap<String, OwnedValue>)]) -> Vec<Person> {
+    let mut found: Vec<Person> = Vec::new();
     for (kind, details) in raw {
         let id = details.get("uid").or_else(|| details.get("gid")).and_then(|v| value_u64(v));
         let Some(id) = id.and_then(|n| u32::try_from(n).ok()) else { continue };
-        let people: Vec<Identity> = match kind.as_str() {
+        let people: Vec<Person> = match kind.as_str() {
             "unix-user" => user_by_uid(id).into_iter().collect(),
             "unix-group" => group_members(id).iter().filter_map(|name| user_by_name(name)).collect(),
             _ => Vec::new(),
@@ -747,7 +825,7 @@ impl Agent {
                 message,
                 icon_name,
                 details,
-                identities: people,
+                identities: people.into_iter().map(|person| Identity::offered(person, id)).collect(),
                 session: session.clone(),
             });
         }

@@ -101,7 +101,7 @@ aizome_typestate::machine! {
             /// use aizome_shell::auth::dialog::Waiting;
             /// fn failed(waiting: Waiting<'_>) {
             ///     let a = waiting.ctx;
-            ///     if let Some(i) = a.request.identities.get(a.identity) {
+            ///     if let Some(i) = a.request.identities().get(a.identity) {
             ///         a.request.authenticate(i);
             ///     }
             /// }
@@ -144,8 +144,8 @@ impl Dialog {
     /// suggests: the first attempt starts.
     pub fn begin(request: AuthRequest, window: WindowKey) -> Dialog {
         let identity =
-            request.default_identity().and_then(|d| request.identities.iter().position(|i| i == d)).unwrap_or(0);
-        if let Some(i) = request.identities.get(identity) {
+            request.default_identity().and_then(|d| request.identities().iter().position(|i| i == d)).unwrap_or(0);
+        if let Some(i) = request.identities().get(identity) {
             request.authenticate(i);
         }
         Dialog::new(Ctx { request, window: Some(window), identity, password: String::new(), prompt: None, note: None })
@@ -208,7 +208,7 @@ impl Dialog {
         });
         AuthView {
             message: c.request.message.clone(),
-            identities: c.request.identities.iter().map(|i| format!("{} ({})", i.display_name(), i.name)).collect(),
+            identities: c.request.identities().iter().map(|i| format!("{} ({})", i.display_name(), i.name())).collect(),
             identity: c.identity,
             prompt,
             echo,
@@ -307,22 +307,28 @@ impl<'s> DialogAny<'s> {
                 s.ctx_mut().note = Some(Note::Info(text));
                 s
             }
-            Said::Refused => {
+            // As the lock screen does: PAM's own words when its modules said
+            // why (a lockout, an expired password), else a sentence of ours.
+            Said::Refused { pam } => {
                 let ctx = self.into_ctx();
                 ctx.password.clear();
-                ctx.note = Some(Note::Error("That didn't work. Try again.".into()));
+                ctx.note = Some(Note::Error(pam.unwrap_or_else(|| "That didn't work. Try again.".into())));
                 Starting::enter(ctx, ()).into()
             }
-            Said::Retrying { failed, .. } => {
+            Said::Retrying { failed, pam, .. } => {
                 let ctx = self.into_ctx();
-                if failed.is_some() {
-                    ctx.note = Some(Note::Info("Trying again…".into()));
+                match (failed, pam) {
+                    (Some(_), Some(pam)) => ctx.note = Some(Note::Error(pam)),
+                    (Some(_), None) => ctx.note = Some(Note::Info("Trying again…".into())),
+                    // The floor holds a start: what's shown still stands.
+                    (None, Some(_) | None) => {}
                 }
                 Waiting::enter(ctx, ()).into()
             }
-            Said::Unavailable { .. } => {
+            Said::Unavailable { pam, .. } => {
                 let ctx = self.into_ctx();
-                ctx.note = Some(Note::Error("Authentication isn't available right now.".into()));
+                let why = pam.unwrap_or_else(|| "Authentication isn't available right now.".into());
+                ctx.note = Some(Note::Error(why));
                 Unavailable::enter(ctx, ()).into()
             }
         }
@@ -330,13 +336,13 @@ impl<'s> DialogAny<'s> {
 
     /// The person picked identity `i`: an attempt as them starts.
     pub fn choose(self, i: usize) -> DialogAny<'s> {
-        if i >= self.ctx().request.identities.len() {
+        if i >= self.ctx().request.identities().len() {
             return self;
         }
         let ctx = self.into_ctx();
         ctx.identity = i;
         ctx.note = None;
-        ctx.request.authenticate(&ctx.request.identities[i]);
+        ctx.request.authenticate(&ctx.request.identities()[i]);
         Starting::enter(ctx, ()).into()
     }
 }
@@ -415,7 +421,7 @@ impl<'s> Unavailable<'s> {
     /// The person asks for another attempt.
     pub fn try_again(self) -> Starting<'s> {
         self.ctx.note = None;
-        if let Some(identity) = self.ctx.request.identities.get(self.ctx.identity) {
+        if let Some(identity) = self.ctx.request.identities().get(self.ctx.identity) {
             self.ctx.request.authenticate(identity);
         }
         Starting::enter(self.ctx, ())
