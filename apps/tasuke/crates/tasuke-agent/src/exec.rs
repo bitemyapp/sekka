@@ -71,6 +71,7 @@ impl Capped {
 /// Run `argv` with `env` added to this process's environment.
 pub(crate) fn run(
     argv: &[String],
+    cwd: Option<&std::path::Path>,
     env: &[(&str, &str)],
     stdin: Option<&[u8]>,
     timeout: Duration,
@@ -86,6 +87,9 @@ pub(crate) fn run(
         .stdout(writer.try_clone()?)
         .stderr(writer)
         .process_group(0);
+    if let Some(dir) = cwd.filter(|d| d.is_dir()) {
+        cmd.current_dir(dir);
+    }
     for (k, v) in env {
         cmd.env(k, v);
     }
@@ -183,7 +187,7 @@ mod tests {
 
     fn sh(script: &str, timeout: Duration) -> Run {
         let argv = vec!["bash".to_owned(), "-c".to_owned(), script.to_owned()];
-        run(&argv, &[], None, timeout, &AtomicBool::new(false)).unwrap()
+        run(&argv, None, &[], None, timeout, &AtomicBool::new(false)).unwrap()
     }
 
     #[test]
@@ -226,7 +230,7 @@ mod tests {
     #[test]
     fn stdin_is_given_or_empty() {
         let argv = vec!["cat".to_owned()];
-        let r = run(&argv, &[], Some(b"hello"), Duration::from_secs(5), &AtomicBool::new(false)).unwrap();
+        let r = run(&argv, None, &[], Some(b"hello"), Duration::from_secs(5), &AtomicBool::new(false)).unwrap();
         assert_eq!(r.output, "hello");
         let r = sh("cat; echo done", Duration::from_secs(5));
         assert_eq!(r.output.trim(), "done");
@@ -241,7 +245,7 @@ mod tests {
             c.store(true, Ordering::SeqCst);
         });
         let argv = vec!["sleep".to_owned(), "30".to_owned()];
-        let r = run(&argv, &[], None, Duration::from_secs(60), &cancel).unwrap();
+        let r = run(&argv, None, &[], None, Duration::from_secs(60), &cancel).unwrap();
         assert!(r.cancelled && !r.timed_out);
     }
 }

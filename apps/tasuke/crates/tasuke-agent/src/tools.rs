@@ -416,7 +416,7 @@ pub(crate) fn execute(call: &ToolCall, o: &Options, desktop: &mut Desktop<'_>, c
             let mut argv = o.user_command_prefix.clone();
             argv.extend(["bash".into(), "-c".into(), command.clone()]);
             let timeout = Duration::from_secs(u64::from(*timeout_seconds));
-            match exec::run(&argv, COMMAND_ENV, None, timeout, cancel) {
+            match exec::run(&argv, Some(&home_dir()), COMMAND_ENV, None, timeout, cancel) {
                 Ok(run) => Outcome::text(run_output(&run, timeout)),
                 Err(e) => Outcome::text(ToolOutput::failed(format!("couldn't start bash: {e}"))),
             }
@@ -519,7 +519,7 @@ fn run_as_root(command: &str, purpose: &str, timeout_seconds: u32, o: &Options, 
     // SAFETY: geteuid can't fail.
     if unsafe { libc::geteuid() } == 0 {
         let argv = vec!["bash".to_owned(), "-c".to_owned(), command.to_owned()];
-        return match exec::run(&argv, COMMAND_ENV, None, timeout, cancel) {
+        return match exec::run(&argv, Some(&home_dir()), COMMAND_ENV, None, timeout, cancel) {
             Ok(run) => run_output(&run, timeout),
             Err(e) => ToolOutput::failed(format!("couldn't start bash: {e}")),
         };
@@ -527,7 +527,7 @@ fn run_as_root(command: &str, purpose: &str, timeout_seconds: u32, o: &Options, 
     let request = json!({"command": command, "purpose": purpose, "timeout_seconds": timeout_seconds}).to_string();
     let argv = vec!["pkexec".to_owned(), o.helper.to_string_lossy().into_owned(), "run".to_owned()];
     // The password dialog's time on top of the command's.
-    let run = match exec::run(&argv, &[], Some(request.as_bytes()), timeout + Duration::from_secs(180), cancel) {
+    let run = match exec::run(&argv, None, &[], Some(request.as_bytes()), timeout + Duration::from_secs(180), cancel) {
         Ok(run) => run,
         Err(e) => return ToolOutput::failed(format!("couldn't start pkexec: {e}")),
     };

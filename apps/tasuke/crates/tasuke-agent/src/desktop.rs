@@ -103,7 +103,7 @@ impl<'a> Desktop<'a> {
     fn aizomectl(&self, args: &[&str]) -> Result<String, String> {
         let mut argv = self.options.aizomectl.clone();
         argv.extend(args.iter().map(|s| (*s).to_owned()));
-        let run = exec::run(&argv, &[], None, Duration::from_secs(30), self.cancel).map_err(|e| e.to_string())?;
+        let run = exec::run(&argv, None, &[], None, Duration::from_secs(30), self.cancel).map_err(|e| e.to_string())?;
         if run.exit_code == Some(0) {
             Ok(run.output)
         } else {
