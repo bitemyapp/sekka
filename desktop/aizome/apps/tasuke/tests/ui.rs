@@ -103,3 +103,47 @@ fn a_download_runs_to_the_end_and_is_used() {
     assert!(h.program().first_run.is_none());
     let _ = Decision::Allow;
 }
+
+#[test]
+fn a_server_that_cant_be_reached_offers_retry_and_the_error_stays() {
+    let mut h = harness("server-down");
+    let w = h.window();
+    let id = current(&h);
+    let texts = h.texts(w);
+    assert!(texts.iter().any(|t| t == "The model server can't be reached"), "{texts:?}");
+    assert!(texts.iter().any(|t| t == "Connection refused (os error 111)"), "{texts:?}");
+    assert!(texts.iter().any(|t| t == "Starting the model server…"), "it failed, so it isn't 'started': {texts:?}");
+    assert_eq!(h.program().window_title(), "Is my graphics card running hot? — Assistant");
+    assert!(h.click_text(w, "Retry"));
+    for _ in 0..100 {
+        h.advance(Duration::from_millis(100));
+    }
+    let c = h.program().conversation(id).unwrap();
+    assert!(c.turn.is_none());
+    let Some(Body::Answer(a)) = c.transcript.items.last().map(|i| &i.body) else { panic!() };
+    assert!(a.text.starts_with("No: it's at **41 °C**"), "{}", a.text);
+    let texts = h.texts(w);
+    assert!(texts.iter().any(|t| t == "The model server can't be reached"), "what went wrong stays");
+    assert!(!texts.iter().any(|t| t == "Retry"), "Retry only on the last thing said: {texts:?}");
+}
+
+#[test]
+fn a_check_up_looks_at_a_dozen_things_and_reports_problems_first() {
+    let mut h = harness("home");
+    let w = h.window();
+    let id = current(&h);
+    h.send(Msg::Suggest(id, "Give my computer a check-up".into()));
+    for _ in 0..400 {
+        h.advance(Duration::from_millis(100));
+    }
+    let c = h.program().conversation(id).unwrap();
+    assert!(c.turn.is_none());
+    assert!(c.transcript.pending_approval().is_none(), "a check-up only looks");
+    let texts = h.texts(w);
+    assert!(texts.iter().any(|t| t.starts_with("Looked at 12 things")), "{texts:?}");
+    let Some(Body::Answer(a)) = c.transcript.items.last().map(|i| &i.body) else { panic!() };
+    let lines: Vec<&str> = a.text.lines().filter(|l| !l.is_empty()).collect();
+    assert_eq!(lines[0], "Two things need attention.");
+    assert!(lines[1].starts_with('✕') && lines[2].starts_with('⚠') && lines[3].starts_with('✓'));
+    assert!(lines.iter().filter(|l| l.starts_with(char::is_numeric)).count() <= 3, "at most three fixes");
+}

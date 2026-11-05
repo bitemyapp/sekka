@@ -8,7 +8,7 @@
 //! of the looking, and opens with it. Thinking after the last look stays
 //! out, beside the answer it led to.
 
-use crate::transcript::{Body, Item, Tool};
+use crate::transcript::{Body, Item, Tool, ToolState};
 
 /// One line of the transcript as shown.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -133,7 +133,13 @@ impl Run {
         Headline {
             count: tools.len(),
             open: tools.iter().any(|t| t.state.is_open()),
-            failed: tools.iter().filter(|t| t.state.is_failure()).count(),
+            // A look that ran and exited non-zero answered (grep found
+            // nothing, coredumpctl has no crashes); one that couldn't run or
+            // took too long didn't.
+            failed: tools
+                .iter()
+                .filter(|t| matches!(t.state, ToolState::TimedOut | ToolState::Failed { exit: None }))
+                .count(),
             targets,
         }
     }
@@ -190,7 +196,7 @@ mod tests {
         let Row::Looked(run) = &rows(&t.items)[1] else { panic!() };
         assert_eq!(run.key, t.items[1].id, "kept by its first item");
         let h = run.headline(&t.items);
-        assert_eq!((h.count, h.open, h.failed), (3, false, 1));
+        assert_eq!((h.count, h.open, h.failed), (3, false, 0), "an exit of 1 is an answer");
         assert_eq!(h.words(), "Looked at 3 things");
         assert_eq!(h.targets[0], "wpctl status");
         assert!(h.targets[2].ends_with('…') && h.targets[2].chars().count() == 40, "{}", h.targets[2]);

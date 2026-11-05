@@ -168,7 +168,9 @@ fn code_box(s: &str) -> Element<Msg> {
 
 /// One call as one line: its state, what it did, to what.
 fn line(t: &Tool) -> Element<Msg> {
-    let (glyph, role) = state_glyph(&t.state);
+    // A look that exited non-zero still answered: quietly, not in red.
+    let answered = t.looks && matches!(t.state, ToolState::Failed { exit: Some(_) });
+    let (glyph, role) = if answered { (Icon::Circle, Role::Text3) } else { state_glyph(&t.state) };
     let d = &t.described;
     let verb = if t.state.is_open() { d.doing } else { d.done };
     let target_line = d.target.lines().next().unwrap_or("").to_owned();
@@ -182,7 +184,7 @@ fn line(t: &Tool) -> Element<Msg> {
         icon(glyph).size(14.0).role(role),
         text(verb).size(12.5).weight(600.0).role(Role::Text2),
         target,
-        text(note).size(11.5).role(if t.state.is_failure() { Role::Danger } else { Role::Text3 }),
+        text(note).size(11.5).role(if t.state.is_failure() && !answered { Role::Danger } else { Role::Text3 }),
     ]
     .spacing(8.0)
     .padding([3.0, 0.0])
@@ -215,13 +217,13 @@ pub fn looked(_app: &Tasuke, c: &Conversation, run: &Run) -> Element<Msg> {
     let (glyph, role) = if h.open {
         (Icon::CircleDot, Role::Accent)
     } else if h.failed > 0 {
-        (Icon::CircleCheck, Role::Text3)
+        (Icon::TriangleAlert, Role::Warning)
     } else {
         (Icon::CircleCheck, Role::Success)
     };
     let mut words = h.words();
     if h.failed > 0 && !h.open {
-        words.push_str(&format!(" · {} with errors", h.failed));
+        words.push_str(&format!(" · {} didn't finish", h.failed));
     }
     let line = row![
         icon(glyph).size(14.0).role(role),

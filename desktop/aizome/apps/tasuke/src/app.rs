@@ -337,6 +337,8 @@ pub const FIXTURES: &[&str] = &[
     "diagnose",
     "root-approval",
     "day-theme",
+    "checkup",
+    "server-down",
     "models-8gb",
     "models-32gb",
     "models-unified",
@@ -429,8 +431,30 @@ impl Tasuke {
                 .unwrap_or_default(),
             state: if t.models.in_use.is_some() { ModelState::Asleep } else { ModelState::Missing },
         };
-        // The earlier conversations, played to where they stopped.
-        for c in fixture::conversations() {
+        // The earlier conversations, played to where they stopped, and the
+        // one the check-up and server-down fixtures add.
+        let n = fixture::CLOCK.now;
+        let mut all = fixture::conversations();
+        match name {
+            "checkup" => all.push(fixture::Conversation {
+                title: "Give my computer a check-up",
+                at: n - 40_000,
+                text: "Give my computer a check-up",
+                script: fixture::checkup(),
+                act: true,
+                desktop: false,
+            }),
+            "server-down" => all.push(fixture::Conversation {
+                title: "Is my graphics card running hot?",
+                at: n - 30_000,
+                text: "Is my graphics card running hot?",
+                script: fixture::server_down(),
+                act: true,
+                desktop: false,
+            }),
+            _ => {}
+        }
+        for c in all {
             let id = t.add_conversation(c.at, c.act, c.desktop);
             let conv = t.conversation_mut(id).expect("just added");
             conv.title = c.title.to_owned();
@@ -475,6 +499,15 @@ impl Tasuke {
                 Page::Conversation(by_title(&t, "Clean up old system versions").expect("in the fixture"))
             }
             "day-theme" => Page::Conversation(by_title(&t, "Switch to the Day theme").expect("in the fixture")),
+            "checkup" => {
+                t.chip.state = ModelState::Ready;
+                Page::Conversation(by_title(&t, "Give my computer a check-up").expect("in the fixture"))
+            }
+            "server-down" => {
+                t.chip.state = ModelState::Off;
+                t.models.server = "Stopped · it starts when you send something".into();
+                Page::Conversation(by_title(&t, "Is my graphics card running hot?").expect("in the fixture"))
+            }
             "models-8gb" | "models-32gb" | "models-unified" => Page::Models,
             "memory" => Page::Memory,
             _ => Page::Conversation(t.new_conversation_id()),
@@ -902,14 +935,13 @@ impl Tasuke {
                 else {
                     return;
                 };
-                // The message stays; the turn runs again.
-                if let Some(c) = self.conversation_mut(id) {
-                    if let Some(i) =
-                        c.transcript.items.iter().rposition(|i| matches!(i.body, crate::transcript::Body::Error { .. }))
-                    {
-                        c.transcript.items.remove(i);
-                    }
-                    c.transcript.revision += 1;
+                // The message and what went wrong stay; the turn runs again
+                // (once: a turn under way isn't started twice).
+                if self.conversation(id).is_none_or(|c| c.turn.is_some()) {
+                    return;
+                }
+                if self.chip.state == ModelState::Asleep || self.chip.state == ModelState::Off {
+                    self.chip.state = ModelState::Loading;
                 }
                 match &self.backend {
                     Backend::Fixture => {

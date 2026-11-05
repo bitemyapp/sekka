@@ -389,25 +389,143 @@ pub fn swap() -> Script {
         .build()
 }
 
-/// Give my computer a check-up: several looks, then a short report.
+const ERRORS: &str = "Nov 05 08:11:02 studio kernel: ACPI BIOS Error (bug): Could not resolve symbol [\\_SB.PCI0.GPP0.SWUS], AE_NOT_FOUND
+Nov 05 08:11:02 studio kernel: ACPI Error: Aborting method \\_SB.PCI0.GPP0.SWUS._PRW due to previous error (AE_NOT_FOUND)";
+
+const FREE: &str = "               total        used        free      shared  buff/cache   available
+Mem:            62Gi        11Gi        38Gi       1.2Gi        14Gi        50Gi
+Swap:           31Gi          0B        31Gi
+NAME       TYPE      SIZE USED PRIO
+/dev/zram0 partition 31G   0B  100";
+
+const BUSY: &str = " 21:29:12 up 13:18,  1 user,  load average: 0.62, 0.71, 0.66
+32
+    PID USER     COMMAND         %CPU %MEM
+   2141 sam      aizome           3.1  1.4
+   2388 sam      aizome-shell     1.2  0.9
+   3307 sam      firefox          0.9  4.2
+   1170 root     nix-daemon       0.2  0.1
+   2420 sam      pipewire         0.1  0.1";
+
+const NETWORK: &str = "STATE      CONNECTIVITY  WIFI-HW  WIFI     WWAN-HW  WWAN
+connected  full          missing  enabled  missing  enabled
+enp14s0:ethernet:connected:Wired connection 1
+lo:loopback:connected (externally):lo
+146.75.30.217   nixos.org";
+
+const CLOCK_STATUS: &str = "               Local time: Thu 2026-11-05 21:29:14 CST
+           Universal time: Fri 2026-11-06 03:29:14 UTC
+                 RTC time: Fri 2026-11-06 03:29:14
+                Time zone: America/Chicago (CST, -0600)
+System clock synchronized: yes
+              NTP service: active
+          RTC in local TZ: no";
+
+/// Give my computer a check-up, as the sekka-checkup skill says: a dozen
+/// read-only looks, then the report in its format (a verdict, problems
+/// and warnings first, one line of what's fine, at most three fixes).
 pub fn checkup() -> Script {
+    let cmd = |c: &str| json!({ "command": c });
     Builder::new()
         .start()
-        .think("A check-up: the disk, memory, failed services, recent errors, updates. Read-only.")
-        .look("c1", "run_command", json!({"command": "df -h / /home"}), DF, Some(0), 90)
-        .look("c2", "run_command", json!({"command": "free -h"}), "               total        used        free      shared  buff/cache   available\nMem:            62Gi        11Gi        38Gi       1.2Gi        14Gi        50Gi\nSwap:           31Gi          0B        31Gi", Some(0), 30)
-        .look("c3", "run_command", json!({"command": "systemctl --failed --no-legend"}), "", Some(0), 70)
-        .look("c4", "run_command", json!({"command": "systemctl --user --failed --no-legend"}), "", Some(0), 60)
-        .look("c5", "run_command", json!({"command": "journalctl -b -p err --no-pager | tail -n 20"}), "Nov 05 08:11:02 studio kernel: ACPI BIOS Error (bug): Could not resolve symbol [\\_SB.PCI0.GPP0.SWUS], AE_NOT_FOUND", Some(0), 400)
-        .look("c6", "run_command", json!({"command": "nixos-version"}), "26.05.20261104.6f1a2c3 (Yarara)", Some(0), 20)
+        .think("A check-up: look at everything in the check-up notes, read-only, then report problems first.")
+        .look("c1", "load_skill", json!({"name": "sekka-checkup"}), "Loaded sekka-checkup.", None, 40)
+        .look(
+            "c2",
+            "run_command",
+            cmd("systemctl --failed --no-pager; systemctl --user --failed --no-pager"),
+            "0 loaded units listed.\n0 loaded units listed.",
+            Some(0),
+            120,
+        )
+        .look("c3", "run_command", cmd("journalctl -b -p err --no-pager -n 40"), ERRORS, Some(0), 380)
+        .look("c4", "run_command", cmd("df -h / /home /nix 2>/dev/null"), DF, Some(0), 60)
+        .look("c5", "run_command", cmd("journalctl --disk-usage"), "Archived and active journals take up 48.0M in the file system.", Some(0), 50)
+        .look(
+            "c6",
+            "run_command",
+            cmd("ls -d /nix/var/nix/profiles/system-*-link | wc -l; stat -c %y /nix/var/nix/profiles/system"),
+            "31\n2026-11-05 08:10:45.000000000 -0600",
+            Some(0),
+            30,
+        )
+        .look("c7", "run_command", cmd("free -h; swapon --show"), FREE, Some(0), 30)
+        .look(
+            "c8",
+            "run_command",
+            cmd("uptime; nproc; ps -eo pid,user,comm,%cpu,%mem --sort=-%cpu | head -6"),
+            BUSY,
+            Some(0),
+            90,
+        )
+        .look("c9", "run_command", cmd("coredumpctl list --since=-7d --no-pager"), "No coredumps found.", Some(1), 200)
+        .look(
+            "c10",
+            "run_command",
+            cmd("nmcli general status; nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device; getent hosts nixos.org"),
+            NETWORK,
+            Some(0),
+            160,
+        )
+        .look("c11", "run_command", cmd("timedatectl status"), CLOCK_STATUS, Some(0), 40)
+        .look(
+            "c12",
+            "run_command",
+            cmd("nvidia-smi --query-gpu=name,temperature.gpu,memory.used,memory.total --format=csv"),
+            "name, temperature.gpu, memory.used [MiB], memory.total [MiB]\nNVIDIA GeForce RTX 5090, 41, 2210 MiB, 32607 MiB",
+            Some(0),
+            300,
+        )
         .say(
-            "Your computer is in good health. In short:\n\n\
-             - **Disk**: 92% full, 40 GB free. The most worth doing: old system versions take about 140 GB. \
-             Ask me *why is my disk filling up?* and I'll walk you through it.\n\
-             - **Memory**: 11 GB of 62 GB in use; nothing is being swapped.\n\
-             - **Services**: none failed.\n\
-             - **Errors since startup**: one, an ACPI message from the firmware that's harmless and common on this kind of board.\n\
-             - **System**: Sekka on NixOS 26.05, updated yesterday.",
+            "Two things need attention.\n\n\
+             ✕ **Disk**: `/` is 92% full, with 40 GB free.\n\
+             ⚠ **Old system versions**: 31 are kept, back to 14 July; they hold most of the disk.\n\
+             ✓ **Fine**: services, errors since startup (two harmless firmware messages), memory (11 of 62 GB in use, \
+             no swap), the processor, the network and name lookup, the clock, no crashes this week, the last update \
+             (this morning) and the graphics card (41 °C).\n\n\
+             I can do these, most useful first:\n\n\
+             1. **Delete software nothing uses**, about 41 GB. No password needed.\n\
+             2. **Remove system versions older than 30 days**, about 96 GB more. Needs the administrator password.\n\
+             3. **Check the disk's health** (SMART). Needs the administrator password.\n\n\
+             Which would you like?",
+        )
+        .finish(68.0)
+        .build()
+}
+
+/// A question asked while the model server is down: the turn starts it,
+/// it doesn't answer, and the error offers Retry.
+pub fn server_down() -> Script {
+    use crate::agent::{Event, FinishReason, Level, Usage};
+    Builder::new()
+        .start()
+        .event(200, Event::Notice { level: Level::Info, text: "Starting the model server…".into() })
+        .event(
+            20_000,
+            Event::Error {
+                text: "the model server can't be reached: Connection refused (os error 111)".into(),
+                retryable: true,
+            },
+        )
+        .event(20, Event::TurnFinished { reason: FinishReason::Failed, usage: Usage::default(), decode_tps: None })
+        .build()
+}
+
+/// Is my graphics card running hot? (What Retry plays in `server-down`.)
+pub fn gpu_heat() -> Script {
+    Builder::new()
+        .start()
+        .look(
+            "h1",
+            "run_command",
+            json!({"command": "nvidia-smi --query-gpu=name,temperature.gpu,fan.speed,power.draw,utilization.gpu --format=csv"}),
+            "name, temperature.gpu, fan.speed [%], power.draw [W], utilization.gpu [%]\nNVIDIA GeForce RTX 5090, 41, 30 %, 38.52 W, 2 %",
+            Some(0),
+            300,
+        )
+        .say(
+            "No: it's at **41 °C**, using 39 W with its fans at 30%. That's an idle card, and normal. \
+             Under a game it would run at 70–80 °C, and the card slows itself down only past about 90 °C.",
         )
         .finish(68.0)
         .build()
@@ -442,6 +560,8 @@ pub fn script_for(text: &str) -> Script {
         swap()
     } else if t.contains("system versions") {
         generations()
+    } else if t.contains("graphics card") {
+        gpu_heat()
     } else {
         unscripted()
     }

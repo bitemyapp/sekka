@@ -222,7 +222,15 @@ fn item_view(app: &Tasuke, c: &Conversation, index: usize, answer: &Look<Msg>) -
                 .width(Fill)
                 .into()
         }
-        Body::Answer(a) if a.open => md::doc(&a.doc, answer),
+        // Copy is offered on a turn's last answer, once the turn is over:
+        // what the model says between steps is narration.
+        Body::Answer(a)
+            if a.open
+                || c.turn.is_some() && index + 1 == items.len()
+                || items.get(index + 1).is_some_and(|n| !matches!(n.body, Body::User { .. })) =>
+        {
+            md::doc(&a.doc, answer)
+        }
         Body::Answer(a) => {
             let copy =
                 icon_button(Icon::Copy).on_press(Msg::Copy(a.text.clone())).tooltip("Copy the answer as Markdown");
@@ -238,7 +246,10 @@ fn item_view(app: &Tasuke, c: &Conversation, index: usize, answer: &Look<Msg>) -
             };
             cards::notice(*level, text, now)
         }
-        Body::Error { text, retryable } => cards::error(c.id, text, *retryable),
+        // Retry is offered on the last thing said, while nothing runs.
+        Body::Error { text, retryable } => {
+            cards::error(c.id, text, *retryable && index + 1 == items.len() && c.turn.is_none())
+        }
     }
 }
 
