@@ -131,7 +131,43 @@ boundaries that keep their constructors private.
 
 ## Compile time
 
-Pending: a comparison of crate-only and incremental build times for every touched package, main against this branch, interleaved under the benchmark lock.
+The touched packages were built on main (`e2a1e508`) and on this branch,
+alternating which went first in each of 5 repetitions, under the benchmark
+lock, on 12 CPU threads with 8 build jobs, in dev profile. Two kinds of build
+were timed:
+- **crate-only:** `cargo clean -p`, then build, with dependencies already
+  built;
+- **incremental:** touch the package's root file, then build with
+  `CARGO_INCREMENTAL=1`.
+
+Other sessions shared the host, so the load average ran from 4.8 to 39
+(median 14). Repetitions spread by about ±15%, so read the table's smaller
+differences as noise. The table gives medians in seconds.
+
+| Package | Crate-only, main | Crate-only, branch | Change | Incremental, main | Incremental, branch | Change |
+|---|---:|---:|---:|---:|---:|---:|
+| `aizome-typestate` (new) | — | 0.11 | new | — | 0.10 | new |
+| `aizome-sys` | 4.97 | 4.84 | −3% | 0.86 | 0.83 | −3% |
+| `aizome-tansu` | 4.07 | 4.59 | +13% | 2.80 | 3.21 | +15% |
+| `aizome-hako` | 5.06 | 5.82 | +15% | 3.30 | 3.51 | +6% |
+| `aizome-yukimi` | 4.44 | 4.48 | +1% | 2.89 | 2.54 | −12% |
+| `kakehashi-core` | 1.01 | 1.01 | 0% | 0.35 | 0.33 | −6% |
+| `kakehashi` (window) | 5.72 | 5.58 | −2% | 6.93 | 6.58 | −5% |
+| `kakehashi-helper` | 0.31 | 0.33 | +4% | 0.29 | 0.39 | +33% |
+| `kakehashi-write` (new) | — | 0.21 | new | — | 0.18 | new |
+| `calamares-nixos` (Genkan backend) | 1.51 | 1.57 | +4% | 0.75 | 0.89 | +18% |
+| `genkan` (window) | 4.33 | 4.37 | +1% | 1.22 | 0.95 | −22% |
+| `yukimi-system` | 0.84 | 0.86 | +2% | 0.22 | 0.21 | −5% |
+| `yukimi-helper` | 0.58 | 0.70 | +21% | 0.42 | 0.43 | +2% |
+
+The shared crate costs 0.1 s, once per workspace. Hako and Tansu build about
+0.5 to 0.8 s slower from scratch, in step with their added code: the runs
+overlap, but the medians and most repetitions agree. `yukimi-helper`'s
++0.12 s is small but consistent. Everything else is within noise. No package
+uses a proc macro, and the macros add no dependency. The raw timings are in
+[`typestate-tier1/compile-times.txt`](typestate-tier1/compile-times.txt), from
+[`compile-times.sh`](typestate-tier1/compile-times.sh).
+
 
 ## Not caught at compile time
 
