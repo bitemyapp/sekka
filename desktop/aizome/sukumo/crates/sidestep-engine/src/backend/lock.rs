@@ -10,6 +10,10 @@
 //! compositor refuses or ends (`finished`) goes, and the main thread
 //! hears it; its surfaces then show nothing. Unlocking a lock that was
 //! never confirmed withdraws it.
+//!
+//! Each request names itself (a `LockTicket`), and what the render thread
+//! says about a lock names the request it was for, so the main thread
+//! can drop what it hears about a lock it has withdrawn since.
 
 use smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface;
 use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
@@ -18,18 +22,30 @@ use smithay_client_toolkit::session_lock::{
 };
 
 use super::{Role, Shell, State};
-use crate::protocol::FromRender;
+use crate::protocol::{FromRender, LockTicket};
 
-/// Ask for the lock, unless one is asked for or held.
-pub(super) fn lock(state: &mut State) {
-    if state.session_lock.is_some() {
+/// The lock asked for or held, and the main thread's request for it.
+pub(super) struct Held {
+    pub(super) lock: SessionLock,
+    request: LockTicket,
+}
+
+/// Ask for the lock under `request`. A lock asked for or held already
+/// becomes `request`'s, and says so if it's held (the main thread asks
+/// again only after unlocking, so this doesn't happen).
+pub(super) fn lock(state: &mut State, request: LockTicket) {
+    if let Some(held) = &mut state.session_lock {
+        held.request = request;
+        if held.lock.is_locked() {
+            state.send(FromRender::SessionLocked { lock: request });
+        }
         return;
     }
     match state.session_locks.lock(&state.qh) {
-        Ok(lock) => state.session_lock = Some(lock),
+        Ok(lock) => state.session_lock = Some(Held { lock, request }),
         Err(_) => {
             eprintln!("sidestep: the compositor has no ext-session-lock");
-            state.send(FromRender::SessionLockFinished);
+            state.send(FromRender::SessionLockFinished { lock: request });
         }
     }
 }
@@ -37,8 +53,8 @@ pub(super) fn lock(state: &mut State) {
 /// Unlock, or withdraw a lock not yet confirmed (dropping the last handle
 /// destroys it, which a compositor takes as that).
 pub(super) fn unlock(state: &mut State) {
-    if let Some(lock) = state.session_lock.take() {
-        lock.unlock();
+    if let Some(held) = state.session_lock.take() {
+        held.lock.unlock();
     }
 }
 
@@ -47,24 +63,32 @@ pub(super) fn unlock(state: &mut State) {
 /// that output, or with a lock surface there already (a second is a
 /// protocol error).
 pub(super) fn create(state: &State, surface: &WlSurface, output: u32) -> Option<SessionLockSurface> {
-    let lock = state.session_lock.as_ref()?;
+    let held = state.session_lock.as_ref()?;
     if state.windows.values().any(|w| matches!(w.shell, Shell::Lock(_, on) if on == output)) {
         return None;
     }
     let on = super::layer::output(state, output)?;
-    Some(lock.create_lock_surface(surface.clone(), &on, &state.qh))
+    Some(held.lock.create_lock_surface(surface.clone(), &on, &state.qh))
 }
 
+// The toolkit hands these events only for a lock object that's still
+// alive, and `state.session_lock` holds the only handle to one: they are
+// about the lock held, under its request. A lock withdrawn or unlocked
+// was dropped, and hears nothing more.
 impl SessionLockHandler for State {
     fn locked(&mut self, _: &Connection, _: &QueueHandle<Self>, _: SessionLock) {
-        self.send(FromRender::SessionLocked);
+        if let Some(held) = &self.session_lock {
+            self.send(FromRender::SessionLocked { lock: held.request });
+        }
     }
 
     fn finished(&mut self, _: &Connection, _: &QueueHandle<Self>, _: SessionLock) {
         // Refused or ended: the lock object goes, unlocked if it was
         // locked (as the protocol asks), else destroyed.
-        unlock(self);
-        self.send(FromRender::SessionLockFinished);
+        if let Some(held) = self.session_lock.take() {
+            held.lock.unlock();
+            self.send(FromRender::SessionLockFinished { lock: held.request });
+        }
     }
 
     fn configure(

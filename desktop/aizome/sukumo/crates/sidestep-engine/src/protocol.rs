@@ -677,6 +677,16 @@ pub enum Corner {
     BottomRight,
 }
 
+/// The kind of request the main thread counts its session locks in
+/// (`aizome_typestate::Generation<SessionLockRequest>`).
+pub enum SessionLockRequest {}
+
+/// One session lock request (`ToRender::LockSession`), as both threads
+/// name it: the render thread's answers carry the request they answer, so
+/// the main thread can tell the answer for a lock it withdrew from the
+/// answer for the lock it asks for now.
+pub type LockTicket = aizome_typestate::Ticket<SessionLockRequest>;
+
 pub enum ToRender {
     CreateWindow {
         window: WindowId,
@@ -891,12 +901,14 @@ pub enum ToRender {
         window: WindowId,
         at: Option<f64>,
     },
-    /// Lock the session (ext-session-lock): the compositor hides
-    /// everything but the lock's surfaces and gives them all input, and
-    /// answers `FromRender::SessionLocked` once it has, or
-    /// `SessionLockFinished` if it won't. Nothing while a lock is asked
-    /// for or held.
-    LockSession,
+    /// Lock the session (ext-session-lock) for request `lock`: the
+    /// compositor hides everything but the lock's surfaces and gives them
+    /// all input, and answers `FromRender::SessionLocked` once it has, or
+    /// `SessionLockFinished` if it won't, both under `lock`. A lock asked
+    /// for or held already becomes this request's.
+    LockSession {
+        lock: LockTicket,
+    },
     /// Unlock the session (or stop asking for a lock).
     UnlockSession,
     /// Make room for `bytes` of window buffers in the shared memory windows
@@ -1154,8 +1166,11 @@ pub enum FromRender {
         window: WindowId,
         time: f64,
     },
-    /// The compositor locked the session, as `ToRender::LockSession` asked.
-    SessionLocked,
+    /// The compositor locked the session, as `ToRender::LockSession` asked
+    /// under `lock`.
+    SessionLocked {
+        lock: LockTicket,
+    },
     /// A destination wants the data drag `drag` promised as `mime`: answer
     /// `ToRender::SelectionData` under `token`.
     ProvideDragData {
@@ -1175,10 +1190,13 @@ pub enum FromRender {
         request: u64,
         token: Option<String>,
     },
-    /// The session lock is over without the program unlocking it: the
-    /// compositor refused it (another program holds one, or it has no
-    /// ext-session-lock) or ended it. Its surfaces show nothing more.
-    SessionLockFinished,
+    /// The session lock asked for under `lock` is over without the program
+    /// unlocking it: the compositor refused it (another program holds one,
+    /// or it has no ext-session-lock) or ended it. Its surfaces show
+    /// nothing more.
+    SessionLockFinished {
+        lock: LockTicket,
+    },
     /// Parts of a target the render thread can't draw again on its own (a
     /// layer animated outside where its tree was recorded): the main
     /// thread repaints them.

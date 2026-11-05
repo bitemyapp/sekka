@@ -26,6 +26,7 @@ use crate::canvas::Canvas;
 use crate::color::{Appearance, Color, SystemColor};
 use crate::event::{Ime, KeyEvent, Modifiers, PointerButton, ScrollDelta, ScrollPhase, WindowEvent, WindowState};
 use crate::image::Image;
+use crate::session_lock::{SessionLock, Stage as LockStage};
 use crate::text::{Font, TextStyle};
 use crate::window::{Background, Window, WindowData, WindowId, WindowOptions, send};
 
@@ -543,15 +544,6 @@ impl DragSource {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ActivationRequest(u64);
 
-/// Where the program's session lock is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Locking {
-    Unlocked,
-    /// Asked for, not yet confirmed.
-    Asked,
-    Locked,
-}
-
 /// A timer, as [`Cx::set_timer`] returns it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct TimerId(u64);
@@ -727,7 +719,7 @@ impl App {
             primary: None,
             drags: HashMap::new(),
             looks: (Appearance::system(), Appearance::system().color(SystemColor::Accent)),
-            locking: Locking::Unlocked,
+            locking: SessionLock::unlocked(),
             next_activation: 1,
             next_drag: 1,
         };
@@ -794,7 +786,8 @@ pub struct Cx {
     drags: HashMap<u64, DragState>,
     /// The appearance and accent windows last drew in.
     looks: (Appearance, Color),
-    locking: Locking,
+    /// The session lock: asked for, held, or neither ([`crate::session_lock`]).
+    locking: SessionLock,
     next_activation: u64,
     next_drag: u64,
 }
@@ -1046,18 +1039,27 @@ impl Cx {
     /// if it won't. Nothing while a lock is asked for or held. A program
     /// that ends while it holds the lock leaves the session locked.
     pub fn lock_session(&mut self) {
-        if self.locking == Locking::Unlocked {
-            self.locking = Locking::Asked;
-            send(&self.backend.tx, ToRender::LockSession);
-        }
+        let tx = &self.backend.tx;
+        self.locking.with_typed(|lock| {
+            let next = match lock {
+                LockStage::Unlocked(unlocked) => unlocked.lock(tx).into(),
+                held @ (LockStage::Asked(_) | LockStage::Locked(_)) => held,
+            };
+            (next, ())
+        });
     }
 
     /// Unlock the session (or stop asking for a lock): the lock's
-    /// surfaces close.
+    /// surfaces close. What the compositor says about that lock from now
+    /// on is dropped.
     pub fn unlock_session(&mut self) {
-        if self.locking != Locking::Unlocked {
-            self.locking = Locking::Unlocked;
-            send(&self.backend.tx, ToRender::UnlockSession);
+        let tx = &self.backend.tx;
+        let unlocked = self.locking.with_typed(|lock| match lock {
+            LockStage::Unlocked(unlocked) => (unlocked.into(), false),
+            LockStage::Asked(asked) => (asked.unlock(tx).into(), true),
+            LockStage::Locked(locked) => (locked.unlock(tx).into(), true),
+        });
+        if unlocked {
             // After the unlock: a lock surface gone while the session is
             // locked leaves its output blank.
             self.close_lock_windows();
@@ -1066,7 +1068,12 @@ impl Cx {
 
     /// Whether the compositor has locked the session for the program.
     pub fn is_session_locked(&self) -> bool {
-        self.locking == Locking::Locked
+        self.locking.is_locked()
+    }
+
+    /// The session lock asked for or held (`testing`).
+    pub(crate) fn session_lock_request(&self) -> Option<crate::session_lock::LockTicket> {
+        self.locking.request()
     }
 
     fn close_lock_windows(&mut self) {
@@ -1602,15 +1609,38 @@ impl Cx {
             FromRender::ActivationToken { request, token } => {
                 handler.activation_token(self, ActivationRequest(request), token);
             }
-            FromRender::SessionLocked => {
-                if self.locking == Locking::Asked {
-                    self.locking = Locking::Locked;
+            // What the compositor says about a lock is for the request it
+            // names: about a lock the program has withdrawn since, it's
+            // dropped.
+            FromRender::SessionLocked { lock } => {
+                let Some(heard) = self.locking.confirmed(lock) else { return };
+                let locked = self.locking.with_typed(|state| match state {
+                    LockStage::Asked(asked) => match asked.confirmed(heard) {
+                        Ok(locked) => (locked.into(), true),
+                        Err(asked) => (asked.into(), false),
+                    },
+                    // Said twice, or (as the request was retired) never.
+                    state @ (LockStage::Locked(_) | LockStage::Unlocked(_)) => (state, false),
+                });
+                if locked {
                     handler.session_locked(self);
                 }
             }
-            FromRender::SessionLockFinished => {
-                if self.locking != Locking::Unlocked {
-                    self.locking = Locking::Unlocked;
+            FromRender::SessionLockFinished { lock } => {
+                let Some(heard) = self.locking.ended(lock) else { return };
+                let ended = self.locking.with_typed(|state| match state {
+                    LockStage::Asked(asked) => match asked.ended(heard) {
+                        Ok(unlocked) => (unlocked.into(), true),
+                        Err(asked) => (asked.into(), false),
+                    },
+                    LockStage::Locked(locked) => match locked.ended(heard) {
+                        Ok(unlocked) => (unlocked.into(), true),
+                        Err(locked) => (locked.into(), false),
+                    },
+                    // The request was retired: not fresh.
+                    state @ LockStage::Unlocked(_) => (state, false),
+                });
+                if ended {
                     self.close_lock_windows();
                     handler.session_lock_finished(self);
                 }

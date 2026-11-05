@@ -10,6 +10,8 @@ repository.workspace = true
 # Linux (and other non-Apple Unix) only: on macOS, programs use AppKit
 # through objc2.
 [target.'cfg(not(target_vendor = "apple"))'.dependencies]
+# The session lock's states and requests (src/session_lock.rs).
+aizome-typestate.workspace = true
 sidestep-engine.workspace = true
 # Geometry in the API (points, rectangles, transforms, shapes), re-exported.
 kurbo = { version = "0.13", default-features = false, features = ["std"] }
