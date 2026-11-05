@@ -172,7 +172,8 @@ uses a proc macro, and the macros add no dependency. The raw timings are in
 ## Not caught at compile time
 
 Every bug's mistake as it was written is rejected. These are what the types
-still can't rule out, grouped by why. They're for discussion.
+still can't rule out, grouped by why. A follow-up pass closed some of them,
+as each group notes; the rest are for discussion.
 
 ### Runtime facts no type can know
 
@@ -194,20 +195,44 @@ takes a proof only the comparison makes.
 
 - **GEN-34 and GEN-28:** a transition can hand back its state unchanged, for
   example a handler that ignores an event. `with_typed` accepts that.
-- **GEN-28:** a caller can still collapse `swap_size(...).is_err()` into
-  "reading".
+  - **Closed in part:** the typestate modules in all five components deny
+    `clippy::wildcard_enum_match_arm`, and every `_ =>` arm in them names
+    its cases. A `_ =>` that hides a new state or event fails clippy.
+  - **Still open:** an arm that names a state and hands it back unchanged.
+- **GEN-28:** a caller could collapse the swap partition's size into
+  "reading". **Closed:** it's an enum (`Off`, `Known`, `Reading`,
+  `Unreadable`) with no shortcuts, so a caller must match it, and
+  `.is_err()` doesn't compile.
 - **YUK-09, YUK-11 and HAKO-05:** dropping a transaction mid-way is covered
-  by an `Unsettled` fallback at run time. A process killed with SIGKILL
-  skips the fallback. In YUK-11 the boot menu then stays stale until the
-  next Clean Up.
+  by an `Unsettled` fallback at run time, and a process killed with SIGKILL
+  skips the fallback.
+  - **Closed for YUK-11:** Clean Up records the deletion durably in
+    `/var/lib/yukimi/clean-up.json` before it starts, and removes the record
+    only after the boot menu is rewritten. The operation's systemd unit runs
+    `yukimi-helper __recover` from `ExecStopPost=`, which systemd runs
+    however the worker ended, SIGKILL included. Every operation also
+    recovers at its start, which covers a power cut. Recovery takes the
+    operation lock, so it never runs beside a live Clean Up.
+  - **Still open:** YUK-09 and HAKO-05 have no record of this kind.
 
 ### Enforced by a lint, not a type
 
 Yukimi and Genkan let only their typed steps name the programs that change
 the system or a disk (a `Program` value with a private constructor). The
 other ways to start a program are banned by clippy `disallowed-methods`,
-which their Nix check phases run. What remains open:
-- code behind `#[allow]` or unsafe FFI;
+which their Nix check phases run.
+
+**Closed:**
+- **The program ban:** the helper and window binaries now `forbid` it, so a
+  local `#[allow]` there is an error (E0453). The libraries keep `deny`,
+  because their one process module must start programs.
+- **`unsafe`:** it's confined to one system-call module per crate (Genkan
+  also keeps libnm's FFI), denied in the libraries and forbidden in the
+  binaries.
+- **A Nix check-phase guard:** it fails the build if either lint is allowed
+  anywhere but those modules.
+
+**Still open:**
 - free-form `nix build` and `systemctl` arguments (Yukimi);
 - writing the device node with ordinary file APIs (Genkan).
 
@@ -221,13 +246,22 @@ which their Nix check phases run. What remains open:
 
 ### Hardware that looks identical
 
-- **Kakehashi:** two serial-less sticks of the same model and size, or two
-  cards behind one reader, look like the same drive. The kernel's disk
-  sequence number would separate them, but media-change events also bump it
-  and would refuse legitimate card-reader writes, so it wasn't added.
-- **aizome-sys:** it also compares UDisks' detection times, which change with
-  each plug. Only a card swapped within one poll of the reader could slip
-  through.
+**Closed in part:** a drive's identity now includes its USB port, compared
+when both readings have one, so an identical serial-less stick in another
+port, or a stick moved to another port, no longer matches.
+- **Kakehashi:** the port comes from sysfs on Linux and from the IOKit
+  location ID on macOS. Windows doesn't read it. The dialog shows the port.
+- **aizome-sys:** the port comes from the disk's USB `/dev/disk/by-path`
+  link.
+
+**Still open:**
+- **Kakehashi:** an identical stick put into the same port, or two cards
+  behind one reader. The kernel's disk sequence number would separate them,
+  but media-change events also bump it and would refuse legitimate
+  card-reader writes, so it wasn't added.
+- **aizome-sys:** it also compares UDisks' detection times, which change
+  with each plug. Only a card swapped within one poll of the reader could
+  slip through.
 
 ### Left as follow-ups
 
@@ -256,6 +290,8 @@ which their Nix check phases run. What remains open:
 **Kakehashi**
 - A drive swapped or re-plugged while the dialog is open isn't written, and
   the window says why.
+- The dialog shows the drive's USB port. A stick moved to another port is
+  treated as another drive.
 - A helper killed after it reported shows the "partly written" warning.
 
 **Tansu**
@@ -284,10 +320,13 @@ which their Nix check phases run. What remains open:
 - **Genkan's helper protocol:** unchanged on the wire. The helper now
   refuses a confirmation sent before `Prepared` instead of keeping it, and
   the GUI sends one only after `Prepared`.
-- **Kakehashi's `plan.json` and progress lines:** unchanged. The helper reads
-  the plan as its own type.
+- **Kakehashi's `plan.json`:** it gains an optional `port` key, omitted when
+  there's none, and old plans still read. The progress lines are unchanged.
+  The helper reads the plan as its own type.
 - **Yukimi's saved configurations:** they gain a `.system` record. Copies
   from before it are accepted once and then recorded.
+- **Yukimi's Clean Up:** it writes `/var/lib/yukimi/clean-up.json` while it
+  runs.
 - **Aizome-sys's API:** `Destructive` is now `Change`, and making partitions,
   labels, partition type, name and flags, and passphrase changes now needs a
   confirmation. Only Tansu calls it.
@@ -300,20 +339,22 @@ The check kinds are kept apart, as `AGENTS.md` asks.
 
   | Workspace | Tests passed | Doctests passed, codes checked |
   |---|---:|---:|
-  | Aizome (crate, aizome-sys, Tansu, Hako, Yukimi window) | 641 | 61 |
-  | Kakehashi | 75 | 20 |
+  | Aizome (crate, aizome-sys, Tansu, Hako, Yukimi window) | 644 | 61 |
+  | Kakehashi | 79 | 20 |
   | Yukimi | 164, plus 4 namespace end-to-end | 24 |
   | Genkan backend | 125 | 29 |
-  | Genkan UI | 46 | 6 |
+  | Genkan UI | 48 | 8 |
 
   Clippy is clean in every workspace.
 - **Regression tests:** each fails on main and passes here.
 - **Nix builds:** `.#kakehashi`, `.#yukimi.helper` (with its new clippy
   pass), `.#genkan`, `.#genkan.helper` and `.#vm-fixture`.
 - **VM checks**, in disposable NixOS VMs:
-  - `kakehashi-vm`, all four subtests;
+  - `kakehashi-vm`, all five subtests, including one where the helper
+    refuses the plan's drive in another port;
   - `storage`;
-  - `encrypted-storage`, 12 BIOS and UEFI cases;
+  - `encrypted-storage`, 12 BIOS and UEFI cases, re-run after the disk
+    lock moved into Genkan's system-call module;
   - `genkan-preflight`;
   - `tansu-resize`.
 - **ISO installs:** pending. UEFI GUI installs from an ISO built from this branch, confirming before and after preparation finishes; the deferred route on a disk too small and on one large enough; and a scripted helper-session install.
