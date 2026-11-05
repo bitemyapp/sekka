@@ -90,6 +90,11 @@
 /// Everything it declares is `#[inline]` or generic, so a machine compiles
 /// only what it uses.
 ///
+/// Keep state data small: a transition that returns `Result<Next, Self>`
+/// carries the whole state in its error, and clippy's `result_large_err`
+/// flags a large one. Box data that's large or rarely touched
+/// (`Review(Box<ReviewData>)`).
+///
 /// Code outside the module can't make a state, open a stored state or set
 /// the machine's state:
 ///
