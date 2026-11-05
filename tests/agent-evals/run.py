@@ -192,7 +192,7 @@ def main():
             run_batch(args, drv, run_dir, label, model_cfg, chosen, results)
         finally:
             if not args.no_serve:
-                subprocess.run(server_cmd() + ["stop"])
+                subprocess.run(server_cmd() + ["stop", "--port", str(args.port)])
 
 
 if __name__ == "__main__":

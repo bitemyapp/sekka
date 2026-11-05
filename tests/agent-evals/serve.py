@@ -29,7 +29,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REGISTRY = Path(os.environ.get("SEKKA_MODELS_TOML", HERE / "models.toml"))
 CACHE = Path(os.environ.get("SEKKA_MODELS", Path.home() / ".cache" / "sekka-models"))
-STATE = CACHE / "server.json"
+def state_file(port=8080):
+    """One server per port; 8080's state keeps its first name."""
+    return CACHE / ("server.json" if port == 8080 else f"server-{port}.json")
 IMAGES = {
     # Pinned by digest, as inferrous pins them (the images are already
     # pulled on runnymede).
@@ -162,7 +164,7 @@ def health(port):
 
 
 def start(m, port, parallel, ctx, extra, wait=1800, total=None, kv="q8_0"):
-    stop(quiet=True)
+    stop(quiet=True, port=port)
     for f in files_of(m):
         if not path_of(m, f).exists():
             sys.exit(f"{path_of(m, f)} is missing: run `download {m['name']}` first")
@@ -170,12 +172,12 @@ def start(m, port, parallel, ctx, extra, wait=1800, total=None, kv="q8_0"):
         argv = llama_command(m, port, parallel, ctx, extra, total=total or m.get("total_ctx"), kv=kv)
     else:
         argv = container_command(m, port, parallel, ctx, extra)
-    log = CACHE / f"server-{m['name']}.log"
+    log = CACHE / f"server-{m['name']}{'' if port == 8080 else '-' + str(port)}.log"
     CACHE.mkdir(parents=True, exist_ok=True)
     out = open(log, "w")
     print(" ".join(argv), file=out, flush=True)
     proc = subprocess.Popen(argv, stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
-    STATE.write_text(json.dumps({"pid": proc.pid, "model": m["name"], "engine": m["engine"], "port": port,
+    state_file(port).write_text(json.dumps({"pid": proc.pid, "model": m["name"], "engine": m["engine"], "port": port,
                                  "parallel": parallel, "ctx": ctx, "argv": argv, "log": str(log),
                                  "started": time.time()}))
     deadline = time.monotonic() + wait
@@ -189,12 +191,13 @@ def start(m, port, parallel, ctx, extra, wait=1800, total=None, kv="q8_0"):
     sys.exit(f"the server didn't come up in {wait} s; see {log}")
 
 
-def stop(quiet=False):
-    if not STATE.exists():
+def stop(quiet=False, port=8080):
+    state = state_file(port)
+    if not state.exists():
         if not quiet:
             print("no server running")
         return
-    s = json.loads(STATE.read_text())
+    s = json.loads(state.read_text())
     if s["engine"] != "llama.cpp":
         subprocess.run(["docker", "stop", "-t", "20", f"sekka-model-{s['port']}"], capture_output=True)
     try:
@@ -205,7 +208,7 @@ def stop(quiet=False):
         os.killpg(s["pid"], signal.SIGKILL)
     except ProcessLookupError:
         pass
-    STATE.unlink(missing_ok=True)
+    state.unlink(missing_ok=True)
     if not quiet:
         print(f"stopped {s['model']}")
 
@@ -305,7 +308,7 @@ def main():
     s.add_argument("--plain", action="store_true", help="leave out the model's own server arguments "
                    "(models.toml `args`, such as speculative decoding), to measure without them")
     s.add_argument("extra", nargs="*", help="further server arguments, after --")
-    sub.add_parser("stop")
+    sub.add_parser("stop").add_argument("--port", type=int, default=8080)
     b = sub.add_parser("bench")
     b.add_argument("model", nargs="?")
     b.add_argument("--port", type=int, default=8080)
@@ -329,9 +332,9 @@ def main():
             m["args"] = []
         start(m, a.port, a.parallel, a.ctx, a.extra, total=a.total_ctx, kv=a.kv)
     elif a.cmd == "stop":
-        stop()
+        stop(port=a.port)
     elif a.cmd == "bench":
-        name = a.model or json.loads(STATE.read_text())["model"]
+        name = a.model or json.loads(state_file(a.port).read_text())["model"]
         print(json.dumps(bench(a.port, name, a.max_tokens, [int(c) for c in a.concurrency.split(",")]), indent=2))
 
 

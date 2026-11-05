@@ -11,6 +11,11 @@
   sshKeys,
   # oh-my-pi, for the `--agent omp` condition (the flake's pinned input).
   ompPackage ? null,
+  # The screen (the harness's computer-use points assume 1440×900).
+  screen ? {
+    x = 1440;
+    y = 900;
+  },
 }:
 {
   config,
@@ -84,13 +89,10 @@ in
     memorySize = 4096;
     cores = 4;
     diskSize = 4096;
-    resolution = {
-      x = 1440;
-      y = 900;
-    };
+    resolution = screen;
     qemu.options = [
       "-vga none"
-      "-device virtio-gpu-pci,xres=1440,yres=900"
+      "-device virtio-gpu-pci,xres=${toString screen.x},yres=${toString screen.y}"
     ];
     # /srv/data: a small disk of its own, so filling it fills only it.
     emptyDiskImages = [ 64 ];

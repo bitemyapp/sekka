@@ -36,6 +36,39 @@ let
       episode.run(machine)
     '';
   };
+  # A recorded demonstration (harness/demo.py): the same machine on a
+  # 1920×1080 screen, with omp in alice's terminal against a model server on
+  # the host at port 8090, recorded by Aizome's own screen recorder.
+  demo = pkgs.testers.runNixOSTest {
+    name = "sekka-agent-demo";
+    globalTimeout = 2 * 3600;
+    node.pkgsReadOnly = false;
+    nodes.machine =
+      { lib, ... }:
+      {
+        imports = [
+          (import ./machine.nix {
+            inherit desktopsModule sshKeys ompPackage;
+            screen = {
+              x = 1920;
+              y = 1080;
+            };
+          })
+        ];
+        # The recording is rendered and encoded in software.
+        virtualisation.cores = lib.mkForce 8;
+        virtualisation.memorySize = lib.mkForce 8192;
+        environment.variables.LLAMA_CPP_BASE_URL = "http://10.0.2.2:8090";
+      };
+    skipLint = true;
+    skipTypeCheck = true;
+    testScript = ''
+      import os, sys
+      sys.path.insert(0, os.environ.get("SEKKA_EVAL_HARNESS") or "${harness}")
+      import demo
+      demo.run(machine)
+    '';
+  };
   run = pkgs.writeShellApplication {
     name = "sekka-agent-evals";
     runtimeInputs = [
@@ -53,5 +86,6 @@ let
 in
 {
   inherit test harness run;
+  demo-driver = demo.driver;
   inherit (test) driver driverInteractive;
 }
