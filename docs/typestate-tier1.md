@@ -256,7 +256,10 @@ person's press, which only the toolkit makes. Aizome's kit makes an
 `Confirm::new` takes one, and so do Tansu's run, Hako's Replace and
 Genkan's confirmation. Kakehashi's window makes a `dialog::Pressed` in the
 dialog's OK handler, and the helper starts only for a plan holding one.
-The stale ticket is still refused at run time. What a press can't show is
+The stale ticket is still refused at run time. Kakehashi's GPUI could press
+OK from the window's own code (`Window::dispatch_action` and its kin): a
+Clippy ban, run by the Nix check, rejects that, not a type. What a press
+can't show is
 in [DEVELOPERS.md](../DEVELOPERS.md#component-development): input the compositor
 or the system accepts from a program presses as a person does, and a
 privileged helper can't see a press at all.
