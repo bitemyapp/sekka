@@ -19,6 +19,7 @@
   src,
   yukimiSrc,
   hotaruSrc,
+  tasukeSrc,
   ghosttyLicense,
   uucodeLicense,
   unicodeLicense,
@@ -32,6 +33,7 @@ let
     cp -r ${src} $out/desktop/aizome
     cp -r ${yukimiSrc} $out/apps/yukimi
     cp -r ${hotaruSrc} $out/apps/hotaru
+    cp -r ${tasukeSrc} $out/apps/tasuke
   '';
 in
 rustPlatform.buildRustPackage {

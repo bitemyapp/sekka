@@ -73,6 +73,20 @@ let
       ../../../apps/yukimi/crates
     ];
   };
+  # Tasuke's libraries (the agent and model management) and the model
+  # catalog they compile in, for the Assistant window; not its CLI or root
+  # helper, so edits to those don't rebuild Aizome.
+  tasukeSrc = lib.fileset.toSource {
+    root = ../../../apps/tasuke;
+    fileset = lib.fileset.unions [
+      ../../../apps/tasuke/Cargo.toml
+      ../../../apps/tasuke/crates/tasuke-models/Cargo.toml
+      ../../../apps/tasuke/crates/tasuke-models/src
+      ../../../apps/tasuke/crates/tasuke-agent/Cargo.toml
+      ../../../apps/tasuke/crates/tasuke-agent/src
+      ../../../apps/tasuke/catalog/models.toml
+    ];
+  };
   hotaruSrc = lib.fileset.toSource {
     root = ../../../apps/hotaru;
     fileset = lib.fileset.unions [
@@ -97,6 +111,7 @@ let
           src
           yukimiSrc
           hotaruSrc
+          tasukeSrc
           ghosttyLicense
           uucodeLicense
           unicodeLicense
@@ -111,6 +126,7 @@ let
           src
           yukimiSrc
           hotaruSrc
+          tasukeSrc
           ghosttyLicense
           uucodeLicense
           unicodeLicense
