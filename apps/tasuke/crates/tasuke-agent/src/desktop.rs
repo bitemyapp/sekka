@@ -93,11 +93,14 @@ pub(crate) struct Desktop<'a> {
     shot_count: u32,
     pub frame: Option<Frame>,
     pub marks: Vec<Mark>,
+    /// Where Tasuke last put the pointer, in layout points: an open menu's
+    /// place follows from it (see [`popup_origin`]).
+    pointer: std::cell::Cell<Option<ScreenPoint>>,
 }
 
 impl<'a> Desktop<'a> {
     pub(crate) fn new(options: &'a Options, cancel: &'a AtomicBool, shots: PathBuf) -> Desktop<'a> {
-        Desktop { options, cancel, shots, shot_count: 0, frame: None, marks: Vec::new() }
+        Desktop { options, cancel, shots, shot_count: 0, frame: None, marks: Vec::new(), pointer: Default::default() }
     }
 
     fn aizomectl(&self, args: &[&str]) -> Result<String, String> {
@@ -203,8 +206,31 @@ impl<'a> Desktop<'a> {
             lines.push(format!("shell: {title}"));
             add_marks(d, ox, oy, title, &mut marks, &mut lines);
         }
-        if docs.iter().any(|d| matches!(d.get("kind").and_then(Value::as_str), Some("menu" | "popover"))) {
-            lines.push("(a menu or popover is open; its items aren't numbered: use the keyboard or a screenshot)".into());
+        // An open menu or popover: kit says where the pointer is inside it,
+        // and Tasuke knows where it put the pointer, so its items can be
+        // numbered too (a menu opened by a click opens under the pointer).
+        for d in &docs {
+            if !matches!(d.get("kind").and_then(Value::as_str), Some("menu" | "popover")) {
+                continue;
+            }
+            match popup_origin(d, self.pointer.get()) {
+                Some((ox, oy)) => {
+                    lines.push(format!("open {}", d.get("kind").and_then(Value::as_str).unwrap_or("menu")));
+                    add_marks(d, ox, oy, "menu", &mut marks, &mut lines);
+                }
+                None => {
+                    let items: Vec<&str> = d
+                        .get("elements")
+                        .and_then(Value::as_array)
+                        .map(|es| es.iter().filter_map(|e| e.get("label").or_else(|| e.get("text"))?.as_str()).collect())
+                        .unwrap_or_default();
+                    lines.push(format!(
+                        "(a menu is open but its place isn't known, so its items aren't numbered: {}. Choose with the \
+                         up/down keys and return, or press escape)",
+                        items.iter().take(20).map(|i| format!("\"{i}\"")).collect::<Vec<_>>().join(", ")
+                    ));
+                }
+            }
         }
         self.marks = marks;
         if lines.is_empty() { "(no windows are open)".into() } else { lines.join("\n") }
@@ -301,6 +327,7 @@ impl<'a> Desktop<'a> {
     }
 
     pub(crate) fn click(&self, at: ScreenPoint, button: MouseButton, count: u32) -> Result<(), String> {
+        self.pointer.set(Some(at));
         self.aizomectl(&["input", "motion", &fmt(at.x), &fmt(at.y)])?;
         for _ in 0..count.clamp(1, 3) {
             self.aizomectl(&["input", "click", button.as_str()])?;
@@ -309,6 +336,7 @@ impl<'a> Desktop<'a> {
     }
 
     pub(crate) fn drag(&self, from: ScreenPoint, to: ScreenPoint) -> Result<(), String> {
+        self.pointer.set(Some(to));
         self.aizomectl(&["input", "motion", &fmt(from.x), &fmt(from.y)])?;
         self.aizomectl(&["input", "button", "left", "down"])?;
         for i in 1..=8 {
@@ -322,6 +350,7 @@ impl<'a> Desktop<'a> {
     }
 
     pub(crate) fn scroll(&self, at: ScreenPoint, lines: f64) -> Result<(), String> {
+        self.pointer.set(Some(at));
         self.aizomectl(&["input", "motion", &fmt(at.x), &fmt(at.y)])?;
         self.aizomectl(&["input", "scroll", "0", &format!("{:.1}", lines * 15.0)]).map(|_| ())
     }
@@ -372,6 +401,15 @@ impl<'a> Desktop<'a> {
         self.aizomectl(&args)?;
         Ok(entry.name.clone())
     }
+}
+
+/// A popup's top left in layout points, from where the pointer is in it
+/// (`pointer` in its inspection file) and where it is on screen.
+fn popup_origin(doc: &Value, pointer: Option<ScreenPoint>) -> Option<(f64, f64)> {
+    let at = pointer?;
+    let local = doc.get("pointer")?.as_array()?;
+    let (lx, ly) = (local.first()?.as_f64()?, local.get(1)?.as_f64()?);
+    Some((at.x - lx, at.y - ly))
 }
 
 fn fmt(v: f64) -> String {
@@ -669,6 +707,22 @@ const DIGITS: [[u8; 5]; 10] = [
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn an_open_menu_is_placed_from_the_pointer() {
+        let menu = json!({"kind": "menu", "pointer": [40.0, 12.0], "size": [160, 120], "elements": [
+            {"rect": [0, 0, 160, 24], "shown": [0, 0, 160, 24], "role": "menuitem", "label": "10 minutes"},
+            {"rect": [0, 24, 160, 24], "shown": [0, 24, 160, 24], "role": "menuitem", "label": "30 minutes"}]});
+        let (ox, oy) = popup_origin(&menu, Some(ScreenPoint { x: 940.0, y: 785.0 })).unwrap();
+        assert_eq!((ox, oy), (900.0, 773.0));
+        let mut marks = Vec::new();
+        let mut lines = Vec::new();
+        add_marks(&menu, ox, oy, "menu", &mut marks, &mut lines);
+        assert_eq!(marks[1].label, "30 minutes");
+        assert_eq!(marks[1].area.center(), ScreenPoint { x: 980.0, y: 809.0 });
+        assert_eq!(popup_origin(&json!({"kind": "menu", "pointer": null}), Some(ScreenPoint { x: 1.0, y: 1.0 })), None);
+        assert_eq!(popup_origin(&menu, None), None);
+    }
 
     #[test]
     fn keys_normalize() {
