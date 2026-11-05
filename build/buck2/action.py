@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shlex
 import subprocess
+import sys
 
 ROOT_TOKEN = "${SEKKA_EXEC_ROOT}"
 

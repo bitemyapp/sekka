@@ -61,6 +61,7 @@ pub fn answer(_: TokenStream) -> TokenStream {
                 "native/native.c": 'int native_value(void) { return 11; }\n',
                 "native/build.rs": '''use std::{env, fs, path::PathBuf, process::Command};
 fn main() {
+    println!("cargo:warning=compiler contract warning-path regression");
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     let status = Command::new(env::var_os("CC").unwrap())
         .args(["-shared", "-fPIC", "native.c", "-o"])
