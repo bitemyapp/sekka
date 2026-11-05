@@ -432,6 +432,8 @@ def main():
                              help="Root-locked service worker runtime store root (Nix wrapper supplies default)")
     for command in ("up", "stop", "restart", "logs", "status", "issue-reader", "metrics", "inventory"):
         sub.add_parser(command)
+    cache_inventory = sub.add_parser("cache-inventory", help="Snapshot persistent cache entries with owned backends paused")
+    cache_inventory.add_argument("--timeout", type=int, default=60, help="Seconds to await configured cache byte bounds")
     destroy = sub.add_parser("destroy")
     destroy.add_argument("--purge-state", action="store_true", help="Remove only the validated owned deployment directory after stopping containers")
     retain = sub.add_parser("retain")
@@ -460,11 +462,13 @@ def main():
         expected = runtime_paths(m.get("worker_runtime"))
         if any(m.get(key) != value for key, value in expected.items()):
             raise SystemExit("Manifest interpreters must come from worker_runtime; run runtime and regenerate clients")
-    if args.command == "inventory":
+    if args.command in ("inventory", "cache-inventory"):
         script = os.environ.get("SEKKA_BUILD_SERVICE_INVENTORY",
                                 str(Path(__file__).resolve().parents[1] / "nix/build-service/inventory.py"))
         subprocess.run([sys.executable, script, "--controller", str(Path(__file__).resolve()),
-                        "--manifest", str(args.manifest), *(["--local"] if LOCAL else [])], check=True)
+                        "--manifest", str(args.manifest), *(["--local"] if LOCAL else []),
+                        *(["--cache-entries", "--timeout", str(args.timeout)]
+                          if args.command == "cache-inventory" else [])], check=True)
         return
     if args.command == "connection-info":
         print(json.dumps(connection_info(m, args.domain)))
