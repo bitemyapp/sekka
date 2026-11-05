@@ -17,7 +17,7 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
         )
         .size(13.0)
         .role(Role::Text2)
-        .wrap(),
+        .wrap().line_height(1.4),
     ]
     .spacing(4.0);
     let body: Element<Msg> = if app.notes.is_empty() {
@@ -31,7 +31,7 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
                 )
                 .size(12.5)
                 .role(Role::Text3)
-                .wrap()
+                .wrap().line_height(1.4)
                 .center(),
             ]
             .spacing(8.0)
@@ -51,7 +51,7 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
             .flat_map(|(i, n)| {
                 let line: Element<Msg> = row![
                     column![
-                        text(n.text.clone()).size(13.5).wrap(),
+                        text(n.text.clone()).size(13.5).wrap().line_height(1.4),
                         text(format!("Noted {}", clock.when(n.created))).size(11.5).role(Role::Text3),
                     ]
                     .spacing(3.0)
@@ -79,7 +79,7 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
                 text("Tasuke adds a note when you ask it to remember something, and says so in the conversation.")
                     .size(12.0)
                     .role(Role::Text3)
-                    .wrap(),
+                    .wrap().line_height(1.4),
             ]
             .spacing(8.0)
             .padding([8.0, 2.0, 0.0, 2.0]),

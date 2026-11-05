@@ -88,7 +88,7 @@ fn home(app: &Tasuke, c: &Conversation) -> Element<Msg> {
         text("Ask about your computer, or ask me to do something. I look around freely, and change nothing until you say Run.")
             .size(14.0)
             .role(Role::Text2)
-            .wrap(),
+            .wrap().line_height(1.4),
         container(model_line(app)).padding([2.0, 0.0, 10.0, 0.0]),
         column_of(pairs).spacing(10.0).width(Fill),
         container(
@@ -117,7 +117,12 @@ pub(crate) fn state_glyph(s: ModelState) -> (Icon, Role) {
 
 /// Room above a row: messages apart, steps together.
 fn gap(prev: Option<&Body>, this: &Body) -> f64 {
-    let step = |b: &Body| matches!(b, Body::Tool(_) | Body::Reasoning(_) | Body::Notice { .. });
+    // A card (a call that asked) and a picture stand apart; steps don't.
+    let step = |b: &Body| match b {
+        Body::Tool(t) => t.gate.is_none() && t.call.name != "screenshot",
+        Body::Reasoning(_) | Body::Notice { .. } => true,
+        _ => false,
+    };
     match (prev, this) {
         (None, _) => 0.0,
         (_, Body::User { .. }) => 28.0,
@@ -186,7 +191,7 @@ fn working(app: &Tasuke, c: &Conversation) -> Option<Element<Msg>> {
 fn item_view(app: &Tasuke, c: &Conversation, item: &Item, answer: &Look<Msg>) -> Element<Msg> {
     match &item.body {
         Body::User { text, .. } => container(
-            prose([(Span::new(text.clone()), None)]).font(FontSpec::ui(ANSWER)).line_height(1.5),
+            prose([(Span::new(text.clone()), None)]).font(FontSpec::ui(ANSWER)).line_height(1.35),
         )
         .padding([10.0, 14.0])
         .fill(Tone::Chrome)
@@ -264,7 +269,7 @@ fn composer_bar(app: &Tasuke, c: &Conversation) -> Element<Msg> {
     let hint = text("Return sends · ⇧Return starts a new line").size(11.0).role(Role::Faint);
     let under = row![chip(app), spacer(), hint].spacing(12.0);
     let _ = matches!(c.turn, Some(Turn::Script(_)));
-    container(column![boxed, under].spacing(8.0).max_width(READING + 48.0))
+    container(column![boxed, under].spacing(8.0).max_width(READING))
         .align_x(Align::Center)
         .padding([4.0, 32.0, 14.0, 32.0])
         .width(Fill)

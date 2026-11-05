@@ -26,11 +26,11 @@ fn frame(parts: Vec<Element<Msg>>) -> Element<Msg> {
 }
 
 fn para(words: &str) -> Element<Msg> {
-    text(words.to_owned()).size(13.5).role(Role::Text2).wrap().into()
+    text(words.to_owned()).size(13.5).role(Role::Text2).wrap().line_height(1.4).into()
 }
 
 fn point(glyph: Icon, words: String) -> Element<Msg> {
-    row![icon(glyph).size(15.0).role(Role::Text3), text(words).size(13.0).role(Role::Text2).wrap()].spacing(10.0).align(Align::Start).into()
+    row![super::lead(icon(glyph).size(15.0).role(Role::Text3)), text(words).size(13.0).role(Role::Text2).wrap().line_height(1.4)].spacing(10.0).align(Align::Start).into()
 }
 
 pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
@@ -67,7 +67,7 @@ pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
                             bar::verdict(&fb),
                             bar::bar(&fb, 12.0),
                             bar::legend(&fb),
-                            text(score).size(12.5).role(Role::Text2).wrap(),
+                            text(score).size(12.5).role(Role::Text2).wrap().line_height(1.4),
                         ]
                         .spacing(8.0)
                         .width(Fill),
@@ -94,7 +94,7 @@ pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
                         ))
                         .size(12.0)
                         .role(Role::Text3)
-                        .wrap()
+                        .wrap().line_height(1.4)
                         .into(),
                     );
                 }

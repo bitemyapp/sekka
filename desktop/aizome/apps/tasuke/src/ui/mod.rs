@@ -70,7 +70,7 @@ fn sidebar(app: &Tasuke) -> Element<Msg> {
         })
         .collect();
     let list: Element<Msg> = if items.is_empty() {
-        container(text("Your conversations will be listed here.").size(12.0).role(Role::Text3).wrap())
+        container(text("Your conversations will be listed here.").size(12.0).role(Role::Text3).wrap().line_height(1.4))
             .padding([4.0, 12.0])
             .into()
     } else {
@@ -113,4 +113,14 @@ fn conversation_item(id: ConvId, title: &str, detail: &str, selected: bool, wait
         item.into()
     };
     el.key(id.0)
+}
+
+/// How far an icon beside wrapped text comes down to sit on its first
+/// line (text set at a reading line height has room above it).
+const LEAD: f64 = 4.0;
+
+/// An icon (or a small element) put level with the first line of wrapped
+/// text beside it, in a row aligned to the top.
+pub(crate) fn lead(e: impl Into<Element<Msg>>) -> Element<Msg> {
+    container(e).padding([LEAD, 0.0, 0.0, 0.0]).into()
 }

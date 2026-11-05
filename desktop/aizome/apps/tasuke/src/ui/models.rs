@@ -22,13 +22,13 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
         )
         .size(13.0)
         .role(Role::Text2)
-        .wrap(),
+        .wrap().line_height(1.4),
     ]
     .spacing(4.0);
     let mut parts: Vec<Element<Msg>> = vec![header.into()];
     if let Some(p) = &app.models.problem {
         parts.push(
-            container(row![icon(Icon::CircleAlert).size(15.0).role(Role::Danger), text(p.clone()).wrap()].spacing(8.0))
+            container(row![icon(Icon::CircleAlert).size(15.0).role(Role::Danger), text(p.clone()).wrap().line_height(1.4)].spacing(8.0))
                 .padding([8.0, 12.0])
                 .fill(Tone::Chrome)
                 .border(Edge::Line)
@@ -86,7 +86,7 @@ pub(crate) fn machine(app: &Tasuke, hw: &tasuke_models::Hardware) -> Element<Msg
             column![
                 column_of(lines).spacing(8.0),
                 divider().edge(Edge::Line),
-                row![icon(Icon::Info).size(13.0).role(Role::Text3), text(models::budget_words(hw)).size(12.5).role(Role::Text2).wrap()]
+                row![super::lead(icon(Icon::Info).size(13.0).role(Role::Text3)), text(models::budget_words(hw)).size(12.5).role(Role::Text2).wrap().line_height(1.4)]
                     .spacing(8.0)
                     .align(Align::Start),
             ]
@@ -110,7 +110,7 @@ pub(crate) fn machine(app: &Tasuke, hw: &tasuke_models::Hardware) -> Element<Msg
 
 fn section(s: &Section) -> Element<Msg> {
     let mut parts: Vec<Element<Msg>> = vec![
-        column![text(s.title).size(16.0).weight(700.0), text(s.about).size(12.5).role(Role::Text2).wrap()].spacing(2.0).into(),
+        column![text(s.title).size(16.0).weight(700.0), text(s.about).size(12.5).role(Role::Text2).wrap().line_height(1.4)].spacing(2.0).into(),
     ];
     match s.cards.split_first() {
         None => parts.push(
@@ -184,7 +184,7 @@ fn card(c: &Card, first: bool) -> Element<Msg> {
     };
     let who = format!("By {} · {} · {} · {}", c.maker, c.lineage, c.origin, licence);
     let head = row![
-        column![tags, text(who).size(12.0).role(Role::Text3).wrap()].spacing(4.0).width(Fill),
+        column![tags, text(who).size(12.0).role(Role::Text3).wrap().line_height(1.4)].spacing(4.0).width(Fill),
         actions(c),
     ]
     .spacing(12.0)
@@ -205,7 +205,7 @@ fn card(c: &Card, first: bool) -> Element<Msg> {
     facts = facts.push(fact(Icon::HardDriveDownload, format!("{} · {}", size(c.download), c.quant)));
     parts.push(facts.into());
     if let Some(why) = &c.why {
-        parts.push(text(why.clone()).size(12.5).role(Role::Text2).wrap().into());
+        parts.push(text(why.clone()).size(12.5).role(Role::Text2).wrap().line_height(1.4).into());
     }
     let notes: Vec<Element<Msg>> = c
         .incidents
@@ -213,7 +213,7 @@ fn card(c: &Card, first: bool) -> Element<Msg> {
         .map(|i| (Icon::TriangleAlert, Role::Warning, i.clone()))
         .chain(c.licence_note.iter().map(|n| (Icon::Info, Role::Text3, n.clone())))
         .chain(c.notes.iter().map(|n| (Icon::Dot, Role::Text3, n.clone())))
-        .map(|(g, r, n)| row![icon(g).size(13.0).role(r), text(n).size(12.0).role(Role::Text2).wrap()].spacing(6.0).align(Align::Start).into())
+        .map(|(g, r, n)| row![super::lead(icon(g).size(13.0).role(r)), text(n).size(12.0).role(Role::Text2).wrap().line_height(1.4)].spacing(6.0).align(Align::Start).into())
         .collect();
     if !notes.is_empty() {
         parts.push(column_of(notes).spacing(4.0).width(Fill).into());
@@ -248,7 +248,7 @@ fn origins(app: &Tasuke) -> Element<Msg> {
                 text("A model counts as made where its maker is, and where the models it was built from were made.")
                     .size(12.0)
                     .role(Role::Text3)
-                    .wrap(),
+                    .wrap().line_height(1.4),
             ]
             .spacing(8.0)
             .width(Fill)

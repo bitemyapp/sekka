@@ -37,7 +37,18 @@ pub fn reasoning(c: &Conversation, key: u64, r: &Reasoning) -> Element<Msg> {
         Some(s) => format!("Thought for {s} s"),
         None => "Thinking…".to_owned(),
     };
-    let line = row![chevron(open), text(words).size(12.5).role(Role::Text3)].spacing(8.0).padding([3.0, 0.0]);
+    // Its first words, while it's closed: what it was about.
+    let gist = r.text.split_whitespace().take(24).collect::<Vec<_>>().join(" ");
+    let (glyph, role) = if r.ended.is_none() { (Icon::Ellipsis, Role::Accent) } else { (Icon::Ellipsis, Role::Text3) };
+    let line = row![
+        icon(glyph).size(14.0).role(role),
+        text(words).size(12.5).role(Role::Text3),
+        text(if open { String::new() } else { gist }).size(12.0).italic().role(Role::Faint).width(Fill),
+        chevron(open),
+    ]
+    .spacing(8.0)
+    .padding([3.0, 0.0])
+    .width(Fill);
     let head = opener(line, c.id, key);
     if !open {
         return head;
@@ -49,6 +60,17 @@ pub fn reasoning(c: &Conversation, key: u64, r: &Reasoning) -> Element<Msg> {
     .padding([2.0, 0.0, 4.0, 12.0])
     .width(Fill);
     column![head, container(body).padding([2.0, 0.0, 4.0, 6.0]).width(Fill)].width(Fill).into()
+}
+
+/// A policy's reason as the end of a sentence: "It deletes files" reads
+/// "it deletes files" after "Why it asks:" (but "SSH keys" stays).
+fn clause(reason: &str) -> String {
+    let r = reason.trim().trim_end_matches('.');
+    let mut chars = r.chars();
+    match (chars.next(), chars.next()) {
+        (Some(a), Some(b)) if a.is_uppercase() && b.is_lowercase() => a.to_lowercase().chain(r[a.len_utf8()..].chars()).collect(),
+        _ => r.to_owned(),
+    }
 }
 
 /// A call's state as a glyph, in a colour, never by colour alone.
@@ -94,13 +116,13 @@ fn output_text(t: &Tool) -> String {
 fn details(t: &Tool) -> Element<Msg> {
     let mut parts: Vec<Element<Msg>> = Vec::new();
     if let Some(p) = &t.described.purpose {
-        parts.push(text(format!("Why: {p}")).size(12.0).role(Role::Text3).wrap().into());
+        parts.push(text(format!("Why: {p}")).size(12.0).role(Role::Text3).wrap().line_height(1.4).into());
     }
     if t.described.code && t.described.target.contains('\n') {
         parts.push(code_box(&t.described.target));
     }
     if let ToolState::Refused { reason } = &t.state {
-        parts.push(text(format!("Tasuke never runs this: {reason}.")).size(12.0).role(Role::Warning).wrap().into());
+        parts.push(text(format!("Tasuke never runs this: {reason}.")).size(12.0).role(Role::Warning).wrap().line_height(1.4).into());
     }
     let out = output_text(t);
     if !out.is_empty() {
@@ -263,13 +285,13 @@ fn approval(c: &Conversation, key: u64, t: &Tool, g: &Gate) -> Element<Msg> {
         _ => parts.push(code_box(&d.target)),
     }
     if let Gate::Pending { reason, root } = g {
-        let why = format!("Why it asks: {}.", reason.trim_end_matches('.'));
-        parts.push(row![icon(Icon::Info).size(13.0).role(Role::Text3), text(why).size(12.0).role(Role::Text2).wrap()].spacing(8.0).align(Align::Start).into());
+        let why = format!("Why it asks: {}.", clause(reason));
+        parts.push(row![super::lead(icon(Icon::Info).size(13.0).role(Role::Text3)), text(why).size(12.0).role(Role::Text2).wrap().line_height(1.4)].spacing(8.0).align(Align::Start).into());
         if *root {
             parts.push(
                 row![
-                    icon(Icon::Lock).size(13.0).role(Role::Text3),
-                    text("After you choose Run as administrator, the system asks for your password.").size(12.0).role(Role::Text2).wrap(),
+                    super::lead(icon(Icon::Lock).size(13.0).role(Role::Text3)),
+                    text("After you choose Run as administrator, the system asks for your password.").size(12.0).role(Role::Text2).wrap().line_height(1.4),
                 ]
                 .spacing(8.0)
                 .align(Align::Start)
@@ -365,7 +387,7 @@ pub fn notice(level: Level, words: &str) -> Element<Msg> {
         Level::Warning => (Icon::TriangleAlert, Role::Warning),
         Level::Error => (Icon::CircleAlert, Role::Danger),
     };
-    row![icon(glyph).size(13.0).role(role), text(words.to_owned()).size(12.0).role(Role::Text3).wrap()]
+    row![super::lead(icon(glyph).size(13.0).role(role)), text(words.to_owned()).size(12.0).role(Role::Text3).wrap().line_height(1.4)]
         .spacing(8.0)
         .align(Align::Start)
         .padding([2.0, 0.0])
@@ -376,7 +398,7 @@ pub fn notice(level: Level, words: &str) -> Element<Msg> {
 pub fn error(conv: ConvId, words: &str, retryable: bool) -> Element<Msg> {
     let mut line = row![
         icon(Icon::CircleAlert).size(15.0).role(Role::Danger),
-        text(words.to_owned()).size(13.0).role(Role::Text).wrap().width(Fill),
+        text(words.to_owned()).size(13.0).role(Role::Text).wrap().line_height(1.4).width(Fill),
     ]
     .spacing(10.0)
     .width(Fill);

@@ -131,7 +131,7 @@ impl ModelState {
     pub fn words(self) -> &'static str {
         match self {
             ModelState::Ready => "ready",
-            ModelState::Asleep => "asleep, wakes when you send",
+            ModelState::Asleep => "asleep, loads when you send",
             ModelState::Loading => "loading…",
             ModelState::Missing => "not downloaded",
             ModelState::Off => "server stopped",

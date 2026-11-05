@@ -30,6 +30,19 @@ pub fn size(b: Bytes) -> String {
     }
 }
 
+/// A device's total as it was sold: what the system reports is a little
+/// under it (the firmware and the driver keep some), so a total within 4%
+/// under a size memory is sold in reads as that size: 31.1 GB of RAM is
+/// "32 GB", an RTX 5090's 31.8 GB is "32 GB". Anything else as measured.
+pub fn installed_size(b: Bytes) -> String {
+    const SOLD: [u64; 14] = [4, 6, 8, 12, 16, 20, 24, 32, 48, 64, 96, 128, 192, 256];
+    let gib = b.as_gib();
+    match SOLD.iter().find(|&&s| gib <= s as f64 && gib >= s as f64 * 0.96) {
+        Some(s) => format!("{s} GB"),
+        None => size(b),
+    }
+}
+
 /// A GPU's name without its maker's prefix: "RTX 4060 Laptop GPU".
 pub fn short_gpu_name(g: &Gpu) -> String {
     let n = g.name.trim();
@@ -73,10 +86,10 @@ pub fn devices(hw: &Hardware) -> Vec<Device> {
             tags.push("drives the display".to_owned());
         }
         let (kind, memory) = match g.memory {
-            GpuMemory::Dedicated { total, .. } => (DeviceKind::Gpu, format!("{} of its own memory", size(total))),
+            GpuMemory::Dedicated { total, .. } => (DeviceKind::Gpu, format!("{} of its own memory", installed_size(total))),
             GpuMemory::Unified { .. } => {
                 tags.push("unified memory".to_owned());
-                (DeviceKind::UnifiedGpu, format!("shares the {} of memory", size(hw.ram.total)))
+                (DeviceKind::UnifiedGpu, format!("shares the {} of memory", installed_size(hw.ram.total)))
             }
             GpuMemory::Unknown => (DeviceKind::Gpu, "memory not reported".to_owned()),
         };
@@ -87,7 +100,7 @@ pub fn devices(hw: &Hardware) -> Vec<Device> {
         let name = if g.name.starts_with(vendor.trim()) { g.name.clone() } else { format!("{vendor}{}", g.name) };
         out.push(Device { kind, name, memory, tags });
     }
-    out.push(Device { kind: DeviceKind::Memory, name: "Memory".into(), memory: size(hw.ram.total), tags: Vec::new() });
+    out.push(Device { kind: DeviceKind::Memory, name: "Memory".into(), memory: installed_size(hw.ram.total), tags: Vec::new() });
     if !hw.cpu.model.is_empty() {
         let cores = format!("{} cores", hw.cpu.physical_cores);
         out.push(Device { kind: DeviceKind::Processor, name: hw.cpu.model.clone(), memory: cores, tags: Vec::new() });
@@ -119,7 +132,7 @@ pub fn budget_words(hw: &Hardware) -> String {
                 size(b),
                 short_gpu_name(g),
                 fit::GPU_MARGIN * 100.0,
-                size(total)
+                installed_size(total)
             )
         }
         Some((b, g, true)) => format!(
@@ -524,6 +537,10 @@ mod tests {
 
     #[test]
     fn sizes_read_as_labels_do() {
+        assert_eq!(installed_size(Bytes::mib(31_806)), "32 GB");
+        assert_eq!(installed_size(Bytes::mib(32_607)), "32 GB");
+        assert_eq!(installed_size(Bytes::mib(126_560)), "128 GB");
+        assert_eq!(installed_size(Bytes::gib(40)), "40 GB", "not a size memory is sold in");
         assert_eq!(size(Bytes::mib(8188)), "8 GB");
         assert_eq!(size(Bytes::gib_f64(7.44)), "7.4 GB");
         assert_eq!(size(Bytes::gib(128)), "128 GB");
