@@ -68,12 +68,16 @@ struct Mount {
 /// The mount `path` is on, of those in `mountinfo`: the deepest whose
 /// device is `dev`. Btrfs gives each subvolume a device of its own, which
 /// mountinfo doesn't show (it gives the filesystem's), so failing that,
-/// the deepest whose mount point (`dev_of`) is on `dev`. Of two mounts on
-/// one place, the later is the one showing.
+/// the deepest whose mount point (`dev_of`) is on `dev`; and failing that
+/// too, the deepest Btrfs (or bcachefs) mount above it: `path` is in a
+/// subvolume that isn't mounted on its own, as systemd makes `/tmp` and
+/// `/var/tmp` on Btrfs. Of two mounts on one place, the later is the one
+/// showing.
 fn mount_of(mountinfo: &str, path: &Path, dev: u64, dev_of: impl Fn(&Path) -> Option<u64>) -> Option<Mount> {
     let majmin = format!("{}:{}", libc::major(dev), libc::minor(dev));
     let mut by_number: Option<(Mount, usize)> = None;
     let mut by_place: Option<(Mount, usize)> = None;
+    let mut deepest: Option<(Mount, usize)> = None;
     for line in mountinfo.lines() {
         let fields: Vec<&str> = line.split(' ').collect();
         let Some(dash) = fields.iter().position(|f| *f == "-") else { continue };
@@ -98,8 +102,13 @@ fn mount_of(mountinfo: &str, path: &Path, dev: u64, dev_of: impl Fn(&Path) -> Op
         } else if by_place.as_ref().is_none_or(|(_, d)| depth >= *d) && dev_of(&mount) == Some(dev) {
             by_place = Some((m(), depth));
         }
+        if deepest.as_ref().is_none_or(|(_, d)| depth >= *d) {
+            deepest = Some((m(), depth));
+        }
     }
-    by_number.or(by_place).map(|(m, _)| m)
+    // Whatever's deeper hides what's above it, subvolumes or not.
+    let above = deepest.filter(|(m, _)| matches!(m.fstype.as_str(), "btrfs" | "bcachefs"));
+    by_number.or(by_place).or(above).map(|(m, _)| m)
 }
 
 /// A mountinfo field (or a by-label name) with its escapes undone: `\040`
@@ -170,7 +179,13 @@ mod tests {
         // the later, which is the one showing.
         let m = mount_of(mountinfo, Path::new("/home/alice/Games/snes"), libc::makedev(8, 2), dev_of).unwrap();
         assert_eq!(m.source, "/dev/sdb1");
-        // On nothing mounted.
-        assert_eq!(mount_of(mountinfo, Path::new("/srv"), libc::makedev(0, 40), dev_of), None);
+        // In a subvolume of root's that isn't mounted on its own (systemd
+        // makes /tmp one): root's mount, the subvolume's path under it.
+        let m = mount_of(mountinfo, Path::new("/tmp/games"), libc::makedev(0, 40), dev_of).unwrap();
+        assert_eq!((m.mount.to_str(), m.root.as_str()), (Some("/"), "/@"));
+        // Under the exFAT drive, nothing of its own matches: not Btrfs, so
+        // nothing to guess; nor under the devices' filesystem.
+        assert_eq!(mount_of(mountinfo, Path::new("/home/alice/Games/x"), libc::makedev(0, 41), dev_of), None);
+        assert_eq!(mount_of(mountinfo, Path::new("/dev/input"), libc::makedev(0, 42), dev_of), None);
     }
 }
