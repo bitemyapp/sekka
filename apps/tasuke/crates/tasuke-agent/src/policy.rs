@@ -1497,6 +1497,7 @@ fn private_examples(home: &Path) -> Vec<(Vec<String>, &'static str, bool)> {
 // Checking (what may run without asking)
 
 const SUBST_REASON: &str = "It runs another command inside this one ($(…) or backticks).";
+const ENVIRONMENT: &str = "It shows environment variables, which can hold passwords.";
 
 fn check(src: &str, home: &Path) -> Result<(), String> {
     if src.len() > MAX_LEN {
@@ -1557,6 +1558,16 @@ fn check_command(ctx: &mut Ctx, cmd: &Command) -> Result<(), String> {
     }
     let (prog, rest) = unwrap(&args)?;
     let mut uses = rule(ctx, &prog, rest)?;
+    // `strings @FILE` reads its arguments from FILE and names them in errors.
+    let at_files: Vec<Use> = uses
+        .iter()
+        .filter(|u| u.arg.text.starts_with('@') && u.arg.pattern.starts_with('@'))
+        .map(|u| Use {
+            arg: Arg { text: u.arg.text[1..].into(), pattern: u.arg.pattern[1..].into(), ..u.arg.clone() },
+            access: u.access,
+        })
+        .collect();
+    uses.extend(at_files);
     // Options that read file names from a file print its lines in errors.
     for (k, a) in rest.iter().enumerate() {
         for name in ["--files0-from", "--files-from", "--exclude-from"] {
@@ -1964,12 +1975,57 @@ fn getopt(args: &[Arg], spec: &Spec) -> Result<Parsed, String> {
     Ok(out)
 }
 
+/// The values of options given as `--name=value`, which may be files to
+/// read (diff --from-file=FILE), for programs whose options aren't listed.
+fn option_values(opts: &[Opt]) -> Vec<Arg> {
+    opts.iter().filter_map(|o| o.value.as_deref()).map(Arg::literal).collect()
+}
+
 fn uses(args: &[Arg], access: Access) -> Vec<Use> {
     args.iter().map(|a| Use { arg: a.clone(), access }).collect()
 }
 
 fn never_ends() -> String {
     "It keeps running until it is stopped.".into()
+}
+
+/// ps, which shows every process's environment with the BSD option `e`.
+fn ps(args: &[Arg]) -> Result<Vec<Use>, String> {
+    const LONG_VALUED: &[&str] = &[
+        "--cols",
+        "--columns",
+        "--format",
+        "--group",
+        "--Group",
+        "--lines",
+        "--pid",
+        "--ppid",
+        "--quick-pid",
+        "--rows",
+        "--sid",
+        "--sort",
+        "--tty",
+        "--user",
+        "--User",
+        "--width",
+    ];
+    let mut k = 0;
+    while let Some(a) = args.get(k) {
+        let t = a.text.as_str();
+        k += 1;
+        if t.starts_with("--") {
+            k += usize::from(LONG_VALUED.contains(&t));
+        } else if let Some(cluster) = t.strip_prefix('-') {
+            // -o FORMAT, -p PIDS…: a value-taking option last in the cluster takes the next word.
+            k += usize::from(cluster.find(|c| "CGgOopqstUu".contains(c)) == Some(cluster.len().saturating_sub(1)));
+        } else if t.chars().all(|c| c.is_ascii_alphabetic()) {
+            if t.contains('e') {
+                return Err(ENVIRONMENT.into());
+            }
+            k += usize::from(t.ends_with(|c| "oOpqtUk".contains(c)));
+        }
+    }
+    Ok(Vec::new())
 }
 
 /// The rule for each allowlisted program: `Ok` with the paths it reads when
@@ -1979,11 +2035,27 @@ fn rule(ctx: &mut Ctx, prog: &str, args: &[Arg]) -> Result<Vec<Use>, String> {
     let none: Result<Vec<Use>, String> = Ok(Vec::new());
     match prog {
         // They print, compute or wait; they read no files.
-        "echo" | "printf" | "true" | "false" | ":" | "test" | "[" | "basename" | "dirname" | "uname" | "whoami"
-        | "id" | "groups" | "nproc" | "arch" | "tty" | "pwd" | "locale" | "lscpu" | "lsmod" | "sleep" | "printenv"
-        | "which" | "type" | "seq" | "nixos-version" | "uptime" | "lsblk" | "lsusb" | "ps" | "pgrep" | "env"
-        | "nice" | "ionice" | "who" | "w" | "users" | "last" | "getconf" | "free" | "ls" | "stat" | "du" | "df"
-        | "readlink" | "realpath" => none,
+        "echo" | "true" | "false" | ":" | "test" | "[" | "basename" | "dirname" | "uname" | "whoami" | "id"
+        | "groups" | "nproc" | "arch" | "tty" | "pwd" | "locale" | "lscpu" | "lsmod" | "sleep" | "which" | "type"
+        | "seq" | "nixos-version" | "uptime" | "lsblk" | "lsusb" | "pgrep" | "nice" | "ionice" | "who" | "w"
+        | "users" | "last" | "getconf" | "free" | "ls" | "stat" | "du" | "df" | "readlink" | "realpath" => none,
+        // bash's printf -v NAME sets a variable, so a later $HOME could be anything.
+        "printf" => match args.first() {
+            Some(a) if a.text.starts_with('-') && a.text != "--" && a.text != "-" => {
+                Err("It sets a shell variable (printf -v).".into())
+            }
+            _ => none,
+        },
+        // The environment can hold passwords and tokens, as /proc/*/environ can.
+        "env" => Err(ENVIRONMENT.into()),
+        "printenv" => {
+            let p = getopt(args, &Spec { sf: "0", lf: &["null", "help", "version"], ..NO })?;
+            if p.pos.is_empty() || p.pos.iter().any(|a| !is_name(&a.text) || ctx.var(&a.text).is_none()) {
+                return Err(ENVIRONMENT.into());
+            }
+            none
+        }
+        "ps" => ps(args),
         "cd" => {
             let p = getopt(args, &Spec { sf: "LPe@", ..NO })?;
             ctx.cwd = match p.pos.as_slice() {
@@ -2044,8 +2116,13 @@ fn rule(ctx: &mut Ctx, prog: &str, args: &[Arg]) -> Result<Vec<Use>, String> {
                     ..NO
                 },
             )?;
-            let lists: Vec<Arg> =
-                p.opts.iter().filter(|o| o.name == "-f").filter_map(|o| o.value.as_deref().map(Arg::literal)).collect();
+            // file -m FILE prints each line it can't parse as magic.
+            let lists: Vec<Arg> = p
+                .opts
+                .iter()
+                .filter(|o| matches!(o.name.as_str(), "-f" | "-m" | "--magic-file"))
+                .filter_map(|o| o.value.as_deref().map(Arg::literal))
+                .collect();
             Ok(uses(&lists, Content))
         }
         "cat" => {
@@ -2189,19 +2266,46 @@ fn rule(ctx: &mut Ctx, prog: &str, args: &[Arg]) -> Result<Vec<Use>, String> {
             )?;
             none
         }
-        "column" | "strings" | "od" | "hexdump" | "base64" | "zcat" | "nl" | "fold" | "fmt" | "rev" | "tac"
-        | "expand" => {
+        "column" | "strings" | "od" | "base64" | "zcat" | "nl" | "fold" | "fmt" | "rev" | "tac" | "expand" => {
             let p = getopt(args, &ANY)?;
-            Ok(uses(&p.pos, Content))
+            Ok(uses(&[p.pos, option_values(&p.opts)].concat(), Content))
+        }
+        "hexdump" => {
+            // hexdump -f FILE prints the format it can't parse.
+            let p = getopt(
+                args,
+                &Spec {
+                    sv: "efns",
+                    sf: "bcCdovxhV",
+                    so: "L",
+                    lv: &["format", "format-file", "length", "skip"],
+                    lf: &[
+                        "one-byte-octal",
+                        "one-byte-char",
+                        "canonical",
+                        "two-bytes-decimal",
+                        "two-bytes-octal",
+                        "two-bytes-hex",
+                        "no-squeezing",
+                        "help",
+                        "version",
+                    ],
+                    lo: &["color"],
+                    ..NO
+                },
+            )?;
+            let formats: Vec<Arg> = p
+                .opts
+                .iter()
+                .filter(|o| matches!(o.name.as_str(), "-f" | "--format-file"))
+                .filter_map(|o| o.value.as_deref().map(Arg::literal))
+                .collect();
+            Ok(uses(&[p.pos, formats].concat(), Content))
         }
         "diff" | "cmp" => {
-            let recursive = args.iter().any(|a| {
-                a.text == "-r"
-                    || a.text == "--recursive"
-                    || (a.text.starts_with('-') && !a.text.starts_with("--") && a.text.contains('r'))
-            });
+            // diff reads the files in folders it is given, and diff -N prints them whole.
             let p = getopt(args, &ANY)?;
-            Ok(uses(&p.pos, if recursive { Recursive } else { Content }))
+            Ok(uses(&[p.pos, option_values(&p.opts)].concat(), if prog == "diff" { Recursive } else { Content }))
         }
         "xxd" => {
             let p = getopt(args, &Spec { sv: "cglosnC", sf: "abeEipuh", lv: &[], lf: &["version", "help"], ..NO })
@@ -2732,7 +2836,7 @@ fn rule(ctx: &mut Ctx, prog: &str, args: &[Arg]) -> Result<Vec<Use>, String> {
             }
         }
         "dmesg" => {
-            getopt(
+            let p = getopt(
                 args,
                 &Spec {
                     sv: "lfsFK",
@@ -2779,7 +2883,14 @@ fn rule(ctx: &mut Ctx, prog: &str, args: &[Arg]) -> Result<Vec<Use>, String> {
                     e
                 }
             })?;
-            none
+            // dmesg -F FILE prints FILE as if it were the kernel's log.
+            let files: Vec<Arg> = p
+                .opts
+                .iter()
+                .filter(|o| matches!(o.name.as_str(), "-F" | "--file" | "-K" | "--kmsg-file"))
+                .filter_map(|o| o.value.as_deref().map(Arg::literal))
+                .collect();
+            Ok(uses(&files, Content))
         }
         "swapon" => {
             let p =
@@ -2892,17 +3003,27 @@ fn rule(ctx: &mut Ctx, prog: &str, args: &[Arg]) -> Result<Vec<Use>, String> {
 
 fn jq(args: &[Arg]) -> Result<Vec<Use>, String> {
     let mut out = Vec::new();
-    let mut pos = Vec::new();
-    let mut filter_given = false;
+    let mut files = Vec::new();
+    let mut filter: Option<&str> = None;
+    // After --args or --jsonargs, positionals are strings, not files; jq
+    // still reads options after them. After --, everything is positional.
+    let mut strings = false;
+    let mut done = false;
     let mut i = 0;
-    let mut rest_are_args = false;
     while i < args.len() {
-        let t = args[i].text.as_str();
+        let a = &args[i];
+        let t = a.text.as_str();
         i += 1;
-        if rest_are_args {
+        if done || !t.starts_with('-') || t == "-" {
+            if filter.is_none() {
+                filter = Some(t);
+            } else if !strings {
+                files.push(a.clone());
+            }
             continue;
         }
         match t {
+            "--" => done = true,
             "--arg" | "--argjson" => i += 2,
             "--slurpfile" | "--rawfile" => {
                 if let Some(f) = args.get(i + 1) {
@@ -2910,20 +3031,9 @@ fn jq(args: &[Arg]) -> Result<Vec<Use>, String> {
                 }
                 i += 2;
             }
-            "-f" | "--from-file" => {
-                if let Some(f) = args.get(i) {
-                    out.push(Use { arg: f.clone(), access: Access::Content });
-                }
-                filter_given = true;
-                i += 1;
-            }
+            "-f" | "--from-file" => return Err("It runs a jq program from a file, which Tasuke doesn't check.".into()),
             "--indent" | "-L" => i += 1,
-            "--args" | "--jsonargs" => {
-                if !filter_given && pos.is_empty() {
-                    // the filter still comes first
-                }
-                rest_are_args = !pos.is_empty() || filter_given;
-            }
+            "--args" | "--jsonargs" => strings = true,
             "--tab"
             | "--seq"
             | "--stream"
@@ -2942,25 +3052,32 @@ fn jq(args: &[Arg]) -> Result<Vec<Use>, String> {
             | "--raw-input"
             | "--unbuffered"
             | "--version"
-            | "--help"
-            | "--" => {}
-            _ if t.starts_with('-') && t.len() > 1 && !t.starts_with("--") => {
-                if !t[1..].chars().all(|c| "rjacnsSCMeRh0".contains(c)) {
-                    return Err(unknown_option(t));
-                }
-            }
-            _ if t.starts_with("--") => return Err(unknown_option(t)),
-            _ => {
-                if !filter_given {
-                    filter_given = true;
-                } else {
-                    pos.push(args[i - 1].clone());
-                }
-            }
+            | "--help" => {}
+            _ if !t.starts_with("--") && t[1..].chars().all(|c| "rjacnsSCMeRh0".contains(c)) => {}
+            _ => return Err(unknown_option(t)),
         }
     }
-    out.extend(uses(&pos, Access::Content));
+    let filter = filter.unwrap_or("");
+    // import "f" as $f {search: "DIR"}; reads DIR/f.json; env and $ENV are the environment.
+    if has_token(filter, "import") || has_token(filter, "include") {
+        return Err("Its jq program loads files of its own (import or include).".into());
+    }
+    if has_token(filter, "env") || filter.contains("$ENV") {
+        return Err(ENVIRONMENT.into());
+    }
+    out.extend(uses(&files, Access::Content));
     Ok(out)
+}
+
+/// Whether `word` appears in `s` as a word of its own, not as part of a
+/// longer name or a `.field`.
+fn has_token(s: &str, word: &str) -> bool {
+    let name = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    s.match_indices(word).any(|(k, _)| {
+        let before = s[..k].chars().next_back();
+        let after = s[k + word.len()..].chars().next();
+        !before.is_some_and(|c| name(c) || c == '.' || c == '$') && !after.is_some_and(name)
+    })
 }
 
 fn sed(args: &[Arg]) -> Result<Vec<Use>, String> {
@@ -3229,6 +3346,13 @@ fn awk(args: &[Arg]) -> Result<Vec<Use>, String> {
         if ["system", ">", "|", "getline", "@"].iter().any(|s| prog.contains(s)) {
             return Err("Its awk program could write files or run commands.".into());
         }
+        // ARGV[1] = "FILE" in BEGIN makes awk read FILE.
+        if prog.contains("ARGV") || prog.contains("ARGC") {
+            return Err("Its awk program chooses the files it reads (ARGV).".into());
+        }
+        if prog.contains("ENVIRON") {
+            return Err(ENVIRONMENT.into());
+        }
     }
     let files: Vec<Arg> = files.into_iter().filter(|a| !a.text.contains('=')).collect();
     Ok(uses(&files, Access::Content))
@@ -3236,6 +3360,7 @@ fn awk(args: &[Arg]) -> Result<Vec<Use>, String> {
 
 fn find(args: &[Arg]) -> Result<Vec<Use>, String> {
     let mut i = 0;
+    let mut reads = Vec::new();
     while let Some(a) = args.get(i) {
         match a.text.as_str() {
             "-H" | "-L" | "-P" => i += 1,
@@ -3346,13 +3471,19 @@ fn find(args: &[Arg]) -> Result<Vec<Use>, String> {
                 Some(v) if v.glob => {
                     return Err(format!("The pattern {} isn't quoted, so the shell would expand it.", v.text));
                 }
-                Some(_) => i += 2,
+                Some(v) => {
+                    // find -files0-from FILE names FILE's contents in its errors.
+                    if t == "-files0-from" {
+                        reads.push(Use { arg: v.clone(), access: Access::Content });
+                    }
+                    i += 2
+                }
             },
             _ if ALONE.contains(&t) => i += 1,
             _ => return Err(format!("It uses {t}, which Tasuke doesn't know to be safe.")),
         }
     }
-    Ok(Vec::new())
+    Ok(reads)
 }
 
 fn systemctl(args: &[Arg]) -> Result<Vec<Use>, String> {
@@ -3934,7 +4065,12 @@ fn git(args: &[Arg]) -> Result<Vec<Use>, String> {
             "--no-pager" | "-P" | "--no-optional-locks" | "--literal-pathspecs" | "--no-replace-objects" | "--bare" => {
                 i += 1
             }
-            _ if t.starts_with("--git-dir=") || t.starts_with("--work-tree=") => i += 1,
+            _ if t.starts_with("--git-dir=") || t.starts_with("--work-tree=") => {
+                if let Some((_, dir)) = t.split_once('=') {
+                    out.push(Use { arg: Arg::literal(dir), access: Access::Content });
+                }
+                i += 1
+            }
             "-c" | "--config-env" | "--exec-path" => return Err("It changes Git's settings for this command.".into()),
             _ if t.starts_with('-') => return Err(unknown_option(t)),
             _ => break,
@@ -3950,8 +4086,21 @@ fn git(args: &[Arg]) -> Result<Vec<Use>, String> {
     }
     match sub.text.as_str() {
         "status" | "log" | "diff" | "show" | "rev-parse" | "ls-files" | "describe" | "blame" | "shortlog" => {
-            let paths: Vec<Arg> = rest.iter().filter(|a| !a.text.starts_with('-')).cloned().collect();
-            out.extend(uses(&paths, Access::Content));
+            let mut paths: Vec<Arg> = Vec::new();
+            for a in rest {
+                // A file can hide in an option's value (blame --contents=FILE)
+                // or after a revision (HEAD:path).
+                match a.text.split_once(if a.text.starts_with('-') { '=' } else { ':' }) {
+                    Some((_, v)) if !v.is_empty() => paths.push(Arg::literal(v)),
+                    _ => {}
+                }
+                if !a.text.starts_with('-') {
+                    paths.push(a.clone());
+                }
+            }
+            // git diff compares folders file by file, outside a repository or with --no-index.
+            let access = if sub.text == "diff" { Access::Recursive } else { Access::Content };
+            out.extend(uses(&paths, access));
             Ok(out)
         }
         "remote" => {
@@ -5234,6 +5383,24 @@ mod tests {
             ("uniq -c /tmp/x", "run"),
             ("rg -n foo", "run"),
             ("ps aux | rg aizome", "run"),
+            ("ps -eo pid,user,etime", "run"),
+            ("ps o pid,user,etime", "run"),
+            ("ps -U alice -u alice", "run"),
+            ("ps --sort=-%mem aux", "run"),
+            ("printenv HOME XDG_SESSION_TYPE", "run"),
+            ("printf '%s\\n' a b", "run"),
+            ("printf -- '-x\\n'", "run"),
+            ("diff /etc/hosts /etc/hostname", "run"),
+            ("diff -u ~/.config/aizome/settings.toml /etc/hostname", "run"),
+            ("strings /run/current-system/sw/bin/ls | head", "run"),
+            ("hexdump -C -n 64 /etc/hostname", "run"),
+            ("jq -r '.env' /tmp/x.json", "run"),
+            ("jq -n --arg x 1 '$x' --args a b", "run"),
+            ("jq '.important' /tmp/x.json", "run"),
+            ("git log --format=%H -1", "run"),
+            ("git show HEAD:README.md", "run"),
+            ("dmesg -F /var/log/dmesg.txt", "run"),
+            ("file -m /etc/magic /etc/hostname", "run"),
         ]);
     }
 
@@ -5890,6 +6057,42 @@ mod tests {
             ("cp ~/.ssh/id_rsa /tmp/", "ask"),
             ("ln -s ~/.ssh/id_rsa /tmp/k", "ask"),
             ("diff ~/.ssh/id_rsa /dev/null", "ask"),
+            // Private files read through an option, a folder or the program itself.
+            ("dmesg -F .config/gh/hosts.yml", "ask"),
+            ("dmesg --file=/home/alice/.ssh/id_rsa", "ask"),
+            ("dmesg -K .ssh/id_rsa", "ask"),
+            ("diff --from-file=/home/alice/.ssh/id_rsa /dev/null", "ask"),
+            ("diff -N /var/empty /home/alice/.ssh", "ask"),
+            ("diff -N /var/empty ~", "ask"),
+            ("git diff --no-index /var/empty /home/alice/.ssh", "ask"),
+            ("git diff --no-index /dev/null ~", "ask"),
+            ("git blame --contents=/home/alice/.config/gh/hosts.yml README.md", "ask"),
+            ("git --git-dir=/home/alice/.password-store/.git log -p", "ask"),
+            ("git show HEAD:.config/gh/hosts.yml", "ask"),
+            ("strings @.config/gh/hosts.yml", "ask"),
+            ("file -m .config/gh/hosts.yml /dev/null", "ask"),
+            ("file --magic-file=.ssh/id_rsa /dev/null", "ask"),
+            ("find -files0-from .config/gh/hosts.yml", "ask"),
+            ("hexdump -f.config/gh/hosts.yml /dev/null", "ask"),
+            ("hexdump --format-file=.ssh/id_rsa /dev/null", "ask"),
+            ("awk 'BEGIN{ARGV[1]=\"/home/alice/.ssh/id_rsa\";ARGC=2}{print}'", "ask"),
+            ("jq -n '$f' --args --rawfile f .ssh/id_rsa", "ask"),
+            ("jq -R . -- --arg x .ssh/id_rsa", "ask"),
+            ("jq -n 'import \"config\" as $c {search:\"/home/alice/.docker\"}; $c'", "ask"),
+            ("jq -L /home/alice/.docker -n 'include \"config\"; x'", "ask"),
+            ("jq -f filter.jq /tmp/x.json", "ask"),
+            ("printf -v HOME %s /home/alice/.config/gh; cat $HOME/hosts.yml", "ask"),
+            ("printf -vHOME %s /home/alice/.config/gh; cat $HOME/hosts.yml", "ask"),
+            // The environment, as /proc/*/environ.
+            ("ps e", "ask"),
+            ("ps auxe", "ask"),
+            ("ps -p 1 eww", "ask"),
+            ("env", "ask"),
+            ("printenv", "ask"),
+            ("printenv GITHUB_TOKEN", "ask"),
+            ("jq -n env", "ask"),
+            ("jq -n '$ENV.PATH'", "ask"),
+            ("awk 'BEGIN{for(k in ENVIRON) print k, ENVIRON[k]}'", "ask"),
         ]);
     }
 
