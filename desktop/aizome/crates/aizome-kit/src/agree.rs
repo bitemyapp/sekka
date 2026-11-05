@@ -329,6 +329,7 @@ mod tests {
         }
         fn view(&self, _: WindowKey) -> Element<Msg> {
             column![
+                Element::new(Grip, Vec::new()).id("grip"),
                 text_field(&self.name).on_change(Msg::Name).on_submit(Msg::Ask).id("name"),
                 button("Ask").on_press(Msg::Ask),
                 button(format!("Erase {}", self.disk))
@@ -339,6 +340,34 @@ mod tests {
             .spacing(8.0)
             .padding(16.0)
             .into()
+        }
+    }
+
+    /// An edge that takes only drags, as aizome-face's `drawn(…).drags_only()`
+    /// does: a press that ends without a drag reaches what's under it.
+    struct Grip;
+
+    impl crate::widget::Widget for Grip {
+        fn name(&self) -> &'static str {
+            "grip"
+        }
+        fn layout(&mut self, _: &mut crate::widget::LayoutCx, bc: crate::layout::Constraints) -> crate::layout::Size {
+            bc.constrain(crate::layout::Size::new(120.0, 24.0))
+        }
+        fn hit(&self) -> bool {
+            true
+        }
+        fn drags_only(&self) -> bool {
+            true
+        }
+        fn event(&mut self, cx: &mut crate::widget::EventCx, event: &crate::widget::Event) -> crate::widget::Status {
+            match event {
+                crate::widget::Event::PointerDown { button: PointerButton::Left, .. } => {
+                    cx.capture_pointer();
+                    crate::widget::Status::Handled
+                }
+                _ => crate::widget::Status::Ignored,
+            }
         }
     }
 
@@ -429,6 +458,21 @@ mod tests {
         h.move_to(w, on);
         h.release(w, on, PointerButton::Left);
         assert!(h.program().erased.is_empty(), "the press wasn't the button's");
+        assert!(h.click_text(w, "Erase sdb"));
+        assert_eq!(h.program().erased, ["sdb"]);
+    }
+
+    /// Nor does a press on a drags-only edge, released over the button: the
+    /// press reaches what's under the edge, which isn't the button.
+    #[test]
+    fn a_release_over_the_button_after_a_press_on_a_drag_edge_agrees_to_nothing() {
+        let (mut h, w) = harness(true);
+        let grip = h.find_id(w, "grip").expect("the edge").center();
+        let on = h.find(w, "Erase sdb").expect("the button").center();
+        h.press(w, grip, PointerButton::Left, 1);
+        h.move_to(w, on);
+        h.release(w, on, PointerButton::Left);
+        assert!(h.program().erased.is_empty(), "the press was the edge's");
         assert!(h.click_text(w, "Erase sdb"));
         assert_eq!(h.program().erased, ["sdb"]);
     }
