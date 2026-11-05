@@ -534,6 +534,23 @@ all selected worktrees and shared stores in one union, not a sum of `du`
 results. Service protocol checks alone do not establish frontend correctness,
 full-matrix performance or ISO qualification.
 
+The harness creates private evidence and publishes observations create-only.
+Completed command timings survive failed postprocessing; an interrupted trial
+is not replayed as a cold measurement. Failed compiler-category actions are
+attempts, not proof that a compiler process ran, even when the native executor
+kind is unset. Libtest counts include failed commands, and test acceptance
+requires nonzero passing tests and no failures. Native remote test execution
+does not establish local runtime/manager coverage. A server filtering stale
+action-cache entries establishes only that server path, not client recovery
+from an already accepted cache hit with missing CAS data.
+
+Physical sharing uses the post-edit/revert one-tree immutable union as its
+denominator. All roots must share a Btrfs filesystem UUID (subvolume device
+numbers may differ); failed measurements cannot pass storage gates. Finite
+churn under a configured budget is only an observed budget check. Automatic
+total owned cache, daemon and output-state enforcement remains explicitly
+unmeasured without a separate mechanism and enforcement experiment.
+
 ### Component builds
 
 Sekka's PipeWire service uses `sekka-pipewire-daemon`, with the X11 bell

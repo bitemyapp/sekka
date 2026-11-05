@@ -11,7 +11,7 @@ Configuration keys: tool, repo, commit (full frozen SHA), root, client (argv),
 environment (explicit overrides), profiles (dev/release/release-lto, each with
 features and targets), artifacts (leaf/shared/icon selectors), setup (argv lists),
 service (identity, inventory/metrics/restart/eviction/restore_capacity argv and APIs),
-storage (roots, immutable_roots, command, optional max_active_union_bytes),
+storage (roots, immutable_roots, command, optional immutable_command and max_active_union_bytes),
 test_groups (nine named argv suffixes), soroban_tests, correctness_behavior
 (argv producing the eleven real libtest results), startup (private headless argv),
 startup_result (test-startup.py result.json path; exact executables and PNGs checked),
@@ -24,6 +24,8 @@ include compositor/shell/ctl/koe. The compositor also runs --build-info.
 Bitcode-only rlibs require bitcode_decoder (argv with {member}/{decoded}, e.g.
 matching clang -S -emit-llvm -x ir {member} -o {decoded}); inspection decodes the
 actual archive members outside build timing and preserves inputs/IR/command logs.
+Artifact checks require their own current marker and allow current dependency
+markers embedded by linking; every stale/unexpected marker still fails.
 
 Buck configuration requires buck_engine (native argv), buck_telemetry_flags
 including --buck-arg=--build-report={telemetry}.report.json and
@@ -31,13 +33,26 @@ including --buck-arg=--build-report={telemetry}.report.json and
 identical across clients: it enters action paths. Output-loss recovery stops only
 the owned daemon and quarantines mutable output state, preserving its original
 action path and all cache data. Quarantine is evidence, not active workload.
+Buck libtest acceptance additionally requires native executed-test records from
+log what-ran against that exact event-log path, never an implicit latest log.
+Native test.run records retain their executor identity: real executed tests may
+run remotely, and do not by themselves prove local runtime or manager coverage.
+Libtest counts are retained even for failed test commands, never only successes.
 
 Storage command must emit compsize's compression-aware TOTAL row and receives
 ALL selected roots in ONE invocation. Roots may use glob:PATH; unmatched roots
 fail. Separate active/immutable unions are never summed. The sharing denominator
 is the one-tree post-edit/revert workload, not the smaller original cold cache.
+Storage roots are checked by Btrfs filesystem UUID, not st_dev: separate Btrfs
+subvolumes of one filesystem legitimately have different device numbers.
+max_active_union_bytes is an observed churn-budget threshold, not an enforcement
+mechanism. Automatic total-state boundedness remains unmeasured without separate
+mechanism and enforcement evidence covering all owned state.
 Optional cargo_baseline JSON supplies commit, features, leaf/shared/icon median
 seconds; differing commits additionally require equal comparison_identity.
+Completed command timings remain in summaries even when trial postprocessing or
+later stage storage fails. A missing trial result is explicitly failed/incomplete,
+never a successful observation or a reason to replay its timing.
 Credentials belong in private client rc/manifest files, not literal argv tokens.
 Placeholders: {tree}, {root}, {profile}, {jobs}, {trial}, {state}, {output},
 {python}; these are literal substitutions, never shell expansions.
@@ -83,6 +98,17 @@ def file_digest(path):
         for block in iter(lambda: stream.read(1024 * 1024), b''):
             h.update(block)
     return h.hexdigest()
+
+
+def btrfs_filesystem_id(path):
+    """BTRFS_IOC_FS_INFO uses a 1024-byte struct with its 16-byte fsid at offset 16."""
+    fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        info = bytearray(1024)
+        fcntl.ioctl(fd, 0x8400941f, info, True)
+        return bytes(info[16:32]).hex()
+    finally:
+        os.close(fd)
 
 
 def canonical(value):
@@ -214,6 +240,7 @@ def bazel_telemetry(prefix):
     if execution.exists():
         actions, runners, hits, keys = {}, {}, 0, []
         memory_peaks = []
+        memory_unmeasured = 0
         for action in json_stream(execution):
             runner = action.get('runner', 'unknown')
             runners[runner] = runners.get(runner, 0) + 1
@@ -223,15 +250,18 @@ def bazel_telemetry(prefix):
                 mnemonic = action.get('mnemonic', 'unknown')
                 actions[mnemonic] = actions.get(mnemonic, 0) + 1
                 peak = action.get('metrics', {}).get('measuredMemoryPeakBytes')
-                if peak is not None:
+                if peak is not None and int(peak) > 0:
                     memory_peaks.append(int(peak))
+                else:
+                    memory_unmeasured += 1
             keys.append({k: action[k] for k in ('digest', 'mnemonic', 'targetLabel', 'runner', 'cacheHit', 'metrics') if k in action})
         result.update(executed_mnemonics=actions, runners=runners, remote_or_disk_hits=hits,
                       compiler_executions=sum(n for key, n in actions.items() if 'Rustc' in key or key == 'CppCompile'),
                       action_keys=keys)
         result['maximum_executed_action_memory_bytes'] = max(memory_peaks) if memory_peaks else None
         result['memory_sample_count'] = len(memory_peaks)
-        result['memory_method'] = 'largest individually measured executed action, not concurrent aggregate RSS; cache-hit metadata excluded'
+        result['memory_unmeasured_action_count'] = memory_unmeasured
+        result['memory_method'] = 'largest positive native measuredMemoryPeakBytes, not concurrent RSS; zero/missing defaults unmeasured; cache-hit metadata excluded'
     result['action_cpu_seconds'] = None
     result['action_cpu_reason'] = 'not inferred from client CPU or summed wall time; native raw telemetry retained'
     cpu_by_mnemonic = {}
@@ -252,18 +282,21 @@ def buck_telemetry(path):
     """Buck2 2026-10-15 data.proto ActionExecutionKind, not console heuristics.
 
     Schema: https://github.com/facebook/buck2/blob/2026-10-15/app/buck2_data/data.proto
-    cargo_build/cargo_test each invoke one rustc; native subprocesses inside
-    run-custom-build are NOT guessed from the outer action count.
+    Successful cargo_build/cargo_test actions each invoke one rustc. Failed
+    actions may stop during input population, before any compiler process.
+    Native subprocesses inside run-custom-build are not inferred.
     """
     kinds = {0: 'unset', 1: 'local', 2: 'remote', 3: 'action_cache', 4: 'simple',
              6: 'deferred', 7: 'local_dep_file', 8: 'local_worker',
              9: 'remote_dep_file_cache', 10: 'local_action_cache',
              11: 'remote_worker', 12: 'remote_served_from_cache', 13: 'remote_deduplicated'}
-    result = {'compiler_executions': 0, 'execution_kinds': {}, 'executed_categories': {},
-              'action_keys': [], 'failed_actions': 0, 'native_compiler_subprocesses': None,
-              'compiler_count_definition': 'one rustc per executed cargo_build/cargo_test action; buildscript native subprocesses unmeasured',
+    result = {'compiler_executions': 0, 'compiler_action_attempts': 0, 'failed_compiler_actions': 0,
+              'execution_kinds': {}, 'executed_categories': {}, 'action_keys': [],
+              'failed_actions': 0, 'native_compiler_subprocesses': None,
+              'compiler_count_definition': 'one rustc per successful cargo_build/cargo_test action; total unmeasured if an eligible action fails; buildscript native subprocesses unmeasured',
               'native_event_json': str(path), 'snapshots': []}
     memory_peaks = []
+    memory_unmeasured = 0
     commands_complete = False
     for row in json_stream(path):
         event = row.get('Event', {}).get('data', {})
@@ -285,14 +318,21 @@ def buck_telemetry(path):
             result['executed_categories'][category] = result['executed_categories'].get(category, 0) + 1
             if category in ('cargo_build', 'cargo_test'):
                 result['compiler_executions'] += 1
+        if category in ('cargo_build', 'cargo_test') and (kind in (1, 2, 8, 11) or action.get('failed')):
+            result['compiler_action_attempts'] += 1
+        if category in ('cargo_build', 'cargo_test') and action.get('failed'):
+            result['failed_compiler_actions'] += 1
         if action.get('failed'):
             result['failed_actions'] += 1
         digests = []
         for command in action.get('commands', []):
             variants = command.get('details', {}).get('command_kind', {}).get('command', {})
             stats = command.get('details', {}).get('metadata', {}).get('execution_stats') or {}
-            if kind in (1, 2, 8, 11) and stats.get('memory_peak') is not None:
-                memory_peaks.append(int(stats['memory_peak']))
+            if kind in (1, 2, 8, 11):
+                if stats.get('memory_peak') is not None and int(stats['memory_peak']) > 0:
+                    memory_peaks.append(int(stats['memory_peak']))
+                else:
+                    memory_unmeasured += 1
             for detail in variants.values():
                 if isinstance(detail, dict) and detail.get('action_digest'):
                     digests.append(detail['action_digest'])
@@ -301,12 +341,14 @@ def buck_telemetry(path):
                                       'commands': action.get('commands', []),
                                       'cache_upload_result': action.get('cache_upload_result')})
     result['command_end_observed'] = commands_complete
-    if not commands_complete:
+    if not commands_complete or result['failed_compiler_actions']:
         result['compiler_executions'] = None
     # Endpoints suffice for daemon metrics; all original samples remain in JSON.
     result['snapshots'] = result['snapshots'][:1] + result['snapshots'][-1:]
     result['maximum_executed_action_memory_bytes'] = max(memory_peaks) if memory_peaks else None
     result['memory_sample_count'] = len(memory_peaks)
+    result['memory_unmeasured_command_count'] = memory_unmeasured
+    result['memory_method'] = 'largest positive native execution_stats.memory_peak, not concurrent RSS; zero/missing defaults unmeasured'
     result['action_cpu_seconds'] = None
     result['action_cpu_reason'] = 'not inferred from client CPU or summed wall time; per-command native worker details retained when reported'
     return result
@@ -355,6 +397,17 @@ def artifact_markers(data, directory, decoder, command):
                                 'decoded': str(decoded), 'decoded_sha256': digest(ir), 'command': rec})
             offset = end + size % 2
     return {'markers': sorted(value.decode() for value in found), 'bitcode_members': members}
+
+
+def marker_check(found, required, current):
+    observed = set(found)
+    expected = set(required)
+    allowed = {marker for marker in current if marker}
+    return {'markers': sorted(observed), 'expected': sorted(expected),
+            'allowed_current_markers': sorted(allowed),
+            'missing_required_markers': sorted(expected - observed),
+            'unexpected_markers': sorted(observed - allowed),
+            'passed': expected <= observed <= allowed}
 
 
 class Bench:
@@ -568,11 +621,27 @@ class Bench:
         if not engine:
             raise RuntimeError('buck_engine argv required to decode native events')
         decoded = self.command(expand(engine, values) + ['log', 'show', str(event_path)],
-                               values['tree'], directory, name)
+                               values['tree'], directory, name, separate_stderr=True)
         if decoded['exit_status']:
             raise RuntimeError('native Buck event decoding failed')
         telemetry = buck_telemetry(decoded['log'])
         telemetry['collection'] = decoded
+        executed = self.command(
+            expand(engine, values) + ['log', 'what-ran', '--format', 'json', '--skip-cache-hits', str(event_path)],
+            values['tree'], directory, name + '-executed', separate_stderr=True)
+        if executed['exit_status']:
+            raise RuntimeError('native Buck execution-record decoding failed')
+        test_executions = []
+        reasons = {}
+        for row in json_stream(executed['log']):
+            reason = row.get('reason', 'unknown')
+            reasons[reason] = reasons.get(reason, 0) + 1
+            if reason == 'test.run':
+                test_executions.append(row)
+        telemetry['execution_records'] = executed
+        telemetry['execution_reasons'] = reasons
+        telemetry['test_execution_count'] = len(test_executions)
+        telemetry['test_executions'] = test_executions
         return telemetry
 
     def artifact(self, kind, values, directory, require_cached=True):
@@ -653,7 +722,7 @@ class Bench:
             found = inspection['markers']
             expected = [marker] if marker else []
             check = {'artifact': str(path), 'sha256': digest(data), 'bytes': len(data),
-                     'markers': found, 'expected': expected, 'passed': found == expected}
+                     **marker_check(found, expected, markers.values())}
             check['bitcode_members'] = inspection['bitcode_members']
             if kind == 'leaf' and marker:
                 selector = self.config['artifacts'][kind]
@@ -670,12 +739,19 @@ class Bench:
                 check['reference_bytes_equal'] = check['sha256'] == reference[kind]['sha256']
             checks[kind] = check
         if 'leaf' in kinds and not markers.get('leaf') and self.config.get('correctness_behavior'):
-            rec = self.command(expand(self.config['correctness_behavior'], values),
-                               values['tree'], directory, 'original-behavior')
+            behavior = expand(self.config['correctness_behavior'], values)
+            behavior_prefix = directory / 'original-behavior-native'
+            if self.config['tool'] == 'buck2':
+                behavior += expand(self.config['buck_telemetry_flags'], dict(values, telemetry=behavior_prefix))
+            rec = self.command(behavior, values['tree'], directory, 'original-behavior')
             counts = self.test_counts(rec['log'])
             checks['original_behavior'] = {
                 'command': rec, 'test_counts': counts,
                 'passed': rec['exit_status'] == 0 and counts['passed'] == 11 and counts['failed'] == 0}
+            if self.config['tool'] == 'buck2':
+                telemetry = self.collect_telemetry(behavior_prefix, values, directory, 'original-behavior-telemetry')
+                checks['original_behavior']['telemetry'] = telemetry
+                checks['original_behavior']['passed'] &= telemetry.get('test_execution_count', 0) > 0
         return checks
 
     def metrics(self, values, directory, name):
@@ -773,6 +849,10 @@ class Bench:
             'untracked': source['untracked_files']}))
         before = self.metrics(values, directory, 'metrics-before')
         rec = self.command(argv, tree, directory, 'build', start_barrier=start_barrier)
+        if start_barrier is not None:
+            # A fast worker must not compile correctness tests or materialize
+            # artifacts while another worker is still in its measured build.
+            start_barrier.wait(timeout=self.config.get('timeout_seconds', 7200) + 30)
         result = {'schema': SCHEMA, 'stage': stage, 'tree': name, 'tool': self.config['tool'],
                   'profile': stage['profile'], 'features': profile['features'], 'source': source,
                   'host': socket.gethostname(), 'service': self.config.get('service', {}).get('identity'),
@@ -809,14 +889,17 @@ class Bench:
                     'screenshots': screenshots}
                 result['startup_passed'] = (executables_match and all(screenshots.values())
                                              and report.get('coverage', '').startswith('private headless compositor;'))
-            elif rec['exit_status'] == 0 and operation in ('test', 'soroban'):
+            elif operation in ('test', 'soroban'):
                 result['test_evidence'] = self.test_counts(directory / 'build.log')
-                result['test_count_passed'] = result['test_evidence']['summaries'] > 0 and result['test_evidence']['failed'] == 0
+                result['test_count_passed'] = result['test_evidence']['passed'] > 0 and result['test_evidence']['failed'] == 0
                 if operation == 'soroban':
                     result['test_count_passed'] = result['test_evidence']['passed'] == stage['expected_tests'] and result['test_evidence']['failed'] == 0
+                if self.config['tool'] == 'buck2':
+                    result['test_execution_passed'] = result.get('telemetry', {}).get('test_execution_count', 0) > 0
             result['passed'] = (rec['exit_status'] == 0 and not result.get('telemetry_error')
                                 and all(c['passed'] for c in result.get('correctness', {}).values())
                                 and result.get('test_count_passed', True)
+                                and result.get('test_execution_passed', True)
                                 and result.get('startup_passed', True)
                                 and (build_info is None or build_info['exit_status'] == 0))
         except Exception as exc:
@@ -857,17 +940,26 @@ class Bench:
                 roots.append(Path(value).resolve())
         if any(not path.exists() for path in roots):
             raise RuntimeError(f'storage root missing; refusing unmatched denominator: {roots}')
-        devices = {path.stat().st_dev for path in roots}
-        if len(devices) != 1:
-            raise RuntimeError('physical union roots span filesystems; configure one union per filesystem')
-        command = expand(config['command'], self.values()) + [str(path) for path in roots]
+        filesystems = {str(path): btrfs_filesystem_id(path) for path in roots}
+        if len(set(filesystems.values())) != 1:
+            raise RuntimeError(f'physical union roots span Btrfs filesystems: {filesystems}')
+        command_key = 'immutable_command' if root_key == 'immutable_roots' and 'immutable_command' in config else 'command'
+        command = expand(config[command_key], self.values()) + [str(path) for path in roots]
         rec = self.command(command, self.root, directory, 'physical-union')
         text = Path(rec['log']).read_text()
         match = re.search(r'(?m)^TOTAL\s+\S+\s+(\d+)\s+(\d+)\s+(\d+)\s*$', text)
         value = {'stage': stage['id'], 'roots': [str(path) for path in roots], 'command': rec,
+                 'btrfs_filesystem_ids': filesystems,
                  'workload_boundary': {'completed_stages': self.completed(), 'profile': stage['profile'], 'trees': stage['trees']},
                  'method': 'single compression-aware compsize extent union; cache+outputs+mutable state, no summed component totals',
                  'passed': rec['exit_status'] == 0 and match is not None}
+        try:
+            provenance = json.loads(text.splitlines()[0])
+        except (json.JSONDecodeError, IndexError):
+            provenance = None
+        if isinstance(provenance, dict) and provenance.get('roots'):
+            value['expanded_measurement_roots'] = provenance['roots']
+            value['measurement_inventory'] = provenance.get('inventory')
         if root_key == 'roots' and config.get('immutable_roots'):
             value['immutable_union'] = self.storage(stage, directory / 'immutable', 'immutable_roots')
             value['passed'] &= value['immutable_union']['passed']
@@ -973,11 +1065,36 @@ class Bench:
         return summarize(self.root)
 
 
+def stage_trial_observations(root, stage, tool, completed=None):
+    if completed is not None:
+        return [trial for trial in completed['results'] if 'build' in trial]
+    directory = root / 'stages' / stage['id']
+    intent = directory / 'intent.json'
+    recorded_stage = load(intent)['stage'] if intent.exists() else stage
+    trials = []
+    for name in recorded_stage['trees']:
+        trial_directory = directory / name
+        result = trial_directory / 'result.json'
+        command = trial_directory / 'build.json'
+        if result.exists():
+            trials.append(load(result))
+        elif command.exists():
+            trials.append({
+                'schema': SCHEMA, 'tool': tool, 'stage': recorded_stage, 'tree': name,
+                'profile': recorded_stage['profile'], 'build': load(command), 'passed': False,
+                'incomplete_observation': True, 'raw_build_record': str(command),
+                'reason': 'Completed command is durable but trial postprocessing has no result; original timing retained, not replayed',
+                'telemetry': {'compiler_executions': None},
+            })
+    return trials
+
+
 def qualification_gates(root):
     """Prior-matrix thresholds: absent or unmatched evidence never passes."""
     config = load(root / 'config.json')
     stages = {path.parent.name: load(path) for path in (root / 'stages').glob('*/complete.json')}
-    trials = [trial for stage in stages.values() for trial in stage['results'] if 'build' in trial]
+    trials = [trial for stage in plan()
+              for trial in stage_trial_observations(root, stage, config['tool'], stages.get(stage['id']))]
     gates = {}
 
     def record(name, observed, passed, requirement):
@@ -995,10 +1112,13 @@ def qualification_gates(root):
            all(value == 0 for value in compiles) and all(trial['passed'] for trial in fresh)
            if len(compiles) == 4 and None not in compiles else None,
            'four independent fresh worktrees, zero eligible compiler actions each')
-    cold = stages.get('dev-cold', {}).get('results', [])
+    cold = [trial for trial in trials if trial['stage']['id'] == 'dev-cold']
     ratios = [trial['build']['wall_seconds'] / cold[0]['build']['wall_seconds'] for trial in fresh] if cold else []
-    record('warm_identical_wall', ratios, all(value <= .2 for value in ratios) if len(ratios) == 4 else None,
-           'each identical fresh build <=20% of original cold observation')
+    failed_warm_observation = any(not trial['passed'] for trial in cold + fresh)
+    warm_wall_passed = (False if failed_warm_observation else
+                        all(value <= .2 for value in ratios) if len(cold) == 1 and len(fresh) == 4 else None)
+    record('warm_identical_wall', ratios, warm_wall_passed,
+           'successful original cold and four successful identical fresh builds, each <=20% of original cold observation')
     baseline = load(config['cargo_baseline']) if config.get('cargo_baseline') else None
     if baseline:
         same_commit = baseline.get('commit') == config['commit']
@@ -1019,10 +1139,12 @@ def qualification_gates(root):
     sharing_base = stages.get('dev-revert', {}).get('storage', {})
     denominator = sharing_base.get('immutable_union', {}).get('physical_disk_bytes')
     previous = sharing_base.get('physical_disk_bytes')
+    sharing_storage_valid = sharing_base.get('passed', False)
     deltas, boundaries = [], []
     for tree in 'bcde':
         storage = stages.get('dev-fresh-' + tree, {}).get('storage', {})
         current = storage.get('physical_disk_bytes')
+        sharing_storage_valid &= storage.get('passed', False)
         if previous is not None and current is not None:
             deltas.append(current - previous)
             boundaries.append(storage.get('workload_boundary'))
@@ -1030,13 +1152,17 @@ def qualification_gates(root):
     limit = .05 * denominator + 32 * 1024 * 1024 if denominator is not None else None
     record('physical_sharing', {'incremental_union_bytes': deltas, 'one_tree_immutable_union_bytes': denominator,
                                'per_tree_limit_bytes': limit, 'baseline': 'dev-revert', 'workload_boundaries': boundaries},
-           all(value <= limit for value in deltas) if len(deltas) == 4 and limit is not None else None,
+           sharing_storage_valid and all(value <= limit for value in deltas) if len(deltas) == 4 and limit is not None else None,
            'each extra worktree <=5% matched one-tree immutable payload +32 MiB metadata; cache+all outputs union')
     churn = [stages.get(f'dev-churn-{n}', {}).get('storage', {}).get('physical_disk_bytes') for n in range(1, 11)]
     budget = config.get('storage', {}).get('max_active_union_bytes')
-    record('bounded_total_state', {'churn_union_bytes': churn, 'configured_budget_bytes': budget},
-           all(value <= budget for value in churn) if budget and None not in churn else None,
-           'ten churn observations fit explicit active-union budget; cache cap alone is not total-state cap')
+    churn_storage_valid = all(stages.get(f'dev-churn-{n}', {}).get('storage', {}).get('passed', False)
+                              for n in range(1, 11))
+    record('observed_churn_budget', {'churn_union_bytes': churn, 'configured_budget_bytes': budget},
+           churn_storage_valid and all(value <= budget for value in churn) if budget and None not in churn else None,
+           'ten observed churn unions fit the configured budget; this does not prove automatic total-state enforcement')
+    record('automatic_total_state_bound', None, None,
+           'unmeasured: cache caps and finite churn observations do not demonstrate automatic enforcement over all owned state')
     for name, required in (
         ('restart', ['service-restart', 'dev-restart-edited', 'dev-restart-original']),
         ('eviction_recovery', ['service-eviction', 'dev-post-eviction-original', 'dev-post-eviction-known']),
@@ -1051,19 +1177,27 @@ def qualification_gates(root):
 
 def summarize(root):
     root = Path(root)
+    tool = load(root / 'config.json')['tool']
     rows = []
     interrupted = []
+    retained_partial_trials = []
     groups = {}
     for stage in plan():
         directory = root / 'stages' / stage['id']
         complete = directory / 'complete.json'
-        if not complete.exists():
+        if complete.exists():
+            value = load(complete)
+            rows.append({'id': stage['id'], 'passed': value['passed'], 'makespan_seconds': value['wall_makespan_seconds']})
+            trials = value['results']
+        else:
             if directory.exists():
                 interrupted.append(stage['id'])
-            continue
-        value = load(complete)
-        rows.append({'id': stage['id'], 'passed': value['passed'], 'makespan_seconds': value['wall_makespan_seconds']})
-        for trial in value['results']:
+            trials = stage_trial_observations(root, stage, tool)
+            retained_partial_trials.extend({
+                'record': trial.get('raw_build_record', str(directory / trial['tree'] / 'result.json')),
+                'trial_postprocessing_complete': not trial.get('incomplete_observation', False),
+            } for trial in trials)
+        for trial in trials:
             if 'build' not in trial:
                 continue
             key = re.sub(r'-[1-9][0-9]*$', '', stage['id'])
@@ -1072,6 +1206,7 @@ def summarize(root):
     summary = {'schema': SCHEMA, 'root': str(root), 'generated_unix': time.time(), 'stages': rows,
                'raw_failed_stages': sum(not row['passed'] for row in rows) + len(interrupted),
                'interrupted_or_harness_failed_stages': interrupted,
+               'durable_observations_from_incomplete_stages': retained_partial_trials,
                'missing_stages': [stage['id'] for stage in plan() if not (root / 'stages' / stage['id']).exists()],
                'groups': {}, 'gates': {'all_required_stages_passed': len(rows) == len(plan()) and all(row['passed'] for row in rows),
                                      'host_load_gating': False, 'global_host_gc': False}}
@@ -1126,6 +1261,7 @@ def validate(config, full):
 
 
 def main():
+    os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('plan', help='print exact required scenarios as JSON')
