@@ -558,15 +558,19 @@ A writable CI experiment instead needs its own
 job; never share its writer namespace across jobs. Its backend data, including
 incomplete uploads, is bounded by a tmpfs quota and is lost on restart.
 Trusted persistent caches default to 64 GiB CAS and 1 GiB action-cache LRU
-retention with a seven-day age policy; these are retained-object limits,
-not hard bounds on in-progress trusted uploads. `resize --cas-bytes N
---ac-bytes N` drains workers and adjusts the existing cache without deleting
-individual objects. Docker logs are bounded separately.
+retention with a seven-day age policy. Every filesystem cache, including worker
+scratch caches, also caps entries at `max(1, byte_budget // 4096)`, matching its
+explicit 4 KiB block accounting. This closes the zero-byte ActionResult loophole
+in byte-only retention. These are retained-object limits, not hard bounds on
+in-progress trusted uploads. Apply this policy to an existing deployment with
+`restart`; persistent cache contents are retained subject to the new bounds.
+`resize --cas-bytes N --ac-bytes N` drains workers and adjusts the existing cache
+without deleting individual objects. Docker logs are bounded separately.
 
 For eviction/restart evidence, `cache-inventory --timeout SECONDS` snapshots
 persistent cache names and sizes with the owned backends temporarily paused.
 It records complete above-bound observations while waiting for configured
-byte limits, but fails on filesystem errors without retrying partial scans.
+byte and entry limits, but fails on filesystem errors without retrying partial scans.
 Returned or failed scans resume their backends; an already-paused backend is
 refused without changing its state. Symlinked cache roots are refused.
 Use an idle, isolated qualification deployment: this pauses service requests,
@@ -574,7 +578,11 @@ does not support ephemeral tmpfs caches, and is not physical-extent accounting.
 A killed observer can leave backends paused; inspect `status` and unpause only
 the labelled owned backends before continuing. A real disposable-service smoke
 covered 1,950 evictions, exact restart retention, scan-error cleanup and
-preservation of an operator's preexisting pause.
+preservation of an operator's preexisting pause. A zero-byte-result regression
+retained 512 empty entries before the count policy; afterward a configured
+eight-entry budget retained eight through 2,048 new results and restart.
+The probe verified real empty-result hits, evicted misses and unchanged ordinary
+CAS entries; it did not merely inspect generated configuration.
 
 Each domain has an owned frontend bridge and a stable namespace-owner
 container. CI joins that bridge with its own network namespace; it never
