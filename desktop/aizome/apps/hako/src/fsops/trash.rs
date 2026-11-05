@@ -120,7 +120,7 @@ impl Entry {
             Err(e) if e.kind() == io::ErrorKind::NotFound => {
                 // The info as it is now, so that forgetting takes only it,
                 // not one a later item made under the name.
-                let info = fs::symlink_metadata(&info).ok().map(|m| (m.dev(), m.ino()));
+                let info = fs::symlink_metadata(&info).ok().map(|m| InfoId::of(&m));
                 Some(Gone { can: self.can.clone(), name: self.name.clone(), info })
             }
             Ok(_) | Err(_) => None,
@@ -144,8 +144,25 @@ impl Entry {
 pub struct Gone {
     can: Can,
     name: OsString,
-    /// Its info's device and inode when the item was found gone.
-    info: Option<(u64, u64)>,
+    /// Its info file when the item was found gone.
+    info: Option<InfoId>,
+}
+
+/// Which info file a [`Gone`] found. A device and inode alone don't say:
+/// ext4 gives a freed inode to the next file it makes, so the info of an
+/// item trashed later under the name can have them. Its change time tells
+/// the two apart, as far as the filesystem's clock does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct InfoId {
+    dev: u64,
+    ino: u64,
+    ctime: (i64, i64),
+}
+
+impl InfoId {
+    fn of(m: &fs::Metadata) -> InfoId {
+        InfoId { dev: m.dev(), ino: m.ino(), ctime: (m.ctime(), m.ctime_nsec()) }
+    }
 }
 
 impl Trash {
@@ -431,13 +448,15 @@ impl Trash {
             return;
         }
         let path = can.info().join(info_name(&name));
-        // Only the info found with it: a later item may have the name now.
-        let ours = info.is_some_and(|id| fs::symlink_metadata(&path).is_ok_and(|m| (m.dev(), m.ino()) == id));
+        // A later item may have the name now. While it's in `files/`, its
+        // info stays whatever inode it got.
+        let still_gone =
+            fs::symlink_metadata(can.files().join(&name)).is_err_and(|e| e.kind() == io::ErrorKind::NotFound);
+        // And only the info found with it.
+        let ours = still_gone && info.is_some_and(|id| fs::symlink_metadata(&path).is_ok_and(|m| InfoId::of(&m) == id));
         if ours {
             let _ = fs::remove_file(&path);
         }
-        let still_gone =
-            fs::symlink_metadata(can.files().join(&name)).is_err_and(|e| e.kind() == io::ErrorKind::NotFound);
         if ours || (info.is_none() && still_gone) {
             let key = encode_name(&name);
             let _ = edit_sizes(&can, |lines| lines.retain(|l| l.rsplit(' ').next() != Some(key.as_str())));

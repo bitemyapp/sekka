@@ -189,7 +189,12 @@ takes a proof only the comparison makes.
 - **YUK-02 and YUK-10:** boot ids and generation link targets, from the
   kernel and Nix.
 - **HAKO-06 and HAKO-08:** whether an `fsync` failed, and whether an item has
-  left the Trash can.
+  left the Trash can. Which info file a proof found is its device, inode and
+  change time: ext4 gives a freed inode to the next file, so the inode alone
+  matched a later item's info. Forgetting also needs the item still gone, so
+  a later item in the can keeps its info whatever inode it got. Left open:
+  an item being trashed under the name, between claiming its info and
+  moving in, with a reused inode and an equal change time.
 
 ### Rust has no linear types
 
