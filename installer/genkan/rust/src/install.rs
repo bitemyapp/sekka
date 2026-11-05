@@ -278,8 +278,24 @@ pub struct Prepared {
     derivation: String,
     system: String,
     summary: Summary,
+    /// How step 4 puts the system on the target: the route that prepared it.
+    build: Build,
+    /// The plan it was prepared for: its disk and firmware. The layout and
+    /// the identities are that plan's, so no other plan may execute it.
+    disk: disk::Identity,
+    firmware: Firmware,
     _room: room::Room,
 }
+
+/// How the installed system reaches the target.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Build {
+    /// Built in the live store: copied.
+    Copy,
+    /// Too big for memory: built on the target after formatting.
+    OnTarget,
+}
+
 impl Prepared {
     pub fn summary(&self) -> &Summary {
         &self.summary
@@ -287,7 +303,8 @@ impl Prepared {
 
     /// What every stage established, once a route has found room for the
     /// system. `summary` has what the route measured.
-    fn new(evaluated: Evaluated<'_>, room: room::Room, mut summary: Summary) -> Self {
+    fn new(evaluated: Evaluated<'_>, room: room::Room, build: Build, mut summary: Summary) -> Self {
+        summary.deferred = build == Build::OnTarget;
         let Evaluated {
             configured,
             derivation,
@@ -303,6 +320,9 @@ impl Prepared {
         summary.swap_bytes = checked.layout.swap_bytes().unwrap_or(0);
         summary.seconds = checked.started.elapsed().as_secs_f64();
         Self {
+            disk: checked.plan.disk().clone(),
+            firmware: checked.plan.firmware(),
+            build,
             _lock: checked.lock,
             staging,
             template: checked.template,
@@ -628,7 +648,7 @@ impl InMemory<'_> {
             downloaded_bytes: missing.fetch_bytes,
             ..Summary::default()
         };
-        Ok(Prepared::new(evaluated, room, summary))
+        Ok(Prepared::new(evaluated, room, Build::Copy, summary))
     }
 }
 
@@ -655,22 +675,74 @@ impl InMemory<'_> {
 pub struct Deferred<'p>(Evaluated<'p>);
 
 impl Deferred<'_> {
-    /// Checks that the root filesystem has room for the downloads, the
-    /// least the system will take.
+    /// Checks that the root filesystem has room for what building on it
+    /// will put in its store ([`target_store_bytes`]).
     pub fn check_room(self) -> Result<Prepared> {
         let evaluated = self.0;
-        let downloads = evaluated.missing.fetch_bytes;
-        let room = room::check(&evaluated.configured.checked.layout, downloads)?;
+        let estimate = target_store_bytes(&evaluated.derivation, evaluated.missing)?;
+        let room = room::check(&evaluated.configured.checked.layout, estimate)?;
         preparing(&format!(
             "The selection needs {:.1} GiB of downloads, more than fits in memory: the system will be built on the target disk after formatting",
-            downloads as f64 / memory::GIB as f64
+            evaluated.missing.fetch_bytes as f64 / memory::GIB as f64
         ));
+        // Also step 4's progress total.
         let summary = Summary {
-            deferred: true,
+            closure_bytes: estimate,
             ..Summary::default()
         };
-        Ok(Prepared::new(evaluated, room, summary))
+        Ok(Prepared::new(evaluated, room, Build::OnTarget, summary))
     }
+}
+
+/// What each derivation built on the target adds, beyond what it fetches:
+/// most of an installed system's builds are generated configuration. The
+/// root filesystem's reserve covers the builds' workspace and the rare
+/// large local build.
+const PER_BUILD: u64 = 4 << 20;
+
+/// An estimate of what building `derivation` on the target puts in its
+/// store: the downloads, unpacked; every path of the build that the live
+/// store already has, which the build copies from it (the outputs and
+/// sources of the derivations it needs, `nix-store --query --requisites
+/// --include-outputs`); and an allowance per local build. It counts build
+/// inputs of derivations that are already built too, which errs towards
+/// refusing.
+fn target_store_bytes(derivation: &str, missing: nixlog::DryRun) -> Result<u64> {
+    let requisites = process::output_full(
+        "nix-store",
+        &["--query", "--requisites", "--include-outputs", derivation],
+        300,
+    )?;
+    let paths: Vec<&str> = requisites
+        .lines()
+        .filter_map(|line| precache::store_path(line).map(|_| line.trim()))
+        .collect();
+    let mut live = 0u64;
+    for chunk in paths.chunks(1000) {
+        let mut args = vec!["path-info", "--json"];
+        args.extend(chunk);
+        live = live
+            .checked_add(nar_sizes(&serde_json::from_str(&process::output_full(
+                "nix", &args, 300,
+            )?)?)?)
+            .context("Store size overflow")?;
+    }
+    live.checked_add(missing.fetch_bytes)
+        .and_then(|bytes| bytes.checked_add(missing.builds.checked_mul(PER_BUILD)?))
+        .context("Store size overflow")
+}
+
+/// The sum of `narSize` in `nix path-info --json`, in either of its shapes.
+fn nar_sizes(value: &serde_json::Value) -> Result<u64> {
+    let entries: Vec<_> = match value {
+        serde_json::Value::Array(entries) => entries.iter().collect(),
+        serde_json::Value::Object(entries) => entries.values().collect(),
+        _ => anyhow::bail!("Invalid path information"),
+    };
+    entries.iter().try_fold(0u64, |sum, entry| {
+        let size = entry["narSize"].as_u64().context("Missing path size")?;
+        sum.checked_add(size).context("Store size overflow")
+    })
 }
 
 /// The root filesystem's room for the installed system.
@@ -956,6 +1028,12 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
         config::configuration(&request, &prepared.ids)? == prepared.configuration,
         "The confirmed plan differs from the prepared system"
     );
+    // Its layout and identities were chosen for one disk and firmware: the
+    // configuration names the disk only for BIOS.
+    ensure!(
+        *request.disk() == prepared.disk && request.firmware() == prepared.firmware,
+        "The confirmed plan is for another disk than the prepared system"
+    );
     // Nothing cancels the installation from here on: a withdrawal that came
     // first stops it here, before any write, and a later one is refused.
     process::LATCH.commit()?;
@@ -1034,37 +1112,40 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
             None => {}
         }
     };
-    if prepared.summary.deferred {
-        progress(
-            4,
-            "Downloading and building the system on the new disk (this can take a while)",
-        );
-        build_on_target(&target.0, &store, &prepared.derivation, &tracker, &on_line)
-            .context("Building the system on the new disk failed")?;
-    } else {
-        progress(4, "Copying the prepared system to the new disk");
-        // Measured against a direct parallel file copy with database
-        // registration: nix copy was faster both in VMs and on the host.
-        output_lines(
-            "nix",
-            &[
-                "copy",
-                "--no-check-sigs",
-                "--log-format",
-                "internal-json",
-                "--to",
-                &store,
-                &prepared.system,
-            ],
-            7200,
-            &on_line,
-        )
-        .map_err(|error| nix_failure(error, &tracker))
-        .context("Copying the system to the new disk failed")?;
-        event(Event::Copying {
-            bytes: total,
-            total,
-        });
+    match prepared.build {
+        Build::OnTarget => {
+            progress(
+                4,
+                "Downloading and building the system on the new disk (this can take a while)",
+            );
+            build_on_target(&target.0, &store, &prepared.derivation, &tracker, &on_line)
+                .context("Building the system on the new disk failed")?;
+        }
+        Build::Copy => {
+            progress(4, "Copying the prepared system to the new disk");
+            // Measured against a direct parallel file copy with database
+            // registration: nix copy was faster both in VMs and on the host.
+            output_lines(
+                "nix",
+                &[
+                    "copy",
+                    "--no-check-sigs",
+                    "--log-format",
+                    "internal-json",
+                    "--to",
+                    &store,
+                    &prepared.system,
+                ],
+                7200,
+                &on_line,
+            )
+            .map_err(|error| nix_failure(error, &tracker))
+            .context("Copying the system to the new disk failed")?;
+            event(Event::Copying {
+                bytes: total,
+                total,
+            });
+        }
     }
     stage.done();
 
@@ -1206,6 +1287,21 @@ mod tests {
         ] {
             assert!(closure_size(&value).is_err());
         }
+    }
+    #[test]
+    fn store_sizes_sum_either_json_shape() {
+        assert_eq!(
+            nar_sizes(&serde_json::json!([{ "narSize": 2 }, { "narSize": 3 }])).unwrap(),
+            5
+        );
+        assert_eq!(
+            nar_sizes(&serde_json::json!({ "/nix/store/a": { "narSize": 7 } })).unwrap(),
+            7
+        );
+        assert!(nar_sizes(&serde_json::json!([{}])).is_err());
+        assert!(
+            nar_sizes(&serde_json::json!([{ "narSize": u64::MAX }, { "narSize": 1 }])).is_err()
+        );
     }
     #[test]
     fn cleanup_never_recursively_deletes_contents() {

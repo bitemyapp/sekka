@@ -95,6 +95,17 @@ esac"#,
         script(ok, "exit 0");
     }
     script("nixos-generate-config", "echo '{ ... }: { }'");
+    // Paths of the build the live store already has: `nix path-info` says
+    // they hold 20 GiB.
+    script(
+        "nix-store",
+        "echo /nix/store/22222222222222222222222222222222-live-a\necho /nix/store/33333333333333333333333333333333-live-b",
+    );
+    // The live store already has paths of the build: 20 GiB of them.
+    script(
+        "nix-store",
+        "printf '%s\\n' /nix/store/22222222222222222222222222222222-live-a /nix/store/33333333333333333333333333333333-live-b",
+    );
     script(
         "nix",
         &format!(
@@ -104,6 +115,7 @@ esac"#,
     echo 'these 4 derivations will be built:' >&2
     echo 'these 1500 paths will be fetched (60.00 GiB download, 300.00 GiB unpacked):' >&2
     ;;
+  "path-info --json") printf '%s\n' '[{{"narSize":21474836480}}]' ;;
   *) echo "fake nix: unexpected $*" >&2; exit 1 ;;
 esac"#
         ),
@@ -279,6 +291,10 @@ fn inner() {
     );
     let small = prepare_on(40).map_err(|e| format!("{e:#}"));
     println!("40 GiB disk: {small:?}");
+    // Room for the downloads and the reserve (308 GiB), but not for the
+    // 20 GiB of the build the live store has, which the build copies too.
+    let borderline = prepare_on(320).map_err(|e| format!("{e:#}"));
+    println!("320 GiB disk: {borderline:?}");
     // Control: a disk with room for the downloads is prepared on the
     // deferred route.
     let large = prepare_on(400).map_err(|e| format!("{e:#}"));
@@ -290,10 +306,20 @@ fn inner() {
         "harness: expected the 400 GiB disk to be prepared on the deferred route, got {large:?}"
     );
     assert!(
+        large.as_ref().is_ok_and(|s| s.closure_bytes > 320 * GIB),
+        "the estimate counts the downloads and the live store's paths: {large:?}"
+    );
+    assert!(
         small
             .as_ref()
             .is_err_and(|e| e.contains("on the root filesystem")),
         "preparation accepted a selection with 300 GiB of unpacked downloads for a 39 GiB root filesystem (deferred route); expected a refusal before erasure, got {small:?}"
+    );
+    assert!(
+        borderline
+            .as_ref()
+            .is_err_and(|e| e.contains("on the root filesystem")),
+        "preparation ignored the live store's paths that building on the target copies: {borderline:?}"
     );
 }
 
