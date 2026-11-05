@@ -21,5 +21,8 @@
 [build]
   execution_platforms = root//build/buck2:execution
 
+[buck2]
+  restarter = true
+
 [project]
   ignore = .git .work .direnv .buckal buck-out target desktop/aizome/target desktop/aizome/sukumo/target

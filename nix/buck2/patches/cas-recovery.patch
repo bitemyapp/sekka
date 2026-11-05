@@ -1,0 +1,1221 @@
+diff --git a/app/buck2_action_impl/src/actions/impls/run.rs b/app/buck2_action_impl/src/actions/impls/run.rs
+index 448b95d..39cae26 100644
+--- a/app/buck2_action_impl/src/actions/impls/run.rs
++++ b/app/buck2_action_impl/src/actions/impls/run.rs
+@@ -1287,6 +1287,7 @@ impl RunAction {
+                         .action
+                         .coerce();
+                     let req = req.with_remote_dep_file_key(&remote_dep_file_key);
++                    let remote_action_cache_rejected = manager.inner.remote_action_cache_rejected;
+                     let remote_dep_file_result = ctx
+                         .remote_dep_file_cache(manager, &req, &prepared_action)
+                         .await;
+@@ -1305,7 +1306,10 @@ impl RunAction {
+                             .await?;
+                         (
+                             req,
+-                            res.map_continue(|_| ctx.command_execution_manager(WaitingData::new())),
++                            res.map_continue(|_| {
++                                ctx.command_execution_manager(WaitingData::new())
++                                    .with_remote_action_cache_rejected(remote_action_cache_rejected)
++                            }),
+                         )
+                     } else {
+                         (req, remote_dep_file_result)
+diff --git a/app/buck2_build_api/src/actions/artifact/materializer.rs b/app/buck2_build_api/src/actions/artifact/materializer.rs
+index ca54172..9f9988e 100644
+--- a/app/buck2_build_api/src/actions/artifact/materializer.rs
++++ b/app/buck2_build_api/src/actions/artifact/materializer.rs
+@@ -21,8 +21,10 @@ use buck2_events::dispatch::current_span;
+ use buck2_events::dispatch::span_async_simple;
+ use buck2_execute::artifact_value::ArtifactValue;
+ use buck2_execute::materialize::materializer::HasMaterializer;
++use buck2_execute::materialize::materializer::MaterializationError;
+ use buck2_execute::materialize::materializer::MaterializationPurpose;
+ use buck2_execute::materialize::materializer::MaterializeRequest;
++use buck2_execute::re::error::report_cas_corruption;
+ use buck2_util::time_span::TimeSpan;
+ use dice::DiceComputations;
+ use dice::DiceComputationsData;
+@@ -87,7 +89,17 @@ impl ArtifactMaterializer for DiceComputationsData {
+                     drop(
+                         response
+                             .ensure_results_ok()
+-                            .map_err(Into::<buck2_error::Error>::into)?,
++                            .map_err(|error| match error {
++                                MaterializationError::NotFound { source } => {
++                                    let corrupted =
++                                        source.info.origin.guaranteed_by_action_cache();
++                                    report_cas_corruption(
++                                        MaterializationError::NotFound { source }.into(),
++                                        corrupted,
++                                    )
++                                }
++                                error => error.into(),
++                            })?,
+                     );
+                 };
+ 
+diff --git a/app/buck2_execute/src/execute/manager.rs b/app/buck2_execute/src/execute/manager.rs
+index 3870a80..477f176 100644
+--- a/app/buck2_execute/src/execute/manager.rs
++++ b/app/buck2_execute/src/execute/manager.rs
+@@ -55,6 +55,9 @@ pub struct CommandExecutionManagerInner {
+     pub events: EventDispatcher,
+     pub liveliness_observer: Arc<dyn LivelinessObserver>,
+     pub intend_to_fallback_on_failure: bool,
++    /// A cached result referenced missing CAS content. Do not let Execute serve
++    /// that same record again after the cache checker rejected it.
++    pub remote_action_cache_rejected: bool,
+     pub execution_kind: Option<CommandExecutionKind>,
+     pub was_result_delayed: Arc<AtomicBool>,
+     pub waiting_data: WaitingData,
+@@ -78,6 +81,7 @@ impl CommandExecutionManager {
+                 events,
+                 liveliness_observer,
+                 intend_to_fallback_on_failure: false,
++                remote_action_cache_rejected: false,
+                 execution_kind: None,
+                 was_result_delayed: Arc::new(AtomicBool::new(false)),
+                 waiting_data,
+@@ -92,6 +96,7 @@ impl CommandExecutionManager {
+             events,
+             liveliness_observer,
+             intend_to_fallback_on_failure: _,
++            remote_action_cache_rejected: _,
+             execution_kind,
+             was_result_delayed: _,
+             waiting_data,
+@@ -143,6 +148,11 @@ impl CommandExecutionManager {
+         self
+     }
+ 
++    pub fn with_remote_action_cache_rejected(mut self, rejected: bool) -> Self {
++        self.inner.remote_action_cache_rejected = rejected;
++        self
++    }
++
+     pub fn with_execution_kind(mut self, execution_kind: CommandExecutionKind) -> Self {
+         self.inner.execution_kind = Some(execution_kind);
+         self
+diff --git a/app/buck2_execute/src/re/client.rs b/app/buck2_execute/src/re/client.rs
+index 3db9e87..c9fe0ca 100644
+--- a/app/buck2_execute/src/re/client.rs
++++ b/app/buck2_execute/src/re/client.rs
+@@ -262,9 +262,19 @@ impl RemoteExecutionClient {
+             match Self::new(re_config).await {
+                 Ok(v) => return Ok(v),
+                 Err(e) => {
+-                    if e.find_typed_context::<RemoteExecutionError>().is_none() {
+-                        // If we cannot connect to RE due to some non-RE error, we should not retry
+-                        // And should just return the error immediately as it's unlikely to be flakey
++                    if e
++                        .find_typed_context::<RemoteExecutionError>()
++                        .is_none_or(|error| {
++                            matches!(
++                                error.code,
++                                TCode::UNAUTHENTICATED
++                                    | TCode::PERMISSION_DENIED
++                                    | TCode::INVALID_ARGUMENT
++                            )
++                        })
++                    {
++                        // Non-RE errors, invalid configuration and rejected
++                        // credentials cannot be repaired by reconnecting.
+                         return Err(e);
+                     }
+ 
+diff --git a/app/buck2_execute/src/re/error.rs b/app/buck2_execute/src/re/error.rs
+index 93d1bf6..5e6b456 100644
+--- a/app/buck2_execute/src/re/error.rs
++++ b/app/buck2_execute/src/re/error.rs
+@@ -9,6 +9,7 @@
+  */
+ 
+ use allocative::Allocative;
++use buck2_core::soft_error;
+ use buck2_error::ErrorTag;
+ use buck2_error::TypedContext;
+ use remote_execution::REClientError;
+@@ -94,6 +95,35 @@ fn re_error(
+     }
+ }
+ 
++/// Only structured missing-input failures qualify for native CAS recovery.
++/// In OSS, the RE client sets this reason group from REAPI PreconditionFailure,
++/// not from a status message or from FAILED_PRECONDITION alone.
++pub fn is_missing_cas_input(error: &buck2_error::Error) -> bool {
++    error
++        .find_typed_context::<RemoteExecutionError>()
++        .is_some_and(|error| {
++            error.code == TCode::FAILED_PRECONDITION
++                && error.group == TCodeReasonGroup::DIGEST_NOT_FOUND
++        })
++}
++
++/// Reuse the native, single-restart recovery boundary. A new daemon discards
++/// stale DICE values and presence leases; cache candidates are checked against
++/// CAS before their outputs can be accepted again.
++pub fn report_cas_corruption(
++    error: buck2_error::Error,
++    action_cache_is_corrupted: bool,
++) -> buck2_error::Error {
++    soft_error!(
++        "cas_missing_recovery",
++        error.clone(),
++        daemon_in_memory_state_is_corrupted: true,
++        action_cache_is_corrupted: action_cache_is_corrupted
++    )
++    .err()
++    .unwrap_or(error)
++}
++
+ pub(crate) fn with_error_handler<T>(
+     re_action: &str,
+     re_session_id: &str,
+@@ -148,4 +178,32 @@ mod tests {
+         let err = error.find_typed_context::<RemoteExecutionError>().unwrap();
+         assert_eq!(err.code, TCode::UNKNOWN);
+     }
++
++    #[test]
++    fn test_missing_cas_requires_typed_reason_and_code() {
++        let error = with_error_handler::<()>(
++            "execute",
++            "test",
++            Err(REClientError {
++                code: TCode::FAILED_PRECONDITION,
++                group: TCodeReasonGroup::DIGEST_NOT_FOUND,
++                message: "arbitrary server wording".to_owned(),
++            }
++            .into()),
++        )
++        .unwrap_err();
++        assert!(is_missing_cas_input(&error));
++        for (code, group) in [
++            (TCode::FAILED_PRECONDITION, TCodeReasonGroup::UNKNOWN),
++            (TCode::UNAUTHENTICATED, TCodeReasonGroup::DIGEST_NOT_FOUND),
++            (TCode::PERMISSION_DENIED, TCodeReasonGroup::DIGEST_NOT_FOUND),
++            (TCode::NOT_FOUND, TCodeReasonGroup::UNKNOWN),
++        ] {
++            assert!(!is_missing_cas_input(&test_re_error_with_group(
++                "action input missing from CAS",
++                code,
++                group,
++            )));
++        }
++    }
+ }
+diff --git a/app/buck2_execute/src/re/remote_action_result.rs b/app/buck2_execute/src/re/remote_action_result.rs
+index 92f22ff..d2f313a 100644
+--- a/app/buck2_execute/src/re/remote_action_result.rs
++++ b/app/buck2_execute/src/re/remote_action_result.rs
+@@ -16,6 +16,8 @@ use buck2_error::BuckErrorContext;
+ use buck2_miniperf_proto::MiniperfCounter;
+ use remote_execution::ActionResultResponse;
+ use remote_execution::ExecuteResponse;
++use remote_execution::TActionResult2;
++use remote_execution::TDigest;
+ use remote_execution::TDirectory2;
+ use remote_execution::TExecutedActionMetadata;
+ use remote_execution::TFile;
+@@ -37,6 +39,7 @@ pub trait RemoteActionResult: Send + Sync {
+     fn output_files(&self) -> &[TFile];
+     fn output_directories(&self) -> &[TDirectory2];
+     fn output_symlinks(&self) -> &[TSymlink];
++    fn std_stream_digests(&self) -> [Option<&TDigest>; 2];
+ 
+     fn execution_kind(&self, details: RemoteCommandExecutionDetails) -> CommandExecutionKind;
+ 
+@@ -98,6 +101,10 @@ impl RemoteActionResult for ExecuteResponseWithQueueStats {
+         &self.execute_response.action_result.output_symlinks
+     }
+ 
++    fn std_stream_digests(&self) -> [Option<&TDigest>; 2] {
++        std_stream_digests(&self.execute_response.action_result)
++    }
++
+     fn execution_kind(&self, details: RemoteCommandExecutionDetails) -> CommandExecutionKind {
+         self.execution_kind_for_failed_actions(details, None, None)
+     }
+@@ -147,6 +154,10 @@ impl RemoteActionResult for ActionCacheResult {
+         &self.0.action_result.output_symlinks
+     }
+ 
++    fn std_stream_digests(&self) -> [Option<&TDigest>; 2] {
++        std_stream_digests(&self.0.action_result)
++    }
++
+     fn execution_kind(&self, details: RemoteCommandExecutionDetails) -> CommandExecutionKind {
+         match self.1 {
+             buck2_data::CacheType::ActionCache => CommandExecutionKind::ActionCache { details },
+@@ -185,6 +196,19 @@ impl RemoteActionResult for ActionCacheResult {
+     }
+ }
+ 
++fn std_stream_digests(result: &TActionResult2) -> [Option<&TDigest>; 2] {
++    [
++        result
++            .stdout_digest
++            .as_ref()
++            .filter(|_| result.stdout_raw.as_ref().is_none_or(Vec::is_empty)),
++        result
++            .stderr_digest
++            .as_ref()
++            .filter(|_| result.stderr_raw.as_ref().is_none_or(Vec::is_empty)),
++    ]
++}
++
+ pub struct ReMetadataTiming {
+     pub execution_time: Duration,
+     pub start_time: SystemTime,
+@@ -266,3 +290,32 @@ fn convert_perf_count(
+             .buck_error_context("Invalid time_running")?,
+     }))
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn test_stream_presence_matches_inline_byte_precedence() {
++        let digest = TDigest {
++            hash: "aa".to_owned(),
++            size_in_bytes: 1,
++            ..Default::default()
++        };
++        let mut result = TActionResult2 {
++            stdout_raw: Some(vec![b'x']),
++            stdout_digest: Some(digest.clone()),
++            stderr_raw: Some(Vec::new()),
++            stderr_digest: Some(digest),
++            ..Default::default()
++        };
++        let [stdout, stderr] = std_stream_digests(&result);
++        assert!(stdout.is_none());
++        assert_eq!(stderr, result.stderr_digest.as_ref());
++        result.stdout_raw = None;
++        result.stderr_digest = None;
++        let [stdout, stderr] = std_stream_digests(&result);
++        assert_eq!(stdout, result.stdout_digest.as_ref());
++        assert!(stderr.is_none());
++    }
++}
+diff --git a/app/buck2_execute/src/re/uploader.rs b/app/buck2_execute/src/re/uploader.rs
+index 454b84c..78cfc15 100644
+--- a/app/buck2_execute/src/re/uploader.rs
++++ b/app/buck2_execute/src/re/uploader.rs
+@@ -31,6 +31,7 @@ use buck2_hash::BuckMutSet;
+ use buck2_hash::IntentionallyStdHashMap;
+ use dupe::Dupe;
+ use itertools::Itertools;
++#[cfg(fbcode_build)]
+ use jiff::SignedDuration;
+ use remote_execution::InlinedBlobWithDigest;
+ use remote_execution::NamedDigest;
+@@ -47,6 +48,7 @@ use crate::directory::ActionImmutableDirectory;
+ use crate::directory::ReDirectorySerializer;
+ use crate::execute::blobs::ActionBlobs;
+ use crate::materialize::materializer::ArtifactNotMaterializedReason;
++#[cfg(fbcode_build)]
+ use crate::materialize::materializer::CasDownloadInfo;
+ use crate::materialize::materializer::MaterializationPurpose;
+ use crate::materialize::materializer::MaterializeRequest;
+@@ -231,48 +233,60 @@ impl Uploader {
+                         if let DirectoryEntry::Leaf(ActionDirectoryMember::File(file)) =
+                             entry.as_ref()
+                         {
+-                            // NOTE: find_missing has negative caching, so when we query to know if an
+-                            // artifact was uploaded, if it was the result of an action we just ran, it
+-                            // won't be here. On the flip side, if a digest has been in the CAS for
+-                            // a very long time, it might have expired.
+                             if file.digest.to_re() == digest {
+-                                if should_error_for_missing_digest(info) {
++                                #[cfg(fbcode_build)]
++                                let missing = should_error_for_missing_digest(info);
++                                #[cfg(not(fbcode_build))]
++                                let missing = client
++                                    .get_digests_ttl(
++                                        vec![digest.clone()],
++                                        &use_case.metadata(identity),
++                                        false,
++                                    )
++                                    .await?
++                                    .digests_with_ttl
++                                    .iter()
++                                    .any(|digest| digest.ttl <= 0);
++
++                                if !missing {
++                                    #[cfg(fbcode_build)]
+                                     soft_error!(
+-                                        "cas_missing_fatal",
++                                        "cas_missing",
+                                         buck2_error::buck2_error!(
+                                             buck2_error::ErrorTag::Input,
+-                                            "{} missing (origin: {})",
++                                            "{} (expires = {}) is missing in the CAS but expected to exist as per: {:#}",
+                                             file.digest,
+-                                            info.origin.as_display_for_not_found(),
++                                            file.digest.expires()?,
++                                            err
+                                         ),
+-                                        daemon_in_memory_state_is_corrupted: true,
+-                                        action_cache_is_corrupted: info.origin.guaranteed_by_action_cache()
++                                        quiet: true
+                                     )?;
+-
+-                                    return Err(buck2_error::buck2_error!(
+-                                        buck2_error::ErrorTag::ReCasArtifactExpired,
+-                                        "Your build requires an artifact that has expired in the RE CAS \
+-                                        and Buck does not have it. This likely happened because your Buck daemon \
+-                                        has been online for a long time. This error is currently unrecoverable. \
+-                                        To proceed, you should restart Buck using `buck2 killall`. \
+-                                        Debug information: {:#}",
+-                                        err
+-                                    ));
++                                    continue;
+                                 }
+ 
++                                // A fresh REAPI miss is authoritative even for
++                                // a recently produced artifact. Its bytes are
++                                // remote-only, so retrying upload cannot repair
++                                // it: discard stale action state and rebuild.
+                                 soft_error!(
+-                                    "cas_missing",
++                                    "cas_missing_fatal",
+                                     buck2_error::buck2_error!(
+                                         buck2_error::ErrorTag::Input,
+-                                        "{} (expires = {}) is missing in the CAS but expected to exist as per: {:#}",
++                                        "{} missing (origin: {})",
+                                         file.digest,
+-                                        file.digest.expires()?,
+-                                        err
++                                        info.origin.as_display_for_not_found(),
+                                     ),
+-                                    quiet: true
++                                    daemon_in_memory_state_is_corrupted: true,
++                                    action_cache_is_corrupted: info.origin.guaranteed_by_action_cache()
+                                 )?;
+ 
+-                                continue;
++                                return Err(buck2_error::buck2_error!(
++                                    buck2_error::ErrorTag::ReCasArtifactExpired,
++                                    "Your build requires an artifact missing from the RE CAS \
++                                    with no local copy. Native CAS recovery will restart the \
++                                    command when enabled. Debug information: {:#}",
++                                    err
++                                ));
+                             }
+                         }
+ 
+@@ -398,6 +412,7 @@ buck2_util::size_assert::words_of_async_fn_future!(
+     ~65
+ );
+ 
++#[cfg(fbcode_build)]
+ fn should_error_for_missing_digest(info: &CasDownloadInfo) -> bool {
+     // RE sometimes reports things that exist as missing. We don't fully understand why at this
+     // time and this is being investigated, but we know that RE normally ensures that anything it
+diff --git a/app/buck2_execute_impl/src/executors/action_cache.rs b/app/buck2_execute_impl/src/executors/action_cache.rs
+index a8b74e5..f7bfa9d 100644
+--- a/app/buck2_execute_impl/src/executors/action_cache.rs
++++ b/app/buck2_execute_impl/src/executors/action_cache.rs
+@@ -227,7 +227,12 @@ async fn query_action_cache_and_download_result(
+     )
+     .await;
+ 
+-    let DownloadResult::Result(mut res) = res;
++    let mut res = match res {
++        DownloadResult::Result(res) => res,
++        DownloadResult::CacheMiss(manager) => {
++            return ControlFlow::Continue(manager.with_remote_action_cache_rejected(true));
++        }
++    };
+     match &cache_type {
+         CacheType::RemoteDepFileCache(key) => {
+             tracing::trace!(
+diff --git a/app/buck2_execute_impl/src/executors/hybrid.rs b/app/buck2_execute_impl/src/executors/hybrid.rs
+index cfb070e..41ec5a4 100644
+--- a/app/buck2_execute_impl/src/executors/hybrid.rs
++++ b/app/buck2_execute_impl/src/executors/hybrid.rs
+@@ -186,6 +186,7 @@ where
+             manager.inner.liveliness_observer.dupe(),
+             manager.inner.waiting_data.clone(),
+         )
++        .with_remote_action_cache_rejected(manager.inner.remote_action_cache_rejected)
+         .with_intend_to_fallback_on_failure(fallback_on_failure);
+         let was_result_delayed = remote_manager.inner.was_result_delayed.dupe();
+         let remote_result = self.remote_exec_cmd(command, remote_manager, cancellations);
+diff --git a/app/buck2_execute_impl/src/executors/re.rs b/app/buck2_execute_impl/src/executors/re.rs
+index d07c6e9..4bc2eec 100644
+--- a/app/buck2_execute_impl/src/executors/re.rs
++++ b/app/buck2_execute_impl/src/executors/re.rs
+@@ -49,6 +49,8 @@ use buck2_execute::re::client::CancellationReason;
+ use buck2_execute::re::client::ExecuteResponseOrCancelled;
+ use buck2_execute::re::error::RemoteExecutionError;
+ use buck2_execute::re::error::get_re_error_tag;
++use buck2_execute::re::error::is_missing_cas_input;
++use buck2_execute::re::error::report_cas_corruption;
+ use buck2_execute::re::manager::ManagedRemoteExecutionClient;
+ use buck2_execute::re::output_trees_download_config::OutputTreesDownloadConfig;
+ use buck2_execute::re::remote_action_result::ExecuteResponseWithQueueStats;
+@@ -185,6 +187,9 @@ impl ReExecutor {
+ 
+         let now = TimeSpan::start_now();
+ 
++        let skip_cache_lookup = self.skip_cache_read
++            || request.induced_cache_miss()
++            || manager.inner.remote_action_cache_rejected;
+         let execute_response_fut = self.re_client.execute(
+             action_digest.dupe(),
+             platform,
+@@ -192,7 +197,7 @@ impl ReExecutor {
+             re_gang_workers,
+             identity,
+             &mut manager,
+-            self.skip_cache_read || request.induced_cache_miss(),
++            skip_cache_lookup,
+             self.skip_cache_write,
+             self.re_max_queue_time,
+             self.re_resource_units,
+@@ -275,6 +280,11 @@ impl ReExecutor {
+                             CommandExecutionMetadata::empty(TimeSpan::empty_now()),
+                         ));
+                     }
++                    let e = if is_missing_cas_input(&e) {
++                        report_cas_corruption(e, false)
++                    } else {
++                        e
++                    };
+                     return ControlFlow::Break(manager.error("remote_call_error", e));
+                 }
+             };
+@@ -516,7 +526,22 @@ impl PreparedCommandExecutor for ReExecutor {
+         .boxed()
+         .await;
+ 
+-        let DownloadResult::Result(mut res) = res;
++        let mut res = match res {
++            DownloadResult::Result(res) => res,
++            DownloadResult::CacheMiss(manager) => {
++                return manager.error(
++                    "remote_cache_missing_outputs",
++                    report_cas_corruption(
++                        buck2_error::buck2_error!(
++                            buck2_error::ErrorTag::ReCasArtifactExpired,
++                            "Cached remote action {} references missing CAS outputs",
++                            action_and_blobs.action,
++                        ),
++                        true,
++                    ),
++                );
++            }
++        };
+         res.action_result = Some(response.execute_response.action_result);
+ 
+         if let Some(run_action_key) = request.run_action_key()
+diff --git a/app/buck2_execute_impl/src/re/download.rs b/app/buck2_execute_impl/src/re/download.rs
+index 36790ec..0b86cb3 100644
+--- a/app/buck2_execute_impl/src/re/download.rs
++++ b/app/buck2_execute_impl/src/re/download.rs
+@@ -22,17 +22,22 @@ use buck2_core::execution_types::executor_config::RemoteExecutorUseCase;
+ use buck2_core::fs::artifact_path_resolver::ArtifactFs;
+ use buck2_core::fs::buck_out_path::BuildArtifactPath;
+ use buck2_core::fs::project_rel_path::ProjectRelativePathBuf;
++use buck2_directory::directory::directory::Directory;
++use buck2_directory::directory::directory_iterator::DirectoryIterator;
+ use buck2_directory::directory::entry::DirectoryEntry;
+ use buck2_error::BuckErrorContext;
+ use buck2_events::dispatch::console_message;
+ use buck2_execute::artifact_value::ArtifactValue;
+ use buck2_execute::digest::CasDigestFromReExt;
++use buck2_execute::digest::CasDigestToReExt;
+ use buck2_execute::digest_config::DigestConfig;
+ use buck2_execute::directory::ActionDirectoryMember;
+ use buck2_execute::directory::extract_artifact_value;
+ use buck2_execute::directory::re_tree_to_directory;
+ use buck2_execute::execute::executor_stage_async;
++use buck2_execute::execute::kind::CommandExecutionKind;
+ use buck2_execute::execute::kind::RemoteCommandExecutionDetails;
++use buck2_execute::execute::kind::RemoteExecutionOrigin;
+ use buck2_execute::execute::manager::CommandExecutionManager;
+ use buck2_execute::execute::manager::CommandExecutionManagerExt;
+ use buck2_execute::execute::manager::CommandExecutionManagerWithClaim;
+@@ -51,6 +56,7 @@ use buck2_execute::materialize::materializer::MaterializeRequest;
+ use buck2_execute::materialize::materializer::Materializer;
+ use buck2_execute::re::action_identity::ReActionIdentity;
+ use buck2_execute::re::error::RemoteExecutionError;
++use buck2_execute::re::error::report_cas_corruption;
+ use buck2_execute::re::manager::ManagedRemoteExecutionClient;
+ use buck2_execute::re::output_trees_download_config::OutputTreesDownloadConfig;
+ use buck2_execute::re::remote_action_result::RemoteActionResult;
+@@ -322,7 +328,18 @@ impl CasDownloader<'_> {
+             BuckIndexMap<CommandExecutionOutput, ArtifactValue>,
+         ),
+     > {
+-        let manager = manager.with_execution_kind(output_spec.execution_kind(details.clone()));
++        let execution_kind = output_spec.execution_kind(details.clone());
++        let validate_cached_outputs = cfg!(not(fbcode_build))
++            && matches!(
++                &execution_kind,
++                CommandExecutionKind::ActionCache { .. }
++                    | CommandExecutionKind::RemoteDepFileCache { .. }
++                    | CommandExecutionKind::Remote {
++                        origin: RemoteExecutionOrigin::ServedFromCache,
++                        ..
++                    }
++            );
++        let manager = manager.with_execution_kind(execution_kind);
+         executor_stage_async(stage, async {
+             let now = Timestamp::now();
+             let expires = re_expiration_from_ttl(now, output_spec.ttl(), &identity.action_key);
+@@ -344,12 +361,14 @@ impl CasDownloader<'_> {
+                     output_spec,
+                     expires,
+                     &info,
++                    validate_cached_outputs,
+                 )
+                 .await;
+ 
+             let artifacts =
+                 match artifacts {
+-                    Ok(artifacts) => artifacts,
++                    Ok(Some(artifacts)) => artifacts,
++                    Ok(None) => return ControlFlow::Break(DownloadResult::CacheMiss(manager)),
+                     Err(e) => {
+                         let error: buck2_error::Error =
+                             e.context(format!("action_digest={}", details.action_digest));
+@@ -417,7 +436,8 @@ impl CasDownloader<'_> {
+         output_spec: &dyn RemoteActionResult,
+         expires: Timestamp,
+         info: &CasDownloadInfo,
+-    ) -> buck2_error::Result<ExtractedArtifacts> {
++        validate_cached_outputs: bool,
++    ) -> buck2_error::Result<Option<ExtractedArtifacts>> {
+         // Download process:
+         // 1. merges all the outputs (files and trees) into the inputs structure
+         // 2. computes the ArtifactValue for all outputs from that merged structure
+@@ -425,8 +445,22 @@ impl CasDownloader<'_> {
+         let input_dir = paths.input_directory();
+         let output_paths = paths.output_paths();
+         let mut input_dir = input_dir.clone().into_builder();
++        let mut output_digests = BuckMutSet::default();
++        if validate_cached_outputs {
++            output_digests.extend(
++                output_spec
++                    .std_stream_digests()
++                    .into_iter()
++                    .flatten()
++                    .filter(|digest| digest.size_in_bytes != 0)
++                    .cloned(),
++            );
++        }
+ 
+         for x in output_spec.output_files() {
++            if validate_cached_outputs && x.digest.digest.size_in_bytes != 0 {
++                output_digests.insert(x.digest.digest.clone());
++            }
+             let digest = FileDigest::from_re(&x.digest.digest, self.digest_config)?;
+             let digest = TrackedFileDigest::new_expires(
+                 digest,
+@@ -473,7 +507,7 @@ impl CasDownloader<'_> {
+ 
+             // Compute the re_outputs from the output_directories
+             // This requires traversing the trees to find symlinks that point outside such trees
+-            let trees = self
++            let trees = match self
+                 .re_client
+                 .download_typed_blobs::<RE::Tree>(
+                     Some(identity),
+@@ -486,7 +520,23 @@ impl CasDownloader<'_> {
+                 )
+                 .boxed()
+                 .await
+-                .buck_error_context("Failed to download trees")?;
++            {
++                Ok(trees) => trees,
++                Err(error) => {
++                    let missing = error
++                        .find_typed_context::<RemoteExecutionError>()
++                        .is_some_and(|error| error.code == RE::TCode::NOT_FOUND);
++                    if missing && validate_cached_outputs {
++                        return Ok(None);
++                    }
++                    let error = error.context("Failed to download trees");
++                    return Err(if missing {
++                        report_cas_corruption(error, true)
++                    } else {
++                        error
++                    });
++                }
++            };
+ 
+             for (dir, tree) in output_spec.output_directories().iter().zip(trees) {
+                 let entry = re_tree_to_directory(
+@@ -496,6 +546,15 @@ impl CasDownloader<'_> {
+                     self.output_trees_download_config
+                         .fingerprint_re_output_trees_eagerly(),
+                 )?;
++                if validate_cached_outputs {
++                    for child in entry.unordered_walk().without_paths() {
++                        if let DirectoryEntry::Leaf(ActionDirectoryMember::File(file)) = child
++                            && file.digest.size() != 0
++                        {
++                            output_digests.insert(file.digest.to_re());
++                        }
++                    }
++                }
+                 input_dir.insert(
+                     re_forward_path(dir.path.as_str())?,
+                     DirectoryEntry::Dir(entry),
+@@ -503,6 +562,21 @@ impl CasDownloader<'_> {
+             }
+         }
+ 
++        if validate_cached_outputs && !output_digests.is_empty() {
++            // REAPI does not lease cached outputs. This direct query bypasses
++            // both interned digest expirations and the OSS FindMissing cache.
++            // Trees were already fetched above; only leaf bytes and non-inline
++            // standard streams need a presence query, not eager materialization.
++            let expirations = self
++                .re_client
++                .get_digest_expirations(output_digests.into_iter().collect(), info)
++                .await?;
++            let now = Timestamp::now();
++            if expirations.iter().any(|(_, expires)| *expires <= now) {
++                return Ok(None);
++            }
++        }
++
+         let mut to_declare = Vec::with_capacity(output_paths.len());
+         let mut mapped_outputs = BuckIndexMap::with_capacity(output_paths.len());
+ 
+@@ -528,10 +602,10 @@ impl CasDownloader<'_> {
+             }
+         }
+ 
+-        Ok(ExtractedArtifacts {
++        Ok(Some(ExtractedArtifacts {
+             to_declare,
+             mapped_outputs,
+-        })
++        }))
+     }
+ 
+     async fn materialize_outputs(
+@@ -569,6 +643,9 @@ pub enum DownloadResult {
+     /// Got a result: might be a success, might be a failure. Caller needs to deal with this
+     /// result.
+     Result(CommandExecutionResult),
++    /// A cache record refers to evicted CAS content. No output claim or
++    /// materializer declaration has been made; the producer can execute.
++    CacheMiss(CommandExecutionManager),
+ }
+ 
+ impl FromResidual<ControlFlow<Self, Infallible>> for DownloadResult {
+diff --git a/remote_execution/oss/re_grpc/src/client.rs b/remote_execution/oss/re_grpc/src/client.rs
+index adc3a30..050da26 100644
+--- a/remote_execution/oss/re_grpc/src/client.rs
++++ b/remote_execution/oss/re_grpc/src/client.rs
+@@ -125,16 +125,91 @@ fn tstatus_ok() -> TStatus {
+     }
+ }
+ 
++// The fields needed from google.rpc.PreconditionFailure. Descriptions are
++// deliberately not decoded: recovery is based only on the protocol's typed
++// violation and digest resource name, never a server's human-readable message.
++#[derive(Clone, PartialEq, Message)]
++struct PreconditionFailure {
++    #[prost(message, repeated, tag = "1")]
++    violations: Vec<PreconditionViolation>,
++}
++
++#[derive(Clone, PartialEq, Message)]
++struct PreconditionViolation {
++    #[prost(string, tag = "1")]
++    r#type: String,
++    #[prost(string, tag = "2")]
++    subject: String,
++}
++
++fn is_missing_blob_subject(subject: &str) -> bool {
++    let Some(resource) = subject.strip_prefix("blobs/") else {
++        return false;
++    };
++    let Some((hash, size)) = resource.rsplit_once('/') else {
++        return false;
++    };
++    let hash = match hash.split_once('/') {
++        Some((function, hash))
++            if !function.is_empty()
++                && function.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) =>
++        {
++            hash
++        }
++        Some(_) => return false,
++        None => hash,
++    };
++    !hash.is_empty()
++        && hash.bytes().all(|c| c.is_ascii_hexdigit())
++        && !size.is_empty()
++        && size.bytes().all(|c| c.is_ascii_digit())
++        && size.parse::<i64>().is_ok()
++}
++
++fn status_reason_group(status: &Status) -> TCodeReasonGroup {
++    if status.code != TCode::FAILED_PRECONDITION.0 {
++        return TCodeReasonGroup::UNKNOWN;
++    }
++    let mut missing = false;
++    for detail in &status.details {
++        if detail.type_url != "type.googleapis.com/google.rpc.PreconditionFailure" {
++            continue;
++        }
++        let Ok(failure) = PreconditionFailure::decode(detail.value.as_slice()) else {
++            return TCodeReasonGroup::UNKNOWN;
++        };
++        if failure.violations.is_empty()
++            || !failure
++                .violations
++                .iter()
++                .all(|v| v.r#type == "MISSING" && is_missing_blob_subject(&v.subject))
++        {
++            return TCodeReasonGroup::UNKNOWN;
++        }
++        missing = true;
++    }
++    if missing {
++        TCodeReasonGroup::DIGEST_NOT_FOUND
++    } else {
++        TCodeReasonGroup::UNKNOWN
++    }
++}
++
++fn error_from_status(status: Status) -> REClientError {
++    let group = status_reason_group(&status);
++    REClientError {
++        code: TCode(status.code),
++        message: status.message,
++        group,
++    }
++}
++
+ fn check_status(status: Status) -> Result<(), REClientError> {
+     if status.code == 0 {
+         return Ok(());
+     }
+ 
+-    Err(REClientError {
+-        code: TCode(status.code),
+-        message: status.message,
+-        group: TCodeReasonGroup::UNKNOWN,
+-    })
++    Err(error_from_status(status))
+ }
+ 
+ fn ttimestamp_to(ts: &TTimestamp) -> ::prost_types::Timestamp {
+@@ -416,15 +491,23 @@ impl InjectHeadersInterceptor {
+                 let value = substitute_env_vars(&h.value)?;
+ 
+                 let key = MetadataKey::<metadata::Ascii>::from_bytes(key.as_bytes())
+-                    .with_context(|| format!("Invalid key in header: `{key}: {value}`"))?;
++                    .context("Invalid remote execution header key")?;
+ 
+-                let value = MetadataValue::try_from(&value)
+-                    .with_context(|| format!("Invalid value in header: `{key}: {value}`"))?;
++                let mut value = MetadataValue::try_from(&value)
++                    .context("Invalid remote execution header value")?;
++                value.set_sensitive(true);
+ 
+                 anyhow::Ok((key, value))
+             })
+             .collect::<Result<_, _>>()
+-            .context("Error converting headers")?;
++            .context("Error converting headers")
++            .map_err(|error| {
++                error.context(REClientError {
++                    code: TCode::INVALID_ARGUMENT,
++                    message: "Invalid remote execution headers".to_owned(),
++                    group: TCodeReasonGroup::UNKNOWN,
++                })
++            })?;
+ 
+         Ok(Self {
+             headers: Arc::new(headers),
+@@ -453,9 +536,9 @@ enum DigestRemoteState {
+ }
+ 
+ struct FindMissingCache {
+-    cache: LruCache<TDigest, DigestRemoteState>,
+-    /// To avoid a situation where we cache that an artifact is available remotely, but the artifact then expires
+-    /// we clear our local cache once every `ttl`.
++    cache: LruCache<TDigest, ()>,
++    /// Optimistic upload-only knowledge. Authoritative checks always bypass
++    /// this cache; a successful lookup does not constitute a server lease.
+     ttl: Duration,
+     last_check: Instant,
+ }
+@@ -468,14 +551,28 @@ impl FindMissingCache {
+         }
+     }
+ 
+-    pub fn get(&mut self, digest: &TDigest) -> Option<DigestRemoteState> {
++    pub fn get(&mut self, digest: &TDigest, allow_cached: bool) -> Option<DigestRemoteState> {
++        if !allow_cached {
++            return None;
++        }
+         self.clear_if_ttl_expires();
+-        self.cache.get(digest).copied()
++        self.cache
++            .get(digest)
++            .map(|()| DigestRemoteState::ExistsOnRemote)
+     }
+ 
+     pub fn put(&mut self, digest: TDigest, state: DigestRemoteState) {
+         self.clear_if_ttl_expires();
+-        self.cache.put(digest, state);
++        match state {
++            DigestRemoteState::ExistsOnRemote => {
++                self.cache.put(digest, ());
++            }
++            DigestRemoteState::Missing => {
++                // Uploads and completed actions can make a missing digest
++                // present immediately. Never retain negative knowledge.
++                self.cache.pop(&digest);
++            }
++        }
+     }
+ }
+ 
+@@ -638,10 +735,17 @@ fn normalize_re_error(err: anyhow::Error) -> anyhow::Error {
+     }) else {
+         return err;
+     };
++    let group = if status.code() == tonic::Code::FailedPrecondition {
++        Status::decode(status.details())
++            .ok()
++            .map_or(TCodeReasonGroup::UNKNOWN, |s| status_reason_group(&s))
++    } else {
++        TCodeReasonGroup::UNKNOWN
++    };
+     let re_error = REClientError {
+         code: TCode(status.code() as i32),
+         message: status.message().to_owned(),
+-        group: TCodeReasonGroup::UNKNOWN,
++        group,
+     };
+     err.context(re_error)
+ }
+@@ -846,12 +950,7 @@ impl REClient {
+                     .context("Missing `result` when message was `done`")?
+                 {
+                     OpResult::Error(rpc_status) => {
+-                        return Err(REClientError {
+-                            code: TCode(rpc_status.code),
+-                            message: rpc_status.message,
+-                            group: TCodeReasonGroup::UNKNOWN,
+-                        }
+-                        .into());
++                        return Err(error_from_status(rpc_status).into());
+                     }
+                     OpResult::Response(any) => {
+                         let execute_response_grpc: GExecuteResponse =
+@@ -1070,7 +1169,9 @@ impl REClient {
+             {
+                 let mut find_missing_cache = self.find_missing_cache.lock().unwrap();
+                 for digest in digest_iter.by_ref() {
+-                    if let Some(rs) = find_missing_cache.get(digest) {
++                    if let Some(rs) =
++                        find_missing_cache.get(digest, request.is_for_upload.unwrap_or(false))
++                    {
+                         // We have our final result already cached
+                         remote_results.insert(digest.clone(), rs);
+                     } else {
+@@ -1967,7 +2068,14 @@ fn substitute_env_vars_impl(
+     for mat in ENV_REGEX.find_iter(s) {
+         out.push_str(&s[last_idx..mat.start()]);
+         let var = &mat.as_str()[1..];
+-        let val = getter(var).with_context(|| format!("Error substituting `{}`", mat.as_str()))?;
++        let val = getter(var).map_err(|error| match error {
++            VarError::NotPresent => {
++                anyhow::anyhow!("Missing environment variable in remote execution header")
++            }
++            VarError::NotUnicode(_) => {
++                anyhow::anyhow!("Non-UTF-8 environment variable in remote execution header")
++            }
++        })?;
+         out.push_str(&val);
+         last_idx = mat.end();
+     }
+@@ -1989,6 +2097,160 @@ mod tests {
+ 
+     use super::*;
+ 
++    fn missing_input_status(violation_type: &str, subject: &str) -> Status {
++        Status {
++            code: TCode::FAILED_PRECONDITION.0,
++            message: "arbitrary server wording".to_owned(),
++            details: vec![prost_types::Any {
++                type_url: "type.googleapis.com/google.rpc.PreconditionFailure".to_owned(),
++                value: PreconditionFailure {
++                    violations: vec![PreconditionViolation {
++                        r#type: violation_type.to_owned(),
++                        subject: subject.to_owned(),
++                    }],
++                }
++                .encode_to_vec(),
++            }],
++        }
++    }
++
++    #[test]
++    fn test_missing_input_status_preserves_typed_reason() {
++        for subject in [
++            "blobs/aa/0",
++            "blobs/blake3/aa/42",
++            "blobs/06a608a5c67942e55c50f43515ae137009100547be310fbffb056871fd12e78f/986808",
++        ] {
++            let status = missing_input_status("MISSING", subject);
++            let operation_error = error_from_status(status.clone());
++            assert_eq!(operation_error.code, TCode::FAILED_PRECONDITION);
++            assert_eq!(operation_error.group, TCodeReasonGroup::DIGEST_NOT_FOUND);
++            let response = GExecuteResponse {
++                status: Some(status),
++                ..Default::default()
++            };
++            let encoded = response.encode_to_vec();
++            let response = GExecuteResponse::decode(encoded.as_slice()).unwrap();
++            let error = check_status(response.status.unwrap()).unwrap_err();
++            assert_eq!(error.group, TCodeReasonGroup::DIGEST_NOT_FOUND);
++        }
++    }
++
++    #[test]
++    fn test_missing_input_requires_valid_structured_blob_violation() {
++        for (violation_type, subject) in [
++            ("OTHER", "blobs/aa/1"),
++            ("MISSING", "workers/default"),
++            ("MISSING", "blobs//1"),
++            ("MISSING", "blobs/not-a-hash/1"),
++            ("MISSING", "blobs/aa/-1"),
++            ("MISSING", "blobs/aa/+1"),
++            ("MISSING", "blobs/aa/9223372036854775808"),
++            ("MISSING", "blobs/aa/1/extra"),
++        ] {
++            assert_eq!(
++                status_reason_group(&missing_input_status(violation_type, subject)),
++                TCodeReasonGroup::UNKNOWN,
++                "{violation_type}: {subject}",
++            );
++        }
++        let mut status = missing_input_status("MISSING", "blobs/aa/1");
++        for code in [
++            TCode::NOT_FOUND,
++            TCode::UNAUTHENTICATED,
++            TCode::PERMISSION_DENIED,
++            TCode::INTERNAL,
++        ] {
++            status.code = code.0;
++            assert_eq!(status_reason_group(&status), TCodeReasonGroup::UNKNOWN);
++        }
++        status.code = TCode::FAILED_PRECONDITION.0;
++        status.details[0].value = vec![0xff];
++        assert_eq!(status_reason_group(&status), TCodeReasonGroup::UNKNOWN);
++        status.details.clear();
++        status.message = "action input missing from CAS: blobs/aa/1".to_owned();
++        assert_eq!(status_reason_group(&status), TCodeReasonGroup::UNKNOWN);
++    }
++
++    #[test]
++    fn test_missing_input_rejects_mixed_preconditions() {
++        let mut status = missing_input_status("MISSING", "blobs/aa/1");
++        status.details.extend(missing_input_status("OTHER", "workers/pool").details);
++        assert_eq!(status_reason_group(&status), TCodeReasonGroup::UNKNOWN);
++        let mut status = missing_input_status("MISSING", "blobs/aa/1");
++        status.details[0].type_url = "type.example/PreconditionFailure".to_owned();
++        assert_eq!(status_reason_group(&status), TCodeReasonGroup::UNKNOWN);
++    }
++
++    #[tokio::test]
++    async fn test_missing_input_is_classified_without_rpc_retries() {
++        for (outer_code, inner_code, expected_group) in [
++            (
++                tonic::Code::FailedPrecondition,
++                TCode::FAILED_PRECONDITION,
++                TCodeReasonGroup::DIGEST_NOT_FOUND,
++            ),
++            (
++                tonic::Code::Unauthenticated,
++                TCode::FAILED_PRECONDITION,
++                TCodeReasonGroup::UNKNOWN,
++            ),
++            (
++                tonic::Code::PermissionDenied,
++                TCode::FAILED_PRECONDITION,
++                TCodeReasonGroup::UNKNOWN,
++            ),
++            (
++                tonic::Code::FailedPrecondition,
++                TCode::UNAUTHENTICATED,
++                TCodeReasonGroup::UNKNOWN,
++            ),
++        ] {
++            let mut status = missing_input_status("MISSING", "blobs/aa/1");
++            status.code = inner_code.0;
++            let details = prost::bytes::Bytes::from(status.encode_to_vec());
++            let attempts = AtomicU16::new(0);
++            let error = retry(|| async {
++                attempts.fetch_add(1, Ordering::Relaxed);
++                Err::<(), _>(anyhow::Error::new(tonic::Status::with_details(
++                    outer_code,
++                    "arbitrary server wording",
++                    details.clone(),
++                )))
++            })
++            .await
++            .unwrap_err();
++            assert_eq!(attempts.load(Ordering::Relaxed), 1);
++            let classified = error.downcast_ref::<REClientError>().unwrap();
++            assert_eq!(classified.code, TCode(outer_code as i32));
++            assert_eq!(classified.group, expected_group);
++            assert!(error.downcast_ref::<tonic::Status>().is_some());
++        }
++    }
++
++    #[test]
++    fn test_authoritative_presence_bypasses_cache_and_misses_are_not_cached() {
++        let digest = TDigest {
++            hash: "aa".to_owned(),
++            size_in_bytes: 1,
++            ..Default::default()
++        };
++        let mut cache = FindMissingCache {
++            cache: LruCache::new(NonZeroUsize::new(8).unwrap()),
++            ttl: Duration::from_secs(60),
++            last_check: Instant::now(),
++        };
++        cache.put(digest.clone(), DigestRemoteState::ExistsOnRemote);
++        assert!(matches!(
++            cache.get(&digest, true),
++            Some(DigestRemoteState::ExistsOnRemote)
++        ));
++        assert!(cache.get(&digest, false).is_none());
++        cache.put(digest.clone(), DigestRemoteState::Missing);
++        assert!(cache.get(&digest, true).is_none());
++        assert!(cache.get(&digest, false).is_none());
++    }
++
+     // Exercise h2's actual frame handling: Error::from(Reason) does not retain
+     // whether an error was a GOAWAY, a reset, or remotely initiated.
+     async fn remote_h2_error(reason: h2::Reason, reset: bool) -> h2::Error {
+@@ -3243,6 +3505,54 @@ mod tests {
+         Ok(())
+     }
+ 
++    #[test]
++    fn test_header_credentials_are_sensitive() {
++        let secret = "private-header-credential";
++        let mut interceptor = InjectHeadersInterceptor::new(&[HttpHeader {
++            key: "authorization".to_owned(),
++            value: secret.to_owned(),
++        }])
++        .unwrap();
++        let request = interceptor.call(tonic::Request::new(())).unwrap();
++        let value = request.metadata().get("authorization").unwrap();
++        assert_eq!(value.to_str().unwrap(), secret);
++        assert!(value.is_sensitive());
++        assert!(!format!("{:?}", request.metadata()).contains(secret));
++    }
++
++    #[test]
++    fn test_invalid_header_diagnostics_omit_credentials() {
++        let secret = "private-header-credential";
++        for (key, value) in [
++            ("invalid\nkey", secret.to_owned()),
++            ("authorization", format!("{secret}\n")),
++        ] {
++            let error = InjectHeadersInterceptor::new(&[HttpHeader {
++                key: key.to_owned(),
++                value,
++            }])
++            .err()
++            .expect("invalid header must fail");
++            assert_eq!(
++                error.downcast_ref::<REClientError>().unwrap().code,
++                TCode::INVALID_ARGUMENT,
++            );
++            assert!(!format!("{error:#}").contains(secret));
++            assert!(!format!("{error:?}").contains(secret));
++        }
++    }
++
++    #[test]
++    fn test_header_environment_errors_omit_credentials() {
++        let secret = "private-header-credential";
++        let error = substitute_env_vars_impl("$TOKEN", |_| {
++            Err(VarError::NotUnicode(secret.into()))
++        })
++        .unwrap_err();
++        assert!(!format!("{error:#}").contains(secret));
++        assert!(!format!("{error:?}").contains(secret));
++    }
++
+     #[test]
+     fn test_substitute_env_vars() {
+         let getter = |s: &str| match s {
+diff --git a/tests/core/restart/test_restart.py b/tests/core/restart/test_restart.py
+index 3f4eff5..646bbb9 100644
+--- a/tests/core/restart/test_restart.py
++++ b/tests/core/restart/test_restart.py
+@@ -14,6 +14,8 @@ import json
+ import os
+ import signal
+ 
++import pytest
++
+ from buck2.tests.e2e_util.api.buck import Buck
+ from buck2.tests.e2e_util.asserts import expect_failure
+ from buck2.tests.e2e_util.buck_workspace import buck_test
+@@ -55,7 +57,8 @@ async def test_restart_materializer_corruption(buck: Buck) -> None:
+ 
+ 
+ @buck_test(allow_soft_errors=True)
+-async def test_restart_cas_missing(buck: Buck) -> None:
++@pytest.mark.parametrize("target", ["//:stage1", "//:stage2"])
++async def test_restart_cas_missing(buck: Buck, target: str) -> None:
+     # Make sure Buck is not running.
+     await buck.kill()
+ 
+@@ -63,13 +66,26 @@ async def test_restart_cas_missing(buck: Buck) -> None:
+     # This is just the hash of `src`.
+     await buck.build(env={"BUCK2_TEST_TOMBSTONED_DIGESTS": TEST_DIGEST})
+ 
+-    # Now build //:stage2. Buck2 must try to download the file, fail, then
+-    # restart the daemon.
+-    res = await buck.build("//:stage2")
++    # Exercise both a final output and an input needed by a local action.
++    # Both must restart the daemon after the typed CAS download failure.
++    res = await buck.build(target)
+     assert "Your command will now restart" in res.stderr
+ 
+-    # TODO: We should also handle the case where the top-level artifact is what
+-    # fails to download (i.e. build stage1 here instead).
++
++@buck_test(allow_soft_errors=True)
++@pytest.mark.parametrize("target", ["//:stage1", "//:stage2"])
++async def test_restart_persistent_cas_missing_is_bounded(buck: Buck, target: str) -> None:
++    await buck.kill()
++    # Keep the typed missing-download failure active in both daemons. Recovery
++    # must give up after one restart, including for an input to a local action.
++    res = await expect_failure(
++        buck.build(
++            target,
++            "--prefer-remote",
++            env={"BUCK2_TEST_FAIL_RE_DOWNLOADS": "true"},
++        ),
++    )
++    assert res.stderr.count("Your command will now restart") == 1
+ 
+ 
+ @buck_test(

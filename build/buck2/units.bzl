@@ -93,7 +93,13 @@ def _unit_impl(ctx):
         CargoUnitInfo(output = output, closure = closure, spec = spec),
     ]
     runtime = read_root_config("sekka", "runtime", "")
-    run = cmd_args(python, ctx.attrs._runtime, "--action-module", ctx.attrs._runner, "--environment", environment, "--runtime", runtime, "--run", output)
+    # Runtime metadata and CARGO_BIN_EXE_* reference other unit outputs. They
+    # must be staged for remote tests, not merely present after local builds.
+    run = cmd_args(
+        python, ctx.attrs._runtime, "--action-module", ctx.attrs._runner,
+        "--environment", environment, "--runtime", runtime, "--run", output,
+        hidden = [closure.values(), ctx.attrs.source[SourceInfo].inputs] + [source[SourceInfo].inputs for source in ctx.attrs.extra_sources.values()],
+    )
     if spec["mode"] == "test":
         providers.append(ExternalRunnerTestInfo(type = "rust", command = [cmd_args(run, "--test-run", "--")], env = {}, labels = [], contacts = [], run_from_project_root = True, use_project_relative_paths = True))
     elif "bin" in spec["target"]["crate_types"] and spec["mode"] == "build":

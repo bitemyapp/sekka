@@ -7,11 +7,7 @@ platform(
         "@platforms//cpu:x86_64",
         "@rules_nixpkgs_core//constraints:support_nix",
     ],
-    # Identical scheduling properties for local/cache/RBE invocations: adding
-    # them only on remote invocations would needlessly split the action cache.
-    exec_properties = {
-        "OSFamily": "linux",
-        "ISA": "x86-64",
-    },
+    # Keep exec_properties empty: Bazel otherwise ignores the private client's
+    # complete OS/ISA and immutable worker-runtime execution defaults.
     visibility = ["//visibility:public"],
 )

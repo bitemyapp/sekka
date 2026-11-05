@@ -371,16 +371,34 @@ worktrees retain separate mutable daemon state. Defaults are 10 GiB and
 `--local-content-store PATH`, `--local-content-store-max-bytes N` and
 `--local-content-store-max-entries N` select an explicit store and bounds.
 Evicting store objects does not invalidate existing reflinked outputs.
+The store also keeps a separately entry-bounded index of weak output paths.
+After canonical eviction, a still-live output can supply a digest-verified
+reflink without allocating a second physical extent generation. These hints
+retain no file data; missing, changed, symlinked or nonregular paths are
+discarded. Opens are nonblocking and verification reads are bounded by the
+expected artifact size. Mutable daemon state remains worktree-local.
 Private cache configuration, TLS material and store settings participate in
 daemon startup identity so a long-lived daemon does not silently retain old
 credentials or settings. Keep the same `--isolation-dir` across cooperating
 remote-cache clients because it enters action paths.
 
-The corresponding engine source is published in
-[the qualified Buck2 fork](https://github.com/bitemyapp/buck2/pull/1).
-Its committed tree matches the three source patches in `nix/buck2/engine.nix`;
-Nix keeps the qualified upstream revision plus those patches. The separate
-unused-bindgen manifest patch affects packaging only.
+Native engine changes are maintained in
+[the Buck2 fork](https://github.com/bitemyapp/buck2/pull/1);
+`nix/buck2/engine.nix` pins upstream plus the repository patch set. Its
+unused-bindgen patch affects packaging only. The Nix build fixes jemalloc's
+virtual-address width at its portable x86-64 value, 57 bits: otherwise the
+allocator's configure step probes the builder CPU and emits different pointer
+layouts on 48-bit and 57-bit hosts. Source-generation ordering is deterministic
+as well; disabling incremental compilation alone is insufficient.
+
+The native cache path makes authoritative CAS presence checks and rejects
+cached results whose required outputs are missing. Rejected action-cache
+results remain rejected across depfile verification and hybrid fallback.
+Typed missing-content failures use Buck's existing bounded, single-restart
+recovery; this repository explicitly enables the restarter. Authentication,
+permission and invalid-configuration failures are not transient connection
+failures. Recovery qualification distinguishes real service eviction from
+native fault-injection checks of the retry bound.
 
 The backend depends on the pinned Cargo unit-graph API and its LTO planning
 semantics; changing Cargo requires requalification, not just a version bump.
@@ -427,6 +445,40 @@ Workers require the exact immutable toolchain/native closures: realize them
 on the workstation and use `retain /nix/store/CLIENT /nix/store/VENDOR`.
 `retain` does not evaluate sources or import unsigned arbitrary build outputs.
 
+The packaged controller supplies one root-flake-pinned `workerRuntime` closure
+for Bash, `env`, D-Bus and the worker's minimal NSS configuration. It uses the
+same `pkgs.dbus` as `nix/bazel/toolchains.nix`'s test environment, not another
+runtime pin. Workers run as UID/GID 30501 with only `root` and `sekka-builder`
+entries in service-owned read-only passwd/group files. Their private `/tmp`
+is a 1 GiB `exec,nosuid,nodev` tmpfs; D-Bus session policy is read-only at
+`/etc/dbus-1/session.conf`. No host NSS, home, system bus or session socket is
+mounted. Tests can launch their own buses and executable temporary fixtures.
+
+Realize the same controller/runtime closure on the deployment host before
+provisioning or migration. `init` and `runtime` take the packaged runtime by
+default; an explicitly selected immutable bundle uses
+`--worker-runtime /nix/store/ROOT`. There are no independent controller
+`--shell`/`--env` overrides: `/bin/sh`, `/bin/bash` and `/usr/bin/env` come
+from that bundle. For an existing **owned** deployment, run
+`nix run .#build-service -- --manifest PRIVATE.json runtime` (add global
+`--local` on its host). This drains/replaces its workers and restarts their
+schedulers; ephemeral CI cache contents are lost. It leaves the namespace
+owner and frontend gateway in place. Preserve failure evidence, synchronize
+the updated private manifest between administrative hosts, and regenerate
+every private client file before resuming work. Merely restarting an old
+container does not migrate its mounts.
+
+Generated clients require the manifest's runtime store path: Buck2 receives
+`[sekka] worker_runtime = PATH`; Bazel receives repeated
+`--remote_default_exec_properties` for `OSFamily=linux`, `ISA=x86-64` and
+`sekka.worker-runtime=PATH`. NativeLink
+advertises and exactly matches the same platform property. It is part of
+remote action identity, including compilation: build scripts and proc macros
+can observe NSS, `/etc` and interpreter behavior too. Changing the runtime
+therefore invalidates affected remote/cache actions; unrelated checkout
+paths or source edits do not change this root-locked bundle. Local-only
+execution does not add a remote runtime property.
+
 Bazel credentials are private comment metadata consumed by a pinned
 credential helper, not native header options. Old inline-header client files
 and imported rc files are rejected; regenerate them with the current
@@ -439,6 +491,16 @@ so same-path rotation takes effect on the next request. An authenticated
 native smoke covered real remote execution, invalid/restored same-path
 credentials, fresh reader cache hits, rc announcements, invalid options and
 a complete client-file token scan.
+
+The patched Buck engine redacts all configuration values in native telemetry,
+including command-line overrides, expanded flag files and configuration-error
+diagnostics. Parser-time capture handles clustered short options without
+changing execution arguments. Authentication, startup identity and comparison
+of previous configuration still use the original values. Regenerate private
+client files rather than passing credentials inline. Logs produced by older
+engines can contain literal header credentials; keep those logs private and
+rotate exposed credentials. Native command logs can still contain application
+arguments and output, so redaction is not a license to publish arbitrary logs.
 
 Readers are denied CAS, ByteStream and action-cache writes and `Execute` by
 the server, not merely by client flags. Normal CI uses this reader access.

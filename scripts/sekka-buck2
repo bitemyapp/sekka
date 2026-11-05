@@ -12,6 +12,10 @@ inputs=(
   nix/buck2/patches/local-content-store.patch nix/buck2/patches/drop-unused-bindgen.patch
   nix/buck2/patches/external-startup-config.patch
   nix/buck2/patches/http2-goaway.patch
+  nix/buck2/patches/reproducible-generation.patch
+  nix/buck2/patches/private-config-telemetry.patch
+  nix/buck2/patches/local-live-views.patch
+  nix/buck2/patches/cas-recovery.patch
   nix/bazel/toolchains.nix nix/bazel/aizome-inputs.nix
   nix/libsecret-dh-padding.nix nix/patches/libsecret-gnutls-dh-padding.patch
   desktop/aizome/nix/fonts.nix desktop/aizome/nix/aizome-fonts.nix
