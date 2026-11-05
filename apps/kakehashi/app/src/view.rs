@@ -4,25 +4,26 @@
 //! runs on threads that send messages; a short timer in the window takes
 //! them in and redraws.
 
-use crate::elevate::{self, Ran};
 use crate::when;
-use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::progress::Progress as Bar;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tag::Tag;
-use gpui_kit::component::{ActiveTheme as _, Disableable as _, Sizable as _, WindowExt as _, h_flex, v_flex};
+use gpui_kit::component::{ActiveTheme as _, Disableable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     AnyElement, Context, ExternalPaths, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
     PathPromptOptions, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Task, Window, div,
 };
-use kakehashi_core::choice::{DriveList, DriveListing, ImageId, Listed, ReviewTicket};
+use kakehashi_core::choice::{DriveList, DriveListing, ImageId, Listed};
 use kakehashi_core::image::{self, Cancelled};
 use kakehashi_core::job::{End, Event, Job, JobDir, JobState, ProgressFile};
 use kakehashi_core::nightly::{self, Build, Fetch, NIGHTLY};
 use kakehashi_core::write::{Plan, Progress, TAIL};
 use kakehashi_core::{Drive, human, platform};
+use kakehashi_window::dialog::{self, Pressed};
+use kakehashi_window::elevate::{self, PlanFile, Ran};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -408,7 +409,6 @@ impl Kakehashi {
         let Some((review, target)) = self.drives.open_review(holds.as_deref(), image) else { return };
         let (drive, image) = (target.drive(), target.image());
         let name = image.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let view = cx.entity();
         let title = format!("Erase {}?", drive.label());
         let description = format!(
             "{} ({}, {}, {}) will be erased and replaced with {}. Everything on it now will be lost; this can't be undone.",
@@ -419,42 +419,37 @@ impl Kakehashi {
             name
         );
         // OK writes the drive and image described here, found again when it
-        // is pressed, and only while this dialog's review is the open one.
-        window.open_alert_dialog(cx, move |alert, _, _| {
-            let (ok, cancel) = (view.clone(), view.clone());
-            alert
-                .title(title.clone())
-                .description(description.clone())
-                .ok_text("Erase and write")
-                .ok_variant(ButtonVariant::Danger)
-                .cancel_text("Cancel")
-                .show_cancel(true)
-                .on_ok(move |_, _, cx| {
-                    ok.update(cx, |this, cx| {
-                        this.start_write(review);
-                        cx.notify();
-                    });
-                    true
-                })
-                .on_cancel(move |_, _, cx| {
-                    cancel.update(cx, |this, _| this.drives.cancel_review(review));
-                    true
-                })
-        });
+        // is pressed, and only while this dialog's review is the open one:
+        // the person's press is what the write takes.
+        dialog::erase(
+            window,
+            cx,
+            title,
+            description,
+            review,
+            target.clone(),
+            |this, pressed, cx| {
+                this.start_write(pressed);
+                cx.notify();
+            },
+            |this, review, _| this.drives.cancel_review(review),
+        );
     }
 
-    /// Writes the drive and image the open dialog described, if they are
-    /// still the drive listed under its name and the window's image.
-    fn start_write(&mut self, review: ReviewTicket) {
+    /// Writes the drive and image the dialog the person pressed OK in
+    /// described, if they are still the drive listed under its name and the
+    /// window's image.
+    fn start_write(&mut self, pressed: Pressed) {
         let image = self.image_id();
         let holds = self.holds().map(str::to_owned);
-        let plan = match self.drives.confirm(review, holds.as_deref(), image) {
-            Ok(write) => Plan::new(write),
-            Err(why) => {
-                self.error = Some(why.to_string());
-                return;
-            }
-        };
+        let plan =
+            match self.drives.confirm(pressed.review(), holds.as_deref(), image).and_then(|w| Plan::new(w, pressed)) {
+                Ok(plan) => plan,
+                Err(why) => {
+                    self.error = Some(why.to_string());
+                    return;
+                }
+            };
         let dir = match JobDir::new() {
             Ok(dir) => dir,
             Err(e) => {
@@ -470,7 +465,7 @@ impl Kakehashi {
             // cancellation and failure alike.
             let dir = dir;
             let cancel = dir.cancel();
-            let prepared = (|| -> anyhow::Result<()> {
+            let prepared = (|| -> anyhow::Result<PlanFile> {
                 #[cfg(target_os = "macos")]
                 let plan = {
                     let staged =
@@ -480,18 +475,20 @@ impl Kakehashi {
                 if cancel.exists() {
                     anyhow::bail!(Cancelled);
                 }
-                fs::write(dir.plan(), serde_json::to_string(&plan)?)?;
-                Ok(())
+                Ok(PlanFile::write(&dir, plan)?)
             })();
-            if let Err(e) = prepared {
-                let message = if e.is::<Cancelled>() {
-                    "Stopped before writing; nothing was written.".to_owned()
-                } else {
-                    format!("{e:#}")
-                };
-                let _ = tx.send(Msg::Job(Event::NotStarted(message)));
-                return;
-            }
+            let file = match prepared {
+                Ok(file) => file,
+                Err(e) => {
+                    let message = if e.is::<Cancelled>() {
+                        "Stopped before writing; nothing was written.".to_owned()
+                    } else {
+                        format!("{e:#}")
+                    };
+                    let _ = tx.send(Msg::Job(Event::NotStarted(message)));
+                    return;
+                }
+            };
             let helper = match elevate::helper_path() {
                 Ok(helper) => helper,
                 Err(e) => {
@@ -500,8 +497,7 @@ impl Kakehashi {
                 }
             };
             let _ = tx.send(Msg::Job(Event::Authorizing));
-            let (p, q) = (dir.plan(), dir.progress());
-            let runner = std::thread::spawn(move || elevate::run(&helper, &p, &q));
+            let runner = std::thread::spawn(move || elevate::run(&helper, &file));
             let mut reports = ProgressFile::new(&dir);
             while !runner.is_finished() {
                 for report in reports.read() {
