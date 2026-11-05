@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use crate::agent::{Approval, Described, Event, FinishReason, Level, ToolCall, ToolOutput};
+use crate::agent::{Approval, Described, Event, FinishReason, Level, Outcome, ToolCall, ToolOutput};
 use crate::approval::Gate;
 use crate::markdown::{self, Doc};
 
@@ -65,6 +65,8 @@ pub struct Tool {
     pub described: Described,
     /// Its approval, if it needed one.
     pub gate: Option<Gate>,
+    /// It only looks (see [`ToolCall::looks_only`]).
+    pub looks: bool,
     pub state: ToolState,
     pub output: Option<ToolOutput>,
 }
@@ -75,8 +77,12 @@ pub enum ToolState {
     Waiting,
     Running,
     Done { exit: Option<i32> },
-    Failed { exit: i32 },
+    /// It ran and failed (a command's non-zero exit), or couldn't run.
+    Failed { exit: Option<i32> },
+    TimedOut,
     Denied,
+    /// The policy never runs it: why.
+    Refused { reason: String },
     /// The turn ended before it ran or finished.
     Stopped,
 }
@@ -89,10 +95,23 @@ impl ToolState {
             ToolState::Running => "running".into(),
             ToolState::Done { exit: Some(code) } => format!("done (exit {code})"),
             ToolState::Done { exit: None } => "done".into(),
-            ToolState::Failed { exit } => format!("failed (exit {exit})"),
-            ToolState::Denied => "denied".into(),
+            ToolState::Failed { exit: Some(code) } => format!("failed (exit {code})"),
+            ToolState::Failed { exit: None } => "failed".into(),
+            ToolState::TimedOut => "timed out".into(),
+            ToolState::Denied => "not run".into(),
+            ToolState::Refused { .. } => "never run".into(),
             ToolState::Stopped => "stopped".into(),
         }
+    }
+
+    /// Still to finish: waiting or running.
+    pub fn is_open(&self) -> bool {
+        matches!(self, ToolState::Waiting | ToolState::Running)
+    }
+
+    /// It went wrong (not a person's no).
+    pub fn is_failure(&self) -> bool {
+        matches!(self, ToolState::Failed { .. } | ToolState::TimedOut)
     }
 }
 
@@ -233,38 +252,45 @@ impl Transcript {
             Event::ToolCall { id, call, needs } => {
                 self.end_reasoning(at);
                 self.close_answer();
-                let gate = match needs {
-                    Approval::None => None,
-                    Approval::Ask { reason } => Some(Gate::pending(reason, false)),
-                    Approval::AskRoot { reason } => Some(Gate::pending(reason, true)),
+                let looks = call.looks_only(&needs);
+                let (gate, state) = match needs {
+                    Approval::None => (None, ToolState::Waiting),
+                    Approval::Ask { reason } => (Some(Gate::pending(reason, false)), ToolState::Waiting),
+                    Approval::AskRoot { reason } => (Some(Gate::pending(reason, true)), ToolState::Waiting),
+                    Approval::Refused { reason } => (None, ToolState::Refused { reason }),
                 };
                 let described = call.describe();
-                self.push(Body::Tool(Tool { call_id: id, call, described, gate, state: ToolState::Waiting, output: None }));
+                self.push(Body::Tool(Tool { call_id: id, call, described, gate, looks, state, output: None }));
             }
             Event::ToolStarted { id } => {
                 if let Some(t) = self.tool_mut(&id) {
                     if let Some(g) = &mut t.gate {
                         g.started();
                     }
-                    if !matches!(t.state, ToolState::Denied) {
+                    if !matches!(t.state, ToolState::Denied | ToolState::Refused { .. }) {
                         t.state = ToolState::Running;
                     }
                 }
             }
             Event::ToolOutput { id, output } => {
                 if let Some(t) = self.tool_mut(&id) {
-                    if output.refused {
+                    if output.refused() {
                         if let Some(g) = &mut t.gate {
                             g.refused();
                         }
-                        t.state = ToolState::Denied;
+                        if !matches!(t.state, ToolState::Refused { .. }) {
+                            t.state = ToolState::Denied;
+                        }
                     } else {
                         if let Some(g) = &mut t.gate {
                             g.started();
                         }
-                        t.state = match output.exit {
-                            Some(code) if code != 0 => ToolState::Failed { exit: code },
-                            exit => ToolState::Done { exit },
+                        t.state = match (output.outcome, output.exit) {
+                            (Outcome::TimedOut, _) => ToolState::TimedOut,
+                            (Outcome::Cancelled, _) => ToolState::Stopped,
+                            (Outcome::Failed, exit) => ToolState::Failed { exit },
+                            (_, Some(code)) if code != 0 => ToolState::Failed { exit: Some(code) },
+                            (_, exit) => ToolState::Done { exit },
                         };
                     }
                     t.output = Some(output);
@@ -439,7 +465,7 @@ mod tests {
         t.decide("one", Decision::Deny { note: None });
         assert_eq!(t.tool("one").unwrap().state, ToolState::Denied);
         // The agent reports the refusal back; it stays denied.
-        t.apply(Event::ToolOutput { id: "one".into(), output: ToolOutput { refused: true, ..Default::default() } }, 2);
+        t.apply(Event::ToolOutput { id: "one".into(), output: ToolOutput { outcome: Outcome::Denied, ..Default::default() } }, 2);
         assert_eq!(t.tool("one").unwrap().state, ToolState::Denied);
         t.apply(ask("two"), 3);
         t.apply(Event::TurnFinished { reason: FinishReason::Cancelled, usage: Usage::default(), decode_tps: None }, 4);

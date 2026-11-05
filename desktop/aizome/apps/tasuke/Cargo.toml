@@ -17,9 +17,10 @@ path = "src/main.rs"
 
 [features]
 default = ["live"]
-# The window on the real libraries: Tasuke's agent and model management
-# (apps/tasuke). Without it, only the fixtures run.
-live = ["dep:tasuke-models", "dep:tasuke-agent"]
+# The window on Tasuke's agent (apps/tasuke). Without it, only the
+# fixtures run. Model management (`tasuke-models`) is always there: the
+# Models page works it out for fixtures' machines too.
+live = ["dep:tasuke-agent"]
 
 [dependencies]
 aizome-kit.workspace = true
@@ -30,6 +31,8 @@ log.workspace = true
 env_logger.workspace = true
 libc = "0.2"
 pulldown-cmark = { version = "0.13.4", default-features = false }
+# Screenshots, decoded to make their thumbnails.
+png = "0.18"
 # The UI-independent libraries the window shares with the `tasuke` CLI.
-tasuke-models = { path = "../../../../apps/tasuke/crates/tasuke-models", optional = true }
+tasuke-models = { path = "../../../../apps/tasuke/crates/tasuke-models" }
 tasuke-agent = { path = "../../../../apps/tasuke/crates/tasuke-agent", optional = true }

@@ -37,6 +37,15 @@ pub enum Approval {
     Ask { reason: String },
     /// It runs as root: approval, then polkit's password.
     AskRoot { reason: String },
+    /// Tasuke never runs it (it would end the session or delete what
+    /// can't come back): nobody is asked, and the model is told why.
+    Refused { reason: String },
+}
+
+impl Approval {
+    pub fn asks(&self) -> bool {
+        matches!(self, Approval::Ask { .. } | Approval::AskRoot { .. })
+    }
 }
 
 /// What the person decided about a call.
@@ -61,27 +70,53 @@ pub enum FinishReason {
     Length,
     /// The step budget ran out.
     StepBudget,
+    /// The turn's wall-clock limit ran out.
+    TimeLimit,
     Cancelled,
     Failed,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Usage {
-    pub prompt_tokens: u32,
-    pub completion_tokens: u32,
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+}
+
+/// How a call ended.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Outcome {
+    /// It ran (a command may still have exited non-zero).
+    #[default]
+    Ran,
+    /// It couldn't run, or the tool failed.
+    Failed,
+    /// The person said no.
+    Denied,
+    /// The policy refused it outright.
+    Refused,
+    TimedOut,
+    Cancelled,
 }
 
 /// What a tool gave back.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ToolOutput {
+    pub outcome: Outcome,
     /// Its output, capped by the agent (head and tail).
     pub text: String,
+    /// Whether the agent's cap took the middle of `text`.
+    pub truncated: bool,
     /// A command's exit status; `None` for tools that have none.
     pub exit: Option<i32>,
     /// A screenshot it took.
     pub image: Option<PathBuf>,
-    /// The call didn't run: the person said no (or the turn ended first).
-    pub refused: bool,
+}
+
+impl ToolOutput {
+    /// It didn't run because someone (the person, or the policy) said no.
+    pub fn refused(&self) -> bool {
+        matches!(self.outcome, Outcome::Denied | Outcome::Refused)
+    }
 }
 
 /// A call as the model made it.
@@ -141,9 +176,19 @@ impl ToolCall {
             purpose: purpose.clone(),
             kind: Kind::Other,
         };
-        let at = |c: &ToolCall| match (c.num("x"), c.num("y")) {
-            (Some(x), Some(y)) => format!("{x:.0}, {y:.0}"),
-            _ => String::new(),
+        // A point, as the agent sends it (`at: {x, y}`) or flat (`x`, `y`).
+        let at = |c: &ToolCall| {
+            let p = c.args.get("at").unwrap_or(&c.args);
+            match (p.get("x").and_then(Value::as_f64), p.get("y").and_then(Value::as_f64)) {
+                (Some(x), Some(y)) => format!("{x:.0}, {y:.0}"),
+                _ => String::new(),
+            }
+        };
+        // A numbered element of a marked screenshot: `[3] "Day"`.
+        let mark = |c: &ToolCall| match (c.num("mark"), c.arg("label")) {
+            (Some(m), Some(l)) if !l.is_empty() => format!("[{m:.0}] “{l}”"),
+            (Some(m), _) => format!("[{m:.0}]"),
+            _ => at(c),
         };
         match self.name.as_str() {
             "run_command" => Described {
@@ -185,8 +230,21 @@ impl ToolCall {
                     false,
                 )
             },
+            "click_element" => {
+                Described { kind: Kind::Desktop, ..d(Icon::MousePointer, "Clicking", "Clicked", mark(self), false) }
+            }
+            "type_into" => Described {
+                kind: Kind::Desktop,
+                ..d(
+                    Icon::Keyboard,
+                    "Typing into",
+                    "Typed into",
+                    format!("{} “{}”", mark(self), self.arg("text").unwrap_or("")),
+                    false,
+                )
+            },
             "drag" => Described { kind: Kind::Desktop, ..d(Icon::Move, "Dragging", "Dragged", String::new(), false) },
-            "scroll" => Described { kind: Kind::Desktop, ..d(Icon::ArrowUpDown, "Scrolling", "Scrolled", String::new(), false) },
+            "scroll" => Described { kind: Kind::Desktop, ..d(Icon::ArrowUpDown, "Scrolling", "Scrolled", at(self), false) },
             "type_text" => Described { kind: Kind::Desktop, ..d(Icon::Keyboard, "Typing", "Typed", self.arg("text").unwrap_or("").to_owned(), true) },
             "key" => Described { kind: Kind::Desktop, ..d(Icon::Keyboard, "Pressing", "Pressed", self.arg("keys").unwrap_or("").to_owned(), true) },
             "open_app" => Described { kind: Kind::Desktop, ..d(Icon::AppWindow, "Opening", "Opened", self.arg("name").unwrap_or("").to_owned(), false) },
@@ -197,8 +255,19 @@ impl ToolCall {
                 self.num("seconds").map(|s| format!("{s:.0} s")).unwrap_or_default(),
                 false,
             ),
+            // A call the agent couldn't read: the tool it named.
+            "invalid" => d(Icon::CircleAlert, "Trying", "Couldn’t use", self.arg("name").unwrap_or("a tool").to_owned(), true),
             other => d(Icon::Wrench, "Using", "Used", other.to_owned(), true),
         }
+    }
+
+    /// Whether it only looks: what a run of looking folds into one line
+    /// ("Looked at 6 things"). Commands count when the policy let them run
+    /// without asking, which it does only for read-only ones. Screenshots,
+    /// notes and desktop actions show on their own.
+    pub fn looks_only(&self, needs: &Approval) -> bool {
+        *needs == Approval::None
+            && matches!(self.name.as_str(), "run_command" | "read_file" | "load_skill" | "list_windows" | "ui_elements")
     }
 }
 
