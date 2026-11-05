@@ -66,7 +66,15 @@ def run_omp(vm, cfg, s, result, out):
     t0 = time.monotonic()
     status, _ = vm.sh(command, timeout=minutes * 60 + 120)
     seconds = time.monotonic() - t0
-    events = vm.out_of("cat /root/.omp-eval/events.jsonl", timeout=60)
+    # Without the streaming updates (a long session's are many megabytes,
+    # more than the shell carries back): every message, tool result and the end.
+    keep = ("import json,sys\n"
+            "for l in open(sys.argv[1]):\n"
+            "    try: t = json.loads(l).get('type')\n"
+            "    except ValueError: continue\n"
+            "    if t not in ('message_update', 'tool_execution_update'): sys.stdout.write(l)\n")
+    events = vm.out_of(f"python3 -c {sh.quote(keep)} /root/.omp-eval/events.jsonl", timeout=120)
+    result["transcript_complete"] = '"agent_end"' in events or '"type": "agent_end"' in events
     with open(os.path.join(out, "omp-events.jsonl"), "w") as f:
         f.write(events)
     with open(os.path.join(out, "omp-stderr.txt"), "w") as f:

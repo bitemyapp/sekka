@@ -35,6 +35,13 @@ def load(paths):
             r["console_attempts"] = [c for c in refused if "backdoor" in (refusal(c) or "")]
             r["blocked_commands"] = [c for c in refused if c not in r["console_attempts"]]
             r["repeated_calls"], r["calls"] = repeats(f.parent / "transcript.jsonl")
+            events = f.parent / "omp-events.jsonl"
+            if events.exists() and "transcript_complete" not in r:
+                # Before the harness filtered omp's stream, a long session's
+                # was cut at 1 MB, losing its end and its report.
+                r["transcript_complete"] = events.stat().st_size < 990_000 or b"agent_end" in events.read_bytes()
+            if r.get("transcript_complete") is False:
+                r["diagnosed"] = None
             key = (str(f.parent.parent), r["scenario"], r.get("repeat", 0), r.get("observe")
                    if r.get("track") == "computer-use" else None)
             latest[key] = r
@@ -102,9 +109,11 @@ def summary(results, track):
             continue
         succ = sum(bool(r.get("success")) for r in rs)
         fixed = sum(bool(r.get("resolved")) for r in rs)
-        named = sum(bool(r.get("diagnosed")) for r in rs)
+        graded = [r for r in rs if r.get("diagnosed") is not None or r.get("agent") != "omp"]
+        named = sum(bool(r.get("diagnosed")) for r in graded)
         coll = sum(bool(r.get("collateral")) or bool(r.get("blocked_commands")) for r in rs)
-        unfinished = sum(r.get("ended") not in ("finished", "oracle", "no-agent") for r in rs)
+        unfinished = sum(r.get("ended") not in ("finished", "oracle", "no-agent")
+                         and r.get("transcript_complete") is not False for r in rs)
         walls = sorted((r.get("stats") or {}).get("seconds", r.get("wall_seconds", 0)) / 60 for r in rs)
         med = walls[len(walls) // 2] if walls else None
         steps = mean([(r.get("stats") or {}).get("steps") for r in rs])
@@ -112,7 +121,8 @@ def summary(results, track):
         calls = sum(r.get("calls", 0) for r in rs)
         text_calls = sum(r.get("repeated_calls", 0) for r in rs)
         if track == "diagnostics":
-            out.append(f"| {label} | {n} | **{pct(succ, n)}** | {pct(fixed, n)} | {pct(named, n)} | {coll} | "
+            named_cell = pct(named, len(graded)) + (f" of {len(graded)}" if len(graded) < n else "")
+            out.append(f"| {label} | {n} | **{pct(succ, n)}** | {pct(fixed, n)} | {named_cell} | {coll} | "
                        f"{unfinished} | {fmt(med, 1)} | {fmt(steps, 1)} | {fmt(tokens)} | {pct(text_calls, calls)} |")
         else:
             out.append(f"| {label} | {n} | **{pct(succ, n)}** | {coll} | {unfinished} | {fmt(med, 1)} | "
