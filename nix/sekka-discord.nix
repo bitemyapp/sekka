@@ -11,6 +11,8 @@ pkgs.rustPlatform.buildRustPackage {
       ../services/sekka-discord/migrations
       ../services/sekka-discord/monitor.py
       ../services/sekka-discord/test_monitor.py
+      ../services/sekka-discord/deploy.py
+      ../services/sekka-discord/test_deploy.py
     ];
   };
   cargoLock.lockFile = ../services/sekka-discord/Cargo.lock;
@@ -19,11 +21,14 @@ pkgs.rustPlatform.buildRustPackage {
   nativeCheckInputs = [ pkgs.python3 ];
   doCheck = true;
   postCheck = ''
-    python3 -m unittest discover -s . -p test_monitor.py
+    python3 -m unittest discover -s . -p 'test_*.py'
   '';
   postInstall = ''
     install -Dm755 monitor.py "$out/bin/sekka-discord-monitor"
     substituteInPlace "$out/bin/sekka-discord-monitor" \
+      --replace-fail '#!/usr/bin/env python3' '#!${pkgs.python3}/bin/python3'
+    install -Dm755 deploy.py "$out/bin/sekka-discord-deploy"
+    substituteInPlace "$out/bin/sekka-discord-deploy" \
       --replace-fail '#!/usr/bin/env python3' '#!${pkgs.python3}/bin/python3'
   '';
   meta = {

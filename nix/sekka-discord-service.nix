@@ -10,7 +10,33 @@ let
     yuki = 980;
     yuki-tunnel = 981;
     yuki-monitor = 982;
-  };
+  }
+  // lib.optionalAttrs cfg.deploy.enable { yuki-deploy = 983; };
+  uids =
+    names:
+    "{ ${
+      lib.concatMapStringsSep ", " toString (
+        lib.sort lib.lessThan (lib.attrVals (lib.filter (name: identities ? ${name}) names) identities)
+      )
+    } }";
+  httpsUids = uids [
+    "yuki"
+    "yuki-monitor"
+    "yuki-deploy"
+  ];
+  deployDirectory = "/var/lib/sekka-discord-deploy";
+  # With deployment on, Yuki's identities run the deployed profile, or this
+  # host's package until the first deployment.
+  launch =
+    name:
+    if cfg.deploy.enable then
+      pkgs.writeShellScript "yuki-${name}" ''
+        deployed=${deployDirectory}/profile/bin/${name}
+        [ -x "$deployed" ] || deployed=${cfg.package}/bin/${name}
+        exec "$deployed" "$@"
+      ''
+    else
+      "${cfg.package}/bin/${name}";
   resolver = pkgs.writeText "yuki-resolv.conf" "nameserver 1.1.1.3\noptions timeout:2 attempts:2\n";
   sandbox = {
     NoNewPrivileges = true;
@@ -79,19 +105,20 @@ let
       counter blocked { }
       chain output {
         type filter hook output priority -10; policy accept;
-        meta skuid { 980, 981, 982 } jump isolated
+        meta skuid ${uids (lib.attrNames identities)} jump isolated
       }
       chain isolated {
         ct state established,related accept
         meta skuid 981 ip daddr 127.0.0.1 tcp dport 8787 accept
         meta skuid 982 ip daddr 127.0.0.1 tcp dport { 8787, 20241 } accept
+        ${lib.optionalString cfg.deploy.enable "meta skuid 983 ip daddr 127.0.0.1 tcp dport 8787 accept"}
         ip daddr 1.1.1.3 udp dport 53 accept
         ip daddr 1.1.1.3 tcp dport 53 accept
         fib daddr type local jump denied
         ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24, 192.0.2.0/24, 192.168.0.0/16, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24, 224.0.0.0/3 } jump denied
         # No IPv6 egress: globally addressed LAN peers are not private prefixes.
         meta nfproto ipv6 counter name blocked reject
-        meta skuid { 980, 982 } tcp dport 443 accept
+        meta skuid ${httpsUids} tcp dport 443 accept
         meta skuid 981 ip daddr { 198.41.192.0/24, 198.41.200.0/24 } meta l4proto { tcp, udp } th dport 7844 accept
         jump denied
       }
@@ -118,6 +145,30 @@ in
       default = "/etc/sekka-discord";
       description = "Root-only directory containing bot-token, webhook-secret, tunnel-token and service.env; never a Nix store path.";
     };
+    deploy = {
+      enable = lib.mkEnableOption ''
+        deploying Yuki's package from each successful Yuki workflow run on the
+        repository's main branch. The deploying identity builds the run's commit
+        itself and can only change which package Yuki's identities run; their
+        units, sandboxing and egress policy still come from this host's
+        configuration'';
+      repository = lib.mkOption {
+        type = lib.types.strMatching "[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+";
+        default = "bitemyapp/sekka";
+        description = "GitHub repository whose Yuki workflow runs are deployed.";
+      };
+      installable = lib.mkOption {
+        type = lib.types.strMatching "[^[:space:]]*[{]rev[}][^[:space:]]*";
+        default = "github:${cfg.deploy.repository}/{rev}#sekka-discord";
+        defaultText = lib.literalExpression ''"github:''${config.services.sekka-discord.deploy.repository}/{rev}#sekka-discord"'';
+        description = "Flake installable built for a run, where {rev} becomes the run's full commit.";
+      };
+      apiUrl = lib.mkOption {
+        type = lib.types.str;
+        default = "https://api.github.com";
+        description = "Origin of the GitHub REST API.";
+      };
+    };
   };
   config = lib.mkIf cfg.enable {
     assertions = [
@@ -139,6 +190,7 @@ in
         "sekka-discord.service"
         "sekka-discord-tunnel.service"
         "sekka-discord-monitor.service"
+        "sekka-discord-deploy.service"
       ];
       serviceConfig = {
         Type = "oneshot";
@@ -162,7 +214,7 @@ in
       serviceConfig = sandbox // {
         User = "yuki";
         Group = "yuki";
-        ExecStart = "${cfg.package}/bin/sekka-discord run";
+        ExecStart = "${launch "sekka-discord"} run";
         EnvironmentFile = "${cfg.credentialsDirectory}/service.env";
         LoadCredential = [
           "bot-token:${cfg.credentialsDirectory}/bot-token"
@@ -206,7 +258,7 @@ in
         # bus, whose policy authorizes read-only operations for this identity.
         InaccessiblePaths = lib.filter (p: p != "-/run/dbus") sandbox.InaccessiblePaths;
         LoadCredential = [ "bot-token:${cfg.credentialsDirectory}/bot-token" ];
-        ExecStart = "${cfg.package}/bin/sekka-discord-monitor --once";
+        ExecStart = "${launch "sekka-discord-monitor"} --once";
         StateDirectory = "sekka-discord-monitor";
         StateDirectoryMode = "0700";
         TimeoutStartSec = 100;
@@ -219,6 +271,83 @@ in
         OnBootSec = "2min";
         OnUnitInactiveSec = "60s";
         AccuracySec = "5s";
+      };
+    };
+    systemd.services.sekka-discord-deploy = lib.mkIf cfg.deploy.enable (
+      network
+      // {
+        description = "Yuki deployment from successful Yuki workflow runs";
+        path = [
+          config.nix.package
+          pkgs.systemd
+        ];
+        environment = {
+          SEKKA_DEPLOY_REPOSITORY = cfg.deploy.repository;
+          SEKKA_DEPLOY_INSTALLABLE = cfg.deploy.installable;
+          SEKKA_DEPLOY_API = cfg.deploy.apiUrl;
+          SEKKA_DEPLOY_FALLBACK = "${cfg.package}";
+          SEKKA_DEPLOY_STATE_DIR = deployDirectory;
+          HOME = "/var/cache/sekka-discord-deploy";
+          XDG_CACHE_HOME = "/var/cache/sekka-discord-deploy";
+          # The system bundle, with this host's own additions, as the Nix daemon uses.
+          SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
+        };
+        serviceConfig = sandbox // {
+          Type = "oneshot";
+          User = "yuki-deploy";
+          Group = "yuki-deploy";
+          # The deployer is this host's, never the deployed profile's.
+          ExecStart = "${cfg.package}/bin/sekka-discord-deploy --once";
+          RestrictAddressFamilies = [
+            "AF_UNIX"
+            "AF_INET"
+            "AF_INET6"
+          ];
+          # Builds go through the Nix daemon, as an untrusted user; unit state is
+          # read over the system bus.
+          InaccessiblePaths = lib.subtractLists [
+            "-/run/dbus"
+            "-/nix/var/nix/daemon-socket"
+          ] sandbox.InaccessiblePaths;
+          # Nix raises its own stack limit with setrlimit.
+          SystemCallFilter = [
+            "@system-service"
+            "~@privileged @mount @debug @obsolete"
+          ];
+          # Yuki's identities traverse it to the profile; the state file is private.
+          StateDirectory = "sekka-discord-deploy";
+          StateDirectoryMode = "0755";
+          CacheDirectory = "sekka-discord-deploy";
+          CacheDirectoryMode = "0700";
+          MemoryMax = "4G";
+          TasksMax = 256;
+          TimeoutStartSec = "45min";
+          Restart = "no";
+        };
+      }
+    );
+    systemd.timers.sekka-discord-deploy = lib.mkIf cfg.deploy.enable {
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "5min";
+        OnUnitInactiveSec = "3min";
+        AccuracySec = "15s";
+      };
+    };
+    # Root acts on a request's arrival alone, never reading it or the profile.
+    systemd.paths.sekka-discord-deploy-restart = lib.mkIf cfg.deploy.enable {
+      wantedBy = [ "paths.target" ];
+      pathConfig.PathModified = "${deployDirectory}/restart";
+    };
+    systemd.services.sekka-discord-deploy-restart = lib.mkIf cfg.deploy.enable {
+      description = "Restart Yuki for a deployment";
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = "${pkgs.systemd}/bin/systemctl restart sekka-discord.service";
+        PrivateNetwork = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        NoNewPrivileges = true;
       };
     };
   };

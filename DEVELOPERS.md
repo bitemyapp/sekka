@@ -41,8 +41,10 @@ The dedicated **Yuki (manual)** workflow (`.github/workflows/yuki.yml`) has
 only `workflow_dispatch`: no push, pull-request, schedule, or dependency-change
 trigger. It builds/tests `.#sekka-discord` and smoke-checks the packaged CLI on
 the sandboxed `sekka-builder`, from `main` only, with read-only repository
-permissions and no production credentials. It does not deploy, restart Yuki,
-or publish releases. After this workflow is merged, invoke it when needed:
+permissions and no production credentials. The job itself deploys nothing and
+publishes no releases, but a host with deployment enabled takes each successful
+run as its request to deploy that commit ([Deploying from main](#deploying-from-main)).
+Invoke it after merging a Yuki change:
 
 ```sh
 gh workflow run yuki.yml --ref main
@@ -223,6 +225,67 @@ inside every sandbox. The module supplies the runtime paths and loopback binding
 the standalone CLI retains its home-directory defaults for operator use.
 Neither host ingress ports nor a Discord gateway connection are required.
 
+### Deploying from main
+
+With `services.sekka-discord.deploy.enable`, a host deploys Yuki's package from
+each successful **Yuki (manual)** run on `main`. Nothing on GitHub can reach the
+host for this: the runner keeps its unprivileged identity, the workflow its
+read-only token, and there is no deploy key or host credential anywhere. The host
+pulls instead. `sekka-discord-deploy.timer` runs the deployer every three minutes
+as `yuki-deploy` (UID/GID 983), a fourth isolated identity whose only egress is
+public HTTPS, fixed DNS and the bot's loopback health check. Each tick:
+
+1. Asks GitHub's API, with a conditional request, for the latest successful
+   `workflow_dispatch` run of `yuki.yml` on `main`. The run and its source must
+   be this repository, and every job of that run attempt must have succeeded: a
+   job skipped by the workflow's main-only guard is not a build.
+2. Builds the run's commit itself, `github:bitemyapp/sekka/<commit>#sekka-discord`,
+   as an untrusted Nix user. The daemon builds or substitutes from its own trusted
+   caches, and the package's tests run as part of the build.
+3. Switches `/var/lib/sekka-discord-deploy/profile` to the result and asks for a
+   restart. `sekka-discord-deploy-restart.path` sees the request arrive and runs
+   `systemctl restart sekka-discord.service` as root; root never reads the request
+   or the profile.
+4. Requires the restarted bot to answer `/healthz` and stay up for ten seconds,
+   and the monitor's first tick on the new package to succeed if its last one did.
+   Otherwise it switches the profile back, restarts the bot again, and records that
+   run attempt as failed, never to be retried; re-running the workflow is a new
+   attempt.
+
+The bot and monitor units run whatever the profile holds, and the host's `package`
+until the first deployment; the connector is untouched. Profile generations are
+garbage-collector roots, the newest five are kept, and they survive reboots. The
+switch is recorded in the deployer's private state first, so a deployment
+interrupted midway is rolled back by the next tick rather than trusted. A failed
+build is retried twice, 15 minutes apart. Failed or rolled-back deployments reach
+the owner as a security DM; successful ones are in the journal:
+
+```sh
+systemctl list-timers sekka-discord-deploy.timer
+journalctl -u sekka-discord-deploy -u sekka-discord-deploy-restart
+readlink -f /var/lib/sekka-discord-deploy/profile
+```
+
+Whoever can push to `main` or dispatch its workflows chooses the code Yuki runs,
+as merging already did; `main` is unprotected, and `bitemyapp` is the only
+collaborator. A compromised deployer could run any code as Yuki's identities,
+including the monitor that would report it, and restart the bot at will, but gains
+no root, no Nix trust, no credential and no LAN access. Only the package deploys
+this way: the units, sandboxing, egress policy, module options and the deployer
+itself come from the host's configuration and change only when root rebuilds it.
+A package needing a newer module fails its health checks and is rolled back until
+the host catches up. Rolling back does not undo SQLite migrations a newer bot
+applied. Polling is unauthenticated: at most 20 requests an hour from the host's
+address, of GitHub's 60.
+
+On wx-workstation, update the module and package copies in `/etc/nixos` to a
+revision that includes the deployer, then add `deploy.enable = true;` to
+`services.sekka-discord` in `sekka-discord-host.nix`. To go back to the host's own
+package, stop `sekka-discord-deploy.timer`, remove the profile link and restart
+`sekka-discord.service`. `checks.sekka-discord-deploy` exercises deployment,
+rollback, skipped runs and reboots in VMs, with stand-ins for the bot, monitor,
+connector and GitHub's API.
+
 ### Host isolation and security alerts
 
 All three long-lived workloads have a read-only system filesystem, hidden home
@@ -234,7 +297,7 @@ The receiver and connector cannot create Unix-domain sockets; the monitor needs
 them for read-only systemd status queries, governed by the system bus policy.
 
 `sekka-discord-firewall.service` installs its own `inet yuki` nftables table
-before the services start. It affects only the three dedicated UIDs, not SSH,
+before the services start. It affects only Yuki's dedicated UIDs, not SSH,
 CI, Docker or other host traffic. Established replies are allowed. New egress:
 
 - Receiver: public IPv4 HTTPS and DNS to `1.1.1.3`; no new loopback, host-address,
@@ -242,6 +305,8 @@ CI, Docker or other host traffic. Established replies are allowed. New egress:
 - Connector: only Cloudflare's `198.41.192.0/24` and `198.41.200.0/24` edge
   addresses on TCP/UDP 7844, fixed DNS, and `127.0.0.1:8787`.
 - Monitor: public IPv4 HTTPS, fixed DNS, and the two local health endpoints.
+- Deployer, when enabled: public IPv4 HTTPS, fixed DNS, and `127.0.0.1:8787`.
+  It also reaches the Nix daemon's socket as an untrusted user.
 - New IPv6 egress is blocked, including globally addressed LAN neighbors;
   IPv4 remains available. Expected IPv6 fallback failures are counted but not
   logged as incidents. Other denies produce kernel summaries, rate-limited to
@@ -263,6 +328,7 @@ notifications channel. It reports:
 - Rejected webhooks, denied egress, SSH authentication failures/successes and
   sudo activity.
 - Catch-up/dispatch errors and unresolved Discord sends.
+- Failed or rolled-back deployments.
 - Less than 512 MiB or 5% free space on the state filesystem.
 - Journal coverage failures, retention gaps and collection backlogs.
 
