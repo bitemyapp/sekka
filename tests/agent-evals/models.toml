@@ -75,7 +75,9 @@ mmproj = "mmproj-Muse-Glimmer-30B-Q4_K_M.gguf"
 size_gb = 21.1
 engine = "llama.cpp"
 vision = true
-coords = "pixel"
+# Its clicks are 0–1000 whatever the prompt says (grounding.py: 7 px off
+# read so, 162 px read as pixels).
+coords = "norm1000"
 license = "Apache-2.0"
 params = { temperature = 1.0, top_p = 0.95, top_k = 64 }
 
@@ -89,6 +91,7 @@ mmproj = "gemma-4-31B-it-mmproj.gguf"
 size_gb = 18.9
 engine = "llama.cpp"
 vision = true
+# Pixels, as asked (grounding.py: 10 px off).
 coords = "pixel"
 license = "Apache-2.0"
 params = { temperature = 1.0, top_p = 0.95, top_k = 64 }
