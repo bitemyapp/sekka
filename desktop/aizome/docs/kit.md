@@ -168,7 +168,7 @@ them, Space and Return work them, arrows move within them.
 | `slider(v, ValueRange::UNIT)` | `.step(s)`, `.ticks(n)`, `.on_change(f)`, `.on_release(msg)`. Arrows, Page Up/Down, Home/End. |
 | `stepper(v).range(bounds).step(increment).suffix("pt").on_change(f)` | − value +. |
 | `segmented(["Night", "Day", "Auto"], i).on_select(f)`, `segmented_icons([...], i)` | ← → change it. |
-| `dropdown(options, selected).on_select(f)` | A pop-up button opening a menu of choices (the board's "Markdown ⌄"); `.placeholder(t)`, `.compact()` for toolbars. |
+| `dropdown(options, selected).on_select(f)` | A pop-up button opening a menu of choices (the board's "Markdown ⌄"); `.placeholder(t)`, `.compact()` for toolbars. `.swatches(colors)` adds flat 8pt colour squares beside the popup labels in option order, separate from the selection checkmark; unmatched options remain text-only and extra colours are ignored. |
 | `progress(f)`, `progress_indeterminate()`, `meter(values)` | The indeterminate bar ticks every 50 ms redrawing only itself, and stands still under reduced motion; meters are the menu bar's CPU bars (`.role(..)`, `.bar_width(..)`). |
 
 ### Text entry

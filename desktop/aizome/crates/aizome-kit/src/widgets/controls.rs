@@ -1654,11 +1654,16 @@ impl Widget for SegWidget {
 
 // Pop-up buttons.
 
+struct DropdownOption {
+    label: String,
+    swatch: Option<Color>,
+}
+
 /// A pop-up button that opens a menu of choices, as the board's
 /// "Markdown ⌄": `dropdown(["Markdown", "Plain Text"], Some(0)).on_select(Msg::Syntax)`.
 pub struct Dropdown<Msg> {
     pub(crate) common: Common,
-    options: Vec<String>,
+    options: Vec<DropdownOption>,
     selected: Option<usize>,
     placeholder: Option<Arc<str>>,
     on_select: Option<MsgMap<usize>>,
@@ -1675,7 +1680,7 @@ pub fn dropdown<Msg, S: Into<String>>(
 ) -> Dropdown<Msg> {
     Dropdown {
         common: Common::default(),
-        options: options.into_iter().map(Into::into).collect(),
+        options: options.into_iter().map(|label| DropdownOption { label: label.into(), swatch: None }).collect(),
         selected: selected.into(),
         placeholder: None,
         on_select: None,
@@ -1693,6 +1698,16 @@ impl<Msg: Send + 'static> Dropdown<Msg> {
 }
 
 impl<Msg> Dropdown<Msg> {
+    /// Flat 8pt colour squares beside the popup labels, in option order.
+    /// Unmatched options stay text-only; extra colours are ignored.
+    pub fn swatches(mut self, colors: impl IntoIterator<Item = Color>) -> Self {
+        let mut colors = colors.into_iter();
+        for option in &mut self.options {
+            option.swatch = colors.next();
+        }
+        self
+    }
+
     /// What it says with nothing chosen.
     pub fn placeholder(mut self, text: impl Into<Arc<str>>) -> Self {
         self.placeholder = Some(text.into());
@@ -1726,7 +1741,7 @@ impl<Msg> From<Dropdown<Msg>> for Element<Msg> {
 }
 
 struct DropdownWidget {
-    options: Vec<String>,
+    options: Vec<DropdownOption>,
     selected: Option<usize>,
     placeholder: Option<Arc<str>>,
     on_select: Option<MsgMap<usize>>,
@@ -1741,7 +1756,7 @@ impl DropdownWidget {
 
     fn label(&self) -> &str {
         match self.selected.and_then(|i| self.options.get(i)) {
-            Some(s) => s,
+            Some(o) => &o.label,
             None => self.placeholder.as_deref().unwrap_or(""),
         }
     }
@@ -1764,7 +1779,7 @@ impl DropdownWidget {
             .map(|(i, o)| {
                 let f = f.clone();
                 ItemSpec::Action(ActionSpec {
-                    label: o.clone(),
+                    label: o.label.clone(),
                     msg: Some(MsgFn::from_fn(move || f.make(i))),
                     shortcut: None,
                     enabled: true,
@@ -1773,6 +1788,7 @@ impl DropdownWidget {
                     key: None,
                     id: None,
                     icon: None,
+                    swatch: o.swatch,
                 })
             })
             .collect();
@@ -1793,7 +1809,7 @@ impl Widget for DropdownWidget {
         let widest = self
             .options
             .iter()
-            .map(String::as_str)
+            .map(|o| o.label.as_str())
             .chain(self.placeholder.as_deref())
             .map(|o| cx.measure(o, &spec).width)
             .fold(0.0f64, f64::max);

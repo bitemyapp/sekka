@@ -293,6 +293,7 @@ fn toolbar(app: &Fusen) -> Element<Msg> {
             .label("Pin")
             .into(),
         dropdown(colors, color)
+            .swatches(NoteColor::ALL.iter().map(|c| rgb(c.dye())))
             .compact()
             .enabled(has)
             .on_select(|i| Msg::Color(NoteColor::ALL[i.min(4)]))

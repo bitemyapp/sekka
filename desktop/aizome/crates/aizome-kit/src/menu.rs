@@ -8,7 +8,7 @@
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-use sidestep_ui::{Key, KeyEvent, NamedKey};
+use sidestep_ui::{Color, Key, KeyEvent, NamedKey};
 
 use crate::element::MsgFn;
 use crate::icons::Icon;
@@ -295,6 +295,8 @@ pub struct ActionSpec {
     /// The kit's own id for the shell protocol (the window list's rows).
     pub id: Option<u32>,
     pub icon: Option<Icon>,
+    /// An 8pt colour square beside the label in local popup menus.
+    pub swatch: Option<Color>,
 }
 
 impl MenuSpec {
@@ -426,6 +428,7 @@ impl<Msg> MenuItem<Msg> {
                 key: None,
                 id: None,
                 icon: None,
+                swatch: None,
             }),
             _m: PhantomData,
         }

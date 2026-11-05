@@ -42,6 +42,8 @@ const PAD: f64 = 10.0;
 const GUTTER: f64 = 18.0;
 const ARROW: f64 = 16.0;
 const STRIP: f64 = 22.0;
+const SWATCH: f64 = 8.0;
+const SWATCH_GAP: f64 = 6.0;
 /// How long the pointer may cross other rows on its way to a submenu.
 const AIM: Duration = Duration::from_millis(220);
 
@@ -580,7 +582,8 @@ impl Widget for MenuView {
                     let lw = cx.measure(&a.label, &label).width;
                     let tw = if trail.is_empty() { 0.0 } else { cx.measure(&trail, &shortcut).width + 12.0 };
                     let sw = a.shortcut.map_or(0.0, |s| cx.measure(&s.label(), &shortcut).width + 24.0);
-                    (m.menu_row, lw + tw + sw)
+                    let swatch = if a.swatch.is_some() { SWATCH + SWATCH_GAP } else { 0.0 };
+                    (m.menu_row, lw + tw + sw + swatch)
                 }
                 (Some(ItemSpec::Submenu(s)), _) => (m.menu_row, cx.measure(&s.title, &label).width + ARROW + 12.0),
                 (_, RowKind::Separator) => (9.0, 0.0),
@@ -711,7 +714,7 @@ impl Widget for MenuView {
                     } else {
                         t.text()
                     };
-                    let x = r.x0 + PAD + self.gutter;
+                    let mut x = r.x0 + PAD + self.gutter;
                     let mut right = r.x1 - PAD;
                     if row.kind == RowKind::Submenu {
                         let c = if hot { t.on_selection() } else { t.text3() };
@@ -740,6 +743,14 @@ impl Widget for MenuView {
                                 14.0,
                                 if hot { fg } else { t.text3() },
                             );
+                        }
+                        if let Some(color) = a.swatch {
+                            let square = Rect::from_origin_size(
+                                Point::new(x, r.y0 + (r.height() - SWATCH) / 2.0),
+                                (SWATCH, SWATCH),
+                            );
+                            cx.canvas.fill_rect(square, color);
+                            x += SWATCH + SWATCH_GAP;
                         }
                         if let Some(s) = a.shortcut {
                             let c = if hot {
@@ -786,6 +797,10 @@ impl Widget for MenuView {
             match i {
                 ItemSpec::Action(a) => {
                     h.str(&a.label).add(&(a.enabled, a.checked, a.shortcut, a.icon));
+                    h.add(&a.swatch.is_some());
+                    if let Some(color) = a.swatch {
+                        h.color(color);
+                    }
                 }
                 ItemSpec::Submenu(m) => {
                     h.str(&m.title).add(&(m.items.len(), m.icon));
