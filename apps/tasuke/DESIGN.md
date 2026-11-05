@@ -83,14 +83,15 @@ The libraries are UI-independent, as with Yukimi (`apps/yukimi` holds the librar
 
 | Tool | Runs as | Approval |
 |---|---|---|
-| `run_command {command, purpose}` | the user, `bash -c`, no stdin, timeout 60 s (max 300), output capped at 32 KB (head and tail) | none if the policy classifies it read-only; otherwise ask |
+| `run_command {command, purpose}` | the user, `bash --noprofile --norc -c` in the home folder (no `BASH_ENV`, `ENV` or exported functions), no stdin, timeout 60 s (max 300), output capped at 32 KB (head and tail) | none if the policy classifies it read-only; otherwise ask |
 | `run_as_root {command, purpose}` | root, through tasuke-helper | always ask, then polkit |
 | `read_file {path, offset?, limit?}` | the user | none, except for sensitive paths (keys, keyrings, browser profiles, password stores) |
 | `write_file {path, content}`, `edit_file {path, old, new}` | the user | always ask, showing a diff |
 | `load_skill {name}` | — | none |
 | `remember {text}`, `forget {id}` | — | none; shown in the transcript and the Memory list |
-| `screenshot {}` | Aizome (`aizomectl screenshot`) | needs Desktop control on; vision models only |
+| `screenshot {}` | Aizome (`aizomectl screenshot`), scaled to at most 1600 px across, controls numbered (set-of-marks) | needs Desktop control on; vision models only |
 | `list_windows {}`, `ui_elements {}` | Aizome (`aizomectl --json windows`, kit inspection files when present) | needs Desktop control on |
+| `click_element {mark}`, `type_into {mark, text}` | Aizome, at the centre of control [mark] from the last look | needs Desktop control on; asks with the other actions |
 | `click {x,y,button?}`, `double_click`, `drag`, `scroll`, `type_text {text}`, `key {keys}`, `open_app {name}`, `wait {seconds}` | Aizome (`aizomectl input …`, palette or desktop entries) | needs Desktop control on; the first action of a turn asks once |
 
 **Modes.** A conversation's composer has two toggles:
@@ -198,3 +199,12 @@ The window follows Omperor's principles (`~/work/omperor-aizome/docs/PRODUCT_DIR
   - Download (with progress, pause and cancel), Use, and Remove.
   - The server's state and its idle-unload setting.
 - **First run:** detect the hardware, recommend a model, download it, and say hello. While it downloads, the window explains what is happening and how long it will take.
+
+## Since the first draft (2026-11-05)
+
+- **Set-of-marks is built.** Every look at the screen (the first comes with the request) lists the windows and numbers each control kit apps report; vision models also get the screenshot with the numbers drawn on it. `click_element`/`type_into` take a number; x/y clicks go through the model's coordinate convention (`Coords`, including per-axis affine).
+- **Acting, not asking twice.** The prompt says the approval card is the person's yes, and to retry with `run_as_root` when the person's permissions fall short. Skills write root commands as `sudo CMD`; each says that means `run_as_root` in Tasuke.
+- **Robustness.** A reply that turns into a loop (one short unit repeated through the last 1,200 bytes) is cut off and resampled once; Gemma 4 12B otherwise repeats its channel markers until the token limit. Connection retries back off 1–8 s, and a turn starts `tasuke-llm.service` when Tasuke's own port is dead.
+- **Routines.** `tasuke checkup [--notify]` runs the read-only `sekka-checkup` skill with Act off; the module's opt-in weekly timer notifies only when something needs attention.
+- **The helper** is installed in `libexec` and found through `tasuke_agent::root::find_helper` (the path the polkit action names).
+- **Evaluation.** `run.py --agent tasuke` grades this agent in the VM; when the turn ends on a question, the harness answers "Yes, please go ahead." once and keeps the first turn's result apart.
