@@ -39,7 +39,7 @@ Every model was served by the same llama.cpp (0.8.0, build 11960, CUDA 13.4, SM1
 Two agent harnesses ran the diagnostics against the same model server:
 
 - **The bare loop** (`harness/agent.py`): one `shell` tool and `finish`, and nothing else, the same for every model, so differences are the model's.
-- **oh-my-pi** (`omp` 18.6.1, `--agent omp`): run as root inside the VM against the host's server, with its own system prompt and tools (read, edit, grep, bash, todo lists, compaction) and the same brief appended. Its limit is 30 minutes; it has no turn limit.
+- **oh-my-pi** (`omp` 18.6.1 for these results; the flake now follows omp's main branch, #285; `--agent omp`): run as root inside the VM against the host's server, with its own system prompt and tools (read, edit, grep, bash, todo lists, compaction) and the same brief appended. Its limit is 30 minutes; it has no turn limit.
 
 Conditions, each against the bare loop's default: the troubleshooting skill appended to the brief (`--skill`); the first version of the system prompt (`prompt v1`, without "once you know what is wrong, fix it"); the windows' element lists instead of screenshots (`--observe elements`, Qwen3.8 and the text-only gpt-oss); and Holo4 with thinking and sampling instead of H Company's greedy, no-thinking setting.
 
