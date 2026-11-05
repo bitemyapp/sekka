@@ -107,7 +107,7 @@ def run_batch(args, drv, run_dir, label, model_cfg, chosen, results):
             observe = args.observe or ("screenshot" if (model_cfg or {}).get("vision") else "elements")
             cfg = {"scenario": s.id, "agent": args.agent, "repeat": r, "observe": observe,
                    "max_steps": args.max_steps or (40 if s.track == "diagnostics" else 35),
-                   "max_seconds": args.max_seconds}
+                   "max_seconds": args.max_seconds, "ctx": args.ctx}
             if model_cfg:
                 cfg["model"] = model_cfg
             if args.skill and s.track == "diagnostics":
@@ -137,8 +137,9 @@ def run_batch(args, drv, run_dir, label, model_cfg, chosen, results):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--agent", choices=["model", "omp", "none", "oracle"], default="model",
-                    help="model: the bare tool loop; omp: oh-my-pi in the VM, against the same server")
+    ap.add_argument("--agent", choices=["model", "omp", "tasuke", "none", "oracle"], default="model",
+                    help="model: the bare tool loop; omp: oh-my-pi in the VM; tasuke: Sekka's assistant in the VM "
+                         "(SEKKA_EVAL_TASUKE names its store path); both against the same server")
     ap.add_argument("--models", default="", help="comma-separated names from models.toml")
     ap.add_argument("--scenarios", default="all")
     ap.add_argument("--track", choices=["diagnostics", "computer-use"])
@@ -147,8 +148,11 @@ def main():
     ap.add_argument("--parallel", type=int, default=4)
     ap.add_argument("--observe", choices=["screenshot", "elements", "both"])
     ap.add_argument("--skill", action="store_true", help="give diagnostics the troubleshooting skill")
-    ap.add_argument("--coords", choices=["pixel", "norm1000", "norm1"],
-                    help="override the model's coordinate convention (grounding.py measures it)")
+    ap.add_argument("--marks", action="store_true",
+                    help="tasuke: number the controls on screenshots (set-of-marks) and offer click_element")
+    ap.add_argument("--coords",
+                    help="override the model's coordinate convention (grounding.py measures it): pixel, norm1000, norm1, "
+                         "or for tasuke affine:XSCALE,XOFFSET,YSCALE,YOFFSET")
     ap.add_argument("--max-steps", type=int)
     ap.add_argument("--max-seconds", type=int, default=2400,
                     help="a safety net per episode; the step budget is the real limit")
@@ -179,7 +183,7 @@ def main():
                      "vision": m.get("vision", False), "keep_reasoning": m.get("keep_reasoning", False),
                      "max_tokens": m.get("max_tokens", 6144), "engine": m["engine"],
                      # Where the VM reaches the host's server (omp runs in the VM).
-                     "omp_base_url": f"http://10.0.2.2:{args.port}"}
+                     "omp_base_url": f"http://10.0.2.2:{args.port}", "marks": args.marks}
         if not args.no_serve:
             subprocess.run(server_cmd() + ["start", name, "--port", str(args.port), "--parallel", str(args.parallel),
                                            "--ctx", str(args.ctx)], check=True)
@@ -188,7 +192,7 @@ def main():
             (run_dir / f"bench-{name}.json").write_text(bench.stdout)
             print(bench.stdout, flush=True)
         try:
-            label = name + ("+omp" if args.agent == "omp" else "") + ("+skill" if args.skill else "")
+            label = name + {"omp": "+omp", "tasuke": "+tasuke"}.get(args.agent, "") + ("+marks" if args.marks else "") + ("+skill" if args.skill else "")
             run_batch(args, drv, run_dir, label, model_cfg, chosen, results)
         finally:
             if not args.no_serve:

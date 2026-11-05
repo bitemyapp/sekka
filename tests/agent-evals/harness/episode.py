@@ -104,6 +104,92 @@ def run_omp(vm, cfg, s, result, out):
     return {"root_cause": last_text, "changes": "", "fixed": None}
 
 
+def run_tasuke(vm, cfg, s, result, out):
+    """The same task through Tasuke, Sekka's assistant (`tasuke ask`: the
+    product's own agent loop, prompt, skills and command policy), run as
+    root inside the VM against the host's model server. Its commands run as
+    alice (`as-alice`), `run_as_root` as root, and every approval is
+    granted, as by a person who says yes to everything. The binary and
+    skills come from the store path in SEKKA_EVAL_TASUKE (the host's store
+    is the VM's). Its session file is the transcript."""
+    import shlex as sh
+
+    m = cfg["model"]
+    tasuke = os.environ["SEKKA_EVAL_TASUKE"]
+    seconds = cfg.get("max_seconds", 1800)
+    args = [f"{tasuke}/bin/tasuke", "ask", "--approve", "all",
+            "--base-url", m["omp_base_url"] + "/v1", "--model", m["name"],
+            "--data-dir", "/root/.tasuke-eval", "--skills-dir", f"{tasuke}/share/tasuke/skills",
+            "--user-prefix", "as-alice", "--aizomectl", "as-alice aizomectl", "--person", "alice (uid 1000)",
+            "--inspect-dir", "/run/user/1000/inspect", "--max-steps", str(cfg.get("max_steps", 40)),
+            "--max-seconds", str(seconds), "--max-tokens", str(m.get("max_tokens", 6144)),
+            "--context", str(cfg.get("ctx", 32768)), "--answer-file", "/root/.tasuke-eval/answer.txt"]
+    if s.track == "computer-use":
+        args.append("--desktop")
+        if m.get("vision"):
+            args += ["--vision", "--coords", m.get("coords", "pixel")]
+        if m.get("marks"):
+            args.append("--marks")
+    if m.get("keep_reasoning"):
+        args.append("--keep-reasoning")
+    for k, v in (m.get("params") or {}).items():
+        args += ["--param", f"{k}={json.dumps(v)}"]
+    command = ("mkdir -p /root/.tasuke-eval && cd /root && HOME=/home/alice USER=alice "
+               + " ".join(sh.quote(a) for a in args) + " " + sh.quote(s.prompt)
+               + " > /root/.tasuke-eval/stdout.txt 2> /root/.tasuke-eval/stderr.txt")
+    t0 = time.monotonic()
+    status, _ = vm.sh(command, timeout=seconds + 180)
+    answer = vm.out_of("cat /root/.tasuke-eval/answer.txt 2>/dev/null")
+    # Tasuke asks before risky changes, in words as well as approvals. A
+    # person would answer; so does the harness, once, with a plain yes.
+    # The first turn's own result is kept apart.
+    if answer.rstrip().endswith("?") and time.monotonic() - t0 < seconds - 60:
+        first, details = s.check(vm, {"root_cause": answer})
+        result["first_turn"] = {"resolved": bool(first), "answer": answer[-1500:]}
+        session_id = vm.out_of("ls /root/.tasuke-eval/sessions/ | sed -n 's/\\.jsonl$//p' | head -1").strip()
+        left = int(seconds - (time.monotonic() - t0))
+        follow = [a if a != str(seconds) else str(left) for a in args] + ["--session", session_id]
+        status, _ = vm.sh("cd /root && HOME=/home/alice USER=alice " + " ".join(sh.quote(a) for a in follow)
+                          + " " + sh.quote("Yes, please go ahead.")
+                          + " >> /root/.tasuke-eval/stdout.txt 2>> /root/.tasuke-eval/stderr.txt", timeout=left + 180)
+        answer = vm.out_of("cat /root/.tasuke-eval/answer.txt 2>/dev/null")
+        result["followups"] = 1
+    wall = time.monotonic() - t0
+    session = vm.out_of("cat /root/.tasuke-eval/sessions/*.jsonl", timeout=120)
+    with open(os.path.join(out, "tasuke-session.jsonl"), "w") as f:
+        f.write(session)
+    with open(os.path.join(out, "tasuke-stderr.txt"), "w") as f:
+        f.write(vm.out_of("tail -c 20000 /root/.tasuke-eval/stderr.txt"))
+    stats = {"steps": 0, "tool_calls": 0, "completion_tokens": 0, "prompt_tokens": 0, "seconds": round(wall, 1),
+             "refused": 0, "denied": 0, "invalid_calls": 0}
+    finished = None
+    for line in session.splitlines():
+        try:
+            r = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        e = r.get("event") or {}
+        if e.get("type") == "turn_finished":
+            u = e.get("usage") or {}
+            finished = e.get("reason")
+            for k in ("tool_calls", "completion_tokens", "prompt_tokens", "cached_tokens", "llm_seconds"):
+                stats[k] = stats.get(k, 0) + (u.get(k) or 0)
+            stats["steps"] += u.get("requests", 0)
+            stats["max_prompt_tokens"] = max(stats.get("max_prompt_tokens", 0), u.get("max_prompt_tokens", 0))
+            stats["decode_tps"] = e.get("decode_tps")
+        elif e.get("type") == "tool_output":
+            st = (e.get("output") or {}).get("status")
+            stats["refused"] += st == "refused"
+            stats["denied"] += st == "denied"
+        elif e.get("type") == "tool_call" and (e.get("call") or {}).get("tool") == "invalid":
+            stats["invalid_calls"] += 1
+    result["stats"] = stats
+    result["tasuke_exit"] = status
+    result["ended"] = {"answered": "finished", "step_budget": "max-steps", "time_limit": "time"}.get(
+        finished, finished or f"exit {status}")
+    return {"root_cause": answer, "changes": "", "fixed": None}
+
+
 def load_config():
     with open(os.environ["SEKKA_EVAL_CONFIG"]) as f:
         return json.load(f)
@@ -144,6 +230,8 @@ def run(machine):
         final = None
         if cfg["agent"] == "omp":
             final = run_omp(vm, cfg, s, result, out)
+        elif cfg["agent"] == "tasuke":
+            final = run_tasuke(vm, cfg, s, result, out)
         elif cfg["agent"] == "oracle":
             s.oracle(vm)
             final = {"root_cause": "oracle", "changes": "oracle", "fixed": True}
