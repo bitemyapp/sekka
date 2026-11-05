@@ -30,6 +30,27 @@ To make a model without Chinese lineage beat the field, the gap to close is Gemm
 - **For the desktop alone,** Holo4-27B and Muse Glimmer did 8 of 9 tasks each, Holo4-27B in under a minute, Muse in 16; Holo4's licence is non-commercial, and Muse is weak at diagnostics.
 - **Every model ran far above 10 tokens/s** on the 5090: the slowest, the dense ~30B models, decode about 70.
 
+## The 8 GiB round
+
+Which models, at which quantizations, help on a GPU with 8 GiB of memory, the most common gaming and laptop size? Six were run on 2026-11-05 through the same scenarios, harnesses and checks as above. Quality doesn't depend on how many requests a server takes at once, so the episodes ran eight at a time on the RTX 5090 and the RTX PRO 6000; `fit8gib.py` then measured each model's single-user server as a person with an 8 GiB card would run it (`args_8gib`: one slot, 32K context, q8_0 KV cache, and for the mixtures of experts some layers' experts in system RAM), with the context filled and, for vision models, an image decoded. Tables per scenario are in [results-2026-11-05-8gib.md](results-2026-11-05-8gib.md); the data in [data/2026-11-05-8gib.jsonl](data/2026-11-05-8gib.jsonl).
+
+| Model (file) | Made by (lineage) | Licence | Diagnostics, bare loop | Diagnostics, oh-my-pi | Computer use | Peak GPU memory | Decode |
+|---|---|---|---:|---:|---:|---:|---:|
+| Gemma 4 26B-A4B (QAT Q4_0, 15.6 GB; experts of 24 layers in RAM) | Google | Apache-2.0 | **14/16 (88%)** | **13/16 (81%)** | **5/9 (56%)** | 7,736 MiB | 15 tok/s |
+| Gemma 4 12B (IQ4_XS, 6.5 GB) | Google | Apache-2.0 | 3/16 (19%)¹ | 12/16 (75%) | 3/9 (33%) | 7,868 MiB | 79 tok/s |
+| Qwen3.5 9B (Q4_K_M, 6.6 GB) | Alibaba | Apache-2.0 | 9/16 (56%) | 10/14 (71%) | 0/9 | 7,608 MiB | 111 tok/s |
+| Nemotron 3.5 Lightning 30B-A3B (Q4_0, 18.9 GB; experts of 40 layers in RAM) | NVIDIA | OpenMDW-1.1 | 8/16 (50%) | 9/15 (60%) | text only: 4/9 (44%) | 7,696 MiB | 62 tok/s |
+| Holo3.1 4B (Q8_0, 5.5 GB) | H Company (Qwen3.5 fine-tune) | Apache-2.0 | 7/16 (44%) | 5/15 (33%) | 0/9 | –² | – |
+| LFM2.5 24B-A2B (Q4_K_M, 14.5 GB; experts of 26 layers in RAM) | Liquid AI | LFM Open 1.0 (restricted above $10M revenue) | 4/16 (25%) | 4/13 (31%) | text only: 1/9 (11%) | 7,144 MiB | 24 tok/s |
+
+Counts are valid episodes; six omp episodes were lost to the harness (broken pipes when wx ran out of open files) and are excluded. Peak memory is the server process's on the GPU, with 32K tokens of context in use. Decode is single-stream on the RTX PRO 6000 while other jobs used the machine, so it shows the order, not an 8 GiB card's speed: an RTX 4060-class card has about a sixth of the PRO 6000's memory bandwidth, and the mixtures of experts are bound by the system RAM and CPU that hold their experts.
+
+¹ Gemma 4 12B often answers a tool result with its channel markers (`<channel|><|channel>thought`) over and over until the 6,144-token limit: 14 of its 16 bare-loop episodes ended that way within two or three steps. oh-my-pi recovers from it, and so does Tasuke, which cuts a looping reply off and samples again; the bare loop doesn't. ² Holo3.1 4B wasn't downloaded on the machine that measured the fits.
+
+- **Gemma 4 26B-A4B is the 8 GiB model to beat, and it is Google's.** It fixed 14 of 16 faults in the bare loop with nothing harmed, did 5 of 9 desktop tasks from screenshots in pixel coordinates, and fits in 7.7 GiB with the experts of 24 of its layers in system RAM. The cost is speed: about 15 tokens/s here with the experts on a busy CPU. In oh-my-pi it once ended alice's session to apply a keyboard layout, the failure Qwen3.6-35B-A3B showed.
+- **Gemma 4 12B is the fast choice.** Everything stays on the GPU, so it decodes several times faster, and with a harness that survives its loops it fixes three quarters of the faults (12 of 16 in omp) without harming anything.
+- **The rest damaged things or did little.** Qwen3.5 9B deleted alice's older backup to free space and ended her session once each; Nemotron 3.5 Lightning, in omp, deleted that backup once and ended her session twice, and needs 40 of its layers' experts in RAM to fit; Holo3.1 4B and LFM2.5 fixed fewer than half.
+
 ## What was measured
 
 Sixteen diagnostic scenarios break a Sekka system with Aizome in a fresh VM (ten in the system, six in the desktop session) and hand an agent a root shell and the user's complaint in their own words. Nine computer-use tasks give it the screen, mouse and keyboard on a clean desktop. Each episode is graded by checking the machine afterwards: the problem is gone (or the task done) and nothing else was harmed. For diagnostics the report must also name the cause, which is reported separately. Every scenario was validated first with no agent (its check fails) and with a known fix (its check passes, nothing else harmed).
