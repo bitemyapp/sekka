@@ -7,8 +7,8 @@
 //! what stays with a device, not only what another device can take over
 //! (an object path, a `/dev` name, a size): the drive it is on (its serial,
 //! its WWN, the USB port it is in, and when UDisks detected it and the
-//! medium in it) or the image a
-//! loop device holds; a partition's place in its table and its UUID; and
+//! medium in it) or the image a loop device holds; a partition's place in
+//! its table and its UUID; and
 //! what is on it (its filesystem's type and UUID, or its partition table's
 //! partitions). Only [`DisksState::identity`] makes one, from the whole
 //! state: a block device's record alone doesn't know its drive, and a whole
@@ -42,6 +42,10 @@
 //!   `TimeMediaDetected`; then only the partitions' and filesystems' UUIDs
 //!   tell the cards apart, and an operation held only to the disk's place
 //!   (making a partition, in free space checked again) goes ahead.
+
+// Every arm names what it matches: a variant added later is a compile
+// error here, not a case quietly taken by `_`.
+#![deny(clippy::wildcard_enum_match_arm)]
 
 use super::model::{BlockDevice, DisksState};
 use crate::error::{Error, Result};
