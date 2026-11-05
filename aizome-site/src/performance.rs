@@ -368,6 +368,14 @@ fn terminals() -> String {
 <tr><th scope="row">Unicode text</th><td>188</td><td>215</td><td>198</td><td>93</td><td>193</td><td>171</td></tr>
 <tr><th scope="row">Cursor-heavy output</th><td>127</td><td>22</td><td>89</td><td>90</td><td>95</td><td>99</td></tr>
 </tbody></table></div>
+<p>The graphs in <a href="{post}">Ghostty's author's post</a> show different gaps, and on plain text the opposite order. Two things account for most of it. He timed the terminal libraries alone, fed bytes with nothing drawn, where these runs time each app on screen. And Hotaru's feed-only mode keeps no history, so in his runs only Ghostty kept any, while here both kept 50 MB. Plain text is the output history slows Hotaru most, so with history on both sides Ghostty main is ahead on it. The builds are close: our Ghostty main is three commits after his, with one more fix for erasing blank rows, and our Hotaru includes a later change to how it reads from the program. Why Ghostty's lead on styled text is smaller here and on Unicode larger, we haven't measured. Drawing is the likeliest difference.</p>
+<div class="table-wrap"><table class="numbers"><caption>Ghostty main's speed as a multiple of Hotaru's. His run timed the VT libraries alone, with 50 MB of history for Ghostty and none for Hotaru. These runs timed whole terminals on screen, both with 50 MB.</caption><thead><tr><th scope="col">Ghostty main ÷ Hotaru</th><th scope="col">His library-level run</th><th scope="col">These app runs</th></tr></thead><tbody>
+<tr><th scope="row">Plain text</th><td>0.78×</td><td>1.13×</td></tr>
+<tr><th scope="row">Styled text</th><td>1.35×</td><td>1.15×</td></tr>
+<tr><th scope="row">Unicode text</th><td>1.35×</td><td>1.52×</td></tr>
+<tr><th scope="row">Cursor-heavy output</th><td>1.67×</td><td>1.44×</td></tr>
+<tr><th scope="row">Hyperlinks</th><td>1.17×</td><td>not measured</td></tr>
+</tbody></table></div>
 <p>Sitting idle with a steady cursor, Hotaru wakes once a second. foot, gnome-terminal and Konsole don't wake at all, while Ghostty wakes 28 times a second and keeps the GPU busy for 4.3 ms of every second even though nothing changes. With default settings, Hotaru's cursor blinks forever, whereas GNOME's terminals stop blinking after ten seconds. At startup Hotaru uses 47 MiB of memory, about the same as Console and two thirds of what Konsole uses here, where Konsole runs outside Plasma and its libraries count in full. foot needs just 7. Hotaru's CPU-drawn buffers also cost the compositor more. Scrolling a row at 60 Hz cost sway 0.76 ms of CPU time per update with Hotaru, against 0.36 ms with Ghostty. {doc}</p>"#,
         start = chart("term-start", "Launch to first frame, ms (lower is better)", "ms", 1, &start,
             "Ten fresh launches each, with warm caches, timed until the first captured frame that shows the whole first screen."),

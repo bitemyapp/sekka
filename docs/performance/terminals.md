@@ -514,6 +514,46 @@ doesn't share that. Hotaru's other corpora change by at most 14%. These
 are whole terminals on screen: reading, parsing, keeping history and
 drawing, not the VT library alone.
 
+### Against Ghostty's author's library-level figures
+
+The graphs in [his post](data/terminals/ghostty-author-2026-11-02/README.md)
+put the same two terminals in a different order on some corpora. Ghostty
+main's speed as a multiple of Hotaru's (higher is better for Ghostty):
+
+| | His run: VT libraries only, Ghostty with 50 MB, Hotaru with none | These runs: whole terminals on screen, both with 50 MB |
+|---|---:|---:|
+| ASCII | 0.78× | 1.13× |
+| Styled | 1.35× | 1.15× |
+| Unicode | 1.35× | 1.52× |
+| Cursor/erase | 1.67× | 1.44× |
+| Hyperlinks | 1.17× | not measured |
+
+The two setups differ in four ways:
+
+- **What is timed.** He fed bytes to libghostty-vt and to Hotaru's core
+  with `hotaru-replay`, drawing nothing. These runs time each terminal
+  reading a PTY, keeping history and putting frames on screen.
+- **Hotaru's history.** Hotaru's feed-only mode keeps none, so in his runs
+  only Ghostty paid for history; here both did. That is what turns ASCII
+  around. It is the corpus history slows Hotaru most (his third graph:
+  +109% with 50,000 lines; here 1,047 → 705 MiB/s), so with history on
+  both sides Ghostty main is ahead.
+- **Builds.** Ghostty main here is `0b1729e`, three commits after his
+  `91973f2b2`: the same fixes, plus one that skips erasing and scanning
+  rows already blank (ghostty-org/ghostty#15035), which bears on
+  cursor/erase. His Hotaru is Sekka `59786be0` (30 October). Ours,
+  `d7ecbac`, includes #159, which changed Hotaru's PTY session
+  (`session.rs`), a path a feed-only run doesn't take.
+- **Inputs and machine.** His inputs are the library comparison's four
+  reviewed 8 MiB patterns, a hyperlink pattern and `ghostty-gen`'s data.
+  These are 64 MiB floods of four kinds, on runnymede. His post doesn't
+  name his machine.
+
+These records don't explain the rest. Ghostty's lead on styled text is
+smaller here than in his runs, and its lead on Unicode larger. Drawing is
+what these runs add, and the likeliest place for both, but nothing here
+measures it apart.
+
 ### At rest and typing
 
 Each energy trial: 20 s of sway alone (the baseline), the terminal at a
