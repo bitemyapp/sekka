@@ -386,12 +386,15 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", out.display());
     println!("cargo:rustc-link-lib=dylib=contract_native");
     println!("cargo:rustc-env=NATIVE_SEARCH=-L{}", out.display());
+    let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
+    println!("cargo:rustc-env=EXECUTION_PATHS={}:{}", manifest.ancestors().nth(2).unwrap().display(), out.display());
 }
 ''',
                 "native/src/lib.rs": '''include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 unsafe extern "C" { fn native_value() -> i32; }
 pub fn value() -> i32 { unsafe { native_value() + GENERATED } }
 pub fn search_path() -> &'static str { env!("NATIVE_SEARCH").strip_prefix("-L").unwrap() }
+pub fn execution_root() -> &'static str { env!("EXECUTION_PATHS").split(':').next().unwrap() }
 ''',
                 "core/Cargo.toml": '''[package]
 name="aizome-comp-core"
@@ -428,6 +431,7 @@ contract-native={path="../native"}
     let search = std::path::Path::new(contract_native::search_path()).canonicalize().unwrap();
     assert!(search.starts_with(std::env::current_dir().unwrap()));
     assert!(search.join("libcontract_native.so").is_file());
+    assert_eq!(std::path::Path::new(contract_native::execution_root()).canonicalize().unwrap(), std::env::current_dir().unwrap());
     println!("real LTO, proc-macro, generated Rust and native dylib: 21");
 }
 ''',

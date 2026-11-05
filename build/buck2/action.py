@@ -18,6 +18,7 @@ ROOT_TOKEN = "${SEKKA_EXEC_ROOT}"
 OUTPUT_TOKEN = "${SEKKA_UNIT_OUTPUT}"
 # Match owned paths at token boundaries, including joined native search options.
 EXECUTION_PATH_PREFIX = r"(?<![A-Za-z0-9_./-])(-[LIBF])?"
+EXECUTION_PATH_END = r"(?=/|$|[\s,:;\"'])"
 
 
 def load(path):
@@ -31,7 +32,7 @@ def relocate(value, root, output, encode=False):
             prefix = re.escape(root)
             # Cargo instructions and linker arguments can embed multiple paths.
             # Keep spaces within paths, but stop at separators or the next root.
-            start = EXECUTION_PATH_PREFIX + prefix + r"(?=/|$|[\s,:;\"'])"
+            start = EXECUTION_PATH_PREFIX + prefix + EXECUTION_PATH_END
             pattern = start + r"(?:(?!" + start + r")[^\n\r,:;\"'])*"
 
             def encode_path(match):
@@ -329,7 +330,7 @@ def compile_unit(payload, output, env, tools, root, dep_file, incremental_direct
     # Unlike the checkout's absolute path, it is identical on every executor.
     # Joined search-path options still contain an owned absolute path. Keep
     # their option prefix without matching a root embedded in an external path.
-    execution_root = re.compile(EXECUTION_PATH_PREFIX + re.escape(str(root)) + r"(?=/|$)")
+    execution_root = re.compile(EXECUTION_PATH_PREFIX + re.escape(str(root)) + EXECUTION_PATH_END)
     args = [execution_root.sub(r"\1/proc/self/cwd", value) for value in args]
     env = {key: execution_root.sub(r"\1/proc/self/cwd", value) for key, value in env.items()}
     subprocess.run(args, env=env, check=True)
