@@ -10,7 +10,6 @@ use std::time::{Duration, Instant};
 use aizome_kit::{MsgSender, WindowKey};
 
 use crate::fsops::archive::{self, Format};
-use crate::fsops::replace::Displaced;
 use crate::fsops::transfer::{self, Mode};
 use crate::fsops::trash::{self, Trash};
 use crate::fsops::undo::{self, Inversion, Inverted, Record, Step, items_label};
@@ -219,7 +218,7 @@ pub fn run(work: Work, trash: &Trash, env: &mut Env) -> Done {
     };
     match work {
         Work::Transfer { sources, dest, mode } => {
-            let report = transfer::transfer(&sources, &dest, mode, env, Displaced::ToTrash(trash));
+            let report = transfer::transfer(&sources, &dest, mode, env, trash);
             let mut changed = parents(&sources);
             changed.push(dest.clone());
             let step = match mode {
@@ -234,7 +233,7 @@ pub fn run(work: Work, trash: &Trash, env: &mut Env) -> Done {
             Done { report, step, inverted: None, changed }
         }
         Work::Duplicate { sources } => {
-            let report = transfer::duplicate(&sources, env, Displaced::ToTrash(trash));
+            let report = transfer::duplicate(&sources, env, trash);
             Done { step: made(&report, "Duplicate"), changed: parents(&sources), report, inverted: None }
         }
         Work::Trash { paths } => {

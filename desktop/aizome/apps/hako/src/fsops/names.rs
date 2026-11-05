@@ -181,6 +181,16 @@ pub fn aside_name(name: &OsStr) -> OsString {
     OsString::from_vec(v)
 }
 
+/// The name a replaced item is kept under beside its replacement when it
+/// can't go to the Trash: `photo (replaced).jpg`, numbered if taken. A
+/// visible name, so the person finds it where they're looking.
+pub fn replaced_name(dir: &Path, name: &OsStr, is_dir: bool) -> OsString {
+    const SUFFIX: &str = " (replaced)";
+    let (stem, ext) = split_ext(name, is_dir);
+    let base = join(fit(stem.as_bytes(), SUFFIX.len() + ext.len() + 4), SUFFIX, ext.as_bytes());
+    free_name(dir, &base, is_dir)
+}
+
 /// Whether a name is one of the temporary names above (left behind by a
 /// crash; lists hide them).
 pub fn is_temporary(name: &OsStr) -> bool {

@@ -19,8 +19,8 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use hako::fsops::replace::Displaced;
 use hako::fsops::transfer::{Mode, transfer};
+use hako::fsops::trash::Trash;
 use hako::fsops::{Always, Control, Env, ErrorChoice, Resolution};
 
 /// The source whose rename is refused as crossing filesystems.
@@ -99,7 +99,12 @@ fn a_nested_folder_not_written_safely_keeps_its_sources() {
         &dest,
         Mode::Move,
         &mut Env::new(&control, &mut asker, &mut ()),
-        Displaced::DeleteForGood,
+        &Trash {
+            home: root.join("data/Trash"),
+            home_dir: None,
+            uid: unsafe { libc::getuid() },
+            topdirs: Some(Vec::new()),
+        },
     );
     *EXDEV_FROM.lock().unwrap() = None;
     *EIO_DIR.lock().unwrap() = None;
