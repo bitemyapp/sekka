@@ -19,8 +19,10 @@ pub fn run(args: &[String]) -> i32 {
             "--notify" => notify = true,
             "--always" => always = true,
             "-h" | "--help" => {
-                println!("usage: tasuke checkup [--notify [--always]]\n\nA read-only check-up of this computer; \
-                          --notify shows a notification when something needs attention (--always: every time).");
+                println!(
+                    "usage: tasuke checkup [--notify [--always]]\n\nA read-only check-up of this computer; \
+                          --notify shows a notification when something needs attention (--always: every time)."
+                );
                 return 0;
             }
             other => {
@@ -28,6 +30,13 @@ pub fn run(args: &[String]) -> i32 {
                 return 2;
             }
         }
+    }
+    // A quick look in Rust first: when nothing has failed and no disk is
+    // nearly full, the model (and the GPU memory it takes) isn't woken at all.
+    let findings = quick_look();
+    if findings.is_empty() && !always {
+        println!("Nothing needs attention: no failed services, and every disk is under {DISK_LIMIT}% full.");
+        return 0;
     }
     let mut o = Options::from_config();
     if o.model.is_empty() {
@@ -58,6 +67,11 @@ pub fn run(args: &[String]) -> i32 {
     turn.join();
     println!("{}", answer.trim());
     if reason != Some(FinishReason::Answered) {
+        // The model couldn't report (its server is down, say): what the quick
+        // look found is still worth a notification.
+        if notify && !findings.is_empty() {
+            notify_desktop("Your computer needs attention", &findings.join(" "));
+        }
         return 1;
     }
     let attention = needs_attention(&answer);
@@ -67,6 +81,58 @@ pub fn run(args: &[String]) -> i32 {
         notify_desktop(title, &strip_markdown(verdict));
     }
     0
+}
+
+/// A disk this full is worth a look.
+const DISK_LIMIT: u64 = 85;
+
+/// What a check-up would certainly report, found without the model: failed
+/// system or user units, and filesystems over [`DISK_LIMIT`] full.
+fn quick_look() -> Vec<String> {
+    let mut out = Vec::new();
+    for (scope, args) in [
+        ("system", &["--failed", "--plain", "--no-legend", "--no-pager"][..]),
+        ("user", &["--user", "--failed", "--plain", "--no-legend", "--no-pager"][..]),
+    ] {
+        let failed = std::process::Command::new("systemctl")
+            .args(args)
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).lines().filter(|l| !l.trim().is_empty()).count())
+            .unwrap_or(0);
+        if failed > 0 {
+            out.push(format!("{failed} {scope} service{} failed.", if failed == 1 { "" } else { "s" }));
+        }
+    }
+    let mut seen = Vec::new();
+    for mount in ["/", "/home", "/nix"] {
+        if let Some((id, used)) = usage(mount)
+            && !seen.contains(&id)
+        {
+            seen.push(id);
+            if used >= DISK_LIMIT {
+                out.push(format!("{mount} is {used}% full."));
+            }
+        }
+    }
+    out
+}
+
+/// A filesystem's id and how full it is, in percent, as df counts it.
+fn usage(path: &str) -> Option<(u64, u64)> {
+    let c = std::ffi::CString::new(path).ok()?;
+    // SAFETY: statvfs writes only into `st`, and `c` is a valid C string.
+    let st = unsafe {
+        let mut st: libc::statvfs = std::mem::zeroed();
+        if libc::statvfs(c.as_ptr(), &mut st) != 0 {
+            return None;
+        }
+        st
+    };
+    let total = st.f_blocks as u64;
+    let avail = st.f_bavail as u64;
+    let used = total.saturating_sub(st.f_bfree as u64);
+    let denom = used + avail;
+    (denom > 0).then(|| (st.f_fsid as u64, (used * 100).div_ceil(denom)))
 }
 
 /// The report marks problems ✕ and warnings ⚠ (the skill's format).
@@ -111,6 +177,14 @@ fn notify_desktop(title: &str, body: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_quick_look_reads_this_machine() {
+        let (_, used) = usage("/").expect("statvfs of /");
+        assert!(used <= 100);
+        // Every finding is a sentence a notification can carry.
+        assert!(quick_look().iter().all(|f| f.ends_with('.')));
+    }
 
     #[test]
     fn attention_follows_the_report_marks() {
