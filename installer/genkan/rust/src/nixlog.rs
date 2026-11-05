@@ -203,6 +203,25 @@ impl Tracker {
         }
         Some(report)
     }
+
+    /// Whether Nix failed because a substitute did not download (a dropped
+    /// connection, a cache error), which another run may not repeat. `nix
+    /// build` exits 1 for every failure, so its messages are what tell.
+    pub fn download_failed(&self) -> bool {
+        self.errors.iter().any(|error| {
+            error.contains("unable to download")
+                || error.contains("some substitutes for the outputs of derivation")
+        })
+    }
+
+    /// Before another run of Nix: forget the last run's errors, output and
+    /// activities, and keep the bytes it copied, which stay in the store.
+    pub fn restart(&mut self) {
+        self.kinds.clear();
+        self.copied.clear();
+        self.errors.clear();
+        self.tail.clear();
+    }
 }
 
 #[cfg(test)]
@@ -280,5 +299,55 @@ mod tests {
         let report = t.failure_report().unwrap();
         assert!(report.starts_with("error: builder for 'x.drv' failed"));
         assert!(report.ends_with("error[E0425]: cannot find value"));
+    }
+    /// Messages as Determinate Nix 3.24.1 sent them in VM installs on
+    /// 2026-11-05: a NAR download that failed, and a build that ran out of space.
+    const FAILED_DOWNLOAD: [&str; 3] = [
+        r#"@nix {"action":"msg","level":0,"msg":"\u001b[31;1merror:\u001b[0m unable to download '\u001b[35;1mhttps://cache.nixos.org/nar/0v4kdrbkrcghik5ri8g21viaibg5s0ra27j4p4yaynk2mcn61h7f.nar.zst\u001b[0m': HTTP error 416"}"#,
+        r#"@nix {"action":"msg","level":0,"msg":"\u001b[31;1merror:\u001b[0m path '\u001b[35;1m/nix/store/6c3jv7qads2rs56czymy1jgk7mi6inhf-windows-0.54.0\u001b[0m' is required, but there is no substituter that can build it"}"#,
+        r#"@nix {"action":"msg","level":0,"msg":"\u001b[31;1merror:\u001b[0m some substitutes for the outputs of derivation '\u001b[35;1m/nix/store/yx8hj2cvrk4inj7k7dw3rrwbf5y4xkz6-windows-0.54.0.drv\u001b[0m' failed (usually happens due to networking issues); try '--fallback' to build derivation from source "}"#,
+    ];
+    const FAILED_BUILD: [&str; 2] = [
+        r#"@nix {"action":"result","id":7,"type":101,"fields":["cp: error copying 'target/release/deps/hex.d' to 'target/release-tmp/deps/hex.d': No space left on device"]}"#,
+        r#"@nix {"action":"msg","level":0,"msg":"\u001b[31;1merror:\u001b[0m Cannot build '\u001b[35;1m/nix/store/lvsya6njggsnrnszb2czpfpw4birjah5-aizome-uta-0.1.0.drv\u001b[0m'.\n       Reason: \u001b[31;1mbuilder failed with exit code 1\u001b[0m.\n       note: build failure may have been caused by lack of free disk space"}"#,
+    ];
+    #[test]
+    fn tells_failed_downloads_from_failed_builds() {
+        // Either the download's own error or the derivation's says so. A path
+        // that no substituter has is not a failed download.
+        for (line, failed) in FAILED_DOWNLOAD.iter().zip([true, false, true]) {
+            let mut t = Tracker::default();
+            t.line(line);
+            assert_eq!(t.download_failed(), failed, "{line}");
+        }
+        let mut t = Tracker::default();
+        for line in FAILED_BUILD {
+            t.line(line);
+        }
+        assert!(!t.download_failed());
+        assert!(!Tracker::default().download_failed());
+    }
+    #[test]
+    fn restart_forgets_the_last_run_but_keeps_its_progress() {
+        let mut t = Tracker::default();
+        t.line(r#"@nix {"action":"start","id":2,"type":100,"text":"copying path"}"#);
+        t.line(r#"@nix {"action":"result","id":2,"type":105,"fields":[300,500]}"#);
+        for line in FAILED_DOWNLOAD.iter().chain(&FAILED_BUILD) {
+            t.line(line);
+        }
+        t.restart();
+        assert_eq!(t.failure_report(), None);
+        assert!(!t.download_failed());
+        assert_eq!(t.copied_bytes, 300);
+        // The next run's activities count from there.
+        t.line(r#"@nix {"action":"start","id":9,"type":100,"text":"copying path"}"#);
+        t.line(r#"@nix {"action":"result","id":9,"type":105,"fields":[200,200]}"#);
+        assert_eq!(t.copied_bytes, 500);
+        // An activity of the last run no longer counts.
+        assert_eq!(
+            t.line(r#"@nix {"action":"result","id":2,"type":105,"fields":[500,500]}"#),
+            None
+        );
+        assert_eq!(t.copied_bytes, 500);
     }
 }

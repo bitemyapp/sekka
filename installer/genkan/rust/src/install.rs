@@ -517,6 +517,122 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
     })
 }
 
+/// The target's `/nix/var/nix/builds`, the installed system's own build
+/// directory, for builds into the target store: the live system's is in
+/// RAM, too small for a large build. Nix refuses a world-writable one, and
+/// unsandboxed builds need to traverse it.
+fn target_build_dir(root: &Path) -> Result<PathBuf> {
+    let mut dir = root.to_path_buf();
+    for name in ["nix", "var", "nix", "builds"] {
+        dir.push(name);
+        match fs::create_dir(&dir) {
+            Ok(()) => fs::set_permissions(&dir, fs::Permissions::from_mode(0o755))?,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => {
+                return Err(error).with_context(|| format!("Creating {}", dir.display()));
+            }
+        }
+    }
+    Ok(dir)
+}
+
+/// Pauses before running the on-target build again after a download failed.
+/// What earlier runs fetched stays in the target store.
+const DOWNLOAD_RETRY_DELAYS: [Duration; 2] = [Duration::from_secs(15), Duration::from_secs(60)];
+
+/// Run `build` until it succeeds, again after each delay while its failures
+/// are failed downloads. Its last run gets `fallback`: it builds from source
+/// what still fails to download, which is slower than downloading but does
+/// not abort an installation whose disk is already erased.
+fn retry_downloads(
+    delays: &[Duration],
+    tracker: &Mutex<nixlog::Tracker>,
+    mut build: impl FnMut(bool) -> Result<()>,
+) -> Result<()> {
+    let runs = delays.len() + 1;
+    for (run, delay) in (1..).zip(delays) {
+        let Err(error) = build(false) else {
+            return Ok(());
+        };
+        let mut log = tracker.lock().unwrap();
+        if !log.download_failed() {
+            drop(log);
+            return Err(nix_failure(error, tracker));
+        }
+        if let Some(report) = log.failure_report() {
+            let first = report.lines().next().unwrap_or_default();
+            event(Event::Log { line: first.into() });
+        }
+        log.restart();
+        drop(log);
+        progress(
+            4,
+            &format!(
+                "A download failed; trying again in {} seconds",
+                delay.as_secs()
+            ),
+        );
+        thread::sleep(*delay);
+        progress(
+            4,
+            &format!(
+                "Downloading and building the system on the new disk (run {} of {runs}{})",
+                run + 1,
+                if run + 1 == runs {
+                    "; what still fails to download is built from source"
+                } else {
+                    ""
+                }
+            ),
+        );
+    }
+    build(true).map_err(|error| nix_failure(error, tracker))
+}
+
+fn on_target_build_args<'a>(
+    store: &'a str,
+    build_dir: &'a str,
+    installable: &'a str,
+    fallback: bool,
+) -> Vec<&'a str> {
+    let mut args = vec![
+        "build",
+        "--store",
+        store,
+        "--extra-substituters",
+        "auto?trusted=1",
+        "--log-format",
+        "internal-json",
+        "--no-link",
+        // The global setting: it overrides the store's and nix.conf's.
+        "--option",
+        "build-dir",
+        build_dir,
+    ];
+    if fallback {
+        args.push("--fallback");
+    }
+    args.push(installable);
+    args
+}
+
+/// Download and build the system into the target store, after formatting.
+fn build_on_target(
+    root: &Path,
+    store: &str,
+    derivation: &str,
+    tracker: &Mutex<nixlog::Tracker>,
+    on_line: &(dyn Fn(&str) + Sync),
+) -> Result<()> {
+    let build_dir = target_build_dir(root)?;
+    let build_dir = build_dir.to_str().context("Target path encoding")?;
+    let installable = format!("{derivation}^out");
+    retry_downloads(&DOWNLOAD_RETRY_DELAYS, tracker, |fallback| {
+        let args = on_target_build_args(store, build_dir, &installable, fallback);
+        output_lines("nix", &args, 7200, on_line).map(drop)
+    })
+}
+
 /// Shared destructive storage phase; tests call this only on a marked VM disk.
 fn prepare_storage(
     request: &InstallPlan,
@@ -733,27 +849,8 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
             4,
             "Downloading and building the system on the new disk (this can take a while)",
         );
-        output_lines(
-            "nix",
-            &[
-                "build",
-                "--store",
-                &store,
-                "--extra-substituters",
-                "auto?trusted=1",
-                "--log-format",
-                "internal-json",
-                "--no-link",
-                "--option",
-                "build-dir",
-                "/nix/var/nix/builds",
-                &format!("{}^out", prepared.derivation),
-            ],
-            7200,
-            &on_line,
-        )
-        .map_err(|error| nix_failure(error, &tracker))
-        .context("Building the system on the new disk failed")?;
+        build_on_target(&target.0, &store, &prepared.derivation, &tracker, &on_line)
+            .context("Building the system on the new disk failed")?;
     } else {
         progress(4, "Copying the prepared system to the new disk");
         // Measured against a direct parallel file copy with database
@@ -929,6 +1026,82 @@ mod tests {
         drop(Target(path.clone(), Cell::new(false)));
         assert_eq!(fs::read_to_string(path.join("keep")).unwrap(), "important");
     }
+    #[test]
+    fn on_target_builds_use_the_targets_build_dir() {
+        let outer = tempfile::tempdir().unwrap();
+        let root = outer.path().join("target");
+        fs::create_dir(&root).unwrap();
+        let dir = target_build_dir(&root).unwrap();
+        assert_eq!(dir, root.join("nix/var/nix/builds"));
+        for path in ["nix", "nix/var", "nix/var/nix", "nix/var/nix/builds"] {
+            let mode = fs::metadata(root.join(path)).unwrap().permissions().mode();
+            assert_eq!(mode & 0o7777, 0o755, "{path}");
+        }
+        assert_eq!(target_build_dir(&root).unwrap(), dir);
+
+        let store = format!("local?root={}", root.display());
+        let dir = dir.to_str().unwrap();
+        for fallback in [false, true] {
+            let args = on_target_build_args(&store, dir, "/nix/store/x-system.drv^out", fallback);
+            assert!(args.windows(3).any(|w| w == ["--option", "build-dir", dir]));
+            assert!(args.windows(2).any(|w| w == ["--store", store.as_str()]));
+            assert_eq!(args.contains(&"--fallback"), fallback);
+            assert_eq!(args.last(), Some(&"/nix/store/x-system.drv^out"));
+        }
+    }
+
+    const FAILED_DOWNLOAD: &str =
+        "error: unable to download 'https://cache.nixos.org/nar/a.nar.zst': HTTP error 416";
+    const FAILED_BUILD: &str = "error: Cannot build '/nix/store/b-uta.drv'.\n       Reason: builder failed with exit code 1.";
+
+    /// `retry_downloads` against scripted Nix runs, each failing with its
+    /// error messages or, without any, succeeding. Returns each run's
+    /// `fallback`.
+    fn scripted(runs: &[&[&str]]) -> (Vec<bool>, Result<()>) {
+        let tracker = Mutex::new(nixlog::Tracker::default());
+        let mut calls = vec![];
+        let result = retry_downloads(&[Duration::ZERO; 2], &tracker, |fallback| {
+            let messages = runs[calls.len()];
+            calls.push(fallback);
+            for message in messages {
+                let msg = serde_json::json!({"action": "msg", "level": 0, "msg": message});
+                tracker.lock().unwrap().line(&format!("@nix {msg}"));
+            }
+            ensure!(messages.is_empty(), "nix failed");
+            Ok(())
+        });
+        (calls, result)
+    }
+
+    #[test]
+    fn on_target_builds_retry_failed_downloads_then_build_them() {
+        let (calls, result) = scripted(&[&[]]);
+        assert_eq!(calls, [false]);
+        result.unwrap();
+        let (calls, result) = scripted(&[&[FAILED_DOWNLOAD], &[]]);
+        assert_eq!(calls, [false, false]);
+        result.unwrap();
+        let (calls, result) = scripted(&[&[FAILED_DOWNLOAD], &[FAILED_DOWNLOAD], &[]]);
+        assert_eq!(calls, [false, false, true]);
+        result.unwrap();
+        // The last run's report, not the first's.
+        let last =
+            "error: unable to download 'https://cache.nixos.org/nar/c.nar.zst': HTTP error 503";
+        let (calls, result) = scripted(&[&[FAILED_DOWNLOAD], &[FAILED_DOWNLOAD], &[last]]);
+        assert_eq!(calls, [false, false, true]);
+        assert_eq!(format!("{:#}", result.unwrap_err()), last);
+    }
+
+    #[test]
+    fn on_target_builds_do_not_retry_failed_builds() {
+        let (calls, result) = scripted(&[&[FAILED_BUILD]]);
+        assert_eq!(calls, [false]);
+        assert_eq!(format!("{:#}", result.unwrap_err()), FAILED_BUILD);
+        let (calls, result) = scripted(&[&[FAILED_DOWNLOAD], &[FAILED_BUILD]]);
+        assert_eq!(calls, [false, false]);
+        assert_eq!(format!("{:#}", result.unwrap_err()), FAILED_BUILD);
+    }
+
     #[test]
     fn events_round_trip_as_tagged_json() {
         let summary = Summary {

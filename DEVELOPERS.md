@@ -398,8 +398,12 @@ a complete release image or physical hardware.
 Build-time verification cannot guarantee against RAM faults, media changes or
 later I/O failures. Keep Nix's copy-time checks enabled; deferred installations
 still obtain unavailable downloads after formatting and can encounter network
-or build failures at that point. The deferred route builds the system on the
-target, so the complete system need not fit in physical RAM, but it does not
+or build failures at that point. After a failed download Genkan runs the build
+again, keeping what it already fetched; its last run builds from source what
+still fails to download (`--fallback`). A failed build is not retried. The
+deferred route builds the system on the target, with its temporary build
+directories in the target's `/nix/var/nix/builds`, so neither the complete
+system nor a large local build need fit in physical RAM, but it does not
 eliminate the RAM and temporary live-store space needed to evaluate the
 configuration first. Do not describe the deferred route as immune to memory
 exhaustion, or focused VM results as physical-hardware or full-release
