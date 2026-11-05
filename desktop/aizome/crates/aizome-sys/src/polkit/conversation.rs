@@ -8,7 +8,7 @@
 //!                 └── connect error, EOF or FAILURE with no answer ────┤
 //!                                  ↓                                   │
 //!                     Cooling ─due→ Dialing     (FAILURE after an answer:
-//!                     Unavailable ─start→ …      Refused, Dialing at once)
+//!                     Unavailable ─start→ …      Refused, then the floor)
 //! any state ─cancel or SUCCESS→ Over
 //! ```
 //!
@@ -21,23 +21,31 @@
 //!   [`Generation::check_answer`]. A `Now` lives only as long as the step
 //!   that made it (one `with_typed`, under the session's lock), so a check
 //!   made under one lock can't be spent under another, where a newer
-//!   conversation may have started.
+//!   conversation may have started; and the transition compares the
+//!   proof's ticket with its own state's, so it can't be spent on another
+//!   state in the same step.
 //! - **Nothing starts the helper sooner than the floor allows.** Starting a
 //!   helper takes a [`Dial`], and only the floor (`gate`) makes the proof a
-//!   `Dial` needs. After an attempt that ended with no answer written (the
-//!   helper couldn't be reached, or stopped or refused before the person
-//!   answered), the next one waits [`delay`]; after
-//!   [`AUTOMATIC_ATTEMPTS`] of them in a row, no attempt starts until the
-//!   UI asks again, and that one waits out the floor too. An answer resets
-//!   it. A refused answer starts the next attempt at once: the person typed.
-//! - **An answer goes only to the prompt it answers**, once: it carries that
-//!   prompt's [`Asked`], and only [`Prompted`] takes it.
+//!   `Dial` needs; the code that spawns or connects to the helper is the
+//!   floor's module's. Every attempt that ends without success (a refused
+//!   answer, no answer, left for another identity) delays the next one
+//!   ([`delay`]), for all the agent's requests, until a success or a quiet
+//!   [`QUIET`]. After [`AUTOMATIC_ATTEMPTS`] in a row with no answer, no
+//!   attempt starts until the UI asks again.
+//! - **An answer goes only to the prompt it answers, of the request it
+//!   came from**, once: [`Asked::answer`] sends it through the `Asked`'s
+//!   own request, the answer carries the request, the conversation and the
+//!   prompt, and only [`Prompted`] takes it, comparing all three. It is one
+//!   line the helper reads whole: [`Reply`] can't hold a line break, a NUL
+//!   or more than [`MAX_ANSWER`] bytes. It's written outside the session's
+//!   lock.
 //! - **polkitd gets one reply**: only the transitions into [`Over`] send it,
 //!   and `Over` has none.
 //!
 //! What stays a run-time fact: which ticket a line, a connection or a timer
-//! belongs to (they come from other threads), and the time. The floor reads
-//! the clock itself; no caller passes it a time.
+//! belongs to (they come from other threads), which request an answer is
+//! for (the type can't name an instance), and the time. The floor reads the
+//! clock itself; no caller passes it a time.
 
 // Typestate code: every state and every case is named, so a new one
 // added later can't fall into an arm written for others.
@@ -47,6 +55,7 @@ use std::collections::VecDeque;
 use std::io::{BufRead, Write};
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 use aizome_typestate::{Answer, Fresh, Generation, Ticket};
@@ -54,8 +63,10 @@ use aizome_typestate::{Answer, Fresh, Generation, Ticket};
 use super::{AuthEvent, AuthRequest, Ender, HelperLine};
 use crate::error::Error;
 use crate::oneshot;
+use crate::service::lock;
 
-pub use gate::{AUTOMATIC_ATTEMPTS, Dial, delay};
+pub(super) use gate::SharedFloor;
+pub use gate::{AUTOMATIC_ATTEMPTS, Dial, QUIET, delay};
 use gate::{Floor, Retry};
 
 /// Names one request's conversations with the helper, for their
@@ -76,6 +87,25 @@ impl RequestId {
 /// What a request's conversation said, for the UI. Its payload is read
 /// only from a proof that it is about the request's latest conversation:
 /// [`AuthRequest::check`], then [`said`].
+///
+/// ```compile_fail,E0308
+/// use aizome_sys::polkit::{Heard, Said, Talk, said};
+/// use aizome_typestate::Generation;
+/// // A proof from a generation of one's own, not the request's check.
+/// fn forged(heard: Heard) -> Option<Said> {
+///     let mut mine = Generation::<Talk>::new();
+///     mine.issue();
+///     let fresh = mine.check_answer(heard).ok()?;
+///     Some(said(fresh))
+/// }
+/// ```
+///
+/// ```
+/// use aizome_sys::polkit::{AuthRequest, Heard, Said, said};
+/// fn read(request: &AuthRequest, heard: Heard) -> Option<Said> {
+///     request.check(heard).ok().map(said)
+/// }
+/// ```
 #[derive(Clone, Debug)]
 pub struct Heard {
     ticket: Ticket<Talk>,
@@ -100,8 +130,7 @@ impl Answer<Talk> for Heard {
 /// What the dialog shows.
 #[derive(Clone, Debug)]
 pub enum Said {
-    /// The helper asks for a line: answer it with
-    /// [`AuthRequest::respond`].
+    /// The helper asks for a line: answer it with [`Asked::answer`].
     Prompt(Asked),
     /// PAM's error ("Authentication failure").
     Error(String),
@@ -118,18 +147,55 @@ pub enum Said {
     Unavailable { failed: String },
 }
 
-/// The payload of an event proven to be about the latest conversation.
-pub fn said(fresh: Fresh<Talk, Heard>) -> Said {
-    fresh.into_answer().said
+/// An event proven, by its request's [`AuthRequest::check`], to be about
+/// that request's latest conversation. Only the check makes one.
+#[derive(Debug)]
+pub struct Checked {
+    fresh: Fresh<Talk, Heard>,
 }
 
-/// One prompt of one conversation, and the right to answer it once.
+impl Checked {
+    /// The request it's about.
+    pub fn request(&self) -> RequestId {
+        self.fresh.answer().request
+    }
+}
+
+/// The payload of an event proven to be about the latest conversation.
+pub fn said(checked: Checked) -> Said {
+    checked.fresh.into_answer().said
+}
+
+/// The longest answer polkit's helper reads as one line: it reads each into
+/// a `PAM_MAX_RESP_SIZE` (512) buffer, newline and terminator included.
+pub const MAX_ANSWER: usize = 510;
+
+/// One prompt of one request's conversation, and the right to answer it
+/// once. The answer goes to the request the prompt came from: it carries
+/// the request, and nothing else names where the answer goes.
+///
+/// ```compile_fail,E0599
+/// use aizome_sys::polkit::{Asked, AuthRequest};
+/// // A's prompt answered through B: B's helper would take A's password.
+/// fn through(b: &AuthRequest, asked_a: Asked) {
+///     b.respond(asked_a, "secret");
+/// }
+/// ```
+///
+/// ```
+/// use aizome_sys::polkit::{Asked, Unsent};
+/// fn answer(asked_a: Asked) -> Result<(), Unsent> {
+///     asked_a.answer("secret")
+/// }
+/// ```
 #[derive(Clone, Debug)]
 pub struct Asked {
     ticket: Ticket<Talk>,
+    request: RequestId,
     seq: u32,
     text: String,
     echo: bool,
+    to: Weak<super::Session>,
 }
 
 impl Asked {
@@ -142,18 +208,65 @@ impl Asked {
     pub fn echo(&self) -> bool {
         self.echo
     }
+
+    /// Answers this prompt, of this request. The text is written to the
+    /// helper only if this prompt is still the one waiting, and the agent's
+    /// copy is overwritten. Text the helper can't read as one line (a line
+    /// break, a NUL, more than [`MAX_ANSWER`] bytes) is refused here, and
+    /// the prompt handed back.
+    pub fn answer(self, text: &str) -> Result<(), Unsent> {
+        let reply = match Reply::new(&self, text) {
+            Ok(reply) => reply,
+            Err(why) => return Err(Unsent { asked: self, why }),
+        };
+        // A request that's over has no helper to answer.
+        if let Some(session) = self.to.upgrade() {
+            session.answer(reply);
+        }
+        Ok(())
+    }
 }
 
-/// An answer to one prompt. Its text is wiped when it's dropped.
+/// Why an answer wasn't sent: the helper reads one line per prompt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Unsendable {
+    /// Its tail would answer a later prompt.
+    LineBreak,
+    /// PAM would read only what's before it.
+    Nul,
+    /// Longer than [`MAX_ANSWER`]: the rest would answer a later prompt.
+    TooLong,
+}
+
+/// An answer that wasn't sent, and the prompt to answer instead.
+#[derive(Debug)]
+pub struct Unsent {
+    pub asked: Asked,
+    pub why: Unsendable,
+}
+
+/// An answer to one prompt of one request: one line the helper reads
+/// whole. Its text is wiped when it's dropped.
 pub struct Reply {
     ticket: Ticket<Talk>,
+    request: RequestId,
     seq: u32,
     text: Vec<u8>,
 }
 
 impl Reply {
-    pub(super) fn new(asked: Asked, text: &str) -> Reply {
-        Reply { ticket: asked.ticket, seq: asked.seq, text: text.as_bytes().to_vec() }
+    fn new(asked: &Asked, text: &str) -> Result<Reply, Unsendable> {
+        let bytes = text.as_bytes();
+        if bytes.contains(&b'\n') || bytes.contains(&b'\r') {
+            return Err(Unsendable::LineBreak);
+        }
+        if bytes.contains(&0) {
+            return Err(Unsendable::Nul);
+        }
+        if bytes.len() > MAX_ANSWER {
+            return Err(Unsendable::TooLong);
+        }
+        Ok(Reply { ticket: asked.ticket, request: asked.request, seq: asked.seq, text: bytes.to_vec() })
     }
 }
 
@@ -271,12 +384,42 @@ impl Answer<Talk> for Due {
     }
 }
 
+/// The helper's input, shared by its running state and the answer being
+/// written to it.
+type Input = Arc<Mutex<Box<dyn Write + Send>>>;
+
+/// An answer to write to the helper, outside the session's lock. It is one
+/// line of at most [`MAX_ANSWER`] bytes, which a pipe's or a socket's
+/// buffer takes without waiting. Its copy is wiped when it's dropped.
+pub struct Answering {
+    to: Input,
+    line: Vec<u8>,
+}
+
+impl Answering {
+    pub(super) fn send(self) {
+        let mut to = lock(&self.to);
+        if let Err(error) = to.write_all(&self.line).and_then(|()| to.flush()) {
+            // The helper is gone: its output ends next, as a refusal.
+            log::warn!("aizome-sys: polkit helper: {error}");
+        }
+    }
+}
+
+impl Drop for Answering {
+    fn drop(&mut self) {
+        self.line.fill(0);
+    }
+}
+
 /// What the session does once its lock is released.
 #[must_use = "a step's work is done outside the session's lock"]
 pub enum Then {
     Nothing,
     /// Start the helper.
     Dial(Dial),
+    /// Write an answer to the helper.
+    Answer(Answering),
     /// Wait, then try again.
     Wake(Wake),
     /// Read the helper.
@@ -314,6 +457,12 @@ impl<'s, A> Now<'s, A> {
     pub(super) fn into_answer(self) -> A {
         self.fresh.into_answer()
     }
+
+    /// Whether it names `ticket`: a state holds the ticket of the attempt
+    /// it is, so a proof checked against one state can't drive another.
+    fn names(&self, ticket: Ticket<Talk>) -> bool {
+        self.fresh.current().ticket() == ticket
+    }
 }
 
 /// Whether the conversation's answers have started.
@@ -332,23 +481,37 @@ pub(super) struct Ctx {
     talks: Generation<Talk>,
     /// polkitd's reply, until it's sent.
     reply: Option<oneshot::Sender<bool>>,
-    floor: Floor,
+    /// The agent's floor, which every request shares.
+    floor: SharedFloor,
     prompts: u32,
+    /// The session, for the prompts it hands out to answer through.
+    session: Weak<super::Session>,
     /// What the UI is told, in order.
     outbox: VecDeque<AuthEvent>,
 }
 
 impl Ctx {
-    pub(super) fn new(request: RequestId, cookie: String, reply: oneshot::Sender<bool>) -> Ctx {
+    pub(super) fn new(
+        request: RequestId,
+        cookie: String,
+        reply: oneshot::Sender<bool>,
+        floor: SharedFloor,
+        session: Weak<super::Session>,
+    ) -> Ctx {
         Ctx {
             request,
             cookie,
             talks: Generation::new(),
             reply: Some(reply),
-            floor: Floor::default(),
+            floor,
             prompts: 0,
+            session,
             outbox: VecDeque::new(),
         }
+    }
+
+    fn floor(&self) -> std::sync::MutexGuard<'_, Floor> {
+        lock(&self.floor)
     }
 
     fn tell(&mut self, ticket: Ticket<Talk>, said: Said) {
@@ -366,7 +529,7 @@ pub(super) struct Attempt {
 pub(super) struct Running {
     ticket: Ticket<Talk>,
     user: String,
-    writer: Box<dyn Write + Send>,
+    writer: Input,
     ender: Ender,
 }
 
@@ -452,11 +615,11 @@ impl Conversation {
 
     /// The UI's check of an event: it's about this request's latest
     /// conversation.
-    pub(super) fn check_heard(&self, heard: Heard) -> Result<Fresh<Talk, Heard>, Heard> {
+    pub(super) fn check_heard(&self, heard: Heard) -> Result<Checked, Heard> {
         if heard.request != self.ctx.request {
             return Err(heard);
         }
-        self.ctx.talks.check_answer(heard)
+        self.ctx.talks.check_answer(heard).map(|fresh| Checked { fresh })
     }
 }
 
@@ -485,7 +648,8 @@ impl<'s> ConvAny<'s> {
 /// Starts an attempt as `user` under `ticket`: now, if the floor allows, or
 /// when it does.
 fn attempt(ctx: &mut Ctx, ticket: Ticket<Talk>, user: String) -> Step<'_> {
-    match ctx.floor.rested() {
+    let rested = ctx.floor().rested();
+    match rested {
         Ok(rested) => {
             let dial = Dial::new(rested, ticket, user.clone());
             (Dialing::enter(ctx, Attempt { ticket, user }).into(), Then::Dial(dial))
@@ -502,7 +666,8 @@ fn attempt(ctx: &mut Ctx, ticket: Ticket<Talk>, user: String) -> Step<'_> {
 fn unanswered(ctx: &mut Ctx, user: String, failed: String) -> Step<'_> {
     log::warn!("aizome-sys: polkit authentication: {failed}");
     let ticket = ctx.talks.issue();
-    match ctx.floor.unanswered() {
+    let retry = ctx.floor().unanswered();
+    match retry {
         Retry::After(after) => {
             let at = Instant::now() + after;
             ctx.tell(ticket, Said::Retrying { after, failed: Some(failed) });
@@ -515,9 +680,11 @@ fn unanswered(ctx: &mut Ctx, user: String, failed: String) -> Step<'_> {
     }
 }
 
-/// An attempt ended after an answer: polkit refused it, and the person can
-/// type again at once.
+/// An attempt ended after an answer: polkit refused it. The next starts as
+/// soon as the floor allows: a refusal counts as a failure too, so a UI
+/// that answers every prompt by itself can't start helpers in a loop.
 fn refused(ctx: &mut Ctx, user: String) -> Step<'_> {
+    ctx.floor().failed();
     let ticket = ctx.talks.issue();
     ctx.tell(ticket, Said::Refused);
     attempt(ctx, ticket, user)
@@ -525,6 +692,9 @@ fn refused(ctx: &mut Ctx, user: String) -> Step<'_> {
 
 /// polkitd's reply, once, and the UI told.
 fn over(ctx: &mut Ctx, authorized: bool) -> Over<'_> {
+    if authorized {
+        ctx.floor().succeeded();
+    }
     ctx.talks.retire();
     if let Some(reply) = ctx.reply.take() {
         reply.send(authorized);
@@ -534,17 +704,11 @@ fn over(ctx: &mut Ctx, authorized: bool) -> Over<'_> {
     Over::enter(ctx, ())
 }
 
-/// A conversation is left before it ended: count it if no answer was
-/// written, then start the next.
-fn supersede(ctx: &mut Ctx, spoken: Spoken, user: String) -> Step<'_> {
-    match spoken {
-        // Starting one helper after another with nobody answering is what
-        // the floor is for, whoever asks.
-        Spoken::Silent => match ctx.floor.unanswered() {
-            Retry::After(_) | Retry::Stop => {}
-        },
-        Spoken::Answered => {}
-    }
+/// A conversation is left before it succeeded: it counts as a failure (one
+/// helper after another, whoever asks, is what the floor is for), then the
+/// next starts when the floor allows.
+fn supersede(ctx: &mut Ctx, user: String) -> Step<'_> {
+    ctx.floor().failed();
     let ticket = ctx.talks.issue();
     attempt(ctx, ticket, user)
 }
@@ -553,7 +717,8 @@ fn supersede(ctx: &mut Ctx, spoken: Spoken, user: String) -> Step<'_> {
 fn prompt(ctx: &mut Ctx, running: Running, text: String, echo: bool, after: Spoken) -> Step<'_> {
     ctx.prompts += 1;
     let seq = ctx.prompts;
-    ctx.tell(running.ticket, Said::Prompt(Asked { ticket: running.ticket, seq, text, echo }));
+    let asked = Asked { ticket: running.ticket, request: ctx.request, seq, text, echo, to: ctx.session.clone() };
+    ctx.tell(running.ticket, Said::Prompt(asked));
     (Prompted::enter(ctx, Prompting { running, seq, after }).into(), Then::Nothing)
 }
 
@@ -585,7 +750,7 @@ impl<'s> Idle<'s> {
 impl<'s> Dialing<'s> {
     /// Another attempt, as `user`; this one's helper is ended when it's up.
     pub fn start(self, user: String) -> Step<'s> {
-        supersede(self.ctx, Spoken::Silent, user)
+        supersede(self.ctx, user)
     }
 
     /// The helper is up, or couldn't be started.
@@ -612,10 +777,14 @@ impl<'s> Dialing<'s> {
     /// }
     /// ```
     pub fn dialed(self, now: Now<'s, Dialed>) -> Step<'s> {
+        if !now.names(self.data.ticket) {
+            return (self.into(), Then::Abandon(now.into_answer()));
+        }
         let Dialing { ctx, data: Attempt { ticket, user } } = self;
         match now.into_answer().pipe {
             Ok(Pipe { reader, writer, ender }) => {
                 let converse = Converse { lines: Lines { ticket }, reader, ender: ender.clone() };
+                let writer = Arc::new(Mutex::new(writer));
                 (Starting::enter(ctx, Running { ticket, user, writer, ender }).into(), Then::Converse(converse))
             }
             Err(error) => unanswered(ctx, user, format!("polkit's helper: {}", error.describe())),
@@ -632,7 +801,7 @@ impl<'s> Starting<'s> {
     pub fn start(self, user: String) -> Step<'s> {
         let Starting { ctx, data } = self;
         drop(data);
-        supersede(ctx, Spoken::Silent, user)
+        supersede(ctx, user)
     }
 
     /// The helper wrote a line, or its output ended.
@@ -659,6 +828,9 @@ impl<'s> Starting<'s> {
     /// }
     /// ```
     pub fn heard(self, now: Now<'s, Line>) -> Step<'s> {
+        if !now.names(self.data.ticket) {
+            return (self.into(), Then::Nothing);
+        }
         let Starting { ctx, data: mut running } = self;
         let line = now.into_answer().said;
         match line {
@@ -693,60 +865,60 @@ impl<'s> Prompted<'s> {
     /// Another attempt, as `user`.
     pub fn start(self, user: String) -> Step<'s> {
         let Prompted { ctx, data } = self;
-        let spoken = data.after;
         drop(data);
-        supersede(ctx, spoken, user)
+        supersede(ctx, user)
     }
 
-    /// The person's answer to the prompt. It's written only if it answers
-    /// this prompt; an answer to an earlier one is dropped.
+    /// The person's answer to the prompt. It's taken only if it answers this
+    /// prompt of this request; any other is dropped. This is the only step
+    /// that leads to writing an answer, and the write happens outside the
+    /// session's lock ([`Answering`]).
     ///
     /// Only this state takes an answer, so one sent before the helper asked
     /// has nowhere to go:
     ///
     /// ```compile_fail,E0599
-    /// use aizome_sys::polkit::conversation::{Checking, Now, Reply, Starting};
-    /// fn early<'s>(starting: Starting<'s>, reply: Now<'s, Reply>) -> Checking<'s> {
+    /// use aizome_sys::polkit::conversation::{Answering, Checking, Now, Reply, Starting};
+    /// fn early<'s>(starting: Starting<'s>, reply: Now<'s, Reply>) -> (Checking<'s>, Answering) {
     ///     starting.answer(reply).ok().unwrap()
     /// }
     /// ```
     ///
     /// ```compile_fail,E0308
-    /// use aizome_sys::polkit::conversation::{Checking, Prompted, Reply};
+    /// use aizome_sys::polkit::conversation::{Answering, Checking, Prompted, Reply};
     /// // An answer applied without checking it's this conversation's.
-    /// fn answer<'s>(prompted: Prompted<'s>, reply: Reply) -> Result<Checking<'s>, Prompted<'s>> {
+    /// fn answer<'s>(prompted: Prompted<'s>, reply: Reply) -> Result<(Checking<'s>, Answering), Prompted<'s>> {
     ///     prompted.answer(reply)
     /// }
     /// ```
     ///
     /// ```
-    /// use aizome_sys::polkit::conversation::{Checking, Now, Prompted, Reply};
-    /// fn answer<'s>(prompted: Prompted<'s>, reply: Now<'s, Reply>) -> Result<Checking<'s>, Prompted<'s>> {
+    /// use aizome_sys::polkit::conversation::{Answering, Checking, Now, Prompted, Reply};
+    /// fn answer<'s>(prompted: Prompted<'s>, reply: Now<'s, Reply>) -> Result<(Checking<'s>, Answering), Prompted<'s>> {
     ///     prompted.answer(reply)
     /// }
     /// ```
-    pub fn answer(self, now: Now<'s, Reply>) -> Result<Checking<'s>, Prompted<'s>> {
+    pub fn answer(self, now: Now<'s, Reply>) -> Result<(Checking<'s>, Answering), Prompted<'s>> {
+        // Tickets and prompt numbers count per request: the request, the
+        // conversation and the prompt must all be this one's.
         let reply = now.into_answer();
-        if reply.seq != self.data.seq {
+        if reply.request != self.ctx.request || reply.ticket != self.data.running.ticket || reply.seq != self.data.seq {
             return Err(self);
         }
-        let Prompted { ctx, data: Prompting { mut running, .. } } = self;
+        let Prompted { ctx, data: Prompting { running, .. } } = self;
         let mut line = Vec::with_capacity(reply.text.len() + 1);
         line.extend_from_slice(&reply.text);
         line.push(b'\n');
-        // One line, which a pipe's or a socket's buffer takes at once.
-        let written = running.writer.write_all(&line).and_then(|()| running.writer.flush());
-        line.fill(0);
-        if let Err(error) = written {
-            // The helper is gone: its output ends next, as a refusal.
-            log::warn!("aizome-sys: polkit helper: {error}");
-        }
-        ctx.floor.answered();
-        Ok(Checking::enter(ctx, running))
+        let answering = Answering { to: running.writer.clone(), line };
+        ctx.floor().answered();
+        Ok((Checking::enter(ctx, running), answering))
     }
 
     /// The helper wrote a line, or its output ended.
     pub fn heard(self, now: Now<'s, Line>) -> Step<'s> {
+        if !now.names(self.data.running.ticket) {
+            return (self.into(), Then::Nothing);
+        }
         let Prompted { ctx, data: Prompting { mut running, seq, after } } = self;
         let line = now.into_answer().said;
         match line {
@@ -785,11 +957,14 @@ impl<'s> Checking<'s> {
     pub fn start(self, user: String) -> Step<'s> {
         let Checking { ctx, data } = self;
         drop(data);
-        supersede(ctx, Spoken::Answered, user)
+        supersede(ctx, user)
     }
 
     /// The helper wrote a line, or its output ended.
     pub fn heard(self, now: Now<'s, Line>) -> Step<'s> {
+        if !now.names(self.data.ticket) {
+            return (self.into(), Then::Nothing);
+        }
         let Checking { ctx, data: mut running } = self;
         let line = now.into_answer().said;
         match line {
@@ -860,9 +1035,13 @@ impl<'s> Cooling<'s> {
     ///     cooling.due(due)
     /// }
     /// ```
-    pub fn due(self, _timer: Now<'s, Due>) -> Step<'s> {
+    pub fn due(self, timer: Now<'s, Due>) -> Step<'s> {
+        if !timer.names(self.data.ticket) {
+            return (self.into(), Then::Nothing);
+        }
         let Cooling { ctx, data: Planned { ticket, user, at } } = self;
-        match ctx.floor.rested() {
+        let rested = ctx.floor().rested();
+        match rested {
             Ok(rested) => {
                 let dial = Dial::new(rested, ticket, user.clone());
                 (Dialing::enter(ctx, Attempt { ticket, user }).into(), Then::Dial(dial))
@@ -909,11 +1088,14 @@ mod gate {
     /// stop.
     pub const AUTOMATIC_ATTEMPTS: u8 = 3;
 
-    /// How long the next attempt waits after `unanswered` attempts in a row
-    /// ended with no answer: none after none, then half a second, doubling,
-    /// at most four seconds.
-    pub fn delay(unanswered: u8) -> Duration {
-        match unanswered {
+    /// How long without a failed attempt before the floor starts afresh.
+    pub const QUIET: Duration = Duration::from_secs(60);
+
+    /// How long the next attempt waits after `failed` attempts in a row
+    /// ended without success: none after none, then half a second,
+    /// doubling, at most four seconds.
+    pub fn delay(failed: u8) -> Duration {
+        match failed {
             0 => Duration::ZERO,
             n => Duration::from_millis(500 << u32::from(n - 1).min(3)),
         }
@@ -922,9 +1104,16 @@ mod gate {
     /// Proof the floor allows a helper to start now.
     pub struct Rested(());
 
-    /// Attempts in a row that ended with no answer, and when the last did.
+    /// The agent's floor, shared by its requests: a new request doesn't
+    /// start afresh.
+    pub type SharedFloor = Arc<Mutex<Floor>>;
+
+    /// Attempts in a row that ended without success, however they ended
+    /// (no answer, a refused answer, left for another), and when the last
+    /// did; of those, how many in a row ended with no answer written.
     #[derive(Debug, Default)]
     pub struct Floor {
+        failed: u8,
         unanswered: u8,
         since: Option<Instant>,
     }
@@ -936,28 +1125,58 @@ mod gate {
     }
 
     impl Floor {
+        /// A quiet minute since the last failure: start afresh.
+        fn settle(&mut self, now: Instant) {
+            if self.since.is_some_and(|since| now.duration_since(since) >= QUIET) {
+                *self = Floor::default();
+            }
+        }
+
         /// Whether a helper may start now, or when it may.
-        pub fn rested(&self) -> Result<Rested, Instant> {
+        pub fn rested(&mut self) -> Result<Rested, Instant> {
+            let now = Instant::now();
+            self.settle(now);
             match self.since {
-                Some(since) if self.unanswered > 0 => {
-                    let at = since + delay(self.unanswered);
-                    if Instant::now() >= at { Ok(Rested(())) } else { Err(at) }
+                Some(since) if self.failed > 0 => {
+                    let at = since + delay(self.failed);
+                    if now >= at { Ok(Rested(())) } else { Err(at) }
                 }
                 Some(_) | None => Ok(Rested(())),
             }
         }
 
-        /// An attempt ended, or was left, with no answer written.
-        pub fn unanswered(&mut self) -> Retry {
-            self.unanswered = self.unanswered.saturating_add(1);
-            self.since = Some(Instant::now());
-            if self.unanswered < AUTOMATIC_ATTEMPTS { Retry::After(delay(self.unanswered)) } else { Retry::Stop }
+        /// An attempt ended without success: it delays the next.
+        pub fn failed(&mut self) {
+            let now = Instant::now();
+            self.settle(now);
+            self.failed = self.failed.saturating_add(1);
+            self.since = Some(now);
         }
 
-        /// An answer was written: the helper works.
+        /// An attempt ended with no answer written: it delays the next, and
+        /// enough of them in a row stop automatic attempts.
+        pub fn unanswered(&mut self) -> Retry {
+            self.failed();
+            self.unanswered = self.unanswered.saturating_add(1);
+            if self.unanswered < AUTOMATIC_ATTEMPTS { Retry::After(delay(self.failed)) } else { Retry::Stop }
+        }
+
+        /// An answer was written: the helper works, so attempts that end
+        /// with no answer count from none again. A refusal still counts as
+        /// a failure.
         pub fn answered(&mut self) {
             self.unanswered = 0;
-            self.since = None;
+        }
+
+        /// Moves the last failure `by` into the past.
+        #[cfg(test)]
+        pub fn age(&mut self, by: Duration) {
+            self.since = self.since.map(|since| since - by);
+        }
+
+        /// An attempt succeeded.
+        pub fn succeeded(&mut self) {
+            *self = Floor::default();
         }
     }
 
@@ -1047,11 +1266,10 @@ mod tests {
     use super::*;
     use std::io::BufReader;
     use std::os::unix::net::UnixStream;
-    use std::sync::Arc;
 
     fn conversation() -> Conversation {
         let (reply, _) = oneshot::channel();
-        Conversation::new(Ctx::new(RequestId::next(), "cookie".into(), reply))
+        Conversation::new(Ctx::new(RequestId::next(), "cookie".into(), reply, SharedFloor::default(), Weak::new()))
     }
 
     /// A helper that came up: its ends are one side of a socket pair.
@@ -1160,7 +1378,7 @@ mod tests {
     }
 
     #[test]
-    fn the_floor_waits_longer_after_each_unanswered_attempt() {
+    fn the_floor_counts_every_failure_until_a_success_or_a_quiet_minute() {
         assert_eq!(delay(0), Duration::ZERO);
         assert_eq!(delay(1), Duration::from_millis(500));
         assert_eq!(delay(2), Duration::from_secs(1));
@@ -1172,9 +1390,65 @@ mod tests {
         assert!(matches!(floor.unanswered(), Retry::After(d) if d == Duration::from_millis(500)));
         assert!(floor.rested().is_err());
         assert!(matches!(floor.unanswered(), Retry::After(d) if d == Duration::from_secs(1)));
-        assert!(matches!(floor.unanswered(), Retry::Stop));
-        assert!(floor.rested().is_err());
+        // A written answer restarts the count toward stopping, not the delay.
         floor.answered();
+        assert!(floor.rested().is_err());
+        floor.failed();
+        assert!(matches!(floor.unanswered(), Retry::After(d) if d == Duration::from_secs(4)));
+        assert!(matches!(floor.unanswered(), Retry::After(_)));
+        assert!(matches!(floor.unanswered(), Retry::Stop));
+        floor.succeeded();
         assert!(floor.rested().is_ok());
+        // A quiet minute since the last failure starts afresh.
+        floor.failed();
+        floor.age(QUIET);
+        assert!(floor.rested().is_ok());
+        assert!(matches!(floor.unanswered(), Retry::After(d) if d == Duration::from_millis(500)));
+    }
+
+    #[test]
+    fn an_answer_for_another_requests_prompt_is_not_written() {
+        let mut c = conversation();
+        let Then::Dial(dial) = c.with_typed(|s| match s {
+            ConvAny::Idle(s) => s.start("me".into()),
+            other => (other, Then::Nothing),
+        }) else {
+            panic!()
+        };
+        let ticket = dial.ticket();
+        let (dialed, mut helper) = up(ticket);
+        let _converse = c.with_typed(|s| {
+            let now = s.check(dialed).ok().unwrap();
+            match s {
+                ConvAny::Dialing(s) => s.dialed(now),
+                other => (other, Then::Nothing),
+            }
+        });
+        let asked = Lines { ticket }.line("PAM_PROMPT_ECHO_OFF Password: ");
+        let _ = c.with_typed(|s| {
+            let now = s.check(asked).ok().unwrap();
+            match s {
+                ConvAny::Starting(s) => s.heard(now),
+                other => (other, Then::Nothing),
+            }
+        });
+        assert_eq!(name(&c), "prompted");
+        // Another request's first prompt has the same ticket and number.
+        let other = Reply { ticket, request: RequestId::next(), seq: 1, text: b"secret".to_vec() };
+        let then = c.with_typed(|s| {
+            let now = s.check(other).ok().expect("the same ticket checks current");
+            match s {
+                ConvAny::Prompted(s) => match s.answer(now) {
+                    Ok((checking, answering)) => (checking.into(), Then::Answer(answering)),
+                    Err(prompted) => (prompted.into(), Then::Nothing),
+                },
+                other => (other, Then::Nothing),
+            }
+        });
+        assert!(matches!(then, Then::Nothing), "nothing to write");
+        assert_eq!(name(&c), "prompted");
+        helper.set_nonblocking(true).unwrap();
+        let mut got = [0u8; 64];
+        assert!(std::io::Read::read(&mut helper, &mut got).is_err(), "the helper got nothing");
     }
 }

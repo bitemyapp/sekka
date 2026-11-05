@@ -57,8 +57,8 @@ pub enum Submit {
     /// Authenticate: answer the prompt (or the first one, if it hasn't
     /// come yet).
     Answer,
-    /// Authenticate, dimmed: an answer is being checked, or the agent is
-    /// about to try again.
+    /// Authenticate, dimmed: an answer is being checked, or waits for
+    /// its prompt.
     Wait,
     /// Try Again: the agent stopped trying.
     TryAgain,
@@ -273,10 +273,14 @@ impl Shell {
             AuthMsg::Authenticate => dialog.with_typed(|s| {
                 let next = match s {
                     DialogAny::Starting(s) => s.submit().into(),
-                    DialogAny::Prompted(s) => s.submit().into(),
+                    DialogAny::Prompted(s) => match s.submit() {
+                        Ok(checking) => checking.into(),
+                        Err(prompted) => prompted.into(),
+                    },
+                    DialogAny::Waiting(s) => s.submit().into(),
                     DialogAny::Unavailable(s) => s.try_again().into(),
-                    // Checking an answer, or the agent about to try again.
-                    s @ (DialogAny::Eager(_) | DialogAny::Checking(_) | DialogAny::Waiting(_)) => s,
+                    // An answer is being checked, or waits for its prompt.
+                    s @ (DialogAny::Eager(_) | DialogAny::Checking(_)) => s,
                 };
                 (next, ())
             }),
