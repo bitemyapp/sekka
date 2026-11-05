@@ -7,8 +7,13 @@ use core::fmt;
 /// stays with the target (a serial, a WWN, a partition table's id, an
 /// inode), never only what another target can take over (a device path such
 /// as `/dev/sdb`, a drive's name, a row's index).
-pub trait SameTarget {
-    fn same_target(&self, fresh: &Self) -> bool;
+///
+/// `F` is the fresh reading's type, `Self` by default. Give the fresh reading
+/// a type of its own when only the code that reads the target should be able
+/// to make one (Genkan reviews a disk described on the wire, and confirms it
+/// against a reading of that disk alone).
+pub trait SameTarget<F: ?Sized = Self> {
+    fn same_target(&self, fresh: &F) -> bool;
 }
 
 /// A target as the person saw it when they agreed to act on it, or as a
@@ -73,12 +78,15 @@ impl<T, B> Reviewed<T, B> {
     }
 }
 
-impl<T: SameTarget, B> Reviewed<T, B> {
+impl<T, B> Reviewed<T, B> {
     /// Whether a fresh reading is still the target the person saw, without
     /// spending the review: for a sheet that re-checks each time it's drawn.
     /// The step that acts still needs [`confirm`](Self::confirm).
     #[inline]
-    pub fn matches(&self, fresh: &T) -> bool {
+    pub fn matches<F>(&self, fresh: &F) -> bool
+    where
+        T: SameTarget<F>,
+    {
         self.target.same_target(fresh)
     }
 
@@ -86,7 +94,10 @@ impl<T: SameTarget, B> Reviewed<T, B> {
     /// proof carries the fresh reading, so the step that takes it acts on the
     /// target as it is now (its current path), and only if it's the same one.
     #[inline]
-    pub fn confirm(self, fresh: T) -> Result<Confirmed<T, B>, Changed<T>> {
+    pub fn confirm<F>(self, fresh: F) -> Result<Confirmed<F, B>, Changed<T, F>>
+    where
+        T: SameTarget<F>,
+    {
         if self.target.same_target(&fresh) {
             Ok(Confirmed { target: fresh, brand: self.brand })
         } else {
@@ -145,6 +156,42 @@ impl<T, B> Confirmed<T, B> {
     pub fn brand(&self) -> &B {
         &self.brand
     }
+
+    /// Checks the target again before a later step (Genkan re-checks its
+    /// disk before partitioning, formatting and writing), keeping the
+    /// review's brand only while it's still the same target.
+    ///
+    /// ```
+    /// mod sheet {
+    ///     use aizome_typestate::{Reviewed, SameTarget};
+    ///     #[derive(Debug)]
+    ///     pub struct Disk { pub path: &'static str, pub serial: &'static str }
+    ///     impl SameTarget for Disk {
+    ///         fn same_target(&self, fresh: &Self) -> bool { self.serial == fresh.serial }
+    ///     }
+    ///     pub struct Review(());
+    ///     pub fn review(disk: Disk) -> Reviewed<Disk, Review> { Reviewed::new(disk, Review(())) }
+    /// }
+    /// use sheet::Disk;
+    /// let erased = sheet::review(Disk { path: "/dev/vda", serial: "S" })
+    ///     .confirm(Disk { path: "/dev/vda", serial: "S" })
+    ///     .unwrap();
+    /// // The disk came back under another name after partitioning: same disk.
+    /// let partitioned = erased.recheck(Disk { path: "/dev/vdb", serial: "S" }).unwrap();
+    /// assert_eq!(partitioned.target().path, "/dev/vdb");
+    /// assert!(partitioned.recheck(Disk { path: "/dev/vdb", serial: "T" }).is_err());
+    /// ```
+    #[inline]
+    pub fn recheck<G>(self, fresh: G) -> Result<Confirmed<G, B>, Changed<T, G>>
+    where
+        T: SameTarget<G>,
+    {
+        if self.target.same_target(&fresh) {
+            Ok(Confirmed { target: fresh, brand: self.brand })
+        } else {
+            Err(Changed { reviewed: self.target, found: fresh })
+        }
+    }
 }
 
 impl<T: fmt::Debug, B> fmt::Debug for Confirmed<T, B> {
@@ -155,9 +202,9 @@ impl<T: fmt::Debug, B> fmt::Debug for Confirmed<T, B> {
 
 /// The target changed since the person reviewed it.
 #[derive(Debug)]
-pub struct Changed<T> {
+pub struct Changed<T, F = T> {
     pub reviewed: T,
-    pub found: T,
+    pub found: F,
 }
 
 #[cfg(test)]
@@ -186,6 +233,21 @@ mod tests {
         assert!(r.matches(&D("/dev/sdc", 7)));
         assert!(!r.matches(&D("/dev/sdb", 8)));
         assert!(r.confirm(D("/dev/sdb", 7)).is_ok());
+    }
+
+    #[derive(Debug)]
+    struct Reading(u32);
+    impl SameTarget<Reading> for D {
+        fn same_target(&self, fresh: &Reading) -> bool {
+            self.1 == fresh.0
+        }
+    }
+
+    #[test]
+    fn a_fresh_reading_can_have_its_own_type() {
+        let c = Reviewed::new(D("/dev/sdb", 7), Brand).confirm(Reading(7)).unwrap();
+        assert_eq!(c.target().0, 7);
+        assert!(Reviewed::new(D("/dev/sdb", 7), Brand).confirm(Reading(8)).is_err());
     }
 
     #[test]
