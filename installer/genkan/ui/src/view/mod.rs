@@ -7,7 +7,6 @@
 //! `sidebar_item`, `form_section`, `scroll`); what Genkan draws of its own
 //! (the partitions, the world map) is in [`partitions`] and [`map`].
 use crate::app::{Genkan, Msg, Step};
-use crate::format::size;
 use aizome_kit::prelude::*;
 use aizome_kit::widgets::layout::column as column_of;
 use aizome_kit::{column, row};
@@ -131,14 +130,12 @@ fn computer(app: &Genkan) -> Element<Msg> {
     } else {
         lines = lines.push(text(firmware).mono().size(11.0).role(Role::Text3));
     }
-    if let crate::ram::MemoryState::Known(memory) = app.memory() {
-        lines = lines.push(
-            text(format!("{} of memory", size(memory.total)))
-                .mono()
-                .size(11.0)
-                .role(Role::Text3),
-        );
-    }
+    lines = lines.push(
+        text(app.memory().summary())
+            .mono()
+            .size(11.0)
+            .role(Role::Text3),
+    );
     container(lines.width(Fill))
         .padding(12.0)
         .edges(Edge::Line, Sides::TOP)

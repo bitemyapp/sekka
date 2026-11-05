@@ -6,17 +6,11 @@ use crate::app::{Genkan, Msg, PrepState, Review};
 use crate::format::size;
 use aizome_kit::prelude::*;
 use aizome_kit::{column, row};
-use calamares_nixos::{Filesystem, Firmware, disk::Layout, memory};
+use calamares_nixos::{Filesystem, Firmware, disk::Layout};
 
 fn partitions(app: &Genkan, review: &Review) -> String {
     let disk = &review.disk;
-    let swap = review
-        .swap
-        .then(|| match app.memory() {
-            crate::ram::MemoryState::Known(info) => Some(memory::swap_bytes(info.total)),
-            _ => None,
-        })
-        .flatten();
+    let swap = app.memory().swap_size(review.swap).ok().flatten();
     match Layout::for_install(disk.bytes, review.firmware, swap, review.encrypt) {
         Ok(layout) => {
             let mut parts = vec![
