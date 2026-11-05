@@ -42,7 +42,7 @@ mod linux {
         fn session_locked(&mut self, cx: &mut Cx) {
             self.locked += 1;
             if self.locked == 1 {
-                let first = testing::session_lock_request(cx).expect("the first lock held");
+                let first = testing::session_lock_held().expect("the first lock held");
                 // Unlocked, and locked again at once (a lock screen that
                 // unlocks and the idle timer locks again) …
                 cx.unlock_session();

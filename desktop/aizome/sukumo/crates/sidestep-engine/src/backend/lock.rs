@@ -11,9 +11,16 @@
 //! hears it; its surfaces then show nothing. Unlocking a lock that was
 //! never confirmed withdraws it.
 //!
-//! Each request names itself (a `LockTicket`), and what the render thread
-//! says about a lock names the request it was for, so the main thread
-//! can drop what it hears about a lock it has withdrawn since.
+//! Each request names itself (a `LockRequest`), and what the render
+//! thread says about a lock is a `LockAnswer` naming the request it was
+//! for, so the main thread can drop what it hears about a lock it has
+//! withdrawn since. Only the render thread makes answers.
+//!
+//! `state.session_lock` must stay the only strong `SessionLock` handle:
+//! the toolkit hands `locked` and `finished` only for a lock still alive,
+//! and the handlers below take them to be about the lock held (0.19's
+//! `SessionLock` has no equality to check that by). A clone kept anywhere
+//! else would let an old lock's `finished` end the new one.
 
 use smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface;
 use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
@@ -22,22 +29,22 @@ use smithay_client_toolkit::session_lock::{
 };
 
 use super::{Role, Shell, State};
-use crate::protocol::{FromRender, LockTicket};
+use crate::protocol::{FromRender, LockAnswer, LockRequest};
 
 /// The lock asked for or held, and the main thread's request for it.
 pub(super) struct Held {
     pub(super) lock: SessionLock,
-    request: LockTicket,
+    request: LockRequest,
 }
 
 /// Ask for the lock under `request`. A lock asked for or held already
 /// becomes `request`'s, and says so if it's held (the main thread asks
 /// again only after unlocking, so this doesn't happen).
-pub(super) fn lock(state: &mut State, request: LockTicket) {
+pub(super) fn lock(state: &mut State, request: LockRequest) {
     if let Some(held) = &mut state.session_lock {
         held.request = request;
         if held.lock.is_locked() {
-            state.send(FromRender::SessionLocked { lock: request });
+            state.send(FromRender::SessionLocked { lock: LockAnswer::heard(request) });
         }
         return;
     }
@@ -45,7 +52,7 @@ pub(super) fn lock(state: &mut State, request: LockTicket) {
         Ok(lock) => state.session_lock = Some(Held { lock, request }),
         Err(_) => {
             eprintln!("sidestep: the compositor has no ext-session-lock");
-            state.send(FromRender::SessionLockFinished { lock: request });
+            state.send(FromRender::SessionLockFinished { lock: LockAnswer::heard(request) });
         }
     }
 }
@@ -78,7 +85,7 @@ pub(super) fn create(state: &State, surface: &WlSurface, output: u32) -> Option<
 impl SessionLockHandler for State {
     fn locked(&mut self, _: &Connection, _: &QueueHandle<Self>, _: SessionLock) {
         if let Some(held) = &self.session_lock {
-            self.send(FromRender::SessionLocked { lock: held.request });
+            self.send(FromRender::SessionLocked { lock: LockAnswer::heard(held.request) });
         }
     }
 
@@ -87,7 +94,7 @@ impl SessionLockHandler for State {
         // locked (as the protocol asks), else destroyed.
         if let Some(held) = self.session_lock.take() {
             held.lock.unlock();
-            self.send(FromRender::SessionLockFinished { lock: held.request });
+            self.send(FromRender::SessionLockFinished { lock: LockAnswer::heard(held.request) });
         }
     }
 
