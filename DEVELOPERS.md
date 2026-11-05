@@ -41,6 +41,8 @@ not replace testing session changes on the actual ISO.
 
 Use x86_64 Linux with Nix and flakes enabled. The full image includes several desktops and an application cache: allow substantial disk space (a dedicated builder with at least 250 GiB free and 32 GiB RAM is a useful starting point). Component builds are much smaller. Never run installer storage tests against host disks.
 
+Run the commands below from the repository root unless a different working directory is specified.
+
 ```sh
 nix develop
 nix flake check --no-build --no-update-lock-file
