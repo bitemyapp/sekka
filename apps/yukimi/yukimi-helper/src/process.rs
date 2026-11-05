@@ -44,9 +44,11 @@
 //! # Ok(()) }
 //! ```
 //!
-//! `std::process::Command::new` is denied in this crate's programs too
-//! (Clippy's `disallowed_methods`, see `clippy.toml`), so the standard
-//! library is no way around it.
+//! `std::process::Command::new` is no way around it (Clippy's
+//! `disallowed_methods`, see `clippy.toml`): the helper's programs forbid
+//! the lint, so allowing it there is an error (E0453), and this library
+//! denies it, allowing it only in the one function that makes commands
+//! (which the helper's Nix check enforces).
 //!
 //! [`change::RestorePoint::attempt`]: crate::change::RestorePoint::attempt
 //! [`clean`]: crate::clean
@@ -305,9 +307,7 @@ pub fn command(program: Program) -> Command {
 /// The same for a program given by its path, such as a system's
 /// `switch-to-configuration`.
 pub(crate) fn prepared(program: &Path) -> Command {
-    // The one place the helper makes a command.
-    #[allow(clippy::disallowed_methods)]
-    let mut c = Command::new(program);
+    let mut c = new_command(program);
     // Only the helper handles terminal cancellation. In particular, an
     // activation already committed must finish even when Ctrl-C is pressed.
     c.process_group(0);
@@ -316,6 +316,27 @@ pub(crate) fn prepared(program: &Path) -> Command {
         c.env("LOCALE_ARCHIVE", archive);
     }
     c
+}
+
+/// The one place the helper and its terminal client make a command. The
+/// programs forbid the lint this allows, and the Nix check allows it only
+/// here.
+#[allow(clippy::disallowed_methods)]
+fn new_command(program: &Path) -> Command {
+    Command::new(program)
+}
+
+/// The helper beside the running program, through pkexec unless this
+/// process is root already: how the terminal client starts an operation.
+/// Never a helper found on PATH, and never another program.
+pub fn helper_client() -> std::io::Result<Command> {
+    let helper = std::env::current_exe()?.with_file_name("yukimi-helper");
+    if sys::is_root() {
+        return Ok(new_command(&helper));
+    }
+    let mut pkexec = new_command(Path::new("/run/wrappers/bin/pkexec"));
+    pkexec.arg(helper);
+    Ok(pkexec)
 }
 
 /// `nix <subcommand>`, with flakes enabled.

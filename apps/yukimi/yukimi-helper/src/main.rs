@@ -49,7 +49,7 @@
 //! standard input is a pipe and Yukimi closes it, the helper stops what it
 //! is doing and puts the configuration back, unless the new system is
 //! already being started, which is never interrupted.
-#![deny(clippy::disallowed_methods)]
+#![forbid(clippy::disallowed_methods)]
 #![forbid(unsafe_code)]
 use std::io::Write;
 
