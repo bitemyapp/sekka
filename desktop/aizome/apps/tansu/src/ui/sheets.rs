@@ -8,7 +8,7 @@ use aizome_sys::disks::{SelfTest, TableKind, format_size};
 
 use crate::app::{CreateForm, FormatForm, Msg, ResizeForm, Sheet, SheetKind, SheetMsg, Tansu, UNITS};
 use crate::fs;
-use crate::layout::{Flags, MIB, Seg};
+use crate::layout::{Chosen, Flags, MIB, Seg};
 use crate::plan::Loss;
 use crate::run::Status;
 
@@ -21,10 +21,10 @@ pub fn view(t: &Tansu, sheet: &Sheet) -> Element<Msg> {
         SheetKind::Format(f) => (470.0, format(t, f)),
         SheetKind::Create(f) => (500.0, create(t, f)),
         SheetKind::Resize(f) => (500.0, resize(t, f)),
-        SheetKind::Label { seg, label } => (400.0, label_sheet(t, *seg, label)),
-        SheetKind::Flags { seg, flags } => (460.0, flags_sheet(t, *seg, *flags)),
-        SheetKind::Table { kind } => (470.0, table_sheet(t, *kind)),
-        SheetKind::Unlock { seg, pass } => (400.0, unlock(t, *seg, pass)),
+        SheetKind::Label { target, label } => (400.0, label_sheet(t, target, label)),
+        SheetKind::Flags { target, flags } => (460.0, flags_sheet(t, target, *flags)),
+        SheetKind::Table { target, kind } => (470.0, table_sheet(t, target, *kind)),
+        SheetKind::Unlock { target, pass } => (400.0, unlock(t, target, pass)),
         SheetKind::Attach { path, read_only } => (480.0, attach(path, *read_only)),
         SheetKind::Apply(f) => (580.0, apply(t, f)),
         SheetKind::Running => (580.0, running(t)),
@@ -74,6 +74,19 @@ fn buttons(confirm: &str, enabled: bool, destructive: bool) -> Element<Msg> {
 
 fn field_row(label: &str, control: impl Into<Element<Msg>>) -> Element<Msg> {
     row![text(label.to_owned()).role(Role::Text2).width(92.0), control.into()].spacing(10.0).width(Length::Fill).into()
+}
+
+/// The segment a sheet is for, found again in the layout as it is now (none
+/// for a disk), or why it isn't there: its disk went, or another device took
+/// its names.
+fn found<'t>(t: &'t Tansu, chosen: &Chosen) -> Result<Option<&'t Seg>, String> {
+    t.layout.locate(&t.state, chosen).map(|at| at.seg())
+}
+
+/// A sheet whose segment is no longer there: what it was for, why, and no
+/// way to go on but Cancel.
+fn gone(heading: &str, why: String, confirm: &str) -> Vec<Element<Msg>> {
+    vec![title(heading), warning(Icon::TriangleAlert, Role::Danger, why), buttons(confirm, false, false)]
 }
 
 fn seg_words(seg: &Seg) -> String {
@@ -134,7 +147,11 @@ fn encryption(encrypt: bool, pass: &str, pass2: &str) -> Vec<Element<Msg>> {
 }
 
 fn format(t: &Tansu, f: &FormatForm) -> Vec<Element<Msg>> {
-    let Some(seg) = t.layout.segs.get(f.seg) else { return vec![title("Format")] };
+    let seg = match found(t, &f.target) {
+        Ok(Some(seg)) => seg,
+        Ok(None) => return vec![title("Format")],
+        Err(why) => return gone(&format!("Format {}", f.target.name()), why, "Add to Pending"),
+    };
     let fs_type = fs::FORMATS[f.fs.min(fs::FORMATS.len() - 1)];
     let new = seg.pending.contains(&crate::layout::Mark::New);
     let mut v = vec![title(&format!("Format {}", seg.short_name())), sub(seg_words(seg))];
@@ -211,6 +228,9 @@ fn size_controls(
 }
 
 fn create(t: &Tansu, f: &CreateForm) -> Vec<Element<Msg>> {
+    if let Err(why) = found(t, &f.target) {
+        return gone("New Partition", why, "Add to Pending");
+    }
     let fs_type = fs::FORMATS.get(f.fs).copied().unwrap_or("");
     let mut v = vec![
         title("New Partition"),
@@ -262,7 +282,11 @@ fn create(t: &Tansu, f: &CreateForm) -> Vec<Element<Msg>> {
 }
 
 fn resize(t: &Tansu, f: &ResizeForm) -> Vec<Element<Msg>> {
-    let Some(seg) = t.layout.segs.get(f.seg) else { return vec![title("Resize")] };
+    let seg = match found(t, &f.target) {
+        Ok(Some(seg)) => seg,
+        Ok(None) => return vec![title("Resize")],
+        Err(why) => return gone(&format!("Resize {}", f.target.name()), why, "Resize"),
+    };
     let r = fs::resizable(&seg.fs);
     let mut v = vec![
         title(&format!("Resize {}", seg.short_name())),
@@ -315,8 +339,12 @@ fn resize(t: &Tansu, f: &ResizeForm) -> Vec<Element<Msg>> {
     v
 }
 
-fn label_sheet(t: &Tansu, seg: usize, label: &str) -> Vec<Element<Msg>> {
-    let Some(sg) = t.layout.segs.get(seg) else { return vec![title("Label")] };
+fn label_sheet(t: &Tansu, target: &Chosen, label: &str) -> Vec<Element<Msg>> {
+    let sg = match found(t, target) {
+        Ok(Some(seg)) => seg,
+        Ok(None) => return vec![title("Label")],
+        Err(why) => return gone(&format!("Label {}", target.name()), why, "Add to Pending"),
+    };
     let limit = fs::label_limit(&sg.fs);
     vec![
         title(&format!("Label {}", sg.short_name())),
@@ -340,8 +368,12 @@ fn label_sheet(t: &Tansu, seg: usize, label: &str) -> Vec<Element<Msg>> {
     ]
 }
 
-fn flags_sheet(t: &Tansu, seg: usize, flags: Flags) -> Vec<Element<Msg>> {
-    let Some(sg) = t.layout.segs.get(seg) else { return vec![title("Flags")] };
+fn flags_sheet(t: &Tansu, target: &Chosen, flags: Flags) -> Vec<Element<Msg>> {
+    let sg = match found(t, target) {
+        Ok(Some(seg)) => seg,
+        Ok(None) => return vec![title("Flags")],
+        Err(why) => return gone(&format!("Flags of {}", target.name()), why, "Add to Pending"),
+    };
     let offered = Flags::offered(&t.layout.table);
     let item = |label: &str, on: bool, which: u8, what: &str| -> Element<Msg> {
         column![
@@ -383,7 +415,10 @@ fn flags_sheet(t: &Tansu, seg: usize, flags: Flags) -> Vec<Element<Msg>> {
     v
 }
 
-fn table_sheet(t: &Tansu, kind: TableKind) -> Vec<Element<Msg>> {
+fn table_sheet(t: &Tansu, target: &Chosen, kind: TableKind) -> Vec<Element<Msg>> {
+    if let Err(why) = found(t, target) {
+        return gone(&format!("New Partition Table on {}", target.name()), why, "Add to Pending");
+    }
     let parts: Vec<String> = t.layout.partitions().map(|p| p.short_name()).collect();
     let device = t.layout.device.trim_start_matches("/dev/").to_owned();
     let big = t.layout.size > (2u64 << 40);
@@ -408,8 +443,11 @@ fn table_sheet(t: &Tansu, kind: TableKind) -> Vec<Element<Msg>> {
     v
 }
 
-fn unlock(t: &Tansu, seg: usize, pass: &str) -> Vec<Element<Msg>> {
-    let name = t.layout.segs.get(seg).map(|s| s.short_name()).unwrap_or_default();
+fn unlock(t: &Tansu, target: &Chosen, pass: &str) -> Vec<Element<Msg>> {
+    if let Err(why) = found(t, target) {
+        return gone(&format!("Unlock {}", target.name()), why, "Unlock");
+    }
+    let name = target.name();
     vec![
         title(&format!("Unlock {name}")),
         sub("Its passphrase opens the volume until it's locked or the computer restarts."),
