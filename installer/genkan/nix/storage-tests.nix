@@ -2,15 +2,20 @@
 pkgs.rustPlatform.buildRustPackage {
   pname = "calamares-storage-tests";
   version = "0.1.0";
+  # The backend at its place in Sekka, beside the typestate crate it uses.
   src = pkgs.lib.fileset.toSource {
-    root = ../rust;
+    root = ../../..;
     fileset = pkgs.lib.fileset.unions [
       ../rust/Cargo.toml
       ../rust/Cargo.lock
       ../rust/reference.nix
       ../rust/src
+      ../../../desktop/aizome/crates/aizome-typestate
     ];
   };
+  postUnpack = ''
+    sourceRoot="$sourceRoot/installer/genkan/rust"
+  '';
   cargoLock.lockFile = ../rust/Cargo.lock;
   CALAMARES_TOOL_PATH = pkgs.lib.makeBinPath [
     pkgs.parted

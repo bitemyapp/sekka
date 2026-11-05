@@ -1610,7 +1610,7 @@ impl Genkan {
         thread::spawn(move || {
             let result = (|| -> anyhow::Result<(Box<Review>, Session)> {
                 let plan = request.parse(&Settings::load()?)?;
-                disk::revalidate(plan.disk())?;
+                disk::Reviewed::of(&plan).revalidate()?;
                 let plan = plan.snapshot_wifi()?;
                 let review = Box::new(Review::of(&plan));
                 let events = send.clone();
