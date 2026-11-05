@@ -339,7 +339,7 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
         "Firmware changed since review"
     );
     let lock = installer_lock()?;
-    disk::revalidate(plan.disk())?;
+    disk::Reviewed::of(plan).revalidate()?;
     preparing("Checking filesystem support before erasing the disk");
     plan.filesystem().preflight(plan.firmware())?;
     if plan.swap() {
@@ -643,13 +643,15 @@ fn prepare_storage(
     mappings: &mut crate::encryption::Mappings,
 ) -> Result<()> {
     let firmware = request.firmware();
-    // Lock while editing the partition table. Re-probe its stable identity and
-    // all mount/holder state immediately before the first write.
+    let reviewed = disk::Reviewed::of(request);
+    // Lock while editing the partition table. Re-read the disk's stable
+    // identity and its mount and holder state immediately before the first
+    // write; every write acts on the disk that confirmed.
     let mut device = Some(
         fs::OpenOptions::new()
             .read(true)
             .write(true)
-            .open(&request.disk().path)?,
+            .open(&reviewed.identity().path)?,
     );
     ensure!(
         unsafe {
@@ -660,8 +662,9 @@ fn prepare_storage(
         } == 0,
         "Disk is locked by another installer"
     );
-    disk::revalidate(request.disk())?;
-    let dev = request.disk().path.as_str();
+    let disk = reviewed.revalidate()?;
+    let path = disk.path().to_owned();
+    let dev = path.as_str();
     let mount = target.0.to_str().context("Target path encoding")?;
     let storage = (|| -> Result<()> {
         progress(
@@ -678,7 +681,7 @@ fn prepare_storage(
         output("blockdev", &["--rereadpt", dev], 30)?;
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
-            match disk::verify_layout(request.disk(), layout) {
+            match disk::verify_layout(disk.identity(), layout) {
                 Ok(()) => break,
                 Err(error) if Instant::now() >= deadline => {
                     return Err(error.context("Kernel partition layout did not become ready"));
@@ -686,7 +689,9 @@ fn prepare_storage(
                 Err(_) => thread::sleep(Duration::from_millis(100)),
             }
         }
-        disk::revalidate(request.disk())?;
+        // From here the disk is half written: only the target is read again,
+        // so another disk coming or going can't abandon it.
+        let disk = disk.recheck(&[])?;
         progress(2, "Formatting, verifying and mounting the new filesystems");
         let boot = disk::partition(dev, 1);
         let root = disk::partition(dev, 2);
@@ -741,7 +746,7 @@ fn prepare_storage(
         changed.extend(mapping_paths.iter().map(String::as_str));
         output("udevadm", &changed, 70)?;
         // Recheck identity and busy state, accepting only this install's own mappings.
-        disk::revalidate_with_mappings(request.disk(), &mappings.paths())?;
+        disk.recheck(&mappings.paths())?;
         request.filesystem().mount(&root_device, mount)?;
         target.1.set(true);
         if ids.efi.is_some() {
@@ -1206,7 +1211,7 @@ mod encryption_tests {
                 let target = Target::new()?;
                 prepare_storage(&plan, &ids, &layout, PASSPHRASE, &target, &mut mappings)?;
                 // The normal disk selector must still reject our open holders.
-                assert!(disk::revalidate(&identity).is_err());
+                assert!(disk::Reviewed::new(identity.clone()).revalidate().is_err());
                 fs::write(target.0.join("encrypted-sentinel"), b"written by Genkan")?;
                 let mount = target.0.to_str().unwrap();
                 output("fstrim", &["--verbose", mount], 30)?;
@@ -1229,7 +1234,7 @@ mod encryption_tests {
                 drop(target);
                 drop(mappings);
                 assert!(mapping_paths.iter().all(|path| !Path::new(path).exists()));
-                disk::revalidate(&identity)?;
+                disk::Reviewed::new(identity.clone()).revalidate()?;
                 let target = Target::new()?;
                 let mount = target.0.to_str().unwrap();
                 let root = disk::partition(&identity.path, 2);
