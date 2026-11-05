@@ -74,14 +74,19 @@ pub fn best_budget(hw: &Hardware) -> Bytes {
 }
 
 /// The curated default for `role` on `hw`: the default with the largest
-/// tier the machine reaches, whose model fits on a GPU.
+/// tier the machine reaches, whose model fits on a GPU (or in unified memory),
+/// with or without some experts in system RAM: on 8 GiB cards the curated
+/// choice is a mixture of experts placed that way, deliberately.
 pub fn curated_default<'c>(hw: &Hardware, catalog: &'c Catalog, role: Role, prefs: &Preferences) -> Option<&'c crate::catalog::CuratedDefault> {
     let budget = best_budget(hw);
     let mut candidates: Vec<_> = catalog.defaults.iter().filter(|d| d.role == role && d.min_budget <= budget).collect();
     candidates.sort_by_key(|d| std::cmp::Reverse(d.min_budget));
     candidates.into_iter().find(|d| {
         catalog.get(&d.model).is_some_and(|e| {
-            !excluded(e, prefs) && matches!(fit::fit(e, hw, FitOptions::default()), Fit::Gpu { .. } | Fit::Unified { .. })
+            !excluded(e, prefs) && matches!(
+                    fit::fit(e, hw, FitOptions::default()),
+                    Fit::Gpu { .. } | Fit::Unified { .. } | Fit::GpuWithExpertOffload { .. }
+                )
         })
     })
 }

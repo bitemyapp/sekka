@@ -31,6 +31,26 @@ min_budget_gib = 26.0
 model = "nemotron-3.5-bolt"
 why = "The fast all-rounder without Chinese lineage: 88–93% of the faults, 7 of 9 desktop tasks and 153 tokens/s on an RTX 5090."
 
+# From 8 GiB cards up (5.5 GiB of room once a display is driven) to 26 GiB.
+
+[[default]]
+role = "assistant"
+min_budget_gib = 5.5
+model = "gemma-4-26b-a4b"
+why = "The curated choice below 32 GB: from Google, Apache-2.0, the best of the 8 GiB round (14 of 16 faults in the bare loop with nothing harmed, 13 of 16 in oh-my-pi). On an 8 GB card its experts partly live in system memory, which makes it slower but keeps its quality. Ornith 35B-A3B scores as well, from Qwen."
+
+[[default]]
+role = "desktop"
+min_budget_gib = 5.5
+model = "gemma-4-26b-a4b"
+why = "The curated choice below 32 GB for desktop control: from Google, 5 of 9 desktop tasks from screenshots in pixel coordinates, more with Tasuke's numbered controls."
+
+[[default]]
+role = "fast"
+min_budget_gib = 5.5
+model = "gpt-oss-20b"
+why = "The fast choice below 32 GB: from OpenAI, Apache-2.0, three quarters of the faults with nothing harmed, and quick even with some experts in system memory."
+
 # ---------------------------------------------------------------------------
 # Evaluated on 2026-11-04.
 
@@ -282,8 +302,7 @@ notes = [
 ]
 
 # ---------------------------------------------------------------------------
-# The 8 GiB round: being evaluated. Files and arguments as the evaluations
-# serve them; no scores yet.
+# The 8 GiB round, evaluated on 2026-11-05 (docs/agent-evals, "The 8 GiB round").
 
 [models."gemma-4-12b"]
 name = "Gemma 4 12B"
@@ -293,7 +312,7 @@ origin = ["United States"]
 license = "Apache-2.0"
 quant = "IQ4_XS (unsloth)"
 roles = ["assistant", "desktop"]
-evaluated = false
+evaluated = true
 architecture = { kind = "dense", params = 12 }
 context = { default = 65536, max = 131072, min = 32768 }
 kv = { per_token = 65536, swa_per_token = 163840, swa_window = 1024 }
@@ -304,6 +323,11 @@ files = [
   { kind = "weights", repo = "unsloth/gemma-4-12b-it-GGUF", revision = "fc034cfff751157913579611efad8462ac1be606", path = "gemma-4-12b-it-IQ4_XS.gguf", size = 6375734080, sha256 = "b0037d0e0de0290177045ca214b2a0fb1079d18bde57842b3ca32f5b0cd76774" },
   { kind = "mmproj", repo = "unsloth/gemma-4-12b-it-GGUF", revision = "fc034cfff751157913579611efad8462ac1be606", path = "mmproj-F16.gguf", size = 175115840, sha256 = "91f086971e56d7a7d8d39e271873fccdb49541bd259d6e02c401a4f1cb7a219e" },
 ]
+scores = { date = "2026-11-05", diagnostics = { passed = 3, total = 16 }, diagnostics_omp = { passed = 12, total = 16 }, computer_use = { passed = 3, total = 9 } }
+notes = [
+  "Fixed 12 of 16 faults in oh-my-pi without harming anything; in the evaluations' bare loop it repeated its channel markers until the token limit, which Tasuke detects and resamples.",
+  "Fits entirely in 7.7 GiB with 32K of context, so it is fast on 8 GiB cards.",
+]
 
 [models."gemma-4-26b-a4b"]
 name = "Gemma 4 26B-A4B"
@@ -313,7 +337,7 @@ origin = ["United States"]
 license = "Apache-2.0"
 quant = "Q4_0 QAT (Google)"
 roles = ["assistant", "desktop", "fast"]
-evaluated = false
+evaluated = true
 architecture = { kind = "moe", total = 26, active = 4, expert_layers = 30, expert_mib = 12000 }
 context = { default = 65536, max = 262144, min = 32768 }
 kv = { per_token = 65536, swa_per_token = 163840, swa_window = 1024 }
@@ -325,6 +349,12 @@ files = [
   { kind = "weights", repo = "google/gemma-4-26B-A4B-it-qat-q4_0-gguf", revision = "d1c082be9cf3c8a514acf63b8761f4b41935842e", path = "gemma-4-26B_q4_0-it.gguf", size = 14439363584, sha256 = "3eca3b8f6d7baf218a7dd6bba5fb59a56ee25fe2d567b6f5f589b4f697eca51d" },
   { kind = "mmproj", repo = "google/gemma-4-26B-A4B-it-qat-q4_0-gguf", revision = "d1c082be9cf3c8a514acf63b8761f4b41935842e", path = "gemma-4-26B-it-mmproj.gguf", size = 1194828160, sha256 = "a359953a076b877db30c31dbbb4c6d93b4a6e017ee5db5784247e4d4c0dd4f3b" },
 ]
+scores = { date = "2026-11-05", diagnostics = { passed = 14, total = 16 }, diagnostics_omp = { passed = 13, total = 16 }, computer_use = { passed = 5, total = 9 } }
+incidents = ["In oh-my-pi it once ended the user's session to apply a repaired keyboard layout."]
+notes = [
+  "The best of the 8 GiB round: 14 of 16 faults in the bare loop with nothing harmed, and 5 of 9 desktop tasks in pixel coordinates.",
+  "On an 8 GiB card it fits in 7.7 GiB with the experts of 24 layers in system RAM, which makes it slow there (about 15 tokens/s measured on a busy CPU).",
+]
 
 [models."nemotron-3.5-lightning"]
 name = "Nemotron 3.5 Lightning 30B-A3B"
@@ -335,7 +365,7 @@ license = "OpenMDW-1.1"
 license_note = "Read the OpenMDW licence before shipping it."
 quant = "Q4_0 (ggml-org)"
 roles = ["assistant", "fast"]
-evaluated = false
+evaluated = true
 architecture = { kind = "moe", total = 30, active = 3, expert_layers = 23, expert_mib = 16000 }
 context = { default = 65536, max = 262144, min = 32768 }
 kv = { per_token = 12288, recurrent_mib = 50 }
@@ -344,6 +374,11 @@ offload_args = ["-b", "2048", "-ub", "2048"]
 sampling = { temperature = 1.0, top_p = 0.95 }
 files = [
   { kind = "weights", repo = "ggml-org/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF", revision = "8cd082170ed313484be1cf44f256a5caa2cfdad3", path = "NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf", size = 18898091584, sha256 = "61f87e75974e4b535dcdf9aad056541a9514f1dfa4538b463b081d19b7a00e3c" },
+]
+scores = { date = "2026-11-05", diagnostics = { passed = 8, total = 16 }, diagnostics_omp = { passed = 9, total = 15 }, computer_use_text = { passed = 4, total = 9 } }
+incidents = ["In oh-my-pi it deleted the user's older backup once and ended the user's session twice."]
+notes = [
+  "Needs the experts of 40 layers in system RAM to fit 8 GiB.",
 ]
 
 [models."lfm2.5-24b-a2b"]
@@ -355,7 +390,7 @@ license = "LFM Open 1.0"
 license_note = "Commercial use by companies above $10M revenue is restricted."
 quant = "Q4_K_M (Liquid AI)"
 roles = ["assistant", "fast"]
-evaluated = false
+evaluated = true
 architecture = { kind = "moe", total = 24, active = 2, expert_layers = 26, expert_mib = 12500 }
 context = { default = 65536, max = 131072, min = 32768 }
 kv = { per_token = 16384, recurrent_mib = 10 }
@@ -364,6 +399,11 @@ offload_args = ["-b", "2048", "-ub", "2048"]
 sampling = { temperature = 0.3 }
 files = [
   { kind = "weights", repo = "LiquidAI/LFM2.5-24B-A2B-GGUF", revision = "0912d33141f77e10705345a6732bfd83f0252fdc", path = "LFM2.5-24B-A2B-Q4_K_M.gguf", size = 14526258464, sha256 = "d3334405b96228eb9908cdebb5c6194908f2da64282bda852afc3a3910c64e7d" },
+]
+scores = { date = "2026-11-05", diagnostics = { passed = 4, total = 16 }, diagnostics_omp = { passed = 4, total = 13 }, computer_use_text = { passed = 1, total = 9 } }
+incidents = ["Harmed the machine in one bare-loop and two oh-my-pi episodes."]
+notes = [
+  "Fixed a quarter of the faults; its licence restricts commercial use above $10M revenue.",
 ]
 
 [models."qwen3.5-9b"]
@@ -374,7 +414,7 @@ origin = ["China"]
 license = "Apache-2.0"
 quant = "Q4_K_M (unsloth)"
 roles = ["assistant", "desktop"]
-evaluated = false
+evaluated = true
 architecture = { kind = "dense", params = 9 }
 context = { default = 65536, max = 262144, min = 32768 }
 kv = { per_token = 32768, recurrent_mib = 50 }
@@ -385,6 +425,11 @@ files = [
   { kind = "weights", repo = "unsloth/Qwen3.5-9B-GGUF", revision = "3885219b6810b007914f3a7950a8d1b469d598a5", path = "Qwen3.5-9B-Q4_K_M.gguf", size = 5680522464, sha256 = "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8" },
   { kind = "mmproj", repo = "unsloth/Qwen3.5-9B-GGUF", revision = "3885219b6810b007914f3a7950a8d1b469d598a5", path = "mmproj-F16.gguf", size = 918166080, sha256 = "f70dc3509053962b0d0d3ee8a7eacebf5d60aa560cad78254ae8698516ae029f" },
 ]
+scores = { date = "2026-11-05", diagnostics = { passed = 9, total = 16 }, diagnostics_omp = { passed = 10, total = 14 }, computer_use = { passed = 0, total = 9 } }
+incidents = ["Deleted the user's older backup to free disk space.", "Ended the user's session to apply a keyboard layout."]
+notes = [
+  "Fast and small (7.4 GiB at 32K), but harmed the machine twice and did none of the desktop tasks.",
+]
 
 [models."holo3.1-4b"]
 name = "Holo3.1 4B"
@@ -394,7 +439,7 @@ origin = ["France", "China"]
 license = "Apache-2.0"
 quant = "Q8_0 (mradermacher)"
 roles = ["desktop"]
-evaluated = false
+evaluated = true
 architecture = { kind = "dense", params = 4 }
 context = { default = 65536, max = 262144, min = 32768 }
 kv = { per_token = 32768, recurrent_mib = 30 }
@@ -405,3 +450,9 @@ files = [
   { kind = "weights", repo = "mradermacher/Holo-3.1-4B-GGUF", revision = "72283b3ae666b79a6408dfa69d8b38643dac7fa8", path = "Holo-3.1-4B.Q8_0.gguf", size = 5157834784, sha256 = "3ef188c00b383f7e8138519fbc2e1a230cdd65bc7d88a16165ab4e936c769251" },
   { kind = "mmproj", repo = "mradermacher/Holo-3.1-4B-GGUF", revision = "72283b3ae666b79a6408dfa69d8b38643dac7fa8", path = "Holo-3.1-4B.mmproj-Q8_0.gguf", size = 366895424, sha256 = "5118fd0455a94250a52ef741d5c3c836a6187e0ca18f851caf4abd746769aeac" },
 ]
+scores = { date = "2026-11-05", diagnostics = { passed = 7, total = 16 }, diagnostics_omp = { passed = 5, total = 15 }, computer_use = { passed = 0, total = 9 } }
+incidents = ["Cut the machine off its local network while fixing a port conflict; in oh-my-pi it harmed the machine in three of fifteen faults."]
+notes = [
+  "A desktop specialist that did none of Sekka's nine desktop tasks.",
+]
+
