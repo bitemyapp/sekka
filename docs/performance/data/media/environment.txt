@@ -1,0 +1,18 @@
+# Environment of the media benchmarks (runnymede, 2 November 2026)
+commit: d7ecbacd02916c1f67cf9ffcee69e431a318024a
+kernel: 7.3.0
+cpu: AMD Ryzen 7 9800X3D; governor performance, EPP performance
+igpu: Mesa Gallium driver 26.2.6 for AMD Ryzen 7 9800X3D 8-Core Processor (radeonsi, raphael_mendocino, ACO, DRM 3.64, 7.3.0)
+libva: 2.24.1 (players), libva-utils 2.24.0 (vainfo)
+vainfo decode profiles (renderD128): VAProfileH264ConstrainedBaseline VAProfileH264Main VAProfileH264High VAProfileHEVCMain VAProfileHEVCMain10 VAProfileJPEGBaseline VAProfileVP9Profile0 VAProfileVP9Profile2 VAProfileAV1Profile0 
+aizome: /nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0 ("profile":"release","rustc":"rustc1.99.0(b940084d72026-09-28)(builtfromasourcetarball)",)
+utsushi links: FFmpeg 9.0.2 (libavcodec 63), libpipewire 1.6.9, dav1d 1.5.3
+mpv: /nix/store/ndqxyws873ri6h0g0ggg78y09yx3h1f0-mpv-with-scripts-0.41.0 (mpv v0.41.0 Copyright © 2000-2025 mpv/MPlayer/mplayer2 projects); FFmpeg 9.0.2, libplacebo 7.360.1
+vlc: /nix/store/kjirqf9xqmzav2k3wl7wf9fmnqis9mb3-vlc-3.0.24 (3.0.24; its avcodec module links FFmpeg 8.1.3)
+sway: /nix/store/yl8mwqqr3xj01i6daa82r0kwlasvk2hk-sway-1.12 (sway version 1.12), wlroots 0.20.2
+xwayland-satellite: /nix/store/q6k3hsmwr7wb8xinn3cypmkylkd5al6v-xwayland-satellite-0.8.3 (0.8.3), Xwayland 24.1.14
+dbus: /nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2
+pipewire (daemon): /nix/store/n8ksprmibzglf09aavw7mcl4n9767axm-pipewire-1.6.9, wireplumber 0.5.18
+pipewire settings: clock.rate=48000 clock.quantum=1024 clock.min-quantum=32 clock.max-quantum=8192 
+python: /nix/store/xahxrjs30p3mw0a42bqg9ikgkikskw8m-python3-3.14.8
+ffmpeg (encodes): /nix/store/8280gf6l76z9gqb1hwk3c29ivskspjl2-ffmpeg-9.0.2-bin

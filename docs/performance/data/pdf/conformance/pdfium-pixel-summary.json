@@ -1,0 +1,113 @@
+{
+ "tests_found": 256,
+ "excluded": {
+  "input events (.evt)": 17,
+  "xfa_specific (XFA)": 34
+ },
+ "run": 205,
+ "all run": {
+  "tests": 205,
+  "pdfium": {
+   "exact": 180,
+   "pdfium_rule": 180,
+   "under_0.1%_over_48": 184,
+   "under_1%_over_48": 192,
+   "under_5%_over_48": 194,
+   "drew_no_page": 0,
+   "page_count_differs": 0,
+   "size_differs": 0
+  },
+  "hayro-fork": {
+   "exact": 46,
+   "pdfium_rule": 48,
+   "under_0.1%_over_48": 106,
+   "under_1%_over_48": 147,
+   "under_5%_over_48": 170,
+   "drew_no_page": 2,
+   "page_count_differs": 2,
+   "size_differs": 10
+  },
+  "hayro-upstream": {
+   "exact": 46,
+   "pdfium_rule": 48,
+   "under_0.1%_over_48": 103,
+   "under_1%_over_48": 145,
+   "under_5%_over_48": 170,
+   "drew_no_page": 2,
+   "page_count_differs": 2,
+   "size_differs": 10
+  }
+ },
+ "not suppressed": {
+  "tests": 182,
+  "pdfium": {
+   "exact": 180,
+   "pdfium_rule": 180,
+   "under_0.1%_over_48": 180,
+   "under_1%_over_48": 182,
+   "under_5%_over_48": 182,
+   "drew_no_page": 0,
+   "page_count_differs": 0,
+   "size_differs": 0
+  },
+  "hayro-fork": {
+   "exact": 45,
+   "pdfium_rule": 47,
+   "under_0.1%_over_48": 95,
+   "under_1%_over_48": 132,
+   "under_5%_over_48": 151,
+   "drew_no_page": 2,
+   "page_count_differs": 2,
+   "size_differs": 9
+  },
+  "hayro-upstream": {
+   "exact": 45,
+   "pdfium_rule": 47,
+   "under_0.1%_over_48": 92,
+   "under_1%_over_48": 130,
+   "under_5%_over_48": 151,
+   "drew_no_page": 2,
+   "page_count_differs": 2,
+   "size_differs": 9
+  }
+ },
+ "suppressed diff/blank": {
+  "tests": 23,
+  "pdfium": {
+   "exact": 0,
+   "pdfium_rule": 0,
+   "under_0.1%_over_48": 4,
+   "under_1%_over_48": 10,
+   "under_5%_over_48": 12,
+   "drew_no_page": 0,
+   "page_count_differs": 0,
+   "size_differs": 0
+  },
+  "hayro-fork": {
+   "exact": 1,
+   "pdfium_rule": 1,
+   "under_0.1%_over_48": 11,
+   "under_1%_over_48": 15,
+   "under_5%_over_48": 19,
+   "drew_no_page": 0,
+   "page_count_differs": 0,
+   "size_differs": 1
+  },
+  "hayro-upstream": {
+   "exact": 1,
+   "pdfium_rule": 1,
+   "under_0.1%_over_48": 11,
+   "under_1%_over_48": 15,
+   "under_5%_over_48": 19,
+   "drew_no_page": 0,
+   "page_count_differs": 0,
+   "size_differs": 1
+  }
+ },
+ "no expected images": {
+  "tests": 0,
+  "pdfium": {},
+  "hayro-fork": {},
+  "hayro-upstream": {}
+ }
+}

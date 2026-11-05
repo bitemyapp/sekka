@@ -1,0 +1,206 @@
+test	suppression	expected_pages	fork_pages	fork_exact	fork_within_3_mse_0.05	fork_worst_frac_over_48	upstream_exact	upstream_worst_frac_over_48	pdfium_exact	pdfium_worst_frac_over_48	fork_failure_at_1%_by_eye
+alpha_composite.in	-	1	1	no	yes	0.00000	no	0.00000	yes	0.00000	
+axial_shading_point_at_border_no_extend.in	-	1	1	no	no	0.00333	no	0.00333	yes	0.00000	
+bug_1012369.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1015233.in	-	1	1	no	no	0.00363	no	0.00363	yes	0.00000	
+bug_1021762.in	-	1	1	no	no	0.00640	no	0.01220	yes	0.00000	
+bug_1072440.in	-	1	1	no	no	0.00153	no	0.00153	yes	0.00000	
+bug_1087.pdf	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1099446.in	-	1	1	no	no	0.01495	no	0.01495	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_1116869.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1128284.in	-	1	1	no	no	0.00038	no	0.00038	yes	0.00000	
+bug_1161.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_1236.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_1236805.in	diff	1	1	no	no	0.00000	no	0.00000	no	0.00000	
+bug_1237898.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1241587.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1258634.in	diff	1	1	no	no		no		no	0.00175	
+bug_1258968.in	-	1	1	no	no	0.00009	no	0.00009	yes	0.00000	
+bug_1271578.in	-	1	1	no	no	0.00000	no	0.00280	no	0.00240	
+bug_1283.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1286.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_1287409.pdf	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_1288_1.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1288_2.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1294.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1296.in	-	1	1	no	no	0.00011	no	0.00011	yes	0.00000	
+bug_1304714.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1308.pdf	-	1	1	no	no	0.00086	no	0.00076	yes	0.00000	
+bug_1308_1.in	-	1	1	no	no	0.00000	no	0.00017	yes	0.00000	
+bug_1314.in	-	3	3	no	no	0.00120	no	0.00120	yes	0.00000	
+bug_1321.in	-	1	1	no	no	0.08760	no	0.08760	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_1330.in	-	1	1	no	no	0.00106	no	0.00106	yes	0.00000	
+bug_1338.in	-	1	1	no	no	0.00067	no	0.00067	yes	0.00000	
+bug_1355.in	-	1	1	no	no	0.00430	no	0.00430	yes	0.00000	
+bug_1374.in	-	1	1	no	no	0.00180	no	0.00180	yes	0.00000	
+bug_1383708.in	-	1	1	no	no	0.00673	no	0.00673	yes	0.00000	
+bug_1388.in	-	1	1	no	no	0.00032	no	0.00032	yes	0.00000	
+bug_1388_2.in	-	1	1	no	no	0.00125	no	0.00125	yes	0.00000	
+bug_1388_3.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_1395648.in	-	1	1	no	no	0.13250	no	0.13250	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_1396266.in	-	1	1	no	no	0.00234	no	0.00234	yes	0.00000	
+bug_1402.in	-	1	1	no	no	0.00540	no	0.00540	yes	0.00000	
+bug_1430333.in	-	1	1	no	no	0.00165	no	0.00165	yes	0.00000	
+bug_1442723.in	-	1	1	no	no	0.00215	no	0.00265	yes	0.00000	
+bug_1469.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1478366.in	-	1	1	no	no	0.81310	no	0.81310	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_1479436.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1484283.pdf	-	1	1	no	no		no		yes	0.00000	page size: a missing or invalid page box (hayro falls back to A4, PDFium to US Letter) or another box chosen
+bug_1491.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_1546.in	-	1	1	no	no	0.14475	no	0.14475	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_1638.in	-	1	1	no	no	0.00075	no	0.00075	yes	0.00000	
+bug_1639_1.in	-	1	1	no	no	0.00743	no	0.00743	yes	0.00000	
+bug_1693.in	-	1	1	no	no	0.75000	no	0.75000	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_1733.in	-	2	2	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1746.in	-	1	1	no	no	0.13550	no	0.13550	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_1750.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1752.in	-	1	1	no	no	0.00108	no	0.00492	yes	0.00000	
+bug_1772.in	-	1	1	no	no	0.00060	no	0.00060	yes	0.00000	
+bug_1774.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1822.in	-	1	1	no	no	0.00055	no	0.00055	yes	0.00000	
+bug_1845.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1847.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_1883.in	-	4	4	no	no	0.00378	no	0.00378	yes	0.00000	
+bug_1922.in	-	1	1	no	no	0.01310	no	0.03190	yes	0.00000	edges: glyph or stroke edges at 72 dpi, the drawing otherwise the same
+bug_1949.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_1963.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_1966.in	-	1	1	no	no	0.07471	no	0.07471	yes	0.00000	edges: glyph or stroke edges at 72 dpi, the drawing otherwise the same
+bug_1976.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_1983.in	-	1	1	no	no	0.07040	no	0.07040	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_1986.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_1995.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_2106.in	-	1	1	no	yes	0.00000	no	0.00000	yes	0.00000	
+bug_2122.pdf	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_2123.pdf	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_2152.pdf	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_304.pdf	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_332462378.pdf	-	1	1	no	no	0.11900	no	0.11900	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_335309995.pdf	-	1	1	no	no		no		yes	0.00000	page size: a missing or invalid page box (hayro falls back to A4, PDFium to US Letter) or another box chosen
+bug_345274934.pdf	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_346598551.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_346766787.in	diff	1	1	no	no	0.00003	no	0.00003	no	0.00003	
+bug_349972030.pdf	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_358039783.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_372749732.in	-	1	1	no	no	0.81250	no	0.81250	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_394767650.in	diff	1	1	yes	yes	0.00000	yes	0.00000	no	1.00000	
+bug_40040570.in	-	1	1	no	no	0.00041	no	0.00041	yes	0.00000	
+bug_40721524.in	diff	1	1	no	no	0.00465	no	0.00465	no	0.07295	
+bug_40860237.in	-	1	1	no	no	0.00220	no	0.00390	yes	0.00000	
+bug_41010502_1.in	diff	1	1	no	no	0.00262	no	0.00262	no	0.00262	
+bug_41010502_2.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_41153500.in	diff	1	1	no	no	0.00000	no	0.00000	no	0.00500	
+bug_412524377.in	-	2	2	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_41470360.in	diff	1	1	no	no	0.00000	no	0.00000	no	0.00792	
+bug_42270333.in	diff	1	1	no	no	0.08760	no	0.08760	no	0.08760	
+bug_42270459.in	-	1	1	no	no	0.01100	no	0.01090	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_42270459_2.in	diff	1	1	no	no	0.01100	no	0.01090	no	0.01140	
+bug_42270524.in	diff	1	1	no	no	0.00000	no	0.00000	no	0.00000	
+bug_42270577.in	diff	1	1	no	no	0.00855	no	0.00855	no	0.00490	
+bug_42270732.in	diff	1	1	no	no	0.00000	no	0.00000	no	0.46875	
+bug_42270979_1.in	diff	1	1	no	no	0.00000	no	0.00000	no	0.10190	
+bug_42270979_2.in	diff	1	1	no	no	0.00000	no	0.00000	no	0.07005	
+bug_42270979_3.in	diff	1	1	no	no	0.05500	no	0.05500	no	0.05020	
+bug_42270980.in	diff	1	1	no	no	0.00810	no	0.00810	no	0.01893	
+bug_42271010.pdf	diff	1	1	no	no	0.21723	no	0.20850	no	0.97000	
+bug_42271472.in	diff	1	1	no	no	0.00069	no	0.00069	no	0.00069	
+bug_432208037.in	-	1	1	no	no	0.01408	no	0.01558	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_440028542.pdf	-	1	1	no	no	0.00003	no	0.00003	yes	0.00000	
+bug_453723.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_467170761.in	-	1	1	no	no	0.12000	no	0.12000	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_479849565.in	diff	1	1	no	no	0.00005	no	0.00005	no	0.00300	
+bug_491_invisible.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_491_unspecified.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_491_visible.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_512557.pdf	-	1	1	no	no	0.50000	no	0.50000	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_524043_1.in	-	1	1	no	no	0.00783	no	0.00775	yes	0.00000	
+bug_524043_2.in	-	1	1	no	no	0.00272	no	0.00310	yes	0.00000	
+bug_524043_3.in	-	1	1	no	no	0.02098	no	0.02135	yes	0.00000	damaged content: a stream whose /Length is wrong, which PDFium reads to its endstream
+bug_524043_4.in	-	1	1	no	no	0.02098	no	0.02135	yes	0.00000	damaged content: a stream whose /Length is wrong, which PDFium reads to its endstream
+bug_524043_5.in	-	1	1	no	no	0.02098	no	0.02135	yes	0.00000	damaged content: a stream whose /Length is wrong, which PDFium reads to its endstream
+bug_524043_6.in	-	1	1	no	no	0.00570	no	0.00585	yes	0.00000	
+bug_524043_7.in	-	1	1	no	no	0.00272	no	0.00310	yes	0.00000	
+bug_527174.in	-	1	1	no	no		no		yes	0.00000	page size: a missing or invalid page box (hayro falls back to A4, PDFium to US Letter) or another box chosen
+bug_528103.in	-	1	1	no	no	0.00188	no	0.00772	yes	0.00000	
+bug_536543461.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_543018_1.in	-	1	1	no	no	0.02498	no	0.02498	yes	0.00000	damaged content: a stream whose /Length is wrong, which PDFium reads to its endstream
+bug_543018_2.in	-	1	1	no	no	0.02498	no	0.02498	yes	0.00000	damaged content: a stream whose /Length is wrong, which PDFium reads to its endstream
+bug_551258_1.in	-	1	1	no	no	0.02498	no	0.02498	yes	0.00000	damaged content: a stream whose /Length is wrong, which PDFium reads to its endstream
+bug_551460.in	-	1	1	no	no		no		yes	0.00000	page size: a missing or invalid page box (hayro falls back to A4, PDFium to US Letter) or another box chosen
+bug_554151.in	-	1	1	no	no		no		yes	0.00000	page size: a missing or invalid page box (hayro falls back to A4, PDFium to US Letter) or another box chosen
+bug_557223.in	-	1	1	no	no	1.00000	no	1.00000	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_585.in	-	1	1	no	no	0.00199	no	0.00199	yes	0.00000	
+bug_591137.in	-	1	1	no	no	0.00007	no	0.00007	yes	0.00000	
+bug_601362.in	-	1	1	no	no	0.00505	no	0.00505	yes	0.00000	
+bug_603518.pdf	-	1	1	no	no	0.75067	no	0.75067	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_632.in	-	2	2	no	no	0.00005	no	0.00075	yes	0.00000	
+bug_660850.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_665467.in	-	1	1	no	no	0.00200	no	0.00270	yes	0.00000	
+bug_71.in	-	1	1	no	no		no		yes	0.00000	page size: a missing or invalid page box (hayro falls back to A4, PDFium to US Letter) or another box chosen
+bug_714187.in	-	1	1	no	no		no		yes	0.00000	page size: a missing or invalid page box (hayro falls back to A4, PDFium to US Letter) or another box chosen
+bug_718762.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_725389.in	-	1	1	no	no	0.00435	no	0.00435	yes	0.00000	
+bug_733528.in	-	1	1	no	no	0.01067	no	0.01067	yes	0.00000	no appearance stream: an annotation or form field PDFium draws an appearance for and hayro leaves out
+bug_736695_1.in	-	1	1	no	no	0.00056	no	0.00056	yes	0.00000	
+bug_736703.in	-	1	1	no	no	0.01140	no	0.01178	yes	0.00000	edges: glyph or stroke edges at 72 dpi, the drawing otherwise the same
+bug_820345.in	-	1	1	no	no	0.00702	no	0.00942	yes	0.00000	
+bug_828206.pdf	-	1	0	no	no		no		yes	0.00000	not opened: a damaged file PDFium repairs and hayro refuses
+bug_830221.pdf	-	1	0	no	no		no		yes	0.00000	not opened: a damaged file PDFium repairs and hayro refuses
+bug_842.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_843.in	-	1	1	no	no	0.00058	no	0.00058	yes	0.00000	
+bug_845697.in	-	1	1	no	no	0.00022	no	0.00103	yes	0.00000	
+bug_846.in	-	1	1	no	no	0.01413	no	0.01555	yes	0.00000	edges: glyph or stroke edges at 72 dpi, the drawing otherwise the same
+bug_867501.pdf	-	1	1	no	no	0.33333	no	0.33333	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+bug_909762.in	-	1	1	no	no	0.00038	no	0.00162	yes	0.00000	
+bug_925736.pdf	-	1	1	no	no	0.00005	no	0.00003	yes	0.00000	
+bug_963885.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_966263.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_972999.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+bug_981288.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+bug_981347.in	-	1	1	no	no		no		yes	0.00000	page size: a missing or invalid page box (hayro falls back to A4, PDFium to US Letter) or another box chosen
+bug_984811.in	-	1	1	no	no	0.00003	no	0.00014	yes	0.00000	
+bug_986108.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+checkbox_radiobutton_hide.in	-	1	1	no	no	0.00524	no	0.00524	no	0.00107	
+checkbox_radiobutton_reset.in	-	1	1	no	no	0.00613	no	0.00613	yes	0.00000	
+checkboxes.in	-	1	1	no	no	0.01365	no	0.01365	yes	0.00000	no appearance stream: an annotation or form field PDFium draws an appearance for and hayro leaves out
+composite-and-xnor.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+composite-or-xor-replace.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+dashed_line_negative_scale.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+dashed_lines.in	-	1	1	no	no	0.01213	no	0.01213	yes	0.00000	edges: glyph or stroke edges at 72 dpi, the drawing otherwise the same
+direct_content_stream.pdf	-	1	1	no	no		no		yes	0.00000	page size: a missing or invalid page box (hayro falls back to A4, PDFium to US Letter) or another box chosen
+font_size.in	-	1	1	no	no	0.00592	no	0.01525	yes	0.00000	
+freetext_annotation_with_ap.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+freetext_annotation_with_da.in	-	1	1	no	no	0.03125	no	0.03125	yes	0.00000	no appearance stream: an annotation or form field PDFium draws an appearance for and hayro leaves out
+freetext_annotation_without_da.pdf	-	1	1	no	no	0.03125	no	0.03125	yes	0.00000	no appearance stream: an annotation or form field PDFium draws an appearance for and hayro leaves out
+generation_numbers1.pdf	-	1	1	no	no	0.00665	no	0.00843	yes	0.00000	
+generation_numbers2.pdf	-	1	1	no	no	0.00665	no	0.00843	yes	0.00000	
+icc_profile_bad_component.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+icc_profile_bad_value.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+image_transformer_other.in	-	1	1	no	no	0.08098	no	0.08098	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+jpxdecode.in	diff	1	1	no	no	0.03409	no	0.03409	no	0.05256	
+jpxdecode_indexed.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+jpxdecode_indexed2.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+jpxdecode_smask_in_data_2.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+jpxdecode_with_mismatch_colorspace.in	-	1	1	no	no	0.40909	no	0.40909	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+jpxdecode_without_bitspercomponent.in	diff	1	1	no	no	0.03409	no	0.03409	no	0.05256	
+jpxdecode_without_colorspace.in	diff	1	1	no	no	0.03409	no	0.03409	no	0.05256	
+jpxdecode_without_smaskindata.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+long_dashed_line.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+lzw1.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+matte.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+radial_shading_point_at_border.in	-	1	1	no	no	0.12279	no	0.12279	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+radial_shading_point_at_border_no_extend.in	-	1	1	no	no	0.00106	no	0.00106	yes	0.00000	
+radial_shading_point_at_center.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+rectangles_clipped.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+rectangles_wrong_xref_size.in	-	1	1	no	no	0.00000	no	0.00000	yes	0.00000	
+same_color_knockout_fill.in	-	1	1	no	no	0.01970	no	0.01970	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+shade-tensor.in	-	1	1	no	no	0.05034	no	0.05034	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+shade.in	-	1	1	no	no	0.18474	no	0.18474	yes	0.00000	drawn differently: content missing, extra, or in other colours or places
+single_point_paths.in	-	1	1	no	no	0.00285	no	0.00285	yes	0.00000	
+smask_blend.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+stream_with_indirect_dict.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+text_form_custom_font.in	-	1	1	no	no	0.01370	no	0.01370	yes	0.00000	no appearance stream: an annotation or form field PDFium draws an appearance for and hayro leaves out
+text_form_multiline.in	-	1	1	no	no	0.00740	no	0.00740	yes	0.00000	
+transfer_function.in	-	2	2	no	no	0.00000	no	0.00000	yes	0.00000	
+type3.in	-	1	1	no	no	0.00083	no	0.00083	yes	0.00000	
+type3_xobject.in	-	1	1	yes	yes	0.00000	yes	0.00000	yes	0.00000	
+use_symbolneu/bug_1449.in	-	1	1	no	no	0.00200	no	0.00200	yes	0.00000	

@@ -1,0 +1,6 @@
+{
+  "baseline": {"kernel":"7.3","mesa":"26.2.6","nixpkgs":"1c89083e451e891152365b799595cf7790a43325","sekka":"d7ecbacd02916c1f67cf9ffcee69e431a318024a","systemd":"262"},
+  "aizome": {"aizome":"/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0","aizome-version":"0.1.0","kernel":"7.3","mesa":"26.2.6","nixpkgs":"1c89083e451e891152365b799595cf7790a43325","sekka":"d7ecbacd02916c1f67cf9ffcee69e431a318024a","systemd":"262"},
+  "gnome": {"gdm":"50.2","gnome-shell":"50.4","kernel":"7.3","mesa":"26.2.6","mutter":"50.5","nixpkgs":"1c89083e451e891152365b799595cf7790a43325","sekka":"d7ecbacd02916c1f67cf9ffcee69e431a318024a","systemd":"262"},
+  "plasma": {"frameworks":"6.31.0","kernel":"7.3","kwin":"6.8.2","mesa":"26.2.6","nixpkgs":"1c89083e451e891152365b799595cf7790a43325","plasma-login-manager":"6.8.2","plasma-workspace":"6.8.2","qt":"6.12.0","sekka":"d7ecbacd02916c1f67cf9ffcee69e431a318024a","systemd":"262"}
+}

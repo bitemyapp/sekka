@@ -1,0 +1,242 @@
+{
+ "kit": {
+  "task-clock": 19.265,
+  "user": 16.564,
+  "sys": 3.229,
+  "page-faults": 1220.5,
+  "context-switches": 0.0,
+  "cycles": 82266810.0,
+  "instructions": 316281175.0,
+  "n": 8
+ },
+ "gtk4": {
+  "task-clock": 98.10499999999999,
+  "user": 61.5855,
+  "sys": 37.5735,
+  "page-faults": 18130.0,
+  "context-switches": 0.0,
+  "cycles": 330741751.5,
+  "instructions": 790155758.5,
+  "n": 8
+ },
+ "gtk4.lean": {
+  "task-clock": 31.240000000000002,
+  "user": 24.2765,
+  "sys": 6.973,
+  "page-faults": 2973.5,
+  "context-switches": 0.0,
+  "cycles": 130350184.5,
+  "instructions": 336617473.5,
+  "n": 8
+ },
+ "gtk4.cairo": {
+  "task-clock": 33.075,
+  "user": 25.823,
+  "sys": 7.324,
+  "page-faults": 3010.5,
+  "context-switches": 0.0,
+  "cycles": 136764481.0,
+  "instructions": 337844803.0,
+  "n": 8
+ },
+ "gtk4.radv-only": {
+  "task-clock": 49.114999999999995,
+  "user": 37.618,
+  "sys": 13.513,
+  "page-faults": 4679.5,
+  "context-switches": 0.0,
+  "cycles": 191541229.5,
+  "instructions": 450597130.5,
+  "n": 8
+ },
+ "adw": {
+  "task-clock": 120.44,
+  "user": 82.89750000000001,
+  "sys": 39.931,
+  "page-faults": 17315.5,
+  "context-switches": 0.0,
+  "cycles": 443974436.5,
+  "instructions": 1099632324.5,
+  "n": 8
+ },
+ "adw.lean": {
+  "task-clock": 56.14,
+  "user": 48.722,
+  "sys": 8.355,
+  "page-faults": 3869.5,
+  "context-switches": 0.0,
+  "cycles": 251534031.5,
+  "instructions": 675533213.0,
+  "n": 8
+ },
+ "adw.cairo": {
+  "task-clock": 53.93,
+  "user": 45.451,
+  "sys": 9.2765,
+  "page-faults": 3818.5,
+  "context-switches": 0.0,
+  "cycles": 239469489.0,
+  "instructions": 627324095.0,
+  "n": 8
+ },
+ "adw.radv-only": {
+  "task-clock": 71.35499999999999,
+  "user": 58.714,
+  "sys": 15.706,
+  "page-faults": 5439.5,
+  "context-switches": 0.0,
+  "cycles": 300543918.5,
+  "instructions": 745457689.5,
+  "n": 8
+ },
+ "qtwidgets": {
+  "task-clock": 45.385000000000005,
+  "user": 36.77850000000001,
+  "sys": 9.7835,
+  "page-faults": 4488.0,
+  "context-switches": 0.0,
+  "cycles": 192716879.0,
+  "instructions": 508314415.5,
+  "n": 8
+ },
+ "qtwidgets.lean": {
+  "task-clock": 19.765,
+  "user": 15.4955,
+  "sys": 4.8685,
+  "page-faults": 2774.0,
+  "context-switches": 0.0,
+  "cycles": 77847693.5,
+  "instructions": 237473855.0,
+  "n": 8
+ },
+ "qtwidgets.no-gtk3-theme": {
+  "task-clock": 20.465,
+  "user": 15.078499999999998,
+  "sys": 6.1855,
+  "page-faults": 2800.5,
+  "context-switches": 0.0,
+  "cycles": 80194835.0,
+  "instructions": 239705432.0,
+  "n": 8
+ },
+ "qtquick": {
+  "task-clock": 91.975,
+  "user": 68.5135,
+  "sys": 26.7405,
+  "page-faults": 12907.5,
+  "context-switches": 0.0,
+  "cycles": 368121142.0,
+  "instructions": 916603009.0,
+  "n": 8
+ },
+ "qtquick.lean": {
+  "task-clock": 36.795,
+  "user": 28.096000000000004,
+  "sys": 9.2305,
+  "page-faults": 4592.0,
+  "context-switches": 0.0,
+  "cycles": 151480412.5,
+  "instructions": 422714488.5,
+  "n": 8
+ },
+ "qtquick.software": {
+  "task-clock": 61.635000000000005,
+  "user": 51.545500000000004,
+  "sys": 12.142,
+  "page-faults": 6110.5,
+  "context-switches": 0.0,
+  "cycles": 263556426.0,
+  "instructions": 690400783.5,
+  "n": 8
+ },
+ "qtquick.no-gtk3-theme": {
+  "task-clock": 68.565,
+  "user": 49.76050000000001,
+  "sys": 19.195500000000003,
+  "page-faults": 11472.0,
+  "context-switches": 0.0,
+  "cycles": 262027083.0,
+  "instructions": 661319258.0,
+  "n": 8
+ },
+ "sumi": {
+  "task-clock": 18.685,
+  "user": 15.8745,
+  "sys": 2.968,
+  "page-faults": 1173.0,
+  "context-switches": 0.0,
+  "cycles": 78963848.0,
+  "instructions": 307688026.0,
+  "n": 8
+ },
+ "gnome-text-editor": {
+  "task-clock": 162.15,
+  "user": 122.991,
+  "sys": 42.178,
+  "page-faults": 19321.5,
+  "context-switches": 0.0,
+  "cycles": 635847372.5,
+  "instructions": 1570851931.0,
+  "n": 8
+ },
+ "gnome-text-editor.lean": {
+  "task-clock": 90.49000000000001,
+  "user": 79.0865,
+  "sys": 12.756499999999999,
+  "page-faults": 5579.0,
+  "context-switches": 0.0,
+  "cycles": 412126369.5,
+  "instructions": 1081644098.5,
+  "n": 8
+ },
+ "gnome-text-editor.cairo": {
+  "task-clock": 93.58,
+  "user": 81.51750000000001,
+  "sys": 13.1465,
+  "page-faults": 5978.5,
+  "context-switches": 0.0,
+  "cycles": 424119585.0,
+  "instructions": 1083919698.5,
+  "n": 8
+ },
+ "gnome-text-editor.radv-only": {
+  "task-clock": 111.13499999999999,
+  "user": 94.9465,
+  "sys": 19.185000000000002,
+  "page-faults": 7326.5,
+  "context-switches": 0.0,
+  "cycles": 485764120.0,
+  "instructions": 1198996133.5,
+  "n": 8
+ },
+ "kwrite": {
+  "task-clock": 102.39,
+  "user": 83.58000000000001,
+  "sys": 19.6405,
+  "page-faults": 7882.0,
+  "context-switches": 0.0,
+  "cycles": 440657886.5,
+  "instructions": 1105571245.5,
+  "n": 8
+ },
+ "kwrite.lean": {
+  "task-clock": 71.12,
+  "user": 58.6965,
+  "sys": 13.0305,
+  "page-faults": 6155.0,
+  "context-switches": 0.0,
+  "cycles": 299273080.0,
+  "instructions": 786225135.5,
+  "n": 8
+ },
+ "kwrite.no-gtk3-theme": {
+  "task-clock": 73.00999999999999,
+  "user": 56.495,
+  "sys": 16.378999999999998,
+  "page-faults": 6176.5,
+  "context-switches": 0.0,
+  "cycles": 307447474.0,
+  "instructions": 790958032.5,
+  "n": 8
+ }
+}

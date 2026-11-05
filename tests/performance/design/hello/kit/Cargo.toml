@@ -1,0 +1,22 @@
+# The same window as the GTK4, libadwaita, Qt Widgets and Qt Quick programs
+# beside it, in Aizome's kit: a label and a button. Its own workspace; it
+# takes aizome-kit by path, so it is built exactly as Aizome's apps are.
+[package]
+name = "hello-kit"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+aizome-kit = { path = "../../../../../desktop/aizome/crates/aizome-kit" }
+
+[workspace]
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+
+[patch.crates-io]
+moxcms = { git = "https://github.com/bitemyapp/moxcms", rev = "b63298023362c19b0ea5499c2c8d35802fc1adac" }
+zune-core = { git = "https://github.com/bitemyapp/zune-image", branch = "scaled-idct" }
+simdutf8 = { path = "../../../../../apps/hotaru/vendor/simdutf8" }

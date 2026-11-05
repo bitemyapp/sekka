@@ -1,0 +1,68 @@
+{
+ "rounds": 3,
+ "trials": [
+  {
+   "subject": "baseline",
+   "clip": null
+  },
+  {
+   "subject": "utsushi",
+   "clip": "tos-1080p24-h264.mp4"
+  },
+  {
+   "subject": "mpv-default",
+   "clip": "tos-1080p24-h264.mp4"
+  },
+  {
+   "subject": "mpv-vaapi-gpunext",
+   "clip": "tos-1080p24-h264.mp4"
+  },
+  {
+   "subject": "mpv-vaapi-dmabuf",
+   "clip": "tos-1080p24-h264.mp4"
+  },
+  {
+   "subject": "vlc-default",
+   "clip": "tos-1080p24-h264.mp4"
+  },
+  {
+   "subject": "mpv-sekka",
+   "clip": "tos-1080p24-h264.mp4"
+  },
+  {
+   "subject": "baseline",
+   "clip": null,
+   "mode": "pause",
+   "sound": true,
+   "window_s": 30
+  },
+  {
+   "subject": "utsushi",
+   "clip": "tos-1080p24-h264.mp4",
+   "mode": "pause",
+   "sound": true,
+   "window_s": 30
+  },
+  {
+   "subject": "mpv-default",
+   "clip": "tos-1080p24-h264.mp4",
+   "mode": "pause",
+   "sound": true,
+   "window_s": 30
+  },
+  {
+   "subject": "mpv-vaapi-dmabuf",
+   "clip": "tos-1080p24-h264.mp4",
+   "mode": "pause",
+   "sound": true,
+   "window_s": 30
+  },
+  {
+   "subject": "vlc-default",
+   "clip": "tos-1080p24-h264.mp4",
+   "mode": "pause",
+   "sound": true,
+   "window_s": 30
+  }
+ ]
+}

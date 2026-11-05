@@ -1,0 +1,60 @@
+            fn window offset offset enum impl frame mut surface offset match surface; // 1
+        scroll layout match scroll enum region row frame column layout column; // 2
+row damage text mut offset fn; // 3
+text surface damage row; // 4
+layout buffer column; // 5
+offset commit surface scroll impl damage self damage text; // 6
+    column text row frame impl count offset; // 7
+        index impl paint region let paint enum; // 8
+        text frame struct window fn self layout frame; // 9
+    let value count fn enum value region; // 10
+layout paint text paint fn surface fn; // 11
+struct self enum enum index surface region enum enum commit layout window; // 12
+        index damage struct count row commit frame text; // 13
+scroll damage frame buffer region frame row paint layout layout; // 14
+        mut value window fn fn column let surface paint commit match; // 15
+    column damage window impl window offset window region; // 16
+fn enum surface; // 17
+        index scroll buffer column region offset layout buffer value window text match; // 18
+            impl damage frame text surface count region match match column; // 19
+        value buffer region offset count count surface impl count struct offset; // 20
+    commit damage damage match impl layout; // 21
+        layout commit offset; // 22
+        buffer layout index; // 23
+    frame mut fn let row count surface enum text enum; // 24
+            scroll index buffer surface region layout struct buffer count paint region; // 25
+            match window window commit region damage region frame frame impl region surface; // 
+count match frame row; // 27
+        offset frame struct enum mut frame scroll index struct let region; // 28
+        value column window frame region region match; // 29
+        region text match offset self offset text; // 30
+            damage region index damage self mut match scroll buffer fn self let; // 31
+layout column damage region buffer region; // 32
+struct mut layout region offset window frame let struct text struct match; // 33
+            window offset fn; // 34
+            region commit self paint; // 35
+        column struct mut; // 36
+            match match buffer frame enum match surface; // 37
+    fn self paint; // 38
+            enum damage scroll match fn value match column column frame; // 39
+    self match window commit frame; // 40
+        row frame index layout text region count fn; // 41
+        region region let; // 42
+            self fn text self layout text; // 43
+        layout row paint struct offset region frame struct; // 44
+        window impl let surface commit window; // 45
+    layout commit region enum buffer count row match count self fn; // 46
+    let damage enum index; // 47
+            offset text self index damage damage; // 48
+    column let impl let commit index frame text offset; // 49
+    fn window layout enum region; // 50
+    struct layout mut scroll impl surface column window commit layout paint; // 51
+    fn offset offset text let surface window; // 52
+            frame paint text damage paint paint scroll row self self region; // 53
+    paint frame match buffer column match text buffer; // 54
+    frame column column window struct; // 55
+    surface mut commit let scroll count count value struct paint; // 56
+            paint impl mut layout region count; // 57
+        surface paint offset damage commit offset fn window paint value surface; // 58
+            let struct column match frame damage window frame value let damage; // 59
+            self frame enum let; // 60

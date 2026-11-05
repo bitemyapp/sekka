@@ -1,0 +1,81 @@
+{
+ "aizome-idle": {
+  "eligible": 447,
+  "spare_time_misses": 0,
+  "rate": 0.0,
+  "p_next_also": null,
+  "longest_run": 0,
+  "runs": []
+ },
+ "aizome-load": {
+  "eligible": 451,
+  "spare_time_misses": 0,
+  "rate": 0.0,
+  "p_next_also": null,
+  "longest_run": 0,
+  "runs": []
+ },
+ "gnome-idle": {
+  "eligible": 450,
+  "spare_time_misses": 4,
+  "rate": 0.009,
+  "p_next_also": 0.0,
+  "longest_run": 1,
+  "runs": [
+   1,
+   1,
+   1,
+   1
+  ]
+ },
+ "gnome-load": {
+  "eligible": 434,
+  "spare_time_misses": 90,
+  "rate": 0.207,
+  "p_next_also": 0.124,
+  "longest_run": 4,
+  "runs": [
+   4,
+   4,
+   2,
+   2,
+   2,
+   2,
+   2,
+   1,
+   1,
+   1
+  ]
+ },
+ "plasma-idle": {
+  "eligible": 462,
+  "spare_time_misses": 77,
+  "rate": 0.167,
+  "p_next_also": 0.961,
+  "longest_run": 32,
+  "runs": [
+   32,
+   23,
+   22
+  ]
+ },
+ "plasma-load": {
+  "eligible": 454,
+  "spare_time_misses": 138,
+  "rate": 0.304,
+  "p_next_also": 0.855,
+  "longest_run": 41,
+  "runs": [
+   41,
+   35,
+   35,
+   11,
+   1,
+   1,
+   1,
+   1,
+   1,
+   1
+  ]
+ }
+}

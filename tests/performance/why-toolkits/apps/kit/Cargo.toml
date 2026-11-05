@@ -1,0 +1,23 @@
+# The matched program in Aizome's kit (docs/performance/why-toolkits.md): its own
+# workspace, taking aizome-kit by path, built as Aizome's apps are.
+[package]
+name = "tk-kit"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+aizome-kit = { path = "../../../../../desktop/aizome/crates/aizome-kit" }
+
+[workspace]
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+# As Aizome's release profile: line tables, for perf's call chains.
+debug = "line-tables-only"
+
+[patch.crates-io]
+moxcms = { git = "https://github.com/bitemyapp/moxcms", rev = "b63298023362c19b0ea5499c2c8d35802fc1adac" }
+zune-core = { git = "https://github.com/bitemyapp/zune-image", branch = "scaled-idct" }
+simdutf8 = { path = "../../../../../apps/hotaru/vendor/simdutf8" }

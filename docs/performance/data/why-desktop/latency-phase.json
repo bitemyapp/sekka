@@ -1,0 +1,860 @@
+{
+ "aizome-idle": {
+  "n": 660,
+  "refresh_ms": 13.334,
+  "key_to_present_p50_ms": 6.488,
+  "key_to_client_p50_ms": 0.083,
+  "client_recv_to_commit_p50_ms": 0.002,
+  "commit_to_present_p50_ms": 6.408,
+  "commit_to_next_vblank_p50_ms": 6.194,
+  "extra_refreshes_mean": 0.024,
+  "share_missing_first_vblank": 0.024,
+  "share_missing_two": 0.0,
+  "smallest_phase_that_made_it_ms": 0.193,
+  "largest_phase_that_missed_ms": 0.203,
+  "latch_estimate_ms": 0,
+  "bins": [
+   {
+    "phase_ms": [
+     0,
+     1
+    ],
+    "n": 62,
+    "missed": 16,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     1,
+     2
+    ],
+    "n": 56,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     2,
+     3
+    ],
+    "n": 55,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     3,
+     4
+    ],
+    "n": 40,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     4,
+     5
+    ],
+    "n": 58,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     5,
+     6
+    ],
+    "n": 50,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     6,
+     7
+    ],
+    "n": 52,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     7,
+     8
+    ],
+    "n": 42,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     8,
+     9
+    ],
+    "n": 50,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     9,
+     10
+    ],
+    "n": 48,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     10,
+     11
+    ],
+    "n": 46,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     11,
+     12
+    ],
+    "n": 47,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     12,
+     13
+    ],
+    "n": 40,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     13,
+     14
+    ],
+    "n": 14,
+    "missed": 0,
+    "missed2": 0
+   }
+  ]
+ },
+ "aizome-load": {
+  "n": 660,
+  "refresh_ms": 13.334,
+  "key_to_present_p50_ms": 7.045,
+  "key_to_client_p50_ms": 0.053,
+  "client_recv_to_commit_p50_ms": 0.002,
+  "commit_to_present_p50_ms": 6.991,
+  "commit_to_next_vblank_p50_ms": 6.505,
+  "extra_refreshes_mean": 0.029,
+  "share_missing_first_vblank": 0.029,
+  "share_missing_two": 0.0,
+  "smallest_phase_that_made_it_ms": 0.169,
+  "largest_phase_that_missed_ms": 1.184,
+  "latch_estimate_ms": 0,
+  "bins": [
+   {
+    "phase_ms": [
+     0,
+     1
+    ],
+    "n": 61,
+    "missed": 18,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     1,
+     2
+    ],
+    "n": 55,
+    "missed": 1,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     2,
+     3
+    ],
+    "n": 42,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     3,
+     4
+    ],
+    "n": 51,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     4,
+     5
+    ],
+    "n": 50,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     5,
+     6
+    ],
+    "n": 54,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     6,
+     7
+    ],
+    "n": 37,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     7,
+     8
+    ],
+    "n": 45,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     8,
+     9
+    ],
+    "n": 54,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     9,
+     10
+    ],
+    "n": 46,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     10,
+     11
+    ],
+    "n": 53,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     11,
+     12
+    ],
+    "n": 49,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     12,
+     13
+    ],
+    "n": 51,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     13,
+     14
+    ],
+    "n": 12,
+    "missed": 0,
+    "missed2": 0
+   }
+  ]
+ },
+ "gnome-idle": {
+  "n": 660,
+  "refresh_ms": 13.334,
+  "key_to_present_p50_ms": 10.461,
+  "key_to_client_p50_ms": 0.12,
+  "client_recv_to_commit_p50_ms": 0.002,
+  "commit_to_present_p50_ms": 10.346,
+  "commit_to_next_vblank_p50_ms": 6.512,
+  "extra_refreshes_mean": 0.276,
+  "share_missing_first_vblank": 0.276,
+  "share_missing_two": 0.0,
+  "smallest_phase_that_made_it_ms": 2.485,
+  "largest_phase_that_missed_ms": 10.513,
+  "latch_estimate_ms": 3,
+  "bins": [
+   {
+    "phase_ms": [
+     0,
+     1
+    ],
+    "n": 53,
+    "missed": 53,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     1,
+     2
+    ],
+    "n": 48,
+    "missed": 48,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     2,
+     3
+    ],
+    "n": 52,
+    "missed": 49,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     3,
+     4
+    ],
+    "n": 57,
+    "missed": 28,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     4,
+     5
+    ],
+    "n": 48,
+    "missed": 1,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     5,
+     6
+    ],
+    "n": 49,
+    "missed": 1,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     6,
+     7
+    ],
+    "n": 45,
+    "missed": 1,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     7,
+     8
+    ],
+    "n": 46,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     8,
+     9
+    ],
+    "n": 43,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     9,
+     10
+    ],
+    "n": 56,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     10,
+     11
+    ],
+    "n": 55,
+    "missed": 1,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     11,
+     12
+    ],
+    "n": 41,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     12,
+     13
+    ],
+    "n": 53,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     13,
+     14
+    ],
+    "n": 14,
+    "missed": 0,
+    "missed2": 0
+   }
+  ]
+ },
+ "gnome-load": {
+  "n": 660,
+  "refresh_ms": 13.334,
+  "key_to_present_p50_ms": 12.979,
+  "key_to_client_p50_ms": 0.078,
+  "client_recv_to_commit_p50_ms": 0.002,
+  "commit_to_present_p50_ms": 12.885,
+  "commit_to_next_vblank_p50_ms": 6.31,
+  "extra_refreshes_mean": 0.486,
+  "share_missing_first_vblank": 0.477,
+  "share_missing_two": 0.008,
+  "smallest_phase_that_made_it_ms": 3.917,
+  "largest_phase_that_missed_ms": 12.311,
+  "latch_estimate_ms": 6,
+  "bins": [
+   {
+    "phase_ms": [
+     0,
+     1
+    ],
+    "n": 53,
+    "missed": 53,
+    "missed2": 1
+   },
+   {
+    "phase_ms": [
+     1,
+     2
+    ],
+    "n": 75,
+    "missed": 75,
+    "missed2": 2
+   },
+   {
+    "phase_ms": [
+     2,
+     3
+    ],
+    "n": 55,
+    "missed": 55,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     3,
+     4
+    ],
+    "n": 43,
+    "missed": 42,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     4,
+     5
+    ],
+    "n": 47,
+    "missed": 31,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     5,
+     6
+    ],
+    "n": 43,
+    "missed": 22,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     6,
+     7
+    ],
+    "n": 41,
+    "missed": 17,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     7,
+     8
+    ],
+    "n": 49,
+    "missed": 13,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     8,
+     9
+    ],
+    "n": 53,
+    "missed": 4,
+    "missed2": 1
+   },
+   {
+    "phase_ms": [
+     9,
+     10
+    ],
+    "n": 42,
+    "missed": 1,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     10,
+     11
+    ],
+    "n": 39,
+    "missed": 0,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     11,
+     12
+    ],
+    "n": 54,
+    "missed": 1,
+    "missed2": 1
+   },
+   {
+    "phase_ms": [
+     12,
+     13
+    ],
+    "n": 57,
+    "missed": 1,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     13,
+     14
+    ],
+    "n": 9,
+    "missed": 0,
+    "missed2": 0
+   }
+  ]
+ },
+ "plasma-idle": {
+  "n": 660,
+  "refresh_ms": 13.334,
+  "key_to_present_p50_ms": 9.643,
+  "key_to_client_p50_ms": 0.112,
+  "client_recv_to_commit_p50_ms": 0.002,
+  "commit_to_present_p50_ms": 9.52,
+  "commit_to_next_vblank_p50_ms": 7.16,
+  "extra_refreshes_mean": 0.244,
+  "share_missing_first_vblank": 0.242,
+  "share_missing_two": 0.002,
+  "smallest_phase_that_made_it_ms": 1.15,
+  "largest_phase_that_missed_ms": 13.305,
+  "latch_estimate_ms": 1,
+  "bins": [
+   {
+    "phase_ms": [
+     0,
+     1
+    ],
+    "n": 45,
+    "missed": 45,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     1,
+     2
+    ],
+    "n": 53,
+    "missed": 23,
+    "missed2": 1
+   },
+   {
+    "phase_ms": [
+     2,
+     3
+    ],
+    "n": 56,
+    "missed": 9,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     3,
+     4
+    ],
+    "n": 44,
+    "missed": 6,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     4,
+     5
+    ],
+    "n": 40,
+    "missed": 5,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     5,
+     6
+    ],
+    "n": 42,
+    "missed": 8,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     6,
+     7
+    ],
+    "n": 40,
+    "missed": 9,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     7,
+     8
+    ],
+    "n": 60,
+    "missed": 9,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     8,
+     9
+    ],
+    "n": 48,
+    "missed": 6,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     9,
+     10
+    ],
+    "n": 55,
+    "missed": 9,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     10,
+     11
+    ],
+    "n": 62,
+    "missed": 9,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     11,
+     12
+    ],
+    "n": 46,
+    "missed": 7,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     12,
+     13
+    ],
+    "n": 53,
+    "missed": 13,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     13,
+     14
+    ],
+    "n": 16,
+    "missed": 2,
+    "missed2": 0
+   }
+  ]
+ },
+ "plasma-load": {
+  "n": 660,
+  "refresh_ms": 13.334,
+  "key_to_present_p50_ms": 13.463,
+  "key_to_client_p50_ms": 0.074,
+  "client_recv_to_commit_p50_ms": 0.002,
+  "commit_to_present_p50_ms": 13.385,
+  "commit_to_next_vblank_p50_ms": 6.73,
+  "extra_refreshes_mean": 0.508,
+  "share_missing_first_vblank": 0.505,
+  "share_missing_two": 0.003,
+  "smallest_phase_that_made_it_ms": 2.094,
+  "largest_phase_that_missed_ms": 13.207,
+  "latch_estimate_ms": 5,
+  "bins": [
+   {
+    "phase_ms": [
+     0,
+     1
+    ],
+    "n": 53,
+    "missed": 53,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     1,
+     2
+    ],
+    "n": 52,
+    "missed": 52,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     2,
+     3
+    ],
+    "n": 46,
+    "missed": 43,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     3,
+     4
+    ],
+    "n": 55,
+    "missed": 47,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     4,
+     5
+    ],
+    "n": 42,
+    "missed": 25,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     5,
+     6
+    ],
+    "n": 53,
+    "missed": 22,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     6,
+     7
+    ],
+    "n": 35,
+    "missed": 9,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     7,
+     8
+    ],
+    "n": 55,
+    "missed": 14,
+    "missed2": 1
+   },
+   {
+    "phase_ms": [
+     8,
+     9
+    ],
+    "n": 53,
+    "missed": 15,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     9,
+     10
+    ],
+    "n": 53,
+    "missed": 14,
+    "missed2": 1
+   },
+   {
+    "phase_ms": [
+     10,
+     11
+    ],
+    "n": 45,
+    "missed": 11,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     11,
+     12
+    ],
+    "n": 52,
+    "missed": 12,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     12,
+     13
+    ],
+    "n": 53,
+    "missed": 14,
+    "missed2": 0
+   },
+   {
+    "phase_ms": [
+     13,
+     14
+    ],
+    "n": 13,
+    "missed": 2,
+    "missed2": 0
+   }
+  ]
+ }
+}

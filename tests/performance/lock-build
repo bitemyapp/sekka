@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Run a heavy build/encode/compile: waits while a measurement holds the lock,
+# and blocks new measurements until it finishes (shared with other builds).
+# Usage: lock-build CMD [ARGS...]
+set -euo pipefail
+D=${PERF_LOCK_DIR:-${TMPDIR:-/tmp}/aizome-perf}
+mkdir -p "$D"
+flock "$D/turnstile.lock" true
+# -o: the command doesn't inherit the lock (see lock-measure).
+exec flock -o -s "$D/bench.lock" "$@"

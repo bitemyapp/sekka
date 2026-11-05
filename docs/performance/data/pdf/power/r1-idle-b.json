@@ -1,0 +1,1 @@
+{"sensor":"/sys/class/hwmon/hwmon5/power1_input","interval_ms":10,"duration_s":20.010,"samples":1955,"energy_j":373.779,"mean_w":18.680,"p10_w":17.0,"p50_w":18.0,"p90_w":21.0,"max_w":59.0,"system_busy_cpu_s":3.74,"exit":0}

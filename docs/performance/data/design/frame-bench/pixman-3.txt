@@ -1,0 +1,15 @@
+renderer pixman, output 3840x2160@2
+recovery: open, cold         frames    1 skipped   0  cpu p50 0.569 p95 0.569 p99 0.569 max 0.569 mean 0.569 ms
+idle (2s)                    frames    0 skipped   0  cpu p50 0.000 p95 0.000 p99 0.000 max 0.000 mean 0.000 ms
+move a window (240 steps)    frames  229 skipped   0  cpu p50 0.239 p95 0.281 p99 0.303 max 0.450 mean 0.215 ms
+animating client (3s)        frames  178 skipped   0  cpu p50 0.176 p95 0.194 p99 0.202 max 0.233 mean 0.135 ms
+desk switches (12, sliding)  frames   26 skipped   1  cpu p50 0.204 p95 0.270 p99 0.345 max 0.345 mean 0.189 ms
+overview open/close (8)      frames   31 skipped   0  cpu p50 1.195 p95 1.719 p99 3.028 max 3.028 mean 1.284 ms
+10 windows, one moving       frames  115 skipped   0  cpu p50 0.306 p95 0.330 p99 0.347 max 0.370 mean 0.284 ms
+recovery: open/close (8)     frames   16 skipped   7  cpu p50 1.037 p95 1.422 p99 1.422 max 1.422 mean 1.116 ms
+recovery: list updating (5s) frames    0 skipped   5  cpu p50 0.000 p95 0.000 p99 0.000 max 0.000 mean 0.000 ms
+recovery: keys moving (20)   frames    3 skipped   1  cpu p50 0.464 p95 1.337 p99 1.337 max 1.337 mean 0.684 ms
+frost: window moving under (Full) frames  219 skipped   0  cpu p50 0.375 p95 0.434 p99 0.449 max 0.489 mean 0.344 ms
+frost: client drawing under (Full) frames  175 skipped   0  cpu p50 0.308 p95 0.330 p99 0.361 max 0.415 mean 0.279 ms
+full-screen client (3s)      frames  166 skipped   0  cpu p50 1.336 p95 1.382 p99 1.505 max 1.612 mean 1.131 ms
+recovery over it (3s)        frames    2 skipped   4  cpu p50 0.221 p95 0.320 p99 0.320 max 0.320 mean 0.271 ms

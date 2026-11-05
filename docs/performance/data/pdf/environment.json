@@ -1,0 +1,81 @@
+{
+  "date": "2026-11-02",
+  "machine": {
+    "name": "runnymede",
+    "cpu": "AMD Ryzen 7 9800X3D, 8 cores / 16 threads (SMT siblings N and N+8)",
+    "memory_gib": 60,
+    "kernel": "Linux 7.3.0 (NixOS, Sekka)",
+    "cpufreq": "amd_pstate active, governor performance, energy_performance_preference performance, boost on",
+    "pinning": "each benchmark process pinned to one core of its own with taskset (cores 2, 3, 4, 5; their SMT siblings 10-13 not used by the benchmark), four processes at a time",
+    "shared_with": "other measurement agents (excluded by a lock while these ran), the user's desktop session (idle) and occasional builds between measured passes"
+  },
+  "nixpkgs": {
+    "source": "the Sekka flake's root nixpkgs input",
+    "rev": "1c89083e451e891152365b799595cf7790a43325"
+  },
+  "compilers": {
+    "rust": "rustc 1.99.0 (nixpkgs), release profile as Aizome's workspace: codegen-units 4, no LTO, debug = line-tables-only, baseline x86-64",
+    "c": "GCC 16.2.0 (nixpkgs), -O2"
+  },
+  "engines": {
+    "hayro-fork": {
+      "source": "https://github.com/bitemyapp/hayro",
+      "rev": "a2e9e62bdeb6872745ee6f0c811760ba31d441e9",
+      "branch": "aizome-perf (its tip on 2026-11-02); 50 commits on upstream 8558a8a5",
+      "pinned_by": "desktop/aizome/apps/shiori/Cargo.toml",
+      "features": "hayro defaults (embed-fonts, embed-cmaps), hayro-syntax `unsafe`",
+      "patched_dependencies": {
+        "moxcms": "bitemyapp/moxcms b63298023362c19b0ea5499c2c8d35802fc1adac (gamma-table-cache-0.8)",
+        "zune-jpeg": "bitemyapp/zune-image scaled-idct 13f18bce7bdc1af4bb1890b88436360751534899",
+        "zune-core": "bitemyapp/zune-image scaled-idct"
+      },
+      "lockfile": "tests/performance/pdf/hayro/fork/Cargo.lock, started from desktop/aizome/Cargo.lock",
+      "settings": "hayro::render with InterpreterSettings::default(), RenderSettings::default(), one RenderCache per document"
+    },
+    "hayro-upstream": {
+      "source": "https://github.com/LaurenzV/hayro",
+      "rev": "04a801ded77c2018af0dfde88f03277d241d26e9",
+      "date": "2026-11-01",
+      "features": "as the fork's",
+      "lockfile": "tests/performance/pdf/hayro/upstream/Cargo.lock, started from upstream's Cargo.lock",
+      "settings": "as the fork's; upstream's RenderSettings::default() hints text and caches glyphs (added in #1705 and #1706 since the fork's base)"
+    },
+    "pdfium": {
+      "package": "nixpkgs pdfium 8110",
+      "store_path": "/nix/store/n4fpv5wnb57wzyag4v8yyr0j9imlai8v-pdfium-8110",
+      "build": "from source with GN and GCC (is_clang=false), is_debug=false, pdf_enable_v8=false (no JavaScript, no XFA), PartitionAlloc off, AGG renderer (no Skia), system FreeType 2.14.3, libjpeg-turbo 3.2.0, OpenJPEG 2.5.4, lcms2 2.19.1, libpng, libtiff, zlib, HarfBuzz, ICU 78.3",
+      "api": "its C API directly: FPDF_LoadDocument, a form-fill environment, FPDF_RenderPageBitmap with FPDF_ANNOT, then FPDF_FFLDraw"
+    },
+    "mupdf": {
+      "package": "nixpkgs mupdf 1.28.5",
+      "store_path": "/nix/store/9nbwx3mdqygap9ywimk6x6h6daw258d3-mupdf-1.28.5-bin",
+      "api": "C API: fz_load_page, a draw device into an RGB pixmap cleared to white, fz_run_page (contents, annotations and widgets); one thread"
+    },
+    "poppler-splash": {
+      "package": "nixpkgs poppler 26.10.0 (poppler-cpp)",
+      "store_path": "/nix/store/q5d2wa2kikk6wj5i6h5k4aw2bgn80844-poppler-glib-26.10.0",
+      "api": "poppler::page_renderer (Splash), antialiasing and text_antialiasing hints, ARGB32, white paper"
+    },
+    "poppler-cairo": {
+      "package": "nixpkgs poppler 26.10.0 (poppler-glib) with cairo 1.18.4",
+      "cairo_store_path": "/nix/store/3jf4p2dcb16lvj1q6jc595qwn6gf8ppk-cairo-1.18.4",
+      "api": "poppler_page_render into a cairo RGB24 image surface painted white"
+    },
+    "pdfjs": {
+      "package": "npm pdfjs-dist 6.5.438 (legacy build) with @napi-rs/canvas 1.1.0 (Skia), on nixpkgs Node.js 24.21.0",
+      "api": "getDocument, getPage, page.render into a canvas; pdf.js's fake worker in the same thread"
+    }
+  },
+  "corpus": {
+    "source": "https://github.com/mozilla/pdf.js test/pdfs, the PDFs in the repository (not the linked ones)",
+    "rev": "279175b948b23077808d744435c07b32d23aa5bc",
+    "files": 1012,
+    "sha256_of_sorted_sha256sum_listing": "b282eac57a6e8b9601732cb9a1c291582502e9ae4055cb3c41cef5e3a7507835"
+  },
+  "conformance_sources": {
+    "hayro_tests": "tests/ of each hayro revision; PDFs and reference images downloaded from https://hayro-assets.dev on first run",
+    "pdfium": "https://pdfium.googlesource.com/pdfium branch chromium/8110 at 7c55203ed66b0461378323e3fcf2efaf76755241 (testing/resources/pixel, testing/tools/fixup_pdf_template.py, testing/SUPPRESSIONS)",
+    "chromium_test_fonts": "chromium/src/third_party/test_fonts at 7f51783942943e965cd56facf786544ccfc07713 (PDFium's DEPS), test_fonts.tar.gz sha1 cd96fc55dc243f6c6f4cb63ad117cad6cd48dceb from the chromium-fonts bucket"
+  },
+  "power": "/tmp/claude-1000/perf/bin/powermeter: the amdgpu hwmon PPT sensor (CPU cores, iGPU and SoC/IO die; not RAM, NVIDIA card or PSU), sampled every 10 ms"
+}

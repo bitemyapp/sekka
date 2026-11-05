@@ -1,0 +1,927 @@
+{
+ "variant": "aizome",
+ "tag": "m1",
+ "mem_mib": 2048,
+ "start": "2026-11-02T14:29:29-0600",
+ "loadavg_start": [
+  "1.00",
+  "0.77",
+  "0.49"
+ ],
+ "host_idle_power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 100,
+  "duration_s": 30.0,
+  "samples": 300,
+  "energy_j": 706.661,
+  "mean_w": 23.555,
+  "p10_w": 18.0,
+  "p50_w": 21.0,
+  "p90_w": 33.0,
+  "max_w": 68.0,
+  "system_busy_cpu_s": 11.71,
+  "exit": 0
+ },
+ "boot": {
+  "settled_s": 6.2633,
+  "last_change_s": 6.2633,
+  "first_match_s": 6.2633,
+  "timeout": false,
+  "systemd": {
+   "kernel": 0.184,
+   "initrd": 2.751,
+   "userspace": 2.129,
+   "target_reached_userspace": 2.129
+  },
+  "units_host_s": {
+   "display-manager.service": 5.371,
+   "multi-user.target": 5.374,
+   "graphical.target": 5.374
+  }
+ },
+ "login": {
+  "settled_s": 1.3349,
+  "last_change_s": 1.3349,
+  "first_change_s": 0.6343,
+  "first_match_s": 1.3349,
+  "timeout": false,
+  "journal": {
+   "pam_service": "greetd",
+   "pam_session_opened_s": 40.306,
+   "units": {
+    "aizome.service": 0.211,
+    "graphical-session.target": 0.436,
+    "aizome-session.target": 0.689
+   },
+   "last_user_unit_started_s": 10.072,
+   "enter_to_pam_s": 0.104
+  }
+ },
+ "memory": {
+  "greeter": {
+   "used_mib": 430.5,
+   "memtotal_mib": 1962.2,
+   "available_mib": 1531.7,
+   "anon_mib": 94.4,
+   "shmem_mib": 43.6,
+   "cached_mib": 611.3,
+   "swap_used_mib": 1.3,
+   "zswap_pool_mib": 0.8,
+   "zswapped_mib": 1.2,
+   "memory_pressure_some_total_us": 9162,
+   "pswpout": 0,
+   "zswpout": 335,
+   "pss_mib": {
+    "system": 83.2,
+    "greeter": 160.3
+   },
+   "pss_total_mib": 243.5,
+   "swap_pss_mib": {
+    "system": 1.3,
+    "greeter": 0.0
+   },
+   "processes": 29,
+   "top_units_mib": {
+    "greeter:session-1.scope": 136.2,
+    "system:NetworkManager.service": 14.4,
+    "greeter:sekka-agent-workloads.service": 14.1,
+    "system:cups-browsed.service": 11.7,
+    "system:ananicy-cpp.service": 10.7,
+    "system:systemd (PID 1)": 6.5,
+    "system:systemd-udevd.service": 6.4,
+    "greeter:init.scope": 6.3,
+    "system:cups.service": 5.2,
+    "system:greetd.service": 4.7,
+    "system:dbus-broker.service": 4.3,
+    "greeter:gcr-ssh-agent.service": 3.7,
+    "system:wpa_supplicant.service": 3.6,
+    "system:polkit.service": 2.5,
+    "system:systemd-journald.service": 2.3,
+    "system:accounts-daemon.service": 2.2,
+    "system:systemd-timesyncd.service": 2.1,
+    "system:systemd-logind.service": 2.0,
+    "system:nscd.service": 1.9,
+    "system:systemd-oomd.service": 1.3,
+    "system:avahi-daemon.service": 1.1,
+    "system:serial-getty@ttyS0.service": 0.5
+   },
+   "top_processes": [
+    {
+     "comm": "aizome",
+     "group": "greeter",
+     "unit": "session-1.scope",
+     "pss_mib": 78.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-greeter",
+     "group": "greeter",
+     "unit": "session-1.scope",
+     "pss_mib": 51.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 14.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "python3",
+     "group": "greeter",
+     "unit": "sekka-agent-workloads.service",
+     "pss_mib": 14.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "cups-browsed",
+     "group": "system",
+     "unit": "cups-browsed.service",
+     "pss_mib": 11.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "ananicy-cpp",
+     "group": "system",
+     "unit": "ananicy-cpp.service",
+     "pss_mib": 10.7,
+     "swap_pss_mib": 1.3
+    },
+    {
+     "comm": "systemd",
+     "group": "system",
+     "unit": "systemd (PID 1)",
+     "pss_mib": 6.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-udevd",
+     "group": "system",
+     "unit": "systemd-udevd.service",
+     "pss_mib": 6.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd",
+     "group": "greeter",
+     "unit": "init.scope",
+     "pss_mib": 4.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "greetd",
+     "group": "greeter",
+     "unit": "session-1.scope",
+     "pss_mib": 4.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "greetd",
+     "group": "system",
+     "unit": "greetd.service",
+     "pss_mib": 3.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "gcr-ssh-agent",
+     "group": "greeter",
+     "unit": "gcr-ssh-agent.service",
+     "pss_mib": 3.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wpa_supplicant",
+     "group": "system",
+     "unit": "wpa_supplicant.service",
+     "pss_mib": 3.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "cupsd",
+     "group": "system",
+     "unit": "cups.service",
+     "pss_mib": 3.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "dbus-broker-lau",
+     "group": "system",
+     "unit": "dbus-broker.service",
+     "pss_mib": 2.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "polkitd",
+     "group": "system",
+     "unit": "polkit.service",
+     "pss_mib": 2.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-journal",
+     "group": "system",
+     "unit": "systemd-journald.service",
+     "pss_mib": 2.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "accounts-daemon",
+     "group": "system",
+     "unit": "accounts-daemon.service",
+     "pss_mib": 2.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-timesyn",
+     "group": "system",
+     "unit": "systemd-timesyncd.service",
+     "pss_mib": 2.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-logind",
+     "group": "system",
+     "unit": "systemd-logind.service",
+     "pss_mib": 2.0,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "nsncd",
+     "group": "system",
+     "unit": "nscd.service",
+     "pss_mib": 1.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "dbus",
+     "group": "system",
+     "unit": "cups.service",
+     "pss_mib": 1.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "dbus-broker",
+     "group": "system",
+     "unit": "dbus-broker.service",
+     "pss_mib": 1.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "(sd-pam)",
+     "group": "greeter",
+     "unit": "init.scope",
+     "pss_mib": 1.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".gnome-keyring-",
+     "group": "greeter",
+     "unit": "session-1.scope",
+     "pss_mib": 1.5,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  },
+  "desktop60": {
+   "used_mib": 496.3,
+   "memtotal_mib": 1962.2,
+   "available_mib": 1465.8,
+   "anon_mib": 146.8,
+   "shmem_mib": 46.2,
+   "cached_mib": 1033.0,
+   "swap_used_mib": 2.0,
+   "zswap_pool_mib": 0.9,
+   "zswapped_mib": 1.8,
+   "memory_pressure_some_total_us": 12828,
+   "pswpout": 0,
+   "zswpout": 496,
+   "pss_mib": {
+    "system": 85.9,
+    "session": 276.9
+   },
+   "pss_total_mib": 362.8,
+   "swap_pss_mib": {
+    "system": 1.9,
+    "session": 0.0
+   },
+   "processes": 55,
+   "top_units_mib": {
+    "session:aizome.service": 154.8,
+    "session:wireplumber.service": 17.9,
+    "session:xdg-desktop-portal-gtk.service": 16.9,
+    "session:sekka-agent-workloads.service": 14.1,
+    "session:session-3.scope": 12.0,
+    "system:NetworkManager.service": 11.8,
+    "system:ananicy-cpp.service": 9.7,
+    "system:cups-browsed.service": 9.5,
+    "system:udisks2.service": 7.9,
+    "session:xdg-desktop-portal.service": 6.9,
+    "session:aizome-koyomi-agent.service": 6.6,
+    "session:pipewire.service": 6.5,
+    "session:aizome-network-agent.service": 6.3,
+    "system:systemd (PID 1)": 6.3,
+    "session:init.scope": 6.2,
+    "system:systemd-udevd.service": 6.2,
+    "session:aizome-file-manager.service": 5.2,
+    "session:aizome-portal.service": 5.1,
+    "system:cups.service": 4.5,
+    "system:dbus-broker.service": 4.3,
+    "session:gvfs-daemon.service": 3.8,
+    "system:wpa_supplicant.service": 3.3,
+    "system:upower.service": 3.2,
+    "system:polkit.service": 3.2,
+    "session:pipewire-pulse.service": 3.1,
+    "system:systemd-journald.service": 2.7,
+    "session:gcr-ssh-agent.service": 2.5,
+    "session:xdg-desktop-portal-wlr.service": 2.1,
+    "system:nscd.service": 2.1,
+    "session:dbus-broker.service": 2.1
+   },
+   "top_processes": [
+    {
+     "comm": "aizome",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 61.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-shell",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 59.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "Xwayland",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 29.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wireplumber",
+     "group": "session",
+     "unit": "wireplumber.service",
+     "pss_mib": 17.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal-gtk.service",
+     "pss_mib": 16.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "python3",
+     "group": "session",
+     "unit": "sekka-agent-workloads.service",
+     "pss_mib": 14.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 11.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "ananicy-cpp",
+     "group": "system",
+     "unit": "ananicy-cpp.service",
+     "pss_mib": 9.7,
+     "swap_pss_mib": 1.9
+    },
+    {
+     "comm": "cups-browsed",
+     "group": "system",
+     "unit": "cups-browsed.service",
+     "pss_mib": 9.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "udisksd",
+     "group": "system",
+     "unit": "udisks2.service",
+     "pss_mib": 7.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal.service",
+     "pss_mib": 6.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-koyomi",
+     "group": "session",
+     "unit": "aizome-koyomi-agent.service",
+     "pss_mib": 6.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "pipewire",
+     "group": "session",
+     "unit": "pipewire.service",
+     "pss_mib": 6.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-network-",
+     "group": "session",
+     "unit": "aizome-network-agent.service",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "greetd",
+     "group": "session",
+     "unit": "session-3.scope",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd",
+     "group": "system",
+     "unit": "systemd (PID 1)",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-udevd",
+     "group": "system",
+     "unit": "systemd-udevd.service",
+     "pss_mib": 6.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-hako",
+     "group": "session",
+     "unit": "aizome-file-manager.service",
+     "pss_mib": 5.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-portal",
+     "group": "session",
+     "unit": "aizome-portal.service",
+     "pss_mib": 5.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd",
+     "group": "session",
+     "unit": "init.scope",
+     "pss_mib": 4.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xwayland-satel",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 4.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".gnome-keyring-",
+     "group": "session",
+     "unit": "session-3.scope",
+     "pss_mib": 3.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wpa_supplicant",
+     "group": "system",
+     "unit": "wpa_supplicant.service",
+     "pss_mib": 3.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "upowerd",
+     "group": "system",
+     "unit": "upower.service",
+     "pss_mib": 3.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "polkitd",
+     "group": "system",
+     "unit": "polkit.service",
+     "pss_mib": 3.2,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  },
+  "desktop190": {
+   "used_mib": 495.0,
+   "memtotal_mib": 1962.2,
+   "available_mib": 1467.2,
+   "anon_mib": 146.6,
+   "shmem_mib": 46.2,
+   "cached_mib": 1033.0,
+   "swap_used_mib": 2.2,
+   "zswap_pool_mib": 1.0,
+   "zswapped_mib": 2.1,
+   "memory_pressure_some_total_us": 13769,
+   "pswpout": 0,
+   "zswpout": 563,
+   "pss_mib": {
+    "system": 85.6,
+    "session": 276.9
+   },
+   "pss_total_mib": 362.5,
+   "swap_pss_mib": {
+    "system": 2.1,
+    "session": 0.0
+   },
+   "processes": 55,
+   "top_units_mib": {
+    "session:aizome.service": 154.8,
+    "session:wireplumber.service": 17.9,
+    "session:xdg-desktop-portal-gtk.service": 16.9,
+    "session:sekka-agent-workloads.service": 14.1,
+    "session:session-3.scope": 12.0,
+    "system:NetworkManager.service": 11.8,
+    "system:cups-browsed.service": 9.5,
+    "system:ananicy-cpp.service": 9.4,
+    "system:udisks2.service": 7.9,
+    "session:xdg-desktop-portal.service": 6.9,
+    "session:aizome-koyomi-agent.service": 6.6,
+    "session:pipewire.service": 6.5,
+    "session:aizome-network-agent.service": 6.3,
+    "system:systemd (PID 1)": 6.3,
+    "session:init.scope": 6.2,
+    "system:systemd-udevd.service": 6.2,
+    "session:aizome-file-manager.service": 5.2,
+    "session:aizome-portal.service": 5.1,
+    "system:cups.service": 4.5,
+    "system:dbus-broker.service": 4.3,
+    "session:gvfs-daemon.service": 3.8,
+    "system:wpa_supplicant.service": 3.3,
+    "system:upower.service": 3.2,
+    "system:polkit.service": 3.2,
+    "session:pipewire-pulse.service": 3.1,
+    "system:systemd-journald.service": 2.7,
+    "session:gcr-ssh-agent.service": 2.5,
+    "session:xdg-desktop-portal-wlr.service": 2.1,
+    "system:nscd.service": 2.1,
+    "session:dbus-broker.service": 2.1
+   },
+   "top_processes": [
+    {
+     "comm": "aizome",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 61.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-shell",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 59.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "Xwayland",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 29.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wireplumber",
+     "group": "session",
+     "unit": "wireplumber.service",
+     "pss_mib": 17.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal-gtk.service",
+     "pss_mib": 16.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "python3",
+     "group": "session",
+     "unit": "sekka-agent-workloads.service",
+     "pss_mib": 14.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 11.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "cups-browsed",
+     "group": "system",
+     "unit": "cups-browsed.service",
+     "pss_mib": 9.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "ananicy-cpp",
+     "group": "system",
+     "unit": "ananicy-cpp.service",
+     "pss_mib": 9.4,
+     "swap_pss_mib": 2.1
+    },
+    {
+     "comm": "udisksd",
+     "group": "system",
+     "unit": "udisks2.service",
+     "pss_mib": 7.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal.service",
+     "pss_mib": 6.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-koyomi",
+     "group": "session",
+     "unit": "aizome-koyomi-agent.service",
+     "pss_mib": 6.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "pipewire",
+     "group": "session",
+     "unit": "pipewire.service",
+     "pss_mib": 6.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-network-",
+     "group": "session",
+     "unit": "aizome-network-agent.service",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "greetd",
+     "group": "session",
+     "unit": "session-3.scope",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd",
+     "group": "system",
+     "unit": "systemd (PID 1)",
+     "pss_mib": 6.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-udevd",
+     "group": "system",
+     "unit": "systemd-udevd.service",
+     "pss_mib": 6.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-hako",
+     "group": "session",
+     "unit": "aizome-file-manager.service",
+     "pss_mib": 5.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "aizome-portal",
+     "group": "session",
+     "unit": "aizome-portal.service",
+     "pss_mib": 5.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd",
+     "group": "session",
+     "unit": "init.scope",
+     "pss_mib": 4.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xwayland-satel",
+     "group": "session",
+     "unit": "aizome.service",
+     "pss_mib": 4.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".gnome-keyring-",
+     "group": "session",
+     "unit": "session-3.scope",
+     "pss_mib": 3.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wpa_supplicant",
+     "group": "system",
+     "unit": "wpa_supplicant.service",
+     "pss_mib": 3.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "upowerd",
+     "group": "system",
+     "unit": "upower.service",
+     "pss_mib": 3.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "polkitd",
+     "group": "system",
+     "unit": "polkit.service",
+     "pss_mib": 3.2,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  }
+ },
+ "idle": {
+  "window_s": 120.0,
+  "guest_busy_pct": 0.16,
+  "guest_busy_pct_of_one_vcpu": 0.31,
+  "ctxt_per_s": 187.3,
+  "intr_per_s": 191.6,
+  "forks_per_s": 0.07,
+  "task_wakeups_per_s": 101.4,
+  "qemu_cpu_pct_of_core": 0.97,
+  "qemu_vcpu_pct_of_core": 0.51,
+  "ppt_mean_w": 24.493,
+  "ppt_energy_j": 2939.193,
+  "host_busy_cpu_s": 36.18,
+  "top_wakers": [
+   {
+    "comm": "aizome-shell",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/aizome.service",
+    "voluntary_per_s": 47.08,
+    "involuntary_per_s": 0.12,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "ananicy-cpp",
+    "cgroup": "/system.slice/ananicy-cpp.service",
+    "voluntary_per_s": 13.29,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "aizome",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/aizome.service",
+    "voluntary_per_s": 6.8,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/0:2-events",
+    "cgroup": "/",
+    "voluntary_per_s": 4.55,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/u8:3-events_power_efficient",
+    "cgroup": "/",
+    "voluntary_per_s": 4.42,
+    "involuntary_per_s": 0.01,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/1:2-events",
+    "cgroup": "/",
+    "voluntary_per_s": 3.92,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/u8:5-events_unbound",
+    "cgroup": "/",
+    "voluntary_per_s": 2.67,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/u8:2-events_power_efficient",
+    "cgroup": "/",
+    "voluntary_per_s": 2.64,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "aizome-koyomi",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/aizome-koyomi-agent.service",
+    "voluntary_per_s": 2.05,
+    "involuntary_per_s": 0.01,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "aizome-hako",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/aizome-file-manager.service",
+    "voluntary_per_s": 2.0,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "aizome-network-",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/aizome-network-agent.service",
+    "voluntary_per_s": 2.0,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "aizome-portal",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/aizome-portal.service",
+    "voluntary_per_s": 2.0,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "psimon",
+    "cgroup": "/",
+    "voluntary_per_s": 1.34,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/u8:0-events_power_efficient",
+    "cgroup": "/",
+    "voluntary_per_s": 1.17,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "systemd-oomd",
+    "cgroup": "/system.slice/systemd-oomd.service",
+    "voluntary_per_s": 0.81,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.017
+   }
+  ],
+  "top_cpu": [
+   {
+    "comm": "python3",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/background.slice/sekka-agent-workloads.service",
+    "cpu_pct": 0.067
+   },
+   {
+    "comm": "systemd-oomd",
+    "cgroup": "/system.slice/systemd-oomd.service",
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "ananicy-cpp",
+    "cgroup": "/system.slice/ananicy-cpp.service",
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "aizome",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/aizome.service",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "systemd-journal",
+    "cgroup": "/system.slice/systemd-journald.service",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "systemd-timesyn",
+    "cgroup": "/system.slice/systemd-timesyncd.service",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "systemd",
+    "cgroup": "/init.scope",
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/0:1-cgroup_release",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/0:0H-kblockd",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/u8:0-events_power_efficient",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   }
+  ],
+  "ppt_over_host_idle_w": 0.94
+ }
+}

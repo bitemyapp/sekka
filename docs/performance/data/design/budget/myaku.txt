@@ -1,0 +1,83 @@
+# cargo test --release -p aizome-myaku --test perf -- --nocapture --test-threads 1
+# 2026-11-02T13:36:18-06:00; load 1.94 0.87 0.64; AIZOME_FONT_DIR=b9vp4qd3gz9vmsl20grvd80hniirn5n5-aizome-fonts
+Using saved setting for 'extra-substituters = https://cache.sekka.computer https://cache.numtide.com?priority=55' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = cache.sekka.computer-1:JJsOkmRt3iCwjvJrol8x2a7euU+kMV7iHaDSFzofA+Y= niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=' from ~/.local/share/nix/trusted-settings.json.
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+copying path '/nix/store/nbdi0r6jklg8r7lnzz5pw51aa1h1fhih-fontconfig-2.18.3-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/wra7pnc8v3vk7xl597kq79bbmvncxz8j-clang-21.1.8' from 'https://cache.nixos.org'...
+copying path '/nix/store/zk3da6mr6l2nihqra94nn6h26cfb6bfs-ffmpeg-9.0.2-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/sw7grjplsgbrn881pdxhcl05mijsfj93-libsecret-0.21.7-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/1sf33724ai5nydnck9ndwrd785faarsy-just-1.58.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/mv3d5izxzch9splhhp63nj6k0j572j6q-rust-lib-src' from 'https://cache.nixos.org'...
+copying path '/nix/store/1qg7z7i461qsv0lczc40nyi8ps6snlca-rustc-1.99.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/10y1l1vdmldglcdpr3sfkgzqvcp1al67-rust-analyzer-unwrapped-2026-10-26' from 'https://cache.nixos.org'...
+copying path '/nix/store/nif3bbb67gxbjd5gnysrvqr5aj45w0fv-seatd-0.9.3-bin' from 'https://cache.nixos.org'...
+copying path '/nix/store/mabgbkgz9pyaw5pdzmwmp3rb9n1hsd5j-mold-unwrapped-3.0.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/zazxxaxz9ym0v9cyfkm2mwianzip8c6z-seatd-0.9.3-dev' from 'https://cache.nixos.org'...
+warning: unable to download 'https://cache.nixos.org/nar/0mkgzzgxjrm78fw8av3awyqwakggkd15nshfra6drydf90fzc5ws.nar.zst': HTTP error 200 (curl error: Failure when receiving data from the peer); retrying from offset 5095424 in 75 ms (attempt 1/5)
+warning: unable to download 'https://cache.nixos.org/nar/18cqssldcll5sap3l76gp871ys2pr6vc3mmkjqs43zk46xc2mq06.nar.zst': HTTP error 200 (curl error: Failed sending data to the peer); retrying from offset 4816635 in 59 ms (attempt 1/5)
+warning: unable to download 'https://cache.nixos.org/nar/1h962zg2ji3qnhhgcgn0ljgdwf8nxqfxjn9mp1h83j44rzha4qc5.nar.zst': HTTP error 200 (curl error: Failed sending data to the peer); retrying from offset 8388608 in 74 ms (attempt 1/5)
+warning: unable to download 'https://cache.nixos.org/nar/0pm9jnzg2nsw4m8868spk3wilqfk2b2p0r2x82wwf5ykilbqbg2f.nar.zst': HTTP error 200 (curl error: Failed sending data to the peer); retrying from offset 7880704 in 52 ms (attempt 1/5)
+warning: unable to download 'https://cache.nixos.org/nar/10ldjsvc0z8vq5yg4j46wlzrf80kjbf5ni3cfg0fi5j4i4cpjlrf.nar.zst': HTTP error 200 (curl error: Failed sending data to the peer); retrying from offset 8238528 in 59 ms (attempt 1/5)
+copying path '/nix/store/9dsg7mbd3v3l0dcr6sx2wz2bjbks72zp-libcap-2.78-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/l8a9m498a7vbpd3i04hwjmbbml2lwjzr-libpulseaudio-17.0-dev' from 'https://cache.nixos.org'...
+copying path '/nix/store/i52d7j6ma8bh4ggg4r2hl4af7bychdpa-clang-wrapper-21.1.8' from 'https://cache.nixos.org'...
+copying path '/nix/store/ni76h2hpjsa7j93whs86cbymnwbn7kdv-rust-analyzer-2026-10-26' from 'https://cache.nixos.org'...
+copying path '/nix/store/bd4k8ccmaqawip2azms7l9ajwcrzz19q-rust-bindgen-hook' from 'https://cache.nixos.org'...
+warning: unable to download 'https://cache.nixos.org/nar/0s12lr5p7j6y5m6i3qi0w0qxjh8a8wz0raavd2zbs7zzvpj8ls1c.nar.zst': Failed sending data to the peer (55) OpenSSL SSL_read: SSL_ERROR_SYSCALL, errno 0; retrying in 92 ms (attempt 1/5)
+warning: unable to download 'https://cache.nixos.org/nar/10ldjsvc0z8vq5yg4j46wlzrf80kjbf5ni3cfg0fi5j4i4cpjlrf.nar.zst': HTTP error 206 (curl error: Failed sending data to the peer); retrying from offset 16777216 in 189 ms (attempt 2/5)
+warning: unable to download 'https://cache.nixos.org/nar/18cqssldcll5sap3l76gp871ys2pr6vc3mmkjqs43zk46xc2mq06.nar.zst': HTTP error 206 (curl error: Failed sending data to the peer); retrying from offset 15807659 in 41 ms (attempt 2/5)
+building '/nix/store/64j7p6wj4lslxg4dsbw094pizhnnkgpf-hotaru-development-terminfo.drv'...
+copying path '/nix/store/c761q93rp3m4qyg71w2d5dwynha1kr97-mold-unwrapped-wrapper-3.0.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/9d5hldsjq3zz3s7rk3m357948vmcl1qh-clippy-1.99.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/6l9kbzxwq9ij2lcmwl2qb1jdpqisjr8l-rustc-wrapper-1.99.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/l3jrya2cdjmzxgdpnxzwvx3h416lcbr6-cargo-1.99.0' from 'https://cache.nixos.org'...
+copying path '/nix/store/vwgbz9vm1gyxqn6z4fg1jd6va2nzfa3m-rustfmt-1.99.0' from 'https://cache.nixos.org'...
+building '/nix/store/vgwwdbm2m6l25i0mzcn3z32lrknpacb4-nix-shell-env.drv'...
+warning: ignoring the client-specified setting 'trusted-public-keys', because it is a restricted setting and you are not a trusted user
+   Compiling async-io v2.6.0
+   Compiling kbvm v0.2.0
+   Compiling async-signal v0.2.14
+   Compiling async-process v2.5.0
+   Compiling zbus v5.19.0
+   Compiling sidestep-engine v0.0.1 (/home/callen/work/sekka-performance-page/desktop/aizome/sukumo/crates/sidestep-engine)
+   Compiling aizome-sys v0.1.0 (/home/callen/work/sekka-performance-page/desktop/aizome/crates/aizome-sys)
+   Compiling sidestep-ui v0.0.1 (/home/callen/work/sekka-performance-page/desktop/aizome/sukumo/crates/sidestep-ui)
+   Compiling aizome-kit v0.1.0 (/home/callen/work/sekka-performance-page/desktop/aizome/crates/aizome-kit)
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/aizome-kit/src/urls.rs:184:14
+    |
+184 |             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < LIMIT).then_some(n + 1))
+    |              ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+184 -             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < LIMIT).then_some(n + 1))
+184 +             .try_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < LIMIT).then_some(n + 1))
+    |
+
+   Compiling aizome-myaku v0.1.0 (/home/callen/work/sekka-performance-page/desktop/aizome/apps/myaku)
+warning: `aizome-kit` (lib) generated 1 warning (run `cargo fix --lib -p aizome-kit` to apply 1 suggestion)
+    Finished `release` profile [optimized + debuginfo] target(s) in 35.33s
+     Running tests/perf.rs (/tmp/claude-1000/perf/design-comp-target/release/deps/perf-8d1b111132ef9260)
+
+running 2 tests
+test frames_fit_the_budget_and_memory_stays_put ... myaku memory: 233980 KiB before 200 readings, 233980 KiB after; event: p50 3µs p99 8µs (n=150)
+update: p50 70µs p99 80µs (n=319)
+view+layout: p50 635µs p99 1035µs (n=351)
+paint (record): p50 2µs p99 8µs (n=1024)
+myaku reading: p50 2.25875ms p95 2.58343ms max 2.69332ms (n=60, at 2x, 600 processes)
+myaku row click: p50 188.24µs p95 248.74µs max 4.36006ms (n=30, at 2x, 600 processes)
+myaku scroll: p50 267.99µs p95 345.21µs max 381.39µs (n=30, at 2x, 600 processes)
+ok
+test one_card_shown_fits_the_budget_too ... myaku reading, one GPU shown: p50 1.12496ms p95 1.4251ms max 1.467089ms (n=60, at 2x, 600 processes)
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+

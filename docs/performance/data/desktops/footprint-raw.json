@@ -1,0 +1,6 @@
+{
+  "baseline": {"toplevel": "/nix/store/38g2dxs8gjsvm4211gsnkp110ng4fgbg-nixos-system-nixos-26.11.20261030.1c89083", "closure_bytes": 3554972128, "store_paths": 1076},
+  "aizome": {"toplevel": "/nix/store/y3x0a1akg3jldqmm75w1qw63lcpak98n-nixos-system-nixos-26.11.20261030.1c89083", "closure_bytes": 8487033304, "store_paths": 1623},
+  "gnome": {"toplevel": "/nix/store/sp5nzxd1y292j6wpprjdkxllhv9nqx6b-nixos-system-nixos-26.11.20261030.1c89083", "closure_bytes": 8520261504, "store_paths": 1685},
+  "plasma": {"toplevel": "/nix/store/cwg8cvmq7rd58xqxak7xfa0wzs8d6b96-nixos-system-nixos-26.11.20261030.1c89083", "closure_bytes": 10779992152, "store_paths": 1924}
+}

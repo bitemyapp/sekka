@@ -1,0 +1,9 @@
+{
+  "name": "pdfbench-pdfjs",
+  "private": true,
+  "description": "pdf.js for the PDF renderer benchmark: npm ci --prefix <dir>, then PDFJS_MODULES=<dir> node bench.mjs FILE.pdf",
+  "dependencies": {
+    "@napi-rs/canvas": "1.1.0",
+    "pdfjs-dist": "6.5.438"
+  }
+}

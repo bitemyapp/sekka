@@ -1,0 +1,130 @@
+{
+ "manifest_entries": {
+  "custom": 338,
+  "pdfjs": 679,
+  "pdfbox": 454,
+  "pdfium": 127,
+  "corpus": 41
+ },
+ "manifest_ignored": {
+  "pdfjs": 22,
+  "pdfbox": 25,
+  "pdfium": 26
+ },
+ "by_suite": {
+  "other": {
+   "load": {
+    "tests_run": 129,
+    "passed": 129,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   },
+   "text": {
+    "tests_run": 6,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   },
+   "visibility": {
+    "tests_run": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   },
+   "write": {
+    "tests_run": 31,
+    "passed": 31,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   }
+  },
+  "raster": {
+   "custom": {
+    "tests_run": 337,
+    "passed": 337,
+    "failed": 0,
+    "skipped": 0,
+    "other": {},
+    "ignored_in_manifest": 0,
+    "failed_graded_worst_page": {}
+   },
+   "corpus": {
+    "tests_run": 41,
+    "passed": 41,
+    "failed": 0,
+    "skipped": 0,
+    "other": {},
+    "ignored_in_manifest": 0,
+    "failed_graded_worst_page": {}
+   },
+   "pdfbox": {
+    "tests_run": 429,
+    "passed": 429,
+    "failed": 0,
+    "skipped": 0,
+    "other": {},
+    "ignored_in_manifest": 25,
+    "failed_graded_worst_page": {}
+   },
+   "pdfium": {
+    "tests_run": 101,
+    "passed": 101,
+    "failed": 0,
+    "skipped": 0,
+    "other": {},
+    "ignored_in_manifest": 26,
+    "failed_graded_worst_page": {}
+   },
+   "pdfjs": {
+    "tests_run": 658,
+    "passed": 657,
+    "failed": 1,
+    "skipped": 0,
+    "other": {},
+    "ignored_in_manifest": 22,
+    "failed_graded_worst_page": {
+     "reference image unavailable (404)": 1
+    }
+   }
+  },
+  "svg": {
+   "custom": {
+    "tests_run": 39,
+    "passed": 39,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   },
+   "pdfbox": {
+    "tests_run": 7,
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   },
+   "pdfium": {
+    "tests_run": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   },
+   "pdfjs": {
+    "tests_run": 5,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "other": {}
+   }
+  }
+ },
+ "total": {
+  "passed": 1784,
+  "failed": 1
+ },
+ "ignored_total": 73
+}

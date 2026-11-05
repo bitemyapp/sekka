@@ -1,0 +1,499 @@
+{
+ "tag": "010-aizome-playsound-tos-1080p24-h264-showtime",
+ "spec": {
+  "subject": "showtime",
+  "clip": "tos-1080p24-h264.mp4",
+  "mode": "playsound",
+  "sound": true,
+  "round": 0
+ },
+ "started": "2026-11-02T13:47:53-0600",
+ "quiet": {
+  "busy_cores_before": 0.165,
+  "waited_s": 2.0,
+  "loadavg": [
+   "0.22",
+   "0.25",
+   "0.38"
+  ]
+ },
+ "session_up_s": null,
+ "window_after_s": 0.813,
+ "audio_route": {
+  "nodes": [
+   94
+  ],
+  "targets": [
+   "perf-null"
+  ]
+ },
+ "windows": [
+  {
+   "id": 1,
+   "app_id": "org.gnome.Showtime",
+   "pid": 900297,
+   "fullscreen": true,
+   "geometry": {
+    "x": 0,
+    "y": 0,
+    "w": 1920,
+    "h": 1080
+   },
+   "title": "Video Player"
+  }
+ ],
+ "audio_route_before_window": {
+  "nodes": [
+   94
+  ],
+  "targets": [
+   "perf-null"
+  ]
+ },
+ "roles": {
+  "compositor": [
+   {
+    "pid": 900158,
+    "comm": "aizome",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome"
+   }
+  ],
+  "shell": [
+   {
+    "pid": 900174,
+    "comm": "aizome-shell",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome-shell"
+   }
+  ],
+  "dbus": [
+   {
+    "pid": 900157,
+    "comm": "dbus-daemon",
+    "exe": "/nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2/bin/dbus-daemon"
+   }
+  ],
+  "player": [
+   {
+    "pid": 900297,
+    "comm": ".showtime-wrapp",
+    "exe": "/nix/store/xahxrjs30p3mw0a42bqg9ikgkikskw8m-python3-3.14.8/bin/python3.14"
+   }
+  ],
+  "pw:pipewire": [
+   {
+    "pid": 2310,
+    "comm": "pipewire",
+    "exe": "/nix/store/n8ksprmibzglf09aavw7mcl4n9767axm-pipewire-1.6.9/bin/pipewire"
+   }
+  ],
+  "pw:pipewire-pulse": [
+   {
+    "pid": 2311,
+    "comm": "pipewire-pulse",
+    "exe": "/nix/store/n8ksprmibzglf09aavw7mcl4n9767axm-pipewire-1.6.9/bin/pipewire"
+   }
+  ],
+  "pw:wireplumber": [
+   {
+    "pid": 2312,
+    "comm": "wireplumber",
+    "exe": "/nix/store/dryjzhq5m2jah4rg5rri6fg8yjrv6y8i-wireplumber-0.5.18/bin/wireplumber"
+   }
+  ]
+ },
+ "player_stats_before": null,
+ "compositor_stats": [
+  {
+   "name": "HEADLESS-1",
+   "frames_rendered": 1439,
+   "frames_skipped": 35,
+   "cpu_us": {
+    "p50": 80.0,
+    "p95": 233.0,
+    "p99": 250.0,
+    "max": 450.0,
+    "mean": 99.76094510076442
+   },
+   "gpu_us": {
+    "p50": 218.0,
+    "p95": 240.0,
+    "p99": 253.0,
+    "max": 549.0,
+    "mean": 218.7866574009729
+   },
+   "samples": 1439
+  }
+ ],
+ "player_stats_after": null,
+ "power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 10,
+  "duration_s": 60.005,
+  "samples": 5787,
+  "energy_j": 1175.758,
+  "mean_w": 19.594,
+  "p10_w": 17.0,
+  "p50_w": 18.0,
+  "p90_w": 24.0,
+  "max_w": 82.0,
+  "system_busy_cpu_s": 13.11,
+  "exit": 0
+ },
+ "cpu": {
+  "compositor": {
+   "cpu_s": 0.3014,
+   "cpu_pct": 0.502,
+   "cpu_ticks_s": 0.3,
+   "vol_switches": 9130,
+   "invol_switches": 92,
+   "switches_per_s": 153.7,
+   "wakeups_per_s": 152.2
+  },
+  "shell": {
+   "cpu_s": 0.0369,
+   "cpu_pct": 0.061,
+   "cpu_ticks_s": 0.03,
+   "vol_switches": 3204,
+   "invol_switches": 29,
+   "switches_per_s": 53.9,
+   "wakeups_per_s": 53.4
+  },
+  "dbus": {
+   "cpu_s": 0.0004,
+   "cpu_pct": 0.001,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 12,
+   "invol_switches": 0,
+   "switches_per_s": 0.2,
+   "wakeups_per_s": 0.2
+  },
+  "player": {
+   "cpu_s": 0.9649,
+   "cpu_pct": 1.608,
+   "cpu_ticks_s": 0.96,
+   "vol_switches": 32732,
+   "invol_switches": 351,
+   "switches_per_s": 551.3,
+   "wakeups_per_s": 545.5
+  },
+  "pw:pipewire": {
+   "cpu_s": 0.0108,
+   "cpu_pct": 0.018,
+   "cpu_ticks_s": 0.02,
+   "vol_switches": 1406,
+   "invol_switches": 0,
+   "switches_per_s": 23.4,
+   "wakeups_per_s": 23.4
+  },
+  "pw:pipewire-pulse": {
+   "cpu_s": 0.1574,
+   "cpu_pct": 0.262,
+   "cpu_ticks_s": 0.17,
+   "vol_switches": 5393,
+   "invol_switches": 36,
+   "switches_per_s": 90.5,
+   "wakeups_per_s": 89.9
+  },
+  "pw:wireplumber": {
+   "cpu_s": 0.0,
+   "cpu_pct": 0.0,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 0,
+   "invol_switches": 0,
+   "switches_per_s": 0.0,
+   "wakeups_per_s": 0.0
+  }
+ },
+ "gpu": {
+  "compositor": {
+   "engine_ns": {
+    "gfx": 301271055,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "shell": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "dbus": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "player": {
+   "engine_ns": {
+    "gfx": 2694795267,
+    "compute": 0,
+    "dec": 1914593555
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "pw:pipewire": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "pw:pipewire-pulse": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "pw:wireplumber": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  }
+ },
+ "igpu": {
+  "busy_pct_mean": 6.85,
+  "busy_samples": 601,
+  "sclk_mhz_mean": 722.5,
+  "tctl_c_mean": 44.15
+ },
+ "player_memory": {
+  "rss_kib": 243416,
+  "pss_kib": 162658,
+  "pss_anon_kib": 101004,
+  "pss_file_kib": 61586,
+  "pss_shmem_kib": 68,
+  "swap_kib": 0
+ },
+ "player_threads": {
+  "900297": {
+   "900297": ".showtime-wrapp",
+   "900300": "pool-spawner",
+   "900301": "gmain",
+   "900302": "gdbus",
+   "900303": "[pango] fontcon",
+   "900304": "dconf worker",
+   "900350": "python3:cs0",
+   "900351": "python3:disk$0",
+   "900352": "python3:sh0",
+   "900353": "python:sh_opt0",
+   "900354": "python:traceq0",
+   "900355": "python3:gdrv0",
+   "900356": "python3:gl0",
+   "900357": "python:traceq0",
+   "900358": "python3:gdrv0",
+   "900359": "python3:gl0",
+   "900360": "gldisplay-event",
+   "900361": "gldisplay-event",
+   "900362": "python3:disk$0",
+   "900363": "python3:disk$0",
+   "900364": "python:traceq0",
+   "900365": "python3:gdrv0",
+   "900366": "python3:gl0",
+   "900367": "GstPlay",
+   "900368": "typefindelement",
+   "900369": "typefind:sink",
+   "900370": "qtdemux0:sink",
+   "900371": "multiqueue1:src",
+   "900372": "multiqueue1:src",
+   "900373": "multiqueue0:src",
+   "900378": "python3:disk$0",
+   "900379": "python3:sh0",
+   "900380": "python:sh_opt0",
+   "900381": "python:traceq0",
+   "900382": "multiqueue0:src",
+   "900383": "gstglcontext",
+   "900384": "python:traceq0",
+   "900385": "python3:gdrv0",
+   "900386": "python3:gl0",
+   "900388": "vqueue:src",
+   "900390": "threaded-ml",
+   "900391": "aqueue:src",
+   "900398": "python3:disk$1",
+   "900399": "python3:disk$2",
+   "900401": "python3:disk$1",
+   "900402": "python3:disk$2",
+   "900403": "python3:disk$3",
+   "900404": "python3:disk$3"
+  }
+ },
+ "player_alive": true,
+ "compositor_memory": {
+  "rss_kib": 122456,
+  "pss_kib": 69597,
+  "pss_anon_kib": 23480,
+  "pss_file_kib": 45803,
+  "pss_shmem_kib": 314,
+  "swap_kib": 0
+ },
+ "player_switches_by_thread": {
+  ".showtime-wrapp": [
+   10579,
+   140,
+   494.4
+  ],
+  "pool-spawner": [
+   0,
+   0,
+   0.0
+  ],
+  "gmain": [
+   0,
+   0,
+   0.0
+  ],
+  "gdbus": [
+   12,
+   0,
+   0.4
+  ],
+  "[pango] fontcon": [
+   0,
+   0,
+   0.0
+  ],
+  "dconf worker": [
+   0,
+   0,
+   0.0
+  ],
+  "900348": [
+   0,
+   0,
+   0.0
+  ],
+  "python3:cs0": [
+   1440,
+   18,
+   40.7
+  ],
+  "python3:disk$0": [
+   0,
+   0,
+   0.0
+  ],
+  "python3:sh0": [
+   0,
+   0,
+   0.0
+  ],
+  "python:sh_opt0": [
+   0,
+   0,
+   0.0
+  ],
+  "python:traceq0": [
+   0,
+   0,
+   0.0
+  ],
+  "python3:gdrv0": [
+   0,
+   0,
+   0.0
+  ],
+  "python3:gl0": [
+   0,
+   0,
+   0.0
+  ],
+  "gldisplay-event": [
+   0,
+   0,
+   0.0
+  ],
+  "GstPlay": [
+   603,
+   2,
+   23.6
+  ],
+  "typefindelement": [
+   0,
+   0,
+   0.0
+  ],
+  "typefind:sink": [
+   0,
+   0,
+   0.0
+  ],
+  "qtdemux0:sink": [
+   1665,
+   25,
+   38.0
+  ],
+  "multiqueue1:src": [
+   4662,
+   20,
+   28.4
+  ],
+  "multiqueue0:src": [
+   3678,
+   80,
+   170.0
+  ],
+  "gstglcontext": [
+   4204,
+   4,
+   29.1
+  ],
+  "vqueue:src": [
+   2021,
+   13,
+   79.1
+  ],
+  "threaded-ml": [
+   3139,
+   38,
+   31.3
+  ],
+  "aqueue:src": [
+   729,
+   11,
+   29.9
+  ],
+  "python3:disk$1": [
+   0,
+   0,
+   0.0
+  ],
+  "python3:disk$2": [
+   0,
+   0,
+   0.0
+  ],
+  "python3:disk$3": [
+   0,
+   0,
+   0.0
+  ],
+  "900408": [
+   0,
+   0,
+   0.0
+  ],
+  "900409": [
+   0,
+   0,
+   0.0
+  ]
+ },
+ "ok": true,
+ "loadavg_after": [
+  "0.09",
+  "0.21",
+  "0.35"
+ ]
+}

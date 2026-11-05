@@ -1,0 +1,85 @@
+{
+ "git_commit": "d7ecbacd02916c1f67cf9ffcee69e431a318024a",
+ "git_status_clean": true,
+ "kernel": "7.3.0",
+ "subjects": {
+  "hotaru": {
+   "store_path": "/nix/store/d8hm9pp1g9l43awvhz0mxrl27ma8vzn3-hotaru-0.1.0",
+   "entry": "/nix/store/d8hm9pp1g9l43awvhz0mxrl27ma8vzn3-hotaru-0.1.0/bin/hotaru",
+   "nar_size": 13955936,
+   "closure_size": 125681256
+  },
+  "ghostty": {
+   "store_path": "/nix/store/pda6j5833xwmiqh8w8bpsccs22hxqlk3-ghostty-1.4.0",
+   "entry": "/nix/store/pda6j5833xwmiqh8w8bpsccs22hxqlk3-ghostty-1.4.0/bin/ghostty",
+   "nar_size": 32517760,
+   "closure_size": 977185256
+  },
+  "gnome-terminal": {
+   "store_path": "/nix/store/2ywzyfkrx3nb53vv7irashipdif8zrfv-gnome-terminal-3.60.0",
+   "entry": "/nix/store/2ywzyfkrx3nb53vv7irashipdif8zrfv-gnome-terminal-3.60.0",
+   "nar_size": 9690040,
+   "closure_size": 1226247160
+  },
+  "konsole": {
+   "store_path": "/nix/store/9kf88zx0zhvilvlrrf9na9dsmax8m13z-konsole-26.08.2",
+   "entry": "/nix/store/9kf88zx0zhvilvlrrf9na9dsmax8m13z-konsole-26.08.2/bin/konsole",
+   "nar_size": 12823544,
+   "closure_size": 1824888376
+  },
+  "kgx": {
+   "store_path": "/nix/store/gf6hqh7idil1qhfg1hc8dncjfz30bsq2-gnome-console-50.0",
+   "entry": "/nix/store/gf6hqh7idil1qhfg1hc8dncjfz30bsq2-gnome-console-50.0/bin/kgx",
+   "nar_size": 1198272,
+   "closure_size": 934378648
+  },
+  "foot": {
+   "store_path": "/nix/store/0gkg75w7bmwd7klmf23qy8m697abypvc-foot-1.28.0",
+   "entry": "/nix/store/0gkg75w7bmwd7klmf23qy8m697abypvc-foot-1.28.0/bin/foot",
+   "nar_size": 860696,
+   "closure_size": 102437760
+  },
+  "alacritty": {
+   "store_path": "/nix/store/xfwsg4zb4bdv17yinzdacnzf5x3sf8x6-alacritty-0.17.0",
+   "entry": "/nix/store/xfwsg4zb4bdv17yinzdacnzf5x3sf8x6-alacritty-0.17.0/bin/alacritty",
+   "nar_size": 11865040,
+   "closure_size": 247805256
+  },
+  "kitty": {
+   "store_path": "/nix/store/rhgydfk31wgp70zc3lyhna356l7id2mi-kitty-0.49.2",
+   "entry": "/nix/store/rhgydfk31wgp70zc3lyhna356l7id2mi-kitty-0.49.2/bin/kitty",
+   "nar_size": 81295552,
+   "closure_size": 623973488
+  }
+ },
+ "tools": {
+  "sway": {
+   "path": "/nix/store/yl8mwqqr3xj01i6daa82r0kwlasvk2hk-sway-1.12/bin/sway",
+   "version": "sway version 1.12"
+  },
+  "grim": {
+   "path": "/nix/store/pcsy1cp83xdrcnqbyk9951vaj2ad2wky-grim-1.5.0/bin/grim",
+   "version": null
+  },
+  "dbus-daemon": {
+   "path": "/nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2/bin/dbus-daemon",
+   "version": "D-Bus Message Bus Daemon 1.16.2"
+  },
+  "python3": {
+   "path": "/nix/store/xahxrjs30p3mw0a42bqg9ikgkikskw8m-python3-3.14.8/bin/python3.14",
+   "version": "Python 3.14.8"
+  },
+  "cc": {
+   "path": "/nix/store/r5ri78axx1qggkjq3vawywlzglg70b5w-gcc-wrapper-16.2.0/bin/gcc",
+   "version": "gcc (GCC) 16.2.0"
+  }
+ },
+ "cpu_model": "AMD Ryzen 7 9800X3D 8-Core Processor",
+ "logical_cpus": 16,
+ "memory_kib": 63312000,
+ "governor": "performance",
+ "energy_performance_preference": "performance",
+ "render_node_driver": "amdgpu",
+ "mesa_egl_vendor_file": "/run/opengl-driver/share/glvnd/egl_vendor.d/50_mesa.json",
+ "mesa_driver": "/nix/store/5dn4zscffxky60hc9awjdirksfvahkgg-graphics-drivers"
+}

@@ -1,0 +1,449 @@
+{
+ "qemu": "QEMU emulator version 11.1.2",
+ "pinned_cpus": "2,3,10,11",
+ "qemu_argv_example": [
+  "taskset",
+  "-c",
+  "2,3,10,11",
+  "qemu-system-x86_64",
+  "-name",
+  "sekka-aizome",
+  "-machine",
+  "pc,accel=kvm",
+  "-cpu",
+  "host",
+  "-smp",
+  "2",
+  "-m",
+  "2048",
+  "-nodefaults",
+  "-no-user-config",
+  "-display",
+  "none",
+  "-device",
+  "virtio-rng-pci",
+  "-netdev",
+  "user,id=n0,restrict=on",
+  "-device",
+  "virtio-net-pci,netdev=n0",
+  "-drive",
+  "if=none,id=root,file=/tmp/claude-1000/perf/desktops/runs/aizome-2048/m1/root.qcow2,format=qcow2,cache=none,werror=report",
+  "-device",
+  "virtio-blk-pci,drive=root,serial=root",
+  "-drive",
+  "if=none,id=store,file=/tmp/claude-1000/perf/desktops/img/aizome/store-fd7hra2k6ndynkgn4pjj1abyldp1fvzy.img,format=raw,readonly=on,cache=none",
+  "-device",
+  "virtio-blk-pci,drive=store,serial=store",
+  "-drive",
+  "if=none,id=swap,file=/tmp/claude-1000/perf/desktops/img/aizome/swap-m1.img,format=raw,cache=none",
+  "-device",
+  "virtio-blk-pci,drive=swap,serial=swap",
+  "-vga",
+  "none",
+  "-device",
+  "virtio-vga,xres=1920,yres=1080",
+  "-usb",
+  "-device",
+  "usb-tablet",
+  "-kernel",
+  "/nix/store/fd7hra2k6ndynkgn4pjj1abyldp1fvzy-nixos-system-nixos-26.11.20261030.1c89083/kernel",
+  "-initrd",
+  "/nix/store/fd7hra2k6ndynkgn4pjj1abyldp1fvzy-nixos-system-nixos-26.11.20261030.1c89083/initrd",
+  "-append",
+  "zswap.enabled=1 zswap.compressor=zstd zswap.max_pool_percent=25 zswap.shrinker_enabled=1 nowatchdog preempt=full rcu_nocbs=all quiet udev.log_level=3 rd.udev.log_level=3 root=fstab loglevel=3 lsm=landlock,yama,bpf init=/nix/store/fd7hra2k6ndynkgn4pjj1abyldp1fvzy-nixos-system-nixos-26.11.20261030.1c89083/init console=ttyS0,115200 console=tty0",
+  "-serial",
+  "file:/tmp/claude-1000/perf/desktops/runs/aizome-2048/m1/serial.log",
+  "-qmp",
+  "unix:/tmp/claude-1000/dbs-aizome/qmp,server=on,wait=off",
+  "-chardev",
+  "socket,id=agent,path=/tmp/claude-1000/dbs-aizome/agent,server=on,wait=off",
+  "-device",
+  "virtio-serial-pci",
+  "-device",
+  "virtserialport,chardev=agent,name=perf.agent",
+  "-rtc",
+  "base=2026-11-02T15:00:00"
+ ],
+ "trials": [
+  {
+   "subject": "aizome-4096",
+   "tag": "r1",
+   "start": "2026-11-02T09:30:55-0600",
+   "end": "2026-11-02T09:41:52-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "1.38",
+    "2.22",
+    "1.75"
+   ],
+   "waited_for_quiet_s": 10.0,
+   "loadavg_end": [
+    "0.23",
+    "0.70",
+    "1.11"
+   ],
+   "guest_rtc_start": null
+  },
+  {
+   "subject": "gnome-4096",
+   "tag": "r1",
+   "start": "2026-11-02T09:42:15-0600",
+   "end": "2026-11-02T09:54:26-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.32",
+    "0.69",
+    "1.10"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.41",
+    "0.70",
+    "0.90"
+   ],
+   "guest_rtc_start": null
+  },
+  {
+   "subject": "plasma-4096",
+   "tag": "r1",
+   "start": "2026-11-02T09:54:50-0600",
+   "end": "2026-11-02T10:05:38-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.42",
+    "0.68",
+    "0.88"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.61",
+    "0.66",
+    "0.73"
+   ],
+   "guest_rtc_start": null
+  },
+  {
+   "subject": "baseline-4096",
+   "tag": "r1",
+   "start": "2026-11-02T10:05:58-0600",
+   "end": "2026-11-02T10:10:25-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.59",
+    "0.65",
+    "0.73"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.06",
+    "0.36",
+    "0.59"
+   ],
+   "guest_rtc_start": null
+  },
+  {
+   "subject": "gnome-4096",
+   "tag": "r2",
+   "start": "2026-11-02T11:37:48-0600",
+   "end": "2026-11-02T11:49:54-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.34",
+    "0.13",
+    "0.11"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.32",
+    "0.49",
+    "0.33"
+   ],
+   "guest_rtc_start": null
+  },
+  {
+   "subject": "plasma-4096",
+   "tag": "r2",
+   "start": "2026-11-02T11:50:13-0600",
+   "end": "2026-11-02T12:00:57-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.74",
+    "0.58",
+    "0.36"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.67",
+    "0.73",
+    "0.55"
+   ],
+   "guest_rtc_start": null
+  },
+  {
+   "subject": "baseline-4096",
+   "tag": "r2",
+   "start": "2026-11-02T12:01:12-0600",
+   "end": "2026-11-02T12:05:38-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "1.21",
+    "0.85",
+    "0.60"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.03",
+    "0.36",
+    "0.45"
+   ],
+   "guest_rtc_start": null
+  },
+  {
+   "subject": "aizome-4096",
+   "tag": "r2",
+   "start": "2026-11-02T12:58:21-0600",
+   "end": "2026-11-02T13:09:03-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.99",
+    "0.42",
+    "0.26"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "1.12",
+    "1.03",
+    "0.63"
+   ],
+   "guest_rtc_start": "2026-11-02T15:00:00"
+  },
+  {
+   "subject": "plasma-4096",
+   "tag": "r3",
+   "start": "2026-11-02T13:09:26-0600",
+   "end": "2026-11-02T13:20:09-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "1.35",
+    "1.09",
+    "0.66"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.34",
+    "0.81",
+    "0.74"
+   ],
+   "guest_rtc_start": "2026-11-02T15:00:00"
+  },
+  {
+   "subject": "baseline-4096",
+   "tag": "r3",
+   "start": "2026-11-02T13:20:24-0600",
+   "end": "2026-11-02T13:24:50-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.34",
+    "0.79",
+    "0.73"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.02",
+    "0.34",
+    "0.55"
+   ],
+   "guest_rtc_start": "2026-11-02T15:00:00"
+  },
+  {
+   "subject": "aizome-4096",
+   "tag": "r3",
+   "start": "2026-11-02T13:25:07-0600",
+   "end": "2026-11-02T13:35:50-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.17",
+    "0.35",
+    "0.55"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.31",
+    "0.51",
+    "0.52"
+   ],
+   "guest_rtc_start": "2026-11-02T15:00:00"
+  },
+  {
+   "subject": "gnome-4096",
+   "tag": "r3",
+   "start": "2026-11-02T14:17:03-0600",
+   "end": "2026-11-02T14:29:10-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.90",
+    "0.37",
+    "0.26"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.86",
+    "0.73",
+    "0.47"
+   ],
+   "guest_rtc_start": "2026-11-02T15:00:00"
+  },
+  {
+   "subject": "aizome-2048",
+   "tag": "m1",
+   "start": "2026-11-02T14:29:29-0600",
+   "end": "2026-11-02T14:33:50-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "1.00",
+    "0.77",
+    "0.49"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.16",
+    "0.49",
+    "0.45"
+   ],
+   "guest_rtc_start": "2026-11-02T15:00:00"
+  },
+  {
+   "subject": "gnome-2048",
+   "tag": "m1",
+   "start": "2026-11-02T14:34:02-0600",
+   "end": "2026-11-02T14:38:26-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.20",
+    "0.48",
+    "0.45"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.10",
+    "0.32",
+    "0.39"
+   ],
+   "guest_rtc_start": "2026-11-02T15:00:00"
+  },
+  {
+   "subject": "plasma-2048",
+   "tag": "m1",
+   "start": "2026-11-02T14:38:48-0600",
+   "end": "2026-11-02T14:43:14-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.36",
+    "0.36",
+    "0.40"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.54",
+    "0.36",
+    "0.38"
+   ],
+   "guest_rtc_start": "2026-11-02T15:00:00"
+  },
+  {
+   "subject": "baseline-2048",
+   "tag": "m1",
+   "start": "2026-11-02T14:43:36-0600",
+   "end": "2026-11-02T14:48:03-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.67",
+    "0.40",
+    "0.39"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.89",
+    "0.55",
+    "0.44"
+   ],
+   "guest_rtc_start": "2026-11-02T15:00:00"
+  },
+  {
+   "subject": "gnome-2048",
+   "tag": "m2",
+   "start": "2026-11-02T14:48:19-0600",
+   "end": "2026-11-02T14:52:43-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "1.00",
+    "0.59",
+    "0.46"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.28",
+    "0.47",
+    "0.44"
+   ],
+   "guest_rtc_start": "2026-11-02T15:00:00"
+  },
+  {
+   "subject": "plasma-2048",
+   "tag": "m2",
+   "start": "2026-11-02T14:52:54-0600",
+   "end": "2026-11-02T14:57:19-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.39",
+    "0.49",
+    "0.45"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.42",
+    "0.49",
+    "0.47"
+   ],
+   "guest_rtc_start": "2026-11-02T15:00:00"
+  },
+  {
+   "subject": "aizome-2048",
+   "tag": "m2",
+   "start": "2026-11-02T15:12:45-0600",
+   "end": "2026-11-02T15:17:07-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.59",
+    "0.63",
+    "0.68"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.08",
+    "0.29",
+    "0.52"
+   ],
+   "guest_rtc_start": "2026-11-02T15:00:00"
+  },
+  {
+   "subject": "baseline-2048",
+   "tag": "m2",
+   "start": "2026-11-02T15:17:18-0600",
+   "end": "2026-11-02T15:21:44-0600",
+   "host_kernel": "7.3.0",
+   "loadavg_start": [
+    "0.15",
+    "0.30",
+    "0.52"
+   ],
+   "waited_for_quiet_s": 0.0,
+   "loadavg_end": [
+    "0.16",
+    "0.26",
+    "0.45"
+   ],
+   "guest_rtc_start": "2026-11-02T15:00:00"
+  }
+ ]
+}

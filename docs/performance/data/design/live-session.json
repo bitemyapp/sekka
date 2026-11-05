@@ -1,0 +1,141 @@
+{
+ "date": "2026-11-02T02:31:36-0600",
+ "note": "The live Aizome session on runnymede while in use (this benchmark's own agents writing to a Hotaru window); the compositor on the NVIDIA GPU (udev, GLES), one 3840x2160 240 Hz display at scale 2. Window titles and app identities are left out.",
+ "stats": {
+  "response": "stats",
+  "stats": {
+   "renderer": "gles",
+   "backend": "udev",
+   "outputs": [
+    {
+     "name": "DP-4",
+     "frames_rendered": 53159,
+     "frames_skipped": 111,
+     "cpu_us": {
+      "p50": 303.0,
+      "p95": 616.0,
+      "p99": 1303.0,
+      "max": 3908.0,
+      "mean": 396.261474609375
+     },
+     "gpu_us": null,
+     "samples": 4096
+    }
+   ],
+   "renderer_setting": "auto",
+   "renderer_after_restart": false,
+   "logic": {
+    "build": "0.1.0+99a10a69a575a5f0",
+    "path": "/nix/store/w32wnmm79spnqnsjnl38pb3qygjnl4vj-aizome-0.1.0/bin/../lib/aizome/libaizome_comp_logic.so",
+    "loaded_at": 1793605463,
+    "healthy": true,
+    "reloads": 0,
+    "rollbacks": 0,
+    "last_error": null,
+    "core_abi": "ccf6992e52754e4c03eb4efefc123c3dd9a72f2f78559baa358253f8ad269f7e"
+   }
+  }
+ },
+ "outputs": [
+  {
+   "name": "DP-4",
+   "make": "AUS",
+   "model": "PG27UCDM",
+   "current_mode": {
+    "width": 3840,
+    "height": 2160,
+    "refresh": 240000,
+    "preferred": false
+   },
+   "scale": 2.0,
+   "transform": "normal"
+  }
+ ],
+ "window_count": 2,
+ "processes": [
+  {
+   "comm": "aizome-shell",
+   "store_path": "/nix/store/w32wnmm79spnqnsjnl38pb3qygjnl4vj-aizome-0.1.0",
+   "elapsed_s": 2833,
+   "cpu_s": 7.94,
+   "threads": 63,
+   "pss_kib": 443346,
+   "pss_anon_kib": 381436,
+   "pss_file_kib": 22760,
+   "pss_shmem_kib": 39150,
+   "rss_kib": 490716
+  },
+  {
+   "comm": "aizome",
+   "store_path": "/nix/store/w32wnmm79spnqnsjnl38pb3qygjnl4vj-aizome-0.1.0",
+   "elapsed_s": 2833,
+   "cpu_s": 31.79,
+   "threads": 16,
+   "pss_kib": 283340,
+   "pss_anon_kib": 41128,
+   "pss_file_kib": 150228,
+   "pss_shmem_kib": 91984,
+   "rss_kib": 442644
+  },
+  {
+   "comm": ".aizome-hotaru-",
+   "store_path": "/nix/store/w32wnmm79spnqnsjnl38pb3qygjnl4vj-aizome-0.1.0",
+   "elapsed_s": 2536,
+   "cpu_s": 24.25,
+   "threads": 18,
+   "pss_kib": 83960,
+   "pss_anon_kib": 46440,
+   "pss_file_kib": 10228,
+   "pss_shmem_kib": 27292,
+   "rss_kib": 117880
+  },
+  {
+   "comm": "aizome-koyomi",
+   "store_path": "/nix/store/w32wnmm79spnqnsjnl38pb3qygjnl4vj-aizome-0.1.0",
+   "elapsed_s": 2833,
+   "cpu_s": 0.06,
+   "threads": 6,
+   "pss_kib": 6723,
+   "pss_anon_kib": 1048,
+   "pss_file_kib": 5675,
+   "pss_shmem_kib": 0,
+   "rss_kib": 9120
+  },
+  {
+   "comm": ".xwayland-satel",
+   "store_path": "/nix/store/q6k3hsmwr7wb8xinn3cypmkylkd5al6v-xwayland-satellite-0.8.3",
+   "elapsed_s": 2833,
+   "cpu_s": 0.0,
+   "threads": 2,
+   "pss_kib": 4150,
+   "pss_anon_kib": 788,
+   "pss_file_kib": 3362,
+   "pss_shmem_kib": 0,
+   "rss_kib": 6788
+  },
+  {
+   "comm": "aizome-portal",
+   "store_path": "/nix/store/w32wnmm79spnqnsjnl38pb3qygjnl4vj-aizome-0.1.0",
+   "elapsed_s": 2833,
+   "cpu_s": 0.04,
+   "threads": 4,
+   "pss_kib": 2852,
+   "pss_anon_kib": 744,
+   "pss_file_kib": 2108,
+   "pss_shmem_kib": 0,
+   "rss_kib": 7008
+  },
+  {
+   "comm": "aizome-awake",
+   "store_path": "/nix/store/w32wnmm79spnqnsjnl38pb3qygjnl4vj-aizome-0.1.0",
+   "elapsed_s": 2833,
+   "cpu_s": 0.41,
+   "threads": 4,
+   "pss_kib": 2366,
+   "pss_anon_kib": 412,
+   "pss_file_kib": 1954,
+   "pss_shmem_kib": 0,
+   "rss_kib": 4316
+  }
+ ]
+}

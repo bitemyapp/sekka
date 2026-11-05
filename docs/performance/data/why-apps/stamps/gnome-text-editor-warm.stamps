@@ -1,0 +1,181 @@
+70866741690927 1718293 1718293 ctor 0 /nix/store/94r4v2l4…-gnome-text-editor-50.1/bin/gnome-text-editor
+70866741742447 1718293 1718293 main 0 /nix/store/94r4v2l4…-gnome-text-editor-50.1/bin/gnome-text-editor
+70866758723571 1718293 1718293 ctor 0 /nix/store/94r4v2l4…-gnome-text-editor-50.1/bin/.gnome-text-editor-wrapped
+70866758746481 1718293 1718293 main 0 /nix/store/94r4v2l4…-gnome-text-editor-50.1/bin/gnome-text-editor
+70866759094371 1718293 1718293 dlopen 70020 /nix/store/hpj1833w…-dconf-0.49.0-lib/lib/gio/modules/libdconfsettings.so
+70866759248711 1718293 1718293 pthread_create 0 libglib-2.0.so.0 ?
+70866759293551 1718293 1718293 pthread_create 0 libglib-2.0.so.0 ?
+70866759340762 1718293 1718293 pthread_create 0 libglib-2.0.so.0 ?
+70866759388912 1718293 1718293 dlopen 321540 /nix/store/h7pjc6hi…-gvfs-1.60.3/lib/gio/modules/libgvfsdbus.so
+70866760740484 1718293 1718296 pthread_create 0 libglib-2.0.so.0 ?
+70866759408802 1718293 1718296 g_bus_get_sync 1607382 2
+70866759753782 1718293 1718293 g_bus_get_sync 1264402 2
+70866761193944 1718293 1718293 poll 213611 1 ppoll
+70866761105234 1718293 1718296 poll 378151 1 ppoll
+70866761827275 1718293 1718293 g_bus_get_sync 450 2
+70866761830285 1718293 1718293 g_dbus_connection_call_sync 74620 org.freedesktop.DBus org.freedesktop.DBus.ListActivatableNames ok
+70866761911735 1718293 1718293 g_bus_get_sync 150 2
+70866761917615 1718293 1718293 g_dbus_connection_call_sync 111850 org.freedesktop.portal.Desktop org.freedesktop.DBus.Properties.Get ok
+70866762033485 1718293 1718293 g_bus_get_sync 250 2
+70866762044305 1718293 1718293 g_dbus_proxy_new_sync 52531 org.freedesktop.portal.Documents org.freedesktop.portal.FileTransfer
+70866762142296 1718293 1718293 pthread_create 0 libglib-2.0.so.0 ?
+70866762313366 1718293 1718293 dlopen 418970 /run/current-system/sw/lib/gtk-4.0/4.0.0/immodules/libim-ibus.so
+70866762822206 1718293 1718293 wl_display_connect 16120 
+70866762869127 1718293 1718293 xkb_context_new 4940 
+70866762883417 1718293 1718293 g_bus_get_sync 960 2
+70866762092696 1718293 1718297 poll 812931 2 ppoll
+70866762887697 1718293 1718293 g_dbus_connection_call_sync 126760 org.freedesktop.portal.Desktop org.freedesktop.DBus.Properties.Get ok
+70866763021127 1718293 1718293 g_dbus_proxy_new_sync 217030 org.freedesktop.portal.Desktop org.freedesktop.portal.Settings
+70866763251617 1718293 1718297 poll 674511 2 ppoll
+70866763248037 1718293 1718293 poll 757951 1 ppoll
+70866764091738 1718293 1718293 wl_display_roundtrip 149291 queue
+70866764091308 1718293 1718293 wl_display_roundtrip 150931 
+70866764262119 1718293 1718293 xkb_context_new 1210 
+70866765516470 1718293 1718293 g_bus_get_sync 880 2
+70866763998928 1718293 1718297 poll 1543982 2 ppoll
+70866765523350 1718293 1718293 g_dbus_connection_call_sync 103381 org.freedesktop.portal.Desktop org.freedesktop.DBus.Properties.Get ok
+70866765629311 1718293 1718293 g_dbus_proxy_new_sync 155880 org.freedesktop.portal.Desktop org.freedesktop.portal.Inhibit
+70866762197246 1718293 1718298 FcInit 3938855 
+70866765812291 1718293 1718297 poll 382370 2 ppoll
+70866772453470 1718293 1718294 pthread_create 0 libglib-2.0.so.0 ?
+70866766371912 1718293 1718297 poll 8804402 2 ppoll
+70866775144684 1718293 1718293 g_dbus_proxy_new_sync 273761 org.freedesktop.portal.Desktop org.freedesktop.portal.Settings
+70866761530235 1718293 1718296 poll 14394120 1 ppoll
+70866790918977 1718293 1718293 pthread_create 0 libglib-2.0.so.0 ?
+70866790997757 1718293 1718300 pthread_create 0 libglib-2.0.so.0 ?
+70866791199217 1718293 1718300 pthread_create 0 libglib-2.0.so.0 ?
+70866775956285 1718293 1718297 poll 15378602 2 ppoll
+70866791302437 1718293 1718293 g_dbus_proxy_new_sync 237450 org.freedesktop.portal.Desktop org.freedesktop.portal.Settings
+70866791556057 1718293 1718297 poll 604821 2 ppoll
+70866791551037 1718293 1718293 poll 670051 1 ppoll
+70866795285643 1718293 1718293 g_bus_get_sync 820 2
+70866792221098 1718293 1718297 poll 3087405 2 ppoll
+70866795291393 1718293 1718293 g_dbus_connection_call_sync 163500 org.a11y.Bus org.a11y.Bus.GetAddress ok
+70866806117258 1718293 1718293 dlopen 328791 /nix/store/lmlkif1a…-enchant-2.6.9/lib/enchant-2/enchant_nuspell.so
+70866806462039 1718293 1718293 dlopen 61800 /nix/store/lmlkif1a…-enchant-2.6.9/lib/enchant-2/enchant_aspell.so
+70866806528769 1718293 1718293 dlopen 57980 /nix/store/lmlkif1a…-enchant-2.6.9/lib/enchant-2/enchant_hspell.so
+70866806590929 1718293 1718293 dlopen 803601 /nix/store/lmlkif1a…-enchant-2.6.9/lib/enchant-2/enchant_voikko.so
+70866807401580 1718293 1718293 dlopen 463091 /nix/store/lmlkif1a…-enchant-2.6.9/lib/enchant-2/enchant_hunspell.so
+70866759357852 1718293 1718295 poll 49255030 1 ppoll
+70866813296098 1718293 1718293 pthread_create 0 libglib-2.0.so.0 ?
+70866817493744 1718293 1718294 pthread_create 0 libglib-2.0.so.0 ?
+70866820027028 1718293 1718293 dlopen 725071 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_virtio.so
+70866820779919 1718293 1718293 dlopen 10926546 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_lvp.so
+70866831747065 1718293 1718293 dlopen 416370 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_powervr_mesa.so
+70866832186395 1718293 1718293 dlopen 10505125 /nix/store/h9lbjvp7…-nvidia-x11-615.78.08/lib/libGLX_nvidia.so.0
+70866842733850 1718293 1718293 dlopen 1938183 /nix/store/j6846pd6…-mesa-26.2.6/lib/libEGL_mesa.so.0
+70866846076705 1718293 1718293 dlopen 416691 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_panfrost.so
+70866846517446 1718293 1718293 dlopen 432330 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_intel.so
+70866846969796 1718293 1718293 dlopen 594851 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_radeon.so
+70866847584377 1718293 1718293 dlopen 348021 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_dzn.so
+70866847952448 1718293 1718293 dlopen 345070 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_broadcom.so
+70866848317148 1718293 1718293 dlopen 357281 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_intel_hasvk.so
+70866848693299 1718293 1718293 dlopen 545921 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_asahi.so
+70866849262070 1718293 1718293 dlopen 476740 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_nouveau.so
+70866849772090 1718293 1718293 dlopen 1672843 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_freedreno.so
+70866851467683 1718293 1718293 dlopen 245370 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_gfxstream.so
+70866851784713 1718293 1718293 dlopen 2420 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_virtio.so
+70866851794723 1718293 1718293 dlopen 1860 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_lvp.so
+70866851805273 1718293 1718293 dlopen 1480 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_powervr_mesa.so
+70866851814023 1718293 1718293 dlopen 8798363 /nix/store/h9lbjvp7…-nvidia-x11-615.78.08/lib/libGLX_nvidia.so.0
+70866862240348 1718293 1718293 dlopen 9870 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_panfrost.so
+70866862266028 1718293 1718293 dlopen 2090 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_intel.so
+70866862276928 1718293 1718293 dlopen 1390 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_radeon.so
+70866862286448 1718293 1718293 dlopen 1370 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_dzn.so
+70866862297778 1718293 1718293 dlopen 1460 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_broadcom.so
+70866862306918 1718293 1718293 dlopen 1360 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_intel_hasvk.so
+70866862324288 1718293 1718293 dlopen 1300 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_asahi.so
+70866862335988 1718293 1718293 dlopen 1250 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_nouveau.so
+70866862359088 1718293 1718293 dlopen 1360 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_freedreno.so
+70866862368688 1718293 1718293 dlopen 1380 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_gfxstream.so
+70866819871628 1718293 1718293 vkEnumerateInstanceExtensionProperties 42817481 
+70866862768469 1718293 1718293 dlopen 2620 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_virtio.so
+70866862778519 1718293 1718293 dlopen 1240 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_lvp.so
+70866862787569 1718293 1718293 dlopen 1170 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_powervr_mesa.so
+70866862795709 1718293 1718293 dlopen 7801531 /nix/store/h9lbjvp7…-nvidia-x11-615.78.08/lib/libGLX_nvidia.so.0
+70866871709292 1718293 1718293 dlopen 6240 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_panfrost.so
+70866871728152 1718293 1718293 dlopen 1810 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_intel.so
+70866871737432 1718293 1718293 dlopen 1340 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_radeon.so
+70866871745962 1718293 1718293 dlopen 1340 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_dzn.so
+70866871756622 1718293 1718293 dlopen 1300 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_broadcom.so
+70866871764752 1718293 1718293 dlopen 1310 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_intel_hasvk.so
+70866871773542 1718293 1718293 dlopen 1290 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_asahi.so
+70866871783012 1718293 1718293 dlopen 1300 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_nouveau.so
+70866871805362 1718293 1718293 dlopen 1640 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_freedreno.so
+70866871813902 1718293 1718293 dlopen 1410 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_gfxstream.so
+70866862690769 1718293 1718293 vkEnumerateInstanceExtensionProperties 9342403 
+70866872152212 1718293 1718293 dlopen 2230 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_virtio.so
+70866872162122 1718293 1718293 dlopen 1220 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_lvp.so
+70866872171812 1718293 1718293 dlopen 1260 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_powervr_mesa.so
+70866872179622 1718293 1718293 dlopen 7568621 /nix/store/h9lbjvp7…-nvidia-x11-615.78.08/lib/libGLX_nvidia.so.0
+70866880711045 1718293 1718293 dlopen 5440 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_panfrost.so
+70866880728565 1718293 1718293 dlopen 2320 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_intel.so
+70866880740295 1718293 1718293 dlopen 2220 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_radeon.so
+70866880751005 1718293 1718293 dlopen 1360 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_dzn.so
+70866880761355 1718293 1718293 dlopen 1290 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_broadcom.so
+70866880769455 1718293 1718293 dlopen 1360 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_intel_hasvk.so
+70866880777955 1718293 1718293 dlopen 1240 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_asahi.so
+70866880787325 1718293 1718293 dlopen 1290 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_nouveau.so
+70866880807905 1718293 1718293 dlopen 1380 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_freedreno.so
+70866880815665 1718293 1718293 dlopen 1570 /nix/store/j6846pd6…-mesa-26.2.6/lib/libvulkan_gfxstream.so
+70866880971215 1718293 1718293 dlopen 95510 /nix/store/j6846pd6…-mesa-26.2.6/lib/libVkLayer_MESA_device_select.so
+70866872038942 1718293 1718293 vkCreateInstance 15278872 0
+70866891279620 1718293 1718293 pthread_create 0 libvulkan_radeon.so ?
+70866891339630 1718293 1718293 pthread_create 0 libvulkan_radeon.so ?
+70866892243611 1718293 1718293 wl_display_connect 18000 
+70866892335291 1718293 1718293 wl_display_roundtrip 148130 queue
+70866892335171 1718293 1718293 wl_display_roundtrip 149440 
+70866887350234 1718293 1718293 vkEnumeratePhysicalDevices 5140567 2
+70866892512221 1718293 1718293 wl_display_connect 5910 
+70866892545141 1718293 1718293 wl_display_roundtrip 106200 queue
+70866892545121 1718293 1718293 wl_display_roundtrip 106970 
+70866892492081 1718293 1718293 vkEnumeratePhysicalDevices 874512 2
+70866893396633 1718293 1718293 vkCreateDevice 974191 0
+70866894539254 1718293 1718293 wl_display_roundtrip 42190 queue
+70866894583234 1718293 1718293 wl_display_roundtrip 27910 queue
+70866894611804 1718293 1718293 wl_display_roundtrip 5440 queue
+70866894622594 1718293 1718293 wl_display_roundtrip 27150 queue
+70866894650514 1718293 1718293 wl_display_roundtrip 17560 queue
+70866894668564 1718293 1718293 wl_display_roundtrip 6420 queue
+70866894686234 1718293 1718293 wl_display_roundtrip 23370 queue
+70866894710354 1718293 1718293 wl_display_roundtrip 14400 queue
+70866894725234 1718293 1718293 wl_display_roundtrip 4820 queue
+70866894733064 1718293 1718293 wl_display_roundtrip 22530 queue
+70866894756185 1718293 1718293 wl_display_roundtrip 12660 queue
+70866894769325 1718293 1718293 wl_display_roundtrip 4690 queue
+70866894776285 1718293 1718293 wl_display_roundtrip 22220 queue
+70866894799105 1718293 1718293 wl_display_roundtrip 12600 queue
+70866894812175 1718293 1718293 wl_display_roundtrip 4600 queue
+70866894819825 1718293 1718293 wl_display_roundtrip 22590 queue
+70866894843005 1718293 1718293 wl_display_roundtrip 12270 queue
+70866894855745 1718293 1718293 wl_display_roundtrip 4460 queue
+70866894862735 1718293 1718293 wl_display_roundtrip 15100 queue
+70866795448653 1718293 1718297 poll 100216163 2 ppoll
+70866895568256 1718293 1718293 g_dbus_connection_new_for_address_sync 186060 ok
+70866895778006 1718293 1718293 xdg_toplevel 0 63
+70866895781416 1718293 1718293 commit 0 32 toplevel
+70866895764326 1718293 1718297 poll 3300955 3 ppoll
+70866808626392 1718293 1718295 poll 91005969 2 ppoll
+70866907549293 1718293 1718293 wl_display_roundtrip 50140 queue
+70866907605963 1718293 1718293 wl_display_roundtrip 40540 queue
+70866907647563 1718293 1718293 wl_display_roundtrip 7450 queue
+70866907662453 1718293 1718293 wl_display_roundtrip 27440 queue
+70866907690653 1718293 1718293 wl_display_roundtrip 19400 queue
+70866907710543 1718293 1718293 wl_display_roundtrip 5220 queue
+70866907719933 1718293 1718293 wl_display_roundtrip 8780 queue
+70866899528431 1718293 1718297 poll 10938756 3 ppoll
+70866912063219 1718293 1718293 vkCreateGraphicsPipelines 89280 1
+70866912215249 1718293 1718293 vkCreateGraphicsPipelines 47230 1
+70866913352911 1718293 1718293 pthread_create 0 libvulkan_radeon.so ?
+70866913411721 1718293 1718293 pthread_create 0 libvulkan_radeon.so ?
+70866913473031 1718293 1718293 vkCreateGraphicsPipelines 42830 1
+70866982395519 1718293 1718293 pthread_create 0 libvulkan_radeon.so ?
+70866913521621 1718293 1718293 vkCreateGraphicsPipelines 70122590 1
+70867015171536 1718293 1718293 pthread_create 0 libvulkan_radeon.so ?
+70866983683351 1718293 1718293 vkCreateGraphicsPipelines 31851615 1
+70867022777727 1718293 1718293 pthread_create 0 libvulkan_radeon.so ?
+70867015596517 1718293 1718293 vkCreateGraphicsPipelines 7339950 1
+70867023095257 1718293 1718293 vkCreateGraphicsPipelines 86080 1
+70867023211527 1718293 1718293 vkCreateGraphicsPipelines 5216628 1
+70867028635435 1718293 1718293 attach 0 32 buffer
+70867028637655 1718293 1718293 commit-buffer 0 32 toplevel

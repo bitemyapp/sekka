@@ -1,0 +1,350 @@
+{
+ "documents": {
+  "constitution-annotated-2017.pdf": {
+   "pdfium": {
+    "pages": 20,
+    "total_ms": 58.7,
+    "p50": 3.14,
+    "max": 5.76,
+    "not_ok": []
+   },
+   "hayro-fork": {
+    "pages": 20,
+    "total_ms": 38.6,
+    "p50": 1.93,
+    "max": 4.2,
+    "not_ok": []
+   },
+   "hayro-upstream": {
+    "pages": 20,
+    "total_ms": 54.5,
+    "p50": 2.65,
+    "max": 8.35,
+    "not_ok": []
+   },
+   "mupdf": {
+    "pages": 20,
+    "total_ms": 61.8,
+    "p50": 1.29,
+    "max": 23.98,
+    "not_ok": []
+   },
+   "poppler-splash": {
+    "pages": 20,
+    "total_ms": 768.6,
+    "p50": 41.25,
+    "max": 43.47,
+    "not_ok": []
+   },
+   "poppler-cairo": {
+    "pages": 20,
+    "total_ms": 127.3,
+    "p50": 4.86,
+    "max": 32.95,
+    "not_ok": []
+   }
+  },
+  "federal-register-2026-10-30.pdf": {
+   "pdfium": {
+    "pages": 20,
+    "total_ms": 93.8,
+    "p50": 4.34,
+    "max": 10.58,
+    "not_ok": []
+   },
+   "hayro-fork": {
+    "pages": 20,
+    "total_ms": 76.4,
+    "p50": 3.33,
+    "max": 7.11,
+    "not_ok": []
+   },
+   "hayro-upstream": {
+    "pages": 20,
+    "total_ms": 85.5,
+    "p50": 4.65,
+    "max": 6.98,
+    "not_ok": []
+   },
+   "mupdf": {
+    "pages": 20,
+    "total_ms": 61.8,
+    "p50": 1.99,
+    "max": 13.36,
+    "not_ok": []
+   },
+   "poppler-splash": {
+    "pages": 20,
+    "total_ms": 310.1,
+    "p50": 16.88,
+    "max": 20.52,
+    "not_ok": []
+   },
+   "poppler-cairo": {
+    "pages": 20,
+    "total_ms": 125.1,
+    "p50": 3.77,
+    "max": 36.01,
+    "not_ok": []
+   }
+  },
+  "irs-f1040.pdf": {
+   "pdfium": {
+    "pages": 2,
+    "total_ms": 18.0,
+    "p50": 8.98,
+    "max": 11.73,
+    "not_ok": []
+   },
+   "hayro-fork": {
+    "pages": 2,
+    "total_ms": 13.7,
+    "p50": 6.83,
+    "max": 8.51,
+    "not_ok": []
+   },
+   "hayro-upstream": {
+    "pages": 2,
+    "total_ms": 13.8,
+    "p50": 6.91,
+    "max": 8.42,
+    "not_ok": []
+   },
+   "mupdf": {
+    "pages": 2,
+    "total_ms": 32.0,
+    "p50": 16.01,
+    "max": 20.27,
+    "not_ok": []
+   },
+   "poppler-splash": {
+    "pages": 2,
+    "total_ms": 45.0,
+    "p50": 22.5,
+    "max": 24.91,
+    "not_ok": []
+   },
+   "poppler-cairo": {
+    "pages": 2,
+    "total_ms": 23.0,
+    "p50": 11.48,
+    "max": 15.13,
+    "not_ok": []
+   }
+  },
+  "irs-p17.pdf": {
+   "pdfium": {
+    "pages": 20,
+    "total_ms": 101.1,
+    "p50": 5.07,
+    "max": 7.52,
+    "not_ok": []
+   },
+   "hayro-fork": {
+    "pages": 20,
+    "total_ms": 73.8,
+    "p50": 3.62,
+    "max": 5.84,
+    "not_ok": []
+   },
+   "hayro-upstream": {
+    "pages": 20,
+    "total_ms": 101.4,
+    "p50": 4.87,
+    "max": 13.13,
+    "not_ok": []
+   },
+   "mupdf": {
+    "pages": 20,
+    "total_ms": 118.3,
+    "p50": 4.69,
+    "max": 28.68,
+    "not_ok": []
+   },
+   "poppler-splash": {
+    "pages": 20,
+    "total_ms": 285.8,
+    "p50": 14.9,
+    "max": 17.01,
+    "not_ok": []
+   },
+   "poppler-cairo": {
+    "pages": 20,
+    "total_ms": 98.2,
+    "p50": 4.71,
+    "max": 10.93,
+    "not_ok": []
+   }
+  },
+  "plos-one-0000001.pdf": {
+   "pdfium": {
+    "pages": 11,
+    "total_ms": 52.9,
+    "p50": 4.87,
+    "max": 7.23,
+    "not_ok": []
+   },
+   "hayro-fork": {
+    "pages": 11,
+    "total_ms": 53.6,
+    "p50": 4.45,
+    "max": 9.24,
+    "not_ok": []
+   },
+   "hayro-upstream": {
+    "pages": 11,
+    "total_ms": 60.6,
+    "p50": 5.13,
+    "max": 7.87,
+    "not_ok": []
+   },
+   "mupdf": {
+    "pages": 11,
+    "total_ms": 54.7,
+    "p50": 5.11,
+    "max": 8.92,
+    "not_ok": []
+   },
+   "poppler-splash": {
+    "pages": 11,
+    "total_ms": 291.3,
+    "p50": 17.55,
+    "max": 44.21,
+    "not_ok": []
+   },
+   "poppler-cairo": {
+    "pages": 11,
+    "total_ms": 198.4,
+    "p50": 13.38,
+    "max": 35.74,
+    "not_ok": []
+   }
+  },
+  "us-budget-fy2025.pdf": {
+   "pdfium": {
+    "pages": 20,
+    "total_ms": 72.5,
+    "p50": 3.45,
+    "max": 11.52,
+    "not_ok": []
+   },
+   "hayro-fork": {
+    "pages": 20,
+    "total_ms": 49.6,
+    "p50": 2.3,
+    "max": 6.11,
+    "not_ok": []
+   },
+   "hayro-upstream": {
+    "pages": 20,
+    "total_ms": 68.2,
+    "p50": 3.04,
+    "max": 13.46,
+    "not_ok": []
+   },
+   "mupdf": {
+    "pages": 20,
+    "total_ms": 141.8,
+    "p50": 1.5,
+    "max": 92.96,
+    "not_ok": []
+   },
+   "poppler-splash": {
+    "pages": 20,
+    "total_ms": 269.7,
+    "p50": 14.43,
+    "max": 34.86,
+    "not_ok": []
+   },
+   "poppler-cairo": {
+    "pages": 20,
+    "total_ms": 62.8,
+    "p50": 2.27,
+    "max": 17.67,
+    "not_ok": []
+   }
+  },
+  "us-constitution-pocket.pdf": {
+   "pdfium": {
+    "pages": 20,
+    "total_ms": 80.6,
+    "p50": 2.24,
+    "max": 39.25,
+    "not_ok": []
+   },
+   "hayro-fork": {
+    "pages": 20,
+    "total_ms": 66.7,
+    "p50": 1.7,
+    "max": 30.69,
+    "not_ok": []
+   },
+   "hayro-upstream": {
+    "pages": 20,
+    "total_ms": 72.9,
+    "p50": 2.1,
+    "max": 32.87,
+    "not_ok": []
+   },
+   "mupdf": {
+    "pages": 20,
+    "total_ms": 58.1,
+    "p50": 1.0,
+    "max": 27.41,
+    "not_ok": []
+   },
+   "poppler-splash": {
+    "pages": 20,
+    "total_ms": 230.0,
+    "p50": 10.82,
+    "max": 52.82,
+    "not_ok": []
+   },
+   "poppler-cairo": {
+    "pages": 20,
+    "total_ms": 135.6,
+    "p50": 1.77,
+    "max": 91.1,
+    "not_ok": []
+   }
+  }
+ },
+ "totals": {
+  "pdfium": {
+   "pages_all_drew": 113,
+   "total_ms": 478.0,
+   "ratio_to_pdfium": 1.0,
+   "faster_than_pdfium_on": 0
+  },
+  "hayro-fork": {
+   "pages_all_drew": 113,
+   "total_ms": 372.0,
+   "ratio_to_pdfium": 0.78,
+   "faster_than_pdfium_on": 102
+  },
+  "hayro-upstream": {
+   "pages_all_drew": 113,
+   "total_ms": 457.0,
+   "ratio_to_pdfium": 0.957,
+   "faster_than_pdfium_on": 81
+  },
+  "mupdf": {
+   "pages_all_drew": 113,
+   "total_ms": 529.0,
+   "ratio_to_pdfium": 1.107,
+   "faster_than_pdfium_on": 93
+  },
+  "poppler-splash": {
+   "pages_all_drew": 113,
+   "total_ms": 2200.0,
+   "ratio_to_pdfium": 4.608,
+   "faster_than_pdfium_on": 0
+  },
+  "poppler-cairo": {
+   "pages_all_drew": 113,
+   "total_ms": 770.0,
+   "ratio_to_pdfium": 1.613,
+   "faster_than_pdfium_on": 50
+  }
+ }
+}

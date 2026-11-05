@@ -1,0 +1,43 @@
+  15.010 gdm: Gdm: It appears that your system does not have a primary GPU! Proceeding with any GPU
+  15.039 systemd-logind: New session 'c1' of user 'gdm-greeter' with class 'greeter' and type 'wayland'.
+  15.059 (systemd): pam_unix(systemd-user:session): session opened for user gdm-greeter(uid=60578) by (uid=0)
+  15.060 systemd-logind: New session '1' of user 'gdm-greeter' with class 'manager-early' and type 'unspecified'.
+  15.193 systemd: Started Session c1 of User gdm-greeter.
+  15.399 gnome-shell: Running GNOME Shell (using mutter 50.5) as a Wayland display server
+  15.527 gnome-shell: Thread 'KMS thread' will be using high priority scheduling
+  15.543 gnome-shell: MESA-EGL: warning: egl: failed to create dri2 screen
+  15.545 gnome-shell: MESA-EGL: warning: egl: failed to create dri2 screen
+  15.546 gnome-shell: MESA-EGL: warning: NEEDS EXTENSION: falling back to kms_swrast
+  15.547 gnome-shell: Added device '/dev/dri/card0' (virtio_gpu) using atomic mode setting.
+  15.548 gnome-shell: Failed to initialize accelerated iGPU/dGPU framebuffer sharing: Not hardware accelerated
+  15.548 gnome-shell: Created gbm renderer for '/dev/dri/card0'
+  15.548 gnome-shell: GPU /dev/dri/card0 selected as primary
+  15.756 gnome-shell: Using public X11 display :1024, (using unix:/tmp/.X11-unix/X1025 for managed services)
+  15.756 gnome-shell: Using Wayland display name 'wayland-0'
+  16.308 None: Registering session with GDM
+  16.692 None: Registering display with GDM
+  16.899 gnome-shell: Xwayland glamor: GBM Wayland interfaces not available
+  16.899 gnome-shell: Failed to initialize glamor, falling back to sw
+  16.975 gnome-shell: The XKEYBOARD keymap compiler (xkbcomp) reports:
+  16.976 gnome-shell: > Warning:          Multiple symbols for level 1/group 1 on key <FK23>
+  16.976 gnome-shell: >                   Using F23, ignoring XF86TouchpadOff
+  16.976 gnome-shell: > Warning:          Symbol map for key <FK23> redefined
+  16.976 gnome-shell: >                   Using last definition for conflicting fields
+  16.976 gnome-shell: > Warning:          Symbol map for key <FK24> redefined
+  16.976 gnome-shell: >                   Using last definition for conflicting fields
+  16.976 gnome-shell: > Warning:          Could not resolve keysym XF86ElectronicPrivacyScreenOn
+  16.976 gnome-shell: > Warning:          Could not resolve keysym XF86ElectronicPrivacyScreenOff
+  16.976 gnome-shell: > Warning:          Could not resolve keysym XF86ActionOnSelection
+  16.976 gnome-shell: > Warning:          Could not resolve keysym XF86ContextualInsert
+  16.976 gnome-shell: > Warning:          Could not resolve keysym XF86ContextualQuery
+  16.978 gnome-shell: Errors from xkbcomp are not fatal to the X server
+  17.029 gnome-shell: The XKEYBOARD keymap compiler (xkbcomp) reports:
+  17.029 gnome-shell: > Warning:          Unsupported maximum keycode 709, clipping.
+  17.029 gnome-shell: >                   X11 cannot support keycodes above 255.
+  17.029 gnome-shell: > Warning:          Virtual modifier Hyper multiply defined
+  17.029 gnome-shell: >                   Using 0, ignoring 0
+  17.029 gnome-shell: > Warning:          Virtual modifier ScrollLock multiply defined
+  17.029 gnome-shell: >                   Using 0, ignoring 0
+  17.031 gnome-shell: Errors from xkbcomp are not fatal to the X server
+  17.211 gnome-shell: MESA-EGL: warning: DRI3 error: Could not get DRI3 device
+  17.211 gnome-shell: MESA-EGL: warning: Ensure your X server supports DRI3 to get accelerated rendering

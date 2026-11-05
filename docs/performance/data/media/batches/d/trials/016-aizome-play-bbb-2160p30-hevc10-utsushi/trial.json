@@ -1,0 +1,333 @@
+{
+ "tag": "016-aizome-play-bbb-2160p30-hevc10-utsushi",
+ "spec": {
+  "subject": "utsushi",
+  "clip": "bbb-2160p30-hevc10.mp4",
+  "round": 1
+ },
+ "started": "2026-11-02T05:19:06-0600",
+ "quiet": {
+  "busy_cores_before": 0.145,
+  "waited_s": 2.0,
+  "loadavg": [
+   "0.07",
+   "0.14",
+   "0.24"
+  ]
+ },
+ "session_up_s": null,
+ "window_after_s": 0.052,
+ "windows": [
+  {
+   "id": 1,
+   "app_id": "org.aizome.Utsushi",
+   "pid": 350259,
+   "fullscreen": true,
+   "geometry": {
+    "x": 0,
+    "y": 0,
+    "w": 1920,
+    "h": 1080
+   },
+   "title": "Big Buck Bunny, Sunflower version"
+  }
+ ],
+ "roles": {
+  "compositor": [
+   {
+    "pid": 350116,
+    "comm": "aizome",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome"
+   }
+  ],
+  "shell": [
+   {
+    "pid": 350128,
+    "comm": "aizome-shell",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome-shell"
+   }
+  ],
+  "dbus": [
+   {
+    "pid": 350115,
+    "comm": "dbus-daemon",
+    "exe": "/nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2/bin/dbus-daemon"
+   }
+  ],
+  "player": [
+   {
+    "pid": 350259,
+    "comm": "aizome-utsushi",
+    "exe": "/nix/store/sg59lw6c0y4xx39kbv0ad56c08k00h11-aizome-0.1.0/bin/aizome-utsushi"
+   }
+  ]
+ },
+ "player_stats_before": {
+  "shown": 150,
+  "dropped": 0,
+  "decoded": 154,
+  "presented": 149,
+  "discarded": 0,
+  "suspensions": 0,
+  "path": "Dmabuf",
+  "video_decoder": "hevc",
+  "audio_output": "No audio output",
+  "gpu": true,
+  "position": 4.96,
+  "lines": 1
+ },
+ "compositor_stats": [
+  {
+   "name": "HEADLESS-1",
+   "frames_rendered": 1801,
+   "frames_skipped": 1,
+   "cpu_us": {
+    "p50": 258.0,
+    "p95": 326.0,
+    "p99": 351.0,
+    "max": 739.0,
+    "mean": 231.06052193225983
+   },
+   "gpu_us": {
+    "p50": 1797.0,
+    "p95": 2025.0,
+    "p99": 2101.0,
+    "max": 2158.0,
+    "mean": 1801.8895058300943
+   },
+   "samples": 1801
+  }
+ ],
+ "player_stats_after": {
+  "shown": 1950,
+  "dropped": 0,
+  "decoded": 1954,
+  "presented": 1950,
+  "discarded": 0,
+  "suspensions": 0,
+  "path": "Dmabuf",
+  "video_decoder": "hevc",
+  "audio_output": "No audio output",
+  "gpu": true,
+  "position": 64.96,
+  "lines": 13
+ },
+ "power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 10,
+  "duration_s": 60.002,
+  "samples": 5832,
+  "energy_j": 1119.507,
+  "mean_w": 18.658,
+  "p10_w": 17.0,
+  "p50_w": 18.0,
+  "p90_w": 21.0,
+  "max_w": 43.0,
+  "system_busy_cpu_s": 9.29,
+  "exit": 0
+ },
+ "cpu": {
+  "compositor": {
+   "cpu_s": 0.7311,
+   "cpu_pct": 1.218,
+   "cpu_ticks_s": 0.74,
+   "vol_switches": 9429,
+   "invol_switches": 305,
+   "switches_per_s": 162.2,
+   "wakeups_per_s": 157.1
+  },
+  "shell": {
+   "cpu_s": 0.0474,
+   "cpu_pct": 0.079,
+   "cpu_ticks_s": 0.04,
+   "vol_switches": 3275,
+   "invol_switches": 25,
+   "switches_per_s": 55.0,
+   "wakeups_per_s": 54.6
+  },
+  "dbus": {
+   "cpu_s": 0.0,
+   "cpu_pct": 0.0,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 0,
+   "invol_switches": 0,
+   "switches_per_s": 0.0,
+   "wakeups_per_s": 0.0
+  },
+  "player": {
+   "cpu_s": 0.7542,
+   "cpu_pct": 1.257,
+   "cpu_ticks_s": 0.75,
+   "vol_switches": 10670,
+   "invol_switches": 188,
+   "switches_per_s": 181.0,
+   "wakeups_per_s": 177.8
+  }
+ },
+ "gpu": {
+  "compositor": {
+   "engine_ns": {
+    "gfx": 3207852496,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "shell": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "dbus": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "player": {
+   "engine_ns": {
+    "dec": 11716230629
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  }
+ },
+ "igpu": {
+  "busy_pct_mean": 58.51,
+  "busy_samples": 601,
+  "sclk_mhz_mean": 1417.3,
+  "tctl_c_mean": 40.88
+ },
+ "player_memory": {
+  "rss_kib": 172556,
+  "pss_kib": 125600,
+  "pss_anon_kib": 82736,
+  "pss_file_kib": 38812,
+  "pss_shmem_kib": 4052,
+  "swap_kib": 0
+ },
+ "player_threads": {
+  "350259": {
+   "350259": "aizome-utsushi",
+   "350261": "sidestep-settin",
+   "350262": "sidestep-render",
+   "350263": "aizome-config-w",
+   "350264": "aizome-shell",
+   "350268": "aizome-media",
+   "350269": "instance",
+   "350270": "sidestep-raster",
+   "350271": "sidestep-raster",
+   "350272": "sidestep-raster",
+   "350273": "aizome-uts:cs0",
+   "350274": "aizome-:disk$0",
+   "350275": "aizome-uts:sh0",
+   "350276": "aizome:sh_opt0",
+   "350277": "aizome:traceq0",
+   "350278": "aizome-media-vi",
+   "350279": "aizome-media-nu"
+  }
+ },
+ "player_alive": true,
+ "compositor_memory": {
+  "rss_kib": 130412,
+  "pss_kib": 81460,
+  "pss_anon_kib": 23588,
+  "pss_file_kib": 53532,
+  "pss_shmem_kib": 4340,
+  "swap_kib": 0
+ },
+ "player_switches_by_thread": {
+  "aizome-utsushi": [
+   18,
+   0,
+   2.5
+  ],
+  "sidestep-settin": [
+   0,
+   0,
+   0.0
+  ],
+  "sidestep-render": [
+   3628,
+   28,
+   128.4
+  ],
+  "aizome-config-w": [
+   60,
+   0,
+   0.7
+  ],
+  "aizome-shell": [
+   0,
+   0,
+   0.0
+  ],
+  "aizome-media": [
+   64,
+   6,
+   40.0
+  ],
+  "instance": [
+   0,
+   0,
+   0.0
+  ],
+  "sidestep-raster": [
+   0,
+   0,
+   0.0
+  ],
+  "aizome-uts:cs0": [
+   1800,
+   44,
+   123.9
+  ],
+  "aizome-:disk$0": [
+   0,
+   0,
+   0.0
+  ],
+  "aizome-uts:sh0": [
+   0,
+   0,
+   0.0
+  ],
+  "aizome:sh_opt0": [
+   0,
+   0,
+   0.0
+  ],
+  "aizome:traceq0": [
+   0,
+   0,
+   0.0
+  ],
+  "aizome-media-vi": [
+   3900,
+   110,
+   444.3
+  ],
+  "aizome-media-nu": [
+   1200,
+   0,
+   14.3
+  ]
+ },
+ "ok": true,
+ "loadavg_after": [
+  "0.05",
+  "0.12",
+  "0.22"
+ ]
+}

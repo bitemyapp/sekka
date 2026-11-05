@@ -1,0 +1,934 @@
+{
+ "variant": "plasma",
+ "tag": "m2",
+ "mem_mib": 2048,
+ "start": "2026-11-02T14:52:54-0600",
+ "loadavg_start": [
+  "0.39",
+  "0.49",
+  "0.45"
+ ],
+ "host_idle_power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 100,
+  "duration_s": 30.0,
+  "samples": 300,
+  "energy_j": 635.467,
+  "mean_w": 21.182,
+  "p10_w": 17.0,
+  "p50_w": 19.0,
+  "p90_w": 27.0,
+  "max_w": 57.0,
+  "system_busy_cpu_s": 10.02,
+  "exit": 0
+ },
+ "boot": {
+  "settled_s": 7.6643,
+  "last_change_s": 7.5643,
+  "first_match_s": 7.6643,
+  "timeout": false,
+  "systemd": {
+   "kernel": 0.189,
+   "initrd": 1.861,
+   "userspace": 1.981,
+   "target_reached_userspace": 1.979
+  },
+  "units_host_s": {
+   "display-manager.service": 4.331,
+   "multi-user.target": 4.323,
+   "graphical.target": 4.332
+  }
+ },
+ "login": {
+  "settled_s": 5.9374,
+  "last_change_s": 5.9374,
+  "first_change_s": 0.1354,
+  "first_match_s": 5.7382,
+  "timeout": false,
+  "journal": {
+   "pam_service": "plasmalogin-helper",
+   "pam_session_opened_s": 43.488,
+   "units": {
+    "plasma-kwin_wayland.service": 0.356,
+    "plasma-plasmashell.service": 0.412,
+    "plasma-core.target": 1.192,
+    "plasma-workspace.target": 2.098,
+    "graphical-session.target": 2.099
+   },
+   "last_user_unit_started_s": 15.743,
+   "enter_to_pam_s": 0.081
+  }
+ },
+ "memory": {
+  "greeter": {
+   "used_mib": 951.2,
+   "memtotal_mib": 1962.2,
+   "available_mib": 1011.0,
+   "anon_mib": 567.4,
+   "shmem_mib": 104.6,
+   "cached_mib": 1044.7,
+   "swap_used_mib": 2.1,
+   "zswap_pool_mib": 1.0,
+   "zswapped_mib": 2.0,
+   "memory_pressure_some_total_us": 14226,
+   "pswpout": 0,
+   "zswpout": 532,
+   "pss_mib": {
+    "system": 71.9,
+    "greeter": 834.3
+   },
+   "pss_total_mib": 906.2,
+   "swap_pss_mib": {
+    "system": 2.0,
+    "greeter": 0.0
+   },
+   "processes": 32,
+   "top_units_mib": {
+    "greeter:plasma-login-kwin_wayland.service": 371.5,
+    "greeter:plasma-wallpaper.service": 198.5,
+    "greeter:plasma-login.service": 197.9,
+    "greeter:session-c1.scope": 17.8,
+    "greeter:wireplumber.service": 17.1,
+    "greeter:sekka-agent-workloads.service": 14.1,
+    "system:NetworkManager.service": 11.8,
+    "system:ananicy-cpp.service": 9.5,
+    "system:plasmalogin.service": 8.0,
+    "system:systemd (PID 1)": 6.4,
+    "greeter:init.scope": 6.3,
+    "system:systemd-udevd.service": 6.2,
+    "greeter:pipewire.service": 5.5,
+    "system:polkit.service": 4.5,
+    "system:systemd-journald.service": 4.2,
+    "system:dbus-broker.service": 4.0,
+    "greeter:gcr-ssh-agent.service": 3.8,
+    "system:wpa_supplicant.service": 3.3,
+    "system:upower.service": 3.3,
+    "system:nscd.service": 2.3,
+    "system:systemd-logind.service": 2.1,
+    "system:systemd-timesyncd.service": 2.0,
+    "system:accounts-daemon.service": 1.9,
+    "greeter:dbus-broker.service": 1.8,
+    "system:systemd-oomd.service": 1.3,
+    "system:rtkit-daemon.service": 0.6,
+    "system:serial-getty@ttyS0.service": 0.5
+   },
+   "top_processes": [
+    {
+     "comm": ".kwin_wayland-w",
+     "group": "greeter",
+     "unit": "plasma-login-kwin_wayland.service",
+     "pss_mib": 204.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".plasma-login-w",
+     "group": "greeter",
+     "unit": "plasma-wallpaper.service",
+     "pss_mib": 198.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".plasma-login-g",
+     "group": "greeter",
+     "unit": "plasma-login.service",
+     "pss_mib": 197.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".plasma-keyboar",
+     "group": "greeter",
+     "unit": "plasma-login-kwin_wayland.service",
+     "pss_mib": 167.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wireplumber",
+     "group": "greeter",
+     "unit": "wireplumber.service",
+     "pss_mib": 17.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "python3",
+     "group": "greeter",
+     "unit": "sekka-agent-workloads.service",
+     "pss_mib": 14.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 11.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".startplasma-lo",
+     "group": "greeter",
+     "unit": "session-c1.scope",
+     "pss_mib": 9.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "ananicy-cpp",
+     "group": "system",
+     "unit": "ananicy-cpp.service",
+     "pss_mib": 9.5,
+     "swap_pss_mib": 2.0
+    },
+    {
+     "comm": ".plasmalogin-he",
+     "group": "greeter",
+     "unit": "session-c1.scope",
+     "pss_mib": 8.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".plasmalogin-wr",
+     "group": "system",
+     "unit": "plasmalogin.service",
+     "pss_mib": 8.0,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd",
+     "group": "system",
+     "unit": "systemd (PID 1)",
+     "pss_mib": 6.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-udevd",
+     "group": "system",
+     "unit": "systemd-udevd.service",
+     "pss_mib": 6.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "pipewire",
+     "group": "greeter",
+     "unit": "pipewire.service",
+     "pss_mib": 5.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd",
+     "group": "greeter",
+     "unit": "init.scope",
+     "pss_mib": 4.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "polkitd",
+     "group": "system",
+     "unit": "polkit.service",
+     "pss_mib": 4.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-journal",
+     "group": "system",
+     "unit": "systemd-journald.service",
+     "pss_mib": 4.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "gcr-ssh-agent",
+     "group": "greeter",
+     "unit": "gcr-ssh-agent.service",
+     "pss_mib": 3.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wpa_supplicant",
+     "group": "system",
+     "unit": "wpa_supplicant.service",
+     "pss_mib": 3.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "upowerd",
+     "group": "system",
+     "unit": "upower.service",
+     "pss_mib": 3.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "dbus-broker-lau",
+     "group": "system",
+     "unit": "dbus-broker.service",
+     "pss_mib": 2.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "nsncd",
+     "group": "system",
+     "unit": "nscd.service",
+     "pss_mib": 2.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-logind",
+     "group": "system",
+     "unit": "systemd-logind.service",
+     "pss_mib": 2.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-timesyn",
+     "group": "system",
+     "unit": "systemd-timesyncd.service",
+     "pss_mib": 2.0,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "accounts-daemon",
+     "group": "system",
+     "unit": "accounts-daemon.service",
+     "pss_mib": 1.9,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  },
+  "desktop60": {
+   "used_mib": 1128.9,
+   "memtotal_mib": 1962.2,
+   "available_mib": 833.3,
+   "anon_mib": 743.3,
+   "shmem_mib": 66.0,
+   "cached_mib": 886.3,
+   "swap_used_mib": 25.2,
+   "zswap_pool_mib": 6.0,
+   "zswapped_mib": 24.3,
+   "memory_pressure_some_total_us": 279001,
+   "pswpout": 0,
+   "zswpout": 6445,
+   "pss_mib": {
+    "system": 71.9,
+    "session": 1093.7
+   },
+   "pss_total_mib": 1165.6,
+   "swap_pss_mib": {
+    "system": 11.3,
+    "session": 9.2
+   },
+   "processes": 84,
+   "top_units_mib": {
+    "session:plasma-plasmashell.service": 348.8,
+    "session:akonadi_control.service": 328.9,
+    "session:plasma-kwin_wayland.service": 206.2,
+    "session:plasma-kded6.service": 23.7,
+    "session:wireplumber.service": 14.7,
+    "session:xdg-desktop-portal-gtk.service": 14.4,
+    "session:sekka-agent-workloads.service": 14.0,
+    "session:plasma-powerdevil.service": 13.8,
+    "session:session-2.scope": 13.7,
+    "session:plasma-xdg-desktop-portal-kde.service": 12.9,
+    "session:app-org.kde.discover.notifier@autostart.service": 11.5,
+    "session:plasma-kaccess.service": 9.4,
+    "session:plasma-polkit-agent.service": 9.3,
+    "system:NetworkManager.service": 8.3,
+    "session:plasma-kactivitymanagerd.service": 7.7,
+    "system:ModemManager.service": 7.1,
+    "session:kde-baloo.service": 6.8,
+    "system:udisks2.service": 6.7,
+    "system:systemd (PID 1)": 6.4,
+    "session:init.scope": 6.1,
+    "session:xdg-desktop-portal.service": 6.1,
+    "system:systemd-udevd.service": 6.0,
+    "session:pipewire.service": 5.8,
+    "session:plasma-ksmserver.service": 5.5,
+    "session:kunifiedpush-distributor.service": 4.5,
+    "session:plasma-gmenudbusmenuproxy.service": 4.5,
+    "system:dbus-broker.service": 4.4,
+    "session:plasma-xembedsniproxy.service": 4.3,
+    "session:pipewire-pulse.service": 3.7,
+    "system:polkit.service": 3.7
+   },
+   "top_processes": [
+    {
+     "comm": ".plasmashell-wr",
+     "group": "session",
+     "unit": "plasma-plasmashell.service",
+     "pss_mib": 339.3,
+     "swap_pss_mib": 2.9
+    },
+    {
+     "comm": ".kwin_wayland-w",
+     "group": "session",
+     "unit": "plasma-kwin_wayland.service",
+     "pss_mib": 182.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "mariadbd",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 74.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_mailfi",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 28.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_archiv",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 28.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_follow",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 27.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_unifie",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 27.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_sendla",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 27.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_mailme",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 27.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".kded6-wrapped",
+     "group": "session",
+     "unit": "plasma-kded6.service",
+     "pss_mib": 23.1,
+     "swap_pss_mib": 4.2
+    },
+    {
+     "comm": "Xwayland",
+     "group": "session",
+     "unit": "plasma-kwin_wayland.service",
+     "pss_mib": 21.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wireplumber",
+     "group": "session",
+     "unit": "wireplumber.service",
+     "pss_mib": 14.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal-gtk.service",
+     "pss_mib": 14.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "python3",
+     "group": "session",
+     "unit": "sekka-agent-workloads.service",
+     "pss_mib": 14.0,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".org_kde_powerd",
+     "group": "session",
+     "unit": "plasma-powerdevil.service",
+     "pss_mib": 13.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadiserver-",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 13.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "plasma-xdg-desktop-portal-kde.service",
+     "pss_mib": 12.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_newmai",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 12.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".DiscoverNotifi",
+     "group": "session",
+     "unit": "app-org.kde.discover.notifier@autostart.service",
+     "pss_mib": 11.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_maildi",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 11.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_migrat",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 10.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".kaccess-wrappe",
+     "group": "session",
+     "unit": "plasma-kaccess.service",
+     "pss_mib": 9.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".polkit-kde-aut",
+     "group": "session",
+     "unit": "plasma-polkit-agent.service",
+     "pss_mib": 9.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_contro",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 9.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 8.3,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  },
+  "desktop190": {
+   "used_mib": 1133.6,
+   "memtotal_mib": 1962.2,
+   "available_mib": 828.5,
+   "anon_mib": 741.4,
+   "shmem_mib": 66.0,
+   "cached_mib": 896.9,
+   "swap_used_mib": 25.2,
+   "zswap_pool_mib": 6.0,
+   "zswapped_mib": 24.3,
+   "memory_pressure_some_total_us": 279001,
+   "pswpout": 0,
+   "zswpout": 6445,
+   "pss_mib": {
+    "system": 68.5,
+    "session": 1093.4
+   },
+   "pss_total_mib": 1162.0,
+   "swap_pss_mib": {
+    "system": 11.3,
+    "session": 9.2
+   },
+   "processes": 82,
+   "top_units_mib": {
+    "session:plasma-plasmashell.service": 348.8,
+    "session:akonadi_control.service": 329.1,
+    "session:plasma-kwin_wayland.service": 206.2,
+    "session:plasma-kded6.service": 23.8,
+    "session:wireplumber.service": 14.7,
+    "session:xdg-desktop-portal-gtk.service": 14.4,
+    "session:sekka-agent-workloads.service": 14.0,
+    "session:plasma-powerdevil.service": 13.8,
+    "session:session-2.scope": 13.7,
+    "session:plasma-xdg-desktop-portal-kde.service": 12.9,
+    "session:app-org.kde.discover.notifier@autostart.service": 11.5,
+    "session:plasma-kaccess.service": 9.4,
+    "session:plasma-polkit-agent.service": 9.3,
+    "system:NetworkManager.service": 8.3,
+    "session:plasma-kactivitymanagerd.service": 7.7,
+    "system:ModemManager.service": 7.1,
+    "session:kde-baloo.service": 6.8,
+    "system:udisks2.service": 6.7,
+    "system:systemd (PID 1)": 6.4,
+    "session:init.scope": 6.1,
+    "session:xdg-desktop-portal.service": 6.1,
+    "system:systemd-udevd.service": 6.0,
+    "session:pipewire.service": 5.8,
+    "session:plasma-ksmserver.service": 5.6,
+    "session:kunifiedpush-distributor.service": 4.5,
+    "session:plasma-gmenudbusmenuproxy.service": 4.5,
+    "system:dbus-broker.service": 4.4,
+    "session:plasma-xembedsniproxy.service": 4.3,
+    "session:pipewire-pulse.service": 3.7,
+    "system:polkit.service": 3.7
+   },
+   "top_processes": [
+    {
+     "comm": ".plasmashell-wr",
+     "group": "session",
+     "unit": "plasma-plasmashell.service",
+     "pss_mib": 339.3,
+     "swap_pss_mib": 2.9
+    },
+    {
+     "comm": ".kwin_wayland-w",
+     "group": "session",
+     "unit": "plasma-kwin_wayland.service",
+     "pss_mib": 182.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "mariadbd",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 74.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_mailfi",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 28.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_archiv",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 28.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_follow",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 27.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_unifie",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 27.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_sendla",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 27.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_mailme",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 27.1,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".kded6-wrapped",
+     "group": "session",
+     "unit": "plasma-kded6.service",
+     "pss_mib": 23.2,
+     "swap_pss_mib": 4.2
+    },
+    {
+     "comm": "Xwayland",
+     "group": "session",
+     "unit": "plasma-kwin_wayland.service",
+     "pss_mib": 21.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wireplumber",
+     "group": "session",
+     "unit": "wireplumber.service",
+     "pss_mib": 14.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "xdg-desktop-portal-gtk.service",
+     "pss_mib": 14.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "python3",
+     "group": "session",
+     "unit": "sekka-agent-workloads.service",
+     "pss_mib": 14.0,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".org_kde_powerd",
+     "group": "session",
+     "unit": "plasma-powerdevil.service",
+     "pss_mib": 13.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadiserver-",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 13.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".xdg-desktop-po",
+     "group": "session",
+     "unit": "plasma-xdg-desktop-portal-kde.service",
+     "pss_mib": 12.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_newmai",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 12.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".DiscoverNotifi",
+     "group": "session",
+     "unit": "app-org.kde.discover.notifier@autostart.service",
+     "pss_mib": 11.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_maildi",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 11.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_migrat",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 10.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".kaccess-wrappe",
+     "group": "session",
+     "unit": "plasma-kaccess.service",
+     "pss_mib": 9.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".polkit-kde-aut",
+     "group": "session",
+     "unit": "plasma-polkit-agent.service",
+     "pss_mib": 9.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": ".akonadi_contro",
+     "group": "session",
+     "unit": "akonadi_control.service",
+     "pss_mib": 9.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 8.3,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  }
+ },
+ "idle": {
+  "window_s": 120.0,
+  "guest_busy_pct": 0.14,
+  "guest_busy_pct_of_one_vcpu": 0.29,
+  "ctxt_per_s": 117.2,
+  "intr_per_s": 140.3,
+  "forks_per_s": 0.08,
+  "task_wakeups_per_s": 59.7,
+  "qemu_cpu_pct_of_core": 0.92,
+  "qemu_vcpu_pct_of_core": 0.47,
+  "ppt_mean_w": 24.25,
+  "ppt_energy_j": 2910.084,
+  "host_busy_cpu_s": 34.07,
+  "top_wakers": [
+   {
+    "comm": ".org_kde_powerd",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/background.slice/plasma-powerdevil.service",
+    "voluntary_per_s": 13.99,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "ananicy-cpp",
+    "cgroup": "/system.slice/ananicy-cpp.service",
+    "voluntary_per_s": 13.31,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "kworker/u8:2-events_power_efficient",
+    "cgroup": "/",
+    "voluntary_per_s": 5.26,
+    "involuntary_per_s": 0.02,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/0:0-events",
+    "cgroup": "/",
+    "voluntary_per_s": 4.12,
+    "involuntary_per_s": 0.02,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/u8:4-events_unbound",
+    "cgroup": "/",
+    "voluntary_per_s": 3.81,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/1:1-events",
+    "cgroup": "/",
+    "voluntary_per_s": 3.7,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "mariadbd",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/background.slice/akonadi_control.service",
+    "voluntary_per_s": 3.31,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "psimon",
+    "cgroup": "/",
+    "voluntary_per_s": 1.53,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": ".plasmashell-wr",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-plasmashell.service",
+    "voluntary_per_s": 1.42,
+    "involuntary_per_s": 0.07,
+    "cpu_pct": 0.033
+   },
+   {
+    "comm": "kworker/u8:3-ipv6_addrconf",
+    "cgroup": "/",
+    "voluntary_per_s": 1.2,
+    "involuntary_per_s": 0.01,
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "systemd-oomd",
+    "cgroup": "/system.slice/systemd-oomd.service",
+    "voluntary_per_s": 0.81,
+    "involuntary_per_s": 0.02,
+    "cpu_pct": 0.025
+   },
+   {
+    "comm": "kworker/u8:1-events_power_efficient",
+    "cgroup": "/",
+    "voluntary_per_s": 0.64,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "rcuog/0",
+    "cgroup": "/",
+    "voluntary_per_s": 0.55,
+    "involuntary_per_s": 0.01,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "python3",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/background.slice/sekka-agent-workloads.service",
+    "voluntary_per_s": 0.5,
+    "involuntary_per_s": 0.01,
+    "cpu_pct": 0.083
+   },
+   {
+    "comm": "rcu_preempt",
+    "cgroup": "/",
+    "voluntary_per_s": 0.49,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   }
+  ],
+  "top_cpu": [
+   {
+    "comm": "python3",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/background.slice/sekka-agent-workloads.service",
+    "cpu_pct": 0.083
+   },
+   {
+    "comm": ".plasmashell-wr",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-plasmashell.service",
+    "cpu_pct": 0.033
+   },
+   {
+    "comm": "systemd-oomd",
+    "cgroup": "/system.slice/systemd-oomd.service",
+    "cpu_pct": 0.025
+   },
+   {
+    "comm": "ananicy-cpp",
+    "cgroup": "/system.slice/ananicy-cpp.service",
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "systemd",
+    "cgroup": "/init.scope",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/u8:3-ipv6_addrconf",
+    "cgroup": "/",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": ".kwin_wayland-w",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": ".org_kde_powerd",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/background.slice/plasma-powerdevil.service",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/0:1-cgroup_free",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/0:0H-kblockd",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   }
+  ],
+  "ppt_over_host_idle_w": 3.07
+ }
+}

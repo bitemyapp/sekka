@@ -1,0 +1,8 @@
+name	url	sha256	bytes	licence
+irs-p17	https://www.irs.gov/pub/irs-pdf/p17.pdf	2d2381d62c7c77ed4b64b83ac23c28ed85b7c8304eb580c09bd9fd660be0840b	3088632	US-government-work(public-domain)
+irs-f1040	https://www.irs.gov/pub/irs-pdf/f1040.pdf	3d31c226df0d189ced80e039d01cf0f8820c1019681a0f0ca6264de277b7e982	220237	US-government-work(public-domain)
+federal-register-2026-10-30	https://www.govinfo.gov/content/pkg/FR-2026-10-30/pdf/FR-2026-10-30.pdf	cd73f819803ef36d0da34fcb19bd317c52034e5f0fff72192074f03ef91e7182	25299675	US-government-work(public-domain)
+us-budget-fy2025	https://www.govinfo.gov/content/pkg/BUDGET-2025-BUD/pdf/BUDGET-2025-BUD.pdf	3f1df41cfa3cebfd675b2a6ed673b6f665e0848c293d8d3bb5ab1815a0bae36b	2504695	US-government-work(public-domain)
+constitution-annotated-2017	https://www.govinfo.gov/content/pkg/GPO-CONAN-2017/pdf/GPO-CONAN-2017.pdf	f992df312df4784a782e814cfa3a3f8936595196aab926a936a17a5056af330c	19839427	US-government-work(public-domain)
+us-constitution-pocket	https://www.govinfo.gov/content/pkg/CDOC-110hdoc50/pdf/CDOC-110hdoc50.pdf	7f29c4a79e310cc7bcee5f3fd07fb1367e463bd4530fa5d854ebdd4fd4402e57	4020598	US-government-work(public-domain)
+plos-one-0000001	https://journals.plos.org/plosone/article/file?id=10.1371/journal.pone.0000001&type=printable	22f2423f45940809cc040415b5045a707b907fddec6a0c43bea16ac6455c72b0	816502	CC-BY-4.0

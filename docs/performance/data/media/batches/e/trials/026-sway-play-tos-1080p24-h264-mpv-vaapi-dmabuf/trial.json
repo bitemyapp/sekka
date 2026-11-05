@@ -1,0 +1,357 @@
+{
+ "tag": "026-sway-play-tos-1080p24-h264-mpv-vaapi-dmabuf",
+ "spec": {
+  "subject": "mpv-vaapi-dmabuf",
+  "clip": "tos-1080p24-h264.mp4",
+  "compositor": "sway",
+  "round": 2
+ },
+ "started": "2026-11-02T12:48:30-0600",
+ "quiet": {
+  "busy_cores_before": 0.125,
+  "waited_s": 2.0,
+  "loadavg": [
+   "0.09",
+   "0.14",
+   "0.17"
+  ]
+ },
+ "session_up_s": null,
+ "window_after_s": 0.104,
+ "windows": [
+  {
+   "id": 5,
+   "app_id": "mpv",
+   "pid": 868668,
+   "fullscreen": true,
+   "geometry": {
+    "x": 0,
+    "y": 0,
+    "w": 1920,
+    "h": 1080
+   },
+   "title": "tos-1080p24-h264.mp4 - mpv"
+  }
+ ],
+ "roles": {
+  "compositor": [
+   {
+    "pid": 868638,
+    "comm": "sway",
+    "exe": "/nix/store/6j0fhfv3as31pyibdfq81cfxsw8yyixq-sway-unwrapped-1.12/bin/sway"
+   }
+  ],
+  "dbus": [
+   {
+    "pid": 868637,
+    "comm": "dbus-daemon",
+    "exe": "/nix/store/fqbfyxfci9la4a246k1g340c99pva47l-dbus-1.16.2/bin/dbus-daemon"
+   }
+  ],
+  "player": [
+   {
+    "pid": 868668,
+    "comm": "mpv",
+    "exe": "/nix/store/rw9wq87v2amzk0vz7d23pacms850gpww-mpv-0.41.0/bin/mpv"
+   }
+  ]
+ },
+ "player_stats_before": {
+  "frame-drop-count": 0,
+  "decoder-frame-drop-count": 0,
+  "vo-delayed-frame-count": 0,
+  "mistimed-frame-count": null,
+  "playback-time": 5.083333,
+  "estimated-vf-fps": 24.0,
+  "hwdec-current": "vaapi",
+  "current-vo": "dmabuf-wayland",
+  "current-gpu-context": null,
+  "video-params/pixelformat": "vaapi",
+  "video-params/hw-pixelformat": "nv12",
+  "video-out-params/w": 1920,
+  "video-out-params/h": 800,
+  "display-fps": null,
+  "current-ao": "null",
+  "audio-params/samplerate": 44100,
+  "pause": false,
+  "fullscreen": true
+ },
+ "compositor_stats": null,
+ "player_stats_after": {
+  "frame-drop-count": 0,
+  "decoder-frame-drop-count": 0,
+  "vo-delayed-frame-count": 0,
+  "mistimed-frame-count": null,
+  "playback-time": 65.083333,
+  "estimated-vf-fps": 24.0,
+  "hwdec-current": "vaapi",
+  "current-vo": "dmabuf-wayland",
+  "current-gpu-context": null,
+  "video-params/pixelformat": "vaapi",
+  "video-params/hw-pixelformat": "nv12",
+  "video-out-params/w": 1920,
+  "video-out-params/h": 800,
+  "display-fps": null,
+  "current-ao": "null",
+  "audio-params/samplerate": 44100,
+  "pause": false,
+  "fullscreen": true
+ },
+ "power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 10,
+  "duration_s": 60.008,
+  "samples": 5859,
+  "energy_j": 1139.528,
+  "mean_w": 18.99,
+  "p10_w": 17.0,
+  "p50_w": 18.0,
+  "p90_w": 22.0,
+  "max_w": 59.0,
+  "system_busy_cpu_s": 10.94,
+  "exit": 0
+ },
+ "cpu": {
+  "compositor": {
+   "cpu_s": 0.1785,
+   "cpu_pct": 0.297,
+   "cpu_ticks_s": 0.17,
+   "vol_switches": 4321,
+   "invol_switches": 61,
+   "switches_per_s": 73.0,
+   "wakeups_per_s": 72.0
+  },
+  "dbus": {
+   "cpu_s": 0.0,
+   "cpu_pct": 0.0,
+   "cpu_ticks_s": 0.0,
+   "vol_switches": 0,
+   "invol_switches": 0,
+   "switches_per_s": 0.0,
+   "wakeups_per_s": 0.0
+  },
+  "player": {
+   "cpu_s": 0.8734,
+   "cpu_pct": 1.455,
+   "cpu_ticks_s": 0.87,
+   "vol_switches": 27441,
+   "invol_switches": 255,
+   "switches_per_s": 461.5,
+   "wakeups_per_s": 457.3
+  }
+ },
+ "gpu": {
+  "compositor": {
+   "engine_ns": {
+    "gfx": 0,
+    "compute": 0
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  },
+  "dbus": {
+   "engine_ns": {},
+   "devices": [],
+   "pdevs": [],
+   "nvidia_fds": 0
+  },
+  "player": {
+   "engine_ns": {
+    "compute": 0,
+    "dec": 1931602997
+   },
+   "devices": [
+    "/dev/dri/renderD128"
+   ],
+   "pdevs": [
+    "0000:78:00.0"
+   ],
+   "nvidia_fds": 0
+  }
+ },
+ "igpu": {
+  "busy_pct_mean": 0.0,
+  "busy_samples": 601,
+  "sclk_mhz_mean": 600.0,
+  "tctl_c_mean": 44.19
+ },
+ "player_memory": {
+  "rss_kib": 158960,
+  "pss_kib": 104322,
+  "pss_anon_kib": 69424,
+  "pss_file_kib": 34890,
+  "pss_shmem_kib": 8,
+  "swap_kib": 0
+ },
+ "player_threads": {
+  "868668": {
+   "868668": "mpv",
+   "868670": "terminal/input",
+   "868671": "lua/osc",
+   "868672": "lua/ytdl_hook",
+   "868673": "lua/stats",
+   "868674": "lua/console",
+   "868676": "lua/select",
+   "868677": "lua/positioning",
+   "868678": "lua/commands",
+   "868679": "lua/context_men",
+   "868680": "mpv",
+   "868681": "ipc/socket",
+   "868683": "demux",
+   "868684": "worker",
+   "868685": "vo",
+   "868687": "mpv:cs0",
+   "868688": "mpv:disk$0",
+   "868689": "mpv:sh0",
+   "868690": "mpv:sh_opt0",
+   "868691": "mpv:traceq0",
+   "868692": "av:h264:df0",
+   "868693": "av:h264:df1",
+   "868694": "av:h264:df2",
+   "868695": "av:h264:df3",
+   "868696": "ao"
+  }
+ },
+ "player_alive": true,
+ "compositor_memory": {
+  "rss_kib": 102096,
+  "pss_kib": 46757,
+  "pss_anon_kib": 23000,
+  "pss_file_kib": 23757,
+  "pss_shmem_kib": 0,
+  "swap_kib": 0
+ },
+ "player_switches_by_thread": {
+  "mpv": [
+   8157,
+   26,
+   261.9
+  ],
+  "terminal/input": [
+   60,
+   0,
+   0.6
+  ],
+  "lua/osc": [
+   2381,
+   70,
+   137.4
+  ],
+  "lua/ytdl_hook": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/stats": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/console": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/select": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/positioning": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/commands": [
+   0,
+   0,
+   0.0
+  ],
+  "lua/context_men": [
+   0,
+   0,
+   0.0
+  ],
+  "ipc/socket": [
+   0,
+   0,
+   0.0
+  ],
+  "demux": [
+   3676,
+   14,
+   59.3
+  ],
+  "worker": [
+   0,
+   0,
+   0.0
+  ],
+  "vo": [
+   6411,
+   36,
+   122.7
+  ],
+  "mpv:cs0": [
+   1442,
+   27,
+   92.4
+  ],
+  "mpv:disk$0": [
+   0,
+   0,
+   0.0
+  ],
+  "mpv:sh0": [
+   0,
+   0,
+   0.0
+  ],
+  "mpv:sh_opt0": [
+   0,
+   0,
+   0.0
+  ],
+  "mpv:traceq0": [
+   0,
+   0,
+   0.0
+  ],
+  "av:h264:df0": [
+   722,
+   20,
+   41.1
+  ],
+  "av:h264:df1": [
+   721,
+   19,
+   42.3
+  ],
+  "av:h264:df2": [
+   722,
+   17,
+   44.2
+  ],
+  "av:h264:df3": [
+   722,
+   23,
+   42.1
+  ],
+  "ao": [
+   2427,
+   3,
+   29.4
+  ]
+ },
+ "ok": true,
+ "loadavg_after": [
+  "0.22",
+  "0.17",
+  "0.18"
+ ]
+}

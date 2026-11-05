@@ -1,0 +1,627 @@
+{
+ "variant": "baseline",
+ "tag": "m2",
+ "mem_mib": 2048,
+ "start": "2026-11-02T15:17:18-0600",
+ "loadavg_start": [
+  "0.15",
+  "0.30",
+  "0.52"
+ ],
+ "host_idle_power": {
+  "sensor": "/sys/class/hwmon/hwmon5/power1_input",
+  "interval_ms": 100,
+  "duration_s": 30.0,
+  "samples": 300,
+  "energy_j": 598.498,
+  "mean_w": 19.95,
+  "p10_w": 17.0,
+  "p50_w": 18.0,
+  "p90_w": 24.0,
+  "max_w": 62.0,
+  "system_busy_cpu_s": 8.11,
+  "exit": 0
+ },
+ "boot": {
+  "settled_s": 5.6606,
+  "last_change_s": 5.6606,
+  "first_match_s": 5.6606,
+  "timeout": false,
+  "systemd": {
+   "kernel": 0.198,
+   "initrd": 2.734,
+   "userspace": 1.957,
+   "target_reached_userspace": 1.955
+  },
+  "units_host_s": {
+   "multi-user.target": 5.183
+  }
+ },
+ "memory": {
+  "greeter": {
+   "used_mib": 292.5,
+   "memtotal_mib": 1962.2,
+   "available_mib": 1669.7,
+   "anon_mib": 27.5,
+   "shmem_mib": 11.6,
+   "cached_mib": 165.5,
+   "swap_used_mib": 1.3,
+   "zswap_pool_mib": 0.9,
+   "zswapped_mib": 1.2,
+   "memory_pressure_some_total_us": 6853,
+   "pswpout": 0,
+   "zswpout": 323,
+   "pss_mib": {
+    "system": 68.1
+   },
+   "pss_total_mib": 68.1,
+   "swap_pss_mib": {
+    "system": 1.2
+   },
+   "processes": 14,
+   "top_units_mib": {
+    "system:NetworkManager.service": 20.6,
+    "system:ananicy-cpp.service": 12.0,
+    "system:systemd (PID 1)": 8.5,
+    "system:systemd-udevd.service": 6.9,
+    "system:wpa_supplicant.service": 4.2,
+    "system:dbus-broker.service": 4.1,
+    "system:systemd-journald.service": 3.2,
+    "system:systemd-timesyncd.service": 2.3,
+    "system:systemd-logind.service": 1.8,
+    "system:nscd.service": 1.8,
+    "system:systemd-oomd.service": 1.4,
+    "system:serial-getty@ttyS0.service": 0.6,
+    "system:getty@tty1.service": 0.6
+   },
+   "top_processes": [
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 20.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "ananicy-cpp",
+     "group": "system",
+     "unit": "ananicy-cpp.service",
+     "pss_mib": 12.0,
+     "swap_pss_mib": 1.2
+    },
+    {
+     "comm": "systemd",
+     "group": "system",
+     "unit": "systemd (PID 1)",
+     "pss_mib": 8.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-udevd",
+     "group": "system",
+     "unit": "systemd-udevd.service",
+     "pss_mib": 6.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wpa_supplicant",
+     "group": "system",
+     "unit": "wpa_supplicant.service",
+     "pss_mib": 4.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-journal",
+     "group": "system",
+     "unit": "systemd-journald.service",
+     "pss_mib": 3.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "dbus-broker-lau",
+     "group": "system",
+     "unit": "dbus-broker.service",
+     "pss_mib": 2.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-timesyn",
+     "group": "system",
+     "unit": "systemd-timesyncd.service",
+     "pss_mib": 2.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-logind",
+     "group": "system",
+     "unit": "systemd-logind.service",
+     "pss_mib": 1.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "nsncd",
+     "group": "system",
+     "unit": "nscd.service",
+     "pss_mib": 1.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "dbus-broker",
+     "group": "system",
+     "unit": "dbus-broker.service",
+     "pss_mib": 1.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-oomd",
+     "group": "system",
+     "unit": "systemd-oomd.service",
+     "pss_mib": 1.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "agetty",
+     "group": "system",
+     "unit": "serial-getty@ttyS0.service",
+     "pss_mib": 0.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "agetty",
+     "group": "system",
+     "unit": "getty@tty1.service",
+     "pss_mib": 0.6,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  },
+  "desktop60": {
+   "used_mib": 290.3,
+   "memtotal_mib": 1962.2,
+   "available_mib": 1671.9,
+   "anon_mib": 27.4,
+   "shmem_mib": 11.6,
+   "cached_mib": 166.1,
+   "swap_used_mib": 1.3,
+   "zswap_pool_mib": 0.9,
+   "zswapped_mib": 1.2,
+   "memory_pressure_some_total_us": 6853,
+   "pswpout": 0,
+   "zswpout": 323,
+   "pss_mib": {
+    "system": 68.1
+   },
+   "pss_total_mib": 68.1,
+   "swap_pss_mib": {
+    "system": 1.2
+   },
+   "processes": 14,
+   "top_units_mib": {
+    "system:NetworkManager.service": 20.6,
+    "system:ananicy-cpp.service": 12.0,
+    "system:systemd (PID 1)": 8.5,
+    "system:systemd-udevd.service": 6.9,
+    "system:wpa_supplicant.service": 4.2,
+    "system:dbus-broker.service": 4.1,
+    "system:systemd-journald.service": 3.2,
+    "system:systemd-timesyncd.service": 2.3,
+    "system:systemd-logind.service": 1.8,
+    "system:nscd.service": 1.8,
+    "system:systemd-oomd.service": 1.4,
+    "system:serial-getty@ttyS0.service": 0.6,
+    "system:getty@tty1.service": 0.6
+   },
+   "top_processes": [
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 20.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "ananicy-cpp",
+     "group": "system",
+     "unit": "ananicy-cpp.service",
+     "pss_mib": 12.0,
+     "swap_pss_mib": 1.2
+    },
+    {
+     "comm": "systemd",
+     "group": "system",
+     "unit": "systemd (PID 1)",
+     "pss_mib": 8.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-udevd",
+     "group": "system",
+     "unit": "systemd-udevd.service",
+     "pss_mib": 6.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wpa_supplicant",
+     "group": "system",
+     "unit": "wpa_supplicant.service",
+     "pss_mib": 4.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-journal",
+     "group": "system",
+     "unit": "systemd-journald.service",
+     "pss_mib": 3.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "dbus-broker-lau",
+     "group": "system",
+     "unit": "dbus-broker.service",
+     "pss_mib": 2.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-timesyn",
+     "group": "system",
+     "unit": "systemd-timesyncd.service",
+     "pss_mib": 2.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-logind",
+     "group": "system",
+     "unit": "systemd-logind.service",
+     "pss_mib": 1.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "nsncd",
+     "group": "system",
+     "unit": "nscd.service",
+     "pss_mib": 1.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "dbus-broker",
+     "group": "system",
+     "unit": "dbus-broker.service",
+     "pss_mib": 1.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-oomd",
+     "group": "system",
+     "unit": "systemd-oomd.service",
+     "pss_mib": 1.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "agetty",
+     "group": "system",
+     "unit": "serial-getty@ttyS0.service",
+     "pss_mib": 0.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "agetty",
+     "group": "system",
+     "unit": "getty@tty1.service",
+     "pss_mib": 0.6,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  },
+  "desktop190": {
+   "used_mib": 297.2,
+   "memtotal_mib": 1962.2,
+   "available_mib": 1664.9,
+   "anon_mib": 27.5,
+   "shmem_mib": 11.6,
+   "cached_mib": 166.1,
+   "swap_used_mib": 1.3,
+   "zswap_pool_mib": 0.9,
+   "zswapped_mib": 1.2,
+   "memory_pressure_some_total_us": 6853,
+   "pswpout": 0,
+   "zswpout": 323,
+   "pss_mib": {
+    "system": 68.1
+   },
+   "pss_total_mib": 68.1,
+   "swap_pss_mib": {
+    "system": 1.2
+   },
+   "processes": 14,
+   "top_units_mib": {
+    "system:NetworkManager.service": 20.6,
+    "system:ananicy-cpp.service": 12.0,
+    "system:systemd (PID 1)": 8.5,
+    "system:systemd-udevd.service": 6.9,
+    "system:wpa_supplicant.service": 4.2,
+    "system:dbus-broker.service": 4.1,
+    "system:systemd-journald.service": 3.2,
+    "system:systemd-timesyncd.service": 2.3,
+    "system:systemd-logind.service": 1.8,
+    "system:nscd.service": 1.8,
+    "system:systemd-oomd.service": 1.4,
+    "system:serial-getty@ttyS0.service": 0.6,
+    "system:getty@tty1.service": 0.6
+   },
+   "top_processes": [
+    {
+     "comm": "NetworkManager",
+     "group": "system",
+     "unit": "NetworkManager.service",
+     "pss_mib": 20.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "ananicy-cpp",
+     "group": "system",
+     "unit": "ananicy-cpp.service",
+     "pss_mib": 12.0,
+     "swap_pss_mib": 1.2
+    },
+    {
+     "comm": "systemd",
+     "group": "system",
+     "unit": "systemd (PID 1)",
+     "pss_mib": 8.5,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-udevd",
+     "group": "system",
+     "unit": "systemd-udevd.service",
+     "pss_mib": 6.9,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "wpa_supplicant",
+     "group": "system",
+     "unit": "wpa_supplicant.service",
+     "pss_mib": 4.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-journal",
+     "group": "system",
+     "unit": "systemd-journald.service",
+     "pss_mib": 3.2,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "dbus-broker-lau",
+     "group": "system",
+     "unit": "dbus-broker.service",
+     "pss_mib": 2.7,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-timesyn",
+     "group": "system",
+     "unit": "systemd-timesyncd.service",
+     "pss_mib": 2.3,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-logind",
+     "group": "system",
+     "unit": "systemd-logind.service",
+     "pss_mib": 1.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "nsncd",
+     "group": "system",
+     "unit": "nscd.service",
+     "pss_mib": 1.8,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "dbus-broker",
+     "group": "system",
+     "unit": "dbus-broker.service",
+     "pss_mib": 1.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "systemd-oomd",
+     "group": "system",
+     "unit": "systemd-oomd.service",
+     "pss_mib": 1.4,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "agetty",
+     "group": "system",
+     "unit": "serial-getty@ttyS0.service",
+     "pss_mib": 0.6,
+     "swap_pss_mib": 0.0
+    },
+    {
+     "comm": "agetty",
+     "group": "system",
+     "unit": "getty@tty1.service",
+     "pss_mib": 0.6,
+     "swap_pss_mib": 0.0
+    }
+   ]
+  }
+ },
+ "idle": {
+  "window_s": 120.0,
+  "guest_busy_pct": 0.05,
+  "guest_busy_pct_of_one_vcpu": 0.09,
+  "ctxt_per_s": 106.0,
+  "intr_per_s": 187.2,
+  "forks_per_s": 0.07,
+  "task_wakeups_per_s": 56.0,
+  "qemu_cpu_pct_of_core": 0.92,
+  "qemu_vcpu_pct_of_core": 0.35,
+  "ppt_mean_w": 23.647,
+  "ppt_energy_j": 2837.656,
+  "host_busy_cpu_s": 29.94,
+  "top_wakers": [
+   {
+    "comm": "ananicy-cpp",
+    "cgroup": "/system.slice/ananicy-cpp.service",
+    "voluntary_per_s": 13.28,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/1:1-events",
+    "cgroup": "/",
+    "voluntary_per_s": 11.4,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "kworker/0:3+events",
+    "cgroup": "/",
+    "voluntary_per_s": 8.63,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/u8:3-events_unbound",
+    "cgroup": "/",
+    "voluntary_per_s": 7.01,
+    "involuntary_per_s": 0.02,
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/u8:1-events_power_efficient",
+    "cgroup": "/",
+    "voluntary_per_s": 4.88,
+    "involuntary_per_s": 0.02,
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/u8:0-events_unbound",
+    "cgroup": "/",
+    "voluntary_per_s": 3.62,
+    "involuntary_per_s": 0.01,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/1:3-events",
+    "cgroup": "/",
+    "voluntary_per_s": 2.67,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "psimon",
+    "cgroup": "/",
+    "voluntary_per_s": 1.47,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "systemd-oomd",
+    "cgroup": "/system.slice/systemd-oomd.service",
+    "voluntary_per_s": 0.8,
+    "involuntary_per_s": 0.01,
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "systemd-timesyn",
+    "cgroup": "/system.slice/systemd-timesyncd.service",
+    "voluntary_per_s": 0.4,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "rcuog/0",
+    "cgroup": "/",
+    "voluntary_per_s": 0.3,
+    "involuntary_per_s": 0.02,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "rcu_preempt",
+    "cgroup": "/",
+    "voluntary_per_s": 0.3,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "NetworkManager",
+    "cgroup": "/system.slice/NetworkManager.service",
+    "voluntary_per_s": 0.28,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "rcuop/1",
+    "cgroup": "/",
+    "voluntary_per_s": 0.12,
+    "involuntary_per_s": 0.09,
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "systemd",
+    "cgroup": "/init.scope",
+    "voluntary_per_s": 0.13,
+    "involuntary_per_s": 0.0,
+    "cpu_pct": 0.008
+   }
+  ],
+  "top_cpu": [
+   {
+    "comm": "kworker/1:1-events",
+    "cgroup": "/",
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "systemd-oomd",
+    "cgroup": "/system.slice/systemd-oomd.service",
+    "cpu_pct": 0.017
+   },
+   {
+    "comm": "systemd",
+    "cgroup": "/init.scope",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/u8:1-events_power_efficient",
+    "cgroup": "/",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/u8:3-events_unbound",
+    "cgroup": "/",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "ananicy-cpp",
+    "cgroup": "/system.slice/ananicy-cpp.service",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/0:3+events",
+    "cgroup": "/",
+    "cpu_pct": 0.008
+   },
+   {
+    "comm": "kworker/0:1-cgroup_free",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/0:0H-kblockd",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   },
+   {
+    "comm": "kworker/1:3-events",
+    "cgroup": "/",
+    "cpu_pct": 0.0
+   }
+  ],
+  "ppt_over_host_idle_w": 3.7
+ }
+}

@@ -1,0 +1,1652 @@
+{
+ "date": "2026-11-02T10:53:12-0600",
+ "host": "runnymede",
+ "kernel": "7.3.0",
+ "load_before": [
+  "0.21",
+  "0.42",
+  "0.37"
+ ],
+ "settle_s": 3.0,
+ "idle_s": 30.0,
+ "reps": 6,
+ "programs": {
+  "myaku": [
+   "/tmp/claude-1000/perf/design-aizome/bin/aizome-myaku"
+  ],
+  "gnome-system-monitor": [
+   "/nix/store/amkryqz5mwxg20anlrs64njgpwbaxrhf-gnome-system-monitor-50.0/bin/gnome-system-monitor"
+  ],
+  "plasma-systemmonitor": [
+   "/nix/store/mqzkadxkbm8i5xrrff1kr7cq83gwwrk2-plasma-systemmonitor-6.8.2/bin/plasma-systemmonitor"
+  ],
+  "kura": [
+   "/tmp/claude-1000/perf/design-aizome/bin/aizome-kura"
+  ],
+  "baobab": [
+   "/nix/store/50sax8829b42hg8bxyhdgmc5iyzg1nc8-baobab-50.0/bin/baobab"
+  ],
+  "filelight": [
+   "/nix/store/5c93zldzhps4hjn78838i3c1bhzqc92g-filelight-26.08.2/bin/filelight"
+  ]
+ },
+ "sway": "sway version 1.12",
+ "render_node": "/dev/dri/renderD128",
+ "runs": [
+  {
+   "name": "myaku",
+   "first_frame_ms": 78.34,
+   "cpu_to_first_frame_ms": 70.0,
+   "cpu_to_first_frame_sched_ms": 77.08,
+   "window": {
+    "app_id": "org.aizome.Myaku",
+    "pid": 822450,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 720
+    }
+   },
+   "processes": 1,
+   "threads": 11,
+   "pss_kib": 45062,
+   "rss_kib": 55512,
+   "pss_anon_kib": 31064,
+   "pss_file_kib": 12478,
+   "pss_shmem_kib": 1520,
+   "shared_objects": 17,
+   "gpu_driver_libs": [],
+   "idle_s": 2.001,
+   "idle_cpu_ms_per_s": 19.995,
+   "idle_cpu_sched_ms_per_s": 18.1781,
+   "idle_switches_per_s": 13.0,
+   "warmup": true
+  },
+  {
+   "name": "gnome-system-monitor",
+   "first_frame_ms": 356.81,
+   "cpu_to_first_frame_ms": 300.0,
+   "cpu_to_first_frame_sched_ms": 309.09,
+   "window": {
+    "app_id": "org.gnome.SystemMonitor",
+    "pid": 822586,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 800,
+     "height": 720
+    }
+   },
+   "processes": 1,
+   "threads": 16,
+   "pss_kib": 115365,
+   "rss_kib": 178848,
+   "pss_anon_kib": 72588,
+   "pss_file_kib": 42769,
+   "pss_shmem_kib": 8,
+   "shared_objects": 163,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so",
+    "libvulkan_dzn.so",
+    "libvulkan_lvp.so",
+    "libvulkan_radeon.so"
+   ],
+   "idle_s": 2.001,
+   "idle_cpu_ms_per_s": 9.997,
+   "idle_cpu_sched_ms_per_s": 10.7601,
+   "idle_switches_per_s": 26.49,
+   "warmup": true
+  },
+  {
+   "name": "plasma-systemmonitor",
+   "first_frame_ms": 283.54,
+   "cpu_to_first_frame_ms": 280.0,
+   "cpu_to_first_frame_sched_ms": 285.0,
+   "window": {
+    "app_id": "org.kde.plasma-systemmonitor",
+    "pid": 822719,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 990,
+     "height": 702
+    }
+   },
+   "processes": 1,
+   "threads": 29,
+   "pss_kib": 197234,
+   "rss_kib": 276320,
+   "pss_anon_kib": 96588,
+   "pss_file_kib": 100382,
+   "pss_shmem_kib": 264,
+   "shared_objects": 258,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so"
+   ],
+   "idle_s": 2.001,
+   "idle_cpu_ms_per_s": 24.989,
+   "idle_cpu_sched_ms_per_s": 29.1316,
+   "idle_switches_per_s": 185.42,
+   "warmup": true
+  },
+  {
+   "name": "kura",
+   "first_frame_ms": 18.94,
+   "cpu_to_first_frame_ms": 10.0,
+   "cpu_to_first_frame_sched_ms": 21.29,
+   "window": {
+    "app_id": "org.aizome.Kura",
+    "pid": 822780,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 700
+    }
+   },
+   "processes": 1,
+   "threads": 17,
+   "pss_kib": 407140,
+   "rss_kib": 433600,
+   "pss_anon_kib": 382412,
+   "pss_file_kib": 23250,
+   "pss_shmem_kib": 1478,
+   "shared_objects": 96,
+   "gpu_driver_libs": [],
+   "idle_s": 2.001,
+   "idle_cpu_ms_per_s": -764.759,
+   "idle_cpu_sched_ms_per_s": -770.7121,
+   "idle_switches_per_s": -79843.81,
+   "warmup": true
+  },
+  {
+   "name": "baobab",
+   "first_frame_ms": 156.49,
+   "cpu_to_first_frame_ms": 120.0,
+   "cpu_to_first_frame_sched_ms": 134.68,
+   "window": {
+    "app_id": "org.gnome.baobab",
+    "pid": 822835,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 960,
+     "height": 600
+    }
+   },
+   "processes": 1,
+   "threads": 12,
+   "pss_kib": 45386,
+   "rss_kib": 107560,
+   "pss_anon_kib": 23244,
+   "pss_file_kib": 22134,
+   "pss_shmem_kib": 8,
+   "shared_objects": 153,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so",
+    "libvulkan_dzn.so",
+    "libvulkan_lvp.so",
+    "libvulkan_radeon.so"
+   ],
+   "idle_s": 2.001,
+   "idle_cpu_ms_per_s": 0.0,
+   "idle_cpu_sched_ms_per_s": 0.2724,
+   "idle_switches_per_s": 5.5,
+   "warmup": true
+  },
+  {
+   "name": "filelight",
+   "first_frame_ms": 186.98,
+   "cpu_to_first_frame_ms": 170.0,
+   "cpu_to_first_frame_sched_ms": 176.93,
+   "window": {
+    "app_id": "org.kde.filelight",
+    "pid": 822865,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 720,
+     "height": 540
+    }
+   },
+   "processes": 1,
+   "threads": 29,
+   "pss_kib": 134860,
+   "rss_kib": 212060,
+   "pss_anon_kib": 53500,
+   "pss_file_kib": 81096,
+   "pss_shmem_kib": 264,
+   "shared_objects": 226,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so"
+   ],
+   "idle_s": 2.001,
+   "idle_cpu_ms_per_s": 0.0,
+   "idle_cpu_sched_ms_per_s": 0.0,
+   "idle_switches_per_s": 0.0,
+   "warmup": true
+  },
+  {
+   "name": "myaku",
+   "first_frame_ms": 18.82,
+   "cpu_to_first_frame_ms": 10.0,
+   "cpu_to_first_frame_sched_ms": 19.08,
+   "window": {
+    "app_id": "org.aizome.Myaku",
+    "pid": 822920,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 720
+    }
+   },
+   "processes": 1,
+   "threads": 11,
+   "pss_kib": 44676,
+   "rss_kib": 55008,
+   "pss_anon_kib": 30740,
+   "pss_file_kib": 12416,
+   "pss_shmem_kib": 1520,
+   "shared_objects": 17,
+   "gpu_driver_libs": [],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 23.0,
+   "idle_cpu_sched_ms_per_s": 23.0746,
+   "idle_switches_per_s": 13.0,
+   "rep": 0
+  },
+  {
+   "name": "gnome-system-monitor",
+   "first_frame_ms": 189.48,
+   "cpu_to_first_frame_ms": 180.0,
+   "cpu_to_first_frame_sched_ms": 188.37,
+   "window": {
+    "app_id": "org.gnome.SystemMonitor",
+    "pid": 823034,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 800,
+     "height": 720
+    }
+   },
+   "processes": 1,
+   "threads": 8,
+   "pss_kib": 69796,
+   "rss_kib": 133204,
+   "pss_anon_kib": 33352,
+   "pss_file_kib": 36436,
+   "pss_shmem_kib": 8,
+   "shared_objects": 163,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so",
+    "libvulkan_dzn.so",
+    "libvulkan_lvp.so",
+    "libvulkan_radeon.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 18.0,
+   "idle_cpu_sched_ms_per_s": 17.9078,
+   "idle_switches_per_s": 48.77,
+   "rep": 0
+  },
+  {
+   "name": "plasma-systemmonitor",
+   "first_frame_ms": 204.22,
+   "cpu_to_first_frame_ms": 200.0,
+   "cpu_to_first_frame_sched_ms": 208.89,
+   "window": {
+    "app_id": "org.kde.plasma-systemmonitor",
+    "pid": 823389,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 990,
+     "height": 702
+    }
+   },
+   "processes": 1,
+   "threads": 26,
+   "pss_kib": 191095,
+   "rss_kib": 269384,
+   "pss_anon_kib": 91832,
+   "pss_file_kib": 98999,
+   "pss_shmem_kib": 264,
+   "shared_objects": 258,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 13.0,
+   "idle_cpu_sched_ms_per_s": 12.773,
+   "idle_switches_per_s": 104.56,
+   "rep": 0
+  },
+  {
+   "name": "kura",
+   "first_frame_ms": 19.31,
+   "cpu_to_first_frame_ms": 10.0,
+   "cpu_to_first_frame_sched_ms": 19.68,
+   "window": {
+    "app_id": "org.aizome.Kura",
+    "pid": 823582,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 700
+    }
+   },
+   "processes": 1,
+   "threads": 17,
+   "pss_kib": 15833,
+   "rss_kib": 24192,
+   "pss_anon_kib": 5380,
+   "pss_file_kib": 8975,
+   "pss_shmem_kib": 1478,
+   "shared_objects": 13,
+   "gpu_driver_libs": [],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.0,
+   "idle_cpu_sched_ms_per_s": 0.0205,
+   "idle_switches_per_s": 0.97,
+   "rep": 0
+  },
+  {
+   "name": "baobab",
+   "first_frame_ms": 161.66,
+   "cpu_to_first_frame_ms": 130.0,
+   "cpu_to_first_frame_sched_ms": 136.7,
+   "window": {
+    "app_id": "org.gnome.baobab",
+    "pid": 823682,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 960,
+     "height": 600
+    }
+   },
+   "processes": 1,
+   "threads": 13,
+   "pss_kib": 45297,
+   "rss_kib": 107116,
+   "pss_anon_kib": 23184,
+   "pss_file_kib": 22105,
+   "pss_shmem_kib": 8,
+   "shared_objects": 153,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so",
+    "libvulkan_dzn.so",
+    "libvulkan_lvp.so",
+    "libvulkan_radeon.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.333,
+   "idle_cpu_sched_ms_per_s": 0.2781,
+   "idle_switches_per_s": 5.73,
+   "rep": 0
+  },
+  {
+   "name": "filelight",
+   "first_frame_ms": 166.26,
+   "cpu_to_first_frame_ms": 160.0,
+   "cpu_to_first_frame_sched_ms": 170.28,
+   "window": {
+    "app_id": "org.kde.filelight",
+    "pid": 823804,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 720,
+     "height": 540
+    }
+   },
+   "processes": 1,
+   "threads": 23,
+   "pss_kib": 131953,
+   "rss_kib": 208260,
+   "pss_anon_kib": 51668,
+   "pss_file_kib": 80021,
+   "pss_shmem_kib": 264,
+   "shared_objects": 226,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.0,
+   "idle_cpu_sched_ms_per_s": -0.0023,
+   "idle_switches_per_s": -1.2,
+   "rep": 0
+  },
+  {
+   "name": "filelight",
+   "first_frame_ms": 164.01,
+   "cpu_to_first_frame_ms": 160.0,
+   "cpu_to_first_frame_sched_ms": 169.54,
+   "window": {
+    "app_id": "org.kde.filelight",
+    "pid": 823938,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 720,
+     "height": 540
+    }
+   },
+   "processes": 1,
+   "threads": 23,
+   "pss_kib": 132171,
+   "rss_kib": 208436,
+   "pss_anon_kib": 51664,
+   "pss_file_kib": 80243,
+   "pss_shmem_kib": 264,
+   "shared_objects": 226,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.0,
+   "idle_cpu_sched_ms_per_s": -0.0016,
+   "idle_switches_per_s": -1.27,
+   "rep": 1
+  },
+  {
+   "name": "baobab",
+   "first_frame_ms": 158.9,
+   "cpu_to_first_frame_ms": 120.0,
+   "cpu_to_first_frame_sched_ms": 136.45,
+   "window": {
+    "app_id": "org.gnome.baobab",
+    "pid": 824106,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 960,
+     "height": 600
+    }
+   },
+   "processes": 1,
+   "threads": 15,
+   "pss_kib": 45455,
+   "rss_kib": 107596,
+   "pss_anon_kib": 23288,
+   "pss_file_kib": 22159,
+   "pss_shmem_kib": 8,
+   "shared_objects": 153,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so",
+    "libvulkan_dzn.so",
+    "libvulkan_lvp.so",
+    "libvulkan_radeon.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.333,
+   "idle_cpu_sched_ms_per_s": 0.2662,
+   "idle_switches_per_s": 5.57,
+   "rep": 1
+  },
+  {
+   "name": "kura",
+   "first_frame_ms": 18.99,
+   "cpu_to_first_frame_ms": 10.0,
+   "cpu_to_first_frame_sched_ms": 19.95,
+   "window": {
+    "app_id": "org.aizome.Kura",
+    "pid": 824286,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 700
+    }
+   },
+   "processes": 1,
+   "threads": 17,
+   "pss_kib": 15969,
+   "rss_kib": 24328,
+   "pss_anon_kib": 5416,
+   "pss_file_kib": 9075,
+   "pss_shmem_kib": 1478,
+   "shared_objects": 13,
+   "gpu_driver_libs": [],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.0,
+   "idle_cpu_sched_ms_per_s": 0.0187,
+   "idle_switches_per_s": 1.0,
+   "rep": 1
+  },
+  {
+   "name": "plasma-systemmonitor",
+   "first_frame_ms": 198.9,
+   "cpu_to_first_frame_ms": 200.0,
+   "cpu_to_first_frame_sched_ms": 204.31,
+   "window": {
+    "app_id": "org.kde.plasma-systemmonitor",
+    "pid": 824387,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 990,
+     "height": 702
+    }
+   },
+   "processes": 1,
+   "threads": 26,
+   "pss_kib": 191336,
+   "rss_kib": 269576,
+   "pss_anon_kib": 92184,
+   "pss_file_kib": 98888,
+   "pss_shmem_kib": 264,
+   "shared_objects": 258,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 12.333,
+   "idle_cpu_sched_ms_per_s": 12.3718,
+   "idle_switches_per_s": 105.6,
+   "rep": 1
+  },
+  {
+   "name": "gnome-system-monitor",
+   "first_frame_ms": 190.41,
+   "cpu_to_first_frame_ms": 180.0,
+   "cpu_to_first_frame_sched_ms": 189.64,
+   "window": {
+    "app_id": "org.gnome.SystemMonitor",
+    "pid": 824548,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 800,
+     "height": 720
+    }
+   },
+   "processes": 1,
+   "threads": 11,
+   "pss_kib": 70026,
+   "rss_kib": 133476,
+   "pss_anon_kib": 33648,
+   "pss_file_kib": 36370,
+   "pss_shmem_kib": 8,
+   "shared_objects": 163,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so",
+    "libvulkan_dzn.so",
+    "libvulkan_lvp.so",
+    "libvulkan_radeon.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 17.333,
+   "idle_cpu_sched_ms_per_s": 17.1286,
+   "idle_switches_per_s": 46.5,
+   "rep": 1
+  },
+  {
+   "name": "myaku",
+   "first_frame_ms": 19.45,
+   "cpu_to_first_frame_ms": 10.0,
+   "cpu_to_first_frame_sched_ms": 20.91,
+   "window": {
+    "app_id": "org.aizome.Myaku",
+    "pid": 824877,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 720
+    }
+   },
+   "processes": 1,
+   "threads": 11,
+   "pss_kib": 44665,
+   "rss_kib": 54984,
+   "pss_anon_kib": 30808,
+   "pss_file_kib": 12337,
+   "pss_shmem_kib": 1520,
+   "shared_objects": 17,
+   "gpu_driver_libs": [],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 23.0,
+   "idle_cpu_sched_ms_per_s": 23.0265,
+   "idle_switches_per_s": 12.8,
+   "rep": 1
+  },
+  {
+   "name": "myaku",
+   "first_frame_ms": 19.03,
+   "cpu_to_first_frame_ms": 10.0,
+   "cpu_to_first_frame_sched_ms": 20.71,
+   "window": {
+    "app_id": "org.aizome.Myaku",
+    "pid": 825007,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 720
+    }
+   },
+   "processes": 1,
+   "threads": 11,
+   "pss_kib": 44974,
+   "rss_kib": 55380,
+   "pss_anon_kib": 30804,
+   "pss_file_kib": 12650,
+   "pss_shmem_kib": 1520,
+   "shared_objects": 17,
+   "gpu_driver_libs": [],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 23.333,
+   "idle_cpu_sched_ms_per_s": 23.5176,
+   "idle_switches_per_s": 13.1,
+   "rep": 2
+  },
+  {
+   "name": "gnome-system-monitor",
+   "first_frame_ms": 190.17,
+   "cpu_to_first_frame_ms": 180.0,
+   "cpu_to_first_frame_sched_ms": 189.64,
+   "window": {
+    "app_id": "org.gnome.SystemMonitor",
+    "pid": 825137,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 800,
+     "height": 720
+    }
+   },
+   "processes": 1,
+   "threads": 11,
+   "pss_kib": 69504,
+   "rss_kib": 133100,
+   "pss_anon_kib": 33184,
+   "pss_file_kib": 36312,
+   "pss_shmem_kib": 8,
+   "shared_objects": 163,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so",
+    "libvulkan_dzn.so",
+    "libvulkan_lvp.so",
+    "libvulkan_radeon.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 18.0,
+   "idle_cpu_sched_ms_per_s": 17.8938,
+   "idle_switches_per_s": 47.6,
+   "rep": 2
+  },
+  {
+   "name": "plasma-systemmonitor",
+   "first_frame_ms": 200.89,
+   "cpu_to_first_frame_ms": 190.0,
+   "cpu_to_first_frame_sched_ms": 206.1,
+   "window": {
+    "app_id": "org.kde.plasma-systemmonitor",
+    "pid": 825513,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 990,
+     "height": 702
+    }
+   },
+   "processes": 1,
+   "threads": 27,
+   "pss_kib": 190423,
+   "rss_kib": 268788,
+   "pss_anon_kib": 91140,
+   "pss_file_kib": 99019,
+   "pss_shmem_kib": 264,
+   "shared_objects": 258,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 13.666,
+   "idle_cpu_sched_ms_per_s": 14.0139,
+   "idle_switches_per_s": 106.7,
+   "rep": 2
+  },
+  {
+   "name": "kura",
+   "first_frame_ms": 18.62,
+   "cpu_to_first_frame_ms": 10.0,
+   "cpu_to_first_frame_sched_ms": 19.57,
+   "window": {
+    "app_id": "org.aizome.Kura",
+    "pid": 825654,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 700
+    }
+   },
+   "processes": 1,
+   "threads": 17,
+   "pss_kib": 15960,
+   "rss_kib": 24384,
+   "pss_anon_kib": 5392,
+   "pss_file_kib": 9090,
+   "pss_shmem_kib": 1478,
+   "shared_objects": 13,
+   "gpu_driver_libs": [],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.0,
+   "idle_cpu_sched_ms_per_s": 0.0216,
+   "idle_switches_per_s": 1.0,
+   "rep": 2
+  },
+  {
+   "name": "baobab",
+   "first_frame_ms": 158.96,
+   "cpu_to_first_frame_ms": 130.0,
+   "cpu_to_first_frame_sched_ms": 137.23,
+   "window": {
+    "app_id": "org.gnome.baobab",
+    "pid": 825821,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 960,
+     "height": 600
+    }
+   },
+   "processes": 1,
+   "threads": 13,
+   "pss_kib": 45324,
+   "rss_kib": 107436,
+   "pss_anon_kib": 23176,
+   "pss_file_kib": 22140,
+   "pss_shmem_kib": 8,
+   "shared_objects": 153,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so",
+    "libvulkan_dzn.so",
+    "libvulkan_lvp.so",
+    "libvulkan_radeon.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.333,
+   "idle_cpu_sched_ms_per_s": 0.2759,
+   "idle_switches_per_s": 5.8,
+   "rep": 2
+  },
+  {
+   "name": "filelight",
+   "first_frame_ms": 163.42,
+   "cpu_to_first_frame_ms": 160.0,
+   "cpu_to_first_frame_sched_ms": 168.72,
+   "window": {
+    "app_id": "org.kde.filelight",
+    "pid": 825934,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 720,
+     "height": 540
+    }
+   },
+   "processes": 1,
+   "threads": 23,
+   "pss_kib": 132033,
+   "rss_kib": 208412,
+   "pss_anon_kib": 51688,
+   "pss_file_kib": 80081,
+   "pss_shmem_kib": 264,
+   "shared_objects": 226,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.0,
+   "idle_cpu_sched_ms_per_s": -0.0023,
+   "idle_switches_per_s": -1.27,
+   "rep": 2
+  },
+  {
+   "name": "filelight",
+   "first_frame_ms": 164.02,
+   "cpu_to_first_frame_ms": 160.0,
+   "cpu_to_first_frame_sched_ms": 168.57,
+   "window": {
+    "app_id": "org.kde.filelight",
+    "pid": 826074,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 720,
+     "height": 540
+    }
+   },
+   "processes": 1,
+   "threads": 23,
+   "pss_kib": 132076,
+   "rss_kib": 208444,
+   "pss_anon_kib": 51700,
+   "pss_file_kib": 80112,
+   "pss_shmem_kib": 264,
+   "shared_objects": 226,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.0,
+   "idle_cpu_sched_ms_per_s": -0.0031,
+   "idle_switches_per_s": -1.4,
+   "rep": 3
+  },
+  {
+   "name": "baobab",
+   "first_frame_ms": 159.1,
+   "cpu_to_first_frame_ms": 130.0,
+   "cpu_to_first_frame_sched_ms": 138.3,
+   "window": {
+    "app_id": "org.gnome.baobab",
+    "pid": 826269,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 960,
+     "height": 600
+    }
+   },
+   "processes": 1,
+   "threads": 13,
+   "pss_kib": 45354,
+   "rss_kib": 107536,
+   "pss_anon_kib": 23180,
+   "pss_file_kib": 22166,
+   "pss_shmem_kib": 8,
+   "shared_objects": 153,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so",
+    "libvulkan_dzn.so",
+    "libvulkan_lvp.so",
+    "libvulkan_radeon.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.333,
+   "idle_cpu_sched_ms_per_s": 0.2693,
+   "idle_switches_per_s": 5.8,
+   "rep": 3
+  },
+  {
+   "name": "kura",
+   "first_frame_ms": 19.31,
+   "cpu_to_first_frame_ms": 10.0,
+   "cpu_to_first_frame_sched_ms": 19.92,
+   "window": {
+    "app_id": "org.aizome.Kura",
+    "pid": 826383,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 700
+    }
+   },
+   "processes": 1,
+   "threads": 17,
+   "pss_kib": 15861,
+   "rss_kib": 24148,
+   "pss_anon_kib": 5380,
+   "pss_file_kib": 9003,
+   "pss_shmem_kib": 1478,
+   "shared_objects": 13,
+   "gpu_driver_libs": [],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.0,
+   "idle_cpu_sched_ms_per_s": 0.0188,
+   "idle_switches_per_s": 0.97,
+   "rep": 3
+  },
+  {
+   "name": "plasma-systemmonitor",
+   "first_frame_ms": 202.28,
+   "cpu_to_first_frame_ms": 200.0,
+   "cpu_to_first_frame_sched_ms": 206.24,
+   "window": {
+    "app_id": "org.kde.plasma-systemmonitor",
+    "pid": 826519,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 990,
+     "height": 702
+    }
+   },
+   "processes": 1,
+   "threads": 25,
+   "pss_kib": 190979,
+   "rss_kib": 269372,
+   "pss_anon_kib": 91460,
+   "pss_file_kib": 99255,
+   "pss_shmem_kib": 264,
+   "shared_objects": 258,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 13.0,
+   "idle_cpu_sched_ms_per_s": 13.2298,
+   "idle_switches_per_s": 106.03,
+   "rep": 3
+  },
+  {
+   "name": "gnome-system-monitor",
+   "first_frame_ms": 192.37,
+   "cpu_to_first_frame_ms": 180.0,
+   "cpu_to_first_frame_sched_ms": 191.7,
+   "window": {
+    "app_id": "org.gnome.SystemMonitor",
+    "pid": 826660,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 800,
+     "height": 720
+    }
+   },
+   "processes": 1,
+   "threads": 11,
+   "pss_kib": 69687,
+   "rss_kib": 133164,
+   "pss_anon_kib": 33268,
+   "pss_file_kib": 36411,
+   "pss_shmem_kib": 8,
+   "shared_objects": 163,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so",
+    "libvulkan_dzn.so",
+    "libvulkan_lvp.so",
+    "libvulkan_radeon.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 18.666,
+   "idle_cpu_sched_ms_per_s": 18.6466,
+   "idle_switches_per_s": 52.7,
+   "rep": 3
+  },
+  {
+   "name": "myaku",
+   "first_frame_ms": 18.87,
+   "cpu_to_first_frame_ms": 10.0,
+   "cpu_to_first_frame_sched_ms": 19.35,
+   "window": {
+    "app_id": "org.aizome.Myaku",
+    "pid": 827026,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 720
+    }
+   },
+   "processes": 1,
+   "threads": 11,
+   "pss_kib": 44514,
+   "rss_kib": 54920,
+   "pss_anon_kib": 30668,
+   "pss_file_kib": 12326,
+   "pss_shmem_kib": 1520,
+   "shared_objects": 17,
+   "gpu_driver_libs": [],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 23.0,
+   "idle_cpu_sched_ms_per_s": 22.9742,
+   "idle_switches_per_s": 12.5,
+   "rep": 3
+  },
+  {
+   "name": "myaku",
+   "first_frame_ms": 18.52,
+   "cpu_to_first_frame_ms": 10.0,
+   "cpu_to_first_frame_sched_ms": 18.72,
+   "window": {
+    "app_id": "org.aizome.Myaku",
+    "pid": 827192,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 720
+    }
+   },
+   "processes": 1,
+   "threads": 11,
+   "pss_kib": 44892,
+   "rss_kib": 55264,
+   "pss_anon_kib": 30804,
+   "pss_file_kib": 12568,
+   "pss_shmem_kib": 1520,
+   "shared_objects": 17,
+   "gpu_driver_libs": [],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 24.0,
+   "idle_cpu_sched_ms_per_s": 23.8648,
+   "idle_switches_per_s": 12.87,
+   "rep": 4
+  },
+  {
+   "name": "gnome-system-monitor",
+   "first_frame_ms": 189.29,
+   "cpu_to_first_frame_ms": 180.0,
+   "cpu_to_first_frame_sched_ms": 188.56,
+   "window": {
+    "app_id": "org.gnome.SystemMonitor",
+    "pid": 827343,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 800,
+     "height": 720
+    }
+   },
+   "processes": 1,
+   "threads": 11,
+   "pss_kib": 69995,
+   "rss_kib": 133260,
+   "pss_anon_kib": 33716,
+   "pss_file_kib": 36271,
+   "pss_shmem_kib": 8,
+   "shared_objects": 163,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so",
+    "libvulkan_dzn.so",
+    "libvulkan_lvp.so",
+    "libvulkan_radeon.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 17.333,
+   "idle_cpu_sched_ms_per_s": 17.1416,
+   "idle_switches_per_s": 47.67,
+   "rep": 4
+  },
+  {
+   "name": "plasma-systemmonitor",
+   "first_frame_ms": 200.69,
+   "cpu_to_first_frame_ms": 190.0,
+   "cpu_to_first_frame_sched_ms": 205.87,
+   "window": {
+    "app_id": "org.kde.plasma-systemmonitor",
+    "pid": 827715,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 990,
+     "height": 702
+    }
+   },
+   "processes": 1,
+   "threads": 26,
+   "pss_kib": 191579,
+   "rss_kib": 269908,
+   "pss_anon_kib": 92444,
+   "pss_file_kib": 98871,
+   "pss_shmem_kib": 264,
+   "shared_objects": 258,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 12.666,
+   "idle_cpu_sched_ms_per_s": 12.547,
+   "idle_switches_per_s": 98.7,
+   "rep": 4
+  },
+  {
+   "name": "kura",
+   "first_frame_ms": 19.44,
+   "cpu_to_first_frame_ms": 10.0,
+   "cpu_to_first_frame_sched_ms": 19.84,
+   "window": {
+    "app_id": "org.aizome.Kura",
+    "pid": 827858,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 700
+    }
+   },
+   "processes": 1,
+   "threads": 17,
+   "pss_kib": 15921,
+   "rss_kib": 24280,
+   "pss_anon_kib": 5416,
+   "pss_file_kib": 9027,
+   "pss_shmem_kib": 1478,
+   "shared_objects": 13,
+   "gpu_driver_libs": [],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.0,
+   "idle_cpu_sched_ms_per_s": 0.0162,
+   "idle_switches_per_s": 1.0,
+   "rep": 4
+  },
+  {
+   "name": "baobab",
+   "first_frame_ms": 158.9,
+   "cpu_to_first_frame_ms": 130.0,
+   "cpu_to_first_frame_sched_ms": 137.65,
+   "window": {
+    "app_id": "org.gnome.baobab",
+    "pid": 827989,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 960,
+     "height": 600
+    }
+   },
+   "processes": 1,
+   "threads": 15,
+   "pss_kib": 45330,
+   "rss_kib": 107332,
+   "pss_anon_kib": 23284,
+   "pss_file_kib": 22038,
+   "pss_shmem_kib": 8,
+   "shared_objects": 153,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so",
+    "libvulkan_dzn.so",
+    "libvulkan_lvp.so",
+    "libvulkan_radeon.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.333,
+   "idle_cpu_sched_ms_per_s": 0.2807,
+   "idle_switches_per_s": 5.63,
+   "rep": 4
+  },
+  {
+   "name": "filelight",
+   "first_frame_ms": 163.31,
+   "cpu_to_first_frame_ms": 150.0,
+   "cpu_to_first_frame_sched_ms": 168.15,
+   "window": {
+    "app_id": "org.kde.filelight",
+    "pid": 828125,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 720,
+     "height": 540
+    }
+   },
+   "processes": 1,
+   "threads": 23,
+   "pss_kib": 132168,
+   "rss_kib": 208504,
+   "pss_anon_kib": 51680,
+   "pss_file_kib": 80224,
+   "pss_shmem_kib": 264,
+   "shared_objects": 226,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.0,
+   "idle_cpu_sched_ms_per_s": -0.0019,
+   "idle_switches_per_s": -1.27,
+   "rep": 4
+  },
+  {
+   "name": "filelight",
+   "first_frame_ms": 163.24,
+   "cpu_to_first_frame_ms": 160.0,
+   "cpu_to_first_frame_sched_ms": 168.4,
+   "window": {
+    "app_id": "org.kde.filelight",
+    "pid": 828265,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 720,
+     "height": 540
+    }
+   },
+   "processes": 1,
+   "threads": 24,
+   "pss_kib": 132202,
+   "rss_kib": 208676,
+   "pss_anon_kib": 51736,
+   "pss_file_kib": 80202,
+   "pss_shmem_kib": 264,
+   "shared_objects": 226,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.0,
+   "idle_cpu_sched_ms_per_s": -0.0031,
+   "idle_switches_per_s": -1.4,
+   "rep": 5
+  },
+  {
+   "name": "baobab",
+   "first_frame_ms": 156.93,
+   "cpu_to_first_frame_ms": 120.0,
+   "cpu_to_first_frame_sched_ms": 135.9,
+   "window": {
+    "app_id": "org.gnome.baobab",
+    "pid": 828389,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 960,
+     "height": 600
+    }
+   },
+   "processes": 1,
+   "threads": 13,
+   "pss_kib": 45442,
+   "rss_kib": 107572,
+   "pss_anon_kib": 23220,
+   "pss_file_kib": 22214,
+   "pss_shmem_kib": 8,
+   "shared_objects": 153,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so",
+    "libvulkan_dzn.so",
+    "libvulkan_lvp.so",
+    "libvulkan_radeon.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.333,
+   "idle_cpu_sched_ms_per_s": 0.2777,
+   "idle_switches_per_s": 5.5,
+   "rep": 5
+  },
+  {
+   "name": "kura",
+   "first_frame_ms": 19.0,
+   "cpu_to_first_frame_ms": 10.0,
+   "cpu_to_first_frame_sched_ms": 19.69,
+   "window": {
+    "app_id": "org.aizome.Kura",
+    "pid": 828509,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 700
+    }
+   },
+   "processes": 1,
+   "threads": 17,
+   "pss_kib": 15808,
+   "rss_kib": 24244,
+   "pss_anon_kib": 5412,
+   "pss_file_kib": 8918,
+   "pss_shmem_kib": 1478,
+   "shared_objects": 13,
+   "gpu_driver_libs": [],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 0.0,
+   "idle_cpu_sched_ms_per_s": 0.0189,
+   "idle_switches_per_s": 0.97,
+   "rep": 5
+  },
+  {
+   "name": "plasma-systemmonitor",
+   "first_frame_ms": 200.81,
+   "cpu_to_first_frame_ms": 190.0,
+   "cpu_to_first_frame_sched_ms": 205.72,
+   "window": {
+    "app_id": "org.kde.plasma-systemmonitor",
+    "pid": 828648,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 990,
+     "height": 702
+    }
+   },
+   "processes": 1,
+   "threads": 25,
+   "pss_kib": 191685,
+   "rss_kib": 269936,
+   "pss_anon_kib": 92536,
+   "pss_file_kib": 98885,
+   "pss_shmem_kib": 264,
+   "shared_objects": 258,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so"
+   ],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 13.0,
+   "idle_cpu_sched_ms_per_s": 13.1502,
+   "idle_switches_per_s": 104.3,
+   "rep": 5
+  },
+  {
+   "name": "gnome-system-monitor",
+   "first_frame_ms": 191.39,
+   "cpu_to_first_frame_ms": 180.0,
+   "cpu_to_first_frame_sched_ms": 191.23,
+   "window": {
+    "app_id": "org.gnome.SystemMonitor",
+    "pid": 828799,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 800,
+     "height": 720
+    }
+   },
+   "processes": 1,
+   "threads": 11,
+   "pss_kib": 69772,
+   "rss_kib": 133236,
+   "pss_anon_kib": 33392,
+   "pss_file_kib": 36372,
+   "pss_shmem_kib": 8,
+   "shared_objects": 163,
+   "gpu_driver_libs": [
+    "libgallium-26.2.6.so",
+    "libvulkan_dzn.so",
+    "libvulkan_lvp.so",
+    "libvulkan_radeon.so"
+   ],
+   "idle_s": 30.0,
+   "idle_cpu_ms_per_s": 17.666,
+   "idle_cpu_sched_ms_per_s": 17.4948,
+   "idle_switches_per_s": 47.63,
+   "rep": 5
+  },
+  {
+   "name": "myaku",
+   "first_frame_ms": 18.98,
+   "cpu_to_first_frame_ms": 10.0,
+   "cpu_to_first_frame_sched_ms": 21.29,
+   "window": {
+    "app_id": "org.aizome.Myaku",
+    "pid": 829185,
+    "rect": {
+     "x": 0,
+     "y": 0,
+     "width": 0,
+     "height": 0
+    },
+    "geometry": {
+     "x": 0,
+     "y": 0,
+     "width": 1080,
+     "height": 720
+    }
+   },
+   "processes": 1,
+   "threads": 11,
+   "pss_kib": 45353,
+   "rss_kib": 55708,
+   "pss_anon_kib": 31300,
+   "pss_file_kib": 12533,
+   "pss_shmem_kib": 1520,
+   "shared_objects": 17,
+   "gpu_driver_libs": [],
+   "idle_s": 30.001,
+   "idle_cpu_ms_per_s": 21.333,
+   "idle_cpu_sched_ms_per_s": 21.3604,
+   "idle_switches_per_s": 14.57,
+   "rep": 5
+  }
+ ],
+ "load_after": [
+  "0.14",
+  "0.13",
+  "0.21"
+ ]
+}

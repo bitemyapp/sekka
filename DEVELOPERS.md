@@ -19,8 +19,8 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `services/sekka-discord/` | Standalone Rust service announcing public Sekka GitHub activity in Discord |
 | `site/` | The sekka.computer website generator |
 | `aizome-site/` | The aizome.computer website generator |
-| `tests/` | Generated-system configuration matrices and integration checks |
-| `docs/` | Architecture, migration notes, screenshots, historical evidence, [incident records](docs/incidents/README.md), brand, patches sent upstream |
+| `tests/` | Generated-system configuration matrices, integration checks and [performance harnesses](docs/performance/README.md) |
+| `docs/` | Architecture, migration notes, screenshots, historical evidence, [incident records](docs/incidents/README.md), [performance records](docs/performance/README.md), brand, patches sent upstream |
 
 The initial import preserves component layouts and separate Cargo workspaces, and Aizome, which joined later, keeps its own workspace in `desktop/aizome` ([migration record](docs/migration.md#aizome)). There are no submodules or remote first-party flake inputs. Sukumo, Aizome's toolkit, is a workspace of its own inside `desktop/aizome` ([Sukumo](#sukumo)). `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
 
@@ -3297,6 +3297,13 @@ provenance their docs record. `nix/aizome-site.nix` takes only those files,
 the app icons and the theme crate's source. Everything the site claims
 comes from Aizome's READMEs and docs, which `aizome-site/src/pages.rs` and
 `apps.rs` name; change them when what they describe changes.
+
+The Performance page (`aizome-site/src/performance.rs`) repeats figures from
+[docs/performance](docs/performance/README.md), whose records and harnesses
+(`tests/performance/`) say how each was measured; its bar charts are SVG
+drawn when the site is built (`aizome-site/src/chart.rs`), coloured by the
+theme's classes, each with a table of the same numbers. When a record is
+measured again, change the page with it.
 
 ```sh
 nix build .#aizome-site --out-link result-aizome-site

@@ -1,0 +1,49 @@
+# tests/performance/design/thread-wakeups.sh, 2026-11-02 ~03:45, aizome package of d7ecbac; context switches per second per thread over 10 s at rest (PID:thread name)
+== aizome-hako fixtures/folder
+  339084:aizome-hako                         4.8/s
+  339084:aizome-sys                          3.4/s
+  339084:aizome-sys                          3.4/s
+  339084:blocking-1                          2.0/s
+  339084:aizome-config-w                     1.1/s
+  339084:sidestep-render                     0.8/s
+  339084:hako-watch                          0.8/s
+  339084:sidestep-raster                     0.4/s
+== aizome-shiori fixtures/PDF32000_2008.pdf
+  342066:shiori-watchdog                     4.0/s
+  342066:aizome-config-w                     1.1/s
+  342066:aizome-shiori                       0.7/s
+  342066:sidestep-raster                     0.1/s
+  342066:sidestep-raster                     0.1/s
+== aizome-sumi fixtures/editor-fixture.rs
+  342229:sidestep-render                     3.8/s
+  342229:aizome-sumi                         3.8/s
+  342229:aizome-config-w                     1.1/s
+  342229:sidestep-raster                     0.1/s
+  342229:sidestep-raster                     0.1/s
+== aizome-tokei
+  342342:sidestep-render                     2.0/s
+  342342:aizome-tokei                        2.0/s
+  342342:aizome-config-w                     1.1/s
+
+# The shell (aizome-shell) of the live session on runnymede, 2026-11-02 06:31, the session's own aizome package (/nix/store/w32wnmm79…-aizome-0.1.0), not idle: its bar and the agents' terminal were live; context switches per second over 10 s, summed by thread name (count of threads):
+  28.7  aizome-sys_org.        x14
+  20.3  sidestep-raster        x3
+   6.0  aizome-shell           x1
+   4.4  aizome-sys_stat        x2
+   4.1  aizome-sys_mpri        x2
+   3.7  sidestep-render        x1
+   2.1  blocking-2             x1
+   2.1  blocking-1             x1
+   2.0  aizome-sys_rfki        x1
+   2.0  aizome-config-w        x2
+   1.6  async-io               x1
+   1.1  ipc-events             x1
+   1.1  aizome-sys_back        x1
+   1.0  shell-in-2             x1
+   1.0  keep-awake             x1
+   0.8  zbus::Connectio        x5
+   0.6  aizome-sys_apps        x1
+   0.5  meters                 x1
+   0.5  desktop-watch          x1
+   0.1  shell-socket           x1
+# (aizome-sys_org. = aizome-sys's D-Bus name watchers, one thread per watched org.freedesktop.* service; thread names are truncated to 15 bytes)

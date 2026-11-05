@@ -1,0 +1,35 @@
+--- a/tests/tests/main.rs
++++ b/tests/tests/main.rs
+@@ -93,6 +93,32 @@
+         references::write_lockfile(dir);
+     }
+     let report = report::write(&results);
++    // Aizome performance page: one JSON line per test (name, outcome,
++    // message), so results can be counted per manifest. Doesn't change
++    // how a test passes or fails.
++    if let Some(path) = std::env::var_os("HAYRO_RESULTS_JSONL") {
++        let mut out = String::new();
++        for result in &results {
++            let (kind, message) = match &result.outcome {
++                runner::Outcome::Passed => ("passed", String::new()),
++                runner::Outcome::New(n) => ("new", n.to_string()),
++                runner::Outcome::Changed(n) => ("changed", n.to_string()),
++                runner::Outcome::Skipped(m) => ("skipped", m.clone()),
++                runner::Outcome::Failed(m) => ("failed", m.clone()),
++            };
++            out.push_str(
++                &serde_json::json!({
++                    "name": result.name,
++                    "outcome": kind,
++                    "message": message,
++                    "ms": result.duration.as_secs_f64() * 1000.0,
++                })
++                .to_string(),
++            );
++            out.push('\n');
++        }
++        std::fs::write(path, out).unwrap();
++    }
+     ui.summary(&results, ignored, report.as_deref());
+ 
+     let failed = results

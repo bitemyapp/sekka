@@ -1,0 +1,1102 @@
+{
+ "meta": [
+  {
+   "meta": true,
+   "date": "2026-11-02T20:56:00-0600",
+   "host": "runnymede",
+   "kernel": "7.3.0",
+   "load_before": [
+    "0.44",
+    "0.54",
+    "0.77"
+   ],
+   "reps": 10,
+   "settle_s": 0.0,
+   "variants": [
+    {
+     "name": "kit",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-kit-target/release/hello-kit"
+     ]
+    },
+    {
+     "name": "kit.bind-now",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-kit-target/release/hello-kit"
+     ],
+     "env": {
+      "LD_BIND_NOW": "1"
+     }
+    },
+    {
+     "name": "gtk4",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-gtk4"
+     ]
+    },
+    {
+     "name": "gtk4.cairo",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-gtk4"
+     ],
+     "env": {
+      "GSK_RENDERER": "cairo"
+     }
+    },
+    {
+     "name": "gtk4.gl",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-gtk4"
+     ],
+     "env": {
+      "GSK_RENDERER": "gl"
+     }
+    },
+    {
+     "name": "gtk4.radv-only",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-gtk4"
+     ],
+     "env": {
+      "VK_DRIVER_FILES": "/run/opengl-driver/share/vulkan/icd.d/radeon_icd.x86_64.json"
+     }
+    },
+    {
+     "name": "gtk4.no-a11y",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-gtk4"
+     ],
+     "env": {
+      "GTK_A11Y": "none"
+     }
+    },
+    {
+     "name": "gtk4.no-portals",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-gtk4"
+     ],
+     "env": {
+      "GDK_DEBUG": "no-portals"
+     }
+    },
+    {
+     "name": "gtk4.no-gvfs",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-gtk4"
+     ],
+     "env": {
+      "GIO_EXTRA_MODULES": null
+     }
+    },
+    {
+     "name": "gtk4.bind-now",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-gtk4"
+     ],
+     "env": {
+      "LD_BIND_NOW": "1"
+     }
+    },
+    {
+     "name": "gtk4.lean",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-gtk4"
+     ],
+     "env": {
+      "GSK_RENDERER": "cairo",
+      "GTK_A11Y": "none",
+      "GDK_DEBUG": "no-portals",
+      "GIO_EXTRA_MODULES": null
+     }
+    },
+    {
+     "name": "adw",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-adw"
+     ]
+    },
+    {
+     "name": "adw.cairo",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-adw"
+     ],
+     "env": {
+      "GSK_RENDERER": "cairo"
+     }
+    },
+    {
+     "name": "adw.gl",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-adw"
+     ],
+     "env": {
+      "GSK_RENDERER": "gl"
+     }
+    },
+    {
+     "name": "adw.radv-only",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-adw"
+     ],
+     "env": {
+      "VK_DRIVER_FILES": "/run/opengl-driver/share/vulkan/icd.d/radeon_icd.x86_64.json"
+     }
+    },
+    {
+     "name": "adw.no-a11y",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-adw"
+     ],
+     "env": {
+      "GTK_A11Y": "none"
+     }
+    },
+    {
+     "name": "adw.no-portals",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-adw"
+     ],
+     "env": {
+      "GDK_DEBUG": "no-portals"
+     }
+    },
+    {
+     "name": "adw.no-gvfs",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-adw"
+     ],
+     "env": {
+      "GIO_EXTRA_MODULES": null
+     }
+    },
+    {
+     "name": "adw.bind-now",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-adw"
+     ],
+     "env": {
+      "LD_BIND_NOW": "1"
+     }
+    },
+    {
+     "name": "adw.lean",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-adw"
+     ],
+     "env": {
+      "GSK_RENDERER": "cairo",
+      "GTK_A11Y": "none",
+      "GDK_DEBUG": "no-portals",
+      "GIO_EXTRA_MODULES": null
+     }
+    },
+    {
+     "name": "qtwidgets",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-qtwidgets"
+     ]
+    },
+    {
+     "name": "qtwidgets.no-gtk3-theme",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-qtwidgets"
+     ],
+     "env": {
+      "QT_QPA_PLATFORMTHEME": null
+     }
+    },
+    {
+     "name": "qtwidgets.no-ibus",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-qtwidgets"
+     ],
+     "env": {
+      "QT_IM_MODULE": null
+     }
+    },
+    {
+     "name": "qtwidgets.no-a11y",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-qtwidgets"
+     ],
+     "env": {
+      "QT_ACCESSIBILITY": "0"
+     }
+    },
+    {
+     "name": "qtwidgets.bind-now",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-qtwidgets"
+     ],
+     "env": {
+      "LD_BIND_NOW": "1"
+     }
+    },
+    {
+     "name": "qtwidgets.lean",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-qtwidgets"
+     ],
+     "env": {
+      "QT_QPA_PLATFORMTHEME": null,
+      "QT_IM_MODULE": null,
+      "QT_ACCESSIBILITY": "0"
+     }
+    },
+    {
+     "name": "qtquick",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-qtquick"
+     ]
+    },
+    {
+     "name": "qtquick.no-gtk3-theme",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-qtquick"
+     ],
+     "env": {
+      "QT_QPA_PLATFORMTHEME": null
+     }
+    },
+    {
+     "name": "qtquick.no-ibus",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-qtquick"
+     ],
+     "env": {
+      "QT_IM_MODULE": null
+     }
+    },
+    {
+     "name": "qtquick.no-a11y",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-qtquick"
+     ],
+     "env": {
+      "QT_ACCESSIBILITY": "0"
+     }
+    },
+    {
+     "name": "qtquick.bind-now",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-qtquick"
+     ],
+     "env": {
+      "LD_BIND_NOW": "1"
+     }
+    },
+    {
+     "name": "qtquick.lean",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-qtquick"
+     ],
+     "env": {
+      "QT_QPA_PLATFORMTHEME": null,
+      "QT_IM_MODULE": null,
+      "QT_ACCESSIBILITY": "0",
+      "QT_QUICK_BACKEND": "software"
+     }
+    },
+    {
+     "name": "qtquick.software",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-qtquick"
+     ],
+     "env": {
+      "QT_QUICK_BACKEND": "software"
+     }
+    },
+    {
+     "name": "qtquick.basic-style",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-hello/bin/hello-qtquick"
+     ],
+     "env": {
+      "QT_QUICK_CONTROLS_STYLE": "Basic"
+     }
+    },
+    {
+     "name": "sumi",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-aizome/bin/aizome-sumi",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ]
+    },
+    {
+     "name": "sumi.bind-now",
+     "cmd": [
+      "/tmp/claude-1000/perf/design-aizome/bin/aizome-sumi",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ],
+     "env": {
+      "LD_BIND_NOW": "1"
+     }
+    },
+    {
+     "name": "gnome-text-editor",
+     "cmd": [
+      "/nix/store/94r4v2l4r5lzmik62h7mnfi7bwvqnmfz-gnome-text-editor-50.1/bin/gnome-text-editor",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ]
+    },
+    {
+     "name": "gnome-text-editor.cairo",
+     "cmd": [
+      "/nix/store/94r4v2l4r5lzmik62h7mnfi7bwvqnmfz-gnome-text-editor-50.1/bin/gnome-text-editor",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ],
+     "env": {
+      "GSK_RENDERER": "cairo"
+     }
+    },
+    {
+     "name": "gnome-text-editor.gl",
+     "cmd": [
+      "/nix/store/94r4v2l4r5lzmik62h7mnfi7bwvqnmfz-gnome-text-editor-50.1/bin/gnome-text-editor",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ],
+     "env": {
+      "GSK_RENDERER": "gl"
+     }
+    },
+    {
+     "name": "gnome-text-editor.radv-only",
+     "cmd": [
+      "/nix/store/94r4v2l4r5lzmik62h7mnfi7bwvqnmfz-gnome-text-editor-50.1/bin/gnome-text-editor",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ],
+     "env": {
+      "VK_DRIVER_FILES": "/run/opengl-driver/share/vulkan/icd.d/radeon_icd.x86_64.json"
+     }
+    },
+    {
+     "name": "gnome-text-editor.no-a11y",
+     "cmd": [
+      "/nix/store/94r4v2l4r5lzmik62h7mnfi7bwvqnmfz-gnome-text-editor-50.1/bin/gnome-text-editor",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ],
+     "env": {
+      "GTK_A11Y": "none"
+     }
+    },
+    {
+     "name": "gnome-text-editor.no-portals",
+     "cmd": [
+      "/nix/store/94r4v2l4r5lzmik62h7mnfi7bwvqnmfz-gnome-text-editor-50.1/bin/gnome-text-editor",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ],
+     "env": {
+      "GDK_DEBUG": "no-portals"
+     }
+    },
+    {
+     "name": "gnome-text-editor.no-gvfs",
+     "cmd": [
+      "/nix/store/94r4v2l4r5lzmik62h7mnfi7bwvqnmfz-gnome-text-editor-50.1/bin/gnome-text-editor",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ],
+     "env": {
+      "GIO_EXTRA_MODULES": null
+     }
+    },
+    {
+     "name": "gnome-text-editor.bind-now",
+     "cmd": [
+      "/nix/store/94r4v2l4r5lzmik62h7mnfi7bwvqnmfz-gnome-text-editor-50.1/bin/gnome-text-editor",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ],
+     "env": {
+      "LD_BIND_NOW": "1"
+     }
+    },
+    {
+     "name": "gnome-text-editor.lean",
+     "cmd": [
+      "/nix/store/94r4v2l4r5lzmik62h7mnfi7bwvqnmfz-gnome-text-editor-50.1/bin/gnome-text-editor",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ],
+     "env": {
+      "GSK_RENDERER": "cairo",
+      "GTK_A11Y": "none",
+      "GDK_DEBUG": "no-portals",
+      "GIO_EXTRA_MODULES": null
+     }
+    },
+    {
+     "name": "kwrite",
+     "cmd": [
+      "/nix/store/782fd5l1s9f3jris5xx3ksv1xxgpnynn-kate-26.08.2/bin/kwrite",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ]
+    },
+    {
+     "name": "kwrite.no-gtk3-theme",
+     "cmd": [
+      "/nix/store/782fd5l1s9f3jris5xx3ksv1xxgpnynn-kate-26.08.2/bin/kwrite",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ],
+     "env": {
+      "QT_QPA_PLATFORMTHEME": null
+     }
+    },
+    {
+     "name": "kwrite.no-ibus",
+     "cmd": [
+      "/nix/store/782fd5l1s9f3jris5xx3ksv1xxgpnynn-kate-26.08.2/bin/kwrite",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ],
+     "env": {
+      "QT_IM_MODULE": null
+     }
+    },
+    {
+     "name": "kwrite.no-a11y",
+     "cmd": [
+      "/nix/store/782fd5l1s9f3jris5xx3ksv1xxgpnynn-kate-26.08.2/bin/kwrite",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ],
+     "env": {
+      "QT_ACCESSIBILITY": "0"
+     }
+    },
+    {
+     "name": "kwrite.bind-now",
+     "cmd": [
+      "/nix/store/782fd5l1s9f3jris5xx3ksv1xxgpnynn-kate-26.08.2/bin/kwrite",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ],
+     "env": {
+      "LD_BIND_NOW": "1"
+     }
+    },
+    {
+     "name": "kwrite.lean",
+     "cmd": [
+      "/nix/store/782fd5l1s9f3jris5xx3ksv1xxgpnynn-kate-26.08.2/bin/kwrite",
+      "/tmp/claude-1000/perf/design-fixtures/editor-fixture.rs"
+     ],
+     "env": {
+      "QT_QPA_PLATFORMTHEME": null,
+      "QT_IM_MODULE": null,
+      "QT_ACCESSIBILITY": "0"
+     }
+    }
+   ],
+   "sway": "sway version 1.12"
+  },
+  {
+   "meta": true,
+   "load_after": [
+    "0.87",
+    "0.70",
+    "0.78"
+   ]
+  }
+ ],
+ "variants": {
+  "kit": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 19.1405,
+   "min": 18.931,
+   "max": 20.025,
+   "cpu_ms": 19.0180075,
+   "main_cpu_ms": 18.1654415,
+   "main_not_running_ms": 0.9253134999999997,
+   "shared_objects": 13.0
+  },
+  "kit.bind-now": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 19.223,
+   "min": 18.851,
+   "max": 20.487,
+   "cpu_ms": 19.135597,
+   "main_cpu_ms": 18.258991,
+   "main_not_running_ms": 1.071898000000001,
+   "shared_objects": 13.0,
+   "delta_ms": 0.08
+  },
+  "gtk4": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 97.06299999999999,
+   "min": 93.763,
+   "max": 104.977,
+   "cpu_ms": 97.375804,
+   "main_cpu_ms": 91.676387,
+   "main_not_running_ms": 5.533467999999999,
+   "shared_objects": 131.0
+  },
+  "gtk4.cairo": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 32.031,
+   "min": 31.24,
+   "max": 36.987,
+   "cpu_ms": 33.77853,
+   "main_cpu_ms": 28.261017,
+   "main_not_running_ms": 3.6560740000000003,
+   "shared_objects": 109.0,
+   "delta_ms": -65.03
+  },
+  "gtk4.gl": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 68.5075,
+   "min": 65.801,
+   "max": 71.469,
+   "cpu_ms": 71.186014,
+   "main_cpu_ms": 62.5747195,
+   "main_not_running_ms": 5.786896000000002,
+   "shared_objects": 125.0,
+   "delta_ms": -28.56
+  },
+  "gtk4.radv-only": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 48.7285,
+   "min": 47.585,
+   "max": 50.598,
+   "cpu_ms": 50.5189505,
+   "main_cpu_ms": 44.806748999999996,
+   "main_not_running_ms": 3.891218000000002,
+   "shared_objects": 123.0,
+   "delta_ms": -48.33
+  },
+  "gtk4.no-a11y": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 98.868,
+   "min": 94.697,
+   "max": 103.808,
+   "cpu_ms": 99.3132165,
+   "main_cpu_ms": 93.5443085,
+   "main_not_running_ms": 5.3236915000000025,
+   "shared_objects": 131.0,
+   "delta_ms": 1.81
+  },
+  "gtk4.no-portals": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 100.0135,
+   "min": 93.543,
+   "max": 104.322,
+   "cpu_ms": 101.5222675,
+   "main_cpu_ms": 95.5938075,
+   "main_not_running_ms": 4.193586999999994,
+   "shared_objects": 131.0,
+   "delta_ms": 2.95
+  },
+  "gtk4.no-gvfs": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 99.634,
+   "min": 92.781,
+   "max": 104.403,
+   "cpu_ms": 99.798059,
+   "main_cpu_ms": 93.885626,
+   "main_not_running_ms": 5.573122499999997,
+   "shared_objects": 129.0,
+   "delta_ms": 2.57
+  },
+  "gtk4.bind-now": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 102.718,
+   "min": 94.946,
+   "max": 109.012,
+   "cpu_ms": 102.950813,
+   "main_cpu_ms": 97.11090200000001,
+   "main_not_running_ms": 5.933163999999998,
+   "shared_objects": 131.0,
+   "delta_ms": 5.66
+  },
+  "gtk4.lean": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 29.104,
+   "min": 28.259,
+   "max": 30.032,
+   "cpu_ms": 32.070741,
+   "main_cpu_ms": 26.89721,
+   "main_not_running_ms": 2.1409695000000006,
+   "shared_objects": 107.0,
+   "delta_ms": -67.96
+  },
+  "adw": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 124.79849999999999,
+   "min": 118.861,
+   "max": 128.982,
+   "cpu_ms": 124.40462,
+   "main_cpu_ms": 118.1861965,
+   "main_not_running_ms": 6.612303499999996,
+   "shared_objects": 152.0
+  },
+  "adw.cairo": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 53.994,
+   "min": 52.906,
+   "max": 56.047,
+   "cpu_ms": 55.1701575,
+   "main_cpu_ms": 49.2354555,
+   "main_not_running_ms": 4.759671999999998,
+   "shared_objects": 130.0,
+   "delta_ms": -70.8
+  },
+  "adw.gl": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 91.5195,
+   "min": 88.834,
+   "max": 94.165,
+   "cpu_ms": 93.23369199999999,
+   "main_cpu_ms": 84.59799000000001,
+   "main_not_running_ms": 6.590011000000004,
+   "shared_objects": 146.0,
+   "delta_ms": -33.28
+  },
+  "adw.radv-only": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 71.5385,
+   "min": 69.469,
+   "max": 74.578,
+   "cpu_ms": 72.64920000000001,
+   "main_cpu_ms": 66.4935295,
+   "main_not_running_ms": 5.175264500000004,
+   "shared_objects": 144.0,
+   "delta_ms": -53.26
+  },
+  "adw.no-a11y": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 124.1345,
+   "min": 119.443,
+   "max": 130.698,
+   "cpu_ms": 123.416602,
+   "main_cpu_ms": 117.1368315,
+   "main_not_running_ms": 6.394581500000001,
+   "shared_objects": 152.0,
+   "delta_ms": -0.66
+  },
+  "adw.no-portals": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 128.183,
+   "min": 122.791,
+   "max": 134.86,
+   "cpu_ms": 128.610063,
+   "main_cpu_ms": 121.593241,
+   "main_not_running_ms": 6.327986499999994,
+   "shared_objects": 152.0,
+   "delta_ms": 3.38
+  },
+  "adw.no-gvfs": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 126.083,
+   "min": 117.142,
+   "max": 129.191,
+   "cpu_ms": 125.9912975,
+   "main_cpu_ms": 119.748388,
+   "main_not_running_ms": 6.555759999999999,
+   "shared_objects": 150.0,
+   "delta_ms": 1.28
+  },
+  "adw.bind-now": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 127.283,
+   "min": 117.894,
+   "max": 130.676,
+   "cpu_ms": 126.76671099999999,
+   "main_cpu_ms": 120.494909,
+   "main_not_running_ms": 6.483161000000003,
+   "shared_objects": 152.0,
+   "delta_ms": 2.48
+  },
+  "adw.lean": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 55.158,
+   "min": 54.006,
+   "max": 56.59,
+   "cpu_ms": 57.614416000000006,
+   "main_cpu_ms": 51.231677000000005,
+   "main_not_running_ms": 4.027784499999999,
+   "shared_objects": 128.0,
+   "delta_ms": -69.64
+  },
+  "qtwidgets": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 44.525999999999996,
+   "min": 42.849,
+   "max": 45.633,
+   "cpu_ms": 47.230569,
+   "main_cpu_ms": 41.179647,
+   "main_not_running_ms": 3.426209499999999,
+   "shared_objects": 98.0
+  },
+  "qtwidgets.no-gtk3-theme": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 21.617,
+   "min": 21.352,
+   "max": 22.836,
+   "cpu_ms": 20.936680000000003,
+   "main_cpu_ms": 20.284588,
+   "main_not_running_ms": 1.3256329999999998,
+   "shared_objects": 57.0,
+   "delta_ms": -22.91
+  },
+  "qtwidgets.no-ibus": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 44.1575,
+   "min": 41.36,
+   "max": 45.037,
+   "cpu_ms": 47.14246,
+   "main_cpu_ms": 41.0559695,
+   "main_not_running_ms": 3.282912999999997,
+   "shared_objects": 96.0,
+   "delta_ms": -0.37
+  },
+  "qtwidgets.no-a11y": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 44.619,
+   "min": 43.054,
+   "max": 46.528,
+   "cpu_ms": 47.405364500000005,
+   "main_cpu_ms": 41.1830555,
+   "main_not_running_ms": 3.3285180000000025,
+   "shared_objects": 98.0,
+   "delta_ms": 0.09
+  },
+  "qtwidgets.bind-now": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 44.3615,
+   "min": 42.882,
+   "max": 46.407,
+   "cpu_ms": 47.3285745,
+   "main_cpu_ms": 41.260089,
+   "main_not_running_ms": 3.1295430000000017,
+   "shared_objects": 98.0,
+   "delta_ms": -0.16
+  },
+  "qtwidgets.lean": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 21.515500000000003,
+   "min": 20.853,
+   "max": 22.434,
+   "cpu_ms": 20.827286,
+   "main_cpu_ms": 20.2989335,
+   "main_not_running_ms": 1.177780499999999,
+   "shared_objects": 55.0,
+   "delta_ms": -23.01
+  },
+  "qtquick": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 92.244,
+   "min": 87.586,
+   "max": 95.368,
+   "cpu_ms": 94.92408499999999,
+   "main_cpu_ms": 68.3093485,
+   "main_not_running_ms": 23.945820999999995,
+   "shared_objects": 156.0
+  },
+  "qtquick.no-gtk3-theme": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 69.969,
+   "min": 66.565,
+   "max": 71.75,
+   "cpu_ms": 69.438825,
+   "main_cpu_ms": 48.3789355,
+   "main_not_running_ms": 21.4750115,
+   "shared_objects": 124.0,
+   "delta_ms": -22.28
+  },
+  "qtquick.no-ibus": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 91.2005,
+   "min": 86.89,
+   "max": 94.756,
+   "cpu_ms": 94.322377,
+   "main_cpu_ms": 67.3506985,
+   "main_not_running_ms": 23.622224000000003,
+   "shared_objects": 154.0,
+   "delta_ms": -1.04
+  },
+  "qtquick.no-a11y": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 92.99000000000001,
+   "min": 87.643,
+   "max": 95.996,
+   "cpu_ms": 95.58966000000001,
+   "main_cpu_ms": 68.75647599999999,
+   "main_not_running_ms": 23.570861999999998,
+   "shared_objects": 156.0,
+   "delta_ms": 0.75
+  },
+  "qtquick.bind-now": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 92.9675,
+   "min": 87.715,
+   "max": 96.376,
+   "cpu_ms": 95.7877015,
+   "main_cpu_ms": 68.49745899999999,
+   "main_not_running_ms": 23.9509745,
+   "shared_objects": 156.0,
+   "delta_ms": 0.72
+  },
+  "qtquick.lean": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 38.7485,
+   "min": 36.895,
+   "max": 39.551,
+   "cpu_ms": 37.869002,
+   "main_cpu_ms": 26.6213445,
+   "main_not_running_ms": 12.0473355,
+   "shared_objects": 100.0,
+   "delta_ms": -53.5
+  },
+  "qtquick.software": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 61.2515,
+   "min": 58.397,
+   "max": 65.528,
+   "cpu_ms": 63.0374415,
+   "main_cpu_ms": 46.082586500000005,
+   "main_not_running_ms": 14.686669499999997,
+   "shared_objects": 137.0,
+   "delta_ms": -30.99
+  },
+  "qtquick.basic-style": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 89.9735,
+   "min": 86.073,
+   "max": 93.997,
+   "cpu_ms": 92.055441,
+   "main_cpu_ms": 67.47855050000001,
+   "main_not_running_ms": 22.1476895,
+   "shared_objects": 152.0,
+   "delta_ms": -2.27
+  },
+  "sumi": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 19.274,
+   "min": 18.913,
+   "max": 19.966,
+   "cpu_ms": 18.883614,
+   "main_cpu_ms": 18.131432,
+   "main_not_running_ms": 1.1484644999999993,
+   "shared_objects": 13.0
+  },
+  "sumi.bind-now": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 19.451,
+   "min": 18.812,
+   "max": 20.047,
+   "cpu_ms": 18.895093,
+   "main_cpu_ms": 18.106351,
+   "main_not_running_ms": 1.2024629999999998,
+   "shared_objects": 13.0,
+   "delta_ms": 0.18
+  },
+  "gnome-text-editor": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 166.603,
+   "min": 158.06,
+   "max": 175.643,
+   "cpu_ms": 167.258389,
+   "main_cpu_ms": 157.247775,
+   "main_not_running_ms": 9.30371000000001,
+   "shared_objects": 171.0
+  },
+  "gnome-text-editor.cairo": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 93.82499999999999,
+   "min": 88.945,
+   "max": 96.768,
+   "cpu_ms": 95.708972,
+   "main_cpu_ms": 86.2581275,
+   "main_not_running_ms": 7.174849999999999,
+   "shared_objects": 149.0,
+   "delta_ms": -72.78
+  },
+  "gnome-text-editor.gl": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 138.118,
+   "min": 129.197,
+   "max": 142.004,
+   "cpu_ms": 142.0327005,
+   "main_cpu_ms": 117.0387075,
+   "main_not_running_ms": 20.7954235,
+   "shared_objects": 165.0,
+   "delta_ms": -28.49
+  },
+  "gnome-text-editor.radv-only": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 111.98150000000001,
+   "min": 108.225,
+   "max": 115.919,
+   "cpu_ms": 113.981291,
+   "main_cpu_ms": 104.1639025,
+   "main_not_running_ms": 7.903952999999994,
+   "shared_objects": 163.0,
+   "delta_ms": -54.62
+  },
+  "gnome-text-editor.no-a11y": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 167.3425,
+   "min": 157.08,
+   "max": 170.26,
+   "cpu_ms": 168.32608349999998,
+   "main_cpu_ms": 158.560013,
+   "main_not_running_ms": 8.972198500000005,
+   "shared_objects": 171.0,
+   "delta_ms": 0.74
+  },
+  "gnome-text-editor.no-portals": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 167.9885,
+   "min": 157.716,
+   "max": 173.377,
+   "cpu_ms": 169.58013849999998,
+   "main_cpu_ms": 158.5557455,
+   "main_not_running_ms": 9.595580499999997,
+   "shared_objects": 171.0,
+   "delta_ms": 1.39
+  },
+  "gnome-text-editor.no-gvfs": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 167.63549999999998,
+   "min": 157.684,
+   "max": 173.385,
+   "cpu_ms": 166.69478750000002,
+   "main_cpu_ms": 157.5677945,
+   "main_not_running_ms": 8.389665000000008,
+   "shared_objects": 169.0,
+   "delta_ms": 1.03
+  },
+  "gnome-text-editor.bind-now": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 165.074,
+   "min": 159.285,
+   "max": 172.55,
+   "cpu_ms": 165.5096595,
+   "main_cpu_ms": 155.684412,
+   "main_not_running_ms": 9.455206999999987,
+   "shared_objects": 171.0,
+   "delta_ms": -1.53
+  },
+  "gnome-text-editor.lean": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 89.90350000000001,
+   "min": 87.357,
+   "max": 93.695,
+   "cpu_ms": 93.0144995,
+   "main_cpu_ms": 83.1184035,
+   "main_not_running_ms": 6.946310000000004,
+   "shared_objects": 147.0,
+   "delta_ms": -76.7
+  },
+  "kwrite": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 111.068,
+   "min": 103.644,
+   "max": 113.884,
+   "cpu_ms": 107.50079099999999,
+   "main_cpu_ms": 100.532114,
+   "main_not_running_ms": 10.084389999999999,
+   "shared_objects": 194.0
+  },
+  "kwrite.no-gtk3-theme": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 81.8955,
+   "min": 79.609,
+   "max": 97.464,
+   "cpu_ms": 74.90573499999999,
+   "main_cpu_ms": 73.5414725,
+   "main_not_running_ms": 8.5312615,
+   "shared_objects": 160.0,
+   "delta_ms": -29.17
+  },
+  "kwrite.no-ibus": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 107.73849999999999,
+   "min": 102.034,
+   "max": 114.895,
+   "cpu_ms": 105.130779,
+   "main_cpu_ms": 98.2066265,
+   "main_not_running_ms": 10.058612499999995,
+   "shared_objects": 192.0,
+   "delta_ms": -3.33
+  },
+  "kwrite.no-a11y": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 107.035,
+   "min": 101.168,
+   "max": 110.389,
+   "cpu_ms": 105.9717265,
+   "main_cpu_ms": 99.11721499999999,
+   "main_not_running_ms": 7.957250999999999,
+   "shared_objects": 194.0,
+   "delta_ms": -4.03
+  },
+  "kwrite.bind-now": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 106.311,
+   "min": 102.069,
+   "max": 125.547,
+   "cpu_ms": 103.0767075,
+   "main_cpu_ms": 96.198887,
+   "main_not_running_ms": 9.445094500000003,
+   "shared_objects": 194.0,
+   "delta_ms": -4.76
+  },
+  "kwrite.lean": {
+   "n": 10,
+   "failed": 0,
+   "first_frame_ms": 79.956,
+   "min": 75.607,
+   "max": 91.355,
+   "cpu_ms": 73.258717,
+   "main_cpu_ms": 71.81787,
+   "main_not_running_ms": 6.994623500000003,
+   "shared_objects": 158.0,
+   "delta_ms": -31.11
+  }
+ }
+}
