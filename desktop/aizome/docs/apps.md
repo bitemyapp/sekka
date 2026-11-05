@@ -127,7 +127,9 @@ palette. Search filters the sidebar and highlights options.
   screen off, show the clock.
 - **Users & Groups**: the current user's name, picture, password; other
   accounts (AccountsService), admin or standard, add and remove, automatic
-  login.
+  login; and where Chanoma is installed, the TV account (set up, how it signs
+  in: nothing, a PIN or a password; forget its Chanoma's PIN; remove), through
+  `aizome-tv-account` as root (`docs/chanoma.md`, "The TV account").
 - **Keyboard**: layouts (searchable list from `aizome-sys`'s xkb data, with
   variants), switching shortcut, key repeat delay and rate, modifier keys
   (swap Alt/Super, Control/Super or Control/Alt on both sides or just one),

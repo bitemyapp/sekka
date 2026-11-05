@@ -73,8 +73,9 @@ floating panel along the foot of the screen, its keys square faces.
 
 ### Controllers
 
-Chanoma reads controllers' event devices itself, on a thread of its own,
-rather than through a library, because it **grabs** them (`EVIOCGRAB`):
+Chanoma reads controllers' event devices itself (`crates/aizome-gamepad`,
+which the login screen shares, listening without grabbing), on a thread of
+its own, rather than through a library, because it **grabs** them (`EVIOCGRAB`):
 while a service's page is open, Chrome's Gamepad API would otherwise also
 act on presses Chanoma turns into keys. Devices are found with inotify on
 `/dev/input`, retried when logind's ACL arrives (`IN_ATTRIB`), and told
@@ -85,18 +86,25 @@ keeps its player number.
 Buttons are named by position (`South` is the bottom face button). The
 mapping is, in order: one set up in Chanoma's settings for that model
 (`controllers.json`); SDL's community database (the package points
-`CHANOMA_GAMECONTROLLERDB` at nixpkgs' `sdl_gamecontrollerdb`), numbered
+`AIZOME_GAMECONTROLLERDB` at nixpkgs' `sdl_gamecontrollerdb`), numbered
 as SDL numbers a device's buttons, axes and hats; else the kernel's
 gamepad layout, with Microsoft's and `xpad`'s left and top buttons swapped
 back (they report X, the left one, as `BTN_X`, the same code as
 `BTN_NORTH`). Microsoft's Bluetooth controllers, whose right stick is
-Z/RZ and triggers brake and gas, map right without the database.
+Z/RZ and triggers brake and gas, map right without the database. A pad
+the database doesn't know that reports joystick codes (`BTN_TRIGGER` and
+on, as cheap USB pads do) gets its buttons in order, as SDL guesses (yes,
+no, left, top, the shoulders, the triggers, Select, Start); one without
+a direction pad of its own has its X and Y axes as the arrows too, which
+is where such pads put theirs.
 
 Which button says yes follows the controller (Nintendo's right-hand A,
 others' bottom button) unless a grown-up sets it. Menus get a direction
 from the arrows or the left stick (with hysteresis), repeating after
 420 ms every 130 ms, quickening to 75 ms. Select and Start held for a
-second is Home on controllers without one.
+second is Home on controllers without one. The pointer hides while a
+controller is in hand (until the mouse moves), as on a console, and the TV
+account's Chanoma starts without one.
 
 Games read the controllers' state from shared atomics the thread keeps
 current, not through messages.
@@ -375,28 +383,40 @@ Chanoma whenever what shows changes.
 ### Rules
 
 The PIN is four to eight presses of the controller's buttons, as a
-console's passcode is (`ui/pinpad.rs`). Each press is the same dot in
-its cell, and nothing in the legend lights, so someone watching sees that
-a button went but not which. The legend is the buttons a PIN is made of:
-the four arrows, the shoulders, and the top and left face buttons. They're
-named by place, as every button is here, so a PIN made on one controller
-is the same presses on any other, whoever made it; the legend draws each
-in the prints of the controller pressed last, with a mark under the face
-buttons saying which place they are (Xbox's Y is Nintendo's X). Left out:
-the yes and no buttons, which Nintendo's controllers swap (they're Done
-and Delete), the triggers, which some pads lack and others press only
-part way, and the sticks. The arrows count as presses of the direction
-pad only, once each, never the stick or a press held. Delete (the no
-button, Backspace, or the pad's Delete clicked) takes the last press back,
-and with none, puts the pad away. Each of the legend's buttons is
-numbered, 1 to 8, in its corner: a PIN is kept as those digits (1 is
-Up), so a PIN made of digits 1 to 8 before PINs were buttons is still
-the same, pressed by the numbers; one with a 9 or a 0 needs
-`--reset-pin`. The legend never changes as presses go in, so the numbers
-give nothing away. A keyboard presses them with those digits, or with the
-arrows, Page Up and Page Down, Tab and Space, the keys Chanoma's hints
-show for those buttons; the legend shows those keys when a keyboard was
-last used.
+console's passcode is (`crates/aizome-sofa/src/pinpad.rs`, shared with the
+login screen, which takes the TV account's PIN on it). Each press is the
+same dot in its cell, and nothing in the legend lights, so someone
+watching sees that a button went but not which. The legend is ten
+buttons, one for each digit, in the same place on every controller: the
+arrows are 1 to 4, the shoulders 5 and 6, the top and left face buttons 7
+and 8, and the triggers 9 and 0, so the legend reads 1 to 9 and then 0, as
+a keyboard's row of numbers does. They're named by place, as every button
+is here, so a PIN made on one controller is the same presses on any other,
+whoever made it; the legend draws each in the prints of the controller
+pressed last, with a mark under the face buttons saying which place they
+are (Xbox's Y is Nintendo's X). Left out: the yes and no buttons, which
+Nintendo's controllers swap (they're Done and Delete), and the sticks. The
+arrows count as presses of the direction pad only, once each, never the
+stick or a press held. A trigger counts once pressed past half way. Delete
+(the no button, Backspace, or the pad's Delete clicked) takes the last
+press back, and with none, puts the pad away. Each of the legend's
+buttons has its digit in its corner: a PIN is kept as those digits (1 is
+Up), so PINs made before the triggers joined are the same presses. The
+legend never changes as presses go in, so the numbers give nothing away.
+A keyboard presses them with the digits, or with the arrows, Page Up and
+Page Down, Tab and Space, the keys Chanoma's hints show for those
+buttons; the legend shows those keys when a keyboard was last used.
+
+A controller without a digit's own button presses it as a chord, Select
+being shift (Start on a pad without Select): Select with a shoulder is the
+trigger behind it (a Super pad's 9 and 0), Select with an arrow is the
+digit four on (5 to 8 on a NES pad), and the face buttons stand in where
+nothing else is left (a NES pad's 9 and 0). Only a missing button gets a
+chord, chosen so that no two digits share one, and the legend draws the
+chord in its digit's place ("− + L" on an 8BitDo SN30). Which buttons a
+controller has comes from its layout (`PadInfo::buttons`). Every mix of
+missing shoulders, top buttons and triggers is checked to press each
+digit one way and no two alike.
 
 It's kept as PBKDF2-HMAC-SHA-256 with a random salt and 150,000
 rounds (about a tenth of a second, checked off the interface thread).
@@ -412,9 +432,12 @@ real one, and checked through PAM: `aizome_sys::pam`, the lock screen's
 service `aizome`, moved from the shell to `aizome-sys` (its `pam`
 feature) to be shared. Right, it's grown-up mode and a new PIN to
 choose; wrong, it counts with wrong PINs. It's that account because PAM
-without privileges checks no other's password. Every Sekka account is a
-full one so far; once kids have accounts of their own, theirs mustn't
-reset the PIN this way, and `app/reset.rs` is where to say so.
+without privileges checks no other's password. The TV account's Chanoma
+(`--tv`) doesn't: its password may be nothing, or the PIN a kid logs in
+with, so there *Forgot it?* says a grown-up can have Chanoma forget the PIN
+from their own account (Settings, Users & Groups, the TV account's *Forget
+Chanoma's PIN*, which runs `aizome-chanoma --reset-pin` as the TV account
+through the TV account's helper).
 
 Time counts while a game, a service or a film is open in kids' mode,
 into `usage.json` (written every 30 seconds while it counts). The gate
@@ -662,6 +685,40 @@ controller: X takes a letter back, Y types a space); Start or Back puts
 the keyboard away to go through them, up from their first line brings
 it back, and Back from them goes back where search was opened.
 
+### The TV account
+
+A grown-up can give the television an account of its own (Settings,
+Users & Groups, *TV account*): `tv`, "TV", signing in with nothing, a PIN
+or a password, as they choose. At the login screen it's the last tile, a
+television; with nothing to sign in with, choosing it shows Start (it
+never starts by itself, or logging out would start it again), with a PIN
+the PIN pad takes it from a controller (the same buttons as Chanoma's
+grown-ups' PIN, 1 to 9 and 0), and with a password the login screen's
+keyboard does. Its session is Chanoma's, whatever's picked: the login
+screen doesn't offer another, Aizome's session hands over to it, and
+logging in by itself (Settings, *Log in automatically as*) starts it too.
+
+The session (`data/aizome-chanoma-session`) is the compositor in kiosk
+mode (`aizome --kiosk -- aizome-chanoma --tv`): no shell, none of the
+desktop's shortcuts, nothing of `aizome-session.target`, the system's
+environment file (Chanoma's cores, BIOS, browser and databases), and the
+compositor stops when Chanoma does, ending the session. What it says goes
+to the journal as `chanoma-session`. Chanoma with `--tv` is Chanoma as
+anywhere else (kids' mode from the start; a first start asks a grown-up
+for the PIN and the setup; the PIN unlocks grown-up mode), but leaving is
+*Log Out*, which kids may choose too (beyond is only the login screen),
+and *Forgot it?* doesn't sign in with the account's own password.
+
+The account is made and changed by `aizome-tv-account`, Settings' helper,
+run as root through pkexec under the polkit action
+`org.aizome.Settei.tv-account` (an administrator's password): `useradd`
+with nologin for a shell (so a console, `su` or SSH won't let it in;
+greetd starts its session itself), the password set as a hash with
+`usermod` or emptied for none (greetd's PAM service is `login`'s, which
+has `nullok`), and its record `/var/lib/aizome/tv-account.toml` (the
+account, how it signs in, a PIN's length; nothing secret), which the
+login screen, Aizome's session and Settings read (`aizome_sys::tv`).
+
 ## Checking it
 
 ```sh
@@ -688,18 +745,21 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   another language), and the sites a page may be on (subdomains; not
   look-alikes, a user before the host, the rest of Google, or what isn't
   the web), which services get Chanoma's keyboard, the PIN's buttons
-  (none of yes, no, the triggers or Start) and where clicks on its pad
-  land, and the keyboard's rows, moving between its keys, Shift and its
+  (ten, the triggers 9 and 0; none of yes, no, Start or Select), the chords
+  of every controller short of them, and where clicks on its pad land, and the keyboard's rows, moving between its keys, Shift and its
   symbols. What plays, where a film carries on and the subtitles' cues
   are `aizome-media`'s, tested there; serving the media controls is
   `aizome-mpris`'s, tested there against a private `dbus-daemon` (what a
   player says, and which asks reach it).
 - **Headless** (`tests/chanoma.rs`, also in the package's check): the
   first setup, its PIN pressed on the controller (a slip taken back with
-  B; the stick, a trigger, Start and Select pressing nothing) and again on
-  the keyboard; Home for kids and grown-ups (the PIN typed by its numbers on
-  a keyboard, 9 and 0 typing nothing); a PIN made on an Xbox
-  controller pressed on a Nintendo one, its B taking a press back; wrong
+  B; the stick, Start and Select pressing nothing; the right trigger a 0)
+  and again on the keyboard; Home for kids and grown-ups (the PIN typed by
+  its numbers on a keyboard, 9 and 0 among them); a PIN made on an Xbox
+  controller pressed on a Nintendo one, its B taking a press back; a pad
+  without triggers pressing 9 and 0 with Select and a shoulder, the legend
+  saying so; the TV account's Chanoma (kids may *Log Out*, which ends it,
+  and *Forgot it?* sends a grown-up to their own account); wrong
   PINs and their wait, surviving a restart; a game played through a
   libretro core written in the test (frames reaching the window's video
   sink enlarged, the controller reaching the core, pausing under the Home

@@ -94,10 +94,18 @@ password); when time runs out the game is saved and a friendly screen
 says goodnight. It wears the desktop's own look, made large enough to
 read from the sofa, so it's as much at home with the grown-ups. A
 keyboard and mouse work too, with a way back to Home from anywhere, a
-streaming page included. So far it has been tested in a virtual machine
-with a virtual controller and with real emulator cores, not yet with a
-physical controller, Netflix-style services or a television, and consoles
-that need 3D hardware (the Nintendo 64 and later) aren't supported. See
+streaming page included. A grown-up can give the television an account of
+its own in Settings, under Users & Groups: it opens straight into Chanoma
+in kids' mode and can't open anything else, it signs in with nothing, a
+PIN or a password, as you choose, and leaving Chanoma logs out. The login
+screen takes a game controller too, so the whole evening needs no
+keyboard: nothing changes there until a button is pressed, then the
+controller chooses who logs in and types a password on an on-screen
+keyboard, or presses the TV's PIN on its buttons. So far all of it has
+been tested in a virtual machine with a virtual controller and with real
+emulator cores, not yet with a physical controller, Netflix-style
+services or a television, and consoles that need 3D hardware (the
+Nintendo 64 and later) aren't supported. See
 [docs/chanoma.md](desktop/aizome/docs/chanoma.md).
 
 **Super + Return** opens Hotaru 蛍, Aizome's own terminal, and programs that

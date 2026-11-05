@@ -23,6 +23,21 @@ if [ "$1" != --no-login-shell ] && [ -n "$SHELL" ] && grep -qx "$SHELL" /etc/she
 fi
 [ "$1" = --no-login-shell ] && shift
 
+# The TV account (Settings, Users & Groups) has Chanoma's session, whatever
+# started this one: the desktop isn't its to reach.
+tv_record=/var/lib/aizome/tv-account.toml
+if [ -r "$tv_record" ]; then
+  tv_user=
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      'user = "'*'"') tv_user=${line#user = \"}; tv_user=${tv_user%\"} ;;
+    esac
+  done < "$tv_record"
+  if [ -n "$tv_user" ] && [ "$tv_user" = "$(id -un)" ]; then
+    exec aizome-chanoma-session
+  fi
+fi
+
 vars="XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE"
 user_environment="${XDG_CONFIG_HOME:-$HOME/.config}/aizome/environment"
 for file in /etc/xdg/aizome/environment "$user_environment"; do

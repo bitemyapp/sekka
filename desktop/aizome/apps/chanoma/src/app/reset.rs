@@ -5,9 +5,9 @@
 //! but not the account's password.
 //!
 //! It's the account Chanoma runs as because PAM, run without privileges,
-//! checks only that one's password. Every Sekka account is a full one
-//! today; once there are kids' accounts, one of those mustn't be able to
-//! reset the PIN this way, and this is where to say so.
+//! checks only that one's password. The TV account (`--tv`) isn't one to
+//! trust so: its password may be nothing, or the PIN a kid logs in with.
+//! There a grown-up forgets the PIN from their own account, in Settings.
 //!
 //! The password is typed on Chanoma's keyboard (its box shows dots) or a
 //! real one. Wrong ones count with wrong PINs: three free, then waits.
@@ -35,6 +35,23 @@ pub struct Reset {
 impl Chanoma {
     /// *Forgot it?* on the PIN pad.
     pub fn forgot_pin(&mut self, cx: &mut Cx<Msg>) {
+        // The TV account's own password may be no password, or the PIN a
+        // kid logs in with: a grown-up forgets the PIN from their own
+        // account instead.
+        if self.config.tv {
+            log::info!("chanoma: the PIN forgotten, on the TV account");
+            self.modal = None;
+            self.go(
+                Screen::Problem(
+                    "Forgot the PIN?".into(),
+                    "A grown-up can have Chanoma forget it from their own account: in Settings, under Users & \
+                     Groups, the TV account's Forget Chanoma's PIN. Then Chanoma asks for a new one."
+                        .into(),
+                ),
+                cx,
+            );
+            return;
+        }
         let (login, name) = self.config.account.clone();
         log::info!("chanoma: the PIN forgotten; signing in as {login}");
         self.modal = None;
@@ -82,6 +99,7 @@ impl Chanoma {
             family,
             ok: self.ok_button(family),
             back: self.back_button(family),
+            fixed_caret: true,
             field: Some(Field {
                 label: format!("{}'s password", r.login),
                 text: String::new(),

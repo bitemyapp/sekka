@@ -203,7 +203,9 @@ version = "0.1.0"
 dependencies = [
  "aizome-config",
  "aizome-face",
+ "aizome-gamepad",
  "aizome-kit",
+ "aizome-sofa",
  "aizome-sys",
  "aizome-theme",
  "env_logger",
@@ -584,6 +586,7 @@ dependencies = [
  "roxmltree 0.21.1",
  "serde",
  "sha-crypt",
+ "toml 0.9.12+spec-1.1.0",
  "zbus",
 ]
 

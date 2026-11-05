@@ -1749,12 +1749,30 @@ app can share: a second look lists only folders whose modified time
 changed. Its design and measurements are in [the files index's
 notes](desktop/aizome/docs/files-index.md).
 
+What a controller needs is shared with the login screen as two crates:
+`aizome-gamepad` (controllers from evdev, by position, through SDL's
+database) and `aizome-sofa` (the sofa-sized look, the on-screen keyboard
+and the PIN pad, whose ten digits a controller short of buttons presses as
+chords with Select). The TV account (Settings, Users & Groups;
+`aizome_sys::tv`) is a real account with nologin for a shell, made and
+changed by `aizome-tv-account`, a root helper Settings runs through
+pkexec under its own polkit action (installed in the package's `libexec`,
+as Nisshi's is); its record, nothing secret, is
+`/var/lib/aizome/tv-account.toml`. The login screen forces its session,
+`aizome-chanoma-session` (the compositor's new `--kiosk` mode with
+`aizome-chanoma --tv` alone, ending with it), and `aizome-session` hands
+over to it too.
+
 ```sh
 cargo test -p aizome-index
+cargo test -p aizome-gamepad -p aizome-sofa
 cargo test -p aizome-chanoma
+cargo test -p aizome-greeter                 # the controller at the login screen, the TV account
+cargo test -p aizome-settei --test window    # setting the TV account up
 CHANOMA_TEST_CORES=<folder of *_libretro.so> \
   cargo test -p aizome-chanoma --test cores -- --ignored --nocapture
 nix build .#aizome-checks.chanoma -L
+nix build .#aizome-checks.tv -L              # login screen to Chanoma and back, a controller alone
 ```
 
 The first (also run in the package's check phase) covers the rules,
@@ -1764,7 +1782,10 @@ Boy game with gambatte, SameBoy and mGBA. The VM check drives the packaged
 app in an Aizome session with a uinput controller alone: found and held,
 a game opened, played (its picture read from the compositor), paused and
 kept; a page in Chromium clicked, keyed and pointed at, and the overlay
-menu over it. None of these is a physical controller, a DRM service or a
+menu over it. The TV check drives the login screen with the same kind of
+controller: Alice's password on the on-screen keyboard, the TV account
+made by its helper and its PIN pressed on the PIN pad, Chanoma set up and
+left in its kiosk session, and the login screen back. None of these is a physical controller, a DRM service or a
 television; [Chanoma's notes](desktop/aizome/docs/chanoma.md) record what
 has and hasn't been checked.
 

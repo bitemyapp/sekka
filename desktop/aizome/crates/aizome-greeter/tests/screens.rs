@@ -58,7 +58,7 @@ fn sessions() -> Vec<Session> {
 }
 
 fn user(name: &str, real: &str, uid: u32) -> User {
-    User { name: name.into(), real_name: real.into(), uid, icon: None }
+    User { name: name.into(), real_name: real.into(), uid, icon: None, tv: None }
 }
 
 fn people() -> Vec<User> {
@@ -231,4 +231,201 @@ fn every_display_shows_the_time_and_only_one_the_login() {
     let texts = h.texts(other);
     assert!(!texts.iter().any(|t| t == "Chris Allen"), "{texts:?}");
     assert!(texts.iter().any(|t| t.contains(':')), "the time: {texts:?}");
+}
+
+// Game controllers.
+
+use aizome_gamepad::{Button, Dir, Family, PadEvent, PadInfo};
+use aizome_greeter::pads::Spot;
+use aizome_greeter::sofa::Target;
+use aizome_sys::tv::{Auth, TvAccount};
+
+fn controller(id: u32, family: Family) -> PadInfo {
+    PadInfo {
+        id,
+        slot: id as usize - 1,
+        name: "Xbox Wireless Controller".into(),
+        family,
+        bluetooth: true,
+        guid: String::new(),
+        battery: Some((80, false)),
+        source: aizome_gamepad::mapping::Source::Database,
+        rumble: true,
+        buttons: Button::all_bits(),
+    }
+}
+
+fn press(h: &mut Harness<Greeter>, b: Button) {
+    for pressed in [true, false] {
+        h.send(Msg::Pad(PadEvent::Button { id: 1, slot: 0, button: b, pressed }));
+    }
+}
+
+fn push(h: &mut Harness<Greeter>, dir: Dir) {
+    h.send(Msg::Pad(PadEvent::Nav { id: 1, slot: 0, dir, repeat: false }));
+}
+
+fn tv_user(auth: Auth, pin_length: Option<u8>) -> User {
+    User {
+        name: "tv".into(),
+        real_name: "TV".into(),
+        uid: 1003,
+        icon: None,
+        tv: Some(TvAccount { user: "tv".into(), auth, pin_length }),
+    }
+}
+
+#[test]
+fn a_controller_changes_nothing_until_pressed_then_logs_in_by_its_keyboard() {
+    let mut h = greeter(State::default(), people());
+    let w = main_window(&h);
+    let before = h.texts(w);
+    // Switched on: nothing shows, nothing moves.
+    h.send(Msg::Pad(PadEvent::Connected(controller(1, Family::Xbox))));
+    assert!(!h.program().couch.active && h.program().sofa().is_none());
+    assert_eq!(h.texts(w), before);
+    // The first press shows what it does, and does nothing else: the
+    // arrow's press, its direction, its release, as the thread sends them.
+    h.send(Msg::Pad(PadEvent::Button { id: 1, slot: 0, button: Button::Right, pressed: true }));
+    push(&mut h, Dir::Right);
+    h.send(Msg::Pad(PadEvent::Button { id: 1, slot: 0, button: Button::Right, pressed: false }));
+    assert!(h.program().couch.active);
+    assert_eq!(h.program().selected, 0, "the first touch moved nothing");
+    assert_eq!(h.program().couch.spot, Spot::People);
+    h.save_png(w, shots().join("greeter-controller-people.png"), 2.0);
+    // Then the arrows choose and yes picks: the keyboard comes up.
+    push(&mut h, Dir::Right);
+    assert_eq!(h.program().selected, 1);
+    press(&mut h, Button::South);
+    assert_eq!(h.program().stage, Stage::Password);
+    asks_password(&mut h);
+    assert!(h.program().couch.keys.is_some(), "the keyboard came up by itself");
+    // q (where it starts), w, a slip taken back with X, then Start.
+    press(&mut h, Button::South);
+    push(&mut h, Dir::Right);
+    press(&mut h, Button::South);
+    press(&mut h, Button::South);
+    press(&mut h, Button::West);
+    assert_eq!(h.program().password, "qw");
+    let scene = h.program().sofa().expect("the keyboard");
+    let field = scene.keys.as_ref().and_then(|k| k.field.clone()).expect("its box");
+    assert!(field.secret && field.text.is_empty() && field.length == 2, "dots, not the password: {field:?}");
+    h.save_png(w, shots().join("greeter-controller-keyboard.png"), 2.0);
+    press(&mut h, Button::Start);
+    assert!(h.program().password.is_empty(), "sent");
+    assert_eq!(h.program().login.step, Step::Waiting);
+    // A key typed on a real keyboard: the controller's things go.
+    asks_password(&mut h);
+    h.type_text(w, "x");
+    assert!(!h.program().couch.active && h.program().couch.keys.is_none());
+    assert_eq!(h.program().password, "x");
+}
+
+#[test]
+fn the_pointer_gives_the_screen_back_and_the_corner_button_explains() {
+    let mut h = greeter(State::default(), people());
+    let w = main_window(&h);
+    h.send(Msg::Pad(PadEvent::Connected(controller(1, Family::PlayStation))));
+    press(&mut h, Button::South);
+    assert!(h.program().couch.active);
+    h.send(Msg::Pointer);
+    assert!(!h.program().couch.active && h.program().sofa().is_none());
+    // The controller button at the top right, clicked: what controllers
+    // do here, in the buttons of the one connected.
+    assert!(h.texts(w).iter().any(|t| t == "Game controllers"), "{:?}", h.texts(w));
+    h.send(Msg::Help);
+    let help = h.program().sofa().and_then(|s| s.help).expect("the panel");
+    assert_eq!(help.family, Family::PlayStation);
+    assert_eq!(help.pads.len(), 1);
+    h.save_png(w, shots().join("greeter-controller-help.png"), 2.0);
+    h.send(Msg::Sofa(Target::Close));
+    assert!(h.program().sofa().is_none());
+    // From the controller: up to the top's buttons, yes on the first.
+    press(&mut h, Button::South);
+    push(&mut h, Dir::Up);
+    assert_eq!(h.program().couch.spot, Spot::Controllers);
+    press(&mut h, Button::South);
+    assert!(h.program().couch.help);
+    press(&mut h, Button::East);
+    assert!(!h.program().couch.help);
+    // Home opens it anywhere; and the power menu is a controller's too.
+    press(&mut h, Button::Guide);
+    assert!(h.program().couch.help);
+    press(&mut h, Button::Guide);
+    push(&mut h, Dir::Right);
+    assert_eq!(h.program().couch.spot, Spot::Power);
+    press(&mut h, Button::South);
+    assert_eq!(h.program().couch.power, Some(0));
+    push(&mut h, Dir::Down);
+    assert_eq!(h.program().couch.power, Some(1));
+    h.save_png(w, shots().join("greeter-controller-power.png"), 2.0);
+    press(&mut h, Button::East);
+    assert_eq!(h.program().couch.power, None);
+}
+
+#[test]
+fn the_tv_account_with_nothing_to_sign_in_with_starts_when_asked() {
+    let mut users = people();
+    users.push(tv_user(Auth::None, None));
+    let mut state = State::default();
+    state.logged_in("tv", "chanoma");
+    let mut h = greeter(state, users);
+    let w = main_window(&h);
+    // Back from the TV: it waits for Start, rather than starting again.
+    assert_eq!(h.program().stage, Stage::Password);
+    assert!(h.program().tv_start());
+    assert_eq!(h.program().login.user, None);
+    let texts = h.texts(w);
+    assert!(texts.iter().any(|t| t == "Start") && texts.iter().any(|t| t == "Opens Chanoma"), "{texts:?}");
+    assert!(!texts.iter().any(|t| t.starts_with("Session:")), "no session to choose");
+    assert_eq!(h.program().session().map(|s| s.exec.clone()), Some(Config::default().tv_session));
+    h.save_png(w, shots().join("greeter-tv.png"), 2.0);
+    h.send(Msg::Pad(PadEvent::Connected(controller(1, Family::Nintendo))));
+    press(&mut h, Button::East);
+    assert_eq!(h.program().login.user, None, "the first press only wakes it");
+    // A, the right-hand button on Nintendo's: Start.
+    press(&mut h, Button::East);
+    assert_eq!(h.program().login.user.as_deref(), Some("tv"));
+    // No question (PAM's nullok): Chanoma's session starts.
+    h.send(Msg::Greetd(Response::Success));
+    assert_eq!(h.program().login.step, Step::Starting);
+    h.send(Msg::Greetd(Response::Success));
+    assert_eq!(h.program().login.step, Step::Done);
+}
+
+#[test]
+fn the_tv_accounts_pin_is_pressed_on_the_pad_and_goes_when_its_long_enough() {
+    let mut users = people();
+    users.push(tv_user(Auth::Pin, Some(4)));
+    let mut h = greeter(State::default(), users);
+    let w = main_window(&h);
+    h.send(Msg::Pad(PadEvent::Connected(controller(1, Family::Xbox))));
+    press(&mut h, Button::South);
+    for _ in 0..3 {
+        push(&mut h, Dir::Right);
+    }
+    assert_eq!(h.program().selected, 3, "the TV, last in the row");
+    h.save_png(w, shots().join("greeter-controller-tv-tile.png"), 2.0);
+    press(&mut h, Button::South);
+    asks_password(&mut h);
+    assert!(h.program().couch.pin && h.program().couch.keys.is_none(), "the PIN pad, not the keyboard");
+    // 2 (Down), 4 (Right), 9 (LT), then 0 (RT): sent at the fourth.
+    for b in [Button::Down, Button::Right, Button::L2] {
+        press(&mut h, b);
+    }
+    assert_eq!(h.program().password, "249");
+    let pad = h.program().sofa().and_then(|s| s.pin).expect("the pad");
+    assert_eq!((pad.typed, pad.length), (3, Some(4)));
+    h.save_png(w, shots().join("greeter-controller-tv-pin.png"), 2.0);
+    press(&mut h, Button::R2);
+    assert!(h.program().password.is_empty(), "sent");
+    assert_eq!(h.program().login.step, Step::Waiting);
+    // Wrong: it says so on the pad, in a PIN's words.
+    h.send(Msg::Greetd(Response::Error {
+        error_type: ErrorType::AuthError,
+        description: "pam_authenticate: AUTH_ERR".into(),
+    }));
+    asks_password(&mut h);
+    let pad = h.program().sofa().and_then(|s| s.pin).expect("the pad");
+    assert_eq!(pad.error.as_deref(), Some("That PIN didn't work. Try again."));
 }

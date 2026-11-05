@@ -1,0 +1,35 @@
+#!/bin/sh
+# The TV account's session (aizome_sys::tv): Aizome's compositor in kiosk
+# mode with Chanoma alone, in kids' mode. No shell and none of the
+# desktop's shortcuts; leaving Chanoma ends the compositor, and with it
+# the session, and the login screen comes back. The login screen starts
+# this for the TV account whatever session was picked, and Aizome's own
+# session hands over to it.
+#
+# The environment is the system's (/etc/xdg/aizome/environment: Chanoma's
+# cores, BIOS images, browser and games' databases, the keyboard layout);
+# the account's own files aren't read.
+file=/etc/xdg/aizome/environment
+if [ -r "$file" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      '' | '#'*) continue ;;
+      *=*)
+        key=${line%%=*}
+        case "$key" in
+          '' | [0-9]* | *[!a-zA-Z0-9_]* | file | line | key | IFS) continue ;;
+        esac
+        export "$key=${line#*=}"
+        ;;
+    esac
+  done < "$file"
+fi
+export XDG_CURRENT_DESKTOP=Chanoma
+export XDG_SESSION_DESKTOP=chanoma
+export XDG_SESSION_TYPE=wayland
+# What the compositor and Chanoma say goes to the journal
+# (`journalctl -t chanoma-session`).
+if command -v systemd-cat >/dev/null; then
+  exec systemd-cat -t chanoma-session @aizome@ --backend udev --kiosk -- @chanoma@ --tv
+fi
+exec @aizome@ --backend udev --kiosk -- @chanoma@ --tv

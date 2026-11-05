@@ -298,6 +298,10 @@ pub struct Config {
     pub mounts: Vec<PathBuf>,
     /// Films on the desktop's media controls (the session bus).
     pub mpris: bool,
+    /// The TV account's Chanoma (`--tv`, `aizome_sys::tv`): its session is
+    /// Chanoma alone, so leaving logs out, kids may too, and a forgotten PIN
+    /// is forgotten from a grown-up's own account.
+    pub tv: bool,
 }
 
 impl Config {
@@ -336,6 +340,7 @@ impl Config {
                 ]
             },
             mpris: true,
+            tv: false,
         }
     }
 }
@@ -819,6 +824,8 @@ impl Chanoma {
             }
             PadEvent::Raw { id, input } => self.setup_raw(id, input, cx),
             PadEvent::Nav { id, dir, .. } => {
+                // The pointer goes while the controller's in hand, as on a console.
+                cx.hide_cursor_until_moved();
                 if self.setup.as_ref().is_some_and(|s| s.pad == id) {
                     return;
                 }
@@ -842,6 +849,9 @@ impl Chanoma {
                 }
             }
             PadEvent::Button { id, button, pressed, .. } => {
+                if pressed {
+                    cx.hide_cursor_until_moved();
+                }
                 if self.setup.as_ref().is_some_and(|s| s.pad == id) {
                     return;
                 }
@@ -1812,6 +1822,10 @@ impl Program for Chanoma {
     fn launched(&mut self, cx: &mut Cx<Msg>) {
         let spec = WindowSpec::new("Chanoma").size(1280.0, 720.0).min_size(640.0, 360.0).video();
         self.window = cx.open_window(spec);
+        // The TV account's television starts with no pointer in the middle of it.
+        if self.config.tv {
+            cx.hide_cursor_until_moved();
+        }
         if self.config.fullscreen {
             cx.set_fullscreen(self.window, true);
         }
