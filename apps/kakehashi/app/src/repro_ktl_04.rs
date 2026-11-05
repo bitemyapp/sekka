@@ -12,7 +12,6 @@
 //! and the helper are never run; no device is opened.
 
 use super::*;
-use kakehashi_core::write::Requested;
 
 const FAKE_PKEXEC: &str = "KAKEHASHI-REPRO-FAKE-PKEXEC";
 
@@ -117,9 +116,13 @@ fn repro_ktl_04_ok_writes_the_drive_the_dialog_named() {
     if started.is_some() {
         run_to_end(&mut k);
     }
-    let plan: Option<Requested> =
-        fs::read_to_string(out.join("plan.json")).ok().map(|text| serde_json::from_str(&text).unwrap());
-    let erased = plan.as_ref().map(|p| p.drive().clone()).or(started.clone());
+    // The drive the helper was asked to write, as the fake pkexec kept the
+    // plan: the window can't name the helper's own request type.
+    let plan: Option<Drive> = fs::read_to_string(out.join("plan.json")).ok().map(|text| {
+        let plan: serde_json::Value = serde_json::from_str(&text).unwrap();
+        serde_json::from_value(plan["drive"].clone()).unwrap()
+    });
+    let erased = plan.clone().or(started.clone());
 
     assert!(
         erased.as_ref().is_none_or(|d| d.same(&named)),
@@ -130,9 +133,9 @@ fn repro_ktl_04_ok_writes_the_drive_the_dialog_named() {
         named.serial_hint(),
         started.as_ref().map(Drive::label),
         started.as_ref().map(Drive::serial_hint),
-        plan.as_ref().map(|p| p.drive().label()),
-        plan.as_ref().map(|p| p.drive().serial_hint()),
-        plan.as_ref().is_some_and(|p| p.drive().same(&second)),
+        plan.as_ref().map(Drive::label),
+        plan.as_ref().map(Drive::serial_hint),
+        plan.as_ref().is_some_and(|p| p.same(&second)),
     );
     // Nothing was started, and the window says why.
     assert!(started.is_none() && plan.is_none(), "{started:?} {plan:?}");

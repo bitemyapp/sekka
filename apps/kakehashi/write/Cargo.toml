@@ -1,0 +1,32 @@
+[package]
+name = "kakehashi-write"
+description = "The write Kakehashi's helper makes, with administrator rights: the drive checked again, written and read back"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# Only the helper depends on this crate; the window must not.
+[dependencies]
+kakehashi-core.workspace = true
+aizome-typestate.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+sha2.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+]
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile = "3"

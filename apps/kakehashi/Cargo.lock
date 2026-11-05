@@ -3683,8 +3683,24 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "kakehashi-core",
+ "kakehashi-write",
  "libc",
  "serde_json",
+]
+
+[[package]]
+name = "kakehashi-write"
+version = "0.1.0"
+dependencies = [
+ "aizome-typestate",
+ "anyhow",
+ "kakehashi-core",
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "windows 0.62.2",
 ]
 
 [[package]]

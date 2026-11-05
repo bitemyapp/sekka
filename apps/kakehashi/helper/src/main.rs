@@ -8,7 +8,7 @@
 //! (as JSON; it reads only, and is how tests make a plan).
 //!
 //! It checks the plan's drive against the drive as it is now, writes,
-//! reads back and ejects (kakehashi_core::write), appending one JSON
+//! reads back and ejects (kakehashi_write), appending one JSON
 //! progress object per line to PROGRESS, which the window created. It
 //! stops between chunks once `PROGRESS.cancel` exists.
 
@@ -16,7 +16,8 @@
 
 use anyhow::{Context, Result, bail, ensure};
 use kakehashi_core::image::Cancelled;
-use kakehashi_core::write::{Progress, Requested, execute};
+use kakehashi_core::write::Progress;
+use kakehashi_write::{Requested, execute};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
