@@ -345,7 +345,7 @@ pub struct Shell {
     pub lock: crate::lock::LockState,
     pub authenticator: Arc<dyn crate::pam::Authenticator>,
     pub user_picture: Option<aizome_kit::Image>,
-    pub auth: Option<crate::auth::AuthState>,
+    pub(crate) auth: Option<crate::auth::dialog::Dialog>,
     polkit: Option<Arc<aizome_sys::polkit::PolkitAgent>>,
     pub tearoffs: Vec<crate::tearoff::TearOff>,
     pub(crate) tear_shown: HashMap<usize, crate::tearoff::Shown>,
@@ -2016,6 +2016,9 @@ impl Program for Shell {
             if s == Surface::DeskbarLanding {
                 self.deskbar_landing = None;
             }
+            if s == Surface::Auth {
+                self.auth_window_closed(window, cx);
+            }
         }
         true
     }
@@ -2118,6 +2121,7 @@ impl Shell {
         self.sync_panel(cx);
         self.sync_tearoffs(cx);
         self.sync_cards(cx);
+        self.sync_auth(cx);
         self.keep_palette_ahead(cx);
         self.sync_rename_keys(cx);
         if let Some(screen) = self.primary().cloned() {

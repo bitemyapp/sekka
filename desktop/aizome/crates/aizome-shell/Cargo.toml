@@ -15,7 +15,8 @@ aizome-config.workspace = true
 aizome-kit.workspace = true
 aizome-face.workspace = true
 aizome-sys.workspace = true
-# The lock screen's states and PAM's checks (src/lock/screen.rs).
+# The lock screen's states and PAM's checks (src/lock/screen.rs), and the
+# authentication dialog's states (src/auth/dialog.rs).
 aizome-typestate.workspace = true
 aizome-search.workspace = true
 aizome-shell-proto = { path = "../aizome-shell-proto" }
