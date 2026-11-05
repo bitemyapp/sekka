@@ -199,7 +199,7 @@ fn answering_ui(answers: Vec<&'static str>, events: Arc<Mutex<Vec<String>>>) -> 
                     }
                     Said::Info(text) => log.push(format!("info {text}")),
                     Said::Error(text) => log.push(format!("error {text}")),
-                    Said::Refused => log.push("refused".into()),
+                    Said::Refused { pam } => log.push(format!("refused {}", pam.unwrap_or_default())),
                     Said::Retrying { .. } => log.push("retrying".into()),
                     Said::Unavailable { .. } => log.push("unavailable".into()),
                 }
@@ -252,7 +252,7 @@ fn the_conversation_retries_after_a_wrong_password() {
             format!("info Authenticating {user}"),
             "prompt Password:  false".into(),
             "error Authentication failure".into(),
-            "refused".into(),
+            "refused Authentication failure".into(),
             "retrying".into(),
             format!("info Authenticating {user}"),
             "prompt Password:  false".into(),
@@ -760,5 +760,128 @@ fn an_answer_the_helper_cannot_read_as_one_line_is_refused() {
     current.lock().unwrap().clone().unwrap().cancel();
     assert!(!call.join().unwrap(), "nothing answered the second prompt");
     assert!(!script.parent().unwrap().join("got").exists());
+    std::fs::remove_dir_all(script.parent().unwrap()).unwrap();
+}
+
+/// Should 7 of the review: `authenticate` takes only an identity polkitd
+/// offered for that request. An identity from request A, handed to B, starts
+/// no helper for B (the helper runs PAM, as root, for the user it's given).
+#[test]
+fn an_identity_another_request_offered_is_refused() {
+    let bus = test_bus!();
+    if !has_passwd_entry() {
+        eprintln!("skipping: no passwd entry for this uid");
+        return;
+    }
+    let (polkitd, log) = serve_polkitd(&bus);
+    let script = script_in(
+        "#!/bin/sh\nread cookie\necho \"$cookie $1\" >> \"$(dirname \"$0\")/started\"\n\
+         echo \"PAM_PROMPT_ECHO_OFF Password: \"\nread password\necho FAILURE\n",
+    );
+    let begun: Arc<Mutex<Vec<AuthRequest>>> = Arc::default();
+    let agent_bus = bus.bus();
+    let agent_name = agent_bus.unique_name().unwrap();
+    let _agent = PolkitAgent::register_with(agent_bus, "7".into(), Helper::Program(script.clone()), {
+        let begun = begun.clone();
+        move |event| {
+            if let AuthEvent::Begin(r) = event {
+                begun.lock().unwrap().push(r);
+            }
+        }
+    })
+    .unwrap();
+    assert!(eventually(|| log.lock().unwrap().agents.len() == 1));
+    let a = ask(&polkitd, &agent_name, "cookie-A");
+    let b = ask(&polkitd, &agent_name, "cookie-B");
+    assert!(eventually(|| begun.lock().unwrap().len() == 2));
+    let (req_a, req_b) = {
+        let begun = begun.lock().unwrap();
+        let (first, second) = (begun[0].clone(), begun[1].clone());
+        if first.cookie == "cookie-A" { (first, second) } else { (second, first) }
+    };
+    let from_a = req_a.identities()[0].clone();
+    assert_eq!(from_a.request(), req_a.id());
+    req_b.authenticate(&from_a);
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    let started = script.parent().unwrap().join("started");
+    assert!(!started.exists(), "B started a helper for A's identity");
+    // B's own identity starts its helper.
+    req_b.authenticate(&req_b.identities()[0]);
+    assert!(eventually(|| std::fs::read_to_string(&started).is_ok_and(|s| s.starts_with("cookie-B "))));
+    req_a.cancel();
+    req_b.cancel();
+    assert!(!a.join().unwrap() && !b.join().unwrap());
+    std::fs::remove_dir_all(script.parent().unwrap()).unwrap();
+}
+
+/// Should 8 of the review: the end states carry what PAM's modules last
+/// said, so a lockout reads as a lockout.
+#[test]
+fn a_refusal_carries_what_pam_said() {
+    let bus = test_bus!();
+    if !has_passwd_entry() {
+        eprintln!("skipping: no passwd entry for this uid");
+        return;
+    }
+    let (polkitd, log) = serve_polkitd(&bus);
+    // Refused after an answer with PAM's reason; then, with no answer, a
+    // reason and an end.
+    let script = script_in(
+        "#!/bin/sh\nread cookie\nn=$(cat \"$(dirname \"$0\")/n\" 2>/dev/null || echo 0)\n\
+         echo $((n + 1)) > \"$(dirname \"$0\")/n\"\n\
+         if [ \"$n\" = 0 ]; then echo \"PAM_PROMPT_ECHO_OFF Password: \"; read password\n\
+         echo \"PAM_ERROR_MSG The account is locked due to 3 failed logins.\"; echo FAILURE\n\
+         else echo \"PAM_ERROR_MSG Your account has expired.\"; fi\n",
+    );
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let agent_bus = bus.bus();
+    let agent_name = agent_bus.unique_name().unwrap();
+    let _agent = PolkitAgent::register_with(agent_bus, "7".into(), Helper::Program(script.clone()), {
+        let events = events.clone();
+        let current = Arc::new(Mutex::new(None::<AuthRequest>));
+        move |event| match event {
+            AuthEvent::Begin(r) => {
+                let id = r.default_identity().cloned().unwrap();
+                *current.lock().unwrap() = Some(r.clone());
+                std::thread::spawn(move || r.authenticate(&id));
+            }
+            AuthEvent::Heard(heard) => {
+                let Some(r) = current.lock().unwrap().clone() else { return };
+                let Ok(checked) = r.check(heard) else { return };
+                match said(checked) {
+                    Said::Prompt(asked) => {
+                        std::thread::spawn(move || asked.answer("guess").unwrap());
+                    }
+                    Said::Refused { pam } => events.lock().unwrap().push(format!("refused {pam:?}")),
+                    Said::Retrying { failed: Some(_), pam, .. } => {
+                        events.lock().unwrap().push(format!("retrying {pam:?}"))
+                    }
+                    Said::Unavailable { pam, .. } => events.lock().unwrap().push(format!("unavailable {pam:?}")),
+                    Said::Retrying { failed: None, .. } | Said::Error(_) | Said::Info(_) => {}
+                }
+            }
+            AuthEvent::Done { .. } => {}
+        }
+    })
+    .unwrap();
+    assert!(eventually(|| log.lock().unwrap().agents.len() == 1));
+    let call = ask(&polkitd, &agent_name, "cookie-pam");
+    assert!(eventually(|| events.lock().unwrap().len() >= 2));
+    let seen = events.lock().unwrap().clone();
+    assert_eq!(
+        seen[..2],
+        [
+            "refused Some(\"The account is locked due to 3 failed logins.\")".to_owned(),
+            "retrying Some(\"Your account has expired.\")".to_owned(),
+        ]
+    );
+    let _ = polkitd.call_method(
+        Some(agent_name.as_str()),
+        AGENT_PATH,
+        Some("org.freedesktop.PolicyKit1.AuthenticationAgent"),
+        "CancelAuthentication",
+        &("cookie-pam",),
+    );
+    assert!(!call.join().unwrap());
     std::fs::remove_dir_all(script.parent().unwrap()).unwrap();
 }

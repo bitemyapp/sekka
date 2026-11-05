@@ -219,7 +219,7 @@ fn an_unreachable_helper_does_not_spin_the_dialog() {
                         | Said::Prompt(_)
                         | Said::Error(_)
                         | Said::Info(_)
-                        | Said::Refused => {}
+                        | Said::Refused { .. } => {}
                     }
                 }
             }
@@ -280,4 +280,38 @@ fn the_dialog_shows_again_when_its_output_goes() {
     assert!(h.program().auth_view().is_none(), "the dialog closed");
     assert!(call.join().unwrap().is_ok(), "polkitd heard yes");
     drop(polkit.bus);
+}
+
+/// Should 8 of the review: a refusal shows what PAM's modules said, as the
+/// lock screen does, so a lockout doesn't read as a wrong password.
+#[test]
+fn the_dialog_shows_pams_reason_for_a_refusal() {
+    let helper = |bus: &TestBus| {
+        let script = bus.dir.join("polkit-agent-helper-1");
+        std::fs::write(
+            &script,
+            "#!/bin/sh\nread cookie\necho \"PAM_PROMPT_ECHO_OFF Password: \"\nread password\n\
+             echo \"PAM_ERROR_MSG The account is locked due to 3 failed logins.\"\necho FAILURE\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        Helper::Program(script)
+    };
+    let Some(polkit) = Polkit::start("pam", helper) else { return };
+    let mut h = scene(false);
+    let call = polkit.ask();
+    polkit.pump(&mut h, Duration::from_secs(5), |h, _| {
+        h.program().auth_view().is_some_and(|v| v.submit == Submit::Answer && v.prompt.starts_with("Password"))
+    });
+    let window = window_titled(&h, "Authenticate");
+    h.type_text(window, "secret");
+    assert!(h.click_text(window, "Authenticate"));
+    let locked = |h: &Harness<Shell>| {
+        h.program().auth_view().and_then(|v| v.note).is_some_and(|(note, _)| note.contains("account is locked"))
+    };
+    polkit.pump(&mut h, Duration::from_secs(5), |h, _| locked(h));
+    let note = h.program().auth_view().and_then(|v| v.note);
+    h.send(Msg::AuthUi(AuthMsg::Cancel));
+    let _ = call.join();
+    assert_eq!(note, Some(("The account is locked due to 3 failed logins.".into(), true)));
 }

@@ -747,10 +747,14 @@ change of identity), delays the next: half a second, then 1, 2 and 4
 seconds. The delay is the agent's, across all its requests, and starts
 afresh only after a success or a minute without a failure, so nothing,
 however it answers or asks again, can start polkit's root helper in a
-loop. A refused password shows "That didn't work. Try again."; an
+loop. When PAM's modules said why an attempt failed (a lockout, an
+expired password), the dialog shows their words, as the lock screen does;
+otherwise a refused password shows "That didn't work. Try again."; an
 attempt that ends before anyone answers shows "Trying again…", and after
 a third in a row the dialog says authentication isn't available and
-Authenticate becomes Try Again. A password submitted before the helper's
+Authenticate becomes Try Again; if the retry can't even be scheduled, it
+says so at once. The helper runs only for someone polkitd offered for that
+request. A password submitted before the helper's
 prompt answers that prompt (if it hides what's typed). An answer goes
 only to the prompt it answers, of the request it came from, once, and
 one with a line break, a NUL or over 510 bytes is refused in the dialog
