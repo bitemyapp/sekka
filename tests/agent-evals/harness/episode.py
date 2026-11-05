@@ -143,7 +143,10 @@ def run_tasuke(vm, cfg, s, result, out):
     # Tasuke asks before risky changes, in words as well as approvals. A
     # person would answer; so does the harness, once, with a plain yes.
     # The first turn's own result is kept apart.
-    if answer.rstrip().endswith("?") and time.monotonic() - t0 < seconds - 60:
+    tail = answer[-600:].lower()
+    asks = "?" in answer[-400:] or any(p in tail for p in ("would you like", "shall i", "do you want", "let me know",
+                                                         "if so,", "please tell me", "please confirm"))
+    if asks and time.monotonic() - t0 < seconds - 60:
         first, details = s.check(vm, {"root_cause": answer})
         result["first_turn"] = {"resolved": bool(first), "answer": answer[-1500:]}
         session_id = vm.out_of("ls /root/.tasuke-eval/sessions/ | sed -n 's/\\.jsonl$//p' | head -1").strip()
