@@ -45,6 +45,10 @@
 //! assert!(matches!(list.confirm(review, None, Some(image)), Err(Unconfirmed::Changed(_))));
 //! ```
 
+// Every arm names its variants, so a new state, event or reason is
+// handled where it matters rather than falling into a catch-all.
+#![deny(clippy::wildcard_enum_match_arm)]
+
 use crate::drive::{Drive, Excluded};
 use aizome_typestate::{Answer, Changed, Confirmed, Fresh, Generation, Reviewed, SameTarget, Ticket};
 use std::fmt;

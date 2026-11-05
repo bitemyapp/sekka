@@ -43,6 +43,10 @@
 //! assert!(failure.touched(), "the drive was partly written");
 //! ```
 
+// Every arm names its variants, so a new state, event or reason is
+// handled where it matters rather than falling into a catch-all.
+#![deny(clippy::wildcard_enum_match_arm)]
+
 use crate::drive::Drive;
 use crate::write::{Plan, Progress};
 use std::fs::File;
@@ -309,8 +313,8 @@ impl Pass {
         let from = match (&progress, previous) {
             (Progress::Writing { .. }, Some(Pass { last: Progress::Writing { .. }, from }))
             | (Progress::Verifying { .. }, Some(Pass { last: Progress::Verifying { .. }, from })) => from,
-            (Progress::Writing { done, .. } | Progress::Verifying { done, .. }, _) => Some((*done, now)),
-            _ => None,
+            (Progress::Writing { done, .. } | Progress::Verifying { done, .. }, None | Some(_)) => Some((*done, now)),
+            (Progress::Preparing | Progress::Finished { .. } | Progress::Failed { .. }, None | Some(_)) => None,
         };
         Pass { last: progress, from }
     }
@@ -425,7 +429,7 @@ impl<'s> Authorizing<'s> {
     pub fn exited(self, ran: Ran) -> Ended<'s> {
         let end = match ran {
             Ran::Declined => End::Declined,
-            ran => End::Failed(Failure { message: ran.message(), touched: false }),
+            ran @ (Ran::Exited(_) | Ran::Failed(_)) => End::Failed(Failure { message: ran.message(), touched: false }),
         };
         Ended::enter(self.ctx, end)
     }
@@ -578,7 +582,10 @@ impl Job {
                 (JobAny::Running(s), Step::Exited(ran)) => s.exited(ran).into(),
                 (JobAny::Running(s), Step::NotStarted(message)) => s.exited(Ran::Failed(message)).into(),
                 (state @ (JobAny::Authorizing(_) | JobAny::Running(_)), Step::Authorizing) => state,
-                (state @ JobAny::Ended(_), _) => state,
+                (
+                    state @ JobAny::Ended(_),
+                    Step::Report(_) | Step::Authorizing | Step::NotStarted(_) | Step::Exited(_),
+                ) => state,
             };
             (next, ())
         });
@@ -591,7 +598,8 @@ impl Job {
             match &mut state {
                 JobAny::Preparing(s) => s.stop(),
                 JobAny::Running(s) if !s.data.is_final() => s.stop(),
-                _ => {}
+                // The prompt is up, the final report is in, or it is over.
+                JobAny::Authorizing(_) | JobAny::Running(_) | JobAny::Ended(_) => {}
             }
             (state, ())
         });
@@ -656,7 +664,9 @@ mod tests {
     fn failure(job: &Job) -> (&str, bool) {
         match job.stored() {
             JobState::Ended(End::Failed(f)) => (f.message(), f.touched()),
-            other => panic!("not failed: {other:?}"),
+            other @ (JobState::Preparing(_) | JobState::Authorizing(_) | JobState::Running(_) | JobState::Ended(_)) => {
+                panic!("not failed: {other:?}")
+            }
         }
     }
 
