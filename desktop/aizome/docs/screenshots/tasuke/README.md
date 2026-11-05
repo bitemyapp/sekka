@@ -96,3 +96,17 @@ The Night and Day goldens in `desktop/aizome/apps/tasuke/tests/snapshots/`
 are headless renders of the same fixtures by the kit's offscreen
 renderer, at the window's own 1180 × 780 without a menu bar
 (`cargo test -p aizome-tasuke --test look`), not window captures.
+
+## From the VM tests
+
+Two 1280 × 800 captures by the NixOS test driver (`machine.screenshot`)
+of a VM's virtio-gpu display, running Aizome with alice logged in, taken
+on 5 November 2026 on wx-workstation and recompressed losslessly as above.
+Unlike the pictures above, nothing in them comes from a fixture: the
+window runs its real agent and model library, Aizome's shell draws the
+password dialog, and the download is real. What stands in is said below.
+
+| File | Test | What it shows |
+| --- | --- | --- |
+| `vm-password-dialog.png` | `checks.x86_64-linux.tasuke-dialog`, built at `b5fd05ff` | After **Run as administrator**, Aizome's own polkit dialog asking for alice's password (`test-only`, typed next). The model is a script (`apps/tasuke/nix/fake-openai.py`); "Gemma 4 12B" names sparse stand-in files, and no model ran |
+| `vm-download-paused.png` | `legacyPackages.x86_64-linux.tasuke-download`, built at `5737fdd1` with that test's files from `fc640dc4` (the page is drawn the same since) | First run's download from Hugging Face, paused at 335 MB of Qwen3.5 9B's 6.1 GB; first run recommended it for a stand-in `nvidia-smi`'s 8 GB laptop GPU and the VM's 3.8 GB of memory |
