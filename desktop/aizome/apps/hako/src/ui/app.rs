@@ -804,11 +804,10 @@ impl Hako {
 
     pub(crate) fn finished(&mut self, cx: &mut Cx<Msg>, w: WindowKey, title: &str, done: &Done) {
         if let Some(step) = &done.step {
-            match done.inverted {
-                None => self.history.push(step.clone()),
-                Some(false) => self.history.undone(step.clone()),
-                Some(true) => self.history.redone(step.clone()),
-            }
+            self.history.push(step.clone());
+        }
+        if let Some(inverted) = &done.inverted {
+            self.history.finished(inverted.clone());
         }
         // Select what came where the person is.
         let mut by_dir: HashMap<PathBuf, Vec<OsString>> = HashMap::new();

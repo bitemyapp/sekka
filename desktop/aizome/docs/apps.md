@@ -327,6 +327,16 @@ open. If that folder leaves the listing (including Put Back from Trash),
 its obsolete columns close and keyboard focus returns to the surviving
 parent when needed.
 
+Replace at a name conflict moves the item that was there to the Trash,
+for Put Back and Undo as for copies and moves. If the Trash can't take it,
+it stays beside its replacement under a hidden name the report gives, and
+an item that changed while the question was up isn't replaced at all. A
+folder put back by merging, with a conflict in it skipped, keeps the
+skipped part in the Trash, where it can still be put back from. Undo and
+Redo run one at a time. An undo that can't be carried out (a name taken
+since, or Stop at a conflict) stays in Edit ▸ Undo to try again, so the
+next ❖Z doesn't undo the step before it instead.
+
 Encrypted removable volumes stay in the file sidebar after unlocking. Hako asks for a volume passphrase before mounting a locked one; Cancel leaves it locked, and an incorrect passphrase can be retried. While unlocking, the prompt waits for the device operation to finish. System volumes and devices hidden by UDisks policy stay excluded from the removable list.
 
 ### Sumi (Text Editor)
