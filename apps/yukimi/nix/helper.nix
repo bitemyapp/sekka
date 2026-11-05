@@ -6,6 +6,7 @@
   pkg-config,
   sqlite,
   util-linux,
+  clippy,
 }:
 let
   # Content-addressed source: the same derivation wherever the checkout is.
@@ -19,8 +20,8 @@ let
       # Completion detection uses the UI-independent Aizome IPC protocol.
       ../../../desktop/aizome/Cargo.toml
       ../../../desktop/aizome/crates/aizome-ipc
-      # Saved configurations name their generation through its typestate
-      # support (`SameTarget`).
+      # Typestate support: `Unsettled` for restore points and the clean-up,
+      # `SameTarget` for saved configurations.
       ../../../desktop/aizome/crates/aizome-typestate
       ../../../desktop/aizome/session/aizome-session
     ];
@@ -35,7 +36,17 @@ rustPlatform.buildRustPackage {
   '';
   cargoLock.lockFile = ../Cargo.lock;
   nativeBuildInputs = [ pkg-config ];
-  nativeCheckInputs = [ util-linux ];
+  nativeCheckInputs = [
+    util-linux
+    clippy
+  ];
+  # The helper runs programs only through its library, which names the ones
+  # it may run; yukimi-helper/clippy.toml denies the other ways to start one.
+  # Only that lint fails the build, so a toolchain's new lints don't.
+  preCheck = ''
+    cargo clippy --offline --locked -p yukimi-helper --all-targets -- \
+      -A clippy::all -D clippy::disallowed_methods
+  '';
   buildInputs = [ sqlite ];
   # The system's programs first, then a Git for Nix to fetch Sekka with, so
   # that Git's own progress reaches Yukimi on installations without Git.

@@ -9,6 +9,7 @@ disallowed-methods = [
   { path = "yukimi_system::nix::stream", reason = "the unprivileged side's runner" },
   { path = "yukimi_system::updates::lock_command", reason = "the unprivileged side's lock step" },
   { path = "yukimi_system::updates::fetch_command", reason = "the unprivileged side's fetch step" },
+  { path = "std::os::unix::process::CommandExt::arg0", reason = "a multicall binary is another program under another name" },
   { path = "libc::system", reason = "run programs through yukimi_helper::process::command" },
   { path = "libc::execv", reason = "run programs through yukimi_helper::process::command" },
   { path = "libc::execve", reason = "run programs through yukimi_helper::process::command" },
