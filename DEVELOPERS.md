@@ -365,8 +365,9 @@ Rustc owns session cleanup; there is no additional per-action state-byte quota.
 
 Execution-root compiler paths use `/proc/self/cwd` and stable working-directory
 remapping so cached state and binaries can move between worktrees. This includes
-joined native search options and build-script metadata; a root substring inside
-an external path is not treated as owned. Imported read-only state is atomically
+joined native search options, delimiter-separated root entries and build-script
+metadata; a root substring inside an external path is not treated as owned.
+Imported read-only state is atomically
 replaced with writable owned files before rustc runs, using reflinks where
 available and preserving sparse allocation in the fallback. Native post-action
 mode normalization also detaches shared inodes, including on early failure.
