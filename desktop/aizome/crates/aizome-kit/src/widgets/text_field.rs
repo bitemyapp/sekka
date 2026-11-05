@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 
 use sidestep_ui::{Cursor, Ime, Key, NamedKey, PointerButton, TextLayout, Wrap};
 
-use crate::composing::{Focus, Heard, Kept as _, Mode, Place, Plain, Secret};
+use crate::composing::{Composes, Kept as _, Mode, Place, Plain, Secret};
 use crate::draw;
 use crate::editing::{floor, next_char, next_word, prev_char, prev_word, word_at};
 use crate::element::{Common, Element, Layoutable, MsgFn, MsgMap, RawElement};
@@ -271,7 +271,7 @@ const DRAG_SLOP: f64 = 4.0;
 
 /// What a field remembers between views, whatever its mode. What goes
 /// with the focus (the caret's blink, what an input method is composing)
-/// is its mode's [`Focus`], kept beside it.
+/// is its mode's [`Focus`](crate::composing::Focus), kept beside it.
 #[derive(Default)]
 pub(crate) struct FieldState {
     caret: usize,
@@ -403,6 +403,10 @@ struct FieldWidget<M> {
     _mode: PhantomData<fn() -> M>,
 }
 
+impl<M: Mode> Composes for FieldWidget<M> {
+    type Mode = M;
+}
+
 impl<M: Mode> FieldWidget<M> {
     fn spec(&self, t: &Theme, color: sidestep_ui::Color) -> TextSpec {
         let f = if self.mono { FontSpec::mono(t.metrics.body) } else { FontSpec::ui(t.metrics.body) };
@@ -490,7 +494,7 @@ impl<M: Mode> FieldWidget<M> {
         let at = range.start + with.len();
         st.caret = at;
         st.anchor = at;
-        cx.state::<Focus<M>>().wake();
+        cx.composition(self).wake();
         self.emit(cx, new);
     }
 
@@ -511,7 +515,7 @@ impl<M: Mode> FieldWidget<M> {
             st.anchor = at;
         }
         st.last_edit = None;
-        cx.state::<Focus<M>>().wake();
+        cx.composition(self).wake();
         cx.relayout();
         cx.invalidate();
         self.follow_caret(cx);
@@ -534,18 +538,13 @@ impl<M: Mode> FieldWidget<M> {
         st.scroll = st.scroll.clamp(0.0, (l.size().width - visible + 2.0).max(0.0));
         let h = self.box_height(&t);
         let caret_rect = Rect::new(self.left() + x - st.scroll, 3.0, self.left() + x - st.scroll + 2.0, h - 3.0);
-        match cx.state::<Focus<M>>().place() {
-            Place::Here => cx.set_text_input_as(M::PURPOSE, true, Some(caret_rect)),
-            Place::Away => {}
-        }
+        cx.composer(self).tell_caret(Some(caret_rect));
     }
 
     /// The field has the focus: its starting selection, input methods told
-    /// what it takes, and the caret, which shows, then blinks. What it kept
-    /// in its other mode is dropped.
+    /// what it takes, and the caret, which shows, then blinks. What it was
+    /// composing in its other mode is dropped.
     fn arrive(&self, cx: &mut EventCx) {
-        cx.state::<Focus<M>>().came();
-        *cx.state::<Focus<M::Other>>() = Focus::default();
         let st = cx.state::<FieldState>();
         if !std::mem::replace(&mut st.primed, true)
             && let Some(r) = &self.select_on_focus
@@ -555,6 +554,7 @@ impl<M: Mode> FieldWidget<M> {
             st.anchor = a.min(b);
             st.caret = a.max(b);
         }
+        cx.composer(self).arrive(None);
         cx.request_tick(BLINK);
         self.follow_caret(cx);
     }
@@ -562,19 +562,17 @@ impl<M: Mode> FieldWidget<M> {
     /// An input method's event: what it composes shows as the mode keeps
     /// it; what it commits is typed.
     fn ime(&self, cx: &mut EventCx, ime: &Ime) -> Status {
-        match cx.state::<Focus<M>>().hear() {
-            Heard::Stale(start_over) => start_over.tell(cx),
-            Heard::InStep(composing) => match ime {
-                Ime::Commit(text) => {
-                    composing.commit();
-                    self.replace(cx, text, EditKind::Typing);
-                }
-                Ime::Preedit { text, selection } => {
-                    composing.compose(text, selection.as_ref().map(|r| r.end));
-                    cx.rebuild();
-                    cx.invalidate();
-                }
-            },
+        let Some(composing) = cx.composer(self).hear() else { return Status::Handled };
+        match ime {
+            Ime::Commit(text) => {
+                composing.commit();
+                self.replace(cx, text, EditKind::Typing);
+            }
+            Ime::Preedit { text, selection } => {
+                composing.compose(text, selection.as_ref().map(|r| r.end));
+                cx.rebuild();
+                cx.invalidate();
+            }
         }
         Status::Handled
     }
@@ -706,7 +704,7 @@ impl<M: Mode> Widget for FieldWidget<M> {
         if set {
             st.seen = self.value.to_string();
         }
-        let focus = cx.state::<Focus<M>>();
+        let focus = cx.composition(self);
         if set {
             focus.value_changed();
         }
@@ -805,7 +803,7 @@ impl<M: Mode> Widget for FieldWidget<M> {
                 cx.canvas.fill_rect(Rect::new(s.x0, s.y1 - 1.0, s.x1, s.y1), t.text());
             }
         }
-        let blink_off = cx.state::<Focus<M>>().is_some_and(|f| f.blink_off());
+        let blink_off = cx.composition(self).is_some_and(|f| f.blink_off());
         if focused && self.sel.is_empty() && !blink_off && self.editable() {
             let c = l.caret(self.caret, false);
             let x = (origin.x + c.x).round().max(inner.x0 + 1.0);
@@ -865,7 +863,7 @@ impl<M: Mode> Widget for FieldWidget<M> {
                 return Status::Handled;
             }
             Event::Focus(false) => {
-                cx.state::<Focus<M>>().went();
+                cx.composer(self).went();
                 if let Some(msg) = &self.on_blur {
                     cx.emit(msg);
                 }
@@ -878,18 +876,16 @@ impl<M: Mode> Widget for FieldWidget<M> {
         // Focused without having heard so (the field changed mode while
         // focused): input methods are told what it takes now.
         if cx.is_focused()
-            && let Place::Away = cx.state::<Focus<M>>().place()
+            && let Place::Away = cx.composition(self).place()
         {
             self.arrive(cx);
         }
         if let Event::Ime(ime) = event {
             return self.ime(cx, ime);
         }
-        // A composition the program's change dropped: the input method
-        // starts over.
-        if let Some(start_over) = cx.state::<Focus<M>>().owed() {
-            start_over.tell(cx);
-        }
+        // A composition the field dropped (the program set the text, or it
+        // changed mode): the input method starts over.
+        cx.composer(self).catch_up();
         match event {
             Event::PointerDown { pos, button: PointerButton::Left, clicks, mods } => {
                 if self.search && !self.value.is_empty() && self.clear_button(cx.size(), &t).contains(*pos) {
@@ -927,7 +923,7 @@ impl<M: Mode> Widget for FieldWidget<M> {
                         st.selecting = true;
                     }
                 }
-                cx.state::<Focus<M>>().wake();
+                cx.composition(self).wake();
                 cx.relayout();
                 cx.invalidate();
                 Status::Handled
@@ -961,7 +957,7 @@ impl<M: Mode> Widget for FieldWidget<M> {
                 if let Some((_, at)) = st.drag_text.take() {
                     st.caret = at;
                     st.anchor = at;
-                    cx.state::<Focus<M>>().wake();
+                    cx.composition(self).wake();
                     cx.relayout();
                     cx.invalidate();
                 }
@@ -969,9 +965,9 @@ impl<M: Mode> Widget for FieldWidget<M> {
             }
             Event::Key(k) if k.pressed => self.key(cx, k),
             Event::Tick => {
-                if let Place::Here = cx.state::<Focus<M>>().place() {
+                if let Place::Here = cx.composition(self).place() {
                     if cx.theme().motion() {
-                        cx.state::<Focus<M>>().blink();
+                        cx.composition(self).blink();
                     }
                     cx.invalidate();
                     cx.request_tick(BLINK);
