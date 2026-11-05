@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 
 use aizome_sys::Wake;
 use aizome_sys::disks::{Disks, DisksState, Erase};
+use tansu::app::Opening;
 use tansu::backend::Backend;
 use tansu::layout::{Here, Layout, Sel};
 use tansu::plan::{NewFs, Plan};
@@ -334,7 +335,7 @@ fn finish(run: &mut Run, backend: &dyn Backend) -> Outcome {
 
 /// Segment `i` of `l`, chosen and found now.
 fn here<'l>(state: &DisksState, l: &'l Layout, i: usize) -> Here<'l> {
-    l.locate(state, &l.choose(state, &Sel::of(&l.segs[i])).unwrap()).unwrap()
+    l.locate(state, &l.choose(state, &Sel::of(&l.segs[i]), &Opening::for_tests()).unwrap()).unwrap()
 }
 
 fn format_and_delete(d: &Disks) -> Plan {

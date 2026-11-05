@@ -64,22 +64,54 @@ pub struct NewFs {
     pub encrypt: Option<Encryption>,
 }
 
-/// One pending operation.
+/// One pending operation. Its fields are read-only outside this module:
+/// what it does and what it acts on decide what the run confirms.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Op {
-    pub id: u64,
+    id: u64,
     /// The disk's block device (object path) and its node (`/dev/sdb`).
-    pub disk: String,
-    pub disk_device: String,
+    disk: String,
+    disk_device: String,
     /// The device acted on: a partition, or the disk itself (a new table,
     /// a new partition).
-    pub target: String,
-    pub device: String,
-    pub kind: OpKind,
+    target: String,
+    device: String,
+    kind: OpKind,
     /// The device acted on, as it was when the operation was queued: its
     /// confirmations hold the device to this, so it never follows another
     /// device to the same names.
     seen: Identity,
+}
+
+impl Op {
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    /// The disk's block device (object path).
+    pub fn disk(&self) -> &str {
+        &self.disk
+    }
+
+    /// The disk's node (`/dev/sdb`).
+    pub fn disk_device(&self) -> &str {
+        &self.disk_device
+    }
+
+    /// The device acted on (object path): a partition, or the disk itself
+    /// (a new table, a new partition).
+    pub fn target(&self) -> &str {
+        &self.target
+    }
+
+    /// The device acted on's node (`/dev/sdb1`).
+    pub fn device(&self) -> &str {
+        &self.device
+    }
+
+    pub fn kind(&self) -> &OpKind {
+        &self.kind
+    }
 }
 
 /// The brand of a confirmation of a pending operation's device
@@ -1238,13 +1270,15 @@ mod tests {
 
     /// Segment `i` of `l`, chosen and found now.
     fn here<'l>(s: &DisksState, l: &'l Layout, i: usize) -> Here<'l> {
-        let chosen = l.choose(s, &crate::layout::Sel::of(&l.segs[i])).unwrap_or_else(|| panic!("segment {i}"));
+        let opening = crate::app::Opening::for_tests();
+        let chosen =
+            l.choose(s, &crate::layout::Sel::of(&l.segs[i]), &opening).unwrap_or_else(|| panic!("segment {i}"));
         l.locate(s, &chosen).expect("found")
     }
 
     /// The disk of `l`, chosen and found now.
     fn disk_here<'l>(s: &DisksState, l: &'l Layout) -> Here<'l> {
-        l.locate(s, &l.choose_disk(s).expect("the disk")).expect("the disk")
+        l.locate(s, &l.choose_disk(s, &crate::app::Opening::for_tests()).expect("the disk")).expect("the disk")
     }
 
     /// The largest stretch of free space.

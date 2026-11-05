@@ -77,7 +77,7 @@ fn select(h: &mut Harness<Tansu>, drive: &str, seg: &str) {
 }
 
 fn queued(h: &Harness<Tansu>) -> Vec<String> {
-    h.program().plan.ops.iter().map(|o| format!("{} {}", tansu::plan::verb(&o.kind), o.device)).collect()
+    h.program().plan.ops.iter().map(|o| format!("{} {}", tansu::plan::verb(o.kind()), o.device())).collect()
 }
 
 #[test]
@@ -116,8 +116,8 @@ fn a_format_sheet_for_a_stick_that_goes_formats_nothing_else() {
         .plan
         .ops
         .iter()
-        .filter(|o| o.disk != stick_disk)
-        .map(|o| format!("{} on {}", tansu::plan::verb(&o.kind), o.device))
+        .filter(|o| o.disk() != stick_disk)
+        .map(|o| format!("{} on {}", tansu::plan::verb(o.kind()), o.device()))
         .collect();
     let typed = t.disks_to_type();
     assert!(

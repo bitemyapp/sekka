@@ -1,5 +1,6 @@
 //! Ordering and partial-failure contracts for confirmed resize plans.
 //! The backend is in memory; real filesystem coverage lives in the VM.
+use tansu::app::Opening;
 use tansu::backend::Backend;
 use tansu::layout::Sel;
 use tansu::mock::Mock;
@@ -33,7 +34,7 @@ fn fixture_with_plan(fs: &str, to: u64) -> (Mock, Plan, Run) {
     let layout = plan.preview(&mock.snapshot(), DISK).unwrap();
     let index = layout.segs.iter().position(|s| s.short_name() == "sda3").unwrap();
     let state = mock.snapshot();
-    let chosen = layout.choose(&state, &Sel::of(&layout.segs[index])).unwrap();
+    let chosen = layout.choose(&state, &Sel::of(&layout.segs[index]), &Opening::for_tests()).unwrap();
     plan.resize(layout.locate(&state, &chosen).unwrap(), to).unwrap();
     let run = Run::agree(&plan, &mock.snapshot());
     (mock, plan, run)
