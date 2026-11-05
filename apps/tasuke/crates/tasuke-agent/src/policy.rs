@@ -4580,8 +4580,16 @@ fn refuse_command(args: &[Arg], ctx: &Ctx, depth: u32) -> Option<String> {
             if !recursive {
                 return None;
             }
+            // Only the paths: chmod, chown and chgrp take a mode, owner or
+            // group first (unless --reference names a file to copy), and
+            // chattr's `+i`/`=i`. Taken as a path, `alice:users` from `/` read
+            // as a top-level folder and refused a fix to a folder in home.
+            let reference = texts.iter().any(|t| t.starts_with("--reference"));
+            let skip_first = matches!(prog.as_str(), "chmod" | "chown" | "chgrp") && !reference;
             rest.iter()
                 .filter(|a| !a.text.starts_with('-'))
+                .filter(|a| !(prog == "chattr" && (a.text.starts_with('+') || a.text.starts_with('='))))
+                .skip(usize::from(skip_first))
                 .find_map(|a| wholesale(a, ctx))
                 .map(|w| format!("It would change the permissions or owner of {w}."))
         }
@@ -5435,6 +5443,19 @@ mod tests {
         }
     }
 
+    #[test]
+    fn root_fixes_inside_home_are_not_refused_from_slash() {
+        // The helper checks from `/` with root's home: the owner or mode
+        // must not be read as a top-level folder there.
+        let (root, slash) = (Path::new("/root"), Path::new("/"));
+        for ok in ["chown -R alice:users /home/alice/Notes", "chmod -R u+w /home/alice/Notes", "chgrp -R users /home/alice/x"] {
+            assert_eq!(refused_from(ok, root, slash), None, "{ok}");
+        }
+        for bad in ["chown -R alice:users /", "chmod -R 777 /etc", "chown -R alice /home/alice"] {
+            assert!(refused_from(bad, Path::new("/home/alice"), slash).is_some(), "{bad}");
+        }
+    }
+
     fn table(cases: &[(&str, &str)]) {
         let mut failures = Vec::new();
         for (cmd, want) in cases {
@@ -6187,6 +6208,11 @@ mod tests {
             ("chown -R root:root /home", "refuse"),
             ("chmod --recursive a-r $HOME", "refuse"),
             ("chmod -R 700 ~/.ssh", "ask"),
+            ("chown -R alice:users ~/Notes", "ask"),
+            ("chown -R alice /home/alice/Notes", "ask"),
+            ("chmod -R u+w ~/Notes", "ask"),
+            ("chown -R --reference=/etc/passwd /", "refuse"),
+            ("chattr -R +i ~", "refuse"),
             ("chmod 755 ~", "ask"),
             ("mkfs.ext4 /dev/sda1", "refuse"),
             ("mkfs -t ext4 /dev/nvme0n1p2", "refuse"),

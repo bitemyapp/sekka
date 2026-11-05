@@ -383,6 +383,8 @@ impl Outcome {
     fn text(output: ToolOutput) -> Outcome {
         let for_model = match output.status {
             ToolStatus::Failed => format!("Error: {}", output.text),
+            // Said outright, or a model may report a fix that never ran.
+            ToolStatus::Refused => format!("Not run: Tasuke refused it. {}", output.text),
             _ => output.text.clone(),
         };
         Outcome { output, for_model, image: None, memory_changed: false }
