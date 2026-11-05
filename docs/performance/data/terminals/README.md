@@ -37,6 +37,8 @@ headless sway on the integrated Radeon).
   from the zero-scrollback run. `calibration-history.json` is the
   calibration they used: the six terminals' from `calibration.json`,
   Ghostty main's from `calibration-ghostty-main.tar.xz`.
+- `ghostty-author-2026-11-02/` — the post by Ghostty's author that led to
+  the run with history: its link, text, screenshots and attached graphs.
 
 132 measured trials, all accepted, in the first run. Unpack with `tar xJf PHASE.tar.xz`;
 `tests/performance/terminals/terminal-summary.py DIR OUT` rebuilds

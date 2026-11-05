@@ -8,11 +8,16 @@ costs at rest and while typing, in CPU, wake-ups, GPU time, socket energy
 and memory.
 
 **Throughput measured again with history (2 November 2026, afternoon).** The
-first throughput run gave every terminal zero scrollback. Mitchell Hashimoto,
-Ghostty's author, pointed out that zero scrollback turns off much of
-libghostty-vt's fast path for output on the normal screen (where these
-corpora are written), and that Hotaru gets slower as its history grows, so
-those figures favoured Hotaru twice over. Throughput is now measured again
+first throughput run gave every terminal zero scrollback, as the earlier
+library-level comparison
+([ghostty-comparison-2026-10-30.md](../../apps/hotaru/docs/ghostty-comparison-2026-10-30.md))
+had. Mitchell Hashimoto, Ghostty's author, reran that comparison and
+[pointed out](https://x.com/mitchellh/status/2117374562333872319) that zero
+scrollback turns off a lot of libghostty-vt's optimizations, which is fair
+for the alternate screen but not for output on the normal screen (where
+these corpora are written), and that Hotaru gets slower as its history
+grows ([the post, kept here](data/terminals/ghostty-author-2026-11-02/README.md)).
+So those figures favoured Hotaru twice over. Throughput is now measured again
 with history in every terminal: Ghostty with its defaults (50 MB), Hotaru
 with the same 50 MB, and the four terminals whose history is counted only in
 lines with 1,000,000 lines, Hotaru's row limit. Ghostty's main branch at
