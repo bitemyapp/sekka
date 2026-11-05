@@ -9,7 +9,7 @@
 //! the kit's message stream. Answers from an older request (its epoch or
 //! generation) are dropped, as are stale sessions, which cancels them.
 use crate::flow::{Flow, FlowAny, FlowState, HelperAnswer, ReviewAnswer, ReviewRequest, Said};
-use crate::ram::{Memory, MemoryAnswer, SwapUnsized};
+use crate::ram::{Memory, MemoryAnswer, SwapSize};
 use crate::{format::size, media, zone};
 use aizome_ipc::{KeyboardInfo, setup::Beside};
 use aizome_kit::cx::MsgSender;
@@ -467,6 +467,13 @@ pub struct Preparation {
     /// Reading the prepared system into memory, as a fraction.
     pub progress: Option<f64>,
     pub failure: Option<String>,
+}
+
+/// Why swap can't be had when installed memory couldn't be read.
+fn swap_unsized(error: &str) -> String {
+    format!(
+        "Installed memory could not be read ({error}), so a swap partition can't be sized. Turn swap off to continue."
+    )
 }
 
 /// The stage a transition reached, or the one it refused to leave.
@@ -1066,7 +1073,7 @@ impl Genkan {
     /// The read answered. A failure turns swap off: nothing can size it.
     fn memory_read(&mut self, answer: MemoryAnswer, cx: &mut Cx<Msg>) {
         self.memory.answer(answer);
-        if let Err(SwapUnsized::Unreadable(error)) = self.memory.swap_size(true) {
+        if let SwapSize::Unreadable(error) = self.memory.swap_size(true) {
             self.swap = false;
             self.note(&format!("Could not read installed memory: {error}"), cx);
         }
@@ -1081,13 +1088,16 @@ impl Genkan {
     /// when it couldn't be read.
     fn set_swap(&mut self, on: bool, cx: &mut Cx<Msg>) {
         match self.memory.swap_size(on) {
-            Err(why @ SwapUnsized::Unreadable(_)) => self.note(&why.to_string(), cx),
-            Ok(_) | Err(SwapUnsized::Reading) => self.swap = on,
+            SwapSize::Unreadable(error) => self.note(&swap_unsized(&error), cx),
+            SwapSize::Off | SwapSize::Known(_) | SwapSize::Reading => self.swap = on,
         }
     }
 
     pub fn swap_bytes(&self) -> Option<u64> {
-        self.memory.swap_size(self.swap).ok().flatten()
+        match self.memory.swap_size(self.swap) {
+            SwapSize::Known(bytes) => Some(bytes),
+            SwapSize::Off | SwapSize::Reading | SwapSize::Unreadable(_) => None,
+        }
     }
 
     pub fn selected(&self) -> Option<&Disk> {
@@ -1099,10 +1109,12 @@ impl Genkan {
         let Some(disk) = self.selected() else {
             return Err("Select a disk to preview its new partitions.".into());
         };
-        let swap = self.memory.swap_size(self.swap).map_err(|why| match why {
-            SwapUnsized::Reading => "Reading installed memory…".to_string(),
-            SwapUnsized::Unreadable(_) => why.to_string(),
-        })?;
+        let swap = match self.memory.swap_size(self.swap) {
+            SwapSize::Off => None,
+            SwapSize::Known(bytes) => Some(bytes),
+            SwapSize::Reading => return Err("Reading installed memory…".into()),
+            SwapSize::Unreadable(error) => return Err(swap_unsized(&error)),
+        };
         Layout::for_install(disk.identity.bytes, self.firmware, swap, self.encrypt)
             .map_err(|error| format!("{error:#}"))
     }
@@ -1130,9 +1142,13 @@ impl Genkan {
         if let Some(reason) = &disk.blocked {
             return Err(reason.clone());
         }
-        self.memory
-            .swap_size(self.swap)
-            .map_err(|why| why.to_string())?;
+        match self.memory.swap_size(self.swap) {
+            SwapSize::Off | SwapSize::Known(_) => {}
+            SwapSize::Reading => {
+                return Err("Still reading installed memory; try again in a moment.".into());
+            }
+            SwapSize::Unreadable(error) => return Err(swap_unsized(&error)),
+        }
         self.layout().map(|_| ())
     }
 

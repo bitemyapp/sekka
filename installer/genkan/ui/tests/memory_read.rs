@@ -12,7 +12,7 @@ use aizome_kit::testing::Harness;
 use aizome_kit::theme::{Appearance, ThemeChoice};
 use genkan::Step;
 use genkan::app::{Genkan, Msg};
-use genkan::ram::SwapUnsized;
+use genkan::ram::SwapSize;
 use std::time::Duration;
 
 fn says(h: &Harness<Genkan>, w: aizome_kit::WindowKey, what: &str) -> bool {
@@ -31,7 +31,7 @@ fn a_failed_memory_read_is_not_reported_as_still_reading() {
     assert_eq!(h.program().step, Step::Disk);
     assert!(matches!(
         h.program().memory().swap_size(true),
-        Err(SwapUnsized::Unreadable(_))
+        SwapSize::Unreadable(_)
     ));
     assert!(!h.program().swap, "the failure turns swap off");
     assert!(says(&h, w, "Could not read installed memory"));
@@ -68,7 +68,7 @@ fn a_read_memory_sizes_swap() {
     );
     assert_eq!(
         h.program().memory().swap_size(true),
-        Ok(Some(32 * 1024u64.pow(3)))
+        SwapSize::Known(32 * 1024u64.pow(3))
     );
     assert_eq!(h.program().swap_bytes(), Some(32 * 1024u64.pow(3)));
     assert!(h.program().layout().is_ok_and(|l| l.swap.is_some()));
