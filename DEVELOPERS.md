@@ -2498,8 +2498,8 @@ network in GNOME, Plasma, Xfce or Aizome would ask for its password.
   then renamed into place.
 - `sekka-network-store.service`, before NetworkManager and bounded to 30 s,
   opens the store. It adopts anything left in the plaintext directory
-  (Genkan's `installer-wifi-N` files, profiles from before the store, ones saved
-  at a boot it couldn't open), merges back stores set aside earlier that open
+  (profiles from before the store, Genkan's `installer-wifi-N` files where it
+  made no store, ones saved at a boot it couldn't open), merges back stores set aside earlier that open
   again, and binds `connections/` over the keyfile directory. Adoption copies
   to a hidden name, syncs and renames, and unlinks the original only if it
   didn't change meanwhile. Two different versions of a profile keep the newer
@@ -2528,6 +2528,27 @@ at every boot, so a TPM that comes back brings its passwords back. A damaged
 filesystem or a failed mount never sets the store aside.
 `/run/sekka/network-store.json` says which of these happened, for desktop UIs.
 
+On a new installation, Genkan makes the store itself, so no password the
+installed system saves, from the live session's Wi-Fi to whatever is joined at
+its first boot, is written unencrypted. Once `nixos-install` has put the system
+in place, the helper runs `sekka-network-store install --root <target>` on its
+tool path (`save_networks` in `rust/src/install.rs`) and hands it the
+transferred profiles through an anonymous memory file. The program builds the
+store as `create` does, on this computer's TPM, writes the profiles inside it
+before it is renamed into place, and adds their secret-less copies. It makes
+nothing, and says why, where the installed system wouldn't keep a store: a
+target generation without the marker (resolved in the target's own store), an
+encrypted root, no TPM with its driver loaded, or removable media. Removable
+means a USB, FireWire or memory-stick bus, an SD card, a disk whose
+`removable` flag is set, or one behind a port the firmware calls external
+(Thunderbolt): such a system may start other computers, whose TPMs couldn't
+open the store. Genkan then writes the profiles in plaintext as before, and
+the installed system goes on as `create` decides at its first boot (on
+removable media too, on whichever computer that is). A store that fails to
+build leaves nothing behind, and the installation goes on the same way.
+`/var/log/calamares-nixos/install.json` records which happened as
+`saved_networks`: `sealed`, `plaintext` or `no-store`.
+
 Limits:
 
 - A cleared or replaced TPM, or the disk moved to another computer, loses the
@@ -2535,7 +2556,8 @@ Limits:
   off in the firmware hides them until it's back.
 - Passwords saved before the store are removed from the filesystem, but may be
   recoverable from the raw disk. The service starts the fstrim unit once after
-  adopting them.
+  adopting them. On an installation where Genkan made the store, there are
+  none.
 - Hibernation to an unencrypted swap partition writes the store's volume key to
   disk, and core dumps of NetworkManager or wpa_supplicant can hold passwords.
   iwd, when chosen as the Wi-Fi backend, keeps its own known networks in
@@ -2562,9 +2584,26 @@ store's creation at each step. It then checks:
 - exporting puts the profiles back;
 - a TPM whose driver never loads doesn't hold NetworkManager back.
 
+```sh
+nix build .#checks.x86_64-linux.genkan-network-store --no-update-lock-file
+```
+
+`genkan-network-store` (`installer/genkan/nix/network-store-test.nix`) runs
+Genkan's storage and network steps on a marked disposable disk in a VM with a
+software TPM, with the installed system placed in the target's store as
+`nixos-install` leaves it, then boots that disk on the same TPM. Before the
+boot, the password isn't on the raw disk (its profile's secret-less copy is,
+so the scan reads file contents), and the target's root directory has never
+had an `/etc`. The first boot opens the store holding the transferred profile,
+adopts nothing, leaves the plaintext directory underneath empty, and joins the
+network with nobody logged in; the password is still nowhere on the raw disk.
+Like `encrypted-storage`, it's a component test: the harness supplies the
+bootloader and the Nix store. Without a TPM, Genkan's unit tests and the
+`respin-tools qemu-test` fixture's Wi-Fi check cover the plaintext fallback.
+
 The other network checks run the installed module set in VMs without a TPM,
 where nothing changes. None of this covers a physical TPM or an installation
-from the ISO.
+from the ISO with one.
 
 ## Omarchy's fish configuration
 

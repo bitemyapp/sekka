@@ -421,6 +421,7 @@
         storage = calamares.storageTest;
         encrypted-storage = import ./installer/genkan/nix/encryption-test.nix { inherit pkgs; };
         encrypted-boot-splash = import ./installer/genkan/nix/encrypted-splash-test.nix { inherit pkgs; };
+        genkan-network-store = import ./installer/genkan/nix/network-store-test.nix { inherit pkgs; };
         applications = applicationCatalog.check;
         uta-installation = import ./nix/uta-installation-test.nix {
           inherit pkgs applicationCatalog installer;

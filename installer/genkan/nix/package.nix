@@ -26,6 +26,8 @@ let
         pkgs.systemd
         pkgs.coreutils
         pkgs.curl
+        # Makes the installed system's store of saved networks.
+        (pkgs.callPackage ../rust/system/network-store/package.nix { })
       ]
       + ":/run/current-system/sw/bin";
     # NixOS installs the setuid entry point here; the store binary is not setuid.

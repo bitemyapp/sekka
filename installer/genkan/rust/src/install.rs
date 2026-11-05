@@ -15,6 +15,7 @@ use crate::{
     filesystem::{self, Identities},
     memory, nixlog, precache,
     process::{self, output, output_lines},
+    wifi::WifiTransfer,
 };
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -643,6 +644,29 @@ fn prepare_storage(
     Ok(())
 }
 
+/// Make the installed system's store of saved networks now, sealed to this
+/// computer's TPM, with the live session's Wi-Fi inside: neither those
+/// passwords nor any saved from the first boot on reach the disk
+/// unencrypted. Where the system keeps no store (no TPM, an encrypted root,
+/// removable media), write the Wi-Fi in plaintext as NetworkManager reads
+/// it, as before the store. Returns which, for the installation record.
+fn save_networks(wifi: &WifiTransfer, root: &Path) -> Result<&'static str> {
+    match wifi.seal_into(root) {
+        Ok(()) => Ok("sealed"),
+        Err(error) => {
+            event(Event::Log {
+                line: format!("{error:#}").trim().to_owned(),
+            });
+            wifi.write_to(root)?;
+            Ok(if wifi.profile_count() > 0 {
+                "plaintext"
+            } else {
+                "no-store"
+            })
+        }
+    }
+}
+
 /// Destructive installation of a prepared, confirmed plan.
 pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     let started = Instant::now();
@@ -680,7 +704,7 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     stage.done();
 
     let stage = Stage::start("files");
-    progress(3, "Writing the configuration, account and Wi-Fi settings");
+    progress(3, "Writing the configuration and account settings");
     let dir = target.0.join("etc/nixos");
     fs::create_dir_all(&dir)?;
     prepared.template.write(&dir)?;
@@ -695,7 +719,6 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     fs::create_dir(&secret_dir)?;
     fs::set_permissions(&secret_dir, fs::Permissions::from_mode(0o700))?;
     config::write_secret(&secret_dir.join("user-password.hash"), &hash)?;
-    request.wifi().write_to(&target.0)?;
     // Seed the first activation with the user's selected zone. Aizome makes
     // time.timeZone mutable and preserves /etc/localtime across rebuilds;
     // a fresh target has no previous zone for it to preserve. Its activation
@@ -803,6 +826,12 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     );
     stage.done();
 
+    // Once the system is in place: the store checks that it can open one.
+    let stage = Stage::start("networks");
+    progress(5, "Setting up saved networks");
+    let networks = save_networks(request.wifi(), &target.0)?;
+    stage.done();
+
     // A record for measuring real hardware: read it after booting the
     // installed system. No secrets; flushing and unmounting follow.
     let record = serde_json::json!({
@@ -815,6 +844,7 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
             .collect::<serde_json::Map<_, _>>(),
         "seconds_from_confirmation_before_flush": started.elapsed().as_secs_f64(),
         "kept_awake": awake.held(),
+        "saved_networks": networks,
     });
     let log_dir = target.0.join("var/log/calamares-nixos");
     fs::create_dir_all(&log_dir)?;
@@ -1117,6 +1147,100 @@ mod encryption_tests {
                 );
             }
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod network_store_tests {
+    use super::*;
+    use std::os::unix::fs::MetadataExt;
+    /// A Wi-Fi profile as libnm normalizes the live session's.
+    const PROFILE: &str = "[connection]\nid=Installer\nuuid=135ea3d9-d456-44b1-ae42-1e7081f66666\ntype=wifi\n\n[wifi]\nmode=infrastructure\nssid=Installer\n\n[wifi-security]\nkey-mgmt=wpa-psk\npsk=installer-pass-2c9a\n\n[ipv4]\nmethod=auto\n\n[ipv6]\naddr-gen-mode=default\nmethod=auto\n";
+    const KEYFILES: &str = "etc/NetworkManager/system-connections";
+
+    /// Here no store can be made: there's no system at the root (nor, when
+    /// `cargo test` runs it, a store program on the tool path).
+    #[test]
+    fn wifi_is_written_in_plaintext_where_no_store_is_made() -> Result<()> {
+        let root = tempfile::tempdir()?;
+        let wifi = WifiTransfer::normalized(&[PROFILE]);
+        assert_eq!(save_networks(&wifi, root.path())?, "plaintext");
+        let file = root
+            .path()
+            .join(KEYFILES)
+            .join("installer-wifi-0.nmconnection");
+        assert_eq!(fs::read_to_string(&file)?, PROFILE);
+        let meta = fs::metadata(&file)?;
+        assert_eq!(
+            (meta.uid(), meta.mode() & 0o777),
+            (unsafe { libc::getuid() }, 0o600)
+        );
+        let empty = tempfile::tempdir()?;
+        assert_eq!(
+            save_networks(&WifiTransfer::Skip, empty.path())?,
+            "no-store"
+        );
+        assert!(!empty.path().join("etc").exists());
+        Ok(())
+    }
+
+    /// Genkan's storage and network steps on a marked disposable VM disk,
+    /// with a TPM, and the installed system in the target's store as
+    /// nixos-install leaves it (`GENKAN_TEST_SYSTEM`). network-store-test.nix
+    /// then boots the disk and checks the first boot.
+    #[test]
+    #[ignore = "destructive: marked disposable NixOS VM with a TPM only"]
+    fn wifi_is_sealed_at_installation() -> Result<()> {
+        ensure!(
+            fs::read_to_string("/etc/genkan-storage-test")? == "disposable VM\n",
+            "Not a test VM"
+        );
+        let identity = disk::discover()?
+            .into_iter()
+            .find(|disk| {
+                disk.identity.path == "/dev/vdb"
+                    && disk.identity.serial == "GENKAN_NETSTORE_TEST"
+                    && disk.identity.bytes == 32 * memory::GIB
+                    && disk.blocked.is_none()
+            })
+            .context("Missing disposable network-store test disk")?
+            .identity;
+        let system = std::env::var("GENKAN_TEST_SYSTEM").context("Missing the installed system")?;
+        let (_dir, settings, mut raw) = crate::plan_tests::fixture();
+        raw.disk = identity.clone();
+        raw.swap = false;
+        let plan = raw.parse(&settings)?;
+        let ids = Identities {
+            root: "11111111-2222-4333-8444-555555555555".into(),
+            efi: Some("A1B2-C3D4".into()),
+            swap: None,
+            encryption: None,
+            bios_boot: None,
+        };
+        let layout = Layout::for_install(identity.bytes, Firmware::Uefi, None, false)?;
+        let mut mappings = crate::encryption::Mappings::default();
+        let target = Target::new()?;
+        prepare_storage(&plan, &ids, &layout, "", &target, &mut mappings)?;
+        let store = target.0.join("nix/store");
+        fs::create_dir_all(&store)?;
+        output("cp", &["-a", &system, store.to_str().unwrap()], 120)?;
+        let profiles = target.0.join("nix/var/nix/profiles");
+        fs::create_dir_all(&profiles)?;
+        std::os::unix::fs::symlink(&system, profiles.join("system-1-link"))?;
+        std::os::unix::fs::symlink("system-1-link", profiles.join("system"))?;
+
+        let wifi = WifiTransfer::normalized(&[PROFILE]);
+        assert_eq!(save_networks(&wifi, &target.0)?, "sealed");
+        assert!(!target.0.join(KEYFILES).exists());
+        let state = target.0.join("var/lib/sekka/network-store");
+        assert!(state.join("store.luks").exists() && state.join("store.srk").exists());
+        let copy = fs::read_to_string(state.join("skeleton/installer-wifi-0.nmconnection"))?;
+        assert!(copy.contains("ssid=Installer") && !copy.contains("psk="));
+        // As the flush stage does: nothing of the store's holds the target.
+        output("sync", &["--file-system", target.0.to_str().unwrap()], 60)?;
+        target.unmount()?;
+        println!("PASS: the live session's Wi-Fi sealed into a new store, none in plaintext");
         Ok(())
     }
 }

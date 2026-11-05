@@ -10,6 +10,7 @@ use std::io;
 use std::path::Path;
 
 use crate::files;
+use crate::seed::Profile;
 
 /// Properties NetworkManager marks secret (`NM_SETTING_PARAM_SECRET` in
 /// libnm-core 1.58), by their keyfile names: Wi-Fi, 802.1X, mobile, PPPoE,
@@ -110,6 +111,15 @@ pub fn refresh(connections: &Path, skeleton: &Path) -> io::Result<()> {
         }
     }
     files::sync_dir(skeleton)
+}
+
+/// Secret-less copies of the profiles a store was just made with.
+pub fn add(skeleton: &Path, profiles: &[Profile]) -> io::Result<()> {
+    files::ensure_dir(skeleton, 0o700)?;
+    for profile in profiles {
+        files::write_atomic(&skeleton.join(&profile.name), &strip(&profile.bytes), 0o600)?;
+    }
+    Ok(())
 }
 
 /// Put the secret-less copies where NetworkManager reads (`keyfiles`, not

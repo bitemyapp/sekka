@@ -13,10 +13,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::cmd::tool;
 use crate::rotation::{KEPT, Srk};
+use crate::seed::Profile;
 use crate::{crash_point, files, sys};
 
 /// Where things are.
 pub struct Context {
+    /// The system's root: / when it's running, the target's mount when Genkan
+    /// installs it. The paths below are under it.
+    pub root: PathBuf,
     /// The image, its SRK, the secret-less copies, counters: root's only.
     pub state: PathBuf,
     /// NetworkManager's keyfile directory.
@@ -265,16 +269,18 @@ impl<'c> Absent<'c> {
         let _ = fs::remove_file(&volume.image);
     }
 
-    pub fn build(self) -> Result<Built<'c>, String> {
+    /// Build it with `seed` (Genkan's profiles at installation) already in
+    /// `connections/`: written only inside it, never anywhere in plaintext.
+    pub fn build(self, seed: &[Profile]) -> Result<Built<'c>, String> {
         self.clean();
-        let result = self.make();
+        let result = self.make(seed);
         if result.is_err() {
             self.clean();
         }
         result.map(|()| Built(self.0))
     }
 
-    fn make(&self) -> Result<(), String> {
+    fn make(&self, seed: &[Profile]) -> Result<(), String> {
         let cx = self.0;
         let volume = self.volume();
         let image = volume.image.as_path();
@@ -343,8 +349,14 @@ impl<'c> Absent<'c> {
             .arg(&device)
             .arg(&volume.staging)
             .ok()?;
-        let made =
-            files::ensure_dir(&volume.staging.join(CONNECTIONS), 0o700).map_err(|e| e.to_string());
+        let connections = volume.staging.join(CONNECTIONS);
+        let made = files::ensure_dir(&connections, 0o700)
+            .and_then(|()| {
+                seed.iter().try_for_each(|profile| {
+                    files::write_atomic(&connections.join(&profile.name), &profile.bytes, 0o600)
+                })
+            })
+            .map_err(|e| e.to_string());
         unmount(&volume.staging)?;
         made?;
         detach(volume.mapper);

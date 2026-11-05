@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! `sekka-network-store open|create|stop|skeleton|export`: NetworkManager's
+//! `sekka-network-store open|create|stop|skeleton|export|install`: NetworkManager's
 //! saved connections, secrets and all, kept in a small LUKS2 image whose only
 //! key is sealed to the TPM, bound over NetworkManager's keyfile directory
 //! before it starts. NetworkManager itself is unchanged: secrets stay owned
@@ -17,16 +17,20 @@
 //! - `stop` closes it, but never under a running NetworkManager.
 //! - `skeleton` refreshes the secret-less copies.
 //! - `export` (when turned off) moves the profiles back out and removes it.
+//! - `install` (Genkan, installing) makes the store for the system installed
+//!   at `--root`, with the live session's saved networks already in it.
 
 mod cmd;
 mod files;
 mod merge;
 mod rotation;
+mod seed;
 mod skeleton;
 mod store;
 mod sys;
 
 use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
@@ -322,7 +326,7 @@ fn create(cx: &Context) {
             }
         }
     }
-    let unmarked = sys::unmarked(&sys::generations(&cx.profiles));
+    let unmarked = sys::unmarked(&sys::generations(&cx.root, &cx.profiles));
     if !unmarked.is_empty() {
         let list: Vec<String> = unmarked.iter().map(|p| p.display().to_string()).collect();
         return report(
@@ -352,7 +356,7 @@ fn create(cx: &Context) {
     let Some(absent) = Absent::find(cx) else {
         return;
     };
-    let made = absent.build().and_then(|built| {
+    let made = absent.build(&[]).and_then(|built| {
         let srk = match store::read_srk() {
             Srk::Known(srk) => Some(srk),
             _ => None,
@@ -437,10 +441,49 @@ fn export(cx: &Context) {
     }
 }
 
+/// Genkan's installation: make the store for the system installed at
+/// `cx.root`, sealed to this computer's TPM, with the live session's saved
+/// networks (`input`) written straight into it, so their passwords never
+/// reach the target disk unencrypted. It's opened at the first boot. Where
+/// `create` wouldn't make one, and on removable media, which may start other
+/// computers, it makes nothing and says why; Genkan then writes the profiles
+/// in plaintext, as before the store.
+fn install(cx: &Context, input: &[u8]) -> Result<usize, String> {
+    let profiles = seed::parse(input)?;
+    let generations = sys::generations(&cx.root, &cx.profiles);
+    if generations.is_empty() {
+        return Err("there's no system installed there".into());
+    }
+    if !sys::unmarked(&generations).is_empty() {
+        return Err("the installed system can't open a store".into());
+    }
+    if sys::encrypted(&cx.keyfiles) {
+        return Err("the filesystem is encrypted already".into());
+    }
+    if sys::removable(&cx.keyfiles) {
+        return Err("it's on removable media, which may start other computers".into());
+    }
+    if !sys::tpm_loaded() {
+        return Err("there's no TPM".into());
+    }
+    let absent = Absent::find(cx).ok_or("there's a store already")?;
+    let built = absent.build(&profiles)?;
+    let srk = match store::read_srk() {
+        Srk::Known(srk) => Some(srk),
+        _ => None,
+    };
+    built.commit(srk.as_deref())?;
+    if let Err(e) = skeleton::add(&cx.skeleton(), &profiles) {
+        log(&format!("writing the secret-less copies: {e}"));
+    }
+    Ok(profiles.len())
+}
+
 fn usage() -> ExitCode {
     eprintln!(
-        "usage: sekka-network-store open|create|stop|skeleton|export \
-         [--state DIR] [--keyfiles DIR] [--run DIR] [--profiles DIR] [--tpm2-setup PATH]"
+        "usage: sekka-network-store open|create|stop|skeleton|export|install \
+         [--root DIR] [--state DIR] [--keyfiles DIR] [--run DIR] [--profiles DIR] \
+         [--tpm2-setup PATH]"
     );
     ExitCode::from(2)
 }
@@ -450,18 +493,29 @@ fn main() -> ExitCode {
     let Some(command) = args.next() else {
         return usage();
     };
-    let mut cx = Context {
-        state: PathBuf::from("/var/lib/sekka/network-store"),
-        keyfiles: PathBuf::from("/etc/NetworkManager/system-connections"),
-        run: PathBuf::from("/run/sekka"),
-        profiles: PathBuf::from("/nix/var/nix/profiles"),
-        tpm2_setup: PathBuf::from("systemd-tpm2-setup"),
-    };
+    let mut options = Vec::new();
     while let Some(option) = args.next() {
         let Some(value) = args.next() else {
             return usage();
         };
+        options.push((option, value));
+    }
+    let root = options
+        .iter()
+        .rfind(|(option, _)| option == "--root")
+        .map_or_else(|| PathBuf::from("/"), |(_, value)| PathBuf::from(value));
+    let under = |path: &str| root.join(path);
+    let mut cx = Context {
+        state: under("var/lib/sekka/network-store"),
+        keyfiles: under("etc/NetworkManager/system-connections"),
+        run: PathBuf::from("/run/sekka"),
+        profiles: under("nix/var/nix/profiles"),
+        tpm2_setup: PathBuf::from("systemd-tpm2-setup"),
+        root: root.clone(),
+    };
+    for (option, value) in options {
         match option.as_str() {
+            "--root" => {}
             "--state" => cx.state = value.into(),
             "--keyfiles" => cx.keyfiles = value.into(),
             "--run" => cx.run = value.into(),
@@ -498,6 +552,26 @@ fn main() -> ExitCode {
         "stop" => stop(&cx),
         "skeleton" => refresh_skeleton(&cx),
         "export" => export(&cx),
+        "install" => {
+            let mut input = Vec::new();
+            let read = std::io::stdin()
+                .take(seed::LIMIT as u64 + 1)
+                .read_to_end(&mut input);
+            let made = match read {
+                Ok(_) if input.len() > seed::LIMIT => Err("too many saved networks".into()),
+                Ok(_) => install(&cx, &input),
+                Err(e) => Err(format!("reading the saved networks: {e}")),
+            };
+            match made {
+                Ok(n) => log(&format!(
+                    "made the store, sealed to this computer's TPM, with {n} saved networks in it"
+                )),
+                Err(e) => {
+                    log(&format!("not making a store: {e}"));
+                    return ExitCode::FAILURE;
+                }
+            }
+        }
         _ => return usage(),
     }
     ExitCode::SUCCESS

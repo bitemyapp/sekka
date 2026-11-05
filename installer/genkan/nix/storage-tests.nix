@@ -23,6 +23,7 @@ pkgs.rustPlatform.buildRustPackage {
     pkgs.xfsprogs
     pkgs.dosfstools
     pkgs.coreutils
+    (pkgs.callPackage ../rust/system/network-store/package.nix { })
   ];
   buildPhase = ''
     runHook preBuild

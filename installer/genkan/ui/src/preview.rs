@@ -255,7 +255,7 @@ pub fn show(app: &mut Genkan, cx: &mut Cx<Msg>, page: &str) {
             "Erasing the selected disk and creating a GPT partition table",
         ),
         (2, "Formatting, verifying and mounting the new filesystems"),
-        (3, "Writing the configuration, account and Wi-Fi settings"),
+        (3, "Writing the configuration and account settings"),
         (4, "Copying the prepared system to the new disk"),
     ] {
         app.helper_event(

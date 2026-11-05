@@ -957,6 +957,26 @@ fn main() -> Result<()> {
                 winter.trim() == "-0600 CST" && summer.trim() == "-0500 CDT",
                 "Central daylight saving rules were not preserved"
             );
+            // Sealed in the store Genkan made, on a TPM; in plaintext without
+            // one. Either way NetworkManager reads it at the same path.
+            let saved = record["saved_networks"].as_str().unwrap_or_default();
+            let sealed = output(
+                "findmnt",
+                &[
+                    "-n",
+                    "-o",
+                    "SOURCE",
+                    "/etc/NetworkManager/system-connections",
+                ],
+                10,
+            )
+            .is_ok_and(|source| source.trim().starts_with("/dev/mapper/sekka-network-store"));
+            ensure!(
+                matches!((saved, sealed), ("sealed", true) | ("plaintext", false)),
+                "Saved networks recorded as {saved:?}, but the store is{} open",
+                if sealed { "" } else { " not" }
+            );
+            println!("SAVED_NETWORKS={saved}");
             let wifi =
                 Path::new("/etc/NetworkManager/system-connections/installer-wifi-0.nmconnection");
             let metadata = fs::metadata(wifi)?;

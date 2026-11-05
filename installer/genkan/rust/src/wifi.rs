@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Read-only snapshots and parsed, normalized connection profiles. Never log secrets.
 use crate::Username;
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use std::{
     collections::BTreeSet,
     fs,
@@ -71,26 +71,76 @@ impl WifiTransfer {
         }
     }
 
+    /// Each profile's keyfile name on the installed system, and its bytes.
+    fn files(&self) -> Vec<(String, &[u8])> {
+        let Self::Copy(profiles) = self else {
+            return vec![];
+        };
+        profiles
+            .0
+            .iter()
+            .enumerate()
+            .map(|(index, profile)| {
+                (
+                    format!("installer-wifi-{index}.nmconnection"),
+                    profile.keyfile.as_bytes(),
+                )
+            })
+            .collect()
+    }
+
     /// Only I/O remains here: the profile bytes already carry parsing guarantees.
     pub fn write_to(&self, root: &Path) -> Result<()> {
-        let Self::Copy(profiles) = self else {
-            return Ok(());
-        };
-        if profiles.0.is_empty() {
+        let files = self.files();
+        if files.is_empty() {
             return Ok(());
         }
         let dir = root.join("etc/NetworkManager/system-connections");
         fs::create_dir_all(&dir)?;
         fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
-        for (index, profile) in profiles.0.iter().enumerate() {
+        for (name, bytes) in files {
             let mut file = fs::OpenOptions::new()
                 .write(true)
                 .create_new(true)
                 .mode(0o600)
-                .open(dir.join(format!("installer-wifi-{index}.nmconnection")))?;
-            file.write_all(profile.keyfile.as_bytes())?;
+                .open(dir.join(name))?;
+            file.write_all(bytes)?;
             file.sync_all()?;
         }
+        Ok(())
+    }
+
+    /// Make the store of saved networks for the system installed at `root`,
+    /// sealed to this computer's TPM, with the profiles written only inside
+    /// it (`sekka-network-store install`; DEVELOPERS.md, "Saved network
+    /// connections"). They reach it through an anonymous memory file, never
+    /// the target disk. Fails, making nothing, where the installed system
+    /// keeps no store: no TPM, an encrypted root, removable media.
+    pub fn seal_into(&self, root: &Path) -> Result<()> {
+        let files = self.files();
+        let headers: Vec<String> = files
+            .iter()
+            .map(|(name, bytes)| format!("{name}\n{}\n", bytes.len()))
+            .collect();
+        // Sized once: growing it would leave copies of the secrets behind.
+        let mut input = Zeroizing::new(Vec::with_capacity(
+            files.iter().map(|(_, bytes)| bytes.len()).sum::<usize>()
+                + headers.iter().map(String::len).sum::<usize>(),
+        ));
+        for ((_, bytes), header) in files.iter().zip(&headers) {
+            input.extend_from_slice(header.as_bytes());
+            input.extend_from_slice(bytes);
+        }
+        let root = root.to_str().context("Target path encoding")?;
+        // Longer than the store's own limits on its tools (a TPM that hangs,
+        // say), so it always cleans up after itself: a device left open on
+        // the target would keep it from being unmounted.
+        crate::process::output_secret(
+            "sekka-network-store",
+            &["install", "--root", root],
+            &input,
+            900,
+        )?;
         Ok(())
     }
 
@@ -106,6 +156,23 @@ impl WifiTransfer {
                     .collect(),
             ),
         }
+    }
+}
+
+#[cfg(test)]
+impl WifiTransfer {
+    /// Profiles as libnm normalizes them, for tests built without it.
+    pub(crate) fn normalized(keyfiles: &[&str]) -> Self {
+        Self::Copy(WifiProfiles(
+            keyfiles
+                .iter()
+                .enumerate()
+                .map(|(index, keyfile)| WifiProfile {
+                    uuid: index.to_string(),
+                    keyfile: Zeroizing::new((*keyfile).to_owned()),
+                })
+                .collect(),
+        ))
     }
 }
 
