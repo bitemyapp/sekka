@@ -25,6 +25,7 @@ The mark is a *yukiwa* 雪輪, the snow ring of Japanese family crests: six circ
 - Keep clear space of a quarter of the crest's width on every side.
 - Never draw the full crest below 24px. From 16 to 23px use `sekka-symbolic.svg`, which drops the branches and thickens the cuts so they survive the pixel grid; it is single ink (#2e3436, the GTK symbolic convention) and may be recoloured to any text token.
 - The application icon is `sekka-app-icon.svg`: the blue crest on a square `surface` tile with no rounding (`radius-none`), like every Tatami surface.
+- Yuki's Discord banner is `logos/yuki-banner.svg`: 1360×480 (17:6), with the unmodified blue crest, flat Night colours, outlined JetBrains Mono and a sparse snow motif. `generate.py` regenerates it alongside the other assets. Rasterize at its native size with `rsvg-convert -o yuki-banner.png docs/brand/logos/yuki-banner.svg`; Discord accepts the PNG, not the SVG.
 - Don't rotate the crest, add outlines, shadows or gradients to it, or recolour it outside `crest`, `text-strong` and `surface`. Don't set the wordmark in another face or in capitals. Don't lock the crest up with the NixOS snowflake as if they were one mark: Sekka runs on NixOS, but the marks stay separate.
 
 ## Colour

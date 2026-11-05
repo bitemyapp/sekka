@@ -1,0 +1,31 @@
+name: Yuki (manual)
+
+# Deliberately opt-in: ordinary pushes, PRs and shared flake updates must not
+# schedule this job. Run it from main after merging a Yuki change when needed.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sekka-yuki-manual
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: ${{ github.repository == 'bitemyapp/sekka' && github.ref == 'refs/heads/main' }}
+    runs-on: [self-hosted, linux, x64, sekka-builder]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Build and test Yuki
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix build --no-update-lock-file --print-build-logs --out-link result-yuki .#sekka-discord
+      - name: Smoke-check packaged CLI
+        shell: bash
+        run: ./result-yuki/bin/sekka-discord --help
