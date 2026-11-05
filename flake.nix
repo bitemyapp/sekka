@@ -8,7 +8,8 @@
   # Application updates are independent of the already-tested base system.
   inputs.applications.url = "github:NixOS/nixpkgs/nixos-unstable";
   inputs.ai-apps.url = "github:numtide/llm-agents.nix";
-  inputs.omp.url = "github:can1357/oh-my-pi/v18.6.1";
+  # Track upstream development so the nightly's flake update advances omp.
+  inputs.omp.url = "github:can1357/oh-my-pi/main";
   # Catalog applications packaged by other flakes, from forks under bitemyapp:
   # only commits there reach the nightly. Sekka builds them with the
   # applications' Nixpkgs and gives them to the catalog as its own packages

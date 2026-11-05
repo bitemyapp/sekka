@@ -23,7 +23,7 @@ pins were selected on 2026-10-04:
 | --- | --- | --- |
 | [NixOS/nixpkgs](https://github.com/NixOS/nixpkgs) | `a7868a727837f3c09cee2ce0ca671c76b1589fed` | Browsers, editors, terminals, developer tools, productivity, communication and media |
 | [Numtide llm-agents.nix](https://github.com/numtide/llm-agents.nix) | `372f0337e8170e55ff0c017cd43ab73b02a062ad` | Codex, ChatGPT, Claude Code, Claude Desktop and OpenCode |
-| [oh-my-pi upstream](https://github.com/can1357/oh-my-pi) | v18.6.1, `2a2c6dcbbb558c0f8145f67f28b3370984f2bf60` | oh-my-pi |
+| [oh-my-pi upstream](https://github.com/can1357/oh-my-pi) | Tracks `main`; exact revision in `flake.lock` | oh-my-pi |
 | [bitemyapp/superluminal-nix-linux](https://github.com/bitemyapp/superluminal-nix-linux) | `eacbc06314c5c590e2cc74d95d082911759b59f0` (1.0.7705.679-alpha), added 2026-10-16 | Superluminal |
 | [bitemyapp/tracy-flake](https://github.com/bitemyapp/tracy-flake), forked from [Quince-Pie/tracy-flake](https://github.com/Quince-Pie/tracy-flake) | `1f0bf6eaee8e965848274caa7f4ab6d2ff877f97` (0.14.1), added 2026-10-16 | Tracy Profiler |
 | [bitemyapp/uta](https://github.com/bitemyapp/uta) | `93379928e91ce2bade6ccae69fe13e1de9bb1b55`, updated 2026-11-03 | Uta for YouTube Music, with RustyPipe |
@@ -32,8 +32,10 @@ The AI definitions use upstream release artifacts or source and adapt them for
 NixOS. The ChatGPT and Claude entries package their official Linux applications;
 they are not unofficial web wrappers. Their vendor-supported Linux distributions
 and this community NixOS packaging have different support scopes. Account login
-is performed by the user after installation. The upstream oh-my-pi release was
-newer than the Numtide package at the time of pinning.
+is performed by the user after installation. oh-my-pi follows upstream `main`,
+including unreleased changes, so the nightly's `nix flake update` advances it
+without manually selecting release tags. The lock still pins every build to
+an exact revision; publication retains the nightly's checks and cache gates.
 
 OrbStack is macOS-only. At the user's request its Linux replacement is Docker
 Engine + Compose. Thunderbird, KeePassXC and Gemini CLI are absent.
