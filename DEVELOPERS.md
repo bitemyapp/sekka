@@ -2339,6 +2339,12 @@ nix build .#checks.x86_64-linux.tasuke-dialog
 # First run downloading a real model from Hugging Face through the window
 # (needs the internet, so not a check: run the driver outside the sandbox)
 nix build .#tasuke-download.driver && ./result/bin/nixos-test-driver
+# The window on Aizome answering through a real model: start `tasuke server
+# start` on the host with port 18737, then name its key (not a check either)
+nix build .#tasuke-live.driver
+TASUKE_LIVE_KEY=$XDG_RUNTIME_DIR/tasuke/api-key ./result/bin/nixos-test-driver
+# The window on a real model without a VM, in the kit's test harness
+bash -c 'cd desktop/aizome && cargo test -p aizome-tasuke --test live_model -- --ignored'
 ```
 
 The evaluations grade the product itself: `run.py --agent tasuke` runs

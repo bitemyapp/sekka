@@ -88,14 +88,16 @@ renderer, at the window's own 1180 × 780 without a menu bar
 
 ## From the VM tests
 
-Two 1280 × 800 captures by the NixOS test driver (`machine.screenshot`)
+Three 1280 × 800 captures by the NixOS test driver (`machine.screenshot`)
 of a VM's virtio-gpu display, running Aizome with alice logged in, taken
 on 5 November 2026 on wx-workstation and recompressed losslessly as above.
 Unlike the pictures above, nothing in them comes from a fixture: the
 window runs its real agent and model library, Aizome's shell draws the
-password dialog, and the download is real. What stands in is said below.
+password dialog, the download is real, and so is the last one's model.
+What stands in is said below.
 
 | File | Test | What it shows |
 | --- | --- | --- |
 | `vm-password-dialog.png` | `checks.x86_64-linux.tasuke-dialog`, built at `58e13304` | After **Run as administrator**, Aizome's own polkit dialog asking for alice's password (`test-only`, typed next). The model is a script (`apps/tasuke/nix/fake-openai.py`); "Gemma 4 12B" names sparse stand-in files, and no model ran |
 | `vm-download-paused.png` | `legacyPackages.x86_64-linux.tasuke-download`, built at `58e13304` | First run's download from Hugging Face, paused at 372 MB of Qwen3.5 9B's 6.1 GB; first run recommended it for a stand-in `nvidia-smi`'s 8 GB laptop GPU and the VM's 3.8 GB of memory |
+| `vm-live-answered.png` | `legacyPackages.x86_64-linux.tasuke-live`, added with this picture | A question answered by a real model: Gemma 4 26B-A4B, served by `tasuke server start` on wx-workstation (the VM's host) as it would be for an 8 GB laptop GPU, reached through a forwarded port. The two commands ran in the VM, and the answer's figures match what they printed. The model's files in the VM are sparse stand-ins, so the chip's "on this computer" names the host's model. The test's second run; the model was already loaded |

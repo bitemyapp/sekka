@@ -201,6 +201,16 @@
           tasukeModule = inputs.tasuke.nixosModules.default;
           aizomeModule = inputs.aizome.nixosModules.default;
         };
+        # The window on Aizome answering through a real model served on the
+        # host (apps/tasuke/nix/vm-live-test.nix). Not among `checks`: the
+        # sandbox can't reach the host's model server.
+        tasuke-live = import ./apps/tasuke/nix/vm-live-test.nix {
+          inherit pkgs;
+          inherit (pkgs) lib;
+          inherit (self.packages.${system}) tasuke;
+          tasukeModule = inputs.tasuke.nixosModules.default;
+          aizomeModule = inputs.aizome.nixosModules.default;
+        };
       };
       apps.${system} = {
         update = {
