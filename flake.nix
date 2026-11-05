@@ -203,6 +203,7 @@
           iso = installer.config.system.build.isoImage;
         };
         inherit tools calamares;
+        sekka-discord = import ./nix/sekka-discord.nix { inherit pkgs; };
         chatgpt = (import ./nix/ai-packages.nix inputs.ai-apps.packages.${system}).chatgpt;
         aizome = inputs.aizome.packages.${system}.aizome;
         hotaru = inputs.aizome.packages.${system}.hotaru;

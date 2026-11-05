@@ -101,6 +101,32 @@ class Face:
                 cx += self.glyphs[g].width * s + tracking
         return pen.getCommands(), bounds.bounds
 
+def yuki_banner(mono):
+    """Discord's 17:6 banner, with outlined text and the unmodified Sekka crest."""
+    body = f'<rect width="1360" height="480" fill="{NIGHT}"/>'
+    body += f'<rect x="0" y="0" width="1360" height="6" fill="{BLUE}"/>'
+    body += f'<path d="M0 424H1360V480H0Z" fill="{STORM}"/>'
+    # Keep the lower-left clear for Discord's overlapping profile avatar.
+    for x, y, r, ink in (
+        (58, 74, 3, TEXT), (795, 66, 4, BLUE), (871, 153, 3, TEXT),
+        (1302, 92, 4, TEXT), (1287, 281, 3, BLUE), (911, 367, 4, TEXT),
+        (755, 389, 3, BLUE), (1330, 395, 3, TEXT), (37, 300, 3, BLUE),
+    ):
+        body += f'<circle cx="{x}" cy="{y}" r="{r}" fill="{ink}"/>'
+    body += f'<g transform="translate(965 88) scale(1.05)">{crest(BLUE, "yuki-crest")}</g>'
+    for text, size, x, baseline, ink, tracking in (
+        ("Sekka community", 24, 132, 110, BLUE, 1.2),
+        ("Yuki", 132, 124, 258, SNOW, -3),
+        ("A little snow. The latest from Sekka.", 22, 132, 310, TEXT, 0),
+        ("Pull requests / Issues / Releases", 19, 132, 373, TEXT, 0),
+    ):
+        outline, _ = mono.run(text, size, x, baseline, tracking=tracking)
+        body += f'<path d="{outline}" fill="{ink}"/>'
+    body += f'<path d="M132 337H792" stroke="{STORM}" stroke-width="2"/>'
+    return svg(1360, 480, body, "Yuki — Sekka community",
+               "Yuki, Sekka's snowy repository messenger: blue snow-ring crest, "
+               "scattered snow and JetBrains Mono on the flat Night palette.")
+
 def main(out, mono_path, cjk_path):
     mono = Face(TTFont(mono_path))
     jp = next(ft for ft in TTCollection(cjk_path).fonts
@@ -122,6 +148,7 @@ def main(out, mono_path, cjk_path):
     W("logos/sekka-app-icon.svg", svg(256, 256,
         f'<rect width="256" height="256" fill="{NIGHT}"/><g transform="translate(24 24) scale(0.8125)">{crest(BLUE)}</g>',
         "Sekka", "Application icon: the blue crest on a square Night tile."))
+    W("logos/yuki-banner.svg", yuki_banner(mono))
 
     # Lockups.
     def wordmark(size, x, baseline):

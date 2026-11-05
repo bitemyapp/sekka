@@ -16,6 +16,7 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 | `modules/`, `templates/` | Live ISO and the installed-system flake template |
 | `nix/` | Component integration, packages, application resolution, prebuilt systems |
 | `rust/`, `scripts/` | Image, VM, diagnostics, USB and release tooling |
+| `services/sekka-discord/` | Standalone Rust service announcing public Sekka GitHub activity in Discord |
 | `site/` | The sekka.computer website generator |
 | `aizome-site/` | The aizome.computer website generator |
 | `tests/` | Generated-system configuration matrices and integration checks |
@@ -24,6 +25,201 @@ Sekka is the source home for the ISO, Genkan installer, Aizome and Tatami deskto
 The initial import preserves component layouts and separate Cargo workspaces, and Aizome, which joined later, keeps its own workspace in `desktop/aizome` ([migration record](docs/migration.md#aizome)). There are no submodules or remote first-party flake inputs. Sukumo, Aizome's toolkit, is a workspace of its own inside `desktop/aizome` ([Sukumo](#sukumo)). `nix/components.nix` adapts the local components to the existing integration interface; its `calamares` name and the `calamares.*` options are compatibility names, not another source repository.
 
 Sidestep (whose engine and native toolkit Sukumo continues), Upleft, Omperor, upstream forks, and Arch/Omarchy packaging stay outside Sekka. Add package definitions and pinned dependencies when the distro needs them.
+
+## Discord repository notifications
+
+`nix build .#sekka-discord --no-update-lock-file` builds the standalone Rust
+bot, its embedded Diesel/SQLite migrations, and two user-systemd units. Yuki
+accepts signed GitHub webhooks on loopback behind Cloudflare Tunnel and posts
+through Discord REST; no Discord gateway or privileged intents are needed.
+Commands are `setup`, `check`, `smoke`, `run`, and read-only `preview`.
+`preview` renders recent public GitHub events without Discord requests or
+state writes. `run` requires an explicit `DISCORD_CHANNEL_ID`.
+
+The dedicated **Yuki (manual)** workflow (`.github/workflows/yuki.yml`) has
+only `workflow_dispatch`: no push, pull-request, schedule, or dependency-change
+trigger. It builds/tests `.#sekka-discord` and smoke-checks the packaged CLI on
+the sandboxed `sekka-builder`, from `main` only, with read-only repository
+permissions and no production credentials. It does not deploy, restart Yuki,
+or publish releases. After this workflow is merged, invoke it when needed:
+
+```sh
+gh workflow run yuki.yml --ref main
+```
+
+The fixed source is public `bitemyapp/sekka` activity: PRs, issues,
+comments/reviews, releases, pushes, discussions, branch/tag changes and wiki edits.
+Stars and forks are omitted. Reduced Events API payloads may provide only a
+PR/issue number rather than a title; the message still links to the item.
+Mentions are disabled.
+
+### Durable receipt and delivery behavior
+
+On every start, Yuki opens `~/.local/state/sekka-discord/state.sqlite3`, binds
+`127.0.0.1:8787`, then starts Events API catch-up. The listener verifies
+`X-Hub-Signature-256` against the exact body, validates the public repository's
+ID/name, and commits the delivery receipt and outbox transaction before HTTP 202.
+Payloads are bounded to 25 MiB. Invalid signatures receive 401; malformed
+payloads receive 400; wrong/private repositories receive 403; uncommitted
+receipts receive 503. The local `/healthz` route is not exposed by the tunnel.
+
+Diesel uses SQLite WAL, full synchronous commits, and an exclusive state-directory
+lock. Receipts are unique by source and source ID; a delivery ID reused with
+different signed bytes is rejected. Webhook GUIDs and Events API IDs are not
+interchangeable: both map to shared semantic notification keys. Notification
+states are `pending`, `sending`, `sent`, or `suppressed`; successful sends retain
+the Discord message ID. Neither the receipt ledger nor sent identities are pruned.
+
+Dispatch waits for successful startup catch-up, including legacy identity
+mapping. Catch-up failures retry without taking the listener down. There is
+no periodic Events API polling after catch-up. A one-time transaction imports
+the former `state.json` checkpoint; that file remains an untouched backup and is
+not read again after import. Never delete the SQLite database to restart Yuki.
+The original activation cutoff and destination channel are persisted: older
+events are suppressed, but unseen events during later downtime are eligible.
+Changing the environment cutoff does not reset an existing database, and
+reusing it for a different channel is rejected.
+
+Before a Discord POST, Yuki durably changes the notification to `sending`.
+Messages have a stable SHA-256 footer marker and a short enforced Discord nonce.
+After a crash or uncertain network response, Yuki searches paginated channel
+history for its own marker and records the recovered message ID. It never
+blindly reposts an ambiguous send: absent messages remain `sending`, with an
+`UNRESOLVED` journal entry for operator review. Definite HTTP rejections can be
+retried. Discord has no permanent transactional exactly-once send API; this
+policy prioritizes avoiding duplicates over automatically retrying an uncertain
+send that might never have reached Discord. Do not manually reset `sending`
+rows without checking message history.
+
+The [GitHub Events API](https://docs.github.com/en/rest/activity/events) retains
+at most 300 events within 30 days, with documented latency of 30 seconds to six
+hours. Startup backfill cannot recover actions absent from that feed, including
+events not yet published at restart. GitHub does not automatically redeliver a
+failed webhook; inspect and redeliver failed deliveries after an outage.
+Feed gaps are logged when the retained limit has no known receipt overlap.
+`GITHUB_TOKEN_FILE` optionally supplies a separate least-privilege read-only
+token; do not copy a personal CLI credential. Rate-limit waits are honored and
+authentication never expands the public repository boundary.
+
+Some schemas have no shared occurrence identity. Repeated create/delete
+lifecycles of the same ref and identical ref/before/after force-push cycles
+coalesce rather than risk duplicate announcements. Same-second repeated edits
+or transitions can also coalesce; review edits are ignored because they lack a
+shared edit timestamp. Timestamp-free webhook forms use receipt time only for
+cutoff metadata, so a delayed historical delivery of such a form can pass the
+cutoff. Wiki identities use page-name/SHA sets.
+
+### Workstation deployment and credentials
+
+The deployed bot is **Yuki** (application/user ID `1567725866363129876`) in
+**Sekka Community** (`1559653243657912460`). Its destination is the community's
+existing [`#notifications`](https://discord.com/channels/1559653243657912460/1567727550858399875)
+channel (`1567727550858399875`), pinned through `DISCORD_CHANNEL_ID`.
+Do not create a second notifications channel during redeployment. Its profile
+image is the official `docs/brand/logos/sekka-app-icon.svg`, rasterized at
+512×512 without changing the artwork or colours. No privileged intents or
+Administrator permission were enabled.
+Its matching 17:6 profile banner is `docs/brand/logos/yuki-banner.svg`, generated
+by `docs/brand/generate.py` with outlined JetBrains Mono and the same crest.
+
+Webhook deployment verification on 2026-11-05: both local and workstation Nix
+builds passed all 30 tests. Real PR #286 comment `6648782480` reached Discord as
+message `1567740647811850352` in 2.651 seconds; GitHub recorded HTTP 202.
+Redelivering GUID `0220aa30-d8c8-11f1-90ca-d6a1a0a09a00` produced one durable
+receipt and one sent notification, with the replay logged as `duplicate`.
+An unsigned public request received 401; public `/healthz` received 404.
+During a controlled listener outage, comment `6648828594` received webhook
+HTTP 502. After it appeared as Events API event `19184889309`, restarting Yuki
+delivered Discord message `1567741598316368004` from backfill. Subsequent
+webhook redelivery added the webhook receipt without another notification.
+Both events now have API and webhook receipts sharing one sent row each.
+Simulating the missing SQLite commit after the first accepted Discord send
+also recovered the original message ID from real channel history on restart,
+without reposting. The database passed `PRAGMA integrity_check`; both units were
+enabled/running with `Linger=yes`. These checks did not include a host reboot.
+
+The deployment target is `callen@wx-workstation`, with lingering enabled so its
+user services survive logout and start at boot. Build locally, then copy the
+derivation with `nix copy --derivation --to ssh-ng://wx-workstation <derivation-path>`
+and realise it remotely with `nix-store --realise <derivation-path>`.
+`nix path-info --derivation .#sekka-discord` reports that derivation path.
+The workstation rejects unsigned local binary closures; rebuilding there avoids
+weakening its trusted-key policy. Install the resulting output on the workstation
+with `nix-env --profile ~/.local/lib/sekka-discord/profile --install <package-store-path>`.
+Create `~/.local/lib/sekka-discord/bin` as a symlink to `profile/bin`; the profile
+keeps the executable and dependencies rooted against garbage collection.
+Install both package units from `share/systemd/user/` into
+`~/.config/systemd/user/`, then run `systemctl --user daemon-reload`.
+Build the pinned connector with
+`nix build --inputs-from . nixpkgs#cloudflared --no-link --print-out-paths`, copy
+its signed closure to the workstation, and install it into the separate
+`~/.local/lib/sekka-discord-tunnel/profile` Nix profile.
+
+The remotely managed Cloudflare tunnel is `yuki-sekka`
+(`d6f32ec8-1638-4ea6-ad54-3090496b2be7`). Its proxied
+`yuki.sekka.computer` CNAME targets that UUID under `cfargotunnel.com`.
+Ingress matches that hostname and `^/github/webhook$` to
+`http://127.0.0.1:8787`; the final catch-all rule is `http_status:404`.
+No host ingress port or Cloudflare Access login is needed for GitHub.
+Repository webhook `707588947` uses
+`https://yuki.sekka.computer/github/webhook`, JSON, verified TLS, and the shared
+signing secret. It subscribes to `create`, `delete`, `discussion`,
+`discussion_comment`, `gollum`, `issue_comment`, `issues`, `public`,
+`pull_request`, `pull_request_review`, `pull_request_review_comment`, `push`,
+and `release`.
+
+Create a Discord application/bot and invite it to the Sekka server with the
+`bot` scope and Manage Channels, View Channels, Send Messages, Embed Links and
+Read Message History permissions (permission bitset `85008`). Manage Channels
+is needed for initial channel creation, not normal operation. No Administrator
+permission is required. Do not use a Discord user token.
+
+Keep `~/.config/sekka-discord/` mode `0700`. Store these files mode `0600`,
+outside source control and the Nix store:
+
+- `bot-token`: Discord bot token.
+- `webhook-secret`: random shared GitHub signing secret, at least 32 bytes.
+- `tunnel-token`: credential for this Cloudflare tunnel, not an account API token.
+- `service.env`: `DISCORD_GUILD_ID` and `DISCORD_CHANNEL_ID`. For the existing
+  deployment, `SEKKA_ACTIVATED_AT=2026-11-05T02:31:10Z` preserves Yuki's original
+  activation across JSON migration; a new database otherwise defaults to now.
+
+Secret paths can be overridden with `DISCORD_TOKEN_FILE` and
+`GITHUB_WEBHOOK_SECRET_FILE`; `SEKKA_STATE_DIR` selects the state directory.
+`SEKKA_LISTEN_ADDR` defaults to `127.0.0.1:8787` and must remain loopback.
+Run these commands on the workstation after supplying the files and configuring
+the tunnel/webhook:
+
+```sh
+set -a
+. ~/.config/sekka-discord/service.env
+set +a
+~/.local/lib/sekka-discord/bin/sekka-discord setup
+~/.local/lib/sekka-discord/bin/sekka-discord check
+~/.local/lib/sekka-discord/bin/sekka-discord smoke
+systemctl --user enable --now sekka-discord.service sekka-discord-tunnel.service
+journalctl --user -u sekka-discord.service -n 50 --no-pager
+```
+
+`setup` creates `#github-notifications` if absent, with explicit community read
+and bot delivery permissions. It does not modify existing channels; ambiguous
+names or inadequate permissions fail rather than choosing silently. Save the
+chosen `DISCORD_CHANNEL_ID` in `service.env` before running the service.
+`smoke` posts a clearly labelled setup-verification message and reads it back;
+it verifies Discord transport, not webhook authentication or startup catch-up.
+Without credentials and destination IDs, leave the unit disabled.
+The bot uses REST only, so its Discord presence need not appear online.
+
+Both units use private umasks and restart on failure; the connector also
+restarts after a clean exit. Inspect them with `systemctl --user status` and
+`journalctl --user -u sekka-discord.service -u sekka-discord-tunnel.service`.
+After a package or credential change, restart the corresponding unit. Preserve
+the state directory during upgrades. Use SQLite's backup API for live database
+backups rather than copying only the main file while WAL writes are active.
+Read-only SQL diagnostics include `SELECT state, COUNT(*) FROM notifications
+GROUP BY state;` and `SELECT source, delivery_id, notification_key FROM receipts;`.
+The tunnel's metrics endpoint is loopback-only at `127.0.0.1:20241`.
+Release publication settings are unrelated and remain unchanged.
 
 ## Build and check
 
