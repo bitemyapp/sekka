@@ -55,6 +55,7 @@ DOCKER = ["docker", "-H", "unix:///run/docker.sock"]
 LABEL = "computer.sekka.shared-build-service"
 NETWORK_LABEL = LABEL + ".network-generation"
 LOCAL = False
+CACHE_BLOCK_SIZE = 4096
 
 
 def remote(m, *args, capture=False, input=None):
@@ -131,9 +132,17 @@ def put(m, relative, content, mode=0o600):
         copy_file(m, file, relative)
 
 
+def cache_entry_limit(limit):
+    # Empty ActionResults consume zero bytes in NativeLink's byte accounting.
+    # Give them the same cardinality budget as minimally sized nonempty blobs.
+    return max(1, limit // CACHE_BLOCK_SIZE)
+
+
 def filesystem(path, limit):
     return {"filesystem": {"content_path": path + "/content", "temp_path": path + "/temp",
-                           "eviction_policy": {"max_bytes": limit, "max_seconds": 604800}}}
+                           "block_size": CACHE_BLOCK_SIZE,
+                           "eviction_policy": {"max_bytes": limit, "max_seconds": 604800,
+                                               "max_count": cache_entry_limit(limit)}}}
 
 
 def backend_config(m):
@@ -433,7 +442,7 @@ def main():
     for command in ("up", "stop", "restart", "logs", "status", "issue-reader", "metrics", "inventory"):
         sub.add_parser(command)
     cache_inventory = sub.add_parser("cache-inventory", help="Snapshot persistent cache entries with owned backends paused")
-    cache_inventory.add_argument("--timeout", type=int, default=60, help="Seconds to await configured cache byte bounds")
+    cache_inventory.add_argument("--timeout", type=int, default=60, help="Seconds to await configured cache byte/entry bounds")
     destroy = sub.add_parser("destroy")
     destroy.add_argument("--purge-state", action="store_true", help="Remove only the validated owned deployment directory after stopping containers")
     retain = sub.add_parser("retain")

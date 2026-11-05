@@ -141,31 +141,35 @@ def cache_entries(controller, manifest, timeout):
              for domain in sorted(manifest["domains"]) for store in ("cas", "ac")]
     limits = [manifest[store + "_bytes"]
               for domain in sorted(manifest["domains"]) for store in ("cas", "ac")]
+    entry_limits = [controller.cache_entry_limit(limit) for limit in limits]
     scan = """import json, os, stat, sys, time
 from pathlib import Path
 started = time.time()
 roots = [Path(value) for value in json.loads(sys.argv[1])]
-files, errors, sizes = {}, [], []
+files, errors, sizes, counts = {}, [], [], []
 for index, root in enumerate(roots):
     if root.resolve(strict=True) != root:
         raise RuntimeError('Refusing symlinked cache root: ' + str(root))
     if not root.is_dir():
         raise RuntimeError('Cache root is not a directory: ' + str(root))
-    size = 0
+    size, count = 0, 0
     for directory, _, names in os.walk(root, followlinks=False, onerror=lambda error: errors.append(str(error))):
         for name in names:
             path = Path(directory) / name
             try:
                 info = path.lstat()
                 if stat.S_ISREG(info.st_mode):
-                    files[str(index) + '/' + str(path.relative_to(root))] = info.st_size
+                    relative = path.relative_to(root)
+                    files[str(index) + '/' + str(relative)] = info.st_size
                     size += info.st_size
+                    count += relative.parts[0] == 'content'
             except OSError as error:
                 errors.append(str(error))
     sizes.append(size)
+    counts.append(count)
 print(json.dumps({'schema': 1, 'roots': list(map(str, roots)), 'files': files,
                   'file_count': len(files), 'apparent_bytes': sum(sizes),
-                  'root_apparent_bytes': sizes, 'errors': errors,
+                  'root_apparent_bytes': sizes, 'root_entry_counts': counts, 'errors': errors,
                   'start_unix': started, 'end_unix': time.time()}))
 """
     deadline = time.monotonic() + timeout
@@ -183,16 +187,18 @@ print(json.dumps({'schema': 1, 'roots': list(map(str, roots)), 'files': files,
                 resumed.callback(controller.docker, manifest, "unpause", backend, capture=True)
             result = json.loads(controller.remote(
                 manifest, sys.executable, "-B", "-c", scan, json.dumps(roots), capture=True))
-        within_limits = all(size <= limit for size, limit in zip(result["root_apparent_bytes"], limits))
+        within_limits = (
+            all(size <= limit for size, limit in zip(result["root_apparent_bytes"], limits))
+            and all(count <= limit for count, limit in zip(result["root_entry_counts"], entry_limits)))
         observations.append({key: result[key] for key in (
-            "start_unix", "end_unix", "file_count", "root_apparent_bytes", "errors")})
+            "start_unix", "end_unix", "file_count", "root_apparent_bytes", "root_entry_counts", "errors")})
         if result["errors"] or within_limits or time.monotonic() >= deadline:
             if not within_limits:
-                result["errors"].append("Persistent cache has not reached its configured byte bounds")
+                result["errors"].append("Persistent cache has not reached its configured byte/entry bounds")
             result.update(
                 method="Owned backends paused during scan; names/sizes, NOT physical extent accounting",
                 backend_ids=backends, configured_root_byte_limits=limits,
-                bound_observations=observations)
+                configured_root_entry_limits=entry_limits, bound_observations=observations)
             print(json.dumps(result, sort_keys=True))
             return not result["errors"]
         # Successful complete snapshots above the new bound are progress
