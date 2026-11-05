@@ -109,6 +109,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** Retry loop without backoff. When the helper can't be reached (connect error, `polkit.rs:245-252`) or exits without printing SUCCESS/FAILURE (EOF → Failed, `polkit.rs:324`), for example a broken setuid wrapper, a socket unit refusing, or PAM refusing before any prompt, Failed is emitted at once. The shell's Failed handler immediately calls `authenticate` again (`desktop/aizome/crates/aizome-shell/src/auth.rs:289-296`), which fails again, so the dialog spins and spawns helpers or logs warnings as fast as the UI loop runs (confidence: medium)
 - **Related:** `desktop/aizome/crates/aizome-shell/src/auth.rs:237-328` (dialog); polkitd and `polkit-agent-helper-1` (`HELPER_SOCKET`, `HELPER_PATHS`, `polkit.rs:66-74`)
 - **Reproduction:** Confirmed (integration): [test and output](reproductions.md#syb-09)
+- **Follow-up:** reified as typestate in [#298](https://github.com/bitemyapp/sekka/pull/298). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="syb-10"></a>
 
@@ -144,6 +145,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** The lock isn't confirmed before logind's delay limit expires, so the machine sleeps with the shell's `sleep_pending` still set. On resume the delay is retaken (`logind.rs:276-278`, `shell.rs:2063`). Then `lock_confirmed` (`desktop/aizome/crates/aizome-shell/src/lock.rs:365-367`) calls `sleep_ready()` and drops the fresh inhibitor. Nothing retakes it until the next resume, so the next suspend isn't delayed and can sleep before the screen locks (confidence: medium-low)
 - **Related:** `desktop/aizome/crates/aizome-shell/src/shell.rs:2041-2090`, `desktop/aizome/crates/aizome-shell/src/lock.rs:361-389`; logind `Inhibit("sleep", "delay")`
 - **Reproduction:** Confirmed (integration): [test and output](reproductions.md#syb-12)
+- **Follow-up:** reified as typestate in [#298](https://github.com/bitemyapp/sekka/pull/298). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="syb-13"></a>
 

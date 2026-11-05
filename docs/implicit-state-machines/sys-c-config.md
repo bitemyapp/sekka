@@ -92,6 +92,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** with an input method composing (fcitx5 or ibus active), the characters being composed in the lock-screen password field (`desktop/aizome/crates/aizome-shell/src/lock.rs:239`) are drawn in clear text beside the dots until they are committed; the same holds for `desktop/aizome/crates/aizome-shell/src/auth.rs:131` and `desktop/aizome/crates/aizome-greeter/src/view.rs:245` (confidence: medium)
 - **Related:** `desktop/aizome/sukumo/crates/sidestep-ui/src/window.rs:1001` (`set_text_input`), `:1014` (`reset_text_input`, never called by Field)
 - **Reproduction:** Confirmed (integration): [test and output](reproductions.md#syc-07)
+- **Follow-up:** reified as typestate in [#298](https://github.com/bitemyapp/sekka/pull/298). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="syc-08"></a>
 

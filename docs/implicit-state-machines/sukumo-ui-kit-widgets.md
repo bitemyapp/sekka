@@ -296,6 +296,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** a lock screen that unlocks and at once locks again while the old lock's `finished` is in flight: the stale `SessionLockFinished` turns the new `Asked` into `Unlocked` and closes the new lock surfaces (`app.rs:1612-1614`); the backend then creates the new lock, the compositor locks, and the `SessionLocked` is ignored as not `Asked` (`app.rs:1606`) — the session is locked with no lock surface and the program believes it unlocked (confidence: low)
 - **Related:** `desktop/aizome/sukumo/crates/sidestep-engine/src/backend/lock.rs:24` (`lock`), `:39` (`unlock`), `:63` (`finished`)
 - **Reproduction:** Confirmed (integration): [test and output](reproductions.md#uiw-27)
+- **Follow-up:** reified as typestate in [#298](https://github.com/bitemyapp/sekka/pull/298). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="uiw-28"></a>
 

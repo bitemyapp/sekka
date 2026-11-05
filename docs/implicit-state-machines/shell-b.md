@@ -40,6 +40,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** when the helper can't be reached (`polkit-agent-helper` socket missing, spawn error), `Session::start` emits Error then Failed at once (`desktop/aizome/crates/aizome-sys/src/polkit.rs:247`-`252`); the shell's Failed handler calls `authenticate` again (`auth.rs:294`-`295`), which fails the same way, so the shell spins through connect attempts and warnings on its event loop until the user cancels (confidence: medium)
 - **Related:** `desktop/aizome/crates/aizome-sys/src/polkit.rs:233` (`Session::start`, conversation generation, `respond` queue)
 - **Reproduction:** Confirmed (integration): [test and output](reproductions.md#shb-03)
+- **Follow-up:** reified as typestate in [#298](https://github.com/bitemyapp/sekka/pull/298). Its suspected bug is fixed, and the mistake no longer compiles, apart from a person's actions called from an event handler, which the agent's backoff bounds (see `docs/typestate-tier2.md`).
 
 <a id="shb-04"></a>
 
@@ -140,6 +141,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Suspected bug:** whatever PAM says is logged and replaced by "That password didn't work" (`lock.rs:427`-`428`), so an expired password (`pam_acct_mgmt` → new token required) or a faillock lockout reports the correct password as wrong on every try and the user can't learn why (confidence: medium)
 - **Related:** `desktop/aizome/sukumo/crates/sidestep-ui/src/app.rs:1057` (kit's `Locking`), compositor ext-session-lock; logind sleep delay in `desktop/aizome/crates/aizome-sys/src/power/logind.rs:437`
 - **Reproduction:** Confirmed (integration): [test and output](reproductions.md#shb-12)
+- **Follow-up:** reified as typestate in [#298](https://github.com/bitemyapp/sekka/pull/298). Its suspected bug is fixed, and the mistake no longer compiles.
 
 <a id="shb-13"></a>
 

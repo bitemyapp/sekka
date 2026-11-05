@@ -60,6 +60,7 @@ Part of the [implicit state machine catalog](../implicit-state-machines.md), whi
 - **Reify:** High — a user-visible dead end; the stage's meaning is split between `Stage`, `Login` and the view.
 - **Suspected bug:** with `user_list = false` (or nobody listed) a mistyped user name can't be corrected. PAM's auth error begins the same name again every time (`desktop/aizome/crates/aizome-greeter/src/login.rs:182-183`). If `CreateSession` itself fails, the step becomes `Failed` and Return does nothing (`app.rs:259` → `begin` sees `user() == None`). Only restarting the greeter helps. (confidence: high)
 - **Reproduction:** Confirmed (integration): [test and output](reproductions.md#svc-05)
+- **Follow-up:** reified as typestate in [#298](https://github.com/bitemyapp/sekka/pull/298). Its suspected bug is fixed, and the mistake no longer compiles in the model; a guard added in the view or the app's handlers still compiles, and tests catch it (see `docs/typestate-tier2.md`).
 
 <a id="svc-06"></a>
 
