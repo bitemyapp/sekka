@@ -258,6 +258,9 @@ pub enum Msg {
     // Jobs.
     Job(u64, JobEvent),
     Answer(u64, Answer),
+    /// The conflict sheet's Replace button: the person agreed to replace what
+    /// it showed.
+    Replace(u64, aizome_kit::agree::Pressed<crate::fsops::Replacing>),
     AskAll(u64, bool),
     PauseJob(u64),
     CancelJob(u64),
