@@ -6,7 +6,7 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 use aizome_kit::Icon;
-use aizome_search::{Candidate, Query, Scope, calc, rank};
+use aizome_search::{Candidate, Query, Ranked, Scope, calc, rank};
 use aizome_shell_proto as proto;
 
 use crate::actions::Action;
@@ -23,6 +23,9 @@ pub struct Item {
     pub glyph: Icon,
     /// Matched but not shown.
     pub keywords: Vec<String>,
+    /// An app's purposes in Settei's Default Apps ("Terminal", "Text
+    /// editor") for which it's the chosen app.
+    pub purposes: Vec<&'static str>,
     /// Its frecency key (`cmd:…`, `app:…`, `file:…`), if picks are counted.
     pub key: Option<String>,
     pub action: Action,
@@ -41,6 +44,7 @@ impl Item {
             shortcut: None,
             glyph,
             keywords: Vec::new(),
+            purposes: Vec::new(),
             key: None,
             action,
             mono: false,
@@ -168,6 +172,9 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
     }
     let limit = if r.scope.is_some() { 60 } else { r.per_section.max(1) };
     let mut query = Query::new(q);
+    let purpose_query = q.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+    let mut prefer_apps = false;
+    let mut ordinary_app_score = None;
     for scope in ORDER.iter().copied().filter(|s| *s != Scope::Answer) {
         if r.scope.is_some_and(|only| only != scope) {
             continue;
@@ -192,7 +199,30 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
                     boost: i.boost + exactness(&i.title, q),
                 })
                 .collect();
-            rank(&mut query, &candidates, limit)
+            let preferred: Vec<bool> = pool.iter().map(|i| matches_purpose(i, &purpose_query)).collect();
+            let has_preferred = preferred.iter().any(|p| *p);
+            // Keep the ordinary winner before prioritising or truncating:
+            // Commands versus Apps still follows ordinary matching.
+            let mut ranked = rank(&mut query, &candidates, if has_preferred { pool.len() } else { limit });
+            if scope == Scope::App {
+                ordinary_app_score = ranked.first().map(|r| r.score);
+                prefer_apps = has_preferred;
+            }
+            if has_preferred {
+                // A role is itself a reason to find its app. Desktop
+                // entries needn't repeat Settei's labels (mpv has neither
+                // "Videos" nor "Music"). Don't add aliases to other queries.
+                for (index, preferred) in preferred.iter().enumerate() {
+                    if *preferred && !ranked.iter().any(|r| r.index == index) {
+                        ranked.push(Ranked { index, score: 0, ranges: Vec::new() });
+                    }
+                }
+                // Stable: all other apps keep their normal order. This is
+                // priority, not a score that an exact title or habit can beat.
+                ranked.sort_by_key(|r| !preferred[r.index]);
+                ranked.truncate(limit);
+            }
+            ranked
                 .into_iter()
                 .map(|rk| Row { item: pool[rk.index].clone(), ranges: rk.ranges, score: rk.score })
                 .collect()
@@ -205,15 +235,40 @@ pub fn sections(r: &Ranking, items: &[Item], files: &[Item]) -> Vec<Section> {
             (scope == Scope::Command).then(|| r.app_name.map(|a| format!("{} MENUS", a.to_uppercase()))).flatten();
         out.push(Section { scope, head, sub, rows });
     }
-    // With something typed, the section holding the best match leads.
+    // A purpose takes Apps past other sections. Keep Commands ahead when
+    // they would have beaten Apps without purpose matching, promoting them
+    // too rather than leaving Settings or Files ahead of both.
     if !q.is_empty() && r.scope.is_none() {
         let answer = out.first().is_some_and(|s| s.scope == Scope::Answer) as usize;
+        let best = |s: &Section| s.rows.iter().map(|r| r.score).max().unwrap_or(0);
+        let commands = out.iter().find(|s| s.scope == Scope::Command).map(best);
+        let commands_first = commands.is_some_and(|score| ordinary_app_score.is_none_or(|app| score >= app));
+        let priority = |s: &Section| match s.scope {
+            Scope::Command if prefer_apps && commands_first => 0,
+            Scope::App if prefer_apps => 1,
+            _ => 2,
+        };
         out[answer..].sort_by(|a, b| {
-            let best = |s: &Section| s.rows.iter().map(|r| r.score).max().unwrap_or(0);
-            best(b).cmp(&best(a)).then(order_of(a.scope).cmp(&order_of(b.scope)))
+            priority(a).cmp(&priority(b)).then(best(b).cmp(&best(a))).then(order_of(a.scope).cmp(&order_of(b.scope)))
         });
     }
     out
+}
+
+/// Asking for a purpose opens the app chosen for it: "term" and "terminal"
+/// find the default terminal before another used more often, and before
+/// the setting that chooses it. The query must start a word of the
+/// purpose's name, from three letters: "te" and "fi" rank as before.
+/// `q` has already been lowercased and its whitespace normalised.
+fn matches_purpose(i: &Item, q: &str) -> bool {
+    if i.scope != Scope::App || q.chars().count() < 3 {
+        return false;
+    }
+    let starts_a_word = |purpose: &&str| {
+        let purpose = purpose.to_lowercase();
+        purpose.match_indices(q).any(|(at, _)| at == 0 || purpose[..at].ends_with(' '))
+    };
+    i.purposes.iter().any(starts_a_word)
 }
 
 fn order_of(s: Scope) -> usize {
@@ -402,6 +457,219 @@ mod tests {
         assert!(!s[0].rows[0].ranges.is_empty());
         let s = sections(&ranking("calc", None), &items(), &[]);
         assert_eq!(s[0].scope, Scope::App, "a keyword finds Soroban");
+    }
+
+    /// An app as the shell lists it, chosen in Settei for `purposes`.
+    fn app(name: &str, generic: &str, keywords: &[&str], purposes: &[&'static str]) -> Item {
+        let keywords = keywords.iter().map(|k| k.to_string()).chain([generic.to_owned()]).collect();
+        let mut i = Item::new(Scope::App, name, Icon::AppWindow, Action::None).trail(generic).keywords(keywords);
+        i.purposes = purposes.to_vec();
+        i
+    }
+
+    /// Apps whose purposes overlap, as their desktop entries describe
+    /// them, and the setting that chooses the terminal.
+    fn desktop() -> Vec<Item> {
+        let mut foot = app("Foot", "Terminal", &["shell", "prompt", "command", "commandline"], &[]);
+        // About a hundred picks.
+        foot.boost = 110;
+        vec![
+            app("Hotaru", "Terminal", &["terminal", "shell", "console", "command line", "hotaru"], &["Terminal"]),
+            foot,
+            app("Foot Server", "Terminal", &["shell", "prompt", "command", "commandline"], &[]),
+            app("kitty", "Terminal", &["shell", "prompt", "terminal"], &[]),
+            app("Hako", "Files", &["files", "file manager", "folders", "browser", "documents"], &["Files"]),
+            app("Sumi", "Text Editor", &["text editor", "editor", "text"], &["Text editor"]),
+            app("Firefox", "Web Browser", &["internet", "www"], &["Web browser"]),
+            setting_item(&SettingEntry {
+                id: "general.default-terminal".into(),
+                title: "Terminal".into(),
+                path: "General › Default Apps › Terminal".into(),
+                keywords: vec!["shell".into(), "foot".into(), "console".into()],
+                pane: Some("general".into()),
+                entry: Some("default-terminal".into()),
+            }),
+        ]
+    }
+
+    fn first(s: &[Section]) -> (Scope, &str) {
+        (s[0].scope, s[0].rows[0].item.title.as_str())
+    }
+
+    #[test]
+    fn a_purpose_finds_its_chosen_app_first() {
+        for (q, wanted) in [
+            ("ter", "Hotaru"),
+            ("term", "Hotaru"),
+            ("Term", "Hotaru"),
+            ("terminal", "Hotaru"),
+            ("files", "Hako"),
+            ("text editor", "Sumi"),
+            ("editor", "Sumi"),
+            ("browser", "Firefox"),
+        ] {
+            let s = sections(&ranking(q, None), &desktop(), &[]);
+            assert_eq!(first(&s), (Scope::App, wanted), "query: {q}");
+        }
+        // Ahead of the setting, while the other terminals keep their order.
+        let s = sections(&ranking("terminal", None), &desktop(), &[]);
+        assert_eq!(s[0].rows[1].item.title, "Foot");
+        assert_eq!(s[1].scope, Scope::Setting);
+    }
+
+    #[test]
+    fn other_words_rank_as_they_would_without_purpose_priority() {
+        let chosen: Vec<Item> = items().into_iter().chain(desktop()).collect();
+        let plain: Vec<Item> = chosen
+            .iter()
+            .cloned()
+            .map(|mut i| {
+                i.purposes.clear();
+                i
+            })
+            .collect();
+        let order = |s: Vec<Section>| -> Vec<(Scope, Vec<(String, i64)>)> {
+            s.into_iter().map(|s| (s.scope, s.rows.into_iter().map(|r| (r.item.title, r.score)).collect())).collect()
+        };
+        // Too short, not the start of a word, or more than a purpose.
+        for q in [
+            "",
+            " ",
+            "t",
+            "te",
+            "fi",
+            "rminal",
+            "itor",
+            "foot",
+            "kitty",
+            "hotaru",
+            "terminal settings",
+            "settings terminal",
+            "terminal kitty",
+            "find rep",
+            "~/Documents",
+            "文書",
+            "🙂",
+        ] {
+            assert_eq!(
+                order(sections(&ranking(q, None), &chosen, &[])),
+                order(sections(&ranking(q, None), &plain, &[])),
+                "query: {q}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_focused_apps_commands_keep_their_precedence() {
+        let editor = [cmd("New", "File"), cmd("Open…", "File"), cmd("Copy", "Edit"), cmd("Find…", "Edit")];
+        let all: Vec<Item> = editor.into_iter().chain(desktop()).collect();
+        for (q, app) in [("file", "Hako"), ("edit", "Sumi")] {
+            let s = sections(&ranking(q, None), &all, &[]);
+            assert_eq!(s[0].scope, Scope::Command, "query: {q}");
+            // Then the chosen app, ahead of the others.
+            assert_eq!((s[1].scope, s[1].rows[0].item.title.as_str()), (Scope::App, app), "query: {q}");
+        }
+        // Commands that don't match leave Apps in the lead.
+        assert_eq!(first(&sections(&ranking("terminal", None), &all, &[])), (Scope::App, "Hotaru"));
+    }
+
+    #[test]
+    fn every_default_role_is_searchable_without_desktop_keywords() {
+        for role in aizome_sys::apps::DefaultRole::ALL {
+            let label = role.label();
+            let chosen = app("選んだアプリ", "", &[], &[label]);
+            let mut rival = app(label, label, &[], &[]);
+            rival.boost = 10_000;
+            let mut setting = Item::new(Scope::Setting, label, Icon::Settings, Action::None);
+            setting.boost = 20_000;
+            let window = Item::new(Scope::Window, label, Icon::AppWindow, Action::None);
+            let all = [rival, chosen, setting, window];
+            let mut folder = Item::file(&Path::new("/home/person").join(label), true, Path::new("/home/person"));
+            folder.boost = 30_000;
+            // Every useful prefix of each word and of the full purpose,
+            // including capitals and pasted whitespace.
+            for (start, _) in label.char_indices().filter(|(at, _)| *at == 0 || label[..*at].ends_with(' ')) {
+                let suffix = &label[start..];
+                for end in suffix.char_indices().skip(3).map(|(at, _)| at).chain([suffix.len()]) {
+                    let prefix = &suffix[..end];
+                    for q in
+                        [prefix.to_lowercase(), prefix.to_uppercase(), format!("  {}  ", prefix.replace(' ', " \t "))]
+                    {
+                        for limit in [1, 4] {
+                            for scope in [None, Some(Scope::App)] {
+                                let r = Ranking { per_section: limit, ..ranking(&q, scope) };
+                                let s = sections(&r, &all, std::slice::from_ref(&folder));
+                                assert_eq!(
+                                    first(&s),
+                                    (Scope::App, "選んだアプリ"),
+                                    "{role:?}, {q:?}, {limit}, {scope:?}"
+                                );
+                                assert_eq!(s[0].rows.iter().filter(|r| r.item.title == "選んだアプリ").count(), 1);
+                                assert!(s[0].rows[0].ranges.is_empty(), "a purpose isn't a title highlight");
+                            }
+                        }
+                    }
+                }
+            }
+            // A purpose never leaks an app into another scope.
+            for scope in [Scope::Setting, Scope::Window, Scope::File, Scope::Command] {
+                let s = sections(&ranking(label, Some(scope)), &all, std::slice::from_ref(&folder));
+                assert!(s.iter().all(|s| s.scope == scope), "{role:?}, {scope:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn chosen_terminal_beats_an_exact_title_and_heavy_usage_before_truncation() {
+        let mut all = desktop();
+        for n in 0..70 {
+            let mut rival = app("Terminal", "Terminal", &[], &[]);
+            rival.key = Some(format!("app:rival-{n}"));
+            rival.boost = 10_000 + n;
+            all.push(rival);
+        }
+        for scope in [None, Some(Scope::App)] {
+            let r = Ranking { per_section: 1, ..ranking("terminal", scope) };
+            let s = sections(&r, &all, &[]);
+            assert_eq!(first(&s), (Scope::App, "Hotaru"));
+            assert_eq!(s[0].rows.len(), if scope.is_some() { 60 } else { 1 });
+            if scope.is_some() {
+                assert_eq!(s[0].rows[1].item.key.as_deref(), Some("app:rival-69"));
+            }
+        }
+    }
+
+    #[test]
+    fn command_precedence_does_not_leave_settings_or_folders_ahead() {
+        let chosen = app("Hako", "Files", &["files"], &["Files"]);
+        let command = cmd("New", "File");
+        let mut setting = Item::new(Scope::Setting, "Files", Icon::Settings, Action::None);
+        setting.boost = 10_000;
+        let mut folder = Item::file(Path::new("/home/person/Files"), true, Path::new("/home/person"));
+        folder.boost = 20_000;
+        let all = [chosen, command, setting];
+        for limit in [1, 4] {
+            let r = Ranking { per_section: limit, ..ranking("file", None) };
+            let s = sections(&r, &all, std::slice::from_ref(&folder));
+            assert_eq!(
+                s.iter().map(|s| s.scope).collect::<Vec<_>>(),
+                [Scope::Command, Scope::App, Scope::File, Scope::Setting]
+            );
+            assert_eq!(s[1].rows[0].item.title, "Hako");
+        }
+    }
+
+    #[test]
+    fn command_order_uses_the_best_ordinary_app_even_when_it_will_be_hidden() {
+        let mut rival = app("Files", "", &[], &[]);
+        rival.boost = 500;
+        let all = [app("Hako", "Files", &[], &["Files"]), rival, cmd("New", "File")];
+        for limit in [1, 4] {
+            let r = Ranking { per_section: limit, ..ranking("file", None) };
+            let s = sections(&r, &all, &[]);
+            assert_eq!(first(&s), (Scope::App, "Hako"));
+            assert_eq!(s[1].scope, Scope::Command, "Apps already outranked Commands before purpose priority");
+        }
     }
 
     #[test]

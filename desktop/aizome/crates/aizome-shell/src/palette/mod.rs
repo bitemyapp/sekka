@@ -398,6 +398,11 @@ impl Shell {
         }
         // Apps.
         if let Some(index) = &self.apps {
+            // The apps chosen in Settei's Default Apps, by the names it shows.
+            let defaults: Vec<(String, &'static str)> = aizome_sys::apps::DefaultRole::ALL
+                .into_iter()
+                .filter_map(|role| Some((index.role_default(role)?, role.label())))
+                .collect();
             for a in index.apps() {
                 let glyph = crate::apps::catalog::glyph_for(a.app_id())
                     .map(|g| g.0)
@@ -411,6 +416,7 @@ impl Shell {
                         .keywords(kw)
                         .key(key.clone());
                 item.boost = self.frecency.boost(&key);
+                item.purposes = defaults.iter().filter(|(id, _)| *id == a.id).map(|(_, purpose)| *purpose).collect();
                 out.push(item);
             }
         }
