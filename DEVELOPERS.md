@@ -347,6 +347,16 @@ cargo test --locked --manifest-path rust/Cargo.toml
 
 Do not merge unrelated Cargo workspaces or broaden package source filters as part of routine edits. Preserve Genkan, Yukimi and Kakehashi's unprivileged GUI/privileged helper boundaries. Keep slow I/O off the interface thread.
 
+State machines whose mistakes would cost data, a disk or a working system are
+written as typestate on `desktop/aizome/crates/aizome-typestate`: one type per
+state, transitions that consume the state they leave, proofs that a check ran
+(a fresh answer, a confirmed target), and private constructors, so the mistake
+doesn't compile. Show each guarantee with a `compile_fail,EXXXX` doctest beside
+a twin that compiles, and run them with `RUSTC_BOOTSTRAP=1 cargo test --doc -p
+<crate>`, which makes rustdoc check the error codes as it does on nightly.
+`docs/typestate-tier1.md` lists the machines done so far and what their types
+still can't rule out.
+
 The retained VM tooling is available through `nix build .#tools`. Run `result/bin/respin-tools qemu-test --help` for its firmware, storage, desktop, and application options. The Genkan fixture now builds from `installer/genkan/tests/vm-fixture`, not a remote installer revision. The rootless builder's static guest tools require the Rust musl target. The older reports in `TESTING.md`, `installer/genkan/RUST-TESTING.md`, and `docs/test-results/` describe their named predecessor revisions only.
 
 BIOS fixtures keep PCI memory windows below 4 GiB with SeaBIOS's
