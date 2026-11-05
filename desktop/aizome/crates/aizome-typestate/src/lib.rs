@@ -19,7 +19,9 @@
 //! 4. The hottest event is routed first.
 //! 5. The typed transitions are the only way to change a state: fields stay
 //!    private, and code outside the machine's module reaches the typed states
-//!    only through `with_typed`.
+//!    only through `with_typed`. A step that must end in a commit or a restore
+//!    is a consuming method, with [`Unsettled`] running the restore on the
+//!    paths the types can't close (an early return, a panic).
 //!
 //! Everything here is `#[inline]` or generic, so a program compiles only the
 //! parts it uses.
@@ -46,6 +48,8 @@
 mod confirm;
 mod generation;
 mod machine;
+mod settle;
 
 pub use confirm::{Changed, Confirmed, Reviewed, SameTarget};
 pub use generation::{Current, Generation, Ticket};
+pub use settle::Unsettled;
