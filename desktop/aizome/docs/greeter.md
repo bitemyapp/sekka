@@ -90,7 +90,8 @@ picking someone else mid-check can never start the first person's session.
   `UID_MIN`–`UID_MAX` with a login shell), AccountsService's pictures and
   public display scales, and
   its own state, `/var/lib/aizome-greeter/state.toml` (mode 0700, the
-  greeter's). The state holds who logged in last and each person's
+  greeter's), written whole and synced to the disk before the session
+  starts. The state holds who logged in last and each person's
   session, nothing secret. Nothing in people's homes is read.
 - **What it can do.** Power actions go to logind through `systemctl`, and
   polkit lets the person at the login screen take them.
