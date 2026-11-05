@@ -17,16 +17,14 @@ use gpui_kit::{
     AnyElement, Context, ExternalPaths, FontWeight, InteractiveElement as _, IntoElement, ParentElement as _,
     PathPromptOptions, Render, SharedString, StatefulInteractiveElement as _, Styled as _, Task, Window, div,
 };
-use kakehashi_core::choice::{DriveList, Listed, ListingTicket, ReviewedDrive};
+use kakehashi_core::choice::{DriveList, DriveListing, ImageId, Listed, ReviewTicket};
 use kakehashi_core::image::{self, Cancelled};
 use kakehashi_core::job::{self, End, Event, Job, JobState, ProgressFile};
 use kakehashi_core::nightly::{self, Build, Fetch, NIGHTLY};
 use kakehashi_core::write::{Plan, Progress, TAIL};
 use kakehashi_core::{Drive, human, platform};
-use std::cell::Cell;
 use std::fs::{self, File};
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
@@ -36,7 +34,7 @@ const REPORT: Duration = Duration::from_millis(100);
 
 enum Msg {
     Builds(Result<Vec<Build>, String>),
-    Drives(ListingTicket, Result<Vec<Drive>, String>),
+    Drives(DriveListing),
     Hashed { path: PathBuf, done: u64 },
     HashDone { path: PathBuf, result: Result<(String, Option<(String, PathBuf)>), String> },
     Holds { path: PathBuf, drive: Option<String> },
@@ -166,7 +164,7 @@ impl Kakehashi {
         let Some(ticket) = self.drives.request(Instant::now()) else { return };
         let tx = self.tx.clone();
         std::thread::spawn(move || {
-            let _ = tx.send(Msg::Drives(ticket, platform::drives().map_err(|e| format!("{e:#}"))));
+            let _ = tx.send(Msg::Drives(DriveListing::new(ticket, platform::drives().map_err(|e| format!("{e:#}")))));
         });
     }
 
@@ -193,7 +191,7 @@ impl Kakehashi {
                     Err(e) => Loading::Failed(e),
                 }
             }
-            Msg::Drives(ticket, result) => self.drives.listed(ticket, result),
+            Msg::Drives(listing) => self.drives.listed(listing),
             Msg::Hashed { path, done } => {
                 if let Some(image) = self.image.as_mut().filter(|i| i.path == path) {
                     image.check = Check::Hashing { done };
@@ -393,10 +391,23 @@ impl Kakehashi {
         None
     }
 
+    /// The image as a write would use it: checked, with its checksum.
+    fn image_id(&self) -> Option<ImageId> {
+        let image = self.image.as_ref()?;
+        match (&image.check, &image.sha) {
+            (Check::Verified { .. } | Check::Unknown { .. }, Some(sha)) => {
+                Some(ImageId { path: image.path.clone(), sha256: sha.clone() })
+            }
+            _ => None,
+        }
+    }
+
     fn confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let (Some(image), Some(reviewed)) = (&self.image, self.drives.review(self.holds())) else { return };
+        let Some(image) = self.image_id() else { return };
+        let holds = self.holds().map(str::to_owned);
+        let Some((review, target)) = self.drives.open_review(holds.as_deref(), image) else { return };
+        let (drive, image) = (target.drive(), target.image());
         let name = image.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        let drive = reviewed.drive();
         let view = cx.entity();
         let title = format!("Erase {}?", drive.label());
         let description = format!(
@@ -407,11 +418,10 @@ impl Kakehashi {
             drive.serial_hint(),
             name
         );
-        // OK writes the drive described here, found again when it is pressed.
-        let reviewed = Rc::new(Cell::new(Some(reviewed)));
+        // OK writes the drive and image described here, found again when it
+        // is pressed, and only while this dialog's review is the open one.
         window.open_alert_dialog(cx, move |alert, _, _| {
-            let view = view.clone();
-            let reviewed = reviewed.clone();
+            let (ok, cancel) = (view.clone(), view.clone());
             alert
                 .title(title.clone())
                 .description(description.clone())
@@ -420,30 +430,31 @@ impl Kakehashi {
                 .cancel_text("Cancel")
                 .show_cancel(true)
                 .on_ok(move |_, _, cx| {
-                    if let Some(reviewed) = reviewed.take() {
-                        view.update(cx, |this, cx| {
-                            this.start_write(reviewed);
-                            cx.notify();
-                        });
-                    }
+                    ok.update(cx, |this, cx| {
+                        this.start_write(review);
+                        cx.notify();
+                    });
+                    true
+                })
+                .on_cancel(move |_, _, cx| {
+                    cancel.update(cx, |this, _| this.drives.cancel_review(review));
                     true
                 })
         });
     }
 
-    /// Writes the drive the person reviewed in the dialog, if it is still
-    /// the drive listed under its name.
-    fn start_write(&mut self, reviewed: ReviewedDrive) {
-        let Some(image) = &self.image else { return };
-        let Some(sha) = image.sha.clone() else { return };
-        let drive = match self.drives.confirm(reviewed, image.holds.as_deref()) {
-            Ok(drive) => drive,
+    /// Writes the drive and image the open dialog described, if they are
+    /// still the drive listed under its name and the window's image.
+    fn start_write(&mut self, review: ReviewTicket) {
+        let image = self.image_id();
+        let holds = self.holds().map(str::to_owned);
+        let plan = match self.drives.confirm(review, holds.as_deref(), image) {
+            Ok(write) => Plan::new(write),
             Err(why) => {
                 self.error = Some(why.to_string());
                 return;
             }
         };
-        let plan = Plan::new(image.path.clone(), sha, drive);
         let started = (|| -> anyhow::Result<(tempfile::TempDir, PathBuf, PathBuf)> {
             let dir = tempfile::Builder::new().prefix("kakehashi-").tempdir()?;
             let plan_path = dir.path().join("plan.json");

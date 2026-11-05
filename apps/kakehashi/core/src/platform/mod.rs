@@ -2,7 +2,7 @@
 //! helper, opening one for writing.
 
 use crate::drive::Drive;
-use aizome_typestate::Confirmed;
+use crate::write::StillThere;
 use anyhow::Result;
 use std::fs::File;
 use std::path::Path;
@@ -51,13 +51,13 @@ pub fn image_drive(image: &Path) -> Option<String> {
 
 /// Unmounts the drive the plan names, as [`still_there`](crate::write::still_there)
 /// found it.
-pub(crate) fn unmount(drive: &Confirmed<Drive>) -> Result<()> {
+pub(crate) fn unmount(drive: &StillThere) -> Result<()> {
     imp::unmount(drive.target())
 }
 
 /// Opens the drive the plan names, as [`still_there`](crate::write::still_there)
 /// found it, for writing.
-pub(crate) fn open(drive: &Confirmed<Drive>, _cancelled: &dyn Fn() -> bool) -> Result<Device> {
+pub(crate) fn open(drive: &StillThere, _cancelled: &dyn Fn() -> bool) -> Result<Device> {
     #[cfg(target_os = "macos")]
     return imp::open(drive.target(), _cancelled);
     #[cfg(not(target_os = "macos"))]

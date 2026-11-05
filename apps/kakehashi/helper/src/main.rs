@@ -16,7 +16,7 @@
 
 use anyhow::{Context, Result, bail, ensure};
 use kakehashi_core::image::Cancelled;
-use kakehashi_core::write::{Plan, Progress, execute};
+use kakehashi_core::write::{Progress, Requested, execute};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -63,11 +63,12 @@ fn progress_file(path: &Path) -> Result<File> {
     Ok(file)
 }
 
-fn emit(out: &mut File, progress: &Progress) {
-    if let Ok(line) = serde_json::to_string(progress) {
-        let _ = writeln!(out, "{line}");
-        let _ = out.flush();
-    }
+/// Appends one report. `execute` stops before it looks at the drive if the
+/// first can't be written; the others are best effort.
+fn emit(out: &mut File, progress: &Progress) -> std::io::Result<()> {
+    let line = serde_json::to_string(progress)?;
+    writeln!(out, "{line}")?;
+    out.flush()
 }
 
 fn main() -> ExitCode {
@@ -97,13 +98,13 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let plan: Result<Plan> = fs::read_to_string(&args.plan)
+    let plan: Result<Requested> = fs::read_to_string(&args.plan)
         .context("could not read the plan")
         .and_then(|text| serde_json::from_str(&text).context("the plan is not one Kakehashi wrote"));
     let plan = match plan {
         Ok(plan) => plan,
         Err(e) => {
-            emit(&mut out, &Progress::Failed { message: format!("{e:#}"), touched: false });
+            let _ = emit(&mut out, &Progress::Failed { message: format!("{e:#}"), touched: false });
             return ExitCode::FAILURE;
         }
     };
@@ -121,16 +122,17 @@ fn main() -> ExitCode {
                 _ => true,
             };
             if !moving || finished || last.elapsed() >= Duration::from_millis(200) {
-                emit(&mut out, &progress);
                 last = Instant::now();
+                return emit(&mut out, &progress);
             }
+            Ok(())
         },
         &|| cancel.exists(),
         &mut touched,
     );
     match result {
         Ok(outcome) => {
-            emit(&mut out, &Progress::Finished { ejected: outcome.ejected, note: outcome.note });
+            let _ = emit(&mut out, &Progress::Finished { ejected: outcome.ejected, note: outcome.note });
             ExitCode::SUCCESS
         }
         Err(e) => {
@@ -139,7 +141,7 @@ fn main() -> ExitCode {
             } else {
                 format!("{e:#}")
             };
-            emit(&mut out, &Progress::Failed { message, touched });
+            let _ = emit(&mut out, &Progress::Failed { message, touched });
             ExitCode::FAILURE
         }
     }
