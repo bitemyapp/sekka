@@ -578,8 +578,10 @@ without deleting individual objects. Docker logs are bounded separately.
 
 For eviction/restart evidence, `cache-inventory --timeout SECONDS` snapshots
 persistent cache names and sizes with the owned backends temporarily paused.
-It records complete above-bound observations while waiting for configured
-byte and entry limits, but fails on filesystem errors without retrying partial scans.
+It records both apparent sizes and per-file 4 KiB-rounded policy bytes, using
+the latter for byte-limit checks. Complete above-bound observations are retained
+while waiting for configured byte and entry limits; filesystem errors fail
+without retrying partial scans.
 Returned or failed scans resume their backends; an already-paused backend is
 refused without changing its state. Symlinked cache roots are refused.
 Use an idle, isolated qualification deployment: this pauses service requests,
@@ -592,6 +594,10 @@ retained 512 empty entries before the count policy; afterward a configured
 eight-entry budget retained eight through 2,048 new results and restart.
 The probe verified real empty-result hits, evicted misses and unchanged ordinary
 CAS entries; it did not merely inspect generated configuration.
+A block-boundary regression rejected two 4,097-byte blobs against a 12,288-byte
+budget: their apparent total was 8,194 bytes, but their policy charge was 16,384.
+An actual resize then retained one blob with an 8,192-byte charge, and its
+downloaded contents matched. Policy accounting is not physical disk usage.
 
 Each domain has an owned frontend bridge and a stable namespace-owner
 container. CI joins that bridge with its own network namespace; it never

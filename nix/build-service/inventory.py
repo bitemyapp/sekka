@@ -146,13 +146,14 @@ def cache_entries(controller, manifest, timeout):
 from pathlib import Path
 started = time.time()
 roots = [Path(value) for value in json.loads(sys.argv[1])]
-files, errors, sizes, counts = {}, [], [], []
+block_size = int(sys.argv[2])
+files, errors, sizes, counts, accounted_sizes = {}, [], [], [], []
 for index, root in enumerate(roots):
     if root.resolve(strict=True) != root:
         raise RuntimeError('Refusing symlinked cache root: ' + str(root))
     if not root.is_dir():
         raise RuntimeError('Cache root is not a directory: ' + str(root))
-    size, count = 0, 0
+    size, count, accounted_size = 0, 0, 0
     for directory, _, names in os.walk(root, followlinks=False, onerror=lambda error: errors.append(str(error))):
         for name in names:
             path = Path(directory) / name
@@ -162,14 +163,17 @@ for index, root in enumerate(roots):
                     relative = path.relative_to(root)
                     files[str(index) + '/' + str(relative)] = info.st_size
                     size += info.st_size
+                    accounted_size += ((info.st_size + block_size - 1) // block_size) * block_size
                     count += relative.parts[0] == 'content'
             except OSError as error:
                 errors.append(str(error))
     sizes.append(size)
     counts.append(count)
+    accounted_sizes.append(accounted_size)
 print(json.dumps({'schema': 1, 'roots': list(map(str, roots)), 'files': files,
                   'file_count': len(files), 'apparent_bytes': sum(sizes),
                   'root_apparent_bytes': sizes, 'root_entry_counts': counts, 'errors': errors,
+                  'root_block_accounted_bytes': accounted_sizes,
                   'start_unix': started, 'end_unix': time.time()}))
 """
     deadline = time.monotonic() + timeout
@@ -186,17 +190,19 @@ print(json.dumps({'schema': 1, 'roots': list(map(str, roots)), 'files': files,
                 controller.docker(manifest, "pause", backend, capture=True)
                 resumed.callback(controller.docker, manifest, "unpause", backend, capture=True)
             result = json.loads(controller.remote(
-                manifest, sys.executable, "-B", "-c", scan, json.dumps(roots), capture=True))
+                manifest, sys.executable, "-B", "-c", scan, json.dumps(roots),
+                str(controller.CACHE_BLOCK_SIZE), capture=True))
         within_limits = (
-            all(size <= limit for size, limit in zip(result["root_apparent_bytes"], limits))
+            all(size <= limit for size, limit in zip(result["root_block_accounted_bytes"], limits))
             and all(count <= limit for count, limit in zip(result["root_entry_counts"], entry_limits)))
         observations.append({key: result[key] for key in (
-            "start_unix", "end_unix", "file_count", "root_apparent_bytes", "root_entry_counts", "errors")})
+            "start_unix", "end_unix", "file_count", "root_apparent_bytes",
+            "root_block_accounted_bytes", "root_entry_counts", "errors")})
         if result["errors"] or within_limits or time.monotonic() >= deadline:
             if not within_limits:
                 result["errors"].append("Persistent cache has not reached its configured byte/entry bounds")
             result.update(
-                method="Owned backends paused during scan; names/sizes, NOT physical extent accounting",
+                method="Owned backends paused; apparent and block-rounded policy bytes, NOT physical extent accounting",
                 backend_ids=backends, configured_root_byte_limits=limits,
                 configured_root_entry_limits=entry_limits, bound_observations=observations)
             print(json.dumps(result, sort_keys=True))
