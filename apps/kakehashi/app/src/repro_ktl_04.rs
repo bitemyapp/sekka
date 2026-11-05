@@ -46,7 +46,7 @@ fn run_to_end(k: &mut Kakehashi) {
     loop {
         let msg = k.rx.recv_timeout(deadline.saturating_duration_since(Instant::now())).expect("the job never ended");
         k.apply(msg);
-        if k.job.as_ref().is_some_and(|j| j.ended) {
+        if k.job.as_ref().is_some_and(Job::is_ended) {
             return;
         }
     }
@@ -111,7 +111,7 @@ fn repro_ktl_04_ok_writes_the_drive_the_dialog_named() {
 
     // OK in the dialog.
     k.start_write(reviewed);
-    let started = k.job.as_ref().map(|j| j.drive.clone());
+    let started = k.job.as_ref().map(|j| j.ctx().drive().clone());
     if started.is_some() {
         run_to_end(&mut k);
     }

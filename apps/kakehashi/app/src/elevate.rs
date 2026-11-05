@@ -2,20 +2,8 @@
 //! on Linux and UAC on Windows. On macOS the helper runs as the user and
 //! authorizes only the device open with authopen. The window never elevates.
 
+pub use kakehashi_core::job::Ran;
 use std::path::{Path, PathBuf};
-
-/// How a run of the helper ended.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Ran {
-    /// The helper ran and exited with this code; its progress file says how
-    /// the write went.
-    Exited(i32),
-    /// The person dismissed the prompt.
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
-    Declined,
-    /// The helper could not be started.
-    Failed(String),
-}
 
 /// The helper beside this program: in the same directory, or in the same
 /// `Contents/MacOS` of the app bundle.

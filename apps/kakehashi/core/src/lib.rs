@@ -9,11 +9,13 @@
 //!
 //! The window's side of a write is here too, as typestate (see
 //! `aizome-typestate`): [`choice`], the drive list and the drive the person
-//! confirmed, which is the only drive a [`write::Plan`] can name.
+//! confirmed, which is the only drive a [`write::Plan`] can name, and
+//! [`job`], the write as the window follows the helper's reports.
 
 pub mod choice;
 pub mod drive;
 pub mod image;
+pub mod job;
 pub mod nightly;
 pub mod platform;
 pub mod write;
