@@ -22,7 +22,7 @@ use crate::fsops::names;
 use crate::fsops::sys;
 use crate::fsops::transfer::Mode;
 use crate::fsops::trash::{self, Trash};
-use crate::fsops::undo::{History, Record, Step};
+use crate::fsops::undo::{Filed, History, Record, Step};
 use crate::model::entry::{self, Entry, Sort, SortKey};
 use crate::model::mime::MimeDb;
 use crate::model::places::{self, Place};
@@ -806,8 +806,13 @@ impl Hako {
         if let Some(step) = &done.step {
             self.history.push(step.clone());
         }
-        if let Some(inverted) = &done.inverted {
-            self.history.finished(inverted.clone());
+        // A step left out of the history after failing twice: the person
+        // is told, so the next ❖Z doesn't undo the one before it unasked.
+        let mut note = None;
+        if let Some(inverted) = &done.inverted
+            && let Filed::Dropped(why) = self.history.finished(inverted.clone())
+        {
+            note = Some(why);
         }
         // Select what came where the person is.
         let mut by_dir: HashMap<PathBuf, Vec<OsString>> = HashMap::new();
@@ -826,7 +831,7 @@ impl Hako {
         let r = &done.report;
         let mut problems: Vec<(PathBuf, String)> = r.failed.clone();
         problems.extend(r.problems.iter().cloned());
-        if !problems.is_empty() && self.windows.contains_key(&w) {
+        if (!problems.is_empty() || note.is_some()) && self.windows.contains_key(&w) {
             let n = problems.len();
             let shown: Vec<String> = problems
                 .iter()
@@ -840,7 +845,10 @@ impl Hako {
                     )
                 })
                 .collect();
-            let more = if n > 6 { format!("\n…and {} more.", n - 6) } else { String::new() };
+            let mut more = if n > 6 { format!("\n…and {} more.", n - 6) } else { String::new() };
+            if let Some(note) = note {
+                more.push_str(&format!("\n\n{note}"));
+            }
             let head =
                 if n == 1 { "An item couldn't be done.".to_owned() } else { format!("{n} items couldn't be done.") };
             self.open_sheet(

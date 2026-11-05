@@ -335,7 +335,9 @@ folder put back by merging, with a conflict in it skipped, keeps the
 skipped part in the Trash, where it can still be put back from. Undo and
 Redo run one at a time. An undo that can't be carried out (a name taken
 since, or Stop at a conflict) stays in Edit ▸ Undo to try again, so the
-next ❖Z doesn't undo the step before it instead.
+next ❖Z doesn't undo the step before it instead. If a second try in a row
+does nothing either, the step is left out of Undo and the message says so,
+so the steps before it can still be undone.
 
 Encrypted removable volumes stay in the file sidebar after unlocking. Hako asks for a volume passphrase before mounting a locked one; Cancel leaves it locked, and an incorrect passphrase can be retried. While unlocking, the prompt waits for the device operation to finish. System volumes and devices hidden by UDisks policy stay excluded from the removable list.
 
