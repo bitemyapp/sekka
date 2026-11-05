@@ -1166,6 +1166,11 @@ configuration snapshots under `/var/lib/yukimi/configurations` accompany
 generations, including `flake.nix` for rollback across migration. Activation
 is allowed to finish once started; it never initiates a reboot.
 
+`cargo test -p yukimi-helper --test namespace -- --ignored` runs the real
+helper worker against stand-in Nix tools, in an unprivileged user and mount
+namespace with private `/run`, `/nix/var/nix`, `/var/lib/yukimi`,
+`/etc/yukimi` and `/etc/nixos`.
+
 The authenticated helper launches the entire operation in an independent systemd
 service. The client follows progress from regular files, rather than connecting
 activation's output to a GUI-owned pipe. Closing Yukimi requests cancellation

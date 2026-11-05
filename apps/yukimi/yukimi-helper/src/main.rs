@@ -992,9 +992,8 @@ fn change(args: &[String]) -> Result<String> {
             return Err(e);
         }
     };
-    let mut receipt =
-        Receipt { system: PathBuf::from(&system), boot_id: completion::boot_id(), state: "activating".into(), reasons };
-    save_update(&receipt)?;
+    let activating = Receipt::activating(PathBuf::from(&system), reasons);
+    save_update(activating.receipt())?;
     stage(4, if mode == "switch" { "Switching to the new system" } else { "Setting it up for the next start" });
     // Only for refreshing the launcher afterwards, which never fails an update.
     let before = std::fs::canonicalize("/run/current-system").ok();
@@ -1002,8 +1001,7 @@ fn change(args: &[String]) -> Result<String> {
     if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_deref() != Some(Path::new(&system)) {
         return Err(Failure("Activation returned without making the built system current".into()));
     }
-    receipt.state = if mode == "boot" { "prepared" } else { "activated" }.into();
-    save_update(&receipt)?;
+    save_update(&if mode == "boot" { activating.prepared() } else { activating.activated() })?;
     if let (Some(before), "switch") = (&before, mode) {
         refresh_launchers(before, Path::new(&system));
     }
@@ -1048,13 +1046,8 @@ fn rollback(args: &[String]) -> Result<String> {
     let mut set = command("nix-env");
     set.args(["-p", PROFILE, "--switch-generation", &generation.to_string()]);
     run(set, "Choosing the generation")?;
-    let mut receipt = Receipt {
-        system: std::fs::canonicalize(PROFILE)?,
-        boot_id: completion::boot_id(),
-        state: "activating".into(),
-        reasons,
-    };
-    save_update(&receipt)?;
+    let activating = Receipt::activating(std::fs::canonicalize(PROFILE)?, reasons);
+    save_update(activating.receipt())?;
     // The configuration follows the system, so the next change builds on
     // what this generation was made from.
     let kept = saved(generation).is_dir();
@@ -1067,18 +1060,18 @@ fn rollback(args: &[String]) -> Result<String> {
         }
     }
     switch(&format!("{PROFILE}/bin/switch-to-configuration"), mode)?;
-    if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_ref() != Some(&receipt.system) {
+    let system = activating.receipt().system().to_owned();
+    if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_ref() != Some(&system) {
         return Err(Failure("Rollback did not make the selected generation current".into()));
     }
-    receipt.state = if mode == "boot" { "prepared" } else { "activated" }.into();
-    save_update(&receipt)?;
+    save_update(&if mode == "boot" { activating.prepared() } else { activating.activated() })?;
     if mode == "switch" {
-        refresh_launchers(&active, &receipt.system);
+        refresh_launchers(&active, &system);
     }
     stage_done(1);
     let left: Vec<String> = left.iter().map(|f| f.display().to_string()).collect();
     Ok(serde_json::json!({"ok": true, "generation": generation, "configuration": kept, "left": left,
-        "system": receipt.system, "mode": mode, "completion": completion::read_system()})
+        "system": system, "mode": mode, "completion": completion::read_system()})
     .to_string())
 }
 
