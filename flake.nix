@@ -724,6 +724,7 @@
           desktopsModule = inputs.calamares.nixosModules.desktops;
           network = self.packages.${system}.network;
         };
+        network-store-vm = import ./nix/network-store-vm-test.nix { inherit pkgs; };
         wpa-supplicant-scan = import ./nix/wpa-supplicant-scan-test.nix {
           inherit pkgs;
           # The live session, in each of its boot entries, and an installed

@@ -13,6 +13,7 @@
     ./boot-splash
     ./desktops.nix
     ./input-method.nix
+    ./network-store.nix
     ./nvidia.nix
     ./prebuilt-binaries.nix
     ./store-space.nix

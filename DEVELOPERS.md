@@ -2465,6 +2465,107 @@ removed before it starts. It then requires `SelectNetwork` to join. It also
 checks that each of the live session's boot entries and an installed system
 start the patched wpa_supplicant over D-Bus.
 
+## Saved network connections
+
+Every desktop saves Wi-Fi, VPN, 802.1X and WireGuard secrets as owned by the
+system: Aizome over D-Bus, Tatami through nmcli, Genkan when it carries the
+live session's networks over. NetworkManager writes those into root-only
+keyfiles in `/etc/NetworkManager/system-connections`, in plaintext. On an
+installed system with a TPM and no disk encryption,
+`installer/genkan/rust/system/network-store.nix` keeps that directory in a
+64 MiB LUKS2 image, `/var/lib/sekka/network-store/store.luks`, whose only key
+is sealed to the TPM with no PCRs, so firmware, Secure Boot and kernel
+updates can't lock it. The image is bound over the directory before
+NetworkManager starts. NetworkManager is unchanged and its secrets stay the
+system's, so saved networks still connect at boot, before anyone logs in and
+after they log out, in every desktop.
+
+Keeping secrets in each user's keyring instead (agent-owned) would lose that,
+and a root secret agent can't stand in: NetworkManager asks the requesting
+process's agent first, then agents in active sessions, and a session-less
+agent last (`agent_compare_func`, nm-agent-manager.c). Choosing a saved
+network in GNOME, Plasma, Xfce or Aizome would ask for its password.
+
+`sekka-network-store` (in `network-store/`) does the work in four units:
+
+- `sekka-network-store-create.service` makes the store beside NetworkManager,
+  never on its way. It runs only with a TPM whose driver is loaded (not
+  `ConditionSecurity=tpm2`, which also wants EFI firmware to report one), only
+  once every bootable generation and specialisation can open a store (each
+  carries `sekka/network-store-v1`; booting an older one would come up without
+  the saved networks), and not on a filesystem that is encrypted already. The
+  image is built under a hidden name, proven to open through the TPM, and only
+  then renamed into place.
+- `sekka-network-store.service`, before NetworkManager and bounded to 30 s,
+  opens the store. It adopts anything left in the plaintext directory
+  (Genkan's `installer-wifi-N` files, profiles from before the store, ones saved
+  at a boot it couldn't open), merges back stores set aside earlier that open
+  again, and binds `connections/` over the keyfile directory. Adoption copies
+  to a hidden name, syncs and renames, and unlinks the original only if it
+  didn't change meanwhile. Two different versions of a profile keep the newer
+  in place and the other in `.sekka-conflicts/`. Neither this unit nor
+  adoption does anything while NetworkManager runs (a switch starting it, an
+  upgrade): the store opens at the next boot. A switch never stops it either.
+- A path unit keeps secret-less copies of the profiles in
+  `/var/lib/sekka/network-store/skeleton/`. When the store can't be opened,
+  they're put where NetworkManager reads, so saved networks stay listed and ask
+  for their password instead of vanishing.
+- With `calamares.networkStore.enable = false`, `sekka-network-store-export`
+  moves the profiles back out at the next boot and removes the store.
+
+systemd 262 unseals against the storage root key (SRK) stored in the TPM and
+doesn't make it again, so an evicted SRK would lock the store. The SRK derives
+from the TPM's seed: `open` stores it again (`systemd-tpm2-setup`) and retries
+once.
+
+When the TPM still doesn't unlock the store, the SRK decides what happened.
+The store records it when made. A TPM that doesn't
+answer never sets the store aside; a missing SRK is stored again (it derives
+from the TPM's seed) and compared; the same SRK sets it aside only after three
+failing boots; a different one (a cleared or replaced TPM) sets it aside at
+once. A new store is then made, and up to three stores set aside are retried
+at every boot, so a TPM that comes back brings its passwords back. A damaged
+filesystem or a failed mount never sets the store aside.
+`/run/sekka/network-store.json` says which of these happened, for desktop UIs.
+
+Limits:
+
+- A cleared or replaced TPM, or the disk moved to another computer, loses the
+  saved passwords; the networks stay listed and ask for them once. A TPM turned
+  off in the firmware hides them until it's back.
+- Passwords saved before the store are removed from the filesystem, but may be
+  recoverable from the raw disk. The service starts the fstrim unit once after
+  adopting them.
+- Hibernation to an unencrypted swap partition writes the store's volume key to
+  disk, and core dumps of NetworkManager or wpa_supplicant can hold passwords.
+  iwd, when chosen as the Wi-Fi backend, keeps its own known networks in
+  `/var/lib/iwd`.
+
+```sh
+nix build .#checks.x86_64-linux.network-store-vm --no-update-lock-file
+cargo test --manifest-path installer/genkan/rust/system/network-store/Cargo.toml
+```
+
+The VM check uses simulated Wi-Fi and a software TPM. It saves profiles in
+plaintext and as Genkan does, waits for an unmarked generation, and stops the
+store's creation at each step. It then checks:
+
+- the store holds only a TPM keyslot;
+- the next boot adopts the profiles with their owner and mode, and Wi-Fi
+  connects with nobody logged in;
+- a password joined afterwards is nowhere on the raw disk;
+- stopping the unit under NetworkManager leaves the store open, and adoption
+  recovers from a stop partway;
+- an evicted SRK still opens the store;
+- a cleared TPM keeps the networks listed and makes a new store, and the
+  first TPM's store is merged back when that TPM returns;
+- exporting puts the profiles back;
+- a TPM whose driver never loads doesn't hold NetworkManager back.
+
+The other network checks run the installed module set in VMs without a TPM,
+where nothing changes. None of this covers a physical TPM or an installation
+from the ISO.
+
 ## Omarchy's fish configuration
 
 Terminals open in fish, set up as Omarchy sets it up, wherever Aizome is
