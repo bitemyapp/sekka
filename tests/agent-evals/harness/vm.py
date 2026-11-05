@@ -281,6 +281,8 @@ class DesktopTools(Tools):
     def point_doc(self):
         if self.coords == "norm1000":
             return "x and y from 0 to 1000 across the screen's width and height (0,0 top left, 1000,1000 bottom right)"
+        if self.coords == "norm1":
+            return "x and y from 0 to 1 across the screen's width and height (0,0 top left, 1,1 bottom right)"
         return f"x and y in screen pixels, 0,0 top left, the screen {SCREEN[0]}×{SCREEN[1]}"
 
     def schemas(self):

@@ -6,7 +6,7 @@
 #   sglang (their pinned upstream containers).
 # vision: the model takes screenshots (computer use in screenshot mode).
 # coords: how it gives screen points: norm1000 (0–1000 on each axis, as
-#   Qwen3.x-VL and Holo4 are trained) or pixel.
+#   Qwen3.x-VL and Holo4 are trained), norm1 (0–1) or pixel.
 # params: request fields sent with every chat request.
 # args: extra server arguments.
 # total_ctx: llama.cpp KV tokens shared by all slots (q8_0), when the
@@ -103,7 +103,8 @@ mmproj = "mmproj-NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB.gguf"
 size_gb = 23.8
 engine = "llama.cpp"
 vision = true
-coords = "pixel"
+# Its clicks are fractions of the screen (0–1), whatever the prompt says.
+coords = "norm1"
 license = "OpenMDW-1.1"
 # Its KV cache in q8_0, as NVIDIA's 28 GB recipe has it.
 args = ["-ctk", "q8_0", "-ctv", "q8_0"]

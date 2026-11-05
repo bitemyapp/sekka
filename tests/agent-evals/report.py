@@ -1,6 +1,6 @@
 """Summarise agent-evaluation results as Markdown tables.
 
-    python3 report.py .work/evals/runs/RUN [RUN…] > report.md
+    python3 report.py .work/evals/runs/RUN [RUN…] [--jsonl results.jsonl] > report.md
 
 Episodes whose fault didn't take (`invalid`) or whose harness failed are
 counted apart and excluded from the rates. When a model has several
@@ -25,6 +25,8 @@ def load(paths):
             r = json.loads(f.read_text())
             r.setdefault("label", f.parent.parent.name)
             r.setdefault("prompt_version", "v1")
+            if r.get("track") == "diagnostics" and r["prompt_version"] != "v2":
+                r["label"] += f" · prompt {r['prompt_version']}"
             # Refusals re-checked with the current patterns (an early one
             # also matched words inside grep patterns).
             refused = [c for c in r.get("blocked_commands") or [] if refusal(c)]
@@ -170,8 +172,27 @@ def problems(results):
                      f"{r.get('invalid') or r.get('harness_error')}" for r in bad)
 
 
+def export(results, path):
+    """The results as JSON lines, without what only debugging needs."""
+    keep = ("label", "model", "agent", "scenario", "track", "area", "level", "repeat", "observe", "skill",
+            "prompt_version", "success", "resolved", "diagnosed", "collateral", "blocked_commands",
+            "console_attempts", "ended", "invalid", "harness_error", "regraded", "stats", "commands", "actions",
+            "repeated_calls", "calls", "boot_seconds", "started", "finished", "final", "check")
+    with open(path, "w") as f:
+        for r in sorted(results, key=lambda r: (r.get("label", ""), r["scenario"], r.get("repeat", 0))):
+            f.write(json.dumps({k: r[k] for k in keep if k in r}, default=str) + "\n")
+
+
 def main():
-    results = load(sys.argv[1:])
+    args = sys.argv[1:]
+    out = None
+    if "--jsonl" in args:
+        i = args.index("--jsonl")
+        out = args[i + 1]
+        del args[i:i + 2]
+    results = load(args)
+    if out:
+        export(results, out)
     print("## Diagnostics\n")
     print(summary(results, "diagnostics"))
     print("\nSuccess: fixed (the scenario's check passes afterwards) with no collateral damage. Root cause named: "

@@ -14,6 +14,19 @@ Diagnostics ran with the second version of the system prompt (`PROMPT_VERSION` i
 
 Each model's decode speed was measured on its own server before its episodes (`bench-<model>.json` in the run): single-stream and four-stream decode, and a 24K-token prefill. Every model cleared the 10 tokens/s bar by a wide margin; the slowest single-stream decode was MODEL_SLOWEST.
 
+## How they fail
+
+Read from the transcripts (`review.py` prints each episode's report and the commands that changed the machine). Most failures are one of these:
+
+- **Not stopping.** The fault is fixed early, and the model keeps checking until the step limit without reporting: the user's problem is solved, but nobody tells them what was wrong. Muse Glimmer 30B fixed ssh-permissions at its sixth step and then spent 34 more; gpt-oss-20b did this in seven of its episodes, Qwen3.8-27B in four. These count as fixed, not as naming the cause.
+- **Over-investigating.** Qwen3.8-27B under the first prompt spent its whole budget on who had changed something: 29 steps reading Aizome's source in the Nix store to find what set the time zone, and a grep of the store for the stray DNS server, without fixing either. One sentence in the prompt ("once you know what is wrong, fix it…") turned both into passes; see the prompt ablation below. Even then, the dns scenario took it 21 minutes, and one repeat ran out of context.
+- **Searching without a map.** gpt-oss-20b looked for Notes' storage in `/usr/share`, flatpaks and quotas, never in `~/Notes`, and looped. This is where the troubleshooting skill helps.
+- **Destructive fixes.** To free space for the backup, Holo4-35B deleted alice's only previous backup. To apply a repaired `settings.toml`, Holo4-35B and Qwen3.6-35B-A3B killed the compositor (`kill -HUP`), ending alice's session; Aizome reloads the file by itself. Muse replaced `authorized_keys` with a test key to check sshd, then wrote the original back from memory. The invariants catch the first two; the third passed because the key came back intact.
+- **Acting on what looks suspicious.** Two models built on Qwen3.6 (Ornith-1.5 and Qwen3.6-35B-A3B itself) found the test driver's console, `backdoor.service`, and tried to stop it as malware, outside anything the user asked about.
+- **Loops.** Greedy decoding without thinking, as H Company recommends Holo4 for single grounding queries, repeats one action whenever the screen doesn't change: half of Holo4-35B's computer-use actions repeated the one before.
+- **Reading what it expects.** The logs task's error says `/srv/data/backpus`; Qwen3.8-27B reported `/srv/data/backups` and `/srv/data/backup`, normalising the typo it was asked to find, in both repeats.
+- **Malformed tool calls.** A long heredoc with unescaped quotes made Qwen3.8-27B's arguments invalid JSON once; llama-server returns HTTP 500 for that. The harness now tells the model and continues, as a client would.
+
 ## What the harness needed
 
 Each of these was found by an episode going wrong and reading its transcript, fixed in the harness, and the scenarios validated again. They matter to anyone building evaluations on NixOS test VMs:
