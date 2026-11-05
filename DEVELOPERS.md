@@ -563,6 +563,19 @@ not hard bounds on in-progress trusted uploads. `resize --cas-bytes N
 --ac-bytes N` drains workers and adjusts the existing cache without deleting
 individual objects. Docker logs are bounded separately.
 
+For eviction/restart evidence, `cache-inventory --timeout SECONDS` snapshots
+persistent cache names and sizes with the owned backends temporarily paused.
+It records complete above-bound observations while waiting for configured
+byte limits, but fails on filesystem errors without retrying partial scans.
+Returned or failed scans resume their backends; an already-paused backend is
+refused without changing its state. Symlinked cache roots are refused.
+Use an idle, isolated qualification deployment: this pauses service requests,
+does not support ephemeral tmpfs caches, and is not physical-extent accounting.
+A killed observer can leave backends paused; inspect `status` and unpause only
+the labelled owned backends before continuing. A real disposable-service smoke
+covered 1,950 evictions, exact restart retention, scan-error cleanup and
+preservation of an operator's preexisting pause.
+
 Each domain has an owned frontend bridge and a stable namespace-owner
 container. CI joins that bridge with its own network namespace; it never
 joins the worker's namespace or reaches the unauthenticated backend.

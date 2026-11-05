@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Inventory only owned NativeLink deployment roots, never the whole Docker store.
 
-Existing containers must be running: their mount namespaces are the authority
-for exact overlay snapshot paths. No containers are started/restarted here.
+Physical-root discovery requires running containers: their mount namespaces are
+the authority for exact overlay snapshot paths. Cache-entry discovery explicitly
+pauses owned persistent backends during each scan and resumes them on return/error.
 Short-lived probes have no network, writable host mounts, or daemon socket.
 Image blobs are traversed from the exact OCI descriptors, deduplicated by digest.
 Shared engine/network/build-cache metadata is reported outside exclusive roots.
 """
 import argparse
+from contextlib import ExitStack
 from importlib.machinery import SourceFileLoader
 from importlib.util import module_from_spec, spec_from_loader
 import json
@@ -132,12 +134,82 @@ print(json.dumps(result))
     return probe(controller, manifest, code, mounts=mounts, read_search=True)
 
 
+def cache_entries(controller, manifest, timeout):
+    if manifest.get("ephemeral_cache"):
+        raise SystemExit("Cache-entry inventory requires persistent deployment storage")
+    roots = [manifest["directory"] + "/" + domain + "/data/" + store
+             for domain in sorted(manifest["domains"]) for store in ("cas", "ac")]
+    limits = [manifest[store + "_bytes"]
+              for domain in sorted(manifest["domains"]) for store in ("cas", "ac")]
+    scan = """import json, os, stat, sys, time
+from pathlib import Path
+started = time.time()
+roots = [Path(value) for value in json.loads(sys.argv[1])]
+files, errors, sizes = {}, [], []
+for index, root in enumerate(roots):
+    if root.resolve(strict=True) != root:
+        raise RuntimeError('Refusing symlinked cache root: ' + str(root))
+    if not root.is_dir():
+        raise RuntimeError('Cache root is not a directory: ' + str(root))
+    size = 0
+    for directory, _, names in os.walk(root, followlinks=False, onerror=lambda error: errors.append(str(error))):
+        for name in names:
+            path = Path(directory) / name
+            try:
+                info = path.lstat()
+                if stat.S_ISREG(info.st_mode):
+                    files[str(index) + '/' + str(path.relative_to(root))] = info.st_size
+                    size += info.st_size
+            except OSError as error:
+                errors.append(str(error))
+    sizes.append(size)
+print(json.dumps({'schema': 1, 'roots': list(map(str, roots)), 'files': files,
+                  'file_count': len(files), 'apparent_bytes': sum(sizes),
+                  'root_apparent_bytes': sizes, 'errors': errors,
+                  'start_unix': started, 'end_unix': time.time()}))
+"""
+    deadline = time.monotonic() + timeout
+    observations = []
+    while True:
+        backends = []
+        for domain in sorted(manifest["domains"]):
+            backend = controller.inspect_owned(manifest, controller.name(manifest, domain, "backend"))
+            if not backend or not backend["State"]["Running"] or backend["State"]["Paused"]:
+                raise SystemExit("Cache-entry inventory requires running, unpaused owned backends")
+            backends.append(backend["Id"])
+        with ExitStack() as resumed:
+            for backend in backends:
+                controller.docker(manifest, "pause", backend, capture=True)
+                resumed.callback(controller.docker, manifest, "unpause", backend, capture=True)
+            result = json.loads(controller.remote(
+                manifest, sys.executable, "-B", "-c", scan, json.dumps(roots), capture=True))
+        within_limits = all(size <= limit for size, limit in zip(result["root_apparent_bytes"], limits))
+        observations.append({key: result[key] for key in (
+            "start_unix", "end_unix", "file_count", "root_apparent_bytes", "errors")})
+        if result["errors"] or within_limits or time.monotonic() >= deadline:
+            if not within_limits:
+                result["errors"].append("Persistent cache has not reached its configured byte bounds")
+            result.update(
+                method="Owned backends paused during scan; names/sizes, NOT physical extent accounting",
+                backend_ids=backends, configured_root_byte_limits=limits,
+                bound_observations=observations)
+            print(json.dumps(result, sort_keys=True))
+            return not result["errors"]
+        # Successful complete snapshots above the new bound are progress
+        # observations, not failed scans to retry. Let asynchronous eviction run.
+        time.sleep(min(0.25, max(0, deadline - time.monotonic())))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--controller", type=Path, required=True)
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--local", action="store_true")
+    parser.add_argument("--cache-entries", action="store_true")
+    parser.add_argument("--timeout", type=int, default=60)
     args = parser.parse_args()
+    if args.timeout < 0:
+        parser.error("--timeout must be nonnegative")
     if args.manifest.stat().st_mode & 0o077:
         raise SystemExit("Credential manifest must be mode0600")
     loader = SourceFileLoader("service_inventory_controller", str(args.controller))
@@ -146,6 +218,8 @@ def main():
     controller.LOCAL = args.local
     manifest = json.loads(args.manifest.read_text())
     controller.assert_owned_directory(manifest)
+    if args.cache_entries:
+        raise SystemExit(0 if cache_entries(controller, manifest, args.timeout) else 1)
     engine = json.loads(controller.docker(manifest, "info", "--format", "{{json .}}", capture=True))
     if ["driver-type", "io.containerd.snapshotter.v1"] not in engine["DriverStatus"]:
         raise SystemExit("Inventory requires Docker's containerd image store")
