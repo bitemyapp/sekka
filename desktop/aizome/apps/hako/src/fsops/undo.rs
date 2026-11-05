@@ -204,8 +204,9 @@ impl Inversion {
 
     /// The result of this undo or redo if it never ran, or stopped without
     /// a result (its job couldn't start, or panicked): nothing carried out,
-    /// all of it left. The history keeps its step.
-    pub(crate) fn abandoned(&self) -> Inverted {
+    /// all of it left. The history keeps its step. (Only a result that
+    /// keeps all of the step can be made this way.)
+    pub fn abandoned(&self) -> Inverted {
         Inverted { ticket: self.ticket, inverse: None, left: Some(self.record.clone()) }
     }
 }
