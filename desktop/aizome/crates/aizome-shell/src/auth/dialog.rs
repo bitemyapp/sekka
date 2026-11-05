@@ -36,7 +36,7 @@
 #![deny(clippy::wildcard_enum_match_arm)]
 
 use aizome_kit::prelude::WindowKey;
-use aizome_sys::polkit::{Asked, AuthRequest, Checked, Heard, RequestId, Said, Unsendable, Unsent, said};
+use aizome_sys::polkit::{Asked, AuthRequest, Checked, Heard, NotOffered, RequestId, Said, Unsendable, Unsent, said};
 
 use super::{AuthView, Submit};
 
@@ -145,10 +145,22 @@ impl Dialog {
     pub fn begin(request: AuthRequest, window: WindowKey) -> Dialog {
         let identity =
             request.default_identity().and_then(|d| request.identities().iter().position(|i| i == d)).unwrap_or(0);
-        if let Some(i) = request.identities().get(identity) {
-            request.authenticate(i);
+        let started = match request.identities().get(identity) {
+            Some(i) => request.authenticate(i),
+            None => Err(NotOffered),
+        };
+        let mut dialog = Dialog::new(Ctx {
+            request,
+            window: Some(window),
+            identity,
+            password: String::new(),
+            prompt: None,
+            note: None,
+        });
+        if let Err(NotOffered) = started {
+            dialog.with_typed(|s| (s.not_offered(), ()));
         }
-        Dialog::new(Ctx { request, window: Some(window), identity, password: String::new(), prompt: None, note: None })
+        dialog
     }
 
     /// The proof that `heard` is about this dialog's request and its latest
@@ -334,6 +346,14 @@ impl<'s> DialogAny<'s> {
         }
     }
 
+    /// The agent refused the identity (polkitd didn't offer it for this
+    /// request): nothing starts, and the dialog says so.
+    fn not_offered(self) -> DialogAny<'s> {
+        let ctx = self.into_ctx();
+        ctx.note = Some(Note::Error("That account can't authenticate this.".into()));
+        Unavailable::enter(ctx, ()).into()
+    }
+
     /// The person picked identity `i`: an attempt as them starts.
     pub fn choose(self, i: usize) -> DialogAny<'s> {
         if i >= self.ctx().request.identities().len() {
@@ -342,8 +362,10 @@ impl<'s> DialogAny<'s> {
         let ctx = self.into_ctx();
         ctx.identity = i;
         ctx.note = None;
-        ctx.request.authenticate(&ctx.request.identities()[i]);
-        Starting::enter(ctx, ()).into()
+        match ctx.request.authenticate(&ctx.request.identities()[i]) {
+            Ok(()) => Starting::enter(ctx, ()).into(),
+            Err(NotOffered) => DialogAny::from(Starting::enter(ctx, ())).not_offered(),
+        }
     }
 }
 
@@ -419,11 +441,16 @@ impl<'s> Prompted<'s> {
 
 impl<'s> Unavailable<'s> {
     /// The person asks for another attempt.
-    pub fn try_again(self) -> Starting<'s> {
-        self.ctx.note = None;
-        if let Some(identity) = self.ctx.request.identities().get(self.ctx.identity) {
-            self.ctx.request.authenticate(identity);
+    pub fn try_again(self) -> DialogAny<'s> {
+        let ctx = self.ctx;
+        ctx.note = None;
+        let started = match ctx.request.identities().get(ctx.identity) {
+            Some(identity) => ctx.request.authenticate(identity),
+            None => Err(NotOffered),
+        };
+        match started {
+            Ok(()) => Starting::enter(ctx, ()).into(),
+            Err(NotOffered) => DialogAny::from(Unavailable::enter(ctx, ())).not_offered(),
         }
-        Starting::enter(self.ctx, ())
     }
 }
