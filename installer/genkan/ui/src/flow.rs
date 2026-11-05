@@ -17,15 +17,15 @@
 //!   whose preparation fails goes back to the review ([`Unprepared`]).
 //!
 //! The review worker's answer and the helper's events carry the review's
-//! [`Ticket`]. The worker's answer reaches its transition bound to the
-//! proof that it's the latest review's ([`Fresh`]); the helper's events
-//! come with that proof ([`Current`]) beside them.
+//! [`Ticket`], and reach their transitions bound to the proof that they're
+//! the latest review's ([`Fresh`]): a transition reads its payload from
+//! that answer, so it can't be handed another answer's proof.
 //!
 //! [`session::Ready`]: calamares_nixos::session::Ready
-use crate::app::Review;
-use aizome_typestate::{Answer, Current, Fresh, Generation, Ticket};
+use crate::app::{Helper, Review};
+use aizome_typestate::{Answer, Fresh, Generation, Ticket};
 use calamares_nixos::{
-    install::Summary,
+    install::{Event, Summary},
     session::{Ready as Prepared, Session},
 };
 
@@ -153,6 +153,9 @@ aizome_typestate::machine! {
             /// The installation failed.
             Failed(Failure),
         }
+        branches {
+            Dequeued = Queued | Installing | Unprepared;
+        }
         new(pub(crate));
         with_typed(pub(crate));
     }
@@ -206,7 +209,7 @@ impl<'s> Checking<'s> {
 
     /// The helper stopped (or got ahead of the review) before the review
     /// opened: back to the pages, and the worker's answer is stale.
-    pub fn stopped(self, _: Current<ReviewRequest>) -> Editing<'s> {
+    pub fn stopped(self, _: &Said) -> Editing<'s> {
         withdraw(self.ctx)
     }
 }
@@ -233,13 +236,46 @@ impl Answer<ReviewRequest> for ReviewAnswer {
     }
 }
 
+/// What the helper said about a review: it names the review it answers.
+#[derive(Clone, Debug)]
+pub struct HelperAnswer {
+    ticket: Ticket<ReviewRequest>,
+    said: Helper,
+}
+
+impl HelperAnswer {
+    pub fn new(ticket: Ticket<ReviewRequest>, said: Helper) -> Self {
+        Self { ticket, said }
+    }
+    /// What it said.
+    pub fn said(&self) -> &Helper {
+        &self.said
+    }
+}
+
+impl Answer<ReviewRequest> for HelperAnswer {
+    fn ticket(&self) -> Ticket<ReviewRequest> {
+        self.ticket
+    }
+}
+
+/// What the helper said, proven to be about the latest review: the
+/// transitions it drives take it whole and read their payload from it, so
+/// a payload can't be applied with another answer's proof.
+pub type Said = Fresh<ReviewRequest, HelperAnswer>;
+
 impl<'s> Preparing<'s> {
     pub fn review(&self) -> &Review {
         &self.data.review
     }
 
-    /// The helper has prepared: its proof lets the confirmation be sent.
-    pub fn prepared(self, _: Current<ReviewRequest>, ready: Prepared) -> Ready<'s> {
+    /// The helper has prepared: its proof, which the answer carries, lets the
+    /// confirmation be sent. Any other answer leaves it preparing.
+    pub fn prepared(self, said: &Said) -> Result<Ready<'s>, Preparing<'s>> {
+        let Helper::Prepared(ready) = &said.answer().said else {
+            return Err(self);
+        };
+        let ready = ready.clone();
         let summary = ready.summary().clone();
         let Pending { link, review } = self.data;
         let sender = match link {
@@ -251,16 +287,16 @@ impl<'s> Preparing<'s> {
             review,
             summary,
         };
-        Ready::enter(self.ctx, Box::new(primed))
+        Ok(Ready::enter(self.ctx, Box::new(primed)))
     }
 
     /// A preview's sample preparation finished. A running helper's comes
     /// only with its proof.
-    pub(crate) fn sampled(
-        self,
-        _: Current<ReviewRequest>,
-        summary: Summary,
-    ) -> Result<Ready<'s>, Preparing<'s>> {
+    pub(crate) fn sampled(self, said: &Said) -> Result<Ready<'s>, Preparing<'s>> {
+        let Helper::Event(Event::Prepared { summary }) = &said.answer().said else {
+            return Err(self);
+        };
+        let summary = summary.clone();
         match self.data.link {
             Link::Sample => Ok(Ready::enter(
                 self.ctx,
@@ -282,7 +318,7 @@ impl<'s> Preparing<'s> {
 
     /// Preparation failed or was cancelled, or the helper stopped: nothing
     /// was written.
-    pub fn stopped(self, _: Current<ReviewRequest>) -> Unprepared<'s> {
+    pub fn stopped(self, _: &Said) -> Unprepared<'s> {
         Unprepared::enter(self.ctx, self.data.review)
     }
 
@@ -340,7 +376,7 @@ impl<'s> Ready<'s> {
     }
 
     /// The helper stopped while waiting for the confirmation.
-    pub fn stopped(self, _: Current<ReviewRequest>) -> Unprepared<'s> {
+    pub fn stopped(self, _: &Said) -> Unprepared<'s> {
         Unprepared::enter(self.ctx, self.data.review)
     }
 
@@ -360,22 +396,22 @@ impl<'s> Unprepared<'s> {
 }
 
 impl<'s> Queued<'s> {
-    /// Preparation finished: the queued confirmation is sent now. If the
-    /// helper is gone instead, back to the review.
-    pub fn prepared(
-        self,
-        _: Current<ReviewRequest>,
-        ready: Prepared,
-    ) -> Result<Installing<'s>, Unprepared<'s>> {
+    /// Preparation finished: the queued confirmation is sent now, with the
+    /// helper's proof the answer carries. If the helper is gone instead,
+    /// back to the review; any other answer leaves it queued.
+    pub fn prepared(self, said: &Said) -> Dequeued<'s> {
+        let Helper::Prepared(ready) = &said.answer().said else {
+            return Dequeued::Queued(self);
+        };
         let Pending { link, review } = self.data;
         let link = match link {
-            Link::Running(session) => match session.confirm(&ready, &review.phrase()) {
+            Link::Running(session) => match session.confirm(ready, &review.phrase()) {
                 Ok(()) => Link::Running(session),
-                Err(_) => return Err(Unprepared::enter(self.ctx, review)),
+                Err(_) => return Dequeued::Unprepared(Unprepared::enter(self.ctx, review)),
             },
             Link::Sample => Link::Sample,
         };
-        Ok(Installing::enter(
+        Dequeued::Installing(Installing::enter(
             self.ctx,
             Running {
                 _link: link,
@@ -386,7 +422,10 @@ impl<'s> Queued<'s> {
 
     /// A preview's sample preparation finished. A running helper's comes
     /// only with its proof.
-    pub(crate) fn sampled(self, _: Current<ReviewRequest>) -> Result<Installing<'s>, Queued<'s>> {
+    pub(crate) fn sampled(self, said: &Said) -> Result<Installing<'s>, Queued<'s>> {
+        if !matches!(said.answer().said, Helper::Event(Event::Prepared { .. })) {
+            return Err(self);
+        }
         match self.data.link {
             Link::Sample => Ok(Installing::enter(
                 self.ctx,
@@ -410,21 +449,19 @@ impl<'s> Queued<'s> {
     /// review's failed preparation, not a failed installation (GEN-34).
     ///
     /// ```compile_fail,E0308
-    /// use aizome_typestate::Current;
-    /// use genkan::flow::{Failed, Queued, ReviewRequest};
-    /// fn failed<'s>(queued: Queued<'s>, current: Current<ReviewRequest>) -> Failed<'s> {
-    ///     queued.stopped(current)
+    /// use genkan::flow::{Failed, Queued, Said};
+    /// fn failed<'s>(queued: Queued<'s>, said: &Said) -> Failed<'s> {
+    ///     queued.stopped(said)
     /// }
     /// ```
     ///
     /// ```
-    /// use aizome_typestate::Current;
-    /// use genkan::flow::{Queued, ReviewRequest, Unprepared};
-    /// fn failed<'s>(queued: Queued<'s>, current: Current<ReviewRequest>) -> Unprepared<'s> {
-    ///     queued.stopped(current)
+    /// use genkan::flow::{Queued, Said, Unprepared};
+    /// fn failed<'s>(queued: Queued<'s>, said: &Said) -> Unprepared<'s> {
+    ///     queued.stopped(said)
     /// }
     /// ```
-    pub fn stopped(self, _: Current<ReviewRequest>) -> Unprepared<'s> {
+    pub fn stopped(self, _: &Said) -> Unprepared<'s> {
         Unprepared::enter(self.ctx, self.data.review)
     }
 }
@@ -435,19 +472,21 @@ impl<'s> Installing<'s> {
         self.data.step
     }
 
-    /// The helper started step `step`.
-    pub fn progress(mut self, _: Current<ReviewRequest>, step: u8) -> Installing<'s> {
-        self.data.step = Some(step);
+    /// The helper started a step, as the answer says.
+    pub fn progress(mut self, said: &Said) -> Installing<'s> {
+        if let Helper::Event(Event::Progress { step, .. }) = said.answer().said {
+            self.data.step = Some(step);
+        }
         self
     }
 
-    pub fn complete(self, _: Current<ReviewRequest>) -> Installed<'s> {
+    pub fn complete(self, _: &Said) -> Installed<'s> {
         Installed::enter(self.ctx, ())
     }
 
     /// The installation failed, at the step the helper last reported. The
     /// helper may still be cleaning up.
-    pub fn failed(self, _: Current<ReviewRequest>) -> Failed<'s> {
+    pub fn failed(self, _: &Said) -> Failed<'s> {
         let Running { _link: link, step } = self.data;
         Failed::enter(
             self.ctx,
@@ -460,7 +499,7 @@ impl<'s> Installing<'s> {
 
     /// The helper exited without completing: a failure at the step it last
     /// reported.
-    pub fn exited(self, _: Current<ReviewRequest>) -> Failed<'s> {
+    pub fn exited(self, _: &Said) -> Failed<'s> {
         let step = self.data.step;
         Failed::enter(self.ctx, Failure { step, link: None })
     }
@@ -468,7 +507,7 @@ impl<'s> Installing<'s> {
 
 impl<'s> Failed<'s> {
     /// The helper exited.
-    pub fn exited(self, _: Current<ReviewRequest>) -> Failed<'s> {
+    pub fn exited(self, _: &Said) -> Failed<'s> {
         let step = self.data.step;
         Failed::enter(self.ctx, Failure { step, link: None })
     }
@@ -492,9 +531,10 @@ mod tests {
             }
             _ => unreachable!(),
         });
-        let current = flow.ctx().check(ticket).unwrap();
+        let exited = HelperAnswer::new(ticket, Helper::Finished(Err("pkexec failed".into())));
+        let said = flow.ctx().check_answer(exited).ok().unwrap();
         flow.with_typed(|state| match state {
-            FlowAny::Checking(checking) => (checking.stopped(current).into(), ()),
+            FlowAny::Checking(checking) => (checking.stopped(&said).into(), ()),
             other => (other, ()),
         });
         assert!(matches!(flow.stored(), FlowState::Editing(())));

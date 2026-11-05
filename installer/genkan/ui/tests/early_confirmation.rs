@@ -17,6 +17,7 @@ use aizome_kit::theme::{Appearance, ThemeChoice};
 use calamares_nixos::install::Event;
 use genkan::Step;
 use genkan::app::{Genkan, Helper, Msg, PrepState, StepState};
+use genkan::flow::HelperAnswer;
 
 #[test]
 fn a_failure_before_any_disk_write_is_not_reported_as_a_failed_partitioning() {
@@ -45,16 +46,16 @@ fn a_failure_before_any_disk_write_is_not_reported_as_a_failed_partitioning() {
     // step 1.
     let message = "The installed system could not be built; the target disk has not been erased: \
                    nix failed (exit status: 1): error: unable to download 'https://cache.nixos.org/nar/…': HTTP error 503";
-    h.send(Msg::Session(
+    h.send(Msg::Session(HelperAnswer::new(
         ticket,
         Helper::Event(Event::Failed {
             message: message.into(),
         }),
-    ));
-    h.send(Msg::Session(
+    )));
+    h.send(Msg::Session(HelperAnswer::new(
         ticket,
         Helper::Finished(Err("The installation helper stopped (authorization canceled or helper failed, exit status: 1). Do not assume the disk is unchanged if installation had started.".into())),
-    ));
+    )));
 
     let app = h.program();
     let texts = h.texts(w);
@@ -116,30 +117,30 @@ fn a_queued_confirmation_starts_the_installation_once_prepared() {
     h.send(Msg::Next);
     assert!(h.program().installing() && !h.program().prepared());
     assert!(!h.program().password.is_empty(), "nothing was sent yet");
-    h.send(Msg::Session(
+    h.send(Msg::Session(HelperAnswer::new(
         ticket,
         Helper::Event(Event::Prepared {
             summary: Default::default(),
         }),
-    ));
+    )));
     assert_eq!(
         h.program().install_message,
         "Preparation complete. Starting the installation…"
     );
     assert!(h.program().password.is_empty(), "sent, so forgotten");
-    h.send(Msg::Session(
+    h.send(Msg::Session(HelperAnswer::new(
         ticket,
         Helper::Event(Event::Progress {
             step: 1,
             message: "Erasing the selected disk and creating a GPT partition table".into(),
         }),
-    ));
-    h.send(Msg::Session(
+    )));
+    h.send(Msg::Session(HelperAnswer::new(
         ticket,
         Helper::Event(Event::Failed {
             message: "wipefs failed".into(),
         }),
-    ));
+    )));
     // Past the first write, a failure is the installation's.
     let app = h.program();
     assert_eq!(app.step, Step::Install);

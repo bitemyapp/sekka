@@ -8,13 +8,13 @@
 //! Polkit) and the helper's events come from threads of their own through
 //! the kit's message stream. Answers from an older request (its epoch or
 //! generation) are dropped, as are stale sessions, which cancels them.
-use crate::flow::{Flow, FlowAny, FlowState, ReviewAnswer, ReviewRequest};
+use crate::flow::{Flow, FlowAny, FlowState, HelperAnswer, ReviewAnswer, ReviewRequest, Said};
 use crate::ram::{Memory, MemoryAnswer, SwapUnsized};
 use crate::{format::size, media, zone};
 use aizome_ipc::{KeyboardInfo, setup::Beside};
 use aizome_kit::cx::MsgSender;
 use aizome_kit::prelude::*;
-use aizome_typestate::{Answer, Current, Fresh, Generation, Ticket};
+use aizome_typestate::{Answer, Fresh, Generation, Ticket};
 use calamares_nixos::{
     Desktop, Filesystem, Firmware, Hostname, InstallPlan, KEYBOARDS, LOCALES, RawRequest, Settings,
     SuperKey, Username, applications,
@@ -362,7 +362,7 @@ pub enum Msg {
     },
     // Review and installation.
     Reviewed(Handoff<ReviewAnswer>),
-    Session(Ticket<ReviewRequest>, Helper),
+    Session(HelperAnswer),
     Erase(String),
     Consent(bool),
     Tick,
@@ -1795,7 +1795,7 @@ impl Genkan {
                 let review = Box::new(Review::of(&plan));
                 let events = send.clone();
                 let session = Session::start(plan, move |update| {
-                    events.send(Msg::Session(ticket, update.into()));
+                    events.send(Msg::Session(HelperAnswer::new(ticket, update.into())));
                 })?;
                 Ok((review, session))
             })()
@@ -2078,17 +2078,17 @@ impl Genkan {
     /// What the helper said, as if it had (previews and tests).
     pub fn helper_event(&mut self, event: Event, cx: &mut Cx<Msg>) {
         if let Some(ticket) = self.review_ticket {
-            self.update(Msg::Session(ticket, Helper::Event(event)), cx);
+            self.update(
+                Msg::Session(HelperAnswer::new(ticket, Helper::Event(event))),
+                cx,
+            );
         }
     }
 
-    fn session_update(
-        &mut self,
-        current: Current<ReviewRequest>,
-        update: Helper,
-        cx: &mut Cx<Msg>,
-    ) {
-        match update {
+    /// What the helper said, proven to be about the latest review: the
+    /// transitions read their payload from the answer itself.
+    fn session_update(&mut self, said: Said, cx: &mut Cx<Msg>) {
+        match said.answer().said().clone() {
             // What the helper is doing, the most frequent: the pages say it,
             // and the review stays where it is.
             Helper::Event(Event::Log { line }) => {
@@ -2133,13 +2133,13 @@ impl Genkan {
                 let summary = ready.summary().clone();
                 let (moved, ()) = self.moved(|state| {
                     let state = match state {
-                        FlowAny::Preparing(preparing) => preparing.prepared(current, ready).into(),
-                        FlowAny::Queued(queued) => match queued.prepared(current, ready) {
-                            Ok(installing) => installing.into(),
-                            Err(unprepared) => unprepared.into(),
+                        FlowAny::Preparing(preparing) => match preparing.prepared(&said) {
+                            Ok(ready) => ready.into(),
+                            Err(preparing) => preparing.into(),
                         },
+                        FlowAny::Queued(queued) => queued.prepared(&said).into(),
                         // Ahead of the worker's answer: review again.
-                        FlowAny::Checking(checking) => checking.stopped(current).into(),
+                        FlowAny::Checking(checking) => checking.stopped(&said).into(),
                         // The review moved on: late.
                         FlowAny::Editing(s) => s.into(),
                         FlowAny::Ready(s) => s.into(),
@@ -2154,14 +2154,13 @@ impl Genkan {
             }
             // A preview's sample: a running helper's comes with its proof.
             Helper::Event(Event::Prepared { summary }) => {
-                let sample = summary.clone();
                 let (moved, ()) = self.moved(|state| {
                     let state = match state {
-                        FlowAny::Preparing(preparing) => match preparing.sampled(current, sample) {
+                        FlowAny::Preparing(preparing) => match preparing.sampled(&said) {
                             Ok(ready) => ready.into(),
                             Err(preparing) => preparing.into(),
                         },
-                        FlowAny::Queued(queued) => match queued.sampled(current) {
+                        FlowAny::Queued(queued) => match queued.sampled(&said) {
                             Ok(installing) => installing.into(),
                             Err(queued) => queued.into(),
                         },
@@ -2177,12 +2176,10 @@ impl Genkan {
                 });
                 self.prepped(moved, &summary, cx);
             }
-            Helper::Event(Event::Progress { step, message }) => {
+            Helper::Event(Event::Progress { message, .. }) => {
                 self.moved(|state| {
                     let state = match state {
-                        FlowAny::Installing(installing) => {
-                            installing.progress(current, step).into()
-                        }
+                        FlowAny::Installing(installing) => installing.progress(&said).into(),
                         FlowAny::Editing(s) => s.into(),
                         FlowAny::Checking(s) => s.into(),
                         FlowAny::Preparing(s) => s.into(),
@@ -2200,7 +2197,7 @@ impl Genkan {
             Helper::Event(Event::Complete) => {
                 let (moved, ()) = self.moved(|state| {
                     let state = match state {
-                        FlowAny::Installing(installing) => installing.complete(current).into(),
+                        FlowAny::Installing(installing) => installing.complete(&said).into(),
                         FlowAny::Editing(s) => s.into(),
                         FlowAny::Checking(s) => s.into(),
                         FlowAny::Preparing(s) => s.into(),
@@ -2216,11 +2213,11 @@ impl Genkan {
                     self.stop_tick(cx);
                 }
             }
-            Helper::Event(Event::Cancelled) => self.stopped(current, Stop::Cancelled, cx),
+            Helper::Event(Event::Cancelled) => self.stopped(&said, Stop::Cancelled, cx),
             Helper::Event(Event::Failed { message }) => {
-                self.stopped(current, Stop::Failed(message), cx);
+                self.stopped(&said, Stop::Failed(message), cx);
             }
-            Helper::Finished(result) => self.stopped(current, Stop::Exited(result), cx),
+            Helper::Finished(result) => self.stopped(&said, Stop::Exited(result), cx),
         }
     }
 
@@ -2253,22 +2250,22 @@ impl Genkan {
     }
 
     /// The helper cancelled, failed or exited.
-    fn stopped(&mut self, current: Current<ReviewRequest>, why: Stop, cx: &mut Cx<Msg>) {
+    fn stopped(&mut self, said: &Said, why: Stop, cx: &mut Cx<Msg>) {
         let exited = matches!(why, Stop::Exited(_));
         let cancelled = matches!(why, Stop::Cancelled);
         let (moved, ()) = self.moved(|state| {
             let state = match state {
                 // The helper stopped before the review opened.
-                FlowAny::Checking(checking) => checking.stopped(current).into(),
-                FlowAny::Preparing(preparing) => preparing.stopped(current).into(),
-                FlowAny::Ready(ready) => ready.stopped(current).into(),
+                FlowAny::Checking(checking) => checking.stopped(said).into(),
+                FlowAny::Preparing(preparing) => preparing.stopped(said).into(),
+                FlowAny::Ready(ready) => ready.stopped(said).into(),
                 // Before the confirmation was sent: nothing was written (GEN-34).
-                FlowAny::Queued(queued) => queued.stopped(current).into(),
+                FlowAny::Queued(queued) => queued.stopped(said).into(),
                 // The helper never cancels once it's confirmed.
                 FlowAny::Installing(installing) if cancelled => installing.into(),
-                FlowAny::Installing(installing) if exited => installing.exited(current).into(),
-                FlowAny::Installing(installing) => installing.failed(current).into(),
-                FlowAny::Failed(failed) if exited => failed.exited(current).into(),
+                FlowAny::Installing(installing) if exited => installing.exited(said).into(),
+                FlowAny::Installing(installing) => installing.failed(said).into(),
+                FlowAny::Failed(failed) if exited => failed.exited(said).into(),
                 FlowAny::Failed(s) => s.into(),
                 FlowAny::Editing(s) => s.into(),
                 FlowAny::Unprepared(s) => s.into(),
@@ -2653,9 +2650,9 @@ impl Program for Genkan {
                     self.reviewed(fresh, cx);
                 }
             }
-            Msg::Session(ticket, update) => {
-                if let Some(current) = self.flow.ctx().check(ticket) {
-                    self.session_update(current, update, cx);
+            Msg::Session(answer) => {
+                if let Ok(said) = self.flow.ctx().check_answer(answer) {
+                    self.session_update(said, cx);
                 }
             }
             Msg::Erase(text) => self.erase = text,
