@@ -17,12 +17,13 @@
 //!   whose preparation fails goes back to the review ([`Unprepared`]).
 //!
 //! The review worker's answer and the helper's events carry the review's
-//! [`Ticket`]; a transition that applies one takes the [`Current`] proof
-//! that it's the latest review's.
+//! [`Ticket`]. The worker's answer reaches its transition bound to the
+//! proof that it's the latest review's ([`Fresh`]); the helper's events
+//! come with that proof ([`Current`]) beside them.
 //!
 //! [`session::Ready`]: calamares_nixos::session::Ready
 use crate::app::Review;
-use aizome_typestate::{Current, Generation, Ticket};
+use aizome_typestate::{Answer, Current, Fresh, Generation, Ticket};
 use calamares_nixos::{
     install::Summary,
     session::{Ready as Prepared, Session},
@@ -184,24 +185,51 @@ impl<'s> Editing<'s> {
 }
 
 impl<'s> Checking<'s> {
-    /// The settings passed and the helper started: the Review page, while
-    /// it prepares.
-    pub fn reviewed(
+    /// The review worker answered: the Review page while the helper
+    /// prepares, or back to the pages with why not. The answer comes with
+    /// the proof that it's this review's, bound to it.
+    pub fn answered(
         self,
-        _: Current<ReviewRequest>,
-        review: Box<Review>,
-        session: Session,
-    ) -> Preparing<'s> {
-        let pending = Pending {
-            link: Link::Running(session),
-            review,
-        };
-        Preparing::enter(self.ctx, pending)
+        answer: Fresh<ReviewRequest, ReviewAnswer>,
+    ) -> Result<Preparing<'s>, (Editing<'s>, String)> {
+        match answer.into_answer().result {
+            Ok((review, session)) => {
+                let pending = Pending {
+                    link: Link::Running(session),
+                    review,
+                };
+                Ok(Preparing::enter(self.ctx, pending))
+            }
+            Err(error) => Err((Editing::enter(self.ctx, ()), error)),
+        }
     }
 
-    /// They didn't pass, or the helper didn't start: back to the pages.
-    pub fn refused(self, _: Current<ReviewRequest>) -> Editing<'s> {
-        Editing::enter(self.ctx, ())
+    /// The helper stopped (or got ahead of the review) before the review
+    /// opened: back to the pages, and the worker's answer is stale.
+    pub fn stopped(self, _: Current<ReviewRequest>) -> Editing<'s> {
+        withdraw(self.ctx)
+    }
+}
+
+/// The review worker's answer: the plan's display copy and its running
+/// helper, or why there's no review. It names the review it answers.
+pub struct ReviewAnswer {
+    ticket: Ticket<ReviewRequest>,
+    result: Result<(Box<Review>, Session), String>,
+}
+
+impl ReviewAnswer {
+    pub fn new(
+        ticket: Ticket<ReviewRequest>,
+        result: Result<(Box<Review>, Session), String>,
+    ) -> Self {
+        Self { ticket, result }
+    }
+}
+
+impl Answer<ReviewRequest> for ReviewAnswer {
+    fn ticket(&self) -> Ticket<ReviewRequest> {
+        self.ticket
     }
 }
 
@@ -443,5 +471,34 @@ impl<'s> Failed<'s> {
     pub fn exited(self, _: Current<ReviewRequest>) -> Failed<'s> {
         let step = self.data.step;
         Failed::enter(self.ctx, Failure { step, link: None })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The helper can exit (pkexec failing at once) before the worker's
+    /// answer opens the review: the review is abandoned, and the answer that
+    /// follows, with its helper, is stale. Otherwise a dead helper sat behind
+    /// the Review page, and a confirmation queued for it waited for ever.
+    #[test]
+    fn a_helper_that_stops_before_the_review_opens_leaves_no_review() {
+        let mut flow = Flow::new(Generation::new());
+        let ticket = flow.with_typed(|state| match state {
+            FlowAny::Editing(editing) => {
+                let (checking, ticket) = editing.review();
+                (checking.into(), ticket)
+            }
+            _ => unreachable!(),
+        });
+        let current = flow.ctx().check(ticket).unwrap();
+        flow.with_typed(|state| match state {
+            FlowAny::Checking(checking) => (checking.stopped(current).into(), ()),
+            other => (other, ()),
+        });
+        assert!(matches!(flow.stored(), FlowState::Editing(())));
+        let late = ReviewAnswer::new(ticket, Err("late".into()));
+        assert!(flow.ctx().check_answer(late).is_err());
     }
 }
