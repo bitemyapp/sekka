@@ -18,7 +18,7 @@ Can a model that runs on one RTX 5090 fix a broken Sekka machine, or use the Aiz
 
 Diagnostics: the share of the sixteen injected faults fixed with nothing else harmed (the scenario's check passes, every invariant holds), once or twice per scenario. Computer use: the share of the nine desktop tasks done, from screenshots. Decode: single-stream tokens per second on the RTX 5090.
 
-Three candidates, weighing trustworthiness (what a model did to the machine, and where it comes from) as heavily as scores:
+Three candidates after this first round, weighing trustworthiness (what a model did to the machine, and where it comes from) as heavily as scores (the decision with all the data follows them):
 
 1. **Gemma 4 31B (Google): the assistant for diagnostics and conversation.** In oh-my-pi it fixed all sixteen faults, in a median 2.8 minutes and 2,500 output tokens, the most economical of the strong models, and 15 of 16 in the bare loop. It never damaged anything. Its weakness is the desktop, 2 of 9, although it reads the screen in correct pixel coordinates (`grounding.py`): it navigates poorly, so that is what tuning should target.
 2. **Nemotron 3.5 Bolt 74B-A9B (NVIDIA): the fast all-rounder without Chinese lineage.** 88–93% of the faults, 7 of 9 desktop tasks once its 0–1 coordinates were understood, and 153 tokens/s from a 2-bit QAT file that fits in 24 GB. One episode in oh-my-pi left alice's Notes folder empty, so it needs the same guard rails as any model, and its licence (OpenMDW) needs a read before shipping.
@@ -27,6 +27,12 @@ Three candidates, weighing trustworthiness (what a model did to the machine, and
 To make a model without Chinese lineage beat the field, the gap to close is Gemma's computer use: its diagnostics already match or exceed Qwen3.8's. Bolt is the one non-Chinese model that is good at both today.
 
 That gap has since closed. Inside Tasuke, Sekka's assistant, whose desktop tools number the controls on the screen, Gemma 4 31B fixed 28 of 32 faults and did all 18 desktop tasks without harming anything, matching Qwen3.8-27B (27 of 32, 18 of 18): see [tasuke.md](tasuke.md).
+
+**The three, with all the data** (this round, the 8 GiB round below and Tasuke's own runs):
+
+1. **Gemma 4 31B (Google)**: Tasuke's default from 24 GB of GPU memory. Inside Tasuke it fixed 28 of 32 faults, every one on the first turn, did all 18 desktop tasks, and harmed nothing in any episode.
+2. **Gemma 4 26B-A4B (Google)**: the default below that, down to an 8 GB card (7.5 GiB with 24 layers' experts in system RAM, 47 tokens/s). Inside Tasuke it fixed 24 of 31 faults and did 17 of 18 desktop tasks, harming nothing. It takes Nemotron 3.5 Bolt's place: Bolt did less inside Tasuke (22 of 31, 15 of 18), needs 24 GB, and its licence (OpenMDW) is the less usual one.
+3. **Qwen3.8-27B (Alibaba)**: the best outcomes outside Tasuke (30 of 31 faults in the bare loop, 16 of 18 desktop tasks from screenshots alone) and level with Gemma 4 31B inside it (27 of 32, 18 of 18). It is of Chinese lineage, and once, after a "yes" to its own suggestion, it moved alice's older backup.
 
 - **gpt-oss-20b** is the fast, small baseline (75% without vision, in under a minute per fault), and gains most from Sekka's [troubleshooting skill](../../.agents/skills/sekka-troubleshooting/SKILL.md): 88% with it.
 - **For the desktop alone,** Holo4-27B and Muse Glimmer did 8 of 9 tasks each, Holo4-27B in under a minute, Muse in 16; Holo4's licence is non-commercial, and Muse is weak at diagnostics.
