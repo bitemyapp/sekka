@@ -3957,10 +3957,14 @@ objects still have to be fetched.
 
 ## Kakehashi
 
-`apps/kakehashi/` is its own Cargo workspace of three crates. `core` holds the
-drive rules, image checksums, the nightly list and downloads, and the write
-itself, with one platform module each for Linux, macOS and Windows. `helper`
-is `kakehashi-helper`, the only part that writes a drive. It runs with
+`apps/kakehashi/` is its own Cargo workspace of four crates. `core` holds the
+drive rules and listing, image checksums, the nightly list and downloads, and
+the window's side of a write, with one platform module each for Linux, macOS
+and Windows. `write` is `kakehashi-write`, the write itself and each
+platform's unmount, exclusive open, flush and eject; only the helper depends
+on it, so the window can't write a drive in its own process, which on macOS,
+where the helper runs as the user, nothing else would stop. `helper` is
+`kakehashi-helper`, the only part that writes a drive. It runs with
 administrator rights on Linux and Windows; on macOS it receives an authorized
 device handle from Apple’s `authopen` while remaining an ordinary user process.
 `app` is the window, built on GPUI through `gpui-kit` with its `gpui-fast`
@@ -4002,15 +4006,18 @@ stale. OK finds the drive again in the current list and checks that the
 window's image is still the one described, and only the `ConfirmedWrite` that
 yields makes a `Plan`. If either changed, nothing is written and the window
 says why. `Plan` is only serialized: the helper reads `plan.json`, with the
-same fields, as a `Requested`, checks its drive against the drive as it is
-(`still_there`), and unmounts or opens only with that check's proof. The
+same fields, as `kakehashi_write::Requested`, checks its drive against the
+drive as it is (`still_there`), and unmounts or opens only with that
+check's proof. The
 helper's first report must be written before it does anything. `core::job`
 follows the helper: before it starts, or if it reported nothing, nothing was
 written; once it has reported, its final report decides, and a helper that
 exits without one (killed, or an unexplained exit code) leaves the drive
 marked as partly written. Reports reach the job only through `ProgressFile`,
-and the helper's exit only with the lines still unread. The `compile_fail`
+and the helper's exit only with the lines still unread; the reader borrows the
+job's directory, so the directory outlives it. The `compile_fail`
 doctests on `Plan::new`, `ConfirmedWrite`, `Running::exited`, `Exit`,
+`ProgressFile`, `core::write` (which the write step isn't in),
 `Failure` and `Report` show the mistakes these types rule out;
 `RUSTC_BOOTSTRAP=1 cargo test --doc -p kakehashi-core` checks their error
 codes. `app/repro_ktl_03.sh` and `app/repro_ktl_04.sh` run the window's real
@@ -4045,7 +4052,7 @@ checks the production device-open function on an explicitly selected USB disk
 and closes the handle without unmounting, writing or ejecting. It requires
 macOS authorization. These checks do not validate physical USB writing.
 
-`kakehashi_core::write::execute` compares the plan's drive with the drive as
+`kakehashi_write::execute` compares the plan's drive with the drive as
 it is now (name, size, vendor, model, serial and bus) and rejects one the
 rules now exclude, unmounts it, opens it exclusively, checks again, writes in
 sector-padded chunks, zeroes the last MiB, syncs, drops the page cache where
