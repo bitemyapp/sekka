@@ -243,22 +243,73 @@ pub(crate) fn stub_old_outputs(messages: &mut [Message], keep: usize) -> usize {
     cut
 }
 
-/// Where the history can be cut so the kept tail starts cleanly: at a user
-/// message, never between a tool call and its result. Keeps at least the
-/// last `min_keep` messages when it can.
-pub(crate) fn summary_cut(messages: &[Message], min_keep: usize) -> Option<usize> {
-    let latest = messages.len().saturating_sub(min_keep);
-    (1..=latest).rev().find(|&i| messages[i].role == Role::User)
+/// What Tasuke itself says in user messages (the screen after an action, a
+/// call that couldn't be parsed, a summary): never the person's words.
+pub(crate) const SCREEN_NOW: &str = "The screen now:";
+pub(crate) const PARSE_RETRY: &str = "Your last tool call could not be parsed: its arguments were not valid JSON (often \
+an unescaped quote or newline in a long command). Try again, more simply.";
+const SUMMARY_HEADER: &str = "[Earlier in this conversation, summarized]";
+
+/// Whether a message is the person's own: a user message Tasuke didn't write.
+pub(crate) fn is_persons(m: &Message) -> bool {
+    if m.role != Role::User {
+        return false;
+    }
+    let text = m.content.text();
+    let text = text.trim_start();
+    !(text.starts_with(SCREEN_NOW) || text.starts_with(PARSE_RETRY) || text.starts_with(SUMMARY_HEADER))
 }
 
-/// The request that asks the model to summarize what is being dropped.
+/// Where the history can be cut so the kept tail starts with the person's
+/// own message, word for word (never one of Tasuke's, never between a tool
+/// call and its result). Keeps at least the last `min_keep` messages.
+pub(crate) fn summary_cut(messages: &[Message], min_keep: usize) -> Option<usize> {
+    let latest = messages.len().saturating_sub(min_keep);
+    (1..=latest).rev().find(|&i| is_persons(&messages[i]))
+}
+
+/// The request that asks the model to summarize what is being dropped,
+/// under fixed headings so nothing that matters is left to its style.
 pub(crate) const SUMMARY_REQUEST: &str = "\
-The conversation is getting long. Write a summary of everything above for yourself to continue from: the person's \
-requests, what you found (with the exact names, paths, units and values), what you changed and whether they \
-approved it, and what is still open. At most 250 words, no preamble.";
+The conversation is getting long. Summarize everything above for yourself to continue from, under exactly these \
+headings: Request (what the person asked, in their words), Found (with the exact names, paths, units and values), \
+Changed (what ran or was edited, and whether they approved it), Open (what is still to do). At most 250 words, no \
+preamble.";
 
 pub(crate) fn summary_message(text: &str) -> String {
-    format!("[Earlier in this conversation, summarized]\n{}", text.trim())
+    format!("{SUMMARY_HEADER}\n{}", text.trim())
+}
+
+/// A summary built without the model, for when its summary fails: the
+/// person's requests word for word, the steps taken, and the last answer.
+pub(crate) fn fallback_summary(messages: &[Message]) -> String {
+    fn clip(s: &str, n: usize) -> String {
+        let s = s.split_whitespace().collect::<Vec<_>>().join(" ");
+        if s.chars().count() <= n { s } else { format!("{}…", s.chars().take(n).collect::<String>()) }
+    }
+    let mut out = String::from("Request:\n");
+    for m in messages.iter().filter(|m| is_persons(m)) {
+        let text = m.content.text();
+        // The first message carries the environment block before the request.
+        let text = text.rsplit_once("</environment>").map_or(text.as_str(), |(_, t)| t);
+        out.push_str(&format!("- {}\n", clip(text, 400)));
+    }
+    let steps: Vec<String> = messages
+        .iter()
+        .flat_map(|m| m.tool_calls.iter())
+        .map(|c| format!("{} {}", c.name, clip(&c.arguments, 120)))
+        .collect();
+    if !steps.is_empty() {
+        out.push_str("Steps taken:\n");
+        for s in steps.iter().rev().take(20).rev() {
+            out.push_str(&format!("- {s}\n"));
+        }
+    }
+    if let Some(last) = messages.iter().rev().find(|m| m.role == Role::Assistant && !m.content.text().trim().is_empty())
+    {
+        out.push_str(&format!("Last answer: {}\n", clip(&last.content.text(), 400)));
+    }
+    out
 }
 
 #[cfg(test)]
@@ -314,6 +365,43 @@ mod tests {
         assert_eq!(m[0].content.images(), 0);
         assert_eq!(m[1].content.images(), 1);
         assert_eq!(m[2].content.images(), 1);
+    }
+
+    #[test]
+    fn a_summary_cut_skips_tasukes_own_user_messages() {
+        let screen = Message::user(format!("{SCREEN_NOW} …"));
+        let m = vec![Message::user("fix my sound"), Message::assistant("ok"), screen, Message::assistant("done")];
+        assert_eq!(summary_cut(&m, 1), None, "only the first message is the person's, and it can't be cut at");
+        let m = vec![
+            Message::user("a"),
+            Message::assistant("x"),
+            Message::user("b"),
+            Message::user(PARSE_RETRY),
+            tool("o"),
+        ];
+        assert_eq!(summary_cut(&m, 1), Some(2));
+    }
+
+    #[test]
+    fn the_fallback_summary_keeps_the_request_verbatim() {
+        let mut call = Message::assistant("");
+        call.tool_calls.push(crate::chat::WireCall {
+            id: CallId::new("c"),
+            name: "run_command".into(),
+            arguments: "{\"command\":\"wpctl status\"}".into(),
+        });
+        let m = vec![
+            Message::user("<environment>\nx\n</environment>\n\nMy sound stopped working"),
+            call,
+            tool("o"),
+            Message::assistant("PipeWire was masked."),
+        ];
+        let s = fallback_summary(&m);
+        assert!(
+            s.contains("- My sound stopped working") && s.contains("run_command") && s.contains("PipeWire was masked."),
+            "{s}"
+        );
+        assert!(!s.contains("<environment>"));
     }
 
     #[test]

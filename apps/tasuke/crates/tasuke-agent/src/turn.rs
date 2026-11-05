@@ -87,7 +87,8 @@ impl Out<'_> {
     }
 }
 
-pub(crate) fn run(session: &Session, text: &str, options: Options, ctl: &Control) {
+pub(crate) fn run(session: &Session, text: &str, mut options: Options, ctl: &Control) {
+    options.session = Some(session.id().clone());
     let (mut history, last) = session.history().unwrap_or_else(|_| (Vec::new(), TurnNumber(0)));
     let turn = last.next();
     let writer = match Writer::open(session) {
@@ -148,7 +149,10 @@ impl<'a> Loop<'a> {
         self.ensure_server(out);
         let n_ctx = self.client.context_size().unwrap_or(o.context_fallback);
         let memory = Memory::load(&o.data_dir).map(|m| m.prompt_block()).unwrap_or_default();
-        let mut system = context::system_prompt(o, &memory);
+        // Fixed for the whole turn, so llama.cpp's prompt cache keeps hitting: a
+        // note remembered now reaches the prompt from the next turn (the tool's
+        // result already tells the model).
+        let system = context::system_prompt(o, &memory);
         let mut desktop_asked = false;
         let mut malformed = 0;
         let mut tps = None;
@@ -236,13 +240,7 @@ impl<'a> Loop<'a> {
                 Err(LlmError::ToolCallParse(e)) if malformed < MALFORMED_LIMIT => {
                     malformed += 1;
                     log::info!("tasuke: unparseable tool call: {e}");
-                    out.message(
-                        history,
-                        Message::user(
-                            "Your last tool call could not be parsed: its arguments were not valid JSON (often an \
-                             unescaped quote or newline in a long command). Try again, more simply.",
-                        ),
-                    );
+                    out.message(history, Message::user(context::PARSE_RETRY));
                     continue;
                 }
                 Err(LlmError::ContextFull(_)) if !summarized => {
@@ -353,8 +351,6 @@ impl<'a> Loop<'a> {
                         let r = tools::execute(&call, o, &mut self.desktop, self.ctl.cancel_flag());
                         if r.memory_changed {
                             out.send(Event::MemoryChanged);
-                            let memory = Memory::load(&o.data_dir).map(|m| m.prompt_block()).unwrap_or_default();
-                            system = context::system_prompt(o, &memory);
                         }
                         (r.output, r.for_model, r.image)
                     }
@@ -375,7 +371,7 @@ impl<'a> Loop<'a> {
             // Screenshots go after the results: chat templates take images
             // in user messages.
             if let Some(img) = images.pop() {
-                let parts = vec![Part::Text { text: "The screen now:".into() }, Part::Image { path: img }];
+                let parts = vec![Part::Text { text: context::SCREEN_NOW.into() }, Part::Image { path: img }];
                 out.message(history, Message::new(Role::User, Content::Parts(parts)));
             }
         }
@@ -396,15 +392,21 @@ impl<'a> Loop<'a> {
         params.insert("chat_template_kwargs".into(), serde_json::json!({"enable_thinking": false}));
         let body = request_body(&self.options.model, &messages, &[], Tokens(800), &params, false);
         let reply = self.client.chat(&body, self.ctl.cancel_flag(), &mut |_| {}, &mut |_| {});
-        let Ok(reply) = reply else { return };
-        usage.requests += 1;
-        usage.prompt_tokens += reply.prompt_tokens;
-        usage.completion_tokens += reply.completion_tokens;
-        if reply.content.trim().is_empty() {
-            return;
-        }
+        // The model's summary, or one built here when it fails (the context is
+        // full, the server is struggling): a turn must not die of a long conversation.
+        let summary = match reply {
+            Ok(reply) => {
+                usage.requests += 1;
+                usage.prompt_tokens += reply.prompt_tokens;
+                usage.completion_tokens += reply.completion_tokens;
+                Some(reply.content).filter(|c| !c.trim().is_empty())
+            }
+            Err(LlmError::Cancelled) => return,
+            Err(_) => None,
+        };
+        let summary = summary.unwrap_or_else(|| context::fallback_summary(&history[..cut]));
         let keep = history.len() - cut;
-        let text = context::summary_message(&reply.content);
+        let text = context::summary_message(&summary);
         out.flush();
         out.record(&Record::Summary { text: text.clone(), keep });
         let tail = history.split_off(cut);
