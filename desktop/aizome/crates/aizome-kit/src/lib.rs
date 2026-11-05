@@ -34,6 +34,7 @@
 pub mod a11y;
 pub mod ahead;
 mod app;
+pub mod composing;
 pub mod cx;
 pub mod dialogs;
 pub mod draw;

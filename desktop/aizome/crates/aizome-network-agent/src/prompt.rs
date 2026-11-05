@@ -78,7 +78,7 @@ impl Program for Dialog {
                 .id(format!("network-secret-{i}"))
                 .on_change(move |value| Msg::Edit(i, value))
                 .on_submit(Msg::Submit);
-            let field = if f.secret { field.password() } else { field };
+            let field = field.password_when(f.secret);
             content = content.push(column![text(f.label.as_str()), field].spacing(5.0));
         }
         scroll(

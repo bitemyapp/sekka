@@ -12,14 +12,12 @@ fn field(
     on_change: fn(String) -> Msg,
     password: bool,
 ) -> Element<Msg> {
-    let mut input = text_field(value)
+    let input = text_field(value)
         .on_change(on_change)
         .error(app.account_error(which))
         .id(which.id())
         .width(FIELD);
-    if password {
-        input = input.password();
-    }
+    let input = input.password_when(password);
     form_row(label.to_string(), input).into()
 }
 
