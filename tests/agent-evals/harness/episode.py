@@ -157,6 +157,14 @@ def run_tasuke(vm, cfg, s, result, out):
                           + " >> /root/.tasuke-eval/stdout.txt 2>> /root/.tasuke-eval/stderr.txt", timeout=left + 180)
         answer = vm.out_of("cat /root/.tasuke-eval/answer.txt 2>/dev/null")
         result["followups"] = 1
+    if s.track == "computer-use":
+        # What the model saw: the screenshots with their numbered controls.
+        try:
+            vm.sh("mkdir -p /tmp/tasuke-shots && cp /root/.tasuke-eval/sessions/*.files/screen-*.png /tmp/tasuke-shots/ "
+                  "2>/dev/null; true")
+            vm.machine.copy_from_vm("/tmp/tasuke-shots", "tasuke-screens")
+        except Exception as e:  # noqa: BLE001 (the pictures are a record, not the result)
+            result["screens_error"] = str(e)[:200]
     wall = time.monotonic() - t0
     session = vm.out_of("cat /root/.tasuke-eval/sessions/*.jsonl", timeout=120)
     with open(os.path.join(out, "tasuke-session.jsonl"), "w") as f:
