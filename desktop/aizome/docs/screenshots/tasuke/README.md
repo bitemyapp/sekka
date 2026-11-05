@@ -45,7 +45,10 @@ then.
   again then. Against the earlier takes (from `41266f94` to `85a3e01b`),
   ImageMagick's `compare` finds changes only in the menu bar's app name,
   the heading that names the app and, on the Models pages, the first
-  sentence.
+  sentence. The six Models pictures were taken again at `9842393b`, when
+  the catalog's notes gained each model's result inside Tasuke; against
+  the takes at `58e13304`, `compare` finds changes only from the first
+  card's notes down.
 - **Display**: a private headless sway 1.12 with the pixman renderer
   (`desktop/aizome/sukumo/scripts/headless-wayland`, `SIZE=1440x900`),
   with `WAYLAND_DISPLAY`, `DISPLAY` and `AIZOME_SHELL_SOCKET` unset. The
