@@ -16,8 +16,11 @@ inputs=(
   nix/buck2/patches/private-config-telemetry.patch
   nix/buck2/patches/local-live-views.patch
   nix/buck2/patches/cas-recovery.patch
+  nix/buck2/patches/critical-path-priority.patch
+  nix/buck2/patches/priority-dependencies.patch
   nix/bazel/toolchains.nix nix/bazel/aizome-inputs.nix
   nix/libsecret-dh-padding.nix nix/patches/libsecret-gnutls-dh-padding.patch
+  nix/rustc-reproducible-hygiene.nix nix/patches/rustc-reproducible-hygiene.patch
   desktop/aizome/nix/fonts.nix desktop/aizome/nix/aizome-fonts.nix
   desktop/aizome/nix/hotaru-fonts.nix desktop/aizome/Cargo.lock
   build/buck2/client.py build/buck2/generate.py build/buck2/action.py

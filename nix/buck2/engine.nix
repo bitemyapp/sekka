@@ -20,11 +20,15 @@ platform.buildRustPackage {
     ./patches/private-config-telemetry.patch
     ./patches/local-live-views.patch
     ./patches/cas-recovery.patch
+    ./patches/critical-path-priority.patch
   ];
   # Cargo loads Git patch manifests even when the lock records them as unused.
   # Remove this dead patch in both source and vendoring; no resolved dep changes.
-  cargoPatches = [ ./patches/drop-unused-bindgen.patch ];
-  cargoHash = "sha256-8S4vUe7K3sSxO1egCnS/20wJyndpz1q5nuTkyYoGhT8=";
+  cargoPatches = [
+    ./patches/drop-unused-bindgen.patch
+    ./patches/priority-dependencies.patch
+  ];
+  cargoHash = "sha256-AMASQm4PK9Ebus6xVCioNAp6IYhXUCY10vWnFAimP3k=";
   nativeBuildInputs = [ pkgs.clang pkgs.mold pkgs.pkg-config pkgs.git ];
   cargoBuildFlags = [ "--bin" "buck2" ];
   RUSTFLAGS = "--cfg tokio_unstable -C linker=clang -C link-arg=-fuse-ld=mold";
@@ -47,6 +51,7 @@ platform.buildRustPackage {
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_re_configuration -- privacy_tests
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_server_ctx -- ctx::telemetry_tests
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2 --lib -- tests::cli_
+    cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p host_sharing --lib
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- local_content_store::download_tests
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- local_content_store::linux::tests::hint_
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p remote_execution -- client::tests

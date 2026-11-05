@@ -10,6 +10,7 @@ inputs=(
   flake.lock nix/bazel/nixpkgs.nix nix/bazel/client.nix
   nix/bazel/repositories.nix nix/bazel/toolchains.nix nix/bazel/aizome-inputs.nix
   nix/libsecret-dh-padding.nix nix/patches/libsecret-gnutls-dh-padding.patch
+  nix/rustc-reproducible-hygiene.nix nix/patches/rustc-reproducible-hygiene.patch
   desktop/aizome/nix/fonts.nix desktop/aizome/nix/aizome-fonts.nix
   desktop/aizome/nix/hotaru-fonts.nix build/bazel/workflow.py
   build/bazel/credential_helper.py

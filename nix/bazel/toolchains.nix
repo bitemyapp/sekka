@@ -3,8 +3,9 @@
 # `<nixpkgs>` from nix/bazel/nixpkgs.nix (build/bazel/nix.bzl), and the flake's
 # `bazel` shell with its own `pkgs`. Same lock, same store paths.
 #
-# - `rust`: the compiler, Cargo, Clippy, rustfmt and rust-analyzer the Aizome
-#   shell and package use, with the BUILD file of their Bazel toolchain.
+# - `rust`: root-locked Cargo and rust-analyzer, with a hygiene-deterministic
+#   compiler and matching Clippy/rustfmt for both Bazel and Buck2. Aizome's
+#   package and shell still use the unpatched root-locked compiler.
 # - `cc`: stdenv's C/C++ compiler and binutils, which rules_nixpkgs_cc
 #   configures as Bazel's C/C++ toolchain (and rules_rust links with).
 # - `native`: the environment Aizome's package builds in (its buildInputs, as
@@ -17,6 +18,7 @@ let
   inherit (pkgs) lib;
   target = pkgs.stdenv.hostPlatform.rust.rustcTarget;
   aizome = import ./aizome-inputs.nix { inherit pkgs; };
+  rustTools = import ../rustc-reproducible-hygiene.nix { inherit pkgs; };
   # rules_rust passes each as -C opt-level and -C debuginfo, by compilation
   # mode. Cargo's profiles (desktop/aizome/Cargo.toml): `dev` (fastbuild)
   # and `release` (opt) keep line tables; .bazelrc's `dev` config builds
@@ -147,16 +149,16 @@ rec {
   rust = pkgs.buildEnv {
     name = "sekka-bazel-rust-toolchain";
     paths = [
-      pkgs.rustc
-      pkgs.rustc.unwrapped
-      pkgs.cargo
-      pkgs.clippy
-      pkgs.rustfmt
+      rustTools.rustc
+      rustTools.rustc.unwrapped
+      rustTools.cargo
+      rustTools.clippy
+      rustTools.rustfmt
       pkgs.rust-analyzer
       # The standard library's source, where rust-analyzer looks for it.
       (pkgs.runCommand "rust-lib-src" { } ''
         mkdir -p $out/lib/rustlib/src/rust
-        ln -s ${pkgs.rustPlatform.rustLibSrc} $out/lib/rustlib/src/rust/library
+        ln -s ${rustTools.rustPlatform.rustLibSrc} $out/lib/rustlib/src/rust/library
       '')
     ];
     extraOutputsToInstall = [ "lib" ];

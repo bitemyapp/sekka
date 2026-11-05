@@ -1,5 +1,5 @@
 diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-index 483e907..7ebfe87 100644
+index 483e907..ebeba02 100644
 --- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
 +++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
 @@ -20,6 +20,7 @@ mod linux {
@@ -102,18 +102,18 @@ index 483e907..7ebfe87 100644
 +            Ok(())
 +        }
 +
++        // Call inside the access/publication transaction so LRU and bounded
++        // weak-reference changes require one durable metadata commit.
 +        fn remember_view(&self, destination: &Path, key: &str) -> buck2_error::Result<()> {
 +            let path = destination
 +                .to_str()
 +                .ok_or_else(|| error("Non-UTF-8 artifact view path"))?;
-+            let transaction = self.db.unchecked_transaction()?;
-+            transaction.execute(
++            self.db.execute(
 +                "INSERT INTO views VALUES(?1,?2,(SELECT tick FROM clock WHERE id=1))
 +                 ON CONFLICT(path) DO UPDATE SET key=excluded.key,used=excluded.used",
 +                params![path, key],
 +            )?;
 +            self.prune_views()?;
-+            transaction.commit()?;
 +            Ok(())
 +        }
 +
@@ -158,15 +158,16 @@ index 483e907..7ebfe87 100644
          fn access(
              &self,
              destination: &Path,
-@@ -340,6 +433,7 @@ mod linux {
+@@ -339,7 +432,7 @@ mod linux {
+                             }
                              return Err(e);
                          }
-                         self.touch(&key)?;
-+                        self.remember_view(destination, &key)?;
+-                        self.touch(&key)?;
++                        self.record_access(destination, &key)?;
                          return Ok(true);
                      }
                      Err(e) => {
-@@ -350,7 +444,8 @@ mod linux {
+@@ -350,7 +443,8 @@ mod linux {
                      }
                  }
              }
@@ -176,15 +177,32 @@ index 483e907..7ebfe87 100644
                  return Ok(false);
              }
              self.evict(digest.size(), 1)?;
-@@ -376,6 +471,7 @@ mod linux {
+@@ -375,19 +469,22 @@ mod linux {
+             )?;
              fs::rename(&pending, &object)?;
              File::open(&self.root)?.sync_all()?;
-             self.touch(&key)?;
-+            self.remember_view(destination, &key)?;
+-            self.touch(&key)?;
++            self.record_access(destination, &key)?;
              // The original output already shares this object's extents. It is
              // not hardlinked and must retain its existing executable mode.
              Ok(true)
-@@ -413,26 +509,19 @@ mod linux {
+         }
+ 
+-        fn touch(&self, key: &str) -> buck2_error::Result<()> {
++        fn record_access(&self, destination: &Path, key: &str) -> buck2_error::Result<()> {
++            let transaction = self.db.unchecked_transaction()?;
+             self.db
+                 .execute_batch("UPDATE clock SET tick=tick+1 WHERE id=1;")?;
+             self.db.execute(
+                 "UPDATE objects SET used=(SELECT tick FROM clock WHERE id=1) WHERE key=?1",
+                 [key],
+             )?;
++            self.remember_view(destination, key)?;
++            transaction.commit()?;
+             Ok(())
+         }
+     }
+@@ -413,26 +510,19 @@ mod linux {
              .map_err(|e| format!("{e:#}"))
      });
  
@@ -217,7 +235,7 @@ index 483e907..7ebfe87 100644
          let unlock = store.lock.unlock();
          result
              .buck_error_context("Buck2 verified local content store")
-@@ -442,12 +531,150 @@ mod linux {
+@@ -442,12 +532,153 @@ mod linux {
              })
      }
  
@@ -241,11 +259,14 @@ index 483e907..7ebfe87 100644
 +        digest: &FileDigest,
 +    ) -> buck2_error::Result<()> {
 +        with_store((), |store| {
++            let transaction = store.db.unchecked_transaction()?;
 +            store.db.execute(
 +                "DELETE FROM views WHERE path=?1",
 +                [temporary.to_str().ok_or_else(|| error("Non-UTF-8 temporary artifact path"))?],
 +            )?;
-+            store.remember_view(destination, &Store::key(digest))
++            store.remember_view(destination, &Store::key(digest))?;
++            transaction.commit()?;
++            Ok(())
 +        })
 +    }
 +
@@ -368,7 +389,7 @@ index 483e907..7ebfe87 100644
          #[test]
          fn reflink_store_restart_eviction_corruption_and_modes() -> buck2_error::Result<()> {
              // This test requires the same Linux reflink filesystem as production;
-@@ -539,6 +766,13 @@ mod linux {
+@@ -539,6 +770,13 @@ mod linux {
                  |r| Ok((r.get(0)?, r.get(1)?)),
              )?;
              assert_eq!((bytes, entries), actual);
@@ -382,7 +403,7 @@ index 483e907..7ebfe87 100644
              Ok(())
          }
  
-@@ -762,6 +996,12 @@ impl Download {
+@@ -762,6 +1000,12 @@ impl Download {
          self.temporary
              .persist(self.destination.as_path())
              .map_err(|e| e.error)?;
@@ -395,7 +416,7 @@ index 483e907..7ebfe87 100644
          Ok(())
      }
  }
-@@ -806,6 +1046,17 @@ mod download_tests {
+@@ -806,6 +1050,17 @@ mod download_tests {
      #[cfg(target_os = "linux")]
      #[test]
      fn many_pending_downloads_respect_descriptor_limit() -> buck2_error::Result<()> {
@@ -413,7 +434,7 @@ index 483e907..7ebfe87 100644
          const CHILD: &str = "BUCK2_MATERIALIZER_FD_REGRESSION_CHILD";
          if std::env::var_os(CHILD).is_none() {
              use std::os::unix::process::CommandExt;
-@@ -819,43 +1070,37 @@ mod download_tests {
+@@ -819,43 +1074,37 @@ mod download_tests {
                  fn setrlimit(resource: i32, limit: *const Limit) -> i32;
              }
  
