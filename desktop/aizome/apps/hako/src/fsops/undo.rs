@@ -15,6 +15,10 @@
 //! didn't carry out stays to try again, so a failed undo doesn't lose its
 //! step, nor let the next ⌘Z undo the step before it unasked.
 
+// Typestate code: every state and every case is named, so a new one
+// added later can't fall into an arm written for others.
+#![deny(clippy::wildcard_enum_match_arm)]
+
 use std::path::PathBuf;
 
 use aizome_typestate::{Answer, Fresh, Generation, Ticket};
@@ -64,7 +68,7 @@ pub struct Step {
 pub fn items_label(paths: &[PathBuf]) -> String {
     match paths {
         [one] => format!("“{}”", one.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()),
-        _ => format!("{} Items", paths.len()),
+        [] | [_, _, ..] => format!("{} Items", paths.len()),
     }
 }
 
@@ -413,7 +417,7 @@ impl History {
     pub fn undo_label(&self) -> Option<&str> {
         match self.stored() {
             HistoryState::Idle(()) => self.ctx().undo.last().map(|h| h.step.label.as_str()),
-            _ => None,
+            HistoryState::Undoing(_) | HistoryState::Redoing(_) => None,
         }
     }
 
@@ -421,7 +425,7 @@ impl History {
     pub fn redo_label(&self) -> Option<&str> {
         match self.stored() {
             HistoryState::Idle(()) => self.ctx().redo.last().map(|h| h.step.label.as_str()),
-            _ => None,
+            HistoryState::Undoing(_) | HistoryState::Redoing(_) => None,
         }
     }
 
@@ -432,7 +436,7 @@ impl History {
                 Ok((undoing, inversion)) => (undoing.into(), Some(inversion)),
                 Err(idle) => (idle.into(), None),
             },
-            busy => (busy, None),
+            busy @ (HistoryAny::Undoing(_) | HistoryAny::Redoing(_)) => (busy, None),
         })
     }
 
@@ -444,7 +448,7 @@ impl History {
                 Ok((redoing, inversion)) => (redoing.into(), Some(inversion)),
                 Err(idle) => (idle.into(), None),
             },
-            busy => (busy, None),
+            busy @ (HistoryAny::Undoing(_) | HistoryAny::Redoing(_)) => (busy, None),
         })
     }
 
@@ -491,7 +495,7 @@ impl History {
                 }
                 Err(_) => (s.into(), Filed::Stale),
             },
-            idle => (idle, Filed::Stale),
+            idle @ HistoryAny::Idle(_) => (idle, Filed::Stale),
         })
     }
 }
@@ -749,7 +753,7 @@ mod tests {
                 s.ctx.undo = full;
                 (s.into(), ())
             }
-            other => (other, ()),
+            other @ (HistoryAny::Undoing(_) | HistoryAny::Redoing(_)) => (other, ()),
         });
         assert!(redo(&mut h, &tr).is_clean());
         assert_eq!(h.ctx().undo.len(), DEPTH, "the oldest step makes room");

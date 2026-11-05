@@ -15,6 +15,10 @@
 //!    refuses is [`Kept`] beside its replacement under a visible name
 //!    (`a (replaced).txt`) and reported.
 
+// Typestate code: every state and every case is named, so a new one
+// added later can't fall into an arm written for others.
+#![deny(clippy::wildcard_enum_match_arm)]
+
 use std::fs;
 use std::io;
 use std::os::unix::fs::MetadataExt;
@@ -289,9 +293,10 @@ pub struct Kept {
 impl Kept {
     /// The report's problem: the item's target, and where the old one is.
     pub fn problem(self) -> (PathBuf, String) {
-        let name = match (self.at.parent() == self.target.parent(), self.at.file_name()) {
-            (true, Some(n)) if !names::is_temporary(n) => names::display(n),
-            _ => self.at.display().to_string(),
+        let beside = self.at.parent() == self.target.parent();
+        let name = match self.at.file_name() {
+            Some(n) if beside && !names::is_temporary(n) => names::display(n),
+            Some(_) | None => self.at.display().to_string(),
         };
         (self.target, format!("the item it replaced is kept beside it as “{name}”: {}", self.why))
     }

@@ -16,6 +16,10 @@
 //! through its [`Committed`] proof. So a folder that couldn't be synced
 //! keeps the sources of everything in it.
 
+// Typestate code: every state and every case is named, so a new one
+// added later can't fall into an arm written for others.
+#![deny(clippy::wildcard_enum_match_arm)]
+
 use std::ffi::OsStr;
 use std::fs;
 use std::io;
@@ -69,7 +73,7 @@ pub(super) fn rename_item(source: &Path, target: &Path, smeta: &fs::Metadata) ->
             let _ = fs::set_permissions(now, fs::Permissions::from_mode(mode));
             r
         }
-        r => r,
+        r @ (Ok(_) | Err(_)) => r,
     }
 }
 
@@ -121,8 +125,10 @@ impl<'f> Item<'f> {
     pub fn file(self, file: &fs::File) -> Result<(), (Item<'f>, io::Error)> {
         if self.into.is_some() {
             let made = |m: &fs::Metadata| (m.dev(), m.ino());
-            let is_copy =
-                matches!((file.metadata(), fs::symlink_metadata(&self.copy)), (Ok(a), Ok(b)) if made(&a) == made(&b));
+            let is_copy = match (file.metadata(), fs::symlink_metadata(&self.copy)) {
+                (Ok(a), Ok(b)) => made(&a) == made(&b),
+                (Err(_), _) | (_, Err(_)) => false,
+            };
             if !is_copy {
                 return Err((self, io::Error::new(io::ErrorKind::InvalidInput, "it isn't the copy made")));
             }

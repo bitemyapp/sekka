@@ -22,6 +22,10 @@
 //! hold it, `/`, trash cans and what's in them (that is deleted from the
 //! Trash instead), and items that aren't there.
 
+// Typestate code: every state and every case is named, so a new one
+// added later can't fall into an arm written for others.
+#![deny(clippy::wildcard_enum_match_arm)]
+
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
@@ -119,7 +123,7 @@ impl Entry {
                 let info = fs::symlink_metadata(&info).ok().map(|m| (m.dev(), m.ino()));
                 Some(Gone { can: self.can.clone(), name: self.name.clone(), info })
             }
-            _ => None,
+            Ok(_) | Err(_) => None,
         }
     }
 }
@@ -150,7 +154,7 @@ impl Trash {
         let home_dir = std::env::var_os("HOME").filter(|h| !h.is_empty()).map(PathBuf::from);
         let data = match std::env::var_os("XDG_DATA_HOME").map(PathBuf::from) {
             Some(p) if p.is_absolute() => p,
-            _ => home_dir.clone().unwrap_or_else(|| PathBuf::from("/tmp")).join(".local/share"),
+            Some(_) | None => home_dir.clone().unwrap_or_else(|| PathBuf::from("/tmp")).join(".local/share"),
         };
         Trash { home: data.join("Trash"), home_dir, uid: sys::uid(), topdirs: None }
     }
@@ -227,7 +231,7 @@ impl Trash {
         while let Some(up) = top.parent() {
             match fs::metadata(up) {
                 Ok(m) if m.dev() == dev => top = up.to_path_buf(),
-                _ => break,
+                Ok(_) | Err(_) => break,
             }
         }
         Ok(top)
@@ -526,7 +530,7 @@ pub fn list_can(can: &Can) -> Vec<Entry> {
             let (path, deleted) = parse_info(&text);
             let original = path.map(|p| match (&can.topdir, p.is_absolute()) {
                 (Some(top), false) => top.join(p),
-                _ => p,
+                (Some(_), true) | (None, _) => p,
             });
             seen.insert(name.clone());
             out.push(Entry {
@@ -668,7 +672,7 @@ fn real_path(path: &Path) -> PathBuf {
     let path = names::normalize(path);
     match (path.parent(), path.file_name()) {
         (Some(parent), Some(name)) => fs::canonicalize(parent).unwrap_or_else(|_| parent.to_path_buf()).join(name),
-        _ => path,
+        (None, _) | (_, None) => path,
     }
 }
 
