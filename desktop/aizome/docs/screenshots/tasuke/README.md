@@ -40,14 +40,17 @@ then.
 
 - **Date**: 5 November 2026.
 - **Build**: the dev profile (`cargo build -p aizome-tasuke`) on
-  `feat/assistant`, with the repository's Aizome dev shell, at three
+  `feat/assistant`, with the repository's Aizome dev shell, at four
   commits:
-  - `c2b06120` for the six pictures of the 8 GB laptop (`models-8gb`,
-    `first-run`, `downloading`), taken again when the catalog's 8 GiB
-    round made Gemma 4 26B-A4B its choice and the window learned to show
-    a model split between the GPU and system memory. `models-32gb` and
-    `models-unified` were taken again then too and came out pixel for
-    pixel the same, so they were kept.
+  - `d1d906f6` for `models-8gb`, taken again when the catalog gained the
+    8 GiB models' measured speeds and a corrected note on Gemma 4 26B-A4B.
+    `first-run` and `downloading` were taken again then too and came out
+    pixel for pixel the same, so they were kept.
+  - `c2b06120` for `first-run` and `downloading` on the 8 GB laptop,
+    taken again when the catalog's 8 GiB round made Gemma 4 26B-A4B its
+    choice and the window learned to show a model split between the GPU
+    and system memory. `models-32gb` and `models-unified` were taken again
+    then too and came out pixel for pixel the same, so they were kept.
   - `70d629b2` for the check-up and server-down pictures and the Day theme
     pair, taken again then because a finished answer had gained its Copy
     button. The others were taken again then too and came out the same.
