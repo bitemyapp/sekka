@@ -180,3 +180,91 @@ license = "Apache-2.0"
 args = ["--kv-cache-dtype", "fp8_e4m3", "--mem-fraction-static", "0.88", "--tool-call-parser", "qwen3_coder",
         "--reasoning-parser", "qwen3"]
 params = { temperature = 0.6, top_p = 0.95, top_k = 20 }
+
+# Models for an 8 GiB GPU (docs/agent-evals: the 8 GiB round). Quality is
+# the same at any slot count, so the episodes run with more slots on a
+# bigger GPU; `args_8gib` is the single-user server that fits in 8 GiB of
+# VRAM with 32K of context (q8_0 KV), measured on its own. Mixture-of-
+# experts models keep some experts in system RAM there (-ncmoe).
+
+[models."gemma-4-26b-a4b"]
+repo = "google/gemma-4-26B-A4B-it-qat-q4_0-gguf"
+revision = "d1c082be9cf3c8a514acf63b8761f4b41935842e"
+file = "gemma-4-26B_q4_0-it.gguf"
+mmproj = "gemma-4-26B-it-mmproj.gguf"
+size_gb = 15.6
+engine = "llama.cpp"
+vision = true
+coords = "pixel"
+license = "Apache-2.0"
+lineage = "Google"
+params = { temperature = 1.0, top_p = 0.95, top_k = 64 }
+args_8gib = ["-ncmoe", "24", "-b", "2048", "-ub", "2048"]
+
+[models."gemma-4-12b"]
+repo = "unsloth/gemma-4-12b-it-GGUF"
+revision = "fc034cfff751157913579611efad8462ac1be606"
+file = "gemma-4-12b-it-IQ4_XS.gguf"
+mmproj = "mmproj-F16.gguf"
+size_gb = 6.5
+engine = "llama.cpp"
+vision = true
+coords = "pixel"
+license = "Apache-2.0"
+lineage = "Google"
+params = { temperature = 1.0, top_p = 0.95, top_k = 64 }
+args_8gib = []
+
+[models."nemotron-3.5-lightning"]
+repo = "ggml-org/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF"
+revision = "8cd082170ed313484be1cf44f256a5caa2cfdad3"
+file = "NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf"
+size_gb = 18.9
+engine = "llama.cpp"
+vision = false
+coords = "pixel"
+license = "OpenMDW-1.1"
+lineage = "NVIDIA"
+params = { temperature = 1.0, top_p = 0.95 }
+args_8gib = ["-ncmoe", "30", "-b", "2048", "-ub", "2048"]
+
+[models."lfm2.5-24b-a2b"]
+repo = "LiquidAI/LFM2.5-24B-A2B-GGUF"
+revision = "0912d33141f77e10705345a6732bfd83f0252fdc"
+file = "LFM2.5-24B-A2B-Q4_K_M.gguf"
+size_gb = 14.5
+engine = "llama.cpp"
+vision = false
+coords = "pixel"
+license = "LFM Open 1.0 (commercial use above $10M revenue restricted)"
+lineage = "Liquid AI"
+params = { temperature = 0.3 }
+args_8gib = ["-ncmoe", "26", "-b", "2048", "-ub", "2048"]
+
+[models."qwen3.5-9b"]
+repo = "unsloth/Qwen3.5-9B-GGUF"
+revision = "3885219b6810b007914f3a7950a8d1b469d598a5"
+file = "Qwen3.5-9B-Q4_K_M.gguf"
+mmproj = "mmproj-F16.gguf"
+size_gb = 6.6
+engine = "llama.cpp"
+vision = true
+coords = "norm1000"
+license = "Apache-2.0"
+lineage = "Alibaba"
+params = { temperature = 0.6, top_p = 0.95, top_k = 20 }
+args_8gib = []
+
+[models."holo3.1-4b"]
+repo = "mradermacher/Holo-3.1-4B-GGUF"
+revision = "72283b3ae666b79a6408dfa69d8b38643dac7fa8"
+file = "Holo-3.1-4B.Q8_0.gguf"
+mmproj = "Holo-3.1-4B.mmproj-Q8_0.gguf"
+size_gb = 5.5
+engine = "llama.cpp"
+vision = true
+coords = "norm1000"
+license = "Apache-2.0"
+lineage = "H Company (Qwen3.5 fine-tune)"
+params = { temperature = 0.6, top_p = 0.95, top_k = 20 }
+args_8gib = []
