@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -17,7 +18,7 @@ class CompilerContract(unittest.TestCase):
         self.assertEqual(result.returncode, 0, "Command: " + repr(command) + "\n" + result.stdout + result.stderr)
         return result.stdout
 
-    def test_real_lto_macro_build_script_native_and_rust_dylibs(self):
+    def test_real_compiler_runtime_and_test_contracts(self):
         environment = Path(os.environ["SEKKA_BUCK2_ENV"]).resolve()
         tools = json.loads(environment.read_text())
         action = Path(__file__).with_name("action.py").resolve()
@@ -26,6 +27,30 @@ class CompilerContract(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="sekka-buck-contract-") as temporary:
             root = Path(temporary)
             workspace = root / "workspace"
+            staged_runner = root / "runtime-helper" / "run.py"
+            staged_runner.parent.mkdir()
+            shutil.copyfile(runner, staged_runner)
+            runner = staged_runner
+            temporary_contract = '''#![deny(unexpected_cfgs)]
+#[cfg(docsrs)]
+compile_error!("docsrs must be declared, not enabled");
+#[test]
+fn target_tmp_is_worktree_private() {
+    let directory = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
+    assert_eq!(directory, std::path::PathBuf::from(std::env::var("CARGO_TARGET_TMPDIR").unwrap()));
+    assert!(directory.is_dir());
+    let marker = directory.join("worktree");
+    assert!(!marker.exists(), "a different worktree must not seed this directory");
+    std::fs::write(&marker, std::env::current_dir().unwrap().to_str().unwrap()).unwrap();
+    let child = std::process::Command::new(__PYTHON__)
+        .arg("-c")
+        .arg("import subprocess,sys; subprocess.run([sys.executable, '-c', 'import os,sys; from pathlib import Path; p=Path(sys.argv[1]); assert p.read_text()==os.getcwd(); p.with_name(\\\"child\\\").write_text(\\\"ok\\\")', sys.argv[1]], check=True, close_fds=True)")
+        .arg(&marker)
+        .status().unwrap();
+    assert!(child.success());
+    assert_eq!(std::fs::read_to_string(directory.join("child")).unwrap(), "ok");
+}
+'''.replace("__PYTHON__", json.dumps(sys.executable))
             files = {
                 "Cargo.toml": '''[workspace]
 resolver = "3"
@@ -111,6 +136,8 @@ contract-native={path="../native"}
     println!("real LTO, proc-macro, generated Rust and native dylib: 21");
 }
 ''',
+                "app/tests/temporary.rs": temporary_contract,
+                "app/benches/temporary.rs": temporary_contract,
             }
             for name, content in files.items():
                 path = workspace / name
@@ -124,11 +151,15 @@ contract-native={path="../native"}
             units, _ = units_from_graph(graph, package_records(metadata, root), metadata)
             completed = {}
             closures = {}
+            built = {}
 
             def build(index):
                 if index in completed:
                     return
                 unit = units[index]
+                if unit["key"] in built:
+                    completed[index], closures[index] = built[unit["key"]]
+                    return
                 dependencies = graph["units"][index]["dependencies"]
                 closure = set()
                 for dependency in dependencies:
@@ -149,12 +180,13 @@ contract-native={path="../native"}
                 self.checked([sys.executable, str(action), "--environment", str(environment), "--spec", str(specification), "--output", output], cwd=root, env=cargo_env)
                 completed[index] = output
                 closures[index] = closure
+                built[unit["key"]] = output, closure
 
             for index in graph["roots"]:
                 build(index)
             app = next(i for i, unit in enumerate(units) if unit["package"]["name"] == "contract-app" and unit["mode"] == "build")
             self.assertEqual(units[app]["lto_mode"], "run:thin")
-            result = self.checked([sys.executable, str(runner), "--environment", str(environment), "--runtime", str(runtime), "--run", completed[app], "--", "--runtime", "user value", "--environment", "app-env", "--", "literal"], cwd=root, env=cargo_env)
+            result = self.checked([sys.executable, str(runner), "--action-module", str(action), "--environment", str(environment), "--runtime", str(runtime), "--run", completed[app], "--", "--runtime", "user value", "--environment", "app-env", "--", "literal"], cwd=root, env=cargo_env)
             self.assertIn("native dylib: 21", result)
             core = next(i for i, unit in enumerate(units) if unit["package"]["name"] == "aizome-comp-core" and unit["mode"] == "build" and "dylib" in unit["target"]["crate_types"])
             library = root / completed[core] / units[core]["filename"]
@@ -164,6 +196,26 @@ contract-native={path="../native"}
             self.assertIn("overflow-checks=true", flags)
             self.assertIn("metadata=" + units[core]["key"], flags)
             self.assertTrue(any(unit["lto_mode"] == "object-bitcode" for unit in units if unit["package"]["name"] == "contract-shared"))
+            for kind, selection in [("test", "--test"), ("bench", "--bench")]:
+                graph = json.loads(self.checked([tools["cargo"], "test", "-p", "contract-app", selection, "temporary", "--no-run", "--profile", "release-lto", "--locked", "--offline", "--unit-graph", "-Z", "unstable-options"], cwd=workspace, env=cargo_env))
+                units, _ = units_from_graph(graph, package_records(metadata, root), metadata)
+                completed = {}
+                closures = {}
+                for index in graph["roots"]:
+                    build(index)
+                index = next(i for i, unit in enumerate(units) if kind in unit["target"]["kind"])
+                info = json.loads((root / completed[index] / "unit.json").read_text())
+                self.assertEqual(info["test_tmp"], ".buckal/test-tmp/" + units[index]["key"])
+                restored = root / ("restored-" + kind)
+                shutil.copytree(workspace, restored / "workspace")
+                shutil.copytree(root / "outputs", restored / "outputs")
+                for execution_root in [root, restored]:
+                    result = self.checked([sys.executable, str(runner), "--action-module", str(action), "--environment", str(environment), "--runtime", str(runtime), "--run", completed[index], "--test-run", "--"], cwd=execution_root, env=cargo_env)
+                    self.assertIn("1 passed", result)
+                    directory = execution_root / info["test_tmp"]
+                    self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+                    self.assertEqual((directory / "worktree").read_text(), str(execution_root))
+                self.assertEqual((root / info["test_tmp"] / "worktree").read_text(), str(root))
             self.assertFalse(list((root / "cargo-query").glob("**/*.rlib")), "Cargo must only query graphs, not compile")
 
 

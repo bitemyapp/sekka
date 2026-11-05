@@ -64,9 +64,9 @@ def _unit_impl(ctx):
         CargoUnitInfo(output = output, closure = closure, spec = spec),
     ]
     runtime = read_root_config("sekka", "runtime", "")
-    run = cmd_args(python, ctx.attrs._runtime, "--environment", environment, "--runtime", runtime, "--run", output, hidden = [ctx.attrs._runner])
+    run = cmd_args(python, ctx.attrs._runtime, "--action-module", ctx.attrs._runner, "--environment", environment, "--runtime", runtime, "--run", output)
     if spec["mode"] == "test":
-        providers.append(ExternalRunnerTestInfo(type = "rust", command = [cmd_args(run, "--test-run", "--")], env = {}, labels = [], contacts = []))
+        providers.append(ExternalRunnerTestInfo(type = "rust", command = [cmd_args(run, "--test-run", "--")], env = {}, labels = [], contacts = [], run_from_project_root = True, use_project_relative_paths = True))
     elif "bin" in spec["target"]["crate_types"] and spec["mode"] == "build":
         providers.append(RunInfo(args = cmd_args(run, "--")))
     return providers
