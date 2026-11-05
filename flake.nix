@@ -666,12 +666,19 @@
         boot-splash = import ./nix/boot-splash-test.nix { inherit pkgs; };
         boot-splash-choice = import ./nix/boot-splash-choice-test.nix { inherit pkgs inputs; };
         prebuilt-binaries = import ./nix/prebuilt-binaries-vm-test.nix { inherit pkgs; };
+        terminal-shells = import ./nix/terminal-shells-vm-test.nix {
+          inherit pkgs;
+          sekkaModule = inputs.calamares.nixosModules.default;
+          inherit (applicationCatalog.specialArgs) applicationPkgs;
+        };
         fish = import ./nix/fish-vm-test.nix {
           inherit pkgs;
           applicationsModule = inputs.calamares.nixosModules.applications;
           inherit (applicationCatalog.specialArgs) applicationPkgs;
         };
-        fish-default = import ./nix/fish-default-test.nix { inherit pkgs inputs applicationCatalog; };
+        terminal-shell-default = import ./nix/terminal-shell-default-test.nix {
+          inherit pkgs inputs applicationCatalog;
+        };
         genkan-keyboard = import ./nix/genkan-keyboard-test.nix {
           inherit pkgs;
           genkan = calamares;

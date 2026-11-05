@@ -2465,71 +2465,125 @@ removed before it starts. It then requires `SelectNetwork` to join. It also
 checks that each of the live session's boot entries and an installed system
 start the patched wpa_supplicant over D-Bus.
 
-## Omarchy's fish configuration
+## Terminal shells
 
-Terminals open in fish, set up as Omarchy sets it up, wherever Aizome is
-installed: `calamares.fish.enable` (`installer/genkan/rust/system/fish`,
-imported with the application catalog) defaults on when `calamares.desktops`
-has Aizome. It was a catalog application; it isn't one any more. Other
-desktops keep bash, as Omarchy does (its fish is the opt-in `omarchy-fish`),
-and Tatami follows Omarchy; GNOME, Plasma, Xfce and Hyprland stay stock. The
-handover is system-wide, so with Aizome beside another desktop, that one's
-terminals open fish too. Yukimi offers the setting (Terminal shell) to turn
-it off with Aizome or on without. `calamares.applications` still accepts
-`"fish"`, which a system that chose it keeps and which turns the setting on;
-the manifest and Yukimi's Discover no longer list it.
+`calamares.terminalShell` (`installer/genkan/rust/system/terminal-shell`,
+imported with the application catalog) is the shell terminals open in:
+`fish`, `bash`, `zsh` or `nushell`. Yukimi offers it as Terminal shell on its
+Desktops page. Its default is fish, set up as Omarchy sets it up, wherever
+Aizome is installed, and bash elsewhere, as Omarchy does (its fish is the
+opt-in `omarchy-fish`); Tatami follows Omarchy, and GNOME, Plasma, Xfce and
+Hyprland stay stock. The choice is system-wide, so with Aizome beside another
+desktop, that one's terminals open fish too. Fish was a catalog application;
+it isn't one any more. `calamares.applications` still accepts `"fish"`, which
+a system that chose it keeps; the manifest and Yukimi's Discover no longer
+list it.
 
-The setting builds Omarchy's `omarchy-fish` package
-(`installer/genkan/rust/system/fish/package.nix`) as omarchy-pkgs'
-`pkgbuilds/omarchy-fish/PKGBUILD` does: the omarchy-fish and fzf.fish releases
-it names, whose tarballs match its SHA-256 sums, in fish's vendor directories,
-with omarchy-fish's history search replacing fzf.fish's. The PKGBUILD's
-dependencies (eza, mise, zoxide, starship, fzf, fd, bat) come from the
-applications' Nixpkgs. `starship.toml` beside it is
-Omarchy's prompt, unchanged; fish exports `STARSHIP_CONFIG` for it unless the
-person has a `~/.config/starship.toml`. The module writes an absolute shell
-path to `/etc/xdg/aizome/hotaru-shell`, including when Bash is selected.
-Hotaru reads it for each new pane; an explicit `shell` in its TOML configuration
-takes precedence. Without this system file, standalone Hotaru prefers Fish
-on PATH, then `$SHELL`, then `/bin/sh`. Foot starts bash, which hands over.
+`calamares.fish.enable` is the setting Yukimi wrote before it offered zsh and
+nushell. It keeps its default (on with Aizome or the former application) and
+now only chooses `terminalShell`'s default between fish and bash, so systems
+that turned fish off or on keep what they chose. A `terminalShell` Yukimi
+writes beside it takes precedence. Keep both options.
 
 Omarchy keeps bash as the login shell, and `omarchy-setup-fish` gives
-`~/.bashrc` a test that starts fish. The module puts the same test at
-the start of `/etc/bashrc`'s interactive part. It skips root, `bash -c`, bash
-started from fish or directly by Hotaru, and shells with `SHLVL` above 1, so `nix develop` and
-`nix-shell` stay in bash. NixOS's `ls`, `ll` and `l` aliases are removed from
-fish, where Omarchy has none and its `ls` function would be hidden. NixOS's
-fish module still generates completions from each installed package's manual
-pages. These are small local builds, which Determinate Nix downloads instead
-when Sekka's cache has them; the media's Aizome reference systems include
-fish.
+`~/.bashrc` a test that starts fish. For any choice but bash, the module puts
+the same test, starting the chosen shell, at the start of `/etc/bashrc`'s
+interactive part, with `--login` when bash was a login shell. It skips root,
+`bash -c`, bash started from the chosen shell (by its `ps` name: `fish`,
+`zsh` or `nu`) or directly by Hotaru, and shells with `SHLVL` above 1, so
+`nix develop` and `nix-shell` stay in bash. That handover is how foot,
+Ghostty, kitty and other terminals that start the login shell open the
+choice. They don't load their own shell integration for it: Ghostty and
+kitty inject theirs only into the shell they start, which is bash.
 
 Hotaru sets `HOTARU_SHELL_PARENT` to its own PID on its PTY commands. Bash
 compares this with its parent PID before handing over, preserving an explicit
 Bash choice without suppressing the handoff in other terminals launched from
-Hotaru that inherit the variable.
+Hotaru that inherit the variable. The module writes the chosen shell's
+absolute path to `/etc/xdg/aizome/hotaru-shell`, including when Bash is
+selected. Hotaru reads it for each new pane and starts the shell itself, with
+its own integration for fish, zsh and bash (nushell reports its directory
+with OSC 7 on its own); an explicit `shell` in its TOML configuration takes
+precedence. Without this system file, standalone Hotaru prefers Fish on
+PATH, then `$SHELL`, then `/bin/sh`.
+
+Fish builds Omarchy's `omarchy-fish` package
+(`installer/genkan/rust/system/terminal-shell/omarchy-fish.nix`) as
+omarchy-pkgs' `pkgbuilds/omarchy-fish/PKGBUILD` does: the omarchy-fish and
+fzf.fish releases it names, whose tarballs match its SHA-256 sums, in fish's
+vendor directories, with omarchy-fish's history search replacing fzf.fish's.
+The PKGBUILD's dependencies (eza, mise, zoxide, starship, fzf, fd, bat) come
+from the applications' Nixpkgs. `starship.toml` beside it is Omarchy's
+prompt, unchanged; each shell but bash exports `STARSHIP_CONFIG` for it
+unless the person has a `~/.config/starship.toml`. NixOS's `ls`, `ll` and `l`
+aliases are removed from fish, where Omarchy has none and its `ls` function
+would be hidden. NixOS's fish module still generates completions from each
+installed package's manual pages. These are small local builds, which
+Determinate Nix downloads instead when Sekka's cache has them; the media's
+Aizome reference systems include fish.
+
+Omarchy has no zsh or nushell configuration. zsh gets Omarchy's bash setup
+made for zsh (`zshrc`, adapted from `default/bash` at the commit `LICENSE`
+names): its aliases (eza for `ls`, `cd` falling back to zoxide), mise and
+zoxide initialised at each start as Omarchy's bash does (their scripts
+capture `PATH`, so they can't be made ahead of time), emacs keys whatever
+`$EDITOR` says, prefix history search on the arrow keys, and case-insensitive
+menu completion. It also titles the window with the folder, or the command
+running, as fish and nushell do: zsh sets no title of its own, and a
+terminal that started bash would otherwise keep calling the window bash.
+fzf's zsh key bindings, without its completion, as in
+Omarchy's bash; NixOS's zsh-autosuggestions and zsh-syntax-highlighting; and
+a larger history. NixOS sets these in `/etc/zshrc`, before the person's
+`~/.zshrc`. `/etc/zshenv` defines `zsh-newuser-install` as a no-op for
+interactive shells, so zsh's new-user wizard doesn't take over terminals of
+people without startup files, and `/etc/zshrc` restores it.
+
+Nushell can only source files it can read before running anything, so
+`nushell.nix` makes one ahead of time from `starship init nu`,
+`zoxide init nushell` and fzf's `key-bindings.nu`, after turning off the
+welcome banner, and the build sources it with the same nushell so a script
+it no longer accepts fails there. NixOS's `programs.nushell` installs it as
+a vendor autoload, which nushell runs after `config.nu` and before the
+person's own autoload directory. mise's nushell activation captures the
+build's `PATH`, so nushell doesn't activate mise.
 
 ```sh
-nix build .#checks.x86_64-linux.fish-default .#checks.x86_64-linux.fish --no-update-lock-file
+nix build .#checks.x86_64-linux.terminal-shell-default .#checks.x86_64-linux.fish --no-update-lock-file
+nix build .#checks.x86_64-linux.terminal-shells --no-update-lock-file -L
 ```
 
-`fish-default` evaluates where the setting is on: Aizome alone or beside
-Tatami, the former application with Tatami, and not Tatami or Plasma alone or
-Aizome with it turned off, with the Yukimi choice and the manifest. It also
-checks the Hotaru default when Fish is independently installed and disabled
-as the terminal default. `fish`
-logs in on a disposable VM's console, on a system that chose the former
-application. It checks that bash handed over to fish, with Omarchy's
-settings, functions, fzf.fish bindings, zoxide, mise, eza and prompt, and
-that `cd` falls back to zoxide. `bash -c`, root's interactive bash, and bash
-started from fish stay in bash. `genkan-keyboard` checks that Hotaru and foot
-run fish in an Aizome session and that Hotaru honors both the system default
-and its per-app override.
+`terminal-shell-default` evaluates which shell each system gets: fish with
+Aizome alone or beside Tatami and with the former application; bash with
+Tatami or Plasma alone, with Aizome and fish turned off, and when fish is
+installed separately; zsh and nushell when chosen, including over an older
+`calamares.fish.enable`. It checks the handover, Hotaru's default, the
+shells' setup, the Yukimi choice and the manifest. `fish` logs in on a
+disposable VM's console, on a system that chose the former application. It
+checks that bash handed over to fish, with Omarchy's settings, functions,
+fzf.fish bindings, zoxide, mise, eza and prompt, and that `cd` falls back to
+zoxide. `bash -c`, root's interactive bash, and bash started from fish stay
+in bash.
 
-To follow Omarchy, compare the PKGBUILD and Omarchy's `config/starship.toml`
-with these files. Update the tags and hashes
+`terminal-shells` boots an Aizome VM and a Tatami VM (Hyprland, with Plasma
+Login), each from the modules installed systems import, with Ghostty and
+kitty added and, on Tatami, Aizome's package for Hotaru. In Aizome's, Yukimi's
+Desktops page must show the Terminal shell choice with its four options.
+Each VM starts with its desktop's default, then switches to the other
+shells' specialisations within the same session, as the rebuild after a
+Yukimi choice would. For each shell it opens Hotaru, foot, Ghostty and kitty
+as the session's launcher does, checks that the window runs exactly the
+chosen shell (no bash left), and types a probe into it. The probe reports its
+PID, which must be under the terminal's process, the shell's setup, and that
+bash started from it stays bash. For every shell but bash, the window's title
+must then name the folder (`~`). A login bash must hand over with `--login`.
+The result holds a screenshot of each terminal and of Yukimi's choice.
+`genkan-keyboard` checks that Hotaru and foot run fish in an Aizome session
+and that Hotaru honors both the system default and its per-app override.
+
+To follow Omarchy, compare the PKGBUILD, Omarchy's `config/starship.toml` and
+its `default/bash` with these files. Update the tags and hashes
 (`nix flake prefetch github:omacom-io/omarchy-fish/v<version>`), then run the
-check.
+checks.
 
 ## Releases
 

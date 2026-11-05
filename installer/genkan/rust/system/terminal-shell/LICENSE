@@ -1,9 +1,10 @@
 starship.toml in this directory is Omarchy's Starship prompt
 (https://github.com/omacom/omarchy, commit
-cce8b1c971df64a7610b818ff8819e4bea04584a), which is distributed under the
-following license. package.nix is part of Genkan (GPL-3.0-or-later); the
-omarchy-fish and fzf.fish releases it builds install their own MIT licenses
-in share/omarchy-fish.
+cce8b1c971df64a7610b818ff8819e4bea04584a), and the aliases and key settings
+in zshrc are adapted from default/bash/aliases and default/bash/inputrc at
+that commit, all distributed under the following license. The Nix files are
+part of Genkan (GPL-3.0-or-later); the omarchy-fish and fzf.fish releases
+omarchy-fish.nix builds install their own MIT licenses in share/omarchy-fish.
 
 Copyright (c) David Heinemeier Hansson
 

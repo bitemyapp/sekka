@@ -352,7 +352,7 @@ pub fn aizome(site: &Site) -> Result<Page> {
 <section class="tiles">
   <article class="win">
     <h2>Hotaru {hotaru}, the terminal</h2>
-    <p><kbd>Super</kbd> + <kbd>Return</kbd> opens Hotaru, Aizome's own terminal, and programs that need a terminal open in it too. It is built with Aizome's toolkit, not GTK or a web view: native menus, tabs of independently focused split panes, and search through the scrollback. It opens in fish, set up as Omarchy sets it up: a Starship prompt, vi keys, and fzf searches of your history and files.</p>
+    <p><kbd>Super</kbd> + <kbd>Return</kbd> opens Hotaru, Aizome's own terminal, and programs that need a terminal open in it too. It is built with Aizome's toolkit, not GTK or a web view: native menus, tabs of independently focused split panes, and search through the scrollback. It opens in fish, set up as Omarchy sets it up: a Starship prompt, vi keys, and fzf searches of your history and files. Yukimi can switch it to bash, zsh or nushell.</p>
     <p>foot is installed too: choose it in Settei, under General › Default Apps › Terminal.</p>
   </article>
   <article class="win">

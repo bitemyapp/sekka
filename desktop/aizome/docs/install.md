@@ -75,7 +75,7 @@ UDisks2, AccountsService, CUPS, GeoClue, GNOME Keyring, polkit, fonts, foot,
 and the system's keyboard (`services.xserver.xkb`) as the session's, until
 Settings changes it. Hotaru opens fish where it's installed; on a Sekka
 system with Aizome, Sekka's modules install it, set up as Omarchy sets it up
-(`calamares.fish`). Keep (or enable) a display manager such as
+(`calamares.terminalShell`). Keep (or enable) a display manager such as
 GDM: Aizome adds itself to its session list. Then
 `sudo nixos-rebuild boot --flake .#<host>`, reboot and choose Aizome.
 

@@ -1,8 +1,9 @@
 # Optional applications
 
 The installer presents 36 choices with checkboxes, categories, search and short
-descriptions. fish is no longer one of them: it comes with Aizome
-(`calamares.fish`; see DEVELOPERS.md), and systems that chose it keep it.
+descriptions. fish is no longer one of them: it comes with Aizome as the
+terminals' shell (`calamares.terminalShell`; see DEVELOPERS.md), and systems
+that chose it keep it.
 Firefox starts selected. Empty selection is supported. The review screen lists
 the normalized selection, and the privileged helper validates it again.
 Unknown IDs, duplicate requests and proprietary selections without

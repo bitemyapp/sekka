@@ -16,8 +16,8 @@
 let
   catalog = builtins.fromJSON (builtins.readFile ./applications.json);
   # Choices the catalog no longer offers, which systems that chose them keep
-  # in calamares.applications: fish comes with Aizome now, and turns on
-  # calamares.fish elsewhere (../system/fish).
+  # in calamares.applications: fish comes with Aizome now, and makes it the
+  # terminal shell elsewhere (../system/terminal-shell).
   retired = [ "fish" ];
   ids = lib.subtractLists retired config.calamares.applications;
   has = id: builtins.elem id ids;
@@ -99,7 +99,7 @@ in
   # without the module that option doesn't exist.
   imports = [
     # The shell terminals open in, with the applications' packages.
-    ../system/fish
+    ../system/terminal-shell
     {
       config = lib.optionalAttrs (options ? programs.yukimi.catalogs) {
         programs.yukimi.catalogs = [

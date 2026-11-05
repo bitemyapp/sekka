@@ -1,0 +1,84 @@
+# Sekka's zsh for terminals, sourced by /etc/zshrc before your ~/.zshrc,
+# which can change any of it. Omarchy's bash settings, aliases and tools
+# (default/bash at the commit LICENSE names), made for zsh.
+
+# Emacs keys, as readline's, even when $EDITOR names vi.
+bindkey -e
+
+# The arrow keys match what you've typed so far against your history.
+autoload -Uz up-line-or-beginning-search down-line-or-beginning-search
+zle -N up-line-or-beginning-search
+zle -N down-line-or-beginning-search
+for key in '^[[A' '^[OA' ${terminfo[kcuu1]-}; do bindkey $key up-line-or-beginning-search; done
+for key in '^[[B' '^[OB' ${terminfo[kcud1]-}; do bindkey $key down-line-or-beginning-search; done
+unset key
+
+# Completion ignores case, and Tab and Shift+Tab move through a menu.
+zmodload zsh/complist
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
+zstyle ':completion:*' menu select
+bindkey -M menuselect '^[[Z' reverse-menu-complete
+
+# History: commands starting with a space are left out.
+setopt hist_ignore_space
+
+# The window's title: the folder, or the command running in it, as fish and
+# nushell set theirs. A terminal that started bash would otherwise keep
+# calling itself bash. Not on the console, which would print it.
+if [[ $TERM != (dumb|linux) ]]; then
+  _sekka_title_precmd() {
+    print -rn -- $'\e]2;'"${${(%):-%~}//[[:cntrl:]]/}"$'\a'
+  }
+  _sekka_title_preexec() {
+    print -rn -- $'\e]2;'"${${1%%$'\n'*}//[[:cntrl:]]/}"$'\a'
+  }
+  autoload -Uz add-zsh-hook
+  add-zsh-hook precmd _sekka_title_precmd
+  add-zsh-hook preexec _sekka_title_preexec
+fi
+
+export BAT_THEME=ansi
+
+eval "$(mise activate zsh)"
+eval "$(zoxide init zsh)"
+
+# File system
+alias ls='eza -lh --group-directories-first --icons=auto'
+alias lsa='ls -a'
+alias lt='eza --tree --level=2 --long --icons --git'
+alias lta='lt -a'
+alias ff="fzf --preview 'bat --style=numbers --color=always {}'"
+alias eff='$EDITOR "$(ff)"'
+
+# cd falls back to zoxide for a directory you have been to.
+alias cd=zd
+zd() {
+  if (( $# == 0 )); then
+    builtin cd ~ || return
+  elif [[ -d $1 ]]; then
+    builtin cd "$1" || return
+  else
+    if ! z "$@"; then
+      echo "Error: Directory not found"
+      return 1
+    fi
+
+    printf "\U000F17A9 "
+    pwd
+  fi
+}
+
+open() {
+  xdg-open "$@" >/dev/null 2>&1 &!
+}
+
+# Directories
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+
+# Git
+alias g='git'
+alias gcm='git commit -m'
+alias gcam='git commit -a -m'
+alias gcad='git commit -a --amend'

@@ -29,11 +29,15 @@ entry, explicitly use an available terminal description such as
 ## Default shells
 
 New panes start fish where it's installed, else `$SHELL`, else `/bin/sh`;
-`shell = "…"` in Hotaru's TOML settings names another. Fish is the shell
-Sekka's terminals open in. Started directly, it loads Hotaru's fish
-integration whatever the login shell is, which a bash handing itself over to
-fish would skip, and it doesn't depend on the `SHLVL` a Hotaru started from a
-shell inherits. A command named at launch (`-- COMMAND`) runs as given.
+`shell = "…"` in Hotaru's TOML settings names another. On Sekka,
+`/etc/xdg/aizome/hotaru-shell` names the shell its terminals open in, which
+Yukimi's Terminal shell choice sets (fish with Aizome unless changed; bash,
+zsh or nushell), and takes the place of the search. Started directly, the
+shell loads Hotaru's integration whatever the login shell is, which a bash
+handing itself over would skip, and it doesn't depend on the `SHLVL` a
+Hotaru started from a shell inherits. Nushell has no Hotaru integration; it
+reports its directory with OSC 7 itself. A command named at launch
+(`-- COMMAND`) runs as given.
 
 `PtyCommand::shell()` enables integration for a recognized default shell with
 no explicit arguments. `PtyCommand::new()` and native `-- COMMAND [ARG…]`

@@ -212,7 +212,7 @@ sunrise and sunset: the shell writes what GeoClue says).
   ext-image-copy-capture, for outputs and windows, chosen with
   `aizome-share-picker`); xdg-desktop-portal-gtk for the rest
   (`aizome-portals.conf`).
-- Terminal: Hotaru, Aizome's own; foot stays installed as a choice. Shell: Sekka's fish (set up as Omarchy sets it up).
+- Terminal: Hotaru, Aizome's own; foot stays installed as a choice. Shell: Sekka's fish (set up as Omarchy sets it up), or bash, zsh or nushell as chosen in Yukimi.
 - The lock screen uses PAM service `aizome`.
 
 ## Repository layout
