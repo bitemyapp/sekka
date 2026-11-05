@@ -18,6 +18,8 @@ path = "src/main.rs"
 [dependencies]
 aizome-kit.workspace = true
 aizome-sys.workspace = true
+# The brand of the reviews behind its disk confirmations (run.rs).
+aizome-typestate.workspace = true
 aizome-theme.workspace = true
 log.workspace = true
 env_logger.workspace = true

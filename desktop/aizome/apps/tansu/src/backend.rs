@@ -7,12 +7,15 @@ use std::sync::Arc;
 
 use aizome_sys::Task;
 use aizome_sys::disks::{
-    Confirm, DeletePartition, Disks, DisksState, Format, FormatSpec, NewPartitionTable, Repair, Resize, SelfTest,
-    SmartAttribute, TableKind,
+    Confirm, CreatePartition, DeletePartition, Disks, DisksState, Format, FormatSpec, NewPartitionTable,
+    PartitionEntry, Relabel, Repair, Resize, SelfTest, SmartAttribute, TableKind,
 };
 
-/// The operations Tansu uses. Every destructive one takes its
-/// [`Confirm`] token, made from the device as the person agreed to it.
+use crate::run::Agreed;
+
+/// The operations Tansu uses. Every one that changes what is on a disk
+/// takes its [`Confirm`] token, made from the identity of the device as the
+/// person agreed to it.
 pub trait Backend {
     fn snapshot(&self) -> Arc<DisksState>;
     fn generation(&self) -> u64;
@@ -36,24 +39,24 @@ pub trait Backend {
     fn can_format(&self, fs: &str) -> Task<(bool, String)>;
 
     // Queued, and run after the Apply sheet.
-    fn create_partition_table(&self, confirm: Confirm<NewPartitionTable>, kind: TableKind) -> Task<()>;
+    fn create_partition_table(&self, confirm: Confirm<NewPartitionTable, Agreed>, kind: TableKind) -> Task<()>;
     fn create_partition(
         &self,
-        table: &str,
+        confirm: Confirm<CreatePartition, Agreed>,
         offset: u64,
         size: u64,
         type_id: Option<&str>,
         name: &str,
         format: Option<FormatSpec>,
     ) -> Task<String>;
-    fn delete_partition(&self, confirm: Confirm<DeletePartition>) -> Task<()>;
-    fn format(&self, confirm: Confirm<Format>, spec: FormatSpec) -> Task<()>;
-    fn resize_partition(&self, confirm: Confirm<Resize>, size: u64) -> Task<()>;
-    fn resize_filesystem(&self, confirm: Confirm<Resize>, size: u64) -> Task<()>;
-    fn repair(&self, confirm: Confirm<Repair>) -> Task<bool>;
-    fn set_label(&self, block: &str, label: &str) -> Task<()>;
-    fn set_partition_type(&self, block: &str, type_id: &str) -> Task<()>;
-    fn set_partition_flags(&self, block: &str, flags: u64) -> Task<()>;
+    fn delete_partition(&self, confirm: Confirm<DeletePartition, Agreed>) -> Task<()>;
+    fn format(&self, confirm: Confirm<Format, Agreed>, spec: FormatSpec) -> Task<()>;
+    fn resize_partition(&self, confirm: Confirm<Resize, Agreed>, size: u64) -> Task<()>;
+    fn resize_filesystem(&self, confirm: Confirm<Resize, Agreed>, size: u64) -> Task<()>;
+    fn repair(&self, confirm: Confirm<Repair, Agreed>) -> Task<bool>;
+    fn set_label(&self, confirm: Confirm<Relabel, Agreed>, label: &str) -> Task<()>;
+    fn set_partition_type(&self, confirm: Confirm<PartitionEntry, Agreed>, type_id: &str) -> Task<()>;
+    fn set_partition_flags(&self, confirm: Confirm<PartitionEntry, Agreed>, flags: u64) -> Task<()>;
 }
 
 impl Backend for Disks {
@@ -105,42 +108,42 @@ impl Backend for Disks {
     fn can_format(&self, fs: &str) -> Task<(bool, String)> {
         Disks::can_format(self, fs)
     }
-    fn create_partition_table(&self, confirm: Confirm<NewPartitionTable>, kind: TableKind) -> Task<()> {
+    fn create_partition_table(&self, confirm: Confirm<NewPartitionTable, Agreed>, kind: TableKind) -> Task<()> {
         Disks::create_partition_table(self, confirm, kind)
     }
     fn create_partition(
         &self,
-        table: &str,
+        confirm: Confirm<CreatePartition, Agreed>,
         offset: u64,
         size: u64,
         type_id: Option<&str>,
         name: &str,
         format: Option<FormatSpec>,
     ) -> Task<String> {
-        Disks::create_partition(self, table, offset, size, type_id, name, format)
+        Disks::create_partition(self, confirm, offset, size, type_id, name, format)
     }
-    fn delete_partition(&self, confirm: Confirm<DeletePartition>) -> Task<()> {
+    fn delete_partition(&self, confirm: Confirm<DeletePartition, Agreed>) -> Task<()> {
         Disks::delete_partition(self, confirm)
     }
-    fn format(&self, confirm: Confirm<Format>, spec: FormatSpec) -> Task<()> {
+    fn format(&self, confirm: Confirm<Format, Agreed>, spec: FormatSpec) -> Task<()> {
         Disks::format(self, confirm, spec)
     }
-    fn resize_partition(&self, confirm: Confirm<Resize>, size: u64) -> Task<()> {
+    fn resize_partition(&self, confirm: Confirm<Resize, Agreed>, size: u64) -> Task<()> {
         Disks::resize_partition(self, confirm, size)
     }
-    fn resize_filesystem(&self, confirm: Confirm<Resize>, size: u64) -> Task<()> {
+    fn resize_filesystem(&self, confirm: Confirm<Resize, Agreed>, size: u64) -> Task<()> {
         Disks::resize_filesystem(self, confirm, size)
     }
-    fn repair(&self, confirm: Confirm<Repair>) -> Task<bool> {
+    fn repair(&self, confirm: Confirm<Repair, Agreed>) -> Task<bool> {
         Disks::repair(self, confirm)
     }
-    fn set_label(&self, block: &str, label: &str) -> Task<()> {
-        Disks::set_label(self, block, label)
+    fn set_label(&self, confirm: Confirm<Relabel, Agreed>, label: &str) -> Task<()> {
+        Disks::set_label(self, confirm, label)
     }
-    fn set_partition_type(&self, block: &str, type_id: &str) -> Task<()> {
-        Disks::set_partition_type(self, block, type_id)
+    fn set_partition_type(&self, confirm: Confirm<PartitionEntry, Agreed>, type_id: &str) -> Task<()> {
+        Disks::set_partition_type(self, confirm, type_id)
     }
-    fn set_partition_flags(&self, block: &str, flags: u64) -> Task<()> {
-        Disks::set_partition_flags(self, block, flags)
+    fn set_partition_flags(&self, confirm: Confirm<PartitionEntry, Agreed>, flags: u64) -> Task<()> {
+        Disks::set_partition_flags(self, confirm, flags)
     }
 }
