@@ -73,9 +73,9 @@ fn sidebar(app: &Tasuke) -> Element<Msg> {
         })
         .collect();
     let list: Element<Msg> = if items.is_empty() {
-        container(text("Your conversations will be listed here.").size(12.0).role(Role::Text3).wrap().line_height(1.4))
-            .padding([4.0, 12.0])
-            .into()
+        let words =
+            if app.loading { "Reading your conversations…" } else { "Your conversations will be listed here." };
+        container(text(words).size(12.0).role(Role::Text3).wrap().line_height(1.4)).padding([4.0, 12.0]).into()
     } else {
         scroll(column_of(items).spacing(1.0).padding([0.0, 6.0]).width(Fill)).height(Fill).into()
     };

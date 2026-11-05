@@ -17,17 +17,25 @@ use tasuke_models::{Catalog, Config, DownloadEvent, Entry, Hardware, ModelId, Pa
 use crate::agent::{Approval, Decision, Event, FinishReason, Level, Outcome, ToolCall, ToolOutput, Usage};
 use crate::app::{Backend, Chip, ConvId, DownloadNews, ModelState, Msg, Note, Tasuke, Turn};
 use crate::models::{Install, install_of};
-use crate::transcript::Millis;
+use crate::transcript::{Millis, Transcript};
 
 /// Where Tasuke's files are.
 pub struct Env {
     pub data: agent::DataDir,
     pub paths: Paths,
+    /// The model server, as the settings place it.
+    server: tasuke_models::Server,
 }
 
 impl Env {
     pub fn new() -> Env {
-        Env { data: agent::DataDir::user(), paths: Paths::from_env() }
+        let paths = Paths::from_env();
+        let config = Config::load(&paths).unwrap_or_default();
+        Env { data: agent::DataDir::user(), server: tasuke_models::Server::new(&paths, &config), paths }
+    }
+
+    pub fn server(&self) -> tasuke_models::Server {
+        self.server.clone()
     }
 
     pub fn store(&self) -> Store {
@@ -161,18 +169,16 @@ fn millis(t: agent::Timestamp) -> Millis {
     t.0 as Millis * 1000
 }
 
-/// Read the conversations, the notes, the catalog and the settings: what
-/// the window shows before anything is probed.
+/// The settings and which models are downloaded: a small file and a few
+/// `stat`s, all the window needs to open. Conversations and notes are read
+/// after it opens ([`launched`]).
 pub fn load(t: &mut Tasuke) {
     let Backend::Live(env) = &t.backend else { return };
     let config = env.config();
-    let sessions = agent::Session::list(&env.data).unwrap_or_default();
-    let notes = notes(env);
     t.models.prefs = config.recommend.clone();
     t.models.in_use = config.model.id.clone();
     t.models.idle_minutes = config.server.idle_minutes;
-    t.models.server = format!("A model unloads after {} minutes unused", config.server.idle_minutes);
-    t.notes = notes;
+    t.models.server = "Looking…".to_owned();
     let catalog: &Catalog = &t.models.catalog;
     let store = env.store();
     for e in &catalog.models {
@@ -185,36 +191,107 @@ pub fn load(t: &mut Tasuke) {
         name: name.unwrap_or_default(),
         state: if installed { ModelState::Asleep } else { ModelState::Missing },
     };
-    let (act, desktop) = (config.agent.act, config.agent.desktop_control);
-    for s in sessions.into_iter().rev() {
-        let id = t.add_conversation(millis(s.updated()), act, desktop);
-        let Some(c) = t.conversation_mut(id) else { continue };
-        c.title = s.title().to_owned();
-        let at = millis(s.created());
-        for entry in s.transcript().unwrap_or_default() {
-            match entry {
-                agent::Entry::User { text, at: when, .. } => c.transcript.user(&text, millis(when)),
-                agent::Entry::Event { event, .. } => c.transcript.apply(map(event), at),
-            }
-        }
-        // A turn the window didn't see end (it closed mid-turn) is over.
-        if c.transcript.busy {
-            c.transcript.apply(
-                Event::TurnFinished { reason: FinishReason::Cancelled, usage: Usage::default(), decode_tps: None },
-                at,
-            );
-        }
-        c.session = Some(s);
-    }
     if t.chip.state == ModelState::Missing && t.models.in_use.is_none() {
         t.first_run = Some(crate::app::FirstRun::Looking);
     }
+    t.loading = true;
     let id = t.new_conversation_id();
     t.page = crate::app::Page::Conversation(id);
 }
 
-/// After the window opens: probe the hardware.
-pub fn launched(_t: &mut Tasuke, cx: &mut Cx<Msg>) {
+/// What's read from disk once the window is open.
+#[derive(Clone, Debug)]
+pub struct Loaded {
+    /// Each saved conversation, its transcript replayed, the oldest first.
+    pub conversations: Vec<(agent::Session, Transcript)>,
+    pub notes: Vec<Note>,
+}
+
+/// A saved conversation replayed. The agent saves each streamed piece as
+/// an event; runs of them are joined first, so an answer's Markdown is
+/// parsed once rather than once a piece.
+pub fn replay(entries: Vec<agent::Entry>, at: Millis) -> Transcript {
+    let mut t = Transcript::new();
+    let mut pending: Option<Event> = None;
+    let flush = |t: &mut Transcript, pending: &mut Option<Event>| {
+        if let Some(e) = pending.take() {
+            t.apply(e, at);
+        }
+    };
+    for entry in entries {
+        match entry {
+            agent::Entry::User { text, at: when, .. } => {
+                flush(&mut t, &mut pending);
+                t.user(&text, millis(when));
+            }
+            agent::Entry::Event { event, .. } => match (map(event), pending.as_mut()) {
+                (Event::TextDelta { text }, Some(Event::TextDelta { text: so_far })) => so_far.push_str(&text),
+                (Event::ReasoningDelta { text }, Some(Event::ReasoningDelta { text: so_far })) => {
+                    so_far.push_str(&text)
+                }
+                (e @ (Event::TextDelta { .. } | Event::ReasoningDelta { .. }), _) => {
+                    flush(&mut t, &mut pending);
+                    pending = Some(e);
+                }
+                (e, _) => {
+                    flush(&mut t, &mut pending);
+                    t.apply(e, at);
+                }
+            },
+        }
+    }
+    flush(&mut t, &mut pending);
+    // A turn the window didn't see end (it closed mid-turn) is over.
+    if t.busy {
+        t.apply(Event::TurnFinished { reason: FinishReason::Cancelled, usage: Usage::default(), decode_tps: None }, at);
+    }
+    t
+}
+
+fn read(data: &agent::DataDir) -> Loaded {
+    let sessions = agent::Session::list(data).unwrap_or_default();
+    let conversations = sessions
+        .into_iter()
+        .rev()
+        .map(|s| {
+            let t = replay(s.transcript().unwrap_or_default(), millis(s.created()));
+            (s, t)
+        })
+        .collect();
+    Loaded { conversations, notes: notes_in(data) }
+}
+
+/// The conversations and notes read: into the sidebar and Memory.
+pub fn loaded(t: &mut Tasuke, l: Loaded, cx: &mut Cx<Msg>) {
+    let (act, desktop) = t.recent().first().map(|c| (c.act, c.desktop)).unwrap_or_else(|| {
+        let Backend::Live(env) = &t.backend else { return (true, false) };
+        let c = env.config();
+        (c.agent.act, c.agent.desktop_control)
+    });
+    for (s, transcript) in l.conversations {
+        // A conversation started before the read finished is already here.
+        if t.conversations.iter().any(|c| c.session.as_ref().is_some_and(|held| held.id() == s.id())) {
+            continue;
+        }
+        let id = t.add_conversation(millis(s.updated()), act, desktop);
+        if let Some(c) = t.conversation_mut(id) {
+            c.title = s.title().to_owned();
+            c.transcript = transcript;
+            c.session = Some(s);
+        }
+    }
+    t.notes = l.notes;
+    t.loading = false;
+    let _ = cx;
+}
+
+/// After the window opens: read the conversations and notes, probe the
+/// hardware.
+pub fn launched(t: &mut Tasuke, cx: &mut Cx<Msg>) {
+    if let Backend::Live(env) = &t.backend {
+        let data = env.data.clone();
+        cx.spawn(move || Msg::Loaded(Box::new(read(&data))));
+    }
     cx.spawn(|| Msg::Hardware(Box::new(Hardware::detect())));
 }
 
@@ -255,7 +332,11 @@ pub fn start(t: &mut Tasuke, id: ConvId, text: &str, cx: &mut Cx<Msg>) {
 
 /// The notes in memory.toml.
 pub fn notes(env: &Env) -> Vec<Note> {
-    agent::Memory::load(&env.data)
+    notes_in(&env.data)
+}
+
+fn notes_in(data: &agent::DataDir) -> Vec<Note> {
+    agent::Memory::load(data)
         .map(|m| {
             m.list()
                 .iter()

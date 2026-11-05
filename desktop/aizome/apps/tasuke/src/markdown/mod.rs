@@ -181,6 +181,8 @@ struct Builder {
     /// An image's alt text, read until it ends: shown as a link to it.
     image: Option<(String, String)>,
     table: Option<TableDraft>,
+    /// The last thing read was a soft line break.
+    soft: bool,
 }
 
 impl Builder {
@@ -250,6 +252,56 @@ fn callout(kind: Option<BlockQuoteKind>) -> Option<Callout> {
     })
 }
 
+/// The marks a check-up report starts its lines with, and how each reads:
+/// fine, worth attention, a problem.
+pub const STATUS: [(char, Role); 6] = [
+    ('✓', Role::Success),
+    ('✔', Role::Success),
+    ('⚠', Role::Warning),
+    ('✕', Role::Danger),
+    ('✗', Role::Danger),
+    ('❌', Role::Danger),
+];
+
+fn status_role(c: char) -> Option<Role> {
+    STATUS.iter().find(|(s, _)| *s == c).map(|(_, r)| *r)
+}
+
+fn starts_with_status(text: &str) -> bool {
+    text.trim_start().chars().next().is_some_and(|c| status_role(c).is_some())
+}
+
+/// `runs` with each status mark that starts a line (the paragraph or a
+/// line in it) as a run of its own, bold, in its colour.
+pub fn status_runs(runs: &[Run]) -> Vec<Run> {
+    let mut out = Vec::with_capacity(runs.len());
+    let mut line_start = true;
+    for run in runs {
+        if run.code || run.link.is_some() || run.role.is_some() {
+            line_start = run.text.ends_with('\n');
+            out.push(run.clone());
+            continue;
+        }
+        let mut rest = run.text.as_str();
+        while !rest.is_empty() {
+            let lead = rest.len() - rest.trim_start_matches([' ', '\t']).len();
+            let mark = rest[lead..].chars().next().filter(|c| line_start && status_role(*c).is_some());
+            if let Some(c) = mark {
+                let end = lead + c.len_utf8();
+                out.push(Run { text: rest[..end].to_owned(), bold: true, role: status_role(c), ..run.clone() });
+                rest = &rest[end..];
+                line_start = false;
+                continue;
+            }
+            let upto = rest.find('\n').map_or(rest.len(), |n| n + 1);
+            out.push(Run { text: rest[..upto].to_owned(), ..run.clone() });
+            line_start = rest[..upto].ends_with('\n');
+            rest = &rest[upto..];
+        }
+    }
+    out
+}
+
 /// Parse `text` into a document. Cheap enough for the interface's thread
 /// at an answer's length, so an answer is parsed again as it streams.
 pub fn parse(text: &str) -> Doc {
@@ -266,8 +318,10 @@ pub fn parse(text: &str) -> Doc {
         code: None,
         image: None,
         table: None,
+        soft: false,
     };
     for event in Parser::new_ext(text, options) {
+        let was_soft = std::mem::take(&mut b.soft);
         match event {
             Event::Start(tag) => match tag {
                 Tag::Paragraph => b.flush_runs(),
@@ -410,6 +464,17 @@ pub fn parse(text: &str) -> Doc {
                 } else if let Some((_, alt)) = &mut b.image {
                     alt.push_str(&text);
                 } else {
+                    // A line that starts with a status mark (a check-up's ✓ ⚠ ✕)
+                    // starts a line of its own, though the answer only broke
+                    // the line softly.
+                    if starts_with_status(&text)
+                        && let Some(last) = b.runs.as_mut().and_then(|r| r.last_mut())
+                        && last.text.ends_with(' ')
+                        && was_soft
+                    {
+                        last.text.pop();
+                        last.text.push('\n');
+                    }
                     let run = b.style.run(&text);
                     b.push_run(run);
                 }
@@ -453,6 +518,7 @@ pub fn parse(text: &str) -> Doc {
             Event::SoftBreak => {
                 let run = b.style.run(" ");
                 b.push_run(run);
+                b.soft = true;
             }
             Event::HardBreak => {
                 let run = b.style.run("\n");
@@ -527,6 +593,23 @@ pub fn runs_text(runs: &[Run]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_check_up_s_marks_start_their_own_lines_in_their_colours() {
+        let doc = parse(
+            "Two things need attention.\n\n✕ **Disk**: 92% full.\n⚠ Updated 23 days ago.\n✓ Everything else is fine.",
+        );
+        let Block::Paragraph(runs) = &doc.blocks[1] else { panic!("{:?}", doc.blocks) };
+        assert_eq!(runs_text(runs), "✕ Disk: 92% full.\n⚠ Updated 23 days ago.\n✓ Everything else is fine.");
+        let marked = status_runs(runs);
+        let marks: Vec<(&str, Option<Role>)> =
+            marked.iter().filter(|r| r.role.is_some()).map(|r| (r.text.trim(), r.role)).collect();
+        assert_eq!(marks, [("✕", Some(Role::Danger)), ("⚠", Some(Role::Warning)), ("✓", Some(Role::Success))]);
+        assert_eq!(runs_text(&marked), runs_text(runs), "nothing added or lost");
+        // A mark in the middle of a sentence is left alone.
+        let Block::Paragraph(mid) = &parse("It's fine ✓ mostly.").blocks[0] else { panic!() };
+        assert!(status_runs(mid).iter().all(|r| r.role.is_none()));
+    }
 
     fn texts(doc: &Doc) -> Vec<String> {
         doc.blocks

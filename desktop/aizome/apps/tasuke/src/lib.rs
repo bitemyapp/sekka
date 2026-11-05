@@ -12,6 +12,7 @@ pub mod live;
 pub mod markdown;
 pub mod models;
 pub mod script;
+pub mod server;
 pub mod thumb;
 pub mod time;
 pub mod transcript;

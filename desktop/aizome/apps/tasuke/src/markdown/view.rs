@@ -65,6 +65,14 @@ fn paragraph<Msg: Clone + Send + 'static>(
     weight: Option<f32>,
 ) -> Element<Msg> {
     let open = look.open.clone();
+    // A check-up's ✓ ⚠ ✕ at the start of its lines, in their colours.
+    let marked;
+    let runs = if runs.iter().any(|r| r.text.contains(['✓', '✔', '⚠', '✕', '✗', '❌'])) {
+        marked = super::status_runs(runs);
+        &marked[..]
+    } else {
+        runs
+    };
     let runs = runs.iter().map(|r| {
         let (s, l) = span(r, size);
         (if let Some(w) = weight { s.weight(w) } else { s }, l)

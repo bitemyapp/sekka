@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use aizome_kit::MsgSender;
+use aizome_kit::WindowState;
 use aizome_kit::prelude::*;
 use tasuke_models::{Bytes, Catalog, Hardware, ModelId, Preferences};
 
@@ -26,6 +27,13 @@ use crate::transcript::{Millis, Transcript};
 use crate::widgets::follow::Reading;
 
 pub const APP_ID: &str = "org.aizome.Tasuke";
+
+/// How often the model server is looked at while the window shows, and
+/// while the desktop isn't showing it.
+#[cfg_attr(not(feature = "live"), allow(dead_code))]
+const POLL_SHOWN: Duration = Duration::from_secs(5);
+#[cfg_attr(not(feature = "live"), allow(dead_code))]
+const POLL_HIDDEN: Duration = Duration::from_secs(30);
 
 /// A conversation's title: its first message's first line, shortened.
 pub fn title_of(text: &str) -> String {
@@ -123,8 +131,10 @@ pub enum ModelState {
     Loading,
     /// Nothing downloaded to use.
     Missing,
-    /// The model server isn't running.
+    /// The model server isn't running (a turn starts it).
     Off,
+    /// The router tried to load it and couldn't.
+    Failed,
 }
 
 impl ModelState {
@@ -135,6 +145,7 @@ impl ModelState {
             ModelState::Loading => "loading…",
             ModelState::Missing => "not downloaded",
             ModelState::Off => "server stopped",
+            ModelState::Failed => "couldn't load",
         }
     }
 }
@@ -227,6 +238,13 @@ pub enum Msg {
     Copy(String),
     /// The pointer came onto a suggestion, or left them.
     Hover(Option<&'static str>),
+    /// Time to look at the model server again.
+    Poll,
+    /// What the look found.
+    Polled(Box<crate::server::Polled>),
+    /// The conversations and notes, read from disk after the window opened.
+    #[cfg(feature = "live")]
+    Loaded(Box<crate::live::Loaded>),
     /// The clock moved on: relative times say so.
     Tick,
     // Models.
@@ -301,6 +319,16 @@ pub struct Tasuke {
     pub fixture: Option<String>,
     /// The suggestion under the pointer.
     pub hovered: Option<&'static str>,
+    /// The model server, polled: a look under way, when the last ended,
+    /// and whether the desktop is showing the window (it looks less often
+    /// when it isn't).
+    polling: bool,
+    last_poll: Option<Instant>,
+    suspended: bool,
+    /// The window's title as last set.
+    title: String,
+    /// Conversations still being read from disk.
+    pub loading: bool,
 }
 
 /// The fixtures `--fixture` takes.
@@ -348,6 +376,11 @@ impl Tasuke {
             wanted: Vec::new(),
             fixture: None,
             hovered: None,
+            polling: false,
+            last_poll: None,
+            suspended: false,
+            title: String::new(),
+            loading: false,
         }
     }
 
@@ -582,7 +615,13 @@ impl Tasuke {
         // The model answering (thinking, writing, asking for a tool) means
         // it's loaded.
         let mut answering = false;
+        let mut starting = false;
         for e in events {
+            if let Event::Notice { text, .. } = &e
+                && text.starts_with("Starting the model server")
+            {
+                starting = true;
+            }
             if matches!(e, Event::TurnFinished { .. } | Event::Error { .. }) {
                 finished = true;
             }
@@ -602,6 +641,8 @@ impl Tasuke {
         }
         if (finished || answering) && self.chip.state == ModelState::Loading {
             self.chip.state = ModelState::Ready;
+        } else if starting && !matches!(self.chip.state, ModelState::Missing) {
+            self.chip.state = ModelState::Loading;
         }
         if memory_changed {
             self.reload_notes(cx);
@@ -660,6 +701,23 @@ impl Tasuke {
             #[cfg(feature = "live")]
             Backend::Live(_) => crate::live::start(self, id, &text, cx),
         }
+    }
+
+    /// Look at the model server, unless a look is under way or one was
+    /// made lately: every 5 seconds while the window shows, every 30 while
+    /// the desktop isn't showing it. Fixtures have no server.
+    fn poll(&mut self, cx: &mut Cx<Msg>) {
+        #[cfg(feature = "live")]
+        if let Backend::Live(env) = &self.backend {
+            let every = if self.suspended { POLL_HIDDEN } else { POLL_SHOWN };
+            if self.polling || self.last_poll.is_some_and(|t| t.elapsed() + Duration::from_millis(500) < every) {
+                return;
+            }
+            self.polling = true;
+            let server = env.server();
+            cx.spawn(move || Msg::Polled(Box::new(crate::server::poll(&server))));
+        }
+        let _ = cx;
     }
 
     pub fn set_stream(&mut self, s: MsgSender<Msg>) {
@@ -743,6 +801,8 @@ impl Program for Tasuke {
         #[cfg(feature = "live")]
         if let Backend::Live(_) = &self.backend {
             crate::live::launched(self, cx);
+            cx.every(POLL_SHOWN, Msg::Poll);
+            cx.send(Msg::Poll);
         }
     }
 
@@ -765,6 +825,45 @@ impl Program for Tasuke {
     }
 
     fn update(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
+        self.handle(msg, cx);
+        let title = self.window_title();
+        if title != self.title
+            && let Some(w) = self.window
+        {
+            cx.set_title(w, title.clone());
+            self.title = title;
+        }
+    }
+
+    fn window_state(&mut self, _window: WindowKey, state: WindowState, cx: &mut Cx<Msg>) {
+        let shown_again = self.suspended && !state.suspended;
+        self.suspended = state.suspended;
+        if shown_again {
+            cx.send(Msg::Poll);
+        }
+    }
+
+    fn view(&self, _window: WindowKey) -> Element<Msg> {
+        crate::ui::view(self)
+    }
+}
+
+impl Tasuke {
+    /// "Why is my disk filling up? — Assistant", "Models — Assistant".
+    pub fn window_title(&self) -> String {
+        let page = match (self.first_run.is_some(), self.page) {
+            (true, _) => None,
+            (_, Page::Models) => Some("Models".to_owned()),
+            (_, Page::Memory) => Some("Memory".to_owned()),
+            (_, Page::Conversation(id)) => self.conversation(id).map(|c| c.title.clone()).filter(|t| !t.is_empty()),
+        };
+        match page {
+            Some(p) => format!("{p} — Assistant"),
+            None => "Assistant".to_owned(),
+        }
+    }
+
+    fn handle(&mut self, msg: Msg, cx: &mut Cx<Msg>) {
         match msg {
             Msg::Show(page) => self.page = page,
             Msg::NewConversation => {
@@ -886,6 +985,20 @@ impl Program for Tasuke {
             }
             Msg::OpenLink(url) => cx.open_url(&url),
             Msg::Hover(which) => self.hovered = which,
+            Msg::Poll => self.poll(cx),
+            Msg::Polled(p) => {
+                self.polling = false;
+                self.last_poll = Some(Instant::now());
+                let in_use = self.models.in_use.clone();
+                let installed = in_use.as_ref().is_some_and(|id| self.models.install(id) == Install::Installed);
+                let busy = self.conversations.iter().any(|c| c.turn.is_some());
+                self.chip.state = crate::server::chip_state(&p, in_use.as_ref(), installed, busy, self.chip.state);
+                let name = self.chip.name.clone();
+                self.models.server =
+                    crate::server::line(&p, in_use.as_ref().map(|id| (id, name.as_str())), self.models.idle_minutes);
+            }
+            #[cfg(feature = "live")]
+            Msg::Loaded(l) => crate::live::loaded(self, *l, cx),
             Msg::Copy(text) => cx.set_clipboard_text(&text),
             Msg::Tick => {
                 if !self.fixed_clock {
@@ -1038,10 +1151,6 @@ impl Program for Tasuke {
                 self.page = Page::Conversation(id);
             }
         }
-    }
-
-    fn view(&self, _window: WindowKey) -> Element<Msg> {
-        crate::ui::view(self)
     }
 }
 

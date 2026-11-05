@@ -12,7 +12,7 @@ use super::cards;
 use crate::app::{ConvId, Conversation, ModelState, Msg, Page, Tasuke, Turn};
 use crate::fold::{self, Row};
 use crate::markdown::view::{self as md, Look};
-use crate::transcript::{Body, Item};
+use crate::transcript::Body;
 use crate::widgets::composer::composer;
 use crate::widgets::follow::follow_scroll;
 use crate::widgets::prose::prose;
@@ -77,7 +77,10 @@ fn model_line(app: &Tasuke) -> Element<Msg> {
         ModelState::Asleep => format!("{name} is asleep here on this computer. It wakes when you send something."),
         ModelState::Loading => format!("{name} is waking up…"),
         ModelState::Missing => format!("{name} isn't downloaded yet. Models has it."),
-        ModelState::Off => "The model server isn't running.".to_owned(),
+        ModelState::Off => {
+            format!("{name} is here, but the model server isn't running. It starts when you send something.")
+        }
+        ModelState::Failed => format!("{name} couldn't be loaded last time. Models says more."),
     };
     row![icon(glyph).size(13.0).role(role), text(words).size(12.0).role(Role::Text3)].spacing(6.0).into()
 }
@@ -122,7 +125,8 @@ pub(crate) fn state_glyph(s: ModelState) -> (Icon, Role) {
         ModelState::Asleep => (Icon::Moon, Role::Text3),
         ModelState::Loading => (Icon::Hourglass, Role::Accent),
         ModelState::Missing => (Icon::CircleAlert, Role::Warning),
-        ModelState::Off => (Icon::CircleX, Role::Danger),
+        ModelState::Off => (Icon::CircleMinus, Role::Warning),
+        ModelState::Failed => (Icon::CircleX, Role::Danger),
     }
 }
 
@@ -153,7 +157,7 @@ fn transcript(app: &Tasuke, c: &Conversation) -> Element<Msg> {
         let (first, el, key) = match r {
             Row::Item(i) => {
                 let item = &items[*i];
-                (&item.body, item_view(app, c, item, &answer), item.id)
+                (&item.body, item_view(app, c, *i, &answer), item.id)
             }
             Row::Looked(run) => {
                 let first = &items[run.items[0]].body;
@@ -191,6 +195,8 @@ fn working(app: &Tasuke, c: &Conversation) -> Option<Element<Msg>> {
         Some(Body::Answer(a)) => a.open,
         Some(Body::Reasoning(r)) => r.ended.is_none(),
         Some(Body::Tool(t)) => t.state.is_open(),
+        // A notice of something under way says it itself.
+        Some(Body::Notice { text, .. }) => text.ends_with('…'),
         _ => false,
     };
     if streaming {
@@ -204,7 +210,9 @@ fn working(app: &Tasuke, c: &Conversation) -> Option<Element<Msg>> {
     )
 }
 
-fn item_view(app: &Tasuke, c: &Conversation, item: &Item, answer: &Look<Msg>) -> Element<Msg> {
+fn item_view(app: &Tasuke, c: &Conversation, index: usize, answer: &Look<Msg>) -> Element<Msg> {
+    let items = &c.transcript.items;
+    let item = &items[index];
     match &item.body {
         Body::User { text, .. } => {
             container(prose([(Span::new(text.clone()), None)]).font(FontSpec::ui(ANSWER)).line_height(1.35))
@@ -214,10 +222,22 @@ fn item_view(app: &Tasuke, c: &Conversation, item: &Item, answer: &Look<Msg>) ->
                 .width(Fill)
                 .into()
         }
-        Body::Answer(a) => md::doc(&a.doc, answer),
+        Body::Answer(a) if a.open => md::doc(&a.doc, answer),
+        Body::Answer(a) => {
+            let copy =
+                icon_button(Icon::Copy).on_press(Msg::Copy(a.text.clone())).tooltip("Copy the answer as Markdown");
+            column![md::doc(&a.doc, answer), row![spacer(), copy]].spacing(2.0).width(Fill).into()
+        }
         Body::Reasoning(r) => cards::reasoning(c, item.id, r),
         Body::Tool(t) => cards::tool(app, c, item.id, t),
-        Body::Notice { level, text } => cards::notice(*level, text),
+        Body::Notice { level, text } => {
+            let now = match items.get(index + 1).map(|i| &i.body) {
+                Some(Body::Error { .. }) => cards::NoticeNow::Failed,
+                None if c.turn.is_some() => cards::NoticeNow::Going,
+                _ => cards::NoticeNow::Over,
+            };
+            cards::notice(*level, text, now)
+        }
         Body::Error { text, retryable } => cards::error(c.id, text, *retryable),
     }
 }

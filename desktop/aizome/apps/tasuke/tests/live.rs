@@ -5,8 +5,8 @@
 //! Everything is under a scratch directory: the settings name a catalog
 //! model, and its files are there as sparse files of the catalog's sizes
 //! (what the store checks), so the window takes it as downloaded. No model
-//! server runs: whatever the agent says about that (today, that its loop
-//! isn't written; later, that the server can't be reached), the turn ends.
+//! server runs: the turn ends with the agent saying it can't be reached,
+//! and the window's look at the server says it's stopped.
 
 #![cfg(feature = "live")]
 
@@ -32,7 +32,9 @@ fn a_turn_runs_on_the_agent_and_its_events_reach_the_window() {
         std::env::remove_var("XDG_RUNTIME_DIR");
     }
     std::fs::create_dir_all(config.join("tasuke")).unwrap();
-    std::fs::write(config.join("tasuke/config.toml"), "[model]\nid = \"gemma-4-12b\"\n").unwrap();
+    // A port nothing listens on, and not Tasuke's own: the agent then
+    // doesn't try to start the user's model server unit.
+    std::fs::write(config.join("tasuke/config.toml"), "[model]\nid = \"gemma-4-12b\"\n[server]\nport = 9\n").unwrap();
     let catalog = Catalog::load_default();
     let entry = catalog.get(&ModelId::new("gemma-4-12b")).expect("in the catalog");
     let dir = data.join("tasuke/models/gemma-4-12b");
@@ -57,6 +59,15 @@ fn a_turn_runs_on_the_agent_and_its_events_reach_the_window() {
         "the agent's answer or error is shown: {:?}",
         c.transcript.items
     );
+    // The window looked at the server (on the pool) and says what it found.
+    h.settle(Duration::from_secs(10), |t| t.models.server != "Looking…");
+    assert!(
+        h.program().models.server.starts_with("Stopped") || h.program().models.server.starts_with("Not set up"),
+        "{}",
+        h.program().models.server
+    );
+    // Saved conversations are read after the window opens.
+    assert!(!h.program().loading);
     let saved = std::fs::read_dir(data.join("tasuke/sessions")).unwrap().count();
     assert!(saved >= 1, "the conversation is saved");
     let _ = std::fs::remove_dir_all(&root);

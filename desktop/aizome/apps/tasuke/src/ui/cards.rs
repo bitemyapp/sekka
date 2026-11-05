@@ -150,7 +150,7 @@ fn details(t: &Tool) -> Element<Msg> {
     }
     let out = output_text(t);
     if !out.is_empty() {
-        parts.push(code_box(&out));
+        parts.push(output_box(&out));
     } else if matches!(t.state, ToolState::Done { .. }) {
         parts.push(text("It printed nothing.").size(12.0).role(Role::Text3).into());
     }
@@ -363,7 +363,7 @@ fn approval(c: &Conversation, key: u64, t: &Tool, g: &Gate) -> Element<Msg> {
         let line: Element<Msg> = if has_output { opener(line, c.id, key) } else { line.into() };
         parts.push(container(line).padding([2.0, 0.0, 0.0, 0.0]).width(Fill).into());
         if open && has_output {
-            parts.push(code_box(&output_text(t)));
+            parts.push(output_box(&output_text(t)));
         }
     }
     let edge = if pending { Edge::Focus } else { Edge::Line };
@@ -430,32 +430,137 @@ fn screenshot(app: &Tasuke, c: &Conversation, key: u64, t: &Tool) -> Element<Msg
     column![head, container(picture).padding([4.0, 0.0, 4.0, INDENT])].width(Fill).into()
 }
 
-pub fn notice(level: Level, words: &str) -> Element<Msg> {
-    let (glyph, role) = match level {
-        Level::Info => (Icon::Info, Role::Text3),
-        Level::Warning => (Icon::TriangleAlert, Role::Warning),
-        Level::Error => (Icon::CircleAlert, Role::Danger),
+/// How a notice stands: still going on (the turn waits on it), over, or
+/// over and followed by an error (what it was doing didn't work).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NoticeNow {
+    Going,
+    Over,
+    Failed,
+}
+
+/// "Starting the model server…" while it's going on, and "Started the
+/// model server" once the turn has moved on; the agent says the first.
+pub fn progress_words(words: &str, now: NoticeNow) -> Option<String> {
+    let doing = words.strip_suffix('…')?;
+    match now {
+        NoticeNow::Over => doing.strip_prefix("Starting ").map(|rest| format!("Started {rest}")),
+        _ => Some(words.to_owned()),
+    }
+}
+
+pub fn notice(level: Level, words: &str, now: NoticeNow) -> Element<Msg> {
+    let (mut glyph, mut role, mut text_role) = match level {
+        Level::Info => (Icon::Info, Role::Text3, Role::Text3),
+        Level::Warning => (Icon::TriangleAlert, Role::Warning, Role::Text2),
+        Level::Error => (Icon::CircleAlert, Role::Danger, Role::Text2),
     };
-    row![
-        super::lead(icon(glyph).size(13.0).role(role)),
-        text(words.to_owned()).size(12.0).role(Role::Text3).wrap().line_height(1.4)
-    ]
-    .spacing(8.0)
-    .align(Align::Start)
-    .padding([2.0, 0.0])
+    let mut shown = words.to_owned();
+    // Something under way the turn waits on (the server starting): it says
+    // so as it happens, and that it happened.
+    if let Some(p) = progress_words(words, now) {
+        shown = p;
+        (glyph, role, text_role) = match now {
+            NoticeNow::Going => (Icon::Hourglass, Role::Accent, Role::Text2),
+            NoticeNow::Over => (Icon::CircleCheck, Role::Success, Role::Text3),
+            NoticeNow::Failed => (glyph, role, text_role),
+        };
+    }
+    row![super::lead(icon(glyph).size(13.0).role(role)), text(shown).size(12.0).role(text_role).wrap().line_height(1.4)]
+        .spacing(8.0)
+        .align(Align::Start)
+        .padding([2.0, 0.0])
+        .width(Fill)
+        .into()
+}
+
+/// An error as a headline and its detail: the agent's "the model server
+/// can't be reached: connection refused" reads "The model server can't be
+/// reached", then "Connection refused" quietly under it.
+pub fn error_parts(words: &str) -> (String, Option<String>) {
+    let cap = |s: &str| {
+        let mut c = s.chars();
+        c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default()
+    };
+    match words.split_once(": ") {
+        Some((head, detail)) if head.chars().count() <= 70 && !detail.trim().is_empty() => {
+            (cap(head.trim()), Some(cap(detail.trim())))
+        }
+        _ => (cap(words.trim()), None),
+    }
+}
+
+pub fn error(conv: ConvId, words: &str, retryable: bool) -> Element<Msg> {
+    let (head, detail) = error_parts(words);
+    let server = head.to_lowercase().contains("model server");
+    let mut lines = column![text(head).size(13.5).weight(600.0).wrap().line_height(1.4)].spacing(2.0).width(Fill);
+    if let Some(d) = detail {
+        lines = lines.push(text(d).size(12.0).role(Role::Text3).wrap().line_height(1.4));
+    }
+    if server {
+        lines = lines.push(
+            text("Models shows the server's state. Retry sends your message again.")
+                .size(12.0)
+                .role(Role::Text3)
+                .wrap()
+                .line_height(1.4),
+        );
+    }
+    let mut buttons = aizome_kit::widgets::layout::row(Vec::new()).spacing(6.0);
+    if server {
+        buttons = buttons.push(button("Models").on_press(Msg::Show(crate::app::Page::Models)));
+    }
+    if retryable {
+        buttons = buttons.push(button("Retry").icon(Icon::RotateCw).on_press(Msg::Retry(conv)));
+    }
+    let line = row![super::lead(icon(Icon::CircleAlert).size(15.0).role(Role::Danger)), lines, buttons]
+        .spacing(10.0)
+        .align(Align::Start)
+        .width(Fill);
+    container(line).padding([12.0, 14.0]).fill(Tone::Chrome).border(Edge::Line).width(Fill).into()
+}
+
+/// A command's output in a sunken box, with a button to copy it.
+fn output_box(s: &str) -> Element<Msg> {
+    let copy = icon_button(Icon::Copy).on_press(Msg::Copy(s.to_owned())).tooltip("Copy the output");
+    container(
+        row![
+            prose([(Span::new(s.to_owned()), None)]).font(FontSpec::mono(12.0)).role(Role::Text2).line_height(1.4),
+            copy
+        ]
+        .spacing(8.0)
+        .align(Align::Start)
+        .width(Fill),
+    )
+    .padding([6.0, 4.0, 6.0, 10.0])
+    .fill(Tone::Sunk)
+    .border(Edge::Line)
     .width(Fill)
     .into()
 }
 
-pub fn error(conv: ConvId, words: &str, retryable: bool) -> Element<Msg> {
-    let mut line = row![
-        icon(Icon::CircleAlert).size(15.0).role(Role::Danger),
-        text(words.to_owned()).size(13.0).role(Role::Text).wrap().line_height(1.4).width(Fill),
-    ]
-    .spacing(10.0)
-    .width(Fill);
-    if retryable {
-        line = line.push(button("Retry").icon(Icon::RotateCw).on_press(Msg::Retry(conv)));
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn errors_read_as_a_headline_and_a_detail() {
+        assert_eq!(
+            error_parts("the model server can't be reached: Connection refused (os error 111)"),
+            ("The model server can't be reached".to_owned(), Some("Connection refused (os error 111)".to_owned()))
+        );
+        assert_eq!(
+            error_parts("The model gave an empty answer."),
+            ("The model gave an empty answer.".to_owned(), None)
+        );
     }
-    container(line).padding([10.0, 14.0]).fill(Tone::Chrome).border(Edge::Line).width(Fill).into()
+
+    #[test]
+    fn a_notice_of_something_under_way_says_when_it_happened() {
+        let w = "Starting the model server…";
+        assert_eq!(progress_words(w, NoticeNow::Going).as_deref(), Some(w));
+        assert_eq!(progress_words(w, NoticeNow::Over).as_deref(), Some("Started the model server"));
+        assert_eq!(progress_words(w, NoticeNow::Failed).as_deref(), Some(w));
+        assert_eq!(progress_words("Trimmed older command output to make room.", NoticeNow::Over), None);
+    }
 }
