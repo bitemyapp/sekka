@@ -22,7 +22,7 @@ use crate::fsops::names;
 use crate::fsops::sys;
 use crate::fsops::transfer::Mode;
 use crate::fsops::trash::{self, Trash};
-use crate::fsops::undo::{Filed, History, Record, Step};
+use crate::fsops::undo::{History, Record, Step};
 use crate::model::entry::{self, Entry, Sort, SortKey};
 use crate::model::mime::MimeDb;
 use crate::model::places::{self, Place};
@@ -809,10 +809,8 @@ impl Hako {
         // A step left out of the history after failing twice: the person
         // is told, so the next ❖Z doesn't undo the one before it unasked.
         let mut note = None;
-        if let Some(inverted) = &done.inverted
-            && let Filed::Dropped(why) = self.history.finished(inverted.clone())
-        {
-            note = Some(why);
+        if let Some(inverted) = &done.inverted {
+            self.history.finished(inverted.clone(), |why| note = Some(why));
         }
         // Select what came where the person is.
         let mut by_dir: HashMap<PathBuf, Vec<OsString>> = HashMap::new();
@@ -845,17 +843,22 @@ impl Hako {
                     )
                 })
                 .collect();
-            let mut more = if n > 6 { format!("\n…and {} more.", n - 6) } else { String::new() };
-            if let Some(note) = note {
-                more.push_str(&format!("\n\n{note}"));
+            let mut body = shown.join("\n");
+            if n > 6 {
+                body.push_str(&format!("\n…and {} more.", n - 6));
             }
-            let head =
-                if n == 1 { "An item couldn't be done.".to_owned() } else { format!("{n} items couldn't be done.") };
-            self.open_sheet(
-                cx,
-                w,
-                Sheet::Message { title: format!("{title}: {head}"), body: shown.join("\n") + &more },
-            );
+            if let Some(note) = note {
+                if !body.is_empty() {
+                    body.push_str("\n\n");
+                }
+                body.push_str(&note);
+            }
+            let head = match n {
+                0 => "It's left out of the history.".to_owned(),
+                1 => "An item couldn't be done.".to_owned(),
+                _ => format!("{n} items couldn't be done."),
+            };
+            self.open_sheet(cx, w, Sheet::Message { title: format!("{title}: {head}"), body });
         }
     }
 

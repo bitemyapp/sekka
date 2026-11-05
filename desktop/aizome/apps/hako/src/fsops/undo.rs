@@ -207,7 +207,7 @@ impl Inversion {
     /// all of it left. The history keeps its step. (Only a result that
     /// keeps all of the step can be made this way.)
     pub fn abandoned(&self) -> Inverted {
-        Inverted { ticket: self.ticket, inverse: None, left: Some(self.record.clone()) }
+        Inverted { ticket: self.ticket, inverse: None, left: Some(self.record.clone()), declined: false }
     }
 }
 
@@ -221,7 +221,7 @@ impl Inversion {
 /// use hako::fsops::undo::{Inverted, Inverting};
 /// // What a failed undo came to: nothing to redo, and its step forgotten.
 /// fn failed(ticket: Ticket<Inverting>) -> Inverted {
-///     Inverted { ticket, inverse: None, left: None }
+///     Inverted { ticket, inverse: None, left: None, declined: false }
 /// }
 /// ```
 ///
@@ -238,6 +238,9 @@ pub struct Inverted {
     ticket: Ticket<Inverting>,
     inverse: Option<Record>,
     left: Option<Record>,
+    /// What wasn't carried out, the person chose to leave (Stop, or Skip
+    /// at a conflict), and nothing failed.
+    declined: bool,
 }
 
 impl Answer<Inverting> for Inverted {
@@ -284,16 +287,18 @@ impl Stacks {
     /// second try carried out nothing either.
     fn refile(stack: &mut Vec<Held>, at: usize, held: Held, inverted: &Inverted, redo: bool) -> Filed {
         let carried = inverted.inverse.is_some();
+        // A try the person stopped or skipped isn't a failure.
+        let failed = !carried && !inverted.declined;
         match &inverted.left {
             None => Filed::Done,
-            Some(_) if !carried && held.failed => {
+            Some(_) if failed && held.failed => {
                 let (done, menu) = if redo { ("redone", "Redo") } else { ("undone", "Undo") };
                 let label = held.step.label;
                 Filed::Dropped(format!("“{label}” couldn't be {done} a second time, so it's left out of {menu}."))
             }
             Some(record) => {
                 let step = Step { record: record.clone(), label: held.step.label };
-                put(stack, at, Held { step, failed: !carried });
+                put(stack, at, Held { step, failed });
                 if carried { Filed::Done } else { Filed::Kept }
             }
         }
@@ -444,8 +449,33 @@ impl History {
     }
 
     /// An undo's or redo's result came back: filed if it's the one in
-    /// flight, else ignored.
-    pub fn finished(&mut self, inverted: Inverted) -> Filed {
+    /// flight, else ignored. When that leaves its step out of the history,
+    /// `tell` gets what to say to the person. Filing a result without
+    /// somewhere to say it doesn't compile, so no window can leave a step
+    /// out unannounced, and have the next ❖Z undo the one before it:
+    ///
+    /// ```compile_fail,E0061
+    /// use hako::fsops::undo::{History, Inverted};
+    /// fn job_done(history: &mut History, inverted: Inverted) {
+    ///     history.finished(inverted);
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// use hako::fsops::undo::{History, Inverted};
+    /// fn job_done(history: &mut History, inverted: Inverted, notes: &mut Vec<String>) {
+    ///     history.finished(inverted, |note| notes.push(note));
+    /// }
+    /// ```
+    pub fn finished(&mut self, inverted: Inverted, tell: impl FnOnce(String)) -> Filed {
+        let filed = self.file(inverted);
+        if let Filed::Dropped(note) = &filed {
+            tell(note.clone());
+        }
+        filed
+    }
+
+    fn file(&mut self, inverted: Inverted) -> Filed {
         self.with_typed(|s| match s {
             HistoryAny::Undoing(s) => match s.check(inverted) {
                 Ok(fresh) => {
@@ -471,7 +501,8 @@ pub fn invert(inversion: Inversion, trash: &Trash, env: &mut Env) -> (Report, In
     let Inversion { ticket, record, .. } = inversion;
     let (report, inverse, left) = carry_out(&record, trash, env);
     let some = |r: Record| (!r.is_empty()).then_some(r);
-    (report, Inverted { ticket, inverse: some(inverse), left: some(left) })
+    let declined = report.failed.is_empty() && (report.cancelled || !report.skipped.is_empty());
+    (report, Inverted { ticket, inverse: some(inverse), left: some(left), declined })
 }
 
 /// No items.
@@ -561,13 +592,13 @@ mod tests {
 
     fn undo(h: &mut History, tr: &Trash) -> Report {
         let (report, inverted) = run(h.begin_undo().expect("something to undo"), tr);
-        h.finished(inverted);
+        h.finished(inverted, |_| ());
         report
     }
 
     fn redo(h: &mut History, tr: &Trash) -> Report {
         let (report, inverted) = run(h.begin_redo().expect("something to redo"), tr);
-        h.finished(inverted);
+        h.finished(inverted, |_| ());
         report
     }
 
@@ -688,10 +719,10 @@ mod tests {
         h.push(step(Record::Made { paths: vec![t.join("new")] }, "Newer"));
         let (r, inverted) = run(inversion, &tr);
         assert_eq!(r.failed.len(), 1);
-        assert_eq!(h.finished(inverted.clone()), Filed::Kept);
+        assert_eq!(h.finished(inverted.clone(), |_| ()), Filed::Kept);
         assert_eq!(h.undo_label(), Some("Newer"));
         // A result that isn't the one in flight changes nothing.
-        assert_eq!(h.finished(inverted), Filed::Stale);
+        assert_eq!(h.finished(inverted, |_| ()), Filed::Stale);
         assert_eq!(h.undo_label(), Some("Newer"));
         let _newer = h.begin_undo().unwrap();
         assert!(h.begin_redo().is_none(), "no redo while an undo runs");
@@ -737,11 +768,14 @@ mod tests {
         h.push(step(Record::Rename { from: a.clone(), to: b.clone() }, "Rename"));
         // The name is taken: the first failure keeps the step to try again.
         let (_, inverted) = run(h.begin_undo().unwrap(), &tr);
-        assert_eq!(h.finished(inverted), Filed::Kept);
+        assert_eq!(h.finished(inverted, |_| ()), Filed::Kept);
         assert_eq!(h.undo_label(), Some("Rename"));
         // Still taken: the second leaves it out, and says so.
         let (_, inverted) = run(h.begin_undo().unwrap(), &tr);
-        let Filed::Dropped(note) = h.finished(inverted) else { panic!("a second failure drops the step") };
+        let mut told = None;
+        let filed = h.finished(inverted, |note| told = Some(note));
+        assert!(matches!(filed, Filed::Dropped(_)), "a second failure drops the step: {filed:?}");
+        let note = told.expect("the person is told");
         assert!(note.contains("“Rename”") && note.contains("left out of Undo"), "{note}");
         assert_eq!(h.undo_label(), Some("Older"), "the steps before it can be reached");
         assert_eq!(read(&b), "a");
@@ -753,7 +787,7 @@ mod tests {
         h.push(step(Record::Made { paths: vec![PathBuf::from("/nowhere/made")] }, "Copy"));
         let inversion = h.begin_undo().unwrap();
         // Its job couldn't start, or panicked: no result but this.
-        assert_eq!(h.finished(inversion.abandoned()), Filed::Kept);
+        assert_eq!(h.finished(inversion.abandoned(), |_| ()), Filed::Kept);
         assert_eq!((h.undo_label(), h.redo_label()), (Some("Copy"), None));
     }
 
@@ -769,7 +803,27 @@ mod tests {
         h.push(step(Record::Made { paths: vec![t.join("new")] }, "Newer"));
         let (r, inverted) = run(inversion, &tr);
         assert!(r.is_clean(), "{r:?}");
-        assert_eq!(h.finished(inverted), Filed::Done);
+        assert_eq!(h.finished(inverted, |_| ()), Filed::Done);
         assert_eq!((h.undo_label(), h.redo_label()), (Some("Newer"), None), "a new action forgets redo");
+    }
+
+    #[test]
+    fn a_skipped_or_stopped_undo_isn_t_a_failure() {
+        let t = TempDir::new("undo-declined");
+        let tr = trash(&t);
+        let a = t.file("from/a.txt", "a");
+        let to = t.dir("to").join("a.txt");
+        std::fs::rename(&a, &to).unwrap();
+        // Something has a.txt's old name: the undo's conflict is answered
+        // Skip (by `run`'s asker), twice. The person chose that: it stays.
+        t.file("from/a.txt", "newer");
+        let mut h = History::default();
+        h.push(step(Record::Move { pairs: vec![(a.clone(), to.clone())] }, "Move"));
+        for _ in 0..2 {
+            let (r, inverted) = run(h.begin_undo().unwrap(), &tr);
+            assert_eq!(r.skipped, vec![to.clone()]);
+            assert_eq!(h.finished(inverted, |note| panic!("nothing to tell: {note}")), Filed::Kept);
+        }
+        assert_eq!(h.undo_label(), Some("Move"));
     }
 }
