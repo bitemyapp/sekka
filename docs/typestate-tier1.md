@@ -255,6 +255,17 @@ which their Nix check phases run.
 - **Kakehashi:** a stale dialog ticket is refused at run time, not compile
   time.
 
+**Closed in tier 2** for the first two: a confirmation now also takes a
+person's press, which only the toolkit makes. Aizome's kit makes an
+`agree::Agreed` as a person presses an agreeing button. aizome-sys's
+`Confirm::new` takes one, and so do Tansu's run, Hako's Replace and
+Genkan's confirmation. Kakehashi's window makes a `dialog::Pressed` in the
+dialog's OK handler, and the helper starts only for a plan holding one.
+The stale ticket is still refused at run time. What a press can't show is
+in [DEVELOPERS.md](../DEVELOPERS.md#component-development): input the compositor
+or the system accepts from a program presses as a person does, and a
+privileged helper can't see a press at all.
+
 ### Hardware that looks identical
 
 **Closed in part:** a drive's identity now includes its USB port, compared

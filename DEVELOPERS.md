@@ -699,6 +699,31 @@ the doctests of every crate with a `compile_fail` one; the other packages'
 `docs/typestate-tier1.md` lists the machines done so far and what their types
 still can't rule out.
 
+A destructive step that a person must agree to also takes their press, which
+only the toolkit makes. In Aizome's kit, a button built with
+`on_agree(target, msg)` (or an alert's `agree_button`) is drawn destructive
+and carries what the view shows it acts on. When a person presses it, with
+the pointer or with Space or Return while it has the focus, the engine sends
+`msg` with an `agree::Agreed<target>`. It never answers Return or Escape for
+its sheet. The step takes the `Agreed` by value and acts on its target.
+aizome-sys's disk confirmations, Tansu's Apply, Hako's Replace and Genkan's
+Erase Disk and Install take one. Kakehashi, on GPUI, has its own
+`dialog::Pressed`, made in the "Erase …?" dialog's OK handler, and starts
+the helper only for a plan holding one (`elevate::PlanFile`).
+
+A press shows that the toolkit received the input, not who made it. Whatever
+the compositor or the system accepts as input (a virtual pointer, `uinput`,
+an accessibility tool) presses buttons as a person does. Only the window
+holds a press. A privileged helper sees the bytes it is sent, so it can't
+check a press, and it keeps its own checks of the target. Tests get presses
+two ways. `Harness::allow_agreements()` lets the harness's clicks agree, and
+`agree::testing` makes agreements directly. Both exist only in the kit's
+own tests and with its `testing` feature, which only dev-dependencies turn
+on. Kakehashi's `Pressed::for_tests` has its own `test-util` feature. These
+features only add items, so a build that unifies them, as `cargo test` does,
+runs the same code as one without. The shipped builds don't enable them:
+`cargo tree -e normal,features -i aizome-kit` doesn't list `testing`.
+
 The retained VM tooling is available through `nix build .#tools`. Run `result/bin/respin-tools qemu-test --help` for its firmware, storage, desktop, and application options. The Genkan fixture now builds from `installer/genkan/tests/vm-fixture`, not a remote installer revision. The rootless builder's static guest tools require the Rust musl target. The older reports in `TESTING.md`, `installer/genkan/RUST-TESTING.md`, and `docs/test-results/` describe their named predecessor revisions only.
 
 BIOS fixtures keep PCI memory windows below 4 GiB with SeaBIOS's
