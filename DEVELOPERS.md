@@ -2265,6 +2265,10 @@ collateral damage) before it scores a model.
 [tests/agent-evals/README.md](tests/agent-evals/README.md) describes the
 machine, the scenarios and grading;
 [docs/agent-evals](docs/agent-evals/README.md) holds results and analysis.
+The diagnostics run in a bare tool loop or, with `--agent omp`, in
+oh-my-pi inside the VM (the flake's `omp` input) against the same model
+server; `agent-evals.demo-driver` records a demonstration of one fix on
+a 1920×1080 screen with Aizome's own screen recorder.
 The skills in `.agents/skills/sekka-agent-evals` and
 `.agents/skills/sekka-troubleshooting` cover running the evaluations and
 diagnosing a Sekka machine.
