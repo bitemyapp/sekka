@@ -237,15 +237,13 @@ fn password(g: &Greeter, size: Size, person: Person<'_>, progress: Progress<'_>)
         Progress::Failed => (true, "Press Return to try again".to_owned()),
         Progress::Checking => (true, "Checking…".to_owned()),
     };
-    let mut f = field(&g.password, |_| look::ui(15.0, typeface::WEIGHT_REGULAR, color(NIGHT.text)))
+    let f = field(&g.password, |_| look::ui(15.0, typeface::WEIGHT_REGULAR, color(NIGHT.text)))
         .placeholder(placeholder)
         .height(32.0)
         .on_change(Msg::Password)
         .on_submit(Msg::Submit)
         .on_caps(Msg::Caps);
-    if secret {
-        f = f.secure();
-    }
+    let f = f.secure_when(secret);
     let boxed = boxed_field(Element::from(f).id("greeter-password"), g.login().failed());
     let off = crate::app::shake_offset(g.shake());
     let field_row =
