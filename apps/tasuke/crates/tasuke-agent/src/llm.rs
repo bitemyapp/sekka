@@ -46,11 +46,13 @@ pub(crate) enum LlmError {
     Http { status: u16, body: String },
     /// The stream broke off or made no sense.
     Stream(String),
+    /// The model got stuck repeating itself (twice in a row).
+    Degenerate(String),
 }
 
 impl LlmError {
     pub(crate) fn retryable(&self) -> bool {
-        matches!(self, LlmError::Unreachable(_) | LlmError::Stream(_))
+        matches!(self, LlmError::Unreachable(_) | LlmError::Stream(_) | LlmError::Degenerate(_))
             || matches!(self, LlmError::Http { status, .. } if *status >= 500)
     }
 }
@@ -64,6 +66,7 @@ impl std::fmt::Display for LlmError {
             LlmError::ContextFull(e) => write!(f, "the conversation is longer than the model's context: {e}"),
             LlmError::Http { status, body } => write!(f, "the model server answered {status}: {body}"),
             LlmError::Stream(e) => write!(f, "the model's reply broke off: {e}"),
+            LlmError::Degenerate(e) => write!(f, "the model got stuck repeating itself ({e})"),
         }
     }
 }
@@ -138,6 +141,7 @@ impl Client {
         let mut connect_failures = 0;
         let mut server_errors = 0;
         let mut parse_failures = 0;
+        let mut degenerate = 0;
         let mut loading_since: Option<Instant> = None;
         loop {
             if cancel.load(Ordering::SeqCst) {
@@ -166,6 +170,14 @@ impl Client {
                         return Err(LlmError::Http { status: 503, body: msg });
                     }
                     sleep_unless_cancelled(Duration::from_secs(2), cancel)?;
+                }
+                Err(Attempt::Degenerate(msg)) => {
+                    // A small model can fall into a loop (Gemma 4 12B repeats its
+                    // channel markers until the token limit): sample again once.
+                    degenerate += 1;
+                    if degenerate > 1 {
+                        return Err(LlmError::Degenerate(msg));
+                    }
                 }
                 Err(Attempt::ParseToolCall(msg)) => {
                     // One resample; then the loop tells the model.
@@ -215,6 +227,9 @@ impl Client {
                     for d in acc.feed(&v) {
                         on_delta(d);
                     }
+                    if let Some(unit) = acc.degenerate() {
+                        return Err(Attempt::Degenerate(format!("it kept writing {unit:?}")));
+                    }
                 }
                 Ok(Chunk::StreamError(text)) => return Err(classify_error(500, &text)),
                 Ok(Chunk::Status(status, text)) => return Err(classify_error(status, &text)),
@@ -245,6 +260,7 @@ enum Attempt {
     Connect(String),
     Loading(String),
     ParseToolCall(String),
+    Degenerate(String),
     Server { status: u16, body: String },
     Fatal(LlmError),
 }
@@ -348,9 +364,40 @@ struct Accumulator {
     reply: Reply,
     /// Tool calls by their stream index.
     calls: Vec<(u64, Option<String>, String, String)>,
+    /// How much text had been looked at for repetition.
+    checked: usize,
+}
+
+/// The tail that is looked at for a loop, and the longest repeating unit.
+const LOOP_WINDOW: usize = 1200;
+const LOOP_UNIT: usize = 80;
+
+/// The repeating unit when `text`'s last `LOOP_WINDOW` bytes are one short
+/// piece over and over (at least 12 times), as a model stuck in a loop
+/// writes; prose, code and tables never are.
+fn looping(text: &str) -> Option<String> {
+    let b = text.as_bytes();
+    if b.len() < LOOP_WINDOW {
+        return None;
+    }
+    let tail = &b[b.len() - LOOP_WINDOW..];
+    (1..=LOOP_UNIT).find(|&p| tail[p..].iter().zip(tail).all(|(a, b)| a == b)).map(|p| {
+        let unit = String::from_utf8_lossy(&tail[tail.len() - p..]).into_owned();
+        unit.chars().take(40).collect()
+    })
 }
 
 impl Accumulator {
+    /// Whether the reply has turned into a loop (checked every 256 bytes).
+    fn degenerate(&mut self) -> Option<String> {
+        let len = self.reply.content.len() + self.reply.reasoning.len();
+        if len < self.checked + 256 {
+            return None;
+        }
+        self.checked = len;
+        looping(&self.reply.content).or_else(|| looping(&self.reply.reasoning))
+    }
+
     fn feed(&mut self, v: &Value) -> Vec<Delta> {
         let mut out = Vec::new();
         if let Some(choice) = v.get("choices").and_then(|c| c.get(0)) {
@@ -554,6 +601,18 @@ mod tests {
     use super::*;
     use std::io::Write;
     use std::net::TcpListener;
+
+    #[test]
+    fn loops_are_told_from_text() {
+        let stuck = format!("Let me check.{}", "<channel|><|channel>thought\n".repeat(80));
+        assert_eq!(looping(&stuck).as_deref(), Some("<channel|><|channel>thought\n"));
+        assert!(looping(&"x".repeat(2000)).is_some());
+        let prose: String = (0..300).map(|i| format!("line {i} of a log\n")).collect();
+        assert_eq!(looping(&prose), None);
+        let table = "| a | b |\n|---|---|\n".to_owned() + &(0..200).map(|i| format!("| {i} | {} |\n", i * 7)).collect::<String>();
+        assert_eq!(looping(&table), None);
+        assert_eq!(looping("short"), None);
+    }
 
     #[test]
     fn base64_matches_the_standard() {
