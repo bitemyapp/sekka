@@ -392,20 +392,26 @@ pub fn swap() -> Script {
 const ERRORS: &str = "Nov 05 08:11:02 studio kernel: ACPI BIOS Error (bug): Could not resolve symbol [\\_SB.PCI0.GPP0.SWUS], AE_NOT_FOUND
 Nov 05 08:11:02 studio kernel: ACPI Error: Aborting method \\_SB.PCI0.GPP0.SWUS._PRW due to previous error (AE_NOT_FOUND)";
 
-const FREE: &str = "               total        used        free      shared  buff/cache   available
-Mem:            62Gi        11Gi        38Gi       1.2Gi        14Gi        50Gi
-Swap:           31Gi          0B        31Gi
-NAME       TYPE      SIZE USED PRIO
-/dev/zram0 partition 31G   0B  100";
+/// `system_usage` on the desktop: `/` and `/home` share a device, so it is listed once.
+const USAGE: &str = "Memory: 62 GiB in all; 51 GiB available to programs (82%), 11 GiB in use. Swap: 0 bytes of 31 GiB in use.
+Processor: 2% busy over the last 0.5 s, across 32 threads.
 
-const BUSY: &str = " 21:29:12 up 13:18,  1 user,  load average: 0.62, 0.71, 0.66
-32
-    PID USER     COMMAND         %CPU %MEM
-   2141 sam      aizome           3.1  1.4
-   2388 sam      aizome-shell     1.2  0.9
-   3307 sam      firefox          0.9  4.2
-   1170 root     nix-daemon       0.2  0.1
-   2420 sam      pipewire         0.1  0.1";
+Using the most memory (resident memory, and its share of all memory):
+- firefox, pid 3307, user sam: 2.6 GiB, 4.2% of memory
+- aizome, pid 2141, user sam: 889 MiB, 1.4% of memory
+- aizome-shell, pid 2388, user sam: 571 MiB, 0.9% of memory
+- pipewire, pid 2420, user sam: 63 MiB, 0.1% of memory
+- nix-daemon, pid 1170, user root: 63 MiB, 0.1% of memory
+
+Using the most processor time over the last 0.5 s (100% is one thread kept busy):
+- aizome, pid 2141, user sam: 3% of a thread
+- aizome-shell, pid 2388, user sam: 1% of a thread
+
+Disks (free is what can still be written):
+- / on /dev/nvme0n1p2 (btrfs): 40 GiB free of 476 GiB, 92% used";
+
+const LOAD: &str = " 21:29:12 up 13:18,  1 user,  load average: 0.62, 0.71, 0.66
+32";
 
 const NETWORK: &str = "STATE      CONNECTIVITY  WIFI-HW  WIFI     WWAN-HW  WWAN
 connected  full          missing  enabled  missing  enabled
@@ -421,7 +427,7 @@ System clock synchronized: yes
               NTP service: active
           RTC in local TZ: no";
 
-/// Give my computer a check-up, as the sekka-checkup skill says: a dozen
+/// Give my computer a check-up, as the sekka-checkup skill says: eleven
 /// read-only looks, then the report in its format (a verdict, problems
 /// and warnings first, one line of what's fine, at most three fixes).
 pub fn checkup() -> Script {
@@ -439,7 +445,7 @@ pub fn checkup() -> Script {
             120,
         )
         .look("c3", "run_command", cmd("journalctl -b -p err --no-pager -n 40"), ERRORS, Some(0), 380)
-        .look("c4", "run_command", cmd("df -h / /home /nix 2>/dev/null"), DF, Some(0), 60)
+        .look("c4", "system_usage", json!({}), USAGE, None, 520)
         .look("c5", "run_command", cmd("journalctl --disk-usage"), "Archived and active journals take up 48.0M in the file system.", Some(0), 50)
         .look(
             "c6",
@@ -449,15 +455,7 @@ pub fn checkup() -> Script {
             Some(0),
             30,
         )
-        .look("c7", "run_command", cmd("free -h; swapon --show"), FREE, Some(0), 30)
-        .look(
-            "c8",
-            "run_command",
-            cmd("uptime; nproc; ps -eo pid,user,comm,%cpu,%mem --sort=-%cpu | head -6"),
-            BUSY,
-            Some(0),
-            90,
-        )
+        .look("c8", "run_command", cmd("uptime; nproc"), LOAD, Some(0), 30)
         .look("c9", "run_command", cmd("coredumpctl list --since=-7d --no-pager"), "No coredumps found.", Some(1), 200)
         .look(
             "c10",

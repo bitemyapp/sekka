@@ -52,6 +52,9 @@ then.
   again when unified memory was held to the same 10 tokens/s floor as the
   processor: Muse Glimmer 30B no longer qualifies on the 8060S, and
   `compare` finds the change only in the "Also fits" count (11 to 10).
+  The two check-up pictures were taken again when its memory, process
+  and disk looks became one `system_usage`; `compare` finds the change
+  only in the folded line's count (12 to 11).
 - **Display**: a private headless sway 1.12 with the pixman renderer
   (`desktop/aizome/sukumo/scripts/headless-wayland`, `SIZE=1440x900`),
   with `WAYLAND_DISPLAY`, `DISPLAY` and `AIZOME_SHELL_SOCKET` unset. The
@@ -75,7 +78,7 @@ then.
 | `night-diagnose.png`, `day-diagnose.png` | `diagnose` | *Why is my disk filling up?*: thinking folded to one line, six read-only steps folded into "Looked at 6 things", a Markdown answer with a table and a list, and a pending approval card for `nix-store --gc` with its purpose and the policy's reason |
 | `night-root-approval.png`, `day-root-approval.png` | `root-approval` | *Clean up old system versions*: a card asking to run a command as administrator, saying a password prompt follows |
 | `night-day-theme.png`, `day-day-theme.png` | `day-theme` | *Switch to the Day theme*, finished: an answered file-change card with its diff and "You chose Run · done", then the screenshot the agent took, as a thumbnail |
-| `night-checkup.png`, `day-checkup.png` | `checkup` | *Give my computer a check-up*: twelve read-only looks folded into "Looked at 12 things", then the report in the check-up skill's format: the verdict, the problem and the warning (✕ and ⚠, in red and amber), one ✓ line of what's fine, and three offered fixes saying which need the administrator password, with Copy under the finished answer |
+| `night-checkup.png`, `day-checkup.png` | `checkup` | *Give my computer a check-up*: eleven read-only looks (memory, busy processes and disks in one `system_usage`) folded into "Looked at 11 things", then the report in the check-up skill's format: the verdict, the problem and the warning (✕ and ⚠, in red and amber), one ✓ line of what's fine, and three offered fixes saying which need the administrator password, with Copy under the finished answer |
 | `night-server-down.png`, `day-server-down.png` | `server-down` | A question asked while the model server is down: the agent's "Starting the model server…", then the error as a headline (*The model server can't be reached*) with its detail, Models and Retry; the chip says the server is stopped |
 | `night-models-8gb.png`, `day-models-8gb.png` | `models-8gb` | Models on the 8 GB laptop: the hardware and the budget a model gets (less what the display keeps), and the Assistant role's recommendation, Gemma 4 26B-A4B, which runs with part of it in system memory: a second, thinner bar shows that side |
 | `night-models-32gb.png`, `day-models-32gb.png` | `models-32gb` | Models on the 32 GB desktop: the recommendation in use, another downloaded with Use and Remove |

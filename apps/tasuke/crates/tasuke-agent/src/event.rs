@@ -127,6 +127,8 @@ pub enum ToolCall {
     SearchConversations {
         query: String,
     },
+    /// Memory, the busiest processes and each disk's space, labelled.
+    SystemUsage,
     Remember {
         text: String,
     },
@@ -197,6 +199,7 @@ impl ToolCall {
             ToolCall::EditFile { .. } => "edit_file",
             ToolCall::LoadSkill { .. } => "load_skill",
             ToolCall::SearchConversations { .. } => "search_conversations",
+            ToolCall::SystemUsage => "system_usage",
             ToolCall::Remember { .. } => "remember",
             ToolCall::Forget { .. } => "forget",
             ToolCall::Screenshot => "screenshot",
@@ -232,6 +235,7 @@ impl ToolCall {
             ToolCall::SearchConversations { query } => {
                 format!("Search earlier conversations for \"{}\"", first_line(query))
             }
+            ToolCall::SystemUsage => "Look at memory, processes and disks".into(),
             ToolCall::Remember { text } => format!("Remember \"{}\"", first_line(text)),
             ToolCall::Forget { id } => format!("Forget note {id}"),
             ToolCall::Screenshot => "Look at the screen".into(),

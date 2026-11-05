@@ -240,6 +240,7 @@ impl ToolCall {
                 )
             },
             "read_file" => d(Icon::FileText, "Reading", "Read", self.arg("path").unwrap_or("").to_owned(), true),
+            "system_usage" => d(Icon::Activity, "Looking at", "Looked at", "memory, processes and disks".into(), false),
             "write_file" => {
                 let path = self.arg("path").unwrap_or("").to_owned();
                 let diff = self
@@ -340,7 +341,10 @@ impl ToolCall {
     /// notes and desktop actions show on their own.
     pub fn looks_only(&self, needs: &Approval) -> bool {
         *needs == Approval::None
-            && matches!(self.name.as_str(), "run_command" | "read_file" | "load_skill" | "list_windows" | "ui_elements")
+            && matches!(
+                self.name.as_str(),
+                "run_command" | "read_file" | "system_usage" | "load_skill" | "list_windows" | "ui_elements"
+            )
     }
 }
 

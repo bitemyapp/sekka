@@ -180,8 +180,9 @@ status`). On the evaluation VM, `as-alice CMD` does this. Session logs:
 - **Time.** `timedatectl`; with Aizome, Settings owns the time zone
   (`time.timeZone` in configuration.nix is overridden; `/etc/localtime` is
   a link timedated writes and activation preserves).
-- **Storage.** `df -h`, `df -i`, `du -xh --max-depth=2 DIR | sort -h |
-  tail`, `lsof +L1` (deleted files still held open). Free space by
+- **Storage.** In Tasuke, `system_usage` gives each disk's free space,
+  labelled; then `df -i`, `du -xh --max-depth=2 DIR | sort -h | tail`,
+  `lsof +L1` (deleted files still held open). Free space by
   removing what is safe to lose (runaway logs, caches, partial files, old
   generations via Yukimi → Storage), not the user's data or backups;
   truncate a log a process still writes (`truncate -s 0 FILE`) rather
@@ -192,8 +193,10 @@ status`). On the evaluation VM, `as-alice CMD` does this. Session logs:
   Fix with `chmod 700 ~/.ssh; chmod 600 ~/.ssh/authorized_keys` (as the
   user). `sshd -T` prints the effective configuration. Never replace the
   user's `authorized_keys`.
-- **Load.** `top -b -n 1 -o %CPU | head -20`, `ps -eo
-  pid,user,pcpu,etime,cmd --sort=-pcpu | head`, `systemd-cgtop -b -n 1`;
+- **Load.** In Tasuke, `system_usage` names the processes using the most
+  memory and processor time, every figure labelled (`ps` and `top` columns
+  are easy to misread); then `ps -o pid,etime,cmd -p PID` for one of them,
+  `systemd-cgtop -b -n 1`;
   Myaku (`aizome-myaku --print`). systemd-oomd kills the largest offender
   under sustained memory pressure (Sekka's tuning).
 - **Updates.** `sekka-update --status`; a failed build leaves the running

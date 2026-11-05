@@ -64,6 +64,14 @@ pub(crate) fn schemas(o: &Options, screen: (u32, u32)) -> Vec<Value> {
                "limit": {"type": "integer", "description": "How many lines (at most 400)."}}),
             &["path"],
         ));
+        t.push(function(
+            "system_usage",
+            "See what is using this computer, every figure labelled: memory in all and available, the processes \
+             using the most memory and processor time (with pid and user), and each disk's free space. Use it \
+             rather than free, ps, top or df, whose bare columns are easy to misread.",
+            json!({}),
+            &[],
+        ));
         if o.act {
             t.push(function(
                 "write_file",
@@ -313,6 +321,7 @@ pub(crate) fn parse(name: &str, arguments: &str, offered: &[String], desktop: &D
                 section: text_arg(&args, "section").filter(|s| !s.trim().is_empty()),
             },
             "search_conversations" => ToolCall::SearchConversations { query: need("query")? },
+            "system_usage" => ToolCall::SystemUsage,
             "remember" => ToolCall::Remember { text: need("text")? },
             "forget" => ToolCall::Forget { id: NoteId::new(need("id")?.trim()) },
             "screenshot" => ToolCall::Screenshot,
@@ -481,6 +490,7 @@ pub(crate) fn execute(call: &ToolCall, o: &Options, desktop: &mut Desktop<'_>, c
             Ok(_) => ToolOutput::failed(format!("{} changed since; read it again", path.display())),
             Err(e) => ToolOutput::failed(format!("{}: {e}", path.display())),
         }),
+        ToolCall::SystemUsage => Outcome::text(ToolOutput::done(crate::usage::report())),
         ToolCall::SearchConversations { query } => {
             Outcome::text(ToolOutput::done(crate::session::search(&o.data_dir, query, o.session.as_ref(), 1500)))
         }

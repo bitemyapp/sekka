@@ -36,6 +36,7 @@ pub mod skills;
 mod textcalls;
 mod tools;
 mod turn;
+mod usage;
 
 pub use agent::{Agent, TurnHandle};
 pub use event::{

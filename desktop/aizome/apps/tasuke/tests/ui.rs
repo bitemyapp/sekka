@@ -140,7 +140,7 @@ fn a_check_up_looks_at_a_dozen_things_and_reports_problems_first() {
     assert!(c.turn.is_none());
     assert!(c.transcript.pending_approval().is_none(), "a check-up only looks");
     let texts = h.texts(w);
-    assert!(texts.iter().any(|t| t.starts_with("Looked at 12 things")), "{texts:?}");
+    assert!(texts.iter().any(|t| t.starts_with("Looked at 11 things")), "{texts:?}");
     let Some(Body::Answer(a)) = c.transcript.items.last().map(|i| &i.body) else { panic!() };
     let lines: Vec<&str> = a.text.lines().filter(|l| !l.is_empty()).collect();
     assert_eq!(lines[0], "Two things need attention.");
