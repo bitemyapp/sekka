@@ -3,12 +3,14 @@
 //! ("CLI").
 //!
 //! Subcommands live in their own modules: models.rs (hardware, recommend,
-//! models, download, remove, use, server) and ask.rs (ask).
+//! models, download, remove, use, server), ask.rs (ask) and checkup.rs
+//! (checkup).
 
 use std::process::ExitCode;
 
 mod args;
 mod ask;
+mod checkup;
 mod models;
 mod table;
 
@@ -30,6 +32,7 @@ usage: tasuke COMMAND [options]
   ask [--act] [--desktop] [--approve never|ask|all]
       [--base-url URL --model NAME] \"request\"
                                        ask the assistant from the terminal
+  checkup [--notify]                   look over the system's health, changing nothing
 ";
 
 fn main() -> ExitCode {
@@ -44,6 +47,7 @@ fn main() -> ExitCode {
             0
         }
         "ask" => ask::run(rest),
+        "checkup" => checkup::run(rest),
         "hardware" | "recommend" | "models" | "download" | "remove" | "use" | "server" => {
             match models::run(command, rest.to_vec()) {
                 Ok(()) => 0,
