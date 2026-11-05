@@ -266,6 +266,22 @@ not ISO qualification or a completed performance/storage comparison. Nix's
 shipping packages remain separate outputs; selecting a development profile does
 not silently select shipping features.
 
+Portable tests can skip checks requiring a systemd user manager. The real
+`apps::launch::tests::through_systemd` probe also passed on the workstation,
+including its scope/cgroup, literal-argument, session and child-reaping
+assertions. To exercise that path, use an actual user session and local
+standalone execution, not a sandbox PID namespace. Pass Rust test selection
+with `--test_arg`, rather than relying on Bazel's `--test_filter`:
+
+```sh
+scripts/sekka-bazel test //desktop/aizome/crates/aizome-sys:lib_test \
+  --spawn_strategy=standalone --test_strategy=standalone \
+  --test_env=XDG_RUNTIME_DIR="/run/user/$(id -u)" \
+  --test_env=DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus" \
+  --test_arg=--exact --test_arg=apps::launch::tests::through_systemd \
+  --test_arg=--nocapture --test_output=all --nocache_test_results
+```
+
 Build metadata is not a Cargo package input. The shared source filter excludes
 generated Bazel/Buck files; real Rust sources and Cargo manifests still change
 the Nix source identity. Small probes name the files they actually compile

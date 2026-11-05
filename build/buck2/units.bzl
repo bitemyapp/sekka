@@ -6,7 +6,10 @@ CargoUnitInfo = provider(fields = {
     "spec": provider_field(dict),
 })
 
-SourceInfo = provider(fields = {"path": provider_field(typing.Any)})
+SourceInfo = provider(fields = {
+    "path": provider_field(typing.Any),
+    "inputs": provider_field(list),
+})
 
 def _source_impl(ctx):
     if ctx.attrs.store_path:
@@ -19,7 +22,7 @@ def _source_impl(ctx):
         outputs = [path]
         if ctx.attrs.prefix:
             path = path.project(ctx.attrs.prefix)
-    return [DefaultInfo(default_outputs = outputs), SourceInfo(path = path)]
+    return [DefaultInfo(default_outputs = outputs), SourceInfo(path = path, inputs = outputs)]
 
 cargo_source = rule(
     impl = _source_impl,
@@ -53,7 +56,19 @@ def _unit_impl(ctx):
     if not python or not environment:
         fail("Use sekka-buck2 from the root-lock Nix shell (missing immutable environment).")
     ctx.actions.run(
-        cmd_args(python, ctx.attrs._runner, "--environment", environment, "--spec", manifest, "--output", output.as_output()),
+        cmd_args(
+            python,
+            ctx.attrs._runner,
+            "--environment",
+            environment,
+            "--spec",
+            manifest,
+            "--output",
+            output.as_output(),
+            # A projected crate path omits declared sibling resources from the
+            # remote input tree. Retain the complete, narrowly assembled tree.
+            hidden = [ctx.attrs.source[SourceInfo].inputs] + [source[SourceInfo].inputs for source in ctx.attrs.extra_sources.values()],
+        ),
         category = "cargo_" + spec["mode"].replace("-", "_"),
         identifier = spec["package"]["name"] + "-" + spec["target"]["name"],
         allow_cache_upload = True,
