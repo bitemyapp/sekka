@@ -79,7 +79,8 @@ files = [
 scores = { date = "2026-11-04", diagnostics = { passed = 30, total = 31 }, diagnostics_omp = { passed = 14, total = 15 }, computer_use = { passed = 16, total = 18 }, computer_use_text = { passed = 6, total = 9 } }
 speed = { decode = 112, prefill = 3135 }
 notes = [
-  "The most capable at both diagnostics and desktop use, with no damage in any episode.",
+  "The most capable at both diagnostics and desktop use in the open-model evaluations, with no damage in any of their episodes.",
+  "Inside Tasuke it fixed 27 of 32 faults and did all 18 desktop tasks; once, after a \"yes\" to its own suggestion, it moved the user's older backup.",
   "The slowest and most thorough: about 13,000 output tokens per fault. Once ran out of a 48K context.",
   "Normalised a typo it was asked to find (reported /srv/data/backups for /srv/data/backpus).",
 ]
@@ -107,7 +108,7 @@ scores = { date = "2026-11-04", diagnostics = { passed = 15, total = 16 }, diagn
 speed = { decode = 70, prefill = 2958 }
 notes = [
   "Fixed all sixteen faults in oh-my-pi, in a median 2.8 minutes and 2,500 output tokens, and never damaged anything.",
-  "Weak at the desktop (2 of 9) although it reads the screen in correct pixel coordinates: it navigates poorly.",
+  "Inside Tasuke it fixed 28 of 32 faults, every one before being told to go ahead, and did all 18 desktop tasks with Tasuke's numbered controls, harming nothing. From screenshots alone it did 2 of 9: it names the right control and clicks about 160 px away.",
 ]
 
 [models."nemotron-3.5-bolt"]
@@ -136,6 +137,7 @@ incidents = ["In oh-my-pi it ended one fault (notes owned by root) with the user
 notes = [
   "The one model without Chinese lineage that is good at both diagnostics and the desktop.",
   "Gives clicks as fractions of the screen (0–1), whatever the prompt asks.",
+  "Inside Tasuke it fixed 22 of 31 faults and did 15 of 18 desktop tasks, harming nothing.",
 ]
 
 [models."qwen3.6-35b-a3b"]
@@ -328,6 +330,7 @@ scores = { date = "2026-11-05", diagnostics = { passed = 3, total = 16 }, diagno
 notes = [
   "Fixed 12 of 16 faults in oh-my-pi without harming anything; in the evaluations' bare loop it repeated its channel markers until the token limit, which Tasuke detects and resamples.",
   "Fits entirely in 7.7 GiB with 32K of context, so it is fast on 8 GiB cards.",
+  "Inside Tasuke it fixed 20 of 31 faults (9 before being told to go ahead) and did 11 of 18 desktop tasks, harming nothing.",
 ]
 
 [models."gemma-4-26b-a4b"]
@@ -355,6 +358,7 @@ scores = { date = "2026-11-05", diagnostics = { passed = 14, total = 16 }, diagn
 incidents = ["In oh-my-pi it once ended the user's session to apply a repaired keyboard layout."]
 notes = [
   "The best of the 8 GiB round: 14 of 16 faults in the bare loop with nothing harmed, and 5 of 9 desktop tasks in pixel coordinates.",
+  "Inside Tasuke it fixed 24 of 31 faults (15 before being told to go ahead) and did 17 of 18 desktop tasks, harming nothing.",
   "On an 8 GiB card it fits in 7.5 GiB with the experts of 24 layers in system RAM, which makes it slower there: 47 tokens/s with its experts on a Ryzen 7 9800X3D, against about 150 on a GPU that holds it whole.",
 ]
 
