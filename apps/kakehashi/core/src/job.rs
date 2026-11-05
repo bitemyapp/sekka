@@ -24,12 +24,12 @@
 //! # let image = ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
 //! # let (review, _) = list.open_review(None, image.clone()).unwrap();
 //! # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
-//! # let dir = tempfile::tempdir().unwrap();
-//! # let path = dir.path().join("progress");
+//! # let dir = kakehashi_core::job::JobDir::new().unwrap();
+//! # let path = dir.progress();
 //! use kakehashi_core::job::{End, Event, Job, JobState, ProgressFile, Ran};
 //!
-//! let mut job = Job::start(&plan, path.with_extension("cancel"));
-//! let mut reports = ProgressFile::new(path.clone());
+//! let mut job = Job::start(&plan, &dir);
+//! let mut reports = ProgressFile::new(&dir);
 //! job.handle(Event::Authorizing, Instant::now());
 //! // The helper reports that it is writing, and is killed before the
 //! // window reads the line.
@@ -47,7 +47,7 @@ use crate::drive::Drive;
 use crate::write::{Plan, Progress};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 /// How a run of the helper ended.
@@ -84,10 +84,10 @@ impl Ran {
 /// A report the helper wrote:
 ///
 /// ```
-/// use kakehashi_core::{job::ProgressFile, write::Progress};
-/// let dir = tempfile::tempdir().unwrap();
-/// std::fs::write(dir.path().join("progress"), "{\"stage\":\"preparing\"}\n").unwrap();
-/// let reports = ProgressFile::new(dir.path().join("progress")).read();
+/// use kakehashi_core::{job::{JobDir, ProgressFile}, write::Progress};
+/// let dir = JobDir::new().unwrap();
+/// std::fs::write(dir.progress(), "{\"stage\":\"preparing\"}\n").unwrap();
+/// let reports = ProgressFile::new(&dir).read();
 /// assert_eq!(reports[0].progress(), &Progress::Preparing);
 /// ```
 #[derive(Debug)]
@@ -116,7 +116,8 @@ impl Report {
 /// # let (review, _) = list.open_review(None, image.clone()).unwrap();
 /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
 /// use kakehashi_core::job::{Event, Job, Ran};
-/// let mut job = Job::start(&plan, "progress.cancel".into());
+/// let dir = kakehashi_core::job::JobDir::new().unwrap();
+/// let mut job = Job::start(&plan, &dir);
 /// job.handle(Event::Authorizing, Instant::now());
 /// // The helper was killed; its last lines are still in the file.
 /// job.handle(Event::Exited(Ran::Failed("the helper was killed".into())), Instant::now());
@@ -136,8 +137,9 @@ impl Report {
 /// # let (review, _) = list.open_review(None, image.clone()).unwrap();
 /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
 /// use kakehashi_core::job::{Event, Job, ProgressFile, Ran};
-/// let reports = ProgressFile::new("/nonexistent/progress".into());
-/// let mut job = Job::start(&plan, "progress.cancel".into());
+/// let dir = kakehashi_core::job::JobDir::new().unwrap();
+/// let reports = ProgressFile::new(&dir);
+/// let mut job = Job::start(&plan, &dir);
 /// job.handle(Event::Authorizing, Instant::now());
 /// job.handle(Event::Exited(reports.finish(Ran::Failed("the helper was killed".into()))), Instant::now());
 /// assert!(job.is_ended());
@@ -148,24 +150,83 @@ pub struct Exit {
     ran: Ran,
 }
 
-/// The helper's progress file, read as it grows: one JSON object per line.
+/// The job's private directory, removed when it is dropped: the plan the
+/// helper reads, the progress file it appends to, and the marker that stops
+/// it.
 #[derive(Debug)]
-pub struct ProgressFile {
-    path: PathBuf,
+pub struct JobDir {
+    dir: tempfile::TempDir,
+}
+
+impl JobDir {
+    /// A new private directory, with the empty progress file the helper
+    /// appends to.
+    pub fn new() -> std::io::Result<JobDir> {
+        let dir = tempfile::Builder::new().prefix("kakehashi-").tempdir()?;
+        File::create(dir.path().join("progress"))?;
+        Ok(JobDir { dir })
+    }
+
+    pub fn path(&self) -> &Path {
+        self.dir.path()
+    }
+
+    /// Where the window writes the plan.
+    pub fn plan(&self) -> PathBuf {
+        self.dir.path().join("plan.json")
+    }
+
+    /// The progress file the helper appends to.
+    pub fn progress(&self) -> PathBuf {
+        self.dir.path().join("progress")
+    }
+
+    /// The marker that stops the helper: the progress file's name with
+    /// `.cancel`, as the helper looks for it.
+    pub fn cancel(&self) -> PathBuf {
+        self.dir.path().join("progress.cancel")
+    }
+}
+
+/// The helper's progress file, read as it grows: one JSON object per line.
+/// It borrows the job's directory, so the directory can't be removed while
+/// the helper's last lines are still to be read:
+///
+/// ```compile_fail,E0505
+/// use kakehashi_core::job::{JobDir, ProgressFile, Ran};
+/// let dir = JobDir::new().unwrap();
+/// let reports = ProgressFile::new(&dir);
+/// // The helper exited: remove its directory, then read what it wrote last.
+/// drop(dir);
+/// let _exit = reports.finish(Ran::Failed("the helper was killed".into()));
+/// ```
+///
+/// Read what it wrote last, then remove the directory:
+///
+/// ```
+/// use kakehashi_core::job::{JobDir, ProgressFile, Ran};
+/// let dir = JobDir::new().unwrap();
+/// let reports = ProgressFile::new(&dir);
+/// let _exit = reports.finish(Ran::Failed("the helper was killed".into()));
+/// drop(dir);
+/// ```
+#[derive(Debug)]
+pub struct ProgressFile<'d> {
+    dir: &'d JobDir,
     offset: u64,
     /// A line not finished yet.
     pending: String,
 }
 
-impl ProgressFile {
-    pub fn new(path: PathBuf) -> ProgressFile {
-        ProgressFile { path, offset: 0, pending: String::new() }
+impl<'d> ProgressFile<'d> {
+    pub fn new(dir: &'d JobDir) -> ProgressFile<'d> {
+        ProgressFile { dir, offset: 0, pending: String::new() }
     }
 
     /// The whole lines the helper appended since the last read.
     pub fn read(&mut self) -> Vec<Report> {
         let mut reports = Vec::new();
-        let Ok(mut file) = File::open(&self.path) else { return reports };
+        let Ok(mut file) = File::open(self.dir.progress()) else { return reports };
         if file.seek(SeekFrom::Start(self.offset)).is_err() {
             return reports;
         }
@@ -184,8 +245,8 @@ impl ProgressFile {
     }
 
     /// The helper exited as `ran`: that, with whatever it wrote since the
-    /// last read. Call it once the helper's process is gone, and before its
-    /// directory is removed.
+    /// last read. Call it once the helper's process is gone; it releases
+    /// the directory.
     pub fn finish(mut self, ran: Ran) -> Exit {
         Exit { tail: self.read(), ran }
     }
@@ -395,13 +456,13 @@ impl<'s> Running<'s> {
     /// # let image = ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
     /// # let (review, _) = list.open_review(None, image.clone()).unwrap();
     /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
-    /// # let dir = tempfile::tempdir().unwrap();
-    /// # let path = dir.path().join("progress");
+    /// # let dir = kakehashi_core::job::JobDir::new().unwrap();
+    /// # let path = dir.progress();
     /// # std::fs::write(&path, "{\"stage\":\"writing\",\"done\":1073741824,\"total\":4294967296}\n").unwrap();
     /// use kakehashi_core::job::{Event, Job, JobAny, ProgressFile};
-    /// let mut job = Job::start(&plan, path.with_extension("cancel"));
+    /// let mut job = Job::start(&plan, &dir);
     /// job.handle(Event::Authorizing, Instant::now());
-    /// for report in ProgressFile::new(path).read() {
+    /// for report in ProgressFile::new(&dir).read() {
     ///     job.handle(Event::Report(report), Instant::now());
     /// }
     /// job.with_typed(|state| match state {
@@ -425,13 +486,13 @@ impl<'s> Running<'s> {
     /// # let image = ImageId { path: "sekka.iso".into(), sha256: "0".repeat(64) };
     /// # let (review, _) = list.open_review(None, image.clone()).unwrap();
     /// # let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
-    /// # let dir = tempfile::tempdir().unwrap();
-    /// # let path = dir.path().join("progress");
+    /// # let dir = kakehashi_core::job::JobDir::new().unwrap();
+    /// # let path = dir.progress();
     /// # std::fs::write(&path, "{\"stage\":\"writing\",\"done\":1073741824,\"total\":4294967296}\n").unwrap();
     /// use kakehashi_core::job::{End, Event, Job, JobAny, JobState, ProgressFile, Ran};
-    /// let mut job = Job::start(&plan, path.with_extension("cancel"));
+    /// let mut job = Job::start(&plan, &dir);
     /// job.handle(Event::Authorizing, Instant::now());
-    /// for report in ProgressFile::new(path).read() {
+    /// for report in ProgressFile::new(&dir).read() {
     ///     job.handle(Event::Report(report), Instant::now());
     /// }
     /// job.with_typed(|state| match state {
@@ -479,10 +540,10 @@ enum Step {
 }
 
 impl Job {
-    /// Starts following the write of `plan`, which creating `cancel` stops.
-    pub fn start(plan: &Plan, cancel: PathBuf) -> Job {
+    /// Starts following the write of `plan`, from the job's directory `dir`.
+    pub fn start(plan: &Plan, dir: &JobDir) -> Job {
         let image = plan.image().file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        Job::new(Write { drive: plan.drive().clone(), image, cancel, cancelling: false })
+        Job::new(Write { drive: plan.drive().clone(), image, cancel: dir.cancel(), cancelling: false })
     }
 
     /// Takes in what the worker sent.
@@ -557,7 +618,7 @@ mod tests {
     use crate::choice::{DriveList, DriveListing, ImageId};
     use std::time::Duration;
 
-    fn job(cancel: PathBuf) -> Job {
+    fn job(dir: &JobDir) -> Job {
         let stick = Drive {
             name: "sdb".into(),
             bytes: 32_000_000_000,
@@ -572,7 +633,7 @@ mod tests {
         let image = ImageId { path: "/images/sekka.iso".into(), sha256: "0".repeat(64) };
         let (review, _) = list.open_review(None, image.clone()).unwrap();
         let plan = Plan::new(list.confirm(review, None, Some(image)).unwrap());
-        Job::start(&plan, cancel)
+        Job::start(&plan, dir)
     }
 
     fn report(progress: Progress) -> Event {
@@ -584,7 +645,8 @@ mod tests {
     }
 
     fn run(events: Vec<Event>) -> Job {
-        let mut job = job("/nonexistent/progress.cancel".into());
+        let dir = JobDir::new().unwrap();
+        let mut job = job(&dir);
         for event in events {
             job.handle(event, Instant::now());
         }
@@ -602,7 +664,8 @@ mod tests {
 
     #[test]
     fn the_write_is_the_plans() {
-        let job = job("/nonexistent/progress.cancel".into());
+        let dir = JobDir::new().unwrap();
+        let job = job(&dir);
         assert_eq!(job.ctx().drive().serial, "4C53");
         assert_eq!(job.ctx().image(), "sekka.iso");
         assert!(matches!(job.stored(), JobState::Preparing(())));
@@ -624,10 +687,10 @@ mod tests {
 
     #[test]
     fn the_exit_brings_the_lines_not_read_yet() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("progress");
-        let mut reports = ProgressFile::new(path.clone());
-        let mut job = job(dir.path().join("progress.cancel"));
+        let dir = JobDir::new().unwrap();
+        let path = dir.progress();
+        let mut reports = ProgressFile::new(&dir);
+        let mut job = job(&dir);
         job.handle(Event::Authorizing, Instant::now());
         assert!(reports.read().is_empty());
         // The helper reports and is killed between two polls.
@@ -697,9 +760,9 @@ mod tests {
 
     #[test]
     fn stop_creates_the_marker_except_while_authorizing_or_done() {
-        let dir = tempfile::tempdir().unwrap();
-        let cancel = dir.path().join("progress.cancel");
-        let mut j = job(cancel.clone());
+        let dir = JobDir::new().unwrap();
+        let cancel = dir.cancel();
+        let mut j = job(&dir);
         j.handle(Event::Authorizing, Instant::now());
         assert!(!j.can_stop());
         j.stop();
@@ -714,9 +777,9 @@ mod tests {
 
     #[test]
     fn the_progress_file_is_read_in_whole_lines() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("progress");
-        let mut file = ProgressFile::new(path.clone());
+        let dir = JobDir::new().unwrap();
+        let path = dir.progress();
+        let mut file = ProgressFile::new(&dir);
         assert!(file.read().is_empty(), "no file yet");
         std::fs::write(&path, "{\"stage\":\"preparing\"}\n{\"stage\":\"wri").unwrap();
         let first: Vec<_> = file.read().into_iter().map(|r| r.0).collect();

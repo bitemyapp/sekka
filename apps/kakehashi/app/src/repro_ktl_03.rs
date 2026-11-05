@@ -70,16 +70,16 @@ fn repro_ktl_03_killed_mid_write_is_reported_as_partly_written() {
     let plan = Plan::new(k.drives.confirm(review, None, Some(image)).unwrap());
     // As start_write leaves it, and the lines the helper wrote before it
     // was killed, as the worker reads them.
-    let dir = tempfile::tempdir().unwrap();
-    let progress = dir.path().join("progress");
+    let dir = JobDir::new().unwrap();
+    let progress = dir.progress();
     fs::write(
         &progress,
         concat!(r#"{"stage":"preparing"}"#, "\n", r#"{"stage":"writing","done":1073741824,"total":4294967296}"#, "\n"),
     )
     .unwrap();
-    k.job = Some(Job::start(&plan, dir.path().join("progress.cancel")));
+    k.job = Some(Job::start(&plan, &dir));
     k.apply(Msg::Job(Event::Authorizing));
-    let mut reports = ProgressFile::new(progress);
+    let mut reports = ProgressFile::new(&dir);
     for report in reports.read() {
         k.apply(Msg::Job(Event::Report(report)));
     }
