@@ -154,6 +154,7 @@ pub enum Event {
 **Recommendations.**
 
 - Per role, rank the fitting models by measured score, then by trust (no destructive incidents) and speed. One basis for the whole list: Tasuke's own results when every evaluated model in it has one, the evaluation harnesses otherwise.
+- The fast role ranks by speed, but only among models that fixed at least two thirds of the faults, trusted ones first; the rest follow. A quick answer still has to be right and harmless.
 - Show maker and lineage. A user setting can hide model families by origin.
 - The curated default per tier is stated in the catalog, with the reason.
 

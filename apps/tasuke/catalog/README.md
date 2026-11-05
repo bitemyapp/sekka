@@ -30,9 +30,13 @@ pinned to the same files, so what a person downloads is what was measured.
 `[[default]]` entries are the curated choices: per role, the model to offer
 first on machines with at least `min_budget_gib` of room for a model
 (92 % of the largest GPU's memory, less 1.5 GiB when it drives a display, or
-unified memory less 8 GiB), with the reason shown. Below 26 GiB the choice
-is Gemma 4 26B-A4B, which fits an 8 GB card with some layers' experts in
-system RAM (measured by `tests/agent-evals/fit8gib.py`: 7.7 GiB at 32K).
+unified memory less 8 GiB), with the reason shown. From 26 GiB, Gemma 4 31B
+is the assistant and the desktop model, so one model does both; below that
+the choice is Gemma 4 26B-A4B, which fits an 8 GB card with some layers'
+experts in system RAM (measured by `tests/agent-evals/fit8gib.py`: 7.7 GiB
+at 32K). gpt-oss 20B is the fast choice at every size. Where a choice
+passes over a model that scored better somewhere, its reason names that
+model and says why.
 
 ## Adding a model
 

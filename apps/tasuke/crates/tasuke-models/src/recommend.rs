@@ -7,12 +7,15 @@
 //!   CPU, unified memory, experts offloaded to RAM) a model must be estimated
 //!   at [`MIN_USEFUL_DECODE`] or more, the curated default included.
 //! - Evaluated entries are ranked by their measured score for the role:
-//!   diagnostics for `assistant`, desktop tasks for `desktop`, and the
-//!   estimated decode speed for `fast`. Scores come from one [`Basis`] for
-//!   all of them: Tasuke's own results when every evaluated entry ranked has
-//!   one, the evaluation harnesses (bare loop and oh-my-pi pooled, desktop
-//!   tasks from screenshots) otherwise, since a model measured inside Tasuke
-//!   would otherwise outrank one measured only in a stricter harness.
+//!   diagnostics for `assistant` and desktop tasks for `desktop`. For
+//!   `fast` they are ranked by estimated decode speed, but those that fixed
+//!   at least [`FAST_FLOOR`] of the faults come first, trusted ones first
+//!   among them: a quick answer still has to be right and harmless. Scores
+//!   come from one [`Basis`] for all of them: Tasuke's own results when
+//!   every evaluated entry ranked has one, the evaluation harnesses (bare
+//!   loop and oh-my-pi pooled, desktop tasks from screenshots) otherwise,
+//!   since a model measured inside Tasuke would otherwise outrank one
+//!   measured only in a stricter harness.
 //! - Scores within [`CLOSE`] of each other are a tie, since one or two
 //!   scenarios is within run-to-run variation: ties are broken by trust (no
 //!   destructive incidents), then by the better placement, then by score and
@@ -32,6 +35,8 @@ use crate::units::{Bytes, ModelId, TokensPerSecond};
 pub const CLOSE: f64 = 0.05;
 /// Slower than this, a model isn't worth recommending.
 pub const MIN_USEFUL_DECODE: TokensPerSecond = TokensPerSecond(10.0);
+/// The share of faults a model must fix to lead the `fast` list.
+pub const FAST_FLOOR: f64 = 2.0 / 3.0;
 
 /// The user's preferences (`[recommend]` in config.toml).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -181,7 +186,10 @@ fn rank(recs: &mut Vec<Recommendation>, role: Role) {
     let (mut evaluated, mut unevaluated): (Vec<_>, Vec<_>) = recs.drain(..).partition(|r| r.evaluated);
     unevaluated.sort_by(|a, b| a.fit.rank().cmp(&b.fit.rank()).then(speed(b).total_cmp(&speed(a))));
     if role == Role::Fast {
-        evaluated.sort_by(|a, b| speed(b).total_cmp(&speed(a)));
+        let capable = |r: &Recommendation| share(r) >= FAST_FLOOR;
+        evaluated.sort_by(|a, b| {
+            capable(b).cmp(&capable(a)).then(b.trusted.cmp(&a.trusted)).then(speed(b).total_cmp(&speed(a)))
+        });
         recs.extend(evaluated);
         recs.extend(unevaluated);
         return;
@@ -281,8 +289,10 @@ mod tests {
     fn one_basis_for_every_model_ranked() {
         let hw = machine("AMD Radeon 8050S/8060S", Some(256.0), 128);
         let mut catalog = Catalog::load_default();
-        // Five models were measured inside Tasuke, the others only in the
-        // harnesses: every one is ranked by the harnesses.
+        // With one model measured only in the harnesses, every one is
+        // ranked by the harnesses.
+        let oss = catalog.models.iter_mut().find(|e| e.id.as_str() == "gpt-oss-20b").unwrap();
+        oss.scores.as_mut().unwrap().tasuke = None;
         let recs = recommend(&hw, &catalog, Role::Assistant, &Preferences::default());
         assert!(recs.iter().all(|r| r.basis == Basis::Harnesses), "{recs:?}");
         let gemma = recs.iter().find(|r| r.id.as_str() == "gemma-4-31b").unwrap();
@@ -296,6 +306,20 @@ mod tests {
         let gemma = recs.iter().find(|r| r.id.as_str() == "gemma-4-31b").unwrap();
         assert_eq!(gemma.score, Some(Tally { passed: 28, total: 32 }));
         assert!(gemma.why.contains("inside Tasuke"), "{}", gemma.why);
+    }
+
+    #[test]
+    fn fast_answers_still_have_to_be_right_and_harmless() {
+        let hw = machine("AMD Radeon 8050S/8060S", Some(256.0), 128);
+        let catalog = Catalog::load_default();
+        let recs = recommend(&hw, &catalog, Role::Fast, &Preferences::default());
+        let ranked: Vec<_> = recs.iter().filter(|r| r.evaluated && !r.curated_default).collect();
+        let key = |r: &Recommendation| (r.score.is_some_and(|t| t.share() >= FAST_FLOOR), r.trusted);
+        assert!(ranked.windows(2).all(|w| key(w[0]) >= key(w[1])), "{ranked:?}");
+        // LFM2.5 decodes faster than Ornith here, but fixed too few faults
+        // to lead.
+        let at = |id: &str| ranked.iter().position(|r| r.id.as_str() == id).unwrap();
+        assert!(at("ornith-1.5-35b-a3b") < at("lfm2.5-24b-a2b"), "{ranked:?}");
     }
 
     #[test]
