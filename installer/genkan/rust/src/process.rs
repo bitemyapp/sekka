@@ -120,6 +120,16 @@ pub fn command(program: Program) -> Command {
     command
 }
 
+/// The installation helper, started from the window through Polkit's pkexec:
+/// the only other program the installer starts, and no disk tool.
+// The window's one start of a program (clippy.toml).
+#[allow(clippy::disallowed_methods)]
+pub(crate) fn pkexec(helper: &std::path::Path) -> Command {
+    let mut command = Command::new(option_env!("CALAMARES_PKEXEC").unwrap_or("pkexec"));
+    command.arg(helper);
+    command
+}
+
 pub fn output(program: Program, args: &[&str], seconds: u64) -> Result<String> {
     run(
         command(program),
@@ -139,18 +149,9 @@ pub(crate) fn output_secret(
     secret: &[u8],
     seconds: u64,
 ) -> Result<String> {
-    use std::{
-        fs::File,
-        io::{Seek, Write},
-        os::fd::FromRawFd,
-    };
-    let fd = unsafe { libc::memfd_create(c"genkan-secret".as_ptr(), libc::MFD_CLOEXEC) };
-    ensure!(
-        fd >= 0,
-        "Could not allocate secret input: {}",
-        std::io::Error::last_os_error()
-    );
-    let mut input = unsafe { File::from_raw_fd(fd) };
+    use std::io::{Seek, Write};
+    let mut input = crate::sys::memory_file(c"genkan-secret")
+        .map_err(|error| anyhow::anyhow!("Could not allocate secret input: {error}"))?;
     input.write_all(secret)?;
     input.rewind()?;
     let mut cmd = command(program);
@@ -276,9 +277,7 @@ fn run(
             // A group created for this child only; do not leave partitioning or
             // installation descendants running after reporting a timeout. The
             // pipe drains finish once the group is gone.
-            unsafe {
-                libc::kill(-(child.id() as i32), libc::SIGKILL);
-            }
+            crate::sys::kill_group(child.id());
             let _ = child.wait();
             break Err(stop);
         };

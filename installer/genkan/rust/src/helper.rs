@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+// No unsafe code, and no program started but through the library.
+#![forbid(unsafe_code)]
+#![forbid(clippy::disallowed_methods)]
 use anyhow::{Result, ensure};
 use calamares_nixos::{
     RawRequest, Settings, disk,

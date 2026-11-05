@@ -14,7 +14,7 @@ use std::{
     collections::BTreeSet,
     fs,
     io::Read,
-    os::{fd::AsRawFd, unix::fs::MetadataExt},
+    os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     sync::{
         Mutex,
@@ -46,9 +46,7 @@ const SQUASHFS: &str = "/iso/nix-store.squashfs";
 fn drop_cached(file: Option<&fs::File>) {
     // Only clean, unmapped pages are released; a failure only loses memory.
     if let Some(file) = file {
-        unsafe {
-            libc::posix_fadvise(file.as_raw_fd(), 0, 0, libc::POSIX_FADV_DONTNEED);
-        }
+        crate::sys::advise(file, crate::sys::Advice::DontNeed);
     }
 }
 
@@ -129,9 +127,7 @@ fn collect(root: &Path, files: &mut Vec<File>, cancel: &AtomicBool) {
 fn read_file(path: &Path, buffer: &mut [u8], read: &AtomicU64) -> std::io::Result<()> {
     let mut file = fs::File::open(path)?;
     // Hint large sequential readahead; a failure only loses the hint.
-    unsafe {
-        libc::posix_fadvise(file.as_raw_fd(), 0, 0, libc::POSIX_FADV_SEQUENTIAL);
-    }
+    crate::sys::advise(&file, crate::sys::Advice::Sequential);
     loop {
         let n = file.read(buffer)?;
         if n == 0 {
