@@ -315,8 +315,8 @@ fn conflict(job: u64, c: &Conflict, all: bool, name: &str, doing: &str, now: i64
     }
     // Its press is the person's agreement to replace what's there, and with
     // "Apply to all" as shown, what the job finds later: nothing else replaces.
-    let replacing = Replacing { target: c.target.clone(), all };
-    buttons.push(button("Replace").on_agree(replacing, move |p| Msg::Replace(job, p)).into());
+    let replacing = Replacing { job, target: c.target.clone(), all };
+    buttons.push(button("Replace").destructive().on_agree(replacing, move |p| Msg::Replace(job, p)).into());
     column![
         row![
             icon(Icon::Copy).size(32.0).role(Role::Accent),
