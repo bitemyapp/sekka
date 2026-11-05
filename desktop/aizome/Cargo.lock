@@ -66,11 +66,13 @@ name = "aizome-chanoma"
 version = "0.1.0"
 dependencies = [
  "aizome-config",
+ "aizome-gamepad",
  "aizome-index",
  "aizome-ipc",
  "aizome-kit",
  "aizome-media",
  "aizome-mpris",
+ "aizome-sofa",
  "aizome-sys",
  "aizome-theme",
  "crc32fast",
@@ -184,6 +186,15 @@ dependencies = [
  "ropey",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "aizome-gamepad"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "log",
+ "serde",
 ]
 
 [[package]]
@@ -521,6 +532,15 @@ dependencies = [
  "log",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "aizome-sofa"
+version = "0.1.0"
+dependencies = [
+ "aizome-gamepad",
+ "aizome-kit",
+ "aizome-theme",
 ]
 
 [[package]]

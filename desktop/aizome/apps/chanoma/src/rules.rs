@@ -191,17 +191,8 @@ pub enum NewGames {
     Allow,
 }
 
-/// Which button says yes in Chanoma's menus.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Confirm {
-    /// The controller's own habit: the right-hand button on Nintendo's,
-    /// the bottom one on others.
-    #[default]
-    Auto,
-    Bottom,
-    Right,
-}
+/// Which button says yes in Chanoma's menus (and the login screen's).
+pub use crate::pad::Confirm;
 
 /// A site a grown-up added.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -23,7 +23,7 @@ use aizome_chanoma::retro::ffi::*;
 use aizome_chanoma::rules::{PinHash, Settings};
 use aizome_chanoma::store::Dirs;
 use aizome_chanoma::ui::keyboard::{Key, Shift};
-use aizome_chanoma::ui::pinpad::BUTTONS;
+use aizome_chanoma::ui::pinpad::button_of;
 use aizome_chanoma::{Chanoma, Config, Msg};
 use aizome_kit::layout::Point;
 use aizome_kit::sidestep_ui::{Modifiers, NamedKey};
@@ -291,6 +291,7 @@ fn harness(config: Config) -> Harness<Chanoma> {
         battery: Some((80, false)),
         source: aizome_chanoma::pad::mapping::Source::Database,
         rumble: true,
+        buttons: aizome_chanoma::pad::Button::all_bits(),
     };
     h.send(Msg::Pad(PadEvent::Connected(pad)));
     until(&mut h, |a| a.scanned);
@@ -327,7 +328,7 @@ fn press_on(h: &mut Harness<Chanoma>, id: u32, b: Button) {
 /// that place (1 is Up).
 fn type_pin(h: &mut Harness<Chanoma>, pin: &str) {
     for d in pin.bytes() {
-        press(h, BUTTONS[usize::from(d - b'1')]);
+        press(h, button_of(d - b'0').expect("a digit"));
     }
 }
 
@@ -390,13 +391,15 @@ fn the_first_setup_chooses_a_pin_then_hands_over_to_the_kids() {
     press(&mut h, Button::East);
     assert_eq!(typed(&h), 4);
     shot(&mut h, "02-choose-pin");
-    // The stick, a trigger and Start aren't a PIN's: nothing's typed.
+    // The stick, Start and Select aren't a PIN's: nothing's typed.
     h.send(Msg::Pad(PadEvent::Nav { id: 1, slot: 0, dir: Dir::Left, repeat: false }));
-    for b in [Button::L2, Button::Start, Button::Select] {
+    for b in [Button::Start, Button::Select] {
         press(&mut h, b);
     }
     assert_eq!(typed(&h), 4);
-    type_pin(&mut h, "2");
+    // The right trigger is 0.
+    press(&mut h, Button::R2);
+    assert_eq!(typed(&h), 5);
     press(&mut h, Button::South);
     // Again on the keyboard (the arrows, Page Up and Down, Tab, Space),
     // but another PIN: they don't match.
@@ -406,9 +409,9 @@ fn the_first_setup_chooses_a_pin_then_hands_over_to_the_kids() {
     input(&mut h, Input::Ok);
     let Some(Modal::Pin { pin, .. }) = &h.program().modal else { panic!("the pad went") };
     assert_eq!(pin.error.as_deref(), Some("They didn't match. Try again"));
-    type_pin(&mut h, "13572");
+    type_pin(&mut h, "13570");
     press(&mut h, Button::South);
-    type_pin(&mut h, "13572");
+    type_pin(&mut h, "13570");
     press(&mut h, Button::South);
     until(&mut h, |a| a.screen == Screen::GrownUps);
     assert!(h.program().is_grownup());
@@ -426,7 +429,7 @@ fn the_first_setup_chooses_a_pin_then_hands_over_to_the_kids() {
     assert_eq!(h.program().screen, Screen::Home);
     assert!(!h.program().is_grownup());
     let saved: Settings = aizome_chanoma::store::read(&dirs.settings());
-    assert!(saved.setup_done && saved.pin.as_ref().is_some_and(|p| p.verify("13572")));
+    assert!(saved.setup_done && saved.pin.as_ref().is_some_and(|p| p.verify("13570")));
 }
 
 #[test]
@@ -448,10 +451,13 @@ fn home_shows_what_kids_may_have_and_grown_ups_see_the_rest() {
     input(&mut h, Input::Ok);
     assert!(matches!(h.program().modal, Some(Modal::Pin { .. })));
     shot(&mut h, "05-pin-keyboard");
-    // Typed on the keyboard by the legend's numbers; 9 and 0 are none of
-    // its buttons.
+    // Typed on the keyboard by the legend's numbers, 9 and 0 among them,
+    // and Backspace takes them back.
     input(&mut h, Input::Digit(9));
     input(&mut h, Input::Digit(0));
+    assert_eq!(typed(&h), 2);
+    input(&mut h, Input::Erase);
+    input(&mut h, Input::Erase);
     assert_eq!(typed(&h), 0);
     for d in PIN.bytes() {
         input(&mut h, Input::Digit(d - b'0'));
@@ -481,6 +487,7 @@ fn a_pin_is_the_same_presses_on_any_controller() {
         battery: None,
         source: aizome_chanoma::pad::mapping::Source::Database,
         rumble: false,
+        buttons: aizome_chanoma::pad::Button::all_bits(),
     };
     h.send(Msg::Pad(PadEvent::Connected(switch)));
     input(&mut h, Input::Dir(Dir::Down));
@@ -501,6 +508,69 @@ fn a_pin_is_the_same_presses_on_any_controller() {
     press_on(&mut h, 1, Button::West);
     until(&mut h, |a| a.is_grownup());
     assert!(h.program().modal.is_none());
+}
+
+#[test]
+fn a_pad_without_triggers_presses_nine_and_zero_as_chords() {
+    // Shaped as Nintendo's Super pad: no triggers, so 9 is Select with
+    // the left shoulder and 0 Select with the right, and the legend says
+    // so; its other buttons press as any controller's do.
+    let (dirs, cores) = household("pin-snes", |s| {
+        s.pin = Some(PinHash::new("9015", 10));
+        s.pin_length = Some(4);
+    });
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+    let snes = [
+        Button::Up,
+        Button::Down,
+        Button::Left,
+        Button::Right,
+        Button::South,
+        Button::East,
+        Button::West,
+        Button::North,
+        Button::L1,
+        Button::R1,
+        Button::Select,
+        Button::Start,
+    ];
+    let pad = PadInfo {
+        id: 3,
+        slot: 2,
+        name: "8BitDo SN30 Modkit".into(),
+        family: Family::Nintendo,
+        bluetooth: true,
+        guid: String::new(),
+        battery: None,
+        source: aizome_chanoma::pad::mapping::Source::Database,
+        rumble: false,
+        buttons: snes.iter().fold(0, |b, x| b | x.bit()),
+    };
+    h.send(Msg::Pad(PadEvent::Connected(pad)));
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    let held = |h: &mut Harness<Chanoma>, b: Button, pressed: bool| {
+        h.send(Msg::Pad(PadEvent::Button { id: 3, slot: 2, button: b, pressed }));
+    };
+    // The legend's 9 and 0 are chords for this one.
+    press_on(&mut h, 3, Button::Up);
+    let Some(aizome_chanoma::ui::Overlay::Pin(p)) = h.program().overlay() else { panic!("no pad") };
+    use aizome_chanoma::ui::pinpad::{Press, presses};
+    assert_eq!(presses(p.have)[8], Some(Press::Chord(Button::Select, Button::L1)));
+    press_on(&mut h, 3, Button::South);
+    assert_eq!(typed(&h), 0, "B on a Nintendo pad takes the press back");
+    held(&mut h, Button::Select, true);
+    press_on(&mut h, 3, Button::L1);
+    press_on(&mut h, 3, Button::R1);
+    held(&mut h, Button::Select, false);
+    assert_eq!(typed(&h), 2);
+    shot(&mut h, "05-pin-chords");
+    // Let go of Select, the shoulder is itself again: 1, then 5.
+    press_on(&mut h, 3, Button::Up);
+    press_on(&mut h, 3, Button::L1);
+    until(&mut h, |a| a.is_grownup());
 }
 
 #[test]
@@ -1199,6 +1269,7 @@ fn games_say_what_the_databases_know_and_two_controllers_bring_their_games() {
         battery: Some((60, false)),
         source: aizome_chanoma::pad::mapping::Source::Database,
         rumble: true,
+        buttons: aizome_chanoma::pad::Button::all_bits(),
     };
     h.send(Msg::Pad(PadEvent::Connected(second)));
     assert_eq!(on(&h), "Games", "{:?}", titles(&h));

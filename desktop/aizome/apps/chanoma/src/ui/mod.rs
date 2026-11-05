@@ -15,14 +15,14 @@
 //! menu or a minute turning over the clock draws it all.
 
 pub mod home;
-pub mod keyboard;
-pub mod look;
 pub mod menu;
 pub mod picker;
-pub mod pinpad;
 pub mod screens;
 pub mod settings;
 pub mod signin;
+
+// The keyboard, the PIN pad and the look are the login screen's too.
+pub use aizome_sofa::{Fit, H, W, keyboard, look, pinpad};
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -38,9 +38,6 @@ use aizome_media::{Cue, CueBody};
 use crate::pad::{Button, Family};
 use look::*;
 
-/// The design's size, in its own points.
-pub const W: f64 = 1920.0;
-pub const H: f64 = 1080.0;
 /// Where screens start under the header.
 pub const TOP: f64 = 176.0;
 /// The side margin.
@@ -48,49 +45,6 @@ pub const MARGIN: f64 = 96.0;
 /// The header's middle, and the foot's.
 pub const HEAD_Y: f64 = 76.0;
 pub const FOOT_Y: f64 = H - 64.0;
-
-/// How the design sits in a window.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Fit {
-    pub scale: f64,
-    pub origin: Point,
-}
-
-impl Fit {
-    pub fn new(b: Rect) -> Fit {
-        let scale = (b.width() / W).min(b.height() / H).max(0.01);
-        Fit { scale, origin: Point::new(b.x0 + (b.width() - W * scale) / 2.0, b.y0 + (b.height() - H * scale) / 2.0) }
-    }
-
-    pub fn of_size(size: Size) -> Fit {
-        Fit::new(Rect::from_origin_size(Point::ZERO, size))
-    }
-
-    pub fn apply(&self, c: &mut Canvas) {
-        c.translate(self.origin.to_vec2());
-        c.scale_by(self.scale, self.scale);
-    }
-
-    pub fn to_design(&self, p: Point) -> Point {
-        Point::new((p.x - self.origin.x) / self.scale, (p.y - self.origin.y) / self.scale)
-    }
-
-    pub fn to_window(&self, r: Rect) -> Rect {
-        Rect::new(
-            self.origin.x + r.x0 * self.scale,
-            self.origin.y + r.y0 * self.scale,
-            self.origin.x + r.x1 * self.scale,
-            self.origin.y + r.y1 * self.scale,
-        )
-    }
-
-    /// The window's rectangle `b` in the design's points.
-    pub fn visible(&self, b: Rect) -> Rect {
-        let a = self.to_design(Point::new(b.x0, b.y0));
-        let z = self.to_design(Point::new(b.x1, b.y1));
-        Rect::new(a.x, a.y, z.x, z.y)
-    }
-}
 
 /// A controller in the header.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
