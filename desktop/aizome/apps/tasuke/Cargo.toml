@@ -1,0 +1,35 @@
+[package]
+name = "aizome-tasuke"
+description = "Tasuke 助 (Assistant): Sekka's private assistant, running on this computer, in Aizome's look"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "tasuke_window"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aizome-tasuke"
+path = "src/main.rs"
+
+[features]
+default = ["live"]
+# The window on the real libraries: Tasuke's agent and model management
+# (apps/tasuke). Without it, only the fixtures run.
+live = ["dep:tasuke-models", "dep:tasuke-agent"]
+
+[dependencies]
+aizome-kit.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+log.workspace = true
+env_logger.workspace = true
+libc = "0.2"
+pulldown-cmark = { version = "0.13.4", default-features = false }
+# The UI-independent libraries the window shares with the `tasuke` CLI.
+tasuke-models = { path = "../../../../apps/tasuke/crates/tasuke-models", optional = true }
+tasuke-agent = { path = "../../../../apps/tasuke/crates/tasuke-agent", optional = true }
