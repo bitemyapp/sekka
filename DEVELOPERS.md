@@ -347,6 +347,15 @@ runtime-launcher and frontend-only changes do not invalidate compiler actions.
 Release-LTO follows Cargo's per-unit LTO decisions, including mixed non-LTO
 compositor/dynamic-library roots, proc macros and build scripts.
 
+Compiler actions use rustc's dep-info to distinguish a target's actual source
+and included resources from other files in its narrowly assembled source tree.
+An unused source edit can reuse the native depfile cache; edits to a reachable
+module or sibling `include_str!` resource still rebuild. Resolved dependency
+outputs and build-script inputs remain unconditional. This is selective action
+caching, not Cargo's mutable incremental-codegen cache. Dependency paths that
+cross a directory symlink with `..` are rejected when lexical normalization
+would name a different file, rather than silently caching the wrong inputs.
+
 Portable Buck tests deliberately use private home, runtime and D-Bus paths.
 They do not certify integration with the host's user manager, even when
 explicit environment arguments name its bus. The real `through_systemd`

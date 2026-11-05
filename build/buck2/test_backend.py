@@ -10,7 +10,7 @@ import tempfile
 import unittest
 
 from generate import outside_data, package_records, units_from_graph
-from action import OUTPUT_TOKEN, ROOT_TOKEN, relocate
+from action import OUTPUT_TOKEN, ROOT_TOKEN, relocate, write_dependencies
 
 
 class CompilerContract(unittest.TestCase):
@@ -72,6 +72,26 @@ class CompilerContract(unittest.TestCase):
             self.assertEqual(decoded["paths"], ":".join(str(case[2]) for case in cases))
             self.assertEqual(decoded["stdout"], "cargo:root=" + str(materialized / "generated.h") + "\ncargo:assets=" + str(consumer / "assets") + "\n")
 
+    def test_real_rustc_dependency_filenames(self):
+        tools = json.loads(Path(os.environ["SEKKA_BUCK2_ENV"]).read_text())
+        with tempfile.TemporaryDirectory(prefix="sekka-buck-dep-info-") as temporary:
+            root = Path(temporary)
+            module = "odd name's #$\\file.rs"
+            resource = "resource with trailing space "
+            (root / module).write_text('pub fn value() -> u32 { 42 }\n')
+            (root / resource).write_text("resource")
+            (root / "main.rs").write_text(
+                "#[path=" + json.dumps(module) + "] mod part;\n"
+                'fn main() { println!("{} {}", part::value(), include_str!('
+                + json.dumps(resource) + ")); }\n"
+            )
+            raw = root / "rustc.d"
+            self.checked([tools["rustc"], str(root / "main.rs"), "--emit=dep-info=" + str(raw)],
+                         cwd=root, env=os.environ)
+            dependencies = root / "dependencies"
+            write_dependencies(raw, dependencies, root)
+            self.assertEqual(set(dependencies.read_text().splitlines()), {"main.rs", module, resource})
+
     def test_sibling_resources_are_action_inputs(self):
         environment = Path(os.environ["SEKKA_BUCK2_ENV"]).resolve()
         tools = json.loads(environment.read_text())
@@ -93,8 +113,11 @@ class CompilerContract(unittest.TestCase):
                 "library/src/main.rs": '''macro_rules! icon {
     ($name:literal) => { include_str!(concat!("../../icons/", $name, ".svg")) };
 }
-fn main() { print!("{}", icon!("sample")); }
+#[path = "part with spaces.rs"] mod part;
+fn main() { print!("{}{}", part::prefix(), icon!("sample")); }
 ''',
+                "library/src/part with spaces.rs": 'pub fn prefix() -> &\'static str { "" }\n',
+                "library/src/unused.rs": "// Not reachable from this Cargo target.\n",
                 "icons/sample.svg": initial,
                 "unrelated/secret.txt": "not an input\n",
                 ".buckconfig": '''[cells]
@@ -148,7 +171,9 @@ export_file(name = "run.py", visibility = ["PUBLIC"])
                 for relative, contents, expected, executions in [
                     (None, None, initial, 1),
                     ("icons/sample.svg", changed, changed, 1),
+                    ("library/src/unused.rs", "// An unrelated target changed.\n", changed, 0),
                     ("unrelated/secret.txt", "still not an input\n", changed, 0),
+                    ("library/src/part with spaces.rs", 'pub fn prefix() -> &\'static str { "module changed: " }\n', "module changed: " + changed, 1),
                 ]:
                     if relative is not None:
                         (root / relative).write_text(contents)
@@ -165,6 +190,7 @@ export_file(name = "run.py", visibility = ["PUBLIC"])
                     trace_id = trace_file.read_text().strip()
                     commands = self.checked([engine, "log", "what-ran", "--trace-id", trace_id, "--format", "json"], cwd=root, env=env)
                     commands = [json.loads(line) for line in commands.splitlines()]
+                    commands = [command for command in commands if command["reproducer"]["executor"] != "LocalDepFileCache"]
                     self.assertEqual(len(commands), executions, (relative, trace_id, commands))
                     for command in commands:
                         self.assertEqual(command["reproducer"]["executor"], "Local")

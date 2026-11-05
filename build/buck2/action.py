@@ -206,13 +206,54 @@ def run_script(payload, output, env, tools, root):
     (output / "build-script.json").write_text(json.dumps(relocate(result, root, output, encode=True), sort_keys=True))
 
 
-def compile_unit(payload, output, env, tools, root):
+def write_dependencies(raw, destination, root):
+    # Rustc repeats its source list for each output, then emits empty source
+    # rules and env-dep comments. Only the first rule contains the input list.
+    rule = raw.read_text().split("\n\n", 1)[0].replace("\\\n", "")
+    _, separator, dependencies = rule.partition(": ")
+    if not separator:
+        raise RuntimeError("rustc produced an invalid dependency rule")
+    paths = set()
+    # Rustc escapes spaces only: quotes, '#', '$', and backslashes before
+    # ordinary characters are literal filename characters, not shell syntax.
+    for dependency in re.split(r"(?<!\\) ", dependencies.rstrip("\r\n")):
+        if not dependency:
+            continue
+        dependency = dependency.replace("\\ ", " ")
+        if dependency.startswith("/proc/self/cwd/"):
+            dependency = str(root / dependency.removeprefix("/proc/self/cwd/"))
+        path = Path(dependency)
+        if path.is_absolute():
+            try:
+                path = path.relative_to(root)
+            except ValueError:
+                # Immutable Nix inputs are represented by their store paths,
+                # not by project artifacts eligible for depfile filtering.
+                if path.is_relative_to("/nix/store"):
+                    continue
+                raise RuntimeError("rustc dependency lies outside the execution root: " + str(path))
+        if "\n" in str(path) or "\r" in str(path):
+            raise RuntimeError("rustc dependency contains an unsupported newline")
+        normalized = Path(os.path.normpath(path))
+        if normalized.parts and normalized.parts[0] == "..":
+            raise RuntimeError("rustc dependency lies outside the execution root: " + str(path))
+        if not (root / path).is_file():
+            raise RuntimeError("rustc dependency is not an existing file: " + str(path))
+        if ".." in path.parts and (root / normalized).resolve() != (root / path).resolve():
+            raise RuntimeError("rustc dependency traverses a directory symlink with '..': " + str(path))
+        paths.add(normalized.as_posix())
+    Path(destination).write_text("".join(path + "\n" for path in sorted(paths)))
+
+
+def compile_unit(payload, output, env, tools, root, dep_file):
     unit = payload["unit"]
     target = unit["target"]
     manifest = Path(payload["source"]).absolute()
     env.update(package_environment(unit, manifest))
     flags = profile_flags(unit)
-    args = [tools["rustc"], str(manifest / target["src_path"]), "--crate-name", target["name"].replace("-", "_"), "--edition=" + target["edition"], "--emit=link", "-C", "metadata=" + unit["key"], "-C", "extra-filename=-" + unit["key"], "--out-dir", str(output), "--remap-path-prefix", str(root) + "=.", "-C", "linker=" + tools["cc"], *flags]
+    raw_dep_file = output / "rustc.d"
+    emit = "link,dep-info=" + str(raw_dep_file) if dep_file is not None else "link"
+    args = [tools["rustc"], str(manifest / target["src_path"]), "--crate-name", target["name"].replace("-", "_"), "--edition=" + target["edition"], "--emit=" + emit, "-C", "metadata=" + unit["key"], "-C", "extra-filename=-" + unit["key"], "--out-dir", str(output), "--remap-path-prefix", str(root) + "=.", "-C", "linker=" + tools["cc"], *flags]
     args += ["--remap-path-prefix", "/proc/self/cwd=."]
     if unit["mode"] == "test":
         args.append("--test")
@@ -277,6 +318,9 @@ def compile_unit(payload, output, env, tools, root):
     # Unlike the checkout's absolute path, it is identical on every executor.
     env = {key: value.replace(str(root), "/proc/self/cwd") for key, value in env.items()}
     subprocess.run(args, env=env, check=True)
+    if dep_file is not None:
+        write_dependencies(raw_dep_file, dep_file, root)
+        raw_dep_file.unlink()
     if not (output / unit["filename"]).exists():
         raise RuntimeError("rustc did not produce expected output " + unit["filename"])
 
@@ -286,6 +330,7 @@ def main():
     parser.add_argument("--environment", required=True)
     parser.add_argument("--spec", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--dep-file")
     args = parser.parse_args()
     tools = load(args.environment)
     root = Path.cwd()
@@ -308,7 +353,7 @@ def main():
     if payload["unit"]["mode"] == "run-custom-build":
         run_script(payload, output, env, tools, root)
     else:
-        compile_unit(payload, output, env, tools, root)
+        compile_unit(payload, output, env, tools, root, args.dep_file)
     info = {"filename": payload["unit"]["filename"], "library_paths": library_paths}
     temporary = test_tmp_path(payload["unit"])
     if temporary is not None:
