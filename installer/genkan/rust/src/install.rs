@@ -331,15 +331,21 @@ fn installer_lock() -> Result<fs::File> {
             Instant::now() < deadline,
             "Another installation is already running"
         );
-        ensure!(!process::cancelled(), "Preparation was cancelled");
+        if process::cancelled() {
+            return Err(process::Cancelled.into());
+        }
         thread::sleep(Duration::from_millis(200));
     }
     Ok(lock)
 }
 
 /// Replace a raw `--log-format internal-json` failure with Nix's own error
-/// messages and the last build output, when Nix reported them.
+/// messages and the last build output, when Nix reported them. A
+/// cancellation stays one.
 fn nix_failure(error: anyhow::Error, tracker: &Mutex<nixlog::Tracker>) -> anyhow::Error {
+    if process::is_cancellation(&error) {
+        return error;
+    }
     match tracker.lock().unwrap().failure_report() {
         Some(report) => anyhow::anyhow!("{report}"),
         None => error,
@@ -608,10 +614,12 @@ impl InMemory<'_> {
                 .lines()
                 .filter_map(precache::store_path)
                 .collect();
-        let outcome = precache::warm(&closure, &process::CANCEL, |read, total| {
+        let outcome = precache::warm(&closure, process::LATCH.flag(), |read, total| {
             event(Event::Caching { read, total })
         })?;
-        ensure!(!process::cancelled(), "Preparation was cancelled");
+        if process::cancelled() {
+            return Err(process::Cancelled.into());
+        }
         stage.done();
         let summary = Summary {
             closure_bytes,
@@ -950,6 +958,9 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
         config::configuration(&request, &prepared.ids)? == prepared.configuration,
         "The confirmed plan differs from the prepared system"
     );
+    // Nothing cancels the installation from here on: a withdrawal that came
+    // first stops it here, before any write, and a later one is refused.
+    process::LATCH.commit()?;
     let params = Sha512Params::new(100_000)
         .map_err(|e| anyhow::anyhow!("Password hashing parameters: {e:?}"))?;
     let password = request.take_password();
@@ -1115,10 +1126,11 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     Ok(())
 }
 
-/// One-shot preflight or installation of an already-confirmed request.
+/// One-shot preflight or installation of an already-confirmed request: the
+/// same preparation and execution as a session's, with the confirmation the
+/// request carried.
 pub fn install(confirmed: ConfirmedInstall, mode: InstallMode) -> Result<()> {
-    let plan = confirmed.into_plan();
-    let prepared = prepare(&plan)?;
+    let prepared = prepare(confirmed.plan())?;
     event(Event::Prepared {
         summary: prepared.summary.clone(),
     });
@@ -1126,8 +1138,7 @@ pub fn install(confirmed: ConfirmedInstall, mode: InstallMode) -> Result<()> {
         preparing("Preflight passed; no disk writes were made");
         return Ok(());
     }
-    let phrase = format!("ERASE {}", plan.disk().path);
-    execute(plan.confirm(&phrase)?, prepared)
+    execute(confirmed, prepared)
 }
 
 fn closure_size(value: &serde_json::Value) -> Result<u64> {
