@@ -1,6 +1,6 @@
 {
   "inputs": {
-    "MODULE.bazel": "4add6eec61d22546ca6596b550fd594f1bf82fb66775fc71e2386b2b8bd3c684",
+    "MODULE.bazel": "a7b32a48a40ba3eb5a18354fc72396313004083640bbfc5bee591d96844d0ed4",
     "apps/hotaru/Cargo.toml": "7b931cbdee42d1a6350bd74f1c6fb2fde3d7ab83659e61785fd8201f93b95678",
     "apps/hotaru/crates/hotaru-core/Cargo.toml": "55934a7969c806175f4185a8ce1dededbfae75346af0482e9de899dacd1ce972",
     "apps/hotaru/crates/hotaru-io/Cargo.toml": "75bc5003466696323ae6250deed86573b470012722d8e1d3416834810ad1157f",

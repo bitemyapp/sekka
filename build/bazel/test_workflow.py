@@ -39,6 +39,15 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse((self.root / "files").exists())
         self.assertTrue(any(a.startswith("--output_base=" + str(self.root / "state/worktrees")) for a in argv))
 
+    def test_backend_profile_flag_is_passed_after_command(self):
+        argv = self.invoke("--profile", "release", "build", "--profile=/tmp/native.profile.gz")
+        self.assertIn("--config=release", argv)
+        self.assertIn("--profile=/tmp/native.profile.gz", argv)
+
+    def test_default_run_places_target_before_program_arguments(self):
+        argv = self.invoke("run", "--", "--backend", "headless")
+        self.assertEqual(argv[-4:], ["//desktop/aizome/crates/aizome-comp:aizome", "--", "--backend", "headless"])
+
     def test_default_build_is_workspace_not_tests(self):
         argv = self.invoke("build", "--jobs=16")
         self.assertIn("//desktop/aizome:workspace", argv)
