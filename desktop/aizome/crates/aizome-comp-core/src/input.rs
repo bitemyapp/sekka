@@ -290,6 +290,7 @@ impl State {
         let pos = self.clamp_to_outputs(pos);
         let old = self.az.pointer_pos;
         self.az.pointer_pos = pos;
+        self.az.pointer_resting = false;
         if crate::recovery::pointer_moved(self, old, pos, time) {
             return;
         }

@@ -45,6 +45,10 @@ pub struct Options {
     /// Headless and nested backends never own the login session;
     /// `AIZOME_NOTIFY` makes any compositor send notifications.
     pub no_session: bool,
+    /// One program and nothing else (the TV account's Chanoma): no shell
+    /// nor X11 bridge, no shortcuts of the desktop's, and the session ends
+    /// when the program does.
+    pub kiosk: bool,
     /// Settings file to read instead of ~/.config/aizome/settings.toml.
     pub config: Option<PathBuf>,
     /// Program to run once the compositor is up (with its environment).
@@ -74,6 +78,9 @@ usage: aizome [options] [-- command args...]
                                   environment export, session target and
                                   notifications) and service readiness (all
                                   backends); AIZOME_NOTIFY=1 still notifies
+  --kiosk                         run the command alone: no shell, no X11
+                                  bridge, none of the desktop's shortcuts,
+                                  and quit when the command ends
   --logic PATH                    the compositor logic library to load
                                   (default: $AIZOME_LOGIC, else the one
                                   installed beside the binary)
@@ -89,6 +96,7 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> 
         no_shell: false,
         no_xwayland: false,
         no_session: false,
+        kiosk: false,
         config: None,
         command: Vec::new(),
         logic: None,
@@ -113,6 +121,11 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Options, String> 
             "--no-shell" => o.no_shell = true,
             "--no-xwayland" => o.no_xwayland = true,
             "--no-session" => o.no_session = true,
+            "--kiosk" => {
+                o.kiosk = true;
+                o.no_shell = true;
+                o.no_xwayland = true;
+            }
             "-h" | "--help" => return Err(String::new()),
             "--" => {
                 o.command = args.by_ref().collect();
@@ -199,6 +212,10 @@ mod tests {
         assert_eq!(o.headless_outputs[1], HeadlessOutput { width: 2880, height: 1800, scale: 2.0, name: None });
         assert!(o.no_shell);
         assert_eq!(o.command, ["foot"]);
+        assert!(!o.kiosk);
+        let k = parse(["--kiosk", "--", "aizome-chanoma", "--tv"].iter().map(|s| s.to_string())).unwrap();
+        assert!(k.kiosk && k.no_shell && k.no_xwayland);
+        assert_eq!(k.command, ["aizome-chanoma", "--tv"]);
         assert!(parse_output("10x10").is_err());
         assert_eq!(
             parse_output("eDP-1=1280x800@1"),
