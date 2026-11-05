@@ -360,6 +360,24 @@ pub fn current(state: &DisksState, disk: &str) -> Option<Layout> {
     Some(layout)
 }
 
+/// What the selection names, so it survives the layout changing: a
+/// segment's target, or unallocated space by where it starts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Sel {
+    Target(Target),
+    Free { offset: u64, logical: bool },
+}
+
+impl Sel {
+    /// What selecting `seg` names.
+    pub fn of(seg: &Seg) -> Sel {
+        match &seg.target {
+            Some(t) => Sel::Target(t.clone()),
+            None => Sel::Free { offset: seg.offset, logical: seg.logical },
+        }
+    }
+}
+
 /// What a sheet acts on: a segment of a disk (or the disk itself) as the
 /// person chose it, with the identity of the devices then. A sheet holds
 /// this, not an index into the layout: the layout is made again whenever
@@ -396,19 +414,19 @@ impl Chosen {
 }
 
 /// Proof that a segment of this layout (or its disk) is the one the person
-/// chose, re-identified now. Only [`Layout::locate`] and [`Layout::at`] make
-/// one, and it borrows the layout it was found in, so it can't be kept
-/// across a refresh. [`Plan`](crate::plan::Plan)'s operations are queued
-/// only at one, so a sheet can't queue at an index it took before the
-/// layout changed (TSH-25: the stick's Format sheet queued a format of the
+/// chose, re-identified now. Only [`Layout::locate`] makes one, and it
+/// borrows the layout it was found in, so it can't be kept across a
+/// refresh. [`Plan`](crate::plan::Plan)'s operations are queued only at
+/// one, so a sheet can't queue at an index it took before the layout
+/// changed (TSH-25: the stick's Format sheet queued a format of the
 /// partition at the same index on the drive Tansu fell back to):
 ///
 /// ```compile_fail,E0506
 /// use aizome_sys::disks::{DisksState, Erase};
-/// use tansu::layout::Layout;
+/// use tansu::layout::{Chosen, Layout};
 /// use tansu::plan::{NewFs, Plan};
-/// fn format_after_a_refresh(state: &DisksState, mut layout: Layout, now: Layout, plan: &mut Plan) {
-///     let at = layout.at(state, 1).expect("the stick's sdc2");
+/// fn format_after_a_refresh(state: &DisksState, mut layout: Layout, now: Layout, chosen: &Chosen, plan: &mut Plan) {
+///     let at = layout.locate(state, chosen).expect("the stick's sdc2");
 ///     // UDisks reports the stick gone: the layout is made again.
 ///     layout = now;
 ///     let ext4 = NewFs { fs: "ext4".into(), label: String::new(), erase: Erase::Quick, encrypt: None };
@@ -428,7 +446,34 @@ impl Chosen {
 /// }
 /// ```
 ///
-/// and one can't be made from an index without finding it:
+/// A sheet that kept the segment's index can't turn it into a place to
+/// queue at when it's submitted, neither found at once:
+///
+/// ```compile_fail,E0599
+/// use aizome_sys::disks::{DisksState, Erase};
+/// use tansu::layout::Layout;
+/// use tansu::plan::{NewFs, Plan};
+/// struct FormatForm { seg: usize }
+/// fn submit(state: &DisksState, layout: &Layout, plan: &mut Plan, f: &FormatForm) {
+///     let ext4 = NewFs { fs: "ext4".into(), label: String::new(), erase: Erase::Quick, encrypt: None };
+///     let _ = plan.format(layout.at(state, f.seg).unwrap(), ext4);
+/// }
+/// ```
+///
+/// nor chosen then (a choice is of the selection, not of an index):
+///
+/// ```compile_fail,E0308
+/// use aizome_sys::disks::{DisksState, Erase};
+/// use tansu::layout::Layout;
+/// use tansu::plan::{NewFs, Plan};
+/// fn submit(state: &DisksState, layout: &Layout, plan: &mut Plan, seg: usize) {
+///     let chosen = layout.choose(state, seg).unwrap();
+///     let ext4 = NewFs { fs: "ext4".into(), label: String::new(), erase: Erase::Quick, encrypt: None };
+///     let _ = plan.format(layout.locate(state, &chosen).unwrap(), ext4);
+/// }
+/// ```
+///
+/// and a proof can't be made from an index without finding it:
 ///
 /// ```compile_fail,E0451
 /// use tansu::layout::{Here, Layout};
@@ -441,17 +486,17 @@ impl Chosen {
 /// when the person submits; once its stick is gone, it isn't there:
 ///
 /// ```
-/// use std::rc::Rc;
 /// use aizome_sys::disks::Erase;
 /// use tansu::backend::Backend;
+/// use tansu::layout::Sel;
 /// use tansu::mock::{self, Mock};
 /// use tansu::plan::{NewFs, Plan};
 /// let mock = Mock::new(mock::sample());
 /// let stick = "/org/freedesktop/UDisks2/block_devices/sdc";
 /// let (state, mut plan) = (mock.snapshot(), Plan::default());
 /// let layout = plan.preview(&state, stick).unwrap();
-/// let i = layout.segs.iter().position(|s| s.short_name() == "sdc1").unwrap();
-/// let chosen = layout.choose(&state, i).unwrap();
+/// let sdc1 = layout.segs.iter().find(|s| s.short_name() == "sdc1").unwrap();
+/// let chosen = layout.choose(&state, &Sel::of(sdc1)).unwrap();
 /// let ext4 = || NewFs { fs: "ext4".into(), label: String::new(), erase: Erase::Quick, encrypt: None };
 /// plan.format(layout.locate(&state, &chosen).unwrap(), ext4()).unwrap();
 /// assert_eq!(plan.ops[0].device, "/dev/sdc1");
@@ -495,14 +540,70 @@ impl<'l> Here<'l> {
     pub fn device(&self) -> Option<&Identity> {
         self.seen.as_ref()
     }
+
+    /// The segment's device, to act on at once (unlock it).
+    pub fn volume(&self) -> Option<Volume<'_>> {
+        self.seen.as_ref().map(|identity| Volume { identity })
+    }
+}
+
+/// A device found where the person chose it, to act on at once: only
+/// [`Here::volume`] gives one, and it borrows the proof. Unlock takes one,
+/// so a passphrase goes only to the volume chosen (TSH-25: it went to
+/// whatever was at the Unlock sheet's index after its disk went):
+///
+/// ```compile_fail,E0308
+/// use tansu::backend::Backend;
+/// use tansu::layout::Layout;
+/// fn unlock(backend: &dyn Backend, layout: &Layout, seg: usize, pass: &str) {
+///     let block = layout.segs[seg].block().unwrap().to_owned();
+///     let _ = backend.unlock(&block, pass);
+/// }
+/// ```
+#[derive(Clone, Copy, Debug)]
+pub struct Volume<'h> {
+    identity: &'h Identity,
+}
+
+impl Volume<'_> {
+    /// Its block device's object path.
+    pub fn path(&self) -> &str {
+        self.identity.path()
+    }
 }
 
 impl Layout {
-    /// The segment at `i` of this layout, as the person chooses it now to act
-    /// on it once they've filled in a sheet (`state` is what the layout
-    /// shows).
-    pub fn choose(&self, state: &DisksState, i: usize) -> Option<Chosen> {
-        let seg = self.segs.get(i)?;
+    /// Where the selection is in this layout. Unallocated space moves as
+    /// partitions change: the stretch that holds where it started, else a
+    /// partition back there (an undone deletion), else the nearest.
+    pub fn position(&self, sel: &Sel) -> Option<usize> {
+        match sel {
+            Sel::Target(t) => self.find(t),
+            Sel::Free { offset, logical } => {
+                let free = |s: &&Seg| s.is_free() && s.logical == *logical;
+                let holds = |s: &Seg| s.logical == *logical && s.offset <= *offset && *offset < s.end();
+                self.segs
+                    .iter()
+                    .position(|s| free(&s) && holds(s))
+                    .or_else(|| self.segs.iter().position(|s| holds(s) && s.kind() != SegKind::Extended))
+                    .or_else(|| {
+                        self.segs
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, s)| free(s))
+                            .min_by_key(|(_, s)| s.offset.abs_diff(*offset))
+                            .map(|(i, _)| i)
+                    })
+            }
+        }
+    }
+
+    /// The selected segment of this layout, as the person chooses it now to
+    /// act on it once they've filled in a sheet (`state` is what the layout
+    /// shows). Choose when the sheet opens: the selection resolved later
+    /// may name what took the segment's place.
+    pub fn choose(&self, state: &DisksState, sel: &Sel) -> Option<Chosen> {
+        let seg = self.segs.get(self.position(sel)?)?;
         let spot = match &seg.target {
             Some(t) => Spot::Seg(t.clone()),
             None => Spot::Free { offset: seg.offset, logical: seg.logical },
@@ -574,12 +675,6 @@ impl Layout {
             }
         };
         Ok(Here { layout: self, i, disk_seen, seen })
-    }
-
-    /// The segment at `i` of this layout, chosen and found now: for an
-    /// action on the selection that needs no sheet.
-    pub fn at<'l>(&'l self, state: &DisksState, i: usize) -> Option<Here<'l>> {
-        self.locate(state, &self.choose(state, i)?).ok()
     }
 }
 

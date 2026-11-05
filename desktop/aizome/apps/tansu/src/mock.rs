@@ -15,6 +15,7 @@ use aizome_sys::disks::{
 use aizome_sys::{Error, Task};
 
 use crate::backend::Backend;
+use crate::layout::Volume;
 use crate::plan::Queued;
 
 const MIB: u64 = 1 << 20;
@@ -197,7 +198,8 @@ impl Backend for Mock {
         ready(r)
     }
 
-    fn unlock(&self, block: &str, passphrase: &str) -> Task<String> {
+    fn unlock(&self, volume: Volume<'_>, passphrase: &str) -> Task<String> {
+        let block = volume.path();
         let r = self.call(format!("Unlock {}", self.device(block))).and_then(|()| {
             if passphrase.is_empty() || passphrase == "wrong" {
                 return Err(Error::Rejected("Error unlocking: wrong passphrase".into()));
@@ -405,6 +407,7 @@ impl Backend for Mock {
             .call(format!("Format({}) on {}", if kind == TableKind::Gpt { "gpt" } else { "dos" }, self.device(&path)))
             .and_then(|()| {
                 let disk = self.confirmed(confirm)?;
+                let path = disk.path.clone();
                 if disk.partition.is_some() {
                     return Err(Error::InvalidArgument(
                         "A partition table goes on a whole disk, not a partition".into(),
@@ -448,7 +451,8 @@ impl Backend for Mock {
                 self.device(table)
             ))
             .and_then(|()| {
-                self.confirmed(confirm)?;
+                let table = self.confirmed(confirm)?.path;
+                let table = table.as_str();
                 let state = self.state.borrow().clone();
                 let disk = state.block(table).cloned().ok_or_else(|| Error::NotFound(table.into()))?;
                 let kind = disk
@@ -504,6 +508,7 @@ impl Backend for Mock {
         let path = confirm.block().to_owned();
         let r = self.call(format!("Delete {}", self.device(&path))).and_then(|()| {
             let b = self.confirmed(confirm)?;
+            let path = b.path.clone();
             if b.partition.is_none() {
                 return Err(Error::InvalidArgument("Not a partition".into()));
             }
@@ -518,7 +523,7 @@ impl Backend for Mock {
     fn format(&self, confirm: Confirm<Format, Queued>, spec: FormatSpec) -> Task<()> {
         let path = confirm.block().to_owned();
         let r = self.call(format!("Format({}) on {}", spec.fs_type, self.device(&path))).and_then(|()| {
-            self.confirmed(confirm)?;
+            let path = self.confirmed(confirm)?.path;
             if spec.fs_type != "empty" && !self.state.borrow().supported_filesystems.contains(&spec.fs_type) {
                 return Err(Error::InvalidArgument(format!("This system can't make {} filesystems", spec.fs_type)));
             }
@@ -537,6 +542,7 @@ impl Backend for Mock {
         let path = confirm.block().to_owned();
         let r = self.call(format!("ResizePartition({size}) {}", self.device(&path))).and_then(|()| {
             let b = self.confirmed(confirm)?;
+            let path = b.path.clone();
             let part = b.partition.clone().ok_or_else(|| Error::InvalidArgument("Not a partition".into()))?;
             if size > part.size {
                 let state = self.state.borrow().clone();
@@ -566,7 +572,7 @@ impl Backend for Mock {
     fn resize_filesystem(&self, confirm: Confirm<Resize, Queued>, size: u64) -> Task<()> {
         let path = confirm.block().to_owned();
         let r = self.call(format!("ResizeFilesystem({size}) {}", self.device(&path))).and_then(|()| {
-            self.confirmed(confirm)?;
+            let path = self.confirmed(confirm)?.path;
             self.change(|s| {
                 if let Some(b) = s.blocks.iter_mut().find(|b| b.path == path) {
                     let whole = b.size;
@@ -587,10 +593,17 @@ impl Backend for Mock {
         ready(r)
     }
 
+    fn repair_before_resize(&self, confirm: Confirm<Resize, Queued>) -> Task<bool> {
+        let path = confirm.block().to_owned();
+        let r =
+            self.call(format!("Repair {}", self.device(&path))).and_then(|()| self.confirmed(confirm).map(|_| true));
+        ready(r)
+    }
+
     fn set_label(&self, confirm: Confirm<Relabel, Queued>, label: &str) -> Task<()> {
         let block = confirm.block().to_owned();
         let r = self.call(format!("SetLabel({label}) {}", self.device(&block))).and_then(|()| {
-            self.confirmed(confirm)?;
+            let block = self.confirmed(confirm)?.path;
             self.change(|s| {
                 if let Some(b) = s.blocks.iter_mut().find(|b| b.path == block) {
                     b.id_label = label.into();
@@ -604,7 +617,7 @@ impl Backend for Mock {
     fn set_partition_type(&self, confirm: Confirm<PartitionEntry, Queued>, type_id: &str) -> Task<()> {
         let block = confirm.block().to_owned();
         let r = self.call(format!("SetType({type_id}) {}", self.device(&block))).and_then(|()| {
-            self.confirmed(confirm)?;
+            let block = self.confirmed(confirm)?.path;
             self.change(|s| {
                 if let Some(p) = s.blocks.iter_mut().find(|b| b.path == block).and_then(|b| b.partition.as_mut()) {
                     p.type_id = type_id.into();
@@ -620,7 +633,8 @@ impl Backend for Mock {
         let block = confirm.block().to_owned();
         let block = block.as_str();
         let r = self.call(format!("SetFlags({flags:#x}) {}", self.device(block))).and_then(|()| {
-            self.confirmed(confirm)?;
+            let block = self.confirmed(confirm)?.path;
+            let block = block.as_str();
             self.change(|s| {
                 let kind = s
                     .block(block)
