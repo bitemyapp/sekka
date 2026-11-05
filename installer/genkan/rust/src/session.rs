@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! The GUI side of the helper's `session` protocol.
+//! The helper's `session` protocol, both ends.
 //!
 //! Requests are newline-delimited JSON on the helper's stdin: first the
 //! reviewed plan (without a confirmation), later at most one confirmation.
@@ -7,11 +7,15 @@
 //! reports `install::Event`s on stdout. Closing stdin before confirming
 //! cancels preparation; nothing has been written to any disk at that point.
 //!
-//! The GUI sends the confirmation only with the helper's proof that it has
-//! prepared ([`Ready`]), never while it still prepares.
+//! The confirmation is accepted only for a finished preparation (GEN-06):
+//! the GUI can send one only with the proof that the helper reported
+//! `Prepared` ([`Ready`]), and the helper reads it only after reporting that
+//! ([`Awaiting`]). A line before then is a protocol error that cancels
+//! preparation, rather than a confirmation saved for when it finishes.
 use crate::{
-    InstallPlan,
-    install::{Event, Summary},
+    InstallPlan, RawRequest,
+    install::{self, Event, Prepared, Summary},
+    process::{self, Latch},
 };
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -19,8 +23,9 @@ use std::{
     io::{BufRead, BufReader, Write},
     process::{Command, Stdio},
     sync::{
-        atomic::{AtomicU64, Ordering},
-        mpsc::{self, Sender},
+        Arc,
+        atomic::{AtomicU8, AtomicU64, Ordering},
+        mpsc::{self, Receiver, Sender},
     },
     thread,
 };
@@ -54,6 +59,166 @@ pub fn read_line(reader: &mut impl BufRead, limit: usize) -> Result<Option<Zeroi
         ensure!(line.len() <= limit, "Request too large");
     }
 }
+
+// ---- The helper's end ------------------------------------------------------
+
+/// The largest request line.
+pub const REQUEST_LIMIT: usize = 1048576;
+/// The largest confirmation line.
+const CONFIRMATION_LIMIT: usize = 4096;
+
+/// What the stdin watcher has seen, and so what a line from the GUI means.
+const PREPARING: u8 = 0;
+const AWAITING: u8 = 1;
+/// The GUI closed its end, or sent something other than a line, while the
+/// helper prepared.
+const WITHDRAWN: u8 = 2;
+/// The GUI sent a line before the helper reported `Prepared`.
+const EARLY: u8 = 3;
+
+/// A session whose helper is preparing. It watches stdin meanwhile: closing
+/// it cancels preparation, and so does a line, since no confirmation is
+/// accepted before the helper reports `Prepared`. Only
+/// [`prepared`](Self::prepared) leads to the confirmation, so it can't be
+/// taken while preparation runs:
+///
+/// ```compile_fail,E0599
+/// use calamares_nixos::session::Preparing;
+/// fn early(preparing: Preparing) -> anyhow::Result<()> {
+///     let _phrase = preparing.confirmation()?;
+///     Ok(())
+/// }
+/// ```
+///
+/// ```
+/// use calamares_nixos::{install::Prepared, session::Preparing};
+/// fn after(preparing: Preparing, prepared: &Prepared) -> anyhow::Result<()> {
+///     if let Some(awaiting) = preparing.prepared(prepared)? {
+///         let _phrase = awaiting.confirmation()?;
+///     }
+///     Ok(())
+/// }
+/// ```
+pub struct Preparing {
+    phase: Arc<AtomicU8>,
+    heard: Receiver<Option<Zeroizing<Vec<u8>>>>,
+}
+
+impl Preparing {
+    /// Reads the request, then watches `input` for the GUI withdrawing it.
+    pub fn begin(input: impl BufRead + Send + 'static) -> Result<(RawRequest, Self)> {
+        Self::begin_with(input, &process::LATCH)
+    }
+
+    fn begin_with(
+        mut input: impl BufRead + Send + 'static,
+        latch: &'static Latch,
+    ) -> Result<(RawRequest, Self)> {
+        let line = read_line(&mut input, REQUEST_LIMIT)?.context("Missing installation request")?;
+        let request: RawRequest = serde_json::from_slice(&line)
+            .map_err(|_| anyhow::anyhow!("Invalid installation request"))?;
+        drop(line);
+        ensure!(
+            request.confirmation.is_empty(),
+            "A preparation request must not carry a confirmation"
+        );
+        let phase = Arc::new(AtomicU8::new(PREPARING));
+        let (tell, heard) = mpsc::channel();
+        let watching = phase.clone();
+        thread::spawn(move || watch(input, &watching, latch, &tell));
+        Ok((request, Self { phase, heard }))
+    }
+
+    /// Preparation failed. A withdrawal it stopped for is reported as
+    /// `Cancelled`; any other failure, even one after a withdrawal, as the
+    /// failure it is.
+    pub fn failed(self, error: anyhow::Error) -> Result<()> {
+        match self.phase.load(Ordering::Acquire) {
+            WITHDRAWN if process::is_cancellation(&error) => {
+                install::event(Event::Cancelled);
+                Ok(())
+            }
+            EARLY => Err(early()),
+            _ => Err(error),
+        }
+    }
+
+    /// Preparation finished: reports `Prepared` and accepts the confirmation
+    /// from now on. `None` when the GUI withdrew meanwhile (reported as
+    /// `Cancelled`).
+    pub fn prepared(self, prepared: &Prepared) -> Result<Option<Awaiting>> {
+        // Before the event: the GUI answers it, and the watcher must take
+        // that answer as the confirmation.
+        match self
+            .phase
+            .compare_exchange(PREPARING, AWAITING, Ordering::AcqRel, Ordering::Acquire)
+        {
+            Ok(_) => {
+                install::event(Event::Prepared {
+                    summary: prepared.summary().clone(),
+                });
+                Ok(Some(Awaiting { heard: self.heard }))
+            }
+            Err(EARLY) => Err(early()),
+            Err(_) => {
+                install::event(Event::Cancelled);
+                Ok(None)
+            }
+        }
+    }
+}
+
+fn early() -> anyhow::Error {
+    anyhow::anyhow!(
+        "The installer sent a confirmation before preparation finished; no disk writes were made"
+    )
+}
+
+/// The stdin watcher: one line or the end of input, and what it means in
+/// the phase it comes in.
+fn watch(
+    mut input: impl BufRead,
+    phase: &AtomicU8,
+    latch: &Latch,
+    tell: &Sender<Option<Zeroizing<Vec<u8>>>>,
+) {
+    let line = read_line(&mut input, CONFIRMATION_LIMIT).ok().flatten();
+    let stopped = if line.is_some() { EARLY } else { WITHDRAWN };
+    if phase
+        .compare_exchange(PREPARING, stopped, Ordering::AcqRel, Ordering::Acquire)
+        .is_ok()
+    {
+        latch.cancel();
+    } else {
+        // Awaiting: the confirmation, or the GUI withdrawing.
+        let _ = tell.send(line);
+    }
+}
+
+/// A prepared session, waiting for the person's confirmation.
+pub struct Awaiting {
+    heard: Receiver<Option<Zeroizing<Vec<u8>>>>,
+}
+
+impl Awaiting {
+    /// The typed phrase, or `None` when the GUI withdrew instead (reported
+    /// as `Cancelled`). Stdin isn't read after it.
+    pub fn confirmation(self) -> Result<Option<Zeroizing<String>>> {
+        match self.heard.recv() {
+            Ok(Some(line)) => {
+                let confirmation: Confirmation =
+                    serde_json::from_slice(&line).context("Invalid confirmation message")?;
+                Ok(Some(Zeroizing::new(confirmation.confirmation)))
+            }
+            _ => {
+                install::event(Event::Cancelled);
+                Ok(None)
+            }
+        }
+    }
+}
+
+// ---- The GUI's end ---------------------------------------------------------
 
 pub enum Update {
     Event(Event),
@@ -193,6 +358,7 @@ impl Drop for Session {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     #[test]
     fn lines_are_bounded_and_terminated() {
@@ -215,5 +381,77 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    /// A request line as the GUI sends one, followed by `rest`.
+    fn input(rest: &str) -> Cursor<Vec<u8>> {
+        let (_dir, _settings, mut raw) = crate::plan_tests::fixture();
+        raw.confirmation.clear();
+        let mut line = serde_json::to_vec(&raw).unwrap();
+        line.push(b'\n');
+        line.extend_from_slice(rest.as_bytes());
+        Cursor::new(line)
+    }
+
+    fn leaked() -> &'static Latch {
+        Box::leak(Box::new(Latch::new()))
+    }
+
+    /// Waits for the watcher to have read what it was given.
+    fn settled(preparing: &Preparing) -> u8 {
+        for _ in 0..500 {
+            let phase = preparing.phase.load(Ordering::Acquire);
+            if phase != PREPARING {
+                return phase;
+            }
+            thread::sleep(std::time::Duration::from_millis(2));
+        }
+        PREPARING
+    }
+
+    #[test]
+    fn a_line_before_prepared_is_not_kept_as_the_confirmation() {
+        let latch = leaked();
+        let (_, preparing) =
+            Preparing::begin_with(input("{\"confirmation\":\"ERASE /dev/vda\"}\n"), latch).unwrap();
+        assert_eq!(settled(&preparing), EARLY);
+        // It stopped preparation, and nothing can commit to installing now.
+        assert!(latch.cancelled());
+        assert!(latch.commit().is_err());
+        let error = preparing.failed(process::Cancelled.into()).unwrap_err();
+        assert!(format!("{error:#}").contains("before preparation finished"));
+    }
+
+    #[test]
+    fn closing_stdin_while_preparing_cancels_and_reports_only_cancellations_so() {
+        let latch = leaked();
+        let (_, preparing) = Preparing::begin_with(input(""), latch).unwrap();
+        assert_eq!(settled(&preparing), WITHDRAWN);
+        assert!(latch.cancelled());
+        // A failure that isn't the cancellation is still that failure.
+        let error = anyhow::anyhow!("nix failed (exit status: 1)").context("Could not build");
+        assert!(preparing.failed(error).is_err());
+        let (_, preparing) = Preparing::begin_with(input(""), leaked()).unwrap();
+        settled(&preparing);
+        let cancelled = anyhow::Error::from(process::Cancelled).context("Could not build");
+        assert!(preparing.failed(cancelled).is_ok());
+    }
+
+    #[test]
+    fn a_committed_installation_cannot_be_cancelled() {
+        let latch = Latch::new();
+        latch.commit().unwrap();
+        assert!(!latch.cancel());
+        assert!(!latch.cancelled());
+        latch.commit().unwrap();
+    }
+
+    #[test]
+    fn a_request_carrying_a_confirmation_is_refused() {
+        let (_dir, _settings, mut raw) = crate::plan_tests::fixture();
+        raw.confirmation = "ERASE /dev/vda".into();
+        let mut line = serde_json::to_vec(&raw).unwrap();
+        line.push(b'\n');
+        assert!(Preparing::begin_with(Cursor::new(line), leaked()).is_err());
     }
 }
