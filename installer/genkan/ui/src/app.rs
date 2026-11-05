@@ -9,12 +9,12 @@
 //! the kit's message stream. Answers from an older request (its epoch or
 //! generation) are dropped, as are stale sessions, which cancels them.
 use crate::flow::{Flow, FlowAny, FlowState, ReviewAnswer, ReviewRequest};
-use crate::ram::{Memory, MemoryAny, MemoryRead, MemoryState};
+use crate::ram::{Memory, MemoryAnswer, SwapUnsized};
 use crate::{format::size, media, zone};
 use aizome_ipc::{KeyboardInfo, setup::Beside};
 use aizome_kit::cx::MsgSender;
 use aizome_kit::prelude::*;
-use aizome_typestate::{Current, Fresh, Generation, Ticket};
+use aizome_typestate::{Answer, Current, Fresh, Generation, Ticket};
 use calamares_nixos::{
     Desktop, Filesystem, Firmware, Hostname, InstallPlan, KEYBOARDS, LOCALES, RawRequest, Settings,
     SuperKey, Username, applications,
@@ -304,8 +304,8 @@ pub enum Msg {
     ClearNote(u64),
     // Disk.
     Rescan,
-    Scanned(Ticket<DiskScan>, Result<(Vec<Disk>, Firmware), String>),
-    Memory(Ticket<MemoryRead>, Result<MemInfo, String>),
+    Scanned(ScanAnswer),
+    Memory(MemoryAnswer),
     SelectDisk(usize),
     Filesystem(usize),
     Swap(bool),
@@ -476,11 +476,21 @@ enum Stop {
     Exited(Result<(), String>),
 }
 
-/// Why a swap partition can't be had when installed memory couldn't be read.
-const SWAP_UNSIZED: &str = "Installed memory could not be read, so a swap partition can't be sized. Turn swap off to continue.";
-
 /// Names a disk scan: its answer carries the ticket.
 pub enum DiskScan {}
+
+/// A disk scan's answer: the disks and the firmware, or why there are none.
+#[derive(Clone, Debug)]
+pub struct ScanAnswer {
+    ticket: Ticket<DiskScan>,
+    result: Result<(Vec<Disk>, Firmware), String>,
+}
+
+impl Answer<DiskScan> for ScanAnswer {
+    fn ticket(&self) -> Ticket<DiskScan> {
+        self.ticket
+    }
+}
 
 const UNPREPARED: &str =
     "No disk was written. Go back to change your choices, or copy the details below.";
@@ -993,12 +1003,12 @@ impl Genkan {
         let ticket = self.scans.issue();
         self.scan = Some(ticket);
         cx.spawn(move || {
-            Msg::Scanned(
+            Msg::Scanned(ScanAnswer {
                 ticket,
-                disk::discover()
+                result: disk::discover()
                     .map(|d| (d, Firmware::current()))
                     .map_err(|e| format!("{e:#}")),
-            )
+            })
         });
     }
 
@@ -1007,15 +1017,11 @@ impl Genkan {
         self.scan.is_some()
     }
 
-    /// The scan answered: its disks, or why there are none.
-    fn scanned(
-        &mut self,
-        _: Current<DiskScan>,
-        result: Result<(Vec<Disk>, Firmware), String>,
-        cx: &mut Cx<Msg>,
-    ) {
+    /// The scan answered, bound to the proof that it's the latest scan's:
+    /// its disks, or why there are none.
+    fn scanned(&mut self, answer: Fresh<DiskScan, ScanAnswer>, cx: &mut Cx<Msg>) {
         self.scan = None;
-        match result {
+        match answer.into_answer().result {
             Ok((found, firmware)) => {
                 self.selected_disk = None;
                 self.firmware = firmware;
@@ -1029,85 +1035,51 @@ impl Genkan {
     pub(crate) fn sample_disks(&mut self, found: Vec<Disk>, firmware: Firmware, cx: &mut Cx<Msg>) {
         let ticket = self.scans.issue();
         self.scan = Some(ticket);
-        self.update(Msg::Scanned(ticket, Ok((found, firmware))), cx);
-    }
-
-    /// Starts the one read of installed memory: its ticket, the first time.
-    fn ask_memory(&mut self) -> Option<Ticket<MemoryRead>> {
-        self.memory.with_typed(|state| match state {
-            MemoryAny::Unasked(unasked) => {
-                let (reading, ticket) = unasked.ask();
-                (reading.into(), Some(ticket))
-            }
-            other => (other, None),
-        })
+        let result = Ok((found, firmware));
+        self.update(Msg::Scanned(ScanAnswer { ticket, result }), cx);
     }
 
     fn read_memory(&mut self, cx: &mut Cx<Msg>) {
-        if let Some(ticket) = self.ask_memory() {
-            cx.spawn(move || Msg::Memory(ticket, memory::read().map_err(|e| format!("{e:#}"))));
+        if let Some(ticket) = self.memory.ask() {
+            cx.spawn(move || {
+                let result = memory::read().map_err(|e| format!("{e:#}"));
+                Msg::Memory(MemoryAnswer::new(ticket, result))
+            });
         }
     }
 
     /// A preview's sample in place of the read.
-    pub(crate) fn sample_memory(&mut self, answer: Result<MemInfo, String>, cx: &mut Cx<Msg>) {
-        if let Some(ticket) = self.ask_memory() {
-            self.update(Msg::Memory(ticket, answer), cx);
+    pub(crate) fn sample_memory(&mut self, result: Result<MemInfo, String>, cx: &mut Cx<Msg>) {
+        if let Some(ticket) = self.memory.ask() {
+            self.update(Msg::Memory(MemoryAnswer::new(ticket, result)), cx);
         }
     }
 
     /// The read answered. A failure turns swap off: nothing can size it.
-    fn memory_read(
-        &mut self,
-        current: Current<MemoryRead>,
-        answer: Result<MemInfo, String>,
-        cx: &mut Cx<Msg>,
-    ) {
-        self.memory.with_typed(|state| match state {
-            MemoryAny::Reading(reading) => (reading.answered(current, answer).into(), ()),
-            other => (other, ()),
-        });
-        if let MemoryState::Unreadable(error) = self.memory.stored() {
-            let note = format!("Could not read installed memory: {error}");
+    fn memory_read(&mut self, answer: MemoryAnswer, cx: &mut Cx<Msg>) {
+        self.memory.answer(answer);
+        if let Err(SwapUnsized::Unreadable(error)) = self.memory.swap_size(true) {
             self.swap = false;
-            self.note(&note, cx);
+            self.note(&format!("Could not read installed memory: {error}"), cx);
         }
     }
 
-    /// What's known about installed memory.
-    pub fn memory(&self) -> &MemoryState {
-        self.memory.stored()
+    /// Installed memory, which sizes the swap partition.
+    pub fn memory(&self) -> &Memory {
+        &self.memory
     }
 
     /// Swap on or off. On needs installed memory, which sizes it: refused
     /// when it couldn't be read.
     fn set_swap(&mut self, on: bool, cx: &mut Cx<Msg>) {
-        if on && let MemoryState::Unreadable(error) = self.memory.stored() {
-            let note =
-                format!("Swap is sized to installed memory, which could not be read: {error}");
-            self.note(&note, cx);
-        } else {
-            self.swap = on;
+        match self.memory.swap_size(on) {
+            Err(why @ SwapUnsized::Unreadable(_)) => self.note(&why.to_string(), cx),
+            Ok(_) | Err(SwapUnsized::Reading) => self.swap = on,
         }
     }
 
     pub fn swap_bytes(&self) -> Option<u64> {
-        match self.memory.stored() {
-            MemoryState::Known(info) if self.swap => Some(memory::swap_bytes(info.total)),
-            _ => None,
-        }
-    }
-
-    /// Why swap can't be sized yet, if it's on and can't.
-    fn swap_unsized(&self, reading: &str) -> Option<String> {
-        if !self.swap {
-            return None;
-        }
-        match self.memory.stored() {
-            MemoryState::Known(_) => None,
-            MemoryState::Unasked(()) | MemoryState::Reading(()) => Some(reading.into()),
-            MemoryState::Unreadable(_) => Some(SWAP_UNSIZED.into()),
-        }
+        self.memory.swap_size(self.swap).ok().flatten()
     }
 
     pub fn selected(&self) -> Option<&Disk> {
@@ -1119,16 +1091,12 @@ impl Genkan {
         let Some(disk) = self.selected() else {
             return Err("Select a disk to preview its new partitions.".into());
         };
-        if let Some(why) = self.swap_unsized("Reading installed memory…") {
-            return Err(why);
-        }
-        Layout::for_install(
-            disk.identity.bytes,
-            self.firmware,
-            self.swap_bytes(),
-            self.encrypt,
-        )
-        .map_err(|error| format!("{error:#}"))
+        let swap = self.memory.swap_size(self.swap).map_err(|why| match why {
+            SwapUnsized::Reading => "Reading installed memory…".to_string(),
+            SwapUnsized::Unreadable(_) => why.to_string(),
+        })?;
+        Layout::for_install(disk.identity.bytes, self.firmware, swap, self.encrypt)
+            .map_err(|error| format!("{error:#}"))
     }
 
     pub fn passphrase_error(&self) -> Option<String> {
@@ -1154,11 +1122,9 @@ impl Genkan {
         if let Some(reason) = &disk.blocked {
             return Err(reason.clone());
         }
-        if let Some(why) =
-            self.swap_unsized("Still reading installed memory; try again in a moment.")
-        {
-            return Err(why);
-        }
+        self.memory
+            .swap_size(self.swap)
+            .map_err(|why| why.to_string())?;
         self.layout().map(|_| ())
     }
 
@@ -2437,16 +2403,12 @@ impl Program for Genkan {
             }
 
             Msg::Rescan => self.rescan(cx),
-            Msg::Scanned(ticket, result) => {
-                if let Some(current) = self.scans.check(ticket) {
-                    self.scanned(current, result, cx);
+            Msg::Scanned(answer) => {
+                if let Ok(fresh) = self.scans.check_answer(answer) {
+                    self.scanned(fresh, cx);
                 }
             }
-            Msg::Memory(ticket, answer) => {
-                if let Some(current) = self.memory.ctx().check(ticket) {
-                    self.memory_read(current, answer, cx);
-                }
-            }
+            Msg::Memory(answer) => self.memory_read(answer, cx),
             Msg::SelectDisk(index) => {
                 if self.disks.get(index).is_some_and(|d| d.blocked.is_none()) {
                     self.selected_disk = Some(index);

@@ -12,7 +12,7 @@ use aizome_kit::testing::Harness;
 use aizome_kit::theme::{Appearance, ThemeChoice};
 use genkan::Step;
 use genkan::app::{Genkan, Msg};
-use genkan::ram::MemoryState;
+use genkan::ram::SwapUnsized;
 use std::time::Duration;
 
 fn says(h: &Harness<Genkan>, w: aizome_kit::WindowKey, what: &str) -> bool {
@@ -29,7 +29,10 @@ fn a_failed_memory_read_is_not_reported_as_still_reading() {
     let mut h = Harness::with(Genkan::new(Some("memfail".into())), appearance, false);
     let w = h.window();
     assert_eq!(h.program().step, Step::Disk);
-    assert!(matches!(h.program().memory(), MemoryState::Unreadable(_)));
+    assert!(matches!(
+        h.program().memory().swap_size(true),
+        Err(SwapUnsized::Unreadable(_))
+    ));
     assert!(!h.program().swap, "the failure turns swap off");
     assert!(says(&h, w, "Could not read installed memory"));
     // The person turns swap back on and waits; nothing can size it.
@@ -38,7 +41,7 @@ fn a_failed_memory_read_is_not_reported_as_still_reading() {
     h.send(Msg::Dismissed);
     let page_says_reading = says(&h, w, "Reading installed memory");
     let swap = h.program().swap;
-    let memory = h.program().memory().clone();
+    let memory = h.program().memory().swap_size(true);
     h.send(Msg::Next);
     let step_after_next = h.program().step;
     let next_says_still_reading = says(&h, w, "Still reading installed memory");
@@ -63,7 +66,10 @@ fn a_read_memory_sizes_swap() {
         Appearance::default(),
         false,
     );
-    assert!(matches!(h.program().memory(), MemoryState::Known(_)));
+    assert_eq!(
+        h.program().memory().swap_size(true),
+        Ok(Some(32 * 1024u64.pow(3)))
+    );
     assert_eq!(h.program().swap_bytes(), Some(32 * 1024u64.pow(3)));
     assert!(h.program().layout().is_ok_and(|l| l.swap.is_some()));
     h.send(Msg::Swap(false));

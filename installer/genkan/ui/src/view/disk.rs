@@ -3,10 +3,10 @@
 use super::{FIELD, group, note_row, partitions, sections};
 use crate::app::{Field, Genkan, Msg};
 use crate::format::size;
-use crate::ram::MemoryState;
+use crate::ram::SwapUnsized;
 use aizome_kit::prelude::*;
 use aizome_kit::row;
-use calamares_nixos::{Filesystem, memory};
+use calamares_nixos::Filesystem;
 
 /// A filesystem as the switch between them names it.
 fn label(filesystem: Filesystem) -> &'static str {
@@ -116,19 +116,13 @@ pub fn page(app: &Genkan) -> Element<Msg> {
             "Swap sized to memory, with zswap",
             toggle(app.swap)
                 .on_toggle(Msg::Swap)
-                .enabled(!matches!(app.memory(), MemoryState::Unreadable(_))),
+                .enabled(!matches!(
+                    app.memory().swap_size(true),
+                    Err(SwapUnsized::Unreadable(_))
+                )),
         )
-            .description(match app.memory() {
-                MemoryState::Known(info) => format!(
-                    "A {} swap partition matching installed memory. zswap compresses pages in RAM before they reach the disk, and hibernation can resume from it.",
-                    size(memory::swap_bytes(info.total))
-                ),
-                MemoryState::Unreadable(error) => format!(
-                    "Installed memory could not be read ({error}), so a swap partition can't be sized and stays off."
-                ),
-                MemoryState::Unasked(()) | MemoryState::Reading(()) => "Matches installed memory. zswap compresses pages in RAM before they reach the disk, and hibernation can resume from it.".into(),
-            })
-            .into(),
+        .description(app.memory().swap_note())
+        .into(),
         form_row(
             "Encrypt the installation with LUKS2",
             toggle(app.encrypt).on_toggle(Msg::Encrypt),
