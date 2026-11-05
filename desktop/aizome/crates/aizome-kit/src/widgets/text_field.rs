@@ -39,6 +39,9 @@ use crate::widget::{
 
 /// How long the caret shows, then hides.
 pub(crate) const BLINK: Duration = Duration::from_millis(530);
+/// The timer that brings a field that changed mode while focused its
+/// arrival.
+const ARRIVE: u32 = 0;
 /// Typing within this of the last keystroke undoes with it.
 const GROUP: Duration = Duration::from_millis(1000);
 
@@ -407,7 +410,10 @@ impl<M: Mode> Composes for FieldWidget<M> {
     type Mode = M;
 }
 
-impl<M: Mode> FieldWidget<M> {
+impl<M: Mode> FieldWidget<M>
+where
+    Self: Composes<Mode = M>,
+{
     fn spec(&self, t: &Theme, color: sidestep_ui::Color) -> TextSpec {
         let f = if self.mono { FontSpec::mono(t.metrics.body) } else { FontSpec::ui(t.metrics.body) };
         TextSpec { wrap: Wrap::None, ..TextSpec::new(f, color) }
@@ -685,7 +691,10 @@ impl<M: Mode> FieldWidget<M> {
     }
 }
 
-impl<M: Mode> Widget for FieldWidget<M> {
+impl<M: Mode> Widget for FieldWidget<M>
+where
+    Self: Composes<Mode = M>,
+{
     fn name(&self) -> &'static str {
         "text-field"
     }
@@ -716,6 +725,12 @@ impl<M: Mode> Widget for FieldWidget<M> {
         // password's as dots, with the input method's caret in it.
         let (preedit, preedit_caret) =
             focus.composing().map_or((String::new(), None), |k| (k.drawn().into_owned(), k.drawn_caret()));
+        // Focused in a mode that hasn't arrived (the field just changed
+        // mode): it arrives at once, not at the caret's next blink, so few
+        // of the input method's events from the old mode reach it.
+        if !focused && cx.is_focused() {
+            cx.set_timer(ARRIVE, Duration::ZERO);
+        }
         // What shows: the text (as dots for a password) with what an input
         // method is composing at the caret.
         let mut shown = M::shown(&self.value).into_owned();

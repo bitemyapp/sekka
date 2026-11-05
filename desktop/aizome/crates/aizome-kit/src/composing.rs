@@ -242,6 +242,39 @@ mod sealed {
 /// ([`EventCx::composition`], [`EventCx::composer`], and `composition` on
 /// the layout and paint contexts), so a widget of one mode can't keep its
 /// composition in another mode's.
+///
+/// A widget generic over its mode ties its `Composes` to that mode, as the
+/// kit's `text_field` and Aizome's `field` do: their methods and `Widget`
+/// impls hold only `where Self: Composes<Mode = M>`. A password field whose
+/// `Composes` names the plain mode then isn't a widget:
+///
+/// ```compile_fail,E0271
+/// use aizome_kit::composing::{Composes, Mode, Plain, Secret};
+/// use std::marker::PhantomData;
+/// struct Field<M>(PhantomData<M>);
+/// impl<M: Mode> Composes for Field<M> {
+///     type Mode = Plain;
+/// }
+/// trait Paint {}
+/// impl<M: Mode> Paint for Field<M> where Self: Composes<Mode = M> {}
+/// fn password(f: &Field<Secret>) -> &dyn Paint {
+///     f
+/// }
+/// ```
+///
+/// ```
+/// use aizome_kit::composing::{Composes, Mode, Secret};
+/// use std::marker::PhantomData;
+/// struct Field<M>(PhantomData<M>);
+/// impl<M: Mode> Composes for Field<M> {
+///     type Mode = M;
+/// }
+/// trait Paint {}
+/// impl<M: Mode> Paint for Field<M> where Self: Composes<Mode = M> {}
+/// fn password(f: &Field<Secret>) -> &dyn Paint {
+///     f
+/// }
+/// ```
 pub trait Composes {
     type Mode: Mode;
 }
