@@ -179,6 +179,8 @@ fn the_composer_grows_with_its_text_and_hands_over_return_and_pictures() {
     h.platform.offer = vec![("image/png".into(), vec![0x89, b'P', b'N', b'G'])];
     h.command(w, 'v');
     assert_eq!(h.program().pasted, [vec!["image/png".to_owned()]]);
+    // The read's message comes back from a worker.
+    h.settle(std::time::Duration::from_secs(5), |p| p.read.is_some());
     assert_eq!(h.program().read.as_deref(), Some(&[0x89, b'P', b'N', b'G'][..]), "read on a worker");
     h.platform.offer.clear();
     h.platform.clipboard = Some(" six".into());
