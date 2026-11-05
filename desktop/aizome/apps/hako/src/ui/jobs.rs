@@ -14,8 +14,8 @@ use crate::fsops::transfer::{self, Mode};
 use crate::fsops::trash::{self, Trash};
 use crate::fsops::undo::{self, Inversion, Inverted, Record, Step, items_label};
 use crate::fsops::{
-    Asker, Choice, Conflict, Consent, Control, Env, ErrorChoice, Failure, Progress, ReplaceAll, Replacing, Report,
-    Reporter, Resolution,
+    Asker, Choice, Conflict, Consent, Control, Env, ErrorChoice, Failure, JobKey, Progress, ReplaceAll, Replacing,
+    Report, Reporter, Resolution,
 };
 use aizome_kit::agree::Agreed;
 
@@ -222,8 +222,14 @@ pub fn start<Msg: Send + 'static>(
             let (tx, wrap) = (tx.clone(), wrap.clone());
             move |e: JobEvent| tx.send(wrap(id, e))
         };
-        let mut asker =
-            UiAsker { job: id, send: &send, answers: arx, conflicts: None, replace_all: None, errors: None };
+        let mut asker = UiAsker {
+            job: JobKey::new(id),
+            send: &send,
+            answers: arx,
+            conflicts: None,
+            replace_all: None,
+            errors: None,
+        };
         let mut reporter = Throttle { send: &send, last: None };
         let ran = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut env = Env::new(&c, &mut asker, &mut reporter);
@@ -329,9 +335,9 @@ fn made(report: &Report, label: &str) -> Option<Step> {
 
 /// Asks the person, through the program, and waits for the answer.
 struct UiAsker<'a> {
-    /// The job it asks for: an agreement to replace is for one job's
-    /// conflicts.
-    job: u64,
+    /// The key of the job it asks for, which only it holds: an agreement to
+    /// replace consents for this job's conflicts alone.
+    job: JobKey,
     send: &'a dyn Fn(JobEvent) -> bool,
     answers: mpsc::Receiver<Reply>,
     /// "Apply to all" with an answer other than Replace.
@@ -365,7 +371,7 @@ impl Asker for UiAsker<'_> {
                     return r.into();
                 }
                 Ok(Reply::Replace(agreed)) => {
-                    let agreed = match ReplaceAll::new(agreed, self.job) {
+                    let agreed = match ReplaceAll::new(agreed, &self.job) {
                         Ok(all) => {
                             let consent = all.consent(c);
                             self.replace_all = Some(all);
@@ -373,7 +379,7 @@ impl Asker for UiAsker<'_> {
                         }
                         Err(agreed) => agreed,
                     };
-                    if let Ok(consent) = Consent::to(agreed, self.job, c) {
+                    if let Ok(consent) = Consent::to(agreed, &self.job, c) {
                         return Choice::Replace(consent);
                     }
                     // An agreement for another conflict (another job's, or
@@ -485,7 +491,8 @@ mod tests {
             true
         };
         let (tx, rx) = mpsc::channel();
-        let mut asker = UiAsker { job: 7, send: &send, answers: rx, conflicts: None, replace_all: None, errors: None };
+        let mut asker =
+            UiAsker { job: JobKey::new(7), send: &send, answers: rx, conflicts: None, replace_all: None, errors: None };
         // Agreements to another item, and to another job's same item,
         // replace nothing: the asker asks again and waits on.
         tx.send(Reply::Replace(replacing(7, "b.txt", false))).unwrap();

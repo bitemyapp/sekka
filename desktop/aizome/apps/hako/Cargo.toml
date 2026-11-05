@@ -20,6 +20,9 @@ default = ["gui"]
 # The window. Without it the file operations, the Trash, MIME types and
 # thumbnails build with no toolkit at all.
 gui = ["dep:aizome-kit", "dep:aizome-sys", "dep:aizome-ipc", "dep:aizome-search", "dep:aizome-config", "dep:sidestep-engine", "dep:zbus"]
+# `fsops::JobKey::for_tests`: a job's key for tests of operations outside the
+# window. Only the dev-dependency on this package below turns it on.
+test-util = []
 
 [dependencies]
 aizome-kit = { workspace = true, optional = true }
@@ -49,3 +52,5 @@ png = "0.18"
 # Agreements as if a person had pressed Replace, and harness presses that
 # make them (the kit's `testing`; never in the app's own build).
 aizome-kit = { workspace = true, features = ["testing"] }
+# Itself, with test-util, for the integration tests that replace.
+aizome-hako = { path = ".", features = ["test-util"] }

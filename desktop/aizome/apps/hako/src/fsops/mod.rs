@@ -144,15 +144,15 @@ impl Consent {
         &self.target
     }
 
-    /// The consent the person's press gave for `conflict`, of operation
-    /// `job`: the agreement is spent here. It's given back for a conflict it
-    /// isn't for (another job's, another item), or an "Apply to all" one,
-    /// which is a [`ReplaceAll`]'s.
+    /// The consent the person's press gave for `conflict`, of the operation
+    /// whose key is `job`: the agreement is spent here. It's given back for a
+    /// conflict it isn't for (another job's, another item), or an "Apply to
+    /// all" one, which is a [`ReplaceAll`]'s.
     ///
     /// ```
     /// use aizome_kit::agree::Agreed;
-    /// use hako::fsops::{Choice, Conflict, Consent, Replacing};
-    /// fn answer(agreed: Agreed<Replacing>, job: u64, conflict: &Conflict) -> Option<Choice> {
+    /// use hako::fsops::{Choice, Conflict, Consent, JobKey, Replacing};
+    /// fn answer(agreed: Agreed<Replacing>, job: &JobKey, conflict: &Conflict) -> Option<Choice> {
     ///     Consent::to(agreed, job, conflict).ok().map(Choice::Replace)
     /// }
     /// ```
@@ -162,20 +162,20 @@ impl Consent {
     ///
     /// ```compile_fail,E0382
     /// use aizome_kit::agree::Agreed;
-    /// use hako::fsops::{Conflict, Consent, Replacing};
-    /// fn twice(agreed: Agreed<Replacing>, conflict: &Conflict) {
-    ///     let _ = Consent::to(agreed, 1, conflict);
-    ///     let _ = Consent::to(agreed, 2, conflict);
+    /// use hako::fsops::{Conflict, Consent, JobKey, Replacing};
+    /// fn twice(agreed: Agreed<Replacing>, one: &JobKey, another: &JobKey, conflict: &Conflict) {
+    ///     let _ = Consent::to(agreed, one, conflict);
+    ///     let _ = Consent::to(agreed, another, conflict);
     /// }
     /// ```
     #[cfg(feature = "gui")]
     pub fn to(
         agreed: aizome_kit::agree::Agreed<Replacing>,
-        job: u64,
+        job: &JobKey,
         conflict: &Conflict,
     ) -> Result<Consent, aizome_kit::agree::Agreed<Replacing>> {
         let r = agreed.target();
-        if r.all || r.job != job || r.target != conflict.target {
+        if r.all || r.job != job.0 || r.target != conflict.target {
             return Err(agreed);
         }
         Ok(Consent { target: conflict.target.clone() })
@@ -189,9 +189,44 @@ impl Consent {
     }
 }
 
+/// One operation's key: the window's job runner makes it for the job it
+/// starts and gives it to that job's asker alone. Consents to replace are
+/// made with it ([`Consent::to`], [`ReplaceAll::new`]), so the person's
+/// agreement to one job's conflicts consents for no other's, and code
+/// outside the crate can't make one:
+///
+/// ```compile_fail,E0603
+/// let _ = hako::fsops::JobKey(1);
+/// ```
+#[derive(Debug)]
+pub struct JobKey(u64);
+
+impl JobKey {
+    /// For the window's job runner (`ui::jobs::start`), as it starts job
+    /// `id`.
+    #[cfg_attr(not(feature = "gui"), allow(dead_code))]
+    pub(crate) fn new(id: u64) -> JobKey {
+        JobKey(id)
+    }
+
+    /// The job's number.
+    pub fn id(&self) -> u64 {
+        self.0
+    }
+
+    /// A key for tests of operations outside the window: only with the
+    /// `test-util` feature, which only the package's dev-dependency on itself
+    /// turns on.
+    #[cfg(feature = "test-util")]
+    pub fn for_tests(id: u64) -> JobKey {
+        JobKey(id)
+    }
+}
+
 /// "Apply to all" with Replace: the person's agreement for one operation's
 /// conflicts, which its asker alone holds, and which consents for each of
-/// them as it comes (and dies with the operation).
+/// them as it comes (and dies with the operation). Only that asker, with
+/// the job's [`JobKey`], makes one.
 #[cfg(feature = "gui")]
 #[derive(Debug)]
 pub struct ReplaceAll {
@@ -200,14 +235,14 @@ pub struct ReplaceAll {
 
 #[cfg(feature = "gui")]
 impl ReplaceAll {
-    /// The person's "Apply to all" Replace for operation `job`; the agreement
-    /// is given back if it isn't one.
+    /// The person's "Apply to all" Replace for the operation whose key is
+    /// `job`; the agreement is given back if it isn't one.
     pub fn new(
         agreed: aizome_kit::agree::Agreed<Replacing>,
-        job: u64,
+        job: &JobKey,
     ) -> Result<ReplaceAll, aizome_kit::agree::Agreed<Replacing>> {
         let r = agreed.target();
-        if r.all && r.job == job { Ok(ReplaceAll { agreed }) } else { Err(agreed) }
+        if r.all && r.job == job.0 { Ok(ReplaceAll { agreed }) } else { Err(agreed) }
     }
 
     /// The operation it's for.
