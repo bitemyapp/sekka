@@ -1,0 +1,284 @@
+# Tier 1 state machines as typestate
+
+The implicit state machine catalog (PR #282, `docs/implicit-state-machines.md`)
+found the machines behind Sekka's worst confirmed bugs. The crate evaluation in
+the same PR (`docs/state-machine-crates.md`) chose hand-written typestate to
+make them explicit. This change does that for the tier 1 machines: those whose
+bugs can wipe the wrong disk, lose files, or leave a system that doesn't boot.
+Every tier 1 bug is fixed. For each one, the code that made the mistake no
+longer compiles, and a `compile_fail` doctest shows it.
+
+## The machines and their bugs
+
+| Component | Machine | Bug | Fixed | Mistake rejected at compile time |
+|---|---|---|---|---|
+| aizome-sys | SYA-13 destructive-operation confirmation | A confirmation for one stick held for another at the same path | yes | yes |
+| Tansu | TSH-25 sheets holding segment indexes | After an unplug or swap, an open sheet retargeted another partition | yes | yes |
+| Kakehashi | KTL-04 chosen drive | OK re-read the drive by name and could erase a swapped stick | yes | yes |
+| Kakehashi | KTL-03 write job | A helper killed mid-write was reported as "Not written" | yes | yes |
+| Genkan | GEN-03 disk identity | Revalidation failed when an unrelated disk changed | yes | yes, apart from a runtime fact (below) |
+| Genkan | GEN-06 helper session | A confirmation sent during preparation was used as preparation ended | yes (hazards) | yes |
+| Genkan | GEN-07 install transaction | The deferred route skipped the root-space check, so the install failed after erasing | yes | yes |
+| Genkan | GEN-34 review and confirmation (GUI) | A preparation failure after an early confirmation was reported as a failed install | yes | yes |
+| Genkan | GEN-28 disk scan and memory read | A failed memory read showed "Reading installed memory…" forever | yes | yes, apart from collapsing two errors (below) |
+| Yukimi | YUK-09 change transaction | A failed or stopped change left root's channels advanced | yes | yes |
+| Yukimi | YUK-11 rollback and clean-up | Stop during garbage collection left boot entries for deleted generations | yes | yes |
+| Yukimi | YUK-02 update receipt | A stale "activating" receipt outlived a repair and a reboot | yes | yes |
+| Yukimi | YUK-10 saved configurations | A reused generation number kept another generation's configuration | yes | yes |
+| Hako | HAKO-05 replace-aside | Put Back with Replace permanently deleted the newer item | yes | yes |
+| Hako | HAKO-06 cross-filesystem move | Sources under a folder that couldn't be synced were deleted | yes | yes |
+| Hako | HAKO-08 Trash item protocol | A partly restored folder lost its Trash info | yes | yes |
+| Hako | HAKO-09 undo history | A failed undo dropped its step | yes | yes |
+
+GEN-06 had no catalogued bug, only High-rated hazards, and its machine was
+reified with the install transaction.
+
+## How "caught at compile time" was shown
+
+For each bug:
+
+1. **A `compile_fail` doctest.** It writes the bug's own mistake against the
+   new API, for example:
+   - planning the drive found by name at OK;
+   - erasing `request.disk().path`;
+   - choosing deletion for a replaced item;
+   - filing an undo's result without checking it.
+
+   Each probe names the error it expects (` ```compile_fail,E0308 `), and
+   the first error is the guarantee itself, not a typo or a missing import.
+   Beside it, a passing twin makes the legal call. The branch has about 90
+   such probes.
+2. **Checked error codes.** Stable rustdoc doesn't check those codes, so
+   they were checked with `RUSTC_BOOTSTRAP=1 cargo test --doc`, which does.
+   `DEVELOPERS.md` says to run them that way.
+3. **A regression test.** The bug's reproduction from the catalog became its
+   regression test. It fails on main and passes here.
+4. **An independent review.** A second agent tried to write each mistake
+   every other way a maintainer might:
+   - another constructor, `Default`, `Clone` or `Deserialize`;
+   - a kept proof, or a proof for another target;
+   - the old code verbatim;
+   - an external crate.
+
+   Every route that compiled was closed, or is listed below, and was then
+   re-verified.
+
+## The shared crate
+
+`desktop/aizome/crates/aizome-typestate` has no dependencies and no workspace
+inheritance, so Genkan, Kakehashi and Yukimi take it by path from their own
+workspaces. Their Nix sources add only that directory. Everything in it is
+`#[inline]` or generic, so a program compiles only what it uses.
+
+| Piece | What it gives | Used by |
+|---|---|---|
+| `machine!` | One struct per state over a borrowed context, with private fields. Also the stored state (one byte when states carry no data), the typed state and `with_typed`, whose `for<'s>` keeps a state from moving between machines. Opt-in parts: `branches`, `stored(Copy)`, `access(...)`, `new(...)`, `with_typed(...)` | Kakehashi job, Hako undo, Genkan review flow and memory read |
+| `Generation`, `Ticket`, `Answer`, `Fresh` | An answer to a superseded request is dropped, and a transition can take only an answer proven fresh, with the proof bound to that answer | Genkan, Hako, Kakehashi |
+| `Reviewed<T, B>`, `Confirmed<T, B>`, `SameTarget<F>` | A destructive step acts on the target the person or record reviewed, re-identified when it acts (`confirm`, `recheck`). The brand `B` lets only the reviewing code make a review | aizome-sys (and through it Tansu), Kakehashi, Genkan, Hako; Yukimi uses `SameTarget` alone, for generations |
+| `Unsettled<T, F>` | A value spent through a named step, or by its fallback when dropped. It covers the paths types can't close, such as an early return or a panic | Yukimi, Hako |
+
+The crate's API grew from the five components' requests. Two requests were
+declined:
+- `Reviewed::map`, because it would let any holder of a review change what
+  is compared;
+- `Fresh::map`, because it would let any holder of a proof attach it to
+  another payload.
+
+### Macro cost
+
+`machine!` is `macro_rules!`, not a proc macro. It was measured on the
+evaluation's Hotaru wrap machine, the hottest path in the evaluation. The
+source files are in the evaluation workspace in PR #282, under
+`docs/state-machine-crates/eval/experiments/typestate-wrap/`.
+
+| Variant | Lines | Instructions per printed cell vs `enum` (default build / thin LTO) |
+|---|---:|---|
+| Hand-written borrowed layout | 404 | 1.00 / 1.00 |
+| `machine!` | 347 (−14%) | 1.02 / 1.02 |
+| `machine!` with `stored(Copy)` | 347 | 1.02 / **0.96** |
+
+Crate-only builds of that workspace, 5 repetitions: dev 0.50 s with the
+macro against 0.54 s without, release 0.64 s against 0.72 s. That's within
+noise, so the macro has no measurable compile-time cost. The compile-time
+impact on each component is in [Compile time](#compile-time).
+
+Most tier 1 machines are linear transactions: prepare, confirm, execute; back
+up, change, then commit or restore. Consuming types and proof values fit them
+better than `machine!`, so the macro reduced lines only in the four
+event-driven machines.
+
+## Code size
+
+These counts cover the source files the change touches, as non-blank,
+non-comment lines; unit tests inside those files count, and doc comments and
+doctests don't.
+
+| Component | Before | After | Change |
+|---|---:|---:|---:|
+| Genkan | 7,361 | 8,843 | +1,482 |
+| Kakehashi | 2,466 | 3,581 | +1,115 |
+| Yukimi (helper and libraries) | 2,628 | 3,545 | +917 |
+| Hako | 4,389 | 5,257 | +868 |
+| `aizome-typestate` (new) | 0 | 613 | +613 |
+| Tansu | 5,022 | 5,352 | +330 |
+| aizome-sys | 1,746 | 1,976 | +230 |
+| Yukimi window | 2,074 | 2,103 | +29 |
+| **Total** | 25,686 | 31,270 | **+5,584 (+22%)** |
+
+The evaluation predicted this: typestate cost 1.8× the enum's lines there.
+Most of the added code is proof types, consuming stage types and the module
+boundaries that keep their constructors private.
+
+## Compile time
+
+Pending: a comparison of crate-only and incremental build times for every touched package, main against this branch, interleaved under the benchmark lock.
+
+## Not caught at compile time
+
+Every bug's mistake as it was written is rejected. These are what the types
+still can't rule out, grouped by why. They're for discussion.
+
+### Runtime facts no type can know
+
+The comparison happens at run time, but the code can't skip it: the step
+takes a proof only the comparison makes.
+
+- **GEN-03:** that reading the target disk touches no other disk.
+- **SYA-13 and TSH-25:** the identities UDisks reports, and the window
+  between the check and UDisks acting (UDisks has no "only if unchanged"
+  call).
+- **KTL-03 and KTL-04:** the helper's progress reports and plan, which come
+  from another process. A faked progress file can't be detected.
+- **YUK-02 and YUK-10:** boot ids and generation link targets, from the
+  kernel and Nix.
+- **HAKO-06 and HAKO-08:** whether an `fsync` failed, and whether an item has
+  left the Trash can.
+
+### Rust has no linear types
+
+- **GEN-34 and GEN-28:** a transition can hand back its state unchanged, for
+  example a handler that ignores an event. `with_typed` accepts that.
+- **GEN-28:** a caller can still collapse `swap_size(...).is_err()` into
+  "reading".
+- **YUK-09, YUK-11 and HAKO-05:** dropping a transaction mid-way is covered
+  by an `Unsettled` fallback at run time. A process killed with SIGKILL
+  skips the fallback. In YUK-11 the boot menu then stays stale until the
+  next Clean Up.
+
+### Enforced by a lint, not a type
+
+Yukimi and Genkan let only their typed steps name the programs that change
+the system or a disk (a `Program` value with a private constructor). The
+other ways to start a program are banned by clippy `disallowed-methods`,
+which their Nix check phases run. What remains open:
+- code behind `#[allow]` or unsafe FFI;
+- free-form `nix build` and `systemctl` arguments (Yukimi);
+- writing the device node with ordinary file APIs (Genkan).
+
+### A proof shows a check, not a person
+
+- **Kakehashi:** a second, throwaway drive list can produce a confirmation.
+- **aizome-sys:** an identity can be read from live state and confirmed with
+  another brand. Tansu's own brand rejects that.
+- **Kakehashi:** a stale dialog ticket is refused at run time, not compile
+  time.
+
+### Hardware that looks identical
+
+- **Kakehashi:** two serial-less sticks of the same model and size, or two
+  cards behind one reader, look like the same drive. The kernel's disk
+  sequence number would separate them, but media-change events also bump it
+  and would refuse legitimate card-reader writes, so it wasn't added.
+- **aizome-sys:** it also compares UDisks' detection times, which change with
+  each plug. Only a card swapped within one poll of the reader could slip
+  through.
+
+### Left as follow-ups
+
+- **Yukimi:** `rollback N` still names its target by number. Passing the
+  system the person saw needs a protocol change.
+- **Genkan:** a per-preparation nonce and `PTUUID` would bind confirmation to
+  preparation over the wire.
+- **Hako:** files left by a crash (`.hako-aside-*`, `.hako-part-*`) stay
+  hidden, and nothing sweeps them.
+- **Tansu, TSH-26 (not tier 1):** a second launch still replaces the Running
+  sheet.
+
+## Changes a person will notice
+
+**Genkan**
+- An early confirmation waits for preparation.
+- A preparation failure returns to the review page with Back.
+- A failure before any write says the disk is unchanged.
+- A helper that stops before the review opens returns to the pages with a
+  note.
+- A disk that vanishes during a scan is listed as unavailable.
+- A failed memory read says so.
+- The deferred route refuses a selection the root can't hold before
+  erasing.
+
+**Kakehashi**
+- A drive swapped or re-plugged while the dialog is open isn't written, and
+  the window says why.
+- A helper killed after it reported shows the "partly written" warning.
+
+**Tansu**
+- Operations whose device is gone or replaced are dropped with a notice.
+- A sheet whose target is gone keeps its title, says why, and can only be
+  cancelled.
+
+**Yukimi**
+- A failed or stopped change restores root's channels.
+- Clean Up rewrites the boot menu before collecting garbage, and Stop waits
+  for that step.
+- A copy saved for a generation number that Nix has since reused is set
+  aside as `generation-<n>.unrecorded`, not used for the new generation.
+
+**Hako**
+- Put Back and Duplicate send what they replace to the Trash. An item the
+  Trash refuses is kept beside its replacement as `name (replaced).ext`.
+- A folder that couldn't be synced keeps its sources, and its unsafe copy is
+  removed.
+- A partly restored Trash folder keeps its info.
+- Undo and Redo run one at a time. A failed undo keeps its step.
+- A step whose undo does nothing twice is dropped, with a note.
+
+## Wire and file formats
+
+- **Genkan's helper protocol:** unchanged on the wire. The helper now
+  refuses a confirmation sent before `Prepared` instead of keeping it, and
+  the GUI sends one only after `Prepared`.
+- **Kakehashi's `plan.json` and progress lines:** unchanged. The helper reads
+  the plan as its own type.
+- **Yukimi's saved configurations:** they gain a `.system` record. Copies
+  from before it are accepted once and then recorded.
+- **Aizome-sys's API:** `Destructive` is now `Change`, and making partitions,
+  labels, partition type, name and flags, and passphrase changes now needs a
+  confirmation. Only Tansu calls it.
+
+## Checks
+
+The check kinds are kept apart, as `AGENTS.md` asks.
+
+- **Component tests**, on the integrated branch:
+
+  | Workspace | Tests passed | Doctests passed, codes checked |
+  |---|---:|---:|
+  | Aizome (crate, aizome-sys, Tansu, Hako, Yukimi window) | 641 | 61 |
+  | Kakehashi | 75 | 20 |
+  | Yukimi | 164, plus 4 namespace end-to-end | 24 |
+  | Genkan backend | 125 | 29 |
+  | Genkan UI | 46 | 6 |
+
+  Clippy is clean in every workspace.
+- **Regression tests:** each fails on main and passes here.
+- **Nix builds:** `.#kakehashi`, `.#yukimi.helper` (with its new clippy
+  pass), `.#genkan`, `.#genkan.helper` and `.#vm-fixture`.
+- **VM checks**, in disposable NixOS VMs:
+  - `kakehashi-vm`, all four subtests;
+  - `storage`;
+  - `encrypted-storage`, 12 BIOS and UEFI cases;
+  - `genkan-preflight`;
+  - `tansu-resize`.
+- **ISO installs:** pending. UEFI GUI installs from an ISO built from this branch, confirming before and after preparation finishes; the deferred route on a disk too small and on one large enough; and a scripted helper-session install.
+- **Hardware:** no physical hardware was tested.
