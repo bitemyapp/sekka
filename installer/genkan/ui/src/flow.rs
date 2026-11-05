@@ -208,9 +208,13 @@ impl<'s> Checking<'s> {
     }
 
     /// The helper stopped (or got ahead of the review) before the review
-    /// opened: back to the pages, and the worker's answer is stale.
-    pub fn stopped(self, _: &Said) -> Editing<'s> {
-        withdraw(self.ctx)
+    /// opened: back to the pages, and the worker's answer is stale. Any
+    /// other answer leaves it checking.
+    pub fn stopped(self, said: &Said) -> Result<Editing<'s>, Checking<'s>> {
+        if !(stops(said) || matches!(said.answer().said, Helper::Prepared(_))) {
+            return Err(self);
+        }
+        Ok(withdraw(self.ctx))
     }
 }
 
@@ -247,10 +251,6 @@ impl HelperAnswer {
     pub fn new(ticket: Ticket<ReviewRequest>, said: Helper) -> Self {
         Self { ticket, said }
     }
-    /// What it said.
-    pub fn said(&self) -> &Helper {
-        &self.said
-    }
 }
 
 impl Answer<ReviewRequest> for HelperAnswer {
@@ -263,6 +263,20 @@ impl Answer<ReviewRequest> for HelperAnswer {
 /// transitions it drives take it whole and read their payload from it, so
 /// a payload can't be applied with another answer's proof.
 pub type Said = Fresh<ReviewRequest, HelperAnswer>;
+
+/// What the helper said, read only from a proven answer: a stale answer's
+/// payload can't be re-wrapped under the latest ticket.
+pub fn heard(said: &Said) -> &Helper {
+    &said.answer().said
+}
+
+/// Whether the helper said it stopped: cancelled, failed or exited.
+fn stops(said: &Said) -> bool {
+    matches!(
+        said.answer().said,
+        Helper::Event(Event::Cancelled | Event::Failed { .. }) | Helper::Finished(_)
+    )
+}
 
 impl<'s> Preparing<'s> {
     pub fn review(&self) -> &Review {
@@ -317,9 +331,12 @@ impl<'s> Preparing<'s> {
     }
 
     /// Preparation failed or was cancelled, or the helper stopped: nothing
-    /// was written.
-    pub fn stopped(self, _: &Said) -> Unprepared<'s> {
-        Unprepared::enter(self.ctx, self.data.review)
+    /// was written. Any other answer leaves it preparing.
+    pub fn stopped(self, said: &Said) -> Result<Unprepared<'s>, Preparing<'s>> {
+        if !stops(said) {
+            return Err(self);
+        }
+        Ok(Unprepared::enter(self.ctx, self.data.review))
     }
 
     /// Confirmed before preparation finished: the confirmation waits for
@@ -376,8 +393,11 @@ impl<'s> Ready<'s> {
     }
 
     /// The helper stopped while waiting for the confirmation.
-    pub fn stopped(self, _: &Said) -> Unprepared<'s> {
-        Unprepared::enter(self.ctx, self.data.review)
+    pub fn stopped(self, said: &Said) -> Result<Unprepared<'s>, Ready<'s>> {
+        if !stops(said) {
+            return Err(self);
+        }
+        Ok(Unprepared::enter(self.ctx, self.data.review))
     }
 
     pub fn withdraw(self) -> Editing<'s> {
@@ -450,19 +470,22 @@ impl<'s> Queued<'s> {
     ///
     /// ```compile_fail,E0308
     /// use genkan::flow::{Failed, Queued, Said};
-    /// fn failed<'s>(queued: Queued<'s>, said: &Said) -> Failed<'s> {
+    /// fn failed<'s>(queued: Queued<'s>, said: &Said) -> Result<Failed<'s>, Queued<'s>> {
     ///     queued.stopped(said)
     /// }
     /// ```
     ///
     /// ```
     /// use genkan::flow::{Queued, Said, Unprepared};
-    /// fn failed<'s>(queued: Queued<'s>, said: &Said) -> Unprepared<'s> {
+    /// fn failed<'s>(queued: Queued<'s>, said: &Said) -> Result<Unprepared<'s>, Queued<'s>> {
     ///     queued.stopped(said)
     /// }
     /// ```
-    pub fn stopped(self, _: &Said) -> Unprepared<'s> {
-        Unprepared::enter(self.ctx, self.data.review)
+    pub fn stopped(self, said: &Said) -> Result<Unprepared<'s>, Queued<'s>> {
+        if !stops(said) {
+            return Err(self);
+        }
+        Ok(Unprepared::enter(self.ctx, self.data.review))
     }
 }
 
@@ -480,36 +503,50 @@ impl<'s> Installing<'s> {
         self
     }
 
-    pub fn complete(self, _: &Said) -> Installed<'s> {
-        Installed::enter(self.ctx, ())
+    /// The helper completed the installation; any other answer leaves it
+    /// installing.
+    pub fn complete(self, said: &Said) -> Result<Installed<'s>, Installing<'s>> {
+        if !matches!(said.answer().said, Helper::Event(Event::Complete)) {
+            return Err(self);
+        }
+        Ok(Installed::enter(self.ctx, ()))
     }
 
     /// The installation failed, at the step the helper last reported. The
-    /// helper may still be cleaning up.
-    pub fn failed(self, _: &Said) -> Failed<'s> {
+    /// helper may still be cleaning up. Only the helper's `Failed` says so.
+    pub fn failed(self, said: &Said) -> Result<Failed<'s>, Installing<'s>> {
+        if !matches!(said.answer().said, Helper::Event(Event::Failed { .. })) {
+            return Err(self);
+        }
         let Running { _link: link, step } = self.data;
-        Failed::enter(
+        Ok(Failed::enter(
             self.ctx,
             Failure {
                 step,
                 link: Some(link),
             },
-        )
+        ))
     }
 
     /// The helper exited without completing: a failure at the step it last
-    /// reported.
-    pub fn exited(self, _: &Said) -> Failed<'s> {
+    /// reported. Only the helper's exit says so.
+    pub fn exited(self, said: &Said) -> Result<Failed<'s>, Installing<'s>> {
+        if !matches!(said.answer().said, Helper::Finished(_)) {
+            return Err(self);
+        }
         let step = self.data.step;
-        Failed::enter(self.ctx, Failure { step, link: None })
+        Ok(Failed::enter(self.ctx, Failure { step, link: None }))
     }
 }
 
 impl<'s> Failed<'s> {
-    /// The helper exited.
-    pub fn exited(self, _: &Said) -> Failed<'s> {
+    /// The helper exited; any other answer leaves it as it is.
+    pub fn exited(self, said: &Said) -> Result<Failed<'s>, Failed<'s>> {
+        if !matches!(said.answer().said, Helper::Finished(_)) {
+            return Err(self);
+        }
         let step = self.data.step;
-        Failed::enter(self.ctx, Failure { step, link: None })
+        Ok(Failed::enter(self.ctx, Failure { step, link: None }))
     }
 }
 
@@ -534,7 +571,7 @@ mod tests {
         let exited = HelperAnswer::new(ticket, Helper::Finished(Err("pkexec failed".into())));
         let said = flow.ctx().check_answer(exited).ok().unwrap();
         flow.with_typed(|state| match state {
-            FlowAny::Checking(checking) => (checking.stopped(&said).into(), ()),
+            FlowAny::Checking(checking) => (checking.stopped(&said).ok().unwrap().into(), ()),
             other => (other, ()),
         });
         assert!(matches!(flow.stored(), FlowState::Editing(())));
