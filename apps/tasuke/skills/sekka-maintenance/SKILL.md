@@ -3,6 +3,8 @@ name: sekka-maintenance
 description: "Everyday upkeep with exact commands and what needs root — updating, installing and removing software (Yukimi, nix profile, /etc/nixos), freeing disk space (store cleanup, generations, journal, Kura), services and logs, Wi-Fi (nmcli), sound (wpctl), Bluetooth, printers (CUPS), users and passwords, time zone, keyboard layout, language, host name, firewall, SSH, backups. Load for \"update my computer\", \"install X\", \"disk is full\", \"connect to Wi-Fi\", \"add a printer\", \"change the time zone\"."
 ---
 
+> In Tasuke, `sudo CMD` in this guide means CMD as root: call `run_as_root` with CMD, without the word `sudo` (Tasuke asks the person, then they type their password). When telling the person how to do it themselves in a terminal, keep the `sudo`.
+
 # Maintaining Sekka
 
 Commands below run as the desktop user unless marked **root** (prefix

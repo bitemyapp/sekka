@@ -3,6 +3,8 @@ name: sekka-basics
 description: "How Sekka is put together and changed — NixOS with Determinate Nix, Genkan, Aizome, Yukimi; /etc/nixos (flake following github:bitemyapp/sekka/nightly, configuration.nix, calamares.* options); applying changes (sekka-update, Yukimi, nixos-rebuild); rolling back generations; where configuration, state and logs live; per-user live changes versus declarative ones. Load before any system-wide change, or for \"where is X configured\" and \"how do I undo an update\"."
 ---
 
+> In Tasuke, `sudo CMD` in this guide means CMD as root: call `run_as_root` with CMD, without the word `sudo` (Tasuke asks the person, then they type their password). When telling the person how to do it themselves in a terminal, keep the `sudo`.
+
 # Sekka basics
 
 Sekka is NixOS for x86_64 PCs, with Determinate Nix, its own desktop

@@ -3,6 +3,8 @@ name: aizome-computer-use
 description: "Operating Aizome for the person — aizomectl (windows, focus, spawn, screenshots, synthetic pointer and key input, binding actions), aizome-shell msg (palette with a query, panels), screen layout in points, AIZOME_KIT_INSPECT element files, typing limits (US key positions, ASCII only, clipboard workaround), verifying each step, and the rules (never type passwords, confirm destructive actions, never end the session). Load before clicking, typing or opening anything on their screen."
 ---
 
+> In Tasuke, `sudo CMD` in this guide means CMD as root: call `run_as_root` with CMD, without the word `sudo` (Tasuke asks the person, then they type their password). When telling the person how to do it themselves in a terminal, keep the `sudo`.
+
 # Operating Aizome for the person
 
 Prefer, in order: a direct command (`timedatectl`, an app's CLI flag), an

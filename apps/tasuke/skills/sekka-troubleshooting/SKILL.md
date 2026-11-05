@@ -3,6 +3,8 @@ name: sekka-troubleshooting
 description: "Diagnosing and fixing faults on a running Sekka system and Aizome session — safe order of investigation, reaching the user's session from root, units, masks, ownership, logs, and known symptoms with causes (settings reverted, wrong keyboard layout, no sound, file dialogs dead, DNS/firewall, disk full, runaway process, wrong clock, SSH key refused, login refused \"already running\", black lock screen, frozen desktop, failed update). Load when something on the machine is broken."
 ---
 
+> In Tasuke, `sudo CMD` in this guide means CMD as root: call `run_as_root` with CMD, without the word `sudo` (Tasuke asks the person, then they type their password). When telling the person how to do it themselves in a terminal, keep the `sudo`.
+
 # Troubleshooting Sekka and Aizome
 
 Sekka is NixOS with Genkan's installed configuration, the Aizome desktop
@@ -141,7 +143,7 @@ status`). On the evaluation VM, `as-alice CMD` does this. Session logs:
 
 | Symptom | Look at | Usual cause → fix |
 |---|---|---|
-| Theme, wallpaper or every setting reverted | `journalctl --user -b \| grep -i settings.toml`; `aizomectl reload-config` | syntax error → fix the line |
+| Theme, wallpaper or every setting reverted | `journalctl --user -b --no-pager -g settings.toml`; `aizomectl reload-config` | syntax error → fix the line |
 | Settings "don't stick" | `ls -ld ~/.config/aizome ~/.config/aizome/settings.toml` | root-owned → chown to the user |
 | Letters wrong (Y/Z swapped, symbols moved) | `[input.keyboard] layouts`/`variant`; `[[input.keyboards]]`; system `services.xserver.xkb.layout` | wrong layout in settings.toml → set it (Settings → Keyboard) |
 | ❖ and Alt seem swapped | `[input.keyboard] options` (`altwin:…`), per-keyboard `options` | an Alt/Super swap set or missing → Settings → Keyboard → Modifier keys |
