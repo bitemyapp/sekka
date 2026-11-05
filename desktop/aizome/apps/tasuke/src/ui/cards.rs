@@ -91,12 +91,23 @@ fn state_glyph(s: &ToolState) -> (Icon, Role) {
     }
 }
 
+/// The line's verb: the tool's own ("Running", "Ran"), unless the call
+/// never ran, which the verb says rather than contradicts.
+fn verb(s: &ToolState, doing: &'static str, done: &'static str) -> &'static str {
+    match s {
+        s if s.is_open() => doing,
+        ToolState::Refused { .. } => "Refused",
+        ToolState::Denied => "Didn't run",
+        ToolState::Stopped => "Stopped",
+        _ => done,
+    }
+}
+
 /// What the line says after the target, when it's worth saying.
 fn state_note(s: &ToolState) -> String {
     match s {
-        ToolState::Done { .. } => String::new(),
+        ToolState::Done { .. } | ToolState::Refused { .. } | ToolState::Denied | ToolState::Stopped => String::new(),
         ToolState::Failed { exit: Some(code) } => format!("exit {code}"),
-        ToolState::Refused { .. } => "never run".into(),
         other => other.words(),
     }
 }
@@ -172,7 +183,7 @@ fn line(t: &Tool) -> Element<Msg> {
     let answered = t.looks && matches!(t.state, ToolState::Failed { exit: Some(_) });
     let (glyph, role) = if answered { (Icon::Circle, Role::Text3) } else { state_glyph(&t.state) };
     let d = &t.described;
-    let verb = if t.state.is_open() { d.doing } else { d.done };
+    let verb = verb(&t.state, d.doing, d.done);
     let target_line = d.target.lines().next().unwrap_or("").to_owned();
     let target: Element<Msg> = if d.code {
         text(target_line).mono().size(12.0).role(Role::Text2).width(Fill).into()
@@ -564,5 +575,16 @@ mod tests {
         assert_eq!(progress_words(w, NoticeNow::Over).as_deref(), Some("Started the model server"));
         assert_eq!(progress_words(w, NoticeNow::Failed).as_deref(), Some(w));
         assert_eq!(progress_words("Trimmed older command output to make room.", NoticeNow::Over), None);
+    }
+
+    #[test]
+    fn a_call_that_never_ran_doesnt_say_it_ran() {
+        let line = |s: &ToolState| (verb(s, "Running", "Ran"), state_note(s));
+        assert_eq!(line(&ToolState::Running), ("Running", "running".to_owned()));
+        assert_eq!(line(&ToolState::Done { exit: Some(0) }), ("Ran", String::new()));
+        assert_eq!(line(&ToolState::Refused { reason: "it wipes the home folder".into() }), ("Refused", String::new()));
+        assert_eq!(line(&ToolState::Failed { exit: Some(2) }), ("Ran", "exit 2".to_owned()));
+        assert_eq!(line(&ToolState::Denied), ("Didn't run", String::new()));
+        assert_eq!(line(&ToolState::Stopped), ("Stopped", String::new()));
     }
 }
