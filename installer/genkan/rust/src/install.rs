@@ -9,7 +9,7 @@
 //! target and installs the bootloader, so the time after clicking Install is
 //! dominated by writing the target disk.
 use crate::{
-    ConfirmedInstall, Firmware, InstallPlan, Settings,
+    ConfirmedInstall, Firmware, InstallPlan, RawRequest, Settings,
     config::{self, Template},
     disk::{self, Layout},
     filesystem::{self, Identities},
@@ -1197,10 +1197,40 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     Ok(())
 }
 
-/// One-shot preflight or installation of an already-confirmed request: the
-/// same preparation and execution as a session's, with the confirmation the
-/// request carried.
-pub fn install(confirmed: ConfirmedInstall, mode: InstallMode) -> Result<()> {
+/// One-shot preflight or installation of a request that carries its own
+/// confirmation: the same preparation and execution as a session's. It
+/// parses and confirms the request itself, so nothing outside the crate can
+/// mint a confirmation from a request: the old session, which confirmed
+/// with a line read while preparing, doesn't compile that way either
+/// (GEN-06):
+///
+/// ```compile_fail,E0624
+/// use calamares_nixos::{InstallPlan, RawRequest, Settings, install, session::Confirmation};
+/// use std::{io::BufRead, sync::mpsc, thread};
+/// fn session(request: &[u8], settings: &Settings) -> anyhow::Result<()> {
+///     let plan: InstallPlan = serde_json::from_slice::<RawRequest>(request)?.parse(settings)?;
+///     let (send, confirmation) = mpsc::channel();
+///     thread::spawn(move || {
+///         let mut line = String::new();
+///         let read = std::io::stdin().lock().read_line(&mut line).unwrap_or(0);
+///         let _ = send.send((read > 0).then_some(line));
+///     });
+///     let prepared = install::prepare(&plan)?;
+///     let Ok(Some(line)) = confirmation.recv() else { return Ok(()) };
+///     let mut again: RawRequest = serde_json::from_slice(request)?;
+///     again.confirmation = serde_json::from_str::<Confirmation>(&line)?.confirmation;
+///     install::execute(again.parse_confirmed(settings)?, prepared)
+/// }
+/// ```
+///
+/// ```no_run
+/// use calamares_nixos::{RawRequest, Settings, install::{self, InstallMode}};
+/// fn one_shot(request: RawRequest) -> anyhow::Result<()> {
+///     install::install(request, &Settings::load()?, InstallMode::Preflight)
+/// }
+/// ```
+pub fn install(request: RawRequest, settings: &Settings, mode: InstallMode) -> Result<()> {
+    let confirmed = request.parse_confirmed(settings)?;
     let prepared = prepare(confirmed.plan())?;
     event(Event::Prepared {
         summary: prepared.summary.clone(),
