@@ -7,7 +7,7 @@
 //! `BTN_X`, which is the same code as `BTN_NORTH`. Other devices (`hid-generic`)
 //! report whatever their descriptor says. So, in order:
 //!
-//! 1. a layout a grown-up set up in Chanoma for this model;
+//! 1. a layout set up by hand for this model (Chanoma's grown-ups can);
 //! 2. SDL's community database (`gamecontrollerdb.txt`), which names
 //!    buttons by SDL's numbering of the device's codes;
 //! 3. the kernel's layout, with Microsoft's and `xpad`'s left and top
@@ -73,6 +73,19 @@ impl Mapping {
     pub fn has(&self, out: Output) -> bool {
         self.binds.iter().any(|(_, o)| *o == out)
     }
+
+    /// The buttons this layout gives (`Button::bit`s): a trigger counts
+    /// whether it's an axis or a button.
+    pub fn buttons(&self) -> u32 {
+        self.binds.iter().fold(0, |bits, (_, out)| {
+            bits | match *out {
+                Output::Button(b) => b.bit(),
+                Output::Axis(Axis::L2) | Output::HalfAxis(Axis::L2, _) => Button::L2.bit(),
+                Output::Axis(Axis::R2) | Output::HalfAxis(Axis::R2, _) => Button::R2.bit(),
+                _ => 0,
+            }
+        })
+    }
 }
 
 /// SDL's identifier for a device: bus, vendor, product and version,
@@ -131,6 +144,16 @@ impl Database {
 
     pub fn load(path: &std::path::Path) -> Database {
         std::fs::read_to_string(path).map(|t| Database::parse(&t)).unwrap_or_default()
+    }
+
+    /// Where the database is: `$AIZOME_GAMECONTROLLERDB` (Aizome's package
+    /// sets it), else SDL's own `$SDL_GAMECONTROLLERCONFIG_FILE`.
+    pub fn standard_path() -> Option<std::path::PathBuf> {
+        ["AIZOME_GAMECONTROLLERDB", "SDL_GAMECONTROLLERCONFIG_FILE"]
+            .iter()
+            .filter_map(std::env::var_os)
+            .find(|p| !p.is_empty())
+            .map(std::path::PathBuf::from)
     }
 
     pub fn len(&self) -> usize {
@@ -401,6 +424,26 @@ mod tests {
         assert_eq!(bind(&ps, Output::Button(Button::West)), Some(Input::Key(BTN_WEST)), "the square");
         assert_eq!(bind(&ps, Output::Axis(Axis::RightX)), Some(Input::Abs { code: ABS_RX, half: 0, invert: false }));
         assert_eq!(bind(&ps, Output::Axis(Axis::L2)), Some(Input::Abs { code: ABS_Z, half: 0, invert: false }));
+    }
+
+    #[test]
+    fn a_layout_says_which_buttons_the_controller_has() {
+        let db = Database::default();
+        let xbox = resolve(&xbox_bluetooth(), &HashMap::new(), &db).buttons();
+        assert_eq!(xbox & Button::L2.bit(), Button::L2.bit(), "a trigger on an axis");
+        let ps = resolve(&dualsense(), &HashMap::new(), &db).buttons();
+        for b in [Button::L1, Button::R2, Button::North, Button::West, Button::Up, Button::Select, Button::Guide] {
+            assert!(ps & b.bit() != 0, "{b:?}");
+        }
+        // Shaped as Nintendo's Super pad: shoulders, no triggers or sticks.
+        let snes = Caps {
+            keys: Bits::with(&[BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, BTN_SELECT, BTN_START]),
+            abs: Bits::with(&[ABS_HAT0X, ABS_HAT0Y]),
+            ..Caps::default()
+        };
+        let snes = from_kernel(&snes).buttons();
+        assert_eq!(snes & (Button::L2.bit() | Button::R2.bit() | Button::Guide.bit()), 0);
+        assert!(snes & Button::L1.bit() != 0 && snes & Button::Left.bit() != 0);
     }
 
     #[test]

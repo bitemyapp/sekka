@@ -1,16 +1,17 @@
 //! Game controllers, read straight from their event devices on a thread of
-//! their own.
+//! their own: Chanoma's (the television) and the login screen's.
 //!
 //! - **Found as they come**: `/dev/input` is watched, so a controller
 //!   switched on (Bluetooth reconnects a paired one by itself) is there at
 //!   once, as player 1, 2, 3 or 4. A controller that comes back keeps its
 //!   number.
-//! - **Held exclusively**: while Chanoma runs it grabs each controller, so
-//!   a browser's Gamepad API doesn't also act on presses Chanoma turns into
-//!   keys for it.
+//! - **Held exclusively, if asked** ([`Config::grab`]): Chanoma grabs each
+//!   controller, so a browser's Gamepad API doesn't also act on presses
+//!   Chanoma turns into keys for it. The login screen only listens.
 //! - **By position**: buttons are named by where they are (`South` is the
 //!   bottom face button), whatever the controller prints on them; see
-//!   [`mapping`].
+//!   [`mapping`]. Which of them says yes is [`Confirm`]'s to say, and
+//!   [`PadInfo::buttons`] which ones a controller has at all.
 //! - **Menus** hear a direction from the arrows or the stick that repeats
 //!   while it's held ([`nav`]). A controller without a Home button gets one
 //!   by holding Select and Start together for a second.
@@ -82,6 +83,39 @@ impl Button {
 
     pub fn bit(self) -> u32 {
         1 << self as u32
+    }
+
+    /// Every button's bit: what a keyboard, which stands in for all of
+    /// them, has.
+    pub fn all_bits() -> u32 {
+        Button::ALL.iter().fold(0, |b, x| b | x.bit())
+    }
+}
+
+/// Which face button says yes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Confirm {
+    /// The controller's own habit: the right-hand button on Nintendo's,
+    /// the bottom one on others.
+    #[default]
+    Auto,
+    Bottom,
+    Right,
+}
+
+impl Confirm {
+    /// The button that says yes on a controller of `family`.
+    pub fn ok(self, family: Family) -> Button {
+        match (self, family) {
+            (Confirm::Right, _) | (Confirm::Auto, Family::Nintendo) => Button::East,
+            _ => Button::South,
+        }
+    }
+
+    /// And the one that says no: the other of the two.
+    pub fn back(self, family: Family) -> Button {
+        if self.ok(family) == Button::East { Button::South } else { Button::East }
     }
 }
 
@@ -164,6 +198,16 @@ pub struct PadInfo {
     pub battery: Option<(u8, bool)>,
     pub source: Source,
     pub rumble: bool,
+    /// The buttons it has (`Button::bit`s), as its layout gives them: a
+    /// pad shaped as an old console's may have no triggers, or no
+    /// shoulders.
+    pub buttons: u32,
+}
+
+impl PadInfo {
+    pub fn has(&self, b: Button) -> bool {
+        self.buttons & b.bit() != 0
+    }
 }
 
 /// What the controllers did.
@@ -438,7 +482,7 @@ pub struct Config {
     pub dir: PathBuf,
     /// SDL's database.
     pub database: Database,
-    /// Layouts set up in Chanoma, by guid.
+    /// Layouts set up by hand (Chanoma sets them up), by guid.
     pub layouts: HashMap<String, Mapping>,
     /// Grab controllers from the start.
     pub grab: bool,
@@ -462,7 +506,7 @@ impl Pads {
             (None, None)
         };
         let worker = Worker::new(config, shared.clone(), cmds.clone(), read, Box::new(send));
-        let thread = std::thread::Builder::new().name("chanoma-pads".into()).spawn(move || worker.run()).ok();
+        let thread = std::thread::Builder::new().name("aizome-gamepad".into()).spawn(move || worker.run()).ok();
         Pads { shared, control: Control { cmds, wake: write.map(Arc::new) }, thread }
     }
 
@@ -529,6 +573,7 @@ impl Pad {
             battery: self.battery,
             source: self.mapping.source,
             rumble: self.dev.caps.rumble,
+            buttons: self.mapping.buttons(),
         }
     }
 
@@ -682,7 +727,7 @@ impl Worker {
         self.next_id += 1;
         pad.resync();
         log::info!(
-            "chanoma: controller {} ({}, {:?}, {:?}) is player {}",
+            "gamepad: controller {} ({}, {:?}, {:?}) is player {}",
             pad.dev.caps.name,
             pad.dev.path.display(),
             pad.dev.caps.driver,
@@ -697,7 +742,7 @@ impl Worker {
 
     fn remove(&mut self, i: usize) {
         let pad = self.pads.remove(i);
-        log::info!("chanoma: controller {} went (player {})", pad.dev.caps.name, pad.slot + 1);
+        log::info!("gamepad: controller {} went (player {})", pad.dev.caps.name, pad.slot + 1);
         if pad.slot < SLOTS {
             self.shared.set(pad.slot, false, 0, [0.0; 6]);
         }

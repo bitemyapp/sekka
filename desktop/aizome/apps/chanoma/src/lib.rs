@@ -26,7 +26,7 @@ pub mod folders;
 pub mod instance;
 pub mod library;
 pub mod metadata;
-pub mod pad;
+pub use aizome_gamepad as pad;
 pub mod retro;
 pub mod rules;
 pub mod services;

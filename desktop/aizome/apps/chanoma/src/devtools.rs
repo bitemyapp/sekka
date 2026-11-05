@@ -96,27 +96,9 @@ pub enum Ask {
     Key(Key),
 }
 
-/// The keys Chanoma's keyboard presses on a page.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Key {
-    Backspace,
-    Enter,
-    Left,
-    Right,
-}
-
-/// A text box with the page's keyboard.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub struct Field {
-    /// What it's for: its label, its placeholder or its name.
-    pub label: String,
-    /// What's in it; nothing for a password, whose length alone is told.
-    pub text: String,
-    pub length: usize,
-    /// Where typing goes in it, in characters from the start.
-    pub caret: usize,
-    pub secret: bool,
-}
+/// The keys Chanoma's keyboard presses on a page, and a text box with
+/// the page's keyboard: the keyboard's own (shared with the login screen).
+pub use aizome_sofa::keyboard::{Edit as Key, Field};
 
 /// What has a page's keyboard.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

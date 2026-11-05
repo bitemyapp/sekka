@@ -21,6 +21,10 @@ aizome-kit.workspace = true
 aizome-theme.workspace = true
 aizome-config.workspace = true
 aizome-ipc.workspace = true
+# Controllers, and the keyboard and PIN pad drawn for the sofa, which the
+# login screen shares.
+aizome-gamepad.workspace = true
+aizome-sofa.workspace = true
 # Pairing controllers through BlueZ, as Settei does.
 aizome-sys = { workspace = true, features = ["pam"] }
 # Films and episodes from the disk play through Utsushi's engine.

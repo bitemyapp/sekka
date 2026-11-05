@@ -256,8 +256,8 @@ impl Chanoma {
         let Some(k) = self.search.as_mut().and_then(|s| s.keys.as_mut()) else { return };
         match k.press(key) {
             Some(Typed::Text(t)) => self.search_type(&t, cx),
-            Some(Typed::Key(crate::devtools::Key::Backspace)) => self.search_erase(cx),
-            Some(Typed::Key(crate::devtools::Key::Enter)) => self.done_typing(cx),
+            Some(Typed::Edit(crate::devtools::Key::Backspace)) => self.search_erase(cx),
+            Some(Typed::Edit(crate::devtools::Key::Enter)) => self.done_typing(cx),
             _ => {}
         }
     }

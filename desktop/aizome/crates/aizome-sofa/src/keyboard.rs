@@ -1,20 +1,59 @@
-//! Chanoma's keyboard over a page, for a service's text boxes (a sign-in,
-//! a search) where nothing else types: a floating panel along the foot of
-//! the screen, what's in the box above its keys (dots for a password), as
-//! the box may be under the panel, and the keys in rows as a phone's are,
+//! The keyboard on the screen, for typing with a controller where nothing
+//! else types: a service's text boxes in Chanoma (a sign-in, a search), a
+//! password at the login screen. A floating panel along the foot of the
+//! screen, what's in the box above its keys (dots for a password), as the
+//! box may be under the panel, and the keys in rows as a phone's are,
 //! letters and a page of symbols. The arrows or the stick move between
 //! keys and the confirm button presses one; the other buttons do what's
-//! typed most, as the hints along the panel's foot say.
+//! typed most ([`Keyboard::action`]), as the hints along the panel's foot
+//! say.
+//!
+//! What's typed goes where the program says: [`Keyboard::press`] gives
+//! [`Typed`] text and edits, and the program puts them in its box and
+//! tells the keyboard what the box holds now ([`Field`]).
 
 use aizome_kit::Icon;
 use aizome_kit::layout::{Point, Rect};
 use aizome_kit::sidestep_ui::Canvas;
 use aizome_kit::theme::Theme;
 
-use super::look::*;
-use super::{H, W};
-use crate::devtools::{self, Field};
-use crate::pad::{Button, Dir, Family};
+use crate::look::*;
+use crate::{H, W};
+use aizome_gamepad::{Button, Dir, Family};
+
+/// The box typed in, as the keyboard shows it above its keys.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Field {
+    /// What it's for: its label, its placeholder or its name.
+    pub label: String,
+    /// What's in it; nothing for a password, whose length alone is told.
+    pub text: String,
+    pub length: usize,
+    /// Where typing goes in it, in characters from the start.
+    pub caret: usize,
+    pub secret: bool,
+}
+
+/// Keys that edit rather than type.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Edit {
+    Backspace,
+    Enter,
+    /// The caret back or on.
+    Left,
+    Right,
+}
+
+/// What a controller's button does while the keyboard is up.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Action {
+    /// A key pressed: the one the controller is on, or one with a button
+    /// of its own.
+    Key(Key),
+    Edit(Edit),
+    /// Put the keyboard away.
+    Close,
+}
 
 /// A key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -39,11 +78,11 @@ pub enum Shift {
     Lock,
 }
 
-/// What a key typed, for the page.
+/// What a key typed, for the box.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Typed {
     Text(String),
-    Key(devtools::Key),
+    Edit(Edit),
 }
 
 /// Five rows of keys, each ten wide (a key's width in tenths of a row).
@@ -180,6 +219,27 @@ impl Keyboard {
         }
     }
 
+    /// What button `b`, pressed, does here (its controller's yes and no
+    /// are [`Keyboard::ok`] and [`Keyboard::back`]): yes presses the key
+    /// it's on, no closes, and the rest are what's typed most, as the
+    /// hints say. Start (Enter) and Select (closing) are a program's to
+    /// take when they're let go alone, since together they're Home.
+    pub fn action(&self, b: Button) -> Option<Action> {
+        Some(match b {
+            _ if b == self.ok => Action::Key(self.key()),
+            _ if b == self.back => Action::Close,
+            Button::West => Action::Key(Key::Backspace),
+            Button::North => Action::Key(Key::Space),
+            Button::L2 => Action::Key(Key::Shift),
+            Button::R2 => Action::Key(Key::Page),
+            Button::L1 => Action::Edit(Edit::Left),
+            Button::R1 => Action::Edit(Edit::Right),
+            Button::Start => Action::Key(Key::Enter),
+            Button::Select => Action::Close,
+            _ => return None,
+        })
+    }
+
     /// Press `key`: what it types, if anything (Shift and the page of
     /// symbols change the keys instead).
     pub fn press(&mut self, key: Key) -> Option<Typed> {
@@ -193,8 +253,8 @@ impl Keyboard {
             Key::Char(c) => Typed::Text(c.to_string()),
             Key::Text(s) => Typed::Text(s.to_owned()),
             Key::Space => Typed::Text(" ".into()),
-            Key::Backspace => Typed::Key(devtools::Key::Backspace),
-            Key::Enter => Typed::Key(devtools::Key::Enter),
+            Key::Backspace => Typed::Edit(Edit::Backspace),
+            Key::Enter => Typed::Edit(Edit::Enter),
             Key::Shift => {
                 self.shift = match self.shift {
                     Shift::Off => Shift::Once,
@@ -377,6 +437,25 @@ mod tests {
         assert_eq!(k.press(Key::Page), None);
         assert!(k.symbols);
         assert_eq!(k.press(Key::Text(".com")), Some(Typed::Text(".com".into())));
-        assert_eq!(k.press(Key::Enter), Some(Typed::Key(devtools::Key::Enter)));
+        assert_eq!(k.press(Key::Enter), Some(Typed::Edit(Edit::Enter)));
+    }
+
+    #[test]
+    fn the_buttons_do_what_the_hints_say_with_each_makers_yes_and_no() {
+        use aizome_gamepad::Confirm;
+        let mut k = Keyboard::new(None);
+        k.ok = Confirm::Auto.ok(Family::Xbox);
+        k.back = Confirm::Auto.back(Family::Xbox);
+        assert_eq!(k.action(Button::South), Some(Action::Key(Key::Char('q'))));
+        assert_eq!(k.action(Button::East), Some(Action::Close));
+        assert_eq!(k.action(Button::West), Some(Action::Key(Key::Backspace)));
+        assert_eq!(k.action(Button::R1), Some(Action::Edit(Edit::Right)));
+        assert_eq!(k.action(Button::Start), Some(Action::Key(Key::Enter)));
+        assert_eq!(k.action(Button::Guide), None);
+        // Nintendo's yes is the right-hand button.
+        k.ok = Confirm::Auto.ok(Family::Nintendo);
+        k.back = Confirm::Auto.back(Family::Nintendo);
+        assert_eq!(k.action(Button::East), Some(Action::Key(Key::Char('q'))));
+        assert_eq!(k.action(Button::South), Some(Action::Close));
     }
 }
