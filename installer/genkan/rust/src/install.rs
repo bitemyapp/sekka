@@ -818,6 +818,7 @@ fn build_on_target(
 
 /// Shared destructive storage phase; tests call this only on a marked VM disk.
 fn prepare_storage(
+    reviewed: &disk::Reviewed,
     request: &InstallPlan,
     ids: &Identities,
     layout: &Layout,
@@ -826,10 +827,9 @@ fn prepare_storage(
     mappings: &mut crate::encryption::Mappings,
 ) -> Result<()> {
     let firmware = request.firmware();
-    let reviewed = disk::Reviewed::of(request);
     // Lock while editing the partition table. Re-read the disk's stable
     // identity and its mount and holder state immediately before the first
-    // write; every write acts on the disk that confirmed.
+    // write; every write acts on the disk that confirmed, through the proof.
     let mut device = Some(
         fs::OpenOptions::new()
             .read(true)
@@ -846,22 +846,16 @@ fn prepare_storage(
         "Disk is locked by another installer"
     );
     let disk = reviewed.revalidate()?;
+    disk.holds(device.as_ref().unwrap())?;
+    // For diagnostics and udev only: every write takes the proof.
     let path = disk.path().to_owned();
-    let dev = path.as_str();
     let mount = target.0.to_str().context("Target path encoding")?;
     let storage = (|| -> Result<()> {
         progress(
             1,
             "Erasing the selected disk and creating a GPT partition table",
         );
-        output("wipefs", &["--all", "--force", dev], 60)?;
-        let script = layout.parted_script(firmware, request.filesystem().name());
-        let mut args = vec!["--script", dev];
-        args.extend(script.iter().map(String::as_str));
-        output("parted", &args, 60)?;
-        // Keep udev from observing partially written superblocks. Partition nodes
-        // come from the kernel/devtmpfs; do not wait for udev while holding its lock.
-        output("blockdev", &["--rereadpt", dev], 30)?;
+        layout.write(&disk, firmware, request.filesystem())?;
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
             match disk::verify_layout(disk.identity(), layout) {
@@ -876,9 +870,9 @@ fn prepare_storage(
         // so another disk coming or going can't abandon it.
         let disk = disk.recheck(&[])?;
         progress(2, "Formatting, verifying and mounting the new filesystems");
-        let boot = disk::partition(dev, 1);
-        let root = disk::partition(dev, 2);
-        let swap = disk::partition(dev, 3);
+        let boot = disk.partition(1);
+        let root = disk.partition(2);
+        let swap = disk.partition(3);
         let root_device = match &ids.encryption {
             Some(encryption) => mappings.format_open(&root, &encryption.root, passphrase)?,
             None => root.clone(),
@@ -887,9 +881,7 @@ fn prepare_storage(
         match &ids.efi {
             Some(serial) => filesystem::format_efi(&boot, serial)?,
             // A BIOS boot partition must not retain an old filesystem signature.
-            None => {
-                output("wipefs", &["--all", "--force", &boot], 60)?;
-            }
+            None => filesystem::wipe(&boot)?,
         }
         if let Some(uuid) = &ids.swap {
             let swap_device = match &ids.encryption {
@@ -907,7 +899,7 @@ fn prepare_storage(
         }
         let bios_boot = layout
             .bios_boot_partition()
-            .map(|index| disk::partition(dev, index));
+            .map(|index| disk.partition(index));
         if let (Some(boot), Some(uuid)) = (&bios_boot, &ids.bios_boot) {
             crate::Filesystem::Ext4.format(boot, uuid)?;
         }
@@ -918,12 +910,18 @@ fn prepare_storage(
         if let Some(device) = device.take() {
             device.sync_all()?;
         }
-        let mut changed = vec!["trigger", "--action=change", "--settle", &root, &boot];
+        let mut changed = vec![
+            "trigger",
+            "--action=change",
+            "--settle",
+            root.path(),
+            boot.path(),
+        ];
         if ids.swap.is_some() {
-            changed.push(&swap);
+            changed.push(swap.path());
         }
         if let Some(boot) = &bios_boot {
-            changed.push(boot);
+            changed.push(boot.path());
         }
         let mapping_paths = mappings.paths();
         changed.extend(mapping_paths.iter().map(String::as_str));
@@ -943,7 +941,7 @@ fn prepare_storage(
     })();
     // Also releases the lock if storage preparation failed while holding it.
     drop(device);
-    storage.map_err(|error| filesystem::diagnose(error, dev))?;
+    storage.map_err(|error| filesystem::diagnose(error, &path))?;
     Ok(())
 }
 
@@ -976,6 +974,7 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     let mount = target.0.to_str().context("Target path encoding")?;
     let stage = Stage::start("storage");
     prepare_storage(
+        &disk::Reviewed::of(&request),
         &request,
         &prepared.ids,
         &prepared.layout,
@@ -1395,7 +1394,15 @@ mod encryption_tests {
                 )?;
                 let mut mappings = encryption::Mappings::default();
                 let target = Target::new()?;
-                prepare_storage(&plan, &ids, &layout, PASSPHRASE, &target, &mut mappings)?;
+                prepare_storage(
+                    &disk::Reviewed::of(&plan),
+                    &plan,
+                    &ids,
+                    &layout,
+                    PASSPHRASE,
+                    &target,
+                    &mut mappings,
+                )?;
                 // The normal disk selector must still reject our open holders.
                 assert!(disk::Reviewed::new(identity.clone()).revalidate().is_err());
                 fs::write(target.0.join("encrypted-sentinel"), b"written by Genkan")?;
@@ -1448,7 +1455,7 @@ mod encryption_tests {
                     PASSPHRASE.as_bytes(),
                     60,
                 )?;
-                filesystem.mount("/dev/mapper/genkan-reopen", mount)?;
+                filesystem.mount(&disk::Device::for_test("/dev/mapper/genkan-reopen"), mount)?;
                 target.1.set(true);
                 assert_eq!(
                     fs::read(target.0.join("encrypted-sentinel"))?,

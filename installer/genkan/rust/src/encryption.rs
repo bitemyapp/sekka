@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! LUKS2 containers. Secrets are passed on stdin, never saved in the target.
 use crate::{
+    disk::Device,
     filesystem,
     process::{output, output_secret},
 };
@@ -37,18 +38,20 @@ pub(crate) fn preflight() -> Result<()> {
 #[derive(Default)]
 pub(crate) struct Mappings(Vec<String>);
 impl Mappings {
+    /// Formats `partition` as LUKS2 with `uuid` and opens it: the mapping.
     pub(crate) fn format_open(
         &mut self,
-        device: &str,
+        partition: &Device,
         uuid: &str,
         passphrase: &str,
-    ) -> Result<String> {
+    ) -> Result<Device> {
+        let device = partition.path();
         filesystem::check_uuid(uuid, "crypto_LUKS")?;
         validate_passphrase(passphrase)?;
         let name = format!("genkan-{uuid}");
-        let path = format!("/dev/mapper/{name}");
+        let mapping = partition.mapping(&name);
         ensure!(
-            !Path::new(&path).exists(),
+            !Path::new(mapping.path()).exists(),
             "Encryption mapping already exists: {name}"
         );
         output("wipefs", &["--all", "--force", device], 60)?;
@@ -93,7 +96,7 @@ impl Mappings {
             passphrase.as_bytes(),
             120,
         )?;
-        Ok(path)
+        Ok(mapping)
     }
     pub(crate) fn paths(&self) -> Vec<String> {
         self.0
