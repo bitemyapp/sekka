@@ -1,5 +1,6 @@
 [package]
 name = "tasuke-helper"
+description = "The small privileged part of Tasuke: runs one approved command as root, through polkit"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,6 +8,6 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-serde = { workspace = true }
+tasuke-agent = { workspace = true }
 serde_json = { workspace = true }
 libc = { workspace = true }

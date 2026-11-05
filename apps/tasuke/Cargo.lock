@@ -444,8 +444,8 @@ name = "tasuke-helper"
 version = "0.1.0"
 dependencies = [
  "libc",
- "serde",
  "serde_json",
+ "tasuke-agent",
 ]
 
 [[package]]

@@ -30,6 +30,7 @@ mod llm;
 pub mod memory;
 mod options;
 pub mod policy;
+pub mod root;
 pub mod session;
 pub mod skills;
 mod textcalls;
