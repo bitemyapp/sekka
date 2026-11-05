@@ -226,6 +226,8 @@ impl Op {
 pub struct Shown {
     op: Op,
     words: Words,
+    /// The plan it was listed from ([`Plan`]'s lineage).
+    plan: u64,
 }
 
 impl Shown {
@@ -361,10 +363,37 @@ pub enum Action {
 }
 
 /// The pending operations, in the order they will run.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Plan {
     pub ops: Vec<Op>,
     next: u64,
+    /// Which plan this is: each new plan has its own, and its clones (the
+    /// undo history's) keep it. The Apply sheet's agreement names it, so a
+    /// run refuses a plan put together elsewhere with the same operations.
+    lineage: u64,
+}
+
+impl Default for Plan {
+    fn default() -> Plan {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        Plan { ops: Vec::new(), next: 0, lineage: NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) }
+    }
+}
+
+/// Plans are equal when they hold the same operations, whichever plan
+/// they came from.
+impl PartialEq for Plan {
+    fn eq(&self, other: &Plan) -> bool {
+        self.ops == other.ops && self.next == other.next
+    }
+}
+
+impl Plan {
+    /// Whether an agreement to what the Apply sheet listed is to this plan,
+    /// as it is: the same plan, with the same operations.
+    pub(crate) fn is(&self, shown: &[Shown]) -> bool {
+        shown.iter().all(|s| s.plan == self.lineage) && shown.iter().map(Shown::op).eq(self.ops.iter())
+    }
 }
 
 /// Whether a plan's words warn of losing data.
@@ -418,7 +447,7 @@ impl Plan {
     /// The operations as the Apply sheet lists them, in order, with their
     /// words from the disk as `state` has it: what its Apply button agrees to.
     pub fn shown(&self, state: &DisksState) -> Vec<Shown> {
-        self.ops.iter().map(|op| Shown { op: op.clone(), words: self.words(op, state) }).collect()
+        self.ops.iter().map(|op| Shown { op: op.clone(), words: self.words(op, state), plan: self.lineage }).collect()
     }
 
     pub fn on_disk<'a>(&'a self, disk: &'a str) -> impl Iterator<Item = &'a Op> + 'a {
