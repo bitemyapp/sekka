@@ -763,6 +763,8 @@ impl Command {
 struct Pipeline {
     commands: Vec<Command>,
     background: bool,
+    /// The operator before it: `&&`, `||`, `;` or a newline (`None` first).
+    connector: Option<Op>,
 }
 
 #[derive(Debug, Default)]
@@ -833,6 +835,7 @@ fn parse(src: &str) -> Result<Script, String> {
                 if !pipe.commands.is_empty() {
                     script.pipelines.push(std::mem::take(&mut pipe));
                 }
+                pipe.connector = Some(op);
                 pending = matches!(op, Op::And | Op::Or).then_some(op);
             }
         }
@@ -918,15 +921,18 @@ struct Use {
 
 struct Ctx<'h> {
     home: &'h Path,
-    /// The working directory, while `cd` has been followed.
+    /// The working directory the command is checked in (the home folder
+    /// when `None`).
     cwd: Option<PathBuf>,
+    /// Where a `cd` just checked would move the shell, if it succeeds.
+    cd_to: Option<PathBuf>,
     /// The command reads a pipe, not the terminal.
     piped: bool,
 }
 
 impl<'h> Ctx<'h> {
     fn new(home: &'h Path) -> Ctx<'h> {
-        Ctx { home, cwd: None, piped: false }
+        Ctx { home, cwd: None, cd_to: None, piped: false }
     }
 
     fn cwd(&self) -> PathBuf {
@@ -1514,16 +1520,52 @@ fn check(src: &str, home: &Path) -> Result<(), String> {
         return Err("It groups commands in parentheses, which Tasuke doesn't check.".into());
     }
     let mut ctx = Ctx::new(home);
+    // Where the shell could be when the commands so far succeeded, and when
+    // they failed: a `cd` that fails leaves it where it was, and the next
+    // command still runs after `;` or `||`.
+    let mut ok = vec![home.to_path_buf()];
+    let mut failed = vec![home.to_path_buf()];
     for p in &script.pipelines {
         if p.background {
             return Err("It leaves something running in the background.".into());
         }
-        for (i, cmd) in p.commands.iter().enumerate() {
-            ctx.piped = i > 0;
-            check_command(&mut ctx, cmd)?;
+        let start = match p.connector {
+            Some(Op::And) => ok.clone(),
+            Some(Op::Or) => failed.clone(),
+            _ => union(&ok, &failed),
+        };
+        let mut moved = Vec::new();
+        for cwd in &start {
+            ctx.cwd = Some(cwd.clone());
+            for (i, cmd) in p.commands.iter().enumerate() {
+                ctx.piped = i > 0;
+                ctx.cd_to = None;
+                check_command(&mut ctx, cmd)?;
+            }
+            // A `cd` in a pipeline runs in a subshell and moves nothing.
+            let to = ctx.cd_to.take().filter(|_| p.commands.len() == 1).unwrap_or_else(|| cwd.clone());
+            moved = union(&moved, &[to]);
+        }
+        (ok, failed) = match p.connector {
+            Some(Op::And) => (moved, union(&failed, &start)),
+            Some(Op::Or) => (union(&ok, &moved), start),
+            _ => (moved, start),
+        };
+        if ok.len() + failed.len() > 16 {
+            return Err("It changes folders more than Tasuke can follow.".into());
         }
     }
     Ok(())
+}
+
+fn union(a: &[PathBuf], b: &[PathBuf]) -> Vec<PathBuf> {
+    let mut out = a.to_vec();
+    for p in b {
+        if !out.contains(p) {
+            out.push(p.clone());
+        }
+    }
+    out
 }
 
 fn is_invisible(c: char) -> bool {
@@ -1557,6 +1599,10 @@ fn check_command(ctx: &mut Ctx, cmd: &Command) -> Result<(), String> {
         }
     }
     let (prog, rest) = unwrap(&args)?;
+    // `env cd`, `timeout 5 cd`: an outside program, which can't move the shell.
+    if prog == "cd" && args[0].text != "cd" {
+        return Err("It changes folders through another program, which Tasuke can't follow.".into());
+    }
     let mut uses = rule(ctx, &prog, rest)?;
     // `strings @FILE` reads its arguments from FILE and names them in errors.
     let at_files: Vec<Use> = uses
@@ -2058,7 +2104,7 @@ fn rule(ctx: &mut Ctx, prog: &str, args: &[Arg]) -> Result<Vec<Use>, String> {
         "ps" => ps(args),
         "cd" => {
             let p = getopt(args, &Spec { sf: "LPe@", ..NO })?;
-            ctx.cwd = match p.pos.as_slice() {
+            ctx.cd_to = match p.pos.as_slice() {
                 [] => Some(ctx.home.to_path_buf()),
                 [a] if a.text != "-" && !a.glob => {
                     let c = ctx.components(a);
@@ -6011,6 +6057,19 @@ mod tests {
             ("cat ~//.ssh//id_rsa", "ask"),
             ("cd ~/.ssh && cat id_rsa", "ask"),
             ("cd ~/.ssh; cat config2", "ask"),
+            // A cd that fails (no such folder, no permission) leaves the shell
+            // where it was, and the next command runs after ; or ||.
+            ("cd /var/lib/private; cat ../../proc/self/environ", "ask"),
+            ("cd /x/y/z\ncat ../../proc/self/environ", "ask"),
+            ("cd /x/y/z || cat ../../proc/self/environ", "ask"),
+            ("cd /x/y/z && ls || cat ../../proc/self/environ", "ask"),
+            ("cd /x/y/z | cat; cat ../../proc/self/environ", "ask"),
+            ("cd /x/y && cat ../../proc/self/environ", "ask"),
+            ("env cd /x/y/z && cat ../../proc/self/environ", "ask"),
+            ("cd /x/y/z && cat ../../../../proc/self/environ", "ask"),
+            ("cd /etc/nixos && grep -rn foo .", "run"),
+            ("cd /etc && cd nixos && cat configuration.nix", "run"),
+            ("cd /x/y/z && cat ../../hosts", "run"),
             ("grep -r x ~/.gnupg", "ask"),
             ("grep -r password ~", "ask"),
             ("grep -r x /", "ask"),
