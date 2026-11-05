@@ -722,6 +722,34 @@ for a large home folder) is read only while the palette is open and
 dropped when it closes; it's rebuilt in the background when older than ten
 minutes, or when its folders or the ones it skips change.
 
+Freed memory goes back to the system (5 November). glibc raises its mmap
+and trim thresholds to the largest block it has unmapped, up to 32 MB: on
+a 4K output, one frame, early on. From then on every block under 32 MB is
+carved from the allocating thread's arena, and an arena gives back the
+free memory at its top only past twice that, which a 64 MB arena never
+reaches (`malloc_trim` doesn't trim a thread arena's top either). The big,
+short-lived blocks are the background threads': the wallpaper's worker
+(35–86 MB decoding and scaling), the tray's (a 512 × 512 icon converted at
+each reread), zbus's (replies up to 32 MB). At 3840 × 2160, 2×, a shell
+three and a half hours old had fifteen arenas of 26–63 MB, 624 MB touched
+(383 resident, 241 swapped), and a 128 MB main heap, where it used about
+15 MB; under memory pressure the free part was written to swap, and read
+back when reused. `main.rs` now fixes the thresholds at start: blocks of
+4 MB and up are mapped on their own and unmapped when freed, and an
+arena's top is given back above 16 MB. Live, twelve minutes after start
+in the same session: anonymous RSS 105 MB (arenas 77 MB, 57 of it free)
+against 180 MB (183 MB, 170 free). Frames don't notice. The render thread
+allocates nothing that big, the main thread's biggest blocks (a band of
+the palette drawn ahead, 1 MB; a 2 MB buffer every few seconds) stay in
+its heap, and `tests/perf.rs` (120 alternating runs each, release) is
+unchanged within noise except the harness's own first opening of the
+palette (+0.12 ms: its offscreen buffer is now freshly mapped, where a
+window draws into its shared memory). In the kit's `tests/perf.rs`,
+typing's p95 fell (a text field 0.13 ms against 0.27, the editor 0.55
+against 0.76), and a whole-frame offscreen buffer costs nothing (`calloc`
+gets zero pages mapped) against 0.34 ms. Lower thresholds do cost frames:
+1 MB and 4 MB took a window opening from 0.24 to 0.68 ms.
+
 ### Exceptions
 
 - **The palette's first opening**: *fixed* on 19 October. The palette's
