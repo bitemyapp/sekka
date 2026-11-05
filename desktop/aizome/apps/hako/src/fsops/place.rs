@@ -7,14 +7,19 @@
 //! is in place ([`Replaced`](super::replace::Replaced)).
 //!
 //! A move across filesystems deletes a source only once its copy is
-//! committed: the file's data synced ([`Copied`]), then each folder it's
-//! in, from the inside out ([`Unsynced`]), then the folder the whole copy
-//! was renamed into ([`Committed`]). Each stage is a type that only the
-//! sync before it makes, so a folder that couldn't be synced keeps the
-//! sources of everything in it.
+//! committed: a file's data synced, then the folder its copy is in, then
+//! each folder above, from the inside out, then the folder the whole copy
+//! was renamed into. An [`Item`] is handed out only by the [`Folder`] its
+//! copy is made in (or, for the top item, by its [`Move`]), and records its
+//! source there; a folder's sources go on to the folder above only through
+//! its own [`sync`](Folder::sync), and a move's sources can be deleted only
+//! through its [`Committed`] proof. So a folder that couldn't be synced
+//! keeps the sources of everything in it.
 
+use std::ffi::OsStr;
 use std::fs;
 use std::io;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
@@ -68,130 +73,212 @@ pub(super) fn rename_item(source: &Path, target: &Path, smeta: &fs::Metadata) ->
     }
 }
 
-/// Sources of a move across filesystems whose copies are made and on
-/// disk, all but their names in the folder that holds them: a file's data
-/// synced, a link made, a folder synced with all it holds. Only syncing
-/// that folder ([`Unsynced::sync`]), and at the top the folder the copy
-/// was renamed into ([`Copied::commit`]), takes them further. A folder
-/// that couldn't be synced takes its sources with it, so they stay.
+/// Sources whose copies are made and on disk but for their names in a
+/// folder not synced yet: files and links, then folders, each after what
+/// it held.
+#[derive(Debug, Default)]
+struct Sources {
+    leaves: Vec<PathBuf>,
+    dirs: Vec<PathBuf>,
+}
+
+/// Whether `name` names one item in a folder (not a path into another).
+fn is_one_name(name: &OsStr) -> bool {
+    !name.is_empty() && name != "." && name != ".." && !name.as_bytes().contains(&b'/')
+}
+
+/// One item to copy: its source, and where its copy is made. In a move it
+/// also holds the sources of the folder its copy is made in, where its own
+/// goes once its copy is on disk.
+#[derive(Debug)]
+#[must_use = "an item is copied, or left out"]
+pub struct Item<'f> {
+    source: PathBuf,
+    copy: PathBuf,
+    into: Option<&'f mut Sources>,
+}
+
+impl Item<'static> {
+    /// `source`, to copy to `copy`, in a copy (no source goes).
+    pub(super) fn copying(source: &Path, copy: &Path) -> Item<'static> {
+        Item { source: source.to_path_buf(), copy: copy.to_path_buf(), into: None }
+    }
+}
+
+impl<'f> Item<'f> {
+    pub fn source(&self) -> &Path {
+        &self.source
+    }
+
+    /// Where its copy is made.
+    pub fn copy(&self) -> &Path {
+        &self.copy
+    }
+
+    /// It was a file, copied to [`copy`](Self::copy) as `file`. In a move,
+    /// its data is synced and its source recorded in its folder; if the
+    /// sync fails, the item comes back to try again.
+    pub fn file(self, file: &fs::File) -> Result<(), (Item<'f>, io::Error)> {
+        if self.into.is_some()
+            && let Err(e) = file.sync_all()
+        {
+            return Err((self, e));
+        }
+        if let Some(into) = self.into {
+            into.leaves.push(self.source);
+        }
+        Ok(())
+    }
+
+    /// It was a link, made at [`copy`](Self::copy): all of it is its name.
+    pub fn link(self) {
+        if let Some(into) = self.into {
+            into.leaves.push(self.source);
+        }
+    }
+
+    /// It's a folder, made at [`copy`](Self::copy): what's copied into it
+    /// is recorded in it, until it's synced.
+    pub fn folder(self) -> Folder<'f> {
+        let inside = self.into.is_some().then(Sources::default);
+        Folder { source: self.source, copy: self.copy, inside, into: self.into }
+    }
+}
+
+/// A folder being copied, and the sources of what's been copied into it.
+/// Its items' sources go on to the folder it's in only once it's synced,
+/// and while it's being filled, that folder can't take anything else: one
+/// list shared by the whole copy, as the old copy kept, doesn't compile.
 ///
-/// Sources can't be deleted from here:
+/// ```compile_fail,E0499
+/// use hako::fsops::place::Folder;
+/// // The top folder takes a file of the inner one while the inner one is
+/// // being copied: its source would skip the inner folder's sync.
+/// fn one_list(top: &mut Folder<'_>) {
+///     let mut inner = top.child("inner".as_ref()).folder();
+///     top.child("x.txt".as_ref()).link();
+///     inner.child("y.txt".as_ref()).link();
+///     let _ = inner.sync();
+/// }
+/// ```
+///
+/// ```
+/// use hako::fsops::place::Folder;
+/// fn in_turn(top: &mut Folder<'_>) -> std::io::Result<()> {
+///     let mut inner = top.child("inner".as_ref()).folder();
+///     inner.child("y.txt".as_ref()).link();
+///     inner.sync()?;
+///     top.child("x.txt".as_ref()).link();
+///     Ok(())
+/// }
+/// ```
+#[derive(Debug)]
+#[must_use = "a folder's sources go on only once it's synced"]
+pub struct Folder<'f> {
+    source: PathBuf,
+    copy: PathBuf,
+    inside: Option<Sources>,
+    into: Option<&'f mut Sources>,
+}
+
+impl<'f> Folder<'f> {
+    /// The item `name` in it: its copy is made in this folder. A name, not
+    /// a path into another folder (that panics).
+    pub fn child(&mut self, name: &OsStr) -> Item<'_> {
+        assert!(is_one_name(name), "a folder's child is named, not a path: {name:?}");
+        Item { source: self.source.join(name), copy: self.copy.join(name), into: self.inside.as_mut() }
+    }
+
+    /// Where its copy is.
+    pub fn copy(&self) -> &Path {
+        &self.copy
+    }
+
+    /// It's full. In a move, its copy is synced, and then its sources, and
+    /// it, go on to the folder it's in. On an error they stay, with the
+    /// sources of all it holds.
+    pub fn sync(self) -> io::Result<()> {
+        if let (Some(mut inside), Some(into)) = (self.inside, self.into) {
+            sys::sync_dir(&self.copy)?;
+            inside.dirs.push(self.source);
+            into.leaves.extend(inside.leaves);
+            into.dirs.extend(inside.dirs);
+        }
+        Ok(())
+    }
+}
+
+/// A move across filesystems: its item copied under a partial name beside
+/// its target, and the sources of what came. They're deleted only once
+/// it's committed:
 ///
 /// ```compile_fail,E0599
-/// use hako::fsops::place::Copied;
-/// fn delete_early(copied: Copied) {
+/// use hako::fsops::place::Move;
+/// fn delete_early(copied: Move) {
 ///     let _ = copied.delete_sources();
 /// }
 /// ```
 ///
 /// ```
-/// use hako::fsops::place::{Copied, InPlace};
-/// fn delete_once_committed(copied: Copied, placed: &InPlace) -> std::io::Result<()> {
+/// use hako::fsops::place::{InPlace, Move};
+/// fn delete_once_committed(copied: Move, placed: &InPlace) -> std::io::Result<()> {
 ///     let _problems = copied.commit(placed)?.delete_sources();
 ///     Ok(())
 /// }
 /// ```
-#[derive(Debug, Default)]
-#[must_use = "a copy's sources go only once it's committed"]
-pub struct Copied {
-    /// Files and links.
-    leaves: Vec<PathBuf>,
-    /// Folders, each after what it held: removed once they're empty.
-    dirs: Vec<PathBuf>,
-}
-
-impl Copied {
-    /// `source`, a file copied to `copy`: its data synced.
-    pub(super) fn file(source: &Path, copy: &fs::File) -> io::Result<Copied> {
-        copy.sync_all()?;
-        Ok(Copied { leaves: vec![source.to_path_buf()], dirs: Vec::new() })
-    }
-
-    /// `source`, a link copied: it's all in its name.
-    pub(super) fn link(source: &Path) -> Copied {
-        Copied { leaves: vec![source.to_path_buf()], dirs: Vec::new() }
-    }
-
-    /// These copies are in the item just put in place (`placed`): sync the
-    /// folder it was renamed into, and the move is committed.
-    pub fn commit(self, placed: &InPlace) -> io::Result<Committed> {
-        sys::sync_dir(placed.target().parent().unwrap_or(Path::new("/")))?;
-        Ok(Committed(self))
-    }
-}
-
-/// A folder of a move being copied, and the sources of what's been copied
-/// into it. Their copies' names in it are on disk only once it's synced,
-/// so a nested folder's sources go up to the folder above only through
-/// [`sync`](Self::sync):
-///
-/// ```compile_fail,E0308
-/// use hako::fsops::place::Unsynced;
-/// // What the copy did: the inner folder's files were the move's to
-/// // delete before the inner folder was synced.
-/// fn copied_folder(parent: &mut Unsynced, inner: Unsynced) {
-///     parent.add(inner);
-/// }
-/// ```
-///
-/// ```
-/// use hako::fsops::place::Unsynced;
-/// fn copied_folder(parent: &mut Unsynced, inner: Unsynced) -> std::io::Result<()> {
-///     parent.add(inner.sync()?);
-///     Ok(())
-/// }
-/// ```
 #[derive(Debug)]
-#[must_use = "a folder's sources go up only once it's synced"]
-pub struct Unsynced {
+#[must_use = "a move's sources go only once it's committed"]
+pub struct Move {
     source: PathBuf,
-    copy: PathBuf,
-    inside: Copied,
+    partial: PathBuf,
+    came: Sources,
 }
 
-impl Unsynced {
-    /// `source`, a folder, being copied to `copy` (made, and empty).
-    pub(super) fn new(source: &Path, copy: &Path) -> Unsynced {
-        Unsynced { source: source.to_path_buf(), copy: copy.to_path_buf(), inside: Copied::default() }
+impl Move {
+    /// `source`, to copy to `partial`, beside its target.
+    pub(super) fn new(source: &Path, partial: &Path) -> Move {
+        Move { source: source.to_path_buf(), partial: partial.to_path_buf(), came: Sources::default() }
     }
 
-    /// Something copied into it.
-    pub fn add(&mut self, copied: Copied) {
-        self.inside.leaves.extend(copied.leaves);
-        self.inside.dirs.extend(copied.dirs);
+    /// Its item, to copy.
+    pub fn item(&mut self) -> Item<'_> {
+        Item { source: self.source.clone(), copy: self.partial.clone(), into: Some(&mut self.came) }
     }
 
-    /// Sync the folder's copy: then what's in it, and the folder, are on
-    /// disk but for the folder's own name. On an error the sources stay.
-    pub fn sync(self) -> io::Result<Copied> {
-        sys::sync_dir(&self.copy)?;
-        let mut copied = self.inside;
-        copied.dirs.push(self.source);
-        Ok(copied)
+    /// The copy is in place (`placed`: the partial renamed to its target):
+    /// sync the folder it's in, and the move is committed. Another
+    /// folder's placement doesn't do.
+    pub fn commit(self, placed: &InPlace) -> io::Result<Committed> {
+        let dir = placed.target().parent();
+        if dir.is_none() || dir != self.partial.parent() {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "it isn't where the copy was made"));
+        }
+        sys::sync_dir(dir.unwrap_or(Path::new("/")))?;
+        Ok(Committed(self.came))
     }
 }
 
 /// Proof that a move's copies are in place and on disk. Only
-/// [`Copied::commit`] makes one, and only it deletes sources:
+/// [`Move::commit`] makes one, and only it deletes sources:
 ///
 /// ```compile_fail,E0423
-/// use hako::fsops::place::{Committed, Copied};
-/// fn forge(copied: Copied) -> Committed {
-///     Committed(copied)
+/// use hako::fsops::place::Committed;
+/// fn forge() -> Committed {
+///     Committed(Default::default())
 /// }
 /// ```
 #[derive(Debug)]
 #[must_use = "a committed move deletes its sources"]
-pub struct Committed(Copied);
+pub struct Committed(Sources);
 
 impl Committed {
     /// Delete the sources: files and links, then the folders left empty
     /// (those with something skipped in them stay). What couldn't be
     /// deleted comes back as problems for the report.
     pub fn delete_sources(self) -> Vec<(PathBuf, String)> {
-        let Committed(copied) = self;
+        let Committed(sources) = self;
         let mut problems = Vec::new();
-        for leaf in copied.leaves {
+        for leaf in sources.leaves {
             if let Err(e) = fs::remove_file(&leaf)
                 && e.kind() != io::ErrorKind::NotFound
             {
@@ -199,7 +286,7 @@ impl Committed {
                 problems.push((leaf, why));
             }
         }
-        for dir in copied.dirs {
+        for dir in sources.dirs {
             let _ = fs::remove_dir(dir);
         }
         problems
