@@ -6,6 +6,19 @@
 # `nix develop .#aizome`.
 {
   nixpkgs,
+  # Non-flake Yukimi module imports use the same pin as the root flake.
+  crane ?
+    let
+      lock = builtins.fromJSON (builtins.readFile ../../../flake.lock);
+      locked = lock.nodes.${lock.nodes.root.inputs.crane}.locked;
+      source = builtins.fetchTarball {
+        url = "https://github.com/${locked.owner}/${locked.repo}/archive/${locked.rev}.tar.gz";
+        sha256 = locked.narHash;
+      };
+    in
+    {
+      mkLib = pkgs: import source { inherit pkgs; };
+    },
   version ? "0.1.0",
   rev ? null,
 }:
@@ -45,80 +58,24 @@ let
       ffmpeg
       pipewire
     ];
-  # Only what the build reads: the workspace and the files the package
-  # installs.
-  src = lib.fileset.toSource {
-    root = ../.;
-    fileset = lib.fileset.unions [
-      ../Cargo.toml
-      ../Cargo.lock
-      ../crates
-      ../icons
-      ../etc
-      ../scripts
-      # Sukumo, the toolkit: its workspace manifest, for what its crates
-      # inherit, and the crates.
-      ../sukumo/Cargo.toml
-      ../sukumo/crates
-      (lib.fileset.maybeMissing ../apps)
-      (lib.fileset.maybeMissing ../session)
-    ];
-  };
-  # Only the shared backend and its workspace metadata, not the privileged
-  # helper. Helper-only edits must not rebuild Aizome.
-  yukimiSrc = lib.fileset.toSource {
-    root = ../../../apps/yukimi;
-    fileset = lib.fileset.unions [
-      ../../../apps/yukimi/Cargo.toml
-      ../../../apps/yukimi/crates
-    ];
-  };
-  hotaruSrc = lib.fileset.toSource {
-    root = ../../../apps/hotaru;
-    fileset = lib.fileset.unions [
-      ../../../apps/hotaru/Cargo.toml
-      ../../../apps/hotaru/crates
-      ../../../apps/hotaru/resources
-      ../../../apps/hotaru/vendor/simdutf8
-    ];
-  };
-  ghosttyLicense = ../../../apps/hotaru/upstream/LICENSE.ghostty;
-  uucodeLicense = ../../../apps/hotaru/upstream/LICENSE.uucode;
-  unicodeLicense = ../../../apps/hotaru/upstream/LICENSE.unicode;
   self = {
     outPath = ../.;
     # What the checks build their systems with.
     inputs = { inherit nixpkgs; };
 
     packages = forAll (pkgs: rec {
-      aizome = pkgs.callPackage ./package.nix {
-        libsecret = libsecretFor pkgs;
+      components = import ./package.nix {
         inherit
-          src
-          yukimiSrc
-          hotaruSrc
-          ghosttyLicense
-          uucodeLicense
-          unicodeLicense
+          pkgs
+          fonts
+          hotaruFonts
           version
           rev
-          fonts
-          hotaruFonts
           ;
+        craneLib = crane.mkLib pkgs;
       };
-      hotaru = pkgs.callPackage ./hotaru.nix {
-        inherit
-          src
-          yukimiSrc
-          hotaruSrc
-          ghosttyLicense
-          uucodeLicense
-          unicodeLicense
-          fonts
-          hotaruFonts
-          version
-          ;
-      };
+      aizome = components.aggregate;
+      hotaru = components.hotaru;
       archivo = pkgs.callPackage ./fonts.nix { };
       # The session's fonts (Archivo, and nixpkgs' IBM Plex Mono and Noto
       # Sans Symbols 2) as files in one folder, for $AIZOME_FONT_DIR
@@ -207,8 +164,9 @@ let
         AIZOME_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.fonts}";
         HOTARU_FONT_DIR = "${self.packages.${pkgs.stdenv.hostPlatform.system}.hotaruFonts}";
         HOTARU_RESOURCES_DIR = "${../../../apps/hotaru/resources}";
-        HOTARU_TERMINFO_DIR = "${
-          pkgs.runCommand "hotaru-development-terminfo" { nativeBuildInputs = [ pkgs.ncurses ]; } ''
+        HOTARU_TERMINFO_DIR = "${pkgs.runCommand "hotaru-development-terminfo"
+          { nativeBuildInputs = [ pkgs.ncurses ]; }
+          ''
             mkdir -p $out
             tic -x -o $out ${../../../apps/hotaru/resources/hotaru.terminfo}
           ''

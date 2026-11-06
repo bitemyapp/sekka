@@ -1,5 +1,5 @@
 # The git dependencies in Aizome's Cargo.lock, for every package that
-# vendors it (package.nix, hotaru.nix): Shiori's hayro, and the zune-jpeg and
+# vendors it: Shiori's hayro, and the zune-jpeg and
 # moxcms it draws with, from bitemyapp's forks (apps/shiori/Cargo.toml,
 # Cargo.toml).
 {

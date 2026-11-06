@@ -1425,6 +1425,37 @@ nix develop .#aizome
 nix build .#aizome-checks.session -L
 ```
 
+Aizome is assembled from independent packages. `.#aizome` preserves the
+complete desktop and `.#aizome.yukimi` the standalone system manager; the
+individual packages are also available under `.#aizome.components`, for example
+`nix build .#aizome.components.soroban`. The aggregate contains symlinks, so
+installing one application does not retain the other applications or desktop.
+The compositor, its core/logic dylibs and their ABI record remain one package.
+
+`nix/package-sources.nix` follows the locked Cargo dependency graph to include
+each component's local sources, resources and build scripts. Other workspace
+members retain Cargo metadata and inert sources. Crane shares third-party
+artifacts, then caches real local dependencies through each app's inert entry
+point, preserving its feature/LTO context; a source-only app edit does not
+rebuild those dependency artifacts. Incremental compressed archives keep
+inherited Cargo metadata writable and avoid retaining complete copied target
+trees per application. Different Cargo feature sets can
+still require separate compiler artifacts. Dependency caches are build inputs
+and are not included in the installed desktop. The existing CI retention
+wrapper keeps build dependencies for persistent runners. Runtime-only binary
+cache publication does not publish these artifacts, so a fresh builder must
+create them before compiling a changed application.
+
+`python3 desktop/aizome/nix/test-package-boundaries.py` evaluates the real
+package derivations in a disposable copy. It verifies that calculator code and
+metadata, clock data and terminal integration changes replace only the relevant
+application and aggregate, that reverts recover the old identities, and that a
+toolkit build-script change invalidates its consumers without replacing the
+compositor. A font-asset change
+must also leave compiler caches and applications without font wrappers/checks
+unchanged. Package builds and the existing session VMs additionally validate
+binaries and integration.
+
 The shell observes application launch attempts through `aizome-sys`:
 process creation and exit are separate events, and only a compositor window
 event confirms that a window opened. D-Bus acceptance and successful
