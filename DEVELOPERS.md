@@ -2565,6 +2565,11 @@ with these files. Update the tags and hashes
 check.
 ## Apple Silicon
 
+The [Apple Silicon installer implementation plan](docs/apple-silicon-installer-plan.md)
+describes the proposed product image, first-boot setup, native macOS and Recovery
+apps, authenticated delivery, installation journals and qualification gates.
+It is a plan; the implementation and current limits below remain the baseline.
+
 `packages.aarch64-linux` (`nix/apple-silicon/`) builds Sekka for Apple
 Silicon Macs. The first target is the 14-inch MacBook Pro with an M3 Pro
 (Mac15,6, board J514S, SoC T6030). Genkan, Tatami and its applications,
