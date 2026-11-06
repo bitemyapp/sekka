@@ -452,7 +452,7 @@ define_class!(
                 }
                 _ => {}
             }
-            NSColor::whiteColor().setStroke();
+            ui::on_fill().setStroke();
             glyph.stroke();
         }
     }

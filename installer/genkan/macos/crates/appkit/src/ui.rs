@@ -266,6 +266,12 @@ pub fn danger() -> Retained<NSColor> {
     brand(0xb3083a, 0xf7768e)
 }
 
+/// Text and glyphs on those colors as fills: `on-accent` in the brand
+/// tokens. White is too faint on Night's light fills.
+pub fn on_fill() -> Retained<NSColor> {
+    brand(0xffffff, 0x1a1b26)
+}
+
 /// For views that must tell their own kind apart in tests and accessibility.
 pub fn label(view: &NSView, label: &str) {
     view.setAccessibilityLabel(Some(&ns(label)));

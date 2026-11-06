@@ -311,7 +311,7 @@ impl Ui {
                 sub.setHidden(matches!(m, Mark::Done));
                 if let Ok(label) = sub.downcast::<NSTextField>() {
                     let color = if matches!(m, Mark::Current(_)) {
-                        objc2_app_kit::NSColor::whiteColor()
+                        ui::on_fill()
                     } else {
                         objc2_app_kit::NSColor::secondaryLabelColor()
                     };
