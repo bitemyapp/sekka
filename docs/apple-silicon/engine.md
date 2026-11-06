@@ -24,7 +24,14 @@ ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I \
 ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I \
     ROOT/sekka_engine/__main__.py execute --plan FILE --assets DIR \
     --installation UUID --owner SHORTNAME     3< password
+ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I \
+    ROOT/sekka_engine/__main__.py startup-disk --plan FILE \
+    --installation UUID --owner SHORTNAME     3< password
 ```
+
+`startup-disk` is the helper's bounded retry after execute's startup-disk
+stage failed: the same plan file and installation, and only that stage
+(below).
 
 - **Environment.** `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, `LC_ALL=C`, and the
   runtime's own `DYLD_FRAMEWORK_PATH=ROOT/Frameworks` and
@@ -40,18 +47,19 @@ ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I \
   -I -m sekka_engine …` runs the same code wherever the package is importable,
   as in the tests.
 - **Arguments.** Exactly these, each once. `--installation` is the lower-case
-  UUID the helper's journal uses for this installation; the engine writes it
-  into the first-boot handoff and the Recovery configuration. `--owner` is the
-  macOS short name whose password the helper verified. There is no option for
+  UUID the helper's journal uses for this installation; execute writes it
+  into the first-boot handoff and the Recovery configuration, and
+  startup-disk finds the installation by it. `--owner` is the macOS short
+  name whose password the helper verified. There is no option for
   simulation, another installer, profile, command or path; the tests inject
   their fakes into the `Engine` class, which no argument or variable reaches.
 - **Descriptors.** Standard output is the transcript: one canonical JSON
   message per line, numbered from 1. Standard input carries the helper's
-  acknowledgements. Standard error is a diagnostic log. In `execute`, file
-  descriptor 3 carries the owner's password, read once to end of file and
-  closed; it is kept in a `bytearray` only until `bless` has it, then
-  overwritten. (Python may hold other copies, such as the bytes handed to
-  `bless`'s standard input; no complete erasure is claimed.) Before anything
+  acknowledgements. Standard error is a diagnostic log. In `execute` and
+  `startup-disk`, file descriptor 3 carries the owner's password, read once
+  to end of file and closed; it is kept in a `bytearray` only until `bless`
+  has it, then overwritten. (Python may hold other copies, such as the bytes
+  handed to `bless`'s standard input; no complete erasure is claimed.) Before anything
   else runs, the engine takes private copies of descriptors 0 and 1 and points
   them at `/dev/null` and standard error, so neither Asahi's progress printing
   nor any child process can write into the transcript or read an
@@ -197,7 +205,7 @@ found afterwards, by identity (GPT and APFS UUIDs), never by `diskN`.
 | esp | the payload's `esp/` tree (Asahi's `extract_tree`, CRC-checked); the boot entry's `@SEKKA_ROOT_PARTUUID@`/`@SEKKA_ESP_PARTUUID@` filled with the real GPT UUIDs; `sekka/install.json`; Asahi's `asahi/` installer data; AppleDouble files removed; unmounted, mounted, every file read back and compared with what was written, nothing extra | esp-inventory, esp-files, esp-bytes, boot-entry, kernel-arguments, handoff, installation, setup-hints | read-back |
 | root | `root.img` streamed from the package to `/dev/rDISKsN`, hashed as read, flushed (`F_FULLFSYNC`, else `DKIOCSYNCHRONIZECACHE`, else `fsync`), then read back from the raw device and hashed; both must be the manifest's digest | root-partition, root-image-size, root-image, root-read-back, flush | read-back |
 | recovery | `Sekka Recovery.app` from the checked zip, staged and renamed into place on the stub's System volume; `Sekka/InstallData/` with `recovery.json`, `boot.bin` (Asahi's `m1n1.build` of `boot/m1n1.bin` with `chosen.asahi,efi-system-partition` and `chainload=ESP;m1n1/boot.bin`, as `osinstall.install` builds it) and the firmware baseline under `firmware/`; `.IAPhysicalMedia` from Asahi's plist with `AppName` `Sekka Recovery.app`; unmounted, mounted, read back | recovery-app, recovery-app-files, recovery-config, boot-object, boot-object-size, firmware-baseline, iaphysicalmedia | read-back |
-| startup-disk | `bless --setBoot --device /dev/SYSTEM --user OWNER --stdinpass`, as Asahi runs it; then the selection is read back twice (`bless --getBoot` → `diskutil info` → APFSVolumeGroupID, and Asahi's `nvram boot-volume` parse) and both must name the stub's group; then Asahi's `prepare_for_step2` hides SystemVersion so the stub opens Recovery | startup-volume-group, bless-boot-device, nvram-boot-volume-group, recovery-app | policy-read-back |
+| startup-disk | Asahi's `prepare_for_bless` (SystemVersion visible), then `bless --setBoot --device /dev/SYSTEM --user OWNER --stdinpass`, as Asahi runs it; then the selection is read back twice (`bless --getBoot` → `diskutil info` → APFSVolumeGroupID, and Asahi's `nvram boot-volume` parse) and both must name the stub's group; then Asahi's `prepare_for_step2` hides SystemVersion so the stub opens Recovery | startup-volume-group, bless-boot-device, nvram-boot-volume-group, recovery-app | policy-read-back |
 
 Setup hints come from the owner's own preferences: `AppleLocale` to a glibc
 locale, the current keyboard layout to an XKB layout from a fixed table
@@ -210,6 +218,45 @@ did: check that it runs in the stub's paired One True Recovery, `bputil -nc`,
 `kmutil configure-boot -c Sekka/InstallData/boot.bin --raw --entry-point 2048
 --lowest-virtual-address 0`, then restore `SystemVersion.plist` and rename
 `.IAPhysicalMedia` to `IAPhysicalMedia-disabled.plist`.
+
+### startup-disk: the bounded retry
+
+When execute's startup-disk stage fails, the payload is in place and
+verified, and only the startup selection is missing. The helper retries it
+with this mode, which runs `stage_startup_disk` exactly as execute does
+(Asahi's `prepare_for_bless`, `bless --stdinpass`, both read-backs, Asahi's
+`prepare_for_step2`), so the stub still starts into Recovery and opens the
+Recovery app. A retry of bless alone would leave SystemVersion as bless needs
+it and the stub would start normally. No other stage runs in this mode.
+
+Before its one intent, with nothing changed, it refuses (`stage: null`,
+`disk_changed: no`) unless:
+
+- the plan is canonical and passes `Plan::check`, the bundled profile is the
+  plan's, and the installation UUID, owner and password are usable, as in
+  execute;
+- a fresh inspection as root agrees on the machine (binding, product type,
+  device class, chip, system firmware), the GPT disk UUID and the running
+  macOS's volume group, and the Mac runs its normal macOS. The layout digest
+  isn't compared: the installation's own partitions changed it;
+- the owner is in the running macOS's `AdminUserRecoveryInfo.plist`;
+- exactly one stub's System volume has a `Sekka/InstallData/recovery.json`
+  whose `installation` is `--installation` (`installation-not-found`,
+  `installation-ambiguous`);
+- that configuration still describes what is on the disk
+  (`installation-changed` otherwise): its release, volume name and macOS
+  volume group are the plan's; its stub container, volume group, System and
+  Data volumes are the stub's own; its ESP and root partitions exist with the
+  right types; `boot.bin` and every firmware-baseline file match their
+  recorded size and SHA-256; the Recovery app's Info.plist is there;
+  `.IAPhysicalMedia` names `Sekka Recovery.app`; and the ESP's
+  `sekka/install.json` names this installation, root and ESP.
+
+Then it writes the intent, waits for the acknowledgement and runs the stage:
+the checkpoint has the same facts and `policy-read-back` as in execute,
+followed by `waiting-for-recovery`. A failure there is reported for the
+stage with `disk_changed: yes`, since the installation changed the disk before
+this run.
 
 ### Failures
 
@@ -290,12 +337,20 @@ with Asahi installed (MIT fixtures, see their NOTICE). They cover:
   after reinspection, no retry; a resize failing part way: `yes`;
 - a root read-back mismatch, bless failing, and bless exiting 0 without
   changing the selection;
+- startup-disk on the Mac either bless failure leaves behind: only one
+  intent and one `bless --setBoot`, nothing changed before the
+  acknowledgement, the stub selected and SystemVersion hidden afterwards; bless
+  failing again; another installation's UUID and a Mac without the
+  installation refused; no acknowledgement, no bless; a changed `boot.bin`,
+  launch marker, Recovery app, ESP handoff or missing root partition refused;
+  another Mac, an unreadable plan, no password, another owner and a malformed
+  UUID refused;
 - Recovery-zip attacks (traversal, absolute paths, links, devices, resource
   forks, case twins, backslashes, encryption, corruption, missing parts), and
   payload, template and manifest substitutions bound into a plan;
 - canonical JSON's rules, and vectors: `tests/vectors` holds inspections,
   plans, a handoff, a Recovery configuration, a string-escaping document and
-  six transcripts. Python must write `expected.json`'s bytes and digests,
+  nine transcripts. Python must write `expected.json`'s bytes and digests,
   which the Rust crate computed; the crate's `tests/engine_vectors.rs` checks
   the same documents with its types and feeds every transcript to the
   helper's `Transcript`, which accepts all of them.
@@ -330,7 +385,6 @@ license.
 - The image (`nix/apple-silicon/image.nix`) must produce `manifest.json` as
   above and a boot entry with the two placeholders; today's entry names the
   root by label.
-- The helper's `RetryStartupDisk` has no engine mode yet.
 - The disk's GPT GUID comes from IOGUIDPartitionScheme's `UUID`, which
   IOStorageFamily's source publishes; it hasn't been read on the J514S.
 

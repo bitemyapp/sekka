@@ -88,6 +88,21 @@ def main():
         finally:
             t.cleanup()
 
+    for name, kw in (
+        ("startup-disk-retry.jsonl", {}),
+        ("startup-disk-failed.jsonl", {"bless_mode": "fail"}),
+        ("startup-disk-refused.jsonl", {"installation": "00000000-0000-4000-8000-000000000000"}),
+    ):
+        t = S.TempDir()
+        try:
+            r = scenarios.execute(t, before=scenarios.bless_fails)
+            rr = scenarios.retry(r, t, **kw)
+            scenarios.write_lines(os.path.join(out, name), rr["channel"].lines)
+            outcome = "WaitingForRecovery" if rr["outcome"] == "waiting-for-recovery" else "Failed"
+            transcripts[name] = {"mode": "startup-disk", "plan": canonical.digest(r["plan"]), "outcome": outcome}
+        finally:
+            t.cleanup()
+
     pretty(
         os.path.join(out, "strings.json"),
         {

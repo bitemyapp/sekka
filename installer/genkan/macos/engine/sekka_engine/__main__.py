@@ -6,13 +6,18 @@ pinned runtime, isolated (-I), from the extracted engine archive ROOT:
         ROOT/sekka_engine/__main__.py inspect
     … -I ROOT/sekka_engine/__main__.py execute --plan FILE --assets DIR \
         --installation UUID --owner NAME
+    … -I ROOT/sekka_engine/__main__.py startup-disk --plan FILE \
+        --installation UUID --owner NAME
 
 `python3 -I -m sekka_engine …` runs the same code wherever the package is
 importable; the archive doesn't make it importable from the runtime's
 site-packages, because that directory is sealed by the runtime's code
 signature.
 
-`execute` reads the owner's password from file descriptor 3, to its end.
+`startup-disk` is the helper's bounded retry: only the startup-disk stage
+again, for an installation execute left with its payload verified.
+`execute` and `startup-disk` read the owner's password from file
+descriptor 3, to its end.
 Standard output carries the transcript; standard input carries the helper's
 `{"ack":SEQ}` answers; standard error carries a diagnostic log. There are
 no other options: no simulation, no other installer, profile or command.
@@ -29,22 +34,30 @@ def usage(message):
         "usage: python3 -I sekka_engine/__main__.py inspect\n"
         "       python3 -I sekka_engine/__main__.py execute --plan FILE --assets DIR"
         " --installation UUID --owner NAME   (password on fd 3)\n"
+        "       python3 -I sekka_engine/__main__.py startup-disk --plan FILE"
+        " --installation UUID --owner NAME   (password on fd 3)\n"
     )
     return 2
 
 
+OPTIONS = {
+    "execute": ("--plan", "--assets", "--installation", "--owner"),
+    "startup-disk": ("--plan", "--installation", "--owner"),
+}
+
+
 def parse(argv):
-    if not argv or argv[0] not in ("inspect", "execute"):
-        raise ValueError("the mode is inspect or execute")
+    if not argv or argv[0] not in ("inspect", "execute", "startup-disk"):
+        raise ValueError("the mode is inspect, execute or startup-disk")
     mode, rest = argv[0], argv[1:]
     if mode == "inspect":
         if rest:
             raise ValueError("inspect takes no options")
         return mode, {}
-    wanted = ("--plan", "--assets", "--installation", "--owner")
+    wanted = OPTIONS[mode]
     options = {}
     if len(rest) != 2 * len(wanted):
-        raise ValueError("execute takes --plan, --assets, --installation and --owner, once each")
+        raise ValueError(f"{mode} takes {', '.join(wanted)}, once each")
     for flag, value in zip(rest[::2], rest[1::2]):
         if flag not in wanted or flag in options or not value or value.startswith("-"):
             raise ValueError(f"unexpected {flag!r}")
@@ -62,7 +75,7 @@ def main(argv=None):
         mode, options = parse(argv)
     except ValueError as error:
         return usage(str(error))
-    password = read_password(3) if mode == "execute" else None
+    password = read_password(3) if mode in OPTIONS else None
     transcript, acks = take_standard_streams()
     logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
@@ -127,7 +140,10 @@ def main(argv=None):
         except OSError as error:
             logging.error("the plan can't be read: %s", error)
             plan_bytes = b""  # refused as unreadable, through the transcript
-        outcome = engine.run_execute(plan_bytes, options["--assets"], options["--installation"], options["--owner"])
+        if mode == "execute":
+            outcome = engine.run_execute(plan_bytes, options["--assets"], options["--installation"], options["--owner"])
+        else:
+            outcome = engine.run_startup_disk(plan_bytes, options["--installation"], options["--owner"])
     return 0 if outcome in ("inspected", "waiting-for-recovery") else 1
 
 

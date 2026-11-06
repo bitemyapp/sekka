@@ -6,6 +6,7 @@
 //! ```sh
 //! cargo run -q -p sekka-mac-contract --example validate_transcript -- inspect < transcript
 //! cargo run -q -p sekka-mac-contract --example validate_transcript -- execute sha256:… shrinks < transcript
+//! cargo run -q -p sekka-mac-contract --example validate_transcript -- startup-disk sha256:… < transcript
 //! ```
 //!
 //! Prints the outcome and exits 0 when the whole transcript is accepted;
@@ -27,8 +28,11 @@ fn main() {
             let plan: Digest = plan.parse().expect("a plan digest");
             Transcript::execute(plan, *shrinks == "shrinks")
         }
+        ["startup-disk", plan] => Transcript::startup_disk(plan.parse().expect("a plan digest")),
         _ => {
-            eprintln!("usage: validate_transcript inspect | execute PLAN_DIGEST shrinks|no-shrink");
+            eprintln!(
+                "usage: validate_transcript inspect | execute PLAN_DIGEST shrinks|no-shrink | startup-disk PLAN_DIGEST"
+            );
             std::process::exit(2);
         }
     };

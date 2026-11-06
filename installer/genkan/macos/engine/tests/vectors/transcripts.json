@@ -32,5 +32,20 @@
   "inspect-j514s-clean.jsonl": {
     "mode": "inspect",
     "outcome": "Inspected"
+  },
+  "startup-disk-failed.jsonl": {
+    "mode": "startup-disk",
+    "outcome": "Failed",
+    "plan": "sha256:52b200d1650fae2f5370b8a39107fd0af35e04094c582fd6814516e173a9ba49"
+  },
+  "startup-disk-refused.jsonl": {
+    "mode": "startup-disk",
+    "outcome": "Failed",
+    "plan": "sha256:52b200d1650fae2f5370b8a39107fd0af35e04094c582fd6814516e173a9ba49"
+  },
+  "startup-disk-retry.jsonl": {
+    "mode": "startup-disk",
+    "outcome": "WaitingForRecovery",
+    "plan": "sha256:52b200d1650fae2f5370b8a39107fd0af35e04094c582fd6814516e173a9ba49"
   }
 }

@@ -62,7 +62,12 @@ class CommandLine(unittest.TestCase):
         mode, options = cli.parse(["execute", "--plan", "p", "--assets", "a", "--installation", "u", "--owner", "o"])
         self.assertEqual(mode, "execute")
         self.assertEqual(options["--owner"], "o")
+        mode, options = cli.parse(["startup-disk", "--plan", "p", "--installation", "u", "--owner", "o"])
+        self.assertEqual((mode, sorted(options)), ("startup-disk", ["--installation", "--owner", "--plan"]))
         for bad in (
+            ["startup-disk", "--plan", "p", "--assets", "a", "--installation", "u", "--owner", "o"],
+            ["startup-disk", "--plan", "p", "--installation", "u"],
+            ["startup-disk", "--plan", "p", "--installation", "u", "--stage", "root"],
             [],
             ["simulate"],
             ["inspect", "--simulate"],
@@ -96,6 +101,7 @@ class CommandLine(unittest.TestCase):
             shutil.copytree(os.path.join(S.ENGINE, "sekka_engine"), os.path.join(root, "sekka_engine"))
             for argv, password in (
                 (["inspect"], None),
+                (["startup-disk", "--plan", "/nonexistent", "--installation", "1f7d9c62-4a1b-4c8e-9d3f-2b6a8e0c5d47", "--owner", "callen"], b"secret"),
                 (["execute", "--plan", "/nonexistent", "--assets", "/nonexistent", "--installation", "1f7d9c62-4a1b-4c8e-9d3f-2b6a8e0c5d47", "--owner", "callen"], b"secret"),
             ):
                 with self.subTest(mode=argv[0]):

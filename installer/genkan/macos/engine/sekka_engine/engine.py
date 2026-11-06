@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""The two modes: `inspect` describes the Mac; `execute` carries out one plan.
+"""The three modes: `inspect` describes the Mac; `execute` carries out one
+plan; `startup-disk` runs that plan's startup-disk stage again.
 
 `execute` refuses before anything changes unless the plan, the assets, the
 hardware profile and Asahi's own view of the Mac all agree. It then runs the
@@ -7,6 +8,11 @@ stages of engine.rs `macos_stages` in order. Before each it writes an Intent
 and waits for the helper's acknowledgement; after each it writes a
 Checkpoint with what it found and how far that was verified. The first
 failure ends the run: a mutating stage is never retried here.
+
+`startup-disk` is the helper's bounded retry after that stage failed. It
+finds the installation by the identity in its Recovery configuration, checks
+that what execute verified is still in place, and runs the same
+stage_startup_disk, and nothing else, under the same protocol.
 
 Parts adapted from Omarchy's engine overlay
 (omacom/omarchy-mac-installer c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9,
@@ -208,8 +214,10 @@ class Engine:
             if made_workdir:
                 shutil.rmtree(self.workdir, ignore_errors=True)
 
-    def run_stages(self):
-        for stage in c.macos_stages(self.shrink is not None):
+    def run_stages(self, stages=None):
+        if stages is None:
+            stages = c.macos_stages(self.shrink is not None)
+        for stage in stages:
             seq = self.t.intent(stage, self.plan_digest)
             try:
                 self.t.wait_ack(seq)
@@ -274,9 +282,175 @@ class Engine:
         )
         return "no" if same else "yes"
 
+    # startup-disk ----------------------------------------------------------------
+
+    def run_startup_disk(self, plan_bytes, installation, owner):
+        """The helper's bounded retry: the startup-disk stage again, and
+        nothing else, for an installation whose execute run verified its
+        payload and then failed to set the startup disk."""
+        self.t.hello(ENGINE_VERSION, ASAHI_VERSION, self.adapter, "startup-disk")
+        try:
+            try:
+                self.prepare_retry(plan_bytes, installation, owner)
+            except Refusal as refusal:
+                self.t.failure(None, c.failure(refusal.code, refusal.message, refusal.diagnostic, "no"))
+                self.t.completion("failed")
+                return "failed"
+            except Exception as error:  # nothing has changed yet; say so in the protocol
+                log.exception("preparing the startup-disk retry failed")
+                self.t.failure(None, c.failure("internal-error", f"The retry couldn't start: {error}", None, "no"))
+                self.t.completion("failed")
+                return "failed"
+            # The installation changed the disk before this run; a failure
+            # now leaves it changed, whatever this stage did.
+            self.changed = True
+            return self.run_stages(["startup-disk"])
+        finally:
+            wipe(self.password)
+
+    def prepare_retry(self, plan_bytes, installation, owner):
+        """Find this installation and check it is still what execute left:
+        the same Mac, disk and macOS, its stub, ESP and root by identity, and
+        the Recovery data and handoff it wrote. The layout digest isn't
+        compared: the installation's own partitions changed it."""
+        self.check_request(plan_bytes, installation, owner)
+        plan = self.plan
+        try:
+            doc, inspector = inspect_mac(self.asahi, self.host, self.profile, privileged=True)
+        except Exception as error:
+            log.exception("inspection before the retry failed")
+            raise Refusal("inspection-failed", f"This Mac couldn't be inspected: {error}")
+        self.inspection, self.inspector, self.view = doc, inspector, inspector.view
+        m, pm = doc["machine"], plan["machine"]
+        if m["binding"] != pm["binding"] or any(
+            m[k] != pm[k] for k in ("product_type", "device_class", "chip_id", "system_firmware")
+        ):
+            raise Refusal("wrong-machine", "This plan was made for another Mac, or this Mac's firmware changed.")
+        if doc["disk"]["uuid"] != plan["disk"]["disk"]:
+            raise Refusal("wrong-disk", "This plan was made for another disk.")
+        if doc["macos"]["volume_group"] != plan["disk"]["macos_volume_group"]:
+            raise Refusal("wrong-macos", "The plan was made from a different macOS on this Mac.")
+        normal = [i for i in doc["issues"] if i["code"] == "not-normal-boot"]
+        if normal or inspector.cur_os is None:
+            raise Refusal(
+                "not-normal-boot",
+                normal[0]["detail"] if normal else "The running macOS can't be found on the internal disk.",
+            )
+        self.cur_os = inspector.cur_os
+        admins = self.cur_os.admin_users or []
+        if owner not in admins or owner == "_mbsetupuser":
+            raise Refusal(
+                "owner-not-admin",
+                f"{owner} isn't one of this Mac's administrators who can approve startup changes in Recovery.",
+            )
+        p, o, config = self.find_installation()
+        self.check_installation(p, o, config)
+        self.stub_uuid = c.uuid_any(p.uuid)
+        self.stub_container = config["stub"]["container"]
+        self.stub = dict(config["stub"])
+        self.esp_uuid, self.root_uuid = config["esp"], config["root"]
+        v = self.view
+        self.ins = self.asahi.stub.StubInstaller(v.sysinfo, v.dutil, v.osinfo)
+        self.t.log("info", f"Setting the startup disk again for installation {self.installation} on {o.label}.")
+
+    def find_installation(self):
+        """The one stub whose Sekka/InstallData/recovery.json names this
+        installation."""
+        found = []
+        for p, o in self.view.oses():
+            if not o.stub or not o.system:
+                continue
+            path = os.path.join(o.system, c.RECOVERY_DATA_DIR, c.RECOVERY_CONFIG_FILE)
+            try:
+                with open(path, "rb") as f:
+                    raw = f.read(c.LIMIT_RECOVERY + 1)
+            except OSError:
+                continue
+            try:
+                config = c.parse_recovery_config(raw)
+            except (c.Invalid, canonical.CanonicalError, KeyError, TypeError) as error:
+                log.info("%s: unreadable Sekka Recovery configuration: %s", o.label, error)
+                continue
+            if config["installation"] == self.installation:
+                found.append((p, o, config))
+        if not found:
+            raise Refusal(
+                "installation-not-found",
+                f"No startup volume on this Mac holds installation {self.installation}.",
+            )
+        if len(found) > 1:
+            raise Refusal(
+                "installation-ambiguous",
+                f"More than one startup volume claims installation {self.installation}; nothing was changed.",
+            )
+        return found[0]
+
+    def check_installation(self, p, o, config):
+        """Every identity the Recovery configuration names is on the disk, and
+        what execute wrote and verified is still there, unchanged."""
+        plan = self.plan
+
+        def changed(what):
+            raise Refusal(
+                "installation-changed",
+                f"This installation isn't as it was left: {what}. Setting the startup disk again isn't safe.",
+            )
+
+        if config["release"] != plan["release"]["release"] or config["volume_name"] != plan["volume_name"]:
+            changed("its Recovery configuration names another release")
+        if config["owner"]["macos_volume_group"] != plan["disk"]["macos_volume_group"]:
+            changed("its Recovery configuration names another macOS")
+        stub = config["stub"]
+        if p.container is None or c.uuid_any(p.container["APFSContainerUUID"]) != stub["container"]:
+            changed("its startup volume's container differs")
+        if c.uuid_any(o.vgid) != stub["volume_group"]:
+            changed("its startup volume group differs")
+        volumes = {x["DeviceIdentifier"]: x for x in p.container.get("Volumes", [])}
+        for device, want in ((o.sys_volume, stub["system_volume"]), (o.data_volume, stub["data_volume"])):
+            if device not in volumes or c.uuid_any(volumes[device]["APFSVolumeUUID"]) != want:
+                changed("its startup volume's System or Data volume differs")
+        esp = self.view.partition(config["esp"])
+        root = self.view.partition(config["root"])
+        if esp is None or esp.type != "EFI":
+            changed("its ESP is missing")
+        if root is None or root.type != "Linux Filesystem":
+            changed("its root partition is missing")
+        data = os.path.join(o.system, c.RECOVERY_DATA_DIR)
+        for item in [config["boot_object"]] + config["firmware"]:
+            path = os.path.join(data, *A.check_relative(item["path"]))
+            try:
+                found = c.sha256_file(path)
+            except OSError:
+                changed(f"{item['path']} is missing")
+            if found != (item["size"], item["digest"]):
+                changed(f"{item['path']} differs from its record")
+        if not os.path.isfile(os.path.join(o.system, RECOVERY_APP, "Contents", "Info.plist")):
+            changed("the Recovery app is missing")
+        try:
+            with open(os.path.join(o.system, ".IAPhysicalMedia"), "rb") as f:
+                media = plistlib.load(f)
+        except (OSError, plistlib.InvalidFileException, ValueError):
+            media = None
+        if not isinstance(media, dict) or media.get("AppName") != RECOVERY_APP:
+            changed("the startup volume doesn't open the Recovery app")
+        try:
+            mount = self.view.dutil.mount(esp.name)
+            with open(os.path.join(mount, c.HANDOFF_PATH), "rb") as f:
+                handoff = c.parse_handoff(f.read(c.LIMIT_HANDOFF + 1))
+        except (OSError, subprocess.CalledProcessError, c.Invalid, canonical.CanonicalError, KeyError, TypeError):
+            handoff = None
+        if handoff is None or (handoff["installation"], handoff["root"], handoff["esp"]) != (
+            self.installation,
+            config["root"],
+            config["esp"],
+        ):
+            changed("its ESP's handoff names another installation")
+
     # Before anything changes ---------------------------------------------------
 
-    def prepare(self, plan_bytes, assets_dir, installation, owner):
+    def check_request(self, plan_bytes, installation, owner):
+        """What execute and startup-disk both check first: the plan, the
+        installation's identity, the owner and password, and the profile."""
         try:
             self.plan, self.plan_digest = c.parse_plan(plan_bytes)
         except (c.Invalid, canonical.CanonicalError, KeyError, TypeError) as error:
@@ -300,6 +474,10 @@ class Engine:
                 "profile-mismatch",
                 "The plan was made for a different hardware profile than the one this engine carries.",
             )
+
+    def prepare(self, plan_bytes, assets_dir, installation, owner):
+        self.check_request(plan_bytes, installation, owner)
+        plan = self.plan
         util = self.asahi.util
         try:
             paths = A.verify_assets(assets_dir, plan)

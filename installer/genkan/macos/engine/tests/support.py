@@ -1339,6 +1339,9 @@ def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, passwor
         warnings.simplefilter("ignore", ResourceWarning)
         if mode == "inspect":
             outcome = engine.run_inspect()
+        elif mode == "startup-disk":
+            plan_bytes = canonical.dumps(plan) if isinstance(plan, dict) else plan
+            outcome = engine.run_startup_disk(plan_bytes, installation, owner)
         else:
             plan_bytes = canonical.dumps(plan) if isinstance(plan, dict) else plan
             outcome = engine.run_execute(plan_bytes, release["dir"], installation, owner)

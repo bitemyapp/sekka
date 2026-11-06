@@ -102,6 +102,9 @@ fn every_engine_transcript_is_accepted() {
     for (name, meta) in transcripts {
         let mut t = match meta["mode"].as_str().unwrap() {
             "inspect" => Transcript::inspect(),
+            "startup-disk" => {
+                Transcript::startup_disk(meta["plan"].as_str().unwrap().parse().unwrap())
+            }
             _ => Transcript::execute(
                 meta["plan"].as_str().unwrap().parse().unwrap(),
                 meta["shrinks"].as_bool().unwrap(),
@@ -150,4 +153,30 @@ fn the_happy_path_runs_every_macos_stage_with_the_promised_evidence() {
         };
         assert_eq!(verification, want, "{stage:?}");
     }
+}
+
+#[test]
+fn the_startup_disk_retry_runs_that_stage_and_nothing_else() {
+    let data = read("startup-disk-retry.jsonl");
+    let mut intents = Vec::new();
+    let mut checkpoints = Vec::new();
+    for line in data.split(|b| *b == b'\n').filter(|l| !l.is_empty()) {
+        let m: EngineMessage =
+            canonical::from_slice(line, limits::ENGINE_LINE, EngineSchema::VALUE).unwrap();
+        match m.message {
+            EngineBody::Hello { mode, .. } => assert_eq!(mode, EngineMode::StartupDisk),
+            EngineBody::Intent { stage, .. } => intents.push(stage),
+            EngineBody::Checkpoint {
+                stage,
+                verification,
+                ..
+            } => checkpoints.push((stage, verification)),
+            _ => {}
+        }
+    }
+    assert_eq!(intents, vec![Stage::StartupDisk]);
+    assert_eq!(
+        checkpoints,
+        vec![(Stage::StartupDisk, Verification::PolicyReadBack)]
+    );
 }

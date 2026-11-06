@@ -67,6 +67,36 @@ def read_back_corrupts(mac, host, release):
     host.corrupt_read_back = True
 
 
+def bless_fails(mac, host, release):
+    mac.bless_mode = "fail"
+
+
+def bless_refuses_the_password(mac, host, release):
+    """bless exits 0 but changes nothing: the Mac's owner has another
+    password than the one the engine was given."""
+    mac.owner_password = b"another password"
+
+
+def retry(r, t, name="work-retry", bless_mode="ok", owner_password=S.PASSWORD, **kw):
+    """The helper's bounded retry on the Mac an execute run left: the
+    startup-disk mode with the same plan and installation."""
+    mac = r["mac"]
+    mac.bless_mode = bless_mode
+    mac.owner_password = owner_password
+    start = len(mac.commands)
+    state = mac.state_digest()
+    plan = kw.pop("plan", r["plan"])
+    outcome, channel = S.run_engine("startup-disk", mac, r["asahi"], r["host"], t.sub(name), plan=plan, **kw)
+    return {
+        "mac": mac,
+        "plan": plan,
+        "outcome": outcome,
+        "channel": channel,
+        "commands": mac.commands[start:],
+        "state_before": state,
+    }
+
+
 def find_plan_digest(channel):
     for m in channel.messages():
         if m["message"]["type"] == "intent":

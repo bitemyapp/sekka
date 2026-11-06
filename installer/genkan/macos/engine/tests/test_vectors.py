@@ -28,6 +28,8 @@ def validate(lines, meta):
     args = [validator, meta["mode"]]
     if meta["mode"] == "execute":
         args += [meta["plan"], "shrinks" if meta["shrinks"] else "no-shrink"]
+    elif meta["mode"] == "startup-disk":
+        args += [meta["plan"]]
     p = subprocess.run(args, input=b"".join(line + b"\n" for line in lines), capture_output=True)
     return p.returncode, p.stdout.decode().strip()
 
@@ -73,6 +75,19 @@ class TranscriptVectors(unittest.TestCase):
                 self.t = S.TempDir()
                 r = scenarios.execute(self.t, before=before)
                 self.check(name, r["channel"].lines, r["plan"])
+
+    def test_startup_disk(self):
+        for name, kw in (
+            ("startup-disk-retry.jsonl", {}),
+            ("startup-disk-failed.jsonl", {"bless_mode": "fail"}),
+            ("startup-disk-refused.jsonl", {"installation": "00000000-0000-4000-8000-000000000000"}),
+        ):
+            with self.subTest(name):
+                self.t.cleanup()
+                self.t = S.TempDir()
+                r = scenarios.execute(self.t, before=scenarios.bless_fails)
+                rr = scenarios.retry(r, self.t, **kw)
+                self.check(name, rr["channel"].lines, r["plan"])
 
 
 if __name__ == "__main__":
