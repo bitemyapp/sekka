@@ -236,13 +236,12 @@ fn cursor_items(az: &mut Aizome, output: &Output, scale: f64, out: &mut Scene) {
             let img = az.cursor_theme.get(name, scale.ceil().max(1.0) as u32);
             let loc: Point<i32, Physical> =
                 Point::<f64, Logical>::from((rel.x - img.hot.0, rel.y - img.hot.1)).to_physical_precise_round(scale);
-            let size = Size::from((img.size.0.round() as i32, img.size.1.round() as i32));
             out.push(SceneItem::Memory {
                 buffer: img.buffer.clone(),
                 loc: loc.to_f64(),
                 alpha: None,
                 src: None,
-                size: Some(size),
+                size: Some(img.size),
                 kind: Kind::Cursor,
             });
         }
@@ -252,7 +251,9 @@ fn cursor_items(az: &mut Aizome, output: &Output, scale: f64, out: &mut Scene) {
                 states.data_map.get::<CursorImageSurfaceData>().map(|d| d.lock().unwrap().hotspot).unwrap_or_default()
             });
             let loc: Point<i32, Physical> = (rel - hotspot.to_f64()).to_physical_precise_round(scale);
-            out.push(SceneItem::Surface { surface: surface.clone(), loc, alpha: 1.0, kind: Kind::Cursor });
+            // smithay 0.7's cursor-plane copy assumes the whole client buffer
+            // matches the visible surface. A viewport can make that untrue.
+            out.push(SceneItem::Surface { surface: surface.clone(), loc, alpha: 1.0, kind: Kind::Unspecified });
         }
     }
 }
