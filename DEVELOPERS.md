@@ -3159,6 +3159,13 @@ from the start, keeps the choice in `localStorage` (`sekka-theme`) and sets
 checkbox. The other script plays the home page's video, and the content
 security policy allows scripts from the site alone.
 
+The bar keeps every page in reach at every width. As it narrows, the clock
+loses its label and then goes, and Discord and the switch keep only their
+icons. At phone widths the workspaces drop down from the current one, a
+`details` element, so the menu needs no script either. The Discord button
+draws Discord's mark from the Simple Icons path (CC0) inline, so it fetches
+nothing.
+
 The home page's video, Sekka and Aizome in 70 seconds, is drawn by the
 visitor's browser rather than streamed. Its own program, the fframes video in
 [sekka-aizome-hype](https://github.com/bitemyapp/sekka-aizome-hype), is built
@@ -3275,7 +3282,9 @@ link or in-page anchor. It is dressed as Aizome rather than Tatami: the
 header is Aizome's menu bar, each section is a window whose Haiku tab is its
 heading, the focused one amber, and pages open in Night, take Day from the
 bar's switch (`aizome-theme` in `localStorage`) and High Contrast when the
-visitor asks for more contrast.
+visitor asks for more contrast. Its menu bar narrows as sekka.computer's
+bar does, with sekka.computer shortened to Sekka, and at phone widths its
+menus drop down from the current one.
 
 Its colours and metrics come from Aizome's theme crate,
 `desktop/aizome/crates/aizome-theme/src/lib.rs`, read when the site is

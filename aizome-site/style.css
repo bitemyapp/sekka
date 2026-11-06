@@ -147,6 +147,28 @@ code { font-size: 0.88em; color: var(--text); overflow-wrap: anywhere; }
   border-radius: 50%;
 }
 .sibling-short { display: none; }
+/* Discord: a small default button, as Aizome draws one, set in the bar. */
+.menubar .discord {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  margin: 0 6px 0 2px;
+  padding: 0 9px;
+  background: var(--selection);
+  color: var(--on-selection);
+  border: 1px solid var(--bevel-lo);
+  box-shadow: inset 0 1px 0 var(--bevel-hi), 2px 2px 0 var(--slab);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1;
+  flex: none;
+}
+.menubar .discord:hover { background: var(--selection); border-color: var(--text3); }
+.discord-icon { display: block; flex: none; }
+/* The phone menu (below): the menus, dropping down from the current one. */
+.pages { display: none; }
 .theme {
   position: relative;
   display: flex;
@@ -172,7 +194,11 @@ code { font-size: 0.88em; color: var(--text); overflow-wrap: anywhere; }
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   max-width: none;
-  flex: none;
+  /* Cut short before the menus give up any room, rather than widen the page. */
+  flex: 0 1000 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .clock a { color: var(--text); }
 .clock-label { color: var(--text3); font-weight: 400; }
@@ -578,10 +604,20 @@ code { font-size: 0.88em; color: var(--text); overflow-wrap: anywhere; }
 .foot a { color: var(--text); }
 .foot-sekka { font-size: 1rem; }
 
-/* Narrower screens: the menus scroll within the bar rather than widen the
-   page, and the clock gives way. */
-@media (max-width: 900px) {
+/* Narrower screens: the clock loses its label and then gives way, Discord
+   keeps only its icon and Sekka its short name, and at phone widths the
+   menus drop down from the current one, a details element, so every page
+   is a tap away without script. */
+@media (max-width: 1100px) {
+  .clock-label { display: none; }
+}
+@media (max-width: 1000px) {
   .clock { display: none; }
+}
+@media (max-width: 840px) {
+  .discord-name, .sibling-long { display: none; }
+  .sibling-short { display: inline; }
+  .menubar .discord { padding: 0 6px; }
 }
 @media (max-width: 720px) {
   :root { --bar-h: 44px; }
@@ -589,10 +625,38 @@ code { font-size: 0.88em; color: var(--text); overflow-wrap: anywhere; }
   .home { padding: 0 8px; }
   .home-mark { width: 20px; height: 20px; }
   .home-name { display: none; }
-  .menu { padding: 0 9px; }
+  .menus { display: none; }
+  .pages { display: block; position: relative; flex: none; }
+  .pages > summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 100%;
+    padding: 0 10px;
+    list-style: none;
+    cursor: pointer;
+    font-weight: 650;
+    user-select: none;
+  }
+  .pages > summary::-webkit-details-marker { display: none; }
+  .pages > summary:hover, .pages[open] > summary { background: var(--raised); }
+  .pages-caret { display: block; flex: none; }
+  .pages[open] .pages-caret { transform: rotate(180deg); }
+  .pages-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 220px;
+    display: grid;
+    padding: 4px 0;
+    background: var(--surface);
+    border: 1px solid var(--line2);
+    box-shadow: inset 0 1px 0 var(--bevel-hi), 3px 3px 0 var(--slab);
+  }
+  .menu { padding: 0 18px; }
   .sibling { padding: 0 8px; }
-  .sibling-long { display: none; }
-  .sibling-short { display: inline; }
+  .menubar .discord { height: 32px; margin: 0 4px; padding: 0 9px; }
+  .discord-icon { width: 18px; height: 18px; }
   .theme { padding: 0 8px; }
   .theme-name { display: none; }
   .theme-icon { width: 18px; height: 18px; }
@@ -610,7 +674,6 @@ code { font-size: 0.88em; color: var(--text); overflow-wrap: anywhere; }
 }
 @media (max-width: 380px) {
   .sibling::before { display: none; }
-  .menu { padding: 0 7px; }
 }
 @media (prefers-reduced-motion: reduce) {
   * { scroll-behavior: auto; }
