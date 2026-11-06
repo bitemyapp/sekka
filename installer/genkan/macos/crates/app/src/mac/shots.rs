@@ -3,17 +3,22 @@
 //! and dark, rendered by AppKit offscreen and written as PNGs. These are
 //! real captures of the app's own views (docs/screenshots.md: honest
 //! provenance), driven by the simulation, so no disk, helper or account is
-//! involved.
+//! involved. One thing differs from the screen: the sidebar's translucent
+//! material, which blurs whatever is behind the window, is drawn as the
+//! flat under-page background color.
 use objc2_app_kit::NSAppearanceCustomization;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
+use block2::StackBlock;
 use objc2::MainThreadMarker;
 use objc2_app_kit::{
-    NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSBitmapImageFileType, NSView,
+    NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSBezierPath,
+    NSBitmapImageFileType, NSColor, NSCompositingOperation, NSGraphicsContext,
+    NSImageInterpolation, NSView, NSVisualEffectView,
 };
-use objc2_foundation::{NSDictionary, NSSize};
+use objc2_foundation::{NSDictionary, NSPoint, NSRect, NSSize};
 use sekka_mac_appkit::ui;
 use sekka_mac_contract::{ArtifactRole, Progress, Stage};
 
@@ -22,13 +27,54 @@ use crate::env::{DownloadProgress, Environment};
 use crate::model::{Model, Msg};
 use crate::sim::{Scenario, Simulation, settle};
 
+/// A window's content view as the window shows it. AppKit draws the views
+/// over transparency; the window's own background is drawn by its frame,
+/// and a material (the sidebar's) is composited by the window server from
+/// what is behind the window, so neither is in that drawing. Under the
+/// views goes the window's background color and, where a material is, the
+/// under-page background color in its place: offscreen, there is nothing
+/// behind the window to show through it. The crest's cut-outs show what is
+/// under them, as they do on screen.
 fn capture(view: &NSView, path: &Path) -> Result<(), String> {
     view.layoutSubtreeIfNeeded();
     let bounds = view.bounds();
-    let rep = view
-        .bitmapImageRepForCachingDisplayInRect(bounds)
-        .ok_or("AppKit couldn't make a bitmap for the window")?;
-    view.cacheDisplayInRect_toBitmapImageRep(bounds, &rep);
+    let bitmap = || view.bitmapImageRepForCachingDisplayInRect(bounds).ok_or("AppKit couldn't make a bitmap for the window");
+    let views = bitmap()?;
+    view.cacheDisplayInRect_toBitmapImageRep(bounds, &views);
+    let rep = bitmap()?;
+    let context = NSGraphicsContext::graphicsContextWithBitmapImageRep(&rep).ok_or("AppKit couldn't draw into the bitmap")?;
+    context.setImageInterpolation(NSImageInterpolation::None);
+    let background = view.window().map(|w| w.backgroundColor()).unwrap_or_else(NSColor::windowBackgroundColor);
+    let materials: Vec<NSRect> = view
+        .subviews()
+        .iter()
+        .filter(|v| v.downcast_ref::<NSVisualEffectView>().is_some())
+        .map(|v| v.frame())
+        .collect();
+    let draw = StackBlock::new(|| {
+        background.setFill();
+        NSBezierPath::fillRect(bounds);
+        NSColor::underPageBackgroundColor().setFill();
+        for r in &materials {
+            NSBezierPath::fillRect(*r);
+        }
+        unsafe {
+            views.drawInRect_fromRect_operation_fraction_respectFlipped_hints(
+                bounds,
+                NSRect::new(NSPoint::ZERO, views.size()),
+                NSCompositingOperation::SourceOver,
+                1.0,
+                false,
+                None,
+            )
+        };
+    });
+    NSGraphicsContext::saveGraphicsState_class();
+    NSGraphicsContext::setCurrentContext(Some(&context));
+    // Colors resolve for the window's appearance, as the views' did.
+    view.effectiveAppearance().performAsCurrentDrawingAppearance(&draw);
+    context.flushGraphics();
+    NSGraphicsContext::restoreGraphicsState_class();
     let png = unsafe { rep.representationUsingType_properties(NSBitmapImageFileType::PNG, &NSDictionary::new()) }
         .ok_or("AppKit couldn't encode the PNG")?;
     fs::write(path, png.to_vec()).map_err(|e| format!("{}: {e}", path.display()))
