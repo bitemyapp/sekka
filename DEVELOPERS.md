@@ -409,9 +409,18 @@ reflink without allocating a second physical extent generation. These hints
 retain no file data; missing, changed, symlinked or nonregular paths are
 discarded. Opens are nonblocking and verification reads are bounded by the
 expected artifact size. Mutable daemon state remains worktree-local.
-LRU and weak-view updates share a durable SQLite transaction rather than
-committing each update separately. Object accounting still commits before
-canonical publication, and file/directory synchronization remains enabled.
+Tree artifact ingestion groups metadata transactions and directory barriers
+across at most 16 destinations, retaining at most 32 stage/source descriptors.
+A conservative 64 MiB logical staging budget charges two snapshots per
+destination; larger individual objects run alone and must fit the store's
+limits. Distinct canonical digests are reserved once per group.
+Every staged file is still synchronized individually, and object accounting
+commits before canonical publication. Sixteen fixed canonical staging slots
+are removed and the directory synchronized under the shared lock before each
+group's admission, so an already-open peer can recover abandoned stages
+without reopening the store or scanning all canonical objects.
+CAS download paths remain singleton operations; grouped tree ingestion does
+not establish a fresh-worktree download performance improvement.
 Private cache configuration, TLS material and store settings participate in
 daemon startup identity so a long-lived daemon does not silently retain old
 credentials or settings. Keep the same `--isolation-dir` across cooperating
