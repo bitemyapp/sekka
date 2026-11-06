@@ -64,7 +64,7 @@ stub "$T/sw/bin/nix-env" 'cd /nix/var/nix/profiles' 'case "$*" in' \
   '*--set*) max=0; for l in system-*-link; do n=${l#system-}; n=${n%-link}; (( n > max )) && max=$n; done' \
   '  ln -s "${@: -1}" "system-$((max+1))-link"; ln -sfn "system-$((max+1))-link" system;;' \
   '*--switch-generation*) ln -sfn "system-${@: -1}-link" system;;' \
-  '*--delete-generations*) cur=$(readlink system); for l in system-*-link; do [[ $l == "$cur" ]] && continue; rm "$l"' \
+  '*--delete-generations*) echo $$ >"$T/state/delete-pid"; cur=$(readlink system); for l in system-*-link; do [[ $l == "$cur" ]] && continue; rm "$l"' \
   '    if [[ -e $T/ctl/slow-delete ]]; then touch "$T/state/delete-started"; sleep 1; fi; done;;' \
   'esac'
 stub "$T/sw/bin/nix-store" 'case $(cat "$T/ctl/gc") in' \
@@ -102,6 +102,16 @@ helper_stopped() { # marker args…: run the worker, interrupt it once marker ap
   until [[ -e $marker ]]; do sleep 0.02; i=$((i + 1)); ((i < 1500)) || { echo "never reached $marker"; exit 2; }; done
   kill -INT "$pid"; wait "$pid" || true
   cat "$dir/result.json"
+}
+helper_killed() { # marker args…: run the worker, SIGKILL it and the program it runs once marker appears (systemd's control-group kill)
+  local marker=$1; shift
+  local dir; dir=$(mktemp -d /var/lib/yukimi/operations/op.XXXXXX)
+  rm -f "$marker" "$T/state/delete-pid"
+  "$T/yukimi-helper" __worker "$dir" "$@" </dev/null 2>"$dir.stderr" &
+  local pid=$! i=0
+  until [[ -e $marker ]]; do sleep 0.02; i=$((i + 1)); ((i < 1500)) || { echo "never reached $marker"; exit 2; }; done
+  kill -KILL "$pid"; [[ -e $T/state/delete-pid ]] && { kill -KILL "$(cat "$T/state/delete-pid")" 2>/dev/null || true; }; wait "$pid" || true
+  echo "killed, result: $(cat "$dir/result.json" 2>/dev/null || echo none)"
 }
 check_isolated() { # nothing real is reachable through the helper's fixed paths
   [[ $(readlink -f /run/current-system/sw/bin/nix) == "$T/sw/bin/nix" ]]
