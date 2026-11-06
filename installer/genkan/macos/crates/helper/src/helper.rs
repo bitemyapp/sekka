@@ -4,9 +4,11 @@
 //! Requests arrive concurrently, one thread per connection. Those that can
 //! write an installation's record or start the engine (Begin, Cancel of a
 //! stopped installation, RetryStartupDisk, Reconcile) take the install lock
-//! first and refuse if it is held; a run holds it until it ends. Nothing
-//! slow (PAM, unpacking the engine, the root inspection) happens while
-//! holding `active`, which Status and Events read.
+//! first and refuse if it is held; a run holds it until it ends, and so
+//! does each engine it starts, until that engine exits, even if this
+//! process stops first. Nothing slow (PAM, unpacking the engine, the root
+//! inspection) happens while holding `active`, which Status and Events
+//! read.
 use std::collections::VecDeque;
 use std::fs;
 use std::os::unix::fs::DirBuilderExt;
@@ -221,13 +223,15 @@ impl<P: Platform> Helper<P> {
 
     /// Take the install lock, or say why not. A run holds it until it ends;
     /// the other requests that write a record hold it only while they do.
+    /// An engine holds it until it exits, so one left running when an
+    /// earlier helper process stopped holds it too.
     fn claim(&self) -> Result<InstallLock, Response> {
         match InstallLock::try_acquire(&self.paths.lock()) {
             Ok(Some(lock)) => Ok(lock),
             Ok(None) if self.any_running() => Err(refuse(HelperRefusalCode::Busy, "An installation is already running.")),
             Ok(None) => Err(refuse(
                 HelperRefusalCode::Busy,
-                "Sekka Installer's helper is busy with another request. Try again in a moment.",
+                "Sekka Installer's helper is busy with another request, or an earlier step is still finishing. Try again in a moment.",
             )),
             Err(e) => Err(refuse(HelperRefusalCode::Internal, e.to_string())),
         }
@@ -470,7 +474,7 @@ impl<P: Platform> Helper<P> {
             uid,
             owner,
             password,
-            _lock: lock,
+            lock,
         };
         std::thread::Builder::new()
             .name(format!("installation {installation}"))
@@ -565,7 +569,7 @@ impl<P: Platform> Helper<P> {
     }
 
     fn retry_startup_disk(&self, installation: Uuid, password: Secret) -> Response {
-        let _lock = match self.claim() {
+        let lock = match self.claim() {
             Ok(lock) => lock,
             Err(response) => return response,
         };
@@ -617,6 +621,7 @@ impl<P: Platform> Helper<P> {
             &plan_path,
             &owner,
             password,
+            &lock,
         ) {
             Ok(p) => p,
             Err(e) => {
@@ -680,7 +685,16 @@ impl<P: Platform> Helper<P> {
         if self.running(installation) {
             return refuse(HelperRefusalCode::Busy, "The installation is still running.");
         }
-        let journal = match self.open(installation) {
+        // Held from before the record is read until what was seen is added
+        // to it: nothing else writes the record meanwhile, and no engine is
+        // changing the disk while it is inspected (one left running when an
+        // earlier helper process stopped still holds the lock). Status and
+        // Events answer meanwhile.
+        let _lock = match self.claim() {
+            Ok(lock) => lock,
+            Err(response) => return response,
+        };
+        let mut journal = match self.open(installation) {
             Ok(j) => j,
             Err(e) => return refuse(HelperRefusalCode::State, e.to_string()),
         };
@@ -698,8 +712,6 @@ impl<P: Platform> Helper<P> {
             Ok(e) => e,
             Err(e) => return refuse(HelperRefusalCode::Download, e.to_string()),
         };
-        // Slow and changes nothing, so no lock is held: Status, Events and
-        // the other requests answer meanwhile.
         let inspection = match self.platform.inspect(&engine) {
             Ok(i) => i,
             Err(e) => {
@@ -709,7 +721,6 @@ impl<P: Platform> Helper<P> {
                 );
             }
         };
-        let seen = journal.records().len();
         let events = match crate::reconcile::look(journal.records(), &state, &plan, &inspection) {
             Finding::Unchanged(why) => {
                 self.note(installation, format!("Looked at this Mac: nothing recorded, because {why}."));
@@ -718,25 +729,6 @@ impl<P: Platform> Helper<P> {
             Finding::RecoveryFinished(events) => events,
             Finding::Removed(facts) => vec![Event::Removed { facts }],
         };
-        // What was seen is evidence about the record as it was then: add to
-        // it only if nothing was recorded meanwhile, and under the lock.
-        // (A retry of this installation that started meanwhile holds the
-        // lock, or has finished and changed the record.)
-        let _lock = match self.claim() {
-            Ok(lock) => lock,
-            Err(response) => return response,
-        };
-        let mut journal = match self.open(installation) {
-            Ok(j) => j,
-            Err(e) => return refuse(HelperRefusalCode::State, e.to_string()),
-        };
-        if journal.records().len() != seen {
-            self.note(
-                installation,
-                "Looked at this Mac: nothing recorded, because the record changed meanwhile.".into(),
-            );
-            return self.events(installation, 0);
-        }
         for event in events {
             if let Err(e) = journal.append(self.platform.now(), event) {
                 return refuse(
@@ -926,7 +918,8 @@ struct Run<P: Platform> {
     uid: u32,
     owner: String,
     password: Secret,
-    _lock: InstallLock,
+    /// Held until the run ends; the engine it starts holds it too.
+    lock: InstallLock,
 }
 
 impl<P: Platform> Run<P> {
@@ -1014,6 +1007,7 @@ impl<P: Platform> Run<P> {
             &plan_path,
             &self.owner,
             password,
+            &self.lock,
         ) {
             Ok(p) => p,
             Err(e) => {

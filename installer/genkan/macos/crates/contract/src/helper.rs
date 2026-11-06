@@ -55,8 +55,9 @@ pub enum Request {
     /// they took effect, or that nothing of the installation is left. The
     /// helper inspects for itself; the app asks only when its own inspection
     /// disagrees with the journal. Answered with `Events` (all of the
-    /// installation's records), changed or not, or refused while its engine
-    /// runs or when the Mac couldn't be inspected.
+    /// installation's records), changed or not, or refused while any engine
+    /// runs (an engine left running by a helper that stopped included) or
+    /// when the Mac couldn't be inspected.
     Reconcile { installation: Uuid },
 }
 

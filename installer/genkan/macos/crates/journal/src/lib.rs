@@ -365,8 +365,13 @@ pub fn reconcile(own: &[Record], other: &[Record]) -> Result<Vec<Record>, Journa
 /// The lock that makes the helper run one installation at a time. Held for
 /// as long as the value lives; the operating system releases it if the
 /// process dies.
+///
+/// It is a `flock` on an open file, so it belongs to that open file rather
+/// than to the process: a child given a copy of the descriptor (see
+/// [`AsFd`]) holds it too, until both have closed it. The helper gives one
+/// to each engine it starts for an installation.
 pub struct InstallLock {
-    _file: File,
+    file: File,
 }
 
 impl InstallLock {
@@ -378,10 +383,17 @@ impl InstallLock {
             .write(true)
             .open(path)?;
         match file.try_lock() {
-            Ok(()) => Ok(Some(Self { _file: file })),
+            Ok(()) => Ok(Some(Self { file })),
             Err(fs::TryLockError::WouldBlock) => Ok(None),
             Err(fs::TryLockError::Error(e)) => Err(e.into()),
         }
+    }
+}
+
+#[cfg(unix)]
+impl std::os::fd::AsFd for InstallLock {
+    fn as_fd(&self) -> std::os::fd::BorrowedFd<'_> {
+        self.file.as_fd()
     }
 }
 

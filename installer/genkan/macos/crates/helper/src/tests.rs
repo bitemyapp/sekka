@@ -5,7 +5,7 @@
 use super::*;
 use crate::engine::EngineProcess;
 use sekka_mac_contract::*;
-use sekka_mac_journal::{FsStorage, Journal};
+use sekka_mac_journal::{FsStorage, InstallLock, Journal};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -166,9 +166,16 @@ impl Platform for Fake {
         plan: &Path,
         owner: &str,
         password: Secret,
+        lock: &InstallLock,
     ) -> Result<Box<dyn EngineProcess>, PlatformError> {
         assert_eq!(owner, "owner");
         assert_eq!(&password[..], PASSWORD);
+        // The engine is handed the install lock, held while it starts.
+        let path = Paths::at(&self.dir.join("state")).lock();
+        let handed = std::fs::File::from(std::os::fd::AsFd::as_fd(lock).try_clone_to_owned().unwrap());
+        let ino = |m: std::fs::Metadata| std::os::unix::fs::MetadataExt::ino(&m);
+        assert_eq!(ino(handed.metadata().unwrap()), ino(std::fs::metadata(&path).unwrap()));
+        assert!(InstallLock::try_acquire(&path).unwrap().is_none());
         let plan: Plan = canonical::from_slice(&std::fs::read(plan).unwrap(), limits::PLAN, PlanSchema::VALUE).unwrap();
         let (mode, script) = match run {
             crate::EngineRun::Execute { assets } => {
@@ -1356,7 +1363,7 @@ fn reconcile_is_refused_while_the_engine_runs() {
 }
 
 #[test]
-fn a_record_that_changes_during_the_inspection_is_left_alone() {
+fn nothing_else_writes_the_record_while_the_mac_is_inspected() {
     let w = world(Script::Happy);
     let id = abandoned(&w, Stage::AppleInputs);
     *w.fake().inspection.lock().unwrap() = samples::inspection();
@@ -1369,14 +1376,42 @@ fn a_record_that_changes_during_the_inspection_is_left_alone() {
     std::thread::scope(|s| {
         let looked = s.spawn(|| w.reconcile(id));
         wait.recv().unwrap();
-        // While the Mac is inspected, the owner cancels it.
+        // While the Mac is inspected, Status and Events answer, and the
+        // owner's cancel or a new installation waits its turn.
+        assert!(matches!(w.ask(Request::Status, None), Response::Status { .. }));
         assert!(matches!(w.ask(Request::Events { installation: id, after: 0 }, None), Response::Events { .. }));
-        assert_eq!(w.ask(Request::Cancel { installation: id }, None), Response::Cancelled);
+        assert_eq!(refused(w.ask(Request::Cancel { installation: id }, None)).0, HelperRefusalCode::Busy);
+        assert_eq!(refused(w.begin()).0, HelperRefusalCode::Busy);
         go.send(()).unwrap();
-        let (state, records) = looked.join().unwrap();
-        assert_eq!(state, InstallState::Cancelled);
-        assert!(records.iter().all(|r| !matches!(r.event, Event::Removed { .. })), "{records:?}");
+        // Nothing of it was ever on the disk.
+        assert_eq!(looked.join().unwrap().0, InstallState::Removed);
     });
+}
+
+#[test]
+fn an_engine_left_running_by_an_earlier_helper_holds_off_reconcile() {
+    // The helper stopped while its engine was shrinking the container, and
+    // started again. The engine, which holds the install lock it was
+    // handed, is still at it: the container hasn't shrunk yet.
+    let w = world(Script::Happy);
+    let id = abandoned(&w, Stage::Shrink);
+    let w = w.restarted(Script::Happy);
+    *w.fake().inspection.lock().unwrap() = samples::inspection();
+    let engine = InstallLock::try_acquire(&w.helper.paths_for_tests().lock()).unwrap().unwrap();
+    let Response::Events { state, records, .. } = w.ask(Request::Events { installation: id, after: 0 }, None) else {
+        panic!()
+    };
+    assert_eq!(state, InstallState::MutationStarted { stage: Stage::Shrink });
+    let (code, message) = refused(w.ask(Request::Reconcile { installation: id }, None));
+    assert_eq!(code, HelperRefusalCode::Busy);
+    assert!(message.contains("still finishing"), "{message}");
+    assert!(w.fake().inspected_with.lock().unwrap().is_empty(), "the Mac isn't inspected meanwhile");
+    assert_eq!(refused(w.begin()).0, HelperRefusalCode::Busy);
+    // Once it has stopped, the Mac shows nothing of the installation.
+    drop(engine);
+    let (state, after) = w.reconcile(id);
+    assert_eq!(state, InstallState::Removed);
+    assert_eq!(after.len(), records.len() + 1);
 }
 
 #[test]

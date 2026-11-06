@@ -538,8 +538,11 @@ helper's, record for record, but never differ from it or go further, since the
 chain's digests have no key (`sekka_mac_journal::reconcile`). The helper learns
 what Recovery did, or that an installation was removed, only from its own
 inspection as root with the installation's own engine (`Request::Reconcile`).
-It records that inspection only if the journal didn't change while it ran, and
-records nothing when the inspection can't see the plan's disk or is ambiguous.
+It inspects and records under the install lock, which every engine started
+for an installation also holds until it exits, even past the helper that
+started it, so nothing is recorded while an engine may still be changing the
+disk. It records nothing when the inspection can't see the plan's disk or is
+ambiguous.
 
 | Observed state | Permitted next action |
 | --- | --- |

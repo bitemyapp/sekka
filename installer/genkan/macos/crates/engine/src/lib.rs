@@ -9,7 +9,9 @@
 //! their own.
 use std::fs;
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::os::fd::RawFd;
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
@@ -220,6 +222,29 @@ pub fn command(engine: &EngineInstall, args: &[&str]) -> Result<Command, EngineE
     Ok(command)
 }
 
+/// Give an engine started for an installation its two private
+/// descriptors: the owner's password on 3, which it reads to its end, and
+/// the install lock on 4, which it keeps open until it exits. The lock
+/// belongs to the open file, so the engine holds it for as long as it runs,
+/// even if the helper that started it stops first, and nothing claims it
+/// meanwhile to inspect or install. The engine starts its own tools without
+/// either. Both descriptors must stay open until `command` is spawned.
+pub fn inherit(command: &mut Command, password: RawFd, lock: RawFd) {
+    // SAFETY: only async-signal-safe calls between fork and exec.
+    unsafe {
+        command.pre_exec(move || {
+            // Copies above both targets first, so neither dup2 below closes
+            // the other's source. The copies end at exec; 3 and 4 don't.
+            let password = libc::fcntl(password, libc::F_DUPFD_CLOEXEC, 5);
+            let lock = libc::fcntl(lock, libc::F_DUPFD_CLOEXEC, 5);
+            if password < 0 || lock < 0 || libc::dup2(password, 3) < 0 || libc::dup2(lock, 4) < 0 {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+}
+
 /// A running engine, however it was started.
 pub trait EngineProcess: Send {
     /// The next line of its transcript, without the newline; `None` once it
@@ -428,6 +453,46 @@ mod tests {
         assert!(unpack(&archive, &tmp.path().join("cache"), Some(&Digest::of(b"other"))).is_err());
         let found = inspect(&engine).unwrap();
         assert_eq!(found, sekka_mac_contract::samples::inspection());
+    }
+
+    #[test]
+    fn an_engine_holds_the_install_lock_until_it_exits() {
+        use std::os::fd::AsRawFd;
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("installing.lock");
+        let open = || {
+            fs::OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .read(true)
+                .write(true)
+                .open(&path)
+                .unwrap()
+        };
+        let lock = open();
+        lock.try_lock().unwrap();
+        let (password, mut writing) = io::pipe().unwrap();
+        writing.write_all(b"correct horse").unwrap();
+        drop(writing);
+        // Prints the password from 3, then waits for its input to end with
+        // 4 still open.
+        let mut command = Command::new("/bin/sh");
+        command
+            .args(["-c", "cat <&3; read line || :"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped());
+        inherit(&mut command, password.as_raw_fd(), lock.as_raw_fd());
+        let mut child = command.spawn().unwrap();
+        drop(password);
+        let mut read = [0u8; 13];
+        child.stdout.take().unwrap().read_exact(&mut read).unwrap();
+        assert_eq!(&read, b"correct horse");
+        // The helper that started it is gone; the engine still holds it.
+        drop(lock);
+        assert!(matches!(open().try_lock(), Err(fs::TryLockError::WouldBlock)));
+        drop(child.stdin.take());
+        assert!(child.wait().unwrap().success());
+        assert!(open().try_lock().is_ok());
     }
 
     #[test]

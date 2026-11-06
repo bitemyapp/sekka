@@ -4,15 +4,15 @@
 //! helper's own engine directory, with a fixed argument list and a cleared
 //! environment.
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
-use std::fs;
 use std::io::Write;
-use std::os::unix::process::CommandExt;
+use std::os::fd::{AsFd, AsRawFd};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use sekka_mac_contract::{
     APP_IDENTIFIER, Digest, HELPER_SERVICE, Inspection, Timestamp, Uuid,
 };
+use sekka_mac_journal::InstallLock;
 use sekka_mac_trust::TrustConfig;
 
 use crate::engine::{ChildEngine, EngineProcess};
@@ -161,27 +161,20 @@ impl Platform for MacPlatform {
         plan: &Path,
         owner: &str,
         password: Secret,
+        lock: &InstallLock,
     ) -> Result<Box<dyn EngineProcess>, PlatformError> {
         if !plain_account_name(owner) {
             return Err(PlatformError::Authorization("That isn't an account name on this Mac.".into()));
         }
         // The password goes through a pipe on the engine's file descriptor
         // 3, written before it starts and closed: never an argument, never
-        // the environment, never a file.
-        let mut fds = [0 as c_int; 2];
-        // SAFETY: a fresh pipe.
-        if unsafe { libc::pipe(fds.as_mut_ptr()) } != 0 {
-            return Err(PlatformError::Engine(std::io::Error::last_os_error().to_string()));
+        // the environment, never a file. Both ends are close-on-exec; only
+        // the engine gets the read end, as its 3.
+        let (read_end, mut write_end) = std::io::pipe().map_err(|e| PlatformError::Engine(e.to_string()))?;
+        if password.len() > PASSWORD_LIMIT || write_end.write_all(&password).is_err() {
+            return Err(PlatformError::Engine("The password couldn't be handed to the engine.".into()));
         }
-        let (read_end, write_end) = (fds[0], fds[1]);
-        {
-            // SAFETY: we own the write end; File closes it when dropped.
-            let mut w = unsafe { <fs::File as std::os::fd::FromRawFd>::from_raw_fd(write_end) };
-            if password.len() > PASSWORD_LIMIT || w.write_all(&password).is_err() {
-                unsafe { libc::close(read_end) };
-                return Err(PlatformError::Engine("The password couldn't be handed to the engine.".into()));
-            }
-        }
+        drop(write_end);
         drop(password);
         let id = installation.to_string();
         let plan = plan.to_str().unwrap_or_default();
@@ -202,17 +195,9 @@ impl Platform for MacPlatform {
         let mut command = sekka_mac_engine::command(engine, &args)
         .map_err(|e| PlatformError::Engine(e.to_string()))?;
         command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
-        // SAFETY: only async-signal-safe calls between fork and exec.
-        unsafe {
-            command.pre_exec(move || {
-                if libc::dup2(read_end, 3) < 0 {
-                    return Err(std::io::Error::last_os_error());
-                }
-                Ok(())
-            });
-        }
+        sekka_mac_engine::inherit(&mut command, read_end.as_raw_fd(), lock.as_fd().as_raw_fd());
         let child = command.spawn();
-        unsafe { libc::close(read_end) };
+        drop(read_end);
         let child = child.map_err(|e| PlatformError::Engine(e.to_string()))?;
         Ok(Box::new(ChildEngine::new(child).map_err(|e| PlatformError::Engine(e.to_string()))?))
     }

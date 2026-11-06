@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use sekka_mac_contract::{Digest, Inspection, Timestamp, Uuid};
+use sekka_mac_journal::InstallLock;
 
 use zeroize::Zeroizing;
 
@@ -61,7 +62,10 @@ pub trait Platform: Send + Sync + 'static {
 
     /// Start the engine for the plan file, with the owner's credentials
     /// (handed to it privately): `execute` with the imported assets, or
-    /// `startup-disk` to set the startup disk again.
+    /// `startup-disk` to set the startup disk again. The engine is given the
+    /// install lock too, and holds it for as long as it runs, even past the
+    /// helper (see `sekka_mac_engine::inherit`).
+    #[allow(clippy::too_many_arguments)]
     fn start_engine(
         &self,
         engine: &EngineInstall,
@@ -70,5 +74,6 @@ pub trait Platform: Send + Sync + 'static {
         plan: &Path,
         owner: &str,
         password: Secret,
+        lock: &InstallLock,
     ) -> Result<Box<dyn EngineProcess>, PlatformError>;
 }

@@ -59,7 +59,11 @@ of that run's Esp checkpoint from the journal, and only that stage (below).
   `startup-disk`, file descriptor 3 carries the owner's password, read once
   to end of file and closed; it is kept in a `bytearray` only until `bless`
   has it, then overwritten. (Python may hold other copies, such as the bytes
-  handed to `bless`'s standard input; no complete erasure is claimed.) Before anything
+  handed to `bless`'s standard input; no complete erasure is claimed.)
+  Descriptor 4 is the helper's install lock, a `flock` the engine holds by
+  leaving it open until it exits, so nothing else installs or inspects for
+  the helper while it may still be changing the disk, even if the helper
+  stops first; its child processes don't inherit it. Before anything
   else runs, the engine takes private copies of descriptors 0 and 1 and points
   them at `/dev/null` and standard error, so neither Asahi's progress printing
   nor any child process can write into the transcript or read an
