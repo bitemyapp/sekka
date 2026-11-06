@@ -610,9 +610,11 @@ fn server_foreground() -> Result {
     let server = prepare(&ctx)?;
     let llama = llama_server(None, &ctx.config);
     eprintln!("Serving at {} until interrupted.", server.url());
-    let status =
-        server.router_command(&llama).status().map_err(|e| failed(format!("couldn't run {}: {e}", llama.display())))?;
-    if status.success() { Ok(()) } else { Err(failed(format!("llama-server ended: {status}"))) }
+    // Become the router, as the unit does: a signal meant for this process
+    // then reaches llama-server, where a child would be left running with
+    // the model loaded.
+    let err = server.router_command(&llama).exec();
+    Err(failed(format!("couldn't run {}: {err}", llama.display())))
 }
 
 fn server_status(json: bool) -> Result {
