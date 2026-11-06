@@ -9,6 +9,8 @@ use std::path::{Path, PathBuf};
 pub const RECEIPT: &str = "/var/lib/yukimi/update.json";
 pub const SESSION_MANIFEST: &str = "etc/xdg/tatami/update.json";
 pub const SESSION_RECEIPT: &str = "tatami/update-session.json";
+/// Where the system profile's generations are linked, as `system-<n>-link`.
+pub const PROFILES: &str = "/nix/var/nix/profiles";
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -110,6 +112,67 @@ pub fn boot_changes(booted: &Path, target: &Path) -> Result<Vec<String>, String>
         reasons.push("Kernel boot settings changed.".into());
     }
     Ok(reasons)
+}
+
+/// A generation's specialisations by name: its other boot entries, each a
+/// complete system of its own.
+pub fn specialisations(generation: &Path) -> BTreeMap<String, PathBuf> {
+    std::fs::read_dir(generation.join("specialisation"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| Some((entry.file_name().into_string().ok()?, std::fs::canonicalize(entry.path()).ok()?)))
+        .collect()
+}
+
+/// The name of the specialisation `active` is, by the system profile's
+/// generations in `profiles`. A system that is no generation's
+/// specialisation, or is one under different names, has none.
+pub fn specialisation(profiles: &Path, active: &Path) -> Option<String> {
+    let mut names = BTreeSet::new();
+    for link in std::fs::read_dir(profiles).into_iter().flatten().flatten() {
+        if crate::generations::generation_number(&link.file_name().to_string_lossy(), "system").is_some() {
+            names.extend(specialisations(&link.path()).into_iter().filter(|(_, path)| path == active).map(|(n, _)| n));
+        }
+    }
+    if names.len() == 1 { names.pop_first() } else { None }
+}
+
+/// The entry of a new generation to start from `active`, with the reasons
+/// it needs a restart. While a specialisation runs, the generation's own of
+/// that name, if it can take over live, as `nixos-rebuild test
+/// --specialisation` would. Otherwise the generation itself, planned as
+/// ever: its main entry is what the next start uses.
+pub fn plan_entry(profiles: &Path, booted: &Path, active: &Path, generation: &Path) -> (PathBuf, Vec<String>) {
+    let mut entries = specialisations(generation);
+    let name = specialisation(profiles, active).filter(|name| entries.contains_key(name));
+    if let Some(entry) = name.as_ref().and_then(|name| entries.remove(name))
+        && plan(booted, active, &entry).is_empty()
+    {
+        return (entry, Vec::new());
+    }
+    let mut reasons = plan(booted, active, generation);
+    if let Some(name) = name
+        && !reasons.is_empty()
+    {
+        reasons.push(format!("The restart starts the main boot entry. To keep {name}, choose it in the boot menu."));
+    }
+    (generation.to_owned(), reasons)
+}
+
+/// The selected generation's entry to measure completion against: the one
+/// running, else the one Yukimi's receipt names, else the generation
+/// itself. With its name when it is a specialisation.
+fn selected_entry(selected: &Path, active: &Path, receipt: Option<&Receipt>) -> (PathBuf, Option<String>) {
+    if active == selected {
+        return (selected.to_owned(), None);
+    }
+    let specialisations = specialisations(selected);
+    let named = |system: &Path| specialisations.iter().find(|(_, path)| *path == system);
+    match named(active).or_else(|| receipt.and_then(|r| named(&r.system))) {
+        Some((name, path)) => (path.clone(), Some(name.clone())),
+        None => (selected.to_owned(), None),
+    }
 }
 
 /// Reasons to prepare one complete system for boot instead of disrupting the
@@ -479,6 +542,9 @@ pub fn system_state(
     receipt: Option<&Receipt>,
     this_boot: &str,
 ) -> Completion {
+    // While a specialisation runs, it is what this generation installed.
+    let (selected, specialisation) = selected_entry(selected, active, receipt);
+    let selected = selected.as_path();
     // A successful boot into the prepared system supersedes every old request,
     // including errors recorded before that boot. No second reboot for it.
     if let Some(r) = receipt.filter(|r| r.state == "activating")
@@ -514,13 +580,25 @@ pub fn system_state(
     }
     match boot_changes(booted, selected) {
         // Yukimi's planner stages a changed entry; a switch made otherwise can still bring one.
-        Ok(reasons) if reasons.is_empty() => match outdated_sessions(&[booted], active) {
-            Some(reason) => Completion::new(Action::Reboot, reason),
-            None if login_sessions(booted) != login_sessions(active) => {
-                Completion::new(Action::None, LOGIN_SCREEN_LIST)
+        Ok(reasons) if reasons.is_empty() => {
+            let mut state = match outdated_sessions(&[booted], active) {
+                Some(reason) => Completion::new(Action::Reboot, reason),
+                None if login_sessions(booted) != login_sessions(active) => {
+                    Completion::new(Action::None, LOGIN_SCREEN_LIST)
+                }
+                None => Completion::default(),
+            };
+            // Yukimi's own switch left the main entry the default.
+            if let Some(name) = specialisation
+                && state.action == Action::None
+                && receipt.is_some_and(|r| r.system == selected)
+            {
+                state.reasons.push(format!(
+                    "The changes apply to {name}, the boot entry you are running. Restarts start the main entry unless you choose {name} in the boot menu."
+                ));
             }
-            None => Completion::default(),
-        },
+            state
+        }
         Ok(reasons) => Completion { action: Action::Reboot, reasons },
         Err(reason) => Completion::new(Action::Unknown, reason),
     }
@@ -743,24 +821,55 @@ mod tests {
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
-            let old = root.join("old");
-            let new = root.join("new");
             std::fs::create_dir_all(root.join("artifacts")).unwrap();
-            for system in [&old, &new] {
-                std::fs::create_dir_all(system.join("etc/yukimi")).unwrap();
-                for part in ["kernel", "initrd", "kernel-modules"] {
-                    std::fs::write(root.join("artifacts").join(part), part).unwrap();
-                    std::os::unix::fs::symlink(root.join("artifacts").join(part), system.join(part)).unwrap();
-                }
-                std::fs::write(system.join("kernel-params"), "quiet loglevel=4").unwrap();
-                std::fs::write(system.join("init-interface-version"), "2").unwrap();
-                std::fs::write(system.join("etc/yukimi/activation.json"), "{\"version\":1}").unwrap();
-                std::fs::write(system.join("switch-inhibitors"), "{\"dbus\":\"broker\"}").unwrap();
+            // Specialisations are found by their canonical paths.
+            let root = std::fs::canonicalize(root).unwrap();
+            let f = Self { old: root.join("old"), new: root.join("new"), root };
+            for system in [&f.old, &f.new] {
+                f.system(system);
             }
-            Self { root, old, new }
+            f
+        }
+        fn system(&self, system: &Path) {
+            std::fs::create_dir_all(system.join("etc/yukimi")).unwrap();
+            for part in ["kernel", "initrd", "kernel-modules"] {
+                std::fs::write(self.root.join("artifacts").join(part), part).unwrap();
+                std::os::unix::fs::symlink(self.root.join("artifacts").join(part), system.join(part)).unwrap();
+            }
+            std::fs::write(system.join("kernel-params"), "quiet loglevel=4").unwrap();
+            std::fs::write(system.join("init-interface-version"), "2").unwrap();
+            std::fs::write(system.join("etc/yukimi/activation.json"), "{\"version\":1}").unwrap();
+            std::fs::write(system.join("switch-inhibitors"), "{\"dbus\":\"broker\"}").unwrap();
         }
         fn receipt(&self, state: &str) -> Receipt {
             Receipt { system: self.new.clone(), state: state.into(), boot_id: "before".into(), reasons: vec![] }
+        }
+        /// A specialisation of `generation`, as NixOS links it, which starts
+        /// with its own build of the kernel's drivers and initrd.
+        fn specialise(&self, generation: &Path, name: &str) -> PathBuf {
+            let system = self.root.join(format!("{}-{name}", generation.file_name().unwrap().to_string_lossy()));
+            self.system(&system);
+            for part in ["initrd", "kernel-modules"] {
+                let artifact = self.root.join("artifacts").join(format!("{part}-{name}"));
+                std::fs::write(&artifact, format!("{part} for {name}")).unwrap();
+                std::fs::remove_file(system.join(part)).unwrap();
+                std::os::unix::fs::symlink(artifact, system.join(part)).unwrap();
+            }
+            std::fs::create_dir_all(generation.join("specialisation")).unwrap();
+            std::os::unix::fs::symlink(&system, generation.join("specialisation").join(name)).unwrap();
+            system
+        }
+        /// The system profile, with these generations in order.
+        fn profiles(&self, generations: &[&Path]) -> PathBuf {
+            let profiles = self.root.join("profiles");
+            let _ = std::fs::remove_dir_all(&profiles);
+            std::fs::create_dir_all(&profiles).unwrap();
+            for (n, generation) in generations.iter().enumerate() {
+                std::os::unix::fs::symlink(generation, profiles.join(format!("system-{}-link", n + 51))).unwrap();
+            }
+            std::os::unix::fs::symlink(format!("system-{}-link", generations.len() + 50), profiles.join("system"))
+                .unwrap();
+            profiles
         }
     }
     impl Drop for Fixture {
@@ -795,6 +904,89 @@ mod tests {
         assert_eq!(system_state(&f.new, &f.new, &f.new, Some(&r), "after").action, Action::None);
         // Reopening Yukimi again does not resurrect the request.
         assert_eq!(system_state(&f.new, &f.new, &f.new, Some(&r), "after").action, Action::None);
+    }
+    #[test]
+    fn a_running_specialisation_switches_live_to_the_same_one_of_the_new_generation() {
+        let f = Fixture::new();
+        let (old_xe, new_xe) = (f.specialise(&f.old, "xe-dpt"), f.specialise(&f.new, "xe-dpt"));
+        let profiles = f.profiles(&[&f.old, &f.new]);
+        // Measured against the new generation's main entry, an installation
+        // waited for a restart, which would have started without the patch.
+        assert_eq!(plan(&old_xe, &old_xe, &f.new), vec!["The boot environment changed.", "Kernel drivers changed."]);
+        assert_eq!(plan_entry(&profiles, &old_xe, &old_xe, &f.new), (new_xe.clone(), vec![]));
+        let switched = Receipt { system: new_xe.clone(), ..f.receipt("activated") };
+        let state = system_state(&old_xe, &new_xe, &f.new, Some(&switched), "before");
+        assert_eq!(state.action, Action::None);
+        assert!(state.description().ends_with(
+            "The changes apply to xe-dpt, the boot entry you are running. Restarts start the main entry unless you choose xe-dpt in the boot menu."
+        ));
+        // Starting either entry finishes the update.
+        for entry in [&new_xe, &f.new] {
+            assert_eq!(system_state(entry, entry, &f.new, Some(&switched), "after"), Completion::default());
+        }
+    }
+    #[test]
+    fn a_running_specialisation_that_cannot_switch_live_prepares_the_main_entry_as_before() {
+        let f = Fixture::new();
+        let (old_xe, new_xe) = (f.specialise(&f.old, "xe-dpt"), f.specialise(&f.new, "xe-dpt"));
+        let profiles = f.profiles(&[&f.old, &f.new]);
+        std::fs::write(f.root.join("artifacts/kernel-new"), "new kernel").unwrap();
+        for system in [&f.new, &new_xe] {
+            std::fs::remove_file(system.join("kernel")).unwrap();
+            std::os::unix::fs::symlink(f.root.join("artifacts/kernel-new"), system.join("kernel")).unwrap();
+        }
+        let (entry, reasons) = plan_entry(&profiles, &old_xe, &old_xe, &f.new);
+        assert_eq!(entry, f.new);
+        assert_eq!(
+            reasons,
+            vec![
+                "The kernel changed.",
+                "The boot environment changed.",
+                "Kernel drivers changed.",
+                "The restart starts the main boot entry. To keep xe-dpt, choose it in the boot menu.",
+            ]
+        );
+        let prepared = Receipt { reasons: reasons.clone(), ..f.receipt("prepared") };
+        assert_eq!(
+            system_state(&old_xe, &old_xe, &f.new, Some(&prepared), "before"),
+            Completion { action: Action::Reboot, reasons }
+        );
+        // Starting either entry finishes it.
+        for entry in [&f.new, &new_xe] {
+            assert_eq!(system_state(entry, entry, &f.new, Some(&prepared), "after"), Completion::default());
+        }
+    }
+    #[test]
+    fn only_a_specialisation_with_one_name_is_followed() {
+        let f = Fixture::new();
+        let old_xe = f.specialise(&f.old, "xe-dpt");
+        let profiles = f.profiles(&[&f.old, &f.new]);
+        // A generation without it is planned as before, with nothing to choose.
+        let (entry, reasons) = plan_entry(&profiles, &old_xe, &old_xe, &f.new);
+        assert_eq!((entry, reasons), (f.new.clone(), plan(&old_xe, &old_xe, &f.new)));
+        let new_xe = f.specialise(&f.new, "xe-dpt");
+        assert_eq!(plan_entry(&profiles, &old_xe, &old_xe, &f.new).0, new_xe);
+        // A main entry, and a system that is no generation's, follow the main entry.
+        assert_eq!(plan_entry(&profiles, &f.old, &f.old, &f.new), (f.new.clone(), vec![]));
+        let elsewhere = f.root.join("elsewhere");
+        f.system(&elsewhere);
+        assert_eq!(plan_entry(&profiles, &elsewhere, &elsewhere, &f.new), (f.new.clone(), vec![]));
+        // The same system under two names doesn't say which to follow.
+        std::os::unix::fs::symlink(&old_xe, f.old.join("specialisation/also")).unwrap();
+        f.specialise(&f.new, "also");
+        assert_eq!(specialisation(&profiles, &old_xe), None);
+        assert_eq!(plan_entry(&profiles, &old_xe, &old_xe, &f.new).0, f.new);
+    }
+    #[test]
+    fn running_a_specialisation_of_the_installed_generation_is_complete() {
+        let f = Fixture::new();
+        let new_xe = f.specialise(&f.new, "xe-dpt");
+        // Chosen in the boot menu: nothing to finish, and nothing to say.
+        assert_eq!(system_state(&new_xe, &new_xe, &f.new, None, "boot"), Completion::default());
+        // Switched to without a restart, its drivers wait for one.
+        let state = system_state(&f.new, &new_xe, &f.new, None, "boot");
+        assert_eq!(state.action, Action::Reboot);
+        assert_eq!(state.reasons, vec!["The boot environment changed.", "Kernel drivers changed."]);
     }
     #[test]
     fn kernel_and_boot_settings_are_compared_to_what_booted() {

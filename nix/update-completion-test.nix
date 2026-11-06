@@ -18,10 +18,13 @@ let
       '';
       derivationArgs.passthru.providedSessions = [ id ];
     };
+  # A specialisation the machine starts and stays in. Its kernel parameter
+  # keeps its generation's main entry from taking its place live.
+  kept.boot.kernelParams = [ "sekka-kept=1" ];
 in
 pkgs.testers.runNixOSTest {
   name = "yukimi-update-completion";
-  globalTimeout = 300;
+  globalTimeout = 600;
   nodes.machine = { ... }: {
     imports = [
       yukimiModule
@@ -37,6 +40,32 @@ pkgs.testers.runNixOSTest {
           config.services.displayManager.sessionPackages = [
             (session "yukimi-test" "Yukimi test" config.yukimiTest.sessionExec)
           ];
+        }
+      )
+      # The next generation, built with the VM: another file in /etc, and its
+      # own `kept`.
+      (
+        {
+          config,
+          lib,
+          extendModules,
+          ...
+        }:
+        {
+          options.yukimiTest.next = lib.mkEnableOption "the next generation";
+          config = lib.mkIf (!config.yukimiTest.next) {
+            system.build.yukimiNext =
+              (extendModules {
+                modules = [
+                  {
+                    yukimiTest.next = true;
+                    environment.etc."update-test".text = "next";
+                    specialisation = lib.mkForce { kept.configuration = kept; };
+                  }
+                ];
+              }).config.system.build.toplevel;
+            virtualisation.additionalPaths = [ config.system.build.yukimiNext ];
+          };
         }
       )
     ];
@@ -81,6 +110,7 @@ pkgs.testers.runNixOSTest {
     # The entry the login screen started with now starts something else,
     # which it would only start after a restart.
     specialisation.sessionChange.configuration.yukimiTest.sessionExec = "${pkgs.coreutils}/bin/false";
+    specialisation.kept.configuration = kept;
     # Give the test a deterministic point at which activation is committed,
     # then keep writing output after its original client has been killed.
     system.activationScripts.yukimiTest = ''
@@ -91,82 +121,117 @@ pkgs.testers.runNixOSTest {
       fi
     '';
   };
-  testScript = ''
-    import json, time
-    machine.start()
-    machine.wait_for_unit("multi-user.target")
-    base = machine.succeed("readlink -f /run/current-system").strip()
-    live = machine.succeed(f"readlink -f {base}/specialisation/live").strip()
-    restart = machine.succeed(f"readlink -f {base}/specialisation/restart").strip()
-    login_change = machine.succeed(f"readlink -f {base}/specialisation/loginChange").strip()
-    session_list = machine.succeed(f"readlink -f {base}/specialisation/sessionList").strip()
-    session_change = machine.succeed(f"readlink -f {base}/specialisation/sessionChange").strip()
-    def status():
-        return json.loads(machine.succeed("sekka-update --status --json"))
-    assert status()["action"] == "none", status()
-    machine.wait_for_x()
-    desktop_pid = machine.succeed("pgrep -u demo -x icewm").strip()
-    # A target-side check protects even an older frontend which blindly
-    # calls switch. It must fail before the display manager is stopped.
-    machine.fail(f"{login_change}/bin/switch-to-configuration switch")
-    assert machine.succeed("pgrep -u demo -x icewm").strip() == desktop_pid
-    assert machine.succeed("readlink -f /run/current-system").strip() == base
-    # Real helper, real systemd service, real activation; no build mocks.
-    machine.succeed(f"ln -s {live} /nix/var/nix/profiles/system-100-link")
-    machine.succeed("touch /run/test-slow-activation")
-    machine.succeed("systemd-run --unit=test-updater-client --property=StandardOutput=journal --property=StandardError=journal yukimi-helper rollback 100")
-    machine.wait_until_succeeds("test -e /run/test-activation-started", timeout=30)
-    machine.succeed("systemctl kill --signal=SIGKILL test-updater-client.service")
-    machine.wait_until_succeeds("grep -q '\"state\":\"activated\"' /var/lib/yukimi/update.json")
-    machine.wait_until_succeeds("grep -l '\"ok\":true' /var/lib/yukimi/operations/*/result.json")
-    machine.succeed("grep -l 'activation survived its client' /var/lib/yukimi/operations/*/progress.log")
-    machine.succeed("rm /run/test-slow-activation")
-    assert machine.succeed("readlink -f /run/current-system").strip() == live
-    assert machine.succeed("pgrep -u demo -x icewm").strip() == desktop_pid
-    assert status()["action"] == "none", status()
-    # A change to the list of sessions alone stays live. The display manager
-    # keeps running, and offers the new list from its next start.
-    manager_pid = machine.succeed("systemctl show --value --property=MainPID display-manager").strip()
-    machine.succeed(f"ln -s {session_list} /nix/var/nix/profiles/system-101-link")
-    report = json.loads(machine.succeed("yukimi-helper rollback 101"))
-    assert report["ok"] and report["mode"] == "switch", report
-    assert machine.succeed("readlink -f /run/current-system").strip() == session_list
-    assert machine.succeed("systemctl show --value --property=MainPID display-manager").strip() == manager_pid
-    assert machine.succeed("pgrep -u demo -x icewm").strip() == desktop_pid
-    assert status()["action"] == "none", status()
-    assert any("login screen" in reason for reason in status()["reasons"]), status()
-    # A changed entry waits for a restart, and says which desktop.
-    machine.succeed(f"ln -s {session_change} /nix/var/nix/profiles/system-102-link")
-    report = json.loads(machine.succeed("yukimi-helper rollback 102"))
-    assert report["ok"] and report["mode"] == "boot", report
-    assert machine.succeed("readlink -f /run/current-system").strip() == session_list
-    assert machine.succeed("systemctl show --value --property=MainPID display-manager").strip() == manager_pid
-    assert status()["action"] == "reboot", status()
-    assert any("previous version of Yukimi test" in reason for reason in status()["reasons"]), status()
-    machine.succeed(f"ln -s {restart} /nix/var/nix/profiles/system-103-link")
-    report = json.loads(machine.succeed("yukimi-helper rollback 103"))
-    assert report["ok"] and report["mode"] == "boot", report
-    assert machine.succeed("readlink -f /run/current-system").strip() == session_list
-    assert machine.succeed("pgrep -u demo -x icewm").strip() == desktop_pid
-    assert status()["action"] == "reboot", status()
-    # The status survives closing and reopening Yukimi; no background GUI.
-    assert status()["action"] == "reboot", status()
-    machine.wait_for_x()
-    machine.succeed("su - demo -c 'DISPLAY=:0 XDG_RUNTIME_DIR=/run/user/1000 yukimi > /tmp/yukimi.log 2>&1 &' ")
-    try:
-        machine.wait_until_succeeds("pgrep -u demo -f yukimi", timeout=20)
-    except Exception:
-        print(machine.succeed("cat /tmp/yukimi.log"))
-        raise
-    time.sleep(4)
-    machine.screenshot("prepared-update")
-    machine.shutdown()
-    machine.start()
-    machine.wait_for_unit("multi-user.target")
-    assert machine.succeed("readlink -f /run/booted-system").strip() == restart
-    assert "sekka-update-test=1" in machine.succeed("cat /proc/cmdline")
-    assert status()["action"] == "none", status()
-    assert status()["action"] == "none", status()
-    machine.screenshot("update-booted")
-  '';
+  testScript =
+    { nodes, ... }:
+    ''
+      import json, time
+      machine.start()
+      machine.wait_for_unit("multi-user.target")
+      base = machine.succeed("readlink -f /run/current-system").strip()
+      live = machine.succeed(f"readlink -f {base}/specialisation/live").strip()
+      restart = machine.succeed(f"readlink -f {base}/specialisation/restart").strip()
+      login_change = machine.succeed(f"readlink -f {base}/specialisation/loginChange").strip()
+      session_list = machine.succeed(f"readlink -f {base}/specialisation/sessionList").strip()
+      session_change = machine.succeed(f"readlink -f {base}/specialisation/sessionChange").strip()
+      def status():
+          return json.loads(machine.succeed("sekka-update --status --json"))
+      assert status()["action"] == "none", status()
+      machine.wait_for_x()
+      desktop_pid = machine.succeed("pgrep -u demo -x icewm").strip()
+      # A target-side check protects even an older frontend which blindly
+      # calls switch. It must fail before the display manager is stopped.
+      machine.fail(f"{login_change}/bin/switch-to-configuration switch")
+      assert machine.succeed("pgrep -u demo -x icewm").strip() == desktop_pid
+      assert machine.succeed("readlink -f /run/current-system").strip() == base
+      # Real helper, real systemd service, real activation; no build mocks.
+      machine.succeed(f"ln -s {live} /nix/var/nix/profiles/system-100-link")
+      machine.succeed("touch /run/test-slow-activation")
+      machine.succeed("systemd-run --unit=test-updater-client --property=StandardOutput=journal --property=StandardError=journal yukimi-helper rollback 100")
+      machine.wait_until_succeeds("test -e /run/test-activation-started", timeout=30)
+      machine.succeed("systemctl kill --signal=SIGKILL test-updater-client.service")
+      machine.wait_until_succeeds("grep -q '\"state\":\"activated\"' /var/lib/yukimi/update.json")
+      machine.wait_until_succeeds("grep -l '\"ok\":true' /var/lib/yukimi/operations/*/result.json")
+      machine.succeed("grep -l 'activation survived its client' /var/lib/yukimi/operations/*/progress.log")
+      machine.succeed("rm /run/test-slow-activation")
+      assert machine.succeed("readlink -f /run/current-system").strip() == live
+      assert machine.succeed("pgrep -u demo -x icewm").strip() == desktop_pid
+      assert status()["action"] == "none", status()
+      # A change to the list of sessions alone stays live. The display manager
+      # keeps running, and offers the new list from its next start.
+      manager_pid = machine.succeed("systemctl show --value --property=MainPID display-manager").strip()
+      machine.succeed(f"ln -s {session_list} /nix/var/nix/profiles/system-101-link")
+      report = json.loads(machine.succeed("yukimi-helper rollback 101"))
+      assert report["ok"] and report["mode"] == "switch", report
+      assert machine.succeed("readlink -f /run/current-system").strip() == session_list
+      assert machine.succeed("systemctl show --value --property=MainPID display-manager").strip() == manager_pid
+      assert machine.succeed("pgrep -u demo -x icewm").strip() == desktop_pid
+      assert status()["action"] == "none", status()
+      assert any("login screen" in reason for reason in status()["reasons"]), status()
+      # A changed entry waits for a restart, and says which desktop.
+      machine.succeed(f"ln -s {session_change} /nix/var/nix/profiles/system-102-link")
+      report = json.loads(machine.succeed("yukimi-helper rollback 102"))
+      assert report["ok"] and report["mode"] == "boot", report
+      assert machine.succeed("readlink -f /run/current-system").strip() == session_list
+      assert machine.succeed("systemctl show --value --property=MainPID display-manager").strip() == manager_pid
+      assert status()["action"] == "reboot", status()
+      assert any("previous version of Yukimi test" in reason for reason in status()["reasons"]), status()
+      machine.succeed(f"ln -s {restart} /nix/var/nix/profiles/system-103-link")
+      report = json.loads(machine.succeed("yukimi-helper rollback 103"))
+      assert report["ok"] and report["mode"] == "boot", report
+      assert machine.succeed("readlink -f /run/current-system").strip() == session_list
+      assert machine.succeed("pgrep -u demo -x icewm").strip() == desktop_pid
+      assert status()["action"] == "reboot", status()
+      # The status survives closing and reopening Yukimi; no background GUI.
+      assert status()["action"] == "reboot", status()
+      machine.wait_for_x()
+      machine.succeed("su - demo -c 'DISPLAY=:0 XDG_RUNTIME_DIR=/run/user/1000 yukimi > /tmp/yukimi.log 2>&1 &' ")
+      try:
+          machine.wait_until_succeeds("pgrep -u demo -f yukimi", timeout=20)
+      except Exception:
+          print(machine.succeed("cat /tmp/yukimi.log"))
+          raise
+      time.sleep(4)
+      machine.screenshot("prepared-update")
+      machine.shutdown()
+      machine.start()
+      machine.wait_for_unit("multi-user.target")
+      assert machine.succeed("readlink -f /run/booted-system").strip() == restart
+      assert "sekka-update-test=1" in machine.succeed("cat /proc/cmdline")
+      assert status()["action"] == "none", status()
+      assert status()["action"] == "none", status()
+      machine.screenshot("update-booted")
+      # A specialisation chosen to start (here, made the default as an
+      # administrator would) is what its generation installed.
+      kept = machine.succeed(f"readlink -f {base}/specialisation/kept").strip()
+      assert machine.succeed("readlink -f /nix/var/nix/profiles/system-1-link").strip() == base
+      machine.succeed("nix-env -p /nix/var/nix/profiles/system --switch-generation 1")
+      machine.succeed(f"{kept}/bin/switch-to-configuration boot")
+      machine.shutdown()
+      machine.start()
+      machine.wait_for_unit("multi-user.target")
+      assert machine.succeed("readlink -f /run/booted-system").strip() == kept
+      assert "sekka-kept=1" in machine.succeed("cat /proc/cmdline")
+      assert status()["action"] == "none", status()
+      # The next generation's main entry would wait for a restart. Its own
+      # `kept` switches live; the main entry stays the default.
+      following = "${nodes.machine.system.build.yukimiNext}"
+      next_kept = machine.succeed(f"readlink -f {following}/specialisation/kept").strip()
+      machine.succeed(f"ln -s {following} /nix/var/nix/profiles/system-104-link")
+      machine.wait_for_x()
+      desktop_pid = machine.wait_until_succeeds("pgrep -u demo -x icewm").strip()
+      report = json.loads(machine.succeed("yukimi-helper rollback 104"))
+      assert report["ok"] and report["mode"] == "switch" and report["system"] == next_kept, report
+      assert machine.succeed("readlink -f /run/current-system").strip() == next_kept
+      assert machine.succeed("cat /etc/update-test").strip() == "next"
+      assert machine.succeed("pgrep -u demo -x icewm").strip() == desktop_pid
+      assert status()["action"] == "none", status()
+      assert any("unless you choose kept in the boot menu" in reason for reason in status()["reasons"]), status()
+      machine.succeed(f"grep -l 'init={next_kept}/init' /boot/loader/entries/*.conf")
+      machine.shutdown()
+      machine.start()
+      machine.wait_for_unit("multi-user.target")
+      assert machine.succeed("readlink -f /run/booted-system").strip() == following
+      assert "sekka-kept=1" not in machine.succeed("cat /proc/cmdline")
+      assert status() == {"action": "none", "reasons": []}, status()
+    '';
 }

@@ -95,6 +95,14 @@ each generation in `/var/lib/yukimi/configurations`, which is how going back
 restores your choices too. A file you have changed by hand since then is
 left as it is.
 
+If you started one of a generation's other boot entries, a specialisation
+(a kernel patch to try, say), a change or going back to a generation switches
+live to the same specialisation of the new one, when that needs no restart.
+The main entry stays the one the computer starts by default, so after a
+restart, choose the specialisation in the boot menu again. When the change
+does need a restart, Yukimi prepares the main entry, as it does without a
+specialisation, and says so.
+
 ## Updates, quickly
 
 Checking asks GitHub for the commit each branch is at, FlakeHub for its
