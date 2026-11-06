@@ -228,6 +228,42 @@ fn every_interruption_leaves_a_believable_journal() {
 }
 
 #[test]
+fn a_journal_that_never_began_is_taken_away() {
+    let dir = tempfile::tempdir().unwrap();
+    for fail_at in 0..4 {
+        let result = Journal::create(
+            Faulty {
+                count: Cell::new(0),
+                fail_at,
+                mode: Fault::Fail,
+            },
+            dir.path(),
+            id(),
+            at(),
+            opened(),
+        );
+        if result.is_err() {
+            assert!(
+                installations(&FsStorage, dir.path()).unwrap().is_empty()
+                    || Journal::open(FsStorage, dir.path(), id()).is_ok(),
+                "fault {fail_at}: either no journal or a whole one"
+            );
+        }
+        let _ = fs::remove_dir_all(Journal::<FsStorage>::directory(dir.path(), id()));
+    }
+    // A directory left by a crash with only a pending write is removed;
+    // one with a record is never touched.
+    let left = Journal::<FsStorage>::directory(dir.path(), id());
+    fs::create_dir_all(&left).unwrap();
+    fs::write(left.join(".pending-00000001.json"), b"{").unwrap();
+    assert!(discard_if_unopened(&FsStorage, dir.path(), id()));
+    assert!(!left.exists());
+    Journal::create(FsStorage, dir.path(), id(), at(), opened()).unwrap();
+    assert!(!discard_if_unopened(&FsStorage, dir.path(), id()));
+    assert!(Journal::open(FsStorage, dir.path(), id()).is_ok());
+}
+
+#[test]
 fn copies_reconcile_only_when_one_extends_the_other() {
     let dir = tempfile::tempdir().unwrap();
     let mut j = Journal::create(FsStorage, dir.path(), id(), at(), opened()).unwrap();

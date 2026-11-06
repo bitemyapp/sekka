@@ -65,7 +65,7 @@ pub fn stage(stage: Stage) -> &'static str {
 pub fn stage_detail(stage: Stage) -> &'static str {
     match stage {
         Stage::Import => "Sekka Installer's helper is checking every downloaded byte against the release.",
-        Stage::AppleInputs => "Apple's startup files for the new volume come from Apple and are checked against Apple's own signed list.",
+        Stage::AppleInputs => "Apple's startup files for the new volume are downloaded from Apple over a secure connection.",
         Stage::Shrink => "macOS is giving up the space for Sekka. Apple's tool does this; it can take several minutes.",
         Stage::StubPartition => "A small volume holds the startup software and Recovery for Sekka.",
         Stage::StubSystem => "The startup volume gets the parts of macOS it needs to start Sekka.",

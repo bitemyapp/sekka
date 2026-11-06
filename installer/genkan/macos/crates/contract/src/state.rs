@@ -127,8 +127,11 @@ impl InstallState {
             match &record.event {
                 Event::Opened { .. } => return Err(invalid("an installation opens once")),
                 Event::Cancelled => {
-                    if open.is_some()
-                        || last.is_some_and(Stage::mutates)
+                    // Closing an installation abandoned in a stage that
+                    // changes nothing (its process stopped mid-download, say)
+                    // is allowed; nothing that changes the disk ever began.
+                    if open.is_some_and(Stage::mutates)
+                        || changed
                         || failed.is_some_and(Stage::mutates)
                         || state == InstallState::Cancelled
                     {
@@ -137,6 +140,7 @@ impl InstallState {
                         )));
                     }
                     state = InstallState::Cancelled;
+                    open = None;
                 }
                 Event::Intent { stage } => {
                     if open.is_some() {
@@ -416,8 +420,20 @@ mod tests {
         let mut c = Chain::new();
         c.stage(Stage::Import).push(Event::Cancelled);
         assert_eq!(c.state().unwrap(), InstallState::Cancelled);
-        c.push(Event::Intent { stage: Stage::Shrink });
-        assert!(c.state().is_err());
+        // An installation abandoned while downloading Apple's inputs (the
+        // helper stopped) can be closed.
+        let mut c = Chain::new();
+        c.stage(Stage::Import).push(Event::Intent { stage: Stage::AppleInputs }).push(Event::Cancelled);
+        assert_eq!(c.state().unwrap(), InstallState::Cancelled);
+        let mut c = Chain::new();
+        c.stage(Stage::Import)
+            .stage(Stage::AppleInputs)
+            .push(Event::Intent { stage: Stage::Shrink })
+            .push(Event::Cancelled);
+        assert!(c.state().is_err(), "but never one abandoned while changing the disk");
+        let mut c = Chain::new();
+        c.stage(Stage::Import).push(Event::Cancelled).push(Event::Intent { stage: Stage::AppleInputs });
+        assert!(c.state().is_err(), "nothing starts after cancelling");
         let mut c = Chain::new();
         c.stage(Stage::Import)
             .stage(Stage::AppleInputs)

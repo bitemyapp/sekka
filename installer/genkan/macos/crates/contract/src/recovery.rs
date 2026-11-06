@@ -17,8 +17,59 @@ schema_tag!(RecoverySchema, "sekka.mac.recovery/1");
 /// Where the configuration lives on the stub's System volume.
 pub const RECOVERY_DATA_DIR: &str = "Sekka/InstallData";
 pub const RECOVERY_CONFIG_FILE: &str = "recovery.json";
-/// The Recovery app's own journal, beside its data.
+/// The Recovery app's own record, beside its data.
 pub const RECOVERY_STATE_DIR: &str = "Sekka/State";
+pub const RECOVERY_RECEIPT_FILE: &str = "receipt.json";
+
+schema_tag!(RecoveryReceiptSchema, "sekka.mac.recovery-receipt/1");
+
+/// What the Recovery app has done for its installation
+/// (`Sekka/State/receipt.json` on the stub's System volume). The Recovery
+/// app writes it, each step as started before it runs and as completed or
+/// failed after; the helper reads it back from macOS to learn how the
+/// Recovery step went, since Recovery can't reach the helper's journal.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RecoveryReceipt {
+    pub schema: RecoveryReceiptSchema,
+    pub installation: Uuid,
+    /// `bputil`: allowing the startup software.
+    pub enrollment: RecoveryStep,
+    /// `kmutil configure-boot`, then making Sekka the startup disk.
+    pub selection: RecoveryStep,
+    pub attempts: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "kebab-case", deny_unknown_fields)]
+pub enum RecoveryStep {
+    NotStarted,
+    Started { at: crate::Timestamp },
+    Completed { at: crate::Timestamp },
+    Failed { at: crate::Timestamp, message: Text },
+}
+
+impl RecoveryReceipt {
+    pub fn new(installation: Uuid) -> Self {
+        Self {
+            schema: RecoveryReceiptSchema,
+            installation,
+            enrollment: RecoveryStep::NotStarted,
+            selection: RecoveryStep::NotStarted,
+            attempts: 0,
+        }
+    }
+
+    pub fn parse(bytes: &[u8]) -> Result<Self, Error> {
+        crate::canonical::from_slice(bytes, 16 * 1024, RecoveryReceiptSchema::VALUE)
+    }
+
+    /// Both steps finished: the Mac allows and starts Sekka.
+    pub fn finished(&self) -> bool {
+        matches!(self.enrollment, RecoveryStep::Completed { .. })
+            && matches!(self.selection, RecoveryStep::Completed { .. })
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -157,7 +157,10 @@ impl<S: Storage> Journal<S> {
             Err(e) if e.kind() == io::ErrorKind::AlreadyExists => return Err(JournalError::Exists),
             Err(e) => return Err(e.into()),
         }
-        storage.sync_dir(root)?;
+        if let Err(e) = storage.sync_dir(root) {
+            let _ = fs::remove_dir(&dir);
+            return Err(e.into());
+        }
         let mut journal = Self {
             storage,
             dir,
@@ -165,8 +168,26 @@ impl<S: Storage> Journal<S> {
             records: Vec::new(),
             state: InstallState::Planned,
         };
-        journal.append(at, opened)?;
+        if let Err(e) = journal.append(at, opened) {
+            // Nothing was published: take the directory away again, so a
+            // journal that never began can't block another installation.
+            journal.discard_unopened();
+            return Err(e);
+        }
         Ok(journal)
+    }
+
+    /// Remove this installation's directory if it holds no published record
+    /// (only pending writes, or nothing).
+    fn discard_unopened(&self) {
+        let Ok(names) = self.storage.list(&self.dir) else { return };
+        if names.iter().any(|n| parse_record_name(n).is_some()) {
+            return;
+        }
+        for n in names {
+            let _ = self.storage.remove(&self.dir.join(n));
+        }
+        let _ = fs::remove_dir(&self.dir);
     }
 
     /// Read an installation's journal and check all of it.
@@ -277,6 +298,26 @@ impl<S: Storage> Journal<S> {
         self.state = state;
         Ok(self.records.last().expect("just pushed"))
     }
+}
+
+/// Remove an installation directory that never got its first record (a
+/// crash while it was being created). Returns whether it was removed; a
+/// directory with any published record is never touched.
+pub fn discard_if_unopened(storage: &impl Storage, root: &Path, installation: Uuid) -> bool {
+    let dir = root.join(installation.to_string());
+    let Ok(names) = storage.list(&dir) else { return false };
+    if names.iter().any(|n| parse_record_name(n).is_some()) {
+        return false;
+    }
+    for n in names {
+        if !n.starts_with(".pending-") {
+            return false;
+        }
+    }
+    for n in storage.list(&dir).unwrap_or_default() {
+        let _ = storage.remove(&dir.join(n));
+    }
+    fs::remove_dir(&dir).is_ok()
 }
 
 /// Every installation with a journal under `root`.

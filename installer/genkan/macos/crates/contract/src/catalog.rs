@@ -149,9 +149,9 @@ pub struct AppleInput {
 #[serde(rename_all = "kebab-case")]
 pub enum AppleInputKind {
     /// The parts of Apple's restore image the stub needs. The engine fetches
-    /// them from Apple and authenticates them against Apple's own signed
-    /// build manifest, as Asahi's installer does; there is no Sekka checksum
-    /// for Apple's bytes.
+    /// them from Apple over HTTPS from the address pinned in Asahi's
+    /// installer, as Asahi's installer does, and checks each zip member's
+    /// CRC-32; there is no Sekka checksum for Apple's bytes.
     StubRestoreImage,
 }
 
@@ -281,15 +281,18 @@ impl Release {
         Ok(())
     }
 
-    /// Bytes downloaded before installing: the release's own artifacts
-    /// (the engine is carried by the app) and Apple's inputs.
+    /// Room the engine needs in the macOS container while installing: the
+    /// Apple inputs it downloads there before shrinking it.
+    pub fn reserved(&self) -> u64 {
+        self.apple_inputs.iter().map(|i| i.approximate_bytes).sum()
+    }
+
+    /// Bytes downloaded before installing: the release's own artifacts (the
+    /// engine is carried by the app). Apple's inputs come later, during
+    /// installation: [`Release::reserved`].
     pub fn download_bytes(&self) -> u64 {
         let a = &self.artifacts;
-        a.payload.size
-            + a.installer_data.size
-            + a.manifest.size
-            + a.recovery_app.size
-            + self.apple_inputs.iter().map(|i| i.approximate_bytes).sum::<u64>()
+        a.payload.size + a.installer_data.size + a.manifest.size + a.recovery_app.size
     }
 }
 

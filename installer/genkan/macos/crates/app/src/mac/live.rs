@@ -215,7 +215,6 @@ impl Environment for Live {
         ];
         let refs: Vec<(&str, &Expect)> = files.iter().map(|(n, e)| (*n, e)).collect();
         dir.bytes_needed(&refs)
-            + release.apple_inputs.iter().map(|i| i.approximate_bytes).sum::<u64>()
     }
 
     fn download(

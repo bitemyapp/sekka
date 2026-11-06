@@ -252,7 +252,7 @@ impl Model {
         let release = self.release.as_ref()?;
         let candidate = self.candidate()?;
         let min = release.allocation.minimum.div_ceil(sekka_mac_contract::ALIGN) * sekka_mac_contract::ALIGN;
-        let max = capacity(candidate, self.to_download);
+        let max = capacity(release, candidate, self.to_download);
         (max >= min).then_some((min, max))
     }
 
@@ -881,7 +881,7 @@ impl Model {
         let best = inspection
             .candidates
             .iter()
-            .max_by_key(|c| capacity(c, self.to_download));
+            .max_by_key(|c| capacity(&release, c, self.to_download));
         match best.and_then(|c| suggested_size(&release, c, self.to_download).map(|s| (c, s))) {
             Some((c, size)) => {
                 self.place = Some(match c {

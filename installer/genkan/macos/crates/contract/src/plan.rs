@@ -268,9 +268,10 @@ pub fn acknowledgements_for(admission: &Admission, release: &Release) -> Vec<Ack
 }
 
 /// The most Sekka can have from a candidate, with `staging` bytes still to
-/// be downloaded into the macOS container first (they come out of what the
-/// container can give).
-pub fn capacity(candidate: &Candidate, staging: u64) -> u64 {
+/// be downloaded into the macOS container first. Those, and the release's
+/// Apple inputs (which the engine always downloads into the same container
+/// before shrinking it), come out of what the container can give.
+pub fn capacity(release: &Release, candidate: &Candidate, staging: u64) -> u64 {
     // One alignment unit is held back for where the new partitions start.
     let raw = match candidate {
         Candidate::FreeSpace { extent } => extent.size,
@@ -278,7 +279,7 @@ pub fn capacity(candidate: &Candidate, staging: u64) -> u64 {
             available,
             adjacent_free,
             ..
-        } => available.saturating_sub(staging) + adjacent_free,
+        } => available.saturating_sub(staging + release.reserved()) + adjacent_free,
     };
     (raw / ALIGN * ALIGN).saturating_sub(ALIGN)
 }
@@ -286,7 +287,7 @@ pub fn capacity(candidate: &Candidate, staging: u64) -> u64 {
 /// The size the plan screen starts at: the release's recommendation, within
 /// what this place allows.
 pub fn suggested_size(release: &Release, candidate: &Candidate, staging: u64) -> Option<u64> {
-    let max = capacity(candidate, staging);
+    let max = capacity(release, candidate, staging);
     let min = release.allocation.minimum.div_ceil(ALIGN) * ALIGN;
     (max >= min).then(|| release.allocation.recommended.clamp(min, max) / ALIGN * ALIGN)
 }
@@ -329,7 +330,7 @@ pub fn derive_plan(
 
     let sekka = request.sekka / ALIGN * ALIGN;
     let minimum = release.allocation.minimum.div_ceil(ALIGN) * ALIGN;
-    let maximum = capacity(candidate, staging);
+    let maximum = capacity(release, candidate, staging);
     if sekka < minimum {
         return Err(PlanError::TooSmall { minimum });
     }
@@ -371,7 +372,7 @@ pub fn derive_plan(
                 .checked_sub(part.offset)
                 .filter(|to| to < current_size)
                 .ok_or(PlanError::TooLarge { maximum })?;
-            if current_size - to > available.saturating_sub(staging) {
+            if current_size - to > available.saturating_sub(staging + release.reserved()) {
                 return Err(PlanError::TooLarge { maximum });
             }
             (
@@ -496,6 +497,15 @@ mod tests {
             derive_plan(&sample(), &c, &request(310 * GIB), 20 * GIB),
             Err(PlanError::TooLarge { .. })
         ));
+        // So do Apple's inputs, even with nothing left to download: the
+        // largest plan still leaves the engine room for them.
+        let release = &c.releases[0];
+        let candidate = &sample().candidates[0];
+        let max = capacity(release, candidate, 0);
+        let Candidate::ShrinkContainer { available, .. } = candidate else { panic!() };
+        assert!(max + release.reserved() <= *available);
+        assert!(derive_plan(&sample(), &c, &request(max), 0).is_ok());
+        assert!(derive_plan(&sample(), &c, &request(available - ALIGN), 0).is_err());
     }
 
     #[test]

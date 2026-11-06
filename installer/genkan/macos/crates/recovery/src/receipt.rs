@@ -12,31 +12,9 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
-use sekka_mac_contract::{RECOVERY_STATE_DIR, Text, Timestamp, Uuid, canonical, schema_tag};
+use sekka_mac_contract::{RECOVERY_RECEIPT_FILE, RECOVERY_STATE_DIR, Uuid, canonical};
 
-schema_tag!(ReceiptSchema, "sekka.mac.recovery-receipt/1");
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "state", rename_all = "kebab-case", deny_unknown_fields)]
-pub enum Step {
-    NotStarted,
-    Started { at: Timestamp },
-    Completed { at: Timestamp },
-    Failed { at: Timestamp, message: Text },
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Receipt {
-    pub schema: ReceiptSchema,
-    pub installation: Uuid,
-    /// `bputil`: allowing the startup software.
-    pub enrollment: Step,
-    /// `kmutil configure-boot`, then making Sekka the startup disk.
-    pub selection: Step,
-    pub attempts: u32,
-}
+pub use sekka_mac_contract::{RecoveryReceipt as Receipt, RecoveryStep as Step};
 
 pub struct Store {
     path: PathBuf,
@@ -45,27 +23,20 @@ pub struct Store {
 impl Store {
     pub fn at(volume: &Path) -> Self {
         Self {
-            path: volume.join(RECOVERY_STATE_DIR).join("receipt.json"),
+            path: volume.join(RECOVERY_STATE_DIR).join(RECOVERY_RECEIPT_FILE),
         }
     }
 
     pub fn load(&self, installation: Uuid) -> Result<Receipt, String> {
         match fs::read(&self.path) {
             Ok(bytes) => {
-                let r: Receipt = canonical::from_slice(&bytes, 16 * 1024, ReceiptSchema::VALUE)
-                    .map_err(|e| format!("The record of this step is damaged: {e}"))?;
+                let r = Receipt::parse(&bytes).map_err(|e| format!("The record of this step is damaged: {e}"))?;
                 if r.installation != installation {
                     return Err("The record of this step belongs to another installation.".into());
                 }
                 Ok(r)
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Receipt {
-                schema: ReceiptSchema,
-                installation,
-                enrollment: Step::NotStarted,
-                selection: Step::NotStarted,
-                attempts: 0,
-            }),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Receipt::new(installation)),
             Err(e) => Err(e.to_string()),
         }
     }
@@ -94,7 +65,7 @@ mod tests {
         let id = Uuid::from_bytes([1; 16]);
         let mut r = store.load(id).unwrap();
         assert_eq!(r.enrollment, Step::NotStarted);
-        r.enrollment = Step::Started { at: Timestamp::from_unix(1) };
+        r.enrollment = Step::Started { at: sekka_mac_contract::Timestamp::from_unix(1) };
         store.save(&r).unwrap();
         assert_eq!(store.load(id).unwrap(), r);
         assert!(store.load(Uuid::from_bytes([2; 16])).is_err());
