@@ -287,7 +287,8 @@ log "disk A: a stand-in for the stub, the ESP, root.img and $((extra / 1024 / mi
 base=$work/base.img
 esp_start=$((mib + stub_bytes))
 root_start=$((esp_start + esp_bytes))
-disk_bytes=$((root_start + root_bytes + extra + mib))
+# Whole MiBs, so the backup GPT is in the last one.
+disk_bytes=$(((root_start + root_bytes + extra + 2 * mib - 1) / mib * mib))
 blank "$base" "$disk_bytes"
 "$sgdisk" -Z "$base" >/dev/null
 "$sgdisk" -n "1:$((mib / 512)):+$((stub_bytes / 512 - 1))" -t 1:AF0A -c 1:Sekka -u "1:$STUB_A" \
