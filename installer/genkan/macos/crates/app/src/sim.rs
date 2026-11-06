@@ -12,6 +12,7 @@ use sekka_mac_stage::StagedFile;
 use sekka_mac_trust::{TrustConfig, Verified};
 
 use crate::env::*;
+use crate::model::{Effect, Model, Msg};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Scenario {
@@ -417,4 +418,49 @@ impl Environment for Simulation {
     fn shut_down(&self) -> Result<(), String> {
         Err("The simulation doesn't shut down your Mac.".into())
     }
+}
+
+/// Run effects against a simulation inline, feeding results back into the
+/// model until nothing is left to do: the model's tests and the screenshots
+/// see exactly the states a person would, without threads or timers.
+/// Returns whatever was copied to the pasteboard.
+pub fn settle(env: &Simulation, model: &mut Model, effects: Vec<Effect>) -> Vec<String> {
+    let mut queue: std::collections::VecDeque<Effect> = effects.into();
+    let mut copied = Vec::new();
+    let mut steps = 0;
+    while let Some(effect) = queue.pop_front() {
+        steps += 1;
+        assert!(steps < 10_000, "the model never settles");
+        let msgs = match effect {
+            Effect::Inspect => vec![Msg::Inspected(env.inspect())],
+            Effect::LoadCatalog => vec![Msg::Catalog(env.catalog())],
+            Effect::HelperStatus => vec![
+                Msg::HelperStatus(env.helper_status()),
+                Msg::Registration(Ok(env.registration())),
+            ],
+            Effect::MeasureDownload(r) => vec![Msg::ToDownload(env.still_to_download(&r))],
+            Effect::Download(r) => {
+                let mut msgs = Vec::new();
+                let result = env.download(&r, &AtomicBool::new(false), &mut |p| msgs.push(Msg::DownloadProgress(p)));
+                msgs.push(Msg::Downloaded(result));
+                msgs
+            }
+            Effect::CheckRegistration => vec![Msg::Registration(Ok(env.registration()))],
+            Effect::RegisterHelper => vec![Msg::Registration(env.register_helper())],
+            Effect::Begin(b, p) => vec![Msg::Begun(env.begin(*b, p))],
+            Effect::Poll { installation, after, .. } => vec![Msg::Events(env.events(installation, after))],
+            Effect::Cancel(id) => vec![Msg::CancelAnswered(env.cancel(id))],
+            Effect::RetryStartupDisk(id, p) => vec![Msg::Retried(env.retry_startup_disk(id, p))],
+            Effect::Diagnostics(id) => vec![Msg::Diagnostics(env.diagnostics(id))],
+            Effect::CopyToPasteboard(text) => {
+                copied.push(text);
+                vec![]
+            }
+            Effect::StopDownload | Effect::RemoveStaging | Effect::OpenLoginItems | Effect::ShutDown => vec![],
+        };
+        for msg in msgs {
+            queue.extend(model.update(msg));
+        }
+    }
+    copied
 }

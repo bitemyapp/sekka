@@ -30,6 +30,7 @@ zeroize.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 sekka-mac-xpc.workspace = true
+sekka-mac-engine.workspace = true
 libc.workspace = true
 block2.workspace = true
 objc2.workspace = true
@@ -41,6 +42,7 @@ objc2-foundation = { workspace = true, features = [
     "NSData",
     "NSDate",
     "NSDictionary",
+    "NSEnumerator",
     "NSError",
     "NSGeometry",
     "NSNotification",
@@ -65,6 +67,8 @@ objc2-app-kit = { workspace = true, features = [
     "objc2-core-foundation",
     "NSAccessibility",
     "NSAccessibilityConstants",
+    "NSActionCell",
+    "NSClipView",
     "NSAccessibilityProtocols",
     "NSAlert",
     "NSAppearance",
@@ -76,6 +80,7 @@ objc2-app-kit = { workspace = true, features = [
     "NSButtonCell",
     "NSCell",
     "NSColor",
+    "NSColorList",
     "NSControl",
     "NSCursor",
     "NSEvent",
@@ -111,7 +116,7 @@ objc2-app-kit = { workspace = true, features = [
     "NSWindow",
     "NSWorkspace",
 ] }
-objc2-service-management = { workspace = true, features = ["SMAppService", "objc2-foundation"] }
+objc2-service-management = { workspace = true, features = ["SMAppService", "objc2", "objc2-foundation"] }
 
 [dev-dependencies]
 sekka-mac-contract = { workspace = true, features = ["samples"] }
