@@ -9,7 +9,7 @@
 //! their own.
 use std::fs;
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::os::unix::fs::DirBuilderExt;
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
@@ -55,42 +55,101 @@ pub fn digest_file(path: &Path) -> io::Result<Digest> {
     }
 }
 
-/// Unpack `archive` under `cache/<digest>` once, refusing it unless its
-/// digest is `expected` (when given). bsdtar refuses absolute paths and
-/// `..`; the archive's digest is bound by the catalog and the app's
-/// signature covers it.
-pub fn unpack(archive: &Path, cache: &Path, expected: Option<&Digest>) -> Result<EngineInstall, EngineError> {
-    let digest = digest_file(archive)
-        .map_err(|e| EngineError::Missing(format!("This copy of Sekka Installer has no engine ({e}). Download it again.")))?;
-    if expected.is_some_and(|e| *e != digest) {
-        return Err(EngineError::WrongDigest);
-    }
+/// The largest engine archive accepted.
+pub const ARCHIVE_LIMIT: u64 = 1024 * 1024 * 1024;
+
+/// An engine unpacked earlier under `cache` from an archive with this
+/// digest. The cache is private to whoever unpacked it (the helper's is
+/// root's alone), so what is there was checked when it was made.
+pub fn cached(cache: &Path, digest: &Digest) -> Option<EngineInstall> {
     let root = cache.join(digest.hex());
-    if root.join(".complete").exists() {
-        return Ok(EngineInstall { root, digest });
+    let complete = fs::read_to_string(root.join(".complete")).ok()?;
+    (complete == digest.to_string()).then_some(EngineInstall { root, digest: *digest })
+}
+
+/// Unpack `archive` under `cache/<digest>` once, refusing it unless its
+/// digest is `expected` (when given), and reuse an engine already unpacked
+/// for `expected` (an installation can be retried after the app that
+/// installed it was replaced).
+///
+/// The archive in the app bundle is read exactly once: opened without
+/// following links, refused unless it is a regular file, and copied into
+/// the private cache while it is hashed. Only that private copy is checked
+/// and extracted, so nothing the person running the app can change (the
+/// bundle is theirs) can differ between the bytes hashed and the bytes
+/// unpacked. bsdtar refuses absolute paths and `..`.
+pub fn unpack(archive: &Path, cache: &Path, expected: Option<&Digest>) -> Result<EngineInstall, EngineError> {
+    if let Some(found) = expected.and_then(|d| cached(cache, d)) {
+        return Ok(found);
     }
     fs::DirBuilder::new()
         .recursive(true)
         .mode(0o700)
         .create(cache)
         .map_err(|e| EngineError::Unpack(e.to_string()))?;
+    let missing = |e: io::Error| EngineError::Missing(format!("This copy of Sekka Installer has no usable engine ({e}). Download it again."));
+    let mut source = open_regular(archive).map_err(missing)?;
+    let copy = cache.join(format!(".archive-{}", std::process::id()));
+    let _ = fs::remove_file(&copy);
+    let digest = (|| -> io::Result<Digest> {
+        let mut out = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+            .open(&copy)?;
+        let mut hasher = Hasher::new();
+        let mut buf = vec![0u8; 1 << 20];
+        let mut total = 0u64;
+        loop {
+            let n = source.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            total += n as u64;
+            if total > ARCHIVE_LIMIT {
+                return Err(io::Error::other("the archive is too large"));
+            }
+            hasher.update(&buf[..n]);
+            out.write_all(&buf[..n])?;
+        }
+        out.sync_all()?;
+        Ok(hasher.finish())
+    })();
+    drop(source);
+    let digest = match digest {
+        Ok(d) => d,
+        Err(e) => {
+            let _ = fs::remove_file(&copy);
+            return Err(missing(e));
+        }
+    };
+    if expected.is_some_and(|e| *e != digest) {
+        let _ = fs::remove_file(&copy);
+        return Err(EngineError::WrongDigest);
+    }
+    if let Some(found) = cached(cache, &digest) {
+        let _ = fs::remove_file(&copy);
+        return Ok(found);
+    }
+    let root = cache.join(digest.hex());
     let tmp = cache.join(format!(".unpack-{}", digest.hex()));
     let _ = fs::remove_dir_all(&tmp);
-    fs::DirBuilder::new()
-        .mode(0o700)
-        .create(&tmp)
-        .map_err(|e| EngineError::Unpack(e.to_string()))?;
-    let out = Command::new("/usr/bin/tar")
-        .args(["-x", "-z", "--no-same-owner", "-f"])
-        .arg(archive)
-        .arg("-C")
-        .arg(&tmp)
-        .env_clear()
-        .env("PATH", PATH)
-        .env("LC_ALL", "C")
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|e| EngineError::Unpack(e.to_string()))?;
+    let made = fs::DirBuilder::new().mode(0o700).create(&tmp);
+    let out = made.and_then(|_| {
+        Command::new("/usr/bin/tar")
+            .args(["-x", "-z", "--no-same-owner", "-f"])
+            .arg(&copy)
+            .arg("-C")
+            .arg(&tmp)
+            .env_clear()
+            .env("PATH", PATH)
+            .env("LC_ALL", "C")
+            .stdin(Stdio::null())
+            .output()
+    });
+    let _ = fs::remove_file(&copy);
+    let out = out.map_err(|e| EngineError::Unpack(e.to_string()))?;
     if !out.status.success() {
         let _ = fs::remove_dir_all(&tmp);
         return Err(EngineError::Unpack(String::from_utf8_lossy(&out.stderr).trim().to_string()));
@@ -99,6 +158,25 @@ pub fn unpack(archive: &Path, cache: &Path, expected: Option<&Digest>) -> Result
     let _ = fs::remove_dir_all(&root);
     fs::rename(&tmp, &root).map_err(|e| EngineError::Unpack(e.to_string()))?;
     Ok(EngineInstall { root, digest })
+}
+
+/// Open a regular file for reading without following a link at its last
+/// component, and without blocking on a FIFO put in its place.
+fn open_regular(path: &Path) -> io::Result<fs::File> {
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC)
+        .open(path)?;
+    if !file.metadata()?.file_type().is_file() {
+        return Err(io::Error::other("not a regular file"));
+    }
+    // SAFETY: clearing O_NONBLOCK on our own descriptor.
+    unsafe {
+        let fd = std::os::fd::AsRawFd::as_raw_fd(&file);
+        let flags = libc::fcntl(fd, libc::F_GETFL);
+        libc::fcntl(fd, libc::F_SETFL, flags & !libc::O_NONBLOCK);
+    }
+    Ok(file)
 }
 
 /// The engine's own description of how to start it (`engine-lock.json`
@@ -233,8 +311,22 @@ pub fn inspect(engine: &EngineInstall) -> Result<Inspection, EngineError> {
         .spawn()
         .map_err(|e| EngineError::Start(e.to_string()))?;
     let mut process = ChildEngine::new(child).map_err(|e| EngineError::Start(e.to_string()))?;
-    read_inspection(&mut process)
+    // Inspection changes nothing, so a stuck one can be stopped.
+    let mut stop = process.terminator();
+    let (done, finished) = std::sync::mpsc::channel::<()>();
+    let watchdog = std::thread::spawn(move || {
+        if finished.recv_timeout(INSPECT_TIMEOUT).is_err() {
+            stop();
+        }
+    });
+    let result = read_inspection(&mut process);
+    let _ = done.send(());
+    let _ = watchdog.join();
+    result
 }
+
+/// How long an inspection may take.
+pub const INSPECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
 
 /// Read an inspection transcript to its end.
 pub fn read_inspection(process: &mut dyn EngineProcess) -> Result<Inspection, EngineError> {
@@ -336,6 +428,49 @@ mod tests {
         assert!(unpack(&archive, &tmp.path().join("cache"), Some(&Digest::of(b"other"))).is_err());
         let found = inspect(&engine).unwrap();
         assert_eq!(found, sekka_mac_contract::samples::inspection());
+    }
+
+    #[test]
+    fn the_archive_is_read_once_and_never_through_a_link_or_a_fifo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let real = tmp.path().join("real.tar.gz");
+        fs::write(&real, b"archive").unwrap();
+        let link = tmp.path().join("link.tar.gz");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        assert!(open_regular(&link).is_err());
+        let fifo = tmp.path().join("fifo.tar.gz");
+        let c = std::ffi::CString::new(fifo.to_str().unwrap()).unwrap();
+        // SAFETY: making a FIFO at a fresh path.
+        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+        // Refused at once, not blocked waiting for a writer.
+        assert!(open_regular(&fifo).is_err());
+        assert!(matches!(
+            unpack(&fifo, &tmp.path().join("cache"), None),
+            Err(EngineError::Missing(_))
+        ));
+        assert!(open_regular(&real).is_ok());
+        // A wrong digest leaves nothing behind but the private cache.
+        assert_eq!(
+            unpack(&real, &tmp.path().join("cache"), Some(&Digest::of(b"other"))).unwrap_err(),
+            EngineError::WrongDigest
+        );
+        assert_eq!(fs::read_dir(tmp.path().join("cache")).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn an_engine_unpacked_before_is_reused_by_its_digest() {
+        let tmp = tempfile::tempdir().unwrap();
+        let digest = Digest::of(b"an engine");
+        let root = tmp.path().join(digest.hex());
+        fs::create_dir_all(&root).unwrap();
+        assert!(cached(tmp.path(), &digest).is_none(), "not complete yet");
+        fs::write(root.join(".complete"), digest.to_string()).unwrap();
+        assert_eq!(cached(tmp.path(), &digest).unwrap().root, root);
+        // The app's bundled archive is gone or different: the installation's
+        // own engine is still found.
+        assert_eq!(unpack(&tmp.path().join("missing"), tmp.path(), Some(&digest)).unwrap().root, root);
+        fs::write(root.join(".complete"), Digest::of(b"x").to_string()).unwrap();
+        assert!(cached(tmp.path(), &digest).is_none(), "a marker for another digest doesn't count");
     }
 
     #[test]
