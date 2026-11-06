@@ -50,6 +50,12 @@ pub enum Request {
     RetryStartupDisk { installation: Uuid },
     /// A redacted report of an installation for support.
     Diagnostics { installation: Uuid },
+    /// Look at the Mac as root and bring a stopped installation's journal up
+    /// to date with it: record Recovery's steps once the boot policy shows
+    /// they took effect, or that nothing of the installation is left. The
+    /// helper inspects for itself; the app asks only when its own inspection
+    /// disagrees with the journal. Answered with `Events`.
+    Reconcile { installation: Uuid },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

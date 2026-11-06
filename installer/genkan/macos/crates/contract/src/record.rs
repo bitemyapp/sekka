@@ -48,6 +48,12 @@ pub enum Event {
     Failed { stage: Stage, failure: Failure },
     /// The installation was abandoned before anything changed.
     Cancelled,
+    /// The helper looked at the Mac as root and found nothing of the
+    /// installation left: no partition where its plan put them, and no
+    /// system that names it. Someone removed it (or it never got as far as
+    /// the disk); `facts` say what was looked at. Another installation may
+    /// begin.
+    Removed { facts: Vec<Fact> },
 }
 
 /// Stages in the order they happen. Stages through `StartupDisk` run in

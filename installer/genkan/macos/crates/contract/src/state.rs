@@ -35,6 +35,8 @@ pub enum InstallState {
     /// Recovery finished; Sekka's first start creates the account.
     WaitingForSetup,
     Cancelled,
+    /// Nothing of it is left on the Mac, as the helper saw for itself.
+    Removed,
 }
 
 /// What may be offered next, from [`InstallState::permitted`].
@@ -81,16 +83,18 @@ impl InstallState {
             InstallState::EnrollmentUncertain => &[ReadPolicy, ExportDiagnostics],
             InstallState::WaitingForSetup => &[StartSekka, ExportDiagnostics],
             InstallState::Cancelled => &[Reinspect],
+            InstallState::Removed => &[Reinspect, ExportDiagnostics],
         }
     }
 
     /// Whether another installation may start while this one stands. Only
-    /// a finished, cancelled, or cleanly failed one (nothing changed) lets
-    /// another begin; anything else needs reconciling first.
+    /// a finished, cancelled, removed, or cleanly failed one (nothing
+    /// changed) lets another begin; anything else needs reconciling first.
     pub fn allows_new_installation(&self) -> bool {
         matches!(
             self,
             InstallState::Cancelled
+                | InstallState::Removed
                 | InstallState::WaitingForSetup
                 | InstallState::Failed {
                     disk_changed: DiskChanged::No,
@@ -133,13 +137,22 @@ impl InstallState {
                     if open.is_some_and(Stage::mutates)
                         || changed
                         || failed.is_some_and(Stage::mutates)
-                        || state == InstallState::Cancelled
+                        || matches!(state, InstallState::Cancelled | InstallState::Removed)
                     {
                         return Err(invalid(format!(
                             "record {at}: only an installation that changed nothing can be cancelled"
                         )));
                     }
                     state = InstallState::Cancelled;
+                    open = None;
+                }
+                Event::Removed { .. } => {
+                    // Whatever the installation reached, the helper found
+                    // none of it on the disk; an open stage ends with it.
+                    if matches!(state, InstallState::Cancelled | InstallState::Removed) {
+                        return Err(invalid(format!("record {at}: the installation had already ended")));
+                    }
+                    state = InstallState::Removed;
                     open = None;
                 }
                 Event::Intent { stage } => {
@@ -149,7 +162,10 @@ impl InstallState {
                         )));
                     }
                     let allowed = match (&state, failed) {
-                        (InstallState::Cancelled | InstallState::WaitingForSetup, _) => false,
+                        (
+                            InstallState::Cancelled | InstallState::Removed | InstallState::WaitingForSetup,
+                            _,
+                        ) => false,
                         (_, Some(f)) => f == *stage && f.retry_allowed(),
                         _ => Some(*stage) == next_stage(last, shrinks),
                     };
@@ -440,6 +456,51 @@ mod tests {
             .stage(Stage::Shrink)
             .push(Event::Cancelled);
         assert!(c.state().is_err(), "a changed disk can't be cancelled away");
+    }
+
+    #[test]
+    fn an_installation_found_gone_lets_another_begin() {
+        let removed = || Event::Removed {
+            facts: vec![Fact::new("target-extent", "empty").unwrap()],
+        };
+        // Stopped part way, then removed by hand.
+        let mut c = Chain::new();
+        c.stage(Stage::Import)
+            .stage(Stage::AppleInputs)
+            .stage(Stage::Shrink)
+            .push(Event::Intent { stage: Stage::StubPartition })
+            .push(removed());
+        let s = c.state().unwrap();
+        assert_eq!(s, InstallState::Removed);
+        assert!(s.allows_new_installation());
+        assert_eq!(s.permitted()[0], NextAction::Reinspect);
+        // Nothing follows it, not even a second removal or a cancel.
+        for next in [removed(), Event::Cancelled, Event::Intent { stage: Stage::Esp }] {
+            let mut c = Chain::new();
+            c.stage(Stage::Import).push(removed()).push(next);
+            assert!(c.state().is_err());
+        }
+        let mut c = Chain::new();
+        c.stage(Stage::Import).push(Event::Cancelled).push(removed());
+        assert!(c.state().is_err(), "a cancelled installation has already ended");
+    }
+
+    #[test]
+    fn recovery_steps_follow_the_startup_disk() {
+        let mut c = Chain::new();
+        for s in &MACOS {
+            c.stage(*s);
+        }
+        c.push(Event::Intent { stage: Stage::Enrollment });
+        assert_eq!(c.state().unwrap(), InstallState::EnrollmentUncertain);
+        assert_eq!(c.state().unwrap().permitted()[0], NextAction::ReadPolicy);
+        c.push(Event::Completed {
+            stage: Stage::Enrollment,
+            facts: vec![],
+            verification: Verification::PolicyReadBack,
+        });
+        c.stage(Stage::StartupSelection);
+        assert_eq!(c.state().unwrap(), InstallState::WaitingForSetup);
     }
 
     #[test]

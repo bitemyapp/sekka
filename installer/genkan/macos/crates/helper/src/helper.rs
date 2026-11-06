@@ -116,6 +116,10 @@ impl<P: Platform> Helper<P> {
                 None => refuse(HelperRefusalCode::Authorization, "The owner's password is needed."),
             },
             Request::Diagnostics { installation } => self.diagnostics(installation),
+            Request::Reconcile { .. } => refuse(
+                HelperRefusalCode::State,
+                "This helper can't look at the Mac for an installation yet.",
+            ),
         }
     }
 
@@ -573,6 +577,16 @@ impl<P: Platform> Helper<P> {
                     failure.disk_changed
                 ),
                 Event::Cancelled => format!("{} {} cancelled", r.sequence, r.at),
+                Event::Removed { facts } => format!(
+                    "{} {} found removed: {}",
+                    r.sequence,
+                    r.at,
+                    facts
+                        .iter()
+                        .map(|f| format!("{}={}", f.name, f.value))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
             };
             lines.push(text(&redact(&line, &names)));
         }
@@ -625,6 +639,7 @@ pub(crate) fn describe(state: &InstallState) -> String {
         InstallState::EnrollmentUncertain => "its step in Recovery started and didn't finish".into(),
         InstallState::WaitingForSetup => "it is installed and waiting for its first start".into(),
         InstallState::Cancelled => "it was cancelled before anything changed".into(),
+        InstallState::Removed => "nothing of it is left on the disk".into(),
     }
 }
 
