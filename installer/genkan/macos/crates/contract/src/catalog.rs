@@ -67,7 +67,7 @@ pub struct Release {
     pub image: ImageFacts,
     pub allocation: AllocationPolicy,
     /// Apple inputs the engine fetches itself (restore image parts for the
-    /// stub), and how it authenticates them.
+    /// stub) during installation; plans reserve room for them.
     pub apple_inputs: Vec<AppleInput>,
     /// What the owner does by hand after the app's part, in order.
     pub human_steps: Vec<HumanStep>,

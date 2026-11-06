@@ -65,8 +65,9 @@ pub enum Stage {
     /// Copy the verified downloads into the helper's private staging and
     /// verify them again. Changes no disk.
     Import,
-    /// Fetch the parts of Apple's restore image the stub needs, and
-    /// authenticate them against Apple's signed manifest. Changes no disk.
+    /// Fetch the parts of Apple's restore image the stub needs, from Apple
+    /// over HTTPS (see [`crate::AppleInputKind`] for what is checked).
+    /// Changes no disk.
     AppleInputs,
     /// Shrink the macOS container (only when the plan does).
     Shrink,
