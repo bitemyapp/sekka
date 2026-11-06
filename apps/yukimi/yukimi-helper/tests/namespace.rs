@@ -38,3 +38,10 @@ fn a_failed_or_stopped_change_puts_the_channels_back() {
 fn a_reused_generation_number_gets_its_own_configuration() {
     script("repro_yuk_10.sh");
 }
+
+/// YUK-11: the boot menu is updated before garbage is collected.
+#[test]
+#[ignore = "needs unprivileged user namespaces"]
+fn the_boot_menu_is_updated_before_collecting_garbage() {
+    script("repro_yuk_11.sh");
+}
