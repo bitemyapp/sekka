@@ -11,12 +11,17 @@
 //! sekka-mac-tool ledger check LEDGER
 //! ```
 //!
+//! `catalog` and `sign` write the document's exact canonical bytes, with
+//! no newline after them: the app verifies a catalog byte for byte, so
+//! `> SIGNED` is the file to publish. `verify` checks a file's bytes as they
+//! are, as the app does.
+//!
 //! Signing with the development key (`--development` in place of a key
 //! file) is for tests and local catalogs. A production key is generated
 //! offline and never stored in the repository; nothing here publishes
 //! anything.
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::process::ExitCode;
 
 use base64::Engine as _;
@@ -87,10 +92,21 @@ fn seed(path: &str) -> Result<[u8; 32], String> {
     bytes.try_into().map_err(|_| "a key is 32 bytes".to_string())
 }
 
-fn run(args: &[String]) -> Result<(), String> {
+/// Write a document's exact bytes, nothing added.
+fn emit(out: &mut dyn Write, bytes: &[u8]) -> Result<(), String> {
+    out.write_all(bytes).and_then(|()| out.flush()).map_err(|e| e.to_string())
+}
+
+/// Write a line meant for a person.
+fn say(out: &mut dyn Write, line: impl std::fmt::Display) -> Result<(), String> {
+    writeln!(out, "{line}").map_err(|e| e.to_string())
+}
+
+/// Carry out one command, writing what it produces to `out`.
+fn run(args: &[String], out: &mut dyn Write) -> Result<(), String> {
     let a: Vec<&str> = args.iter().map(String::as_str).collect();
     match a.as_slice() {
-        ["keygen", out] => {
+        ["keygen", file] => {
             let mut s = [0u8; 32];
             fs::File::open("/dev/urandom")
                 .and_then(|mut f| f.read_exact(&mut s))
@@ -100,14 +116,12 @@ fn run(args: &[String]) -> Result<(), String> {
             options.write(true).create_new(true);
             #[cfg(unix)]
             std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-            use std::io::Write;
             options
-                .open(out)
+                .open(file)
                 .and_then(|mut f| f.write_all(format!("# Sekka Mac catalog signing key. Keep it offline.\n{b64}\n").as_bytes()))
-                .map_err(|e| format!("{out}: {e}"))?;
+                .map_err(|e| format!("{file}: {e}"))?;
             let key = sekka_mac_trust::signing::key(&s);
-            print!("{}", sekka_mac_trust::signing::public_key_literal(&key));
-            Ok(())
+            emit(out, sekka_mac_trust::signing::public_key_literal(&key).as_bytes())
         }
         ["artifact", file, url] => {
             let (size, digest) = digest_file(file)?;
@@ -116,8 +130,7 @@ fn run(args: &[String]) -> Result<(), String> {
                 size,
                 digest,
             };
-            println!("{}", serde_json::to_string_pretty(&artifact).map_err(|e| e.to_string())?);
-            Ok(())
+            say(out, serde_json::to_string_pretty(&artifact).map_err(|e| e.to_string())?)
         }
         ["catalog", spec] => {
             let spec: Spec = serde_json::from_slice(&read(spec)?).map_err(|e| e.to_string())?;
@@ -137,8 +150,7 @@ fn run(args: &[String]) -> Result<(), String> {
             });
             let catalog: Catalog = serde_json::from_value(value).map_err(|e| e.to_string())?;
             catalog.check().map_err(|e| e.to_string())?;
-            println!("{}", String::from_utf8(canonical::to_vec(&catalog).map_err(|e| e.to_string())?).unwrap());
-            Ok(())
+            emit(out, &canonical::to_vec(&catalog).map_err(|e| e.to_string())?)
         }
         ["sign", key, key_id, catalog] => {
             let catalog: Catalog = canonical::from_slice_relaxed(&read(catalog)?, limits::CATALOG, CatalogSchema::VALUE)
@@ -146,29 +158,30 @@ fn run(args: &[String]) -> Result<(), String> {
             catalog.check().map_err(|e| e.to_string())?;
             let signing = sekka_mac_trust::signing::key(&seed(key)?);
             let signed = sekka_mac_trust::signing::sign(catalog, key_id, &signing).map_err(|e| e.to_string())?;
-            println!("{}", String::from_utf8(canonical::to_vec(&signed).map_err(|e| e.to_string())?).unwrap());
-            Ok(())
+            emit(out, &canonical::to_vec(&signed).map_err(|e| e.to_string())?)
         }
         ["verify", signed] => {
-            let bytes = read(signed)?;
-            let bytes = String::from_utf8(bytes).map_err(|e| e.to_string())?;
+            // The file's bytes exactly as the app receives them: a newline
+            // or any other change makes the app refuse it, so it fails here.
             let verified = sekka_mac_trust::verify(
-                bytes.trim_end().as_bytes(),
+                &read(signed)?,
                 &sekka_mac_trust::TrustConfig::for_this_build(),
                 Timestamp::now(),
             )
             .map_err(|e| e.to_string())?;
             let c = verified.catalog();
-            println!(
-                "{} catalog {} for {}: {} release(s), signed by {}, valid until {}",
-                c.channel,
-                c.serial,
-                c.product,
-                c.releases.len(),
-                verified.signed().key_id,
-                c.expires_at
-            );
-            Ok(())
+            say(
+                out,
+                format_args!(
+                    "{} catalog {} for {}: {} release(s), signed by {}, valid until {}",
+                    c.channel,
+                    c.serial,
+                    c.product,
+                    c.releases.len(),
+                    verified.signed().key_id,
+                    c.expires_at
+                ),
+            )
         }
         ["ledger", "init", candidate] => {
             let candidate: ledger::Candidate = serde_json::from_slice(&read(candidate)?).map_err(|e| e.to_string())?;
@@ -177,8 +190,7 @@ fn run(args: &[String]) -> Result<(), String> {
                 candidate,
                 rows: ledger::rows(),
             };
-            println!("{}", serde_json::to_string_pretty(&l).map_err(|e| e.to_string())?);
-            Ok(())
+            say(out, serde_json::to_string_pretty(&l).map_err(|e| e.to_string())?)
         }
         ["ledger", "check", path] => {
             let l: ledger::Ledger = serde_json::from_slice(&read(path)?).map_err(|e| e.to_string())?;
@@ -187,10 +199,10 @@ fn run(args: &[String]) -> Result<(), String> {
                 let rows: Vec<&ledger::Row> = l.rows.iter().filter(|r| r.gate == gate).collect();
                 let pass = rows.iter().filter(|r| r.status == ledger::Status::Pass).count();
                 let na = rows.iter().filter(|r| r.status == ledger::Status::NotApplicable).count();
-                println!("{gate}: {pass} pass, {na} not applicable, {} other, of {}", rows.len() - pass - na, rows.len());
+                say(out, format_args!("{gate}: {pass} pass, {na} not applicable, {} other, of {}", rows.len() - pass - na, rows.len()))?;
             }
             for p in &problems {
-                println!("problem: {p}");
+                say(out, format_args!("problem: {p}"))?;
             }
             if !problems.is_empty() {
                 return Err(format!("{} problem(s) in the ledger", problems.len()));
@@ -198,8 +210,7 @@ fn run(args: &[String]) -> Result<(), String> {
             if !complete {
                 return Err("the candidate isn't qualified: some cases haven't passed".into());
             }
-            println!("Every required case passed or doesn't apply.");
-            Ok(())
+            say(out, "Every required case passed or doesn't apply.")
         }
         _ => Err("usage: sekka-mac-tool keygen|catalog|sign|verify|artifact|ledger … (see the source's header)".into()),
     }
@@ -207,7 +218,7 @@ fn run(args: &[String]) -> Result<(), String> {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    match run(&args) {
+    match run(&args, &mut std::io::stdout().lock()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => fail(e),
     }
@@ -217,8 +228,17 @@ fn main() -> ExitCode {
 mod tests {
     use super::*;
 
-    /// A specification becomes a catalog, is signed with the development
-    /// key, and verifies with a development build's trust.
+    /// What a command writes to standard output.
+    fn tool(args: &[&str]) -> Result<Vec<u8>, String> {
+        let args: Vec<String> = args.iter().map(|a| a.to_string()).collect();
+        let mut out = Vec::new();
+        run(&args, &mut out).map(|()| out)
+    }
+
+    /// A specification becomes a catalog through `catalog` and is signed
+    /// with the development key through `sign`. What `sign` writes is the
+    /// file the app reads: it verifies unchanged, and with a newline added
+    /// it doesn't.
     #[test]
     fn catalog_sign_verify() {
         let dir = tempfile::tempdir().unwrap();
@@ -235,32 +255,35 @@ mod tests {
         });
         let at = |name: &str| dir.path().join(name).to_string_lossy().into_owned();
         fs::write(at("spec.json"), serde_json::to_vec(&spec).unwrap()).unwrap();
-        let catalog = {
-            let s: Spec = serde_json::from_slice(&fs::read(at("spec.json")).unwrap()).unwrap();
-            assert_eq!(s.serial, 3);
-            // The same path `catalog` takes, captured rather than printed.
-            let issued = Timestamp::now();
-            let value = serde_json::json!({
-                "schema": CatalogSchema::VALUE, "product": PRODUCT, "channel": s.channel, "serial": s.serial,
-                "issued_at": issued, "expires_at": issued.plus(s.days * 86_400),
-                "minimum_app_version": s.minimum_app_version, "protocol": s.protocol,
-                "profiles": s.profiles, "releases": s.releases, "notice": s.notice,
-            });
-            let c: Catalog = serde_json::from_value(value).unwrap();
-            c.check().unwrap();
-            c
-        };
-        fs::write(at("catalog.json"), canonical::to_vec(&catalog).unwrap()).unwrap();
-        let key = sekka_mac_trust::signing::key(&seed("--development").unwrap());
-        let signed = sekka_mac_trust::signing::sign(catalog, sekka_mac_trust::DEVELOPMENT_KEY_ID, &key).unwrap();
-        fs::write(at("signed.json"), canonical::to_vec(&signed).unwrap()).unwrap();
-        run(&["verify".into(), at("signed.json")]).unwrap();
+
+        let catalog = tool(&["catalog", &at("spec.json")]).unwrap();
+        let parsed: Catalog = canonical::from_slice(&catalog, limits::CATALOG, CatalogSchema::VALUE)
+            .expect("catalog writes exactly the canonical bytes");
+        assert_eq!(parsed.serial, 3);
+        fs::write(at("catalog.json"), &catalog).unwrap();
+
+        let signed = tool(&["sign", "--development", sekka_mac_trust::DEVELOPMENT_KEY_ID, &at("catalog.json")]).unwrap();
+        assert_ne!(signed.last(), Some(&b'\n'));
+        fs::write(at("signed.json"), &signed).unwrap();
+        let config = sekka_mac_trust::TrustConfig::for_this_build();
+        let verified = sekka_mac_trust::verify(&fs::read(at("signed.json")).unwrap(), &config, Timestamp::now())
+            .expect("what sign writes verifies as the app verifies it");
+        assert_eq!(verified.catalog(), &parsed);
+        let said = String::from_utf8(tool(&["verify", &at("signed.json")]).unwrap()).unwrap();
+        assert!(said.contains("development catalog 3"), "{said}");
+
+        // One byte more and the app refuses it, so verify does too.
+        let mut newline = signed.clone();
+        newline.push(b'\n');
+        fs::write(at("newline.json"), &newline).unwrap();
+        assert!(sekka_mac_trust::verify(&newline, &config, Timestamp::now()).is_err());
+        assert!(tool(&["verify", &at("newline.json")]).is_err());
+
         // A key from keygen signs too, and isn't trusted.
-        run(&["keygen".into(), at("other.key")]).unwrap();
-        assert!(run(&["keygen".into(), at("other.key")]).is_err(), "never overwrites a key");
-        let other = sekka_mac_trust::signing::key(&seed(&at("other.key")).unwrap());
-        let resigned = sekka_mac_trust::signing::sign(signed.catalog, sekka_mac_trust::DEVELOPMENT_KEY_ID, &other).unwrap();
-        fs::write(at("forged.json"), canonical::to_vec(&resigned).unwrap()).unwrap();
-        assert!(run(&["verify".into(), at("forged.json")]).is_err());
+        tool(&["keygen", &at("other.key")]).unwrap();
+        assert!(tool(&["keygen", &at("other.key")]).is_err(), "never overwrites a key");
+        let forged = tool(&["sign", &at("other.key"), sekka_mac_trust::DEVELOPMENT_KEY_ID, &at("catalog.json")]).unwrap();
+        fs::write(at("forged.json"), &forged).unwrap();
+        assert!(tool(&["verify", &at("forged.json")]).is_err());
     }
 }
