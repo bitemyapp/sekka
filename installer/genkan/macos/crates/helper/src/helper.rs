@@ -580,7 +580,7 @@ pub(crate) fn describe(state: &InstallState) -> String {
 
 /// Which staged file is which, refusing duplicates, missing roles and
 /// sizes that differ from the catalog's before anything is copied.
-fn staged_files(begin: &Begin, release: &Release) -> Result<Vec<(ArtifactRole, String, Expect)>, String> {
+fn staged_files(begin: &Begin, release: &Release) -> Result<Vec<(&'static str, String, Expect)>, String> {
     let a = &release.artifacts;
     let want = [
         (ArtifactRole::Payload, "payload.zip", &a.payload),
@@ -600,7 +600,7 @@ fn staged_files(begin: &Begin, release: &Release) -> Result<Vec<(ArtifactRole, S
         if file.size != artifact.size {
             return Err(format!("The downloaded {name} is the wrong size."));
         }
-        out.push((role, file.path.to_string(), Expect::from(artifact)));
+        out.push((name, file.path.to_string(), Expect::from(artifact)));
     }
     Ok(out)
 }
@@ -615,7 +615,9 @@ struct Run<P: Platform> {
     shrinks: bool,
     plan_digest: sekka_mac_contract::Digest,
     plan_bytes: Vec<u8>,
-    staged: Vec<(ArtifactRole, String, Expect)>,
+    /// The helper's own name for each file (by its role, never by the
+    /// app's path), where the app staged it, and what it must be.
+    staged: Vec<(&'static str, String, Expect)>,
     user_root: std::path::PathBuf,
     uid: u32,
     owner: String,
@@ -666,12 +668,7 @@ impl<P: Platform> Run<P> {
             Err(e) => return self.fail(Stage::Import, "staging", &e.to_string(), DiskChanged::No),
         };
         let mut facts = vec![Fact::new("owner", &self.owner).expect("account names are text")];
-        for (_, source, expect) in self.staged.clone() {
-            let name = Path::new(&source)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or_default()
-                .to_string();
+        for (name, source, expect) in self.staged.clone() {
             if self.active.cancel.load(Ordering::SeqCst) {
                 return self.cancelled(Stage::Import);
             }
@@ -680,7 +677,7 @@ impl<P: Platform> Run<P> {
                 &self.user_root,
                 self.uid,
                 &staging,
-                &name,
+                name,
                 &expect,
                 &self.active.cancel,
             ) {

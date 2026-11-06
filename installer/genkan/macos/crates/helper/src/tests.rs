@@ -490,6 +490,27 @@ fn an_altered_or_older_catalog_is_refused() {
 }
 
 #[test]
+fn imported_files_are_named_by_their_role_not_the_apps_path() {
+    let w = world(Script::Happy);
+    // The app stages the installer data under another file's name; the
+    // helper still files it as installer_data.json.
+    let mut begin = w.begin.clone();
+    let data = begin.staged[1].path.to_string();
+    let renamed = std::path::Path::new(&data).with_file_name("recovery-copy.zip");
+    std::fs::rename(&data, &renamed).unwrap();
+    begin.staged[1].path = renamed.to_str().unwrap().parse().unwrap();
+    let id = match w.ask(Request::Begin(Box::new(begin)), Some(PASSWORD)) {
+        Response::Begun { installation } => installation,
+        other => panic!("{other:?}"),
+    };
+    let (state, _) = w.finish(id);
+    assert_eq!(state, InstallState::WaitingForRecovery);
+    let staged = w.helper.paths_for_tests().staging(id);
+    assert_eq!(std::fs::read(staged.join("installer_data.json")).unwrap(), b"{\"os_list\":[]}");
+    assert!(!staged.join("recovery-copy.zip").exists());
+}
+
+#[test]
 fn a_tampered_download_stops_before_the_engine() {
     let w = world(Script::Happy);
     let payload = w.begin.staged[0].path.to_string();
