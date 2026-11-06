@@ -270,6 +270,8 @@ impl Model {
             | Screen::NoRelease
             | Screen::NeedsUpdate => Step::Check,
             Screen::Plan => Step::Size,
+            // Looking at the Mac again is the review's first part.
+            Screen::Downloading if self.rechecking && !self.downloading => Step::Install,
             Screen::Downloading => Step::Download,
             Screen::Review | Screen::Approval | Screen::Installing | Screen::Stopped => Step::Install,
             Screen::Recovery => Step::Recovery,
@@ -457,6 +459,12 @@ impl Model {
     pub fn recovery_unconfirmed(&self) -> bool {
         self.screen == Screen::Recovery
             && matches!(self.reconciling, Some(Reconciling::Refused(id)) if Some(id) == self.installation)
+    }
+
+    /// Whether the download is only checking files an earlier run left
+    /// whole, which can't be paused part way.
+    pub fn checking_download(&self) -> bool {
+        self.downloading && self.to_download == Some(0)
     }
 
     /// The catalog's releases whose profile admits this Mac.
@@ -1207,12 +1215,17 @@ impl Model {
 
     /// Derive the plan the helper will derive, from the latest inspection.
     fn prepare_review(&mut self) -> Vec<Effect> {
-        let (Some(inspection), Some(verified), Some(release)) =
-            (self.inspection().cloned(), self.verified().cloned(), self.release.clone())
-        else {
-            return Vec::new();
+        let (Some(inspection), Some(verified), Some(release), Some(place)) = (
+            self.inspection().cloned(),
+            self.verified().cloned(),
+            self.release.clone(),
+            self.place.clone(),
+        ) else {
+            // This look took away what the plan was for (the release no
+            // longer admits this Mac, say): decide afresh what it can have.
+            self.screen = Screen::Checking;
+            return self.decide();
         };
-        let Some(place) = self.place.clone() else { return Vec::new() };
         // Sizes may have shrunk now that the downloads take space.
         if let Some((min, max)) = self.size_range()
             && self.size > max

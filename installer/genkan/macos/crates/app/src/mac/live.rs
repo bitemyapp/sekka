@@ -261,8 +261,21 @@ impl Environment for Live {
         let mut before = 0u64;
         let mut staged = Vec::new();
         for (role, name, artifact) in files {
+            let expect = Expect::from(artifact);
+            // A whole file an earlier run left is hashed before it is kept,
+            // which takes as long as checking a download, and reports
+            // nothing until it's done.
+            if dir.bytes_needed(&[(name, &expect)]) == 0 {
+                on(DownloadProgress {
+                    role,
+                    done: before + artifact.size,
+                    total,
+                    retrying: None,
+                    verifying: true,
+                });
+            }
             let file = stager
-                .stage(name, &artifact.url, &Expect::from(artifact), &mut |event| match event {
+                .stage(name, &artifact.url, &expect, &mut |event| match event {
                     StageEvent::Progress { done, .. } => on(DownloadProgress {
                         role,
                         done: before + done,

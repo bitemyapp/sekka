@@ -201,11 +201,12 @@ impl<'a> Page<'a> {
 /// with them, and they move when what is left to download is measured.
 pub fn key(m: &Model) -> String {
     format!(
-        "{:?}|{:?}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}|{:?}|{}",
+        "{:?}|{:?}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}|{:?}|{}",
         m.screen,
         m.notice,
         m.download_error.is_some(),
         m.downloading,
+        m.rechecking,
         m.plan.as_ref().and_then(|p| p.digest().ok()).map(|d| d.to_string()).unwrap_or_default(),
         m.plan_error.is_some(),
         m.state,
@@ -521,8 +522,28 @@ fn plan(m: &Model, p: &mut Page) {
 }
 
 fn downloading(m: &Model, p: &mut Page) {
-    p.title("Downloading Sekka");
-    p.lede("Every byte is checked against the release before anything is installed. Nothing on your disk changes yet.");
+    if m.rechecking && !m.downloading {
+        p.title(text::RECHECK_TITLE);
+        p.lede(text::RECHECK);
+        let spinner = NSProgressIndicator::new(p.mtm);
+        spinner.setStyle(NSProgressIndicatorStyle::Spinning);
+        spinner.setControlSize(objc2_app_kit::NSControlSize::Small);
+        unsafe { spinner.startAnimation(None) };
+        let looking = ui::secondary(p.mtm, "Looking at the disk…", 12.0);
+        let row = ui::stack(p.mtm, false, 8.0, &[&spinner, &looking]);
+        p.add(&row);
+        p.quit();
+        return;
+    }
+    // Hashing files an earlier run left whole can't be paused part way.
+    let checking = m.checking_download();
+    if checking {
+        p.title(text::CHECK_DOWNLOAD_TITLE);
+        p.lede(text::CHECK_DOWNLOAD);
+    } else {
+        p.title("Downloading Sekka");
+        p.lede("Every byte is checked against the release before anything is installed. Nothing on your disk changes yet.");
+    }
     let bar = NSProgressIndicator::new(p.mtm);
     bar.setStyle(NSProgressIndicatorStyle::Bar);
     bar.setIndeterminate(false);
@@ -536,11 +557,12 @@ fn downloading(m: &Model, p: &mut Page) {
         p.callout(Mark::Bad, e);
         p.left("Back", || Msg::StopDownload);
         p.primary("Try Again", || Msg::StartDownload);
+    } else if checking {
+        p.quit();
     } else if m.downloading {
         p.right("Pause", || Msg::StopDownload);
     } else {
-        p.note("Checking this Mac again…");
-        p.quit();
+        p.left("Back", || Msg::StopDownload);
     }
 }
 

@@ -219,6 +219,16 @@ pub fn plan_error(e: &PlanError) -> String {
     }
 }
 
+/// The downloading page while this Mac is looked at once more before the
+/// review: nothing is downloaded or checked then.
+pub const RECHECK_TITLE: &str = "Checking this Mac again";
+pub const RECHECK: &str = "Sekka Installer looks at the disk once more before the review, so the plan is for your Mac as it is now. Nothing on your Mac changes.";
+
+/// The downloading page when an earlier run downloaded everything, and its
+/// files are only checked.
+pub const CHECK_DOWNLOAD_TITLE: &str = "Checking the download";
+pub const CHECK_DOWNLOAD: &str = "Sekka was downloaded earlier. Sekka Installer checks every byte against the release again before the review; this can't be paused. Nothing on your disk changes.";
+
 /// The look at this Mac before the review failed.
 pub fn recheck_failed(e: &str) -> String {
     format!("Sekka Installer couldn't look at this Mac again before the review ({e}). Nothing on your Mac has changed. Check again.")

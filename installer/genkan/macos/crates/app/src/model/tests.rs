@@ -253,6 +253,19 @@ fn a_failed_look_after_the_download_offers_a_way_on() {
 }
 
 #[test]
+fn a_look_before_the_review_that_loses_the_release_says_why() {
+    let mut j = Journey::start(Scenario::Normal);
+    j.reach_review().send(Msg::BackToPlan);
+    j.model.update(Msg::Review);
+    // The release's profile doesn't admit what this look found.
+    let mut i = j.env.inspect().unwrap();
+    i.machine.product_type = "Mac15,7".parse().unwrap();
+    j.send(Msg::Inspected(Ok(i)));
+    assert!(j.model.release.is_none());
+    assert_eq!(j.model.screen, Screen::Unsupported, "never left on the downloading page");
+}
+
+#[test]
 fn the_largest_size_after_the_download_still_leaves_room_for_apples_files() {
     let mut j = Journey::start(Scenario::Normal);
     j.reach_review().send(Msg::BackToPlan).send(Msg::SetSize(u64::MAX));
@@ -651,6 +664,29 @@ fn the_review_names_the_macos_this_mac_starts() {
     i.macos.volume_group = Uuid::from_bytes([0x0e; 16]);
     m.update(Msg::Inspected(Ok(i)));
     assert_eq!(m.macos_volume(), "Work");
+}
+
+#[test]
+fn continuing_from_the_plan_looks_again_without_a_download_page() {
+    let mut j = Journey::start(Scenario::Normal);
+    j.reach_review().send(Msg::BackToPlan);
+    let effects = j.model.update(Msg::Review);
+    assert!(matches!(effects.as_slice(), [Effect::Inspect]));
+    assert!(j.model.rechecking && !j.model.downloading);
+    assert_eq!(j.model.step(), Step::Install, "not back to the download");
+    j.settle(effects);
+    assert_eq!(j.model.screen, Screen::Review);
+
+    // Files an earlier run left whole are only checked, which can't be
+    // paused.
+    let mut j = Journey::start(Scenario::Normal);
+    j.send(Msg::ToDownload(0));
+    let effects = j.model.update(Msg::Review);
+    assert!(matches!(effects.as_slice(), [Effect::Download(_)]));
+    assert!(j.model.checking_download());
+    j.settle(effects);
+    assert!(!j.model.checking_download());
+    assert_eq!(j.model.screen, Screen::Review);
 }
 
 #[test]
