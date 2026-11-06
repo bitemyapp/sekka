@@ -29,12 +29,17 @@
 //!
 //! Needs `services.udisks2.enable`. Changing system devices asks for
 //! administrator rights through polkit; removable drives need none.
+//!
+//! [`Automount`] mounts drives as they're plugged in, for a program that
+//! wants their files without anyone opening them first.
 
+mod automount;
 pub mod confirm;
 mod model;
 mod smart;
 pub mod types;
 
+pub use automount::{Automount, Opening, Outcome};
 pub use confirm::{Confirm, DeletePartition, Destructive, Format, NewPartitionTable, Repair, Resize};
 pub use model::{
     BlockDevice, DisksState, Drive, Encrypted, Filesystem, FreeSpace, Health, Job, LoopDevice, Partition,

@@ -13,8 +13,10 @@ pointer brings down from the top of the screen; it stays on its site, a
 link or a script elsewhere refused with the page left where it was; and a
 box chosen on it brings Chanoma's keyboard, which the controller types
 with. The PIN is pressed on the controller, the pad the same whichever
-button went. This fixture renders in software (shared-memory frames, no
-VA-API).
+button went. Two USB sticks plugged in from the start: the one that can be
+is opened as Chanoma starts, and the one that can't (exFAT, its module not
+loaded) is said once, not again at the next start. This fixture renders in
+software (shared-memory frames, no VA-API).
 """
 
 import hashlib
@@ -127,6 +129,18 @@ with subtest("the household is set up"):
     machine.succeed("chown -R alice /home/alice/.config/aizome")
     user("systemctl --user restart aizome-chanoma")
     until("Chanoma comes back full screen", lambda: (w := window()) and w["fullscreen"])
+
+with subtest("the drives plugged in are opened, and one that can't be is said once"):
+    # Chanoma has started twice: with the session, and set up just now.
+    until("STICK opened", lambda: logged("chanoma: opened the drive STICK at /run/media/alice/STICK"))
+    until("BROKEN tried at each start", lambda: logged("chanoma: couldn't open the drive BROKEN", 2))
+    j = journal()
+    assert j.count("chanoma: opened the drive STICK") == 1, "mounted already at the second start"
+    assert j.count("chanoma: said BROKEN couldn't be opened") == 1, j
+    machine.succeed("findmnt -n /run/media/alice/STICK")
+    machine.succeed("test -f '/run/media/alice/STICK/gb/Stick Test (World).gb'")
+    warned = json.loads(machine.succeed("cat /home/alice/.local/state/aizome/chanoma/drives.json"))
+    assert len(warned["drives"]) == 1, warned
 
 with subtest("the controller is found and held"):
     machine.succeed("systemd-run --unit chanoma-pad /etc/chanoma-pad")

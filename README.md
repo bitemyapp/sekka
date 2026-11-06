@@ -80,9 +80,11 @@ in detail.
 it's turned on (`programs.aizome.chanoma`). Kids use it with nothing but
 a Bluetooth game controller: streaming services open full screen in
 Chrome, films and shows play from your own folders, and retro games play
-through emulator cores, kept just where they were left. Add a folder, or
-one it suggests on a drive just plugged in (a `roms`, a `Movies`), and it
-finds the games, films and shows inside however deep, zipped sets
+through emulator cores, kept just where they were left. Drives plugged
+in are opened by themselves, as it starts and as they come, and it says
+once if one can't be. Add a folder, or one it suggests on a drive (a
+`roms`, a `Movies`), and it finds the games, films and shows inside
+however deep, zipped sets
 included; it shows each game once, in your region's release, says when it
 came out and how many can play, and offers the games two can play when a
 second controller comes on. Every game shows its box, from beside it or
