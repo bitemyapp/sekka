@@ -57,7 +57,8 @@ platform.buildRustPackage {
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p host_sharing --lib
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- local_content_store::download_tests
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- local_content_store::linux::tests::hint_
-    for filter in output_pipeline::tests output_watcher::tests prepared_outputs::tests; do
+    for filter in local_content_store::linux::tests::store_rejects_aliased_index_files_without_changing_targets \
+      output_pipeline::tests output_watcher::tests prepared_outputs::tests; do
       cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- "$filter"
     done
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p remote_execution -- client::tests
