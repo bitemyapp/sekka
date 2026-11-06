@@ -251,7 +251,9 @@ fn cursor_items(az: &mut Aizome, output: &Output, scale: f64, out: &mut Scene) {
                 states.data_map.get::<CursorImageSurfaceData>().map(|d| d.lock().unwrap().hotspot).unwrap_or_default()
             });
             let loc: Point<i32, Physical> = (rel - hotspot.to_f64()).to_physical_precise_round(scale);
-            out.push(SceneItem::Surface { surface: surface.clone(), loc, alpha: 1.0, kind: Kind::Cursor });
+            // smithay 0.7's cursor-plane copy assumes the whole client buffer
+            // matches the visible surface. A viewport can make that untrue.
+            out.push(SceneItem::Surface { surface: surface.clone(), loc, alpha: 1.0, kind: Kind::Unspecified });
         }
     }
 }
