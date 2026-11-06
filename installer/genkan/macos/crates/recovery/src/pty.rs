@@ -310,7 +310,6 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     fn prompts_are_recognized_as_omarchy_found_them() {
@@ -331,16 +330,20 @@ mod tests {
             .unwrap_or_else(|| "stty".into())
     }
 
+    /// A scripted tool, for [`SH`] to run. Executing a file just written
+    /// fails now and then (`ETXTBSY`) while another test forks, as the
+    /// child holds the writer's descriptor until it executes.
     fn script(dir: &std::path::Path, body: &str) -> String {
         let path = dir.join("tool");
         let body = body.replace("stty", &stty());
-        std::fs::write(&path, format!("#!/bin/sh\n{body}")).unwrap();
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(&path, body).unwrap();
         path.to_string_lossy().into_owned()
     }
 
+    const SH: &str = "/bin/sh";
+
     fn sh() -> bool {
-        std::path::Path::new("/bin/sh").exists()
+        std::path::Path::new(SH).exists()
     }
 
     #[test]
@@ -356,7 +359,7 @@ mod tests {
              [ \"$u\" = owner ] && [ \"$p\" = 's3cret pass' ] && echo done && exit 0; exit 9\n",
         );
         let mut log = String::new();
-        run(&tool, &[], "owner", "s3cret pass", false, Duration::from_secs(10), &mut |s| log.push_str(s)).unwrap();
+        run(SH, &[&tool], "owner", "s3cret pass", false, Duration::from_secs(10), &mut |s| log.push_str(s)).unwrap();
         assert!(log.contains("done"));
         assert!(!log.contains("s3cret"));
     }
@@ -368,9 +371,9 @@ mod tests {
         }
         let dir = tempfile::tempdir().unwrap();
         let tool = script(dir.path(), "printf 'Really? [y/n] '; read a; [ \"$a\" = y ] && exit 0; exit 3\n");
-        run(&tool, &[], "owner", "pw", true, Duration::from_secs(10), &mut |_| {}).unwrap();
+        run(SH, &[&tool], "owner", "pw", true, Duration::from_secs(10), &mut |_| {}).unwrap();
         assert!(matches!(
-            run(&tool, &[], "owner", "pw", false, Duration::from_secs(10), &mut |_| {}),
+            run(SH, &[&tool], "owner", "pw", false, Duration::from_secs(10), &mut |_| {}),
             Err(AuthError::Failed(_))
         ));
     }
@@ -386,12 +389,12 @@ mod tests {
             "printf 'Password: '; stty -echo; read p; stty echo; echo; echo 'failed to set credential: Password rejected'; exit 1\n",
         );
         assert_eq!(
-            run(&tool, &[], "owner", "wrong", false, Duration::from_secs(10), &mut |_| {}),
+            run(SH, &[&tool], "owner", "wrong", false, Duration::from_secs(10), &mut |_| {}),
             Err(AuthError::PasswordRejected)
         );
         let again = script(dir.path(), "printf 'Password: '; stty -echo; read p; stty echo; echo; printf 'Password: '; stty -echo; read p; exit 1\n");
         assert_eq!(
-            run(&again, &[], "owner", "wrong", false, Duration::from_secs(10), &mut |_| {}),
+            run(SH, &[&again], "owner", "wrong", false, Duration::from_secs(10), &mut |_| {}),
             Err(AuthError::PasswordRejected)
         );
     }
@@ -405,7 +408,7 @@ mod tests {
         // What closing the terminal sends, if the app quits or crashes.
         let tool = script(dir.path(), "kill -HUP $$; echo still here\n");
         let mut log = String::new();
-        run(&tool, &[], "owner", "pw", false, Duration::from_secs(10), &mut |s| log.push_str(s)).unwrap();
+        run(SH, &[&tool], "owner", "pw", false, Duration::from_secs(10), &mut |s| log.push_str(s)).unwrap();
         assert!(log.contains("still here"));
     }
 
@@ -416,6 +419,6 @@ mod tests {
         }
         let dir = tempfile::tempdir().unwrap();
         let tool = script(dir.path(), "sleep 30\n");
-        assert!(run(&tool, &[], "owner", "pw", false, Duration::from_millis(300), &mut |_| {}).is_err());
+        assert!(run(SH, &[&tool], "owner", "pw", false, Duration::from_millis(300), &mut |_| {}).is_err());
     }
 }
