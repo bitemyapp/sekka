@@ -467,13 +467,25 @@ fn plan(m: &Model, p: &mut Page) {
         p.callout(Mark::Bad, e);
     }
     p.divider();
-    if m.to_download > 0 {
+    let apple: u64 = m
+        .release
+        .as_ref()
+        .map(|r| r.apple_inputs.iter().map(|i| i.approximate_bytes).sum())
+        .unwrap_or(0);
+    let own = m.to_download.saturating_sub(apple);
+    if own > 0 {
         p.body(&format!(
             "Next, Sekka Installer downloads {} and checks every byte. That space comes from macOS until Sekka is installed, and is freed afterwards.",
-            text::bytes(m.to_download)
+            text::bytes(own)
         ));
     } else {
         p.body("Sekka is already downloaded and checked.");
+    }
+    if apple > 0 {
+        p.note(&format!(
+            "While installing, about {} more comes from Apple: the parts of macOS that Sekka's startup volume needs, checked against Apple's own signed list. Stay connected to the internet until the installer finishes.",
+            text::bytes(apple)
+        ));
     }
     p.quit();
     if m.to_download > 0 {
