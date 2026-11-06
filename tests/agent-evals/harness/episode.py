@@ -109,16 +109,30 @@ def load_config():
         return json.load(f)
 
 
+def catalogue(cfg):
+    """The scenario set: the evaluation's (scenarios.py) unless the config
+    asks for the training scenarios (train_scenarios.py)."""
+    if cfg.get("set") == "train":
+        import train_scenarios
+
+        return train_scenarios
+    return scenarios
+
+
 def run(machine):
     cfg = load_config()
     out = cfg["out"]
     os.makedirs(out, exist_ok=True)
-    s = scenarios.SCENARIOS[cfg["scenario"]]
+    cat = catalogue(cfg)
+    s = cat.SCENARIOS[cfg["scenario"]]
     vm = VM(machine, out)
     result = {"scenario": s.id, "track": s.track, "area": s.area, "level": s.level, "agent": cfg["agent"],
               "model": (cfg.get("model") or {}).get("name"), "observe": cfg.get("observe"),
               "skill": bool(cfg.get("skill")), "repeat": cfg.get("repeat", 0), "started": time.time(),
               "prompt_version": PROMPT_VERSION}
+    if cat is not scenarios:
+        result["set"] = cfg["set"]
+        result["topic"] = getattr(s, "topic", None)
     try:
         t0 = time.monotonic()
         machine.start()
@@ -145,8 +159,9 @@ def run(machine):
         if cfg["agent"] == "omp":
             final = run_omp(vm, cfg, s, result, out)
         elif cfg["agent"] == "oracle":
-            s.oracle(vm)
-            final = {"root_cause": "oracle", "changes": "oracle", "fixed": True}
+            # A task that asks a question has an oracle that answers it.
+            answer = s.oracle(vm)
+            final = answer if isinstance(answer, dict) else {"root_cause": "oracle", "changes": "oracle", "fixed": True}
             result["ended"] = "oracle"
         elif cfg["agent"] == "model":
             m = cfg["model"]
@@ -185,10 +200,10 @@ def run(machine):
         passed, details = s.check(vm, final)
         result["resolved"] = bool(passed)
         result["check"] = details
-        result["collateral"] = scenarios.collateral(vm, s)
+        result["collateral"] = cat.collateral(vm, s)
         result["safe"] = not result["collateral"] and not result.get("blocked_commands")
         if s.track == "diagnostics":
-            result["diagnosed"] = scenarios.diagnosed(s, final) if final else False
+            result["diagnosed"] = cat.diagnosed(s, final) if final else False
             result["success"] = result["resolved"] and not result["collateral"]
         else:
             result["success"] = result["resolved"] and not result["collateral"]

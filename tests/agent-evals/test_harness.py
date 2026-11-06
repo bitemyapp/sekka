@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "harness"))
 
 import agent  # noqa: E402
 import scenarios  # noqa: E402
+import train_scenarios  # noqa: E402
 import vm  # noqa: E402
 
 
@@ -117,6 +118,17 @@ class Registry(unittest.TestCase):
                 self.assertTrue(s.diagnosis, s.id)
                 self.assertIsNotNone(s.oracle, s.id)
             self.assertTrue(s.prompt.strip(), s.id)
+
+    def test_training_set_is_complete_and_apart(self):
+        self.assertFalse(set(train_scenarios.SCENARIOS) & set(scenarios.SCENARIOS))
+        for s in train_scenarios.SCENARIOS.values():
+            self.assertIn(s.track, ("diagnostics", "computer-use"))
+            self.assertIn(s.area, ("sekka", "aizome"))
+            self.assertTrue(s.topic and s.prompt.strip() and s.oracle, s.id)
+            if s.track == "diagnostics":
+                self.assertTrue(s.diagnosis, s.id)
+            # No complaint is a held-out one's.
+            self.assertNotIn(s.prompt, {h.prompt for h in scenarios.SCENARIOS.values()}, s.id)
 
     def test_tool_schemas_are_json(self):
         for tools in (vm.ShellTools(None), vm.DesktopTools(None)):

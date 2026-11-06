@@ -8,6 +8,8 @@ tests/agent-evals), several at once against one local model server.
     sekka-agent-evals --models qwen3.8-27b,gpt-oss-20b --track diagnostics --repeats 2
     # Against a server you started yourself:
     sekka-agent-evals --models qwen3.8-27b --base-url http://127.0.0.1:8080/v1 --no-serve
+    # The training scenarios (train_scenarios.py), disjoint from the above.
+    sekka-agent-evals --set train --agent oracle
 
 Results go to OUT/<run>/<model>/<scenario>-r<n>/ (result.json, transcript.jsonl,
 screenshots, the driver's log) and OUT/<run>/results.jsonl; report.py
@@ -81,8 +83,18 @@ def episode(drv, cfg, out, timeout):
     return r
 
 
+def catalogue(name):
+    """The scenarios of a set: eval (scenarios.py, the held-out set) or
+    train (train_scenarios.py, for making training data)."""
+    if name == "train":
+        import train_scenarios
+
+        return train_scenarios
+    return scenarios
+
+
 def selected(args):
-    chosen = list(scenarios.SCENARIOS.values())
+    chosen = list(catalogue(args.set).SCENARIOS.values())
     if args.track:
         chosen = [s for s in chosen if s.track == args.track]
     if args.area:
@@ -108,6 +120,8 @@ def run_batch(args, drv, run_dir, label, model_cfg, chosen, results):
             cfg = {"scenario": s.id, "agent": args.agent, "repeat": r, "observe": observe,
                    "max_steps": args.max_steps or (40 if s.track == "diagnostics" else 35),
                    "max_seconds": args.max_seconds}
+            if args.set != "eval":
+                cfg["set"] = args.set
             if model_cfg:
                 cfg["model"] = model_cfg
             if args.skill and s.track == "diagnostics":
@@ -140,6 +154,9 @@ def main():
     ap.add_argument("--agent", choices=["model", "omp", "none", "oracle"], default="model",
                     help="model: the bare tool loop; omp: oh-my-pi in the VM, against the same server")
     ap.add_argument("--models", default="", help="comma-separated names from models.toml")
+    ap.add_argument("--set", choices=["eval", "train"], default="eval",
+                    help="eval: the held-out scenarios (scenarios.py); train: the training scenarios "
+                         "(train_scenarios.py), disjoint from them")
     ap.add_argument("--scenarios", default="all")
     ap.add_argument("--track", choices=["diagnostics", "computer-use"])
     ap.add_argument("--area", choices=["sekka", "aizome"])
