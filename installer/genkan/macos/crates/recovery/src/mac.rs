@@ -14,9 +14,10 @@ use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSBackingStoreType,
-    NSButton, NSMenu, NSMenuItem, NSPanel, NSScrollView, NSSecureTextField, NSStackView,
-    NSTextView, NSView, NSWindow, NSWindowStyleMask,
+    NSAlert, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate,
+    NSApplicationTerminateReply, NSBackingStoreType, NSButton, NSMenu, NSMenuItem, NSPanel,
+    NSScrollView, NSSecureTextField, NSStackView, NSTextView, NSView, NSWindow, NSWindowButton,
+    NSWindowDelegate, NSWindowStyleMask,
 };
 use objc2_foundation::{NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString, NSTimer};
 use sekka_mac_appkit::ui::{self, Targets, Weight};
@@ -27,6 +28,7 @@ use zeroize::Zeroize;
 use crate::finish::{Environment, FinishError, Finisher, Phase, System};
 use crate::install::{Install, volume_of};
 use crate::pty::{self, AuthError, Program};
+use crate::screen::{self, Screen};
 
 const PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";
 
@@ -114,17 +116,6 @@ impl System for Mac {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum Screen {
-    Checking,
-    Broken(String),
-    WrongRecovery,
-    NotOneTrue,
-    Ready { error: Option<String> },
-    Working(Phase),
-    Done,
-}
-
 /// What the worker thread reports. The finisher travels with the result
 /// back to the main thread, so only one step runs at a time.
 enum Event {
@@ -168,9 +159,7 @@ impl Window {
     }
 
     fn pump(&mut self) {
-        let mut changed = false;
         while let Ok(event) = self.rx.try_recv() {
-            changed = true;
             let mut s = self.state.borrow_mut();
             match event {
                 Event::Checked(result, finisher) => {
@@ -206,9 +195,9 @@ impl Window {
                 }
             }
         }
-        if changed || self.shown.is_none() {
-            self.render();
-        }
+        // Install changes the screen itself, before any event: the window
+        // follows at once, so its close button is off from the start.
+        self.render();
         if let Some(text) = &self.details_text {
             text.setString(&NSString::from_str(&self.state.borrow().log.join("")));
         }
@@ -221,6 +210,9 @@ impl Window {
         }
         self.shown = Some(screen.clone());
         let mtm = self.mtm;
+        if let Some(close) = self.window.standardWindowButton(NSWindowButton::CloseButton) {
+            close.setEnabled(!screen.busy());
+        }
         for v in self.column.arrangedSubviews().iter() {
             self.column.removeArrangedSubview(&v);
             v.removeFromSuperview();
@@ -403,6 +395,7 @@ define_class!(
             let mtm = self.mtm();
             let w = open(mtm);
             menus(mtm, &mut self.ivars().targets.borrow_mut(), &w);
+            w.borrow().window.setDelegate(Some(ProtocolObject::from_ref(self)));
             *self.ivars().window.borrow_mut() = Some(w);
             #[allow(deprecated)]
             NSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
@@ -411,6 +404,24 @@ define_class!(
         #[unsafe(method(applicationShouldTerminateAfterLastWindowClosed:))]
         fn terminate_after_last_window(&self, _: &NSApplication) -> bool {
             true
+        }
+
+        #[unsafe(method(applicationShouldTerminate:))]
+        fn should_terminate(&self, _: &NSApplication) -> NSApplicationTerminateReply {
+            if self.refuse_while_busy() {
+                NSApplicationTerminateReply::TerminateCancel
+            } else {
+                NSApplicationTerminateReply::TerminateNow
+            }
+        }
+    }
+
+    unsafe impl NSWindowDelegate for Delegate {
+        // The close button is off while a step runs; this is for any other
+        // way of closing the window.
+        #[unsafe(method(windowShouldClose:))]
+        fn window_should_close(&self, _: &NSWindow) -> bool {
+            !self.refuse_while_busy()
         }
     }
 );
@@ -543,6 +554,26 @@ impl Delegate {
             targets: RefCell::new(Targets::default()),
         });
         unsafe { msg_send![super(this), init] }
+    }
+
+    /// While a step runs, say why the app stays, and refuse. A state that
+    /// can't be read counts as running: staying open is always safe.
+    fn refuse_while_busy(&self) -> bool {
+        let busy = match self.ivars().window.borrow().as_ref() {
+            None => false,
+            Some(w) => w
+                .try_borrow()
+                .ok()
+                .and_then(|w| w.state.try_borrow().ok().map(|s| s.screen.busy()))
+                .unwrap_or(true),
+        };
+        if busy {
+            let alert = NSAlert::new(self.mtm());
+            alert.setMessageText(&NSString::from_str(screen::BUSY));
+            alert.setInformativeText(&NSString::from_str(screen::BUSY_DETAIL));
+            alert.runModal();
+        }
+        busy
     }
 }
 

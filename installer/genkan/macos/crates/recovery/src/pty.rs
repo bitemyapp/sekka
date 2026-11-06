@@ -137,6 +137,11 @@ pub fn run(
     }
     if child == 0 {
         unsafe {
+            // Closing the terminal hangs up its session. If the app goes
+            // part way through a step, the tool finishes the change it
+            // started rather than stopping in the middle of it; the next
+            // start reads the Mac to see what it did.
+            libc::signal(libc::SIGHUP, libc::SIG_IGN);
             libc::setsid();
             libc::ioctl(slave, libc::TIOCSCTTY as _, 0);
             libc::dup2(slave, 0);
@@ -389,6 +394,19 @@ mod tests {
             run(&again, &[], "owner", "wrong", false, Duration::from_secs(10), &mut |_| {}),
             Err(AuthError::PasswordRejected)
         );
+    }
+
+    #[test]
+    fn a_hangup_doesnt_stop_a_tool_part_way() {
+        if !sh() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        // What closing the terminal sends, if the app quits or crashes.
+        let tool = script(dir.path(), "kill -HUP $$; echo still here\n");
+        let mut log = String::new();
+        run(&tool, &[], "owner", "pw", false, Duration::from_secs(10), &mut |s| log.push_str(s)).unwrap();
+        assert!(log.contains("still here"));
     }
 
     #[test]

@@ -14,6 +14,7 @@ pub mod finish;
 pub mod install;
 pub mod pty;
 pub mod receipt;
+pub mod screen;
 
 
 #[cfg(target_os = "macos")]
