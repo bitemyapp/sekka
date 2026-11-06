@@ -158,14 +158,17 @@ impl<P: Program> Runtime<P> {
                 self.core.queue.push_back(m);
             }
             let mut updated = false;
+            let mut refresh_all = false;
             while let Some(msg) = self.core.queue.pop_front() {
                 match msg.downcast::<KitMsg>() {
                     Ok(k) => self.kit(*k, platform),
                     Err(msg) => match msg.downcast::<P::Msg>() {
                         Ok(m) => {
                             let started = Instant::now();
+                            self.core.refresh_all_after_update = true;
                             let mut cx = Cx { core: &mut self.core, platform, pool: &mut self.pool, _m: PhantomData };
                             self.program.update(*m, &mut cx);
+                            refresh_all |= self.core.refresh_all_after_update;
                             self.core.stats.update(started.elapsed());
                             updated = true;
                         }
@@ -174,7 +177,9 @@ impl<P: Program> Runtime<P> {
                 }
             }
             if updated {
-                self.core.mark_all_dirty();
+                if refresh_all {
+                    self.core.mark_all_dirty();
+                }
                 self.refresh_menus(platform);
             }
             let dirty = self.core.dirty_windows();
@@ -253,7 +258,14 @@ impl<P: Program> Runtime<P> {
 
     /// Ask the program for its menus again; publish them if they changed.
     pub fn refresh_menus(&mut self, platform: &mut dyn Platform) {
-        self.core.menubar = self.program.menus().into_specs();
+        let menus = self.program.menus().into_specs();
+        // In-window bars retain their titles in the widget tree. Menu
+        // actions are looked up in `menubar` when opened, but changing
+        // the strip's titles/count still requires rebuilding its window.
+        if self.core.in_window_menus && !self.core.menubar.iter().map(|m| &m.title).eq(menus.iter().map(|m| &m.title)) {
+            self.core.mark_all_dirty();
+        }
+        self.core.menubar = menus;
         if self.shell.is_some() {
             let published = crate::shell::published(&mut self.core);
             let h = hash_of(&serde_json::to_string(&published).unwrap_or_default());
