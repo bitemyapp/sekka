@@ -350,6 +350,8 @@ fn find_navigates_owned_history_and_wraps_in_both_directions() {
     ];
     let mut h = Harness::new(keeping(command));
     assert!(h.settle(Duration::from_secs(5), |app| app.active_pane().unwrap().ended));
+    // Late font metrics resize the grid and reflow invalidates search anchors.
+    settle_grid(&mut h);
     h.send(Msg::Find);
     h.send(Msg::Search("needle".into()));
     settle_search(&mut h, "1 of 120");
