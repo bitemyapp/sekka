@@ -1,0 +1,21 @@
+{
+  "item_url": "https://archive.org/details/Night.Of.The.Living.Dead_1080p",
+  "download_url": "https://archive.org/download/Night.Of.The.Living.Dead_1080p/NightOfTheLivingDead_PS3.mp4",
+  "metadata_url": "https://archive.org/metadata/Night.Of.The.Living.Dead_1080p",
+  "metadata_downloaded_utc": "2026-11-02",
+  "licenseurl": "http://creativecommons.org/licenses/publicdomain/",
+  "file_metadata": {
+    "name": "NightOfTheLivingDead_PS3.mp4",
+    "source": "original",
+    "format": "h.264 MPEG4",
+    "title": "PS3",
+    "md5": "7b04baa71fb6bbed0a79d1a19d68bf4c",
+    "mtime": "1241614022",
+    "size": "1862510336",
+    "crc32": "c047492a",
+    "sha1": "e3bf9aa77ed21db7c2d2484401d6a5c8f97932bd",
+    "length": "5752.81",
+    "height": "1080",
+    "width": "1920"
+  }
+}
