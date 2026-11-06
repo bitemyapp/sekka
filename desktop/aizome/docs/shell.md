@@ -113,7 +113,9 @@ Settei pane (`aizome-settei --pane <name>`):
 - **Battery & power**: charge, state and time left, a 24h charge sparkline
   if cheap, power mode (Power Saver, Balanced, Performance), Keep Awake,
   and, where the built-in panel can refresh itself (PSR or Panel Replay on
-  Intel's drivers), a Panel Self Refresh switch with a line on what it is;
+  Intel's drivers, unless the driver's `enable_psr` and
+  `enable_panel_replay` options leave it neither), a Panel Self Refresh
+  switch with a line on what it is;
   "Battery Settings…". Panel Self Refresh is off until it's turned on: it
   saves battery while nothing on screen moves, but on some panels it
   costs smoothness or flashes a stray line (the X1 Carbon Gen 14's OLED on
