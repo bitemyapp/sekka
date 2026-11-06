@@ -333,6 +333,16 @@ impl Prepared {
     pub fn cancel(mut self) {
         let _ = self.journal.cancelled();
     }
+    /// The confirmation was refused (malformed, or not this plan's phrase):
+    /// record it, tell the window nothing was written, and pass the error on.
+    pub fn refuse(mut self, error: anyhow::Error) -> anyhow::Error {
+        let message = format!("{error:#}");
+        let _ = self.journal.refused(&message);
+        event(Event::Recovery {
+            report: self.journal.report(&message, false),
+        });
+        error
+    }
 }
 
 fn installer_lock() -> Result<fs::File> {
@@ -723,9 +733,41 @@ fn build_on_target(
     })
 }
 
-/// Shared destructive storage phase; tests call this only on a marked VM disk.
+/// Lock the disk for editing its partition table, then re-probe its stable
+/// identity and all mount/holder state. Nothing is written: a failure here
+/// leaves the disk as it was. The lock is held until storage is prepared.
+fn claim_disk(identity: &disk::Identity) -> Result<fs::File> {
+    let device = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&identity.path)
+        .with_context(|| format!("Opening {}", identity.path))?;
+    ensure!(
+        unsafe { libc::flock(device.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0,
+        "Disk is locked by another installer"
+    );
+    disk::revalidate(identity)?;
+    Ok(device)
+}
+
+/// Claim the disk before the storage intent is recorded. A disk that can't
+/// be claimed (gone, changed, mounted, locked) is a refusal: the record
+/// says nothing was written, which is true.
+fn claim(
+    journal: &mut Journal,
+    identity: &disk::Identity,
+    claim: impl FnOnce(&disk::Identity) -> Result<fs::File>,
+) -> Result<fs::File> {
+    claim(identity).inspect_err(|error| {
+        let _ = journal.refused(&format!("{error:#}"));
+    })
+}
+
+/// Shared destructive storage phase, on a disk `claim_disk` locked and
+/// checked; tests call this only on a marked VM disk.
 fn prepare_storage(
     request: &InstallPlan,
+    device: fs::File,
     ids: &Identities,
     layout: &Layout,
     passphrase: &str,
@@ -733,24 +775,7 @@ fn prepare_storage(
     mappings: &mut crate::encryption::Mappings,
 ) -> Result<()> {
     let firmware = request.firmware();
-    // Lock while editing the partition table. Re-probe its stable identity and
-    // all mount/holder state immediately before the first write.
-    let mut device = Some(
-        fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&request.disk().path)?,
-    );
-    ensure!(
-        unsafe {
-            libc::flock(
-                device.as_ref().unwrap().as_raw_fd(),
-                libc::LOCK_EX | libc::LOCK_NB,
-            )
-        } == 0,
-        "Disk is locked by another installer"
-    );
-    disk::revalidate(request.disk())?;
+    let mut device = Some(device);
     let dev = request.disk().path.as_str();
     let mount = target.0.to_str().context("Target path encoding")?;
     let storage = (|| -> Result<()> {
@@ -997,12 +1022,16 @@ fn write_target(
     };
 
     let stage = Stage::start("storage");
+    // Lock and recheck the disk before announcing the erase: until the
+    // intent is recorded, a refusal truthfully says nothing was written.
+    let device = claim(journal, request.disk(), claim_disk)?;
     journal.intent(
         record::Stage::Storage,
         retry::planned(&built.ids, &built.layout)?,
     )?;
     let stored = prepare_storage(
         &request,
+        device,
         &built.ids,
         &built.layout,
         &passphrase,
@@ -1440,6 +1469,154 @@ mod tests {
         ));
     }
 
+    /// A confirmed installation's journal, as `write_target` has it before
+    /// claiming the disk.
+    fn confirmed_journal(dir: &Path, plan: &InstallPlan) -> Journal {
+        let mut journal = Journal::open(
+            &dir.join("records"),
+            retry::opening(plan).unwrap(),
+            retry::personal(plan),
+        )
+        .unwrap();
+        journal
+            .intent(record::Stage::Preparation, Facts::default())
+            .unwrap();
+        journal
+            .completed(
+                record::Stage::Preparation,
+                Facts::default(),
+                Verification::Inspected,
+            )
+            .unwrap();
+        let mut confirmed = Facts::default();
+        confirmed
+            .add("configuration", Digest::of(b"configuration.nix"))
+            .unwrap();
+        journal.confirmed(confirmed).unwrap();
+        journal
+    }
+
+    #[test]
+    fn a_disk_that_cant_be_claimed_is_refused_with_nothing_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_zoneinfo, settings, raw) = crate::plan_tests::fixture();
+        let plan = raw.parse(&settings).unwrap();
+        let mut journal = confirmed_journal(dir.path(), &plan);
+        let error = claim(&mut journal, plan.disk(), |_| {
+            anyhow::bail!(
+                "Disk is unavailable: Contains a mounted filesystem or active swap (including live media)"
+            )
+        })
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("mounted filesystem"));
+        let record = record::Record::read(journal.live_path()).unwrap();
+        assert_eq!(record.state(), &record::State::Refused);
+        assert!(!record.changed_disk());
+        assert_eq!(record.next(), [record::Next::Review]);
+        let report = journal.report(&format!("{error:#}"), true);
+        assert!(
+            report.changed.starts_with("Nothing was written to"),
+            "{}",
+            report.changed
+        );
+        assert!(
+            report.next.starts_with("The disk is as it was"),
+            "{}",
+            report.next
+        );
+        assert!(report.retry.is_none());
+        // Nothing can be started after the refusal, the erase least of all.
+        assert!(
+            journal
+                .intent(record::Stage::Storage, Facts::default())
+                .is_err()
+        );
+
+        // A disk that can be claimed lets the storage intent follow.
+        let dir = tempfile::tempdir().unwrap();
+        let mut journal = confirmed_journal(dir.path(), &plan);
+        let file = tempfile::tempfile().unwrap();
+        claim(&mut journal, plan.disk(), |_| Ok(file)).unwrap();
+        journal
+            .intent(record::Stage::Storage, Facts::default())
+            .unwrap();
+    }
+
+    #[test]
+    fn a_missing_or_locked_disk_cant_be_claimed() {
+        // Never a block device: a path that doesn't exist, and a regular file
+        // another descriptor holds locked. Both fail before any disk is read.
+        let (_zoneinfo, settings, raw) = crate::plan_tests::fixture();
+        let mut identity = raw.parse(&settings).unwrap().disk().clone();
+        identity.path = "/nonexistent/genkan-test-disk".into();
+        assert!(claim_disk(&identity).is_err());
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let held = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(file.path())
+            .unwrap();
+        assert_eq!(
+            unsafe { libc::flock(held.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+            0
+        );
+        identity.path = file.path().to_str().unwrap().into();
+        let error = claim_disk(&identity).unwrap_err();
+        assert_eq!(format!("{error:#}"), "Disk is locked by another installer");
+    }
+
+    #[test]
+    fn a_refused_confirmation_is_recorded_with_nothing_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_zoneinfo, settings, raw) = crate::plan_tests::fixture();
+        let plan = raw.parse(&settings).unwrap();
+        let mut journal = Journal::open(
+            &dir.path().join("records"),
+            retry::opening(&plan).unwrap(),
+            retry::personal(&plan),
+        )
+        .unwrap();
+        journal
+            .intent(record::Stage::Preparation, Facts::default())
+            .unwrap();
+        journal
+            .completed(
+                record::Stage::Preparation,
+                Facts::default(),
+                Verification::Inspected,
+            )
+            .unwrap();
+        let live = journal.live_path().to_path_buf();
+        let prepared = Prepared {
+            _lock: tempfile::tempfile().unwrap(),
+            journal,
+            built: Built {
+                staging: tempfile::tempdir().unwrap(),
+                template: Template {
+                    flake: String::new(),
+                    lock: Vec::new(),
+                },
+                ids: Identities::generate(Firmware::Uefi, false).unwrap(),
+                layout: Layout::new(40 * memory::GIB, Firmware::Uefi, None).unwrap(),
+                configuration: String::new(),
+                hardware: String::new(),
+                derivation: String::new(),
+                system: String::new(),
+                closure: None,
+                summary: Summary::default(),
+            },
+        };
+        let error = prepared.refuse(
+            plan.confirm("ERASE /dev/sda")
+                .err()
+                .expect("another disk's phrase"),
+        );
+        assert!(format!("{error:#}").contains("Type ERASE"));
+        let record = record::Record::read(&live).unwrap();
+        assert_eq!(record.state(), &record::State::Refused);
+        assert_eq!(record.next(), [record::Next::Review]);
+    }
+
     #[test]
     fn the_profile_and_bootloader_are_read_from_the_target() {
         let root = tempfile::tempdir().unwrap();
@@ -1553,7 +1730,16 @@ mod encryption_tests {
                 )?;
                 let mut mappings = encryption::Mappings::default();
                 let target = Target::new()?;
-                prepare_storage(&plan, &ids, &layout, PASSPHRASE, &target, &mut mappings)?;
+                let device = claim_disk(plan.disk())?;
+                prepare_storage(
+                    &plan,
+                    device,
+                    &ids,
+                    &layout,
+                    PASSPHRASE,
+                    &target,
+                    &mut mappings,
+                )?;
                 // The normal disk selector must still reject our open holders.
                 assert!(disk::revalidate(&identity).is_err());
                 fs::write(target.0.join("encrypted-sentinel"), b"written by Genkan")?;

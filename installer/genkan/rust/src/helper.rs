@@ -92,13 +92,13 @@ fn session() -> Result<()> {
         install::event(Event::Cancelled);
         return Ok(());
     };
-    let confirmation: Confirmation =
-        serde_json::from_slice(&line).context("Invalid confirmation message")?;
-    install::execute(
-        plan.confirm(&confirmation.confirmation)?,
-        prepared,
-        &mut Window(lines),
-    )
+    let confirmed = serde_json::from_slice::<Confirmation>(&line)
+        .context("Invalid confirmation message")
+        .and_then(|confirmation| plan.confirm(&confirmation.confirmation));
+    match confirmed {
+        Ok(confirmed) => install::execute(confirmed, prepared, &mut Window(lines)),
+        Err(error) => Err(prepared.refuse(error)),
+    }
 }
 
 fn run() -> Result<()> {

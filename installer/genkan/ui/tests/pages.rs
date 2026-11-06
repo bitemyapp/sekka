@@ -368,6 +368,68 @@ fn a_failed_bootloader_offers_to_try_again() {
     assert!(says(&h, w, "NixOS Is Installed"));
 }
 
+/// The report a real record gives when the disk couldn't be claimed after
+/// confirming: mounted meanwhile, so the erase never started.
+fn refused_claim(message: &str) -> calamares_nixos::record::Report {
+    use calamares_nixos::record::{Digest, Facts, Journal, Stage, Verification};
+    let dir = std::env::temp_dir().join(format!("genkan-pages-{}", std::process::id()));
+    let mut opened = Facts::default();
+    opened.add("disk", "/dev/nvme0n1").unwrap();
+    opened.add("disk-model", "Samsung SSD 990 PRO 1TB").unwrap();
+    let mut journal = Journal::open(&dir, opened, vec![]).unwrap();
+    journal
+        .intent(Stage::Preparation, Facts::default())
+        .unwrap();
+    journal
+        .completed(
+            Stage::Preparation,
+            Facts::default(),
+            Verification::Inspected,
+        )
+        .unwrap();
+    let mut confirmed = Facts::default();
+    confirmed
+        .add("configuration", Digest::of(b"configuration.nix"))
+        .unwrap();
+    journal.confirmed(confirmed).unwrap();
+    journal.refused(message).unwrap();
+    let report = journal.report(message, true);
+    std::fs::remove_dir_all(&dir).unwrap();
+    report
+}
+
+#[test]
+fn a_disk_that_couldnt_be_claimed_is_said_to_be_as_it_was() {
+    let message =
+        "Disk is unavailable: Contains a mounted filesystem or active swap (including live media)";
+    let report = refused_claim(message);
+    let (mut h, w) = open("ready");
+    h.send(Msg::Next);
+    assert_eq!(h.program().step, Step::Install);
+    let helper = |event| Msg::Session(0, Helper::Event(event));
+    h.send(helper(Event::Recovery { report }));
+    h.send(helper(Event::Failed {
+        message: message.into(),
+    }));
+    h.send(Msg::Session(
+        0,
+        Helper::Finished(Err("The installation helper stopped".into())),
+    ));
+    assert!(says(&h, w, "Installation Failed"));
+    assert!(says(
+        &h,
+        w,
+        "Nothing was written to Samsung SSD 990 PRO 1TB (/dev/nvme0n1)."
+    ));
+    assert!(says(&h, w, "The disk is as it was."));
+    assert!(!says(&h, w, "treat everything that was on it as lost"));
+    assert!(h.find_id(w, "retry-bootloader").is_none());
+    assert!(h.program().finished());
+    h.send(Msg::CopyFailure);
+    let copied = h.platform.clipboard.clone().expect("copied details");
+    assert!(copied.contains("What changed: Nothing was written"));
+}
+
 #[test]
 fn a_retry_offer_ends_with_the_helper() {
     let (mut h, w) = open("bootfail");

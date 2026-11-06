@@ -118,6 +118,17 @@ read back.
 | Verification | — | both copies read back equal to what was written; the full recheck below; the bootloader's evidence again | read-back |
 | Flush | (last entry of the mirror) | `sync`, unmount, mappings closed, nothing mounted at the target any more | inspected |
 
+Two refusals keep the record truthful about an untouched disk. A
+confirmation that is malformed or isn't this plan's phrase is recorded as
+`refused` after `prepared`. And before the storage intent, the helper claims
+the disk: it opens it, takes its exclusive lock and checks again that it is
+the reviewed disk, present, unchanged and not mounted (`claim_disk`). A disk
+that can't be claimed (mounted while the phrase was typed, gone, changed,
+locked) is recorded as `refused` after `confirmed`, with nothing written, so
+the window says the disk is as it was. The intent is then written while the
+lock is held, and the erase runs on the same locked device: the gap between
+the check and the first write is one small append to `/run`.
+
 The claims are distinct: *read-back* goes through the page cache before the
 final flush; *registered* means the target's Nix database registers the
 closure with the prepared NAR hashes, not that the bytes were hashed again;
@@ -247,7 +258,10 @@ a `nix-shell` with glib/Wayland/fontconfig and Aizome's fonts):
   both `nix path-info` JSON forms; a plan's opening record holds no secrets.
 - `install::tests`: the `Recovery` event's shape; the profile followed inside
   the target, never out of it; missing bootloader configuration, wrong lock
-  or system refused.
+  or system refused; a disk that can't be claimed is recorded as refused with
+  nothing written ("Review again", no retry, no storage intent after it); a
+  missing path and a regular file locked by another descriptor can't be
+  claimed (no block device is touched); a refused confirmation is recorded.
 - `session::tests`: one confirmation, then only retry lines; the two line
   kinds can't be confused. The helper's own test: lines sent before an offer
   don't answer it, and the end of input declines.
@@ -255,7 +269,9 @@ a `nix-shell` with glib/Wayland/fontconfig and Aizome's fonts):
   says what changed, offers no retry, can be closed and copies the redacted
   record; a failed bootloader offers to try again, can be closed while
   waiting, and once retried can't be closed, shows the check, and finishes;
-  an offer is withdrawn when the helper ends.
+  an offer is withdrawn when the helper ends; a disk that couldn't be
+  claimed after confirming (a real record's report) is said to be as it
+  was, never lost.
 - The VM fixture (`installer/genkan/tests/vm-fixture`) builds, and its
   `verify` now requires exactly one record under `/var/log/sekka-install`,
   parsed by the same code, ending at the flush intent, whose storage
