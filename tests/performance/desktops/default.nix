@@ -16,6 +16,7 @@ let
   components = import (flake.outPath + "/nix/components.nix") {
     inherit (flake.inputs)
       nixpkgs
+      crane
       applications
       superluminal
       tracy

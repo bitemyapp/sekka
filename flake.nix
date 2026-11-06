@@ -4,6 +4,7 @@
   description = "Sekka: NixOS with Genkan, Aizome, Tatami and Yukimi";
   inputs.nixpkgs.url = "https://flakehub.com/f/NixOS/nixpkgs/0.1";
   inputs.determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/*";
+  inputs.crane.url = "github:ipetkov/crane";
   inputs.fh.url = "https://flakehub.com/f/DeterminateSystems/fh/*.tar.gz";
   # Application updates are independent of the already-tested base system.
   inputs.applications.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -55,6 +56,7 @@
     let
       components = import ./nix/components.nix {
         inherit nixpkgs;
+        inherit (externalInputs) crane;
         inherit (externalInputs)
           applications
           superluminal
