@@ -5,7 +5,7 @@
 use super::*;
 use crate::engine::EngineProcess;
 use sekka_mac_contract::*;
-use sekka_mac_journal::FsStorage;
+use sekka_mac_journal::{FsStorage, Journal};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -26,6 +26,8 @@ enum Script {
     Skip(Stage),
     /// Wait inside this stage until terminated.
     Hang(Stage),
+    /// Refuse before any stage began, saying this.
+    Refuse(&'static str),
 }
 
 struct Fake {
@@ -41,7 +43,7 @@ struct Fake {
 
 impl Platform for Fake {
     fn now(&self) -> Timestamp {
-        "2026-11-07T00:00:00Z".parse().unwrap()
+        at()
     }
     fn engine(&self, expected: &Digest) -> Result<EngineInstall, PlatformError> {
         if *expected != engine_digest() {
@@ -103,6 +105,10 @@ impl Platform for Fake {
     }
 }
 
+fn at() -> Timestamp {
+    "2026-11-07T00:00:00Z".parse().unwrap()
+}
+
 fn failure(changed: DiskChanged) -> Failure {
     Failure {
         code: "apple-tool".parse().unwrap(),
@@ -147,6 +153,21 @@ impl ScriptedEngine {
                 mode,
                 protocol: ENGINE_PROTOCOL,
             });
+            if let Script::Refuse(why) = script {
+                send(EngineBody::Failure {
+                    stage: None,
+                    failure: Failure {
+                        code: "installation-changed".parse().unwrap(),
+                        message: why.parse().unwrap(),
+                        apple_diagnostic: None,
+                        disk_changed: DiskChanged::No,
+                    },
+                });
+                send(EngineBody::Completion {
+                    outcome: EngineOutcome::Failed,
+                });
+                return;
+            }
             let stages = if mode == EngineMode::StartupDisk {
                 vec![Stage::StartupDisk]
             } else {
@@ -216,7 +237,7 @@ impl ScriptedEngine {
 fn journal_has_intent(journals: &Path, stage: Stage) -> bool {
     let Ok(ids) = sekka_mac_journal::installations(&FsStorage, journals) else { return false };
     ids.into_iter().any(|id| {
-        sekka_mac_journal::Journal::open(FsStorage, journals, id)
+        Journal::open(FsStorage, journals, id)
             .map(|j| matches!(&j.records().last().unwrap().event, Event::Intent { stage: s } if *s == stage))
             .unwrap_or(false)
     })
@@ -254,6 +275,8 @@ struct World {
     helper: Helper<Fake>,
     catalog: SignedCatalog,
     begin: Begin,
+    /// The plan the owner reviewed.
+    plan: Plan,
 }
 
 fn file(dir: &Path, name: &str, bytes: &[u8]) -> (PathBuf, Artifact) {
@@ -272,6 +295,26 @@ fn file(dir: &Path, name: &str, bytes: &[u8]) -> (PathBuf, Artifact) {
 fn sign(catalog: Catalog) -> SignedCatalog {
     let key = sekka_mac_trust::signing::key(&sekka_mac_trust::signing::development_seed());
     sekka_mac_trust::signing::sign(catalog, sekka_mac_trust::DEVELOPMENT_KEY_ID, &key).unwrap()
+}
+
+fn trust() -> sekka_mac_trust::TrustConfig {
+    sekka_mac_trust::TrustConfig {
+        roots: vec![sekka_mac_trust::development_root()],
+        hosts: sekka_mac_trust::PRODUCTION_HOSTS.to_vec(),
+        clock_skew: 600,
+    }
+}
+
+fn fake(dir: &Path, script: Script) -> Fake {
+    Fake {
+        dir: dir.into(),
+        inspection: Mutex::new(samples::inspection()),
+        script: Mutex::new(script),
+        startup_disk_ok: AtomicBool::new(true),
+        ordering_held: Arc::new(AtomicBool::new(true)),
+        engine_runs: Arc::new(Mutex::new(0)),
+        startup_runs: Arc::new(Mutex::new(0)),
+    }
 }
 
 fn world(script: Script) -> World {
@@ -331,26 +374,13 @@ fn world(script: Script) -> World {
         staged,
         owner: "owner".parse().unwrap(),
     };
-    let fake = Fake {
-        dir: tmp.path().into(),
-        inspection: Mutex::new(samples::inspection()),
-        script: Mutex::new(script),
-        startup_disk_ok: AtomicBool::new(true),
-        ordering_held: Arc::new(AtomicBool::new(true)),
-        engine_runs: Arc::new(Mutex::new(0)),
-        startup_runs: Arc::new(Mutex::new(0)),
-    };
-    let trust = sekka_mac_trust::TrustConfig {
-        roots: vec![sekka_mac_trust::development_root()],
-        hosts: sekka_mac_trust::PRODUCTION_HOSTS.to_vec(),
-        clock_skew: 600,
-    };
-    let helper = Helper::new(fake, Paths::at(&tmp.path().join("state")), trust, "0.1.0".parse().unwrap()).unwrap();
+    let helper = Helper::new(fake(tmp.path(), script), Paths::at(&tmp.path().join("state")), trust(), "0.1.0".parse().unwrap()).unwrap();
     World {
         _tmp: tmp,
         helper,
         catalog: signed,
         begin,
+        plan,
     }
 }
 
@@ -401,6 +431,20 @@ impl World {
     fn fake(&self) -> &Fake {
         self.helper.platform_for_tests()
     }
+    fn journals(&self) -> PathBuf {
+        self.helper.paths_for_tests().journals()
+    }
+    /// The helper process starts again (after a crash, a restart of the
+    /// Mac, or an update of the app): nothing in memory survives.
+    fn restarted(self, script: Script) -> World {
+        let fake = fake(self._tmp.path(), script);
+        let helper = Helper::new(fake, self.helper.paths_for_tests().clone(), trust(), "0.1.0".parse().unwrap()).unwrap();
+        World { helper, ..self }
+    }
+    fn lines(&self, id: Uuid) -> Vec<String> {
+        let Response::Diagnostics { lines } = self.ask(Request::Diagnostics { installation: id }, None) else { panic!() };
+        lines.into_iter().map(|l| l.to_string()).collect()
+    }
 }
 
 fn refused(response: Response) -> (HelperRefusalCode, String) {
@@ -408,6 +452,39 @@ fn refused(response: Response) -> (HelperRefusalCode, String) {
         Response::Refused(r) => (r.code, r.message.to_string()),
         other => panic!("expected a refusal, got {other:?}"),
     }
+}
+
+/// A journal as a helper that stopped (or a Mac that restarted) inside a
+/// stage that changes nothing leaves it: that stage's intent, no result.
+fn abandoned(w: &World, open: Stage) -> Uuid {
+    let id = Uuid::random().unwrap();
+    let mut j = Journal::create(
+        FsStorage,
+        &w.journals(),
+        id,
+        at(),
+        Event::Opened {
+            plan: Box::new(w.plan.clone()),
+            plan_digest: w.plan.digest().unwrap(),
+            app: "0.1.0".parse().unwrap(),
+            helper: "0.1.0".parse().unwrap(),
+        },
+    )
+    .unwrap();
+    j.append(at(), Event::Intent { stage: Stage::Import }).unwrap();
+    if open == Stage::AppleInputs {
+        j.append(
+            at(),
+            Event::Completed {
+                stage: Stage::Import,
+                facts: vec![Fact::new("owner", "owner").unwrap()],
+                verification: Verification::SourceHashed,
+            },
+        )
+        .unwrap();
+        j.append(at(), Event::Intent { stage: Stage::AppleInputs }).unwrap();
+    }
+    id
 }
 
 #[test]
@@ -655,4 +732,41 @@ fn only_the_startup_disk_is_retried() {
     assert!(w.fake().ordering_held.load(Ordering::SeqCst));
     let (code, _) = refused(w.ask(Request::RetryStartupDisk { installation: id }, Some(PASSWORD)));
     assert_eq!(code, HelperRefusalCode::State);
+}
+
+#[test]
+fn diagnostics_name_no_account_after_a_restart() {
+    let w = world(Script::Refuse("owner isn't one of this Mac's administrators who can approve startup changes in Recovery."));
+    let id = w.begun();
+    let (state, _) = w.finish(id);
+    assert!(matches!(state, InstallState::Failed { stage: Stage::AppleInputs, .. }), "{state:?}");
+    let w = w.restarted(Script::Happy);
+    let lines = w.lines(id);
+    assert!(lines.iter().any(|l| l.contains("(account) isn't one of")), "{lines:?}");
+    assert!(lines.iter().all(|l| !l.contains("owner")), "{lines:?}");
+}
+
+#[test]
+fn long_text_is_cut_on_a_character_boundary() {
+    // A failure message and Apple's diagnostic at their limits, in
+    // characters wider than a byte: one diagnostics line can't hold both.
+    let w = world(Script::Happy);
+    let id = abandoned(&w, Stage::Import);
+    let mut j = Journal::open(FsStorage, &w.journals(), id).unwrap();
+    j.append(
+        at(),
+        Event::Failed {
+            stage: Stage::Import,
+            failure: Failure {
+                code: "download".parse().unwrap(),
+                message: "é".repeat(1024).parse().unwrap(),
+                apple_diagnostic: Some("…".repeat(682).parse().unwrap()),
+                disk_changed: DiskChanged::No,
+            },
+        },
+    )
+    .unwrap();
+    let lines = w.lines(id);
+    let failed = lines.iter().find(|l| l.contains("FAILED")).unwrap();
+    assert!(failed.len() <= 2048 && failed.len() > 2000, "{}", failed.len());
 }

@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex};
 use sekka_mac_contract::{
     ArtifactRole, Begin, DiskChanged, EngineOutcome, Event, Fact, Failure, HELPER_PROTOCOL,
     HelperRefusal, HelperRefusalCode, HelperRequest, HelperRequestSchema, HelperResponse,
-    HelperResponseSchema, InstallState, Progress, Release, Request, Response, Stage, Summary,
-    Text, Transcript, Uuid, Verification, Version, canonical, derive_plan, limits,
+    HelperResponseSchema, InstallState, Progress, Record, Release, Request, Response, Stage,
+    Summary, Text, Transcript, Uuid, Verification, Version, canonical, derive_plan, limits,
 };
 use sekka_mac_journal::{FsStorage, InstallLock, Journal, JournalError};
 use sekka_mac_stage::{Expect, StagingDir};
@@ -22,6 +22,8 @@ use crate::{Paths, Platform, Secret, redact};
 
 /// How many engine log lines are kept for diagnostics.
 const LOG_LINES: usize = 2000;
+/// The most a [`Text`] holds, in bytes.
+const TEXT_BYTES: usize = 2048;
 
 pub struct Helper<P: Platform> {
     platform: Arc<P>,
@@ -50,10 +52,9 @@ struct Shared {
 }
 
 fn refuse(code: HelperRefusalCode, message: impl AsRef<str>) -> Response {
-    let text: String = message.as_ref().chars().take(2000).collect();
     Response::Refused(HelperRefusal {
         code,
-        message: text.parse().unwrap_or_else(|_| "The request was refused.".parse().unwrap()),
+        message: text(message.as_ref()),
     })
 }
 
@@ -134,6 +135,15 @@ impl<P: Platform> Helper<P> {
 
     fn open(&self, installation: Uuid) -> Result<Journal, JournalError> {
         Journal::open(FsStorage, &self.paths.journals(), installation)
+    }
+
+    /// The account that authorized an installation: from its run here, or
+    /// from its record once the helper has restarted.
+    fn owner(&self, installation: Uuid, journal: &Journal) -> Option<String> {
+        self.active(installation)
+            .map(|a| a.owner.clone())
+            .filter(|o| !o.is_empty())
+            .or_else(|| fact(&recorded_facts(journal.records()), "owner"))
     }
 
     fn status(&self) -> Response {
@@ -445,17 +455,7 @@ impl<P: Platform> Helper<P> {
             return refuse(HelperRefusalCode::State, "The installation's record has no plan.");
         };
         let (plan, digest) = ((**plan).clone(), *plan_digest);
-        let facts: Vec<Fact> = journal
-            .records()
-            .iter()
-            .filter_map(|r| match &r.event {
-                Event::Completed { facts, .. } => Some(facts.clone()),
-                _ => None,
-            })
-            .flatten()
-            .collect();
-        let owner = self.active(installation).map(|a| a.owner.clone());
-        let Some(owner) = owner.or_else(|| fact(&facts, "owner")) else {
+        let Some(owner) = self.owner(installation, &journal) else {
             return refuse(HelperRefusalCode::State, "The installation doesn't record its owner.");
         };
         if let Err(e) = self.platform.authenticate_owner(&owner, &password) {
@@ -539,7 +539,7 @@ impl<P: Platform> Helper<P> {
                 };
             }
         };
-        let owner = self.active(installation).map(|a| a.owner.clone()).unwrap_or_default();
+        let owner = self.owner(installation, &journal).unwrap_or_default();
         let names = [owner.as_str()];
         let mut lines = vec![
             text(&format!("Sekka Installer helper {}", self.version)),
@@ -600,15 +600,32 @@ impl<P: Platform> Helper<P> {
     }
 }
 
+/// `s` as one line of [`Text`]: control characters become spaces, and it is
+/// cut on a character boundary to what a `Text` holds.
 fn text(s: &str) -> Text {
-    let clean: String = s
-        .chars()
-        .map(|c| if c.is_control() { ' ' } else { c })
-        .take(2000)
-        .collect();
-    clean.parse().expect("cleaned text")
+    let mut clean = String::with_capacity(s.len().min(TEXT_BYTES));
+    for c in s.chars().map(|c| if c.is_control() { ' ' } else { c }) {
+        if clean.len() + c.len_utf8() > TEXT_BYTES {
+            break;
+        }
+        clean.push(c);
+    }
+    clean.parse().unwrap_or_else(|_| "(unreadable)".parse().expect("plain text"))
 }
 
+/// Every fact the installation's completed stages recorded, in order.
+fn recorded_facts(records: &[Record]) -> Vec<Fact> {
+    records
+        .iter()
+        .filter_map(|r| match &r.event {
+            Event::Completed { facts, .. } => Some(facts.clone()),
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
+/// The last value recorded under `name`.
 fn fact(facts: &[Fact], name: &str) -> Option<String> {
     facts
         .iter()
