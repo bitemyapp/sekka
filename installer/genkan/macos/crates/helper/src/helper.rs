@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Request handling.
+//!
+//! Requests arrive concurrently, one thread per connection. Those that can
+//! write an installation's record or start the engine (Begin, Cancel of a
+//! stopped installation, RetryStartupDisk) take the install lock first and
+//! refuse if it is held; a run holds it until it ends. Nothing slow (PAM,
+//! unpacking the engine, the root inspection) happens while holding
+//! `active`, which Status and Events read.
 use std::collections::VecDeque;
 use std::fs;
 use std::os::unix::fs::DirBuilderExt;
@@ -8,7 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use sekka_mac_contract::{
-    ArtifactRole, Begin, DiskChanged, EngineOutcome, Event, Fact, Failure, HELPER_PROTOCOL,
+    ArtifactRole, Begin, Digest, DiskChanged, EngineOutcome, Event, Fact, Failure, HELPER_PROTOCOL,
     HelperRefusal, HelperRefusalCode, HelperRequest, HelperRequestSchema, HelperResponse,
     HelperResponseSchema, InstallState, Progress, Record, Release, Request, Response, Stage,
     Summary, Text, Transcript, Uuid, Verification, Version, canonical, derive_plan, limits,
@@ -18,7 +25,7 @@ use sekka_mac_stage::{Expect, StagingDir};
 use sekka_mac_trust::{AcceptedStore, TrustConfig};
 
 use crate::engine::{DriveError, Observation, drive};
-use crate::{Paths, Platform, Secret, redact};
+use crate::{EngineInstall, Paths, Platform, PlatformError, Secret, redact};
 
 /// How many engine log lines are kept for diagnostics.
 const LOG_LINES: usize = 2000;
@@ -33,11 +40,16 @@ pub struct Helper<P: Platform> {
     trust: TrustConfig,
     version: Version,
     active: Mutex<Option<Arc<Active>>>,
+    /// Held while an engine is found or unpacked: two requests unpacking at
+    /// once would share the engine cache's working names.
+    unpacking: Mutex<()>,
 }
 
-/// The installation this helper process is running.
+/// The installation this helper process last ran: whether its engine is
+/// running, and its log for diagnostics.
 struct Active {
     installation: Uuid,
+    /// The account that authorized it.
     owner: String,
     cancel: AtomicBool,
     shared: Mutex<Shared>,
@@ -51,6 +63,22 @@ struct Shared {
     progress: Option<Progress>,
     log: VecDeque<String>,
     terminate: Option<Box<dyn FnMut() + Send>>,
+}
+
+impl Active {
+    fn new(installation: Uuid, owner: &str, running: bool, mutating: bool, log: VecDeque<String>) -> Self {
+        Self {
+            installation,
+            owner: owner.into(),
+            cancel: AtomicBool::new(false),
+            shared: Mutex::new(Shared {
+                running,
+                mutating,
+                log,
+                ..Shared::default()
+            }),
+        }
+    }
 }
 
 fn refuse(code: HelperRefusalCode, message: impl AsRef<str>) -> Response {
@@ -82,6 +110,7 @@ impl<P: Platform> Helper<P> {
             trust,
             version,
             active: Mutex::new(None),
+            unpacking: Mutex::new(()),
         })
     }
 
@@ -146,6 +175,53 @@ impl<P: Platform> Helper<P> {
             .cloned()
     }
 
+    fn running(&self, installation: Uuid) -> bool {
+        self.active(installation)
+            .is_some_and(|a| a.shared.lock().unwrap().running)
+    }
+
+    fn any_running(&self) -> bool {
+        self.active
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|a| a.shared.lock().unwrap().running)
+    }
+
+    /// Take the install lock, or say why not. A run holds it until it ends;
+    /// the other requests that write a record hold it only while they do.
+    fn claim(&self) -> Result<InstallLock, Response> {
+        match InstallLock::try_acquire(&self.paths.lock()) {
+            Ok(Some(lock)) => Ok(lock),
+            Ok(None) if self.any_running() => Err(refuse(HelperRefusalCode::Busy, "An installation is already running.")),
+            Ok(None) => Err(refuse(
+                HelperRefusalCode::Busy,
+                "Sekka Installer's helper is busy with another request. Try again in a moment.",
+            )),
+            Err(e) => Err(refuse(HelperRefusalCode::Internal, e.to_string())),
+        }
+    }
+
+    /// Mark `installation` as running in this process, keeping the log of
+    /// its earlier run here, if any, for diagnostics.
+    fn start(&self, installation: Uuid, owner: &str, mutating: bool) -> Arc<Active> {
+        let mut active = self.active.lock().unwrap();
+        let log = active
+            .as_ref()
+            .filter(|a| a.installation == installation)
+            .map(|a| a.shared.lock().unwrap().log.clone())
+            .unwrap_or_default();
+        let started = Arc::new(Active::new(installation, owner, true, mutating, log));
+        *active = Some(started.clone());
+        started
+    }
+
+    /// The engine whose archive has this digest; see [`Platform::engine`].
+    fn engine(&self, digest: &Digest) -> Result<EngineInstall, PlatformError> {
+        let _one = self.unpacking.lock().unwrap();
+        self.platform.engine(digest)
+    }
+
     fn open(&self, installation: Uuid) -> Result<Journal, JournalError> {
         Journal::open(FsStorage, &self.paths.journals(), installation)
     }
@@ -166,9 +242,7 @@ impl<P: Platform> Helper<P> {
         };
         let mut installations = Vec::new();
         for id in ids {
-            let running = self
-                .active(id)
-                .is_some_and(|a| a.shared.lock().unwrap().running);
+            let running = self.running(id);
             match self.open(id) {
                 Ok(j) => {
                     let first = &j.records()[0];
@@ -222,17 +296,11 @@ impl<P: Platform> Helper<P> {
     }
 
     fn begin(&self, uid: u32, begin: Begin, password: Secret) -> Response {
-        let mut active = self.active.lock().unwrap();
-        if active
-            .as_ref()
-            .is_some_and(|a| a.shared.lock().unwrap().running)
-        {
-            return refuse(HelperRefusalCode::Busy, "An installation is already running.");
-        }
-        let lock = match InstallLock::try_acquire(&self.paths.lock()) {
-            Ok(Some(lock)) => lock,
-            Ok(None) => return refuse(HelperRefusalCode::Busy, "An installation is already running."),
-            Err(e) => return refuse(HelperRefusalCode::Internal, e.to_string()),
+        // Held from here until the run ends: a second Begin or a retry is
+        // refused meanwhile, while Status and Events answer.
+        let lock = match self.claim() {
+            Ok(lock) => lock,
+            Err(response) => return response,
         };
         if let Err(response) = self.check_no_unfinished() {
             return response;
@@ -275,7 +343,7 @@ impl<P: Platform> Helper<P> {
         }
 
         // The engine this release needs, and the Mac as root sees it.
-        let engine = match self.platform.engine(&release.artifacts.engine.digest) {
+        let engine = match self.engine(&release.artifacts.engine.digest) {
             Ok(e) => e,
             Err(e) => return refuse(HelperRefusalCode::Download, e.to_string()),
         };
@@ -337,18 +405,7 @@ impl<P: Platform> Helper<P> {
             Err(e) => return refuse(HelperRefusalCode::Internal, e.to_string()),
         };
 
-        let state = Arc::new(Active {
-            installation,
-            owner: owner.clone(),
-            cancel: AtomicBool::new(false),
-            shared: Mutex::new(Shared {
-                running: true,
-                ..Shared::default()
-            }),
-        });
-        *active = Some(state.clone());
-        drop(active);
-
+        let state = self.start(installation, &owner, false);
         let run = Run {
             platform: self.platform.clone(),
             paths: self.paths.clone(),
@@ -423,6 +480,10 @@ impl<P: Platform> Helper<P> {
         }
         // Not running in this process: an installation stopped before the
         // disk changed can be closed.
+        let _lock = match self.claim() {
+            Ok(lock) => lock,
+            Err(response) => return response,
+        };
         let mut journal = match self.open(installation) {
             Ok(j) => j,
             Err(e) => return refuse(HelperRefusalCode::State, e.to_string()),
@@ -443,16 +504,9 @@ impl<P: Platform> Helper<P> {
     }
 
     fn retry_startup_disk(&self, installation: Uuid, password: Secret) -> Response {
-        if self
-            .active(installation)
-            .is_some_and(|a| a.shared.lock().unwrap().running)
-        {
-            return refuse(HelperRefusalCode::Busy, "The installation is still running.");
-        }
-        let _lock = match InstallLock::try_acquire(&self.paths.lock()) {
-            Ok(Some(lock)) => lock,
-            Ok(None) => return refuse(HelperRefusalCode::Busy, "An installation is already running."),
-            Err(e) => return refuse(HelperRefusalCode::Internal, e.to_string()),
+        let _lock = match self.claim() {
+            Ok(lock) => lock,
+            Err(response) => return response,
         };
         let mut journal = match self.open(installation) {
             Ok(j) => j,
@@ -476,7 +530,7 @@ impl<P: Platform> Helper<P> {
         }
         // The engine that installed it, finding its stub by the
         // installation's identity and checking the target is still there.
-        let engine = match self.platform.engine(&plan.release.engine) {
+        let engine = match self.engine(&plan.release.engine) {
             Ok(e) => e,
             Err(e) => return refuse(HelperRefusalCode::Download, e.to_string()),
         };

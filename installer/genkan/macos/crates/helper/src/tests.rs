@@ -33,6 +33,9 @@ enum Script {
 struct Fake {
     dir: PathBuf,
     inspection: Mutex<Inspection>,
+    /// Run once, during the next inspection, as something else might act
+    /// while the Mac is being inspected.
+    during_inspection: Mutex<Option<Box<dyn FnOnce() + Send>>>,
     /// What the engine found in the helper's staging when it started.
     staged_at_start: Mutex<Vec<(String, Vec<u8>)>>,
     script: Mutex<Script>,
@@ -57,6 +60,10 @@ impl Platform for Fake {
         })
     }
     fn inspect(&self, _: &EngineInstall) -> Result<Inspection, PlatformError> {
+        let meanwhile = self.during_inspection.lock().unwrap().take();
+        if let Some(meanwhile) = meanwhile {
+            meanwhile();
+        }
         Ok(self.inspection.lock().unwrap().clone())
     }
     fn authenticate_owner(&self, user: &str, password: &[u8]) -> Result<(), PlatformError> {
@@ -319,6 +326,7 @@ fn fake(dir: &Path, script: Script) -> Fake {
     Fake {
         dir: dir.into(),
         inspection: Mutex::new(samples::inspection()),
+        during_inspection: Mutex::new(None),
         staged_at_start: Mutex::new(Vec::new()),
         script: Mutex::new(script),
         startup_disk_ok: AtomicBool::new(true),
@@ -584,6 +592,28 @@ fn a_changed_mac_needs_a_new_review() {
     assert_eq!(code, HelperRefusalCode::PlanChanged);
     assert!(message.contains("review"), "{message}");
     assert_eq!(*w.fake().engine_runs.lock().unwrap(), 0);
+}
+
+#[test]
+fn status_and_events_answer_while_a_begin_inspects() {
+    let w = world(Script::Happy);
+    let (inspecting, wait) = channel();
+    let (go, gate) = channel::<()>();
+    *w.fake().during_inspection.lock().unwrap() = Some(Box::new(move || {
+        inspecting.send(()).unwrap();
+        gate.recv().unwrap();
+    }));
+    std::thread::scope(|s| {
+        let begun = s.spawn(|| w.begun());
+        wait.recv().unwrap();
+        // The slow checks hold nothing that Status waits for, and a second
+        // Begin is refused rather than queued.
+        assert!(matches!(w.ask(Request::Status, None), Response::Status { .. }));
+        assert_eq!(refused(w.begin()).0, HelperRefusalCode::Busy);
+        go.send(()).unwrap();
+        let id = begun.join().unwrap();
+        assert_eq!(w.finish(id).0, InstallState::WaitingForRecovery);
+    });
 }
 
 #[test]
