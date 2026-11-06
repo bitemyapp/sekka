@@ -89,7 +89,8 @@ pub trait Environment: Send + Sync + 'static {
     /// Ask the helper to look at the Mac as root and bring a stopped
     /// installation's record up to date with it: Recovery's steps once the
     /// boot policy shows them, or that nothing of it is left. It may also
-    /// find nothing to change.
+    /// find nothing to change, or refuse (the helper on this branch can't
+    /// look yet).
     fn reconcile(&self, installation: Uuid) -> Result<Events, HelperRefusal>;
     fn diagnostics(&self, installation: Uuid) -> Vec<String>;
     /// Delete the app's downloads once the helper has its own copies.

@@ -27,6 +27,9 @@ pub enum Screen {
     NotReady,
     /// Sekka (or something unfinished) is already on this disk.
     Existing,
+    /// The helper's record keeps an unfinished installation this Mac's own
+    /// inspection doesn't find, and the helper couldn't close the record.
+    Missing,
     /// No release could be offered (offline, expired, none for this Mac).
     NoRelease,
     /// This Mac has a release, but this app can't install it.
@@ -77,8 +80,10 @@ pub struct CheckRow {
 pub enum Reconciling {
     /// The helper hasn't answered yet.
     Asked(Uuid),
-    /// It answered, or couldn't.
+    /// It looked, and its record says what it found.
     Answered(Uuid),
+    /// It couldn't look: it refused, or wasn't reached.
+    Refused(Uuid),
 }
 
 /// The authorization sheet, while it is open.
@@ -261,6 +266,7 @@ impl Model {
             | Screen::Unsupported
             | Screen::NotReady
             | Screen::Existing
+            | Screen::Missing
             | Screen::NoRelease
             | Screen::NeedsUpdate => Step::Check,
             Screen::Plan => Step::Size,
@@ -435,6 +441,22 @@ impl Model {
             .installations
             .iter()
             .find(|x| x.installation_id == Some(installation))
+    }
+
+    /// Whether this Mac's own inspection found a system or partition it
+    /// couldn't identify. Run as the person using the app, it can miss an
+    /// installation's records, so any of these could be the one it looks
+    /// for.
+    fn unidentified(&self) -> bool {
+        self.inspection()
+            .is_some_and(|i| i.installations.iter().any(|x| x.installation_id.is_none()))
+    }
+
+    /// Whether the record waits for Recovery, and the helper couldn't read
+    /// the boot policy to say whether Recovery's steps are done already.
+    pub fn recovery_unconfirmed(&self) -> bool {
+        self.screen == Screen::Recovery
+            && matches!(self.reconciling, Some(Reconciling::Refused(id)) if Some(id) == self.installation)
     }
 
     /// The catalog's releases whose profile admits this Mac.
@@ -702,9 +724,9 @@ impl Model {
             Msg::Retried(Err(refusal)) => self.refused(refusal),
             Msg::Reconciled(result) => {
                 let Some(Reconciling::Asked(id)) = self.reconciling else { return Vec::new() };
-                self.reconciling = Some(Reconciling::Answered(id));
                 match result {
                     Ok(events) => {
+                        self.reconciling = Some(Reconciling::Answered(id));
                         if let Some(Ok(list)) = &mut self.helper
                             && let Some(summary) = list.iter_mut().find(|s| s.installation == id)
                         {
@@ -716,6 +738,7 @@ impl Model {
                         }
                     }
                     Err(refusal) => {
+                        self.reconciling = Some(Reconciling::Refused(id));
                         self.log(format!("The helper didn't bring the installation's record up to date: {}", refusal.message));
                     }
                 }
@@ -904,6 +927,11 @@ impl Model {
             }];
         }
         match state {
+            // What this Mac's own inspection found stands until the record
+            // closes the installation.
+            _ if self.screen == Screen::Missing && !matches!(state, InstallState::Cancelled | InstallState::Removed) => {
+                Vec::new()
+            }
             InstallState::WaitingForRecovery => {
                 self.screen = Screen::Recovery;
                 vec![Effect::RemoveStaging]
@@ -1109,29 +1137,32 @@ impl Model {
     }
 
     /// Reconnect to a stopped installation the helper knows, or `None` when
-    /// it no longer stands in the way. Its record is read against this Mac's
-    /// own inspection first: the record knows nothing of what Recovery did,
-    /// or of partitions removed by hand. When the two disagree, the helper
-    /// is asked (once) to look as root and bring the record up to date, and
-    /// this is decided again from its answer.
+    /// it no longer stands in the way. Its record knows nothing of what
+    /// Recovery did, or of partitions removed by hand, and this Mac's own
+    /// inspection, run as the person using the app, can't read the boot
+    /// policy. So the helper is asked (once) to look as root and bring the
+    /// record up to date when the record waits for Recovery, or names an
+    /// installation the inspection doesn't find, and this is decided again
+    /// from its answer. If it can't, the inspection decides what it can.
     fn reconnect(&mut self, summary: &Summary) -> Option<Vec<Effect>> {
         let id = summary.installation;
         let Some(inspection) = &self.inspection else { return Some(Vec::new()) };
         let inspected = inspection.is_ok();
         let found = self.on_disk(id).map(|x| x.state);
         let complete = found == Some(InstallationState::Complete);
-        let gone = inspected && found.is_none();
+        // Nothing on the disk names it, though its record says something
+        // would; and gone when nothing unidentified could be it either.
+        let absent = inspected && found.is_none() && named_on_disk(&summary.state);
+        let gone = absent && !self.unidentified();
         match self.reconciling {
             Some(Reconciling::Asked(asked)) if asked == id => return Some(Vec::new()),
-            Some(Reconciling::Answered(answered)) if answered == id => {}
+            Some(Reconciling::Answered(answered) | Reconciling::Refused(answered)) if answered == id => {}
             _ => {
-                let recovered = complete
-                    && matches!(
-                        summary.state,
-                        InstallState::WaitingForRecovery | InstallState::EnrollmentUncertain
-                    );
-                let removed = gone && !summary.state.allows_new_installation();
-                if recovered || removed {
+                let recovery = matches!(
+                    summary.state,
+                    InstallState::WaitingForRecovery | InstallState::EnrollmentUncertain
+                ) && found.is_some_and(|s| s != InstallationState::Partial);
+                if recovery || absent {
                     self.reconciling = Some(Reconciling::Asked(id));
                     return Some(vec![Effect::Reconcile(id)]);
                 }
@@ -1153,6 +1184,12 @@ impl Model {
             // installed and never needs finishing in Recovery.
             _ if complete => {
                 self.screen = Screen::Existing;
+                Vec::new()
+            }
+            // Its steps, or a retry, can't work on an installation that
+            // isn't there.
+            _ if gone => {
+                self.screen = Screen::Missing;
                 Vec::new()
             }
             InstallState::WaitingForRecovery => {
@@ -1293,6 +1330,22 @@ impl Model {
             Some(InstallState::Failed { disk_changed, .. }) => Some(*disk_changed),
             _ => None,
         }
+    }
+}
+
+/// Whether an installation's record shows it got far enough to name itself
+/// on the disk: the handoff on its boot partition is written once the ESP's
+/// stage completes, and Recovery's configuration after that. Until then
+/// nothing an inspection finds carries its identity, so not finding it says
+/// nothing about whether it is there.
+fn named_on_disk(state: &InstallState) -> bool {
+    match state {
+        InstallState::MutationStarted { stage } | InstallState::Failed { stage, .. } => *stage > Stage::Esp,
+        InstallState::StartupDiskFailed
+        | InstallState::WaitingForRecovery
+        | InstallState::EnrollmentUncertain
+        | InstallState::WaitingForSetup => true,
+        InstallState::Planned | InstallState::AssetsVerified | InstallState::Cancelled | InstallState::Removed => false,
     }
 }
 

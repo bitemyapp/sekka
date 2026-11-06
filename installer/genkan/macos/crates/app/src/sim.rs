@@ -43,10 +43,12 @@ pub enum Scenario {
     /// The app reopens with macOS's part done.
     WaitingForRecovery,
     /// The app reopens after Recovery finished; the helper's record still
-    /// waits for Recovery until the helper looks at the Mac.
+    /// waits for Recovery until the helper looks at the Mac, which only a
+    /// [`Simulation::reconciling`] helper does.
     RecoveryFinished,
     /// The app reopens after the owner removed an unfinished installation
-    /// in Disk Utility.
+    /// in Disk Utility; only a [`Simulation::reconciling`] helper closes
+    /// its record.
     RemovedByHand,
     /// The app reopens to an installation whose helper stopped while
     /// downloading Apple's files, before anything on the disk changed.
@@ -111,6 +113,10 @@ pub struct Simulation {
     scenario: Scenario,
     /// How fast time passes: 1.0 is a believable pace; screenshots use 0.
     pace: f64,
+    /// The helper looks at the Mac when asked to reconcile, as the contract
+    /// describes. The helper on this branch refuses, and so does the
+    /// simulation's unless it is made [`Simulation::reconciling`].
+    reconciles: bool,
     state: Mutex<SimState>,
 }
 
@@ -137,8 +143,15 @@ impl Simulation {
         Self {
             scenario,
             pace,
+            reconciles: false,
             state: Mutex::new(SimState::default()),
         }
+    }
+
+    /// The same simulation, with a helper that reconciles.
+    pub fn reconciling(mut self) -> Self {
+        self.reconciles = true;
+        self
     }
 
     fn wait(&self, ms: u64) {
@@ -307,16 +320,13 @@ fn sim_inspection(scenario: Scenario, downloaded: bool) -> Inspection {
             });
         }
         Scenario::Existing => {
-            i.installations.push(sekka(InstallationState::Complete, None).0);
+            i.installations.push(sekka(InstallationState::Unknown, None).0);
         }
-        // The installation the helper knows, by its identity.
+        // The installation the helper knows, by its identity. The app's
+        // inspection runs as the person using it and can't read the boot
+        // policy, so it can't tell whether Recovery's step is done.
         Scenario::WaitingForRecovery | Scenario::RecoveryFinished => {
-            let state = if scenario == Scenario::WaitingForRecovery {
-                InstallationState::WaitingForRecovery
-            } else {
-                InstallationState::Complete
-            };
-            let (installation, issue) = sekka(state, Some(SIM_ID));
+            let (installation, issue) = sekka(InstallationState::Unknown, Some(SIM_ID));
             i.installations.push(installation);
             i.issues.push(issue);
         }
@@ -541,6 +551,13 @@ impl Environment for Simulation {
     }
     fn reconcile(&self, _: Uuid) -> Result<Events, HelperRefusal> {
         self.wait(700);
+        if !self.reconciles {
+            // As the helper on this branch answers.
+            return Err(HelperRefusal {
+                code: HelperRefusalCode::State,
+                message: "This helper can't look at the Mac for an installation yet.".parse().unwrap(),
+            });
+        }
         // Where the record is behind the Mac the helper brings it up to
         // date; elsewhere it finds nothing to change.
         if self.reconciliation().is_some() {

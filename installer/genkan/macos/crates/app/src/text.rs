@@ -243,6 +243,16 @@ pub const REMOVED: &str = "Nothing of the earlier installation was found on your
 /// step is done. Whether Sekka has started since isn't known here.
 pub const INSTALLED: &str = "Recovery's step is done. Start your Mac in Sekka; the first time it starts, Sekka asks you to create your account.";
 
+/// The Recovery page for an installation reconnected to, when the helper
+/// couldn't read the boot policy to say whether these steps are done.
+pub const RECOVERY_UNCONFIRMED: &str = "If you've already done these steps, Sekka is installed: start your Mac in Sekka. Sekka Installer can't yet tell from macOS whether they're done.";
+
+/// The page for an unfinished installation the helper keeps a record of,
+/// but that this Mac's own look at the disk doesn't find.
+pub const MISSING_TITLE: &str = "The earlier installation wasn't found";
+pub const MISSING: &str = "Sekka Installer's helper has a record of an installation that didn't finish, but nothing on your Mac's disk names it any more: it may have been removed in Disk Utility. The helper couldn't confirm that and close the record, and until it does, Sekka Installer can't start another installation.";
+pub const MISSING_NEXT: &str = "Copy the diagnostics and ask for help. Nothing on your Mac was changed.";
+
 /// What the review says one of the plan's actions changes. A failed resize
 /// is inspected again, and what it found is said then: it isn't promised
 /// here.

@@ -201,7 +201,7 @@ impl<'a> Page<'a> {
 /// with them, and they move when what is left to download is measured.
 pub fn key(m: &Model) -> String {
     format!(
-        "{:?}|{:?}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}|{:?}",
+        "{:?}|{:?}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}|{:?}|{}",
         m.screen,
         m.notice,
         m.download_error.is_some(),
@@ -216,6 +216,7 @@ pub fn key(m: &Model) -> String {
         m.size_range(),
         m.staged.is_empty(),
         m.owner,
+        m.recovery_unconfirmed(),
     )
 }
 
@@ -236,6 +237,7 @@ pub fn build(m: &Model, tx: &Sender<Msg>, mtm: MainThreadMarker, targets: &mut T
         Screen::NoRelease => no_release(m, &mut p),
         Screen::NeedsUpdate => needs_update(&mut p),
         Screen::Existing => existing(m, &mut p),
+        Screen::Missing => missing(m, &mut p),
         Screen::Plan => plan(m, &mut p),
         Screen::Downloading => downloading(m, &mut p),
         Screen::Review => review(m, &mut p),
@@ -387,6 +389,22 @@ fn existing(m: &Model, p: &mut Page) {
     }
     p.quit();
     p.left("Copy Details", || Msg::CopyDiagnostics);
+}
+
+fn missing(m: &Model, p: &mut Page) {
+    p.title(text::MISSING_TITLE);
+    p.body(text::MISSING);
+    if let Some(state) = &m.state {
+        let (headline, _) = text::stopped(state);
+        p.gap(2.0);
+        p.row(Mark::Warning, "Its record says", &headline);
+    }
+    p.divider();
+    p.heading("What you can do");
+    p.body(text::MISSING_NEXT);
+    p.quit();
+    p.left("Copy Diagnostics", || Msg::CopyDiagnostics);
+    p.primary("Check Again", || Msg::CheckAgain);
 }
 
 fn disk_layout(m: &Model) -> Option<DiskLayout> {
@@ -674,6 +692,9 @@ fn recovery(m: &Model, p: &mut Page) {
         p.numbered(n + 1, &text::human_step(*step, "Sekka", owner.as_deref()));
     }
     p.gap(4.0);
+    if m.recovery_unconfirmed() {
+        p.callout(Mark::Warning, text::RECOVERY_UNCONFIRMED);
+    }
     p.callout(Mark::Warning, "If your Mac starts up in macOS instead, open Sekka Installer again; it picks up where this left off.");
     p.note("Write these steps down or take a photo of them: this window isn't available in Recovery.");
     p.left("Copy Details", || Msg::CopyDiagnostics);
