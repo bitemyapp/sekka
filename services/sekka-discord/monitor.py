@@ -24,6 +24,7 @@ import time
 
 BOT = "sekka-discord.service"
 TUNNEL = "sekka-discord-tunnel.service"
+DEPLOY = "sekka-discord-deploy.service"
 COOLDOWN = 900
 QUIET = 300
 MAX_STATE = 65536
@@ -50,10 +51,11 @@ LABELS = {
     "ssh_success": "Successful SSH authentication",
     "sudo": "Sudo activity",
     "egress": "Sandbox egress denied by host firewall",
+    "deploy": "Yuki deployment failed; the previous package was kept or restored",
 }
 EVENT_KEYS = {"bot_restart", "tunnel_restart", "journal_gap", "journal_record",
               "webhook", "unresolved", "catchup", "dispatch", "ssh_failure",
-              "ssh_success", "sudo", "egress"}
+              "ssh_success", "sudo", "egress", "deploy"}
 COUNT_MAX = 10**12
 SSH_ACCEPTED = re.compile(r"Accepted [^ ]+ for [^ ]+ from ([^ ]+) port [0-9]{1,5} ssh2(?::|$)")
 
@@ -417,7 +419,7 @@ def journal_command(state, cursor=True):
     else:
         args.append(f"--since=@{state['journal_time']:.6f}"
                     if state["journal_time"] else "--since=-5min")
-    args.extend(["_SYSTEMD_UNIT=" + BOT, "+", "_SYSTEMD_UNIT=" + TUNNEL,
+    args.extend(["_SYSTEMD_UNIT=" + BOT, "+", "_SYSTEMD_UNIT=" + TUNNEL, "+", "_SYSTEMD_UNIT=" + DEPLOY,
                  "+", "_COMM=sshd", "+", "_COMM=sshd-session", "+", "_COMM=sudo",
                  "+", "SYSLOG_IDENTIFIER=sshd", "+", "SYSLOG_IDENTIFIER=sudo",
                  "+", "_TRANSPORT=kernel"])
@@ -470,6 +472,8 @@ def classify(record, counts, lan=()):
             counts["ssh_failure"] += 1
         if message.startswith("Accepted ") and not from_lan(message, lan):
             counts["ssh_success"] += 1
+    if record.get("_SYSTEMD_UNIT") == DEPLOY and message.startswith("DEPLOY FAILED "):
+        counts["deploy"] += 1
     if comm == "sudo" or identifier == "sudo":
         counts["sudo"] += 1
 
