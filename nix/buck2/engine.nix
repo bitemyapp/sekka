@@ -25,6 +25,7 @@ platform.buildRustPackage {
     ./patches/output-pipeline.patch
     ./patches/presence-consistent-hits.patch
     ./patches/content-store-unlocked-views.patch
+    ./patches/content-store-advisory-writes.patch
   ];
   # Cargo loads Git patch manifests even when the lock records them as unused.
   # Remove this dead patch in both source and vendoring; no resolved dep changes.
