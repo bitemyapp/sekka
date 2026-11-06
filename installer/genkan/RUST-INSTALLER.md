@@ -454,8 +454,9 @@ its closure plus 8 GiB of headroom. Failure at this stage leaves disk contents
 unchanged. The integrated ISO caches the complete catalog and a prebuilt system
 for every desktop in its read-only store, so preparation normally downloads
 almost nothing into live-session RAM. Selections whose downloads would not fit
-in memory are built on the target store after formatting instead. This does not
-make the complete OS installation offline.
+in memory are built on the target store after formatting instead, with Nix's
+temporary build directories on the target too. This does not make the complete
+OS installation offline.
 
 Application test runs may use an 80 GiB image in addition to the original 40 GiB
 image. Both require the exact `RESPIN_TEST_ONLY` serial and expected VM device
