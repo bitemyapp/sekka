@@ -1,0 +1,118 @@
+[package]
+name = "sekka-installer"
+description = "Sekka Installer: installs Sekka beside macOS on an Apple Silicon Mac"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "sekka-installer"
+path = "src/main.rs"
+
+[features]
+default = ["simulation"]
+# The simulation (`--simulate`) and screenshots (`--screenshots`), for
+# development and review. Never in an installed build.
+simulation = ["sekka-mac-contract/samples"]
+# Installed builds: production trust only, no simulation, no catalog
+# overrides. Build with --no-default-features --features production.
+production = ["sekka-mac-trust/production"]
+
+[dependencies]
+sekka-mac-contract.workspace = true
+sekka-mac-trust.workspace = true
+sekka-mac-stage.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+zeroize.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+sekka-mac-xpc.workspace = true
+libc.workspace = true
+block2.workspace = true
+objc2.workspace = true
+objc2-foundation = { workspace = true, features = [
+    "block2",
+    "NSArray",
+    "NSAttributedString",
+    "NSBundle",
+    "NSData",
+    "NSDate",
+    "NSDictionary",
+    "NSError",
+    "NSGeometry",
+    "NSNotification",
+    "NSObjCRuntime",
+    "NSProcessInfo",
+    "NSRange",
+    "NSRunLoop",
+    "NSString",
+    "NSThread",
+    "NSTimer",
+    "NSURL",
+    "NSURLRequest",
+    "NSURLResponse",
+    "NSURLSession",
+    "NSValue",
+    "NSAppleScript",
+    "NSAppleEventDescriptor",
+    "NSPathUtilities",
+] }
+objc2-app-kit = { workspace = true, features = [
+    "block2",
+    "objc2-core-foundation",
+    "NSAccessibility",
+    "NSAccessibilityConstants",
+    "NSAccessibilityProtocols",
+    "NSAlert",
+    "NSAppearance",
+    "NSApplication",
+    "NSBezierPath",
+    "NSBitmapImageRep",
+    "NSBox",
+    "NSButton",
+    "NSButtonCell",
+    "NSCell",
+    "NSColor",
+    "NSControl",
+    "NSCursor",
+    "NSEvent",
+    "NSFont",
+    "NSFontDescriptor",
+    "NSGraphics",
+    "NSGraphicsContext",
+    "NSImage",
+    "NSImageRep",
+    "NSImageView",
+    "NSLayoutAnchor",
+    "NSLayoutConstraint",
+    "NSMenu",
+    "NSMenuItem",
+    "NSPanel",
+    "NSParagraphStyle",
+    "NSPasteboard",
+    "NSProgressIndicator",
+    "NSResponder",
+    "NSRunningApplication",
+    "NSScreen",
+    "NSScrollView",
+    "NSSecureTextField",
+    "NSStackView",
+    "NSStringDrawing",
+    "NSText",
+    "NSTextField",
+    "NSTextView",
+    "NSTrackingArea",
+    "NSUserInterfaceLayout",
+    "NSView",
+    "NSVisualEffectView",
+    "NSWindow",
+    "NSWorkspace",
+] }
+objc2-service-management = { workspace = true, features = ["SMAppService", "objc2-foundation"] }
+
+[dev-dependencies]
+sekka-mac-contract = { workspace = true, features = ["samples"] }
+tempfile.workspace = true
