@@ -19,6 +19,7 @@ sekka-mac-contract.workspace = true
 sekka-mac-trust.workspace = true
 sekka-mac-stage.workspace = true
 sekka-mac-journal.workspace = true
+sekka-mac-engine.workspace = true
 sekka-mac-xpc.workspace = true
 serde.workspace = true
 serde_json.workspace = true

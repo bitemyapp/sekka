@@ -5,19 +5,18 @@
 //! environment.
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::fs;
-use std::io::{Read, Write};
-use std::os::unix::fs::DirBuilderExt;
+use std::io::Write;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use sekka_mac_contract::{
-    APP_IDENTIFIER, Digest, EngineBody, EngineOutcome, Fact, Failure, HELPER_SERVICE, Hasher,
-    Inspection, Timestamp, Transcript, Uuid,
+    APP_IDENTIFIER, Digest, Fact, Failure, HELPER_SERVICE, Inspection, Timestamp, Uuid,
 };
 use sekka_mac_trust::TrustConfig;
 
 use crate::engine::{ChildEngine, EngineProcess};
+use sekka_mac_engine::PATH;
 use crate::{EngineInstall, Helper, Paths, Platform, PlatformError, Secret};
 
 /// The team that signs release builds, fixed at build time.
@@ -27,8 +26,6 @@ const _: () = assert!(
     option_env!("SEKKA_TEAM_ID").is_some(),
     "production helpers name the team whose app they accept (SEKKA_TEAM_ID)"
 );
-
-const PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";
 
 pub fn main() {
     // SAFETY: getuid/umask have no preconditions.
@@ -107,142 +104,19 @@ fn plain_account_name(user: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
 }
 
-/// The engine's own description of how to start it, inside its archive.
-#[derive(serde::Deserialize)]
-struct EngineEntry {
-    /// The Python to run, relative to the engine's root.
-    python: String,
-}
-
-fn engine_python(engine: &EngineInstall) -> Result<PathBuf, PlatformError> {
-    let bytes = fs::read(engine.root.join("engine-lock.json"))
-        .map_err(|e| PlatformError::Engine(format!("The installer's engine is incomplete: {e}")))?;
-    let entry: EngineEntry = serde_json::from_slice(&bytes)
-        .map_err(|e| PlatformError::Engine(format!("The installer's engine is incomplete: {e}")))?;
-    let python = engine.root.join(&entry.python);
-    if !python.starts_with(&engine.root) || entry.python.contains("..") {
-        return Err(PlatformError::Engine("The installer's engine names a program outside itself.".into()));
-    }
-    Ok(python)
-}
-
-fn engine_command(engine: &EngineInstall, args: &[&str]) -> Result<Command, PlatformError> {
-    let mut command = Command::new(engine_python(engine)?);
-    command
-        .args(["-I", "-m", "sekka_engine"])
-        .args(args)
-        .current_dir(&engine.root)
-        .env_clear()
-        .env("PATH", PATH)
-        .env("LC_ALL", "C")
-        .env("PYTHONDONTWRITEBYTECODE", "1")
-        .env("PYTHONNOUSERSITE", "1");
-    Ok(command)
-}
-
 impl Platform for MacPlatform {
     fn now(&self) -> Timestamp {
         Timestamp::now()
     }
 
     fn engine(&self, expected: &Digest) -> Result<EngineInstall, PlatformError> {
-        let archive = self.engine_archive();
-        let mut f = fs::File::open(&archive)
-            .map_err(|e| PlatformError::Engine(format!("This copy of Sekka Installer has no engine ({e}). Download it again.")))?;
-        let mut hasher = Hasher::new();
-        let mut buf = vec![0u8; 1 << 20];
-        loop {
-            let n = f.read(&mut buf).map_err(|e| PlatformError::Engine(e.to_string()))?;
-            if n == 0 {
-                break;
-            }
-            hasher.update(&buf[..n]);
-        }
-        let digest = hasher.finish();
-        if digest != *expected {
-            return Err(PlatformError::Engine(
-                "This copy of Sekka Installer carries a different engine than the release needs. Download the latest Sekka Installer.".into(),
-            ));
-        }
-        let root = self.paths.engine(&digest);
-        if root.join(".complete").exists() {
-            return Ok(EngineInstall { root, digest });
-        }
-        let parent = root.parent().expect("engine directories have a parent");
-        fs::DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(parent)
-            .map_err(|e| PlatformError::Engine(e.to_string()))?;
-        let tmp = parent.join(format!(".unpack-{}", digest.hex()));
-        let _ = fs::remove_dir_all(&tmp);
-        fs::DirBuilder::new()
-            .mode(0o700)
-            .create(&tmp)
-            .map_err(|e| PlatformError::Engine(e.to_string()))?;
-        // The archive's digest is the catalog's (and the app bundle's
-        // signature covers it); bsdtar refuses absolute and parent paths.
-        let out = run(
-            "/usr/bin/tar",
-            &[
-                "-x",
-                "-z",
-                "--no-same-owner",
-                "-f",
-                archive.to_str().unwrap_or_default(),
-                "-C",
-                tmp.to_str().unwrap_or_default(),
-            ],
-        )
-        .map_err(|e| PlatformError::Engine(e.to_string()))?;
-        if !out.status.success() {
-            let _ = fs::remove_dir_all(&tmp);
-            return Err(PlatformError::Engine(format!(
-                "The installer's engine couldn't be unpacked: {}",
-                String::from_utf8_lossy(&out.stderr).trim()
-            )));
-        }
-        fs::write(tmp.join(".complete"), digest.to_string()).map_err(|e| PlatformError::Engine(e.to_string()))?;
-        let _ = fs::remove_dir_all(&root);
-        fs::rename(&tmp, &root).map_err(|e| PlatformError::Engine(e.to_string()))?;
-        Ok(EngineInstall { root, digest })
+        let cache = self.paths.root().join("engine");
+        sekka_mac_engine::unpack(&self.engine_archive(), &cache, Some(expected))
+            .map_err(|e| PlatformError::Engine(e.to_string()))
     }
 
     fn inspect(&self, engine: &EngineInstall) -> Result<Inspection, PlatformError> {
-        let child = engine_command(engine, &["inspect"])?
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| PlatformError::Engine(e.to_string()))?;
-        let mut process = ChildEngine::new(child).map_err(|e| PlatformError::Engine(e.to_string()))?;
-        let mut transcript = Transcript::inspect();
-        let mut inspection = None;
-        let mut failure = None;
-        while let Some(line) = process
-            .next_line()
-            .map_err(|e| PlatformError::Inspection(e.to_string()))?
-        {
-            let message = transcript.accept(&line).map_err(|e| {
-                PlatformError::Inspection(format!("The engine's inspection didn't make sense: {e}"))
-            })?;
-            match message.message {
-                EngineBody::Inspection(i) => inspection = Some(*i),
-                EngineBody::Failure { failure: f, .. } => failure = Some(f.message.to_string()),
-                _ => {}
-            }
-            if transcript.outcome().is_some() {
-                break;
-            }
-        }
-        let _ = process.wait();
-        if let Some(f) = failure {
-            return Err(PlatformError::Inspection(f));
-        }
-        match (transcript.outcome(), inspection) {
-            (Some(EngineOutcome::Inspected), Some(i)) => Ok(i),
-            _ => Err(PlatformError::Inspection("The engine couldn't inspect this Mac.".into())),
-        }
+        sekka_mac_engine::inspect(engine).map_err(|e| PlatformError::Inspection(e.to_string()))
     }
 
     fn authenticate_owner(&self, user: &str, password: &[u8]) -> Result<(), PlatformError> {
@@ -308,7 +182,7 @@ impl Platform for MacPlatform {
             }
         }
         drop(password);
-        let mut command = engine_command(
+        let mut command = sekka_mac_engine::command(
             engine,
             &[
                 "execute",
@@ -319,7 +193,8 @@ impl Platform for MacPlatform {
                 "--owner",
                 owner,
             ],
-        )?;
+        )
+        .map_err(|e| PlatformError::Engine(e.to_string()))?;
         command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
         // SAFETY: only async-signal-safe calls between fork and exec.
         unsafe {

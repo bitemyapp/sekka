@@ -8,28 +8,13 @@
 //! already says it was about to — the property the recovery table depends
 //! on. If the journal can't be written, no acknowledgement is sent and the
 //! engine stops before changing anything.
-use std::io::{self, BufRead, BufReader, Read, Write};
-use std::process::{Child, ChildStdin, ChildStdout};
-
 use sekka_mac_contract::{
-    Ack, DiskChanged, EngineBody, EngineOutcome, Event, Failure, LogLevel, Progress, Stage,
-    Timestamp, Transcript, canonical, limits,
+    DiskChanged, EngineBody, EngineOutcome, Event, Failure, LogLevel, Progress, Stage, Timestamp,
+    Transcript,
 };
 use sekka_mac_journal::{Journal, JournalError, Storage};
 
-/// A running engine, however it was started.
-pub trait EngineProcess: Send {
-    /// The next line of its transcript, without the newline; `None` once it
-    /// has closed its output.
-    fn next_line(&mut self) -> io::Result<Option<Vec<u8>>>;
-    fn ack(&mut self, seq: u64) -> io::Result<()>;
-    /// Something another thread can call to ask it to stop. Only used while
-    /// no stage that changes the disk is running: disk tools are never
-    /// killed mid-operation.
-    fn terminator(&self) -> Box<dyn FnMut() + Send>;
-    /// Wait for it to exit; whether it exited successfully.
-    fn wait(&mut self) -> io::Result<bool>;
-}
+pub use sekka_mac_engine::{ChildEngine, EngineProcess};
 
 /// What the person watching should see, as it happens.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -139,74 +124,5 @@ pub fn drive<S: Storage>(
             }
             EngineBody::Completion { outcome } => return Ok(outcome),
         }
-    }
-}
-
-/// An engine started as a child process: transcript on its stdout,
-/// acknowledgements on its stdin.
-pub struct ChildEngine {
-    child: Child,
-    stdin: Option<ChildStdin>,
-    stdout: BufReader<ChildStdout>,
-}
-
-impl ChildEngine {
-    pub fn new(mut child: Child) -> io::Result<Self> {
-        let stdin = child.stdin.take();
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| io::Error::other("the engine has no output"))?;
-        Ok(Self {
-            child,
-            stdin,
-            stdout: BufReader::new(stdout),
-        })
-    }
-}
-
-impl EngineProcess for ChildEngine {
-    fn next_line(&mut self) -> io::Result<Option<Vec<u8>>> {
-        let mut line = Vec::new();
-        let n = (&mut self.stdout)
-            .take(limits::ENGINE_LINE as u64 + 1)
-            .read_until(b'\n', &mut line)?;
-        if n == 0 {
-            return Ok(None);
-        }
-        if line.last() != Some(&b'\n') {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "a transcript line is too long or unterminated",
-            ));
-        }
-        line.pop();
-        Ok(Some(line))
-    }
-    fn ack(&mut self, seq: u64) -> io::Result<()> {
-        let stdin = self
-            .stdin
-            .as_mut()
-            .ok_or_else(|| io::Error::other("the engine's input is closed"))?;
-        let mut bytes = canonical::to_vec(&Ack { ack: seq }).map_err(io::Error::other)?;
-        bytes.push(b'\n');
-        stdin.write_all(&bytes)?;
-        stdin.flush()
-    }
-    fn terminator(&self) -> Box<dyn FnMut() + Send> {
-        let pid = self.child.id() as libc::pid_t;
-        Box::new(move || {
-            // SAFETY: signalling our own child by its pid. Only called
-            // outside a disk-changing stage, while the child is alive (the
-            // run thread clears this before it reaps the child).
-            #[allow(unsafe_code)]
-            unsafe {
-                libc::kill(pid, libc::SIGTERM);
-            }
-        })
-    }
-    fn wait(&mut self) -> io::Result<bool> {
-        self.stdin = None;
-        Ok(self.child.wait()?.success())
     }
 }

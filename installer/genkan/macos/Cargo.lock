@@ -390,11 +390,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "sekka-mac-engine"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "sekka-mac-contract",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "sekka-mac-helper"
 version = "0.1.0"
 dependencies = [
  "libc",
  "sekka-mac-contract",
+ "sekka-mac-engine",
  "sekka-mac-journal",
  "sekka-mac-stage",
  "sekka-mac-trust",

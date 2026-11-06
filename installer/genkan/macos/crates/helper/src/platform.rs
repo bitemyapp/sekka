@@ -4,6 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use sekka_mac_contract::{Digest, Fact, Failure, Inspection, Timestamp};
+
 use zeroize::Zeroizing;
 
 use crate::engine::EngineProcess;
@@ -11,13 +12,7 @@ use crate::engine::EngineProcess;
 /// A password, wiped when dropped.
 pub type Secret = Zeroizing<Vec<u8>>;
 
-/// The engine unpacked in the helper's own directory, from the archive
-/// bundled with the helper, checked against the release's digest.
-#[derive(Clone, Debug)]
-pub struct EngineInstall {
-    pub root: PathBuf,
-    pub digest: Digest,
-}
+pub use sekka_mac_engine::EngineInstall;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum PlatformError {
