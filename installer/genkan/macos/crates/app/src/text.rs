@@ -2,8 +2,8 @@
 //! Every sentence the app shows, in one place, in Sekka's voice: plain,
 //! sentence case, candid about what doesn't work yet, no exclamation marks.
 use sekka_mac_contract::{
-    Acknowledgement, DiskChanged, FileVault, HumanStep, InstallState, Issue, IssueCode, PlanError,
-    Refusal, Stage,
+    Acknowledgement, Action, DiskChanged, FileVault, HumanStep, InstallState, Issue, IssueCode,
+    PlanError, Refusal, Stage,
 };
 
 use crate::model::CheckState;
@@ -243,6 +243,29 @@ pub const REMOVED: &str = "Nothing of the earlier installation was found on your
 /// step is done. Whether Sekka has started since isn't known here.
 pub const INSTALLED: &str = "Recovery's step is done. Start your Mac in Sekka; the first time it starts, Sekka asks you to create your account.";
 
+/// What the review says one of the plan's actions changes. A failed resize
+/// is inspected again, and what it found is said then: it isn't promised
+/// here.
+pub fn change(action: &Action) -> String {
+    match action {
+        Action::ShrinkContainer { from, to, .. } => format!(
+            "macOS shrinks from {} to {}. Apple's own tool does this; if it fails, Sekka Installer looks at the disk again and tells you what it finds.",
+            bytes(*from),
+            bytes(*to)
+        ),
+        Action::CreateStub { size } => format!("A {} startup volume for Sekka is created.", bytes(*size)),
+        Action::CreateEsp { size } => format!("A {} boot partition is created.", bytes(*size)),
+        Action::CreateRoot { size } => format!("Sekka gets {} for itself and your files.", bytes(*size)),
+    }
+}
+
+/// The review's last change, which every installation makes.
+pub fn startup_disk_change(macos: &str) -> String {
+    format!(
+        "Your Mac's startup disk becomes Sekka's startup volume, which opens Recovery to finish the installation. Until you finish, start macOS by holding the power button and choosing {macos}."
+    )
+}
+
 /// Said on the review, before anything is installed
 /// (docs/apple-silicon/encryption.md).
 pub const NOT_ENCRYPTED: &str = "Sekka's partition isn't encrypted. macOS stays protected by FileVault; it doesn't protect Sekka. Encryption will come in a later version.";
@@ -262,11 +285,16 @@ pub fn human_step(step: HumanStep, volume: &str, owner: Option<&str>) -> String 
     }
 }
 
-pub fn disk_changed(changed: DiskChanged) -> &'static str {
-    match changed {
-        DiskChanged::No => "Nothing on your Mac's disk changed.",
-        DiskChanged::Yes => "Your Mac's disk has changed: some of Sekka's partitions are there, but the installation isn't complete.",
-        DiskChanged::Unknown => "It isn't known whether your Mac's disk changed. Sekka Installer won't try again on its own.",
+/// What a failed stage left on the disk, as far as the stage it failed in
+/// allows saying.
+pub fn disk_changed(stage: Stage, changed: DiskChanged) -> &'static str {
+    match (changed, stage) {
+        (DiskChanged::No, _) => "Nothing on your Mac's disk changed.",
+        (DiskChanged::Yes, Stage::Shrink) => "Your Mac's disk changed while macOS was being resized: macOS's container may be smaller than it was. None of Sekka's partitions were created.",
+        (DiskChanged::Yes, Stage::StubPartition | Stage::StubSystem | Stage::Partitions) => "Your Mac's disk has changed: macOS may have been made smaller, and some of Sekka's partitions may be there, but the installation isn't complete.",
+        (DiskChanged::Yes, _) => "Your Mac's disk has changed: Sekka's partitions are there, but the installation isn't complete.",
+        (DiskChanged::Unknown, Stage::Shrink) => "It isn't known whether macOS's container was resized. Sekka Installer won't try again on its own.",
+        (DiskChanged::Unknown, _) => "It isn't known whether your Mac's disk changed. Sekka Installer won't try again on its own.",
     }
 }
 
@@ -275,12 +303,12 @@ pub fn stopped(state: &InstallState) -> (String, String) {
     match state {
         InstallState::Failed { stage, disk_changed: changed } => (
             format!("“{}” didn't finish", stage.title()),
-            disk_changed(*changed).into(),
+            disk_changed(*stage, *changed).into(),
         ),
         InstallState::MutationStarted { stage } => (
             "The installation stopped part way".into(),
             format!(
-                "It stopped during or after “{}”. Your Mac's disk has changed. Copy the diagnostics and ask for help; don't start another installation until this one is looked at.",
+                "It stopped during or after “{}”, so your Mac's disk may have changed. Copy the diagnostics and ask for help; don't start another installation until this one is looked at.",
                 stage.title()
             ),
         ),

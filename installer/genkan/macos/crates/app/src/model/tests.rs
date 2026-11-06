@@ -170,6 +170,25 @@ fn offline_and_low_space_stop_early() {
 }
 
 #[test]
+fn the_review_names_the_startup_disk_and_promises_nothing_it_cant_keep() {
+    let mut j = Journey::start(Scenario::Normal);
+    j.reach_review();
+    let changes = j.model.changes();
+    assert!(changes[0].starts_with("macOS shrinks"));
+    assert!(!changes[0].contains("nothing is changed"), "{}", changes[0]);
+    let last = changes.last().unwrap();
+    assert!(last.contains("startup disk") && last.contains("Macintosh HD"), "{last}");
+    // What a failure left is said for the stage it failed in.
+    let (_, resized) = crate::text::stopped(&InstallState::Failed {
+        stage: Stage::Shrink,
+        disk_changed: DiskChanged::Yes,
+    });
+    assert!(resized.contains("None of Sekka's partitions were created"), "{resized}");
+    let (_, started) = crate::text::stopped(&InstallState::MutationStarted { stage: Stage::Shrink });
+    assert!(started.contains("may have changed"), "{started}");
+}
+
+#[test]
 fn a_wrong_password_is_asked_for_again_in_place() {
     let mut j = Journey::start(Scenario::WrongPassword);
     j.reach_review().confirm().send(Msg::Install).password("wrong");

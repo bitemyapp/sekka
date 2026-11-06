@@ -32,7 +32,8 @@ be a Mac app, **Sekka Installer**, that installs Sekka beside macOS:
   choose Sekka, and enter your Mac password in **Finish Installing Sekka**.
   Sekka then starts and asks you to create your account.
 - **Back up your Mac first.** Apple's own tool shrinks macOS. If it fails,
-  nothing is installed and macOS is left as it was.
+  nothing is installed, and Sekka Installer looks at the disk again and
+  tells you what it finds.
 - Sekka's partition **isn't encrypted** on Macs yet. FileVault keeps
   protecting macOS; it doesn't protect Sekka.
 - Only this one Mac, with the system firmware it was tested on. Any other

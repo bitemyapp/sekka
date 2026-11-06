@@ -1263,23 +1263,24 @@ impl Model {
         self.staged.iter().find(|s| s.role == role)
     }
 
-    /// What the review says will change, in order.
+    /// What the review says will change, in order: the plan's actions, then
+    /// the startup disk, which every installation sets.
     pub fn changes(&self) -> Vec<String> {
         let Some(plan) = &self.plan else { return Vec::new() };
-        let mut out = Vec::new();
-        for action in &plan.actions {
-            out.push(match action {
-                sekka_mac_contract::Action::ShrinkContainer { from, to, .. } => format!(
-                    "macOS shrinks from {} to {}. Apple's own tool does this; if it fails, nothing is changed.",
-                    text::bytes(*from),
-                    text::bytes(*to)
-                ),
-                sekka_mac_contract::Action::CreateStub { size } => format!("A {} startup volume for Sekka is created.", text::bytes(*size)),
-                sekka_mac_contract::Action::CreateEsp { size } => format!("A {} boot partition is created.", text::bytes(*size)),
-                sekka_mac_contract::Action::CreateRoot { size } => format!("Sekka gets {} for itself and your files.", text::bytes(*size)),
-            });
-        }
+        let mut out: Vec<String> = plan.actions.iter().map(text::change).collect();
+        out.push(text::startup_disk_change(&self.macos_volume()));
         out
+    }
+
+    /// macOS's volume as the startup options list it.
+    fn macos_volume(&self) -> String {
+        self.inspection()
+            .into_iter()
+            .flat_map(|i| &i.disk.containers)
+            .flat_map(|c| &c.volume_groups)
+            .find(|g| matches!(g.os, sekka_mac_contract::GroupOs::Macos { .. }))
+            .map(|g| g.name.to_string())
+            .unwrap_or_else(|| "Macintosh HD".into())
     }
 
     /// What a stopped installation lets the person do.
