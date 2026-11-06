@@ -1,0 +1,72 @@
+name: Build and check Sekka's ISO
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sekka-iso
+  cancel-in-progress: false
+
+jobs:
+  iso:
+    # Started by hand only, from main, on the sandboxed builder (nix/runner.nix
+    # and DEVELOPERS.md). It builds the installer image and runs the ISO's own
+    # checks (legacyPackages.x86_64-linux.iso-checks), which pull requests,
+    # main and the nightly leave out. It publishes nothing: an ISO is
+    # published only from a workstation, after testing that exact image. The
+    # image stays rooted on the builder with the main generations
+    # (scripts/ci-retain.py).
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    runs-on: [self-hosted, linux, x64, sekka-builder]
+    timeout-minutes: 720
+    env:
+      # Avoid repeated full-heap GC in the large NixOS evaluations. The job
+      # container has 64 GiB; start Nix's heap at 32 GiB (DEVELOPERS.md).
+      GC_INITIAL_HEAP_SIZE: "34359738368"
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Check the builder
+        shell: bash
+        run: |
+          set -euo pipefail
+          nix --version
+          # As in the nightly: the ISO's checks include NixOS tests in VMs.
+          # The ${...} in single quotes are Nix's own.
+          # shellcheck disable=SC2016
+          nix build --no-link --impure --print-build-logs --expr '
+            let pkgs = (builtins.getFlake (toString ./.)).inputs.nixpkgs.legacyPackages.x86_64-linux;
+            in pkgs.runCommand "kvm-${toString builtins.currentTime}" { requiredSystemFeatures = [ "kvm" ]; } "exec 3<>/dev/kvm && touch $out"
+          ' || {
+            echo "::error::The builder's Nix daemon cannot give builds KVM, which the NixOS tests need (see DEVELOPERS.md)."
+            exit 1
+          }
+      - name: Build the ISO and run its checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          checks=$(nix eval --raw --no-update-lock-file .#legacyPackages.x86_64-linux.iso-checks \
+            --apply 'cs: builtins.concatStringsSep " " (builtins.attrNames cs)')
+          installables=(.#iso)
+          for check in $checks; do
+            installables+=(".#iso-checks.$check")
+          done
+          python3 scripts/ci-retain.py main iso build --keep-going --no-update-lock-file \
+            --print-build-logs --print-out-paths "${installables[@]}" | tee "$RUNNER_TEMP/outputs"
+          git diff --exit-code
+      - name: Report the image
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t outputs < "$RUNNER_TEMP/outputs"
+          {
+            echo "## Sekka ISO for $(git rev-parse HEAD)"
+            echo
+            echo '```'
+            find "${outputs[@]}" -maxdepth 2 -name '*.iso' -exec sha256sum {} + -exec du -h {} +
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"

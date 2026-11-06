@@ -95,8 +95,11 @@ pkgs.testers.runNixOSTest {
         "-device nvme,serial=sekka,drive=nvme"
       ];
     };
-  testScript = ''
+  globalTimeout = 1200;
+  testScript = builtins.readFile ../tests/vm_start.py + ''
     import shlex
+
+    start_vm(machine)
 
     # How long a rule, scheduler or process may take to show. These check
     # that tuning applies, not how fast: on a loaded CI host the VM can be
