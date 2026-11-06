@@ -344,17 +344,26 @@ impl crate::state::State {
     /// one on that was off sets it up afresh on udev.
     pub fn configure_output(&mut self, change: &OutputChange) -> Result<(), String> {
         let off = self.az.disabled_outputs.iter().any(|o| o.name() == change.name);
-        if off && change.enabled == Some(true) && matches!(self.backend, crate::backend::Backend::Udev(_)) {
+        let enabling_udev =
+            off && change.enabled == Some(true) && matches!(self.backend, crate::backend::Backend::Udev(_));
+        let result = if enabling_udev {
             crate::backend::udev::enable_output(self, &change.name, change.position)?;
             let rest = OutputChange { enabled: None, position: None, ..change.clone() };
-            return self.backend.configure_output(&mut self.az, &rest);
+            self.backend.configure_output(&mut self.az, &rest)
+        } else {
+            self.backend.configure_output(&mut self.az, change)
+        };
+        if change.enabled.is_some() || change.mode.is_some() {
+            // Enabling may succeed even if a subsequent mode change fails.
+            // Reconcile against the resulting surfaces in either case.
+            crate::backend::udev::refresh_tiles(self, &change.name);
         }
-        self.backend.configure_output(&mut self.az, change)?;
+        result?;
         if change.enabled == Some(false) {
             // An explicit disable while docked stays disabled on lid-open.
             self.az.power.lid_disabled.retain(|saved| saved.name != change.name);
         }
-        if change.enabled == Some(true) {
+        if change.enabled == Some(true) && !enabling_udev {
             self.update_night_light(true);
         }
         Ok(())

@@ -293,6 +293,19 @@ Notes for client authors:
   scaled to fit with black bars, pointer included; the mirror has no place
   in the layout and no wl_output. It costs a second render of the source
   and a read-back per frame, and redraws when the source does.
+- **Tiled monitors**: a 5K panel such as Apple's Studio Display has two
+  connectors, one for each half (the kernel's `TILE`). Only after the left
+  half successfully initializes the whole-panel mode (5120×2880, with DSC)
+  does Aizome hide the right half: no Desk or room for the pointer or
+  windows. Advertising that mode is not enough. A disabled first connector,
+  a tile-sized mode or failed initialization leaves the sibling available;
+  if no CRTC is free, an existing tile stays active instead of being evicted
+  to attempt the whole-panel mode. Disconnect cleanup finishes before a
+  CRTC is reused. Mode and enable changes reevaluate coverage after the
+  complete configuration batch; explicitly disabled siblings stay disabled.
+  Without an active whole-panel mode each half is a display of its own.
+  Aizome doesn't drive both halves as one display. Metadata-only topology
+  checks do not validate physical TILE/DSC scanout.
 - **Main display**: `primary = true` (or `set-primary-output`); else the
   first output. The pointer starts in its middle, it shows the first Desk
   at login, and the current Desk comes there when its own display goes;
