@@ -3,8 +3,10 @@
 //! standard output, read as it runs.
 //!
 //! The engine is Asahi's installer with Sekka's adapter, run with a fixed
-//! command line in one of two modes: `inspect` reports an [`Inspection`]
-//! and changes nothing; `execute` carries out one plan. In `execute` mode,
+//! command line in one of three modes: `inspect` reports an [`Inspection`]
+//! and changes nothing; `execute` carries out one plan; `startup-disk` runs
+//! only that plan's startup-disk stage again, for the helper's bounded
+//! retry. In `execute` and `startup-disk` modes,
 //! before each stage it writes an [`EngineBody::Intent`] and waits for the
 //! helper to answer `{"ack":SEQ}` on its standard input: the helper
 //! answers only after the intent is durable in its journal, so no change
@@ -76,6 +78,9 @@ pub enum EngineBody {
 pub enum EngineMode {
     Inspect,
     Execute,
+    /// Only the startup-disk stage again, for an installation whose
+    /// payload is in place and verified (the helper's bounded retry).
+    StartupDisk,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -138,6 +143,11 @@ impl Transcript {
     /// Expect an `execute` run of the plan with this digest.
     pub fn execute(plan: Digest, shrinks: bool) -> Self {
         Self::new(EngineMode::Execute, Some(plan), macos_stages(shrinks))
+    }
+
+    /// Expect a `startup-disk` run: that one stage, for this plan.
+    pub fn startup_disk(plan: Digest) -> Self {
+        Self::new(EngineMode::StartupDisk, Some(plan), vec![Stage::StartupDisk])
     }
 
     fn new(mode: EngineMode, plan: Option<Digest>, stages: Vec<Stage>) -> Self {
@@ -228,7 +238,7 @@ impl Transcript {
                 self.done += 1;
             }
             EngineBody::Failure { stage, .. } => {
-                if self.failed || *stage != self.open && self.mode == EngineMode::Execute {
+                if self.failed || *stage != self.open && self.mode != EngineMode::Inspect {
                     return Err(invalid("a failure arrived for a stage that isn't running"));
                 }
                 self.open = None;
@@ -238,7 +248,7 @@ impl Transcript {
                 let ok = match (self.mode, outcome) {
                     (_, EngineOutcome::Failed) => self.failed,
                     (EngineMode::Inspect, EngineOutcome::Inspected) => self.inspection && !self.failed,
-                    (EngineMode::Execute, EngineOutcome::WaitingForRecovery) => {
+                    (EngineMode::Execute | EngineMode::StartupDisk, EngineOutcome::WaitingForRecovery) => {
                         !self.failed && self.open.is_none() && self.done == self.stages.len()
                     }
                     _ => false,
@@ -399,6 +409,22 @@ mod tests {
         more.seq = 6;
         more.push(EngineBody::Intent { stage: Stage::StubPartition, plan: plan() });
         assert!(more.run(Transcript::execute(plan(), true)).is_err());
+    }
+
+    #[test]
+    fn a_startup_disk_run_has_that_one_stage() {
+        let mut w = W::new();
+        w.hello(EngineMode::StartupDisk);
+        stage(&mut w, Stage::StartupDisk);
+        w.push(EngineBody::Completion { outcome: EngineOutcome::WaitingForRecovery });
+        assert!(w.run(Transcript::startup_disk(plan())).is_ok());
+        let mut w = W::new();
+        w.hello(EngineMode::StartupDisk);
+        stage(&mut w, Stage::Root);
+        assert!(w.run(Transcript::startup_disk(plan())).is_err(), "nothing else may run");
+        let mut w = W::new();
+        w.hello(EngineMode::Execute);
+        assert!(w.run(Transcript::startup_disk(plan())).is_err());
     }
 
     #[test]
