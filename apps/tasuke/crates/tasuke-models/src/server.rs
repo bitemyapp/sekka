@@ -157,6 +157,15 @@ pub fn preset_args(entry: &Entry, installed: &Installed, fit: &Fit, hw: &Hardwar
             set(&k, v);
         }
     }
+    // The fit planned room for the draft; a model downloaded before its draft
+    // was catalogued runs without one.
+    if let (Fit::Gpu { draft: true, .. }, Some(draft), Some(path)) = (fit, &entry.draft, installed.draft()) {
+        set("spec-draft-model", path.display().to_string());
+        set("spec-draft-ngl", "999".into());
+        for (k, v) in cli_args_to_ini(&draft.args) {
+            set(&k, v);
+        }
+    }
     for (field, value) in &entry.sampling {
         if let Some(key) = sampling_key(field) {
             set(key, toml_scalar(value));
@@ -594,6 +603,55 @@ mod tests {
             [("spec-type", "draft-mtp"), ("spec-draft-n-max", "2"), ("ctk", "q8_0"), ("no-mmap", "true"), ("temp", "-0.5"), ("x", "y")]
                 .map(|(k, v)| (k.to_owned(), v.to_owned()))
         );
+    }
+
+    #[test]
+    fn the_draft_runs_when_planned_and_downloaded() {
+        use crate::hardware::{Cpu, Gpu, GpuMemory, GpuVendor, Ram};
+        use crate::units::{Bytes, BytesPerSecond};
+        let catalog = Catalog::load_default();
+        let entry = catalog.get(&ModelId::new("gemma-4-26b-a4b")).unwrap();
+        let hw = Hardware {
+            gpus: vec![Gpu {
+                vendor: GpuVendor::Nvidia,
+                name: "NVIDIA GeForce RTX 5090".into(),
+                memory: GpuMemory::Dedicated { total: Bytes::gib(32), free: Bytes::gib(32) },
+                drives_display: true,
+                integrated: false,
+                bandwidth: Some(BytesPerSecond::gb_per_s(1792.0)),
+                pci: None,
+                device_index: Some(0),
+                compute_capability: None,
+            }],
+            ram: Ram { total: Bytes::gib(64), available: Bytes::gib(32) },
+            cpu: Cpu { model: "AMD Ryzen".into(), physical_cores: 8, logical_cores: 16, ..Cpu::default() },
+            notes: Vec::new(),
+        };
+        let root = std::env::temp_dir().join(format!("tasuke-draft-{}", std::process::id()));
+        let store = Store::new(&root);
+        fs::create_dir_all(store.model_dir(&entry.id)).unwrap();
+        // Sparse stand-ins at the catalog's sizes, all but the draft.
+        for f in entry.files.iter().filter(|f| f.kind != crate::FileKind::Draft) {
+            fs::File::create(store.file_path(&entry.id, f)).unwrap().set_len(f.size.0).unwrap();
+        }
+        let fit = fit::fit(entry, &hw, FitOptions::default());
+        assert!(matches!(fit, Fit::Gpu { draft: true, .. }), "{fit:?}");
+        // Downloaded before its draft was catalogued: it runs without one.
+        let installed = store.installed(entry).expect("installed without its draft");
+        assert!(installed.draft().is_none());
+        assert!(matches!(store.state(entry), crate::store::InstallState::Installed { .. }));
+        let args = preset_args(entry, &installed, &fit, &hw);
+        assert!(!args.iter().any(|(k, _)| k.starts_with("spec-")), "{args:?}");
+        // With the draft downloaded too, it drafts.
+        let draft = entry.draft_file().unwrap();
+        fs::File::create(store.file_path(&entry.id, draft)).unwrap().set_len(draft.size.0).unwrap();
+        let installed = store.installed(entry).unwrap();
+        let args = preset_args(entry, &installed, &fit, &hw);
+        let get = |k: &str| args.iter().find(|(key, _)| key == k).map(|(_, v)| v.as_str());
+        assert_eq!(get("spec-draft-model"), installed.draft().and_then(|p| p.to_str()));
+        assert_eq!(get("spec-type"), Some("draft-mtp"));
+        assert_eq!(get("spec-draft-n-max"), Some("2"));
+        fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

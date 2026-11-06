@@ -22,6 +22,7 @@ pinned to the same files, so what a person downloads is what was measured.
 | `args`, `offload_args` | Extra llama-server arguments, and those used when experts are moved to system RAM |
 | `keep_reasoning`, `sampling`, `template_kwargs` | Request settings the evaluations used for the model |
 | `files` | Hugging Face repository, revision, path, size and sha256 of each file; downloads are checked against the sha256 before they are used |
+| `draft` | A draft head for speculative decoding (a file of kind `draft`): its llama-server arguments, the GPU memory it adds at the default context (`mib`) and its measured `speedup` on the reference GPU. It drafts only where the model fits whole on a dedicated GPU beside it; a model without its draft on disk runs without one |
 | `scores` | Measured results with their date: `diagnostics` (the bare loop), `diagnostics_omp`, `computer_use` (screenshots) or `computer_use_text` (element lists), and `tasuke`/`computer_use_tasuke` when Tasuke itself was evaluated; a ranking uses Tasuke's own results only when every evaluated model it ranks has one, and the harnesses' for all of them otherwise, since Tasuke lifts every model it runs |
 | `speed` | Single-stream decode and prefill on the reference GPU (`[reference]`), measured; other GPUs are estimated from memory bandwidth |
 | `incidents` | Anything an evaluation saw the model do to the machine, in plain words; a model with incidents loses ties |
@@ -37,6 +38,21 @@ experts in system RAM (measured by `tests/agent-evals/fit8gib.py`: 7.7 GiB
 at 32K). gpt-oss 20B is the fast choice at every size. Where a choice
 passes over a model that scored better somewhere, its reason names that
 model and says why.
+
+## Draft heads
+
+Gemma 4's multi-token-prediction heads, from bartowski's GGUFs of Google's
+release, draft tokens that the model itself checks, so its answers don't
+change. Measured on the RTX 5090 with one slot and the model's own
+sampling (three prompts twice, 256 tokens each): Gemma 4 31B 72 → 119
+tokens/s drafting 3 (114 drafting 2), 26B-A4B 250 → 343 drafting 2 (299
+drafting 3); the extra GPU memory is llama-server's at 64K with and
+without the draft. With 24 layers' experts on the processor (the 8 GB
+configuration) 26B-A4B went from 60 to 62 tokens/s drafting 2 and 55
+drafting 3, within noise or worse, and the draft took GPU memory the
+experts would use, so fit doesn't draft there. Inside Tasuke, Gemma 4 31B
+with its draft was run on the held-out scenarios like every model
+(`docs/agent-evals/tasuke.md`).
 
 ## Adding a model
 

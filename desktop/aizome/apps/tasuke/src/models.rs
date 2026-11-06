@@ -169,7 +169,7 @@ pub enum Part {
     Weights,
     /// The KV cache for its context.
     Context,
-    /// llama.cpp's compute buffer and a vision model's projector.
+    /// llama.cpp's compute buffer, a vision model's projector and a draft head.
     Working,
     /// What's left of the budget.
     Spare,
@@ -245,11 +245,18 @@ impl FitBar {
             spare < TIGHT_BYTES || (spare.0 as f64) < budget.0 as f64 * TIGHT_SHARE
         };
         match *f {
-            Fit::Gpu { gpu, ctx, need, budget } | Fit::Unified { gpu, ctx, need, budget } => {
+            Fit::Gpu { gpu, ctx, need, budget, .. } | Fit::Unified { gpu, ctx, need, budget } => {
                 let n = fit::need(entry, ctx, KvCacheType::Q8_0);
                 let unified = matches!(f, Fit::Unified { .. });
+                let mut p = parts(n, n.weights);
+                // A draft head, when it drafts here, works beside the compute buffer.
+                if let (Fit::Gpu { draft: true, .. }, Some(d)) = (f, &entry.draft)
+                    && let Some((_, working)) = p.iter_mut().find(|(part, _)| *part == Part::Working)
+                {
+                    *working += d.memory;
+                }
                 FitBar {
-                    parts: with_spare(parts(n, n.weights), need, budget),
+                    parts: with_spare(p, need, budget),
                     budget,
                     verdict: if tight(need, budget) { Verdict::Tight } else { Verdict::Fits },
                     place: if unified {
@@ -520,7 +527,10 @@ fn card(
     if entry.lineage.len() > 1 {
         lineage.push_str(&format!(" · from {}", entry.lineage[1..].join(", ")));
     }
-    let measured = entry.speed.as_ref().map(|s| format!("{:.0} tokens/s on an {}", s.decode.0, catalog.reference.gpu));
+    let measured = entry.speed.as_ref().map(|s| {
+        let drafting = entry.draft.as_ref().map(|d| format!(", {:.0} with its draft head", s.decode.0 as f64 * d.speedup));
+        format!("{:.0} tokens/s on an {}{}", s.decode.0, catalog.reference.gpu, drafting.unwrap_or_default())
+    });
     Card {
         id: entry.id.clone(),
         name: entry.name.clone(),

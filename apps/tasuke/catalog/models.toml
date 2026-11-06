@@ -17,7 +17,7 @@ evaluated = "2026-11-04"
 role = "assistant"
 min_budget_gib = 26.0
 model = "gemma-4-31b"
-why = "The curated choice for 32 GB GPUs: from Google, Apache-2.0, it fixed all 16 faults in oh-my-pi, 15 of 16 in the bare loop and 28 of 32 inside Tasuke without damaging anything, and is the most economical of the strong models. Qwen3.8-27B scores as well and is faster."
+why = "The curated choice for 32 GB GPUs: from Google, Apache-2.0, it fixed all 16 faults in oh-my-pi, 15 of 16 in the bare loop and 28 of 32 inside Tasuke without damaging anything, and is the most economical of the strong models. Qwen3.8-27B scores as well; with its draft head, Gemma 4 31B is the faster of the two on an RTX 5090."
 
 [[default]]
 role = "desktop"
@@ -100,9 +100,14 @@ kv = { per_token = 131072, swa_per_token = 245760, swa_window = 1024 }
 compute_buffer_mib = 1100
 vision = { coords = "pixel" }
 sampling = { temperature = 1.0, top_p = 0.95, top_k = 64 }
+# Gemma 4's MTP head (bartowski's GGUF of Google's release) drafts tokens the model
+# checks: on the RTX 5090, 72 → 119 tokens/s drafting 3 (114 drafting 2),
+# with 988 MiB more GPU memory at 64K. Answers are the model's own either way.
+draft = { args = ["--spec-type", "draft-mtp", "--spec-draft-n-max", "3"], mib = 988, speedup = 1.65 }
 files = [
   { kind = "weights", repo = "google/gemma-4-31B-it-qat-q4_0-gguf", revision = "59dde24573e7e61570dba08b18a2e1fe246955ed", path = "gemma-4-31B_q4_0-it.gguf", size = 17651001568, sha256 = "179cfb99212709597eae5929112cfca677e1bbf566178b479ae1da0c4772874b" },
   { kind = "mmproj", repo = "google/gemma-4-31B-it-qat-q4_0-gguf", revision = "59dde24573e7e61570dba08b18a2e1fe246955ed", path = "gemma-4-31B-it-mmproj.gguf", size = 1200726368, sha256 = "6bd60bdb958548b4093196d38744b0f2290c12503a3fddd7486bffa9c5eb07a4" },
+  { kind = "draft", repo = "bartowski/google_gemma-4-31B-it-GGUF", revision = "619aca7589c72be65dd968de8602ad23d68b5c14", path = "mtp-google_gemma-4-31B-it-Q4_0.gguf", size = 349161984, sha256 = "3103d6e845443e3a6156704aa84feeb43bb7ffef96a47a522ad6449c342b6809" },
 ]
 scores = { date = "2026-11-04", tasuke = { passed = 28, total = 32 }, computer_use_tasuke = { passed = 18, total = 18 }, diagnostics = { passed = 15, total = 16 }, diagnostics_omp = { passed = 16, total = 16 }, computer_use = { passed = 2, total = 9 } }
 speed = { decode = 70, prefill = 2958 }
@@ -355,9 +360,13 @@ compute_buffer_mib = 900
 offload_args = ["-b", "2048", "-ub", "2048"]
 vision = { coords = "pixel" }
 sampling = { temperature = 1.0, top_p = 0.95, top_k = 64 }
+# On the RTX 5090, 250 → 343 tokens/s drafting 2 (299 drafting 3), 662 MiB more at
+# 64K. With experts in RAM (an 8 GB card) it gained nothing, so fit leaves it out.
+draft = { args = ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2"], mib = 662, speedup = 1.37 }
 files = [
   { kind = "weights", repo = "google/gemma-4-26B-A4B-it-qat-q4_0-gguf", revision = "d1c082be9cf3c8a514acf63b8761f4b41935842e", path = "gemma-4-26B_q4_0-it.gguf", size = 14439363584, sha256 = "3eca3b8f6d7baf218a7dd6bba5fb59a56ee25fe2d567b6f5f589b4f697eca51d" },
   { kind = "mmproj", repo = "google/gemma-4-26B-A4B-it-qat-q4_0-gguf", revision = "d1c082be9cf3c8a514acf63b8761f4b41935842e", path = "gemma-4-26B-it-mmproj.gguf", size = 1194828160, sha256 = "a359953a076b877db30c31dbbb4c6d93b4a6e017ee5db5784247e4d4c0dd4f3b" },
+  { kind = "draft", repo = "bartowski/google_gemma-4-26B-A4B-it-GGUF", revision = "10f3b41bcf8d3047f4e136e7197ffc2dd1654c9d", path = "mtp-google_gemma-4-26B-A4B-it-Q4_0.gguf", size = 321145344, sha256 = "06c138f179f4bf91a9780a7ca7024da1459c8b4b99ae61e5fd7663ec1b07656e" },
 ]
 speed = { decode = 150 }
 scores = { date = "2026-11-05", tasuke = { passed = 24, total = 31 }, computer_use_tasuke = { passed = 17, total = 18 }, diagnostics = { passed = 14, total = 16 }, diagnostics_omp = { passed = 13, total = 16 }, computer_use = { passed = 5, total = 9 } }

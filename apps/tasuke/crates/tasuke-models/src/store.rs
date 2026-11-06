@@ -40,6 +40,7 @@ pub struct Installed {
     id: ModelId,
     weights: Vec<PathBuf>,
     mmproj: Option<PathBuf>,
+    draft: Option<PathBuf>,
 }
 
 impl Installed {
@@ -55,6 +56,18 @@ impl Installed {
     pub fn mmproj(&self) -> Option<&Path> {
         self.mmproj.as_deref()
     }
+
+    /// The draft head, when it is here too.
+    pub fn draft(&self) -> Option<&Path> {
+        self.draft.as_deref()
+    }
+}
+
+/// The files a model can't run without: all but its draft head, which only
+/// makes it faster. A model downloaded before its draft was catalogued runs
+/// as it did; downloading it again fetches the draft.
+fn required(entry: &Entry) -> impl Iterator<Item = &ModelFile> {
+    entry.files.iter().filter(|f| f.kind != FileKind::Draft)
 }
 
 impl Store {
@@ -93,19 +106,17 @@ impl Store {
     pub fn state(&self, entry: &Entry) -> InstallState {
         let total = entry.download_size();
         let mut have = Bytes::ZERO;
-        let mut complete = true;
         for f in &entry.files {
             if self.has_file(&entry.id, f) {
                 have += f.size;
-            } else {
-                complete = false;
-                if let Ok(m) = fs::metadata(self.partial_path(&entry.id, f)) {
-                    have += Bytes(m.len().min(f.size.0));
-                }
+            } else if let Ok(m) = fs::metadata(self.partial_path(&entry.id, f)) {
+                have += Bytes(m.len().min(f.size.0));
             }
         }
+        let complete = required(entry).all(|f| self.has_file(&entry.id, f));
+        let on_disk = || entry.files.iter().filter(|f| self.has_file(&entry.id, f)).map(|f| f.size).sum();
         match (complete, have) {
-            (true, _) => InstallState::Installed { size: total },
+            (true, _) => InstallState::Installed { size: on_disk() },
             (false, Bytes::ZERO) => InstallState::Absent,
             (false, have) => InstallState::Partial { have, total },
         }
@@ -113,7 +124,7 @@ impl Store {
 
     /// The proof that `entry` is installed, or `None`.
     pub fn installed(&self, entry: &Entry) -> Option<Installed> {
-        if !entry.files.iter().all(|f| self.has_file(&entry.id, f)) {
+        if !required(entry).all(|f| self.has_file(&entry.id, f)) {
             return None;
         }
         let paths = |kind| entry.files.iter().filter(move |f| f.kind == kind).map(|f| self.file_path(&entry.id, f));
@@ -121,6 +132,7 @@ impl Store {
             id: entry.id.clone(),
             weights: paths(FileKind::Weights).collect(),
             mmproj: paths(FileKind::Mmproj).next(),
+            draft: entry.draft_file().filter(|f| self.has_file(&entry.id, f)).map(|f| self.file_path(&entry.id, f)),
         })
     }
 

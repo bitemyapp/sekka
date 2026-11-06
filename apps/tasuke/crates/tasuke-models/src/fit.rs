@@ -18,6 +18,16 @@
 //! Each placement first tries the requested context, then shrinks it (to a
 //! multiple of 4K) down to the entry's minimum.
 //!
+//! # Draft heads
+//!
+//! A model with a draft head (Gemma 4's MTP heads) drafts tokens for
+//! speculative decoding only when it fits whole on a dedicated GPU with the
+//! draft beside it, at each context before it goes without: there it was
+//! measured faster (1.4–1.7× on the RTX 5090). With experts in RAM it gained
+//! nothing (each check of drafted tokens reads more experts from RAM) and
+//! the draft takes GPU memory the experts would use; on unified memory it
+//! hasn't been measured.
+//!
 //! # Free memory or total memory
 //!
 //! Recommendations plan against a GPU's *total* memory ([`MemoryBasis::Total`]),
@@ -116,8 +126,12 @@ pub enum Fit {
     Gpu {
         gpu: GpuIndex,
         ctx: ContextTokens,
+        /// Everything on the GPU, the draft included when it's used.
         need: Bytes,
         budget: Bytes,
+        /// Whether the entry's draft head drafts tokens here.
+        #[serde(default)]
+        draft: bool,
     },
     GpuWithExpertOffload {
         gpu: GpuIndex,
@@ -183,7 +197,11 @@ impl Fit {
     pub fn describe(&self, hw: &Hardware) -> String {
         let gpu_name = |g: GpuIndex| hw.gpu(g).map(|g| g.name.clone()).unwrap_or_else(|| "the GPU".to_owned());
         match *self {
-            Fit::Gpu { gpu, ctx, need, .. } => format!("on the {} ({need}), {ctx} context", gpu_name(gpu)),
+            Fit::Gpu { gpu, ctx, need, draft, .. } => format!(
+                "on the {} ({need}), {ctx} context{}",
+                gpu_name(gpu),
+                if draft { ", with its draft head" } else { "" }
+            ),
             Fit::GpuWithExpertOffload { gpu, ctx, cpu_expert_layers, gpu_need, ram_need, .. } => format!(
                 "on the {} ({gpu_need}) with {} layers' experts in RAM ({ram_need}), {ctx} context",
                 gpu_name(gpu),
@@ -301,10 +319,16 @@ pub fn fit(entry: &Entry, hw: &Hardware, opts: FitOptions) -> Fit {
         hw.gpus.iter().enumerate().filter_map(|(i, g)| unified_budget(g, hw).map(|b| (GpuIndex(i), b))).collect();
     let ram = ram_budget(hw);
 
+    let draft = entry.draft.as_ref().map(|d| d.memory);
     for ctx in contexts(entry, wanted) {
         let n = need(entry, ctx, opts.kv).total();
+        if let Some(with_draft) = draft.map(|d| n + d)
+            && let Some(&(gpu, budget)) = dedicated.iter().find(|&&(_, b)| with_draft <= b)
+        {
+            return Fit::Gpu { gpu, ctx, need: with_draft, budget, draft: true };
+        }
         if let Some(&(gpu, budget)) = dedicated.iter().find(|&&(_, b)| n <= b) {
-            return Fit::Gpu { gpu, ctx, need: n, budget };
+            return Fit::Gpu { gpu, ctx, need: n, budget, draft: false };
         }
         if let Some(&(gpu, budget)) = unified.iter().find(|&&(_, b)| n <= b) {
             return Fit::Unified { gpu, ctx, need: n, budget };
@@ -365,8 +389,13 @@ pub fn estimate_decode(entry: &Entry, fit: &Fit, hw: &Hardware, reference: &Refe
         }
     };
     let gpu_bw = |g: GpuIndex| hw.gpu(g).and_then(|g| g.bandwidth);
+    let speedup = |drafting: bool| match (&entry.draft, drafting) {
+        (Some(d), true) => d.speedup as f32,
+        _ => 1.0,
+    };
     match *fit {
-        Fit::Gpu { gpu, .. } | Fit::Unified { gpu, .. } => gpu_bw(gpu).map(from_bandwidth),
+        Fit::Gpu { gpu, draft, .. } => gpu_bw(gpu).map(from_bandwidth).map(|t| TokensPerSecond(t.0 * speedup(draft))),
+        Fit::Unified { gpu, .. } => gpu_bw(gpu).map(from_bandwidth),
         Fit::GpuWithExpertOffload { gpu, cpu_expert_layers, .. } => {
             let Architecture::Moe { expert_layers, expert_bytes, .. } = entry.architecture else { return None };
             let gpu_bw = gpu_bw(gpu)?;
@@ -398,5 +427,67 @@ impl Catalog {
                 ModelFit { id: e.id.clone(), estimated_decode: estimate_decode(e, &fit, hw, &self.reference), fit }
             })
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hardware::{Cpu, GpuVendor, Ram};
+    use crate::units::ModelId;
+
+    fn nvidia(name: &str, total: Bytes, gb_s: f64, drives_display: bool) -> Hardware {
+        Hardware {
+            gpus: vec![Gpu {
+                vendor: GpuVendor::Nvidia,
+                name: name.into(),
+                memory: GpuMemory::Dedicated { total, free: total },
+                drives_display,
+                integrated: false,
+                bandwidth: Some(BytesPerSecond::gb_per_s(gb_s)),
+                pci: None,
+                device_index: Some(0),
+                compute_capability: None,
+            }],
+            ram: Ram { total: Bytes::gib(32), available: Bytes::gib(16) },
+            cpu: Cpu { model: "AMD Ryzen".into(), physical_cores: 8, logical_cores: 16, ..Cpu::default() },
+            notes: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_draft_head_drafts_only_beside_a_model_whole_on_the_gpu() {
+        let catalog = Catalog::load_default();
+        let gemma = catalog.get(&ModelId::new("gemma-4-31b")).unwrap();
+        let draft = gemma.draft.as_ref().unwrap();
+        // An RTX 5090 that drives the display: the 31B and its draft fit.
+        let hw = nvidia("NVIDIA GeForce RTX 5090", Bytes::gib(32), 1792.0, true);
+        let f = fit(gemma, &hw, FitOptions::default());
+        let Fit::Gpu { draft: true, need: with_draft, ctx, .. } = f else { panic!("{f:?}") };
+        assert_eq!(ctx, gemma.context.default);
+        assert_eq!(with_draft, need(gemma, ctx, KvCacheType::Q8_0).total() + draft.memory);
+        let speed = estimate_decode(gemma, &f, &hw, &catalog.reference).unwrap();
+        assert!((speed.0 - 70.0 * draft.speedup as f32).abs() < 1.0, "{speed:?}");
+
+        // Room for the model at its default context but not for the draft
+        // too: the context stays and the draft goes.
+        let n = need(gemma, gemma.context.default, KvCacheType::Q8_0).total();
+        let total = Bytes(((n.0 + draft.memory.0 / 2) as f64 / GPU_MARGIN) as u64);
+        let hw = nvidia("NVIDIA RTX A5000", total, 768.0, false);
+        let f = fit(gemma, &hw, FitOptions::default());
+        assert!(matches!(f, Fit::Gpu { draft: false, ctx, .. } if ctx == gemma.context.default), "{f:?}");
+        let speed = estimate_decode(gemma, &f, &hw, &catalog.reference).unwrap();
+        assert!(speed.0 < 70.0, "{speed:?}");
+    }
+
+    #[test]
+    fn no_draft_with_experts_in_ram() {
+        let catalog = Catalog::load_default();
+        let gemma = catalog.get(&ModelId::new("gemma-4-26b-a4b")).unwrap();
+        assert!(gemma.draft.is_some());
+        // An 8 GB laptop GPU that drives its screen.
+        let hw = nvidia("NVIDIA GeForce RTX 4060 Laptop GPU", Bytes::gib(8), 256.0, true);
+        let f = fit(gemma, &hw, FitOptions::default());
+        assert!(matches!(f, Fit::GpuWithExpertOffload { .. }), "{f:?}");
     }
 }

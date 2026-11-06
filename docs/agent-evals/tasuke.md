@@ -106,3 +106,34 @@ Round 1 taught the bare loop's format; Tasuke speaks another (its own tools, its
 **Round 2 changed when the models act, not how often they succeed.** Fault totals moved by one to three in either direction, inside what two runs of the same model differ by: the 26B-A4B base fixed 24 of 31 in its first run and 22 of 31 here, and the 12B base 20 and 18. The 12B pair disagrees on nine scenarios and the 26B-A4B pair on three, in both directions, and no held-out fault went from never fixed to always fixed. What moved is that both adapters fix more before the harness's "yes" (12B: 10 to 17; 26B-A4B: 9 to 15), as the teacher did in 20 of its 26 conversations; Tasuke's approval cards already ask the person before anything changes. For the 26B-A4B even that is within its runs: its base's first run fixed 15 on the first turn. No adapter harmed anything; neither gained on the desktop, which no training conversation covered; general ability held.
 
 Round 2's adapters aren't shipped either: `~/work/lora/out/gguf/sekka-{12b,26b}-tasuke.gguf` on wx-workstation (130 MB and 37 MB; the 26B-A4B adapter leaves the experts alone).
+
+## The weights round: smaller weights, calibrated on Sekka
+
+The 8 GB tier runs Gemma 4 26B-A4B with most of its experts in system memory, so its speed there depends on how many bytes each token reads from RAM. Could smaller weights, quantized with an importance matrix calibrated on Sekka's own conversations, keep its quality? Gemma 4 26B-A4B's BF16 weights were converted to GGUF and quantized to IQ3_XXS (11.3 GB, against Google's QAT Q4_0 at 14.4 GB) twice with the same recipe: once with an importance matrix computed on round 2's training-set Tasuke conversations and Tasuke's skills (347K tokens, rendered with Gemma 4's chat template; nothing from the held-out scenarios), once with bartowski's general-purpose importance matrix. Both ran inside Tasuke at the same time on the same GPU, twice over the held-out faults and desktop tasks.
+
+| Gemma 4 26B-A4B inside Tasuke | Google's QAT Q4_0 | IQ3_XXS, general imatrix | IQ3_XXS, Sekka imatrix |
+|---|---:|---:|---:|
+| Weights | 14.4 GB | 11.3 GB | 11.3 GB |
+| Faults, 16 × 2 | 24/31, then 22/31 | 21/32 | 21/31 |
+| …fixed on the first turn | 15, then 9 | 16 | 18 |
+| Desktop with marks, 9 × 2 | 17/18 twice | 12/18 | 15/18 |
+| Damage | once, after a "yes" | none | once, after a "yes" |
+| GSM8K, 100, no thinking | 96–97 | 98 | 98 |
+
+**Google's QAT Q4_0 stays.** A fifth less weight cost a few faults and, with the general matrix, five desktop tasks; general ability held. Sekka's calibration matched the general one on faults and did three more desktop tasks, though no training conversation was on the desktop; with one run each, that is a hint, not a result. A matrix from 347K tokens of one domain left up to a tenth of some layers' 128 experts without statistics, which is the risk of calibrating narrowly. The Sekka-calibrated quant did what the base model did in its second run: proposed deleting alice's older backup to make room and, after the "yes", deleted it. Across five runs of Gemma 4 26B-A4B's faults inside Tasuke (its first, round 2's base and adapter, and these two) that happened twice; the approval card showing the exact `rm` is the product's guard, and the skills were not changed for it.
+
+Nor did the smaller weights buy speed where it could be measured. With 24 layers' experts on six threads of wx-workstation's processor (`llama-bench`, 128 tokens, five repetitions, twice), Google's Q4_0 decoded at 70–71 tokens/s and the IQ3_XXS at 63–65: IQ quants cost more to decode on a processor. A laptop with two memory channels waits on memory more and might differ; runnymede, the closest stand-in, was busy with other work all night, and its numbers scattered too widely to use.
+
+The quants are `~/work/quant/{sekka,generic}-26b-IQ3_XXS.gguf` on wx-workstation, with the Sekka importance matrix beside them.
+
+## Speed: Gemma 4's draft heads
+
+Gemma 4 has multi-token-prediction heads: a small draft that proposes the next tokens for the model to check in one pass. The model still chooses every token, so its answers don't change, only how long they take. bartowski's GGUFs of Google's MTP heads (0.3 GB each), measured on the RTX 5090 that also drives runnymede's display with one slot, the model's own sampling, and three prompts twice at 256 tokens:
+
+| One stream, RTX 5090 | No draft | Drafting 2 | Drafting 3 | GPU memory the draft adds |
+|---|---:|---:|---:|---:|
+| Gemma 4 31B | 72 tok/s | 114 | **119** | 988 MiB at 64K |
+| Gemma 4 26B-A4B | 250 tok/s | **343** | 299 | 662 MiB at 64K |
+| Gemma 4 26B-A4B, experts of 24 layers on the processor | 60 tok/s | 62 | 55 | 718 MiB at 32K |
+
+Inside Tasuke on the held-out set, Gemma 4 31B drafting 3 fixed 28 of 32 faults (27 on the first turn) and did all 18 desktop tasks, harming nothing: the same as without a draft (28 of 32; 18 of 18). The run shared wx-workstation's GPU with two other servers, so its times say nothing about speed. Tasuke's catalog now carries each draft, and its planner drafts only where the model fits whole on a dedicated GPU beside it; with experts in system memory, checking drafted tokens reads more of them from RAM, and the draft would take GPU memory the experts use.

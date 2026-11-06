@@ -121,6 +121,10 @@ pub struct Entry {
     /// batches, so prefill moves the experts across PCIe less often.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub offload_args: Vec<String>,
+    /// A draft head (the `draft` file) for speculative decoding, used when
+    /// the model and the draft fit whole on a dedicated GPU.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub draft: Option<Draft>,
     /// The client should send the model's earlier reasoning back with the
     /// conversation (gpt-oss's harmony format needs it between tool calls).
     #[serde(default)]
@@ -245,6 +249,23 @@ pub enum Coords {
 pub enum FileKind {
     Weights,
     Mmproj,
+    /// A draft head for speculative decoding: it makes the model faster and
+    /// changes nothing it says, so a model without it still runs.
+    Draft,
+}
+
+/// How a draft head is run, and what it costs and gains, measured.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Draft {
+    /// llama-server's draft arguments (`--spec-type draft-mtp`, how many
+    /// tokens to draft); the draft file's path is added to them.
+    pub args: Vec<String>,
+    /// GPU memory the draft adds at the default context: its weights, its
+    /// cache and its compute buffer.
+    #[serde(rename = "mib", with = "mib")]
+    pub memory: Bytes,
+    /// Single-stream decode with the draft over without, on the reference GPU.
+    pub speedup: f64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -400,6 +421,12 @@ impl Catalog {
             if e.roles.contains(&Role::Desktop) && e.vision.is_none() {
                 return bad(&e.id, "the desktop role needs vision".into());
             }
+            if e.draft.is_some() != e.draft_file().is_some() {
+                return bad(&e.id, "a draft needs exactly when a draft file is listed".into());
+            }
+            if e.draft.as_ref().is_some_and(|d| !(d.speedup >= 1.0)) {
+                return bad(&e.id, "a draft that doesn't speed the model up shouldn't be listed".into());
+            }
             for f in &e.files {
                 if f.path.is_empty() || f.path.contains("..") || f.size == Bytes::ZERO || f.revision.0.len() != 40 {
                     return bad(&e.id, format!("file {:?} needs a path, a size and a 40-digit revision", f.path));
@@ -433,6 +460,10 @@ impl Entry {
 
     pub fn mmproj(&self) -> Option<&ModelFile> {
         self.files.iter().find(|f| f.kind == FileKind::Mmproj)
+    }
+
+    pub fn draft_file(&self) -> Option<&ModelFile> {
+        self.files.iter().find(|f| f.kind == FileKind::Draft)
     }
 
     pub fn download_size(&self) -> Bytes {

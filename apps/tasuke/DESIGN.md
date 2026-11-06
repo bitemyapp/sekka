@@ -24,7 +24,9 @@ The design follows the agent evaluations in `tests/agent-evals` (docs/agent-eval
   - The environment block is gathered deterministically by Rust, not by the model.
   - Memory is shown to the user and can be removed. It is framed as notes, not instructions.
 - **Fast without taking over the machine.**
-  - One llama-server in router mode, as a systemd user unit at low CPU and IO weight.
+  - One llama-server in router mode, as a systemd user unit at low CPU and IO weight, leaving two cores free.
+    Measured on runnymede (Ryzen 7 9800X3D) with Gemma 4 26B-A4B decoding in the 8 GB configuration (experts of 24 layers on the processor): an app's 2 ms timer woke as on an idle machine (p99 0.067 ms against 0.063), and 20 s of work on all 16 threads lost 1–5% to the model under the unit's settings against 12–16% at default priority. Under that load the model nearly stops (3 tokens/s, from 57) at either priority: the person's work comes first.
+  - A draft head drafts tokens for speculative decoding where the model fits whole on a dedicated GPU beside it: Gemma 4 31B 72 → 119 tokens/s and 26B-A4B 250 → 343 on the RTX 5090, answers unchanged (the model checks every drafted token). With experts in RAM it gained nothing, so fit leaves it out there.
   - Models load on first use and unload after a period of idleness (`--sleep-idle-seconds`), so a game or a render gets the GPU back.
   - The window never blocks: inference, commands and downloads run off the UI thread.
 - **Fits the hardware.** Recommendations come from measured evaluation results and the machine's actual GPU memory, unified memory or system RAM.
