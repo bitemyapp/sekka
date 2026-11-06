@@ -246,6 +246,11 @@ pub const REMOVED: &str = "Nothing of the earlier installation was found on your
 /// step is done. Whether Sekka has started since isn't known here.
 pub const INSTALLED: &str = "Recovery's step is done. Start your Mac in Sekka; the first time it starts, Sekka asks you to create your account.";
 
+/// The existing screen's last step, naming this Mac's macOS volume.
+pub fn choose_sekka(macos: &str) -> String {
+    format!("Choose Sekka. To return to macOS later, choose {macos} the same way.")
+}
+
 /// The Recovery page for an installation reconnected to, when the helper
 /// couldn't read the boot policy to say whether these steps are done.
 pub const RECOVERY_UNCONFIRMED: &str = "If you've already done these steps, Sekka is installed: start your Mac in Sekka. Sekka Installer can't yet tell from macOS whether they're done.";
@@ -271,6 +276,9 @@ pub fn change(action: &Action) -> String {
         Action::CreateRoot { size } => format!("Sekka gets {} for itself and your files.", bytes(*size)),
     }
 }
+
+/// What macOS names its volume, when the inspection doesn't say.
+pub const MACOS_VOLUME: &str = "Macintosh HD";
 
 /// The review's last change, which every installation makes.
 pub fn startup_disk_change(macos: &str) -> String {

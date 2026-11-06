@@ -1307,15 +1307,27 @@ impl Model {
         out
     }
 
-    /// macOS's volume as the startup options list it.
-    fn macos_volume(&self) -> String {
-        self.inspection()
-            .into_iter()
-            .flat_map(|i| &i.disk.containers)
-            .flat_map(|c| &c.volume_groups)
-            .find(|g| matches!(g.os, sekka_mac_contract::GroupOs::Macos { .. }))
-            .map(|g| g.name.to_string())
-            .unwrap_or_else(|| "Macintosh HD".into())
+    /// macOS's volume as the startup options list it: the one running
+    /// now, or else the one Sekka's space comes from.
+    pub fn macos_volume(&self) -> String {
+        let Some(i) = self.inspection() else { return text::MACOS_VOLUME.into() };
+        let groups = || {
+            i.disk
+                .containers
+                .iter()
+                .flat_map(|c| c.volume_groups.iter().map(move |g| (c.uuid, g)))
+        };
+        let shrunk = match self.candidate() {
+            Some(Candidate::ShrinkContainer { container, .. }) => Some(*container),
+            _ => None,
+        };
+        groups()
+            .find(|(_, g)| g.uuid == i.macos.volume_group)
+            .or_else(|| {
+                groups().find(|(c, g)| Some(*c) == shrunk && matches!(g.os, sekka_mac_contract::GroupOs::Macos { .. }))
+            })
+            .map(|(_, g)| g.name.to_string())
+            .unwrap_or_else(|| text::MACOS_VOLUME.into())
     }
 
     /// What a stopped installation lets the person do.

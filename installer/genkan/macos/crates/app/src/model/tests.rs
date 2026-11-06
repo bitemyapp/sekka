@@ -634,6 +634,26 @@ fn checking_again_waits_for_an_open_sheet() {
 }
 
 #[test]
+fn the_review_names_the_macos_this_mac_starts() {
+    let env = Simulation::new(Scenario::Normal, 0.0);
+    let mut i = env.inspect().unwrap();
+    // Another macOS, in its own container, listed first.
+    let mut other = i.disk.containers[0].clone();
+    other.uuid = Uuid::from_bytes([0x0c; 16]);
+    other.volume_groups[0].uuid = Uuid::from_bytes([0x0d; 16]);
+    other.volume_groups[0].name = "Sequoia".parse().unwrap();
+    i.disk.containers[0].volume_groups[0].name = "Work".parse().unwrap();
+    i.disk.containers.insert(0, other);
+    let (mut m, effects) = hear(&env, Ok(Vec::new()), Ok(i.clone()));
+    assert!(effects.is_empty());
+    assert_eq!(m.macos_volume(), "Work");
+    // Without the running one, the macOS whose space Sekka takes.
+    i.macos.volume_group = Uuid::from_bytes([0x0e; 16]);
+    m.update(Msg::Inspected(Ok(i)));
+    assert_eq!(m.macos_volume(), "Work");
+}
+
+#[test]
 fn an_installation_stopped_before_any_change_can_be_cancelled() {
     let mut j = Journey::start(Scenario::StoppedEarly);
     assert_eq!(j.model.screen, Screen::Stopped);

@@ -367,7 +367,7 @@ fn existing(m: &Model, p: &mut Page) {
         p.lede(text::INSTALLED);
         p.numbered(1, "Shut down your Mac.");
         p.numbered(2, "Press and hold the power button until “Loading startup options” appears.");
-        p.numbered(3, "Choose Sekka. To return to macOS later, choose Macintosh HD the same way.");
+        p.numbered(3, &text::choose_sekka(&m.macos_volume()));
     } else {
         p.title("Sekka is already on this Mac");
         p.body("Sekka Installer found a Sekka installation on this disk. It doesn't install a second one beside it, and this version doesn't remove or replace an installation.");
