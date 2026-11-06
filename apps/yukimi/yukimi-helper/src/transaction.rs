@@ -88,7 +88,7 @@ pub fn client(args: &[String]) -> Result<String> {
             progress(&mut log);
             return Ok(result);
         }
-        if state().0 == Phase::Stopping && !cancelled {
+        if process::stop_requested() && !cancelled {
             // The worker handles this before commit; after commit it finishes.
             let _ = command("systemctl").args(["kill", "--kill-whom=main", "--signal=SIGINT", &unit]).output();
             cancelled = true;
