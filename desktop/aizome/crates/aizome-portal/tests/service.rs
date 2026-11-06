@@ -8,6 +8,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use aizome_portal::request::Request;
@@ -16,22 +17,59 @@ use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
 
 type Options = HashMap<String, OwnedValue>;
 
+/// A `dbus-daemon` of our own that activates nothing. Its configuration
+/// is ours too: a build sandbox has no /etc/dbus-1 for `--session`.
 struct Bus {
     daemon: Child,
     address: String,
+    dir: PathBuf,
 }
 
 impl Bus {
     fn new() -> Bus {
+        // One folder per bus, as the tests run at once. Unix socket paths
+        // are short (108 bytes), so a long `$TMPDIR` gives way to `/tmp`.
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        let mut base = std::env::temp_dir();
+        if base.as_os_str().len() > 40 && Path::new("/tmp").is_dir() {
+            base = PathBuf::from("/tmp");
+        }
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
+        let dir = base.join(format!("portal-bus-{}-{n}", std::process::id()));
+        // Left by an earlier run that had this process ID.
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir(&dir).unwrap();
+        let config = dir.join("bus.conf");
+        std::fs::write(
+            &config,
+            format!(
+                r#"<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <type>session</type>
+  <listen>unix:dir={}</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>
+"#,
+                dir.display()
+            ),
+        )
+        .unwrap();
         let mut daemon = Command::new("dbus-daemon")
-            .args(["--session", "--nofork", "--print-address"])
+            .arg(format!("--config-file={}", config.display()))
+            .args(["--nofork", "--print-address"])
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
             .spawn()
             .expect("dbus-daemon is required");
         let mut address = String::new();
         BufReader::new(daemon.stdout.take().unwrap()).read_line(&mut address).unwrap();
-        Bus { daemon, address: address.trim().to_owned() }
+        assert!(!address.trim().is_empty(), "dbus-daemon did not start");
+        Bus { daemon, address: address.trim().to_owned(), dir }
     }
 
     fn connect(&self) -> zbus::blocking::Connection {
@@ -61,6 +99,7 @@ impl Drop for Bus {
     fn drop(&mut self) {
         let _ = self.daemon.kill();
         let _ = self.daemon.wait();
+        let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
 
