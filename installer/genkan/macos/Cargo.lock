@@ -465,6 +465,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sekka-mac-tool"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "sekka-mac-contract",
+ "sekka-mac-trust",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "sekka-mac-trust"
 version = "0.1.0"
 dependencies = [
