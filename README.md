@@ -15,6 +15,32 @@ Sekka is NixOS with a desktop of its own: **Aizome**, written in Rust from the c
 - **For x86_64 PCs, with Secure Boot off.** There is no ARM image.
 - **Generations aren't backups.** They return you to an earlier system, not to earlier documents. Btrfs is available without automatic filesystem snapshots.
 
+### On a Mac
+
+Sekka is being brought up on one Apple Silicon Mac, the 14-inch MacBook
+Pro with an M3 Pro (Mac15,6). There is no Mac release to download yet:
+nothing for Macs has been qualified or published. When there is, it will
+be a Mac app, **Sekka Installer**, that installs Sekka beside macOS:
+
+- It checks your Mac first and changes nothing until you've reviewed the
+  plan: how much space macOS gives up, what's created, and what you do
+  afterwards. You choose Sekka's size by dragging the line between macOS
+  and Sekka on a picture of your disk.
+- macOS stays installed. Your Mac asks which system to start when you hold
+  the power button.
+- The last step happens in Recovery: you shut down, hold the power button,
+  choose Sekka, and enter your Mac password in **Finish Installing Sekka**.
+  Sekka then starts and asks you to create your account.
+- **Back up your Mac first.** Apple's own tool shrinks macOS. If it fails,
+  nothing is installed and macOS is left as it was.
+- Sekka's partition **isn't encrypted** on Macs yet. FileVault keeps
+  protecting macOS; it doesn't protect Sekka.
+- Only this one Mac, with the system firmware it was tested on. Any other
+  Mac, including other M3 models, is told it isn't supported yet.
+
+Developers can build and simulate the app today; see
+[DEVELOPERS.md](DEVELOPERS.md#sekka-installer-for-mac).
+
 Googlebook images are temporarily unavailable. The PC ISO does not support
 Googlebook firmware, and experimental Googlebook support has not yet been
 validated on hardware. See the [developer notes](DEVELOPERS.md#googlebook-live-media)

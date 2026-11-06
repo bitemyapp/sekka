@@ -1,8 +1,12 @@
 # Apple Silicon installer implementation plan
 
-Status: proposed work, written on 6 November 2026. The phases below describe
-future implementation and the evidence needed to ship it. This documentation
-change implements none of the new behavior; publication remains inhibited.
+Status: written on 6 November 2026 and implemented on
+`feat/apple-silicon-installer` the same week, as far as source, component
+tests, VM evidence and macOS type-checking reach; see
+[DEVELOPERS.md](../DEVELOPERS.md#sekka-installer-for-mac) for what each part
+has and hasn't been run on. The native Mac builds, the Recovery step and
+every hardware gate still need the Mac. Encryption is
+[deferred](apple-silicon/encryption.md). Publication remains inhibited.
 
 The Sekka baseline is `4882dc33652612e7475f467f6373d8b607e5407c` on
 `fix/apple-silicon-aizome`, rebased onto main
