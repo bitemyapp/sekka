@@ -122,7 +122,7 @@ fn excluded(entry: &Entry, prefs: &Preferences) -> bool {
 
 /// Whether `entry` placed as `fit` is worth suggesting: on a GPU's own memory
 /// it is; anywhere else it must be estimated at [`MIN_USEFUL_DECODE`] or more.
-fn fast_enough(entry: &Entry, fit: &Fit, hw: &Hardware, catalog: &Catalog) -> bool {
+pub fn fast_enough(entry: &Entry, fit: &Fit, hw: &Hardware, catalog: &Catalog) -> bool {
     match fit {
         Fit::Gpu { .. } => true,
         Fit::TooLarge { .. } => false,

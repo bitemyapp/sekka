@@ -3,6 +3,7 @@
 
 mod bar;
 mod cards;
+mod compare;
 mod conversation;
 mod first_run;
 mod memory;
@@ -27,6 +28,7 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
             None => space(0.0),
         },
         Page::Models => models::view(app),
+        Page::Compare => compare::view(app),
         Page::Memory => memory::view(app),
     };
     sidebar_layout(sidebar(app), container(page).fill(Tone::Surface).width(Fill).height(Fill)).first_size(248.0).into()

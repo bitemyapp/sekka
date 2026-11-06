@@ -190,7 +190,7 @@ tasuke ask [--act] [--desktop] [--approve never|ask|all] [--base-url URL --model
 
 The window follows Omperor's principles (`~/work/omperor-aizome/docs/PRODUCT_DIRECTION.md`): conversation at the centre, evidence inline and inspectable, nothing modal except short decisions, and state retained when switching.
 
-- **Sidebar:** New conversation; conversations by recency; Models; Memory.
+- **Sidebar:** New conversation; conversations by recency; Models; Memory. Compare Models opens from the Go menu and the Models page.
 - **Transcript:**
   - Markdown answers.
   - Each tool call is a compact row (verb and command or target, then its state), expanding to the full output.
@@ -202,6 +202,7 @@ The window follows Omperor's principles (`~/work/omperor-aizome/docs/PRODUCT_DIR
   - Recommended models per role, with fit, size, speed estimate, scores, maker and lineage, licence and notes.
   - Download (with progress, pause and cancel), Use, and Remove.
   - The server's state and its idle-unload setting.
+- **Compare Models** (⇧⌘3, or Compare All on Models): every model Sekka measured in one table, sortable by faults fixed, desktop tasks, harm, how it would run here and download size, with each local model's download or Use beside its details. "Only models this computer runs well" keeps those that fit and reach the same 10 tokens/s floor the recommendations use. Cloud models measured on the same scenarios (in their makers' own agents, through the eval bridge) are rows for reference: no download, no fit, and Tasuke never sends anything to them. Models hidden by origin stay hidden here, with a count.
 - **First run:** detect the hardware, recommend a model, download it, and say hello. While it downloads, the window explains what is happening and how long it will take.
 
 ## Since the first draft (2026-11-05)

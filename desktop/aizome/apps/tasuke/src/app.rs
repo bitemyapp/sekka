@@ -55,6 +55,8 @@ pub struct ConvId(pub u64);
 pub enum Page {
     Conversation(ConvId),
     Models,
+    /// Every measured model side by side, with the cloud ones for reference.
+    Compare,
     Memory,
 }
 
@@ -175,6 +177,8 @@ pub struct Models {
     pub idle_minutes: u32,
     /// Something went wrong with the last action (a download, a removal).
     pub problem: Option<String>,
+    /// How the Compare page is sorted and filtered, and its selection.
+    pub compare: crate::compare::View,
 }
 
 impl Models {
@@ -261,6 +265,13 @@ pub enum Msg {
     Use(ModelId),
     Remove(ModelId),
     Removed(ModelId, Result<(), String>),
+    // Compare.
+    /// Sort by the table's column, ascending or not.
+    CompareSort(usize, bool),
+    /// The row whose details show, by key.
+    CompareSelect(Option<String>),
+    CompareFitsOnly(bool),
+    CompareCloud(bool),
     // Memory.
     Forget(String),
     // First run.
@@ -342,6 +353,8 @@ pub const FIXTURES: &[&str] = &[
     "models-8gb",
     "models-32gb",
     "models-unified",
+    "compare",
+    "compare-8gb",
     "downloading",
     "first-run",
     "memory",
@@ -367,6 +380,7 @@ impl Tasuke {
                 server: String::new(),
                 idle_minutes: 10,
                 problem: None,
+                compare: crate::compare::View::default(),
             },
             notes: Vec::new(),
             chip: Chip { name: String::new(), state: ModelState::Missing },
@@ -395,7 +409,7 @@ impl Tasuke {
         let mut t = Tasuke::empty(Backend::Fixture, fixture::CLOCK, true);
         t.fixture = Some(name.to_owned());
         let hw = match name {
-            "models-8gb" | "first-run" | "downloading" => fixture::laptop_8gb(),
+            "models-8gb" | "compare-8gb" | "first-run" | "downloading" => fixture::laptop_8gb(),
             "models-unified" => fixture::apu_128gb(),
             _ => fixture::desktop_32gb(),
         };
@@ -404,7 +418,7 @@ impl Tasuke {
             fixture::notes().into_iter().map(|(id, text, created)| Note { id, text: text.into(), created }).collect();
         // What's downloaded on each machine.
         let installed: &[&str] = match name {
-            "models-8gb" => &["gemma-4-12b"],
+            "models-8gb" | "compare-8gb" => &["gemma-4-12b"],
             "models-unified" => &["gemma-4-31b"],
             "first-run" | "downloading" => &[],
             _ => &["gemma-4-31b", "gpt-oss-20b"],
@@ -509,6 +523,15 @@ impl Tasuke {
                 Page::Conversation(by_title(&t, "Is my graphics card running hot?").expect("in the fixture"))
             }
             "models-8gb" | "models-32gb" | "models-unified" => Page::Models,
+            "compare" => {
+                t.models.compare.selected = Some("gemma-4-31b".into());
+                Page::Compare
+            }
+            "compare-8gb" => {
+                t.models.compare.fits_only = true;
+                t.models.compare.selected = Some("gemma-4-26b-a4b".into());
+                Page::Compare
+            }
             "memory" => Page::Memory,
             _ => Page::Conversation(t.new_conversation_id()),
         };
@@ -853,7 +876,8 @@ impl Program for Tasuke {
         }
         let go = Menu::new("Go")
             .item(MenuItem::new("Models", Msg::Show(Page::Models)).shortcut(Shortcut::cmd('1').shift()))
-            .item(MenuItem::new("Memory", Msg::Show(Page::Memory)).shortcut(Shortcut::cmd('2').shift()));
+            .item(MenuItem::new("Memory", Msg::Show(Page::Memory)).shortcut(Shortcut::cmd('2').shift()))
+            .item(MenuItem::new("Compare Models", Msg::Show(Page::Compare)).shortcut(Shortcut::cmd('3').shift()));
         MenuBar::standard(&self.info()).with_file_menu(file).with_menu(go)
     }
 
@@ -888,6 +912,7 @@ impl Tasuke {
             (true, _) => None,
             (_, Page::Models) => Some("Models".to_owned()),
             (_, Page::Memory) => Some("Memory".to_owned()),
+            (_, Page::Compare) => Some("Compare Models".to_owned()),
             (_, Page::Conversation(id)) => self.conversation(id).map(|c| c.title.clone()).filter(|t| !t.is_empty()),
         };
         match page {
@@ -1054,6 +1079,17 @@ impl Tasuke {
                     crate::live::save_prefs(env, &self.models.prefs);
                 }
             }
+            Msg::CompareSort(column, ascending) => {
+                if let Some(&c) = crate::compare::Column::ALL.get(column) {
+                    // A new column sorts best first; the same one again flips.
+                    let view = &mut self.models.compare;
+                    view.ascending = if view.sort == c { ascending } else { c.ascending_first() };
+                    view.sort = c;
+                }
+            }
+            Msg::CompareSelect(key) => self.models.compare.selected = key,
+            Msg::CompareFitsOnly(on) => self.models.compare.fits_only = on,
+            Msg::CompareCloud(on) => self.models.compare.cloud = on,
             Msg::Download(id) => self.start_download(id, cx),
             Msg::Pause => {
                 if let Some(d) = &mut self.models.download {

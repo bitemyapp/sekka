@@ -7,25 +7,33 @@ use aizome_kit::prelude::*;
 use aizome_kit::widgets::layout::column as column_of;
 use aizome_kit::{column, row};
 
+use tasuke_models::{Bytes, ModelId};
+
 use super::bar;
-use crate::app::{Msg, Tasuke};
+use crate::app::{Msg, Page, Tasuke};
 use crate::models::{self, Card, Device, DeviceKind, Install, Section, size};
 
 const WIDE: f64 = 860.0;
 
 pub fn view(app: &Tasuke) -> Element<Msg> {
-    let header = column![
-        text("Models").size(22.0).weight(700.0),
-        text(
-            "Everything runs on this computer. Sekka measured each of these models doing Tasuke's work, \
-             and what fits is worked out from this computer's memory."
-        )
-        .size(13.0)
-        .role(Role::Text2)
-        .wrap()
-        .line_height(1.4),
+    let header = row![
+        column![
+            text("Models").size(22.0).weight(700.0),
+            text(
+                "Everything runs on this computer. Sekka measured each of these models doing Tasuke's work, \
+                 and what fits is worked out from this computer's memory."
+            )
+            .size(13.0)
+            .role(Role::Text2)
+            .wrap()
+            .line_height(1.4),
+        ]
+        .spacing(4.0)
+        .width(Fill),
+        button("Compare All").icon(Icon::ChartBar).on_press(Msg::Show(Page::Compare)),
     ]
-    .spacing(4.0);
+    .spacing(16.0)
+    .align(Align::Start);
     let mut parts: Vec<Element<Msg>> = vec![header.into()];
     if let Some(p) = &app.models.problem {
         parts.push(
@@ -166,10 +174,15 @@ fn fact(glyph: Icon, words: String) -> Element<Msg> {
 
 /// What can be done with it, by how its download stands.
 fn actions(c: &Card) -> Element<Msg> {
-    let id = c.id.clone();
-    match &c.install {
+    install_actions(&c.id, &c.install, c.in_use, c.download)
+}
+
+/// Download, resume, pause, use or remove a model, by how it stands.
+pub(crate) fn install_actions(id: &ModelId, install: &Install, in_use: bool, download: Bytes) -> Element<Msg> {
+    let id = id.clone();
+    match install {
         Install::Absent => {
-            button(format!("Download · {}", size(c.download))).icon(Icon::Download).on_press(Msg::Download(id)).into()
+            button(format!("Download · {}", size(download))).icon(Icon::Download).on_press(Msg::Download(id)).into()
         }
         Install::Partial { have, total } => column![
             button("Resume Download").icon(Icon::Download).on_press(Msg::Download(id.clone())),
@@ -186,7 +199,7 @@ fn actions(c: &Card) -> Element<Msg> {
             };
             row![toggle, button("Cancel").on_press(Msg::CancelDownload)].spacing(6.0).into()
         }
-        Install::Installed if c.in_use => {
+        Install::Installed if in_use => {
             row![tag("In use", Role::Success), button("Remove").on_press(Msg::Remove(id))].spacing(8.0).into()
         }
         Install::Installed => {

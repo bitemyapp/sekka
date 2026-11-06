@@ -22,6 +22,31 @@ pub struct Catalog {
     /// Entries in catalog order, keyed by id in the file.
     #[serde(with = "entries_map")]
     pub models: Vec<Entry>,
+    /// Cloud models measured on the same scenarios, for comparison only:
+    /// Tasuke never runs one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cloud: Vec<CloudModel>,
+}
+
+/// A cloud model measured on Sekka's scenarios through its maker's own
+/// agent, so a person can see how near the local models come. It has no
+/// files, fit or speed here.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CloudModel {
+    pub name: String,
+    pub maker: String,
+    pub origin: Vec<String>,
+    /// The agent it worked in, its maker's own: "Claude Code", "Codex".
+    pub harness: String,
+    pub date: String,
+    /// The faults, as Tasuke's [`Scores::tasuke`] counts them.
+    pub faults: Tally,
+    /// The desktop tasks, as [`Scores::computer_use_tasuke`] counts them.
+    pub desktop: Tally,
+    /// Episodes after which the checks found her data or session harmed.
+    pub harm: u32,
+    #[serde(default)]
+    pub notes: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -320,6 +345,14 @@ pub struct Scores {
     /// Desktop tasks in Tasuke, with set-of-marks.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub computer_use_tasuke: Option<Tally>,
+    /// Of `tasuke`, the faults fixed before Tasuke asked anything: the rest
+    /// took the person's "yes" to a change it proposed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tasuke_first_turn: Option<Tally>,
+    /// Episodes in Tasuke after which the checks found her data or session
+    /// harmed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tasuke_harm: Option<u32>,
     /// Diagnostics in the evaluations' bare tool loop.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub diagnostics: Option<Tally>,
@@ -440,6 +473,12 @@ impl Catalog {
                 return bad(&e.id, "context needs min ≤ default ≤ max".into());
             }
         }
+        for c in &self.cloud {
+            let id = ModelId(c.name.clone());
+            if c.faults.passed > c.faults.total || c.desktop.passed > c.desktop.total || c.harness.is_empty() {
+                return bad(&id, "a cloud model needs its harness and tallies of at most their totals".into());
+            }
+        }
         for d in &self.defaults {
             match self.get(&d.model) {
                 None => return bad(&d.model, "a default names a model not in the catalog".into()),
@@ -473,21 +512,34 @@ impl Entry {
     /// Whether `tag` (case-insensitive) names this entry's maker, one of its
     /// lineage families, or one of their origins.
     pub fn matches_lineage(&self, tag: &str) -> bool {
-        let tag = tag.trim().to_lowercase();
-        if tag.is_empty() {
-            return false;
-        }
-        let hit = |s: &String| {
-            let s = s.to_lowercase();
-            s == tag || s.split(|c: char| !c.is_alphanumeric()).any(|w| w == tag)
-        };
-        hit(&self.maker) || self.lineage.iter().any(hit) || self.origin.iter().any(hit)
+        lineage_matches(tag, &self.maker, &self.lineage, &self.origin)
     }
 
     /// No destructive incidents in the evaluations.
     pub fn trusted(&self) -> bool {
         self.incidents.is_empty()
     }
+}
+
+impl CloudModel {
+    /// As [`Entry::matches_lineage`]: its maker or origin.
+    pub fn matches_lineage(&self, tag: &str) -> bool {
+        lineage_matches(tag, &self.maker, &[], &self.origin)
+    }
+}
+
+/// Whether `tag` (case-insensitive) names the maker, a lineage family or an
+/// origin, whole or as a word of one.
+fn lineage_matches(tag: &str, maker: &str, lineage: &[String], origin: &[String]) -> bool {
+    let tag = tag.trim().to_lowercase();
+    if tag.is_empty() {
+        return false;
+    }
+    let hit = |s: &str| {
+        let s = s.to_lowercase();
+        s == tag || s.split(|c: char| !c.is_alphanumeric()).any(|w| w == tag)
+    };
+    hit(maker) || lineage.iter().any(|s| hit(s)) || origin.iter().any(|s| hit(s))
 }
 
 /// `[models."id"]` tables, kept in file order.

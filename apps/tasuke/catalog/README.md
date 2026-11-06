@@ -23,7 +23,7 @@ pinned to the same files, so what a person downloads is what was measured.
 | `keep_reasoning`, `sampling`, `template_kwargs` | Request settings the evaluations used for the model |
 | `files` | Hugging Face repository, revision, path, size and sha256 of each file; downloads are checked against the sha256 before they are used |
 | `draft` | A draft head for speculative decoding (a file of kind `draft`): its llama-server arguments, the GPU memory it adds at the default context (`mib`) and its measured `speedup` on the reference GPU. It drafts only where the model fits whole on a dedicated GPU beside it; a model without its draft on disk runs without one |
-| `scores` | Measured results with their date: `diagnostics` (the bare loop), `diagnostics_omp`, `computer_use` (screenshots) or `computer_use_text` (element lists), and `tasuke`/`computer_use_tasuke` when Tasuke itself was evaluated; a ranking uses Tasuke's own results only when every evaluated model it ranks has one, and the harnesses' for all of them otherwise, since Tasuke lifts every model it runs |
+| `scores` | Measured results with their date: `diagnostics` (the bare loop), `diagnostics_omp`, `computer_use` (screenshots) or `computer_use_text` (element lists), and `tasuke`/`computer_use_tasuke` when Tasuke itself was evaluated, with `tasuke_first_turn` (faults fixed before Tasuke asked anything) and `tasuke_harm` (episodes after which the checks found damage); a ranking uses Tasuke's own results only when every evaluated model it ranks has one, and the harnesses' for all of them otherwise, since Tasuke lifts every model it runs |
 | `speed` | Single-stream decode and prefill on the reference GPU (`[reference]`), measured; other GPUs are estimated from memory bandwidth |
 | `incidents` | Anything an evaluation saw the model do to the machine, in plain words; a model with incidents loses ties |
 | `notes` | What the evaluations showed, for people |
@@ -38,6 +38,10 @@ experts in system RAM (measured by `tests/agent-evals/fit8gib.py`: 7.7 GiB
 at 32K). gpt-oss 20B is the fast choice at every size. Where a choice
 passes over a model that scored better somewhere, its reason names that
 model and says why.
+
+## Cloud models, for comparison
+
+`[[cloud]]` entries are cloud models measured on the same scenarios in their makers' own agents (`run.py --agent bridge`), for the Compare Models page only: `name`, `maker`, `origin`, `harness` (the agent, e.g. "Claude Code"), `date`, `faults` and `desktop` tallies counted as `tasuke` and `computer_use_tasuke` are, `harm`, and `notes`. They have no files, fit or speed, and nothing ranks or runs them.
 
 ## Draft heads
 
