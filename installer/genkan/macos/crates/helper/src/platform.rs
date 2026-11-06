@@ -41,8 +41,11 @@ pub enum PlatformError {
 pub trait Platform: Send + Sync + 'static {
     fn now(&self) -> Timestamp;
 
-    /// Unpack (or find) the bundled engine, refusing it unless its archive
-    /// has `expected` as its digest.
+    /// The engine whose archive has `expected` as its digest: the one
+    /// unpacked into the helper's own cache earlier, whatever this copy of
+    /// the app carries now (an installation keeps the engine that made it
+    /// across app updates), or else the bundled archive, unpacked, if it is
+    /// that one.
     fn engine(&self, expected: &Digest) -> Result<EngineInstall, PlatformError>;
 
     /// Run the engine's `inspect` as root and return what it found, already

@@ -3,10 +3,10 @@
 //!
 //! Requests arrive concurrently, one thread per connection. Those that can
 //! write an installation's record or start the engine (Begin, Cancel of a
-//! stopped installation, RetryStartupDisk) take the install lock first and
-//! refuse if it is held; a run holds it until it ends. Nothing slow (PAM,
-//! unpacking the engine, the root inspection) happens while holding
-//! `active`, which Status and Events read.
+//! stopped installation, RetryStartupDisk, Reconcile) take the install lock
+//! first and refuse if it is held; a run holds it until it ends. Nothing
+//! slow (PAM, unpacking the engine, the root inspection) happens while
+//! holding `active`, which Status and Events read.
 use std::collections::VecDeque;
 use std::fs;
 use std::os::unix::fs::DirBuilderExt;
@@ -17,14 +17,15 @@ use std::sync::{Arc, Mutex};
 use sekka_mac_contract::{
     ArtifactRole, Begin, Digest, DiskChanged, EngineOutcome, Event, Fact, Failure, HELPER_PROTOCOL,
     HelperRefusal, HelperRefusalCode, HelperRequest, HelperRequestSchema, HelperResponse,
-    HelperResponseSchema, InstallState, Progress, Record, Release, Request, Response, Stage,
-    Summary, Text, Transcript, Uuid, Verification, Version, canonical, derive_plan, limits,
+    HelperResponseSchema, InstallState, Progress, Release, Request, Response, Stage, Summary,
+    Text, Transcript, Uuid, Verification, Version, canonical, derive_plan, limits,
 };
 use sekka_mac_journal::{FsStorage, InstallLock, Journal, JournalError};
 use sekka_mac_stage::{Expect, StagingDir};
 use sekka_mac_trust::{AcceptedStore, TrustConfig};
 
 use crate::engine::{DriveError, Observation, drive};
+use crate::reconcile::{Finding, fact, open_stage, recorded_facts};
 use crate::{EngineInstall, Paths, Platform, PlatformError, Secret, redact};
 
 /// How many engine log lines are kept for diagnostics.
@@ -45,11 +46,12 @@ pub struct Helper<P: Platform> {
     unpacking: Mutex<()>,
 }
 
-/// The installation this helper process last ran: whether its engine is
-/// running, and its log for diagnostics.
+/// The installation this helper process last ran or looked at: whether its
+/// engine is running, and its log for diagnostics.
 struct Active {
     installation: Uuid,
-    /// The account that authorized it.
+    /// The account that authorized it; empty when this process never ran
+    /// it (the journal records it).
     owner: String,
     cancel: AtomicBool,
     shared: Mutex<Shared>,
@@ -191,10 +193,7 @@ impl<P: Platform> Helper<P> {
                 None => refuse(HelperRefusalCode::Authorization, "The owner's password is needed."),
             },
             Request::Diagnostics { installation } => self.diagnostics(installation),
-            Request::Reconcile { .. } => refuse(
-                HelperRefusalCode::State,
-                "This helper can't look at the Mac for an installation yet.",
-            ),
+            Request::Reconcile { installation } => self.reconcile(installation),
         }
     }
 
@@ -246,6 +245,22 @@ impl<P: Platform> Helper<P> {
         let started = Arc::new(Active::new(installation, owner, true, mutating, log));
         *active = Some(started.clone());
         started
+    }
+
+    /// Keep a line for an installation's diagnostics: in its log here, or
+    /// in a new one if this process holds none (it restarted). Another
+    /// installation's log is never replaced for it.
+    fn note(&self, installation: Uuid, line: String) {
+        let mut active = self.active.lock().unwrap();
+        match active.as_ref() {
+            Some(a) if a.installation == installation => a.log(line),
+            Some(_) => {}
+            None => {
+                let noted = Active::new(installation, "", false, false, VecDeque::new());
+                noted.log(line);
+                *active = Some(Arc::new(noted));
+            }
+        }
     }
 
     /// The engine whose archive has this digest; see [`Platform::engine`].
@@ -328,8 +343,8 @@ impl<P: Platform> Helper<P> {
     }
 
     fn begin(&self, uid: u32, begin: Begin, password: Secret) -> Response {
-        // Held from here until the run ends: a second Begin or a retry is
-        // refused meanwhile, while Status and Events answer.
+        // Held from here until the run ends: a second Begin, a retry or a
+        // reconcile is refused meanwhile, while Status and Events answer.
         let lock = match self.claim() {
             Ok(lock) => lock,
             Err(response) => return response,
@@ -657,6 +672,82 @@ impl<P: Platform> Helper<P> {
         self.events(installation, 0)
     }
 
+    /// Bring a stopped installation's record up to date with the Mac, as
+    /// the helper inspects it with the installation's own engine: Recovery's
+    /// steps once the boot policy shows they took effect, or that nothing of
+    /// it is left. Anything else, or anything uncertain, changes nothing.
+    fn reconcile(&self, installation: Uuid) -> Response {
+        if self.running(installation) {
+            return refuse(HelperRefusalCode::Busy, "The installation is still running.");
+        }
+        let journal = match self.open(installation) {
+            Ok(j) => j,
+            Err(e) => return refuse(HelperRefusalCode::State, e.to_string()),
+        };
+        let state = journal.state().clone();
+        let recovery = matches!(state, InstallState::WaitingForRecovery | InstallState::EnrollmentUncertain);
+        if !recovery && state.allows_new_installation() {
+            return self.events(installation, 0);
+        }
+        let Event::Opened { plan, .. } = &journal.records()[0].event else {
+            return refuse(HelperRefusalCode::State, "The installation's record has no plan.");
+        };
+        let plan = (**plan).clone();
+        // Its own engine, even if this copy of the app carries a newer one.
+        let engine = match self.engine(&plan.release.engine) {
+            Ok(e) => e,
+            Err(e) => return refuse(HelperRefusalCode::Download, e.to_string()),
+        };
+        // Slow and changes nothing, so no lock is held: Status, Events and
+        // the other requests answer meanwhile.
+        let inspection = match self.platform.inspect(&engine) {
+            Ok(i) => i,
+            Err(e) => {
+                return refuse(
+                    HelperRefusalCode::State,
+                    format!("This Mac couldn't be inspected ({e}). Nothing was changed."),
+                );
+            }
+        };
+        let seen = journal.records().len();
+        let events = match crate::reconcile::look(journal.records(), &state, &plan, &inspection) {
+            Finding::Unchanged(why) => {
+                self.note(installation, format!("Looked at this Mac: nothing recorded, because {why}."));
+                return self.events(installation, 0);
+            }
+            Finding::RecoveryFinished(events) => events,
+            Finding::Removed(facts) => vec![Event::Removed { facts }],
+        };
+        // What was seen is evidence about the record as it was then: add to
+        // it only if nothing was recorded meanwhile, and under the lock.
+        // (A retry of this installation that started meanwhile holds the
+        // lock, or has finished and changed the record.)
+        let _lock = match self.claim() {
+            Ok(lock) => lock,
+            Err(response) => return response,
+        };
+        let mut journal = match self.open(installation) {
+            Ok(j) => j,
+            Err(e) => return refuse(HelperRefusalCode::State, e.to_string()),
+        };
+        if journal.records().len() != seen {
+            self.note(
+                installation,
+                "Looked at this Mac: nothing recorded, because the record changed meanwhile.".into(),
+            );
+            return self.events(installation, 0);
+        }
+        for event in events {
+            if let Err(e) = journal.append(self.platform.now(), event) {
+                return refuse(
+                    HelperRefusalCode::State,
+                    format!("The installation's record couldn't be brought up to date ({e})."),
+                );
+            }
+        }
+        self.events(installation, 0)
+    }
+
     fn diagnostics(&self, installation: Uuid) -> Response {
         let journal = match self.open(installation) {
             Ok(j) => j,
@@ -763,35 +854,6 @@ fn remove_downloads(dir: &Path) -> std::io::Result<()> {
         }
     }
     first
-}
-
-/// Every fact the installation's completed stages recorded, in order.
-fn recorded_facts(records: &[Record]) -> Vec<Fact> {
-    records
-        .iter()
-        .filter_map(|r| match &r.event {
-            Event::Completed { facts, .. } => Some(facts.clone()),
-            _ => None,
-        })
-        .flatten()
-        .collect()
-}
-
-/// The stage the journal says started and has no result.
-fn open_stage(records: &[Record]) -> Option<Stage> {
-    match records.last().map(|r| &r.event) {
-        Some(Event::Intent { stage }) => Some(*stage),
-        _ => None,
-    }
-}
-
-/// The last value recorded under `name`.
-fn fact(facts: &[Fact], name: &str) -> Option<String> {
-    facts
-        .iter()
-        .rev()
-        .find(|f| f.name.as_str() == name)
-        .map(|f| f.value.to_string())
 }
 
 /// A plain sentence for a state, for messages.

@@ -9,7 +9,7 @@
 //! | [`Inspection`] | `sekka.mac.inspection/1` | engine | app, helper |
 //! | [`Plan`] | `sekka.mac.plan/1` | engine, recomputed by helper | app, helper |
 //! | [`Confirmation`] | `sekka.mac.confirmation/1` | app | helper |
-//! | [`Record`] | `sekka.mac.record/1` | helper, Recovery | helper, app, Recovery |
+//! | [`Record`] | `sekka.mac.record/1` | helper (Recovery's steps from its own inspection) | helper, app |
 //! | [`EngineMessage`] lines | `sekka.mac.engine/1` | engine | helper, app |
 //! | [`RecoveryConfig`] | `sekka.mac.recovery/1` | engine | Recovery app |
 //! | [`Handoff`] | `sekka.mac.handoff/1` | engine | Linux first-boot setup |

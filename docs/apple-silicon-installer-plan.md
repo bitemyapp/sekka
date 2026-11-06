@@ -531,17 +531,29 @@ Define and test which state is authoritative after power loss. Multiple journal
 copies must agree under a documented reconciliation rule; choosing whichever
 copy says the most progress is unsafe.
 
+On the Mac the helper's journal is the only authoritative copy. Recovery keeps
+its own receipt on the stub, which nothing trusts as evidence: anyone who can
+write the stub can write it. Any other copy of the records may lag the
+helper's, record for record, but never differ from it or go further, since the
+chain's digests have no key (`sekka_mac_journal::reconcile`). The helper learns
+what Recovery did, or that an installation was removed, only from its own
+inspection as root with the installation's own engine (`Request::Reconcile`).
+It records that inspection only if the journal didn't change while it ran, and
+records nothing when the inspection can't see the plan's disk or is ambiguous.
+
 | Observed state | Permitted next action |
 | --- | --- |
 | Inspected/planned; no mutation intent | Reinspect and prepare; a changed layout requires a newly reviewed plan |
-| Verified assets; no mutation intent | Revalidate/reuse assets or cancel without disk changes |
+| Verified assets; no mutation intent | Revalidate/reuse assets or cancel without disk changes; a stage that changes nothing and was cut off by a restart is recorded as interrupted, then cancelled |
 | Mutation started; completion not proved | Inspect actual state; stop for reconciliation if its effect is ambiguous |
 | Payload checkpoint verified; startup authorization failed | Reverify target/content and retry authorization only |
+| macOS's part complete; waiting for Recovery | Finish in Recovery. Once the helper's inspection shows the installation complete (the stub's boot policy names its boot object) and made of the stub, ESP and root its records name, record both Recovery steps as policy read back, with the inspection as their source |
 | Recovery enrollment uncertain | Read actual policy/selection and preserve matching boot software; never blindly restore an older payload |
 | Waiting for Linux setup | Boot the installed target and resume only that installation's setup transaction |
 | Account/configuration partly committed | Reconcile the existing account and generation; never reset a user's password as a retry |
 | Installation complete | Verify booted target and configured system; ordinary updates use Yukimi/NixOS generations |
 | Record missing/corrupt or target changed | Refuse destructive resume; provide redacted diagnostics and a manual recovery path |
+| Stopped, and nothing of it on its plan's disk as the helper inspects it | Record it removed (what was checked: no partition in the plan's extent other than the macOS container it shrank, no installation naming it, nothing unidentified there); then reinspect and plan afresh |
 
 Checkpoint names and exact write order are phase-0/4 schema deliverables. Test
 process termination, short writes, `ENOSPC`, failed sync and power-loss models

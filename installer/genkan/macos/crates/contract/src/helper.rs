@@ -54,7 +54,9 @@ pub enum Request {
     /// to date with it: record Recovery's steps once the boot policy shows
     /// they took effect, or that nothing of the installation is left. The
     /// helper inspects for itself; the app asks only when its own inspection
-    /// disagrees with the journal. Answered with `Events`.
+    /// disagrees with the journal. Answered with `Events` (all of the
+    /// installation's records), changed or not, or refused while its engine
+    /// runs or when the Mac couldn't be inspected.
     Reconcile { installation: Uuid },
 }
 

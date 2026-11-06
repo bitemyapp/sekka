@@ -36,12 +36,49 @@ enum Script {
     Refuse(&'static str),
 }
 
+/// The parts the scripted engine creates, as its checkpoints record them.
+struct Parts {
+    stub_partition: Uuid,
+    stub_container: Uuid,
+    stub_group: Uuid,
+    esp: Uuid,
+    root: Uuid,
+}
+
+fn parts() -> Parts {
+    let u = |s: &str| s.parse().unwrap();
+    Parts {
+        stub_partition: u("5a0c2d4e-1111-4a2b-8c3d-000000000001"),
+        stub_container: u("5a0c2d4e-1111-4a2b-8c3d-000000000002"),
+        stub_group: u("5a0c2d4e-1111-4a2b-8c3d-000000000003"),
+        esp: u("5a0c2d4e-1111-4a2b-8c3d-000000000004"),
+        root: u("5a0c2d4e-1111-4a2b-8c3d-000000000005"),
+    }
+}
+
+fn checkpoint_facts(stage: Stage) -> Vec<Fact> {
+    let p = parts();
+    let f = |name, value: Uuid| Fact::new(name, value).unwrap();
+    match stage {
+        Stage::StubPartition => vec![f("stub-partition", p.stub_partition), f("stub-container", p.stub_container)],
+        Stage::StubSystem => vec![f("stub-volume-group", p.stub_group)],
+        Stage::Partitions => vec![f("esp-partition", p.esp), f("root-partition", p.root)],
+        _ => vec![Fact::new("checked", stage.title()).unwrap()],
+    }
+}
+
 struct Fake {
     dir: PathBuf,
     inspection: Mutex<Inspection>,
     /// Run once, during the next inspection, as something else might act
     /// while the Mac is being inspected.
     during_inspection: Mutex<Option<Box<dyn FnOnce() + Send>>>,
+    /// The engine this copy of the app carries, and those already unpacked
+    /// into the helper's cache, which `sekka_mac_engine::unpack` reuses by
+    /// digest whatever the app carries.
+    bundled: Mutex<Digest>,
+    unpacked: Mutex<Vec<Digest>>,
+    inspected_with: Mutex<Vec<Digest>>,
     /// What the engine found in the helper's staging when it started.
     staged_at_start: Mutex<Vec<(String, Vec<u8>)>>,
     script: Mutex<Script>,
@@ -57,15 +94,20 @@ impl Platform for Fake {
         at()
     }
     fn engine(&self, expected: &Digest) -> Result<EngineInstall, PlatformError> {
-        if *expected != engine_digest() {
-            return Err(PlatformError::Engine("This installer carries a different engine.".into()));
+        let mut unpacked = self.unpacked.lock().unwrap();
+        if !unpacked.contains(expected) {
+            if *self.bundled.lock().unwrap() != *expected {
+                return Err(PlatformError::Engine("This installer carries a different engine.".into()));
+            }
+            unpacked.push(*expected);
         }
         Ok(EngineInstall {
-            root: self.dir.join("engine"),
+            root: self.dir.join("engine").join(expected.hex()),
             digest: *expected,
         })
     }
-    fn inspect(&self, _: &EngineInstall) -> Result<Inspection, PlatformError> {
+    fn inspect(&self, engine: &EngineInstall) -> Result<Inspection, PlatformError> {
+        self.inspected_with.lock().unwrap().push(engine.digest);
         let meanwhile = self.during_inspection.lock().unwrap().take();
         if let Some(meanwhile) = meanwhile {
             meanwhile();
@@ -248,7 +290,7 @@ impl ScriptedEngine {
                 send(EngineBody::Checkpoint {
                     stage,
                     plan: digest,
-                    facts: vec![Fact::new("checked", stage.title()).unwrap()],
+                    facts: checkpoint_facts(stage),
                     verification: Verification::Inspected,
                 });
             }
@@ -341,6 +383,9 @@ fn fake(dir: &Path, script: Script) -> Fake {
         dir: dir.into(),
         inspection: Mutex::new(samples::inspection()),
         during_inspection: Mutex::new(None),
+        bundled: Mutex::new(engine_digest()),
+        unpacked: Mutex::new(Vec::new()),
+        inspected_with: Mutex::new(Vec::new()),
         staged_at_start: Mutex::new(Vec::new()),
         script: Mutex::new(script),
         startup_disk_ok: AtomicBool::new(true),
@@ -473,6 +518,13 @@ impl World {
         }
         panic!("the record never appeared");
     }
+    /// Ask the helper to look at the Mac for an installation.
+    fn reconcile(&self, id: Uuid) -> (InstallState, Vec<Record>) {
+        match self.ask(Request::Reconcile { installation: id }, None) {
+            Response::Events { state, records, running: false, .. } => (state, records),
+            other => panic!("{other:?}"),
+        }
+    }
     fn fake(&self) -> &Fake {
         self.helper.platform_for_tests()
     }
@@ -480,9 +532,11 @@ impl World {
         self.helper.paths_for_tests().journals()
     }
     /// The helper process starts again (after a crash, a restart of the
-    /// Mac, or an update of the app): nothing in memory survives.
+    /// Mac, or an update of the app): nothing in memory survives, while the
+    /// engines it unpacked stay in its cache.
     fn restarted(self, script: Script) -> World {
         let fake = fake(self._tmp.path(), script);
+        *fake.unpacked.lock().unwrap() = self.fake().unpacked.lock().unwrap().clone();
         let helper = Helper::new(fake, self.helper.paths_for_tests().clone(), trust(), "0.1.0".parse().unwrap()).unwrap();
         World { helper, ..self }
     }
@@ -530,6 +584,83 @@ fn abandoned(w: &World, open: Stage) -> Uuid {
         j.append(at(), Event::Intent { stage: Stage::AppleInputs }).unwrap();
     }
     id
+}
+
+/// This Mac after macOS's part of `plan`: the container shrunk, and the
+/// stub, ESP and root where the plan put them, which the engine reports as
+/// an installation in `state` naming `id`.
+fn installed(plan: &Plan, id: Option<Uuid>, state: InstallationState) -> Inspection {
+    let mut i = samples::inspection();
+    let (t, a, p) = (plan.target, plan.allocation, parts());
+    let macos = &mut i.disk.partitions[1];
+    macos.size = t.offset - macos.offset;
+    i.disk.containers[0].size = macos.size;
+    i.disk.containers[0].free = 100 * GIB;
+    let partition = |uuid, kind, offset, size| Partition {
+        uuid,
+        kind,
+        name: "Sekka".parse().unwrap(),
+        offset,
+        size,
+    };
+    i.disk.partitions.extend([
+        partition(p.stub_partition, PartitionKind::Apfs, t.offset, a.stub),
+        partition(p.esp, PartitionKind::Efi, t.offset + a.stub, a.esp),
+        partition(p.root, PartitionKind::Linux, t.offset + a.stub + a.esp, a.root),
+    ]);
+    i.disk.containers.push(Container {
+        uuid: p.stub_container,
+        partition: p.stub_partition,
+        size: a.stub,
+        free: 0,
+        volume_groups: vec![VolumeGroup {
+            uuid: p.stub_group,
+            name: "Sekka".parse().unwrap(),
+            system_volume: None,
+            data_volume: None,
+            os: GroupOs::Stub {
+                for_system: "Sekka".parse().unwrap(),
+            },
+        }],
+        resize: None,
+        snapshots: 0,
+    });
+    i.candidates.clear();
+    i.installations.push(Installation {
+        kind: InstallationKind::Sekka,
+        name: "Sekka".parse().unwrap(),
+        state,
+        stub_group: Some(p.stub_group),
+        esp: Some(p.esp),
+        root: Some(p.root),
+        installation_id: id,
+    });
+    i.issues.push(Issue {
+        code: IssueCode::ExistingSekka,
+        blocking: true,
+        detail: "Sekka is already installed on this Mac (Sekka).".parse().unwrap(),
+    });
+    i.layout_digest = i.disk.layout_digest().unwrap();
+    i.check().unwrap();
+    i
+}
+
+/// This Mac with Sekka's partitions deleted by hand and the space left
+/// unallocated.
+fn emptied(plan: &Plan) -> Inspection {
+    let mut i = samples::inspection();
+    let macos = &mut i.disk.partitions[1];
+    macos.size = plan.target.offset - macos.offset;
+    i.disk.containers[0].size = macos.size;
+    i.candidates = vec![Candidate::FreeSpace { extent: plan.target }];
+    i.layout_digest = i.disk.layout_digest().unwrap();
+    i.check().unwrap();
+    i
+}
+
+fn fact_of(event: &Event, name: &str) -> Option<String> {
+    let (Event::Completed { facts, .. } | Event::Removed { facts }) = event else { return None };
+    facts.iter().find(|f| f.name.as_str() == name).map(|f| f.value.to_string())
 }
 
 #[test]
@@ -919,4 +1050,170 @@ fn long_text_is_cut_on_a_character_boundary() {
     let lines = w.lines(id);
     let failed = lines.iter().find(|l| l.contains("FAILED")).unwrap();
     assert!(failed.len() <= 2048 && failed.len() > 2000, "{}", failed.len());
+}
+
+#[test]
+fn recovery_finished_is_recorded_from_the_helpers_own_inspection() {
+    let w = world(Script::Happy);
+    let id = w.begun();
+    let (_, before) = w.finish(id);
+    *w.fake().inspection.lock().unwrap() = installed(&w.plan, Some(id), InstallationState::Complete);
+    let (state, records) = w.reconcile(id);
+    assert_eq!(state, InstallState::WaitingForSetup);
+    let added: Vec<&Event> = records[before.len()..].iter().map(|r| &r.event).collect();
+    assert!(matches!(
+        added[..],
+        [
+            Event::Intent { stage: Stage::Enrollment },
+            Event::Completed { stage: Stage::Enrollment, verification: Verification::PolicyReadBack, .. },
+            Event::Intent { stage: Stage::StartupSelection },
+            Event::Completed { stage: Stage::StartupSelection, verification: Verification::PolicyReadBack, .. },
+        ]
+    ), "{added:?}");
+    assert_eq!(fact_of(added[3], "source").as_deref(), Some("helper-inspection"));
+    assert_eq!(fact_of(added[3], "stub-group"), Some(parts().stub_group.to_string()));
+    assert!(state.allows_new_installation());
+    // Asking again needs no look at the Mac and changes nothing.
+    let looked = w.fake().inspected_with.lock().unwrap().len();
+    assert_eq!(w.reconcile(id), (state, records));
+    assert_eq!(w.fake().inspected_with.lock().unwrap().len(), looked);
+}
+
+#[test]
+fn recovery_not_finished_changes_nothing() {
+    let w = world(Script::Happy);
+    let id = w.begun();
+    let (_, before) = w.finish(id);
+    // Still waiting for Recovery, as the boot policy shows.
+    *w.fake().inspection.lock().unwrap() = installed(&w.plan, Some(id), InstallationState::WaitingForRecovery);
+    assert_eq!(w.reconcile(id), (InstallState::WaitingForRecovery, before.clone()));
+    // Complete, but not made of this installation's parts.
+    let mut other = installed(&w.plan, Some(id), InstallationState::Complete);
+    other.installations[0].root = Some(other.disk.partitions[2].uuid);
+    *w.fake().inspection.lock().unwrap() = other;
+    assert_eq!(w.reconcile(id), (InstallState::WaitingForRecovery, before));
+    assert!(w.lines(id).iter().any(|l| l.contains("nothing recorded")));
+}
+
+#[test]
+fn an_installation_removed_by_hand_is_recorded_as_removed() {
+    // Stopped part way, then removed by hand, macOS grown back over the
+    // space.
+    let w = world(Script::Die(Stage::Root));
+    let id = w.begun();
+    let (state, before) = w.finish(id);
+    assert!(!state.allows_new_installation());
+    *w.fake().script.lock().unwrap() = Script::Happy;
+    assert_eq!(refused(w.begin()).0, HelperRefusalCode::Busy);
+    let (state, records) = w.reconcile(id);
+    assert_eq!(state, InstallState::Removed);
+    assert_eq!(records.len(), before.len() + 1);
+    let removed = &records.last().unwrap().event;
+    assert_eq!(fact_of(removed, "source").as_deref(), Some("helper-inspection"));
+    assert_eq!(fact_of(removed, "target-extent").as_deref(), Some("macos-container"));
+    // Another installation may begin.
+    assert_eq!(w.finish(w.begun()).0, InstallState::WaitingForRecovery);
+
+    // Waiting for Recovery, then removed, the space left unallocated.
+    let w = world(Script::Happy);
+    let id = w.begun();
+    w.finish(id);
+    *w.fake().inspection.lock().unwrap() = emptied(&w.plan);
+    let (state, records) = w.reconcile(id);
+    assert_eq!(state, InstallState::Removed);
+    assert_eq!(fact_of(&records.last().unwrap().event, "target-extent").as_deref(), Some("unallocated"));
+}
+
+#[test]
+fn an_ambiguous_inspection_changes_nothing() {
+    let w = world(Script::Die(Stage::Root));
+    let id = w.begun();
+    let (state, before) = w.finish(id);
+    let mut another_disk = samples::inspection();
+    another_disk.disk.uuid = "0d4e3e3b-0b3a-4b0a-9a0a-000000000001".parse().unwrap();
+    another_disk.layout_digest = another_disk.disk.layout_digest().unwrap();
+    let mut two_disks = samples::inspection();
+    two_disks.issues.push(Issue {
+        code: IssueCode::AmbiguousDisk,
+        blocking: true,
+        detail: "There is more than one internal disk.".parse().unwrap(),
+    });
+    let mut unplaced = samples::inspection();
+    unplaced.installations.push(Installation {
+        kind: InstallationKind::Sekka,
+        name: "Sekka".parse().unwrap(),
+        state: InstallationState::Partial,
+        stub_group: None,
+        esp: Some(parts().esp),
+        root: None,
+        installation_id: None,
+    });
+    for (case, inspection) in [
+        ("another disk", another_disk),
+        ("more than one disk", two_disks),
+        ("its parts are still there", installed(&w.plan, Some(id), InstallationState::Partial)),
+        ("parts of an unidentified Sekka are there", installed(&w.plan, None, InstallationState::Partial)),
+        ("an unidentified Sekka that can't be placed", unplaced),
+    ] {
+        *w.fake().inspection.lock().unwrap() = inspection;
+        assert_eq!(w.reconcile(id), (state.clone(), before.clone()), "{case}");
+    }
+}
+
+#[test]
+fn reconcile_is_refused_while_the_engine_runs() {
+    let w = world(Script::Hang(Stage::AppleInputs));
+    let id = w.begun();
+    w.wait_for(id, |e| matches!(e, Event::Intent { stage: Stage::AppleInputs }));
+    *w.fake().inspection.lock().unwrap() = emptied(&w.plan);
+    assert_eq!(refused(w.ask(Request::Reconcile { installation: id }, None)).0, HelperRefusalCode::Busy);
+    assert_eq!(w.ask(Request::Cancel { installation: id }, None), Response::Cancelled);
+    assert_eq!(w.finish(id).0, InstallState::Cancelled);
+}
+
+#[test]
+fn a_record_that_changes_during_the_inspection_is_left_alone() {
+    let w = world(Script::Happy);
+    let id = abandoned(&w, Stage::AppleInputs);
+    *w.fake().inspection.lock().unwrap() = samples::inspection();
+    let (inspecting, wait) = channel();
+    let (go, gate) = channel::<()>();
+    *w.fake().during_inspection.lock().unwrap() = Some(Box::new(move || {
+        inspecting.send(()).unwrap();
+        gate.recv().unwrap();
+    }));
+    std::thread::scope(|s| {
+        let looked = s.spawn(|| w.reconcile(id));
+        wait.recv().unwrap();
+        // While the Mac is inspected, the owner cancels it.
+        assert!(matches!(w.ask(Request::Events { installation: id, after: 0 }, None), Response::Events { .. }));
+        assert_eq!(w.ask(Request::Cancel { installation: id }, None), Response::Cancelled);
+        go.send(()).unwrap();
+        let (state, records) = looked.join().unwrap();
+        assert_eq!(state, InstallState::Cancelled);
+        assert!(records.iter().all(|r| !matches!(r.event, Event::Removed { .. })), "{records:?}");
+    });
+}
+
+#[test]
+fn the_installations_own_engine_is_used_after_an_app_update() {
+    let w = world(Script::Fail(Stage::StartupDisk, DiskChanged::No));
+    let id = w.begun();
+    assert_eq!(w.finish(id).0, InstallState::StartupDiskFailed);
+    // A newer Sekka Installer, with a newer engine, replaces the helper.
+    let w = w.restarted(Script::Happy);
+    *w.fake().bundled.lock().unwrap() = Digest::of(b"a newer engine");
+    // The startup disk is retried with the engine that made the
+    // installation, still in the helper's cache.
+    let Response::Events { state, .. } = w.ask(Request::RetryStartupDisk { installation: id }, Some(PASSWORD)) else { panic!() };
+    assert_eq!(state, InstallState::WaitingForRecovery);
+    // And the Mac is inspected with it.
+    *w.fake().inspection.lock().unwrap() = installed(&w.plan, Some(id), InstallationState::Complete);
+    let cache = w.fake().unpacked.lock().unwrap().clone();
+    w.fake().unpacked.lock().unwrap().clear();
+    let (code, _) = refused(w.ask(Request::Reconcile { installation: id }, None));
+    assert_eq!(code, HelperRefusalCode::Download, "without its engine, nothing is looked at");
+    *w.fake().unpacked.lock().unwrap() = cache;
+    assert_eq!(w.reconcile(id).0, InstallState::WaitingForSetup);
+    assert_eq!(w.fake().inspected_with.lock().unwrap().last(), Some(&engine_digest()));
 }

@@ -15,7 +15,10 @@
 //! - it copies the app's downloads into its own staging, hashing them
 //!   against the catalog as it copies, and removes them once the run ends;
 //! - it runs one installation at a time, under a journal that records each
-//!   stage before the engine may begin it.
+//!   stage before the engine may begin it;
+//! - it brings a stopped installation's journal up to date (Recovery's
+//!   steps, or that it was removed) only from its own inspection, never from
+//!   anything written on the stub.
 //!
 //! The operations are the closed set in `sekka_mac_contract::Request`: no
 //! request names a command, an executable or a path the helper will run.
@@ -25,6 +28,7 @@ pub mod engine;
 mod helper;
 pub mod paths;
 mod platform;
+mod reconcile;
 mod redact;
 
 #[cfg(target_os = "macos")]
