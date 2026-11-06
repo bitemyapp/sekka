@@ -38,12 +38,14 @@ fn main() {
             Some(out)
         })
         .collect();
-    let request = Request::parse(&handed);
-    let mut app = Fusen::new(Places::user(), request);
-    match instance::claim("fusen", &handed) {
+    // Claim first: a launch that hands its request over builds no Fusen
+    // (reading every note for nothing).
+    let listener = match instance::claim("fusen", &handed) {
         Claim::Handed => return,
-        Claim::First(listener) => app.instance = Some(listener),
-        Claim::Alone => {}
-    }
+        Claim::First(listener) => Some(listener),
+        Claim::Alone => None,
+    };
+    let mut app = Fusen::new(Places::user(), Request::parse(&handed));
+    app.instance = listener;
     aizome_kit::run(app);
 }

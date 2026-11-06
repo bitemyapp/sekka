@@ -114,6 +114,18 @@ pub struct SavedStickies {
     pub stickies: Vec<SavedSticky>,
 }
 
+/// The stickies kept between runs, and whether this run may write them.
+/// Until `launched` reopens them, the file is all there is of them: a Fusen
+/// that never launches (a second launch handing its request over) has no
+/// stickies open, and saving that would forget them and their login item.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Kept {
+    /// As read at start: not reopened, so never written.
+    Unopened(SavedStickies),
+    /// Reopened at launch: saved as stickies open, close and move.
+    Reopened(SavedStickies),
+}
+
 /// An open sticky.
 #[derive(Clone, Debug)]
 pub struct Sticky {
@@ -209,7 +221,7 @@ pub struct Fusen {
     pub open: HashMap<u64, Open>,
     pub main: Option<WindowKey>,
     pub stickies: BTreeMap<WindowKey, Sticky>,
-    pub saved: SavedStickies,
+    pub kept: Kept,
     /// The New Folder sheet (its window, and the name typed).
     pub folder_sheet: Option<(WindowKey, String)>,
     pub request: Request,
@@ -247,7 +259,7 @@ impl Fusen {
             open: HashMap::new(),
             main: None,
             stickies: BTreeMap::new(),
-            saved,
+            kept: Kept::Unopened(saved),
             folder_sheet: None,
             request,
             instance: None,
@@ -585,6 +597,7 @@ impl Fusen {
     /// Keep where the stickies are, and the login item that brings them
     /// back.
     fn save_stickies(&mut self) {
+        let Kept::Reopened(kept) = &self.kept else { return };
         let mut list = Vec::new();
         for s in self.stickies.values() {
             let Some(n) = self.note(s.note) else { continue };
@@ -592,19 +605,19 @@ impl Fusen {
                 continue;
             }
             let key = self.store.key(&n.path);
-            let place = self.saved.stickies.iter().find(|x| x.note == key).and_then(|x| x.place);
+            let place = kept.stickies.iter().find(|x| x.note == key).and_then(|x| x.place);
             list.push(SavedSticky { note: key, place, float: s.float });
         }
-        self.saved.stickies = list;
+        let saved = SavedStickies { stickies: list };
         if let Some(dir) = &self.places.state {
             let _ = std::fs::create_dir_all(dir);
-            if let Ok(json) = serde_json::to_string_pretty(&self.saved) {
+            if let Ok(json) = serde_json::to_string_pretty(&saved) {
                 let _ = aizome_sumi::files::save_atomic(&dir.join("stickies.json"), json.as_bytes());
             }
         }
         if let Some(dir) = &self.places.autostart {
             let entry = dir.join("org.aizome.Fusen.Stickies.desktop");
-            if self.saved.stickies.is_empty() {
+            if saved.stickies.is_empty() {
                 let _ = std::fs::remove_file(&entry);
             } else if !entry.exists() {
                 let _ = std::fs::create_dir_all(dir);
@@ -614,15 +627,20 @@ impl Fusen {
                 );
             }
         }
+        self.kept = Kept::Reopened(saved);
     }
 
+    /// Reopen the stickies kept from the last run, where they were; from
+    /// now on they're this run's to save.
     fn restore_stickies(&mut self, cx: &mut Cx<Msg>) {
-        let saved = self.saved.stickies.clone();
-        for s in saved {
+        let Kept::Unopened(saved) = &self.kept else { return };
+        let saved = saved.clone();
+        for s in &saved.stickies {
             let path = self.store.root.join(&s.note);
             let Some(id) = self.notes.iter().find(|n| n.path == path).map(|n| n.id) else { continue };
             self.open_sticky(id, s.place, s.float, cx);
         }
+        self.kept = Kept::Reopened(saved);
     }
 
     fn take_request(&mut self, r: Request, cx: &mut Cx<Msg>) {
@@ -978,7 +996,8 @@ impl Program for Fusen {
                     let Some(s) = self.stickies.values().find(|s| s.title == title).cloned() else { continue };
                     let Some(n) = self.note(s.note) else { continue };
                     let key = self.store.key(&n.path);
-                    if let Some(x) = self.saved.stickies.iter_mut().find(|x| x.note == key)
+                    if let Kept::Reopened(kept) = &mut self.kept
+                        && let Some(x) = kept.stickies.iter_mut().find(|x| x.note == key)
                         && (x.place != Some(place) || x.float != float)
                     {
                         x.place = Some(place);
@@ -987,8 +1006,9 @@ impl Program for Fusen {
                     }
                 }
                 if changed
+                    && let Kept::Reopened(kept) = &self.kept
                     && let Some(dir) = &self.places.state
-                    && let Ok(json) = serde_json::to_string_pretty(&self.saved)
+                    && let Ok(json) = serde_json::to_string_pretty(kept)
                 {
                     let _ = aizome_sumi::files::save_atomic(&dir.join("stickies.json"), json.as_bytes());
                 }
