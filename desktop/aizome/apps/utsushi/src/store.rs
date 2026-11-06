@@ -159,8 +159,12 @@ impl Store {
 mod tests {
     use super::*;
 
+    /// A directory of the test's own: tests run concurrently in one process,
+    /// and one's cleanup must not delete another's files.
     fn temp() -> PathBuf {
-        let d = std::env::temp_dir().join(format!("utsushi-store-{}-{}", std::process::id(), now()));
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let d = std::env::temp_dir().join(format!("utsushi-store-{}-{n}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         d
     }
