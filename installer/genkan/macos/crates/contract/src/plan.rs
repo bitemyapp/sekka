@@ -442,8 +442,7 @@ pub fn derive_plan(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::tests::sample_catalog;
-    use crate::inspection::tests::sample;
+    use crate::samples::{catalog as sample_catalog, inspection as sample};
     use crate::{GIB, IssueCode};
 
     fn request(size: u64) -> PlanRequest {

@@ -35,6 +35,8 @@ mod profile;
 mod random;
 mod record;
 mod recovery;
+#[cfg(any(test, feature = "samples"))]
+pub mod samples;
 mod state;
 
 pub use catalog::*;
@@ -69,7 +71,8 @@ pub(crate) fn invalid(message: impl Into<String>) -> Error {
 }
 
 /// A zero-sized `schema` field that serializes as one fixed string and
-/// refuses any other.
+/// refuses any other. The crate using it needs `serde`.
+#[macro_export]
 macro_rules! schema_tag {
     ($name:ident, $value:literal) => {
         #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -97,7 +100,6 @@ macro_rules! schema_tag {
         }
     };
 }
-pub(crate) use schema_tag;
 
 /// Size limits for each document, checked before parsing.
 pub mod limits {

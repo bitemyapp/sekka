@@ -309,7 +309,7 @@ mod tests {
     fn an_inspection_run() {
         let mut w = W::new();
         w.hello(EngineMode::Inspect)
-            .push(EngineBody::Inspection(Box::new(crate::inspection::tests::sample())))
+            .push(EngineBody::Inspection(Box::new(crate::samples::inspection())))
             .push(EngineBody::Completion { outcome: EngineOutcome::Inspected });
         assert_eq!(w.run(Transcript::inspect()).unwrap().outcome(), Some(EngineOutcome::Inspected));
         // Nothing may change in inspect mode.

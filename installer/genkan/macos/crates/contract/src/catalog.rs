@@ -294,77 +294,9 @@ impl Release {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use super::*;
-    use crate::profile::j514s;
-
-    pub fn sample_release() -> Release {
-        let d = |s: &str| Digest::of(s.as_bytes());
-        let artifact = |name: &str, size| Artifact {
-            url: format!("https://downloads.sekka.computer/mac/v1/{name}").parse().unwrap(),
-            size,
-            digest: d(name),
-        };
-        Release {
-            id: "sekka-j514s-4882dc33".parse().unwrap(),
-            title: "Sekka for the 14-inch MacBook Pro (M3 Pro)".parse().unwrap(),
-            profile: "j514s".parse().unwrap(),
-            support: Support::Development,
-            source: SourceIdentity {
-                repository: "bitemyapp/sekka".parse().unwrap(),
-                revision: "4882dc33652612e7475f467f6373d8b607e5407c".parse().unwrap(),
-                lock: d("lock"),
-            },
-            artifacts: Artifacts {
-                payload: artifact("payload.zip", 12 * GIB),
-                installer_data: artifact("installer_data.json", 2048),
-                manifest: artifact("manifest.json", 8192),
-                engine: artifact("engine.tar.gz", 40 * 1024 * 1024),
-                recovery_app: artifact("recovery.zip", 4 * 1024 * 1024),
-            },
-            image: ImageFacts {
-                root_image: SizedDigest {
-                    size: 11 * GIB,
-                    digest: d("root"),
-                },
-                esp_inventory: d("esp"),
-                esp_bytes: GIB,
-            },
-            allocation: AllocationPolicy {
-                minimum: 40 * GIB,
-                recommended: 120 * GIB,
-            },
-            apple_inputs: vec![AppleInput {
-                kind: AppleInputKind::StubRestoreImage,
-                version: "14.8.3".parse().unwrap(),
-                approximate_bytes: 1024 * 1024 * 1024,
-            }],
-            human_steps: vec![
-                HumanStep::ShutDown,
-                HumanStep::HoldPowerButton,
-                HumanStep::ChooseVolume,
-                HumanStep::AuthorizeInRecovery,
-                HumanStep::CreateAccount,
-            ],
-            published: "2026-11-06T21:00:00Z".parse().unwrap(),
-        }
-    }
-
-    pub fn sample_catalog() -> Catalog {
-        Catalog {
-            schema: CatalogSchema,
-            product: PRODUCT.parse().unwrap(),
-            channel: "development".parse().unwrap(),
-            serial: 1,
-            issued_at: "2026-11-06T21:00:00Z".parse().unwrap(),
-            expires_at: "2026-12-06T21:00:00Z".parse().unwrap(),
-            minimum_app_version: "0.1.0".parse().unwrap(),
-            protocol: 1,
-            profiles: vec![j514s()],
-            releases: vec![sample_release()],
-            notice: None,
-        }
-    }
+    use crate::samples::{catalog as sample_catalog, release as sample_release};
 
     #[test]
     fn the_sample_catalog_is_consistent() {

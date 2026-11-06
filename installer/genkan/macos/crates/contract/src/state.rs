@@ -236,8 +236,8 @@ mod tests {
 
     fn plan() -> Plan {
         crate::derive_plan(
-            &crate::inspection::tests::sample(),
-            &crate::catalog::tests::sample_catalog(),
+            &crate::samples::inspection(),
+            &crate::samples::catalog(),
             &crate::PlanRequest {
                 release: "sekka-j514s-4882dc33".parse().unwrap(),
                 place: crate::Place::ShrinkContainer {
