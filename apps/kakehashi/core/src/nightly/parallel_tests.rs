@@ -20,6 +20,7 @@ enum Mode {
     FailOnce,
     TruncateOnce,
     DelayFirst,
+    Overlap,
     IgnoreProbes(usize),
     FailProbeOnce,
     WrongProbeOnce,
@@ -47,16 +48,18 @@ impl Server {
         let stop = Arc::new(AtomicBool::new(false));
         let (d, r, p, s) = (data.clone(), requests.clone(), peak.clone(), stop.clone());
         let thread = std::thread::spawn(move || {
-            let active = Arc::new(AtomicUsize::new(0));
+            let (active, answered) = (Arc::new(AtomicUsize::new(0)), Arc::new(AtomicUsize::new(0)));
             let mut handlers = Vec::new();
             while !s.load(Relaxed) {
                 match listener.accept() {
                     Ok((stream, _)) => {
-                        let (data, requests, peak, active) = (d.clone(), r.clone(), p.clone(), active.clone());
+                        let (data, requests, peak) = (d.clone(), r.clone(), p.clone());
+                        let (active, answered) = (active.clone(), answered.clone());
                         handlers.push(std::thread::spawn(move || {
                             let n = active.fetch_add(1, Relaxed) + 1;
                             peak.fetch_max(n, Relaxed);
-                            let _ = respond(stream, &data, &requests, mode);
+                            let _ = respond(stream, &data, &requests, &answered, mode);
+                            answered.fetch_add(1, Relaxed);
                             active.fetch_sub(1, Relaxed);
                         }));
                     }
@@ -92,7 +95,13 @@ impl Drop for Server {
     }
 }
 
-fn respond(mut stream: TcpStream, data: &[u8], requests: &Mutex<Vec<(u64, u64)>>, mode: Mode) -> std::io::Result<()> {
+fn respond(
+    mut stream: TcpStream,
+    data: &[u8],
+    requests: &Mutex<Vec<(u64, u64)>>,
+    answered: &AtomicUsize,
+    mode: Mode,
+) -> std::io::Result<()> {
     stream.set_nonblocking(false)?;
     stream.set_read_timeout(Some(Duration::from_secs(2)))?;
     stream.set_write_timeout(Some(Duration::from_secs(2)))?;
@@ -129,6 +138,19 @@ fn respond(mut stream: TcpStream, data: &[u8], requests: &Mutex<Vec<(u64, u64)>>
     let (start, end) = if ignored { (0, data.len() - 1) } else { (a as usize, b as usize) };
     if matches!(mode, Mode::DelayFirst) && a == 0 && !probe {
         std::thread::sleep(Duration::from_millis(200));
+    }
+    if matches!(mode, Mode::Overlap) && !probe {
+        // Hold each range until a second one has been requested, and the first
+        // until another has been answered, so the overlap and the later range
+        // arriving first don't depend on how threads are scheduled. Only a
+        // client that never overlaps waits out the deadline, and then fails.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < deadline
+            && (requests.lock().unwrap().iter().filter(|(start, end)| start != end).count() < 2
+                || (a == 0 && answered.load(Relaxed) == 0))
+        {
+            std::thread::sleep(Duration::from_millis(1));
+        }
     }
     if ignored || requested.is_none() {
         write!(stream, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", data.len())?;
@@ -181,7 +203,7 @@ fn respond(mut stream: TcpStream, data: &[u8], requests: &Mutex<Vec<(u64, u64)>>
 
 #[test]
 fn parallel_ranges_commit_in_order_and_match_the_golden_checksum() {
-    let server = Server::new(1024 * 1024 + 37, Mode::DelayFirst);
+    let server = Server::new(1024 * 1024 + 37, Mode::Overlap);
     let build = server.build();
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("part");
@@ -206,7 +228,7 @@ fn parallel_ranges_commit_in_order_and_match_the_golden_checksum() {
     .unwrap();
     assert_eq!(std::fs::read(path).unwrap(), *server.data);
     assert_eq!(hex(&hasher.finalize()), build.sha256);
-    assert!(server.peak.load(Relaxed) >= 2);
+    assert!(server.peak.load(Relaxed) >= 2, "no two ranges were in flight at once");
 }
 
 #[test]
