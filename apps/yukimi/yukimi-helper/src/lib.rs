@@ -10,6 +10,10 @@
 //!   entries for them, then collecting garbage.
 //! - [`snapshots`]: the configuration kept for each generation.
 //! - [`process`]: running programs, and stopping when Yukimi asks.
+//!
+//! Starting a program other than through [`process::command`] is denied
+//! (`clippy.toml`), here and in the helper's programs.
+#![deny(clippy::disallowed_methods)]
 pub mod change;
 pub mod clean;
 pub mod process;

@@ -685,6 +685,7 @@ dependencies = [
 name = "yukimi-helper"
 version = "0.1.0"
 dependencies = [
+ "aizome-typestate",
  "libc",
  "serde_json",
  "yukimi-config",

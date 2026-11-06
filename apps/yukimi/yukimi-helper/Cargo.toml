@@ -12,3 +12,4 @@ yukimi-config.workspace = true
 yukimi-system.workspace = true
 serde_json.workspace = true
 libc.workspace = true
+aizome-typestate = { path = "../../../desktop/aizome/crates/aizome-typestate" }
