@@ -13,9 +13,12 @@ Promotion uses the exact qualified bytes; nothing is rebuilt.
    catalog not newer than the published one.
 2. M9-02: an independent agent audits the evidence against this skill's
    whole tree.
-3. M9-03: `packaging/audit-macho.py --verify --team TEAM` over the app and
-   recovery.zip shows every Mach-O signed by the team; `spctl --assess`
-   accepts the notarized app.
+3. M9-03: `packaging/audit-macho.py --verify --team TEAM --archive-team
+   engine.tar.gz=ENGINE_TEAM` over the app and recovery.zip (build-app.sh
+   --release runs it into `macho-audit.json`) shows every Mach-O signed by
+   Sekka's team, except Asahi's Python runtime inside the engine archive,
+   signed by the team `engine/source-lock.json` pins as `runtime_team`;
+   `spctl --assess` accepts the notarized app.
 4. M9-04: the dry run's upload list is reviewed.
 5. M9-05: publication itself is a separate, explicitly authorized request
    from the user. Afterwards, download the public bytes independently and

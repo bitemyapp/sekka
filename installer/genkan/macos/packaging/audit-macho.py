@@ -6,10 +6,17 @@ release's team when --team is given.
 
 Apple's notarization inspects archived binaries too; an unsigned one
 inside the engine archive or recovery.zip fails it. Prints JSON:
-{"machos": [{"path", "inside", "kinds", "signed", "team"}], "problems": [...]}.
+{"machos": [{"path", "inside", "kinds", "signed", "team", "allowed"}], "problems": [...]}.
 
-    audit-macho.py [--verify] [--team TEAMID] PATH...
+    audit-macho.py [--verify] [--team TEAMID] [--archive-team ARCHIVE=TEAMID]... PATH...
+
+--archive-team allows one more team for the Mach-Os inside archives named
+ARCHIVE (by file name, at any depth): the engine archive carries Asahi's
+Python runtime exactly as Asahi ships it, signed by its own team, and
+re-signing it would change the engine's digest. Every other Mach-O must
+be signed by --team.
 """
+import argparse
 import io
 import json
 import os
@@ -19,30 +26,45 @@ import tarfile
 import tempfile
 import zipfile
 
-MAGIC = {
+THIN = {
     b"\xfe\xed\xfa\xce": "macho32-be",
     b"\xce\xfa\xed\xfe": "macho32",
     b"\xfe\xed\xfa\xcf": "macho64-be",
     b"\xcf\xfa\xed\xfe": "macho64",
+}
+FAT = {
     b"\xca\xfe\xba\xbe": "universal",
     b"\xbe\xba\xfe\xca": "universal-le",
 }
+MAGIC = {**THIN, **FAT}
 
 
-def kind(head):
-    """The Mach-O kind of a file's first bytes, or None. A universal
-    header's second word is its architecture count, small; Java class files
-    share the magic but have a version there."""
-    k = MAGIC.get(head[:4])
-    if k in ("universal", "universal-le") and len(head) >= 8:
-        count = int.from_bytes(head[4:8], "big" if k == "universal" else "little")
-        if count == 0 or count > 30:
-            return None
-    return k
+def kind(data):
+    """The Mach-O kind of a file's bytes, or None. A universal file counts
+    only when one of its slices is a Mach-O: Java class files share the
+    magic, and universal static archives (`.a`) and bitcode (`python.o`)
+    hold no Mach-O and carry no signature of their own."""
+    magic = data[:4]
+    if magic not in FAT:
+        return THIN.get(magic)
+    k = FAT[magic]
+    if len(data) < 8:
+        return None
+    order = "big" if k == "universal" else "little"
+    count = int.from_bytes(data[4:8], order)
+    if count == 0 or count > 30 or len(data) < 8 + 20 * count:
+        return None
+    for i in range(count):
+        entry = data[8 + 20 * i:28 + 20 * i]
+        offset = int.from_bytes(entry[8:12], order)
+        size = int.from_bytes(entry[12:16], order)
+        if size >= 4 and offset + size <= len(data) and data[offset:offset + 4] in THIN:
+            return k
+    return None
 
 
 def scan_bytes(name, data, inside, found):
-    k = kind(data[:8])
+    k = kind(data)
     if k:
         found.append({"path": name, "inside": inside, "kinds": k, "data": data})
     elif name.endswith(".zip"):
@@ -75,14 +97,17 @@ def scan(path):
         if os.path.islink(p):
             continue
         with open(p, "rb") as f:
-            head = f.read(8)
-        if kind(head):
+            head = f.read(4)
+        if head in MAGIC:
             with open(p, "rb") as f:
-                found.append({"path": p, "inside": [], "kinds": kind(head), "data": f.read()})
+                data = f.read()
+            if kind(data):
+                found.append({"path": p, "inside": [], "kinds": kind(data), "data": data})
         elif p.endswith(".zip"):
             scan_zip(p, [p], found)
         elif p.endswith((".tar.gz", ".tgz", ".tar")):
-            scan_tar(p, [p], found)
+            with open(p, "rb") as f:
+                scan_tar(f, [p], found)
     return found
 
 
@@ -104,20 +129,18 @@ def signature(data):
         os.unlink(t.name)
 
 
-def main(argv):
-    verify = "--verify" in argv
-    team = None
-    paths = []
-    i = 0
-    while i < len(argv):
-        if argv[i] == "--verify":
-            pass
-        elif argv[i] == "--team":
-            team = argv[i + 1]
-            i += 1
-        else:
-            paths.append(argv[i])
-        i += 1
+def allowed_teams(team, archive_teams, inside):
+    """The teams that may sign a Mach-O found inside these archives."""
+    teams = [team]
+    for archive in inside:
+        extra = archive_teams.get(os.path.basename(archive))
+        if extra and extra not in teams:
+            teams.append(extra)
+    return teams
+
+
+def audit(paths, verify=False, team=None, archive_teams=None):
+    archive_teams = archive_teams or {}
     machos, problems = [], []
     for p in paths:
         for m in scan(p):
@@ -128,9 +151,30 @@ def main(argv):
                 where = " inside ".join([m["path"]] + list(reversed(m["inside"])))
                 if not signed:
                     problems.append(f"{where} isn't signed")
-                elif team and signer != team:
-                    problems.append(f"{where} is signed by {signer}, not {team}")
+                elif team:
+                    teams = allowed_teams(team, archive_teams, m["inside"])
+                    m["allowed"] = teams
+                    if signer not in teams:
+                        problems.append(f"{where} is signed by {signer}, not {' or '.join(teams)}")
             machos.append(m)
+    return machos, problems
+
+
+def archive_team(value):
+    archive, sep, team = value.partition("=")
+    if not sep or not archive or not team or "/" in archive:
+        raise argparse.ArgumentTypeError(f"{value!r} isn't ARCHIVE=TEAMID")
+    return archive, team
+
+
+def main(argv):
+    parser = argparse.ArgumentParser(prog="audit-macho.py", description="Find and check every Mach-O in a release.")
+    parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--team")
+    parser.add_argument("--archive-team", type=archive_team, action="append", default=[], metavar="ARCHIVE=TEAMID")
+    parser.add_argument("paths", nargs="+", metavar="PATH")
+    args = parser.parse_args(argv)
+    machos, problems = audit(args.paths, args.verify, args.team, dict(args.archive_team))
     json.dump({"machos": machos, "problems": problems}, sys.stdout, indent=2)
     print()
     return 1 if problems else 0

@@ -9,6 +9,7 @@ import importlib.util
 import io
 import json
 import os
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -33,7 +34,82 @@ MACHO = b"\xcf\xfa\xed\xfe" + b"\x0c\x00\x00\x01" + b"\x00" * 64
 JAVA = b"\xca\xfe\xba\xbe" + b"\x00\x00\x00\x41" + b"\x00" * 16
 
 
+def universal(*slices):
+    """A big-endian universal file holding these slices."""
+    header = b"\xca\xfe\xba\xbe" + len(slices).to_bytes(4, "big")
+    offset = len(header) + 20 * len(slices)
+    table, body = b"", b""
+    for s in slices:
+        table += (0x0100000C).to_bytes(4, "big") + bytes(4) + (offset + len(body)).to_bytes(4, "big") + len(s).to_bytes(4, "big") + (3).to_bytes(4, "big")
+        body += s
+    return header + table + body
+
+
+def tar_gz(members):
+    data = io.BytesIO()
+    with tarfile.open(fileobj=data, mode="w:gz") as t:
+        for name, content in members:
+            info = tarfile.TarInfo(name)
+            info.size = len(content)
+            t.addfile(info, io.BytesIO(content))
+    return data.getvalue()
+
+
 class AuditTest(unittest.TestCase):
+    def test_universal_archives_and_bitcode_are_not_mach_os(self):
+        self.assertEqual(audit.kind(universal(MACHO, MACHO)), "universal")
+        self.assertIsNone(audit.kind(universal(b"!<arch>\n" + bytes(64), b"!<arch>\n" + bytes(64))), "libtclstub8.6.a")
+        self.assertIsNone(audit.kind(universal(b"\xde\xc0\x17\x0b" + bytes(64))), "python.o")
+        self.assertIsNone(audit.kind(JAVA))
+        self.assertEqual(audit.kind(MACHO), "macho64")
+
+    def test_the_app_and_the_engine_archive_inside_it(self):
+        """The engine is a file in the app, not a member of an archive."""
+        with tempfile.TemporaryDirectory() as d:
+            app = os.path.join(d, "Sekka Installer.app")
+            os.makedirs(os.path.join(app, "Contents", "MacOS"))
+            os.makedirs(os.path.join(app, "Contents", "Resources", "Engine"))
+            with open(os.path.join(app, "Contents", "MacOS", "sekka-installer"), "wb") as f:
+                f.write(MACHO + b"sekka")
+            engine = os.path.join(app, "Contents", "Resources", "Engine", "engine.tar.gz")
+            with open(engine, "wb") as f:
+                f.write(tar_gz([("Frameworks/Python.framework/Versions/3.13/bin/python3.13", universal(MACHO + b"psf")),
+                                ("Frameworks/Tcl.framework/libtclstub8.6.a", universal(b"!<arch>\n" + bytes(64))),
+                                ("sekka_engine/__main__.py", b"print()")]))
+            found = sorted((m["path"], tuple(m["inside"])) for m in audit.scan(app))
+            self.assertEqual(found, [
+                (os.path.join(app, "Contents", "MacOS", "sekka-installer"), ()),
+                ("Frameworks/Python.framework/Versions/3.13/bin/python3.13", (engine,)),
+            ])
+
+            def signed_by(data):
+                return True, "BMM5U3QVKW" if b"psf" in data else "SEKKATEAM1" if b"sekka" in data else "not set"
+
+            saved = audit.signature
+            audit.signature = signed_by
+            try:
+                self.assertEqual(audit.audit([app], True, "SEKKATEAM1", {"engine.tar.gz": "BMM5U3QVKW"})[1], [])
+                [problem] = audit.audit([app], True, "SEKKATEAM1")[1]
+                self.assertIn("python3.13 inside", problem)
+                self.assertIn("is signed by BMM5U3QVKW, not SEKKATEAM1", problem)
+                # Another archive name, or another team, isn't allowed.
+                self.assertEqual(len(audit.audit([app], True, "SEKKATEAM1", {"recovery.zip": "BMM5U3QVKW"})[1]), 1)
+                self.assertEqual(len(audit.audit([app], True, "SEKKATEAM1", {"engine.tar.gz": "OTHERTEAM1"})[1]), 1)
+                # Sekka's own executables are Sekka's team's, whatever the engine's is.
+                audit.signature = lambda data: (True, "BMM5U3QVKW")
+                [problem] = audit.audit([app], True, "SEKKATEAM1", {"engine.tar.gz": "BMM5U3QVKW"})[1]
+                self.assertIn("sekka-installer is signed by BMM5U3QVKW, not SEKKATEAM1", problem)
+                audit.signature = lambda data: (True, "not set")
+                self.assertEqual(len(audit.audit([app], True, "SEKKATEAM1", {"engine.tar.gz": "BMM5U3QVKW"})[1]), 2)
+            finally:
+                audit.signature = saved
+
+    def test_archive_teams_name_an_archive_and_a_team(self):
+        self.assertEqual(audit.archive_team("engine.tar.gz=BMM5U3QVKW"), ("engine.tar.gz", "BMM5U3QVKW"))
+        for bad in ("engine.tar.gz", "=BMM5U3QVKW", "engine.tar.gz=", "Engine/engine.tar.gz=BMM5U3QVKW"):
+            with self.assertRaises(Exception):
+                audit.archive_team(bad)
+
     def test_finds_binaries_inside_nested_archives(self):
         with tempfile.TemporaryDirectory() as d:
             inner = io.BytesIO()
@@ -206,6 +282,53 @@ class PublishTest(unittest.TestCase):
         self.assertTrue(any("isn't newer" in p for p in self.plan(d, os.path.join(old, "catalog.signed.json"))[1]))
         d = self.candidate(url_base="https://downloads.sekka.computer/mac/v1/latest/")
         self.assertTrue(any("isn't under" in p for p in self.plan(d)[1]))
+
+
+class BuildTest(unittest.TestCase):
+    """build-app.sh's checks of what it is given. A stand-in uname says
+    this isn't a Mac, so a run that passes them stops at the platform check
+    and builds nothing, on any host."""
+
+    NOT_A_MAC = "Sekka Installer is built on macOS."
+
+    def setUp(self):
+        self.t = tempfile.TemporaryDirectory()
+        stubs = os.path.join(self.t.name, "bin")
+        os.mkdir(stubs)
+        with open(os.path.join(stubs, "uname"), "w") as f:
+            f.write("#!/bin/sh\necho Linux\n")
+        os.chmod(os.path.join(stubs, "uname"), 0o755)
+        self.env = {k: v for k, v in os.environ.items() if not k.startswith("SEKKA_")}
+        self.env["PATH"] = stubs + os.pathsep + os.environ.get("PATH", "")
+        self.engine = os.path.join(self.t.name, "engine.tar.gz")
+        with open(self.engine, "wb") as f:
+            f.write(b"engine")
+
+    def tearDown(self):
+        self.t.cleanup()
+
+    def build(self, *args, **env):
+        r = subprocess.run(["bash", os.path.join(HERE, "..", "build-app.sh"), *args],
+                           env={**self.env, **env}, capture_output=True, text=True)
+        return r.returncode, r.stderr
+
+    def test_a_release_names_the_engine_runtimes_pinned_team(self):
+        with open(os.path.join(HERE, "..", "..", "engine", "source-lock.json")) as f:
+            pinned = json.load(f)["asahi_installer"]["runtime_team"]
+        release = ("--release", "--engine", self.engine, "--icon", self.engine)
+        team = {"SEKKA_TEAM_ID": "SEKKATEAM1", "SEKKA_SIGNING_IDENTITY": "Developer ID Application: Sekka (SEKKATEAM1)"}
+        code, said = self.build(*release, **team)
+        self.assertNotEqual(code, 0)
+        self.assertIn("SEKKA_ENGINE_TEAM_ID", said)
+        code, said = self.build(*release, **team, SEKKA_ENGINE_TEAM_ID="OTHERTEAM1")
+        self.assertEqual(code, 1, said)
+        self.assertIn(f"pins the runtime's team as {pinned}", said)
+        code, said = self.build(*release, **team, SEKKA_ENGINE_TEAM_ID=pinned)
+        self.assertEqual(code, 2, said)
+        self.assertIn(self.NOT_A_MAC, said)
+        # A development build needs none of it.
+        code, said = self.build("--engine", self.engine)
+        self.assertIn(self.NOT_A_MAC, said)
 
 
 class ProvenanceTest(unittest.TestCase):

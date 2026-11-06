@@ -10,8 +10,13 @@
 # built them and prove nothing about a release. --release builds the
 # production features and signs with the Developer ID named by
 # SEKKA_SIGNING_IDENTITY for team SEKKA_TEAM_ID, with the hardened runtime;
-# notarize the result with packaging/notarize.sh. The engine archive and
-# icon come from the root flake:
+# notarize the result with packaging/notarize.sh. Every Mach-O must be
+# signed by SEKKA_TEAM_ID except the Python runtime inside the engine
+# archive, which is Asahi's, signed by its own team and never re-signed
+# (that would change the engine's digest): a release names that team as
+# SEKKA_ENGINE_TEAM_ID, which must be the runtime_team that
+# engine/source-lock.json pins. The engine archive and icon come from the
+# root flake:
 #
 #   nix build .#packages.aarch64-linux.mac-engine .#packages.aarch64-darwin.mac-installer-icon
 #
@@ -35,6 +40,18 @@ while (( $# )); do
   esac
 done
 
+# What a build is given is checked before anything is built.
+if $release; then
+  : "${SEKKA_TEAM_ID:?a release names the team that signs it (SEKKA_TEAM_ID)}"
+  : "${SEKKA_SIGNING_IDENTITY:?a release names its Developer ID Application identity (SEKKA_SIGNING_IDENTITY)}"
+  : "${SEKKA_ENGINE_TEAM_ID:?a release names the team that signed the Python runtime in the engine (SEKKA_ENGINE_TEAM_ID, as engine/source-lock.json pins it)}"
+  pinned=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["asahi_installer"]["runtime_team"])' "$workspace/engine/source-lock.json")
+  if [[ "$SEKKA_ENGINE_TEAM_ID" != "$pinned" ]]; then
+    echo "SEKKA_ENGINE_TEAM_ID is $SEKKA_ENGINE_TEAM_ID, but engine/source-lock.json pins the runtime's team as $pinned." >&2
+    exit 1
+  fi
+fi
+
 if [[ "$(uname -s)" != Darwin ]]; then
   echo "Sekka Installer is built on macOS. (Its tests run anywhere: cargo test.)" >&2
   exit 2
@@ -54,8 +71,6 @@ build=$(date -u +%Y%m%d%H%M)
 
 features=()
 if $release; then
-  : "${SEKKA_TEAM_ID:?a release names the team that signs it (SEKKA_TEAM_ID)}"
-  : "${SEKKA_SIGNING_IDENTITY:?a release names its Developer ID Application identity (SEKKA_SIGNING_IDENTITY)}"
   features=(--no-default-features --features production)
   profile=release
 else
@@ -115,7 +130,11 @@ codesign --verify --deep --strict "$recovery"
 # places on the new system's stub.
 (cd "$out" && ditto -c -k --keepParent "Sekka Recovery.app" recovery.zip)
 
-python3 "$here/audit-macho.py" --verify ${SEKKA_TEAM_ID:+--team "$SEKKA_TEAM_ID"} "$app" "$out/recovery.zip" > "$out/macho-audit.json"
+audit=(--verify)
+if $release; then
+  audit+=(--team "$SEKKA_TEAM_ID" --archive-team "engine.tar.gz=$SEKKA_ENGINE_TEAM_ID")
+fi
+python3 "$here/audit-macho.py" "${audit[@]}" "$app" "$out/recovery.zip" > "$out/macho-audit.json"
 python3 "$here/provenance.py" --workspace "$workspace" --release "$release" \
   --artifact "$app" --artifact "$out/recovery.zip" --artifact "$engine" > "$out/build.json"
 echo "$out"

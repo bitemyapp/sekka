@@ -12,6 +12,8 @@
       "sri": "sha256-SE2ZnlO0rvJ9F8RHjklWfpaEL4pss1wHOg31vwu+gnY="
     },
     "runtime": "Python 3.13 as Frameworks/Python.framework/Versions/3.13, with its own code signature (Versions/3.13/_CodeSignature/CodeResources seals lib/python3.13/site-packages)",
+    "runtime_team": "BMM5U3QVKW",
+    "runtime_signers": "2026-11-06, read from the tarball's Mach-O code signatures in place (nothing run): 79 Mach-Os are signed by Developer ID Application: Python Software Foundation (BMM5U3QVKW) with the hardened runtime; Versions/3.13/lib/libffi.8.dylib is signed ad hoc, with no team; python.o, libtclstub8.6.a and libtkstub8.6.a are universal bitcode and static archives, not signed code. build-app.sh --release requires SEKKA_ENGINE_TEAM_ID to be runtime_team, and its audit allows that team only inside engine.tar.gz",
     "checked": "2026-11-06: the tarball's main.py, osinstall.py, stub.py, diskutil.py, system.py, osenum.py, urlcache.py, util.py, m1n1.py, bugs.py, reporting.py, asahi_firmware/ and step2/ are byte-identical to src/ and asahi_firmware/ at the tag",
     "used": [
       "system.SystemInfo (ioreg device tree and service planes, nvram, bputil, SystemVersion and SFR plists, console user)",
