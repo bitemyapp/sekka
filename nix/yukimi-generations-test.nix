@@ -1,8 +1,9 @@
-# Deleting single system generations through Yukimi's helper, in a disposable
-# VM with real systemd-boot entries and a store on its own ext4 disk: the
-# profile links, boot entries and kept configurations that go and stay, the
-# refusals, and the disk space garbage collection gives back, measured
-# against Yukimi's estimate (and against the closure size it showed before).
+# Deleting system generations, one and two together, through Yukimi's helper,
+# in a disposable VM with real systemd-boot entries and a store on its own
+# ext4 disk: the profile links, boot entries and kept configurations that go
+# and stay, the refusals, and the disk space garbage collection gives back,
+# measured against Yukimi's estimate (and against the closure size it showed
+# before).
 {
   pkgs,
   yukimi,
@@ -32,6 +33,8 @@ let
     '';
   # Generations 3 and 4 share this.
   shared = blob "shared" 2;
+  # Generations 4 and 5 share this, and nothing else has it.
+  pair = blob "pair" 3;
   # Generation 3 has this, and so does a user's profile.
   keptByUser = blob "kept-by-user" 1;
   # Generation 3 has this, and a program runs in it.
@@ -50,6 +53,7 @@ let
         (payload n)
       ]
       ++ lib.optional (n == "3" || n == "4") shared
+      ++ lib.optional (n == "4" || n == "5") pair
       ++ lib.optionals (n == "3") [
         keptByUser
         busy
@@ -78,7 +82,7 @@ pkgs.testers.runNixOSTest {
         # generations in the test.
         additionalPaths = lib.attrValues config.system.build.yukimiGenerations;
       };
-      system.build.yukimiGenerations = lib.genAttrs [ "2" "3" "4" "5" ] (
+      system.build.yukimiGenerations = lib.genAttrs [ "2" "3" "4" "5" "6" ] (
         n: (extendModules { modules = [ (variant n) ]; }).config.system.build.toplevel
       );
       boot.loader.systemd-boot.enable = true;
@@ -116,9 +120,10 @@ pkgs.testers.runNixOSTest {
           3: "${gens."3"}",
           4: "${gens."4"}",
           5: "${gens."5"}",
+          6: "${gens."6"}",
       }
       payload3 = "${payload "3"}"
-      kept_by_user, busy, shared = "${keptByUser}", "${busy}", "${shared}"
+      kept_by_user, busy, shared, pair = "${keptByUser}", "${busy}", "${shared}", "${pair}"
 
       def used():
           """Bytes in use on the store's filesystem. Nix deletes its 8 MiB
@@ -166,14 +171,14 @@ pkgs.testers.runNixOSTest {
       machine.wait_for_unit("multi-user.target")
       base = machine.succeed("readlink -f /run/current-system").strip()
 
-      with subtest("generations 2 to 5, as nixos-rebuild leaves them"):
+      with subtest("generations 2 to 6, as nixos-rebuild leaves them"):
           for n in sorted(gens):
               machine.succeed(f"nix-env -p /nix/var/nix/profiles/system --set {gens[n]}")
-          # 5 is selected for the next start; 1 runs and was started with.
+          # 6 is selected for the next start; 1 runs and was started with.
           machine.succeed("/nix/var/nix/profiles/system/bin/switch-to-configuration boot")
-          assert links() == [f"system-{n}-link" for n in range(1, 6)], links()
-          assert entries() == list(range(1, 6)), entries()
-          for n in range(1, 6):
+          assert links() == [f"system-{n}-link" for n in range(1, 7)], links()
+          assert entries() == list(range(1, 7)), entries()
+          for n in range(1, 7):
               machine.succeed(f"mkdir -p /var/lib/yukimi/configurations/generation-{n}")
               machine.succeed(f"echo '{{ }}' > /var/lib/yukimi/configurations/generation-{n}/configuration.nix")
           # Other roots: a user's profile has one of 3's packages, and a
@@ -190,7 +195,7 @@ pkgs.testers.runNixOSTest {
       with subtest("the generations in use, and anything but a generation number, are refused"):
           for args, why in [
               ("1", "running system"),
-              ("5", "selected for the next start"),
+              ("6", "selected for the next start"),
               ("9", "no generation 9"),
               ("03", "Not a generation number"),
               ("3x", "Not a generation number"),
@@ -200,11 +205,11 @@ pkgs.testers.runNixOSTest {
           ]:
               report = json.loads(machine.fail(f"yukimi-helper delete {args}"))
               assert not report["ok"] and why in report["error"], (args, report)
-          assert links() == [f"system-{n}-link" for n in range(1, 6)], links()
-          assert entries() == list(range(1, 6)), entries()
-          assert kept() == [f"generation-{n}" for n in range(1, 6)], kept()
+          assert links() == [f"system-{n}-link" for n in range(1, 7)], links()
+          assert entries() == list(range(1, 7)), entries()
+          assert kept() == [f"generation-{n}" for n in range(1, 7)], kept()
           machine.fail("su demo -c 'yukimi-helper delete 3'")
-          assert links() == [f"system-{n}-link" for n in range(1, 6)], links()
+          assert links() == [f"system-{n}-link" for n in range(1, 7)], links()
 
       with subtest("delete 3 and collect garbage: what comes back matches the estimate"):
           as_user = estimate("3", user="demo")
@@ -242,10 +247,10 @@ pkgs.testers.runNixOSTest {
           assert both["disk"] > as_root["disk"], (both, as_root)
 
       with subtest("3 is gone from the profile, the boot menu and the kept configurations"):
-          assert links() == ["system-1-link", "system-2-link", "system-4-link", "system-5-link"], links()
-          assert entries() == [1, 2, 4, 5], entries()
-          assert kept() == ["generation-1", "generation-2", "generation-4", "generation-5"], kept()
-          assert machine.succeed("readlink /nix/var/nix/profiles/system").strip() == "system-5-link"
+          assert links() == ["system-1-link", "system-2-link", "system-4-link", "system-5-link", "system-6-link"], links()
+          assert entries() == [1, 2, 4, 5, 6], entries()
+          assert kept() == ["generation-1", "generation-2", "generation-4", "generation-5", "generation-6"], kept()
+          assert machine.succeed("readlink /nix/var/nix/profiles/system").strip() == "system-6-link"
           assert machine.succeed("readlink -f /run/current-system").strip() == base
           machine.fail(f"test -e {gens[3]}")
           machine.fail(f"test -e {payload3}")
@@ -261,7 +266,7 @@ pkgs.testers.runNixOSTest {
           print("delete 2:", json.dumps(report))
           assert report["ok"] and report["deleted"] == [2] and not report["collected"], report
           assert "freed" not in report, report
-          assert links() == ["system-1-link", "system-4-link", "system-5-link"], links()
+          assert links() == ["system-1-link", "system-4-link", "system-5-link", "system-6-link"], links()
           assert 2 not in entries(), entries()
           assert "generation-2" not in kept(), kept()
           machine.succeed(f"test -e {gens[2]}")
@@ -278,6 +283,29 @@ pkgs.testers.runNixOSTest {
           assert report["ok"], report
           assert abs(estimate2["disk"] - freed) <= 0.03 * freed + 256 * 1024, (estimate2, freed)
           machine.fail(f"test -e {gens[2]}")
-          assert entries() == [1, 4, 5], entries()
+          assert entries() == [1, 4, 5, 6], entries()
+
+      with subtest("delete 4 and 5 together: what only they share comes back too"):
+          alone = estimate("4")["disk"] + estimate("5")["disk"]
+          together = estimate("4 5")
+          print("estimate for 4 and 5:", json.dumps(together))
+          # The pair's 3 MiB is in neither alone, and comes back with both.
+          assert together["disk"] - alone >= 3 * 1048576, (together, alone)
+          before = used()
+          report = json.loads(machine.succeed("yukimi-helper delete 4 5 --collect-garbage"))
+          after = used()
+          print("delete 4 5:", json.dumps(report))
+          assert report["ok"] and report["deleted"] == [4, 5] and report["collected"], report
+          freed = before - after
+          print(
+              f"generations 4 and 5: freed {freed} bytes ({mib(freed)}); estimated {together['disk']} together "
+              f"({(together['disk'] - freed) / freed:+.2%}), {alone} one at a time ({(alone - freed) / freed:+.1%})"
+          )
+          assert abs(together["disk"] - freed) <= 0.03 * freed + 256 * 1024, (together, freed)
+          assert abs(report["freed"] - freed) <= 0.03 * freed + 256 * 1024, (report["freed"], freed)
+          assert links() == ["system-1-link", "system-6-link"], links()
+          assert entries() == [1, 6], entries()
+          assert kept() == ["generation-1", "generation-6"], kept()
+          machine.fail(f"test -e {pair}")
     '';
 }

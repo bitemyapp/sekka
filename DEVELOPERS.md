@@ -1735,21 +1735,28 @@ counts files with two links as freed, so it differs from both (8.0 MiB for
 the 10.4 MiB the VM check's generation 3 gave back).
 
 `nix build .#checks.x86_64-linux.yukimi-generations` boots a VM from its own
-ext4 disk (`useBootLoader`, systemd-boot) with four more generations built
-beside it, each with incompressible data, 300 small files, a copy of a
-running-system file and a file it shares with another generation; generation
-3 also has a path a user's profile keeps, one a running program uses and one
-generation 4 shares. After optimising and collecting garbage, it checks the
-helper's refusals, deletes 3 with `--collect-garbage` and 2 without (then
-cleans up), and compares the space `statvfs` sees come back with the
-estimate, as root and as an unprivileged user, along with the profile links,
-boot entries and kept configurations left. On 2026-11-03, on wx-workstation,
+ext4 disk (`useBootLoader`, systemd-boot) with five more generations built
+beside it, the newest selected for the next start, each with incompressible
+data, 300 small files, a copy of a running-system file and a file it shares
+with another generation; generation 3 also has a path a user's profile
+keeps, one a running program uses and one generation 4 shares, and 4 and 5
+share a path nothing else has. After optimising and collecting garbage, it
+checks the helper's refusals, deletes 3 with `--collect-garbage` and 2
+without (then cleans up), then 4 and 5 together with `--collect-garbage`,
+and compares the space `statvfs` sees come back with the estimate, as root
+and as an unprivileged user, along with the profile links, boot entries and
+kept configurations left. On 2026-11-03, on wx-workstation,
 generation 3 gave back 10,956,800 bytes and the estimate was 10,956,800, the
 same as root and as `demo`; Yukimi would have shown its 1,844,249,032-byte
 closure (+16,732%), and the NAR size of what only it had, 19,510,448 bytes,
 was +78% (its links and the files it shared with other generations are
 hard-linked in an optimised store). Generation 2, deleted and then cleaned
-up, gave back 8,847,360 bytes for an estimate of 8,859,648 (+0.14%).
+up, gave back 8,847,360 bytes for an estimate of 8,859,648 (+0.14%). On
+2026-11-06, on wx-workstation, generations 4 and 5 deleted together gave back
+33,505,280 bytes for an estimate of 33,492,992 together (−0.04%); their two
+figures alone add up to 30,334,976 (−9.5%), short by the path only they
+shared. Generations 3 and 2 matched as before (10,969,088 for 10,969,088;
+8,859,648 for 8,871,936).
 
 Shiori, Aizome's PDF reader (`desktop/aizome/apps/shiori`), draws pages, and
 reads their text, links and the outline, with hayro (Apache-2.0 OR MIT), a
