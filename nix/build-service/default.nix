@@ -51,10 +51,20 @@ let
     runtimeInputs = [ pkgs.python3 pkgs.openssh pkgs.coreutils pkgs.docker-client ];
     text = ''
       export SEKKA_BUILD_SERVICE_INVENTORY=${./inventory.py}
+      # Physical inventory closes these immutable tool inputs through the host's
+      # nix-store. compsize stays an explicit CLI input, never a hidden default;
+      # immutable payload measurements exclude all observer/tool overhead.
+      export SEKKA_BUILD_SERVICE_INVENTORY_INPUTS="${pkgs.python3} ${pkgs.openssh} ${pkgs.coreutils} ${pkgs.docker-client} ''${BASH_SOURCE[0]}"
       export SEKKA_BUILD_SERVICE_WORKER_RUNTIME=${workerRuntime}
       exec python3 ${../../scripts/build-service} "$@"
     '';
   };
+  inventoryTest = pkgs.runCommand "sekka-build-service-inventory-test" { } ''
+    cp ${./inventory.py} inventory.py
+    cp ${./test_inventory.py} test_inventory.py
+    ${pkgs.python3}/bin/python3 -m unittest -v test_inventory
+    touch $out
+  '';
   qualificationPython = pkgs.python3.withPackages (p: [ p.grpcio ]);
   qualifier = pkgs.writeShellApplication {
     name = "sekka-build-service-qualify";
@@ -62,5 +72,5 @@ let
   };
 in
 {
-  inherit nativelink controller qualifier qualificationPython workerRuntime;
+  inherit nativelink controller inventoryTest qualifier qualificationPython workerRuntime;
 }

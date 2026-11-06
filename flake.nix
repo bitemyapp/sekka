@@ -422,6 +422,7 @@
         };
         build-input-stability = import ./nix/build-inputs-test.nix { inherit pkgs; };
         buck2-backend = buckBuild.backendTest;
+        build-service-inventory = buildService.inventoryTest;
         # Aizome's toolkit's own tests, under a headless sway
         # (desktop/aizome/sukumo).
         sukumo = import ./nix/sukumo-test.nix {

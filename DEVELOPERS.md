@@ -453,6 +453,13 @@ per distinct parent per metadata quantum, before its successful return and
 cached metadata commit. Canonical publication barriers remain unchanged. This
 does not increase the live staging or descriptor bounds, change the database
 schema, or weaken file/directory synchronization.
+
+The index uses FULL-synchronous WAL and a 256-page automatic-checkpoint threshold.
+Its 4 MiB journal-size setting trims retained WAL space after reset, not peak
+transaction space. All SQLite sidecars receive the same regular-file, owner and
+single-link checks as the main index. Stop older daemons before opening an
+existing store with this engine; the index converts to WAL on open.
+
 Sixteen fixed canonical staging slots are removed and the directory synchronized
 under the shared lock before each quantum's admission, so an already-open peer
 can recover abandoned stages without reopening the store or scanning all
@@ -530,6 +537,34 @@ shared image roots must be counted once. Retained native Nix closures are
 enumerated separately. Shared Docker/network/builder and Nix database metadata
 are explicitly outside exclusive attribution, not asserted to occupy zero
 space. Inventory discovers paths; it does not itself measure compressed bytes.
+
+`physical-inventory` performs one compression-aware extent union on the
+deployment host. Supply an already-realized `/nix/store/.../bin/compsize`, an
+allowlist for each workload root, and all intended payload roots in one command:
+
+```sh
+nix run .#build-service -- --manifest PRIVATE.json physical-inventory \
+  --scope active --compsize /nix/store/HASH-compsize/bin/compsize \
+  --allow-root /home/callen/sekka-work/WORKLOAD \
+  /home/callen/sekka-work/WORKLOAD/tree-a \
+  /home/callen/sekka-work/WORKLOAD/tree-b
+```
+
+Use `--scope immutable` with the same explicit roots to measure the matched
+payload denominator separately. The controller and its Nix closure must be
+realized on the deployment host. Active scope adds owned service state, exact
+referenced image blobs and snapshots, retained Nix closure, observer state and
+shared control files, charging shared files in full. It refuses old Docker-built
+NativeLink images: `init` now imports a checksum-verified rootfs tar and records
+the image identity and diffID in `image/construction.json`. Use a fresh isolated
+service for this measurement; do not reinterpret old image storage as proven.
+The JSON receipt precedes the single `compsize` result. It records the exact
+roots and identity checks; it is a live file-data extent observation, not a
+filesystem allocation total or automatic storage bound. The observer uses
+read-only, nonrecursive Docker-daemon binds and fails if measured roots contain
+hidden submounts. A disposable four-container service smoke on Btrfs measured
+285 roots and a 1,035,043,103-byte physical union with no unresolved roots;
+this validates the observer path, not the full workload matrix.
 
 The gateway binds host loopback. From another machine, forward it explicitly:
 

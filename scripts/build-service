@@ -26,6 +26,12 @@ network/DNS endpoint without credentials. Teardown refuses attached foreign jobs
 Use global --local when administering on the deployment host; manifests remain
 portable and no SSH/agent forwarding is required. inventory emits explicit
 persistent roots for physical-union accounting without traversing other services.
+init imports a deterministic owned rootfs tar without Docker builder/cache state.
+image/construction.json records its release checksum, exact imported diffID and
+inspected image identity/platform/entrypoint; image/rootfs.tar retains the bytes.
+physical-inventory forwards an explicit active/immutable scope, immutable compsize
+executable, allowed roots and payload roots to the fail-closed physical observer.
+It emits a sekka.physical-inventory.v1 JSON receipt then one compsize result.
 Workers use bounded executable private tmpfs and a retained root-locked runtime
 for NSS identities and private-session D-Bus policy, never the host's /etc or bus.
 runtime explicitly migrates old manifests, replaces owned workers and restarts
@@ -313,6 +319,63 @@ def retain_runtime(m):
            m["directory"] + "/roots/" + Path(runtime).name, "--indirect")
 
 
+
+def import_service_image(m):
+    source_url = (f"https://github.com/TraceMachina/nativelink/releases/download/v{VERSION}/"
+                  f"nativelink-{VERSION}-x86_64-unknown-linux-musl.tar.gz")
+    entries = [
+        {"path": "bin/", "type": "directory", "mode": "0755", "uid": 0, "gid": 0, "mtime": 0},
+        {"path": "bin/nativelink", "type": "file", "mode": "0755", "uid": 0, "gid": 0, "mtime": 0},
+    ]
+    with tempfile.TemporaryDirectory(prefix="sekka-nativelink-") as tmp:
+        archive = Path(tmp) / "nativelink.tar.gz"
+        urllib.request.urlretrieve(source_url, archive)
+        with archive.open("rb") as stream:
+            if hashlib.file_digest(stream, "sha256").hexdigest() != ARCHIVE_SHA256:
+                raise SystemExit("NativeLink archive checksum mismatch")
+        rootfs = Path(tmp) / "rootfs.tar"
+        with tarfile.open(archive) as release, tarfile.open(rootfs, "w", format=tarfile.USTAR_FORMAT) as tar:
+            binary = next(x for x in release.getmembers()
+                          if x.name.rsplit("/", 1)[-1] == "nativelink" and x.isfile())
+            directory = tarfile.TarInfo("bin/")
+            directory.type = tarfile.DIRTYPE
+            directory.mode = 0o755
+            tar.addfile(directory)
+            executable = tarfile.TarInfo("bin/nativelink")
+            executable.mode = 0o755
+            executable.size = binary.size
+            with release.extractfile(binary) as stream:
+                binary_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
+                stream.seek(0)
+                tar.addfile(executable, stream)
+        rootfs.chmod(0o600)
+        with rootfs.open("rb") as stream:
+            rootfs_sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
+        copy_file(m, rootfs, "image/rootfs.tar")
+    entries[1].update(sha256=binary_sha256, size=binary.size)
+    diff_id = "sha256:" + rootfs_sha256
+    imported_id = docker(m, "image", "import", "--platform", "linux/amd64",
+                         "--change", 'ENTRYPOINT ["/bin/nativelink"]',
+                         m["directory"] + "/image/rootfs.tar", m["image"], capture=True).strip()
+    inspected = json.loads(docker(m, "image", "inspect", m["image"], capture=True))[0]
+    image = {"id": inspected["Id"], "os": inspected["Os"], "architecture": inspected["Architecture"],
+             "entrypoint": inspected["Config"].get("Entrypoint"),
+             "rootfs_type": inspected["RootFS"]["Type"], "diff_ids": inspected["RootFS"].get("Layers")}
+    expected = {"id": imported_id, "os": "linux", "architecture": "amd64",
+                "entrypoint": ["/bin/nativelink"], "rootfs_type": "layers", "diff_ids": [diff_id]}
+    if image != expected:
+        raise SystemExit("Imported NativeLink image does not match the owned rootfs/platform/entrypoint")
+    # Only allowlisted, nonsecret construction data is eligible for public inventory.
+    put(m, "image/construction.json", json.dumps({
+        "schema": 1, "method": "docker-image-import-v1",
+        "source": {"url": source_url, "version": VERSION, "archive_sha256": ARCHIVE_SHA256,
+                   "binary_sha256": binary_sha256},
+        "rootfs": {"path": "image/rootfs.tar", "sha256": rootfs_sha256, "diff_id": diff_id,
+                   "format": "ustar", "entries": entries},
+        "image": image,
+    }, indent=2) + "\n")
+
+
 def init(args):
     if args.manifest.exists():
         raise SystemExit("Manifest already exists; refusing to overwrite credentials")
@@ -339,19 +402,7 @@ def init(args):
         json.dump(m, f, indent=2)
     put(m, "owner.json", json.dumps({"name": unique, "schema": 1}))
     retain_runtime(m)
-    with tempfile.TemporaryDirectory(prefix="sekka-nativelink-") as tmp:
-        archive = Path(tmp) / "nativelink.tar.gz"
-        urllib.request.urlretrieve(f"https://github.com/TraceMachina/nativelink/releases/download/v{VERSION}/nativelink-{VERSION}-x86_64-unknown-linux-musl.tar.gz", archive)
-        if hashlib.file_digest(archive.open("rb"), "sha256").hexdigest() != ARCHIVE_SHA256:
-            raise SystemExit("NativeLink archive checksum mismatch")
-        with tarfile.open(archive) as tar:
-            binary = next(x for x in tar.getmembers() if x.name.rsplit("/", 1)[-1] == "nativelink" and x.isfile())
-            payload = Path(tmp) / "nativelink"
-            payload.write_bytes(tar.extractfile(binary).read())
-            payload.chmod(0o755)
-        copy_file(m, payload, "image/nativelink")
-    put(m, "image/Dockerfile", 'FROM scratch\nCOPY nativelink /bin/nativelink\nENTRYPOINT ["/bin/nativelink"]\n')
-    docker(m, "build", "-t", m["image"], m["directory"] + "/image")
+    import_service_image(m)
     docker(m, "pull", NGINX)
     for d, settings in m["domains"].items():
         remote(m, "mkdir", "-m", "700", m["directory"] + "/" + d)
@@ -443,6 +494,12 @@ def main():
         sub.add_parser(command)
     cache_inventory = sub.add_parser("cache-inventory", help="Snapshot persistent cache entries with owned backends paused")
     cache_inventory.add_argument("--timeout", type=int, default=60, help="Seconds to await configured cache byte/entry bounds")
+    physical = sub.add_parser("physical-inventory", help="Measure one fail-closed physical extent union with public provenance")
+    physical.add_argument("--scope", choices=("active", "immutable"), required=True,
+                          help="Account active deployment state or only supplied immutable payload roots")
+    physical.add_argument("--compsize", required=True, help="Immutable /nix/store/.../bin/compsize executable")
+    physical.add_argument("--allow-root", action="append", default=[], help="Allowed accounting root (repeatable)")
+    physical.add_argument("roots", nargs="+", help="Payload roots to include in the single extent-union measurement")
     destroy = sub.add_parser("destroy")
     destroy.add_argument("--purge-state", action="store_true", help="Remove only the validated owned deployment directory after stopping containers")
     retain = sub.add_parser("retain")
@@ -471,13 +528,19 @@ def main():
         expected = runtime_paths(m.get("worker_runtime"))
         if any(m.get(key) != value for key, value in expected.items()):
             raise SystemExit("Manifest interpreters must come from worker_runtime; run runtime and regenerate clients")
-    if args.command in ("inventory", "cache-inventory"):
+    if args.command in ("inventory", "cache-inventory", "physical-inventory"):
         script = os.environ.get("SEKKA_BUILD_SERVICE_INVENTORY",
                                 str(Path(__file__).resolve().parents[1] / "nix/build-service/inventory.py"))
-        subprocess.run([sys.executable, script, "--controller", str(Path(__file__).resolve()),
-                        "--manifest", str(args.manifest), *(["--local"] if LOCAL else []),
-                        *(["--cache-entries", "--timeout", str(args.timeout)]
-                          if args.command == "cache-inventory" else [])], check=True)
+        inventory_args = [sys.executable, script, "--controller", str(Path(__file__).resolve()),
+                          "--manifest", str(args.manifest), *(["--local"] if LOCAL else [])]
+        if args.command == "cache-inventory":
+            inventory_args.extend(["--cache-entries", "--timeout", str(args.timeout)])
+        elif args.command == "physical-inventory":
+            inventory_args.extend(["--physical", "--scope", args.scope, "--compsize", args.compsize])
+            for root in args.allow_root:
+                inventory_args.extend(["--allow-root", root])
+            inventory_args.extend(["--", *args.roots])
+        subprocess.run(inventory_args, check=True)
         return
     if args.command == "connection-info":
         print(json.dumps(connection_info(m, args.domain)))
