@@ -26,6 +26,8 @@ pub enum Stage {
     Password,
     /// Typing a user name (no list, or nobody to list).
     Name,
+    /// First-boot setup: nobody has an account yet (`setup.rs`).
+    Setup,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -90,6 +92,10 @@ pub enum Msg {
         rgba: Option<Vec<u8>>,
     },
     Avatar(String, Option<Image>),
+    /// Setup's pages and its helper's answers.
+    Setup(crate::setup::SetupMsg),
+    /// Setup's welcome picture, drawn.
+    Logo(Option<Image>),
 }
 
 /// A display's wallpaper: which file, at what size in pixels, and the
@@ -133,6 +139,12 @@ pub struct Greeter {
     /// Pretend to be greetd (`--demo`): any user, the password `aizome`.
     pub demo: bool,
     pub power_error: Option<String>,
+    /// First-boot setup, where the configuration has a helper for it.
+    pub setup: Option<crate::setup::Setup>,
+    pub(crate) to_setup: Option<crate::setup::Link>,
+    /// The compositor's settings file, ours to rewrite (its keyboard).
+    pub settings_file: Option<PathBuf>,
+    pub setup_logo: Option<Image>,
 }
 
 impl Greeter {
@@ -155,7 +167,10 @@ impl Greeter {
         demo: bool,
     ) -> Greeter {
         let last = state.last_user.as_ref().and_then(|u| users.iter().position(|x| &x.name == u));
-        let stage = if !cfg.user_list || users.is_empty() {
+        let setup = cfg.setup_socket.as_ref().map(|_| crate::setup::Setup::default());
+        let stage = if setup.is_some() && users.is_empty() {
+            Stage::Setup
+        } else if !cfg.user_list || users.is_empty() {
             Stage::Name
         } else if last.is_some() || users.len() == 1 {
             Stage::Password
@@ -187,13 +202,17 @@ impl Greeter {
             live,
             demo,
             power_error: None,
+            setup,
+            to_setup: None,
+            settings_file: None,
+            setup_logo: None,
         }
     }
 
     /// The person logging in, or selected in the row.
     pub fn user(&self) -> Option<&User> {
         match self.stage {
-            Stage::Name => None,
+            Stage::Name | Stage::Setup => None,
             _ => self.users.get(self.selected),
         }
     }
@@ -239,7 +258,7 @@ impl Greeter {
     }
 
     /// Begin the selected person's login (the `Password` stage).
-    fn begin(&mut self) {
+    pub(crate) fn begin(&mut self) {
         greetd::zero_string(&mut self.password);
         if let Some(name) = self.user().map(|u| u.name.clone()) {
             let r = self.login.begin(&name);
@@ -428,6 +447,13 @@ impl Greeter {
         self.wallpapers.get(&output).and_then(|(_, _, i)| i.clone())
     }
 
+    /// Setup's welcome picture, at the main display's scale.
+    fn load_logo(&mut self, cx: &mut Cx<Msg>) {
+        let Some(path) = self.cfg.setup_logo.clone() else { return };
+        let scale = cx.outputs().iter().find(|o| Some(o.id) == self.main_output).map(|o| o.scale).unwrap_or(1.0);
+        cx.spawn(move || Msg::Logo(crate::setup_view::logo(&path, 64.0, scale)));
+    }
+
     fn load_avatars(&mut self, cx: &mut Cx<Msg>) {
         for u in &self.users {
             if let Some(path) = u.icon.clone() {
@@ -498,8 +524,14 @@ impl Program for Greeter {
             cx.focus("greeter-password");
         } else if self.stage == Stage::People {
             cx.focus("greeter-people");
+        } else if self.stage == Stage::Setup {
+            cx.focus("setup-page");
         } else {
             cx.focus("greeter-name");
+        }
+        if self.setup.is_some() {
+            self.start_setup(cx);
+            self.load_logo(cx);
         }
         cx.after(self.now.until_next_minute(), Msg::Tick);
     }
@@ -609,6 +641,8 @@ impl Program for Greeter {
                     self.avatars.insert(name, i);
                 }
             }
+            Msg::Setup(m) => self.setup_update(m, cx),
+            Msg::Logo(image) => self.setup_logo = image,
         }
     }
 

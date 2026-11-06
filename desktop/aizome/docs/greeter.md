@@ -39,6 +39,40 @@ change. Integer and fractional scales use the same display matching as the
 session. With no saved preference, the compositor detects the scale from the
 display's DPI as usual.
 
+## First-boot setup
+
+Where the configuration names a setup helper (`setup_socket`; on Sekka,
+`calamares.firstBootSetup`) and nobody has an account yet, the login screen
+sets the computer up instead of listing people. The pages, in the login
+screen's look, each a column down the middle with Back and Continue:
+
+1. **Welcome**: Sekka's lockup (`setup_logo`) and what's to come.
+2. **Language and region**: the language, the keyboard (with a field to
+   try it: the compositor switches layout as it's chosen) and the time
+   zone, found by typing a city or a country. The keyboard comes first so
+   the password is typed on the layout it will be typed on at every login.
+3. **Your account**: full name, user name (suggested from the full name),
+   password twice, and the computer's name (macOS's, simplified, where the
+   Mac installer handed it over). Each field's rule is said under it; the
+   helper judges each as it's typed, by Genkan's rules and in its words,
+   and Continue says what's wrong and where.
+4. **Desktop**: Aizome or Tatami, both installed.
+5. **Review**, then **Setting up…** with the helper's steps as they go.
+
+Then the login screen as usual, the new person picked with their desktop,
+saying their account is ready. Tab goes through every control, Return goes
+on, Escape goes back, F3 opens the power menu. If setup was interrupted,
+the login screen finishes it first; if the helper fails, it says why, and
+offers to try again (and, once the account exists, to log in meanwhile).
+
+The greeter only asks and shows. It speaks one JSON object a line to the
+helper (`setup.rs`): `status`, `check` (the choices so far, and the
+password on its page), `complete`, `retry`. The password lives in the
+fields and the line that sends it, and is zeroed after. While setup runs,
+the compositor's keyboard is the one chosen; `keyboard_file` (written by
+the helper) keeps it at later logins until the system's configuration
+names it.
+
 ## How it runs
 
 greetd starts `aizome-greeter` as the `greeter` user, in a logind session
@@ -122,6 +156,8 @@ Its keys:
 | `wallpaper` | `auto` | `night`, `day` or `auto` |
 | `power` | true | the power menu |
 | `compositor`, `compositor_settings` | Aizome's, with the system's keyboard layout | |
+| `setup_socket`, `setup_logo` | none | first-boot setup's helper and welcome picture (`programs.aizome.greeter.setup`) |
+| `keyboard_file` | none | a root-owned keyboard to use instead of the system's (`keyboardFile`) |
 
 On NixOS, the X11 session wrapper imports the display environment and starts
 the graphical session target for desktops such as Xfce. Logging out stops
@@ -153,7 +189,9 @@ stands in for greetd and takes anyone, with the password `aizome`.
     `cargo test -p aizome-sys --test display_scales`);
   - the conversation: a wrong password, several questions, cancelling, and
     late answers;
-  - the screens, headless, with pictures in `target/greeter-shots/`.
+  - the screens, headless, with pictures in `target/greeter-shots/`;
+  - setup's pages (`tests/setup.rs`), with the helper's answers played to
+    them, by the night and the day wallpaper (`setup-*.png`).
 - `nix build .#aizome-checks.greeter` runs the VM test: two people,
   and Aizome, sway and xterm's X11 session, typed at as a person would. It
   checks:

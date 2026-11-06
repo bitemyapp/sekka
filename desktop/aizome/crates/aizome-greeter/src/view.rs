@@ -34,6 +34,16 @@ pub fn view(g: &Greeter, _window: WindowKey, output: Option<u32>) -> Element<Msg
     let size = g.frames.get(&output).copied().unwrap_or(Size::new(1440.0, 900.0));
     let main = Some(output) == g.main_output;
     let mut layers: Vec<Element<Msg>> = vec![ground(size, g.wallpaper(output))];
+    // Setup, on the display with the login: its page where the time was.
+    if let (true, Stage::Setup, Some(s)) = (main, g.stage, g.setup.as_ref()) {
+        let (content, h) = crate::setup_view::page(g, s, size);
+        let top = ((size.height - h) / 2.0 - 24.0).max(56.0).round();
+        layers.push(aizome_kit::column(vec![content]).padding([top, 0.0, 0.0, 0.0]).into());
+        layers.push(top_bar(g, size));
+        layers.push(crate::setup_view::dots(s, size));
+        layers.push(mark(size));
+        return aizome_kit::stack(layers).width(size.width).height(size.height).into();
+    }
     let mut column: Vec<Element<Msg>> = vec![clock(size, &g.now.time(), &g.now.date())];
     let mut block_h = CLOCK_H;
     if main {
@@ -42,6 +52,7 @@ pub fn view(g: &Greeter, _window: WindowKey, output: Option<u32>) -> Element<Msg
             Stage::Password => password(g, size, false),
             Stage::Name if g.login.user.is_none() || g.login.step == Step::Nobody => name(g, size),
             Stage::Name => password(g, size, true),
+            Stage::Setup => name(g, size),
         };
         column.push(content);
         block_h += h;
@@ -97,12 +108,14 @@ fn clock(size: Size, time: &str, date: &str) -> Element<Msg> {
 /// The computer's name at the top left; the power menu's button at the
 /// top right.
 fn top_bar(g: &Greeter, size: Size) -> Element<Msg> {
-    let host = g.hostname.clone();
+    // Setup is naming the computer: no name yet.
+    let host = if g.stage == Stage::Setup { String::new() } else { g.hostname.clone() };
+    let label = host.clone();
     let name = drawn(size.width / 2.0, 44.0, host.clone(), move |cx| {
         let s = look::ui(13.0, typeface::WEIGHT_SEMIBOLD, color(NIGHT.text2));
         cx.draw_text_in(&host, &s, Rect::new(24.0, 0.0, cx.bounds().x1, 44.0), Align::Start);
     })
-    .text(g.hostname.clone(), SemanticRole::Label);
+    .text(label, SemanticRole::Label);
     let mut items: Vec<(f64, Element<Msg>)> = vec![(0.0, name.into())];
     if g.cfg.power {
         let button = drawn(32.0, 28.0, "power", |cx| {

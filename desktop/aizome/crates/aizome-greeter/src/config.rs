@@ -40,6 +40,16 @@ pub struct Config {
     pub state: PathBuf,
     /// The computer's name, shown at the top left (else the host name).
     pub hostname: Option<String>,
+    /// The first-boot setup helper's socket: where nobody has an account,
+    /// the login screen sets the computer up instead (`setup.rs`).
+    pub setup_socket: Option<PathBuf>,
+    /// The picture setup welcomes with (an SVG).
+    pub setup_logo: Option<PathBuf>,
+    /// A root-owned file, written at run time, whose keyboard replaces the
+    /// compositor settings' at the login screen (`layouts`, `variant`,
+    /// `options`, `model`): first-boot setup's choice, until the system's
+    /// configuration names it.
+    pub keyboard_file: Option<PathBuf>,
 }
 
 impl Default for Config {
@@ -69,6 +79,9 @@ impl Default for Config {
             compositor_settings: None,
             state: "/var/lib/aizome-greeter/state.toml".into(),
             hostname: None,
+            setup_socket: None,
+            setup_logo: None,
+            keyboard_file: None,
         }
     }
 }
