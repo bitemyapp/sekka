@@ -12,7 +12,8 @@
 //! computer), keeps the choice in [`CHOICE`] and applies it; a boot service
 //! applies it again at each start. What it found is in [`STATUS`], which
 //! the menu reads. A computer whose panel can't (or isn't Intel's, or has
-//! no panel) has no status, and the menu has no switch.
+//! no panel, or whose kernel is told never to use it) has no status, and
+//! the menu has no switch.
 
 use crate::error::Error;
 use crate::service::{Task, Wake};
@@ -87,20 +88,50 @@ pub mod helper {
     use super::Status;
     use std::path::{Path, PathBuf};
 
+    /// What the panel can do, as the driver's status next to `debug` says
+    /// (after the driver's own quirks for it).
+    struct Sink {
+        psr: bool,
+        replay: bool,
+    }
+
+    fn sink(debug: &Path) -> Sink {
+        let status = std::fs::read_to_string(debug.with_file_name("i915_edp_psr_status")).unwrap_or_default();
+        let line = status.lines().find(|l| l.starts_with("Sink support:")).unwrap_or_default();
+        Sink { psr: line.contains("PSR = yes"), replay: line.contains("Panel Replay = yes") }
+    }
+
     /// The driver's PSR debug file for the built-in panel under `debugfs`
     /// (`/sys/kernel/debug`), if that panel can refresh itself.
     pub fn find(debugfs: &Path) -> Option<PathBuf> {
         let mut gpus: Vec<PathBuf> = std::fs::read_dir(debugfs.join("dri")).ok()?.flatten().map(|e| e.path()).collect();
         gpus.sort();
         gpus.into_iter().map(|g| g.join("i915_edp_psr_debug")).find(|debug| {
-            let status = debug.with_file_name("i915_edp_psr_status");
-            debug.is_file()
-                && std::fs::read_to_string(status).is_ok_and(|s| {
-                    s.lines().any(|l| {
-                        l.starts_with("Sink support:") && (l.contains("PSR = yes") || l.contains("Panel Replay = yes"))
-                    })
-                })
+            let sink = sink(debug);
+            debug.is_file() && (sink.psr || sink.replay)
         })
+    }
+
+    /// Whether the kernel's options for the driver behind `debug` leave it
+    /// something the panel can do: `enable_psr` for PSR and
+    /// `enable_panel_replay` for Panel Replay, where 0 is never (Linux 7.3
+    /// reads them apart: PSR off still leaves Panel Replay). `sysfs` is
+    /// `/sys`.
+    pub fn allowed(debug: &Path, sysfs: &Path) -> bool {
+        let driver = debug
+            .parent()
+            .and_then(|gpu| gpu.file_name())
+            .and_then(|gpu| std::fs::read_link(sysfs.join("bus/pci/devices").join(gpu).join("driver")).ok())
+            .and_then(|d| d.file_name().map(|n| n.to_owned()));
+        let Some(driver) = driver else {
+            return true;
+        };
+        let never = |option: &str| {
+            std::fs::read_to_string(sysfs.join("module").join(&driver).join("parameters").join(option))
+                .is_ok_and(|v| v.trim() == "0")
+        };
+        let sink = sink(debug);
+        (sink.psr && !never("enable_psr")) || (sink.replay && !never("enable_panel_replay"))
     }
 
     /// Whether a display has Intel's driver (xe or i915), whose files
@@ -126,13 +157,20 @@ pub mod helper {
     }
 
     /// Apply `on` (or the kept choice, for `None`) and say what came of it
-    /// in `status`; keep a new choice in `choice`.
-    pub fn run(debugfs: &Path, choice: &Path, status: &Path, on: Option<bool>) -> std::io::Result<Status> {
+    /// in `status`; keep a new choice in `choice`. `debugfs` and `sysfs` are
+    /// where the driver's files and options are.
+    pub fn run(
+        debugfs: &Path,
+        sysfs: &Path,
+        choice: &Path,
+        status: &Path,
+        on: Option<bool>,
+    ) -> std::io::Result<Status> {
         if let Some(on) = on {
             write(choice, if on { "on\n" } else { "off\n" })?;
         }
         let on = on.unwrap_or_else(|| self::choice(choice));
-        let found = match find(debugfs) {
+        let found = match find(debugfs).filter(|debug| allowed(debug, sysfs)) {
             Some(debug) => {
                 std::fs::write(&debug, value(on))?;
                 Status { available: true, on }
@@ -170,21 +208,40 @@ mod tests {
         root
     }
 
+    /// The driver's options in a `sys` under `root`, where xe drives the
+    /// panel's GPU.
+    fn options(root: &Path, psr: &str, replay: &str) -> PathBuf {
+        let sys = root.join("sys");
+        let device = sys.join("bus/pci/devices/0000:00:02.0");
+        std::fs::create_dir_all(&device).unwrap();
+        let _ = std::fs::remove_file(device.join("driver"));
+        std::os::unix::fs::symlink("../../../bus/pci/drivers/xe", device.join("driver")).unwrap();
+        let parameters = sys.join("module/xe/parameters");
+        std::fs::create_dir_all(&parameters).unwrap();
+        std::fs::write(parameters.join("enable_psr"), format!("{psr}\n")).unwrap();
+        std::fs::write(parameters.join("enable_panel_replay"), format!("{replay}\n")).unwrap();
+        // i915 is loaded too, with nothing to say about this panel.
+        std::fs::create_dir_all(sys.join("module/i915/parameters")).unwrap();
+        std::fs::write(sys.join("module/i915/parameters/enable_psr"), "0\n").unwrap();
+        sys
+    }
+
     #[test]
     fn a_panel_that_can_is_kept_off_until_turned_on() {
         let root = debugfs("replay", "PSR = yes [0x04] (Early Transport), Panel Replay = yes");
         let debug = root.join("dri/0000:00:02.0/i915_edp_psr_debug");
         assert_eq!(find(&root), Some(debug.clone()));
+        let sys = options(&root, "-1", "-1");
         let (choice, status) = (root.join("state/panel-refresh"), root.join("run/panel-refresh.toml"));
         // At boot with no choice yet: off.
-        assert_eq!(run(&root, &choice, &status, None).unwrap(), Status { available: true, on: false });
+        assert_eq!(run(&root, &sys, &choice, &status, None).unwrap(), Status { available: true, on: false });
         assert_eq!(std::fs::read_to_string(&debug).unwrap(), "1");
         assert_eq!(Status::read_from(&status), Some(Status { available: true, on: false }));
         // Turned on in the menu, then the next boot keeps it.
-        run(&root, &choice, &status, Some(true)).unwrap();
+        run(&root, &sys, &choice, &status, Some(true)).unwrap();
         assert_eq!(std::fs::read_to_string(&debug).unwrap(), "0");
         std::fs::write(&debug, "0\n").unwrap();
-        assert_eq!(run(&root, &choice, &status, None).unwrap(), Status { available: true, on: true });
+        assert_eq!(run(&root, &sys, &choice, &status, None).unwrap(), Status { available: true, on: true });
         assert_eq!(std::fs::read_to_string(&choice).unwrap(), "on\n");
         std::fs::remove_dir_all(&root).unwrap();
     }
@@ -194,10 +251,35 @@ mod tests {
         let root = debugfs("none", "PSR = no, Panel Replay = no");
         assert_eq!(find(&root), None);
         let (choice, status) = (root.join("choice"), root.join("status.toml"));
-        assert_eq!(run(&root, &choice, &status, Some(true)).unwrap(), Status::default());
+        assert_eq!(run(&root, &root.join("sys"), &choice, &status, Some(true)).unwrap(), Status::default());
         assert_eq!(std::fs::read_to_string(root.join("dri/0000:00:02.0/i915_edp_psr_debug")).unwrap(), "0\n");
         assert_eq!(Status::read_from(&status).filter(|s| s.available), None);
         assert_eq!(find(Path::new("/nonexistent")), None);
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn no_switch_where_the_kernel_says_never() {
+        let root = debugfs("never", "PSR = yes [0x04] (Early Transport), Panel Replay = yes");
+        let debug = root.join("dri/0000:00:02.0/i915_edp_psr_debug");
+        let (choice, status) = (root.join("choice"), root.join("status.toml"));
+        // PSR off still leaves Panel Replay.
+        let sys = options(&root, "0", "-1");
+        assert!(allowed(&debug, &sys));
+        assert_eq!(run(&root, &sys, &choice, &status, Some(true)).unwrap(), Status { available: true, on: true });
+        // Both off: nothing to turn on, and nothing written.
+        std::fs::write(&debug, "0\n").unwrap();
+        let sys = options(&root, "0", "0");
+        assert_eq!(run(&root, &sys, &choice, &status, Some(true)).unwrap(), Status::default());
+        assert_eq!(std::fs::read_to_string(&debug).unwrap(), "0\n");
+        assert_eq!(Status::read_from(&status).filter(|s| s.available), None);
+        // A panel with PSR alone: PSR off leaves nothing.
+        let psr = debugfs("never-psr", "PSR = yes [0x03], Panel Replay = no");
+        let psr_debug = psr.join("dri/0000:00:02.0/i915_edp_psr_debug");
+        assert!(!allowed(&psr_debug, &options(&psr, "0", "-1")));
+        assert!(allowed(&psr_debug, &options(&psr, "2", "0")));
+        for root in [root, psr] {
+            std::fs::remove_dir_all(&root).unwrap();
+        }
     }
 }
