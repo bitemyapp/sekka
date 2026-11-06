@@ -74,6 +74,10 @@ else:
     read_until("assword:", 30)
     type_line(password)
     read_until(r"\$ ", 60)
+if shell:
+    # systemd's debug shell starts with a minimal PATH.
+    type_line("export PATH=/run/wrappers/bin:/run/current-system/sw/bin:$PATH")
+    read_until(r"# ", 10)
 type_line("export TERM=dumb PAGER=cat SYSTEMD_PAGER=cat PS1='$ '")
 read_until(r"\$ ", 10)
 for i, command in enumerate(commands):

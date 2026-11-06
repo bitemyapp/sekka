@@ -137,6 +137,28 @@ for f in glob.glob("/sys/firmware/efi/efivars/LoaderDevicePartUUID-*"):
 		"path:/etc/nixos#nixosConfigurations.sekka.config.system.build.toplevel" 2>/tmp/eval2.err)
 	tail -n 3 /tmp/eval2.err | sed 's/^/evaluation with identity.nix: /'
 	check identity-evaluates "/etc/nixos with identity.nix evaluates offline to $drv" test -n "$drv"
+	# No account and no usable password; first-boot setup waiting.
+	# People's accounts as setup and the login screen count them: a login
+	# shell and a uid from 1000 (Nix's build users have no login shell).
+	people=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 && $7 !~ /nologin$/ {print $1}' | tr '\n' ' ')
+	check no-accounts "accounts with a login shell and a uid from 1000: ${people:-none}" test -z "$people"
+	check root-locked "root's password field: $(awk -F: '$1 == "root" {print $2}' /etc/shadow)" \
+		bash -c "awk -F: '\$1 == \"root\" {exit !(\$2 ~ /^!/)}' /etc/shadow"
+	if [ -e /etc/sekka-setup/helper.json ]; then
+		check setup-waiting "first-boot setup's socket: $(systemctl is-active sekka-setup.socket)" \
+			systemctl is-active -q sekka-setup.socket
+		# What setup checks before it finishes: the flake, with the setup.nix
+		# it writes, evaluates offline under the new host name.
+		rm -rf /tmp/with-setup && mkdir /tmp/with-setup
+		cp /etc/nixos/flake.nix /etc/nixos/flake.lock /etc/nixos/configuration.nix /etc/nixos/identity.nix /tmp/with-setup/
+		sed -e "s/63d89be1-72f7-4aff-9679-09cafa7e0c2d/$ROOT_A/" -e "s/910de5ca-7390-4716-9a54-8028916e4d78/$ESP_A/" \
+			"$here/setup.nix" >/tmp/with-setup/setup.nix
+		start=$SECONDS
+		drv=$(nixq path-info --derivation --offline --no-update-lock-file \
+			"path:/tmp/with-setup#nixosConfigurations.analytical.config.system.build.toplevel" 2>/tmp/eval3.err)
+		tail -n 3 /tmp/eval3.err | sed 's/^/evaluation with setup.nix: /'
+		check setup-evaluates "with setup's sample setup.nix (host analytical) the flake evaluates offline, in $((SECONDS - start))s, to $drv" test -n "$drv"
+	fi
 	# boot.bin as the image installed it, and its record.
 	check boot-bin-record "m1n1/boot.bin is the record's current copy" python3 -c '
 import hashlib, json
@@ -169,16 +191,22 @@ second)
 	check boot-bin-on-fat "replace, no-op and restore on vfat leave one.bin active and two.bin previous" bash -c \
 		"cmp -s /tmp/one.bin /boot/vm-boot-bin/m1n1/boot.bin && cmp -s /tmp/two.bin /boot/vm-boot-bin/m1n1/boot.bin.previous && ! ls /boot/vm-boot-bin/m1n1/*.new 2>/dev/null"
 	rm -rf /boot/vm-boot-bin
-	# A controlled update: setup.nix (the file first-boot setup writes) with
-	# one marker file, built offline with identity.nix as the next generation.
-	cp "$here/vm-update.nix" /etc/nixos/setup.nix
+	# A controlled update: the owner adds a module with one marker file to
+	# configuration.nix, built offline with identity.nix as the next
+	# generation. (Setup itself builds no generation.)
+	cp "$here/vm-update.nix" /etc/nixos/vm-update.nix
+	sed -i 's|^    ./developer.nix$|&\n    ./vm-update.nix|' /etc/nixos/configuration.nix
+	check update-imported "configuration.nix imports vm-update.nix" grep -q '^    ./vm-update.nix$' /etc/nixos/configuration.nix
 	start=$SECONDS
 	nixos-rebuild boot --flake /etc/nixos#sekka --no-update-lock-file --offline >/tmp/update.log 2>&1
 	status=$?
 	tail -n 25 /tmp/update.log | sed 's/^/update: /'
 	check update-built "nixos-rebuild boot offline exited $status in $((SECONDS - start))s" test "$status" = 0
 	nix-env --list-generations -p /nix/var/nix/profiles/system | sed 's/^/generations: /'
-	for f in /boot/loader/loader.conf /boot/loader/entries/*.conf; do sed "s|^|$f: |" "$f"; done
+	for f in /boot/loader/loader.conf /boot/loader/entries/*.conf; do
+		sed "s|^|$f: |" "$f"
+		echo
+	done
 	check entries-filled "no boot entry still has a placeholder" bash -c '! grep -l @SEKKA_ /boot/loader/entries/*.conf'
 	check entries-name-a "every entry names disk A" bash -c \
 		"for e in /boot/loader/entries/*.conf; do grep -q 'sekka.root=PARTUUID=$ROOT_A sekka.esp=PARTUUID=$ESP_A' \$e || exit 1; done"

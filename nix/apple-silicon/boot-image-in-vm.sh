@@ -59,11 +59,18 @@ sgdisk=$(tool gptfdisk)/bin/sgdisk
 unzip=$(tool unzip)/bin/unzip
 python=$(tool python3)/bin/python3
 cpio=$(tool cpio)/bin/cpio
+memory=4096
 case $(uname -s) in
 Darwin) accel=(-machine virt,accel=hvf,acpi=off -cpu host) ;;
 Linux)
 	[ -w /dev/kvm ] || { echo "/dev/kvm isn't usable here"; exit 1; }
-	accel=(-machine virt,acpi=off,gic-version=max -accel kvm -cpu host)
+	# A 32-bit guest address space (highmem=off, so at most 3 GiB of
+	# memory) keeps KVM's stage-2 table to one 16 KiB page. With the
+	# default 40-bit space it needs 256 KiB contiguous, which a host whose
+	# memory is fragmented by its page cache refuses (KVM_CREATE_VM: Cannot
+	# allocate memory), as this J514S did on 2026-11-06.
+	accel=(-machine virt,acpi=off,gic-version=max,highmem=off -accel kvm -cpu host)
+	memory=3072
 	;;
 *) echo "unsupported host $(uname -s)"; exit 1 ;;
 esac
@@ -97,7 +104,7 @@ start() {
 	: >"$work/console-$run.log"
 	# Relative socket paths: macOS limits them to 104 bytes, Linux to 108.
 	(cd "$work" && exec "$qemu/bin/qemu-system-aarch64" \
-		"${accel[@]}" -smp 4 -m 4096 \
+		"${accel[@]}" -smp 4 -m "$memory" \
 		-drive if=pflash,format=raw,readonly=on,file="$qemu/share/qemu/edk2-aarch64-code.fd" \
 		"${drives[@]}" \
 		-device virtio-serial-device \
@@ -383,6 +390,9 @@ VM_ARGS="$vm_args"
 EOF
 "$mtools/bin/mcopy" -i "$t" "$work/expect.env" "$here/vm/guest-checks.sh" "$here/vm/vm-update.nix" \
 	"$here/boot-bin/boot_bin.py" ::/
+# First-boot setup's own sample of the setup.nix it writes, if this source has it.
+sample=$repo/installer/genkan/first-boot/test-data/setup.nix
+[ ! -e "$sample" ] || "$mtools/bin/mcopy" -i "$t" "$sample" ::/setup.nix
 
 guest() { # NAME: run guest-checks.sh PHASE on the debug shell, then power off
 	(cd "$work" && "$python" -I "$here/vm-console.py" --shell --timeout 2400 shell.sock \
