@@ -1613,11 +1613,15 @@ and replaces only the three first-party inputs and the module reference.
 It preserves external URLs and locks, configuration modules, user choices,
 hardware settings, and `system.stateVersion`. Unrecognized customizations
 require manual migration. Failed builds and cancellation before activation
-restore the touched files. A helper process lock serializes Yukimi changes;
-configuration snapshots under `/var/lib/yukimi/configurations` accompany
-generations, including `flake.nix` for rollback across migration. Activation
-is allowed to finish once started; it never initiates a reboot.
+restore the touched files, and root's channels profile when the change
+updated it. A helper process lock serializes Yukimi changes; configuration
+snapshots under `/var/lib/yukimi/configurations` accompany generations,
+including `flake.nix` for rollback across migration. Activation is allowed
+to finish once started; it never initiates a reboot.
 
+The helper's typed steps live in its library (`yukimi_helper`), each
+guarantee shown by a `compile_fail` doctest. Run them with
+`RUSTC_BOOTSTRAP=1 cargo test --doc`, so that rustdoc checks the error codes.
 `cargo test -p yukimi-helper --test namespace -- --ignored` runs the real
 helper worker against stand-in Nix tools, in an unprivileged user and mount
 namespace with private `/run`, `/nix/var/nix`, `/var/lib/yukimi`,
