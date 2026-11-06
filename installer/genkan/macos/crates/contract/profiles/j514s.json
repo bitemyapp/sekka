@@ -1,0 +1,116 @@
+{
+  "schema": "sekka.mac.profile/1",
+  "id": "j514s",
+  "name": "MacBook Pro (14-inch, M3 Pro, Nov 2023)",
+  "machine": {
+    "product_type": "Mac15,6",
+    "device_class": "j514sap",
+    "chip_id": 24624,
+    "soc": "t6030",
+    "linux_compatible": "apple,j514s"
+  },
+  "firmware": {
+    "os_firmware": ["14.8.3"],
+    "system_firmware": ["20457.1.29"],
+    "untested_system_firmware": "block"
+  },
+  "macos": {
+    "minimum": "14.1",
+    "known_issues": [
+      {
+        "macos": "27.0",
+        "blocking": false,
+        "summary": "On macOS 27.0.1, Apple's APFS resize has failed for another owner with error -69606 despite clean First Aid. If it fails here, nothing is installed and macOS stays as it was; going back to macOS 26 helped that owner.",
+        "reference": "https://github.com/AsahiLinux/asahi-installer/issues/448"
+      }
+    ]
+  },
+  "boot_stack": [
+    {
+      "name": "m1n1-stage1",
+      "version": "1.6.1",
+      "source": "AsahiLinux/asahi-installer v0.9.2"
+    },
+    {
+      "name": "m1n1-aurora",
+      "version": "1.6.1-aurora17",
+      "source": "omacom/m1n1 d05ba17dfb771871d608225be42968bbb1e75a18"
+    },
+    {
+      "name": "u-boot",
+      "version": "2026.07-2-asahi",
+      "source": "AsahiLinux/u-boot asahi-v2026.07-2"
+    },
+    {
+      "name": "linux-aurora",
+      "version": "7.1.12-aurora20",
+      "source": "omacom/linux-aurora aurora-2026.10.17.20 c46d7dcdb8712ea9aeb0ce47b439ffae76371e55"
+    },
+    {
+      "name": "mesa-m3-native-pro",
+      "version": "26.1.4",
+      "source": "iconidentify/mesa-omacom d616d0650d6fa80f72a750a0121442ab917ed6cf"
+    },
+    {
+      "name": "mesa-m3-pro-vulkan",
+      "version": "26.1.4",
+      "source": "iconidentify/mesa-omacom b0f56952b7f06955b143fbfa90c07de4c5864964"
+    },
+    {
+      "name": "sekka",
+      "version": "fix/apple-silicon-aizome",
+      "source": "bitemyapp/sekka 4882dc33652612e7475f467f6373d8b607e5407c"
+    }
+  ],
+  "support": "development",
+  "evidence": [
+    {
+      "claim": "Sekka boots on the reference J514S through Asahi's m1n1 stage 1 v1.6.1, m1n1 v1.6.1-omarchy.aurora17, U-Boot 2026.07 and linux-aurora 7.1.12-aurora20.",
+      "status": "observed",
+      "source": "The device tree's chosen node and uname on the reference J514S (Mac15,6, apple,j514s apple,t6030), read from Linux.",
+      "recorded": "2026-11-06T21:00:00Z"
+    },
+    {
+      "claim": "That boot ran on system firmware mBoot-20457.1.29 (the macOS 27.0 system firmware) with the OS firmware its drivers see as 14.7, which Asahi's installer supplies as 14.8.3.",
+      "status": "observed",
+      "source": "asahi,iboot1-version, asahi,system-fw-version and asahi,os-fw-version in the device tree's chosen node on the reference J514S.",
+      "recorded": "2026-11-06T21:00:00Z"
+    },
+    {
+      "claim": "Aizome runs as the desktop session on the reference J514S, with the panel's backlight controlled by Sekka's T6030 backlight patch.",
+      "status": "observed",
+      "source": "The running session on the reference J514S; DEVELOPERS.md, T6030 developer-image brightness.",
+      "recorded": "2026-11-06T21:00:00Z"
+    },
+    {
+      "claim": "The built-in panel runs natively at 3024x1964 and 120 Hz, the GPU draws the desktop, and a 4K display works over one USB-C port (atc0).",
+      "status": "reported",
+      "source": "https://github.com/omacom/linux-aurora/issues/138 (same system firmware, release aurora-2026.10.17.20).",
+      "recorded": "2026-10-18T00:00:00Z"
+    },
+    {
+      "claim": "Not working in that report: the second USB-C port, sleep with a display attached, and GPU clocks above 1056 MHz.",
+      "status": "reported",
+      "source": "https://github.com/omacom/linux-aurora/issues/138",
+      "recorded": "2026-10-18T00:00:00Z"
+    },
+    {
+      "claim": "A fresh installation through Sekka Installer, its Recovery app and first-boot setup reaches Aizome's login screen.",
+      "status": "untested",
+      "source": "docs/apple-silicon-installer-plan.md, gates M2 to M6.",
+      "recorded": "2026-11-06T21:00:00Z"
+    },
+    {
+      "claim": "On the original developer installation, Wi-Fi (wld0) is up, Bluetooth (hci0), the keyboard and trackpad (Apple MTP) and the panel backlight are present, and speakersafetyd is running.",
+      "status": "observed",
+      "source": "ip link, /sys/class/bluetooth, /proc/bus/input/devices, /sys/class/backlight and systemctl on the reference J514S.",
+      "recorded": "2026-11-06T21:00:00Z"
+    },
+    {
+      "claim": "The same devices work on a fresh installation, with the firmware that installation extracts, and sound plays through speakersafetyd.",
+      "status": "untested",
+      "source": "docs/apple-silicon-installer-plan.md, gate M5.",
+      "recorded": "2026-11-06T21:00:00Z"
+    }
+  ]
+}
