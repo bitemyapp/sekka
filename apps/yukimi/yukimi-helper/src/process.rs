@@ -9,10 +9,50 @@
 //! boot menu, [`clean`]) finishes first, and a stop asked for meanwhile
 //! takes effect when it ends.
 //!
+//! The helper runs only the programs this crate names ([`Program`]). Those
+//! that change what a restore point or the boot menu must cover
+//! (`nix-channel`, `nix-store`, `nix-env`, `nix flake update`) are named
+//! only in the step that covers them, so the helper's program can't run
+//! them around that step. Running a program by name doesn't compile:
+//!
+//! ```compile_fail,E0308
+//! use yukimi_helper::process::{command, run};
+//! # fn main() -> yukimi_helper::process::Result<()> {
+//! // Update root's channels outside the change's restore point.
+//! let mut channels = command("nix-channel");
+//! channels.arg("--update");
+//! run(channels, "Updating the channels")?;
+//! # Ok(()) }
+//! ```
+//!
+//! nor naming one that isn't offered:
+//!
+//! ```compile_fail,E0624
+//! use yukimi_helper::process::{Program, command, wait};
+//! # fn main() -> yukimi_helper::process::Result<()> {
+//! // Collect garbage before the boot menu is rewritten.
+//! wait(command(Program::new("nix-store")).arg("--gc"))?;
+//! # Ok(()) }
+//! ```
+//!
+//! ```no_run
+//! use yukimi_helper::process::{Program, command, output};
+//! # fn main() -> yukimi_helper::process::Result<()> {
+//! let mut users = command(Program::LOGINCTL);
+//! users.args(["list-users", "--no-legend"]);
+//! let _ = output(users, "Listing signed-in users")?;
+//! # Ok(()) }
+//! ```
+//!
+//! `std::process::Command::new` is denied in this crate's programs too
+//! (Clippy's `disallowed_methods`, see `clippy.toml`), so the standard
+//! library is no way around it.
+//!
 //! [`change::RestorePoint::attempt`]: crate::change::RestorePoint::attempt
 //! [`clean`]: crate::clean
-use std::io::Read;
+use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -32,15 +72,70 @@ impl<E: std::fmt::Display> From<E> for Failure {
 
 pub type Result<T> = std::result::Result<T, Failure>;
 
+/// A program the helper may run, found on [`PATH`]. Only this crate names
+/// programs; its program gets the ones that change nothing a restore point
+/// or the boot menu must cover.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Program(&'static str);
+
+impl Program {
+    /// systemd's manager: unit state, and services in users' sessions.
+    pub const SYSTEMCTL: Program = Program("systemctl");
+    /// logind: who is signed in.
+    pub const LOGINCTL: Program = Program("loginctl");
+    /// Starts the operation as a service of its own.
+    pub const SYSTEMD_RUN: Program = Program("systemd-run");
+
+    /// Names a program, for the step of this crate that runs it.
+    pub(crate) const fn new(name: &'static str) -> Program {
+        Program(name)
+    }
+}
+
+/// What the helper's program asks the `nix` command. None of it changes
+/// the store's roots, root's channels or the configuration; `nix flake
+/// update` is run only by a change that covers flake.lock
+/// ([`Changing::update_lock`](crate::change::Changing::update_lock)).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Nix {
+    Build,
+    Eval,
+    Config,
+}
+
+/// The one privileged operation this process runs. A change and a clean-up
+/// borrow it for as long as they can still change the system, so that one
+/// can't start inside or alongside another; only the first
+/// [`begin`](Self::begin) in a process gets it.
+#[derive(Debug)]
+pub struct Operation(());
+
+static BEGUN: AtomicBool = AtomicBool::new(false);
+
+impl Operation {
+    pub fn begin() -> Result<Operation> {
+        if BEGUN.swap(true, Ordering::SeqCst) {
+            return Err(Failure("This process has run its operation already".into()));
+        }
+        Ok(Operation(()))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn for_test() -> Operation {
+        Operation(())
+    }
+}
+
 /// Where the work is, which decides whether it can still be stopped.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Phase {
     Working,
     /// Yukimi asked to stop.
     Stopping,
-    /// A step that a stop must not split is running; `asked` says whether a
-    /// stop waits for it to end.
+    /// A step that a stop must not split is running: what it is finishing,
+    /// and whether a stop waits for it to end.
     Unstoppable {
+        finishing: &'static str,
         asked: bool,
     },
     /// The new system is being started: too late to stop.
@@ -64,8 +159,12 @@ pub fn stop() {
     let mut state = state();
     match state.0 {
         Phase::Committed => return,
-        Phase::Unstoppable { .. } => {
-            state.0 = Phase::Unstoppable { asked: true };
+        Phase::Unstoppable { finishing, asked } => {
+            state.0 = Phase::Unstoppable { finishing, asked: true };
+            drop(state);
+            if !asked {
+                report(1, &format!("{finishing} first, then stopping"));
+            }
             return;
         }
         Phase::Working | Phase::Stopping => state.0 = Phase::Stopping,
@@ -78,7 +177,7 @@ pub fn stop() {
 
 /// Whether a stop was asked for (and hasn't been refused by a commit).
 pub fn stop_requested() -> bool {
-    matches!(state().0, Phase::Stopping | Phase::Unstoppable { asked: true })
+    matches!(state().0, Phase::Stopping | Phase::Unstoppable { asked: true, .. })
 }
 
 /// Whether the work is past its commit, so it no longer puts anything back.
@@ -125,12 +224,13 @@ fn check_stopped() -> Result<()> {
 
 /// From here on the work finishes even if Yukimi goes away, so that the
 /// system is never left half switched. Only a restore point's
-/// [`attempt`](crate::change::RestorePoint::attempt) commits.
+/// [`attempt`](crate::change::RestorePoint::attempt) commits, once.
 pub(crate) fn commit() -> Result<()> {
     let mut state = state();
     match state.0 {
-        Phase::Stopping | Phase::Unstoppable { asked: true } => Err(Failure("Stopped".into())),
-        Phase::Working | Phase::Unstoppable { asked: false } | Phase::Committed => {
+        Phase::Stopping | Phase::Unstoppable { asked: true, .. } => Err(Failure("Stopped".into())),
+        Phase::Committed => Err(Failure("The operation committed already".into())),
+        Phase::Working | Phase::Unstoppable { asked: false, .. } => {
             state.0 = Phase::Committed;
             Ok(())
         }
@@ -140,19 +240,22 @@ pub(crate) fn commit() -> Result<()> {
 /// A step that a stop doesn't split, while this lives: its programs aren't
 /// sent SIGTERM, and a stop asked for meanwhile takes effect when it ends.
 #[must_use = "the step is unstoppable only while this lives"]
+#[derive(Debug)]
 pub(crate) struct Unstoppable {
     /// Only the outermost one ends the step.
     outer: bool,
 }
 
 impl Unstoppable {
-    /// Starts the step, unless a stop was asked for already.
-    pub(crate) fn begin() -> Result<Unstoppable> {
+    /// Starts the step, unless a stop was asked for already. `finishing`
+    /// says what a stop waits for ("Deleting the old generations and
+    /// updating the boot menu").
+    pub(crate) fn begin(finishing: &'static str) -> Result<Unstoppable> {
         let mut state = state();
         match state.0 {
             Phase::Stopping => Err(Failure("Stopped".into())),
             Phase::Working => {
-                state.0 = Phase::Unstoppable { asked: false };
+                state.0 = Phase::Unstoppable { finishing, asked: false };
                 Ok(Unstoppable { outer: true })
             }
             Phase::Unstoppable { .. } | Phase::Committed => Ok(Unstoppable { outer: false }),
@@ -163,7 +266,7 @@ impl Unstoppable {
 impl Drop for Unstoppable {
     fn drop(&mut self) {
         let mut state = state();
-        if let (true, Phase::Unstoppable { asked }) = (self.outer, state.0) {
+        if let (true, Phase::Unstoppable { asked, .. }) = (self.outer, state.0) {
             state.0 = if asked { Phase::Stopping } else { Phase::Working };
         }
     }
@@ -186,23 +289,37 @@ pub fn wait(c: &mut Command) -> Result<std::process::Output> {
     Ok(out?)
 }
 
+/// A line of Nix's log format on standard error. Writing it never fails
+/// the work, and never panics: a full disk under the log must not abort a
+/// step that is putting things back.
+fn log(event: serde_json::Value) {
+    let _ = writeln!(std::io::stderr(), "@nix {event}");
+}
+
 /// Say what is happening, as an activity Yukimi shows.
 pub fn stage(id: u64, text: &str) {
-    eprintln!(
-        "@nix {}",
-        serde_json::json!({"action": "start", "id": id, "level": 0, "type": 0, "text": text, "fields": []})
-    );
+    log(serde_json::json!({"action": "start", "id": id, "level": 0, "type": 0, "text": text, "fields": []}));
 }
 
 pub fn stage_done(id: u64) {
-    eprintln!("@nix {}", serde_json::json!({"action": "stop", "id": id}));
+    log(serde_json::json!({"action": "stop", "id": id}));
 }
 
 pub fn report(level: u8, message: &str) {
-    eprintln!("@nix {}", serde_json::json!({"action": "msg", "level": level, "msg": message}));
+    log(serde_json::json!({"action": "msg", "level": level, "msg": message}));
 }
 
-pub fn command(program: &str) -> Command {
+/// Prepares to run `program` as the helper runs everything: with a clean
+/// environment, and in a process group of its own.
+pub fn command(program: Program) -> Command {
+    prepared(Path::new(program.0))
+}
+
+/// The same for a program given by its path, such as a system's
+/// `switch-to-configuration`.
+pub(crate) fn prepared(program: &Path) -> Command {
+    // The one place the helper makes a command.
+    #[allow(clippy::disallowed_methods)]
     let mut c = Command::new(program);
     // Only the helper handles terminal cancellation. In particular, an
     // activation already committed must finish even when Ctrl-C is pressed.
@@ -214,9 +331,15 @@ pub fn command(program: &str) -> Command {
     c
 }
 
-pub fn nix() -> Command {
-    let mut c = command("nix");
+/// `nix <subcommand>`, with flakes enabled.
+pub fn nix(subcommand: Nix) -> Command {
+    let mut c = command(Program::new("nix"));
     c.args(["--extra-experimental-features", "nix-command flakes"]);
+    c.arg(match subcommand {
+        Nix::Build => "build",
+        Nix::Eval => "eval",
+        Nix::Config => "config",
+    });
     c
 }
 
@@ -258,6 +381,7 @@ mod tests {
         commit().unwrap();
         stop();
         assert!(committed() && !stop_requested());
+        assert!(commit().is_err(), "an operation commits once");
         state().0 = Phase::Working;
     }
 
@@ -265,18 +389,18 @@ mod tests {
     fn an_unstoppable_step_defers_a_stop_until_it_ends() {
         let _phase = phase_for_test();
         {
-            let _step = Unstoppable::begin().unwrap();
+            let _step = Unstoppable::begin("Finishing").unwrap();
             stop();
             assert!(stop_requested());
             // Its programs still run.
             assert!(check_stopped().is_ok());
-            let _inner = Unstoppable::begin().unwrap();
+            let _inner = Unstoppable::begin("Finishing").unwrap();
         }
         assert!(check_stopped().is_err(), "the stop applies once the step ends");
-        assert!(Unstoppable::begin().is_err() && commit().is_err());
+        assert!(Unstoppable::begin("Finishing").is_err() && commit().is_err());
         state().0 = Phase::Working;
         {
-            let _step = Unstoppable::begin().unwrap();
+            let _step = Unstoppable::begin("Finishing").unwrap();
         }
         assert!(!stop_requested());
         commit().unwrap();

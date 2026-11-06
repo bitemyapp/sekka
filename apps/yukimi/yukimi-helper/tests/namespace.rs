@@ -8,6 +8,8 @@
 //! ```sh
 //! cargo test --locked -p yukimi-helper --test namespace -- --ignored
 //! ```
+// Tests run the scripts that run the helper; they are not the helper.
+#![allow(clippy::disallowed_methods)]
 use std::process::Command;
 
 fn script(name: &str) {

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Terminal entry point for the same transaction Yukimi uses.
+#![deny(clippy::disallowed_methods)]
 use std::io::{BufRead, Read};
 use std::process::{Command, ExitCode, Stdio};
 
@@ -62,7 +63,10 @@ fn run() -> Result<(), String> {
     unsafe {
         libc::signal(libc::SIGINT, wait_for_helper as *const () as libc::sighandler_t);
     }
+    // The unprivileged terminal client starting the helper itself, the one
+    // program it runs; the helper runs everything else through its library.
     // SAFETY: geteuid has no preconditions. Never trust a helper from PATH.
+    #[allow(clippy::disallowed_methods)]
     let mut command = if unsafe { libc::geteuid() } == 0 {
         Command::new(&helper)
     } else {

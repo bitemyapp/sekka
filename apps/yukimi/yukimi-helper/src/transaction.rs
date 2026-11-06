@@ -55,7 +55,7 @@ pub fn client(args: &[String]) -> Result<String> {
     let log = dir.join("progress.log");
     std::fs::File::create(&log)?;
     let mut log = std::fs::File::open(log)?;
-    let mut start = command("systemd-run");
+    let mut start = command(Program::SYSTEMD_RUN);
     start.args([
         "--quiet",
         "--collect",
@@ -90,10 +90,10 @@ pub fn client(args: &[String]) -> Result<String> {
         }
         if process::stop_requested() && !cancelled {
             // The worker handles this before commit; after commit it finishes.
-            let _ = command("systemctl").args(["kill", "--kill-whom=main", "--signal=SIGINT", &unit]).output();
+            let _ = command(Program::SYSTEMCTL).args(["kill", "--kill-whom=main", "--signal=SIGINT", &unit]).output();
             cancelled = true;
         }
-        let status = command("systemctl").args(["show", &unit, "--property=ActiveState", "--value"]).output()?;
+        let status = command(Program::SYSTEMCTL).args(["show", &unit, "--property=ActiveState", "--value"]).output()?;
         if !status.status.success()
             || !matches!(String::from_utf8_lossy(&status.stdout).trim(), "active" | "activating" | "deactivating")
         {

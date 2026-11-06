@@ -8,28 +8,66 @@
 //! change alters must be covered first: the configuration's files when the
 //! point is taken, root's channels when the change is about to update them
 //! ([`Changing::cover_channels`]), which is the only way to update them.
+//! The attempt borrows the process's [`Operation`] for as long as it runs,
+//! so nothing inside it can commit:
+//!
+//! ```compile_fail,E0499
+//! use yukimi_helper::change::RestorePoint;
+//! use yukimi_helper::process::Operation;
+//! # fn main() -> yukimi_helper::process::Result<()> {
+//! let mut operation = Operation::begin()?;
+//! let files = [std::path::PathBuf::from("/etc/nixos/configuration.nix")];
+//! RestorePoint::take(&files)?.attempt(&mut operation, |_changing| {
+//!     // A commit in the middle of the change: from here nothing is put back.
+//!     operation.commit_without_changes()?;
+//!     Ok(())
+//! })?;
+//! # Ok(()) }
+//! ```
+//!
+//! ```
+//! use yukimi_helper::process::{Operation, committed};
+//! # fn main() -> yukimi_helper::process::Result<()> {
+//! let mut operation = Operation::begin()?;
+//! // Going back to a generation commits before it changes anything.
+//! let _committed = operation.commit_without_changes()?;
+//! assert!(committed());
+//! assert!(Operation::begin().is_err(), "one operation per process");
+//! # Ok(()) }
+//! ```
+//!
+//! After the commit, [`Committed`] is what sets the system profile and
+//! starts the new system.
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::io::ErrorKind::NotFound;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
+use aizome_typestate::Unsettled;
 use yukimi_system::channels::ROOT_CHANNELS;
-use yukimi_system::generations::generation_number;
+use yukimi_system::generations::{SYSTEM_PROFILE, generation_number};
 use yukimi_system::setup::Setup;
 
-use crate::process::{self, Failure, Result};
+use crate::process::{self, Failure, Operation, Program, Result};
 
-/// Everything a change may alter, as it was before.
+const NIX_CHANNEL: Program = Program::new("nix-channel");
+const NIX_ENV: Program = Program::new("nix-env");
+const GIT: Program = Program::new("git");
+
+/// Everything a change may alter, as it was before. Dropped before the
+/// change settles (a panic in the change), it is put back.
 #[must_use = "a restore point does nothing until a change is attempted from it"]
 pub struct RestorePoint {
+    covered: Unsettled<Covered, fn(Covered)>,
+}
+
+struct Covered {
     files: Vec<(PathBuf, Option<Vec<u8>>)>,
     channels: Option<Channels>,
     /// Root's channels profile; elsewhere only in tests.
     channels_profile: PathBuf,
-    /// Committed or put back: nothing is left to do when it's dropped.
-    settled: bool,
 }
 
 impl RestorePoint {
@@ -46,30 +84,29 @@ impl RestorePoint {
             };
             covered.push((path.clone(), contents));
         }
-        let mut point = RestorePoint::nothing();
-        point.files = covered;
-        Ok(point)
-    }
-
-    /// Covers nothing, for a step that commits before it changes anything.
-    pub fn nothing() -> RestorePoint {
-        RestorePoint { files: Vec::new(), channels: None, channels_profile: ROOT_CHANNELS.into(), settled: false }
+        let covered = Covered { files: covered, channels: None, channels_profile: ROOT_CHANNELS.into() };
+        Ok(RestorePoint { covered: Unsettled::new(covered, put_back_dropped) })
     }
 
     /// Runs `work`, the change up to its plan, then commits: from then on
     /// the work finishes even if Yukimi goes away. If `work` fails, or a
     /// stop comes before the commit, everything the point covers is put
-    /// back, and the failure says what couldn't be.
-    pub fn attempt<T>(mut self, work: impl FnOnce(&mut Changing<'_>) -> Result<T>) -> Result<Committed<T>> {
-        let done = work(&mut Changing { point: &mut self }).and_then(|planned| {
+    /// back, and the failure says what couldn't be. `operation` stays
+    /// borrowed throughout, so `work` can't commit by another way.
+    pub fn attempt<T>(
+        mut self,
+        _operation: &mut Operation,
+        work: impl FnOnce(&mut Changing<'_>) -> Result<T>,
+    ) -> Result<(Committed, T)> {
+        let done = work(&mut Changing { point: self.covered.get_mut() }).and_then(|planned| {
             process::commit()?;
             Ok(planned)
         });
-        self.settled = true;
+        let covered = self.covered.settle();
         match done {
-            Ok(planned) => Ok(Committed { planned }),
+            Ok(planned) => Ok((Committed(()), planned)),
             Err(Failure(message)) => {
-                let left = self.restore();
+                let left = covered.put_back();
                 Err(Failure(if left.is_empty() {
                     message
                 } else {
@@ -78,10 +115,16 @@ impl RestorePoint {
             }
         }
     }
+}
 
+fn put_back_dropped(covered: Covered) {
+    let _ = covered.put_back();
+}
+
+impl Covered {
     /// Puts back everything covered, without starting a program (a stop
     /// refuses to start one). Returns what couldn't be put back.
-    fn restore(&self) -> Vec<String> {
+    fn put_back(&self) -> Vec<String> {
         let mut left = Vec::new();
         for (path, contents) in &self.files {
             let put = match contents {
@@ -101,12 +144,11 @@ impl RestorePoint {
     }
 }
 
-/// A change that panics before its commit still puts back what it covered.
-impl Drop for RestorePoint {
-    fn drop(&mut self) {
-        if !self.settled {
-            let _ = self.restore();
-        }
+impl Operation {
+    /// Commits an operation that changes nothing before its commit
+    /// (going back to a generation), so has nothing to put back.
+    pub fn commit_without_changes(&mut self) -> Result<Committed> {
+        RestorePoint::take(&[])?.attempt(self, |_| Ok(())).map(|(committed, ())| committed)
     }
 }
 
@@ -120,21 +162,25 @@ impl Drop for RestorePoint {
 ///
 /// ```compile_fail,E0599
 /// use yukimi_helper::change::RestorePoint;
+/// use yukimi_helper::process::Operation;
 /// # fn main() -> yukimi_helper::process::Result<()> {
+/// let mut operation = Operation::begin()?;
 /// let files = [std::path::PathBuf::from("/etc/nixos/configuration.nix")];
-/// RestorePoint::take(&files)?.attempt(|changing| changing.update_channels())?;
+/// RestorePoint::take(&files)?.attempt(&mut operation, |changing| changing.update_channels())?;
 /// # Ok(()) }
 /// ```
 ///
 /// ```no_run
 /// use yukimi_helper::change::RestorePoint;
+/// use yukimi_helper::process::Operation;
 /// # fn main() -> yukimi_helper::process::Result<()> {
+/// let mut operation = Operation::begin()?;
 /// let files = [std::path::PathBuf::from("/etc/nixos/configuration.nix")];
-/// RestorePoint::take(&files)?.attempt(|changing| changing.cover_channels()?.update_channels())?;
+/// RestorePoint::take(&files)?.attempt(&mut operation, |changing| changing.cover_channels()?.update_channels())?;
 /// # Ok(()) }
 /// ```
 pub struct Changing<'p> {
-    point: &'p mut RestorePoint,
+    point: &'p mut Covered,
 }
 
 impl Changing<'_> {
@@ -162,7 +208,7 @@ impl Changing<'_> {
             let _ = std::os::unix::fs::chown(path, Some(meta.uid()), Some(meta.gid()));
         }
         if setup.git {
-            let mut git = process::command("git");
+            let mut git = process::command(GIT);
             // Root works in someone else's work tree here, which Git refuses
             // unless told it is safe.
             git.args(["-c", "safe.directory=*", "-C"]).arg(path.parent().unwrap_or(&setup.dir));
@@ -178,11 +224,15 @@ impl Changing<'_> {
         Ok(())
     }
 
-    /// Runs a program that rewrites a covered file (`nix flake update`
-    /// rewrites flake.lock).
-    pub fn rewrite(&mut self, path: &Path, program: Command, what: &str) -> Result<()> {
-        self.check_covered(path)?;
-        process::run(program, what)
+    /// `nix flake update` of `inputs`, which rewrites the configuration's
+    /// flake.lock (covered).
+    pub fn update_lock(&mut self, setup: &Setup, inputs: &[&str]) -> Result<()> {
+        self.check_covered(&setup.dir.join("flake.lock"))?;
+        let mut update = process::command(Program::new("nix"));
+        update.args(["--extra-experimental-features", "nix-command flakes"]);
+        update.args(["flake", "update", "--refresh", "--log-format", "internal-json", "-v", "--flake"]);
+        update.arg(&setup.dir).args(inputs);
+        process::run(update, "Updating the flake inputs")
     }
 
     /// Covers root's channels: records which generation of their profile
@@ -197,29 +247,48 @@ impl Changing<'_> {
 
 /// Root's channels, recorded in the restore point.
 pub struct ChannelsCovered<'c> {
-    point: PhantomData<&'c mut RestorePoint>,
+    point: PhantomData<&'c mut Covered>,
 }
 
 impl ChannelsCovered<'_> {
     /// `nix-channel --update`: a new generation of root's channels profile,
     /// with each channel downloaded anew.
     pub fn update_channels(self) -> Result<()> {
-        let mut c = process::command("nix-channel");
+        let mut c = process::command(NIX_CHANNEL);
         c.arg("--update");
         process::run(c, "Updating the channels")
     }
 }
 
-/// A committed change: from here on it is finished, not put back.
+/// Proof that the operation committed: from here on it is finished, not
+/// put back. Only a commit makes one, and only with one is the system
+/// profile set or a system started.
+#[derive(Debug)]
 #[must_use = "a committed change goes on to activation"]
-pub struct Committed<T> {
-    planned: T,
-}
+pub struct Committed(());
 
-impl<T> Committed<T> {
-    /// What the change planned before it committed.
-    pub fn into_planned(self) -> T {
-        self.planned
+impl Committed {
+    /// Makes `system` the system profile's new generation.
+    pub fn set_system_profile(&self, system: &Path) -> Result<()> {
+        let mut set = process::command(NIX_ENV);
+        set.args(["-p", SYSTEM_PROFILE, "--set"]).arg(system);
+        process::run(set, "Setting the system profile")
+    }
+
+    /// Points the system profile at its generation `generation`.
+    pub fn switch_generation(&self, generation: u32) -> Result<()> {
+        let mut set = process::command(NIX_ENV);
+        set.args(["-p", SYSTEM_PROFILE, "--switch-generation", &generation.to_string()]);
+        process::run(set, "Choosing the generation")
+    }
+
+    /// Runs `system`'s `switch-to-configuration`: `switch` starts it, `boot`
+    /// makes it the next start. The helper already runs in a system service
+    /// with persistent logs; this never connects it to the GUI's files.
+    pub fn switch_to_configuration(&self, system: &Path, mode: &str) -> Result<()> {
+        let mut switch = process::prepared(&system.join("bin/switch-to-configuration"));
+        switch.arg(mode);
+        process::run(switch, "Switching to the new system")
     }
 }
 
@@ -310,7 +379,7 @@ mod tests {
         }
         fn point(&self, files: &[PathBuf]) -> RestorePoint {
             let mut point = RestorePoint::take(files).unwrap();
-            point.channels_profile = self.channels();
+            point.covered.get_mut().channels_profile = self.channels();
             point
         }
         fn links(&self) -> Vec<String> {
@@ -337,7 +406,7 @@ mod tests {
         std::fs::write(&kept, "before").unwrap();
         let point = dir.point(&[kept.clone(), created.clone()]);
         let setup = Setup::detect_in(&dir.0, Default::default(), "acer");
-        let failed = point.attempt(|changing| -> Result<()> {
+        let failed = point.attempt(&mut Operation::for_test(), |changing| -> Result<()> {
             changing.write_file(&setup, &kept, "after")?;
             changing.write_file(&setup, &created, "new")?;
             // Only covered files can be written.
@@ -356,7 +425,7 @@ mod tests {
         let _phase = process::phase_for_test();
         let dir = Dir::new("channels");
         dir.update_channels(1);
-        let failed = dir.point(&[]).attempt(|changing| -> Result<()> {
+        let failed = dir.point(&[]).attempt(&mut Operation::for_test(), |changing| -> Result<()> {
             changing.cover_channels()?;
             dir.update_channels(2);
             Err(Failure("Building the new system failed".into()))
@@ -366,7 +435,7 @@ mod tests {
         assert_eq!(dir.links(), ["channels", "channels-1-link"]);
 
         // A stop that arrives once the work is done still comes before the commit.
-        let stopped = dir.point(&[]).attempt(|changing| {
+        let stopped = dir.point(&[]).attempt(&mut Operation::for_test(), |changing| {
             changing.cover_channels()?;
             dir.update_channels(2);
             process::stop();
@@ -378,12 +447,12 @@ mod tests {
         drop(_phase);
 
         let _phase = process::phase_for_test();
-        let committed = dir.point(&[]).attempt(|changing| {
+        let committed = dir.point(&[]).attempt(&mut Operation::for_test(), |changing| {
             changing.cover_channels()?;
             dir.update_channels(2);
             Ok("planned")
         });
-        assert_eq!(committed.ok().map(Committed::into_planned), Some("planned"));
+        assert_eq!(committed.ok().map(|(_, planned)| planned), Some("planned"));
         assert_eq!(std::fs::read_link(dir.channels()).unwrap(), Path::new("channels-2-link"));
     }
 
@@ -391,7 +460,7 @@ mod tests {
     fn channels_that_were_never_updated_are_removed_again() {
         let _phase = process::phase_for_test();
         let dir = Dir::new("first-channels");
-        let failed = dir.point(&[]).attempt(|changing| -> Result<()> {
+        let failed = dir.point(&[]).attempt(&mut Operation::for_test(), |changing| -> Result<()> {
             changing.cover_channels()?;
             dir.update_channels(1);
             Err(Failure("Updating the channels failed".into()))
@@ -409,7 +478,7 @@ mod tests {
         dir.update_channels(1);
         let point = dir.point(std::slice::from_ref(&file));
         let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let _ = point.attempt(|changing| -> Result<()> {
+            let _ = point.attempt(&mut Operation::for_test(), |changing| -> Result<()> {
                 changing.cover_channels()?;
                 dir.update_channels(2);
                 std::fs::write(&file, "after").unwrap();
