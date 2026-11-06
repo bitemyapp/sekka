@@ -6,6 +6,8 @@
 //!
 //! - [`change`]: a change to the system as a transaction, which ends in
 //!   its commit or in putting back everything it covered.
+//! - [`snapshots`]: the configuration kept for each generation.
 //! - [`process`]: running programs, and stopping when Yukimi asks.
 pub mod change;
 pub mod process;
+pub mod snapshots;

@@ -1,9 +1,11 @@
 //! Read-only source and package drill-down for one exact comparison range.
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use yukimi_config::lock::{FlakeLock, InputTree, Locked};
 use yukimi_system::diff::{Change, ChangeKind};
+use yukimi_system::generations::Generation;
+use yukimi_system::saved::{GenerationId, Snapshot};
 
 use crate::model::{Model, Store};
 use crate::update_history::{Link, same_repo};
@@ -83,6 +85,13 @@ fn saved_tree(file: &Path, name: &str, expected: &Locked) -> Result<InputTree, S
     Ok(tree)
 }
 
+/// The flake.lock kept for `generation` as it is now, not for an earlier
+/// generation that had its number.
+fn saved_lock(generation: &Generation) -> Option<PathBuf> {
+    let root = Path::new(yukimi_system::SAVED_CONFIGURATIONS);
+    Some(Snapshot::of(root, &GenerationId::listed(generation))?.dir().join("flake.lock"))
+}
+
 fn source_tree(
     model: &Model,
     name: &str,
@@ -92,7 +101,13 @@ fn source_tree(
     remote: bool,
 ) -> Result<(InputTree, String), String> {
     if let Some(number) = generation {
-        let tree = saved_tree(&yukimi_system::saved_configuration(number).join("flake.lock"), name, expected)?;
+        let lock = model
+            .generations
+            .iter()
+            .find(|g| g.number == number)
+            .and_then(saved_lock)
+            .ok_or_else(|| format!("Generation {number}'s configuration wasn't kept."))?;
+        let tree = saved_tree(&lock, name, expected)?;
         return Ok((tree, format!("generation {number}")));
     }
     if after && let Ok(tree) = saved_tree(&model.setup.dir.join("flake.lock"), name, expected) {
@@ -106,8 +121,8 @@ fn source_tree(
             .iter()
             .filter(|g| if after { g.current } else { g.active })
             .max_by_key(|g| (g.current, g.number))
-            && let Ok(tree) =
-                saved_tree(&yukimi_system::saved_configuration(g.number).join("flake.lock"), name, expected)
+            && let Some(lock) = saved_lock(g)
+            && let Ok(tree) = saved_tree(&lock, name, expected)
         {
             return Ok((tree, format!("generation {}", g.number)));
         }

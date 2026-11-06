@@ -31,3 +31,10 @@ fn a_later_boot_supersedes_a_failed_activation() {
 fn a_failed_or_stopped_change_puts_the_channels_back() {
     script("repro_yuk_09.sh");
 }
+
+/// YUK-10: a reused generation number gets its own saved configuration.
+#[test]
+#[ignore = "needs unprivileged user namespaces"]
+fn a_reused_generation_number_gets_its_own_configuration() {
+    script("repro_yuk_10.sh");
+}
