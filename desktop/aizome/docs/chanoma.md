@@ -455,10 +455,29 @@ where it is ("On Extreme Pro", "In your home folder", said the same
 while its drive is out) and what it holds ("6509 games for 31 systems ·
 2 films"), how far a look through it has got ("Looking through it: 1204
 folders so far", from the files index's progress), or that its drive
-isn't plugged in. A folder opens a page to look again or remove it
-(which asks first, *Keep it* ready to press, as removing a website does;
-nothing on the disk is deleted). Games and Films and shows have *Your
-folders* and *Add a folder…* too.
+isn't plugged in, is being opened, or couldn't be opened. A folder opens
+a page to look again or remove it (which asks first, *Keep it* ready to
+press, as removing a website does; nothing on the disk is deleted).
+Games and Films and shows have *Your folders* and *Add a folder…* too.
+
+**Drives are opened as Chanoma starts and as they're plugged in**
+(`app/drives.rs`, over `aizome_sys::disks::Automount`): a television's
+films and games are often on a USB disk, and nobody opens it in Hako
+first. Each filesystem UDisks says to mount by itself (`HintAuto`:
+removable and external drives, never the system's own) is mounted the
+first time Chanoma sees it unmounted, off the interface thread, and the
+library is read again once it is. One already mounted, or unmounted later
+in Hako, is left as it is; one unplugged and plugged in again is new.
+Locked (encrypted) drives wait for someone with the passphrase. A drive
+that can't be opened is said once, in a note at the top ("Couldn't open
+the drive Extreme Pro"): not again while it stays broken, nor at the next
+start (`drives.json` in Chanoma's state remembers), but again if it opens
+one day and later fails. *Settings › Folders* keeps listing the drives
+that couldn't be opened, with why, and tries one again when it's
+pressed. `--no-drives` leaves drives alone (a preview beside a desktop).
+A drive another account has mounted is under that account's
+`/run/media/USER`, which the TV account can't read: unmount it there
+first.
 
 *Add a folder…*, and Home's *Add games*, open a picker of Chanoma's own
 (`folders.rs`, `app/picker.rs`, `ui/picker.rs`), as the kit's file panel

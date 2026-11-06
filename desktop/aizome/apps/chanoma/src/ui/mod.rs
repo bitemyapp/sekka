@@ -487,6 +487,8 @@ pub enum Note {
     Home,
     /// A page kept to its service.
     Outside,
+    /// A drive that couldn't be opened.
+    Drive,
 }
 
 /// A note at the top, over whatever shows: a floating panel with a rail
@@ -501,6 +503,7 @@ pub fn toast(c: &mut Canvas, theme: &Theme, t: &str, note: Note) {
         Note::Controller => (Icon::Gamepad2, theme.text2()),
         Note::Home => (Icon::House, theme.text2()),
         Note::Outside => (Icon::Shield, theme.text2()),
+        Note::Drive => (Icon::HardDrive, theme.role(Role::Warning)),
     };
     let w = (RAIL + 32.0 + 36.0 + 20.0 + size.width + 40.0).round();
     let r = Rect::new((W / 2.0 - w / 2.0).round(), 36.0, (W / 2.0 + w / 2.0).round(), 116.0);

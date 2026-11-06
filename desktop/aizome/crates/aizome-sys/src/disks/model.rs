@@ -244,6 +244,15 @@ impl DisksState {
         out
     }
 
+    /// Whether a volume is one to mount without being asked: a filesystem,
+    /// not mounted, that UDisks says to mount by itself (`HintAuto`:
+    /// removable and external drives), and not an image someone attached.
+    pub fn mounts_by_itself(&self, volume: &Volume) -> bool {
+        volume.mount_point.is_none()
+            && volume.image_file.is_none()
+            && self.block(&volume.block).is_some_and(|b| b.hint_auto && b.filesystem.is_some() && b.encrypted.is_none())
+    }
+
     /// Volumes that appeared and disappeared since `previous` (a USB stick
     /// plugged in, an image detached), for desktop icons and "mount when
     /// plugged in" (a new volume whose block has `hint_auto`).

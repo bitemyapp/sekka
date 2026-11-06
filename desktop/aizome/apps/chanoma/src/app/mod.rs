@@ -13,6 +13,7 @@
 //! counts, and the settings open. It locks again by itself after a while
 //! untouched (not in the middle of a film), or when asked.
 
+pub mod drives;
 pub mod grownups;
 pub mod picker;
 pub mod play;
@@ -138,6 +139,10 @@ pub enum Msg {
     Mpris(aizome_mpris::Action),
     Bluetooth,
     Paired(String, Result<(), String>),
+    /// The drives changed, or one finished opening.
+    Drives,
+    /// Drives finished opening, or couldn't be opened.
+    Opened(Vec<aizome_sys::disks::Outcome>),
     /// A folder's folders read, and what's directly in it, for the
     /// picker's reading.
     Listed(u64, Result<Vec<crate::folders::Entry>, String>, Option<crate::folders::Inside>),
@@ -298,6 +303,9 @@ pub struct Config {
     pub mounts: Vec<PathBuf>,
     /// Films on the desktop's media controls (the session bus).
     pub mpris: bool,
+    /// Open the drives plugged in, as Chanoma starts and as they come
+    /// (UDisks), so their folders are there without anyone opening them.
+    pub drives: bool,
     /// The TV account's Chanoma (`--tv`, `aizome_sys::tv`): its session is
     /// Chanoma alone, so leaving logs out, kids may too, and a forgotten PIN
     /// is forgotten from a grown-up's own account.
@@ -340,6 +348,7 @@ impl Config {
                 ]
             },
             mpris: true,
+            drives: true,
             tv: false,
         }
     }
@@ -440,6 +449,8 @@ pub struct Chanoma {
     pub stage_asked: &'static str,
     /// Asks the page what has its keyboard while Chanoma's is up.
     pub keyboard_watch: Option<aizome_kit::TimerHandle>,
+    /// The drives, opened as they come ([`drives`]).
+    pub drives: drives::Drives,
 }
 
 impl Chanoma {
@@ -522,6 +533,7 @@ impl Chanoma {
             instance: None,
             stage_asked: "",
             keyboard_watch: None,
+            drives: drives::Drives::load(&config.dirs),
             config,
         }
     }
@@ -1865,6 +1877,9 @@ impl Program for Chanoma {
             ));
             self.publish_film();
         }
+        if self.config.drives {
+            self.drives.watch(tx.clone());
+        }
         self.outputs_changed(cx);
         if self.config.scan {
             self.rescan(cx);
@@ -1966,6 +1981,8 @@ impl Program for Chanoma {
             Msg::Mpris(a) => self.on_mpris(a, cx),
             Msg::Bluetooth => self.bluetooth_changed(cx),
             Msg::Paired(device, r) => self.paired(device, r, cx),
+            Msg::Drives => self.drives_changed(cx),
+            Msg::Opened(outcomes) => self.opened(outcomes, cx),
             Msg::Listed(reading, listing, inside) => self.listed(reading, listing, inside),
             Msg::Known(reading, known) => self.known(reading, known),
             Msg::Suggested(s) => self.suggested(s, cx),
