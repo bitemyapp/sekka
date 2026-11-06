@@ -407,7 +407,7 @@ impl Tasuke {
             "models-8gb" => &["gemma-4-12b"],
             "models-unified" => &["gemma-4-31b"],
             "first-run" | "downloading" => &[],
-            _ => &["gemma-4-31b", "qwen3.8-27b"],
+            _ => &["gemma-4-31b", "gpt-oss-20b"],
         };
         for id in installed {
             t.models.installs.insert(ModelId::new(*id), Install::Installed);

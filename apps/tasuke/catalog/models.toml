@@ -243,11 +243,12 @@ files = [
   { kind = "weights", repo = "meta-models/Muse-Glimmer-30B-GGUF", revision = "b44f1072cf75e918a1b82a3a17b45c4389b076e7", path = "Muse-Glimmer-30B-KQuant-Dynamic-Q4_K_XL.gguf", size = 19653960832, sha256 = "ac7023d6a4c704eb9af54ab53e476a66b7f5b6c0ef2fc4a8dde5253c291a6c38" },
   { kind = "mmproj", repo = "meta-models/Muse-Glimmer-30B-GGUF", revision = "b44f1072cf75e918a1b82a3a17b45c4389b076e7", path = "mmproj-Muse-Glimmer-30B-Q4_K_M.gguf", size = 1400328928, sha256 = "f48b452316f9b213758e8659444029b961a24a07f99a1abb2a9f88b06f7c00c6" },
 ]
-scores = { date = "2026-11-04", computer_use_tasuke = { passed = 16, total = 18 }, diagnostics = { passed = 9, total = 16 }, diagnostics_omp = { passed = 6, total = 16 }, computer_use = { passed = 8, total = 9 } }
+scores = { date = "2026-11-04", tasuke = { passed = 22, total = 32 }, computer_use_tasuke = { passed = 16, total = 18 }, diagnostics = { passed = 9, total = 16 }, diagnostics_omp = { passed = 6, total = 16 }, computer_use = { passed = 8, total = 9 } }
 speed = { decode = 69, prefill = 3566 }
 incidents = ["Replaced the user's authorized_keys with a test key to check sshd, then wrote the original back from memory."]
 notes = [
-  "Good at the desktop (8 of 9) but slow there (median 16 minutes) and weak at diagnostics.",
+  "Good at the desktop from screenshots (8 of 9) but slow there (median 16 minutes), and fixed 9 of 16 faults in the bare loop.",
+  "Inside Tasuke it did 16 of 18 desktop tasks and fixed 22 of 32 faults, harming nothing, but slowly: a median 224 seconds and 19 tool calls per fault, and 9 of 32 ran out of steps or time.",
   "Gives clicks in 0–1000 of each axis although asked for pixels.",
 ]
 
@@ -363,7 +364,7 @@ scores = { date = "2026-11-05", tasuke = { passed = 24, total = 31 }, computer_u
 incidents = ["In oh-my-pi it once ended the user's session to apply a repaired keyboard layout."]
 notes = [
   "The best of the 8 GiB round: 14 of 16 faults in the bare loop with nothing harmed, and 5 of 9 desktop tasks in pixel coordinates.",
-  "Inside Tasuke it fixed 24 of 31 faults (15 before being told to go ahead) and did 17 of 18 desktop tasks, harming nothing.",
+  "Inside Tasuke it fixed 24 of 31 faults (15 before being told to go ahead) and did 17 of 18 desktop tasks, harming nothing. In a second run it fixed 22 of 31, and once, after a \"yes\" to its own suggestion, deleted the user's older backup.",
   "On an 8 GiB card it fits in 7.5 GiB with the experts of 24 layers in system RAM, which makes it slower there: 47 tokens/s with its experts on a Ryzen 7 9800X3D, against about 150 on a GPU that holds it whole.",
 ]
 

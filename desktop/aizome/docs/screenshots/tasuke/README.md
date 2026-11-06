@@ -54,7 +54,13 @@ then.
   `compare` finds the change only in the "Also fits" count (11 to 10).
   The two check-up pictures were taken again when its memory, process
   and disk looks became one `system_usage`; `compare` finds the change
-  only in the folded line's count (12 to 11).
+  only in the folded line's count (12 to 11). All twenty-four were taken again
+  when every list came to rank on Tasuke's own results (once the last
+  evaluated model, Muse Glimmer 30B, was measured inside Tasuke) and the
+  32 GB desktop's second download became gpt-oss 20B, the fast model;
+  sixteen were pixel-identical to the takes before and were kept, and in
+  the Models and first-run pictures `compare` finds changes only in the
+  score lines, the notes and which models lead "Also fits".
 - **Display**: a private headless sway 1.12 with the pixman renderer
   (`desktop/aizome/sukumo/scripts/headless-wayland`, `SIZE=1440x900`),
   with `WAYLAND_DISPLAY`, `DISPLAY` and `AIZOME_SHELL_SOCKET` unset. The
@@ -81,7 +87,7 @@ then.
 | `night-checkup.png`, `day-checkup.png` | `checkup` | *Give my computer a check-up*: eleven read-only looks (memory, busy processes and disks in one `system_usage`) folded into "Looked at 11 things", then the report in the check-up skill's format: the verdict, the problem and the warning (✕ and ⚠, in red and amber), one ✓ line of what's fine, and three offered fixes saying which need the administrator password, with Copy under the finished answer |
 | `night-server-down.png`, `day-server-down.png` | `server-down` | A question asked while the model server is down: the agent's "Starting the model server…", then the error as a headline (*The model server can't be reached*) with its detail, Models and Retry; the chip says the server is stopped |
 | `night-models-8gb.png`, `day-models-8gb.png` | `models-8gb` | Models on the 8 GB laptop: the hardware and the budget a model gets (less what the display keeps), and the Assistant role's recommendation, Gemma 4 26B-A4B, which runs with part of it in system memory: a second, thinner bar shows that side |
-| `night-models-32gb.png`, `day-models-32gb.png` | `models-32gb` | Models on the 32 GB desktop: the recommendation in use, another downloaded with Use and Remove |
+| `night-models-32gb.png`, `day-models-32gb.png` | `models-32gb` | Models on the 32 GB desktop: the recommendation in use, and gpt-oss 20B, the fast model, downloaded, with Use and Remove |
 | `night-models-unified.png`, `day-models-unified.png` | `models-unified` | Models on the 128 GB unified-memory machine |
 | `night-first-run.png`, `day-first-run.png` | `first-run` | First run on the 8 GB laptop: the hardware, the recommendation (Gemma 4 26B-A4B) with both its fit bars and its incident from the evaluations, Download with how long it takes at 100 Mbit/s |
 | `night-downloading.png`, `day-downloading.png` | `downloading` | First run's download: progress, rate and time left, Pause and Cancel, and what's happening while it downloads |
