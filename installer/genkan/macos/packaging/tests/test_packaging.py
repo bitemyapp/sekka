@@ -330,6 +330,49 @@ class BuildTest(unittest.TestCase):
         code, said = self.build("--engine", self.engine)
         self.assertIn(self.NOT_A_MAC, said)
 
+    def test_only_a_new_directory_or_its_own_is_replaced(self):
+        def out(name):
+            return os.path.join(self.t.name, name)
+
+        os.mkdir(out("Desktop"))
+        with open(out("Desktop/notes.txt"), "w") as f:
+            f.write("keep me")
+        os.mkdir(out("empty"))
+        with open(out("a-file"), "w") as f:
+            f.write("keep me")
+        os.symlink(out("Desktop"), out("link"))
+        for name in ("Desktop", "empty", "a-file", "link"):
+            code, said = self.build("--engine", self.engine, "--out", out(name))
+            self.assertEqual(code, 2, said)
+            self.assertNotIn(self.NOT_A_MAC, said)
+            self.assertIn("--out", said)
+        self.assertEqual(sorted(os.listdir(out("Desktop"))), ["notes.txt"])
+        with open(out("a-file")) as f:
+            self.assertEqual(f.read(), "keep me")
+        code, said = self.build("--engine", self.engine, "--out", "")
+        self.assertIn("--out names a directory", said)
+
+        # The current directory, named as ".", is no different.
+        r = subprocess.run(["bash", os.path.join(HERE, "..", "build-app.sh"), "--engine", self.engine, "--out", "."],
+                           cwd=out("Desktop"), env=self.env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("wasn't made by build-app.sh", r.stderr)
+
+        # A directory that doesn't exist yet, or one an earlier run made.
+        code, said = self.build("--engine", self.engine, "--out", out("new"))
+        self.assertIn(self.NOT_A_MAC, said)
+        os.mkdir(out("earlier"))
+        open(out("earlier/.sekka-build-app"), "w").close()
+        code, said = self.build("--engine", self.engine, "--out", out("earlier"))
+        self.assertIn(self.NOT_A_MAC, said)
+
+        # Never with the inputs inside it.
+        os.rename(self.engine, out("earlier/engine.tar.gz"))
+        code, said = self.build("--engine", out("earlier/engine.tar.gz"), "--out", out("earlier"))
+        self.assertEqual(code, 2, said)
+        self.assertIn("is inside --out", said)
+        self.assertTrue(os.path.exists(out("earlier/engine.tar.gz")))
+
 
 class ProvenanceTest(unittest.TestCase):
     def test_records_crates_and_artifacts(self):

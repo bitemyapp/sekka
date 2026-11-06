@@ -22,6 +22,9 @@
 #
 # Output: DIR/Sekka Installer.app, DIR/recovery.zip (the Recovery app, a
 # release artifact of its own) and DIR/build.json (what was built, from what).
+# DIR (target/package by default) is replaced, so it must not exist yet or
+# be a directory an earlier run made, which its .sekka-build-app file
+# marks; anything else is refused before anything is built.
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -50,6 +53,35 @@ if $release; then
     echo "SEKKA_ENGINE_TEAM_ID is $SEKKA_ENGINE_TEAM_ID, but engine/source-lock.json pins the runtime's team as $pinned." >&2
     exit 1
   fi
+fi
+
+# The output directory is deleted and made again, so only one that doesn't
+# exist or that this script made (and marked) may be named.
+marker=.sekka-build-app
+check_out() {
+  if [[ -z "$out" ]]; then
+    echo "--out names a directory." >&2
+    exit 2
+  elif [[ -L "$out" ]]; then
+    echo "--out $out is a symbolic link; name a new directory, which build-app.sh makes." >&2
+    exit 2
+  elif [[ -e "$out" && ! ( -d "$out" && -f "$out/$marker" ) ]]; then
+    echo "--out $out exists and wasn't made by build-app.sh (it has no $marker), and build-app.sh replaces it; name a new directory." >&2
+    exit 2
+  fi
+}
+check_out
+if [[ -d "$out" ]]; then
+  out_real=$(cd "$out" && pwd -P)
+  for input in "$engine" "$icon"; do
+    [[ -n "$input" && -e "$input" ]] || continue
+    input_dir=$(cd "$(dirname "$input")" && pwd -P)
+    case "$input_dir/" in
+      "$out_real"/*)
+        echo "$input is inside --out $out, which build-app.sh replaces; keep --engine and --icon elsewhere." >&2
+        exit 2 ;;
+    esac
+  done
 fi
 
 if [[ "$(uname -s)" != Darwin ]]; then
@@ -88,8 +120,10 @@ cargo build --locked --release --target "$target" -p sekka-mac-helper "${helper_
 MACOSX_DEPLOYMENT_TARGET=13.0 cargo build --locked --release --target "$target" -p sekka-recovery --manifest-path "$workspace/Cargo.toml"
 bin="$workspace/target/$target/$profile"
 
+check_out
 rm -rf "$out"
 mkdir -p "$out"
+echo "Made by packaging/build-app.sh, which replaces this directory when --out names it again." > "$out/$marker"
 fill() { sed -e "s/@VERSION@/$version/" -e "s/@BUILD@/$build/" -e "s/@REVISION@/$revision/" "$1" > "$2"; }
 
 app="$out/Sekka Installer.app"
