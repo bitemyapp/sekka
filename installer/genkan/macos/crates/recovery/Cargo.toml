@@ -26,13 +26,14 @@ libc.workspace = true
 sekka-mac-appkit.workspace = true
 block2.workspace = true
 objc2.workspace = true
-objc2-foundation = { workspace = true, features = ["NSArray", "NSNotification", "NSString", "NSTimer", "NSGeometry", "NSObjCRuntime", "block2"] }
+objc2-foundation = { workspace = true, features = ["NSArray", "NSAttributedString", "NSDictionary", "NSNotification", "NSRange", "NSString", "NSTimer", "NSGeometry", "NSObjCRuntime", "block2"] }
 objc2-app-kit = { workspace = true, features = [
     "objc2-core-foundation",
     "NSAccessibility",
     "NSAlert",
     "NSApplication",
     "NSButton",
+    "NSColor",
     "NSControl",
     "NSGraphics",
     "NSLayoutAnchor",
@@ -47,6 +48,7 @@ objc2-app-kit = { workspace = true, features = [
     "NSStackView",
     "NSText",
     "NSTextField",
+    "NSTextStorage",
     "NSTextView",
     "NSUserInterfaceLayout",
     "NSView",

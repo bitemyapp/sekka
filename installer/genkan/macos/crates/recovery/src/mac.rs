@@ -12,14 +12,17 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use block2::RcBlock;
 use objc2::rc::Retained;
 use objc2::runtime::ProtocolObject;
-use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
+use objc2::{AnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
     NSAlert, NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate,
-    NSApplicationTerminateReply, NSBackingStoreType, NSButton, NSMenu, NSMenuItem, NSPanel,
-    NSScrollView, NSSecureTextField, NSStackView, NSTextView, NSView, NSWindow, NSWindowButton,
-    NSWindowDelegate, NSWindowStyleMask,
+    NSApplicationTerminateReply, NSBackingStoreType, NSButton, NSColor, NSMenu, NSMenuItem,
+    NSPanel, NSScrollView, NSSecureTextField, NSStackView, NSTextView, NSView, NSWindow,
+    NSWindowButton, NSWindowDelegate, NSWindowStyleMask,
 };
-use objc2_foundation::{NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString, NSTimer};
+use objc2_foundation::{
+    NSAttributedString, NSNotification, NSObject, NSObjectProtocol, NSPoint, NSRange, NSRect, NSSize,
+    NSString, NSTimer,
+};
 use sekka_mac_appkit::ui::{self, Targets, Weight};
 use sekka_mac_appkit::views::{CrestView, Mark, MarkView};
 use sekka_mac_contract::Uuid;
@@ -128,7 +131,7 @@ enum Event {
 struct State {
     screen: Screen,
     owner: (String, String),
-    log: Vec<String>,
+    log: screen::Log,
     finisher: Option<Finisher<Mac>>,
 }
 
@@ -144,6 +147,7 @@ struct Window {
     shown: Option<Screen>,
     details: Option<Retained<NSPanel>>,
     details_text: Option<Retained<NSTextView>>,
+    details_shown: screen::Shown,
 }
 
 impl Window {
@@ -173,12 +177,7 @@ impl Window {
                     s.finisher = Some(*finisher);
                 }
                 Event::Phase(p) => s.screen = Screen::Working(p),
-                Event::Log(line) => {
-                    s.log.push(line);
-                    if s.log.len() > 2000 {
-                        s.log.remove(0);
-                    }
-                }
+                Event::Log(line) => s.log.push(line),
                 Event::Finished(result, finisher) => {
                     s.screen = match result {
                         Ok(()) => Screen::Done,
@@ -198,8 +197,37 @@ impl Window {
         // Install changes the screen itself, before any event: the window
         // follows at once, so its close button is off from the start.
         self.render();
-        if let Some(text) = &self.details_text {
-            text.setString(&NSString::from_str(&self.state.borrow().log.join("")));
+        if self.details.as_ref().is_some_and(|p| p.isVisible()) {
+            self.sync_details();
+        }
+    }
+
+    /// Bring Details up to date with only what arrived since: a selection
+    /// survives, and the view follows the end only if it was already there.
+    fn sync_details(&mut self) {
+        let Some(text) = &self.details_text else { return };
+        let Some(edit) = self.details_shown.catch_up(&self.state.borrow().log) else { return };
+        let Some(storage) = (unsafe { text.textStorage() }) else { return };
+        let (visible, bounds) = (text.visibleRect(), text.bounds());
+        let following = visible.origin.y + visible.size.height >= bounds.origin.y + bounds.size.height - 1.0;
+        storage.beginEditing();
+        if edit.trim > 0 {
+            storage.deleteCharactersInRange(NSRange::new(0, edit.trim.min(storage.length())));
+        }
+        if !edit.append.is_empty() {
+            // In the view's own font and color.
+            let piece = unsafe {
+                NSAttributedString::initWithString_attributes(
+                    NSAttributedString::alloc(),
+                    &NSString::from_str(&edit.append),
+                    Some(&text.typingAttributes()),
+                )
+            };
+            storage.appendAttributedString(&piece);
+        }
+        storage.endEditing();
+        if following {
+            text.scrollRangeToVisible(NSRange::new(storage.length(), 0));
         }
     }
 
@@ -351,11 +379,14 @@ impl Window {
                 .expect("a text view");
             text.setEditable(false);
             text.setFont(Some(&ui::digits(11.0)));
+            text.setTextColor(Some(&NSColor::textColor()));
             panel.setContentView(Some(&scroll));
             let _: &NSScrollView = &scroll;
             self.details_text = Some(text);
+            self.details_shown = screen::Shown::default();
             self.details = Some(panel);
         }
+        self.sync_details();
         if let Some(p) = &self.details {
             p.center();
             p.makeKeyAndOrderFront(None);
@@ -462,7 +493,7 @@ fn open(mtm: MainThreadMarker) -> Rc<RefCell<Window>> {
     let state = Rc::new(RefCell::new(State {
         screen,
         owner,
-        log: Vec::new(),
+        log: screen::Log::default(),
         finisher: None,
     }));
     let w = Rc::new(RefCell::new(Window {
@@ -477,6 +508,7 @@ fn open(mtm: MainThreadMarker) -> Rc<RefCell<Window>> {
         shown: None,
         details: None,
         details_text: None,
+        details_shown: screen::Shown::default(),
     }));
     if let Some(f) = finisher {
         w.borrow().check(f);
