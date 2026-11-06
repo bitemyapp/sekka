@@ -540,33 +540,39 @@ pub fn import(
     let path = dest.file(name)?;
     let tmp = dest.path().join(format!(".import-{name}"));
     let _ = fs::remove_file(&tmp);
-    let mut out = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
-        .open(&tmp)?;
-    let mut hasher = Hasher::new();
-    let mut buffer = vec![0u8; 1 << 20];
-    let mut copied = 0u64;
-    loop {
-        if cancel.load(Ordering::Relaxed) {
-            let _ = fs::remove_file(&tmp);
-            return Err(StageError::Cancelled);
+    // On APFS the helper takes a clone: no second copy of a payload's
+    // gigabytes, so macOS can still give what the plan asked of it. The
+    // clone is the helper's own file, hashed below; what the app does to its
+    // copy afterwards can't change it.
+    let cloned = clone_into(&src, dest.path(), &format!(".import-{name}")).is_ok();
+    let (copied, digest) = if cloned {
+        let mut out = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+            .open(&tmp)?;
+        std::os::unix::fs::fchown(&out, Some(effective_uid()), None).ok();
+        out.set_permissions(fs::Permissions::from_mode(0o600))?;
+        let mut hasher = Hasher::new();
+        let mut buffer = vec![0u8; 1 << 20];
+        let mut copied = 0u64;
+        loop {
+            if cancel.load(Ordering::Relaxed) {
+                let _ = fs::remove_file(&tmp);
+                return Err(StageError::Cancelled);
+            }
+            let n = out.read(&mut buffer)?;
+            if n == 0 {
+                break;
+            }
+            copied += n as u64;
+            hasher.update(&buffer[..n]);
         }
-        let n = src.read(&mut buffer)?;
-        if n == 0 {
-            break;
-        }
-        copied += n as u64;
-        if copied > expect.size {
-            let _ = fs::remove_file(&tmp);
-            return Err(unsafe_path("it grew while being copied"));
-        }
-        hasher.update(&buffer[..n]);
-        out.write_all(&buffer[..n])?;
-    }
-    let digest = hasher.finish();
+        out.sync_all()?;
+        (copied, hasher.finish())
+    } else {
+        copy_hashing(&mut src, &tmp, expect, cancel, &unsafe_path)?
+    };
     if copied != expect.size || digest != expect.digest {
         let _ = fs::remove_file(&tmp);
         return Err(StageError::Corrupt {
@@ -574,7 +580,6 @@ pub fn import(
             actual: digest,
         });
     }
-    out.sync_all()?;
     fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
     fs::rename(&tmp, &path)?;
     File::open(dest.path())?.sync_all()?;
@@ -583,6 +588,64 @@ pub fn import(
         size: copied,
         digest,
     })
+}
+
+/// Copy while hashing, where a clone isn't possible.
+fn copy_hashing(
+    src: &mut File,
+    tmp: &Path,
+    expect: &Expect,
+    cancel: &AtomicBool,
+    unsafe_path: &dyn Fn(&str) -> StageError,
+) -> Result<(u64, Digest), StageError> {
+    let mut out = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(tmp)?;
+    let mut hasher = Hasher::new();
+    let mut buffer = vec![0u8; 1 << 20];
+    let mut copied = 0u64;
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            let _ = fs::remove_file(tmp);
+            return Err(StageError::Cancelled);
+        }
+        let n = src.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        copied += n as u64;
+        if copied > expect.size {
+            let _ = fs::remove_file(tmp);
+            return Err(unsafe_path("it grew while being copied"));
+        }
+        hasher.update(&buffer[..n]);
+        out.write_all(&buffer[..n])?;
+    }
+    out.sync_all()?;
+    Ok((copied, hasher.finish()))
+}
+
+/// An APFS clone of an open file into a directory, without following links.
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn clone_into(src: &File, dir: &Path, name: &str) -> io::Result<()> {
+    use std::os::fd::AsRawFd;
+    let dir = File::open(dir)?;
+    let name = std::ffi::CString::new(name).map_err(|_| io::Error::from(io::ErrorKind::InvalidInput))?;
+    // CLONE_NOFOLLOW (0x1): never clone through a link.
+    // SAFETY: two open descriptors and a NUL-terminated name.
+    if unsafe { libc::fclonefileat(src.as_raw_fd(), dir.as_raw_fd(), name.as_ptr(), 0x0001) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn clone_into(_: &File, _: &Path, _: &str) -> io::Result<()> {
+    Err(io::Error::from(io::ErrorKind::Unsupported))
 }
 
 #[cfg(test)]
