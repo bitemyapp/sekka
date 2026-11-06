@@ -409,8 +409,8 @@ reflink without allocating a second physical extent generation. These hints
 retain no file data; missing, changed, symlinked or nonregular paths are
 discarded. Opens are nonblocking and verification reads are bounded by the
 expected artifact size. Mutable daemon state remains worktree-local.
-Tree artifact ingestion groups metadata transactions and directory barriers
-across at most 16 destinations, retaining at most 32 stage/source descriptors.
+Tree artifact ingestion stages at most 16 destinations at once, sharing
+directory barriers and retaining at most 32 stage/source descriptors.
 A conservative 64 MiB logical staging budget charges two snapshots per
 destination; larger individual objects run alone and must fit the store's
 limits. Distinct canonical digests are reserved once per group.
@@ -420,6 +420,16 @@ descriptors or using Tokio's blocking pool; a single staged file synchronizes
 inline. Each group joins its synchronization work before accounting commits,
 publication or staging cleanup. A synchronization error prevents that group's
 publication. Object accounting commits before canonical publication.
+Cached-only staging groups share a SQLite FULL metadata transaction across at
+most 256 destinations or 256 MiB charged as two snapshots per destination.
+A larger individual object runs alone at this level too. Both store locks
+remain held until this transaction commits or rolls back. New canonical
+accounting or namespace removals commit before publication and end the
+metadata quantum early. Weak-path hints may precede publication because they
+are advisory and reverified on use; pending LRU updates remain visible to
+later groups in the same transaction. This does not increase the live staging
+or descriptor bounds, change the database schema, or weaken file/directory
+synchronization.
 Sixteen fixed canonical staging slots
 are removed and the directory synchronized under the shared lock before each
 group's admission, so an already-open peer can recover abandoned stages

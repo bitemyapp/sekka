@@ -11,27 +11,30 @@ index b61348d..584aa22 100644
              "//buck2/app/buck2_forkserver_proto:buck2_forkserver_proto",
              # @oss-disable[end= ]: "//common/rust/shed/hostcaps:hostcaps",
 diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-index 483e907..5891883 100644
+index 483e907..4e5b9f1 100644
 --- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
 +++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
-@@ -12,14 +12,31 @@
+@@ -12,14 +12,34 @@
  //! worktree: every publication is a verified COW snapshot and atomic rename.
  //! A process-shared lock protects the SQLite LRU and object namespace. The
  //! database is an eviction index, not an authority for content correctness.
 +//!
-+//! Artifact ingestion holds both locks for one bounded group at a time. Groups
-+//! contain at most 16 destinations and target 64 MiB of staged logical bytes;
-+//! one larger file is admitted alone, provided it fits the configured cache.
-+//! At most two retained file descriptors per destination are needed. All COW
-+//! snapshots are verified before the separate per-file sync pass. FULL SQLite
++//! Artifact ingestion holds both locks for a bounded metadata quantum: at most
++//! 256 destinations or 256 MiB charged as two snapshots per destination. Each
++//! staging group contains at most 16 destinations and targets 64 MiB of staged
++//! logical bytes. A file larger than either budget runs alone at that level,
++//! provided it fits the cache. At most 32 stage/source descriptors are retained.
++//! All COW snapshots are verified before the per-file sync pass. FULL SQLite
 +//! accounting commits precede canonical renames, and namespace removals are
 +//! directory-synced before deletion accounting commits. Publication directory
-+//! syncs and the access/weak-view transaction are shared within each group.
++//! syncs are shared within staging groups; cached-only groups share metadata
++//! commits until the quantum ends. Transactions finish before either unlock.
 +//! Before admission, each group clears a fixed staging namespace under both
 +//! locks, including leftovers from a dead peer whose survivors remain open.
 +//! Staging stays directly beside canonical objects, not across a subvolume.
 +
 +const INGEST_BATCH_FILES: usize = 16;
++const INGEST_METADATA_FILES: usize = 256;
  
  #[cfg(target_os = "linux")]
  mod linux {
@@ -46,7 +49,7 @@ index 483e907..5891883 100644
      use std::io::Seek;
      use std::io::SeekFrom;
      use std::os::fd::AsRawFd;
-@@ -33,14 +50,37 @@ mod linux {
+@@ -33,14 +53,38 @@ mod linux {
      use std::sync::Mutex;
  
      use buck2_common::file_ops::metadata::FileDigest;
@@ -60,9 +63,9 @@ index 483e907..5891883 100644
 +    use rusqlite::OptionalExtension;
      use rusqlite::params;
 +    use tempfile::NamedTempFile;
- 
--    // Linux UAPI FICLONE and O_NOFOLLOW, independent of architecture.
++
 +    const INGEST_BATCH_BYTES: u64 = 64 * 1024 * 1024;
++    const INGEST_METADATA_BYTES: u64 = 256 * 1024 * 1024;
 +
 +    // Materialization already runs on Tokio's blocking pool while holding store
 +    // locks. Never submit nested blocking work there: a saturated pool could
@@ -77,7 +80,8 @@ index 483e907..5891883 100644
 +            .build()
 +            .map_err(|error| error.to_string())
 +    });
-+
+ 
+-    // Linux UAPI FICLONE and O_NOFOLLOW, independent of architecture.
 +    // Linux x86-64 UAPI.
      const FICLONE: std::ffi::c_ulong = 0x40049409;
      const O_NOFOLLOW: i32 = 0x20000;
@@ -85,7 +89,7 @@ index 483e907..5891883 100644
      unsafe extern "C" {
          fn ioctl(fd: i32, request: std::ffi::c_ulong, ...) -> i32;
          fn geteuid() -> u32;
-@@ -53,7 +93,7 @@ mod linux {
+@@ -53,7 +97,7 @@ mod linux {
      fn open_file(path: &Path) -> buck2_error::Result<File> {
          let file = OpenOptions::new()
              .read(true)
@@ -94,7 +98,7 @@ index 483e907..5891883 100644
              .open(path)?;
          if !file.metadata()?.is_file() {
              return Err(error(format!(
-@@ -82,11 +122,23 @@ mod linux {
+@@ -82,11 +126,23 @@ mod linux {
          config: DigestConfig,
      ) -> buck2_error::Result<()> {
          file.seek(SeekFrom::Start(0))?;
@@ -119,7 +123,7 @@ index 483e907..5891883 100644
          if actual != *expected {
              return Err(error(format!(
                  "Local content store digest mismatch: expected {expected}, got {actual}"
-@@ -103,8 +155,41 @@ mod linux {
+@@ -103,8 +159,42 @@ mod linux {
          }
      }
  
@@ -153,6 +157,7 @@ index 483e907..5891883 100644
 +    struct GroupResult {
 +        consumed: usize,
 +        found: bool,
++        staging_bytes: u64,
 +    }
 +
      pub(super) struct Store {
@@ -161,7 +166,7 @@ index 483e907..5891883 100644
          lock: File,
          db: Connection,
          max_bytes: u64,
-@@ -174,8 +259,19 @@ mod linux {
+@@ -174,8 +264,19 @@ mod linux {
                  INSERT OR IGNORE INTO totals SELECT 1,COALESCE(SUM(size),0),COUNT(*) FROM objects;
                  CREATE TRIGGER IF NOT EXISTS object_added AFTER INSERT ON objects BEGIN UPDATE totals SET bytes=bytes+NEW.size,entries=entries+1 WHERE id=1; END;
                  CREATE TRIGGER IF NOT EXISTS object_removed AFTER DELETE ON objects BEGIN UPDATE totals SET bytes=bytes-OLD.size,entries=entries-1 WHERE id=1; END;")?;
@@ -181,7 +186,7 @@ index 483e907..5891883 100644
                  lock,
                  db,
                  max_bytes,
-@@ -183,10 +279,30 @@ mod linux {
+@@ -183,10 +284,30 @@ mod linux {
              };
              store.reconcile()?;
              store.evict(0, 0)?;
@@ -212,7 +217,7 @@ index 483e907..5891883 100644
          fn key(digest: &FileDigest) -> String {
              format!("{}-{}", digest.raw_digest().algorithm(), digest).replace(':', "-")
          }
-@@ -212,9 +328,13 @@ mod linux {
+@@ -212,9 +333,13 @@ mod linux {
          }
  
          fn reconcile(&self) -> buck2_error::Result<()> {
@@ -229,7 +234,7 @@ index 483e907..5891883 100644
              let mut statement = self.db.prepare("SELECT key FROM objects")?;
              let keys = statement.query_map([], |r| r.get::<_, String>(0))?;
              for key in keys {
-@@ -243,44 +363,81 @@ mod linux {
+@@ -243,44 +368,81 @@ mod linux {
                      remove(&entry.path())?;
                  }
              }
@@ -324,7 +329,7 @@ index 483e907..5891883 100644
              let parent = destination
                  .parent()
                  .ok_or_else(|| error("Missing output parent"))?;
-@@ -297,97 +454,350 @@ mod linux {
+@@ -297,97 +459,404 @@ mod linux {
                  } else {
                      0o644
                  }))?;
@@ -403,9 +408,13 @@ index 483e907..5891883 100644
 +            }
 +        }
 +
++        // Keep both store locks until metadata commits. Cached-only groups can
++        // share a transaction, but new accounting commits before publication
++        // and ends the quantum. Bound lock ownership independently of the
++        // smaller live staging/descriptor budget.
 +        fn access_group<'a>(
 +            &self,
-+            files: impl Iterator<Item = (&'a Path, &'a FileDigest, bool)>,
++            files: impl Iterator<Item = (&'a Path, &'a FileDigest, bool)> + Clone,
 +            config: DigestConfig,
              ingest: bool,
 -        ) -> buck2_error::Result<bool> {
@@ -435,6 +444,46 @@ index 483e907..5891883 100644
 -                            if verify(&mut source, digest, config).is_err() {
 -                                self.forget(&key)?;
 +        ) -> buck2_error::Result<GroupResult> {
++            let mut files = files.peekable();
++            let mut transaction = None;
++            let mut result = GroupResult { consumed: 0, found: true, staging_bytes: 0 };
++            while result.consumed < super::INGEST_METADATA_FILES {
++                let Some((_, digest, _)) = files.peek() else {
++                    break;
++                };
++                let remaining_bytes = INGEST_METADATA_BYTES.saturating_sub(result.staging_bytes);
++                if result.consumed != 0 && digest.size().saturating_mul(2) > remaining_bytes {
++                    break;
++                }
++                let group = self.stage_group(
++                    files.clone().take(super::INGEST_METADATA_FILES - result.consumed),
++                    config,
++                    ingest,
++                    remaining_bytes,
++                    &mut transaction,
++                )?;
++                files.nth(group.consumed - 1);
++                result.consumed += group.consumed;
++                result.found &= group.found;
++                result.staging_bytes = result.staging_bytes.saturating_add(group.staging_bytes);
++                if transaction.is_none() || result.staging_bytes >= INGEST_METADATA_BYTES {
++                    break;
++                }
++            }
++            if let Some(transaction) = transaction {
++                transaction.commit()?;
++            }
++            Ok(result)
++        }
++
++        fn stage_group<'a, 'store>(
++            &'store self,
++            files: impl Iterator<Item = (&'a Path, &'a FileDigest, bool)>,
++            config: DigestConfig,
++            ingest: bool,
++            byte_budget: u64,
++            transaction: &mut Option<rusqlite::Transaction<'store>>,
++        ) -> buck2_error::Result<GroupResult> {
 +            let capacity = files.size_hint().1
 +                .unwrap_or(super::INGEST_BATCH_FILES)
 +                .min(super::INGEST_BATCH_FILES);
@@ -444,7 +493,8 @@ index 483e907..5891883 100644
 +            let mut staged_bytes = 0u64;
 +            // Recovery stages both a canonical object and its first view.
 +            // Reserve that worst case rather than exceeding the staging budget.
-+            let byte_limit = self.max_bytes.saturating_mul(2).min(INGEST_BATCH_BYTES);
++            let byte_limit = self.max_bytes.saturating_mul(2)
++                .min(INGEST_BATCH_BYTES).min(byte_budget);
 +            for (destination, digest, executable) in files.take(super::INGEST_BATCH_FILES) {
 +                if digest.size() > self.max_bytes {
 +                    return Err(error(format!(
@@ -492,11 +542,13 @@ index 483e907..5891883 100644
 +                }
 +            }
 +            if requests.is_empty() {
-+                return Ok(GroupResult { consumed: 0, found: true });
++                return Ok(GroupResult { consumed: 0, found: true, staging_bytes: 0 });
 +            }
 +            self.clear_staging()?;
 +
-+            let transaction = self.db.unchecked_transaction()?;
++            if transaction.is_none() {
++                *transaction = Some(self.db.unchecked_transaction()?);
++            }
 +            let mut removed_names = false;
 +            for object in &mut objects {
 +                let recorded: bool = self.db.query_row(
@@ -543,11 +595,12 @@ index 483e907..5891883 100644
 +                        // cleanup, but never evict unrelated objects for a miss.
 +                        if removed_names {
 +                            File::open(&self.root)?.sync_all()?;
-                         }
--                        self.forget(&key)?;
-+                        transaction.commit()?;
-+                        return Ok(GroupResult { consumed: requests.len(), found: false });
-                     }
++                        }
++                        transaction.take().expect("active group transaction").commit()?;
++                        return Ok(GroupResult {
++                            consumed: requests.len(), found: false, staging_bytes: staged_bytes,
++                        });
++                    }
 +                });
 +            }
 +
@@ -580,10 +633,8 @@ index 483e907..5891883 100644
 +                        file,
 +                        destination: requests[object.first_request].destination,
 +                    });
-                 }
-             }
--            if !ingest {
--                return Ok(false);
++                }
++            }
 +            for (index, request) in requests.iter().enumerate() {
 +                let object = &mut objects[request.object];
 +                if object.new && index == object.first_request {
@@ -618,10 +669,37 @@ index 483e907..5891883 100644
 +                                // No new accounting or canonical renames have
 +                                // occurred. Commit only removals/hint cleanup.
 +                                File::open(&self.root)?.sync_all()?;
-+                                transaction.commit()?;
++                                transaction.take().expect("active group transaction").commit()?;
 +                            }
-+                        }
+                         }
+-                        self.forget(&key)?;
 +                        return Err(error);
+                     }
+                 }
+             }
+-            if !ingest {
+-                return Ok(false);
++
++            // Every verified snapshot must be durable before accounting or
++            // publication. The dedicated pool joins all work, including on an
++            // error, before any stage can be removed or renamed.
++            {
++                let mut files = objects
++                    .iter()
++                    .filter_map(|object| object.staged.as_ref())
++                    .chain(publications.iter().map(|publication| &publication.file));
++                if let Some(first) = files.next() {
++                    if files.next().is_none() {
++                        // Singleton downloads and files do not start a pool.
++                        first.as_file().sync_all()?;
++                    } else {
++                        FILE_SYNCS.as_ref().map_err(error)?.install(|| {
++                            objects
++                                .par_iter()
++                                .filter_map(|object| object.staged.as_ref())
++                                .chain(publications.par_iter().map(|publication| &publication.file))
++                                .try_for_each(|file| file.as_file().sync_all())
++                        })?;
 +                    }
 +                }
              }
@@ -651,30 +729,6 @@ index 483e907..5891883 100644
 -            // The original output already shares this object's extents. It is
 -            // not hardlinked and must retain its existing executable mode.
 -            Ok(true)
-+
-+            // Every verified snapshot must be durable before accounting or
-+            // publication. The dedicated pool joins all work, including on an
-+            // error, before any stage can be removed or renamed.
-+            {
-+                let mut files = objects
-+                    .iter()
-+                    .filter_map(|object| object.staged.as_ref())
-+                    .chain(publications.iter().map(|publication| &publication.file));
-+                if let Some(first) = files.next() {
-+                    if files.next().is_none() {
-+                        // Singleton downloads and files do not start a pool.
-+                        first.as_file().sync_all()?;
-+                    } else {
-+                        FILE_SYNCS.as_ref().map_err(error)?.install(|| {
-+                            objects
-+                                .par_iter()
-+                                .filter_map(|object| object.staged.as_ref())
-+                                .chain(publications.par_iter().map(|publication| &publication.file))
-+                                .try_for_each(|file| file.as_file().sync_all())
-+                        })?;
-+                    }
-+                }
-+            }
 +            if removed_names {
 +                File::open(&self.root)?.sync_all()?;
 +            }
@@ -684,9 +738,17 @@ index 483e907..5891883 100644
 +                    params![object.key, object.digest.size()],
 +                )?;
 +            }
-+            // FULL accounting is durable BEFORE any canonical rename. Failure
-+            // can leave accounted misses; it cannot publish unaccounted objects.
-+            transaction.commit()?;
++            // Weak paths are advisory and reverified on use; they may precede
++            // publication. Recording accesses now lets subsequent groups see
++            // the right eviction order without a second durable transaction.
++            for request in &requests {
++                self.record_access(request.destination, &objects[request.object].key)?;
++            }
++            if new_entries != 0 || removed_names {
++                // FULL accounting is durable BEFORE any canonical rename.
++                // Failure can leave accounted misses, never unaccounted objects.
++                transaction.take().expect("active group transaction").commit()?;
++            }
 +            for object in &mut objects {
 +                if let Some(staged) = object.staged.take() {
 +                    staged.persist(&object.path).map_err(|error| error.error)?;
@@ -705,12 +767,9 @@ index 483e907..5891883 100644
 +            for parent in parents {
 +                File::open(parent)?.sync_all()?;
 +            }
-+            let transaction = self.db.unchecked_transaction()?;
-+            for request in &requests {
-+                self.record_access(request.destination, &objects[request.object].key)?;
-+            }
-+            transaction.commit()?;
-+            Ok(GroupResult { consumed: requests.len(), found: true })
++            Ok(GroupResult {
++                consumed: requests.len(), found: true, staging_bytes: staged_bytes,
++            })
          }
  
 -        fn touch(&self, key: &str) -> buck2_error::Result<()> {
@@ -741,7 +800,7 @@ index 483e907..5891883 100644
              Ok(())
          }
      }
-@@ -413,26 +823,19 @@ mod linux {
+@@ -413,26 +882,19 @@ mod linux {
              .map_err(|e| format!("{e:#}"))
      });
  
@@ -774,7 +833,7 @@ index 483e907..5891883 100644
          let unlock = store.lock.unlock();
          result
              .buck_error_context("Buck2 verified local content store")
-@@ -442,12 +845,592 @@ mod linux {
+@@ -442,12 +904,664 @@ mod linux {
              })
      }
  
@@ -796,8 +855,8 @@ index 483e907..5891883 100644
 +    ) -> buck2_error::Result<()> {
 +        let mut offset = 0;
 +        while offset < files.len() {
-+            // Byte/entry limits may split the outer descriptor-bounded batch.
-+            // Release BOTH locks between those groups, not just between artifacts.
++            // Release both locks at metadata-quanta boundaries, including
++            // earlier boundaries required by new canonical accounting.
 +            offset += with_store(files.len() - offset, |store| {
 +                let group = store.access_group(
 +                    files[offset..].iter().map(|(path, metadata)| {
@@ -929,7 +988,7 @@ index 483e907..5891883 100644
 +                        }), config, true,
 +                    )?;
 +                    assert!(group.found);
-+                    assert!(group.consumed > 0 && group.consumed <= super::super::INGEST_BATCH_FILES);
++                    assert!(group.consumed > 0);
 +                    assert_bounded_and_accounted(store)?;
 +                    Ok::<_, buck2_error::Error>(group)
 +                })();
@@ -938,6 +997,78 @@ index 483e907..5891883 100644
 +                unlock?;
 +                offset += group.consumed;
 +            }
++            Ok(())
++        }
++
++        #[test]
++        fn reflink_store_metadata_batch_lru_and_rollback() -> buck2_error::Result<()> {
++            let temp = tempfile::tempdir()?;
++            let config = DigestConfig::leak_new(vec![DigestAlgorithm::Sha256], None)?;
++            let store = Store::open(temp.path().join("store"), 2 * 4096, 2)?;
++            let a_bytes = vec![1; 4096];
++            let a_digest = FileDigest::from_content(&a_bytes, config.cas_digest_config());
++            let original = temp.path().join("original");
++            fs::write(&original, &a_bytes)?;
++            assert!(store.access(&original, &a_digest, false, config, true)?);
++            let b_bytes = vec![2; 4096];
++            let b_digest = FileDigest::from_content(&b_bytes, config.cas_digest_config());
++            let older = temp.path().join("older");
++            fs::write(&older, &b_bytes)?;
++            assert!(store.access(&older, &b_digest, false, config, true)?);
++
++            // Cached accesses span several staging groups. Their uncommitted
++            // LRU updates must protect A, not B, when a later group admits C.
++            let mut files = Vec::new();
++            for index in 0..32 {
++                let path = temp.path().join(format!("warm-{index}"));
++                fs::write(&path, &a_bytes)?;
++                files.push((path, a_digest.clone(), false));
++            }
++            let c_bytes = vec![3; 4096];
++            let c_digest = FileDigest::from_content(&c_bytes, config.cas_digest_config());
++            let newest = temp.path().join("newest");
++            fs::write(&newest, &c_bytes)?;
++            files.push((newest, c_digest.clone(), false));
++            ingest_groups(&store, &files, config)?;
++            assert!(store.root.join(Store::key(&a_digest)).exists());
++            assert!(!store.root.join(Store::key(&b_digest)).exists());
++            assert!(store.root.join(Store::key(&c_digest)).exists());
++
++            // A committed weak view must survive eviction and loss of its
++            // original source, including through a separate store connection.
++            store.evict(4096, 1)?;
++            fs::remove_file(original)?;
++            let peer = Store::open(store.root.clone(), 2 * 4096, 2)?;
++            let recovered = temp.path().join("recovered");
++            assert!(peer.access(&recovered, &a_digest, false, config, false)?);
++            assert_eq!(fs::read(&recovered)?, a_bytes);
++            drop(peer);
++
++            // Fail publication after earlier cached groups succeeded. Their
++            // advisory updates roll back before the lock is released; already
++            // published verified bytes and canonical accounting stay valid.
++            files.clear();
++            for index in 0..32 {
++                let path = temp.path().join(format!("rollback-{index}"));
++                fs::write(&path, &a_bytes)?;
++                files.push((path, a_digest.clone(), false));
++            }
++            let bad = temp.path().join("directory");
++            fs::create_dir(&bad)?;
++            fs::write(bad.join("keep"), b"untouched")?;
++            files.push((bad.clone(), a_digest.clone(), false));
++            assert!(ingest_groups(&store, &files, config).is_err());
++            assert_eq!(fs::read(&files[0].0)?, a_bytes);
++            assert_eq!(fs::read(bad.join("keep"))?, b"untouched");
++            let hinted: bool = store.db.query_row(
++                "SELECT EXISTS(SELECT 1 FROM views WHERE path=?1)",
++                [bad.to_str().expect("temporary UTF-8 path")], |row| row.get(0),
++            )?;
++            assert!(!hinted);
++            assert_bounded_and_accounted(&store)?;
++            let after_error = temp.path().join("after-error");
++            assert!(store.access(&after_error, &a_digest, false, config, false)?);
++            assert_eq!(fs::read(after_error)?, a_bytes);
 +            Ok(())
 +        }
 +
@@ -1367,7 +1498,7 @@ index 483e907..5891883 100644
          #[test]
          fn reflink_store_restart_eviction_corruption_and_modes() -> buck2_error::Result<()> {
              // This test requires the same Linux reflink filesystem as production;
-@@ -510,12 +1493,17 @@ mod linux {
+@@ -510,12 +1624,17 @@ mod linux {
                                  FileDigest::from_content(&bytes, config.cas_digest_config());
                              let path = parent.join(format!("{worker}-{iteration}"));
                              fs::write(&path, &bytes)?;
@@ -1391,7 +1522,7 @@ index 483e907..5891883 100644
                          }
                          Ok(())
                      }));
-@@ -539,6 +1527,13 @@ mod linux {
+@@ -539,6 +1658,13 @@ mod linux {
                  |r| Ok((r.get(0)?, r.get(1)?)),
              )?;
              assert_eq!((bytes, entries), actual);
@@ -1405,7 +1536,7 @@ index 483e907..5891883 100644
              Ok(())
          }
  
-@@ -597,6 +1592,7 @@ mod linux {
+@@ -597,6 +1723,7 @@ mod linux {
  }
  
  use buck2_common::file_ops::metadata::FileDigest;
@@ -1413,7 +1544,7 @@ index 483e907..5891883 100644
  use buck2_directory::directory::directory::Directory;
  use buck2_directory::directory::directory_iterator::DirectoryIterator;
  use buck2_directory::directory::directory_iterator::DirectoryIteratorPathStack;
-@@ -607,6 +1603,8 @@ use buck2_execute::directory::ActionDirectory;
+@@ -607,6 +1734,8 @@ use buck2_execute::directory::ActionDirectory;
  use buck2_execute::directory::ActionDirectoryEntry;
  use buck2_execute::directory::ActionDirectoryMember;
  use buck2_fs::paths::abs_norm_path::AbsNormPath;
@@ -1422,11 +1553,11 @@ index 483e907..5891883 100644
  
  pub(crate) fn file(
      path: &AbsNormPath,
-@@ -647,17 +1645,30 @@ pub(crate) fn artifact<D: ActionDirectory>(
+@@ -647,17 +1776,30 @@ pub(crate) fn artifact<D: ActionDirectory>(
          return Ok(());
      }
      let mut walk = unordered_entry_walk(entry.as_ref().map_dir(Directory::as_ref));
-+    let mut files = Vec::with_capacity(INGEST_BATCH_FILES);
++    let mut files = Vec::with_capacity(INGEST_METADATA_FILES);
      while let Some((relative, entry)) = walk.next() {
          if let DirectoryEntry::Leaf(ActionDirectoryMember::File(metadata)) = entry {
 -            file(
@@ -1437,7 +1568,7 @@ index 483e907..5891883 100644
 -                true,
 -            )?;
 +            files.push((path.join(relative.get()), metadata.dupe()));
-+            if files.len() == INGEST_BATCH_FILES {
++            if files.len() == INGEST_METADATA_FILES {
 +                ingest_files(&files, config)?;
 +                files.clear();
 +            }
@@ -1460,7 +1591,7 @@ index 483e907..5891883 100644
      Ok(())
  }
  
-@@ -762,6 +1773,12 @@ impl Download {
+@@ -762,6 +1904,12 @@ impl Download {
          self.temporary
              .persist(self.destination.as_path())
              .map_err(|e| e.error)?;
@@ -1473,7 +1604,7 @@ index 483e907..5891883 100644
          Ok(())
      }
  }
-@@ -806,6 +1823,19 @@ mod download_tests {
+@@ -806,6 +1954,19 @@ mod download_tests {
      #[cfg(target_os = "linux")]
      #[test]
      fn many_pending_downloads_respect_descriptor_limit() -> buck2_error::Result<()> {
@@ -1493,7 +1624,7 @@ index 483e907..5891883 100644
          const CHILD: &str = "BUCK2_MATERIALIZER_FD_REGRESSION_CHILD";
          if std::env::var_os(CHILD).is_none() {
              use std::os::unix::process::CommandExt;
-@@ -819,46 +1849,44 @@ mod download_tests {
+@@ -819,46 +1980,44 @@ mod download_tests {
                  fn setrlimit(resource: i32, limit: *const Limit) -> i32;
              }
  
