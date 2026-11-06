@@ -307,6 +307,9 @@
         };
       };
       checks.${system} = {
+        aizome-media-defaults = import ./nix/aizome-media-defaults-test.nix {
+          inherit pkgs inputs installer;
+        };
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit
             pkgs
