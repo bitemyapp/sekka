@@ -236,13 +236,12 @@ fn cursor_items(az: &mut Aizome, output: &Output, scale: f64, out: &mut Scene) {
             let img = az.cursor_theme.get(name, scale.ceil().max(1.0) as u32);
             let loc: Point<i32, Physical> =
                 Point::<f64, Logical>::from((rel.x - img.hot.0, rel.y - img.hot.1)).to_physical_precise_round(scale);
-            let size = Size::from((img.size.0.round() as i32, img.size.1.round() as i32));
             out.push(SceneItem::Memory {
                 buffer: img.buffer.clone(),
                 loc: loc.to_f64(),
                 alpha: None,
                 src: None,
-                size: Some(size),
+                size: Some(img.size),
                 kind: Kind::Cursor,
             });
         }
