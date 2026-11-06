@@ -1,0 +1,1640 @@
+{
+ "method": "active/immutable: one compsize union each (compressed physical bytes); attribution: btrfs filesystem du -s --raw per root (uncompressed extents; exclusive is fs-wide single-reference)",
+ "stages": [
+  {
+   "stage": "dev-cold",
+   "active_physical_bytes": 13227770435,
+   "active_uncompressed_bytes": 24555123062,
+   "immutable_physical_bytes": 8691464943,
+   "immutable_uncompressed_bytes": 15200498499,
+   "root_count": 19,
+   "attribution_uncompressed": {
+    "/home/callen/.buck/buckd/home/callen/sekka-work/buck2-storage-20261106/run/trees": {
+     "exclusive": 20480,
+     "set_shared": 0,
+     "total": 20480
+    },
+    "bootstrap": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "repo": {
+     "exclusive": 832917504,
+     "set_shared": 0,
+     "total": 832917504
+    },
+    "run/.lock": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/.sekka-shared-build-bench.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/cache": {
+     "exclusive": 1183596544,
+     "set_shared": 4953108480,
+     "total": 7704838144
+    },
+    "run/config.json": {
+     "exclusive": 28672,
+     "set_shared": 0,
+     "total": 28672
+    },
+    "run/plan.json": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/scratch": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/setup": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/stages": {
+     "exclusive": 41852928,
+     "set_shared": 0,
+     "total": 41852928
+    },
+    "run/state": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/summaries": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/buck-out": {
+     "exclusive": 25038848,
+     "set_shared": 4938977280,
+     "total": 7842099200
+    },
+    "run/trials": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "/home/callen/sekka-work/shared-build-service-5ce137e61808": {
+     "exclusive": 7672274944,
+     "set_shared": 0,
+     "total": 7672274944
+    },
+    "/tmp/sekka-buck2-storage-1106": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    }
+   }
+  },
+  {
+   "stage": "dev-revert",
+   "active_physical_bytes": 21838763431,
+   "active_uncompressed_bytes": 36052224338,
+   "immutable_physical_bytes": 17266534719,
+   "immutable_uncompressed_bytes": 26624506328,
+   "root_count": 19,
+   "attribution_uncompressed": {
+    "/home/callen/.buck/buckd/home/callen/sekka-work/buck2-storage-20261106/run/trees": {
+     "exclusive": 20480,
+     "set_shared": 0,
+     "total": 20480
+    },
+    "bootstrap": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "repo": {
+     "exclusive": 832917504,
+     "set_shared": 0,
+     "total": 832917504
+    },
+    "run/.lock": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/.sekka-shared-build-bench.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/cache": {
+     "exclusive": 8136683520,
+     "set_shared": 1931411456,
+     "total": 10822074368
+    },
+    "run/config.json": {
+     "exclusive": 28672,
+     "set_shared": 0,
+     "total": 28672
+    },
+    "run/plan.json": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/scratch": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/setup": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/stages": {
+     "exclusive": 70709248,
+     "set_shared": 0,
+     "total": 70709248
+    },
+    "run/state": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/summaries": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/buck-out": {
+     "exclusive": 797335552,
+     "set_shared": 2636316672,
+     "total": 5951434752
+    },
+    "run/trials": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "/home/callen/sekka-work/shared-build-service-5ce137e61808": {
+     "exclusive": 13865119744,
+     "set_shared": 0,
+     "total": 13865119744
+    },
+    "/tmp/sekka-buck2-storage-1106": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    }
+   }
+  },
+  {
+   "stage": "dev-fresh-b",
+   "active_physical_bytes": 20784623200,
+   "active_uncompressed_bytes": 34696659170,
+   "immutable_physical_bytes": 16353186491,
+   "immutable_uncompressed_bytes": 25375299324,
+   "root_count": 22,
+   "attribution_uncompressed": {
+    "/home/callen/.buck/buckd/home/callen/sekka-work/buck2-storage-20261106/run/trees": {
+     "exclusive": 28672,
+     "set_shared": 0,
+     "total": 28672
+    },
+    "bootstrap": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "repo": {
+     "exclusive": 832917504,
+     "set_shared": 0,
+     "total": 832917504
+    },
+    "run/.lock": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/.sekka-shared-build-bench.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/cache": {
+     "exclusive": 6924140544,
+     "set_shared": 2641960960,
+     "total": 10710847488
+    },
+    "run/config.json": {
+     "exclusive": 28672,
+     "set_shared": 0,
+     "total": 28672
+    },
+    "run/plan.json": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/scratch": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/setup": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/stages": {
+     "exclusive": 108453888,
+     "set_shared": 0,
+     "total": 108453888
+    },
+    "run/state": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/summaries": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/buck-out": {
+     "exclusive": 784625664,
+     "set_shared": 2573701120,
+     "total": 5951434752
+    },
+    "run/trees/b/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/buck-out": {
+     "exclusive": 8966144,
+     "set_shared": 2554015744,
+     "total": 3635720192
+    },
+    "run/trials": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "/home/callen/sekka-work/shared-build-service-5ce137e61808": {
+     "exclusive": 13865119744,
+     "set_shared": 0,
+     "total": 13865119744
+    },
+    "/tmp/sekka-buck2-storage-1106": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    }
+   }
+  },
+  {
+   "stage": "dev-fresh-c",
+   "active_physical_bytes": 20952451394,
+   "active_uncompressed_bytes": 34921553635,
+   "immutable_physical_bytes": 16368381633,
+   "immutable_uncompressed_bytes": 25391922937,
+   "root_count": 25,
+   "attribution_uncompressed": {
+    "/home/callen/.buck/buckd/home/callen/sekka-work/buck2-storage-20261106/run/trees": {
+     "exclusive": 36864,
+     "set_shared": 0,
+     "total": 36864
+    },
+    "bootstrap": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "repo": {
+     "exclusive": 832917504,
+     "set_shared": 0,
+     "total": 832917504
+    },
+    "run/.lock": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/.sekka-shared-build-bench.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/cache": {
+     "exclusive": 6931300352,
+     "set_shared": 2641960960,
+     "total": 10718007296
+    },
+    "run/config.json": {
+     "exclusive": 28672,
+     "set_shared": 0,
+     "total": 28672
+    },
+    "run/plan.json": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/scratch": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/setup": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/stages": {
+     "exclusive": 155901952,
+     "set_shared": 0,
+     "total": 155901952
+    },
+    "run/state": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/summaries": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/buck-out": {
+     "exclusive": 784625664,
+     "set_shared": 2573701120,
+     "total": 5951434752
+    },
+    "run/trees/b/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/buck-out": {
+     "exclusive": 8966144,
+     "set_shared": 2554015744,
+     "total": 3635720192
+    },
+    "run/trees/c/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/buck-out": {
+     "exclusive": 8937472,
+     "set_shared": 2554015744,
+     "total": 3635691520
+    },
+    "run/trials": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "/home/callen/sekka-work/shared-build-service-5ce137e61808": {
+     "exclusive": 13865119744,
+     "set_shared": 0,
+     "total": 13865119744
+    },
+    "/tmp/sekka-buck2-storage-1106": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    }
+   }
+  },
+  {
+   "stage": "dev-fresh-d",
+   "active_physical_bytes": 20998542394,
+   "active_uncompressed_bytes": 35026501747,
+   "immutable_physical_bytes": 16384035527,
+   "immutable_uncompressed_bytes": 25409218294,
+   "root_count": 28,
+   "attribution_uncompressed": {
+    "/home/callen/.buck/buckd/home/callen/sekka-work/buck2-storage-20261106/run/trees": {
+     "exclusive": 45056,
+     "set_shared": 0,
+     "total": 45056
+    },
+    "bootstrap": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "repo": {
+     "exclusive": 832917504,
+     "set_shared": 0,
+     "total": 832917504
+    },
+    "run/.lock": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/.sekka-shared-build-bench.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/cache": {
+     "exclusive": 6938337280,
+     "set_shared": 2641960960,
+     "total": 10725044224
+    },
+    "run/config.json": {
+     "exclusive": 28672,
+     "set_shared": 0,
+     "total": 28672
+    },
+    "run/plan.json": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/scratch": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/setup": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/stages": {
+     "exclusive": 203296768,
+     "set_shared": 0,
+     "total": 203296768
+    },
+    "run/state": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/summaries": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/buck-out": {
+     "exclusive": 784625664,
+     "set_shared": 2573701120,
+     "total": 5951434752
+    },
+    "run/trees/b/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/buck-out": {
+     "exclusive": 8966144,
+     "set_shared": 2554015744,
+     "total": 3635720192
+    },
+    "run/trees/c/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/buck-out": {
+     "exclusive": 8937472,
+     "set_shared": 2554015744,
+     "total": 3635691520
+    },
+    "run/trees/d/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/d/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/d/buck-out": {
+     "exclusive": 8978432,
+     "set_shared": 2554015744,
+     "total": 3635732480
+    },
+    "run/trials": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "/home/callen/sekka-work/shared-build-service-5ce137e61808": {
+     "exclusive": 13865119744,
+     "set_shared": 0,
+     "total": 13865119744
+    },
+    "/tmp/sekka-buck2-storage-1106": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    }
+   }
+  },
+  {
+   "stage": "dev-fresh-e",
+   "active_physical_bytes": 21022284784,
+   "active_uncompressed_bytes": 35107216591,
+   "immutable_physical_bytes": 16399288013,
+   "immutable_uncompressed_bytes": 25425907443,
+   "root_count": 31,
+   "attribution_uncompressed": {
+    "/home/callen/.buck/buckd/home/callen/sekka-work/buck2-storage-20261106/run/trees": {
+     "exclusive": 53248,
+     "set_shared": 0,
+     "total": 53248
+    },
+    "bootstrap": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "repo": {
+     "exclusive": 832917504,
+     "set_shared": 0,
+     "total": 832917504
+    },
+    "run/.lock": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/.sekka-shared-build-bench.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/cache": {
+     "exclusive": 6945366016,
+     "set_shared": 2641960960,
+     "total": 10732072960
+    },
+    "run/config.json": {
+     "exclusive": 28672,
+     "set_shared": 0,
+     "total": 28672
+    },
+    "run/plan.json": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/scratch": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/setup": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/stages": {
+     "exclusive": 250658816,
+     "set_shared": 0,
+     "total": 250658816
+    },
+    "run/state": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/summaries": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/buck-out": {
+     "exclusive": 784625664,
+     "set_shared": 2573701120,
+     "total": 5951434752
+    },
+    "run/trees/b/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/buck-out": {
+     "exclusive": 8966144,
+     "set_shared": 2554015744,
+     "total": 3635720192
+    },
+    "run/trees/c/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/buck-out": {
+     "exclusive": 8937472,
+     "set_shared": 2554015744,
+     "total": 3635691520
+    },
+    "run/trees/d/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/d/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/d/buck-out": {
+     "exclusive": 8978432,
+     "set_shared": 2554015744,
+     "total": 3635732480
+    },
+    "run/trees/e/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/e/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/e/buck-out": {
+     "exclusive": 8962048,
+     "set_shared": 2554015744,
+     "total": 3635716096
+    },
+    "run/trials": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "/home/callen/sekka-work/shared-build-service-5ce137e61808": {
+     "exclusive": 13865119744,
+     "set_shared": 0,
+     "total": 13865119744
+    },
+    "/tmp/sekka-buck2-storage-1106": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    }
+   }
+  },
+  {
+   "stage": "dev-divergent-j4",
+   "active_physical_bytes": 32831463884,
+   "active_uncompressed_bytes": 50110122521,
+   "immutable_physical_bytes": 28121708235,
+   "immutable_uncompressed_bytes": 40265053671,
+   "root_count": 31,
+   "attribution_uncompressed": {
+    "/home/callen/.buck/buckd/home/callen/sekka-work/buck2-storage-20261106/run/trees": {
+     "exclusive": 69632,
+     "set_shared": 0,
+     "total": 69632
+    },
+    "bootstrap": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "repo": {
+     "exclusive": 832917504,
+     "set_shared": 0,
+     "total": 832917504
+    },
+    "run/.lock": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/.sekka-shared-build-bench.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/cache": {
+     "exclusive": 167219200,
+     "set_shared": 7629656064,
+     "total": 10909003776
+    },
+    "run/config.json": {
+     "exclusive": 28672,
+     "set_shared": 0,
+     "total": 28672
+    },
+    "run/plan.json": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/scratch": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/setup": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/stages": {
+     "exclusive": 318218240,
+     "set_shared": 0,
+     "total": 318218240
+    },
+    "run/state": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/summaries": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/buck-out": {
+     "exclusive": 1296629760,
+     "set_shared": 4929757184,
+     "total": 9398263808
+    },
+    "run/trees/b/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/buck-out": {
+     "exclusive": 588697600,
+     "set_shared": 4883415040,
+     "total": 7126827008
+    },
+    "run/trees/c/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/buck-out": {
+     "exclusive": 639168512,
+     "set_shared": 4825460736,
+     "total": 7126290432
+    },
+    "run/trees/d/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/d/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/d/buck-out": {
+     "exclusive": 582823936,
+     "set_shared": 4892512256,
+     "total": 7126573056
+    },
+    "run/trees/e/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/e/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/e/buck-out": {
+     "exclusive": 563519488,
+     "set_shared": 4895870976,
+     "total": 7126487040
+    },
+    "run/trials": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "/home/callen/sekka-work/shared-build-service-5ce137e61808": {
+     "exclusive": 25418403840,
+     "set_shared": 0,
+     "total": 25418403840
+    },
+    "/tmp/sekka-buck2-storage-1106": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    }
+   }
+  },
+  {
+   "stage": "service-eviction",
+   "active_physical_bytes": 19496317940,
+   "active_uncompressed_bytes": 29020427194,
+   "immutable_physical_bytes": 14784454810,
+   "immutable_uncompressed_bytes": 19168973399,
+   "root_count": 31,
+   "attribution_uncompressed": {
+    "/home/callen/.buck/buckd/home/callen/sekka-work/buck2-storage-20261106/run/trees": {
+     "exclusive": 69632,
+     "set_shared": 0,
+     "total": 69632
+    },
+    "bootstrap": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "repo": {
+     "exclusive": 832917504,
+     "set_shared": 0,
+     "total": 832917504
+    },
+    "run/.lock": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/.sekka-shared-build-bench.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/cache": {
+     "exclusive": 167219200,
+     "set_shared": 7629656064,
+     "total": 10909003776
+    },
+    "run/config.json": {
+     "exclusive": 28672,
+     "set_shared": 0,
+     "total": 28672
+    },
+    "run/plan.json": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/scratch": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/setup": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/stages": {
+     "exclusive": 324485120,
+     "set_shared": 0,
+     "total": 324485120
+    },
+    "run/state": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/summaries": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/buck-out": {
+     "exclusive": 1296629760,
+     "set_shared": 4929757184,
+     "total": 9398263808
+    },
+    "run/trees/b/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/buck-out": {
+     "exclusive": 588697600,
+     "set_shared": 4883415040,
+     "total": 7126827008
+    },
+    "run/trees/c/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/buck-out": {
+     "exclusive": 639168512,
+     "set_shared": 4825460736,
+     "total": 7126290432
+    },
+    "run/trees/d/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/d/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/d/buck-out": {
+     "exclusive": 582823936,
+     "set_shared": 4892512256,
+     "total": 7126573056
+    },
+    "run/trees/e/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/e/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/e/buck-out": {
+     "exclusive": 563519488,
+     "set_shared": 4895870976,
+     "total": 7126487040
+    },
+    "run/trials": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "/home/callen/sekka-work/shared-build-service-5ce137e61808": {
+     "exclusive": 4334788608,
+     "set_shared": 0,
+     "total": 4334788608
+    },
+    "/tmp/sekka-buck2-storage-1106": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    }
+   }
+  },
+  {
+   "stage": "dev-primed-output-loss",
+   "active_physical_bytes": 21268073080,
+   "active_uncompressed_bytes": 34631710351,
+   "immutable_physical_bytes": 16562514254,
+   "immutable_uncompressed_bytes": 24690136656,
+   "root_count": 31,
+   "attribution_uncompressed": {
+    "/home/callen/.buck/buckd/home/callen/sekka-work/buck2-storage-20261106/run/trees": {
+     "exclusive": 94208,
+     "set_shared": 0,
+     "total": 94208
+    },
+    "bootstrap": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "repo": {
+     "exclusive": 832917504,
+     "set_shared": 0,
+     "total": 832917504
+    },
+    "run/.lock": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/.sekka-shared-build-bench.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/cache": {
+     "exclusive": 1674326016,
+     "set_shared": 7407599616,
+     "total": 10922512384
+    },
+    "run/config.json": {
+     "exclusive": 28672,
+     "set_shared": 0,
+     "total": 28672
+    },
+    "run/plan.json": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/scratch": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/setup": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/stages": {
+     "exclusive": 424488960,
+     "set_shared": 0,
+     "total": 424488960
+    },
+    "run/state": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/summaries": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/buck-out": {
+     "exclusive": 24510464,
+     "set_shared": 5219643392,
+     "total": 7841570816
+    },
+    "run/trees/b/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/buck-out": {
+     "exclusive": 1766768640,
+     "set_shared": 3892588544,
+     "total": 7126827008
+    },
+    "run/trees/c/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/buck-out": {
+     "exclusive": 1764999168,
+     "set_shared": 3892690944,
+     "total": 7126290432
+    },
+    "run/trees/d/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/d/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/d/buck-out": {
+     "exclusive": 1747382272,
+     "set_shared": 3909705728,
+     "total": 7126573056
+    },
+    "run/trees/e/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/e/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/e/buck-out": {
+     "exclusive": 1760509952,
+     "set_shared": 3896578048,
+     "total": 7126487040
+    },
+    "run/trials": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "/home/callen/sekka-work/shared-build-service-5ce137e61808": {
+     "exclusive": 4335325184,
+     "set_shared": 0,
+     "total": 4335325184
+    },
+    "/tmp/sekka-buck2-storage-1106": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    }
+   }
+  },
+  {
+   "stage": "release-fresh",
+   "active_physical_bytes": 26160543428,
+   "active_uncompressed_bytes": 47356511423,
+   "immutable_physical_bytes": 21610566243,
+   "immutable_uncompressed_bytes": 37484943567,
+   "root_count": 34,
+   "attribution_uncompressed": {
+    "/home/callen/.buck/buckd/home/callen/sekka-work/buck2-storage-20261106/run/trees": {
+     "exclusive": 106496,
+     "set_shared": 0,
+     "total": 106496
+    },
+    "bootstrap": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "repo": {
+     "exclusive": 832917504,
+     "set_shared": 0,
+     "total": 832917504
+    },
+    "run/.lock": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/.sekka-shared-build-bench.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/cache": {
+     "exclusive": 2500395008,
+     "set_shared": 6203940864,
+     "total": 10912059392
+    },
+    "run/config.json": {
+     "exclusive": 28672,
+     "set_shared": 0,
+     "total": 28672
+    },
+    "run/plan.json": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/scratch": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/setup": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/stages": {
+     "exclusive": 510881792,
+     "set_shared": 0,
+     "total": 510881792
+    },
+    "run/state": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/summaries": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/buck-out": {
+     "exclusive": 766902272,
+     "set_shared": 8005500928,
+     "total": 17871032320
+    },
+    "run/trees/b/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/buck-out": {
+     "exclusive": 1840357376,
+     "set_shared": 3820007424,
+     "total": 7126827008
+    },
+    "run/trees/c/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/buck-out": {
+     "exclusive": 1839820800,
+     "set_shared": 3820007424,
+     "total": 7126290432
+    },
+    "run/trees/d/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/d/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/d/buck-out": {
+     "exclusive": 1840103424,
+     "set_shared": 3820007424,
+     "total": 7126573056
+    },
+    "run/trees/e/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/e/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/e/buck-out": {
+     "exclusive": 1840017408,
+     "set_shared": 3820007424,
+     "total": 7126487040
+    },
+    "run/trees/release-fresh/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/release-fresh/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/release-fresh/buck-out": {
+     "exclusive": 11169792,
+     "set_shared": 3941613568,
+     "total": 6238797824
+    },
+    "run/trials": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "/home/callen/sekka-work/shared-build-service-5ce137e61808": {
+     "exclusive": 11842916352,
+     "set_shared": 0,
+     "total": 11842916352
+    },
+    "/tmp/sekka-buck2-storage-1106": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    }
+   }
+  },
+  {
+   "stage": "final-original",
+   "active_physical_bytes": 28522398373,
+   "active_uncompressed_bytes": 51323841770,
+   "immutable_physical_bytes": 23763878916,
+   "immutable_uncompressed_bytes": 41211813119,
+   "root_count": 34,
+   "attribution_uncompressed": {
+    "/home/callen/.buck/buckd/home/callen/sekka-work/buck2-storage-20261106/run/trees": {
+     "exclusive": 110592,
+     "set_shared": 0,
+     "total": 110592
+    },
+    "bootstrap": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "repo": {
+     "exclusive": 832917504,
+     "set_shared": 0,
+     "total": 832917504
+    },
+    "run/.lock": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/.sekka-shared-build-bench.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/cache": {
+     "exclusive": 2564038656,
+     "set_shared": 5796700160,
+     "total": 10908807168
+    },
+    "run/config.json": {
+     "exclusive": 28672,
+     "set_shared": 0,
+     "total": 28672
+    },
+    "run/plan.json": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/scratch": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/setup": {
+     "exclusive": 8192,
+     "set_shared": 0,
+     "total": 8192
+    },
+    "run/stages": {
+     "exclusive": 539119616,
+     "set_shared": 0,
+     "total": 539119616
+    },
+    "run/state": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/summaries": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/a/buck-out": {
+     "exclusive": 1125040128,
+     "set_shared": 8845496320,
+     "total": 19730944000
+    },
+    "run/trees/b/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/b/buck-out": {
+     "exclusive": 1840357376,
+     "set_shared": 3820007424,
+     "total": 7126827008
+    },
+    "run/trees/c/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/c/buck-out": {
+     "exclusive": 1839820800,
+     "set_shared": 3820007424,
+     "total": 7126290432
+    },
+    "run/trees/d/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/d/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/d/buck-out": {
+     "exclusive": 1840103424,
+     "set_shared": 3820007424,
+     "total": 7126573056
+    },
+    "run/trees/e/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/e/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/e/buck-out": {
+     "exclusive": 1840017408,
+     "set_shared": 3820007424,
+     "total": 7126487040
+    },
+    "run/trees/release-fresh/.buckal": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/release-fresh/.sekka-bench-source.json": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "run/trees/release-fresh/buck-out": {
+     "exclusive": 11169792,
+     "set_shared": 3941613568,
+     "total": 6238797824
+    },
+    "run/trials": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    },
+    "/home/callen/sekka-work/shared-build-service-5ce137e61808": {
+     "exclusive": 13807685632,
+     "set_shared": 0,
+     "total": 13807685632
+    },
+    "/tmp/sekka-buck2-storage-1106": {
+     "exclusive": 0,
+     "set_shared": 0,
+     "total": 0
+    }
+   }
+  }
+ ]
+}

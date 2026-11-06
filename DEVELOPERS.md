@@ -564,7 +564,24 @@ filesystem allocation total or automatic storage bound. The observer uses
 read-only, nonrecursive Docker-daemon binds and fails if measured roots contain
 hidden submounts. A disposable four-container service smoke on Btrfs measured
 285 roots and a 1,035,043,103-byte physical union with no unresolved roots;
-this validates the observer path, not the full workload matrix.
+this validates the observer path, not the full workload matrix. Store paths
+that are themselves symlinks, such as a man output pointing at another output,
+are listed as `symlink_requisites` rather than measured: they hold no file data.
+
+On one host, the CAS and the per-user Buck2 content store each keep a copy of
+every uploaded output. On the deployment host, share their extents with:
+
+```sh
+nix run .#build-service -- --local --manifest PRIVATE.json dedupe
+```
+
+It matches persistent CAS blobs to content-store objects by SHA-256 and size,
+then asks the kernel (`FIDEDUPERANGE`) to share identical bytes; the kernel
+compares them, and any mismatch fails the command. `--content-store PATH`
+selects stores other than the default `~/.cache/sekka/buck2/content-v1`.
+Pairs that already share their first extent are skipped, so repeating it is
+cheap; run it after large builds or from a timer. Ephemeral CI caches are not
+touched.
 
 The gateway binds host loopback. From another machine, forward it explicitly:
 
@@ -584,6 +601,18 @@ execution as well as cache access. Bazel execution additionally needs
 Workers require the exact immutable toolchain/native closures: realize them
 on the workstation and use `retain /nix/store/CLIENT /nix/store/VENDOR`.
 `retain` does not evaluate sources or import unsigned arbitrary build outputs.
+
+For worktrees on the workstation's Btrfs filesystem, the qualified setup is
+local execution with a writer client, `scripts/sekka-buck2 --cache cache
+--cache-write --config-file FILE build`, the default per-user content store,
+and `build-service --local dedupe` after large builds. In the 2026-11-06
+storage run, a fresh worktree of an already-built source reused all 706
+actions and kept 8 MiB of its own build state beside 3.47 GB reflinked from
+the store; deduplicating the CAS against the store then cut the physical
+union by 15%. New build generations, not worktrees, are what grow: each one
+lands in the CAS until its LRU bound. Use `--cache remote` to offload
+execution, from another machine for example; its action-cache entries are
+separate from local execution's. [Results](docs/test-results/buck2/2026-11-06-storage-plan/README.md)
 
 The packaged controller supplies one root-flake-pinned `workerRuntime` closure
 for Bash, `env`, D-Bus and the worker's minimal NSS configuration. It uses the
@@ -700,6 +729,16 @@ rewrite their observations. Compression-aware physical accounting measures
 all selected worktrees and shared stores in one union, not a sum of `du`
 results. Service protocol checks alone do not establish frontend correctness,
 full-matrix performance or ISO qualification.
+
+`plan --kind storage` lists the storage-first plan, selected by
+`"plan": "storage"` in the frozen configuration: one observation of each
+storage, reuse and correctness scenario, with edit times reported but not
+gated ([gate revision](docs/bazel-build-plan.md#workstation-exit-gates)).
+A storage root `untracked:GLOB` stands for what git ignores or does not track
+in each matching worktree, so tracked source stays out of the per-worktree
+figure. `storage.attribution_command`, normally `btrfs filesystem du -s
+--raw`, adds each root's uncompressed exclusive and shared extents to the
+receipt; it explains growth and never replaces the compsize union.
 
 Service-operation evidence records each cache root's apparent bytes,
 block-rounded policy bytes, content-entry count and configured byte/entry
