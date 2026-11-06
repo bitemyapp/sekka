@@ -748,3 +748,120 @@ fn baseline_offsets_move_attachments() {
         assert!((grown - want).abs() < 0.01, "TextKit 1: {glyphs}: grew {grown}");
     }
 }
+
+/// Fixture text in the scripts and kinds of character that fall back to
+/// other faces: right to left, joining, combining marks, CJK, symbols,
+/// emoji.
+const FALLBACK_TEXT: &[(&str, &str)] = &[
+    ("latin", "Hello, world"),
+    ("greek-cyrillic", "Ελληνικά Кириллица"),
+    ("hebrew", "שלום עולם"),
+    ("arabic", "مرحبا بالعالم"),
+    ("devanagari", "नमस्ते दुनिया"),
+    ("thai", "สวัสดีชาวโลก"),
+    ("han-kana", "漢字かなカナ"),
+    ("hangul", "한국어 텍스트"),
+    ("combining", "e\u{301}a\u{308}o\u{302}\u{323} n\u{303}"),
+    ("symbols", "▸ ▾ ← → ✓ ❖ ⌥ ⇧ ⌃ ⌘"),
+    ("math", "∑ ∫ √ ∞ ≠ ℝ"),
+    ("emoji", "a😀b 👍🏽 👨\u{200d}👩\u{200d}👧"),
+    ("mixed", "Aizome 藍染 ❖ مرحبا 😀"),
+];
+
+/// The faces that draw `FALLBACK_TEXT` in each of the system's roles and in
+/// some families by name: the family each spec resolves to, then each run's
+/// family (in visual order) and how many glyphs are missing. With
+/// `glyphs`, each run's glyphs and their positions too, for comparing two
+/// builds on one machine.
+fn fallback_report(glyphs: bool) -> Vec<String> {
+    let mut specs: Vec<(String, FontSpec)> = [Design::Default, Design::Monospaced, Design::Serif]
+        .into_iter()
+        .map(|d| (format!("{d:?}"), FontSpec::system(d, 0.0)))
+        .collect();
+    for name in ["DejaVu Sans", "Archivo", "IBM Plex Mono"] {
+        if super::with_ctx(|ctx| ctx.fcx.collection.family_id(name).is_some()) {
+            let spec = FontSpec { family: Family::Named(name.into()), ..FontSpec::system(Design::Default, 0.0) };
+            specs.push((name.replace(' ', "-"), spec));
+        }
+    }
+    let family_of = |id: u32| -> String {
+        fonts::face_data(id)
+            .and_then(|face| {
+                let font = skrifa::FontRef::from_index(face.font.data.data(), face.font.index).ok()?;
+                fonts::name_of(&font, skrifa::string::StringId::TYPOGRAPHIC_FAMILY_NAME)
+                    .or_else(|| fonts::name_of(&font, skrifa::string::StringId::FAMILY_NAME))
+            })
+            .unwrap_or_else(|| "?".into())
+    };
+    let mut lines = Vec::new();
+    for (role, spec) in &specs {
+        let face = fonts::resolve(spec);
+        let font = TextFont { face: face.clone(), size: 16.0, tabular_digits: false, features: None };
+        for (label, text) in FALLBACK_TEXT {
+            let laid = lay(text, Attrs::new(font.clone()), Options::UNBOUNDED);
+            let runs: Vec<String> = laid
+                .runs
+                .iter()
+                .map(|r| {
+                    let mut run = family_of(r.font);
+                    if glyphs {
+                        let placed: Vec<String> =
+                            r.glyphs.iter().map(|g| format!("{}@{:.3},{:.3}", g.id, r.x + g.x, r.y + g.y)).collect();
+                        run = format!("{run} [{}]", placed.join(" "));
+                    }
+                    run
+                })
+                .collect();
+            let missing = laid.runs.iter().flat_map(|r| r.glyphs.iter()).filter(|g| g.id == 0).count();
+            let size = if glyphs { format!(" {:.3}x{:.3}", laid.width, laid.height) } else { String::new() };
+            lines.push(format!("{role} {label}: {} | {} | missing {missing}{size}", face.family_name, runs.join(", ")));
+        }
+    }
+    lines
+}
+
+/// What the pins were made with: the system's families and the locale
+/// fontconfig reads, as a hash.
+fn fonts_fingerprint() -> String {
+    let mut h = super::layout::Fx::default();
+    for name in fonts::family_names() {
+        std::hash::Hasher::write(&mut h, name.as_bytes());
+        std::hash::Hasher::write_u8(&mut h, 0);
+    }
+    for var in ["LC_ALL", "LC_CTYPE", "LANG", "LANGUAGE"] {
+        let value = std::env::var(var).unwrap_or_default();
+        std::hash::Hasher::write(&mut h, format!("{var}={value}").as_bytes());
+        std::hash::Hasher::write_u8(&mut h, 0);
+    }
+    format!("{:016x}", std::hash::Hasher::finish(&h))
+}
+
+/// Which faces draw text in each script, pinned: what fontconfig's generic
+/// families and its fallback for each script give, on the fonts the
+/// Sukumo check installs (nix/sukumo-test.nix), with no locale set. Made
+/// by the build before the system's generic families and fallbacks were
+/// found lazily, so it pins that they give what they gave. Skipped on other
+/// fonts or another locale. `SUKUMO_FALLBACK_PINS=FILE` writes this
+/// machine's report to FILE instead (`SUKUMO_FALLBACK_GLYPHS=1` adds each
+/// glyph and its position, for comparing two builds on one machine).
+#[test]
+fn fallback_faces_are_pinned() {
+    let glyphs = std::env::var_os("SUKUMO_FALLBACK_GLYPHS").is_some();
+    let report = fallback_report(glyphs);
+    let print = format!("# fonts {}\n{}\n", fonts_fingerprint(), report.join("\n"));
+    if let Some(out) = std::env::var_os("SUKUMO_FALLBACK_PINS") {
+        std::fs::write(&out, &print).unwrap();
+        return;
+    }
+    let pins = include_str!("../../../../fixtures/fallback-pins.txt");
+    if pins.lines().next() != print.lines().next() {
+        eprintln!("skipped: these fonts or this locale aren't the pins' (fixtures/fallback-pins.txt)");
+        return;
+    }
+    let want: Vec<&str> = pins.lines().skip(1).collect();
+    let got: Vec<&str> = print.lines().skip(1).collect();
+    for (w, g) in want.iter().zip(&got) {
+        assert_eq!(w, g, "a face changed");
+    }
+    assert_eq!(want.len(), got.len());
+}

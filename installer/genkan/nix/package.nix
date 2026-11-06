@@ -75,9 +75,11 @@ let
       (aizome + "/crates/aizome-shell-proto")
       # The compositor's IPC, for the keyboard step's key.
       (aizome + "/crates/aizome-ipc")
-      # Sukumo, which the kit draws with: its workspace manifest and crates.
+      # Sukumo, which the kit draws with: its workspace manifest and crates,
+      # and the crates.io crate it patches (ui/Cargo.toml).
       (aizome + "/sukumo/Cargo.toml")
       (aizome + "/sukumo/crates")
+      (aizome + "/sukumo/vendor")
     ];
   };
   ui = lib.fileset.toSource {

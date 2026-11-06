@@ -97,7 +97,12 @@ lto = "thin"
 #
 # simdutf8 from Hotaru's audited copy, which includes the upstream AVX2
 # prefetch pointer repair, so transitive users resolve to it too.
+#
+# fontique from Sukumo's copy, which finds the system's generic families
+# when each is first asked for (sukumo/vendor/README.md), as Sukumo's own
+# workspace has it.
 [patch.crates-io]
 moxcms = { git = "https://github.com/bitemyapp/moxcms", rev = "b63298023362c19b0ea5499c2c8d35802fc1adac" }
 zune-core = { git = "https://github.com/bitemyapp/zune-image", branch = "scaled-idct" }
 simdutf8 = { path = "../../apps/hotaru/vendor/simdutf8" }
+fontique = { path = "sukumo/vendor/fontique" }
