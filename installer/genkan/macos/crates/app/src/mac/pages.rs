@@ -512,6 +512,7 @@ fn review(m: &Model, p: &mut Page) {
     for (n, change) in m.changes().iter().enumerate() {
         p.numbered(n + 1, change);
     }
+    p.note(text::NOT_ENCRYPTED);
     p.gap(2.0);
     p.heading("Then you finish in Recovery");
     let owner = m.user.0.clone();

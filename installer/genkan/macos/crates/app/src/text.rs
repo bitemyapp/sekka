@@ -139,6 +139,10 @@ pub fn acknowledgement(a: Acknowledgement) -> &'static str {
 
 pub const BACKUP: &str = "I have a current backup of this Mac.";
 
+/// Said on the review, before anything is installed
+/// (docs/apple-silicon/encryption.md).
+pub const NOT_ENCRYPTED: &str = "Sekka's partition isn't encrypted. macOS stays protected by FileVault; it doesn't protect Sekka. Encryption will come in a later version.";
+
 pub fn human_step(step: HumanStep, volume: &str, owner: &str) -> String {
     match step {
         HumanStep::ShutDown => "Shut down your Mac. Wait ten seconds after the screen goes dark.".into(),
