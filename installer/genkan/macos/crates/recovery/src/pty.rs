@@ -317,8 +317,18 @@ mod tests {
         assert!(rejected("bputil: failed to set credential: Password rejected"));
     }
 
+    /// The test environment's own `stty`, by absolute path: the commands run
+    /// with a fixed PATH that a build sandbox doesn't populate.
+    fn stty() -> String {
+        std::env::var_os("PATH")
+            .and_then(|p| std::env::split_paths(&p).map(|d| d.join("stty")).find(|p| p.exists()))
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "stty".into())
+    }
+
     fn script(dir: &std::path::Path, body: &str) -> String {
         let path = dir.join("tool");
+        let body = body.replace("stty", &stty());
         std::fs::write(&path, format!("#!/bin/sh\n{body}")).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
         path.to_string_lossy().into_owned()
