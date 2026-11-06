@@ -167,17 +167,11 @@ impl Operation {
             Operation::Rollback { generation } if report["left"].as_array().is_some_and(|l| !l.is_empty()) => {
                 format!("Generation {generation} is running. Files you changed by hand since were left as they are")
             }
-            Operation::Clean { .. } => match report["freed"].as_str() {
-                Some(freed) if !freed.is_empty() => format!("The store is tidy: {freed}"),
-                _ => self.done(),
-            },
+            Operation::Clean { .. } => format!("{}. {}", self.done(), disk_observation(&report)),
             Operation::Delete { .. } => {
                 let done = self.done();
-                match (report["collected"].as_bool(), report["freed"].as_u64()) {
-                    (Some(true), Some(freed)) => {
-                        format!("{done}, and {} came back", yukimi_system::human_size(freed))
-                    }
-                    (Some(true), None) => format!("{done}, and garbage was collected"),
+                match report["collected"].as_bool() {
+                    Some(true) => format!("{done}. {}", disk_observation(&report)),
                     _ if report.get("collect_error").is_some() => {
                         format!("{done}. Collecting garbage didn't finish; its space comes back at the next clean-up")
                     }
@@ -469,12 +463,53 @@ pub fn try_command(nixpkgs: &str, attr: &str, program: &str, unfree: bool) -> Ve
     command
 }
 
+/// Filesystem observations include other activity and may precede delayed frees.
+fn disk_observation(report: &serde_json::Value) -> String {
+    let (Some(before), Some(after)) = (report["available_before_gc"].as_u64(), report["available_after_gc"].as_u64())
+    else {
+        return "Disk space change was not measured".to_owned();
+    };
+    let change = match after.cmp(&before) {
+        std::cmp::Ordering::Greater => format!("increased by {}", yukimi_system::human_size(after - before)),
+        std::cmp::Ordering::Less => format!("decreased by {}", yukimi_system::human_size(before - after)),
+        std::cmp::Ordering::Equal => "was unchanged".to_owned(),
+    };
+    format!("Available disk space {change} during collection; other activity and delayed frees can affect this")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn args(run: Run) -> Vec<String> {
         run.command.get_args().map(|a| a.to_string_lossy().into_owned()).collect()
+    }
+
+    #[test]
+    fn cleanup_distinguishes_filesystem_observations_from_nix_deletion_summary() {
+        let op = Operation::Clean { older_than_days: None };
+        let report = |before: u64, after: u64| {
+            serde_json::json!({
+                "freed": "999 GiB freed",
+                "available_before_gc": before,
+                "available_after_gc": after,
+            })
+            .to_string()
+        };
+        let increase = op.outcome(&report(1_000_000_000, 3_000_000_000));
+        assert!(increase.contains("increased by 2.0 GB"), "{increase}");
+        assert!(increase.contains("other activity"));
+        assert!(!increase.contains("999"));
+        let decrease = op.outcome(&report(3_000_000_000, 1_000_000_000));
+        assert!(decrease.contains("decreased by 2.0 GB"), "{decrease}");
+        assert!(op.outcome(&report(1, 1)).contains("was unchanged"));
+        let delete = Operation::Delete { generations: vec![26], collect: true };
+        let mut deleted: serde_json::Value = serde_json::from_str(&report(3_000_000_000, 1_000_000_000)).unwrap();
+        deleted["collected"] = true.into();
+        assert!(delete.outcome(&deleted.to_string()).contains("decreased by 2.0 GB"));
+        for report in [r#"{"freed":"999 GiB freed"}"#, r#"{"available_before_gc":1}"#, "{}"] {
+            assert!(op.outcome(report).contains("not measured"));
+        }
     }
 
     #[test]
@@ -539,7 +574,7 @@ mod tests {
         assert_eq!(crate::app::generation_words(&[31, 20, 24, 25, 26, 30]), "generations 20, 24–26, 30 and 31");
         assert_eq!(
             delete.outcome(r#"{"ok":true,"deleted":[26],"collected":true,"freed":412000000}"#),
-            "Generation 26 is deleted, and 412 MB came back"
+            "Generation 26 is deleted. Disk space change was not measured"
         );
         assert_eq!(
             delete.outcome(r#"{"ok":true,"deleted":[26],"collected":false}"#),
