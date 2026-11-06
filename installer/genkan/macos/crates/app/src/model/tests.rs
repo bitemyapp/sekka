@@ -608,6 +608,32 @@ fn the_helper_is_asked_about_recovery_once_in_each_check() {
 }
 
 #[test]
+fn checking_again_waits_for_an_open_sheet() {
+    let mut j = Journey::start(Scenario::StartupDiskFails);
+    j.reach_review().confirm().send(Msg::Install).password("right");
+    j.send(Msg::RetryStartupDisk);
+    assert!(j.model.update(Msg::CheckAgain).is_empty());
+    assert_eq!(j.model.screen, Screen::Stopped);
+    assert!(j.model.installation.is_some());
+    j.password("right");
+    assert_eq!(j.model.screen, Screen::Recovery);
+
+    // A retry with nothing to retry says so and leaves the sheet usable.
+    let mut j = Journey::start(Scenario::StartupDiskFails);
+    j.reach_review().confirm().send(Msg::Install).password("right");
+    j.send(Msg::RetryStartupDisk);
+    j.model.installation = None;
+    let effects = j.model.update(Msg::Authorize {
+        owner: "chris".into(),
+        password: Secret::new(b"right".to_vec()),
+    });
+    assert!(effects.is_empty());
+    let auth = j.model.authorization.clone().unwrap();
+    assert!(!auth.busy);
+    assert_eq!(auth.error.as_deref(), Some(crate::text::NOTHING_TO_RETRY));
+}
+
+#[test]
 fn an_installation_stopped_before_any_change_can_be_cancelled() {
     let mut j = Journey::start(Scenario::StoppedEarly);
     assert_eq!(j.model.screen, Screen::Stopped);

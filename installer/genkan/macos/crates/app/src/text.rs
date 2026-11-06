@@ -228,6 +228,9 @@ pub fn recheck_failed(e: &str) -> String {
 pub const NEEDS_UPDATE_TITLE: &str = "Sekka Installer needs updating";
 pub const NEEDS_UPDATE: &str = "Sekka's release for this Mac needs a different version of Sekka Installer than this one. Download the latest Sekka Installer from sekka.computer/mac and open that instead.";
 
+/// The retry sheet, once the installation it was opened for isn't known.
+pub const NOTHING_TO_RETRY: &str = "There's no installation to set the startup disk for now. Cancel, then check this Mac again.";
+
 /// The retry sheet, given another account than the installation's own.
 pub fn retry_owner(owner: &str) -> String {
     format!("{owner} authorized this installation. Setting the startup disk again needs the same account: enter its name and password.")

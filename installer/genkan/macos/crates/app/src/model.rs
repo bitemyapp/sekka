@@ -563,8 +563,9 @@ impl Model {
                 self.download_error = Some(e);
                 Vec::new()
             }
-            // A running installation or download is already being watched.
-            Msg::CheckAgain if self.running || self.downloading => Vec::new(),
+            // A running installation or download is already being watched,
+            // and an open sheet answers for the page it was opened from.
+            Msg::CheckAgain if self.running || self.downloading || self.authorization.is_some() => Vec::new(),
             Msg::CheckAgain => {
                 self.notice = None;
                 self.check_again()
@@ -796,37 +797,34 @@ impl Model {
     }
 
     fn authorize(&mut self, owner: String, password: Secret) -> Vec<Effect> {
-        let Some(auth) = self.authorization.as_mut() else { return Vec::new() };
+        let Some(auth) = &self.authorization else { return Vec::new() };
         if auth.busy {
             return Vec::new();
         }
-        if password.is_empty() {
-            auth.error = Some("Enter the password for this account.".into());
-            return Vec::new();
-        }
-        // The helper authenticates the administrator it recorded, whatever
-        // name is typed: a different one is refused here, not ignored.
-        if auth.retry
-            && let Some(recorded) = &self.owner
-            && !same_account(&owner, recorded, &self.user)
-        {
-            auth.error = Some(text::retry_owner(recorded));
-            return Vec::new();
-        }
-        auth.owner = owner.clone();
-        auth.error = None;
-        auth.busy = true;
-        if auth.retry {
-            return match self.installation {
-                Some(id) => vec![Effect::RetryStartupDisk(id, password)],
-                None => Vec::new(),
-            };
-        }
-        match self.begin_request(owner) {
-            Ok(begin) => vec![Effect::Begin(Box::new(begin), password)],
+        let request = if password.is_empty() {
+            Err("Enter the password for this account.".to_string())
+        } else if auth.retry {
+            match (&self.owner, self.installation) {
+                // The helper authenticates the administrator it recorded,
+                // whatever name is typed: a different one is refused here,
+                // not ignored.
+                (Some(recorded), _) if !same_account(&owner, recorded, &self.user) => Err(text::retry_owner(recorded)),
+                (_, Some(id)) => Ok(Effect::RetryStartupDisk(id, password)),
+                (_, None) => Err(text::NOTHING_TO_RETRY.to_string()),
+            }
+        } else {
+            self.begin_request(owner.clone()).map(|begin| Effect::Begin(Box::new(begin), password))
+        };
+        let auth = self.authorization.as_mut().expect("open");
+        match request {
+            // The sheet waits only while the helper has something to answer.
+            Ok(effect) => {
+                auth.owner = owner;
+                auth.error = None;
+                auth.busy = true;
+                vec![effect]
+            }
             Err(e) => {
-                let auth = self.authorization.as_mut().expect("open");
-                auth.busy = false;
                 auth.error = Some(e);
                 Vec::new()
             }
