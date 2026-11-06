@@ -45,6 +45,9 @@ pub struct Ui {
     bar: Retained<NSStackView>,
     page: Option<(Retained<NSStackView>, Live, Targets)>,
     key: String,
+    /// What the page's log shows, so it is replaced only when it changes
+    /// and a selection in it lasts.
+    log: String,
     sheet: Option<Sheet>,
     /// Download rate, from the last few progress reports.
     rate: Option<(Instant, u64, f64)>,
@@ -214,6 +217,7 @@ impl Ui {
             bar,
             page: None,
             key: String::new(),
+            log: String::new(),
             sheet: None,
             rate: None,
             last_tick: Instant::now(),
@@ -354,6 +358,7 @@ impl Ui {
                 self.window.setDefaultButtonCell(last.cell().and_then(|c| c.downcast().ok()).as_deref());
             }
             self.page = Some((body, live, targets));
+            self.log.clear();
         }
         self.update_live();
         self.sync_sheet();
@@ -429,8 +434,12 @@ impl Ui {
                     });
                 }
                 if let Some(log) = &live.log {
-                    let lines: Vec<String> = m.log.iter().rev().take(200).rev().cloned().collect();
-                    log.setStringValue(&ui::ns(&lines.join("\n")));
+                    let lines: Vec<&str> = m.log.iter().rev().take(200).rev().map(String::as_str).collect();
+                    let text = lines.join("\n");
+                    if text != self.log {
+                        log.setStringValue(&ui::ns(&text));
+                        self.log = text;
+                    }
                 }
             }
             _ => {}
