@@ -436,6 +436,36 @@ def marker_check(found, required, current):
             'passed': expected <= observed <= allowed}
 
 
+def cache_inventory_policy(inventory):
+    """Check retained-cache policy accounting, not physical or total-state usage."""
+    roots = inventory.get('roots')
+    if (type(inventory.get('schema')) is not int or inventory['schema'] != 1
+            or inventory.get('errors') != [] or not isinstance(roots, list) or not roots
+            or not all(isinstance(root, str) and root for root in roots)
+            or len(set(roots)) != len(roots)):
+        raise RuntimeError('invalid or incomplete owned-cache inventory')
+    fields = ('root_apparent_bytes', 'root_block_accounted_bytes', 'root_entry_counts',
+              'configured_root_byte_limits', 'configured_root_entry_limits')
+    for field in fields:
+        values = inventory.get(field)
+        if (not isinstance(values, list) or len(values) != len(roots)
+                or any(type(value) is not int or value < 0 for value in values)):
+            raise RuntimeError(f'invalid owned-cache inventory column: {field}')
+    rows = []
+    for index, root in enumerate(roots):
+        row = {'root': root, **{field: inventory[field][index] for field in fields}}
+        if (row['root_block_accounted_bytes'] < row['root_apparent_bytes']
+                or row['configured_root_byte_limits'] == 0
+                or row['configured_root_entry_limits'] == 0):
+            raise RuntimeError('inconsistent owned-cache policy accounting')
+        row['within_byte_limit'] = row['root_block_accounted_bytes'] <= row['configured_root_byte_limits']
+        row['within_entry_limit'] = row['root_entry_counts'] <= row['configured_root_entry_limits']
+        rows.append(row)
+    return {'roots': rows,
+            'passed': all(row['within_byte_limit'] and row['within_entry_limit'] for row in rows),
+            'note': 'retained-cache snapshot policy bounds; NOT physical bytes or total-state enforcement'}
+
+
 class Bench:
     def __init__(self, config):
         self.config = config
@@ -1130,12 +1160,18 @@ class Bench:
                     if before['exit_status']:
                         raise RuntimeError('cannot inventory owned service cache before operation')
                     before_files = load(before['log'])
+                    policy_before = cache_inventory_policy(before_files)
+                    save(directory / 'cache-policy-before.json', policy_before)
+                    if not policy_before['passed']:
+                        raise RuntimeError('owned cache exceeds configured policy bounds before operation')
                     metrics_before = self.metrics(values, directory, 'service-metrics-before')
                     rec = self.command(expand(service[operation], values), tree, directory, operation)
                     after = self.command(inventory_argv, tree, directory, 'inventory-after')
                     if after['exit_status']:
                         raise RuntimeError('cannot inventory owned service cache after operation')
                     after_files = load(after['log'])
+                    policy_after = cache_inventory_policy(after_files)
+                    save(directory / 'cache-policy-after.json', policy_after)
                     if before_files['roots'] != after_files['roots']:
                         raise RuntimeError('service operation changed cache roots; not matched eviction/restart evidence')
                     removed = sorted(set(before_files['files']) - set(after_files['files']))
@@ -1146,15 +1182,16 @@ class Bench:
                         cache_proof &= after_files['apparent_bytes'] <= cap
                     metrics_after = self.metrics(values, directory, 'service-metrics-after')
                     results = [{
-                        'passed': rec['exit_status'] == 0 and cache_proof
+                        'passed': rec['exit_status'] == 0 and cache_proof and policy_after['passed']
                                   and metrics_before.get('exit_status') == 0 and metrics_after.get('exit_status') == 0,
                         'service_operation': rec, 'supported_api': service.get(operation + '_api'),
                         'cache_inventory_before': before, 'cache_inventory_after': after,
                         'removed_cache_entries': removed, 'prior_cache_entries_retained': retained,
                         'cache_apparent_bytes_before': before_files['apparent_bytes'],
                         'cache_apparent_bytes_after': after_files['apparent_bytes'],
+                        'cache_policy_before': policy_before, 'cache_policy_after': policy_after,
                         'metrics_before': metrics_before, 'metrics_after': metrics_after,
-                        'note': 'inventory proves API removal/persistence; physical union measured separately'}]
+                        'note': 'inventory proves policy bounds and API removal/persistence; physical union measured separately'}]
                 else:
                     preparation_start = time.monotonic()
                     prepared = {name: self.edit_source(name, stage) for name in stage['trees']}
