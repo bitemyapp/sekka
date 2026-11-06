@@ -40,8 +40,8 @@ pub struct Live {
 
 pub struct Built {
     pub body: Retained<NSStackView>,
-    /// Buttons on the left of the bar, then on the right (the last is the
-    /// default button).
+    /// Buttons on the left of the bar, then on the right (the one made with
+    /// `primary` is the default button).
     pub left: Vec<Retained<NSButton>>,
     pub right: Vec<Retained<NSButton>>,
     pub live: Live,

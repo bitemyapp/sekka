@@ -14,7 +14,7 @@ use block2::RcBlock;
 use objc2::{MainThreadMarker, MainThreadOnly};
 use objc2::rc::Retained;
 use objc2_app_kit::{
-    NSAlert, NSBackingStoreType, NSBox, NSBoxType, NSButton, NSPanel,
+    NSAlert, NSBackingStoreType, NSBox, NSBoxType, NSButton, NSButtonCell, NSPanel,
     NSScrollView, NSSecureTextField, NSStackView, NSTextField, NSView, NSVisualEffectBlendingMode,
     NSVisualEffectMaterial, NSVisualEffectView, NSWindow, NSWindowStyleMask,
     NSWindowTitleVisibility,
@@ -354,9 +354,12 @@ impl Ui {
             for b in &right {
                 self.bar.addArrangedSubview(b);
             }
-            if let Some(last) = right.last() {
-                self.window.setDefaultButtonCell(last.cell().and_then(|c| c.downcast().ok()).as_deref());
-            }
+            // Return presses the page's primary button, the one `ui::primary`
+            // gave Return, and nothing else: not Cancel or Pause, and not a
+            // button of the page just removed.
+            let primary = left.iter().chain(&right).find(|b| b.keyEquivalent().to_string() == "\r");
+            let cell = primary.and_then(|b| b.cell()).and_then(|c| c.downcast::<NSButtonCell>().ok());
+            self.window.setDefaultButtonCell(cell.as_deref());
             self.page = Some((body, live, targets));
             self.log.clear();
         }
