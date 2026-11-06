@@ -10,13 +10,13 @@ cargo_source(
 
 alias(
     name = "aizome-yukimi-build-dev",
-    actual = "//build/buck2/graph/dev:4760067f7305b53c1f16",
+    actual = "//build/buck2/graph/dev:3e39629e734d1c98079b",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_yukimi-build-dev",
-    actual = "//build/buck2/graph/dev:71d32c5eba13d77d0193",
+    actual = "//build/buck2/graph/dev:8ec988001a939f3d7ef0",
     visibility = ["PUBLIC"],
 )
 
@@ -46,37 +46,37 @@ alias(
 
 alias(
     name = "look-test-test-test",
-    actual = "//build/buck2/graph/test:3ca14fac9e798856e94e",
+    actual = "//build/buck2/graph/test:13ef56b604f8e4e268e0",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-yukimi-test-test-bin",
-    actual = "//build/buck2/graph/test:43f27e7d16cafc9c7913",
+    actual = "//build/buck2/graph/test:2c1e26f66772b57c0449",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_yukimi-test-test-lib",
-    actual = "//build/buck2/graph/test:6fa59d90ac565ea03c14",
+    actual = "//build/buck2/graph/test:817e1e0a9483e946ab7b",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "budget-test-test-test",
-    actual = "//build/buck2/graph/test:7714eb304be9f3e20708",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "golden-test-test-test",
-    actual = "//build/buck2/graph/test:79610fd4d7c60d6a570d",
+    actual = "//build/buck2/graph/test:938356708804d6fd6224",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "headless-test-test-test",
-    actual = "//build/buck2/graph/test:863edfa36aec6b40c1c7",
+    actual = "//build/buck2/graph/test:ae90204eebe70364dec3",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "golden-test-test-test",
+    actual = "//build/buck2/graph/test:c1e9c5371378303c15a6",
     visibility = ["PUBLIC"],
 )
 

@@ -9,14 +9,14 @@ cargo_source(
 )
 
 alias(
-    name = "aizome-tenki-build-dev",
-    actual = "//build/buck2/graph/dev:27b97e7acf747a1b6d0c",
+    name = "aizome_tenki-build-dev",
+    actual = "//build/buck2/graph/dev:28f11d4e2bbb8679d065",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_tenki-build-dev",
-    actual = "//build/buck2/graph/dev:5a5c38b07328ab122c61",
+    name = "aizome-tenki-build-dev",
+    actual = "//build/buck2/graph/dev:cd53db1113d7fa1563d1",
     visibility = ["PUBLIC"],
 )
 
@@ -45,32 +45,32 @@ alias(
 )
 
 alias(
-    name = "tenki-test-test-test",
-    actual = "//build/buck2/graph/test:0495e278f2b3bae03ab9",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-tenki-test-test-bin",
-    actual = "//build/buck2/graph/test:18354009b23a6212d3c9",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "search_generation-test-test-test",
-    actual = "//build/buck2/graph/test:a8e3b19b55f8c010a325",
+    name = "aizome_tenki-test-test-lib",
+    actual = "//build/buck2/graph/test:04954cfb7eae4c8310dc",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "geoclue-test-test-test",
-    actual = "//build/buck2/graph/test:b67025d46b7004014337",
+    actual = "//build/buck2/graph/test:22d2dc78d3770090994a",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_tenki-test-test-lib",
-    actual = "//build/buck2/graph/test:c7aa7baec45ffd5e11bf",
+    name = "tenki-test-test-test",
+    actual = "//build/buck2/graph/test:53b8e737ff02462c3aa0",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-tenki-test-test-bin",
+    actual = "//build/buck2/graph/test:99eca308410eec75e585",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "search_generation-test-test-test",
+    actual = "//build/buck2/graph/test:a1c6ab0ec1f8fb0f7c73",
     visibility = ["PUBLIC"],
 )
 

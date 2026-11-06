@@ -9,14 +9,14 @@ cargo_source(
 )
 
 alias(
-    name = "aizome-tokei-build-dev",
-    actual = "//build/buck2/graph/dev:25cb94243741aa54fef0",
+    name = "aizome_tokei-build-dev",
+    actual = "//build/buck2/graph/dev:5593d46a757272bac25a",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_tokei-build-dev",
-    actual = "//build/buck2/graph/dev:3f0dac2d6d2257167359",
+    name = "aizome-tokei-build-dev",
+    actual = "//build/buck2/graph/dev:96a8a8eda1a44b3beef5",
     visibility = ["PUBLIC"],
 )
 
@@ -45,20 +45,20 @@ alias(
 )
 
 alias(
-    name = "aizome-tokei-test-test-bin",
-    actual = "//build/buck2/graph/test:46f00a5c3443f7c665f3",
+    name = "tokei-test-test-test",
+    actual = "//build/buck2/graph/test:6b962b94e1e3d3931762",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "tokei-test-test-test",
-    actual = "//build/buck2/graph/test:c212f680bbb7ec7cd59e",
+    name = "aizome-tokei-test-test-bin",
+    actual = "//build/buck2/graph/test:72f0817aa84239f9e4fa",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_tokei-test-test-lib",
-    actual = "//build/buck2/graph/test:efa6143453684e74e337",
+    actual = "//build/buck2/graph/test:ca9d94e50ef8d90d2d36",
     visibility = ["PUBLIC"],
 )
 

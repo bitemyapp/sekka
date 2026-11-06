@@ -10,7 +10,7 @@ cargo_source(
 
 alias(
     name = "aizome_face-build-dev",
-    actual = "//build/buck2/graph/dev:ff9789afe3b43f157bca",
+    actual = "//build/buck2/graph/dev:2278a178560cc445386e",
     visibility = ["PUBLIC"],
 )
 
@@ -28,7 +28,7 @@ alias(
 
 alias(
     name = "aizome_face-test-test-lib",
-    actual = "//build/buck2/graph/test:b40c8c7e49f9002c6150",
+    actual = "//build/buck2/graph/test:e1d4c16f8b069b2085aa",
     visibility = ["PUBLIC"],
 )
 

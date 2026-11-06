@@ -10,7 +10,7 @@ cargo_source(
 
 alias(
     name = "aizome-power-meter-build-dev",
-    actual = "//build/buck2/graph/dev:174721c88c13a9b9b426",
+    actual = "//build/buck2/graph/dev:8c2819cf82f688afe25a",
     visibility = ["PUBLIC"],
 )
 
@@ -28,7 +28,7 @@ alias(
 
 alias(
     name = "aizome-power-meter-test-test-bin",
-    actual = "//build/buck2/graph/test:75134217883d8a4f0071",
+    actual = "//build/buck2/graph/test:2d61502b58ac765fa244",
     visibility = ["PUBLIC"],
 )
 

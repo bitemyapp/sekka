@@ -9,14 +9,14 @@ cargo_source(
 )
 
 alias(
-    name = "aizome_greeter-build-dev",
-    actual = "//build/buck2/graph/dev:14a4db9305f91b61f18c",
+    name = "aizome-greeter-build-dev",
+    actual = "//build/buck2/graph/dev:4c252e38f3c9f6b3a14c",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome-greeter-build-dev",
-    actual = "//build/buck2/graph/dev:e180f1e057737e8b5206",
+    name = "aizome_greeter-build-dev",
+    actual = "//build/buck2/graph/dev:ae077a2f7beef6fe8ecc",
     visibility = ["PUBLIC"],
 )
 
@@ -46,25 +46,25 @@ alias(
 
 alias(
     name = "budget-test-test-test",
-    actual = "//build/buck2/graph/test:3025e232b6221b51d9e5",
+    actual = "//build/buck2/graph/test:164b84d733f1db2f08e9",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-greeter-test-test-bin",
-    actual = "//build/buck2/graph/test:366dece455d22b6fe1a2",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "screens-test-test-test",
-    actual = "//build/buck2/graph/test:399ca8d68d1c85051089",
+    actual = "//build/buck2/graph/test:3c68a3e4f4f49fd44556",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_greeter-test-test-lib",
-    actual = "//build/buck2/graph/test:ccf2596b17ecf8a72557",
+    actual = "//build/buck2/graph/test:55545952926a24aeebd3",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "screens-test-test-test",
+    actual = "//build/buck2/graph/test:6f2abb8887fe52db550a",
     visibility = ["PUBLIC"],
 )
 

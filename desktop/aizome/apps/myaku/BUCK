@@ -9,14 +9,14 @@ cargo_source(
 )
 
 alias(
-    name = "myaku-build-dev",
-    actual = "//build/buck2/graph/dev:358ad4d42e660cb58660",
+    name = "aizome-myaku-build-dev",
+    actual = "//build/buck2/graph/dev:373517f7b4eb0f6f77a9",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome-myaku-build-dev",
-    actual = "//build/buck2/graph/dev:f440ff8ed0fcaf5ff7e5",
+    name = "myaku-build-dev",
+    actual = "//build/buck2/graph/dev:e3f6ff7204812f5402f4",
     visibility = ["PUBLIC"],
 )
 
@@ -45,44 +45,44 @@ alias(
 )
 
 alias(
-    name = "ui-test-test-test",
-    actual = "//build/buck2/graph/test:5129d13b80f28349f628",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "myaku-test-test-lib",
-    actual = "//build/buck2/graph/test:7744efa671ef90f9448d",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "gpu-test-test-test",
-    actual = "//build/buck2/graph/test:99bb22f4da2667208e2d",
-    visibility = ["PUBLIC"],
-)
-
-alias(
     name = "perf-test-test-test",
-    actual = "//build/buck2/graph/test:a5ebf5ca79b7b905b464",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-myaku-test-test-bin",
-    actual = "//build/buck2/graph/test:aa15ef9970caa47b24db",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "look-test-test-test",
-    actual = "//build/buck2/graph/test:e520adbc10f4d29a333b",
+    actual = "//build/buck2/graph/test:11c313dcef355257b4be",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "energy-test-test-test",
-    actual = "//build/buck2/graph/test:ffce1622a8cc42d715a2",
+    actual = "//build/buck2/graph/test:4311efd9636e61b16488",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "gpu-test-test-test",
+    actual = "//build/buck2/graph/test:8568e7d3abee9f939dc3",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "myaku-test-test-lib",
+    actual = "//build/buck2/graph/test:97973e15cd8fa1ddf2d2",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "look-test-test-test",
+    actual = "//build/buck2/graph/test:b81f6a28e7b10c92b06a",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "ui-test-test-test",
+    actual = "//build/buck2/graph/test:d17af4201dee35cdb147",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-myaku-test-test-bin",
+    actual = "//build/buck2/graph/test:fc7956e1b8f2695d0f64",
     visibility = ["PUBLIC"],
 )
 

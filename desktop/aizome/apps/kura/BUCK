@@ -10,13 +10,13 @@ cargo_source(
 
 alias(
     name = "aizome-kura-build-dev",
-    actual = "//build/buck2/graph/dev:b0fb1031f4cf853ea8d0",
+    actual = "//build/buck2/graph/dev:6cc7d43305800809a99c",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "kura-build-dev",
-    actual = "//build/buck2/graph/dev:d024545f1ec976bfffbb",
+    actual = "//build/buck2/graph/dev:ce6879a0934c6b446320",
     visibility = ["PUBLIC"],
 )
 
@@ -45,26 +45,26 @@ alias(
 )
 
 alias(
-    name = "index-test-test-test",
-    actual = "//build/buck2/graph/test:3c323cf258a5c81011a2",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "kura-test-test-lib",
-    actual = "//build/buck2/graph/test:49abc7e799f2c153a3f2",
-    visibility = ["PUBLIC"],
-)
-
-alias(
     name = "ui-test-test-test",
-    actual = "//build/buck2/graph/test:a2438caeebd9893e423d",
+    actual = "//build/buck2/graph/test:38a7b68d9802df5836b8",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "index-test-test-test",
+    actual = "//build/buck2/graph/test:71e002c49733d15560f8",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-kura-test-test-bin",
-    actual = "//build/buck2/graph/test:cb405fec97262e607d6c",
+    actual = "//build/buck2/graph/test:be04af734a6481248716",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "kura-test-test-lib",
+    actual = "//build/buck2/graph/test:fc1a6b2b991e9469e7d1",
     visibility = ["PUBLIC"],
 )
 

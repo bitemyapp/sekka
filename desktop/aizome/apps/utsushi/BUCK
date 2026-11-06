@@ -9,14 +9,14 @@ cargo_source(
 )
 
 alias(
-    name = "aizome_utsushi-build-dev",
-    actual = "//build/buck2/graph/dev:b8f35e2b4f7bf190d6ee",
+    name = "aizome-utsushi-build-dev",
+    actual = "//build/buck2/graph/dev:1d79000f059e20d25065",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome-utsushi-build-dev",
-    actual = "//build/buck2/graph/dev:d2e3924d94b23e4047ce",
+    name = "aizome_utsushi-build-dev",
+    actual = "//build/buck2/graph/dev:7a662ce240e192460592",
     visibility = ["PUBLIC"],
 )
 
@@ -46,19 +46,19 @@ alias(
 
 alias(
     name = "utsushi-test-test-test",
-    actual = "//build/buck2/graph/test:67d4ed31ca0c87d0bf10",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-utsushi-test-test-bin",
-    actual = "//build/buck2/graph/test:948d60f6e23a30809b5a",
+    actual = "//build/buck2/graph/test:30a2526a46c8fdfab548",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_utsushi-test-test-lib",
-    actual = "//build/buck2/graph/test:b4063dddb7cf19a5f173",
+    actual = "//build/buck2/graph/test:6bb9620fa59430c77e54",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-utsushi-test-test-bin",
+    actual = "//build/buck2/graph/test:92efd0d45586aa82ddd9",
     visibility = ["PUBLIC"],
 )
 

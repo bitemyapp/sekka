@@ -9,14 +9,14 @@ cargo_source(
 )
 
 alias(
-    name = "aizome-network-agent-build-dev",
-    actual = "//build/buck2/graph/dev:030be650d6039b779a3d",
+    name = "aizome_network_agent-build-dev",
+    actual = "//build/buck2/graph/dev:07b405023ca3eee67520",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_network_agent-build-dev",
-    actual = "//build/buck2/graph/dev:3f1f439b1a0fda366323",
+    name = "aizome-network-agent-build-dev",
+    actual = "//build/buck2/graph/dev:80d7c952a81526086973",
     visibility = ["PUBLIC"],
 )
 
@@ -45,20 +45,20 @@ alias(
 )
 
 alias(
-    name = "aizome-network-agent-test-test-bin",
-    actual = "//build/buck2/graph/test:380a0160a826dd67bbab",
+    name = "aizome_network_agent-test-test-lib",
+    actual = "//build/buck2/graph/test:43150b796e5a63ea9541",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "credentials-test-test-test",
-    actual = "//build/buck2/graph/test:4b442020ab9c781955c5",
+    actual = "//build/buck2/graph/test:8d8759171df92f09e8c3",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_network_agent-test-test-lib",
-    actual = "//build/buck2/graph/test:fa4822b49122abc4f527",
+    name = "aizome-network-agent-test-test-bin",
+    actual = "//build/buck2/graph/test:db359dc607f2ade815e2",
     visibility = ["PUBLIC"],
 )
 

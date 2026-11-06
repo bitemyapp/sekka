@@ -10,7 +10,7 @@ cargo_source(
 
 alias(
     name = "aizome_media-build-dev",
-    actual = "//build/buck2/graph/dev:1c660c18a3211a42838a",
+    actual = "//build/buck2/graph/dev:326bca7e94ca8bc16fe9",
     visibility = ["PUBLIC"],
 )
 
@@ -27,14 +27,14 @@ alias(
 )
 
 alias(
-    name = "engine-test-test-test",
-    actual = "//build/buck2/graph/test:5acaaeb2204679fd4d54",
+    name = "aizome_media-test-test-lib",
+    actual = "//build/buck2/graph/test:0d50273f3635a7b9f8be",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_media-test-test-lib",
-    actual = "//build/buck2/graph/test:8eb84da60494905d6376",
+    name = "engine-test-test-test",
+    actual = "//build/buck2/graph/test:27e9f2dcd6c7bcf4778a",
     visibility = ["PUBLIC"],
 )
 

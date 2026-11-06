@@ -9,14 +9,14 @@ cargo_source(
 )
 
 alias(
-    name = "aizome-fusen-build-dev",
-    actual = "//build/buck2/graph/dev:a8f826a36036246c6ae2",
+    name = "aizome_fusen-build-dev",
+    actual = "//build/buck2/graph/dev:1d930ce7c99d9f59f833",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_fusen-build-dev",
-    actual = "//build/buck2/graph/dev:c0b098ecf75b79caa0ba",
+    name = "aizome-fusen-build-dev",
+    actual = "//build/buck2/graph/dev:9c55e3d033699b46df7e",
     visibility = ["PUBLIC"],
 )
 
@@ -45,26 +45,32 @@ alias(
 )
 
 alias(
-    name = "fusen-test-test-test",
-    actual = "//build/buck2/graph/test:8ada24743204143982a2",
+    name = "save_errors-test-test-test",
+    actual = "//build/buck2/graph/test:495fff5e6286d5a06edd",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "second_launch-test-test-test",
+    actual = "//build/buck2/graph/test:4cd90329707cc940665b",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-fusen-test-test-bin",
-    actual = "//build/buck2/graph/test:90f42421925af186c366",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "save_errors-test-test-test",
-    actual = "//build/buck2/graph/test:9a960fe9b38793893b97",
+    actual = "//build/buck2/graph/test:81877f34c1940dc2fd0a",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_fusen-test-test-lib",
-    actual = "//build/buck2/graph/test:f9ac31de3c71775c9cad",
+    actual = "//build/buck2/graph/test:c17d5e6564b42e675f29",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "fusen-test-test-test",
+    actual = "//build/buck2/graph/test:e88726c3d12ecbfacc76",
     visibility = ["PUBLIC"],
 )
 

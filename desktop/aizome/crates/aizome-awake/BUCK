@@ -10,13 +10,13 @@ cargo_source(
 
 alias(
     name = "aizome_awake-build-dev",
-    actual = "//build/buck2/graph/dev:8008b14f13fa73d30148",
+    actual = "//build/buck2/graph/dev:53aba147ae880d8172f1",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-awake-build-dev",
-    actual = "//build/buck2/graph/dev:fbe4ff466df7ccad2cd8",
+    actual = "//build/buck2/graph/dev:b9f3710636e9965c2b02",
     visibility = ["PUBLIC"],
 )
 
@@ -46,13 +46,13 @@ alias(
 
 alias(
     name = "aizome-awake-test-test-bin",
-    actual = "//build/buck2/graph/test:e1588306ea90ac92119d",
+    actual = "//build/buck2/graph/test:151995dfe2b9fb19db7e",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_awake-test-test-lib",
-    actual = "//build/buck2/graph/test:ebb66850fb111d766d35",
+    actual = "//build/buck2/graph/test:5d42e666f78cddfaf8b4",
     visibility = ["PUBLIC"],
 )
 

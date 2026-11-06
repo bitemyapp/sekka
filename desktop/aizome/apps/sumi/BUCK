@@ -9,14 +9,14 @@ cargo_source(
 )
 
 alias(
-    name = "aizome-sumi-build-dev",
-    actual = "//build/buck2/graph/dev:6fefc0318c1a3f41d13c",
+    name = "aizome_sumi-build-dev",
+    actual = "//build/buck2/graph/dev:24305a6432f386f736d4",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_sumi-build-dev",
-    actual = "//build/buck2/graph/dev:acb5d3313a2d5d1068e9",
+    name = "aizome-sumi-build-dev",
+    actual = "//build/buck2/graph/dev:285a879b13f59fad692b",
     visibility = ["PUBLIC"],
 )
 
@@ -46,19 +46,19 @@ alias(
 
 alias(
     name = "aizome-sumi-test-test-bin",
-    actual = "//build/buck2/graph/test:040ae22c162302c7861b",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "sumi-test-test-test",
-    actual = "//build/buck2/graph/test:c70b6ec9da7be389b82b",
+    actual = "//build/buck2/graph/test:47773fc1e218cf461a38",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_sumi-test-test-lib",
-    actual = "//build/buck2/graph/test:f2ab7f3daf4d8e14c9e5",
+    actual = "//build/buck2/graph/test:662b55900f31e15957a9",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "sumi-test-test-test",
+    actual = "//build/buck2/graph/test:dece0138678d6d4310df",
     visibility = ["PUBLIC"],
 )
 
