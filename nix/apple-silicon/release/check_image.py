@@ -170,6 +170,13 @@ def main() -> int:
                 if got != records[path]:
                     problems.append(f"{path}: the image has {got}, registered {records[path]}")
                 total += got[1]
+            # debugfs keeps the store's read-only directory modes.
+            for root, dirs, _ in os.walk(out):
+                for d in dirs:
+                    p = os.path.join(root, d)
+                    if not os.path.islink(p):
+                        os.chmod(p, 0o755)
+            os.chmod(out, 0o755)
             shutil.rmtree(out)
             if n % 500 == 0:
                 print(f"checked {n}/{len(records)} paths", file=sys.stderr, flush=True)
