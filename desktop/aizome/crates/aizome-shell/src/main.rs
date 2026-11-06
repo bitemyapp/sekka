@@ -32,14 +32,27 @@ fn main() {
 /// of it free, which swapping wrote out and reuse read back. With them
 /// fixed, blocks of 4 MB and up are mapped on their own and unmapped when
 /// freed (zeroed memory then comes free, too), and an arena returns what's
-/// free above 16 MB at its top. What frames allocate stays below both: a
-/// band of the palette drawn ahead is 1 MB, the whole picture 5.6 MB.
+/// free above 16 MB at its top. A live window draws into its shared-memory
+/// pool, so the biggest block a frame takes from the heap, a band of the
+/// palette drawn ahead, is 1 MB, below both. A threshold set in the
+/// environment (GLIBC_TUNABLES, or its MALLOC_*_ alias) is left as set.
 /// See "Memory" under "Shell" in `docs/performance.md`.
 fn fix_malloc_thresholds() {
-    // Safety: mallopt only sets the allocator's parameters.
     #[cfg(all(target_os = "linux", target_env = "gnu"))]
-    unsafe {
-        libc::mallopt(libc::M_MMAP_THRESHOLD, 4 << 20);
-        libc::mallopt(libc::M_TRIM_THRESHOLD, 16 << 20);
+    {
+        let tunables = std::env::var("GLIBC_TUNABLES").unwrap_or_default();
+        let set = |tunable: &str, alias: &str| {
+            std::env::var_os(alias).is_some()
+                || tunables.split(':').any(|t| t.split_once('=').is_some_and(|(name, _)| name == tunable))
+        };
+        // Safety: mallopt only sets the allocator's parameters.
+        unsafe {
+            if !set("glibc.malloc.mmap_threshold", "MALLOC_MMAP_THRESHOLD_") {
+                libc::mallopt(libc::M_MMAP_THRESHOLD, 4 << 20);
+            }
+            if !set("glibc.malloc.trim_threshold", "MALLOC_TRIM_THRESHOLD_") {
+                libc::mallopt(libc::M_TRIM_THRESHOLD, 16 << 20);
+            }
+        }
     }
 }
