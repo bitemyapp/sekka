@@ -168,6 +168,55 @@ fn a_stopped_download_can_be_resumed() {
 }
 
 #[test]
+fn a_charger_unplugged_during_the_download_is_named_before_the_review() {
+    let mut j = Journey::start(Scenario::Unplugged);
+    assert_eq!(j.model.screen, Screen::Plan);
+    j.send(Msg::StartDownload);
+    assert_eq!(j.model.screen, Screen::NotReady, "{:?}", j.model.plan_error);
+    let blocking: Vec<IssueCode> = j.model.inspection().unwrap().blocking().map(|i| i.code).collect();
+    assert_eq!(blocking, [IssueCode::OnBattery]);
+    assert!(j.model.plan.is_none());
+}
+
+#[test]
+fn a_failed_look_after_the_download_offers_a_way_on() {
+    let mut j = Journey::start(Scenario::Normal);
+    let release = j.model.release.clone().unwrap();
+    j.model.update(Msg::StartDownload);
+    let files = j
+        .env
+        .download(&release, &std::sync::atomic::AtomicBool::new(false), &mut |_| {})
+        .unwrap();
+    let effects = j.model.update(Msg::Downloaded(Ok(files)));
+    assert!(matches!(effects.as_slice(), [Effect::Inspect]));
+    assert_eq!(j.model.screen, Screen::Downloading);
+    j.send(Msg::Inspected(Err("The engine stopped.".into())));
+    assert_eq!(j.model.screen, Screen::Plan);
+    assert!(j.model.plan_error.as_ref().unwrap().contains("The engine stopped."));
+    assert!(j.model.size_range().is_some(), "the plan keeps the last good look at the disk");
+    // Continue looks again, and the review follows this time.
+    j.send(Msg::Review);
+    assert_eq!(j.model.screen, Screen::Review);
+    assert!(j.model.plan_error.is_none());
+}
+
+#[test]
+fn the_largest_size_after_the_download_still_leaves_room_for_apples_files() {
+    let mut j = Journey::start(Scenario::Normal);
+    j.reach_review().send(Msg::BackToPlan).send(Msg::SetSize(u64::MAX));
+    assert_eq!(j.model.to_download, Some(0));
+    let release = j.model.release.clone().unwrap();
+    assert!(release.reserved() > 0);
+    let Some(Candidate::ShrinkContainer { available, adjacent_free, .. }) = j.model.candidate().cloned() else {
+        panic!("the sample shrinks macOS")
+    };
+    assert!(j.model.size + release.reserved() <= available + adjacent_free);
+    j.send(Msg::Review);
+    assert_eq!(j.model.screen, Screen::Review, "{:?}", j.model.plan_error);
+    assert_eq!(j.model.plan.as_ref().unwrap().allocation.sekka, j.model.size);
+}
+
+#[test]
 fn a_failed_resize_says_nothing_changed_and_offers_a_new_plan() {
     let mut j = Journey::start(Scenario::ResizeFails);
     j.reach_review().confirm().send(Msg::Install).password("right");

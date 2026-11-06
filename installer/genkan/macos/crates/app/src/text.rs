@@ -2,8 +2,8 @@
 //! Every sentence the app shows, in one place, in Sekka's voice: plain,
 //! sentence case, candid about what doesn't work yet, no exclamation marks.
 use sekka_mac_contract::{
-    Acknowledgement, DiskChanged, FileVault, HumanStep, InstallState, Issue, IssueCode, Refusal,
-    Stage,
+    Acknowledgement, DiskChanged, FileVault, HumanStep, InstallState, Issue, IssueCode, PlanError,
+    Refusal, Stage,
 };
 
 use crate::model::CheckState;
@@ -203,6 +203,25 @@ pub fn to_download(bytes: u64, staged: bool) -> String {
     } else {
         "Sekka is already downloaded. Sekka Installer checks every byte again before going on.".into()
     }
+}
+
+/// Why the plan screen can't go on to the review.
+pub fn plan_error(e: &PlanError) -> String {
+    match e {
+        PlanError::PlaceGone => "The space Sekka was going to use isn't there any more: the disk changed. Check this Mac again.".into(),
+        PlanError::TooSmall { minimum } => format!("Sekka needs at least {} here.", bytes(*minimum)),
+        PlanError::TooLarge { maximum } => format!("This disk can give Sekka at most {} now.", bytes(*maximum)),
+        PlanError::NotAdmitted(_) => "This release doesn't support this Mac.".into(),
+        PlanError::Blocked(_) => "Something on this Mac stops installation. Check this Mac again to see what.".into(),
+        PlanError::UnknownRelease(_) | PlanError::Invalid(_) => format!(
+            "Sekka Installer couldn't make a plan ({e}). Check this Mac again; if it happens again, copy the diagnostics and ask for help."
+        ),
+    }
+}
+
+/// The look at this Mac before the review failed.
+pub fn recheck_failed(e: &str) -> String {
+    format!("Sekka Installer couldn't look at this Mac again before the review ({e}). Nothing on your Mac has changed. Check again.")
 }
 
 pub const BACKUP: &str = "I have a current backup of this Mac.";

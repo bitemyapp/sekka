@@ -172,6 +172,8 @@ pub struct Model {
     pub staged: Vec<Staged>,
     pub plan: Option<Plan>,
     pub plan_error: Option<String>,
+    /// This Mac is being looked at again, and the review follows.
+    pub rechecking: bool,
     pub backup: bool,
     pub acknowledged: BTreeSet<Acknowledgement>,
     pub authorization: Option<Authorization>,
@@ -209,6 +211,7 @@ impl Model {
             staged: Vec::new(),
             plan: None,
             plan_error: None,
+            rechecking: false,
             backup: false,
             acknowledged: BTreeSet::new(),
             authorization: None,
@@ -423,13 +426,18 @@ impl Model {
                 if let Err(e) = &result {
                     self.log(format!("Inspection failed: {e}"));
                 }
+                let rechecking = std::mem::take(&mut self.rechecking);
+                if rechecking && let Err(e) = &result {
+                    // The plan screen keeps the last good look at the disk,
+                    // and says this one failed.
+                    self.plan = None;
+                    self.plan_error = Some(text::recheck_failed(e));
+                    self.screen = Screen::Plan;
+                    return Vec::new();
+                }
                 self.inspection = Some(result);
                 let mut effects = self.choose_release();
-                if self.screen == Screen::Downloading && !self.downloading && self.download_error.is_none() {
-                    effects.extend(self.prepare_review());
-                } else {
-                    effects.extend(self.decide());
-                }
+                effects.extend(if rechecking { self.prepare_review() } else { self.decide() });
                 effects
             }
             Msg::Catalog(result) => {
@@ -464,6 +472,7 @@ impl Model {
                 self.to_download = Some(0);
                 // The downloads took space macOS could have given; plan
                 // from a fresh look at the disk.
+                self.rechecking = true;
                 vec![Effect::Inspect]
             }
             Msg::Downloaded(Err(e)) => {
@@ -514,7 +523,14 @@ impl Model {
             // Nothing was downloaded in this session: the download checks
             // what an earlier one left, keeps it, and then reviews.
             Msg::Review if self.staged.is_empty() => self.update(Msg::StartDownload),
-            Msg::Review => self.prepare_review(),
+            // The review is of the disk as it is now: the charger may have
+            // been unplugged, or the disk changed, since the last look.
+            Msg::Review => {
+                self.screen = Screen::Downloading;
+                self.plan_error = None;
+                self.rechecking = true;
+                vec![Effect::Inspect]
+            }
             Msg::BackToPlan => {
                 self.screen = Screen::Plan;
                 self.plan = None;
@@ -673,6 +689,7 @@ impl Model {
         self.to_download = None;
         self.plan = None;
         self.plan_error = None;
+        self.rechecking = false;
         self.installation = None;
         self.records.clear();
         self.state = None;
@@ -1083,11 +1100,16 @@ impl Model {
             }
             Err(e) => {
                 self.plan = None;
-                self.plan_error = Some(match e {
-                    PlanError::PlaceGone => "The disk changed. Check this Mac again.".into(),
-                    other => other.to_string(),
-                });
-                self.screen = Screen::Plan;
+                // What stops installing has a screen of its own, which says
+                // what it is and what to do.
+                self.screen = match e {
+                    PlanError::Blocked(_) => Screen::NotReady,
+                    PlanError::NotAdmitted(_) => Screen::Unsupported,
+                    _ => {
+                        self.plan_error = Some(text::plan_error(&e));
+                        Screen::Plan
+                    }
+                };
             }
         }
         Vec::new()

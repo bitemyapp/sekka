@@ -30,6 +30,8 @@ pub enum Scenario {
     WrongPassword,
     /// The download stops part way.
     DownloadFails,
+    /// The charger is unplugged during the download.
+    Unplugged,
     /// Apple's resize fails with -69606 and nothing changes.
     ResizeFails,
     /// The root write dies part way.
@@ -54,7 +56,7 @@ pub enum Scenario {
 }
 
 impl Scenario {
-    pub const ALL: [Scenario; 16] = [
+    pub const ALL: [Scenario; 17] = [
         Scenario::Normal,
         Scenario::Unsupported,
         Scenario::NotReady,
@@ -62,6 +64,7 @@ impl Scenario {
         Scenario::LowSpace,
         Scenario::WrongPassword,
         Scenario::DownloadFails,
+        Scenario::Unplugged,
         Scenario::ResizeFails,
         Scenario::InstallFails,
         Scenario::StartupDiskFails,
@@ -82,6 +85,7 @@ impl Scenario {
             Scenario::LowSpace => "low-space",
             Scenario::WrongPassword => "wrong-password",
             Scenario::DownloadFails => "download-fails",
+            Scenario::Unplugged => "unplugged",
             Scenario::ResizeFails => "resize-fails",
             Scenario::InstallFails => "install-fails",
             Scenario::StartupDiskFails => "startup-disk-fails",
@@ -261,8 +265,10 @@ fn sekka(state: InstallationState, installation_id: Option<Uuid>) -> (Installati
     )
 }
 
-fn sim_inspection(scenario: Scenario) -> Inspection {
+/// This Mac as the scenario has it, before or after the download.
+fn sim_inspection(scenario: Scenario, downloaded: bool) -> Inspection {
     let mut i = samples::inspection();
+    let on_battery = scenario == Scenario::NotReady || (scenario == Scenario::Unplugged && downloaded);
     match scenario {
         Scenario::Unsupported => {
             i.machine.product_type = "Mac15,7".parse().unwrap();
@@ -270,7 +276,7 @@ fn sim_inspection(scenario: Scenario) -> Inspection {
             i.machine.product_name = "MacBook Pro (16-inch, Nov 2023)".parse().unwrap();
             i.machine.soc_name = "Apple M3 Pro".parse().unwrap();
         }
-        Scenario::NotReady => {
+        _ if on_battery => {
             i.power.on_ac = false;
             i.power.battery_percent = Some(41);
             i.issues.push(Issue {
@@ -331,7 +337,7 @@ impl Environment for Simulation {
     }
     fn inspect(&self) -> Result<Inspection, String> {
         self.wait(900);
-        Ok(sim_inspection(self.scenario))
+        Ok(sim_inspection(self.scenario, self.state.lock().unwrap().downloaded))
     }
     fn catalog(&self) -> Result<Verified, String> {
         self.wait(600);

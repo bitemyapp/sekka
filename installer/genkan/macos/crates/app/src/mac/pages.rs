@@ -481,6 +481,9 @@ fn plan(m: &Model, p: &mut Page) {
         ));
     }
     p.quit();
+    if m.plan_error.is_some() {
+        p.right("Check Again", || Msg::CheckAgain);
+    }
     if own > 0 {
         p.primary("Download", || Msg::StartDownload);
     } else {
@@ -508,6 +511,7 @@ fn downloading(m: &Model, p: &mut Page) {
         p.right("Pause", || Msg::StopDownload);
     } else {
         p.note("Checking this Mac again…");
+        p.quit();
     }
 }
 
