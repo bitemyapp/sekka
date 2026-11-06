@@ -120,6 +120,8 @@ impl InstallState {
         let mut open: Option<Stage> = None;
         let mut last: Option<Stage> = None;
         let mut failed: Option<Stage> = None;
+        // A stage that changes the disk has completed.
+        let mut changed = false;
         for record in &records[1..] {
             let at = record.sequence;
             match &record.event {
@@ -164,8 +166,11 @@ impl InstallState {
                     }
                     open = None;
                     last = Some(*stage);
+                    if stage.mutates() {
+                        changed = true;
+                    }
                     state = match stage {
-                        Stage::Import => InstallState::AssetsVerified,
+                        Stage::Import | Stage::AppleInputs => InstallState::AssetsVerified,
                         Stage::StartupDisk => InstallState::WaitingForRecovery,
                         // The policy changed; the boot object isn't installed
                         // yet. Recovery reads the actual policy before going
@@ -188,13 +193,17 @@ impl InstallState {
                     } else if stage.in_recovery() {
                         InstallState::EnrollmentUncertain
                     } else {
+                        // Whether the disk differs from before the
+                        // installation: an earlier stage's change counts,
+                        // whatever this stage did.
+                        let disk_changed = match (changed, stage.mutates(), failure.disk_changed) {
+                            (false, false, _) => DiskChanged::No,
+                            (true, _, DiskChanged::No) => DiskChanged::Yes,
+                            (_, _, reported) => reported,
+                        };
                         InstallState::Failed {
                             stage: *stage,
-                            disk_changed: if stage.mutates() {
-                                failure.disk_changed
-                            } else {
-                                DiskChanged::No
-                            },
+                            disk_changed,
                         }
                     };
                 }
@@ -360,6 +369,24 @@ mod tests {
         // Shrinking is never retried within the same installation.
         c.push(Event::Intent { stage: Stage::Shrink });
         assert!(c.state().is_err());
+    }
+
+    #[test]
+    fn a_failure_after_the_disk_changed_never_reads_as_unchanged() {
+        let mut c = Chain::new();
+        for s in &MACOS[..5] {
+            c.stage(*s);
+        }
+        c.fail(Stage::Partitions, DiskChanged::No);
+        let s = c.state().unwrap();
+        assert_eq!(
+            s,
+            InstallState::Failed {
+                stage: Stage::Partitions,
+                disk_changed: DiskChanged::Yes
+            }
+        );
+        assert!(!s.allows_new_installation());
     }
 
     #[test]

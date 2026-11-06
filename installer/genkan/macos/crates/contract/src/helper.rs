@@ -55,6 +55,8 @@ pub enum Request {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Begin {
+    /// The app's version, recorded in the journal.
+    pub app: Version,
     /// The catalog the plan was made from, as received; the helper verifies
     /// it against its own trust roots and accepted serial.
     pub catalog: SignedCatalog,

@@ -164,6 +164,11 @@ impl Transcript {
         self.outcome
     }
 
+    /// The stage the engine should start next.
+    pub fn next_stage(&self) -> Option<Stage> {
+        self.stages.get(self.done).copied()
+    }
+
     /// Accept one line (without its newline).
     pub fn accept(&mut self, line: &[u8]) -> Result<EngineMessage, Error> {
         let message: EngineMessage =
