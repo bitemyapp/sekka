@@ -92,7 +92,7 @@ for f in glob.glob("/sys/firmware/efi/efivars/LoaderDevicePartUUID-*"):
 	part=$(blockdev --getsize64 "/dev/disk/by-partuuid/$ROOT_A")
 	fs=$(df -B1 --output=size / | tail -1 | tr -d ' ')
 	check root-grew "ext4 is $fs bytes in a $part-byte partition; root.img was $ROOT_IMAGE_BYTES" \
-		python3 -c "import sys; fs,part,img=map(int,sys.argv[1:]); sys.exit(not (fs > img and fs > part*0.97))" "$fs" "$part" "$ROOT_IMAGE_BYTES"
+		python3 -c "import sys; fs,part,img=map(int,sys.argv[1:]); sys.exit(not (fs > img + 3 * 2**30 and fs > part * 0.9))" "$fs" "$part" "$ROOT_IMAGE_BYTES"
 	# Apple's firmware, here the harness's stand-in, handed to the system.
 	check firmware "$(findmnt -n -o FSTYPE /lib/firmware/vendor) at /lib/firmware/vendor: $(ls /lib/firmware/vendor | tr '\n' ' ')" \
 		bash -c '[ "$(findmnt -n -o FSTYPE /lib/firmware/vendor)" = tmpfs ] && [ -e /lib/firmware/vendor/sekka-vm-test.txt ]'

@@ -102,7 +102,8 @@ start() {
 		-device virtconsole,chardev=console \
 		-chardev "socket,id=shell,path=shell.sock,server=on,wait=off,logfile=shell-$run.log" \
 		-device virtconsole,chardev=shell \
-		-device virtio-rng-device -display none -serial "file:firmware-$run.log" -monitor none) &
+		-device virtio-rng-device -device virtio-gpu-device \
+		-display none -serial "file:firmware-$run.log" -monitor none) &
 	vm=$!
 	started=$SECONDS
 }
