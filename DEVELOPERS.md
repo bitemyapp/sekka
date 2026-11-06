@@ -306,6 +306,28 @@ Format references: Google's [Depthcharge x86 boot path](https://chromium.googles
 [kernel buffer limits](https://chromium.googlesource.com/chromiumos/platform/depthcharge/+/4c941ba895a7df6e7e8ea7a4e1db820d55338d9b/src/image/Kconfig),
 and [vboot GPT validation](https://chromium.googlesource.com/chromiumos/platform/vboot_reference/+/72043688a9842a31a92e4829fe71ee94c4939fc8/firmware/lib/cgptlib/cgptlib_internal.c).
 
+### Rust in Zed
+
+Open the repository root in Zed. Its checked-in `.zed/settings.json` starts
+rust-analyzer through `nix develop .#editor`, including when Zed starts from
+the desktop launcher. The first start may download the development tools.
+No terminal launch, direnv setup or changes to personal Zed settings are
+needed. After changing the flake or editor settings, use **editor: restart
+language server** to reload the environment.
+
+The editor shell combines the native dependencies of the component shells
+and supplies Cargo, rustc, rustfmt, rust-analyzer and standard-library sources
+from the root flake's locked Nixpkgs. In particular, it does not depend on
+linker wrappers in `~/.rustup` that can refer to a garbage-collected Nix store
+path. Build scripts and procedural macros remain enabled. Cargo checks use
+the existing lockfiles and a separate `target/rust-analyzer` directory in
+each workspace so they do not contend with ordinary builds. Other editors
+can start their language server with the same command:
+
+```sh
+nix develop --no-update-lock-file .#editor -c rust-analyzer
+```
+
 ### Component development
 
 The [migration record](docs/migration.md) explains retained work, exclusions,

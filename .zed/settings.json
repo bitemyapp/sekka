@@ -1,0 +1,25 @@
+{
+  "lsp": {
+    "rust-analyzer": {
+      "binary": {
+        "path": "/usr/bin/env",
+        "arguments": [
+          "nix",
+          "develop",
+          "--no-update-lock-file",
+          ".#editor",
+          "--command",
+          "rust-analyzer"
+        ]
+      },
+      "initialization_options": {
+        "cargo": {
+          "extraArgs": ["--locked"]
+        },
+        "rust": {
+          "analyzerTargetDir": true
+        }
+      }
+    }
+  }
+}
