@@ -640,6 +640,35 @@ Publish a pass/fail table and the raw-data manifest. If either build latency
 or physical sharing fails, fix the workstation implementation first. Do not
 start laptop optimization on the strength of cache-hit counts alone.
 
+**Revision, 2026-11-06: storage before edit latency.** Storage sparing is the
+priority; build times only need to stay reasonable. Gates 1, 2, 4 and 5 are
+unchanged. In gate 3, the no-op and warm-worktree limits still gate, while
+leaf, shared and icon edit times are reported without gating. The full
+85-stage Buck2 matrix of 2026-11-05 (an older engine, remote execution) is
+preserved on `wx-workstation` under
+`/home/callen/sekka-work/shared-build-qualification-coOjat/runs/buck2-final-v2`.
+It missed the edit gates by 2–4× and five correctness observations. Each of
+the last three fresh worktrees added about 327 MB to the physical union
+(limit 514 MB), but the first added 928 MB. Those figures also charged each
+fresh worktree's tracked source to it, which this document keeps separate.
+
+`scripts/shared-build-bench.py` therefore has a second plan. A frozen
+configuration with `"plan": "storage"` runs one observation of each
+storage, reuse and correctness scenario from the full matrix, unchanged and in
+the same order: cold, no-op, one edit of each kind, revert, four fresh
+worktrees, divergent edits, eviction, restart, primed output loss, release
+and its fresh worktree, the nine test groups and Soroban. Churn, job sweeps,
+release-LTO and headless startup stay in the full plan. Storage roots of the
+form `untracked:GLOB` measure only what git ignores or does not track in each
+worktree, so the per-worktree figure is build state. An optional
+`attribution_command` (`btrfs filesystem du -s --raw`) records each root's
+exclusive extents beside the single compsize union, to explain any growth.
+The first storage-plan run on the current engine, the same day, passed every
+storage, reuse and correctness gate. Extra worktrees added −1.05 GB to +168 MB
+against an 897 MB limit, and fresh worktrees executed no compiler actions. It
+missed only the warm limit, at 23% of cold for the first fresh worktree.
+[Results](test-results/buck2/2026-11-06-storage-plan/README.md).
+
 ## Phase 3: laptop reuse and local deduplication
 
 Begin only after the workstation report passes the gates above. Identify
