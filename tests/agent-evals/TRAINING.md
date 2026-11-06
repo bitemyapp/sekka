@@ -62,3 +62,23 @@ The 12B's gain is its repetition loops cured: the bare loop has no defence again
 The training set shares the evaluation's machine and fixtures (alice, `updates.sekka.test`, the backup service), so part of any gain on the held-out set could be familiarity with that machine rather than skill; this round gained nothing there that needs that explanation.
 
 In Tasuke, scores leave out episodes the harness lost, hence the 31s (`tasuke_report.py` sets them apart). The 31B adapter's was one where the test driver's shell lost its framing (`Invalid base64-encoded string`), so the harness saw no tool calls and every invariant broken at once; the model's own answer there says it deleted the killswitch rule alone. The 31B's base and adapter ran at the same time on one GPU, so their speeds aren't comparable.
+
+## The second LoRA round (2026-11-05): Tasuke's own conversations
+
+Round 1 taught the bare loop's format; Tasuke speaks another (its own tools, skills on demand, approval cards, a person who answers). Round 2 trained on conversations in Tasuke's format.
+
+- **Data.** Gemma 4 31B ran the 24 training faults inside Tasuke (`run.py --agent tasuke --set train`, which needs Tasuke from #297), twice each, with the harness's one "Yes, please go ahead." after a question; 32 of 48 episodes succeeded, as in round 1. `tasuke_capture.py` recorded the system prompt and tools Tasuke sends a model, and `tasuke_sft.py` turned the runs into training conversations with them: kept only training-set episodes that succeeded, harmed nothing, finished, had no refused or invalid calls and weren't summarized; 26 conversations from 15 faults, 6 of them with a question and its "yes". 19 fit in 16K tokens. No other model's output is in the data, and no desktop task: the teacher ran the diagnostics track only.
+- **Training.** Round 1's settings exactly: 30 steps over three epochs. Loss went from 0.62 to 0.53 for Gemma 4 12B and stayed near 0.6 for Gemma 4 26B-A4B, whose adapter (37 MB) covers the attention layers only, not the experts.
+- **Evaluation.** Each adapter beside its base inside Tasuke, both servers at once on wx-workstation's RTX PRO 6000 with identical settings, twice over the 16 held-out faults and the 9 desktop tasks (with numbered controls), then 100 GSM8K problems.
+
+| Inside Tasuke, held out | 12B base | 12B adapter | 26B-A4B base | 26B-A4B adapter |
+|---|---:|---:|---:|---:|
+| Faults | 18/31 | 21/32 | 22/31 | 21/30 |
+| …fixed on the first turn | 10 | 17 | 9 | 15 |
+| Desktop tasks with marks | 10/18 | 10/18 | 17/18 | 15/18 |
+| Harmed | nothing | nothing | once, after a "yes" | nothing |
+| GSM8K without thinking | 96 | 97 | 97 | 97 |
+
+Round 2 changed when the models act, not how often they succeed. Fault totals moved by one to three either way, about what two runs of one model differ by (the 26B-A4B base fixed 24 of 31 in its first Tasuke run, 22 here; the 12B base 20, then 18). The 12B pair disagrees on nine faults and the 26B-A4B pair on three, in both directions, and no held-out fault went from never fixed to always fixed. Both adapters fix more before the "yes" (10 to 17, 9 to 15), as the teacher did in 20 of its 26 conversations, but Tasuke's approval cards ask the person anyway, and the 26B-A4B base's first run had fixed 15 on the first turn too. The base 26B-A4B's harm: it proposed deleting alice's older backup to make room, among other courses, and did so after the "yes". Neither adapter gained on the desktop, which no training conversation covered, and neither lost general ability.
+
+Neither adapter is shipped. They are `sekka-12b-tasuke.gguf` and `sekka-26b-tasuke.gguf` in `~/work/lora/out/gguf/` on wx-workstation. A third round would need what this one lacked: desktop conversations, and more than 15 distinct faults to learn from.
