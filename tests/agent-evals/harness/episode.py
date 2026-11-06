@@ -4,10 +4,11 @@ work, then check the machine and write result.json beside the transcript.
 
 The configuration comes as JSON in $SEKKA_EVAL_CONFIG (run.py writes it):
 
-    {"scenario": "dns-nameserver", "agent": "model" | "none" | "oracle",
+    {"scenario": "dns-nameserver", "agent": "model" | "omp" | "tasuke" | "bridge" | "none" | "oracle",
      "model": {"name", "base_url", "params", "coords", "vision", "keep_reasoning", "max_tokens"},
      "observe": "screenshot" | "elements" | "both", "skill": "<text>" | null,
-     "max_steps": 40, "max_seconds": 1200, "out": "<directory>"}
+     "max_steps": 40, "max_seconds": 1200, "out": "<directory>",
+     "bridge": "<the bridge agent's directory>", "skills": "<reference skills for it>"}
 """
 
 import json
@@ -16,6 +17,7 @@ import time
 import traceback
 
 import agent
+import bridge
 import scenarios
 from llm import Client
 from vm import VM, DesktopTools, ShellTools
@@ -245,6 +247,13 @@ def run(machine):
             final = run_omp(vm, cfg, s, result, out)
         elif cfg["agent"] == "tasuke":
             final = run_tasuke(vm, cfg, s, result, out)
+        elif cfg["agent"] == "bridge":
+            if s.track == "diagnostics":
+                system = DIAGNOSTICS_SYSTEM.replace("call `finish`", "run `./vm finish`")
+            else:
+                system = COMPUTER_USE_SYSTEM.replace("call `finish`", "run `./vm finish`") \
+                    .replace("in `finish`", "in `./vm finish`")
+            final = bridge.serve(vm, cfg, s, system, result, out)
         elif cfg["agent"] == "oracle":
             s.oracle(vm)
             final = {"root_cause": "oracle", "changes": "oracle", "fixed": True}

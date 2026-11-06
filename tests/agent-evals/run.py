@@ -8,6 +8,10 @@ tests/agent-evals), several at once against one local model server.
     sekka-agent-evals --models qwen3.8-27b,gpt-oss-20b --track diagnostics --repeats 2
     # Against a server you started yourself:
     sekka-agent-evals --models qwen3.8-27b --base-url http://127.0.0.1:8080/v1 --no-serve
+    # A vendor's own agent through ./vm (harness/bridge.py): Codex started
+    # here, or a Claude Code session started by hand in each ready directory.
+    SEKKA_EVAL_CODEX=… sekka-agent-evals --agent bridge --runner codex --runner-model gpt-6-luna
+    sekka-agent-evals --agent bridge --runner claude-code --runner-model claude-haiku-5-5
 
 Results go to OUT/<run>/<model>/<scenario>-r<n>/ (result.json, transcript.jsonl,
 screenshots, the driver's log) and OUT/<run>/results.jsonl; report.py
@@ -19,9 +23,11 @@ import concurrent.futures as cf
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import tomllib
 from pathlib import Path
@@ -35,6 +41,34 @@ import scenarios  # noqa: E402
 MODELS_TOML = Path(os.environ.get("SEKKA_MODELS_TOML", HERE / "models.toml"))
 SKILL = Path(os.environ.get("SEKKA_EVAL_SKILL", REPO / ".agents/skills/sekka-troubleshooting/SKILL.md"))
 SERVER = os.environ.get("SEKKA_MODEL_SERVER")
+# Bridge agents work in a directory outside the repository (so the checks
+# aren't beside them), with Tasuke's skills as their reference.
+BRIDGES = Path(os.environ.get("SEKKA_EVAL_BRIDGES", "/tmp/sekka-eval-bridges"))
+BRIDGE_SKILLS = os.environ.get("SEKKA_EVAL_BRIDGE_SKILLS", str(REPO / "apps/tasuke/skills"))
+
+
+def run_codex(cfg, out, driver_done):
+    """Codex for one bridge episode, once the driver has the directory
+    ready; stopped when the episode ends first."""
+    bridge = Path(cfg["bridge"])
+    m = cfg["model"]
+    while not (bridge / "ready").exists():
+        if driver_done.wait(1):
+            return
+    with open(out / "codex-events.jsonl", "w") as events, open(out / "codex-stderr.txt", "w") as err:
+        proc = subprocess.Popen([str(HARNESS / "run-codex.sh"), str(bridge), m["name"], m.get("reasoning") or "",
+                                 str(out / "codex-config.toml")],
+                                stdin=subprocess.DEVNULL, stdout=events, stderr=err, start_new_session=True)
+        while proc.poll() is None:
+            if (bridge / ".ended").exists() or driver_done.is_set():
+                os.killpg(proc.pid, signal.SIGTERM)
+                try:
+                    proc.wait(30)
+                except subprocess.TimeoutExpired:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                break
+            time.sleep(1)
+    (bridge / "agent-exited").write_text(str(proc.wait()))
 
 
 def server_cmd():
@@ -62,6 +96,11 @@ def episode(drv, cfg, out, timeout):
     env = {**os.environ, "XDG_RUNTIME_DIR": rt, "TMPDIR": rt, "SEKKA_EVAL_CONFIG": str(out / "config.json")}
     if os.environ.get("SEKKA_EVAL_LIVE_HARNESS"):
         env["SEKKA_EVAL_HARNESS"] = str(HARNESS)
+    driver_done = threading.Event()
+    if cfg["agent"] == "bridge":
+        shutil.rmtree(cfg["bridge"], ignore_errors=True)
+        if cfg["model"]["runner"] == "codex":
+            threading.Thread(target=run_codex, args=(cfg, out, driver_done), daemon=True).start()
     t0 = time.monotonic()
     with open(out / "driver.log", "w") as log:
         try:
@@ -69,6 +108,7 @@ def episode(drv, cfg, out, timeout):
                            start_new_session=True)
         except subprocess.TimeoutExpired:
             pass
+    driver_done.set()
     shutil.rmtree(rt, ignore_errors=True)
     try:
         r = json.loads((out / "result.json").read_text())
@@ -105,6 +145,9 @@ def run_batch(args, drv, run_dir, label, model_cfg, chosen, results):
             if s.track == "computer-use" and model_cfg and not model_cfg.get("vision") and args.observe == "screenshot":
                 continue
             observe = args.observe or ("screenshot" if (model_cfg or {}).get("vision") else "elements")
+            if args.agent == "bridge":
+                # The screenshot and the controls' centers, like Tasuke's marks.
+                observe = "both"
             cfg = {"scenario": s.id, "agent": args.agent, "repeat": r, "observe": observe,
                    "max_steps": args.max_steps or (40 if s.track == "diagnostics" else 35),
                    "max_seconds": args.max_seconds, "ctx": args.ctx}
@@ -114,6 +157,9 @@ def run_batch(args, drv, run_dir, label, model_cfg, chosen, results):
                 cfg["skill"] = SKILL.read_text()
             tag = f"{s.id}-r{r}" + ("-skill" if cfg.get("skill") else "") + (f"-{observe}" if s.track == "computer-use" else "")
             out = run_dir / label / tag
+            if args.agent == "bridge":
+                cfg["bridge"] = str(BRIDGES / run_dir.name / label / tag)
+                cfg["skills"] = BRIDGE_SKILLS
             if args.resume and (out / "result.json").exists():
                 prev = json.loads((out / "result.json").read_text())
                 if not prev.get("harness_error"):
@@ -121,8 +167,10 @@ def run_batch(args, drv, run_dir, label, model_cfg, chosen, results):
             cfg["out"] = str(out)
             jobs.append((cfg, out))
     print(f"{label}: {len(jobs)} episodes, {args.parallel} at a time", flush=True)
+    # A bridge agent may be started by hand: allow for its wait.
+    timeout = args.max_seconds + 900 + (3600 if args.agent == "bridge" else 0)
     with cf.ThreadPoolExecutor(args.parallel) as pool:
-        futures = {pool.submit(episode, drv, cfg, out, args.max_seconds + 900): cfg for cfg, out in jobs}
+        futures = {pool.submit(episode, drv, cfg, out, timeout): cfg for cfg, out in jobs}
         for f in cf.as_completed(futures):
             r = f.result()
             r["label"] = label
@@ -137,9 +185,15 @@ def run_batch(args, drv, run_dir, label, model_cfg, chosen, results):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--agent", choices=["model", "omp", "tasuke", "none", "oracle"], default="model",
+    ap.add_argument("--agent", choices=["model", "omp", "tasuke", "bridge", "none", "oracle"], default="model",
                     help="model: the bare tool loop; omp: oh-my-pi in the VM; tasuke: Sekka's assistant in the VM "
-                         "(SEKKA_EVAL_TASUKE names its store path); both against the same server")
+                         "(SEKKA_EVAL_TASUKE names its store path); both against the same server; bridge: a "
+                         "vendor's agent on the host through ./vm (--runner)")
+    ap.add_argument("--runner", choices=["codex", "claude-code"],
+                    help="bridge: codex is started here (SEKKA_EVAL_CODEX names the binary); claude-code sessions "
+                         "are started by hand in each directory that has `ready`")
+    ap.add_argument("--runner-model", help="bridge: the vendor's model name, e.g. gpt-6-luna, claude-haiku-5-5")
+    ap.add_argument("--reasoning", help="bridge with codex: the reasoning effort (default: the model's own)")
     ap.add_argument("--models", default="", help="comma-separated names from models.toml")
     ap.add_argument("--scenarios", default="all")
     ap.add_argument("--track", choices=["diagnostics", "computer-use"])
@@ -174,6 +228,12 @@ def main():
     results = []
     if args.agent in ("none", "oracle"):
         run_batch(args, drv, run_dir, args.agent, None, chosen, results)
+        return
+    if args.agent == "bridge":
+        if not (args.runner and args.runner_model):
+            ap.error("--agent bridge needs --runner and --runner-model")
+        model_cfg = {"name": args.runner_model, "runner": args.runner, "vision": True, "reasoning": args.reasoning}
+        run_batch(args, drv, run_dir, f"{args.runner_model}+{args.runner}", model_cfg, chosen, results)
         return
     with open(MODELS_TOML, "rb") as f:
         registry = tomllib.load(f)["models"]
