@@ -23,9 +23,19 @@ erasure and verified from its header. The installed configuration contains:
   compressed pages in RAM and writes cold ones to the partition. nixpkgs'
   `boot.zswap` module is deliberately not used: it also sets `zswap.zpool`,
   which Linux 6.18 removed.
-- `vm.swappiness = 100`, the CachyOS value. Swapping first lands in
-  compressed memory, so anonymous memory is reclaimed as readily as file
-  cache.
+- `vm.swappiness = 60`, the kernel default rather than CachyOS's 100. Under
+  sustained pressure, zswap's shrinker writes most swapped pages out to the
+  partition, so anonymous memory is no cheaper to reclaim than file cache.
+  On a workstation with 60 GiB of usable RAM running heavy agent workloads,
+  two days of swap wrote 211 GiB to the partition and read 113 GiB back,
+  while the compressed pool held about 1 GiB. 65% of swapped pages were
+  needed again, against 11% of evicted file cache, and at one point about
+  16 GiB of anonymous memory sat only on disk beside 18 GiB of page cache. At 60, reclaim drops cache before it
+  swaps. Much lower values strip programs' code from memory before anything
+  is swapped, and at 1 or below the kernel reclaims file pages alone. With
+  the desktop's own services protected (see
+  [Keeping the desktop resident](#keeping-the-desktop-resident)), swappiness
+  decides only which applications' pages pay.
 - `vm.page-cluster = 1`. CachyOS uses 0 for zram. Pages that zswap writes back
   live on an SSD, where a small readahead still helps.
 
@@ -133,6 +143,83 @@ Nix builders belong to the daemon rather than the calling agent. Sekka sets
 `nix.daemonCPUSchedPolicy = "idle"`, `nix.daemonIOSchedClass = "idle"` and the
 daemon's CPU/IO weights to 20 as overridable defaults. This also covers
 Determinate Nix. Nix evaluations within agent jobs stay in their work scopes.
+
+### Keeping the desktop resident
+
+CPU priority cannot help a compositor waiting for swapped-out pages. Aizome's
+NixOS module gives each service the desktop waits on its own best-effort
+reclaim reserve (`MemoryLow`), sized to what that service keeps resident:
+
+| Service | MiB | What waits on it |
+|---|---|---|
+| `aizome.service` | 1024 | Drawing and every input event: the compositor (libinput runs in it), shell, Xwayland |
+| `aizome-ibus.service` | 96 | Typing, where Sekka's IBus frontend is the input method |
+| `pipewire`, `pipewire-pulse`, `wireplumber` | 32, 48, 32 | Audio |
+| `aizome-portal`, `xdg-desktop-portal` | 32, 16 | File choosers; apps read the color scheme as they start |
+| Session bus | 16 | The shell's and apps' calls to session services |
+| `systemd-logind` | 16 | The compositor's seat: its input and DRM devices, VT switches, sleep |
+| `systemd-udevd` | 64 | Hotplugged keyboards, mice and displays |
+| System bus | 32 | logind's signals to the compositor |
+| `rtkit-daemon` | 8 | Realtime scheduling for audio threads |
+| `bluetooth` | 16 | Bluetooth LE keyboards and mice, whose every event passes through BlueZ |
+| `systemd-oomd` | 64 | The last-resort killer itself |
+
+The sizes come from a 4K workstation under heavy load: each service's peak and
+its resident plus swapped memory, with headroom. `aizome.service`'s cgroup
+also carries reclaimable kernel caches (directory entries, inodes and unmapped
+page cache, close to 1 GiB there), which its processes don't need resident; its
+budget covers the roughly 800 MiB of heap, mapped code and shared buffers.
+`systemd-oomd`'s unit already asks for 64 MiB, which had no effect while
+`system.slice` granted nothing. Services that aren't installed (BlueZ,
+RealtimeKit, PipeWire's) get no budget.
+
+A service is protected only as far as every ancestor is. The module sets
+`session.slice`, `user@.service`, every user's `user-UID.slice` (through a
+`user-.slice` drop-in) and `user.slice` to the sum of the session budgets, and
+`system.slice` to the sum of the system ones. Protection a service doesn't use
+passes to its siblings in proportion to their use (systemd mounts cgroup2 with
+`memory_recursiveprot`). People logged in at the same time share
+`user.slice`'s reserve; a shared machine can raise
+`systemd.slices.user.sliceConfig.MemoryLow`.
+
+This is best-effort reclaim protection, not preallocation, `mlock`, a hard
+minimum or a limit on applications. Unused protection remains available to
+other programs. A service using more than its budget still loses pages, but
+reclaim scans it in proportion to the unprotected part. The kernel reclaims
+protected memory rather than run out. The budgets are NixOS defaults in Aizome's
+module (the IBus one in Sekka's input-method module), independent of
+`calamares.tuning.enable`. Change them through
+`programs.aizome.memoryReserve.session` and `.system`, in MiB, so the
+ancestors follow; 0 removes a service. A `MemoryLow` set on one of these units
+directly overrides the module's drop-in but leaves the ancestors at the old
+sum.
+
+The reserve changes where reclaim happens: unprotected workloads can lose
+pages and run more slowly before the desktop does. It introduces no new OOM
+threshold, hard workload cap or proactive job termination. Sekka's existing
+oomd fallback remains unchanged (80% sustained pressure for 30 seconds with
+the pinned defaults). Genuine exhaustion can still trigger oomd or the kernel
+OOM killer; keeping the desktop resident does not guarantee that every job
+survives, and concentrating reclaim on workloads can increase their pressure.
+
+`checks.aizome-memory-policy` evaluates the budgets, sums, drop-ins and
+overrides for Aizome alone, with IBus, customized, and without Aizome. The
+`aizome-login` VM test reads every budgeted unit's `MemoryLow` and the cgroup
+files of the ancestors after a real login. A bounded cgroup reclaim experiment
+showed that protected pages remained resident while an unprotected control was
+evicted. These are mechanism checks, not a before/after measurement of the
+full desktop under the original workload. The budgets are an overridable
+starting policy, not a demonstrated latency bound; applications outside
+`session.slice` receive none.
+
+Inspect `oomctl`, `/proc/pressure/{memory,io,cpu}` and the desktop's
+`memory.low`, `memory.swap.current` and `memory.pressure` cgroup files when
+diagnosing a freeze. Large swap use alone does not prove current thrashing;
+combine pressure samples, swap traffic and compositor stall logs. A full
+`nix flake check --no-build` still evaluates every check and can consume tens
+of GiB: use focused component evaluations during concurrent development.
+Neither memory protection nor oomd establishes a frame-latency guarantee or
+fixes unrelated GPU stalls and blocking compositor operations.
 
 ### Launcher and ananicy repairs
 

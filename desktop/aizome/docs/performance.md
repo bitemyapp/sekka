@@ -10,6 +10,30 @@ are from this laptop, debug builds unless said (dependencies at
 `opt-level = 2`, the workspace's own crates unoptimised), so they're upper
 bounds. Exceptions to the budget are written up with their reasons.
 
+## Responsiveness under memory pressure
+
+CPU frame cost is not input latency: a swapped-out compositor can miss seconds
+of input despite high CPU weight. The NixOS module keeps the session's existing
+CPU/I/O weights and gives each service the desktop waits on a best-effort
+`MemoryLow` reserve sized to what it keeps resident
+(`programs.aizome.memoryReserve`): 1 GiB for the compositor, shell and
+Xwayland, smaller ones for audio, the input method, the portals and the
+session bus, and, among system services, logind, udev, the system bus,
+RealtimeKit, BlueZ and systemd-oomd. Their slices and the user manager get the
+sums, since a reserve counts only as far as every ancestor grants it. Reclaim
+takes applications' pages first, while unused RAM stays available to
+workloads. It does not pin memory or guarantee that a session survives
+exhaustion.
+
+This protection does not introduce earlier OOM killing or hard workload caps.
+Unprotected workloads may reclaim more and run more slowly; Sekka's existing
+last-resort oomd policy remains unchanged. The policy, override points and
+validation limits are documented in
+[Sekka's tuning guide](../../../docs/tuning.md#keeping-the-desktop-resident).
+Inspect PSI, swap traffic and the compositor's stall warnings alongside frame
+statistics; neither the frame-budget measurements below nor CPU weights alone
+certify wall-clock responsiveness under memory or GPU contention.
+
 ## At a glance
 
 Every part below was measured again on 18 October 2026 between 00:00 and

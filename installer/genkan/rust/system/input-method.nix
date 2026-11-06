@@ -103,5 +103,10 @@ in
         Slice = "session.slice";
       };
     };
+    # Typing waits on the frontend and its engines, as it does on the
+    # compositor (programs.aizome.memoryReserve).
+    programs.aizome.memoryReserve.session = lib.mkIf wayland {
+      "aizome-ibus.service" = lib.mkDefault 96;
+    };
   };
 }
