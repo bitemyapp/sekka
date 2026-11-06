@@ -97,6 +97,8 @@ struct SimState {
     approved_at: Option<Instant>,
     installation: Option<(Uuid, Instant)>,
     startup_retried: bool,
+    /// The release's files are "staged".
+    downloaded: bool,
 }
 
 const SIM_ID: Uuid = Uuid::from_bytes([0x5e; 16]);
@@ -263,7 +265,7 @@ impl Environment for Simulation {
         })
     }
     fn still_to_download(&self, release: &Release) -> u64 {
-        release.download_bytes()
+        if self.state.lock().unwrap().downloaded { 0 } else { release.download_bytes() }
     }
     fn download(
         &self,
@@ -289,6 +291,7 @@ impl Environment for Simulation {
             });
             self.wait(70);
         }
+        self.state.lock().unwrap().downloaded = true;
         let a = &release.artifacts;
         Ok([
             (ArtifactRole::Payload, &a.payload, "payload.zip"),

@@ -151,8 +151,9 @@ pub struct Model {
     pub place: Option<Place>,
     /// Bytes for Sekka.
     pub size: u64,
-    /// Bytes still to download before installing.
-    pub to_download: u64,
+    /// Bytes still to download before installing; none until measured for
+    /// the release offered.
+    pub to_download: Option<u64>,
     pub download: Option<DownloadProgress>,
     pub download_error: Option<String>,
     pub downloading: bool,
@@ -187,7 +188,7 @@ impl Model {
             release: None,
             place: None,
             size: 0,
-            to_download: 0,
+            to_download: None,
             download: None,
             download_error: None,
             downloading: false,
@@ -252,7 +253,7 @@ impl Model {
         let release = self.release.as_ref()?;
         let candidate = self.candidate()?;
         let min = release.allocation.minimum.div_ceil(sekka_mac_contract::ALIGN) * sekka_mac_contract::ALIGN;
-        let max = capacity(release, candidate, self.to_download);
+        let max = capacity(release, candidate, self.to_download?);
         (max >= min).then_some((min, max))
     }
 
@@ -388,21 +389,21 @@ impl Model {
                     self.log(format!("Inspection failed: {e}"));
                 }
                 self.inspection = Some(result);
+                let mut effects = self.choose_release();
                 if self.screen == Screen::Downloading && !self.downloading && self.download_error.is_none() {
-                    return self.prepare_review();
+                    effects.extend(self.prepare_review());
+                } else {
+                    effects.extend(self.decide());
                 }
-                self.decide()
+                effects
             }
             Msg::Catalog(result) => {
                 if let Err(e) = &result {
                     self.log(format!("Catalog: {e}"));
                 }
                 self.catalog = Some(result);
-                self.choose_release();
-                let mut effects = self.decide();
-                if let Some(r) = &self.release {
-                    effects.push(Effect::MeasureDownload(Box::new(r.clone())));
-                }
+                let mut effects = self.choose_release();
+                effects.extend(self.decide());
                 effects
             }
             Msg::HelperStatus(result) => {
@@ -410,9 +411,9 @@ impl Model {
                 self.decide()
             }
             Msg::ToDownload(bytes) => {
-                self.to_download = bytes;
+                self.to_download = Some(bytes);
                 self.clamp_size();
-                Vec::new()
+                self.decide()
             }
             Msg::DownloadProgress(p) => {
                 if let Some(reason) = &p.retrying {
@@ -425,7 +426,7 @@ impl Model {
                 self.downloading = false;
                 self.download_error = None;
                 self.staged = files;
-                self.to_download = 0;
+                self.to_download = Some(0);
                 // The downloads took space macOS could have given; plan
                 // from a fresh look at the disk.
                 vec![Effect::Inspect]
@@ -442,6 +443,7 @@ impl Model {
                 self.catalog = None;
                 self.helper = None;
                 self.release = None;
+                self.to_download = None;
                 self.plan = None;
                 self.plan_error = None;
                 self.notice = None;
@@ -480,6 +482,9 @@ impl Model {
                     Vec::new()
                 }
             }
+            // Nothing was downloaded in this session: the download checks
+            // what an earlier one left, keeps it, and then reviews.
+            Msg::Review if self.staged.is_empty() => self.update(Msg::StartDownload),
             Msg::Review => self.prepare_review(),
             Msg::BackToPlan => {
                 self.screen = Screen::Plan;
@@ -787,16 +792,27 @@ impl Model {
         self.backup && plan.acknowledgements.iter().all(|a| self.acknowledged.contains(a))
     }
 
-    fn choose_release(&mut self) {
-        self.release = None;
-        let (Some(i), Some(v)) = (self.inspection(), self.verified()) else { return };
+    /// Choose the release this Mac is offered once both it and the catalog
+    /// are known, whichever arrives first, and measure what is left to
+    /// download for it.
+    fn choose_release(&mut self) -> Vec<Effect> {
+        let (Some(i), Some(v)) = (self.inspection(), self.verified()) else { return Vec::new() };
         let facts = i.machine_facts();
-        self.release = v
+        let chosen = v
             .catalog()
             .releases
             .iter()
             .find(|r| v.catalog().profile(&r.profile).is_some_and(|p| p.admit(&facts).admitted()))
             .cloned();
+        if chosen.as_ref().map(|r| &r.id) == self.release.as_ref().map(|r| &r.id) {
+            return Vec::new();
+        }
+        self.release = chosen;
+        self.to_download = None;
+        self.release
+            .iter()
+            .map(|r| Effect::MeasureDownload(Box::new(r.clone())))
+            .collect()
     }
 
     fn clamp_size(&mut self) {
@@ -876,13 +892,15 @@ impl Model {
             self.screen = Screen::NoRelease;
             return Vec::new();
         }
+        // The plan's sizes depend on what is left to download.
+        let Some(to_download) = self.to_download else { return Vec::new() };
         // The largest place, at the release's suggested size.
         let release = self.release.clone().expect("checked");
         let best = inspection
             .candidates
             .iter()
-            .max_by_key(|c| capacity(&release, c, self.to_download));
-        match best.and_then(|c| suggested_size(&release, c, self.to_download).map(|s| (c, s))) {
+            .max_by_key(|c| capacity(&release, c, to_download));
+        match best.and_then(|c| suggested_size(&release, c, to_download).map(|s| (c, s))) {
             Some((c, size)) => {
                 self.place = Some(match c {
                     Candidate::FreeSpace { extent } => Place::FreeSpace { offset: extent.offset },
@@ -927,7 +945,7 @@ impl Model {
             place,
             sekka: self.size,
         };
-        match derive_plan(&inspection, verified.catalog(), &request, self.to_download) {
+        match derive_plan(&inspection, verified.catalog(), &request, self.to_download.unwrap_or(0)) {
             Ok(plan) => {
                 self.plan = Some(plan);
                 self.plan_error = None;

@@ -190,6 +190,21 @@ pub fn acknowledgement(a: Acknowledgement) -> &'static str {
     }
 }
 
+/// The plan screen, on what is left to download. Files an earlier run left
+/// are only measured here; they are checked again before the review.
+pub fn to_download(bytes: u64, staged: bool) -> String {
+    if bytes > 0 {
+        format!(
+            "Next, Sekka Installer downloads {} and checks every byte. That space comes from macOS until Sekka is installed, and is freed afterwards.",
+            self::bytes(bytes)
+        )
+    } else if staged {
+        "Sekka is downloaded and checked.".into()
+    } else {
+        "Sekka is already downloaded. Sekka Installer checks every byte again before going on.".into()
+    }
+}
+
 pub const BACKUP: &str = "I have a current backup of this Mac.";
 
 /// Said on the review, before anything is installed

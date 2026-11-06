@@ -75,6 +75,36 @@ fn the_whole_journey_ends_in_recovery() {
 }
 
 #[test]
+fn the_plan_waits_for_the_release_and_its_download_size_in_any_order() {
+    let env = Simulation::new(Scenario::Normal, 0.0);
+    let (mut m, _) = Model::new("0.1.0".parse().unwrap(), env.user());
+    assert!(m.update(Msg::HelperStatus(env.helper_status())).is_empty());
+    // The catalog before the inspection: there's nothing to choose from yet.
+    assert!(m.update(Msg::Catalog(env.catalog())).is_empty());
+    let effects = m.update(Msg::Inspected(env.inspect()));
+    let release = m.release.clone().expect("the release is chosen once both are known");
+    assert!(matches!(effects.as_slice(), [Effect::MeasureDownload(r)] if r.id == release.id));
+    // The plan's limits and its button depend on what is left to download.
+    assert_eq!(m.screen, Screen::Checking);
+    assert_eq!(m.size_range(), None);
+    m.update(Msg::ToDownload(release.download_bytes()));
+    assert_eq!(m.screen, Screen::Plan);
+    let (_, max) = m.size_range().unwrap();
+    assert_eq!(max, capacity(&release, m.candidate().unwrap(), release.download_bytes()));
+}
+
+#[test]
+fn files_an_earlier_run_downloaded_are_checked_before_the_review() {
+    let mut j = Journey::start(Scenario::Normal);
+    // Every file is on the disk already, but none is checked in this run.
+    j.send(Msg::ToDownload(0));
+    assert!(j.model.staged.is_empty());
+    j.send(Msg::Review);
+    assert_eq!(j.model.screen, Screen::Review);
+    assert_eq!(j.model.staged.len(), 4, "the review installs the files it checked");
+}
+
+#[test]
 fn sizes_stay_within_the_release_and_the_disk() {
     let mut j = Journey::start(Scenario::Normal);
     let (min, max) = j.model.size_range().unwrap();

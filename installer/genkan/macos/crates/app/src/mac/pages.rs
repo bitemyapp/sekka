@@ -196,11 +196,12 @@ impl<'a> Page<'a> {
 }
 
 /// What, besides the screen, changes a page's structure. Values that change
-/// while a page is shown (sizes, progress) are left out and updated in
-/// place.
+/// while a page is shown (the chosen size, progress) are left out and
+/// updated in place. The plan's limits are in: the disk picture is built
+/// with them, and they move when what is left to download is measured.
 pub fn key(m: &Model) -> String {
     format!(
-        "{:?}|{:?}|{}|{}|{}|{}|{:?}|{}|{}|{}",
+        "{:?}|{:?}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}",
         m.screen,
         m.notice,
         m.download_error.is_some(),
@@ -211,6 +212,9 @@ pub fn key(m: &Model) -> String {
         m.checks().iter().map(|c| format!("{:?}", c.state)).collect::<String>(),
         m.details,
         m.release.is_some(),
+        m.to_download.map(|n| n > 0),
+        m.size_range(),
+        m.staged.is_empty(),
     )
 }
 
@@ -415,7 +419,7 @@ pub fn size_words(m: &Model) -> (String, String) {
             let free = m
                 .inspection()
                 .and_then(|i| i.disk.containers.iter().find(|c| &c.uuid == container))
-                .map(|c| (c.free + adjacent_free).saturating_sub(m.size).saturating_sub(m.to_download))
+                .map(|c| (c.free + adjacent_free).saturating_sub(m.size).saturating_sub(m.to_download.unwrap_or(0)))
                 .unwrap_or(0);
             format!("macOS keeps {} ({} free)", text::bytes(after), text::bytes(free))
         }
@@ -468,15 +472,8 @@ fn plan(m: &Model, p: &mut Page) {
     }
     p.divider();
     let apple: u64 = m.release.as_ref().map(|r| r.reserved()).unwrap_or(0);
-    let own = m.to_download;
-    if own > 0 {
-        p.body(&format!(
-            "Next, Sekka Installer downloads {} and checks every byte. That space comes from macOS until Sekka is installed, and is freed afterwards.",
-            text::bytes(own)
-        ));
-    } else {
-        p.body("Sekka is already downloaded and checked.");
-    }
+    let own = m.to_download.unwrap_or(0);
+    p.body(&text::to_download(own, !m.staged.is_empty()));
     if apple > 0 {
         p.note(&format!(
             "While installing, about {} more comes from Apple: the parts of macOS that Sekka's startup volume needs, downloaded from Apple over a secure connection. Stay connected to the internet until the installer finishes.",
@@ -484,7 +481,7 @@ fn plan(m: &Model, p: &mut Page) {
         ));
     }
     p.quit();
-    if m.to_download > 0 {
+    if own > 0 {
         p.primary("Download", || Msg::StartDownload);
     } else {
         p.primary("Continue", || Msg::Review);
