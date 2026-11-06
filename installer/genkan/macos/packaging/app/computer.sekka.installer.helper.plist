@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Sekka Installer's helper, registered by the app with SMAppService and
+     allowed by the owner in System Settings › General › Login Items. It
+     runs from inside the app bundle, so it is replaced with the app; its
+     state stays in /var/db/computer.sekka.installer. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>computer.sekka.installer.helper</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/sekka-installer-helper</string>
+	<key>MachServices</key>
+	<dict>
+		<key>computer.sekka.installer.helper</key>
+		<true/>
+	</dict>
+	<key>AssociatedBundleIdentifiers</key>
+	<array>
+		<string>computer.sekka.installer</string>
+	</array>
+	<key>ProcessType</key>
+	<string>Interactive</string>
+</dict>
+</plist>
