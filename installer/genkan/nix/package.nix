@@ -38,6 +38,8 @@ let
     fileset = lib.fileset.unions [
       ../rust/Cargo.toml
       ../rust/Cargo.lock
+      # The program ban the helper's check runs.
+      ../rust/clippy.toml
       ../rust/data
       ../rust/reference.nix
       ../rust/src
@@ -73,6 +75,11 @@ let
       # compile_fail error codes checked.
       preCheck = ''
         source ${../../../nix/checked-doctests.sh}
+        # Without its configuration the ban names nothing, and passes.
+        if [ ! -f clippy.toml ]; then
+          echo "rust/clippy.toml isn't in the helper's source, so the program ban would check nothing"
+          exit 1
+        fi
         cargo clippy --offline --locked --all-targets -- \
           -A clippy::all -D clippy::disallowed_methods
         found=$(grep -rnE --include='*.rs' '(unsafe_code|disallowed_methods)' src \
