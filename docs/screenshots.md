@@ -18,6 +18,16 @@ synthetic lifecycle events. They are separate from the gallery and from
 ISO qualification. The linked record contains reproduction commands,
 executable identities, observed outcomes and hashes; no pixels were edited.
 
+The [Omperor kit captures](test-results/omperor-kit/README.md) were taken on
+2026-11-05 for PR #133. They are original 1440 × 900 `grim` captures, at
+scale 1, of Omperor (an Aizome app kept outside Sekka) built against that
+branch's kit. It ran on its built-in mock backend under a private headless
+Aizome compositor (pixman) with the shell, in Night and Day. It was driven only
+through `aizomectl input`. The demo project and the agent's turns are the
+mock's made-up data; no account or inference was used. They are separate
+from the gallery and are not ISO qualification. The record has the
+revisions, the scripts as run and hashes; no pixels were edited.
+
 The validation captures in `test-results/luks-gui-uefi/` are separate from the
 README and website gallery. They are original 1280 × 800 QEMU screendumps from
 the [2026-10-21 encrypted GUI installation](test-results/luks-gui-uefi.json),
