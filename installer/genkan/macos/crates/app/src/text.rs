@@ -224,6 +224,10 @@ pub fn recheck_failed(e: &str) -> String {
     format!("Sekka Installer couldn't look at this Mac again before the review ({e}). Nothing on your Mac has changed. Check again.")
 }
 
+/// The screen for an app too old (or too new) for the release on offer.
+pub const NEEDS_UPDATE_TITLE: &str = "Sekka Installer needs updating";
+pub const NEEDS_UPDATE: &str = "Sekka's release for this Mac needs a different version of Sekka Installer than this one. Download the latest Sekka Installer from sekka.computer/mac and open that instead.";
+
 pub const BACKUP: &str = "I have a current backup of this Mac.";
 
 /// After an installation that changed nothing is cancelled.

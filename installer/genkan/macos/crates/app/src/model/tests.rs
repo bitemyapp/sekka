@@ -79,6 +79,7 @@ fn the_plan_waits_for_the_release_and_its_download_size_in_any_order() {
     let env = Simulation::new(Scenario::Normal, 0.0);
     let (mut m, _) = Model::new("0.1.0".parse().unwrap(), env.user());
     assert!(m.update(Msg::HelperStatus(env.helper_status())).is_empty());
+    assert!(m.update(Msg::Engine(env.bundled_engine())).is_empty());
     // The catalog before the inspection: there's nothing to choose from yet.
     assert!(m.update(Msg::Catalog(env.catalog())).is_empty());
     let effects = m.update(Msg::Inspected(env.inspect()));
@@ -122,6 +123,36 @@ fn other_macs_are_told_why() {
     let refusals = j.model.refusals();
     assert!(matches!(refusals.as_slice(), [sekka_mac_contract::Refusal::UnknownMachine { .. }, ..]));
     assert!(crate::text::refusal(&refusals[0]).contains("Mac15,7"));
+}
+
+#[test]
+fn an_app_too_old_for_the_catalog_is_told_to_update_before_any_download() {
+    let j = Journey::start(Scenario::Outdated);
+    assert_eq!(j.model.screen, Screen::NeedsUpdate);
+    assert!(j.model.release.is_none());
+    assert_eq!(j.model.to_download, None, "nothing was measured for a download");
+    let row = j.model.checks().into_iter().find(|c| c.label == "Release").unwrap();
+    assert_eq!(row.state, CheckState::Bad);
+}
+
+#[test]
+fn a_release_this_app_cant_install_is_never_offered() {
+    let another_engine = Digest::of(b"another engine");
+    let other_protocol = || crate::sim::signed_catalog(|c| c.protocol = HELPER_PROTOCOL + 1);
+    for (engine, catalog) in [
+        (Ok(another_engine), Ok(crate::sim::signed_catalog(|_| {}))),
+        (Simulation::new(Scenario::Normal, 0.0).bundled_engine(), Ok(other_protocol())),
+    ] {
+        let env = Simulation::new(Scenario::Normal, 0.0);
+        let (mut m, _) = Model::new("0.1.0".parse().unwrap(), env.user());
+        let mut effects = m.update(Msg::HelperStatus(env.helper_status()));
+        effects.extend(m.update(Msg::Engine(engine)));
+        effects.extend(m.update(Msg::Catalog(catalog)));
+        effects.extend(m.update(Msg::Inspected(env.inspect())));
+        assert!(effects.is_empty(), "nothing is measured or downloaded: {effects:?}");
+        assert!(m.needs_update());
+        assert_eq!(m.screen, Screen::NeedsUpdate);
+    }
 }
 
 #[test]
@@ -266,6 +297,7 @@ fn start(scenario: Scenario) -> (Simulation, Model, Vec<Effect>) {
     let env = Simulation::new(scenario, 0.0);
     let (mut m, _) = Model::new("0.1.0".parse().unwrap(), env.user());
     let mut effects = m.update(Msg::HelperStatus(env.helper_status()));
+    effects.extend(m.update(Msg::Engine(env.bundled_engine())));
     effects.extend(m.update(Msg::Catalog(env.catalog())));
     effects.extend(m.update(Msg::Inspected(env.inspect())));
     for e in std::mem::take(&mut effects) {

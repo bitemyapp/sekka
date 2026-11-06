@@ -233,6 +233,7 @@ pub fn build(m: &Model, tx: &Sender<Msg>, mtm: MainThreadMarker, targets: &mut T
         Screen::Unsupported => unsupported(m, &mut p),
         Screen::NotReady => not_ready(m, &mut p),
         Screen::NoRelease => no_release(m, &mut p),
+        Screen::NeedsUpdate => needs_update(&mut p),
         Screen::Existing => existing(m, &mut p),
         Screen::Plan => plan(m, &mut p),
         Screen::Downloading => downloading(m, &mut p),
@@ -345,6 +346,15 @@ fn no_release(m: &Model, p: &mut Page) {
     }
     p.note("Nothing on your Mac was changed.");
     p.quit();
+    p.primary("Check Again", || Msg::CheckAgain);
+}
+
+fn needs_update(p: &mut Page) {
+    p.title(text::NEEDS_UPDATE_TITLE);
+    p.body(text::NEEDS_UPDATE);
+    p.note("Nothing on your Mac was changed.");
+    p.quit();
+    p.left("Copy Details", || Msg::CopyDiagnostics);
     p.primary("Check Again", || Msg::CheckAgain);
 }
 

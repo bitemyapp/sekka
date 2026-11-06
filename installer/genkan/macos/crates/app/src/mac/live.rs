@@ -17,7 +17,7 @@ use objc2_foundation::{
 };
 use objc2_service_management::{SMAppService, SMAppServiceStatus};
 use sekka_mac_contract::{
-    ArtifactRole, Begin, HELPER_SERVICE, HelperRefusal,
+    ArtifactRole, Begin, Digest, HELPER_SERVICE, HelperRefusal,
     HelperRefusalCode, HelperRequest, HelperRequestSchema, HelperResponse, HelperResponseSchema,
     HttpsUrl, Inspection, Release, Request, Response, Summary, Timestamp, Uuid, canonical, limits,
 };
@@ -188,6 +188,10 @@ impl Environment for Live {
     fn inspect(&self) -> Result<Inspection, String> {
         let engine = sekka_mac_engine::unpack(&self.engine, &self.caches.join("engine"), None).map_err(|e| e.to_string())?;
         sekka_mac_engine::inspect(&engine).map_err(|e| e.to_string())
+    }
+
+    fn bundled_engine(&self) -> Result<Digest, String> {
+        sekka_mac_engine::digest_file(&self.engine).map_err(|e| format!("Sekka Installer's engine couldn't be read: {e}"))
     }
 
     fn catalog(&self) -> Result<Verified, String> {

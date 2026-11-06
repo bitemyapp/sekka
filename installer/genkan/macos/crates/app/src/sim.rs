@@ -24,6 +24,8 @@ pub enum Scenario {
     NotReady,
     /// The catalog can't be fetched.
     Offline,
+    /// The catalog needs a newer Sekka Installer.
+    Outdated,
     /// Not enough room.
     LowSpace,
     /// The first password is refused.
@@ -56,11 +58,12 @@ pub enum Scenario {
 }
 
 impl Scenario {
-    pub const ALL: [Scenario; 17] = [
+    pub const ALL: [Scenario; 18] = [
         Scenario::Normal,
         Scenario::Unsupported,
         Scenario::NotReady,
         Scenario::Offline,
+        Scenario::Outdated,
         Scenario::LowSpace,
         Scenario::WrongPassword,
         Scenario::DownloadFails,
@@ -82,6 +85,7 @@ impl Scenario {
             Scenario::Unsupported => "unsupported",
             Scenario::NotReady => "not-ready",
             Scenario::Offline => "offline",
+            Scenario::Outdated => "outdated",
             Scenario::LowSpace => "low-space",
             Scenario::WrongPassword => "wrong-password",
             Scenario::DownloadFails => "download-fails",
@@ -315,8 +319,19 @@ fn sim_inspection(scenario: Scenario, downloaded: bool) -> Inspection {
     i
 }
 
-fn sim_catalog() -> Verified {
+fn sim_catalog(scenario: Scenario) -> Verified {
+    signed_catalog(|catalog| {
+        if scenario == Scenario::Outdated {
+            catalog.minimum_app_version = "99.0.0".parse().unwrap();
+        }
+    })
+}
+
+/// The sample catalog, current and signed with the development key, after
+/// `edit`.
+pub fn signed_catalog(edit: impl FnOnce(&mut Catalog)) -> Verified {
     let mut catalog = samples::catalog();
+    edit(&mut catalog);
     let now = Timestamp::now();
     catalog.issued_at = now.plus(-3600);
     catalog.expires_at = now.plus(30 * 86_400);
@@ -339,12 +354,15 @@ impl Environment for Simulation {
         self.wait(900);
         Ok(sim_inspection(self.scenario, self.state.lock().unwrap().downloaded))
     }
+    fn bundled_engine(&self) -> Result<Digest, String> {
+        Ok(samples::catalog().releases[0].artifacts.engine.digest)
+    }
     fn catalog(&self) -> Result<Verified, String> {
         self.wait(600);
         if self.scenario == Scenario::Offline {
             return Err("Sekka's release list couldn't be downloaded. Check your internet connection, then check again.".into());
         }
-        Ok(sim_catalog())
+        Ok(sim_catalog(self.scenario))
     }
     fn helper_status(&self) -> Result<Vec<Summary>, HelperProblem> {
         Ok(match self.scenario {
@@ -552,6 +570,7 @@ pub fn settle(env: &Simulation, model: &mut Model, effects: Vec<Effect>) -> Vec<
         assert!(steps < 10_000, "the model never settles");
         let msgs = match effect {
             Effect::Inspect => vec![Msg::Inspected(env.inspect())],
+            Effect::CheckEngine => vec![Msg::Engine(env.bundled_engine())],
             Effect::LoadCatalog => vec![Msg::Catalog(env.catalog())],
             Effect::HelperStatus => vec![
                 Msg::HelperStatus(env.helper_status()),

@@ -5,8 +5,8 @@
 use std::sync::atomic::AtomicBool;
 
 use sekka_mac_contract::{
-    ArtifactRole, Begin, HelperRefusal, InstallState, Inspection, Progress, Record, Release,
-    Summary, Uuid,
+    ArtifactRole, Begin, Digest, HelperRefusal, InstallState, Inspection, Progress, Record,
+    Release, Summary, Uuid,
 };
 use sekka_mac_stage::StagedFile;
 use sekka_mac_trust::Verified;
@@ -63,6 +63,9 @@ pub trait Environment: Send + Sync + 'static {
     fn user(&self) -> (String, String);
     /// Inspect this Mac with the bundled engine, without changing anything.
     fn inspect(&self) -> Result<Inspection, String>;
+    /// The digest of the engine archive this app carries. The helper installs
+    /// a release only with the engine it was made with.
+    fn bundled_engine(&self) -> Result<Digest, String>;
     /// Fetch and verify this build's release catalog.
     fn catalog(&self) -> Result<Verified, String>;
     fn helper_status(&self) -> Result<Vec<Summary>, HelperProblem>;

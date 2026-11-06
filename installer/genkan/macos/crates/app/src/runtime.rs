@@ -46,6 +46,9 @@ impl Runtime {
             Effect::Inspect => self.spawn("inspect", |env, tx| {
                 let _ = tx.send(Msg::Inspected(env.inspect()));
             }),
+            Effect::CheckEngine => self.spawn("engine", |env, tx| {
+                let _ = tx.send(Msg::Engine(env.bundled_engine()));
+            }),
             Effect::LoadCatalog => self.spawn("catalog", |env, tx| {
                 let _ = tx.send(Msg::Catalog(env.catalog()));
             }),

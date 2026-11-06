@@ -7,10 +7,10 @@
 use std::collections::{BTreeSet, VecDeque};
 
 use sekka_mac_contract::{
-    Acknowledgement, ArtifactRole, Begin, Candidate, Confirmation, DiskChanged, HelperRefusal,
-    HelperRefusalCode, InstallState, Inspection, InstallationKind, InstallationState, IssueCode,
-    Place, Plan, PlanError, PlanRequest, Progress, Record, Release, Stage,
-    StagedFile as WireStagedFile, Summary, Uuid, capacity, derive_plan, suggested_size,
+    Acknowledgement, ArtifactRole, Begin, Candidate, Confirmation, Digest, DiskChanged,
+    HELPER_PROTOCOL, HelperRefusal, HelperRefusalCode, InstallState, Inspection, InstallationKind,
+    InstallationState, IssueCode, Place, Plan, PlanError, PlanRequest, Progress, Record, Release,
+    Stage, StagedFile as WireStagedFile, Summary, Uuid, capacity, derive_plan, suggested_size,
 };
 use sekka_mac_trust::Verified;
 
@@ -29,6 +29,8 @@ pub enum Screen {
     Existing,
     /// No release could be offered (offline, expired, none for this Mac).
     NoRelease,
+    /// This Mac has a release, but this app can't install it.
+    NeedsUpdate,
     /// Choose Sekka's size.
     Plan,
     Downloading,
@@ -94,6 +96,7 @@ pub struct Authorization {
 #[derive(Debug)]
 pub enum Msg {
     Inspected(Result<Inspection, String>),
+    Engine(Result<Digest, String>),
     Catalog(Result<Verified, String>),
     HelperStatus(Result<Vec<Summary>, HelperProblem>),
     ToDownload(u64),
@@ -132,6 +135,7 @@ pub enum Msg {
 #[derive(Debug)]
 pub enum Effect {
     Inspect,
+    CheckEngine,
     LoadCatalog,
     HelperStatus,
     MeasureDownload(Box<Release>),
@@ -156,6 +160,8 @@ pub struct Model {
     pub app_version: sekka_mac_contract::Version,
     pub user: (String, String),
     pub inspection: Option<Result<Inspection, String>>,
+    /// The digest of the engine this app carries.
+    pub engine: Option<Result<Digest, String>>,
     pub catalog: Option<Result<Verified, String>>,
     pub helper: Option<Result<Vec<Summary>, HelperProblem>>,
     /// The release offered to this Mac.
@@ -199,6 +205,7 @@ impl Model {
             app_version,
             user,
             inspection: None,
+            engine: None,
             catalog: None,
             helper: None,
             release: None,
@@ -227,7 +234,10 @@ impl Model {
             cancelling: false,
             reconciling: None,
         };
-        (model, vec![Effect::Inspect, Effect::LoadCatalog, Effect::HelperStatus])
+        (
+            model,
+            vec![Effect::Inspect, Effect::LoadCatalog, Effect::HelperStatus, Effect::CheckEngine],
+        )
     }
 
     fn log(&mut self, line: impl Into<String>) {
@@ -242,9 +252,12 @@ impl Model {
         match self.screen {
             // Recovery's step is done: all that's left is Sekka's own.
             Screen::Existing if self.installed() => Step::Account,
-            Screen::Checking | Screen::Unsupported | Screen::NotReady | Screen::Existing | Screen::NoRelease => {
-                Step::Check
-            }
+            Screen::Checking
+            | Screen::Unsupported
+            | Screen::NotReady
+            | Screen::Existing
+            | Screen::NoRelease
+            | Screen::NeedsUpdate => Step::Check,
             Screen::Plan => Step::Size,
             Screen::Downloading => Step::Download,
             Screen::Review | Screen::Approval | Screen::Installing | Screen::Stopped => Step::Install,
@@ -362,6 +375,11 @@ impl Model {
                     detail: r.title.to_string(),
                     state: CheckState::Good,
                 },
+                None if self.needs_update() => CheckRow {
+                    label: "Release",
+                    detail: "Needs a different Sekka Installer".into(),
+                    state: CheckState::Bad,
+                },
                 None => CheckRow {
                     label: "Release",
                     detail: "No release for this Mac yet".into(),
@@ -414,6 +432,34 @@ impl Model {
             .find(|x| x.installation_id == Some(installation))
     }
 
+    /// The catalog's releases whose profile admits this Mac.
+    fn admitted(&self) -> Vec<&Release> {
+        let (Some(i), Some(v)) = (self.inspection(), self.verified()) else { return Vec::new() };
+        let facts = i.machine_facts();
+        v.catalog()
+            .releases
+            .iter()
+            .filter(|r| v.catalog().profile(&r.profile).is_some_and(|p| p.admit(&facts).admitted()))
+            .collect()
+    }
+
+    /// Whether this app can install a release, as its helper checks before
+    /// it begins: the catalog speaks this app's protocol and doesn't ask for
+    /// a newer app, and the release was made with the engine this app
+    /// carries.
+    fn installable(&self, release: &Release) -> bool {
+        let Some(v) = self.verified() else { return false };
+        let catalog = v.catalog();
+        catalog.protocol == HELPER_PROTOCOL
+            && self.app_version >= catalog.minimum_app_version
+            && matches!(&self.engine, Some(Ok(d)) if *d == release.artifacts.engine.digest)
+    }
+
+    /// Whether this Mac has a release, but none this app can install.
+    pub fn needs_update(&self) -> bool {
+        self.engine.is_some() && self.release.is_none() && !self.admitted().is_empty()
+    }
+
     /// Installations the helper knows that need the person's attention.
     pub fn unfinished(&self) -> Option<&Summary> {
         let Some(Ok(list)) = &self.helper else { return None };
@@ -438,6 +484,15 @@ impl Model {
                 self.inspection = Some(result);
                 let mut effects = self.choose_release();
                 effects.extend(if rechecking { self.prepare_review() } else { self.decide() });
+                effects
+            }
+            Msg::Engine(result) => {
+                if let Err(e) = &result {
+                    self.log(format!("Engine: {e}"));
+                }
+                self.engine = Some(result);
+                let mut effects = self.choose_release();
+                effects.extend(self.decide());
                 effects
             }
             Msg::Catalog(result) => {
@@ -896,18 +951,15 @@ impl Model {
         self.backup && plan.acknowledgements.iter().all(|a| self.acknowledged.contains(a))
     }
 
-    /// Choose the release this Mac is offered once both it and the catalog
-    /// are known, whichever arrives first, and measure what is left to
-    /// download for it.
+    /// Choose the release this Mac is offered once it, the catalog and the
+    /// bundled engine are known, whichever arrives last, and measure what is
+    /// left to download for it. A release this app can't install is never
+    /// offered, so nothing is downloaded for it.
     fn choose_release(&mut self) -> Vec<Effect> {
-        let (Some(i), Some(v)) = (self.inspection(), self.verified()) else { return Vec::new() };
-        let facts = i.machine_facts();
-        let chosen = v
-            .catalog()
-            .releases
-            .iter()
-            .find(|r| v.catalog().profile(&r.profile).is_some_and(|p| p.admit(&facts).admitted()))
-            .cloned();
+        if self.inspection().is_none() || self.verified().is_none() || self.engine.is_none() {
+            return Vec::new();
+        }
+        let chosen = self.admitted().into_iter().find(|r| self.installable(r)).cloned();
         if chosen.as_ref().map(|r| &r.id) == self.release.as_ref().map(|r| &r.id) {
             return Vec::new();
         }
@@ -949,7 +1001,9 @@ impl Model {
                 return effects;
             }
         }
-        let (Some(inspection), Some(catalog), Some(_)) = (&self.inspection, &self.catalog, &self.helper) else {
+        let (Some(inspection), Some(catalog), Some(_), Some(_)) =
+            (&self.inspection, &self.catalog, &self.helper, &self.engine)
+        else {
             return Vec::new();
         };
         let Ok(inspection) = inspection else {
@@ -967,6 +1021,12 @@ impl Model {
             || !self.refusals().is_empty()
         {
             self.screen = Screen::Unsupported;
+            return Vec::new();
+        }
+        // Before anything to fix on this Mac: this app couldn't install
+        // once it was fixed.
+        if self.needs_update() {
+            self.screen = Screen::NeedsUpdate;
             return Vec::new();
         }
         if inspection.blocking().next().is_some() {
@@ -1131,6 +1191,9 @@ impl Model {
             for issue in &i.issues {
                 out.push(format!("Issue {:?}: {}", issue.code, issue.detail));
             }
+        }
+        if let Some(Ok(d)) = &self.engine {
+            out.push(format!("Engine {d}"));
         }
         if let Some(r) = &self.release {
             out.push(format!("Release {} ({})", r.id, r.source.revision));
