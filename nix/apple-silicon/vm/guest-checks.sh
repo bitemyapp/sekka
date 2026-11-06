@@ -24,6 +24,15 @@ check() { # NAME DETAIL COMMAND...
 	shift 2
 	if "$@"; then ok "$name" "$detail"; else bad "$name" "$detail"; fi
 }
+# The VM's console arguments in the entries NixOS wrote, after they were
+# checked: a change to this VM's disk only, so the next boot has its consoles.
+vm_entries() {
+	local e
+	for e in /boot/loader/entries/*.conf; do
+		grep -q systemd.debug_shell "$e" || sed -i "s|^options .*|& $VM_ARGS|" "$e"
+	done
+	sync
+}
 partuuid_of() { blkid -p -s PART_ENTRY_UUID -o value "$1" 2>/dev/null; }
 mounted_partuuid() { partuuid_of "$(findmnt -n -o SOURCE --target "$1")"; }
 nixq() { nix --extra-experimental-features 'nix-command flakes' "$@"; }
@@ -176,6 +185,7 @@ second)
 	check entries-firmware "every entry loads the firmware archive first" bash -c \
 		'for e in /boot/loader/entries/*.conf; do [ "$(grep -m1 ^initrd $e)" = "initrd /vendorfw/firmware.cpio" ] || exit 1; done'
 	python3 "$here/boot_bin.py" status --esp /boot | sed 's/^/boot.bin status: /'
+	vm_entries
 	;;
 
 updated)
@@ -196,6 +206,7 @@ updated)
 	sed 's/^/loader.conf: /' /boot/loader/loader.conf
 	check entries-filled "no boot entry still has a placeholder" bash -c '! grep -l @SEKKA_ /boot/loader/entries/*.conf'
 	python3 "$here/boot_bin.py" status --esp /boot | sed 's/^/boot.bin status: /'
+	vm_entries
 	;;
 
 rolled-back)
