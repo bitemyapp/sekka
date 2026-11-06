@@ -82,3 +82,15 @@ Round 1 taught the bare loop's format; Tasuke speaks another (its own tools, ski
 Round 2 changed when the models act, not how often they succeed. Fault totals moved by one to three either way, about what two runs of one model differ by (the 26B-A4B base fixed 24 of 31 in its first Tasuke run, 22 here; the 12B base 20, then 18). The 12B pair disagrees on nine faults and the 26B-A4B pair on three, in both directions, and no held-out fault went from never fixed to always fixed. Both adapters fix more before the "yes" (10 to 17, 9 to 15), as the teacher did in 20 of its 26 conversations, but Tasuke's approval cards ask the person anyway, and the 26B-A4B base's first run had fixed 15 on the first turn too. The base 26B-A4B's harm: it proposed deleting alice's older backup to make room, among other courses, and did so after the "yes". Neither adapter gained on the desktop, which no training conversation covered, and neither lost general ability.
 
 Neither adapter is shipped. They are `sekka-12b-tasuke.gguf` and `sekka-26b-tasuke.gguf` in `~/work/lora/out/gguf/` on wx-workstation. A third round would need what this one lacked: desktop conversations, and more than 15 distinct faults to learn from.
+
+## The weights round (2026-11-06): a Sekka importance matrix
+
+Not training: quantization. The 8 GB tier runs Gemma 4 26B-A4B with most experts in system memory, where fewer bytes per token would mean more speed. Its BF16 weights were converted to GGUF and quantized to IQ3_XXS (11.3 GB, against Google's QAT Q4_0 at 14.4 GB) with the same recipe twice: once with an importance matrix from `imatrix_text.py` (round 2's training-set conversations rendered with Gemma 4's chat template, plus Tasuke's skills, 347K tokens; nothing held out), once with bartowski's general-purpose matrix. Both ran inside Tasuke at the same time on the same GPU, twice over the held-out faults and desktop tasks.
+
+| Gemma 4 26B-A4B inside Tasuke | Google's QAT Q4_0 | IQ3_XXS, general | IQ3_XXS, Sekka |
+|---|---:|---:|---:|
+| Faults | 24/31, then 22/31 | 21/32 | 21/31 |
+| Desktop tasks with marks | 17/18 twice | 12/18 | 15/18 |
+| GSM8K without thinking | 96–97 | 98 | 98 |
+
+Google's quantization-aware file stays. Sekka's matrix matched the general one on faults and did three more desktop tasks, with one run each. A narrow calibration set left up to a tenth of some layers' experts without statistics. The quants and the matrix are in `~/work/quant/` on wx-workstation.
