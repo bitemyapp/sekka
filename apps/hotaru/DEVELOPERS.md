@@ -11,11 +11,15 @@ The native application lives in `desktop/aizome/apps/hotaru`, within Aizome's
 existing workspace, and uses `aizome-kit` and Sukumo (`desktop/aizome/sukumo`,
 Aizome's toolkit) for chrome and drawing.
 Maintain that boundary; the core has no UI dependencies. The core denies unsafe
-Rust except for its bounded SIMD byte scanner and whole-cell ASCII stores.
+Rust except for its bounded SIMD byte scanner, whole-cell ASCII stores and
+cache prefetch hints.
 The scanner's load bounds and CPU requirements are documented and tested
 against the scalar implementation. ASCII stores use one possibly unaligned
 eight-byte write, guarded by compile-time field type/layout assertions and
 tested against ordinary constructors, boundary cases and strict-provenance Miri.
+Prefetch hints (`prefetch.rs`) issue x86-64's PREFETCHT0, which dereferences
+nothing and is sound for any address; history uses them to fetch the rows it
+will evict next ([eviction cost](docs/history.md#eviction-cost-and-history-size)).
 Each Linux I/O unsafe block documents its FFI and ownership invariants.
 UTF-8 validation uses a bundled, audited simdutf8 release with the upstream
 prefetch-pointer repair; see [the dependency audit](docs/utf8-simd.md).
@@ -34,6 +38,11 @@ cargo test --locked --manifest-path apps/hotaru/Cargo.toml
 cargo clippy --locked --manifest-path apps/hotaru/Cargo.toml --all-targets -- -D warnings
 cargo run --release --locked --manifest-path apps/hotaru/Cargo.toml -p hotaru-replay -- \
   --data /path/to/stream.vt --rows 80 --cols 120 --format json
+# Feed-only timing with history: rows, then a byte limit (none, default or a
+# count); --prefill times a second pass, after the first has filled history.
+cargo run --release --locked --manifest-path apps/hotaru/Cargo.toml -p hotaru-replay -- \
+  --data /path/to/stream.vt --scrollback 1000000 --scrollback-bytes default \
+  --bench-json --iterations 5 --prefill
 nix develop .#aizome
 cargo run --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-hotaru
 nix build .#hotaru --no-update-lock-file

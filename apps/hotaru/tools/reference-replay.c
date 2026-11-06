@@ -64,9 +64,14 @@ static void write_pty(GhosttyTerminal terminal, void *userdata,
     replies->length = need;
 }
 
+/* Scrollback bytes: zero by default, as Hotaru's comparisons always ran; with
+ * `default`, the option is left unset and libghostty-vt keeps its own. */
+static bool scrollback_default = false;
+static size_t scrollback_bytes = 0;
+
 static void configure(GhosttyTerminal terminal, struct replies *replies, bool unicode) {
-    const size_t zero = 0;
-    check(ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES, &zero));
+    if (!scrollback_default)
+        check(ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_SCROLLBACK_MAX_BYTES, &scrollback_bytes));
     check(ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_USERDATA, replies));
     check(ghostty_terminal_set(terminal, GHOSTTY_TERMINAL_OPT_WRITE_PTY, (const void *)write_pty));
     const GhosttyTerminalModeConfig grapheme = {.mode = 2027, .value = unicode};
@@ -112,6 +117,18 @@ int main(int argc, char **argv) {
         else if (!strcmp(option, "--cols")) cols = number(value);
         else if (!strcmp(option, "--chunk")) chunk = number(value);
         else if (!strcmp(option, "--iterations")) iterations = number(value);
+        else if (!strcmp(option, "--scrollback-bytes")) {
+            if (!strcmp(value, "default")) scrollback_default = true;
+            else {
+                char *end;
+                errno = 0;
+                unsigned long long bytes = strtoull(value, &end, 10);
+                if (errno || !*value || *end || *value == '-' || bytes > SIZE_MAX)
+                    fail("scrollback bytes must be default or a byte count");
+                scrollback_default = false;
+                scrollback_bytes = (size_t)bytes;
+            }
+        }
         else if (!strcmp(option, "--grapheme-width")) {
             if (!strcmp(value, "unicode")) unicode = true;
             else if (!strcmp(value, "legacy")) unicode = false;
@@ -135,7 +152,9 @@ int main(int argc, char **argv) {
     uint64_t *parse = calloc(iterations, sizeof(uint64_t));
     uint64_t *teardown = calloc(iterations, sizeof(uint64_t));
     uint64_t *response_bytes = calloc(iterations, sizeof(uint64_t));
-    if (!setup || !parse || !teardown || !response_bytes) fail("measurement allocation failed");
+    uint64_t *history_rows = calloc(iterations, sizeof(uint64_t));
+    if (!setup || !parse || !teardown || !response_bytes || !history_rows)
+        fail("measurement allocation failed");
     for (unsigned i = 0; i < iterations; ++i) {
         uint64_t start = now_ns();
         struct replies replies = {0};
@@ -156,18 +175,26 @@ int main(int argc, char **argv) {
         check(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_VT_PROCESSING_ERROR, &processing_error));
         if (processing_error) fail("terminal processing error invalidates timing");
         response_bytes[i] = replies.length;
+        size_t retained = 0;
+        check(ghostty_terminal_get(terminal, GHOSTTY_TERMINAL_DATA_SCROLLBACK_ROWS, &retained));
+        history_rows[i] = retained;
         start = now_ns();
         ghostty_terminal_free(terminal);
         free(replies.data);
         teardown[i] = now_ns() - start;
     }
     printf("{\"schema\":1,\"engine\":\"ghostty\",\"timed_scope\":\"feed-only\","
-           "\"input_bytes\":%zu,\"rows\":%u,\"cols\":%u,\"scrollback\":0,\"chunk_bytes\":%u,\"grapheme_width_method\":\"%s\",",
-           length, rows, cols, chunk, unicode ? "unicode" : "legacy");
+           "\"input_bytes\":%zu,\"rows\":%u,\"cols\":%u,",
+           length, rows, cols);
+    if (scrollback_default) printf("\"scrollback\":\"default\",");
+    else printf("\"scrollback\":%zu,", scrollback_bytes);
+    printf("\"scrollback_unit\":\"bytes\",\"chunk_bytes\":%u,\"grapheme_width_method\":\"%s\",",
+           chunk, unicode ? "unicode" : "legacy");
     array("samples_ns", parse, iterations); putchar(',');
     array("setup_ns", setup, iterations); putchar(',');
     array("teardown_ns", teardown, iterations); putchar(',');
-    array("response_bytes", response_bytes, iterations); puts("}");
-    free(response_bytes); free(teardown); free(parse); free(setup); free(bytes);
+    array("response_bytes", response_bytes, iterations); putchar(',');
+    array("history_rows_after", history_rows, iterations); puts("}");
+    free(history_rows); free(response_bytes); free(teardown); free(parse); free(setup); free(bytes);
     return 0;
 }

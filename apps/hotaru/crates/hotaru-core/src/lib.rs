@@ -13,6 +13,9 @@ pub mod kitty_clipboard;
 mod memory;
 mod parser;
 mod position;
+// Cache hints only: never dereferences, so any address is sound.
+#[allow(unsafe_code)]
+mod prefetch;
 mod row;
 #[allow(unsafe_code)]
 mod scan;
