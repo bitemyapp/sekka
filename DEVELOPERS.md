@@ -1823,6 +1823,117 @@ of the instance. The UI tests check that reveal requests select the files,
 one window to a folder, and that the last window takes the token. These are
 component checks, not browser or ISO qualification.
 
+### Monitor brightness
+
+A laptop's panel goes through `aizome_sys::power::Backlight` (sysfs and
+logind's `SetBrightness`). External monitors go through
+`aizome_sys::monitors` (`desktop/aizome/crates/aizome-sys/src/monitors`),
+which Settei's Displays pane, the shell's Display panel and the brightness
+keys share. Nothing runs as root: the user opens the devices.
+
+- **DDC/CI** (`ddc.rs`): MCCS VCP feature 0x10 over the connector's I2C bus.
+  sysfs's `cardN-<connector>/ddc` gives the bus, and `i2c-dev` makes it
+  `/dev/i2c-N`. The messages are VESA DDC/CI 1.1's at address 0x37, with
+  ddcutil's timing: 50 ms before reading a reply, three tries, and 50 ms
+  after a set. An exchange holds `flock` on the device, as ddcutil 2 does,
+  so ddcutil, Settei and the shell don't interleave on one bus. Each
+  monitor is asked once; the answer is kept until its connector, EDID or
+  device permission changes, or until a refresh (Settei showing its pane,
+  the Display panel opening).
+- **Apple Studio Displays** (`hid.rs`) have no DDC/CI. The 2022 model
+  (05ac:1114), the Studio Display XDR (05ac:1116) and the 2026 model
+  (05ac:1118) take brightness on USB interface 7: feature report 1, a
+  32-bit VESA brightness usage (page 0x82, usage 0x10) in a Monitor Control
+  collection, from 400 to 60000 (hundredths of a nit), then a 16-bit vendor
+  field that writes leave at 0. The product IDs, the interface and the
+  report come from [juliuszint/asdbctl](https://github.com/juliuszint/asdbctl)
+  (MIT, `src/main.rs` at `4f0e081`, and its README's decoded descriptor).
+  The range matches [nikosdion/asdcontrol](https://github.com/nikosdion/asdcontrol),
+  and the usages match the proposed `hid_bl` kernel driver
+  ([LKML v3, 2023-08](https://lkml.iu.edu/2308.2/04461.html)). Aizome finds the
+  field by its usages in sysfs's `report_descriptor` and takes the range
+  from there, rather than assuming asdbctl's numbers for every model. Reads
+  and writes are `HIDIOCGFEATURE`/`HIDIOCSFEATURE` on `/dev/hidrawN`.
+- **One control per physical monitor** (`discover.rs`, `edid.rs`). Over
+  Thunderbolt the Studio Display is two DRM connectors: DP-1 for the whole
+  5K panel, and DP-2 for a right tile, which the still-open #279 keeps
+  dark. Connectors whose EDIDs share a DisplayID container ID or
+  tiled-display group are one monitor, with every connector listed. A HID
+  interface goes with the monitor whose container ID matches the USB
+  Container ID capability of its device or of a hub above it (sysfs `bos_descriptors`, compared both
+  as stored and GUID-swapped). Failing that, one Studio Display and one
+  interface go together. Two that can't be told apart get no control and
+  say so. Make, model and serial are read as the compositor reads them.
+- **Off the UI threads.** Each `Monitors` handle has one worker thread. It
+  re-scans when a sysfs fingerprint changes (connector status and EDID,
+  hidraw devices, `access()` on the device nodes, Thunderbolt
+  authorization; checked every 2 s without opening a device). Sets queued
+  behind one in flight fold into the last, so a dragged slider sends the
+  current level, not a backlog, and every task still finishes. The UIs
+  show the requested level at once. The brightness keys step on the 5%
+  grid, and read the level first when it is over 5 s old, since a
+  monitor's buttons may have moved it.
+- **Remembered levels.** A Studio Display has no buttons, and reports say
+  it comes back at a default after losing power. Its level is kept in
+  `$XDG_STATE_HOME/aizome/monitor-brightness.json` by make, model and
+  serial, written a second after the last change. The shell's handle
+  (`Monitors::restoring`) sets it again when the display appears. DDC/CI
+  monitors keep their own level (and their buttons change it), so Aizome
+  doesn't store theirs. This is state, not `[[outputs]]`: any change to
+  `[[outputs]]` makes the compositor apply every output entry again.
+- **Keys.** `brightness-up`/`-down` change the external monitor under the
+  pointer (the compositor names that output with the binding), else the
+  focused one, when it takes a level; otherwise the built-in panel, as
+  before, when one shows. The OSD opens on the display whose brightness
+  changed.
+- **Permissions.** `programs.aizome.monitorBrightness` (default on) loads
+  `i2c-dev` and installs `nix/monitor-brightness-udev.nix` as
+  `70-aizome-monitor-brightness.rules` through `services.udev.packages`.
+  It has to sort before systemd's `73-seat-late.rules`, which applies
+  `uaccess`; `extraRules` lands in `99-local.rules`, too late. It tags
+  `uaccess`, so the active local session's user gets an ACL:
+  - i2c-dev nodes whose adapter belongs to a display-class PCI device
+    (0x03xxxx), as ddcutil's own rule does. On ganymede that's the i915/xe
+    gmbus and DP AUX buses, not the SMBus or the touchpad's.
+  - hidraw nodes on interface 7 of the three Studio Displays
+    (`DEVPATH=="*:1.7/0003:05AC:111[468].*"`), not the display's other
+    interfaces.
+
+  The narrower alternative, a privileged helper, would add a polkit
+  decision to every key press. The `i2c` group needs per-user
+  configuration and grants remote sessions too.
+- `aizome-brightness [list]` prints what Aizome finds and why a display
+  has no control, only reading. `aizome-brightness set OUTPUT PERCENT`
+  sets one.
+
+Over Thunderbolt 3, the 2022 Studio Display's USB devices sit behind a
+PCIe tunnel, which the kernel opens only once the device is authorized
+(`/sys/bus/thunderbolt/devices/*/authorized`, at security level `user`).
+Sekka doesn't run boltd, and nothing in Aizome authorizes Thunderbolt
+devices. An unauthorized Studio Display shows as `Why::NotAuthorized`.
+The Studio Display XDR that ganymede's journal shows on 2026-11-01 brought
+its USB devices up on the laptop's own USB controllers (HID on interfaces
+5, 7, 8 and 9), so it may not need that authorization; that wasn't checked.
+
+```sh
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-sys --lib monitors
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-shell --test settings --test panels
+nix develop .#aizome -c cargo test --locked --manifest-path desktop/aizome/Cargo.toml -p aizome-settei --lib displays
+nix build .#aizome-checks.monitor-brightness -L
+```
+
+The unit tests use a made-up sysfs (ganymede's connectors: the panel, the
+Studio Display's two tiles, a BenQ on HDMI) with fake DDC/CI and HID
+devices. They cover probing, the reasons given, folded sets, stale steps
+and remembering. The VM check boots the module with the real kernel. Its
+display carries a Studio Display–like EDID (`drm.edid_firmware`). A
+FunctionFS gadget on `dummy_hcd` (`nix/vm-monitor-brightness-studio-display.py`)
+stands in for the display's USB side, with HIDs on interfaces 5 and 7. The
+check verifies the rules with `udevadm verify`, gives the logged-in user
+interface 7 and not 5, keeps an i2c-stub bus root's, and sets the level
+through `aizome-brightness`. These are component checks: no real Studio
+Display, DDC/CI monitor, dock or Thunderbolt link is involved.
+
 ### Sukumo
 
 Sukumo, Aizome's toolkit, is in `desktop/aizome/sukumo`: the Wayland engine

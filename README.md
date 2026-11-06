@@ -64,6 +64,19 @@ NeXTSTEP and IRIX:
   own chooser: Files' sidebar and path bar over the app's window, with its
   filters and options. Qt apps, and GTK 4 apps that don't ask the desktop
   portal, still show their own dialogs.
+- Settings → Displays, the menu bar's Display panel and the brightness keys
+  set a laptop's panel and, where a monitor takes it, an external monitor's
+  own brightness: most monitors over DDC/CI, and Apple's Studio Displays
+  over USB, with one slider for the display even though it uses two
+  connectors. The keys change the display under the pointer, else the
+  laptop's panel. A monitor with DDC/CI turned off in its own menu, or
+  behind a dock, adapter or KVM switch that doesn't pass DDC/CI on, gets no
+  slider, and Settings says why. Over Thunderbolt, a Studio Display's USB
+  side (and with it its brightness, camera and speakers) works only once
+  the computer authorizes the display, for instance with `boltctl`, which
+  Sekka doesn't do for you yet. Aizome remembers a Studio Display's level
+  and sets it again when the display comes back; other monitors keep their
+  own.
 
 It comes with its own apps: Settei (Settings), Yukimi, Hako (Files), Sumi
 (Text Editor), Fusen (Notes), Koyomi (Calendar), Tokei (Clock), Soroban

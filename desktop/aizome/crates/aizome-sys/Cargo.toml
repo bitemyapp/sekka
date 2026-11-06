@@ -1,6 +1,6 @@
 [package]
 name = "aizome-sys"
-description = "Aizome's system services: network, Bluetooth, sound, power, date and time, users, printers, disks, processes, media players, notifications, polkit, apps and keyboard data"
+description = "Aizome's system services: network, Bluetooth, sound, power, monitors' brightness, date and time, users, printers, disks, processes, media players, notifications, polkit, apps and keyboard data"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -26,6 +26,8 @@ roxmltree = "0.21"
 # PipeWire's volume and devices, through pipewire-pulse (see audio.rs).
 libpulse-binding = "2.30"
 serde.workspace = true
+# The levels remembered for Studio Displays (src/monitors).
+serde_json.workspace = true
 
 [dev-dependencies]
 aizome-apps = { workspace = true, features = ["test-util"] }

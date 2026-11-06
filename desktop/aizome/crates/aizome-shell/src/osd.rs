@@ -1,7 +1,8 @@
 //! The on-screen display: volume, mute, brightness and the keyboard's
 //! backlight keys change the value at once and show a `raised` square at
-//! the bottom centre of the focused output — a 32pt glyph and a 16-segment
-//! level bar — for 1.2 s.
+//! the bottom centre of the focused output (for brightness, of the display
+//! whose brightness changed) — a 32pt glyph and a 16-segment level bar —
+//! for 1.2 s.
 
 use std::time::Duration;
 
@@ -63,6 +64,8 @@ impl Osd {
 #[derive(Clone, Debug, PartialEq)]
 pub struct OsdState {
     pub window: WindowKey,
+    /// The output it shows on.
+    pub output: u32,
     pub osd: Osd,
     /// Bumped on each key, so only the last key's timer hides it.
     pub generation: u64,
@@ -96,17 +99,28 @@ pub fn view(o: &Osd) -> Element<Msg> {
 }
 
 impl Shell {
-    /// Show the OSD (opening its surface on the focused output, or
-    /// changing it), hidden again after [`SHOWS`].
+    /// Show the OSD on the focused output, hidden again after [`SHOWS`].
     pub fn show_osd(&mut self, osd: Osd, cx: &mut Cx<Msg>) {
+        let output = self.focused_screen().map(|s| s.output.id);
+        self.show_osd_on(osd, output, cx);
+    }
+
+    /// Show the OSD on `output` (opening its surface there, or changing
+    /// it), hidden again after [`SHOWS`].
+    pub fn show_osd_on(&mut self, osd: Osd, output: Option<u32>, cx: &mut Cx<Msg>) {
+        let Some(output) = output else { return };
         let generation = self.osd.as_ref().map_or(0, |o| o.generation) + 1;
+        // Showing on another output: it moves there.
+        if let Some(o) = self.osd.take_if(|o| o.output != output) {
+            cx.close_window(o.window);
+            self.surfaces.remove(&o.window);
+        }
         match &mut self.osd {
             Some(s) => {
                 s.osd = osd;
                 s.generation = generation;
             }
             None => {
-                let Some(output) = self.focused_screen().map(|s| s.output.id) else { return };
                 let opts = LayerOptions::new(Layer::Overlay, "aizome-osd")
                     .anchors(Anchors::BOTTOM)
                     .margins(Margins::new(0, 0, 96, 0))
@@ -116,7 +130,7 @@ impl Shell {
                 // It takes no clicks.
                 cx.set_input_region(w, Some(Vec::new()));
                 self.surfaces.insert(w, Surface::Osd);
-                self.osd = Some(OsdState { window: w, osd, generation });
+                self.osd = Some(OsdState { window: w, output, osd, generation });
             }
         }
         cx.after(SHOWS, Msg::OsdHide(generation));
@@ -132,7 +146,9 @@ impl Shell {
     }
 
     /// A media key from the compositor: change the value now, and show it.
-    pub fn media_key(&mut self, action: &str, cx: &mut Cx<Msg>) -> bool {
+    /// `output` is the display under the pointer, as the compositor says
+    /// with the key.
+    pub fn media_key(&mut self, action: &str, output: Option<&str>, cx: &mut Cx<Msg>) -> bool {
         const STEP: f32 = 1.0 / SEGMENTS as f32;
         let osd = match action {
             "volume-up" | "volume-down" | "mute" => {
@@ -174,11 +190,27 @@ impl Shell {
                 Osd { kind: OsdKind::Microphone, value: 1.0, muted: !m }
             }
             "brightness-up" | "brightness-down" => {
-                // No built-in panel shows: the backlight isn't this session's.
+                let up = action == "brightness-up";
+                // An external monitor's own brightness, where it can be set:
+                // the one under the pointer, else the focused one.
+                let looked_at = output.map(str::to_owned).or_else(|| self.focused_screen().map(|s| s.name()));
+                if let Some(name) = looked_at
+                    && let Some(m) = &self.sys.monitors
+                    && let Some((id, connectors)) = m.snapshot().on(&name).map(|x| (x.id.clone(), x.connectors.clone()))
+                {
+                    let _ = m.step(&id, if up { 0.05 } else { -0.05 });
+                    let value = m.snapshot().get(&id).map_or(0.5, |x| x.fraction());
+                    // On its first connector that shows: a tiled monitor's main
+                    // tile, not a hidden one the pointer may be over.
+                    let on = connectors.iter().find_map(|c| self.screen_named(c)).map(|s| s.output.id);
+                    self.show_osd_on(Osd { kind: OsdKind::Brightness, value, muted: false }, on, cx);
+                    return true;
+                }
+                // Else the built-in panel's, as before Aizome set monitors;
+                // with none showing, the backlight isn't this session's.
                 if !self.shows_builtin_panel() {
                     return true;
                 }
-                let up = action == "brightness-up";
                 let mut v = self
                     .sys
                     .backlight
@@ -189,7 +221,10 @@ impl Shell {
                     let _ = b.step(if up { 0.05 } else { -0.05 });
                     v = (v + if up { 0.05 } else { -0.05 }).clamp(0.0, 1.0);
                 }
-                Osd { kind: OsdKind::Brightness, value: v, muted: false }
+                // On the panel, whose brightness it is.
+                let on = self.screens.iter().find(|s| crate::shell::builtin_panel(&s.name())).map(|s| s.output.id);
+                self.show_osd_on(Osd { kind: OsdKind::Brightness, value: v, muted: false }, on, cx);
+                return true;
             }
             "kbd-brightness-up" | "kbd-brightness-down" | "kbd-brightness" => {
                 if let Some(u) = &self.sys.upower {

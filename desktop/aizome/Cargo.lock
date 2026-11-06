@@ -519,6 +519,7 @@ dependencies = [
  "log",
  "roxmltree 0.21.1",
  "serde",
+ "serde_json",
  "sha-crypt",
  "zbus",
 ]

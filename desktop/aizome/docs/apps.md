@@ -188,6 +188,14 @@ As built, beyond the above:
   a gamma table (the switch is `[night_light] enabled`, applied at once),
   with today's sunset and sunrise where the computer is; where none does,
   it says why there's no switch.
+- **Displays** has a brightness slider for the selected display: the
+  built-in panel's backlight, or an external monitor's own over DDC/CI
+  (a Studio Display's over USB, one slider for both its tiles). A display
+  that can't be set says why ("Set on the display" where its own buttons
+  are the way): no DDC/CI, no
+  access to its device, a Studio Display whose Thunderbolt link isn't
+  authorized, and so on (`aizome_sys::monitors::Why`). Showing the pane
+  asks the monitors again.
 - **Sound**: the alert sound and volume are the shell's: it plays the
   alert for the system bell (xdg-system-bell, through the compositor),
   notifications' sounds at the alert volume, and, with "Play feedback

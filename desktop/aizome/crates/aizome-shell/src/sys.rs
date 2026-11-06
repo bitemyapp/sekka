@@ -6,6 +6,7 @@ use aizome_config::MenubarSettings;
 use aizome_sys::Wake;
 use aizome_sys::audio::Audio;
 use aizome_sys::bluetooth::Bluetooth;
+use aizome_sys::monitors::Monitors;
 use aizome_sys::mpris::Mpris;
 use aizome_sys::network::Network;
 use aizome_sys::power::Backlight;
@@ -25,6 +26,10 @@ pub struct Sys {
     pub bluetooth: Option<Bluetooth>,
     pub upower: Option<Upower>,
     pub backlight: Option<Backlight>,
+    /// External monitors' brightness (DDC/CI, Studio Displays). The
+    /// shell's handle sets a Studio Display's remembered level again as it
+    /// appears.
+    pub monitors: Option<Monitors>,
     pub profiles: Option<PowerProfiles>,
     pub logind: Option<Logind>,
     pub disks: Option<aizome_sys::disks::Disks>,
@@ -46,6 +51,7 @@ impl Sys {
             bluetooth: Some(Bluetooth::new(w())),
             upower: Some(Upower::new(w())),
             backlight: Some(Backlight::new(w())),
+            monitors: Some(Monitors::restoring(w())),
             profiles: Some(PowerProfiles::new(w())),
             logind: Some(Logind::new(w())),
             disks: Some(aizome_sys::disks::Disks::new(w())),
@@ -121,13 +127,15 @@ impl Sys {
                 t.bluetooth = Some((s.powered(), s.connected()));
             }
         }
-        if cfg.shows("display")
-            && let Some(b) = &self.backlight
-            && b.available()
-        {
-            let s = b.snapshot();
-            if let Some(d) = s.primary() {
-                t.display = Some(d.fraction());
+        if cfg.shows("display") {
+            if let Some(b) = self.backlight.as_ref().filter(|b| b.available()) {
+                t.display = b.snapshot().primary().map(|d| d.fraction());
+            }
+            // A desktop computer's monitors: the first one's level.
+            if t.display.is_none()
+                && let Some(m) = &self.monitors
+            {
+                t.display = m.snapshot().monitors.first().map(|m| m.fraction());
             }
         }
         if cfg.shows("battery")

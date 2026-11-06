@@ -133,6 +133,17 @@ impl Shell {
                 {
                     p.backlights = b.snapshot().devices.iter().map(|d| (d.name.clone(), d.fraction())).collect();
                 }
+                // External monitors showing in this session (not one turned
+                // off, nor another seat's).
+                if let Some(m) = &self.sys.monitors {
+                    p.monitors = m
+                        .snapshot()
+                        .monitors
+                        .iter()
+                        .filter(|m| self.screens.iter().any(|s| m.shows_on(&s.name())))
+                        .map(|m| (m.id.clone(), m.title(), m.fraction()))
+                        .collect();
+                }
                 Panel::Display(p)
             }
             TrayWidget::Awake => Panel::Awake(AwakePanel { status: self.awake }),
@@ -198,6 +209,13 @@ impl Shell {
         self.panel_ui = PanelUi::default();
         if w == TrayWidget::Clock {
             self.refresh_agenda(cx);
+        }
+        // A monitor's buttons may have changed its level, or one that
+        // didn't answer may now.
+        if w == TrayWidget::Display
+            && let Some(m) = &self.sys.monitors
+        {
+            m.refresh();
         }
         let data = self.panel_data(w);
         let size = panels::size(&data);
@@ -358,6 +376,11 @@ impl Shell {
             PanelMsg::Brightness(name, v) => {
                 if let Some(b) = &sys.backlight {
                     let _ = b.set_fraction(&name, v);
+                }
+            }
+            PanelMsg::MonitorBrightness(id, v) => {
+                if let Some(m) = &sys.monitors {
+                    let _ = m.set_fraction(&id, v);
                 }
             }
             PanelMsg::Theme(i) => {
