@@ -84,8 +84,10 @@ def retry(r, t, name="work-retry", bless_mode="ok", owner_password=S.PASSWORD, *
     mac.bless_mode = bless_mode
     mac.owner_password = owner_password
     start = len(mac.commands)
+    mounts = len(mac.mount_log)
     state = mac.state_digest()
     plan = kw.pop("plan", r["plan"])
+    kw.setdefault("esp_inventory", esp_inventory(r.get("channel")))
     outcome, channel = S.run_engine("startup-disk", mac, r["asahi"], r["host"], t.sub(name), plan=plan, **kw)
     return {
         "mac": mac,
@@ -93,12 +95,23 @@ def retry(r, t, name="work-retry", bless_mode="ok", owner_password=S.PASSWORD, *
         "outcome": outcome,
         "channel": channel,
         "commands": mac.commands[start:],
+        "mounts": mac.mount_log[mounts:],
         "state_before": state,
     }
 
 
+def esp_inventory(channel):
+    """The esp-inventory fact of an execute run's Esp checkpoint, as the
+    helper's journal keeps it."""
+    for m in channel.messages() if channel is not None else []:
+        payload = m["message"]["payload"]
+        if m["message"]["type"] == "checkpoint" and payload["stage"] == "esp":
+            return {f["name"]: f["value"] for f in payload["facts"]}["esp-inventory"]
+    return S.canonical.digest_bytes(b"no esp checkpoint")
+
+
 def find_plan_digest(channel):
-    for m in channel.messages():
+    for m in channel.messages() if channel is not None else []:
         if m["message"]["type"] == "intent":
             return m["message"]["payload"]["plan"]
     return None

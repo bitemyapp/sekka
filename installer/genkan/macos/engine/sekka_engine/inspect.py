@@ -1,10 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Build the contract's Inspection from Asahi's own model of the Mac.
 
-Everything here reads; nothing changes a disk. Run unprivileged (the app
-inspects before it asks for a password), volumes are mounted read-only and
-unmounted again, and what only root can read (boot policies, the admin-user
-records) is reported as unavailable rather than guessed.
+Everything here reads; nothing changes a disk. Whether it runs as root or
+not, volumes are mounted read-only and unmounted again, and nothing already
+mounted is touched. Run unprivileged (the app inspects before it asks for a
+password), what only root can read (boot policies, the admin-user records) is
+reported as unavailable rather than guessed.
 """
 
 import logging
@@ -727,8 +728,6 @@ class Inspector:
         elif filevault == "unknown":
             self.unavailable.append("FileVault status")
         self.disk_issues(disk, candidates)
-        if self.view.read_only:
-            self.view.close()
         doc = {
             "schema": c.INSPECTION_SCHEMA,
             "machine": machine,
@@ -755,14 +754,18 @@ class Inspector:
 
 
 def inspect_mac(asahi, host, profile, privileged):
-    """Inspect with Asahi's model. Returns (inspection, inspector)."""
+    """Inspect with Asahi's model. Returns (inspection, inspector).
+
+    As root or not, every volume it mounts is mounted read-only and unmounted
+    again before it returns; `privileged` only says what it may expect to
+    read (boot policies, the admin-user records). The inspector's model stays
+    usable as data afterwards, but not its mount points."""
     from .asahi import View
 
-    view = View(asahi, read_only=not privileged)
+    view = View(asahi)
     try:
         inspector = Inspector(asahi, host, profile, view, privileged)
         doc = inspector.build()
     finally:
-        if not privileged:
-            view.close()
+        view.close()
     return doc, inspector

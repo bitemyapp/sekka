@@ -162,6 +162,52 @@ class ExecuteTests(unittest.TestCase):
         self.assertNotIn(S.PASSWORD, transcript)
         self.assertNotIn(S.PASSWORD.decode(), json.dumps([cmd for cmd in mac.commands]))
 
+    def test_only_sekkas_own_volumes_are_mounted_writable_and_nothing_stays_mounted(self):
+        run = self.run_plan()
+        self.assertEqual(run.outcome, "waiting-for-recovery")
+        mac = run.mac
+        stub, esp = mac.ordered()[2], mac.ordered()[3]
+        own = {v.uuid for v in stub.container.volumes} | {esp.uuid}
+        writable = {uuid for uuid, mode in mac.mount_log if mode == "rw"}
+        self.assertTrue(writable)
+        self.assertLessEqual(writable, own, "only the stub's volumes and the ESP are mounted read-write")
+        self.assertIn(esp.uuid, writable)
+        self.assertEqual(mac.mounted_now(), [], "the run unmounts everything it mounted, the verified ESP included")
+        # macOS's own mounts are left alone (the fake refuses to unmount them).
+        self.assertTrue(any(v.mounted == "system" for ct in mac.containers.values() for v in ct.volumes))
+
+    def test_unreadable_preferences_give_no_hint_and_never_stall(self):
+        """The owner's account can put anything at its preference paths: a
+        FIFO, a link to a device, a huge file. The engine reads them before
+        any intent, without following links or waiting, and takes no hint."""
+
+        def before(mac, host, release):
+            prefs = mac.fs(f"/Users/{S.OWNER}/Library/Preferences")
+            global_prefs = os.path.join(prefs, ".GlobalPreferences.plist")
+            os.unlink(global_prefs)
+            os.mkfifo(global_prefs)
+            toolbox = os.path.join(prefs, "com.apple.HIToolbox.plist")
+            os.unlink(toolbox)
+            os.symlink("/dev/zero", toolbox)
+
+        run = self.run_plan(before=before)
+        self.assertEqual(run.outcome, "waiting-for-recovery")
+        esp = run.mac.ordered()[3]
+        with open(os.path.join(esp.dir, c.HANDOFF_PATH), "rb") as f:
+            hints = c.parse_handoff(f.read())["hints"]
+        self.assertEqual((hints["locale"], hints["keyboard"]), (None, None))
+        self.assertEqual(hints["timezone"], "America/Chicago")
+
+    def test_preferences_another_account_owns_give_no_hint(self):
+        def before(mac, host, release):
+            host.owner_uid = os.getuid() + 1
+
+        run = self.run_plan(before=before)
+        esp = run.mac.ordered()[3]
+        with open(os.path.join(esp.dir, c.HANDOFF_PATH), "rb") as f:
+            hints = c.parse_handoff(f.read())["hints"]
+        self.assertEqual((hints["locale"], hints["keyboard"]), (None, None))
+
     def test_nothing_changes_before_an_acknowledgement(self):
         run = self.run_plan()
         events = run.channel.events

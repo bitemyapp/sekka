@@ -4,10 +4,14 @@
 Each value is mapped to what Linux uses (a glibc locale, an XKB layout, an
 IANA zone) or left out when there is no faithful mapping: setup asks the
 person anyway, and a wrong guess is worse than none. The owner's own
-preferences are read from their home folder, since the engine runs as root.
+preferences are read from their home folder (from the directory service),
+since the engine runs as root, through the host's bounded read: no final link
+followed, no waiting on a FIFO, only regular files of the right owner, at
+most 1 MiB. The engine reads them before its first intent.
 """
 
 import logging
+import os
 import plistlib
 import re
 
@@ -98,10 +102,15 @@ def iana_zone(localtime_target):
     return zone if _ZONE.fullmatch(zone) and ".." not in zone else None
 
 
-def _plist(host, path):
+def _plist(host, path, owners):
+    """A preference file as a plist, or None: through the host's bounded,
+    type- and owner-checked read, so a link, FIFO, device or huge file the
+    owner's account put there is no hint rather than a hung or exhausted
+    engine."""
     try:
-        return plistlib.loads(host.read_file(path))
-    except Exception:
+        return plistlib.loads(host.read_small_file(path, owners))
+    except Exception as error:
+        log.info("no setup hint from %s: %s", path, error)
         return None
 
 
@@ -128,17 +137,30 @@ def _clean(value, limit=255):
 
 
 def read_hints(host, owner, full_name):
-    """The handoff's SetupHints for the owner `owner`."""
-    home = f"/Users/{owner}"
-    user_global = _plist(host, f"{home}/Library/Preferences/.GlobalPreferences.plist")
-    system_global = _plist(host, "/Library/Preferences/.GlobalPreferences.plist")
+    """The handoff's SetupHints for the owner `owner`. The engine gathers
+    them before its first intent, so nothing here runs while a disk is
+    being changed. The owner's files must be the owner's own; the system's
+    must be root's."""
+    try:
+        uid, home = host.user(owner)
+    except (KeyError, OSError) as error:
+        log.info("no setup hints from %s's preferences: %s", owner, error)
+        uid, home = None, None
+    user_prefs = os.path.join(home, "Library", "Preferences") if home else None
+
+    def user_plist(name):
+        return _plist(host, os.path.join(user_prefs, name), {uid}) if user_prefs else None
+
+    def system_plist(name):
+        return _plist(host, os.path.join("/Library/Preferences", name), {0})
+
     locale = None
-    for prefs in (user_global, system_global):
+    for prefs in (user_plist(".GlobalPreferences.plist"), system_plist(".GlobalPreferences.plist")):
         if isinstance(prefs, dict) and locale is None:
             locale = glibc_locale(prefs.get("AppleLocale"))
-    keyboard = xkb_layout(_keyboard_source(_plist(host, f"{home}/Library/Preferences/com.apple.HIToolbox.plist")))
+    keyboard = xkb_layout(_keyboard_source(user_plist("com.apple.HIToolbox.plist")))
     if keyboard is None:
-        keyboard = xkb_layout(_keyboard_source(_plist(host, "/Library/Preferences/com.apple.HIToolbox.plist")))
+        keyboard = xkb_layout(_keyboard_source(system_plist("com.apple.HIToolbox.plist")))
     try:
         timezone = iana_zone(host.readlink("/etc/localtime"))
     except OSError:

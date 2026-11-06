@@ -108,6 +108,13 @@ class StartupDiskRetry(unittest.TestCase):
                 self.assertFalse(os.path.exists(os.path.join(core, "SystemVersion.plist")))
                 self.assertTrue(os.path.exists(os.path.join(system.dir, ".IAPhysicalMedia")))
                 self.assertNotIn(S.PASSWORD, b"\n".join(rr["channel"].lines))
+                # The ESP was only looked at read-only, and nothing is left mounted.
+                esp = mac.ordered()[3]
+                self.assertIn((esp.uuid, "ro"), rr["mounts"])
+                self.assertNotIn((esp.uuid, "rw"), rr["mounts"])
+                stub_volumes = {v.uuid for v in mac.ordered()[2].container.volumes}
+                self.assertLessEqual({u for u, mode in rr["mounts"] if mode == "rw"}, stub_volumes)
+                self.assertEqual(mac.mounted_now(), [])
                 result = validate(rr)
                 if result is not None:
                     self.assertEqual(result, (0, "accepted: WaitingForRecovery"))
@@ -185,7 +192,19 @@ class StartupDiskRetry(unittest.TestCase):
         def root_partition(mac):
             mac.parts.remove(mac.ordered()[4])
 
-        for change in (boot_object, launch, app, handoff, root_partition):
+        def esp_stage2(mac):
+            # What boot.bin chainloads: changed on the ESP after execute verified it.
+            with open(os.path.join(mac.ordered()[3].dir, "m1n1", "boot.bin"), "ab") as f:
+                f.write(b"planted")
+
+        def esp_kernel(mac):
+            os.unlink(os.path.join(mac.ordered()[3].dir, "EFI", "nixos", "kernel.efi"))
+
+        def esp_extra(mac):
+            with open(os.path.join(mac.ordered()[3].dir, "EFI", "BOOT", "extra.efi"), "wb") as f:
+                f.write(b"an extra loader")
+
+        for change in (boot_object, launch, app, handoff, root_partition, esp_stage2, esp_kernel, esp_extra):
             with self.subTest(change.__name__):
                 self.t.cleanup()
                 self.t = S.TempDir()
@@ -202,6 +221,8 @@ class StartupDiskRetry(unittest.TestCase):
             ({"password": None}, "no-password"),
             ({"owner": "nobody"}, "owner-not-admin"),
             ({"installation": INSTALLATION.upper()}, "installation-invalid"),
+            ({"esp_inventory": "sha256:" + "0" * 64}, "installation-changed"),
+            ({"esp_inventory": "not a digest"}, "esp-inventory-invalid"),
         )
         for i, (kw, code) in enumerate(cases):
             with self.subTest(code=code):

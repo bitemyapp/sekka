@@ -7,7 +7,7 @@ pinned runtime, isolated (-I), from the extracted engine archive ROOT:
     … -I ROOT/sekka_engine/__main__.py execute --plan FILE --assets DIR \
         --installation UUID --owner NAME
     … -I ROOT/sekka_engine/__main__.py startup-disk --plan FILE \
-        --installation UUID --owner NAME
+        --installation UUID --owner NAME --esp-inventory DIGEST
 
 `python3 -I -m sekka_engine …` runs the same code wherever the package is
 importable; the archive doesn't make it importable from the runtime's
@@ -16,6 +16,8 @@ signature.
 
 `startup-disk` is the helper's bounded retry: only the startup-disk stage
 again, for an installation execute left with its payload verified.
+`--esp-inventory` is the esp-inventory fact of that execute run's Esp
+checkpoint, from the helper's journal; the ESP must still match it.
 `execute` and `startup-disk` read the owner's password from file
 descriptor 3, to its end.
 Standard output carries the transcript; standard input carries the helper's
@@ -35,14 +37,14 @@ def usage(message):
         "       python3 -I sekka_engine/__main__.py execute --plan FILE --assets DIR"
         " --installation UUID --owner NAME   (password on fd 3)\n"
         "       python3 -I sekka_engine/__main__.py startup-disk --plan FILE"
-        " --installation UUID --owner NAME   (password on fd 3)\n"
+        " --installation UUID --owner NAME --esp-inventory DIGEST   (password on fd 3)\n"
     )
     return 2
 
 
 OPTIONS = {
     "execute": ("--plan", "--assets", "--installation", "--owner"),
-    "startup-disk": ("--plan", "--installation", "--owner"),
+    "startup-disk": ("--plan", "--installation", "--owner", "--esp-inventory"),
 }
 
 
@@ -143,7 +145,9 @@ def main(argv=None):
         if mode == "execute":
             outcome = engine.run_execute(plan_bytes, options["--assets"], options["--installation"], options["--owner"])
         else:
-            outcome = engine.run_startup_disk(plan_bytes, options["--installation"], options["--owner"])
+            outcome = engine.run_startup_disk(
+                plan_bytes, options["--installation"], options["--owner"], options["--esp-inventory"]
+            )
     return 0 if outcome in ("inspected", "waiting-for-recovery") else 1
 
 

@@ -10,10 +10,12 @@ the same list. The test suite substitutes its own Host; nothing on the
 command line or in the environment can.
 """
 
+import errno
 import fcntl
 import logging
 import os
 import re
+import stat
 import subprocess
 import sys
 
@@ -49,6 +51,9 @@ _RAW_DEVICE = re.compile(r"disk[0-9]+s[0-9]+\Z")
 
 # fcntl and ioctl numbers from <sys/fcntl.h> and <sys/disk.h>.
 F_FULLFSYNC = 51
+# The most read_small_file reads: preferences and account records are far
+# smaller.
+SMALL_FILE_LIMIT = 1024 * 1024
 DKIOCSYNCHRONIZECACHE = 0x20006416  # _IO('d', 22)
 
 
@@ -80,7 +85,10 @@ class Host:
     def flush_device(self, fileobj):  # pragma: no cover - interface
         raise NotImplementedError
 
-    def read_file(self, path):  # pragma: no cover - interface
+    def read_small_file(self, path, owners, limit=SMALL_FILE_LIMIT):  # pragma: no cover - interface
+        raise NotImplementedError
+
+    def user(self, name):  # pragma: no cover - interface
         raise NotImplementedError
 
     def readlink(self, path):  # pragma: no cover - interface
@@ -88,6 +96,35 @@ class Host:
 
     def now(self):  # pragma: no cover - interface
         raise NotImplementedError
+
+
+def read_small_file(path, owners, limit=SMALL_FILE_LIMIT):
+    """A small regular file that one of `owners` (uids) owns, read without
+    following a link at its last component and without waiting: a FIFO,
+    device, folder, link, foreign or oversized file raises OSError instead of
+    blocking or filling memory. For files a less privileged account controls,
+    such as the owner's preferences."""
+    flags = os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NOCTTY", 0)
+    fd = os.open(path, flags | getattr(os, "O_CLOEXEC", 0))
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode):
+            raise OSError(errno.EINVAL, "not a regular file", path)
+        if st.st_uid not in owners:
+            raise OSError(errno.EPERM, "not owned as expected", path)
+        if st.st_size > limit:
+            raise OSError(errno.EFBIG, "too large", path)
+        data = bytearray()
+        while len(data) <= limit:
+            chunk = os.read(fd, limit + 1 - len(data))
+            if not chunk:
+                break
+            data.extend(chunk)
+        if len(data) > limit:
+            raise OSError(errno.EFBIG, "too large", path)
+        return bytes(data)
+    finally:
+        os.close(fd)
 
 
 def resolve(name):
@@ -145,9 +182,16 @@ class MacHost(Host):
         os.fsync(fd)
         return "fsync"
 
-    def read_file(self, path):
-        with open(path, "rb") as f:
-            return f.read()
+    def read_small_file(self, path, owners, limit=SMALL_FILE_LIMIT):
+        return read_small_file(path, owners, limit)
+
+    def user(self, name):
+        """(uid, home folder) from the directory service, not a guessed
+        /Users/NAME."""
+        import pwd
+
+        entry = pwd.getpwnam(name)
+        return entry.pw_uid, entry.pw_dir
 
     def readlink(self, path):
         return os.readlink(path)

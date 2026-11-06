@@ -69,8 +69,20 @@ class InspectTests(unittest.TestCase):
         mounts = [cmd for cmd in self.mac.commands if cmd[:2] == ["diskutil", "mount"]]
         self.assertTrue(mounts)
         self.assertTrue(all(cmd[2] == "readOnly" for cmd in mounts), mounts)
-        still = [v.dev for ct in self.mac.containers.values() for v in ct.volumes if v.mounted]
-        self.assertEqual(still, [], "everything the inspection mounted is unmounted again")
+        self.assertEqual(self.mac.mounted_now(), [], "everything the inspection mounted is unmounted again")
+
+    def test_a_root_inspection_mounts_only_read_only_and_undoes_it(self):
+        """As root too: other systems' volumes and ESPs (here an Asahi
+        installation's) are mounted read-only, and nothing is left mounted."""
+        for builder in (S.j514s_clean, S.m1_pro_with_asahi, lambda root, **kw: S.j514s_existing_sekka(root, **kw)[0]):
+            with self.subTest(builder=getattr(builder, "__name__", "existing")):
+                self.t.cleanup()
+                self.t = S.TempDir()
+                outcome, doc = self.inspect(builder, privileged=True)
+                self.assertEqual(outcome, "inspected")
+                self.assertTrue(self.mac.mount_log)
+                self.assertEqual({mode for _, mode in self.mac.mount_log}, {"ro"})
+                self.assertEqual(self.mac.mounted_now(), [])
 
     def test_free_space_is_offered_beside_the_shrink(self):
         outcome, doc = self.inspect(S.j514s_free_space)

@@ -26,12 +26,12 @@ ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I \
     --installation UUID --owner SHORTNAME     3< password
 ROOT/Frameworks/Python.framework/Versions/3.13/bin/python3.13 -I \
     ROOT/sekka_engine/__main__.py startup-disk --plan FILE \
-    --installation UUID --owner SHORTNAME     3< password
+    --installation UUID --owner SHORTNAME --esp-inventory DIGEST  3< password
 ```
 
 `startup-disk` is the helper's bounded retry after execute's startup-disk
-stage failed: the same plan file and installation, and only that stage
-(below).
+stage failed: the same plan file and installation, the `esp-inventory` fact
+of that run's Esp checkpoint from the journal, and only that stage (below).
 
 - **Environment.** `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, `LC_ALL=C`, and the
   runtime's own `DYLD_FRAMEWORK_PATH=ROOT/Frameworks` and
@@ -86,11 +86,13 @@ stage failed: the same plan file and installation, and only that stage
 `inspect` builds the contract's `Inspection` from Asahi's own model:
 `system.SystemInfo` (ioreg's device tree and service planes, nvram, bputil,
 the SystemVersion and SFR plists), `diskutil.DiskUtil` (diskutil's plists and
-`get_partitions`) and `osenum.OSEnum` (each container's systems). It runs
-unprivileged, before the app asks for a password:
+`get_partitions`) and `osenum.OSEnum` (each container's systems). The app runs
+it unprivileged, before it asks for a password; the helper and execute run it
+as root. Either way:
 
-- volumes are mounted read-only (`diskutil mount readOnly`) and unmounted
-  again; nothing is written;
+- every volume it mounts, Asahi's OSEnum's and other systems' ESPs included,
+  is mounted read-only (`diskutil mount readOnly`) and unmounted again before
+  it returns; what macOS had mounted is left as it was; nothing is written;
 - what only root can read is reported in a `log` line rather than guessed:
   without `bputil` the boot mode is taken from the booted volume group, and a
   stub's state is `unknown`.
@@ -211,7 +213,23 @@ Setup hints come from the owner's own preferences: `AppleLocale` to a glibc
 locale, the current keyboard layout to an XKB layout from a fixed table
 (layouts that need a variant, such as Dvorak, are left out),
 `/etc/localtime`'s zone, `scutil --get ComputerName`, and the owner's full name
-from `AdminUserRecoveryInfo.plist`. Any of them may be absent.
+from `AdminUserRecoveryInfo.plist`. Any of them may be absent. They are read
+before the first intent, so a read that fails changes nothing. The owner's home
+folder and uid come from the directory service, and every preference file is
+read with `O_NOFOLLOW | O_NONBLOCK`, must be a regular file owned by the owner
+(root for `/Library/Preferences` and the admin records) and at most 1 MiB; a
+link, FIFO, device, folder, foreign or oversized file is no hint.
+
+### Mounts
+
+Each run works through one view whose mounts it records by GPT or volume UUID.
+Only Sekka's own volumes are mounted read-write: the planned stub's volumes once
+stub-partition has created its container, and the planned ESP once partitions
+has created it. Everything else Asahi's code or the stages mount (macOS's paired
+Recovery volume, other systems' volumes) is mounted read-only. The esp stage
+unmounts the ESP as soon as its read-back passes, and when the run ends,
+successful or not, everything it mounted is unmounted; volumes macOS mounted
+itself are never touched.
 
 Asahi's `step2.sh` flow is not installed. The Recovery app takes over what it
 did: check that it runs in the stub's paired One True Recovery, `bputil -nc`,
@@ -248,9 +266,21 @@ Before its one intent, with nothing changed, it refuses (`stage: null`,
   volume group are the plan's; its stub container, volume group, System and
   Data volumes are the stub's own; its ESP and root partitions exist with the
   right types; `boot.bin` and every firmware-baseline file match their
-  recorded size and SHA-256; the Recovery app's Info.plist is there;
-  `.IAPhysicalMedia` names `Sekka Recovery.app`; and the ESP's
-  `sekka/install.json` names this installation, root and ESP.
+  recorded size and SHA-256; the Recovery app's Info.plist is there; and
+  `.IAPhysicalMedia` names `Sekka Recovery.app`;
+- the ESP, mounted read-only for the check (and unmounted again, after an
+  existing read-write mount is replaced), still holds exactly what execute
+  installed and read back: its whole inventory, every file's path, size and
+  SHA-256 in the esp stage's form, must give `--esp-inventory`
+  (`esp-inventory-invalid` if that isn't a digest, `installation-changed` if
+  it differs). So `m1n1/boot.bin`, which Recovery's `boot.bin` chainloads,
+  the kernel, initrd, firmware and boot entries are as verified. Its
+  `sekka/install.json` must name this installation, root and ESP, and its boot
+  entries must be filled in and name the same partitions.
+
+The stub's volumes are only read until these checks pass; then they may be
+mounted read-write for the stage, which renames the stub's SystemVersion. The
+ESP is never mounted read-write in this mode.
 
 Then it writes the intent, waits for the acknowledgement and runs the stage:
 the checkpoint has the same facts and `policy-read-back` as in execute,
@@ -284,7 +314,18 @@ ordinary ZipFile; reading any byte that wasn't fetched raises an error instead
 of returning zeros. A network failure therefore stops the installation before
 the disk changes.
 
-What the bytes' authenticity rests on is what Asahi's rests on, no more:
+The spool stays in the engine's working folder, on macOS's own volume, until
+the run ends. Before fetching anything but the zip's directory, the stage
+compares what the members need with the room the plan left: above Asahi's
+minimum for the shrunk container (the helper's plan reserves the release's
+`apple_inputs` estimate there), or the macOS container's free space less 1 GiB
+for a free-space plan. If they don't fit it stops (`apple-inputs-no-room`,
+`disk_changed: no`). The shrink stage's recheck of Asahi's minimum then leaves
+out what the engine's own files occupy, since they are deleted when the run
+ends.
+
+What the bytes' authenticity rests on is what Asahi's rests on, no more. There
+is no check against an Apple-signed list:
 
 - an HTTPS connection to the host in the URL, verified against the CA bundle in
   the pinned runtime (`SSL_CERT_FILE`);
@@ -293,9 +334,10 @@ What the bytes' authenticity rests on is what Asahi's rests on, no more:
 - each member's zip CRC-32, checked as it is read in full (corruption, not
   forgery).
 
-Neither Asahi nor the adapter checks a cryptographic digest of Apple's bytes.
-The Mac's boot chain verifies the signed boot objects it later loads; it does
-not cover the firmware copied out for Linux. The checkpoint records the
+Neither Asahi nor the adapter checks a cryptographic digest of Apple's bytes,
+and `BuildManifest.plist` comes from the same zip. The Mac's boot chain
+verifies the signed boot objects it later loads; it does not cover the
+firmware copied out for Linux (Wi-Fi, Bluetooth, keyboard and trackpad). The checkpoint records the
 BuildManifest's SHA-256 so that what was used can be identified afterwards.
 
 ## Tests
@@ -310,7 +352,10 @@ running its tests.
 The fake Mac (`tests/support.py`) keeps one model of a Mac and answers every
 command Asahi and the adapter run from it; Asahi's own modules do the work.
 Partitions and volumes are directories and files in a temporary directory;
-renumbering after a new partition is modeled, as diskutil does it. Linux
+renumbering after a new partition is modeled, as diskutil does it, and so is
+each mount's mode, the volumes macOS mounted itself (which the fake refuses to
+let the engine unmount), and the engine's working folder taking space from
+the macOS container, as `/private/tmp` does on a Mac. Linux
 can't run libSystem's `fsctl`, LZFSE compression or the firmware collectors on
 real Apple firmware, so the tests replace those, and serve a synthetic 14.8.3
 update from memory through Asahi's URLCache class.
@@ -322,7 +367,18 @@ with Asahi installed (MIT fixtures, see their NOTICE). They cover:
 
 - inspection of each, unprivileged and as root; issues for battery, FileVault
   converting, snapshots, missing resize limits, a second internal disk,
-  untested firmware and another board; inspection never changes the fake;
+  untested firmware and another board; inspection never changes the fake, and
+  as root too mounts only read-only (other systems' volumes and an Asahi
+  ESP included) and leaves nothing mounted;
+- execute mounting read-write only the stub's volumes and the ESP, and leaving
+  nothing mounted, the verified ESP included;
+- setup hints: a FIFO, a link to `/dev/zero`, a folder, an oversized file or
+  another account's file at the owner's preference paths gives no hint and
+  never stalls the run;
+- Apple's files at a plan's maximum size with nothing reserved:
+  `apple-inputs-no-room` before anything is fetched or changed; with room
+  reserved, the shrink succeeding although the engine's own files raised
+  Asahi's minimum above the plan's size;
 - execution of a shrink plan and a free-space plan to `waiting-for-recovery`,
   checking every partition, file, byte and selection left behind;
 - the state at every acknowledgement equal to the state at the previous
@@ -343,8 +399,10 @@ with Asahi installed (MIT fixtures, see their NOTICE). They cover:
   failing again; another installation's UUID and a Mac without the
   installation refused; no acknowledgement, no bless; a changed `boot.bin`,
   launch marker, Recovery app, ESP handoff or missing root partition refused;
-  another Mac, an unreadable plan, no password, another owner and a malformed
-  UUID refused;
+  a changed `m1n1/boot.bin`, a missing kernel or an extra file on the ESP, and
+  a wrong or malformed `--esp-inventory`, refused; the ESP mounted only
+  read-only and nothing left mounted; another Mac, an unreadable plan, no
+  password, another owner and a malformed UUID refused;
 - Recovery-zip attacks (traversal, absolute paths, links, devices, resource
   forks, case twins, backslashes, encryption, corruption, missing parts), and
   payload, template and manifest substitutions bound into a plan;
@@ -399,6 +457,10 @@ On the J514S, with a backup and an owner's explicit authorization:
   `UUID` and IOPlatformUUID where the adapter looks;
 - `bputil`, `diskutil mount readOnly`, `apfs listSnapshots`, `fdesetup status`
   and the resize limits as an unprivileged user;
+- the mount policy's inputs: `diskutil info`'s `DiskUUID`,
+  `APFSContainerReference` and `PartitionMapPartition` for volumes and
+  partitions, `diskutil unmount UUID`, and how much the spool under
+  `/private/tmp` raises the container's used space;
 - `diskutil apfs resizeContainer` to the plan's byte count, `addPartition`
   placing the stub exactly behind the shrunk container, `newfs_msdos` and
   diskutil's partition renumbering;

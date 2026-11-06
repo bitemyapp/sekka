@@ -27,6 +27,7 @@ import os
 import plistlib
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 
@@ -154,6 +155,12 @@ class Engine:
         self.password = password
         self.changed = False
         self.progress_state = {}
+        self.view = None
+        self.working = None
+        # Sekka's own volumes, which only the stages mount read-write: the
+        # planned stub's container once it exists, and the planned ESP.
+        self.writable_container = None
+        self.writable_esp = None
 
     # inspect -----------------------------------------------------------------
 
@@ -207,6 +214,7 @@ class Engine:
         finally:
             os.chdir(previous)
             wipe(self.password)
+            self.close_working_view()
             for name in ("payload", "recovery_zip"):
                 archive = getattr(self, name, None)
                 if archive is not None:
@@ -284,14 +292,16 @@ class Engine:
 
     # startup-disk ----------------------------------------------------------------
 
-    def run_startup_disk(self, plan_bytes, installation, owner):
+    def run_startup_disk(self, plan_bytes, installation, owner, esp_inventory):
         """The helper's bounded retry: the startup-disk stage again, and
         nothing else, for an installation whose execute run verified its
-        payload and then failed to set the startup disk."""
+        payload and then failed to set the startup disk. `esp_inventory` is
+        the esp-inventory fact of that run's Esp checkpoint, from the
+        helper's journal."""
         self.t.hello(ENGINE_VERSION, ASAHI_VERSION, self.adapter, "startup-disk")
         try:
             try:
-                self.prepare_retry(plan_bytes, installation, owner)
+                self.prepare_retry(plan_bytes, installation, owner, esp_inventory)
             except Refusal as refusal:
                 self.t.failure(None, c.failure(refusal.code, refusal.message, refusal.diagnostic, "no"))
                 self.t.completion("failed")
@@ -307,13 +317,19 @@ class Engine:
             return self.run_stages(["startup-disk"])
         finally:
             wipe(self.password)
+            self.close_working_view()
 
-    def prepare_retry(self, plan_bytes, installation, owner):
+    def prepare_retry(self, plan_bytes, installation, owner, esp_inventory):
         """Find this installation and check it is still what execute left:
-        the same Mac, disk and macOS, its stub, ESP and root by identity, and
-        the Recovery data and handoff it wrote. The layout digest isn't
-        compared: the installation's own partitions changed it."""
+        the same Mac, disk and macOS, its stub, ESP and root by identity, the
+        Recovery data and handoff it wrote, and the ESP's whole inventory as
+        the journal recorded it. The layout digest isn't compared: the
+        installation's own partitions changed it."""
         self.check_request(plan_bytes, installation, owner)
+        try:
+            self.esp_inventory = c.digest(esp_inventory)
+        except c.Invalid:
+            raise Refusal("esp-inventory-invalid", "The ESP inventory to check against isn't a SHA-256 digest.")
         plan = self.plan
         try:
             doc, inspector = inspect_mac(self.asahi, self.host, self.profile, privileged=True)
@@ -343,12 +359,16 @@ class Engine:
                 "owner-not-admin",
                 f"{owner} isn't one of this Mac's administrators who can approve startup changes in Recovery.",
             )
+        # Looked at read-only until the checks pass; then only the stub's own
+        # volumes become writable (the stage renames its SystemVersion).
+        self.open_working_view()
         p, o, config = self.find_installation()
         self.check_installation(p, o, config)
         self.stub_uuid = c.uuid_any(p.uuid)
         self.stub_container = config["stub"]["container"]
         self.stub = dict(config["stub"])
         self.esp_uuid, self.root_uuid = config["esp"], config["root"]
+        self.writable_container = self.stub_container
         v = self.view
         self.ins = self.asahi.stub.StubInstaller(v.sysinfo, v.dutil, v.osinfo)
         self.t.log("info", f"Setting the startup disk again for installation {self.installation} on {o.label}.")
@@ -433,18 +453,58 @@ class Engine:
             media = None
         if not isinstance(media, dict) or media.get("AppName") != RECOVERY_APP:
             changed("the startup volume doesn't open the Recovery app")
-        try:
-            mount = self.view.dutil.mount(esp.name)
-            with open(os.path.join(mount, c.HANDOFF_PATH), "rb") as f:
-                handoff = c.parse_handoff(f.read(c.LIMIT_HANDOFF + 1))
-        except (OSError, subprocess.CalledProcessError, c.Invalid, canonical.CanonicalError, KeyError, TypeError):
-            handoff = None
+        files, handoff, entries = self.read_esp(esp)
+        if files is None:
+            changed("its ESP can't be read")
+        if A.esp_inventory_digest(files) != self.esp_inventory:
+            changed("its ESP's files differ from what was installed and verified")
         if handoff is None or (handoff["installation"], handoff["root"], handoff["esp"]) != (
             self.installation,
             config["root"],
             config["esp"],
         ):
             changed("its ESP's handoff names another installation")
+        arguments = c.kernel_arguments(config["root"], config["esp"])
+        if not entries or any(c.ROOT_PLACEHOLDER in e or c.ESP_PLACEHOLDER in e for e in entries.values()):
+            changed("its ESP's boot entries aren't filled in")
+        if not any(arguments in e for e in entries.values()):
+            changed("no boot entry on its ESP names this installation's partitions")
+
+    def read_esp(self, esp):
+        """The ESP's whole inventory, its handoff and its boot entries, read
+        through a read-only mount that is undone afterwards. (None, None,
+        None) if it can't be read."""
+        dutil = self.view.dutil
+        try:
+            mount = dutil.mount_read_only(esp.name)
+        except (subprocess.CalledProcessError, OSError, KeyError) as error:
+            log.warning("the ESP couldn't be mounted read-only: %s", error)
+            return None, None, None
+        try:
+            files = []
+            for rel, path in walk_files(mount, skip=MACOS_BOOKKEEPING).items():
+                size, digest = c.sha256_file(path)
+                files.append({"path": rel, "size": size, "digest": digest})
+            try:
+                with open(os.path.join(mount, c.HANDOFF_PATH), "rb") as f:
+                    handoff = c.parse_handoff(f.read(c.LIMIT_HANDOFF + 1))
+            except (OSError, c.Invalid, canonical.CanonicalError, KeyError, TypeError):
+                handoff = None
+            entries = {}
+            folder = os.path.join(mount, "loader", "entries")
+            for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+                if name.endswith(".conf"):
+                    with open(os.path.join(folder, name), "rb") as f:
+                        entries[name] = f.read(64 * 1024).decode("utf-8", "replace")
+            return files, handoff, entries
+        except (StageFailure, OSError) as error:
+            log.warning("the ESP couldn't be read: %s", error)
+            return None, None, None
+        finally:
+            try:
+                dutil.unmount(esp.name)
+            except Exception as error:
+                log.warning("couldn't unmount the ESP again: %s", error)
 
     # Before anything changes ---------------------------------------------------
 
@@ -507,10 +567,37 @@ class Engine:
             )
         self.ipsw = self.choose_ipsw()
         self.t.log("info", f"Asahi's installer gives the new system macOS {self.ipsw.version}'s OS firmware.")
+        # Room for Apple's files, which the apple-inputs stage keeps in the
+        # macOS container until the run ends: above Asahi's minimum when the
+        # container shrinks, its free space less 1 GiB otherwise.
+        if self.shrink:
+            self.apple_room = max(0, self.shrink["to"] - self.shrink_minimum)
+        else:
+            macos = [k for k in doc["disk"]["containers"] if k["partition"] == c.uuid_any(self.cur_os.partition.uuid)]
+            self.apple_room = max(0, macos[0]["free"] - c.GIB) if macos else 0
+        # The setup hints are read now, before any intent, from the owner's
+        # own files: if reading them fails or stalls, nothing has changed.
+        self.full_name = self.owner_full_name()
+        self.hints = read_hints(self.host, self.owner, self.full_name)
         for name in ("boot", "logo.icns", "step2"):
             link = os.path.join(self.workdir, name)
             if not os.path.lexists(link):
                 os.symlink(os.path.join(self.asahi.root, name), link)
+        self.open_working_view()
+
+    def owner_full_name(self):
+        """The owner's full name from the running macOS's
+        AdminUserRecoveryInfo.plist (the record Asahi copies to the stub),
+        read as a small root-owned file; None if it can't be read."""
+        o = self.cur_os
+        try:
+            path = os.path.join(o.preboot, o.vgid, "var/db/AdminUserRecoveryInfo.plist")
+            records = plistlib.loads(self.host.read_small_file(path, {0}))
+            name = records[self.owner]["RealName"]
+        except Exception as error:
+            log.info("no full name for %s: %s", self.owner, error)
+            return None
+        return name if isinstance(name, str) else None
 
     def check_password(self):
         p = self.password
@@ -600,6 +687,7 @@ class Engine:
                     "The plan shrinks macOS below the smallest size Asahi's installer allows "
                     "(macOS keeps 38 GB free for its updates).",
                 )
+            self.shrink_minimum = k["resize"]["minimum"]
             if part.offset + s["to"] != target["offset"] or end > part.offset + part.size + cand["adjacent_free"]:
                 raise Refusal("plan-mismatch", "Sekka's place doesn't follow the shrunk container.")
             self.shrink_partition = part.uuid
@@ -656,6 +744,47 @@ class Engine:
         self.view.refresh()
         return self.view
 
+    def open_working_view(self):
+        """The view the stages work through. It mounts read-write only
+        Sekka's own volumes (the planned stub's, once it exists, and the
+        planned ESP) and everything else read-only, and unmounts all it
+        mounted when the run ends."""
+        from .asahi import Mounts, View
+
+        self.working = View(self.asahi, Mounts(self.writable))
+        self.view = self.working
+
+    def close_working_view(self):
+        if self.working is not None:
+            try:
+                self.working.close()
+            except Exception as error:
+                log.warning("couldn't unmount what the run mounted: %s", error)
+            self.working = None
+
+    def writable(self, info, dutil):
+        if self.writable_esp and (info.get("DiskUUID") or "").lower() == self.writable_esp:
+            return True
+        ref = info.get("APFSContainerReference")
+        container = dutil.ctnr_by_ref.get(ref) if ref else None
+        return bool(
+            self.writable_container
+            and container
+            and (container.get("APFSContainerUUID") or "").lower() == self.writable_container
+            and not info.get("PartitionMapPartition")  # a volume, not the container's store
+        )
+
+    def workdir_bytes(self):
+        """What the engine's own files occupy on macOS's volume now (the
+        spool of Apple's files): removed when the run ends."""
+        total = 0
+        for dirpath, dirnames, filenames in os.walk(self.workdir):
+            for name in filenames:
+                st = os.lstat(os.path.join(dirpath, name))
+                if stat.S_ISREG(st.st_mode):
+                    total += st.st_blocks * 512
+        return total
+
     def require_partition(self, gpt_uuid, what):
         p = self.view.partition(gpt_uuid)
         if p is None:
@@ -669,7 +798,7 @@ class Engine:
         """Unmount and mount again, so what is read next comes from the disk
         rather than what the system cached while writing."""
         self.sync()
-        self.view.dutil.action("unmount", device)
+        self.view.dutil.unmount(device)
         return self.view.dutil.mount(device)
 
     def stub_os(self):
@@ -692,13 +821,21 @@ class Engine:
             self.progress("apple-inputs", done[0], total)
 
         try:
-            r = apple_inputs.prepare(a, self.ins, self.ipsw, self.workdir, progress=progress)
+            r = apple_inputs.prepare(a, self.ins, self.ipsw, self.workdir, progress=progress, room=self.apple_room)
+        except apple_inputs.NoRoom as error:
+            raise StageFailure(
+                "apple-inputs-no-room",
+                f"Apple's startup files for the new system need {error.needed} bytes on macOS's volume while "
+                f"Sekka installs, more than this plan leaves room for ({error.room} bytes). Nothing on the "
+                "disk changed; check this Mac again for a new plan.",
+            )
         except Exception as error:
             log.exception("Apple's inputs")
             raise StageFailure(
                 "apple-inputs-failed",
-                "Apple's startup files for the new system couldn't be downloaded and checked. Nothing on "
-                "the disk changed; try again when the network is working.",
+                "Apple's startup files for the new system couldn't be downloaded over HTTPS and checked "
+                "against the archive's own CRC-32 checksums. Nothing on the disk changed; try again when "
+                "the network is working.",
                 str(error),
             )
         self.restore = r
@@ -730,10 +867,19 @@ class Engine:
             raise StageFailure("plan-mismatch", "Another container now occupies that partition.")
         doc, inspector = inspect_mac(self.asahi, self.host, self.profile, privileged=True)
         k = [x for x in doc["disk"]["containers"] if x["uuid"] == container][0]
-        if k["resize"] is None or s["to"] < k["resize"]["minimum"]:
+        # The engine's own spool of Apple's files is counted as used now and
+        # deleted when the run ends: it doesn't raise the minimum macOS keeps.
+        spool = self.workdir_bytes()
+        if k["resize"] is None or s["to"] < k["resize"]["minimum"] - spool:
             raise StageFailure(
                 "shrink-too-far",
-                "macOS now needs more room than when the plan was made; nothing was resized.",
+                "macOS now needs more room than when the plan was made; nothing was resized."
+                + (
+                    ""
+                    if k["resize"] is None
+                    else f" Its minimum is now {k['resize']['minimum']} bytes ({spool} of them the installer's "
+                    f"own temporary files); the plan shrinks it to {s['to']}."
+                ),
             )
         v = self.refreshed()
         part = self.require_partition(self.shrink_partition, "The macOS container")
@@ -810,6 +956,7 @@ class Engine:
             )
         self.stub_uuid = c.uuid_any(stub.uuid)
         self.stub_container = c.uuid_any(stub.container["APFSContainerUUID"])
+        self.writable_container = self.stub_container
         facts = [
             c.fact("stub-partition", self.stub_uuid),
             c.fact("stub-container", self.stub_container),
@@ -906,6 +1053,7 @@ class Engine:
             )
         self.esp_uuid = c.uuid_any(esp.uuid)
         self.root_uuid = c.uuid_any(root.uuid)
+        self.writable_esp = self.esp_uuid
         facts = [
             c.fact("esp-partition", self.esp_uuid),
             c.fact("esp-offset", esp.offset),
@@ -982,7 +1130,7 @@ class Engine:
             os.fsync(f.fileno())
         os.replace(entry_path + ".new", entry_path)
         expected[entry_rel] = (len(filled), canonical.digest_bytes(filled))
-        hints = read_hints(self.host, self.owner, getattr(self, "full_name", None))
+        hints = self.hints
         handoff = c.handoff(
             self.installation,
             plan["release"]["release"],
@@ -1022,6 +1170,10 @@ class Engine:
                 "esp-read-back-mismatch",
                 f"The ESP read back differs from what was written: {', '.join(wrong[:5])}.",
             )
+        # Verified: nothing more is written to the ESP, and a FAT volume left
+        # mounted would be writable by any of the owner's processes.
+        self.sync()
+        self.view.dutil.unmount(esp.name)
         files = [{"path": rel, "size": s, "digest": d} for rel, (s, d) in found.items()]
         provided = [k for k in ("locale", "keyboard", "timezone", "computer_name", "full_name") if hints.get(k)]
         facts = [
@@ -1192,7 +1344,7 @@ class Engine:
             os.fsync(f.fileno())
         # Read everything back from the disk.
         self.sync()
-        v.dutil.action("unmount", o.sys_volume)
+        v.dutil.unmount(o.sys_volume)
         v = self.refreshed()
         _, o = self.stub_os()
         system = v.dutil.mount(o.sys_volume)

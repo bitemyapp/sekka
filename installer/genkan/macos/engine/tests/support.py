@@ -139,6 +139,10 @@ class FakeMac:
         self.resize_failure = None
         self.bless_mode = "ok"
         self.commands = []
+        self.mount_log = []
+        # A folder whose files take space in the running macOS's container,
+        # as the engine's workdir under /private/tmp does on a Mac.
+        self.charge = None
         self.extra_internal_disks = 0
         os.makedirs(os.path.join(root, "mnt"), exist_ok=True)
         os.makedirs(os.path.join(root, "raw"), exist_ok=True)
@@ -199,6 +203,47 @@ class FakeMac:
                     return ct, v
         return None, None
 
+    def lookup(self, target):
+        """A partition or volume by device name, /dev path or UUID."""
+        target = target.removeprefix("/dev/")
+        upper = target.upper()
+        for p in self.parts:
+            if p.uuid.upper() == upper:
+                return p
+        for ct in self.containers.values():
+            for v in ct.volumes:
+                if v.uuid.upper() == upper:
+                    return v
+        p = self.part_by_name(target)
+        if p is not None:
+            return p
+        return self.volume_by_dev(target)[1]
+
+    def charged_bytes(self):
+        total = 0
+        if self.charge and os.path.isdir(self.charge):
+            for dirpath, dirnames, filenames in os.walk(self.charge):
+                for name in filenames:
+                    path = os.path.join(dirpath, name)
+                    if not os.path.islink(path):
+                        total += os.lstat(path).st_blocks * 512
+        return total
+
+    def is_macos_container(self, ct):
+        return any(v.group == self.boot_group for v in ct.volumes)
+
+    def mounted_now(self):
+        """(uuid, mode) of everything mounted that macOS didn't mount itself."""
+        out = []
+        for p in self.parts:
+            if p.mounted and p.mounted != "system":
+                out.append((p.uuid, p.mounted))
+        for ct in self.containers.values():
+            for v in ct.volumes:
+                if v.mounted and v.mounted != "system":
+                    out.append((v.uuid, v.mounted))
+        return out
+
     def store_part(self, ct):
         for p in self.parts:
             if p.container is ct:
@@ -214,8 +259,8 @@ class FakeMac:
 
     def fs(self, path):
         """An absolute macOS path, inside the running macOS's System volume."""
-        if not path.startswith("/"):
-            return path
+        if not path.startswith("/") or path.startswith(self.root + os.sep):
+            return path  # relative, or already a path in the fake (a mount point)
         return os.path.join(self.macos_system().dir, path.lstrip("/"))
 
     def raw_path(self, p):
@@ -430,24 +475,25 @@ class FakeMac:
             return plist({"Snapshots": list(v.snapshots)})
         if args[0] == "mount":
             target = args[-1]
-            p = self.part_by_name(target)
-            if p is not None:
-                if not p.fat:
-                    return 1, b"", b"Volume on disk0 failed to mount\n"
-                p.mounted = True
-                return f"Volume {p.volume_name} on {target} mounted\n"
-            ct, v = self.volume_by_dev(target)
-            if v is None:
+            mode = "ro" if args[1:-1] == ["readOnly"] else "rw"
+            assert args[1:-1] in ([], ["readOnly"]), args
+            thing = self.lookup(target)
+            if thing is None:
                 return 1, b"", b"no such volume\n"
-            v.mounted = True
-            return f"Volume {v.name} on {target} mounted\n"
+            if isinstance(thing, Part) and not thing.fat:
+                return 1, b"", b"Volume on disk0 failed to mount\n"
+            if thing.mounted:
+                return f"Volume on {target} is already mounted\n"
+            thing.mounted = mode
+            self.mount_log.append((thing.uuid, mode))
+            return f"Volume on {target} mounted\n"
         if args[0] == "unmount":
-            p = self.part_by_name(args[1])
-            if p is not None:
-                p.mounted = False
-            else:
-                ct, v = self.volume_by_dev(args[1])
-                v.mounted = False
+            thing = self.lookup(args[1])
+            if thing is None:
+                return 1, b"", b"no such volume\n"
+            if thing.mounted == "system":
+                raise AssertionError(f"the engine unmounted {args[1]}, which macOS mounted")
+            thing.mounted = False
             return b"unmounted\n"
         if args[0] == "addPartition":
             return self.add_partition(*args[1:])
@@ -508,10 +554,11 @@ class FakeMac:
 
     def apfs_container(self, ct):
         store = self.store_part(ct)
+        free = ct.free - (self.charged_bytes() if self.is_macos_container(ct) else 0)
         return {
             "APFSContainerUUID": ct.uuid,
             "CapacityCeiling": ct.ceiling,
-            "CapacityFree": ct.free,
+            "CapacityFree": free,
             "ContainerReference": ct.ref,
             "DesignatedPhysicalStore": self.part_name(store),
             "PhysicalStores": [{"DeviceIdentifier": self.part_name(store), "DiskUUID": store.uuid, "Size": store.size}],
@@ -546,6 +593,11 @@ class FakeMac:
 
     def info(self, target):
         target = target.removeprefix("/dev/")
+        thing = self.lookup(target)
+        if isinstance(thing, Part):
+            target = self.part_name(thing)
+        elif isinstance(thing, Volume) and self.volume_by_dev(target)[1] is None:
+            target = thing.dev
         if target == "disk0":
             return {
                 "Content": "GUID_partition_scheme",
@@ -677,6 +729,7 @@ class FakeHost(host_module.Host):
     def __init__(self, mac):
         self.mac = mac
         self.corrupt_read_back = False
+        self.owner_uid = os.getuid()
 
     def run(self, argv, input=None, timeout=None):
         return self.mac.run([str(a) for a in argv], input=input)
@@ -702,9 +755,16 @@ class FakeHost(host_module.Host):
         os.fsync(fileobj.fileno())
         return "fsync"
 
-    def read_file(self, path):
-        with open(self.mac.fs(path), "rb") as f:
-            return f.read()
+    def user(self, name):
+        if name != OWNER:
+            raise KeyError(name)
+        return self.owner_uid, f"/Users/{OWNER}"
+
+    def read_small_file(self, path, owners, limit=host_module.SMALL_FILE_LIMIT):
+        # The fake's files all belong to whoever runs the tests: root's are
+        # those, and the owner's are too unless a test says otherwise.
+        real = {os.getuid() if uid == 0 else uid for uid in owners}
+        return host_module.read_small_file(self.mac.fs(path), real, limit)
 
     def readlink(self, path):
         return os.readlink(self.mac.fs(path))
@@ -746,6 +806,8 @@ def base_mac(root, container_size=CONTAINER_CLEAN, privileged=True, seed=1):
     data = mac.add_volume(ct, "Macintosh HD - Data", ["Data"], filevault=True)
     mac.add_volume(ct, "VM", ["VM"])
     group = mac.group(data, system, guuid=mac.new_uuid())
+    # macOS mounts its own System (as its sealed snapshot), Data and Preboot.
+    system.mounted = data.mounted = preboot.mounted = "system"
     mac.boot_group = mac.nvram_boot_group = group
     mac.limits[macos.uuid] = {
         "ContainerCurrentSize": container_size,
@@ -935,6 +997,8 @@ def m1_pro_with_asahi(root, **kw):
     mac.policies[stub_group] = "deadbeef"
     ct_macos, system = mac.volume_by_dev("disk4s1")
     _, preboot = mac.volume_by_dev("disk4s2")
+    _, macos_data = mac.volume_by_dev("disk4s5")
+    system.mounted = preboot.mounted = macos_data.mounted = "system"
     write_macos_files(mac, system, preboot, macos_group)
     _, stub_system = mac.volume_by_dev("disk3s2")
     _, stub_preboot = mac.volume_by_dev("disk3s3")
@@ -1214,7 +1278,7 @@ def derive_plan(inspection, release, sekka, place="shrink", profile=None):
     return plan
 
 
-def make_restore_zip():
+def make_restore_zip(basesystem_size=5000):
     """A small stand-in for Apple's macOS 14.8.3 update for the J514S, laid
     out as Asahi's OTA path mapping expects (AssetData/boot, AssetData/
     Restore), with members for another device that must not be fetched."""
@@ -1264,7 +1328,7 @@ def make_restore_zip():
     }
     members = [("AssetData/boot/" + k, v, 0o100644) for k, v in boot.items()]
     members += [("AssetData/Restore/" + k, v, 0o100644) for k, v in restore.items()]
-    members.append(("AssetData/payloadv2/basesystem_patches/arm64eBaseSystem.dmg", b"BXDIFF50" + b"\0" * 5000, 0o100644))
+    members.append(("AssetData/payloadv2/basesystem_patches/arm64eBaseSystem.dmg", b"BXDIFF50" + b"\0" * basesystem_size, 0o100644))
     members.append(("AssetData/payloadv2/payload.000", bytes(rng.getrandbits(8) for _ in range(2 * MIB)), 0o100644))
     return stored_zip(with_directories(members))
 
@@ -1317,7 +1381,7 @@ class Channel:
         return [json.loads(line) for line in self.lines]
 
 
-def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, password=PASSWORD, owner=OWNER, installation="1f7d9c62-4a1b-4c8e-9d3f-2b6a8e0c5d47", channel=None, privileged=True, restore=None):
+def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, password=PASSWORD, owner=OWNER, installation="1f7d9c62-4a1b-4c8e-9d3f-2b6a8e0c5d47", channel=None, privileged=True, restore=None, esp_inventory=None):
     from sekka_engine.engine import Engine
 
     channel = channel or Channel(mac)
@@ -1341,7 +1405,7 @@ def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, passwor
             outcome = engine.run_inspect()
         elif mode == "startup-disk":
             plan_bytes = canonical.dumps(plan) if isinstance(plan, dict) else plan
-            outcome = engine.run_startup_disk(plan_bytes, installation, owner)
+            outcome = engine.run_startup_disk(plan_bytes, installation, owner, esp_inventory)
         else:
             plan_bytes = canonical.dumps(plan) if isinstance(plan, dict) else plan
             outcome = engine.run_execute(plan_bytes, release["dir"], installation, owner)

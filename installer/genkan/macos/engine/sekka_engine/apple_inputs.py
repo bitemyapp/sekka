@@ -35,6 +35,15 @@ EOCD_WINDOW = 65536 + 22
 PLACEHOLDER_VGID = "00000000-0000-0000-0000-000000000000"
 
 
+class NoRoom(Exception):
+    """Apple's files would need more room than the plan left for them."""
+
+    def __init__(self, needed, room):
+        super().__init__(f"Apple's files need {needed} bytes; the plan leaves {room}")
+        self.needed = needed
+        self.room = room
+
+
 class SpoolGap(IOError):
     """A read from the spool reached bytes that were never fetched."""
 
@@ -197,10 +206,14 @@ def member_range(source, info):
     return start, start + zipfile.sizeFileHeader + name_len + extra_len + info.compress_size
 
 
-def prepare(asahi, ins, ipsw, workdir, progress=None):
+def prepare(asahi, ins, ipsw, workdir, progress=None, room=None):
     """Open Apple's image with Asahi's StubInstaller.load_ipsw, choose the
     build identity with its load_identity, and spool every member the stub
     needs. Afterwards `ins` reads from the spool, not the network.
+
+    The spool lives on macOS's volume until the run ends. When `room` is
+    given and the members would take more than that, NoRoom is raised after
+    reading only the zip's directory, before the members are fetched.
 
     Returns facts for the checkpoint."""
     ins.load_ipsw(ipsw)
@@ -213,7 +226,6 @@ def prepare(asahi, ins, ipsw, workdir, progress=None):
     with remote.open(ins.path("BuildManifest.plist")) as f:
         manifest_bytes = f.read()
     names = needed_members(ins, identity, remote)
-    spool = Spool(os.path.join(workdir, "restore.spool"), source.size if source is not None else 0)
     if source is None:
         raise IOError("Apple's restore image must come from Apple's server")
     start_dir = getattr(remote, "start_dir", None)
@@ -224,6 +236,12 @@ def prepare(asahi, ins, ipsw, workdir, progress=None):
     for name in names:
         ranges.append(member_range(source, remote.getinfo(name)))
     total = sum(e - s for s, e in ranges)
+    # Each range may round up to a whole 4 KiB block once written.
+    needed = total + 4096 * len(ranges)
+    if room is not None and needed > room:
+        source.close_connection()
+        raise NoRoom(needed, room)
+    spool = Spool(os.path.join(workdir, "restore.spool"), source.size)
     for s, e in ranges:
         spool.fetch(source, s, e, progress=(lambda n: progress(n, total)) if progress else None)
     local = zipfile.ZipFile(spool)

@@ -55,51 +55,98 @@ def load(root, host):
     return ns
 
 
-def read_only_diskutil(asahi):
-    """Asahi's DiskUtil, mounting read-only and remembering what it mounted,
-    for inspection: looking must not change what is mounted, or how."""
+class Mounts:
+    """What one run (or one inspection) mounted, by identity, and how.
 
-    class ReadOnlyDiskUtil(asahi.diskutil.DiskUtil):
-        def __init__(self):
-            super().__init__()
-            self.mounted_here = []
+    `writable(info, dutil)` says which volumes may be mounted read-write
+    (by default none); everything else is mounted read-only. Volumes that
+    were already mounted when asked for are left as they are, except that a
+    volume this ledger mounted read-only is mounted again read-write once it
+    becomes writable. `restore` unmounts everything this ledger mounted.
+    Records are kept by GPT or volume UUID, since device names change as
+    partitions are added."""
 
+    def __init__(self, writable=None):
+        self.writable = writable or (lambda info, dutil: False)
+        self.records = {}  # identity -> "ro" | "rw"
+
+    def identity(self, info, target):
+        return (info.get("DiskUUID") or info.get("VolumeUUID") or target).upper()
+
+    def restore(self, dutil):
+        for identity in reversed(list(self.records)):
+            try:
+                dutil.action("unmount", identity)
+            except Exception as error:  # report it, don't hide the run's result
+                log.warning("couldn't unmount %s again: %s", identity, error)
+        self.records = {}
+
+
+def policy_diskutil(asahi, mounts):
+    """Asahi's DiskUtil whose mount() follows a Mounts ledger: read-write only
+    where the ledger allows, read-only otherwise, and every mount recorded so
+    that it can be undone. Asahi's own code (OSEnum, the stub install) mounts
+    through it too."""
+
+    class PolicyDiskUtil(asahi.diskutil.DiskUtil):
         def mount(self, target):
-            before = self.get("info", "-plist", target).get("MountPoint") or ""
-            if not before:
-                self.action("mount", "readOnly", target)
-                self.mounted_here.append(target)
             info = self.get("info", "-plist", target)
-            return info["MountPoint"]
+            identity = mounts.identity(info, target)
+            want = "rw" if mounts.writable(info, self) else "ro"
+            have = mounts.records.get(identity)
+            if info.get("MountPoint"):
+                if have != "ro" or want == "ro":
+                    return info["MountPoint"]
+                # Ours, read-only, and now Sekka's own: mount it writable.
+                self.action("unmount", target)
+            if want == "rw":
+                self.action("mount", target)
+            else:
+                self.action("mount", "readOnly", target)
+            mounts.records[identity] = want
+            return self.get("info", "-plist", target)["MountPoint"]
+
+        def mount_read_only(self, target):
+            """Mounted read-only by this ledger, whoever mounted it before."""
+            info = self.get("info", "-plist", target)
+            identity = mounts.identity(info, target)
+            if info.get("MountPoint"):
+                if mounts.records.get(identity) == "ro":
+                    return info["MountPoint"]
+                self.action("unmount", target)
+            self.action("mount", "readOnly", target)
+            mounts.records[identity] = "ro"
+            return self.get("info", "-plist", target)["MountPoint"]
+
+        def unmount(self, target):
+            info = self.get("info", "-plist", target)
+            self.action("unmount", target)
+            mounts.records.pop(mounts.identity(info, target), None)
 
         def restore_mounts(self):
-            for target in reversed(self.mounted_here):
-                try:
-                    self.action("unmount", target)
-                except Exception as error:  # report, don't hide the inspection
-                    log.warning("couldn't unmount %s again: %s", target, error)
-            self.mounted_here = []
+            mounts.restore(self)
 
-    return ReadOnlyDiskUtil()
+    return PolicyDiskUtil()
 
 
 class View:
     """The Mac as Asahi's own model describes it: SystemInfo (ioreg, nvram,
     bputil, the SystemVersion plists), DiskUtil (diskutil's plists) and
-    OSEnum (each container's operating systems)."""
+    OSEnum (each container's operating systems).
 
-    def __init__(self, asahi, read_only):
+    Mounts follow the given ledger; without one, everything is mounted
+    read-only. close() unmounts what the view mounted."""
+
+    def __init__(self, asahi, mounts=None):
         self.asahi = asahi
-        self.read_only = read_only
+        self.mounts = mounts if mounts is not None else Mounts()
         self.sysinfo = asahi.system.SystemInfo()
         self.dutil = None
         self.refresh()
 
     def refresh(self):
-        if self.dutil is not None and self.read_only:
-            self.dutil.restore_mounts()
         a = self.asahi
-        self.dutil = read_only_diskutil(a) if self.read_only else a.diskutil.DiskUtil()
+        self.dutil = policy_diskutil(a, self.mounts)
         self.dutil.get_info()
         self.sys_disk = self.dutil.find_system_disk()
         self.parts = self.dutil.get_partitions(self.sys_disk)
@@ -110,7 +157,7 @@ class View:
         return self
 
     def close(self):
-        if self.dutil is not None and self.read_only:
+        if self.dutil is not None:
             self.dutil.restore_mounts()
 
     # Lookups by identity: device names (disk0s3) change as partitions are
