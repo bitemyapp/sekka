@@ -40,6 +40,11 @@ That gap has since closed. Inside Tasuke, Sekka's assistant, whose desktop tools
 - **For the desktop alone,** Holo4 27B did all 18 tasks inside Tasuke and Muse Glimmer 16; Holo4's licence is non-commercial and it is built on Qwen3.8, and Muse is slow at diagnostics (22 of 32 faults inside Tasuke, a median 224 seconds each).
 - **Every model ran far above 10 tokens/s** on the 5090: the slowest, the dense ~30B models, decode about 70.
 
+**Against the cloud** ([tasuke.md](tasuke.md#cloud-models-for-reference)): the same scenarios were run in the cloud models' own agents, Claude Code and Codex.
+- Claude Haiku 5.5, Claude Sonnet 5.5 and GPT-6.1 Terra fixed all 32 faults and did all 18 desktop tasks. GPT-6 Luna fixed all 32 faults and did 16 desktop tasks.
+- None of the four harmed anything, and each took a median of 19–34 seconds per fault.
+- Gemma 4 31B inside Tasuke is 4 faults short (28 of 32) and level on the desktop. Tasuke's Compare Models page shows the cloud models as reference rows beside the local ones.
+
 ## The 8 GiB round
 
 Which models, at which quantizations, help on a GPU with 8 GiB of memory, the most common gaming and laptop size? Six were run on 2026-11-05 through the same scenarios, harnesses and checks as above. Quality doesn't depend on how many requests a server takes at once, so the episodes ran eight at a time on the RTX 5090 and the RTX PRO 6000; `fit8gib.py` then measured each model's single-user server as a person with an 8 GiB card would run it (`args_8gib`: one slot, 32K context, q8_0 KV cache, and for the mixtures of experts some layers' experts in system RAM), with the context filled and, for vision models, an image decoded. Tables per scenario are in [results-2026-11-05-8gib.md](results-2026-11-05-8gib.md); the data in [data/2026-11-05-8gib.jsonl](data/2026-11-05-8gib.jsonl).

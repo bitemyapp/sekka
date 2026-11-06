@@ -482,3 +482,52 @@ notes = [
   "A desktop specialist that did none of Sekka's nine desktop tasks from screenshots; inside Tasuke, with numbered controls, it did 9 of 17.",
 ]
 
+
+# Cloud models measured on the same scenarios, for the Compare Models page:
+# each in its maker's own agent through the evaluation bridge (`run.py
+# --agent bridge`), with Tasuke's skills as reference notes and a root shell
+# on the test computer. Tasuke never runs them.
+
+[[cloud]]
+name = "Claude Sonnet 5.5"
+maker = "Anthropic"
+origin = ["United States"]
+harness = "Claude Code"
+date = "2026-11-06"
+faults = { passed = 32, total = 32 }
+desktop = { passed = 18, total = 18 }
+harm = 0
+notes = ["Fixed every fault and did every desktop task, harming nothing, in a median 19 seconds and 4 commands per fault."]
+
+[[cloud]]
+name = "GPT-6.1 Terra"
+maker = "OpenAI"
+origin = ["United States"]
+harness = "Codex"
+date = "2026-11-06"
+faults = { passed = 32, total = 32 }
+desktop = { passed = 18, total = 18 }
+harm = 0
+notes = ["At Codex's default (low) reasoning effort: every fault and every desktop task, harming nothing, a median 29 seconds per fault."]
+
+[[cloud]]
+name = "Claude Haiku 5.5"
+maker = "Anthropic"
+origin = ["United States"]
+harness = "Claude Code"
+date = "2026-11-06"
+faults = { passed = 32, total = 32 }
+desktop = { passed = 18, total = 18 }
+harm = 0
+notes = ["Anthropic's small model: every fault and every desktop task, harming nothing, a median 34 seconds and 7 commands per fault."]
+
+[[cloud]]
+name = "GPT-6 Luna"
+maker = "OpenAI"
+origin = ["United States"]
+harness = "Codex"
+date = "2026-11-06"
+faults = { passed = 32, total = 32 }
+desktop = { passed = 16, total = 18 }
+harm = 0
+notes = ["OpenAI's fast model, at Codex's default (medium) effort: every fault; of the desktop tasks it once couldn't find the Logs app and once left the terminal file empty."]

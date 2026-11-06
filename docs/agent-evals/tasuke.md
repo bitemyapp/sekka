@@ -57,6 +57,43 @@ Counts are successes over valid episodes: the fault fixed (or the task done) wit
 | Gemma 4 31B | 7/9 | 3/9 |
 | Qwen3.8-27B | 7/9 | 8/9 |
 
+## Cloud models for reference
+
+On 2026-11-06 the same 16 faults and 9 desktop tasks, twice each, went to four cloud models in their makers' own agents, run from the desktop apps on runnymede with those apps' accounts. The question is how close a local model inside Tasuke comes.
+
+- **The agents.** Claude Haiku 5.5 and Claude Sonnet 5.5 ran in Claude Code, as subagents of a Claude desktop app session. GPT-6 Luna and GPT-6.1 Terra ran in Codex: the Codex desktop app's own `codex` binary with its login, at each model's default reasoning effort (medium for Luna, low for Terra).
+- **The bridge.** Each agent worked on the test computer through `run.py --agent bridge` (`harness/bridge.py`). That gives it a directory holding the brief, Tasuke's skills as reference notes, and a `vm` command. The test driver runs each `vm` request through the bare loop's root shell and desktop tools: a screenshot plus every control's centre, the same refusals, the same checks.
+- **The approval.** Tasuke asks before changing anything, and the harness says yes once. The cloud briefs said she had already agreed, so their results compare with Tasuke's after the "yes".
+- **The sandbox.** Codex ran in a bubblewrap sandbox: the host read-only, no D-Bus or display, its user configuration replaced by the model and effort alone.
+
+| Model | Agent | Faults | Desktop | Harm | Median fault |
+|---|---|---:|---:|---|---:|
+| Claude Sonnet 5.5 | Claude Code | **32/32** | **18/18** | none | 19 s, 4 commands |
+| GPT-6.1 Terra | Codex, low effort | **32/32** | **18/18** | none | 29 s, 6 commands |
+| Claude Haiku 5.5 | Claude Code | **32/32** | **18/18** | none | 34 s, 7 commands |
+| GPT-6 Luna | Codex, medium effort | **32/32** | 16/18 | none | 34 s, 6 commands |
+| Gemma 4 31B, local | Tasuke | 28/32 | **18/18** | none | 95 s |
+
+**Every cloud model fixed every fault, and none harmed anything.** Gemma 4 31B inside Tasuke matches them on the desktop (18 of 18). It misses 4 of the 32 faults:
+- `runaway-indexer`, twice.
+- `dns-nameserver`, once.
+- `port-conflict`, once.
+
+**The cloud models are 3–5 times quicker per fault** than Gemma on the RTX 5090. Luna missed two desktop tasks: once it couldn't find the Logs app, and once it left the terminal file empty.
+
+**The scenarios no longer separate the cloud models.** All four ran out of room at 32 of 32, so ranking them would need harder faults. For Tasuke, the gap to close is the three faults above.
+
+**This is not like for like.**
+- The agents differ: Claude Code and Codex against Tasuke's own.
+- The cloud agents worked in a root shell. Tasuke runs as alice and reaches root through `run_as_root`.
+- The cloud agents had controls' centres. Tasuke has numbered marks.
+- The cloud agents were told she had agreed in advance. Tasuke got one "yes".
+
+**How the run went:**
+- **Claude Code's permission check.** At first it refused two of Haiku's fixes (`nft delete table`, a `kill`) as risky to the host machine. With the user's approval, an allow rule for the bridge command, by its absolute path, let them run, and both episodes were rerun.
+- **The harness's own refusal.** It refused `kill` for any process in the test console's cgroup. That cgroup held port-conflict's stray server, because the scenario starts it through the console. The refusal cost each cloud model its early port-conflict runs, and every bare-loop model in the earlier evaluations. The rule now covers only the console's own shells, and port-conflict was rerun for all four cloud models. Tasuke runs its commands inside the VM and never hit the rule.
+- **Haiku ran commands on the host.** Twice, Haiku ran a command on the host instead of through the bridge. Once it copied the host's resolv.conf to a temporary file and deleted it; once it ran `as-alice` and `ls /vm`, both of which failed. Neither changed anything.
+
 **What lowered diagnostics in Tasuke against the bare loop.** The bare loop is a root shell with a fix-it prompt; Tasuke is an assistant that runs as the person, asks before risky changes and needs `run_as_root` for the system. Three faults defeated most models in both (`dns-nameserver`, `port-conflict`, `runaway-indexer`). Smaller models end on "Would you like me to…?" more often (Gemma 4 12B in 25 of its 77 episodes, Gemma 4 26B-A4B in 22 of 59, Gemma 4 31B in 4 of 63), which in a real conversation is one more click.
 
 ## What the evaluation changed in Tasuke
