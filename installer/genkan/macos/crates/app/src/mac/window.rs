@@ -26,9 +26,10 @@ use super::pages::{self, Built, Live};
 use sekka_mac_appkit::ui::{self, Targets, Weight};
 use sekka_mac_appkit::views::{CrestView, FlippedView, Mark, MarkView};
 use crate::env::Environment;
-use crate::model::{Effect, Model, Msg, Screen, Step};
+use crate::model::{CheckState, Effect, Model, Msg, Screen, Step};
 use crate::runtime::Runtime;
 use crate::text;
+use sekka_mac_contract::Stage;
 
 const SIDEBAR: f64 = 236.0;
 
@@ -39,7 +40,10 @@ pub struct Ui {
     rx: Receiver<Msg>,
     pub tx: Sender<Msg>,
     pub window: Retained<NSWindow>,
-    steps: Vec<(Retained<MarkView>, Retained<NSTextField>)>,
+    steps: Vec<(Retained<NSStackView>, Retained<MarkView>, Retained<NSTextField>)>,
+    /// The installation's stages as last drawn, to tell VoiceOver when one
+    /// starts or fails.
+    stages: Vec<(Stage, CheckState)>,
     release: Retained<NSTextField>,
     document: Retained<FlippedView>,
     bar: Retained<NSStackView>,
@@ -151,10 +155,10 @@ impl Ui {
             let words = ui::stack(mtm, true, 1.0, &[&t, &s]);
             let row = ui::stack(mtm, false, 10.0, &[&mark, &words]);
             row.setAlignment(objc2_app_kit::NSLayoutAttribute::Top);
+            // Labelled with where the person is on it, in `render`.
             row.setAccessibilityElement(true);
-            ui::label(&row, &format!("Step {} of 6: {title}", n + 1));
-            rows.push(Retained::into_super(row));
-            steps.push((mark, t));
+            rows.push(Retained::into_super(row.clone()));
+            steps.push((row, mark, t));
             let _ = number;
         }
         let refs: Vec<&NSView> = rows.iter().map(|v| &**v).collect();
@@ -215,6 +219,7 @@ impl Ui {
             tx,
             window,
             steps,
+            stages: Vec::new(),
             release,
             document,
             bar,
@@ -310,8 +315,9 @@ impl Ui {
         // The journey.
         let step = self.model.step();
         let order = [Step::Check, Step::Size, Step::Download, Step::Install, Step::Recovery, Step::Account];
-        for (n, (mark, title)) in self.steps.iter().enumerate() {
+        for (n, (row, mark, title)) in self.steps.iter().enumerate() {
             let s = order[n];
+            ui::label(row, &text::journey_step(n, s.cmp(&step)));
             let m = if s < step {
                 Mark::Done
             } else if s == step {
@@ -377,10 +383,15 @@ impl Ui {
             let primary = left.iter().chain(&right).find(|b| b.keyEquivalent().to_string() == "\r");
             let cell = primary.and_then(|b| b.cell()).and_then(|c| c.downcast::<NSButtonCell>().ok());
             self.window.setDefaultButtonCell(cell.as_deref());
+            if let Some(bar) = &live.progress {
+                let downloading = matches!(self.model.screen, Screen::Downloading);
+                ui::label(bar, if downloading { text::DOWNLOAD_PROGRESS } else { text::INSTALL_PROGRESS });
+            }
             self.page = Some((body, live, targets));
             self.log.clear();
         }
         self.update_live();
+        self.announce_stages();
         self.sync_sheet();
     }
 
@@ -447,11 +458,20 @@ impl Ui {
                 for ((stage, mark), (s, state)) in live.stages.iter().zip(m.stages()) {
                     debug_assert_eq!(*stage, s);
                     mark.set_mark(match state {
-                        crate::model::CheckState::Pending => Mark::Empty,
-                        crate::model::CheckState::Good => Mark::Good,
-                        crate::model::CheckState::Warning => Mark::Warning,
-                        crate::model::CheckState::Bad => Mark::Bad,
+                        CheckState::Pending => Mark::Empty,
+                        CheckState::Good => Mark::Good,
+                        // A stage between its intent and its outcome is
+                        // running, not in trouble: the current step's dot.
+                        CheckState::Warning => Mark::Current(0),
+                        CheckState::Bad => Mark::Bad,
                     });
+                    // The mark's row, with the stage's name beside it, is
+                    // what VoiceOver reads. SAFETY: the row is in the page,
+                    // which holds it as long as it holds the mark.
+                    if let Some(row) = unsafe { mark.superview() } {
+                        row.setAccessibilityElement(true);
+                        ui::label(&row, &text::stage_state(s, state));
+                    }
                 }
                 if let Some(log) = &live.log {
                     let lines: Vec<&str> = m.log.iter().rev().take(200).rev().map(String::as_str).collect();
@@ -464,6 +484,26 @@ impl Ui {
             }
             _ => {}
         }
+    }
+
+    /// Tell VoiceOver when a stage starts or fails: the page changes in
+    /// place, away from the person's focus.
+    fn announce_stages(&mut self) {
+        if self.model.installation.is_none() {
+            self.stages.clear();
+            return;
+        }
+        let stages = self.model.stages();
+        if self.stages.len() == stages.len() {
+            for ((stage, before), (_, now)) in self.stages.iter().zip(&stages) {
+                if before != now
+                    && let Some(words) = text::stage_announcement(*stage, *now)
+                {
+                    ui::announce(self.mtm, &words);
+                }
+            }
+        }
+        self.stages = stages;
     }
 
     /// Open, update or close the authorization sheet to match the model.

@@ -6,6 +6,8 @@ use sekka_mac_contract::{
     Stage,
 };
 
+use crate::model::CheckState;
+
 /// Bytes as Finder counts them: decimal units, one decimal place under 100.
 pub fn bytes(n: u64) -> String {
     let units = ["bytes", "KB", "MB", "GB", "TB"];
@@ -57,6 +59,17 @@ pub const JOURNEY: [(&str, &str); 6] = [
     ("Create your account", "When Sekka first starts"),
 ];
 
+/// A step of the journey for VoiceOver: which it is, and whether it is
+/// done (`Less`), the current one (`Equal`) or still to come.
+pub fn journey_step(index: usize, place: std::cmp::Ordering) -> String {
+    let step = format!("Step {} of {}: {}", index + 1, JOURNEY.len(), JOURNEY[index].0);
+    match place {
+        std::cmp::Ordering::Less => format!("{step}, done"),
+        std::cmp::Ordering::Equal => format!("{step}, current step"),
+        std::cmp::Ordering::Greater => step,
+    }
+}
+
 pub fn stage(stage: Stage) -> &'static str {
     stage.title()
 }
@@ -78,6 +91,30 @@ pub fn stage_detail(stage: Stage) -> &'static str {
         Stage::Enrollment | Stage::StartupSelection => "This step happens in Recovery.",
     }
 }
+
+/// How far a stage of the installation got, for VoiceOver. (A stage's
+/// state is `Warning` from its intent until its outcome: it is running.)
+pub fn stage_state(stage: Stage, state: CheckState) -> String {
+    let words = match state {
+        CheckState::Pending => "not started",
+        CheckState::Warning => "in progress",
+        CheckState::Good => "done",
+        CheckState::Bad => "didn't finish",
+    };
+    format!("{}: {words}", stage.title())
+}
+
+/// What VoiceOver says when a stage starts or fails.
+pub fn stage_announcement(stage: Stage, state: CheckState) -> Option<String> {
+    match state {
+        CheckState::Warning => Some(stage.title().to_string()),
+        CheckState::Bad => Some(format!("“{}” didn't finish", stage.title())),
+        CheckState::Pending | CheckState::Good => None,
+    }
+}
+
+pub const DOWNLOAD_PROGRESS: &str = "Download progress";
+pub const INSTALL_PROGRESS: &str = "Installation progress";
 
 pub fn filevault(state: FileVault) -> &'static str {
     match state {
@@ -214,5 +251,16 @@ mod tests {
         assert_eq!(remaining(10, 100.0).unwrap(), "less than a minute left");
         assert_eq!(remaining(240_000_000, 1_000_000.0).unwrap(), "about 4 minutes left");
         assert!(remaining(10, 0.0).is_none());
+    }
+
+    #[test]
+    fn voiceover_hears_where_the_journey_and_the_installation_are() {
+        use std::cmp::Ordering;
+        assert_eq!(journey_step(0, Ordering::Less), "Step 1 of 6: Check this Mac, done");
+        assert_eq!(journey_step(1, Ordering::Equal), "Step 2 of 6: Choose a size, current step");
+        assert_eq!(journey_step(5, Ordering::Greater), "Step 6 of 6: Create your account");
+        assert_eq!(stage_state(Stage::Root, CheckState::Warning), "Writing Sekka: in progress");
+        assert_eq!(stage_announcement(Stage::Root, CheckState::Warning).as_deref(), Some("Writing Sekka"));
+        assert_eq!(stage_announcement(Stage::Root, CheckState::Good), None);
     }
 }

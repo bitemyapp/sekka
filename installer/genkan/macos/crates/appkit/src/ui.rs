@@ -10,12 +10,15 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
-    NSAppearance, NSAppearanceNameDarkAqua, NSButton, NSClickGestureRecognizer, NSColor, NSFont,
-    NSFontWeightBold, NSFontWeightMedium, NSFontWeightRegular, NSFontWeightSemibold,
-    NSLayoutAttribute, NSLayoutConstraintOrientation, NSLineBreakMode, NSStackView,
-    NSStackViewDistribution, NSTextField, NSUserInterfaceLayoutOrientation, NSView,
+    NSAccessibilityAnnouncementKey, NSAccessibilityAnnouncementRequestedNotification,
+    NSAccessibilityPostNotificationWithUserInfo, NSAccessibilityPriorityKey,
+    NSAccessibilityPriorityLevel, NSAppearance, NSAppearanceNameDarkAqua, NSApplication, NSButton,
+    NSClickGestureRecognizer, NSColor, NSFont, NSFontWeightBold, NSFontWeightMedium,
+    NSFontWeightRegular, NSFontWeightSemibold, NSLayoutAttribute, NSLayoutConstraintOrientation,
+    NSLineBreakMode, NSStackView, NSStackViewDistribution, NSTextField,
+    NSUserInterfaceLayoutOrientation, NSView,
 };
-use objc2_foundation::{NSArray, NSEdgeInsets, NSObjectProtocol, NSString};
+use objc2_foundation::{NSArray, NSDictionary, NSEdgeInsets, NSNumber, NSObjectProtocol, NSString};
 
 pub struct TargetIvars {
     callback: RefCell<Box<dyn FnMut()>>,
@@ -297,4 +300,18 @@ pub fn on_fill() -> Retained<NSColor> {
 /// For views that must tell their own kind apart in tests and accessibility.
 pub fn label(view: &NSView, label: &str) {
     view.setAccessibilityLabel(Some(&ns(label)));
+}
+
+/// Have VoiceOver say `words` now: for a change made by the app itself,
+/// away from where the person's focus is.
+pub fn announce(mtm: MainThreadMarker, words: &str) {
+    let app = NSApplication::sharedApplication(mtm);
+    let words = ns(words);
+    let priority = NSNumber::numberWithInteger(NSAccessibilityPriorityLevel::High.0);
+    let (w, p): (&AnyObject, &AnyObject) = (&words, &priority);
+    let info = NSDictionary::from_slices(
+        &[unsafe { NSAccessibilityAnnouncementKey }, unsafe { NSAccessibilityPriorityKey }],
+        &[w, p],
+    );
+    unsafe { NSAccessibilityPostNotificationWithUserInfo(&app, NSAccessibilityAnnouncementRequestedNotification, Some(&info)) };
 }
