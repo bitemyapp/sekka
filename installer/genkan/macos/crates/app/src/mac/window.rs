@@ -114,6 +114,9 @@ impl Ui {
         window.setTitlebarAppearsTransparent(true);
         window.setTitleVisibility(NSWindowTitleVisibility::Hidden);
         window.setContentMinSize(NSSize::new(760.0, 540.0));
+        // Pages are rebuilt while the window is open: Tab follows the
+        // controls of the page shown, not the first one.
+        window.setAutorecalculatesKeyViewLoop(true);
         window.center();
         window.setFrameAutosaveName(&ui::ns("SekkaInstallerWindow"));
 

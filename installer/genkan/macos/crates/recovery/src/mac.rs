@@ -470,6 +470,8 @@ fn open(mtm: MainThreadMarker) -> Rc<RefCell<Window>> {
     unsafe { window.setReleasedWhenClosed(false) };
     window.setTitle(&NSString::from_str("Finish Installing Sekka"));
     window.setTitlebarAppearsTransparent(true);
+    // Each screen is built anew: Tab follows the controls on it.
+    window.setAutorecalculatesKeyViewLoop(true);
     window.center();
     let content = window.contentView().expect("a content view");
     let crest = CrestView::new(mtm, 72.0);
