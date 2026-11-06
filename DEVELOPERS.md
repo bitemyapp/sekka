@@ -2943,11 +2943,13 @@ installer/genkan/macos/packaging/build-app.sh --engine ENGINE.tar.gz --icon AppI
 ```
 
 `--simulate SCENARIO` runs the whole journey with nothing real behind it
-(`normal`, `unsupported`, `not-ready`, `offline`, `low-space`,
-`wrong-password`, `download-fails`, `resize-fails`, `install-fails`,
-`startup-disk-fails`, `waiting-for-recovery`, `existing`,
-`needs-approval`); `--screenshots DIR` renders every screen of every
-scenario in light and dark through AppKit. Production builds refuse both.
+(`normal`, `unsupported`, `not-ready`, `offline`, `outdated`,
+`low-space`, `wrong-password`, `download-fails`, `unplugged`,
+`resize-fails`, `install-fails`, `startup-disk-fails`,
+`waiting-for-recovery`, `recovery-finished`, `removed-by-hand`,
+`stopped-early`, `existing`, `needs-approval`); its helper refuses to
+reconcile, as the real one does for now. `--screenshots DIR` renders
+every screen of every scenario in light and dark through AppKit. Production builds refuse both.
 Development builds also read their catalog from `SEKKA_INSTALLER_CATALOG`
 (a file, still verified with the development key). A release
 (`build-app.sh --release`) needs a clean checkout, `SEKKA_TEAM_ID`,
