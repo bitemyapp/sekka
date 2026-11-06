@@ -47,6 +47,8 @@ struct Log {
     loop_no_filesystem: bool,
     loop_already_mounted: bool,
     mount_error: bool,
+    /// Someone else mounts the filesystem just before a Mount call lands.
+    mount_race: bool,
     autoclear_error: bool,
     delete_error: bool,
 }
@@ -245,6 +247,16 @@ struct FakeFs {
     log: Shared,
 }
 
+/// UDisks's own errors, for those the tests need by name.
+#[derive(Debug, zbus::DBusError)]
+#[zbus(prefix = "org.freedesktop.UDisks2.Error")]
+enum UdisksError {
+    #[zbus(error)]
+    ZBus(zbus::Error),
+    Failed(String),
+    AlreadyMounted(String),
+}
+
 impl FakeFs {
     fn default_with(log: Shared, label: &str) -> FakeFs {
         FakeFs { mount_points: Vec::new(), label: label.into(), log }
@@ -262,11 +274,21 @@ impl FakeFs {
         _options: HashMap<String, OwnedValue>,
         #[zbus(header)] header: zbus::message::Header<'_>,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
-    ) -> fdo::Result<String> {
+    ) -> Result<String, UdisksError> {
         let me = header.path().map(|p| p.to_string()).unwrap_or_default();
         note(&self.log, format!("Mount {me}"));
-        if self.log.lock().unwrap().mount_error {
-            return Err(fdo::Error::Failed("mount refused".into()));
+        let (refused, race) = {
+            let log = self.log.lock().unwrap();
+            (log.mount_error, log.mount_race)
+        };
+        if refused {
+            return Err(UdisksError::Failed("mount refused".into()));
+        }
+        if race {
+            let theirs = format!("/run/media/other/{}", self.label);
+            self.mount_points = vec![bytes(&theirs)];
+            self.mount_points_changed(&emitter).await?;
+            return Err(UdisksError::AlreadyMounted(format!("Device is already mounted at `{theirs}'.")));
         }
         let at = format!("/run/media/test/{}", self.label);
         self.mount_points = vec![bytes(&at)];
@@ -605,6 +627,30 @@ fn mounting_and_safe_removal() {
     assert_eq!(tail.len(), 4, "{calls:?}");
     assert!(tail[..2].iter().all(|c| c.starts_with("Unmount")));
     assert_eq!(&tail[2..], ["Lock", "PowerOff"]);
+}
+
+#[test]
+fn opening_says_where_a_filesystem_is_mounted_even_by_someone_else() {
+    let bus = test_bus!();
+    let (_fake, log) = serve(&bus);
+    let disks = start(&bus);
+    // Mounted by someone else as the request lands: UDisks refuses it as
+    // already mounted, and that's where it is.
+    {
+        let mut log = log.lock().unwrap();
+        log.calls.clear();
+        log.mount_race = true;
+    }
+    assert_eq!(disks.open(&block_path("sdb1")).wait().unwrap(), "/run/media/other/STICK");
+    assert_eq!(calls(&log), [format!("Mount {}", block_path("sdb1"))]);
+    // Mounted already: no call at all.
+    log.lock().unwrap().calls.clear();
+    assert_eq!(disks.open(&block_path("sdb1")).wait().unwrap(), "/run/media/other/STICK");
+    assert!(calls(&log).is_empty(), "{:?}", calls(&log));
+    // A plain mount says the refusal.
+    assert!(disks.mount(&block_path("sdb1")).wait().is_err());
+    // Nothing to mount: said.
+    assert!(disks.open(&block_path("sdb3")).wait().is_err(), "a locked volume has no filesystem");
 }
 
 #[test]

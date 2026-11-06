@@ -475,9 +475,13 @@ start (`drives.json` in Chanoma's state remembers), but again if it opens
 one day and later fails. *Settings › Folders* keeps listing the drives
 that couldn't be opened, with why, and tries one again when it's
 pressed. `--no-drives` leaves drives alone (a preview beside a desktop).
-A drive another account has mounted is under that account's
-`/run/media/USER`, which the TV account can't read: unmount it there
-first.
+Each drive is mounted once: a filesystem that drops out of UDisks's view
+for a moment (as it probes a drive, or mounts it) isn't mounted again, and
+one mounted meanwhile by someone else counts as opened where it is
+(`Disks::open`). A drive another account has open is under that account's
+`/run/media/USER`, which this one can't read (a grown-up's desktop opened
+it, then the TV account logged in): it's said the same way, once, with
+what to do (eject it there, or unplug it and plug it back in).
 
 *Add a folder…*, and Home's *Add games*, open a picker of Chanoma's own
 (`folders.rs`, `app/picker.rs`, `ui/picker.rs`), as the kit's file panel
