@@ -24,6 +24,10 @@
   helper,
   aizomePackage ? aizome.packages.${pkgs.stdenv.hostPlatform.system}.aizome,
   greeterPackage ? aizomePackage,
+  # On an Apple Silicon host (the J514S under linux-aurora), KVM's in-kernel
+  # interrupt controller stalls an aarch64 guest's boot at its serial port;
+  # QEMU's own GICv2 boots it.
+  userspaceIrqchip ? false,
 }:
 let
   inherit (pkgs) lib;
@@ -131,16 +135,22 @@ pkgs.testers.runNixOSTest {
 
       virtualisation = {
         memorySize = 4096;
-        cores = 4;
+        # Fewer virtual processors than a busy host has free: a starved
+        # aarch64 guest can stop at boot with a watchdog lockup.
+        cores = 2;
         qemu.options = [
           "-vga none"
           "-device virtio-gpu-pci,xres=1920,yres=1200"
+        ]
+        ++ lib.optionals userspaceIrqchip [
+          "-machine"
+          "kernel_irqchip=off,gic-version=2"
         ];
       };
     };
 
   testScript = ''
-    import json, shlex, time
+    import datetime, json, shlex, time
 
     INSPECT = "/run/greeter-inspect"
     # Typed with QEMU's (US) key codes once the keyboard is German, where
@@ -169,7 +179,12 @@ pkgs.testers.runNixOSTest {
             if last:
                 return last
             time.sleep(0.5)
-        raise Exception(f"timed out waiting for {what}: {last!r}; the greeter shows {texts()}")
+        focused = [e.get("name") or e.get("text") for d in docs() for e in d.get("elements", []) if e.get("focused")]
+        print(machine.execute("journalctl -b --no-pager -o cat -u greetd -u sekka-setup | tail -40")[1])
+        raise Exception(f"timed out waiting for {what}: {last!r}; the greeter shows {texts()}, focused {focused}")
+
+    def focused():
+        return [e.get("name") for d in docs() for e in d.get("elements", []) if e.get("focused")]
 
     def shows(text, timeout=60):
         return until(f"{text!r} on the login screen", lambda: any(text in t for t in texts()), timeout)
@@ -187,6 +202,32 @@ pkgs.testers.runNixOSTest {
         for _ in range(n):
             machine.send_key(k)
             time.sleep(0.3)
+
+    # Unhurried: with QEMU's own interrupt controller (userspaceIrqchip) a
+    # loaded host can drop keys sent 10 ms apart.
+    def typed(text):
+        machine.send_chars(text, delay=datetime.timedelta(milliseconds=80))
+
+    # A key that moves to another page, pressed again if the page didn't
+    # move (a key the guest never got), never once it has.
+    # A key that opens a menu, again if it didn't open.
+    def open_menu(k, title):
+        for _ in range(3):
+            key(k)
+            try:
+                return until(f"the {title} menu", lambda: any(d.get("kind") == "menu" and any(e.get("label") == title for e in d.get("elements", [])) for d in docs()), 15)
+            except Exception as e:
+                last = e
+        raise last
+
+    def advance(k, *wanted):
+        for _ in range(3):
+            key(k)
+            try:
+                return until(f"one of {wanted}", lambda: any(w in t for w in wanted for t in texts()), 15)
+            except Exception as e:
+                last = e
+        raise last
 
     def greeter_up():
         machine.wait_until_succeeds("pgrep -u greeter -x aizome-greeter", timeout=120)
@@ -212,21 +253,23 @@ pkgs.testers.runNixOSTest {
     machine.wait_for_unit("greetd.service")
 
     with subtest("the image has no account and no usable password"):
-        machine.succeed("! awk -F: '$3 >= 1000 && $3 < 60000' /etc/passwd | grep .")
+        # Nix's build users (30001 up) have no shell; no one else is there.
+        machine.succeed("! awk -F: '$3 >= 1000 && $3 < 60000 && $7 !~ /nologin$/' /etc/passwd | grep .")
         usable = machine.succeed("awk -F: '$2 !~ /^[!*]/ && $2 != \"\" {print $1}' /etc/shadow").strip()
         assert usable == "", f"accounts with a password: {usable}"
         assert machine.succeed("stat -c '%U %G %a' /run/sekka-setup.sock").split() == ["root", "sekka-setup", "660"]
         # Nobody else may ask the helper: not even a person in the group by
         # accident (SO_PEERCRED), nor anyone outside it (the socket's mode).
         machine.fail("su -s /bin/sh nobody -c 'echo {\\\"op\\\":\\\"status\\\"} | ${pkgs.socat}/bin/socat - UNIX-CONNECT:/run/sekka-setup.sock'")
-        answer = machine.succeed("echo '{\"op\":\"status\"}' | ${pkgs.socat}/bin/socat - UNIX-CONNECT:/run/sekka-setup.sock")
+        answer = machine.succeed("echo '{\"op\":\"status\"}' | ${pkgs.socat}/bin/socat -t 10 - UNIX-CONNECT:/run/sekka-setup.sock")
         assert "only the login screen" in answer, answer
 
     with subtest("the login screen sets the Mac up: welcome"):
         greeter_up()
         shows("Set up your Mac")
+        until("Continue to have the focus", lambda: "setup-start" in focused())
         machine.screenshot("01-welcome")
-        key("ret")
+        advance("ret", "Language and region")
 
     with subtest("language and region, from macOS's hints; the keyboard changed to German"):
         shows("Language: Deutsch (Deutschland)")
@@ -234,47 +277,48 @@ pkgs.testers.runNixOSTest {
         shows("Europe/Berlin now")
         machine.screenshot("02-region")
         key("tab")
-        key("ret")
-        menu_open("Keyboards")
-        machine.send_chars("germ")
+        open_menu("ret", "Keyboards")
+        typed("germ")
         key("ret")
         shows("Keyboard: German")
         # The try-it field has the focus: the key that types z on a US
         # keyboard types y on a German one, once the compositor has it.
         time.sleep(2)
-        machine.send_chars("z")
+        typed("z")
         until("the German layout", lambda: any(t == "y" for t in texts()))
         machine.screenshot("03-german")
         # The time zone, searched: Lisbon (nothing here needs y or z).
         key("tab")
-        machine.send_chars("lisbon")
+        typed("lisbon")
         shows("Lisbon, Portugal")
         key("ret")
         shows("Europe/Lisbon now")
         # Return in the emptied field goes on.
-        key("ret")
+        advance("ret", "Make your account")
 
     with subtest("the account: macOS's name; the password typed twice on the German keyboard"):
         shows("Make your account")
         until("the suggested names", lambda: "ada" in texts() and "adas-macbook-pro" in texts())
-        machine.send_chars(KEYS + "\t")
-        machine.send_chars(KEYS)
+        typed(KEYS)
         shows("Long enough.")
+        key("tab")
+        typed(KEYS)
         machine.screenshot("04-account")
         key("ret")
-        key("ret")
+        until("the computer name's field", lambda: "setup-hostname" in focused())
+        advance("ret", "Choose your desktop")
 
     with subtest("the desktop, the review, the work"):
         shows("Choose your desktop")
-        key("ret")
-        shows("Ready to set up")
+        advance("ret", "Ready to set up")
         for want in ("Name: Ada Lovelace", "User name: ada", "Computer name: adas-macbook-pro",
                      "Language: Deutsch (Deutschland)", "Keyboard: German",
                      "Time zone: Lisbon, Portugal (Europe/Lisbon)", "Desktop: Aizome"):
             shows(want)
         machine.screenshot("05-review")
-        key("ret")
+        advance("ret", "Setting up your Mac", "Your account is ready")
         shows("Your account is ready", timeout=300)
+        shows("adas-macbook-pro")
         machine.screenshot("06-login")
 
     with subtest("what setup did, and nothing secret left"):
@@ -312,10 +356,10 @@ pkgs.testers.runNixOSTest {
 
     with subtest("a wrong password is refused; the right one starts Aizome"):
         shows("Ada Lovelace")
-        machine.send_chars("not the password\n")
+        typed("not the password\n")
         shows("That password didn't work. Try again.")
         machine.screenshot("07-wrong")
-        machine.send_chars(KEYS + "\n")
+        typed(KEYS + "\n")
         machine.wait_until_succeeds("pgrep -u ada -x aizome-shell", timeout=120)
         machine.wait_until_fails("pgrep -u greeter -x aizome-greeter", timeout=60)
         time.sleep(5)
@@ -328,19 +372,18 @@ pkgs.testers.runNixOSTest {
         as_ada("aizomectl lock")
         until("the lock screen", lambda: "lock screen" in as_ada("aizomectl input-state"), 30)
         machine.screenshot("09-locked")
-        machine.send_chars(KEYS + "\n")
+        typed(KEYS + "\n")
         until("unlocked", lambda: "lock screen" not in as_ada("aizomectl input-state"), 30)
 
     with subtest("logging out, then the other desktop"):
         log_out("aizome-shell")
         greeter_up()
         shows("Ada Lovelace")
-        key("f2")
-        menu_open("Sessions")
-        machine.send_chars("tat")
+        open_menu("f2", "Sessions")
+        typed("tat")
         key("ret")
         shows("Session: Tatami")
-        machine.send_chars(KEYS + "\n")
+        typed(KEYS + "\n")
         machine.wait_until_succeeds("pgrep -u ada -x sway", timeout=120)
         time.sleep(3)
         machine.screenshot("10-tatami")
@@ -362,11 +405,10 @@ pkgs.testers.runNixOSTest {
         assert machine.succeed("readlink /etc/localtime").strip().endswith("zoneinfo/Europe/Lisbon")
         machine.screenshot("11-after-reboot")
         # The login screen types German too: the password, typed as before.
-        key("f2")
-        menu_open("Sessions")
-        machine.send_chars("aiy")
+        open_menu("f2", "Sessions")
+        typed("aiy")
         key("ret")
-        machine.send_chars(KEYS + "\n")
+        typed(KEYS + "\n")
         machine.wait_until_succeeds("pgrep -u ada -x aizome-shell", timeout=120)
   '';
 }

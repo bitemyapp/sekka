@@ -64,6 +64,7 @@ let
       hostnamectl = "${config.systemd.package}/bin/hostnamectl";
       timedatectl = "${config.systemd.package}/bin/timedatectl";
       localectl = "${config.systemd.package}/bin/localectl";
+      systemctl = "${config.systemd.package}/bin/systemctl";
       nix = "${config.nix.package}/bin/nix";
     };
   };

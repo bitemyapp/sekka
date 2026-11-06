@@ -282,6 +282,11 @@ pub struct Setup {
     stale: bool,
     /// Continue was pressed with something wrong: say what, everywhere.
     pub flagged: bool,
+    /// Continue was pressed while a check was out: go on once it says yes.
+    pending_continue: bool,
+    /// Continue found the passwords different: say so until the second is
+    /// typed again.
+    repeat_flagged: bool,
     pub zone_query: String,
     /// The highlighted match in the time zone list.
     pub zone_pick: usize,
@@ -307,6 +312,8 @@ impl Default for Setup {
             checking: false,
             stale: false,
             flagged: false,
+            pending_continue: false,
+            repeat_flagged: false,
             zone_query: String::new(),
             zone_pick: 0,
             try_text: String::new(),
@@ -349,8 +356,7 @@ impl Setup {
                 // Not while it's still being typed: once it's as long as
                 // the first, or left empty when Continue was tried.
                 let typed = !self.repeat.is_empty() && self.repeat.chars().count() >= self.password.chars().count();
-                let missing = self.flagged && self.repeat.is_empty() && !self.password.is_empty();
-                ((typed || missing) && self.repeat != self.password)
+                ((typed || self.repeat_flagged) && self.repeat != self.password)
                     .then(|| "The passwords don't match. Type the same password twice.".to_owned())
             }
             Input::Password => {
@@ -583,7 +589,9 @@ impl Greeter {
             // A test: it answers itself.
             return;
         }
-        match connect(&path, cx.stream()) {
+        let out = cx.stream();
+        self.setup_out = Some(out.clone());
+        match connect(&path, out) {
             Ok(tx) => {
                 self.to_setup = Some(tx);
                 self.setup_send(&Request::Status {});
@@ -594,6 +602,16 @@ impl Greeter {
 
     fn setup_send(&mut self, r: &Request) {
         let mut l = line(r);
+        // Lost meanwhile (the helper restarted): ask on a new connection.
+        if self.to_setup.is_none()
+            && self.live
+            && let (Some(path), Some(out)) = (self.cfg.setup_socket.clone(), self.setup_out.clone())
+        {
+            match connect(&path, out) {
+                Ok(link) => self.to_setup = Some(link),
+                Err(e) => log::warn!("setup: {}: {e}", path.display()),
+            }
+        }
         if let Some(link) = &self.to_setup
             && link.tx.send(std::mem::take(&mut l)).is_err()
         {
@@ -623,6 +641,7 @@ impl Greeter {
 
     fn go(&mut self, page: Page, cx: &mut Cx<Msg>) {
         let Some(s) = self.setup.as_mut() else { return };
+        log::info!("setup: {page:?}");
         s.page = page;
         s.flagged = false;
         let focus = match page {
@@ -651,6 +670,8 @@ impl Greeter {
             SetupMsg::Lost(why) => {
                 log::error!("setup: {why}");
                 self.to_setup = None;
+                // A check that was out is asked again, on a new connection.
+                s.stale |= s.checking;
                 s.checking = false;
                 if matches!(s.page, Page::Connecting) {
                     s.page = Page::Unavailable;
@@ -702,6 +723,7 @@ impl Greeter {
             SetupMsg::Repeat(v) => {
                 greetd::zero_string(&mut s.repeat);
                 s.repeat = v;
+                s.repeat_flagged = false;
             }
             SetupMsg::Submit(input) => {
                 let at = Input::ALL.iter().position(|i| *i == input).unwrap_or(0);
@@ -812,13 +834,18 @@ impl Greeter {
         let Some(s) = self.setup.as_mut() else { return };
         match s.page {
             Page::Account if !s.account_ready() => {
-                s.flagged = true;
-                if let Some(i) = s.first_unready() {
-                    cx.focus(i.id());
+                let unready = s.first_unready();
+                if unready.is_none() && !s.settled() {
+                    // Only the helper's verdict is missing: go on when it comes.
+                    log::info!("setup: waiting for the helper's check to go on");
+                    s.pending_continue = true;
+                    return;
                 }
-                if !s.settled() {
-                    // Judge it as it is now, then the person can go on.
-                    self.check();
+                log::info!("setup: the account isn't ready ({unready:?})");
+                s.flagged = true;
+                s.repeat_flagged = s.repeat != s.password;
+                if let Some(i) = unready {
+                    cx.focus(i.id());
                 }
             }
             Page::Review => self.setup_update(SetupMsg::SetUp, cx),
@@ -877,6 +904,8 @@ impl Greeter {
                 s.checked = checked;
                 if s.stale {
                     self.check();
+                } else if std::mem::take(&mut s.pending_continue) && s.page == Page::Account {
+                    self.setup_continue(cx);
                 }
             }
             Response::Progress(p) => s.progress = Some(p),
@@ -906,6 +935,8 @@ impl Greeter {
         self.to_setup = None;
         if self.live {
             self.users = crate::users::find(&self.cfg.hidden_users);
+            // The computer has the name setup gave it now.
+            self.hostname = self.cfg.hostname.clone().unwrap_or_else(crate::app::hostname);
         }
         if let Some(d) = &done {
             if !self.users.iter().any(|u| u.name == d.username) {

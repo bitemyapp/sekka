@@ -142,6 +142,7 @@ pub struct Greeter {
     /// First-boot setup, where the configuration has a helper for it.
     pub setup: Option<crate::setup::Setup>,
     pub(crate) to_setup: Option<crate::setup::Link>,
+    pub(crate) setup_out: Option<aizome_kit::MsgSender<Msg>>,
     /// The compositor's settings file, ours to rewrite (its keyboard).
     pub settings_file: Option<PathBuf>,
     pub setup_logo: Option<Image>,
@@ -204,6 +205,7 @@ impl Greeter {
             power_error: None,
             setup,
             to_setup: None,
+            setup_out: None,
             settings_file: None,
             setup_logo: None,
         }
@@ -653,7 +655,7 @@ impl Program for Greeter {
 }
 
 /// The host name, from the kernel.
-fn hostname() -> String {
+pub(crate) fn hostname() -> String {
     std::fs::read_to_string("/proc/sys/kernel/hostname").map(|s| s.trim().to_owned()).unwrap_or_default()
 }
 

@@ -30,6 +30,14 @@ pub struct Account {
     pub shell: String,
 }
 
+impl Account {
+    /// It has a shell to log in with (not `nologin` or `false`).
+    pub fn can_log_in(&self) -> bool {
+        let name = self.shell.rsplit('/').next().unwrap_or("");
+        !self.shell.is_empty() && !matches!(name, "nologin" | "false")
+    }
+}
+
 /// The account setup makes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NewAccount {
@@ -296,7 +304,12 @@ impl System for Host {
     fn set_locale(&mut self, locale: &str) -> Result<()> {
         // /etc/locale.conf, which the module makes localed's
         // (i18n.imperativeLocale) until the configuration names it.
-        self.quick(&self.config.tools.localectl.clone(), &["set-locale", &format!("LANG={locale}")])?;
+        let lang = format!("LANG={locale}");
+        self.quick(&self.config.tools.localectl.clone(), &["set-locale", &lang])?;
+        // systemd reads locale.conf as it starts; until the next boot, the
+        // service manager hands the new language to what it starts next,
+        // the person's user manager among them.
+        self.quick(&self.config.tools.systemctl.clone(), &["set-environment", &lang])?;
         Ok(())
     }
 

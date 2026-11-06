@@ -210,9 +210,11 @@ fn read_credential(config: &Config) -> Result<Option<Zeroizing<String>>> {
     }
 }
 
-/// People's accounts on the system (uids `UID_MIN` up to `UID_MAX`).
+/// People's accounts on the system: uids `UID_MIN` up to `UID_MAX` with a
+/// shell to log in with, as the login screen lists them. Nix's build users
+/// (`nixbld1`, 30001 up) are in that range, with no shell.
 pub fn people<S: System>(sys: &S) -> Result<Vec<Account>> {
-    Ok(sys.accounts()?.into_iter().filter(|a| (UID_MIN..UID_MAX).contains(&a.uid)).collect())
+    Ok(sys.accounts()?.into_iter().filter(|a| (UID_MIN..UID_MAX).contains(&a.uid) && a.can_log_in()).collect())
 }
 
 /// Where setup stands, and what it staged.
@@ -547,7 +549,12 @@ pub(crate) mod tests {
                 shell: "/run/current-system/sw/bin/nologin".into(),
             };
             Fake {
-                accounts: vec![account("root", 0), account("greeter", 999), account("nobody", 65534)],
+                accounts: vec![
+                    account("root", 0),
+                    account("greeter", 999),
+                    account("nixbld1", 30001),
+                    account("nobody", 65534),
+                ],
                 shadow: [("root".into(), "!".into()), ("greeter".into(), "!".into())].into(),
                 groups: ["users", "wheel", "networkmanager", "render"].iter().map(|g| (g.to_string(), BTreeSet::new())).collect(),
                 hostname: String::new(),

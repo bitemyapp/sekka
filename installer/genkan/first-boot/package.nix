@@ -18,6 +18,8 @@ let
       ./Cargo.lock
       ./offered.json
       ./src
+      # setup.nix as the helper writes it, which a test holds it to.
+      ./test-data
     ];
   };
   backend = lib.fileset.toSource {

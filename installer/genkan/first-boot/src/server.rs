@@ -111,6 +111,7 @@ pub fn connection<S: System>(mut stream: UnixStream, config: &Config, sys: &mut 
     let uid = peer_uid(&stream)?;
     if uid != allowed {
         protocol::write(&mut stream, &Response::Error("Setup answers only the login screen.".into()))?;
+        close_gently(&mut stream);
         bail!("refused a connection from user id {uid}");
     }
     stream.set_read_timeout(Some(IDLE_CONNECTION))?;
@@ -121,6 +122,7 @@ pub fn connection<S: System>(mut stream: UnixStream, config: &Config, sys: &mut 
             Ok(None) => return Ok(()),
             Err(e) => {
                 let _ = protocol::write(&mut out, &Response::Error(format!("Setup couldn't read the request: {e}.")));
+                close_gently(&mut stream);
                 return Err(e.into());
             }
         };
@@ -130,10 +132,28 @@ pub fn connection<S: System>(mut stream: UnixStream, config: &Config, sys: &mut 
             Ok(r) => answer(r, config, sys, &mut out)?,
             Err(e) => {
                 protocol::write(&mut out, &Response::Error(e.clone()))?;
+                close_gently(&mut stream);
                 bail!("{e}");
             }
         }
     }
+}
+
+/// End a connection whose peer may still be sending, so it reads the
+/// answer rather than a reset: no more from here, and what it sent (up to
+/// a request's worth, for a second at most) read and dropped.
+fn close_gently(stream: &mut UnixStream) {
+    let _ = stream.shutdown(std::net::Shutdown::Write);
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
+    let mut sink = [0u8; 4096];
+    let mut left = protocol::MAX_REQUEST;
+    while left > 0 {
+        match std::io::Read::read(stream, &mut sink) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => left = left.saturating_sub(n),
+        }
+    }
+    zeroize::Zeroize::zeroize(&mut sink[..]);
 }
 
 fn cmdline() -> String {

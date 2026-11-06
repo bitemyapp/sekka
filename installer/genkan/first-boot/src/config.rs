@@ -66,6 +66,7 @@ pub struct Tools {
     pub hostnamectl: PathBuf,
     pub timedatectl: PathBuf,
     pub localectl: PathBuf,
+    pub systemctl: PathBuf,
     pub nix: PathBuf,
 }
 
@@ -83,7 +84,7 @@ impl Config {
             ensure!(p.is_absolute(), "{} isn't an absolute path", p.display());
         }
         let t = &self.tools;
-        for p in [&t.useradd, &t.usermod, &t.chpasswd, &t.hostnamectl, &t.timedatectl, &t.localectl, &t.nix] {
+        for p in [&t.useradd, &t.usermod, &t.chpasswd, &t.hostnamectl, &t.timedatectl, &t.localectl, &t.systemctl, &t.nix] {
             ensure!(p.is_absolute(), "{} isn't an absolute path", p.display());
         }
         ensure!(!self.desktops.is_empty(), "no desktops are installed");
@@ -156,6 +157,7 @@ pub(crate) fn sample(root: &Path) -> Config {
             hostnamectl: "/bin/false".into(),
             timedatectl: "/bin/false".into(),
             localectl: "/bin/false".into(),
+            systemctl: "/bin/false".into(),
             nix: "/bin/false".into(),
         },
     }
