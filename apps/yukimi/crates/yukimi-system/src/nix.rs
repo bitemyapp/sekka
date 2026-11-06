@@ -97,8 +97,7 @@ impl Stop {
         state.requested = true;
         state.stdin = None;
         if let (true, Some(pid)) = (state.signal, state.pid) {
-            // SAFETY: signalling a process has no memory-safety preconditions.
-            unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+            crate::sys::terminate(pid);
         }
     }
 

@@ -57,6 +57,8 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use yukimi_system::sys;
+
 /// pkexec starts programs with an almost empty environment.
 pub const PATH: &str = "/run/current-system/sw/bin:/run/wrappers/bin";
 
@@ -144,12 +146,6 @@ enum Phase {
 
 /// The phase, and the program running now (to stop when asked).
 static STATE: Mutex<(Phase, Option<u32>)> = Mutex::new((Phase::Working, None));
-static INTERRUPTED: AtomicBool = AtomicBool::new(false);
-
-extern "C" fn interrupt(_: libc::c_int) {
-    INTERRUPTED.store(true, Ordering::Relaxed);
-}
-
 fn state() -> std::sync::MutexGuard<'static, (Phase, Option<u32>)> {
     STATE.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
@@ -170,8 +166,7 @@ pub fn stop() {
         Phase::Working | Phase::Stopping => state.0 = Phase::Stopping,
     }
     if let Some(pid) = state.1 {
-        // SAFETY: signalling a process has no memory-safety preconditions.
-        unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) };
+        sys::terminate(pid);
     }
 }
 
@@ -190,25 +185,17 @@ pub fn committed() -> bool {
 pub fn watch_for_stop() {
     // Terminal cancellation must follow the same rollback path as closing
     // the GUI's pipe, not abruptly exit with a half-edited configuration.
-    // SAFETY: the signal handler only stores to a lock-free atomic.
-    unsafe {
-        libc::signal(libc::SIGINT, interrupt as *const () as libc::sighandler_t);
-        libc::signal(libc::SIGTERM, interrupt as *const () as libc::sighandler_t);
-    }
+    sys::catch_sigint();
+    sys::catch_sigterm();
     std::thread::spawn(|| {
         loop {
-            if INTERRUPTED.swap(false, Ordering::Relaxed) {
+            if sys::take_interrupt() {
                 stop();
             }
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
     });
-    // SAFETY: fstat writes only into the struct it is given.
-    let is_pipe = unsafe {
-        let mut stat: libc::stat = std::mem::zeroed();
-        libc::fstat(0, &mut stat) == 0 && (stat.st_mode & libc::S_IFMT) == libc::S_IFIFO
-    };
-    if !is_pipe {
+    if !sys::stdin_is_pipe() {
         return;
     }
     std::thread::spawn(|| {

@@ -14,6 +14,7 @@
 //!
 //! Everything here only reads. The store database is world-readable on
 //! NixOS, so none of it needs root.
+#![forbid(unsafe_code)]
 pub mod db;
 pub mod path;
 pub mod roots;

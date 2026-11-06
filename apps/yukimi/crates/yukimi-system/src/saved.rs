@@ -386,18 +386,8 @@ mod tests {
         assert!(matches!(made_for(&copy), MadeFor::System(s) if s == generation.system()));
         // A link made after the copy: today's generation 4 isn't the copy's.
         std::fs::remove_file(copy.join(MADE_FOR)).unwrap();
-        set_link_time(&f.dir.join("profiles/system-4-link"), 60);
+        crate::sys::set_link_modified(&f.dir.join("profiles/system-4-link"), 60);
         assert!(Snapshot::of(&f.root(), &generation).is_none());
-    }
-
-    /// Sets a symlink's own modification time, `ahead` seconds from now.
-    fn set_link_time(link: &Path, ahead: i64) {
-        let path = std::ffi::CString::new(link.as_os_str().as_bytes()).unwrap();
-        let modified = libc::timespec { tv_sec: crate::now() + ahead, tv_nsec: 0 };
-        let stamps = [modified, modified];
-        // SAFETY: utimensat reads the path and the two timestamps it is given.
-        let r = unsafe { libc::utimensat(libc::AT_FDCWD, path.as_ptr(), stamps.as_ptr(), libc::AT_SYMLINK_NOFOLLOW) };
-        assert_eq!(r, 0);
     }
 
     #[test]
@@ -422,7 +412,7 @@ mod tests {
         // An unrecorded copy of an existing generation, made before its link.
         let six = f.link(6, "/nix/store/s6");
         std::fs::create_dir_all(directory(&f.root(), &six)).unwrap();
-        set_link_time(&f.dir.join("profiles/system-6-link"), 60);
+        crate::sys::set_link_modified(&f.dir.join("profiles/system-6-link"), 60);
         std::fs::remove_file(f.dir.join("profiles/system-1-link")).unwrap();
         f.link(2, "/nix/store/s2-rebuilt");
         prune(&f.root(), &f.profile());
@@ -437,7 +427,7 @@ mod tests {
         let copy = directory(&f.root(), &generation);
         std::fs::create_dir_all(&copy).unwrap();
         std::fs::write(copy.join("flake.lock"), "made by hand long ago").unwrap();
-        set_link_time(&f.dir.join("profiles/system-6-link"), 60);
+        crate::sys::set_link_modified(&f.dir.join("profiles/system-6-link"), 60);
         assert!(Snapshot::of(&f.root(), &generation).is_none());
         // The next change keeps the configuration as it is now.
         let saving = Saving::begin(&f.root(), &generation).unwrap();
