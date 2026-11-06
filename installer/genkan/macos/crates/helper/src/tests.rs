@@ -1230,6 +1230,85 @@ fn an_installation_removed_by_hand_is_recorded_as_removed() {
 }
 
 #[test]
+fn a_free_space_installation_removed_by_hand_is_recorded_as_removed() {
+    // Stopped part way, or waiting for Recovery, then removed by hand and
+    // macOS grown back over the space it had left free.
+    for script in [Script::Die(Stage::Root), Script::Happy] {
+        let w = free_world(script);
+        let id = w.begun();
+        let (state, before) = w.finish(id);
+        assert!(!state.allows_new_installation());
+        *w.fake().inspection.lock().unwrap() = samples::inspection();
+        let (state, records) = w.reconcile(id);
+        assert_eq!(state, InstallState::Removed, "{script:?}");
+        assert_eq!(records.len(), before.len() + 1);
+        assert_eq!(fact_of(&records.last().unwrap().event, "target-extent").as_deref(), Some("macos-container"));
+    }
+    // Or with the space left free.
+    let w = free_world(Script::Happy);
+    let id = w.begun();
+    w.finish(id);
+    *w.fake().inspection.lock().unwrap() = emptied(&w.plan);
+    assert_eq!(w.reconcile(id).0, InstallState::Removed);
+    // Any other partition grown over the space is still something there.
+    let w = free_world(Script::Happy);
+    let id = w.begun();
+    let (state, before) = w.finish(id);
+    let mut other = samples::inspection();
+    other.disk.containers[0].volume_groups[0].uuid = "8e945eba-968d-4906-966b-e07ec593e16a".parse().unwrap();
+    other.layout_digest = other.disk.layout_digest().unwrap();
+    *w.fake().inspection.lock().unwrap() = other;
+    assert_eq!(w.reconcile(id), (state, before));
+}
+
+#[test]
+fn an_unrelated_empty_container_doesnt_stop_a_removal() {
+    // The owner made a data container in Disk Utility, after the Recovery
+    // container. The engine reports it as an unknown, partial installation
+    // with none of its parts named.
+    let w = world(Script::Die(Stage::Root));
+    let id = w.begun();
+    w.finish(id);
+    let mut i = emptied(&w.plan);
+    let partition: Uuid = "6b1d3e5f-2222-4a2b-8c3d-000000000001".parse().unwrap();
+    let after_recovery = i.disk.partitions[2].offset + i.disk.partitions[2].size;
+    i.disk.partitions.push(Partition {
+        uuid: partition,
+        kind: PartitionKind::Apfs,
+        name: "Data".parse().unwrap(),
+        offset: after_recovery,
+        size: 256 * 1024 * 1024,
+    });
+    i.disk.containers.push(Container {
+        uuid: "6b1d3e5f-2222-4a2b-8c3d-000000000002".parse().unwrap(),
+        partition,
+        size: 256 * 1024 * 1024,
+        free: 255 * 1024 * 1024,
+        volume_groups: vec![],
+        resize: None,
+        snapshots: 0,
+    });
+    i.installations.push(Installation {
+        kind: InstallationKind::Unknown,
+        name: "Data".parse().unwrap(),
+        state: InstallationState::Partial,
+        stub_group: None,
+        esp: None,
+        root: None,
+        installation_id: None,
+    });
+    i.issues.push(Issue {
+        code: IssueCode::UnrecognizedLayout,
+        blocking: false,
+        detail: "The APFS container disk0s4 (Data) holds no system the installer recognizes.".parse().unwrap(),
+    });
+    i.layout_digest = i.disk.layout_digest().unwrap();
+    i.check().unwrap();
+    *w.fake().inspection.lock().unwrap() = i;
+    assert_eq!(w.reconcile(id).0, InstallState::Removed);
+}
+
+#[test]
 fn an_ambiguous_inspection_changes_nothing() {
     let w = world(Script::Die(Stage::Root));
     let id = w.begun();

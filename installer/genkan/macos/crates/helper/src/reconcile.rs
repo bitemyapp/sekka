@@ -228,10 +228,13 @@ fn recovery_finished(
 /// the plan put Sekka, and nothing there that could be an unidentified part
 /// of it. (No installation naming it was found; the caller checked.)
 ///
-/// One partition may cover that space: the macOS container the plan shrank,
-/// from before the installation, when it was never shrunk or has been grown
-/// back over the space (the usual last step of removing a system by hand).
-/// Partitions can't overlap, so then nothing else is there.
+/// One partition may cover that space: a macOS container from before the
+/// installation, when it was never shrunk or has been grown back over the
+/// space (the usual last step of removing a system by hand). That is the
+/// container the plan shrank, or the one holding the macOS the plan was
+/// made from, which after a plan for free space is the one usually grown
+/// back. Sekka's stub is a new container holding neither. Partitions can't
+/// overlap, so then nothing else is there.
 fn gone(plan: &Plan, inspection: &Inspection) -> Result<Vec<Fact>, &'static str> {
     let disk = &inspection.disk;
     let target = plan.target;
@@ -239,25 +242,35 @@ fn gone(plan: &Plan, inspection: &Inspection) -> Result<Vec<Fact>, &'static str>
         Action::ShrinkContainer { container, .. } => Some(*container),
         _ => None,
     });
-    let macos = shrunk
-        .and_then(|c| disk.containers.iter().find(|k| k.uuid == c))
-        .map(|k| k.partition);
+    let macos: Vec<Uuid> = disk
+        .containers
+        .iter()
+        .filter(|k| {
+            Some(k.uuid) == shrunk || k.volume_groups.iter().any(|g| g.uuid == plan.disk.macos_volume_group)
+        })
+        .map(|k| k.partition)
+        .collect();
     let mut regrown = false;
     for p in disk.partitions.iter().filter(|p| overlaps(target, p)) {
-        if Some(p.uuid) == macos && p.offset < target.offset {
+        if macos.contains(&p.uuid) && p.offset < target.offset {
             regrown = true;
         } else {
             return Err("a partition still lies where its plan put Sekka");
         }
     }
+    // Every part of an installation is a partition, so the loop above has
+    // already found anything over the space. One the inspection reports
+    // without a part it can place (an empty APFS container elsewhere, which
+    // it names without its partition) isn't there.
     for i in &inspection.installations {
         let unidentified = i.kind == InstallationKind::Sekka && i.installation_id.is_none();
         if !unidentified && i.state != InstallationState::Partial {
             continue;
         }
         match parts(i, inspection) {
-            Some(ps) if !ps.is_empty() && !ps.iter().any(|p| overlaps(target, p)) => {}
-            _ => return Err("an unidentified Sekka or partial installation may be where its plan put Sekka"),
+            Some(ps) if !ps.iter().any(|p| overlaps(target, p)) => {}
+            Some(_) => return Err("an unidentified Sekka or partial installation lies where its plan put Sekka"),
+            None => return Err("an unidentified Sekka or partial installation names a part that isn't on the disk"),
         }
     }
     Ok(evidence(&[

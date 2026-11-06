@@ -553,7 +553,7 @@ records nothing when the inspection can't see the plan's disk or is ambiguous.
 | Account/configuration partly committed | Reconcile the existing account and generation; never reset a user's password as a retry |
 | Installation complete | Verify booted target and configured system; ordinary updates use Yukimi/NixOS generations |
 | Record missing/corrupt or target changed | Refuse destructive resume; provide redacted diagnostics and a manual recovery path |
-| Stopped, and nothing of it on its plan's disk as the helper inspects it | Record it removed (what was checked: no partition in the plan's extent other than the macOS container it shrank, no installation naming it, nothing unidentified there); then reinspect and plan afresh |
+| Stopped, and nothing of it on its plan's disk as the helper inspects it | Record it removed (what was checked: no partition in the plan's extent other than a macOS container from before it, the one it shrank or the one holding its macOS, grown back over the space; no installation naming it; nothing unidentified there); then reinspect and plan afresh |
 
 Checkpoint names and exact write order are phase-0/4 schema deliverables. Test
 process termination, short writes, `ENOSPC`, failed sync and power-loss models
