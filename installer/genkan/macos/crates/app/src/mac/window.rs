@@ -44,6 +44,9 @@ pub struct Ui {
     /// The installation's stages as last drawn, to tell VoiceOver when one
     /// starts or fails.
     stages: Vec<(Stage, CheckState)>,
+    /// Whether the installing page was last drawn, to tell VoiceOver what
+    /// came of the installation when another page takes its place.
+    installing: bool,
     release: Retained<NSTextField>,
     document: Retained<FlippedView>,
     bar: Retained<NSStackView>,
@@ -220,6 +223,7 @@ impl Ui {
             window,
             steps,
             stages: Vec::new(),
+            installing: false,
             release,
             document,
             bar,
@@ -486,9 +490,12 @@ impl Ui {
         }
     }
 
-    /// Tell VoiceOver when a stage starts or fails: the page changes in
-    /// place, away from the person's focus.
+    /// Tell VoiceOver when a stage starts or fails, and what came of the
+    /// installation when it stops: the page changes in place, away from the
+    /// person's focus.
     fn announce_stages(&mut self) {
+        let installing = matches!(self.model.screen, Screen::Installing);
+        let ended = std::mem::replace(&mut self.installing, installing) && !installing;
         if self.model.installation.is_none() {
             self.stages.clear();
             return;
@@ -504,6 +511,12 @@ impl Ui {
             }
         }
         self.stages = stages;
+        if ended
+            && let Some(state) = &self.model.state
+            && let Some(words) = text::installation_ended(state)
+        {
+            ui::announce(self.mtm, &words);
+        }
     }
 
     /// Open, update or close the authorization sheet to match the model.

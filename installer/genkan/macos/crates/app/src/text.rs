@@ -113,6 +113,22 @@ pub fn stage_announcement(stage: Stage, state: CheckState) -> Option<String> {
     }
 }
 
+/// What VoiceOver says when an installation stops running and the page
+/// saying what came of it replaces the installing page, in place.
+pub fn installation_ended(state: &InstallState) -> Option<String> {
+    match state {
+        InstallState::WaitingForRecovery => {
+            Some("macOS's part is done and checked. Finish in Recovery: the steps are on this page.".into())
+        }
+        InstallState::WaitingForSetup => Some("Sekka is installed. Start your Mac in Sekka to create your account.".into()),
+        // Said as the stage failed.
+        InstallState::Failed { .. } | InstallState::StartupDiskFailed => None,
+        // The person asked for it.
+        InstallState::Cancelled => None,
+        other => Some(stopped(other).0),
+    }
+}
+
 pub const DOWNLOAD_PROGRESS: &str = "Download progress";
 pub const INSTALL_PROGRESS: &str = "Installation progress";
 
@@ -262,5 +278,27 @@ mod tests {
         assert_eq!(stage_state(Stage::Root, CheckState::Warning), "Writing Sekka: in progress");
         assert_eq!(stage_announcement(Stage::Root, CheckState::Warning).as_deref(), Some("Writing Sekka"));
         assert_eq!(stage_announcement(Stage::Root, CheckState::Good), None);
+    }
+
+    #[test]
+    fn voiceover_hears_what_came_of_the_installation_once() {
+        assert_eq!(
+            installation_ended(&InstallState::WaitingForRecovery).as_deref(),
+            Some("macOS's part is done and checked. Finish in Recovery: the steps are on this page.")
+        );
+        assert!(installation_ended(&InstallState::WaitingForSetup).unwrap().starts_with("Sekka is installed."));
+        assert_eq!(
+            installation_ended(&InstallState::MutationStarted { stage: Stage::Root }).as_deref(),
+            Some("The installation stopped part way")
+        );
+        // A failed stage has said so already, in the same words as the page.
+        let failed = InstallState::Failed {
+            stage: Stage::Root,
+            disk_changed: DiskChanged::Yes,
+        };
+        assert_eq!(installation_ended(&failed), None);
+        assert_eq!(stopped(&failed).0, stage_announcement(Stage::Root, CheckState::Bad).unwrap());
+        assert_eq!(installation_ended(&InstallState::StartupDiskFailed), None);
+        assert_eq!(installation_ended(&InstallState::Cancelled), None);
     }
 }
