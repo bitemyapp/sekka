@@ -15,7 +15,8 @@ use objc2::runtime::ProtocolObject;
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate,
-    NSApplicationTerminateReply, NSEventModifierFlags, NSMenu, NSMenuItem,
+    NSApplicationTerminateReply, NSEventModifierFlags, NSMenu, NSMenuItem, NSWindow,
+    NSWindowDelegate,
 };
 use objc2_foundation::{NSNotification, NSObject, NSObjectProtocol, NSString};
 
@@ -77,6 +78,7 @@ define_class!(
         fn did_finish_launching(&self, _: &NSNotification) {
             let mtm = self.mtm();
             let ui = Ui::open(mtm, self.ivars().env.clone(), self.ivars().simulated);
+            ui.borrow().window.setDelegate(Some(ProtocolObject::from_ref(self)));
             *self.ivars().ui.borrow_mut() = Some(ui.clone());
             menus(mtm, &mut self.ivars()._targets.borrow_mut(), &ui);
             #[allow(deprecated)]
@@ -86,6 +88,22 @@ define_class!(
         #[unsafe(method(applicationShouldTerminateAfterLastWindowClosed:))]
         fn terminate_after_last_window(&self, _: &NSApplication) -> bool {
             true
+        }
+
+        /// Clicking the Dock icon brings the window back, minimized or not.
+        #[unsafe(method(applicationShouldHandleReopen:hasVisibleWindows:))]
+        fn should_handle_reopen(&self, _: &NSApplication, visible: bool) -> bool {
+            if !visible
+                && let Some(ui) = self.ivars().ui.borrow().as_ref()
+                && let Ok(u) = ui.try_borrow()
+            {
+                if u.window.isMiniaturized() {
+                    u.window.deminiaturize(None);
+                }
+                u.window.makeKeyAndOrderFront(None);
+            }
+            // With a window showing, AppKit does what it always does.
+            visible
         }
 
         #[unsafe(method(applicationShouldTerminate:))]
@@ -102,6 +120,27 @@ define_class!(
             } else {
                 NSApplicationTerminateReply::TerminateCancel
             }
+        }
+    }
+
+    unsafe impl NSWindowDelegate for Delegate {
+        /// The app has one window, and closing it quits. While Sekka is
+        /// installing, closing asks what quitting asks, with the window
+        /// still there: choosing Cancel leaves it open, not an app with no
+        /// window to come back to.
+        #[unsafe(method(windowShouldClose:))]
+        fn window_should_close(&self, _: &NSWindow) -> bool {
+            let running = self
+                .ivars()
+                .ui
+                .borrow()
+                .as_ref()
+                .and_then(|u| u.try_borrow().ok().map(|u| u.model.running))
+                .unwrap_or(false);
+            if running {
+                NSApplication::sharedApplication(self.mtm()).terminate(None);
+            }
+            !running
         }
     }
 );
@@ -142,7 +181,7 @@ fn custom(
     i
 }
 
-fn submenu(mtm: MainThreadMarker, bar: &NSMenu, title: &str, items: &[Retained<NSMenuItem>]) {
+fn submenu(mtm: MainThreadMarker, bar: &NSMenu, title: &str, items: &[Retained<NSMenuItem>]) -> Retained<NSMenu> {
     let menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(title));
     for i in items {
         menu.addItem(i);
@@ -150,6 +189,7 @@ fn submenu(mtm: MainThreadMarker, bar: &NSMenu, title: &str, items: &[Retained<N
     let holder = item(mtm, title, None, "");
     holder.setSubmenu(Some(&menu));
     bar.addItem(&holder);
+    menu
 }
 
 fn menus(mtm: MainThreadMarker, targets: &mut ui::Targets, ui: &Rc<RefCell<Ui>>) {
@@ -201,7 +241,7 @@ fn menus(mtm: MainThreadMarker, targets: &mut ui::Targets, ui: &Rc<RefCell<Ui>>)
             custom(mtm, targets, "Copy Diagnostics", "", send(|| Msg::CopyDiagnostics)),
         ],
     );
-    submenu(
+    let window = submenu(
         mtm,
         &bar,
         "Window",
@@ -210,6 +250,8 @@ fn menus(mtm: MainThreadMarker, targets: &mut ui::Targets, ui: &Rc<RefCell<Ui>>)
             item(mtm, "Zoom", Some(sel!(performZoom:)), ""),
         ],
     );
+    // AppKit lists the window here, with Bring All to Front.
+    app.setWindowsMenu(Some(&window));
     submenu(
         mtm,
         &bar,
