@@ -18,8 +18,13 @@
   system ? "aarch64-linux",
   # Until the platform is on main, Macs follow the Apple integration branch.
   ref ? "fix/apple-silicon-aizome",
-  # The name before setup chooses one.
-  fallback ? "sekka",
+  # The names before setup chooses one: Sekka's, and "nixos", which the
+  # running system reports (systemd's fallback) while its host name is
+  # empty, so nixos-rebuild without a name finds it too.
+  fallbacks ? [
+    "sekka"
+    "nixos"
+  ],
 }:
 let
   source = builtins.readFile ../../templates/flake.nix.in;
@@ -89,10 +94,12 @@ in
         from = "    nixosConfigurations.\"@HOSTNAME@\" = nixpkgs.lib.nixosSystem {";
         to =
           "    # Named after the host name the configuration sets (setup.nix, from\n"
-          + "    # first-boot setup), as Yukimi and nixos-rebuild look it up, and\n"
-          + "    # \"${fallback}\" before setup has chosen one.\n"
+          + "    # first-boot setup), as Yukimi and nixos-rebuild look it up; before\n"
+          + "    # setup, while it is empty, ${lib.concatMapStringsSep " and " (n: ''"${n}"'') fallbacks}.\n"
           + "    nixosConfigurations =\n"
-          + "      (c: { \${if c.config.networking.hostName == \"\" then \"${fallback}\" else c.config.networking.hostName} = c; })\n"
+          + "      (c: if c.config.networking.hostName == \"\"\n"
+          + "        then { ${lib.concatMapStrings (n: "${n} = c; ") fallbacks}}\n"
+          + "        else { \${c.config.networking.hostName} = c; })\n"
           + "      (nixpkgs.lib.nixosSystem {";
         count = 1;
       }
