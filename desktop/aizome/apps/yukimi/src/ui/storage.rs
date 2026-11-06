@@ -138,8 +138,10 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
         caption("Clean up"),
         text(
             "Deleting old generations lets go of what only they have; collecting garbage removes everything nothing \
-             needs, and only then does the space come back. The running system and the one this computer started \
-             with are always kept. To delete one generation, open it in History."
+             needs, and only then does the space come back. Clean Up keeps the generation selected for the next \
+             start and the one in use at the cutoff; the running system and the one this computer started with \
+             keep their files until the next start, even if their generations go. To choose which generations go, \
+             one or several, select them in History."
         )
         .wrap()
         .size(12.0)
