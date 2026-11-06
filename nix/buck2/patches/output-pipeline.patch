@@ -1,0 +1,4127 @@
+diff --git a/app/buck2_action_impl/src/actions/impls/run.rs b/app/buck2_action_impl/src/actions/impls/run.rs
+index 9f29b1d..975066b 100644
+--- a/app/buck2_action_impl/src/actions/impls/run.rs
++++ b/app/buck2_action_impl/src/actions/impls/run.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ use std::borrow::Cow;
+ use std::fmt::Display;
+@@ -1416,6 +1416,11 @@ impl RunAction {
+             .with_priority(self.inner.priority)
+             .with_low_pass_filter(self.inner.low_pass_filter)
+             .with_outputs_cleanup(!self.inner.no_outputs_cleanup)
++            .with_pipeline_cache_upload(
++                self.inner.allow_cache_upload
++                    .unwrap_or_else(|| ctx.run_action_knobs().default_allow_cache_upload)
++                    || force_cache_upload()?,
++            )
+             .with_local_environment_inheritance(EnvironmentInheritance::local_command_exclusions())
+             .with_force_full_hybrid_if_capable(self.inner.force_full_hybrid_if_capable)
+             .with_unique_input_inodes(self.inner.unique_input_inodes)
+@@ -1799,7 +1804,7 @@ impl Action for RunAction {
+             // TODO(jtbraun): D121882458 moves this upload off the action's critical path. Worth
+             // adopting if missing entries, e.g. after a cache bust, make these uploads visible in
+             // build wall time; its in-flight limit has to rise first or it drops most seeding uploads.
+-            let upload_result = ctx
++            let upload_result = match ctx
+                 .cache_upload(
+                     &action_and_blobs,
+                     &result,
+@@ -1812,7 +1817,17 @@ impl Action for RunAction {
+                     },
+                     allow_cache_upload,
+                 )
+-                .await?;
++                .await
++            {
++                Ok(upload_result) => upload_result,
++                Err(error) => {
++                    ctx.record_command_execution_reports(
++                        result.rejected_execution,
++                        result.report,
++                    );
++                    return Err(error);
++                }
++            };
+ 
+             result.cache_upload_result = upload_result.cache_upload_outcome.to_proto();
+             result.dep_file_cache_upload_result = if supports_remote_dep_files {
+diff --git a/app/buck2_build_api/src/actions.rs b/app/buck2_build_api/src/actions.rs
+index 6977218..684798a 100644
+--- a/app/buck2_build_api/src/actions.rs
++++ b/app/buck2_build_api/src/actions.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ //! This module contains support for running actions and asynchronous providers
+ //!
+@@ -56,6 +56,7 @@ use buck2_execute::execute::manager::CommandExecutionManager;
+ use buck2_execute::execute::prepared::PreparedAction;
+ use buck2_execute::execute::request::CommandExecutionRequest;
+ use buck2_execute::execute::request::ExecutorPreference;
++use buck2_execute::execute::result::CommandExecutionReport;
+ use buck2_execute::execute::result::CommandExecutionResult;
+ use buck2_execute::materialize::materializer::Materializer;
+ use buck2_execute::re::manager::UnconfiguredRemoteExecutionClient;
+@@ -276,6 +277,9 @@ pub trait ActionExecutionCtx: Send + Sync {
+         prepared_action: &PreparedAction,
+     ) -> ControlFlow<CommandExecutionResult, CommandExecutionManager>;
+ 
++    /// Publishes cache roots only after validating successful command outputs
++    /// against the action's declarations, returning the original output validation
++    /// error. Callers must record command reports before propagating an error.
+     async fn cache_upload(
+         &mut self,
+         action: &ActionDigestAndBlobs,
+@@ -283,7 +287,14 @@ pub trait ActionExecutionCtx: Send + Sync {
+         re_result: Option<&mut TActionResult2>,
+         dep_file_entry: Option<&mut dyn IntoRemoteDepFile>,
+         allow_cache_upload: bool,
+-    ) -> buck2_error::Result<CacheUploadResults>;
++    ) -> Result<CacheUploadResults, ExecuteError>;
++
++    /// Retains reports when a command result is unpacked or publication fails.
++    fn record_command_execution_reports(
++        &mut self,
++        rejected_execution: Option<CommandExecutionReport>,
++        report: CommandExecutionReport,
++    );
+ 
+     /// Executes a command
+     /// TODO(bobyf) this seems like it deserves critical sections?
+diff --git a/app/buck2_build_api/src/actions/execute/action_executor.rs b/app/buck2_build_api/src/actions/execute/action_executor.rs
+index d878f12..27d9f77 100644
+--- a/app/buck2_build_api/src/actions/execute/action_executor.rs
++++ b/app/buck2_build_api/src/actions/execute/action_executor.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ use std::fmt::Debug;
+ use std::ops::ControlFlow;
+@@ -80,7 +80,6 @@ use dice::DiceComputations;
+ use dice_futures::cancellation::CancellationContext;
+ use dupe::Dupe;
+ use either::Either;
+-use itertools::Itertools;
+ use mini_vec::MiniBoxSlice;
+ use remote_execution::TActionResult2;
+ use strong_hash::StrongHash;
+@@ -168,10 +167,6 @@ impl ActionOutputsMap {
+         }
+     }
+ 
+-    fn contains_key(&self, artifact: &BuildArtifactPath) -> bool {
+-        self.get(artifact).is_some()
+-    }
+-
+     fn iter(&self) -> impl Iterator<Item = (&BuildArtifactPath, &ArtifactValue)> {
+         match self {
+             ActionOutputsMap::Small(entries) => {
+@@ -181,10 +176,6 @@ impl ActionOutputsMap {
+         }
+     }
+ 
+-    fn keys(&self) -> impl Iterator<Item = &BuildArtifactPath> {
+-        self.iter().map(|(path, _)| path)
+-    }
+-
+     fn values(&self) -> impl Iterator<Item = &ArtifactValue> {
+         self.iter().map(|(_, value)| value)
+     }
+@@ -695,7 +686,7 @@ impl ActionExecutionCtx for BuckActionExecutionContext<'_, '_> {
+             ..
+         } = result;
+ 
+-        // TODO(T156483516): We should also validate that the outputs match the expected outputs
++        // Command-only outputs (such as test paths) are not action artifacts.
+         let action_outputs = ActionOutputs::new(
+             outputs
+                 .into_iter()
+@@ -741,8 +732,7 @@ impl ActionExecutionCtx for BuckActionExecutionContext<'_, '_> {
+                 error: None,
+             }),
+         };
+-        self.command_reports.extend(rejected_execution);
+-        self.command_reports.push(report);
++        self.record_command_execution_reports(rejected_execution, report);
+         res
+     }
+ 
+@@ -768,6 +758,15 @@ impl ActionExecutionCtx for BuckActionExecutionContext<'_, '_> {
+             .await
+     }
+ 
++    fn record_command_execution_reports(
++        &mut self,
++        rejected_execution: Option<CommandExecutionReport>,
++        report: CommandExecutionReport,
++    ) {
++        self.command_reports.extend(rejected_execution);
++        self.command_reports.push(report);
++    }
++
+     async fn cache_upload(
+         &mut self,
+         action_digest_and_blobs: &ActionDigestAndBlobs,
+@@ -775,7 +774,17 @@ impl ActionExecutionCtx for BuckActionExecutionContext<'_, '_> {
+         re_result: Option<&mut TActionResult2>,
+         dep_file_bundle: Option<&mut dyn IntoRemoteDepFile>,
+         allow_cache_upload: bool,
+-    ) -> buck2_error::Result<CacheUploadResults> {
++    ) -> Result<CacheUploadResults, ExecuteError> {
++        if execution_result.was_success() {
++            validate_action_outputs(
++                self.fs(),
++                &self.action.outputs(),
++                execution_result
++                    .outputs
++                    .iter()
++                    .filter_map(|(output, value)| Some((output.build_artifact_path()?, value))),
++            )?;
++        }
+         let action = self.target();
+         Ok(self
+             .executor
+@@ -834,88 +843,12 @@ impl<'d> BuckActionExecutor<'d> {
+             };
+ 
+             let (result, metadata) = action.execute(&mut ctx, waiting_data).await?;
+-
+-            // Check that all the outputs are the right output_type
+-            for x in outputs.iter() {
+-                let declared = x.output_type();
+-                // FIXME: One day we should treat FileOrDirectory as a File, and soft_error if it is a directory
+-                if declared != OutputType::FileOrDirectory {
+-                    if let Some(t) = result.0.outputs.get(x.get_path()) {
+-                        let real = if t.is_dir() {
+-                            OutputType::Directory
+-                        } else {
+-                            OutputType::File
+-                        };
+-                        if real != declared {
+-                            return Err(ExecuteError::WrongOutputType {
+-                                path: self.command_executor.fs().resolve_build(
+-                                    x.get_path(),
+-                                    Some(&t.content_based_path_hash()),
+-                                )?,
+-                                declared,
+-                                real,
+-                            });
+-                        }
+-                    }
+-                }
+-            }
+-
+-            fn check_all_requested_outputs_returned_without_extra<'a>(
+-                outputs: &[BuildArtifact],
+-                result_outputs: impl IntoIterator<Item = &'a BuildArtifactPath>,
+-            ) -> bool {
+-                // Ignore ordering as outputs in original action might be ordered differently from
+-                // output paths in action result (they are sorted there).
+-                let result_output_paths: BuckMutSet<&BuildArtifactPath> =
+-                    result_outputs.into_iter().collect();
+-                let mut outputs_count = 0;
+-                for output in outputs.iter() {
+-                    outputs_count += 1;
+-                    let output_path = output.get_path();
+-                    if !result_output_paths.contains(output_path) {
+-                        return false;
+-                    }
+-                }
+-                outputs_count == result_output_paths.len()
+-            }
+-
+-            // TODO (T122966509): Check projections here as well
+-            if !check_all_requested_outputs_returned_without_extra(
++            validate_action_outputs(
++                self.command_executor.fs(),
+                 &outputs,
+-                result.0.outputs.keys(),
+-            ) {
+-                let declared = outputs
+-                    .iter()
+-                    .filter(|x| !result.0.outputs.contains_key(x.get_path()))
+-                    .map(|x| {
+-                        self.command_executor.fs().resolve_build(
+-                            x.get_path(),
+-                            Some(&ContentBasedPathHash::for_output_artifact()),
+-                        )
+-                    })
+-                    .collect::<buck2_error::Result<_>>()?;
+-                let real = result
+-                    .0
+-                    .outputs
+-                    .keys()
+-                    .filter(|x| {
+-                        // This is error message, linear search is fine.
+-                        !outputs.iter().map(|b| b.get_path()).contains(x)
+-                    })
+-                    .map(|x| {
+-                        self.command_executor
+-                            .fs()
+-                            .resolve_build(x, Some(&ContentBasedPathHash::for_output_artifact()))
+-                    })
+-                    .collect::<buck2_error::Result<Vec<_>>>()?;
+-                if real.is_empty() {
+-                    Err(ExecuteError::MissingOutputs { declared })
+-                } else {
+-                    Err(ExecuteError::MismatchedOutputs { declared, real })
+-                }
+-            } else {
+-                Ok((result, metadata))
+-            }
++                result.0.outputs.iter(),
++            )?;
++            Ok((result, metadata))
+         }
+         .await;
+ 
+@@ -927,6 +860,71 @@ impl<'d> BuckActionExecutor<'d> {
+     }
+ }
+ 
++/// Validate authoritative outputs before publishing cache roots, and again at the
++/// generic action boundary for action kinds which do not upload command results.
++fn validate_action_outputs<'a>(
++    fs: &ArtifactFs,
++    outputs: &[BuildArtifact],
++    result_outputs: impl IntoIterator<Item = (&'a BuildArtifactPath, &'a ArtifactValue)>,
++) -> Result<(), ExecuteError> {
++    // Borrow values rather than cloning artifacts or computing ActionOutputs'
++    // fingerprint. Like the old output-name set, this keeps large actions linear.
++    let result_outputs: BuckIndexMap<_, _> = result_outputs.into_iter().collect();
++    for output in outputs {
++        let declared = output.output_type();
++        // FileOrDirectory deliberately accepts both types.
++        if declared != OutputType::FileOrDirectory {
++            if let Some(value) = result_outputs.get(output.get_path()) {
++                let real = if value.is_dir() {
++                    OutputType::Directory
++                } else {
++                    OutputType::File
++                };
++                if real != declared {
++                    return Err(ExecuteError::WrongOutputType {
++                        path: fs.resolve_build(
++                            output.get_path(),
++                            Some(&value.content_based_path_hash()),
++                        )?,
++                        declared,
++                        real,
++                    });
++                }
++            }
++        }
++    }
++
++    // Ignore ordering: executors may return output paths in a different order.
++    // TODO (T122966509): Check projections here as well.
++    if outputs.len() == result_outputs.len()
++        && outputs
++            .iter()
++            .all(|output| result_outputs.contains_key(output.get_path()))
++    {
++        return Ok(());
++    }
++    let declared = outputs
++        .iter()
++        .filter(|output| !result_outputs.contains_key(output.get_path()))
++        .map(|output| {
++            fs.resolve_build(
++                output.get_path(),
++                Some(&ContentBasedPathHash::for_output_artifact()),
++            )
++        })
++        .collect::<buck2_error::Result<_>>()?;
++    let real = result_outputs
++        .keys()
++        .filter(|path| !outputs.iter().any(|output| output.get_path() == **path))
++        .map(|path| fs.resolve_build(path, Some(&ContentBasedPathHash::for_output_artifact())))
++        .collect::<buck2_error::Result<Vec<_>>>()?;
++    if real.is_empty() {
++        Err(ExecuteError::MissingOutputs { declared })
++    } else {
++        Err(ExecuteError::MismatchedOutputs { declared, real })
++    }
++}
++
+ #[cfg(test)]
+ mod tests {
+     use buck2_core::fs::project::ProjectRootTemp;
+diff --git a/app/buck2_build_api/src/materialize.rs b/app/buck2_build_api/src/materialize.rs
+index fca2473..9fd8eb6 100644
+--- a/app/buck2_build_api/src/materialize.rs
++++ b/app/buck2_build_api/src/materialize.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ use std::sync::Arc;
+ 
+@@ -213,6 +213,7 @@ async fn ensure_uploaded(
+             ProjectRelativePath::empty(),
+             &dir,
+             None,
++            buck2_execute::re::presence::NegativeCache::Allowed,
+         )
+         .await?;
+ 
+diff --git a/app/buck2_common/src/liveliness_observer.rs b/app/buck2_common/src/liveliness_observer.rs
+index be448a1..c6e1f89 100644
+--- a/app/buck2_common/src/liveliness_observer.rs
++++ b/app/buck2_common/src/liveliness_observer.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ use std::sync::Arc;
+ use std::time::Duration;
+@@ -186,6 +186,7 @@ impl LivelinessObserver for Arc<dyn LivelinessObserver> {
+     }
+ }
+ 
++#[derive(Clone, Dupe)]
+ pub struct LivelinessAnd<A, B> {
+     a: A,
+     b: B,
+diff --git a/app/buck2_execute/src/execute/request.rs b/app/buck2_execute/src/execute/request.rs
+index 9dfa8c8..219f765 100644
+--- a/app/buck2_execute/src/execute/request.rs
++++ b/app/buck2_execute/src/execute/request.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ use std::sync::Arc;
+ use std::time::Duration;
+@@ -375,6 +375,9 @@ pub struct CommandExecutionRequest {
+     host_sharing_requirements: Arc<HostSharingRequirements>,
+     /// Local admission order only; never serialized into the remote action.
+     priority: i32,
++    /// Allows speculative CAS blobs while local execution runs. Successful
++    /// action/depfile publication still requires final output validation.
++    pipeline_cache_upload: bool,
+     // Used to disable the low pass filter for concurrent local actions. Enabled by default
+     low_pass_filter: bool,
+     /// Working directory, relative to the project root.
+@@ -450,6 +453,7 @@ impl CommandExecutionRequest {
+             executor_preference: ExecutorPreference::Default,
+             host_sharing_requirements: Arc::new(HostSharingRequirements::default()),
+             priority: 0,
++            pipeline_cache_upload: false,
+             low_pass_filter: true,
+             working_directory: ProjectRelativePathBuf::default(),
+             prefetch_lossy_stderr: false,
+@@ -502,6 +506,15 @@ impl CommandExecutionRequest {
+         self
+     }
+ 
++    pub fn with_pipeline_cache_upload(mut self, allowed: bool) -> Self {
++        self.pipeline_cache_upload = allowed;
++        self
++    }
++
++    pub fn pipeline_cache_upload(&self) -> bool {
++        self.pipeline_cache_upload
++    }
++
+     pub fn with_executor_preference(mut self, executor_preference: ExecutorPreference) -> Self {
+         self.executor_preference = executor_preference;
+         self
+diff --git a/app/buck2_execute/src/re/client.rs b/app/buck2_execute/src/re/client.rs
+index 2e759b2..d14cbce 100644
+--- a/app/buck2_execute/src/re/client.rs
++++ b/app/buck2_execute/src/re/client.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ use std::collections::BTreeMap;
+ use std::sync::Arc;
+@@ -319,6 +319,7 @@ impl RemoteExecutionClient {
+         input_dir: &ActionImmutableDirectory,
+         use_case: RemoteExecutorUseCase,
+         identity: Option<&ReActionIdentity<'_>>,
++        negative_cache: NegativeCache,
+     ) -> buck2_error::Result<UploadStats> {
+         // Actually upload to CAS
+         let _cas = self.data.client.cas_semaphore.acquire().await;
+@@ -334,6 +335,7 @@ impl RemoteExecutionClient {
+                 blobs,
+                 use_case,
+                 identity,
++                negative_cache,
+             ))
+             .await
+     }
+diff --git a/app/buck2_execute/src/re/manager.rs b/app/buck2_execute/src/re/manager.rs
+index 2f4bff3..8d7fca3 100644
+--- a/app/buck2_execute/src/re/manager.rs
++++ b/app/buck2_execute/src/re/manager.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ // This triggers on Arc<Arc<...>>, but we do that here for lifetime/ownership reasons
+ #![allow(clippy::redundant_allocation)]
+@@ -411,6 +411,7 @@ impl ManagedRemoteExecutionClient {
+         dir_path: &ProjectRelativePath,
+         input_dir: &ActionImmutableDirectory,
+         identity: Option<&ReActionIdentity<'_>>,
++        negative_cache: NegativeCache,
+     ) -> buck2_error::Result<UploadStats> {
+         self.lock()?
+             .get()
+@@ -423,6 +424,7 @@ impl ManagedRemoteExecutionClient {
+                 input_dir,
+                 self.use_case,
+                 identity,
++                negative_cache,
+             )
+             .await
+     }
+diff --git a/app/buck2_execute/src/re/uploader.rs b/app/buck2_execute/src/re/uploader.rs
+index 78cfc15..0f74c74 100644
+--- a/app/buck2_execute/src/re/uploader.rs
++++ b/app/buck2_execute/src/re/uploader.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ use std::path::Path;
+ use std::str::FromStr;
+@@ -73,6 +73,7 @@ impl Uploader {
+         input_dir: &'a ActionImmutableDirectory,
+         blobs: &'a ActionBlobs,
+         use_case: RemoteExecutorUseCase,
++        negative_cache: NegativeCache,
+     ) -> buck2_error::Result<(
+         Vec<InlinedBlobWithDigest>,
+         BuckMutSet<&'a TrackedFileDigest>,
+@@ -103,7 +104,7 @@ impl Uploader {
+                     .iter()
+                     .map(|digest| (*digest).dupe())
+                     .collect(),
+-                NegativeCache::Allowed,
++                negative_cache,
+             )
+             .await?;
+ 
+@@ -146,9 +147,10 @@ impl Uploader {
+         blobs: &ActionBlobs,
+         use_case: RemoteExecutorUseCase,
+         identity: Option<&ReActionIdentity<'_>>,
++        negative_cache: NegativeCache,
+     ) -> buck2_error::Result<UploadStats> {
+         let (mut upload_blobs, mut missing_digests) =
+-            Self::find_missing(client, input_dir, blobs, use_case).await?;
++            Self::find_missing(client, input_dir, blobs, use_case, negative_cache).await?;
+ 
+         if upload_blobs.is_empty() && missing_digests.is_empty() {
+             return Ok(UploadStats::default());
+@@ -402,13 +404,13 @@ impl Uploader {
+ #[cfg(fbcode_build)] // Relies on fbcode future sizes
+ buck2_util::size_assert::words_of_async_fn_future!(
+     Uploader::upload,
+-    (_, _, _, _, _, _, _, _),
++    (_, _, _, _, _, _, _, _, _),
+     ~287
+ );
+ #[cfg(fbcode_build)] // Relies on fbcode future sizes
+ buck2_util::size_assert::words_of_async_fn_future!(
+     Uploader::find_missing,
+-    (_, _, _, _),
++    (_, _, _, _, _),
+     ~65
+ );
+ 
+diff --git a/app/buck2_execute_impl/src/executors.rs b/app/buck2_execute_impl/src/executors.rs
+index 2b9d3c8..e39113c 100644
+--- a/app/buck2_execute_impl/src/executors.rs
++++ b/app/buck2_execute_impl/src/executors.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ pub mod action_cache;
+ pub mod action_cache_upload_permission_checker;
+@@ -14,6 +14,10 @@ pub mod caching;
+ pub(crate) mod empty_action_result;
+ pub mod hybrid;
+ pub mod local;
++#[cfg(target_os = "linux")]
++pub(crate) mod output_pipeline;
++#[cfg(target_os = "linux")]
++pub(crate) mod output_watcher;
+ pub mod re;
+ pub mod stacked;
+ pub mod to_re_platform;
+diff --git a/app/buck2_execute_impl/src/executors/action_cache.rs b/app/buck2_execute_impl/src/executors/action_cache.rs
+index f7bfa9d..2534fc8 100644
+--- a/app/buck2_execute_impl/src/executors/action_cache.rs
++++ b/app/buck2_execute_impl/src/executors/action_cache.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ use std::ops::ControlFlow;
+ use std::sync::Arc;
+@@ -141,6 +141,7 @@ async fn query_action_cache_and_download_result(
+                 ProjectRelativePath::empty(),
+                 request.paths().input_directory(),
+                 identity,
++                buck2_execute::re::presence::NegativeCache::Allowed,
+             )
+             .await
+         {
+diff --git a/app/buck2_execute_impl/src/executors/caching.rs b/app/buck2_execute_impl/src/executors/caching.rs
+index 9ae8bdc..33be254 100644
+--- a/app/buck2_execute_impl/src/executors/caching.rs
++++ b/app/buck2_execute_impl/src/executors/caching.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ use std::fmt::Debug;
+ use std::sync::Arc;
+@@ -37,11 +37,13 @@ use buck2_execute::execute::cache_uploader::UploadCache;
+ use buck2_execute::execute::kind::CommandExecutionKind;
+ use buck2_execute::execute::result::CommandExecutionResult;
+ use buck2_execute::execute::result::CommandExecutionStatus;
++use buck2_execute::materialize::materializer::CasDownloadInfo;
+ use buck2_execute::materialize::materializer::MaterializationPurpose;
+ use buck2_execute::materialize::materializer::MaterializeRequest;
+ use buck2_execute::materialize::materializer::Materializer;
+ use buck2_execute::re::client::ActionCacheWriteType;
+ use buck2_execute::re::manager::ManagedRemoteExecutionClient;
++use buck2_execute::re::presence::NegativeCache;
+ use dupe::Dupe;
+ use futures::future;
+ use futures::future::FutureExt;
+@@ -102,6 +104,28 @@ impl CacheUploader {
+         }
+     }
+ 
++    /// Only CAS blobs are eligible before success. A configured whole-action
++    /// size limit cannot be proven until the final tree exists, so those actions
++    /// retain the ordinary final upload path rather than weakening that policy.
++    #[cfg(target_os = "linux")]
++    pub(crate) async fn output_pipeline_client(
++        &self,
++        digest_config: DigestConfig,
++    ) -> buck2_error::Result<Option<ManagedRemoteExecutionClient>> {
++        if self.max_bytes.is_some() {
++            return Ok(None);
++        }
++        if self
++            .cache_upload_permission_checker
++            .has_permission_to_upload_to_cache(&self.re_client, &self.platform, digest_config)
++            .await?
++            .is_err()
++        {
++            return Ok(None);
++        }
++        Ok(Some(self.re_client.dupe()))
++    }
++
+     /// Publish successful outputs under the lookup key. Local outputs must be
+     /// uploaded first; an incremental RE result already has its outputs in CAS
+     /// but may need publication under the source-only key.
+@@ -417,11 +441,19 @@ impl CacheUploader {
+                     };
+ 
+                     file_digests.push(f.digest.dupe());
+-                    upload_futs.push(
+-                        self.re_client
+-                            .upload_files_and_directories(vec![named_digest], vec![], vec![])
+-                            .boxed(),
+-                    );
++                    let digest = f.digest.dupe();
++                    upload_futs.push(async move {
++                        let info = CasDownloadInfo::new_uploaded(self.re_client.use_case);
++                        let present = self.re_client.check_presence(
++                            vec![digest], NegativeCache::Bypassed, &info,
++                        ).await?;
++                        if present[0].is_none() {
++                            self.re_client
++                                .upload_files_and_directories(vec![named_digest], vec![], vec![])
++                                .await?;
++                        }
++                        buck2_error::Ok(())
++                    }.boxed());
+                 }
+                 DirectoryEntry::Dir(d) => {
+                     let tree = directory_to_re_tree(d);
+@@ -445,6 +477,7 @@ impl CacheUploader {
+                                 &content_path,
+                                 &d.dupe().as_immutable(),
+                                 identity,
++                                NegativeCache::Bypassed,
+                             )
+                             .await
+                             .map(|_| ())
+diff --git a/app/buck2_execute_impl/src/executors/local.rs b/app/buck2_execute_impl/src/executors/local.rs
+index 03945f4..08a5194 100644
+--- a/app/buck2_execute_impl/src/executors/local.rs
++++ b/app/buck2_execute_impl/src/executors/local.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ use std::ffi::OsStr;
+ use std::ffi::OsString;
+@@ -110,12 +110,18 @@ use host_sharing::host_sharing::HostSharingGuard;
+ use tokio_stream::wrappers::UnboundedReceiverStream;
+ use tracing::info;
+ 
++use crate::executors::caching::CacheUploader;
++#[cfg(target_os = "linux")]
++use crate::executors::output_pipeline::OutputPipeline as PipelineGuard;
+ use crate::executors::worker::WorkerHandle;
+ use crate::executors::worker::WorkerPool;
+ use crate::incremental_actions_helper::get_incremental_path_map;
+ use crate::incremental_actions_helper::save_content_based_incremental_state;
+ use crate::sqlite::incremental_state_db::IncrementalDbState;
+ 
++#[cfg(not(target_os = "linux"))]
++type PipelineGuard = ();
++
+ #[derive(Debug, buck2_error::Error)]
+ #[buck2(input)]
+ enum LocalExecutionError {
+@@ -150,6 +156,7 @@ pub struct LocalExecutor {
+     /// Attributed with the CAS traffic that materializing this executor's inputs causes. The
+     /// buck2 invocation's, not that of any RE work the action's configuration involves.
+     invocation_re_use_case: RemoteExecutorUseCase,
++    cache_uploader: Option<Arc<CacheUploader>>,
+ }
+ 
+ impl LocalExecutor {
+@@ -180,9 +187,69 @@ impl LocalExecutor {
+             memory_tracker,
+             daemon_id,
+             invocation_re_use_case,
++            cache_uploader: None,
+         }
+     }
+ 
++    pub fn with_cache_uploader(mut self, uploader: Option<Arc<CacheUploader>>) -> Self {
++        self.cache_uploader = uploader;
++        self
++    }
++
++    async fn start_output_pipeline(
++        &self,
++        request: &CommandExecutionRequest,
++        digest_config: DigestConfig,
++    ) -> Option<PipelineGuard> {
++        #[cfg(target_os = "linux")]
++        {
++            let client = if request.pipeline_cache_upload() {
++                if let Some(uploader) = self.cache_uploader.as_ref() {
++                    match uploader.output_pipeline_client(digest_config).await {
++                        Ok(client) => client,
++                        Err(error) => {
++                            tracing::debug!(%error, "Speculative CAS upload unavailable");
++                            None
++                        }
++                    }
++                } else {
++                    None
++                }
++            } else {
++                None
++            };
++            if client.is_none() && !crate::materializers::local_content_store::enabled() {
++                return None;
++            }
++            let outputs = request
++                .outputs()
++                .map(|output| {
++                    let path = output
++                        .resolve(
++                            &self.artifact_fs,
++                            Some(&ContentBasedPathHash::for_output_artifact()),
++                        )?
++                        .into_path();
++                    Ok(self.root.join(&path).as_path().to_path_buf())
++                })
++                .collect::<buck2_error::Result<Vec<_>>>();
++            match outputs {
++                Ok(outputs) => {
++                    match PipelineGuard::new(self.root.as_path(), outputs, client, digest_config) {
++                        Ok(pipeline) => return pipeline,
++                        Err(error) => {
++                            tracing::debug!(%error, "Speculative output pipeline unavailable")
++                        }
++                    }
++                }
++                Err(error) => tracing::debug!(%error, "Speculative output roots unavailable"),
++            }
++        }
++        #[cfg(not(target_os = "linux"))]
++        let _ = (request, digest_config);
++        None
++    }
++
+     // Compiler gets confused (on the not(unix) branch only, weirdly) if you use an async fn.
+     #[allow(clippy::manual_async_fn)]
+     fn exec<'a>(
+@@ -280,7 +347,7 @@ impl LocalExecutor {
+         request: &CommandExecutionRequest,
+         manager: CommandExecutionManagerWithClaim,
+         cancellations: &CancellationContext,
+-        liveliness_observer: impl LivelinessObserver + 'static,
++        liveliness_observer: impl LivelinessObserver + Dupe + 'static,
+         scratch_path: &ScratchPath,
+         args: &[String],
+         worker: Option<&WorkerHandle>,
+@@ -288,12 +355,14 @@ impl LocalExecutor {
+         cgroup: Option<CgroupPathBuf>,
+         freeze_rx: impl ActionFreezeEventReceiver,
+         network_access: Option<NetworkAccess>,
++        digest_config: DigestConfig,
+     ) -> Result<
+         (
+             TimeSpan,
+             SystemTime,
+             CommandResult,
+             CommandExecutionManagerWithClaim,
++            Option<PipelineGuard>,
+         ),
+         CommandExecutionResult,
+     > {
+@@ -322,6 +391,15 @@ impl LocalExecutor {
+             return Err(manager.error("prepare_output_dirs_failed", e));
+         };
+ 
++        let mut pipeline = tokio::select! {
++            pipeline = self.start_output_pipeline(request, digest_config) => pipeline,
++            _ = liveliness_observer.while_alive() => None,
++        };
++        #[cfg(target_os = "linux")]
++        let pipeline_liveliness = pipeline.as_ref().map(|_| liveliness_observer.dupe());
++        #[cfg(target_os = "linux")]
++        let pipeline_execution = &mut pipeline;
++
+         let (time_span, start_time, res) = executor_stage_async(
+             {
+                 let env = env
+@@ -359,8 +437,9 @@ impl LocalExecutor {
+                 let execution_start = TimeSpan::start_now();
+                 let start_time = SystemTime::now();
+ 
++                let producer = async move {
+                 let env = env.iter().map(|(k, v)| (k, v.into_os_str()));
+-                let r = if let Some(worker) = worker {
++                if let Some(worker) = worker {
+                     let env: Vec<(OsString, OsString)> = env
+                         .into_iter()
+                         .map(|(k, v)| (OsString::from(k), v.to_owned()))
+@@ -383,7 +462,15 @@ impl LocalExecutor {
+                         network_access,
+                     )
+                     .await
++                }
+                 };
++                #[cfg(target_os = "linux")]
++                let r = match pipeline_execution.as_mut() {
++                    Some(pipeline) => pipeline.run(producer).await,
++                    None => producer.await,
++                };
++                #[cfg(not(target_os = "linux"))]
++                let r = producer.await;
+ 
+                 let time_span = execution_start.end_now();
+ 
+@@ -393,8 +480,26 @@ impl LocalExecutor {
+         .boxed()
+         .await;
+ 
++        #[cfg(target_os = "linux")]
++        if let Some(pipeline) = pipeline.as_mut() {
++            let successful = res.as_ref().is_ok_and(|result| {
++                matches!(
++                    result.status,
++                    GatherOutputStatus::Finished { exit_code: 0, .. }
++                )
++            });
++            pipeline
++                .finish(
++                    successful,
++                    pipeline_liveliness
++                        .expect("active output pipeline")
++                        .while_alive(),
++                )
++                .await;
++        }
++
+         match res {
+-            Ok(res) => Ok((time_span, start_time, res, manager)),
++            Ok(res) => Ok((time_span, start_time, res, manager, pipeline)),
+             Err(e) => Err(manager.error("exec_failed", e)),
+         }
+     }
+@@ -412,12 +517,14 @@ impl LocalExecutor {
+         worker: Option<&WorkerHandle>,
+         env: &[(&str, StrOrOsStr<'_>)],
+         network_access: Option<NetworkAccess>,
++        digest_config: DigestConfig,
+     ) -> Result<
+         (
+             TimeSpan,
+             SystemTime,
+             CommandResult,
+             CommandExecutionManagerWithClaim,
++            Option<PipelineGuard>,
+         ),
+         CommandExecutionResult,
+     > {
+@@ -501,11 +608,12 @@ impl LocalExecutor {
+                     cgroup_session.as_ref().map(|s| s.path.clone()),
+                     freeze_rx,
+                     network_access,
++                    digest_config,
+                 )
+                 .await;
+ 
+             let res = match res {
+-                Ok((time_span, start_time, status, res_manager)) => {
++                Ok((time_span, start_time, status, res_manager, pipeline)) => {
+                     if matches!(status.status, GatherOutputStatus::Cancelled) {
+                         let f = retry_future.lock().unwrap().take();
+                         if let Some(retry_future) = f {
+@@ -514,7 +622,7 @@ impl LocalExecutor {
+                             continue;
+                         }
+                     }
+-                    Ok((time_span, start_time, status, res_manager))
++                    Ok((time_span, start_time, status, res_manager, pipeline))
+                 }
+                 Err(e) => Err(e),
+             };
+@@ -701,7 +809,7 @@ impl LocalExecutor {
+             },
+         };
+ 
+-        let (time_span, start_time, res, manager) = match self
++        let (time_span, start_time, res, manager, _pipeline) = match self
+             .exec_with_resource_control(
+                 action_digest,
+                 request,
+@@ -713,6 +821,7 @@ impl LocalExecutor {
+                 worker.as_deref(),
+                 &env,
+                 network_access,
++                digest_config,
+             )
+             .await
+         {
+diff --git a/app/buck2_execute_impl/src/executors/output_pipeline.rs b/app/buck2_execute_impl/src/executors/output_pipeline.rs
+new file mode 100644
+index 0000000..01dd6cb
+--- /dev/null
++++ b/app/buck2_execute_impl/src/executors/output_pipeline.rs
+@@ -0,0 +1,509 @@
++/*
++ * Copyright (c) Meta Platforms, Inc. and affiliates.
++ *
++ * This source code is dual-licensed under either the MIT license found in the
++ * LICENSE-MIT file in the root directory of this source tree or the Apache
++ * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
++ * of this source tree. You may select, at your option, one of the
++ * above-listed licenses.
++ */
++
++//! Speculative bytes, never speculative action results. Filesystem events only
++//! nominate candidates. Private snapshots are hashed and prepared independently
++//! of compiler paths; ordinary final output hashing decides which views apply.
++//! All work is action-owned and drained before its scratch/claim can be released.
++
++use std::collections::HashMap;
++use std::collections::HashSet;
++use std::collections::VecDeque;
++use std::fs::File;
++use std::fs::Permissions;
++use std::future::Future;
++use std::io::Read;
++use std::io::Seek;
++use std::io::SeekFrom;
++use std::os::fd::AsRawFd;
++use std::os::unix::fs::MetadataExt;
++use std::os::unix::fs::PermissionsExt;
++use std::path::Path;
++use std::path::PathBuf;
++use std::sync::Arc;
++use std::sync::LazyLock;
++
++use buck2_common::file_ops::metadata::FileDigest;
++use buck2_common::file_ops::metadata::FileMetadata;
++use buck2_common::file_ops::metadata::TrackedFileDigest;
++use buck2_error::BuckErrorContext;
++use buck2_execute::digest::CasDigestToReExt;
++use buck2_execute::digest_config::DigestConfig;
++use buck2_execute::materialize::materializer::CasDownloadInfo;
++use buck2_execute::re::manager::ManagedRemoteExecutionClient;
++use buck2_execute::re::presence::NegativeCache;
++use buck2_fs::paths::abs_norm_path::AbsNormPathBuf;
++use dupe::Dupe;
++use futures::FutureExt;
++use futures::StreamExt;
++use futures::future::BoxFuture;
++use futures::stream::FuturesUnordered;
++use remote_execution::NamedDigest;
++use tempfile::TempPath;
++use tokio::sync::OwnedSemaphorePermit;
++use tokio::sync::Semaphore;
++use tokio::sync::watch;
++
++use super::output_watcher::OutputWatcher;
++use crate::materializers::local_content_store;
++use crate::materializers::prepared_outputs;
++use crate::materializers::prepared_outputs::CaptureDirectory;
++use crate::materializers::prepared_outputs::CaptureRetention;
++use crate::materializers::prepared_outputs::PreparedEntry;
++use crate::materializers::prepared_outputs::PreparedFile;
++
++const BATCH_FILES: usize = 8;
++const PENDING_FILES: usize = 256;
++const ACTIVE_BATCHES: usize = 4;
++const PREPARED_HANDLES: usize = 4096;
++static WORKERS: LazyLock<Arc<Semaphore>> =
++    LazyLock::new(|| Arc::new(Semaphore::new(ACTIVE_BATCHES)));
++
++type Completed = buck2_error::Result<Vec<Arc<PreparedEntry>>>;
++
++pub(crate) struct OutputPipeline {
++    watcher: Option<OutputWatcher>,
++    directory: Arc<CaptureDirectory>,
++    client: Option<ManagedRemoteExecutionClient>,
++    config: DigestConfig,
++    pending: VecDeque<PathBuf>,
++    queued: HashSet<PathBuf>,
++    work: FuturesUnordered<BoxFuture<'static, Completed>>,
++    prepared: HashMap<usize, Arc<PreparedEntry>>,
++    uploads: watch::Sender<bool>,
++}
++
++impl OutputPipeline {
++    pub(crate) fn new(
++        project_root: &Path,
++        outputs: Vec<PathBuf>,
++        client: Option<ManagedRemoteExecutionClient>,
++        config: DigestConfig,
++    ) -> buck2_error::Result<Option<Self>> {
++        let Some(parent) = outputs.first().and_then(|path| path.parent()) else {
++            return Ok(None);
++        };
++        // Staging must not appear in any output tree, including during its final
++        // walk. A parent of overlapping declared outputs is not a safe location.
++        if outputs.iter().any(|output| parent.starts_with(output)) {
++            return Ok(None);
++        }
++        let directory = CaptureDirectory::create(parent)?;
++        let watcher = OutputWatcher::new(project_root, outputs)?;
++        let (uploads, _) = watch::channel(true);
++        Ok(Some(Self {
++            watcher: Some(watcher),
++            directory,
++            client,
++            config,
++            pending: VecDeque::new(),
++            queued: HashSet::new(),
++            work: FuturesUnordered::new(),
++            prepared: HashMap::new(),
++            uploads,
++        }))
++    }
++
++    /// Poll alongside the producer, without changing its cancellation protocol.
++    /// This returns at producer completion; finish() drains remaining work outside
++    /// the LocalExecute timing span, while retaining prepared publication views.
++    pub(crate) async fn run<F: Future>(&mut self, producer: F) -> F::Output {
++        tokio::pin!(producer);
++        loop {
++            tokio::select! {
++                result = &mut producer => {
++                    self.pending.clear();
++                    self.queued.clear();
++                    return result;
++                }
++                batch = async { self.watcher.as_mut().expect("enabled watcher").next_batch().await },
++                    if self.watcher.is_some() => {
++                    match batch {
++                        Ok(paths) => {
++                            for path in paths {
++                                if self.pending.len() == PENDING_FILES {
++                                    break;
++                                }
++                                if self.queued.insert(path.clone()) {
++                                    self.pending.push_back(path);
++                                }
++                            }
++                        }
++                        Err(error) => {
++                            // Lost hints cannot establish finality. Normal final
++                            // hashing/store ingestion remains authoritative.
++                            tracing::debug!(%error, "Stopping speculative output observation");
++                            self.watcher = None;
++                            self.pending.clear();
++                            self.queued.clear();
++                        }
++                    }
++                }
++                permit = WORKERS.clone().acquire_owned(),
++                    if !self.pending.is_empty() && self.work.len() < ACTIVE_BATCHES => {
++                    self.launch(permit.expect("pipeline semaphore never closes"));
++                }
++                Some(result) = self.work.next(), if !self.work.is_empty() => self.collect(result),
++            }
++        }
++    }
++
++    fn launch(&mut self, permit: OwnedSemaphorePermit) {
++        let mut sources = Vec::with_capacity(BATCH_FILES);
++        let watcher = self
++            .watcher
++            .as_ref()
++            .expect("pending candidates have a watcher");
++        while sources.len() < BATCH_FILES {
++            let Some(path) = self.pending.pop_front() else {
++                break;
++            };
++            self.queued.remove(&path);
++            // Resolve again beneath the declared roots. Events and previous
++            // metadata never authorize following a swapped symlink or FIFO.
++            if let Ok(source) = watcher.open_candidate(&path) {
++                if let Ok(metadata) = source.metadata() {
++                    if let Some(retention) =
++                        prepared_outputs::reserve(metadata.len(), self.directory.clone())
++                    {
++                        sources.push((source, metadata, retention));
++                    }
++                }
++            }
++        }
++        if sources.is_empty() {
++            return;
++        }
++        let client = self.client.dupe();
++        let config = self.config;
++        let want_upload = client.is_some();
++        let mut uploads_enabled = self.uploads.subscribe();
++        self.work.push(async move {
++            // Never detach blocking work on cancellation: finish() drains every
++            // future, including its capture join, before releasing action state.
++            let (uploads, prepared) = tokio::task::spawn_blocking(move || capture(sources, config, want_upload))
++                .await
++                .buck_error_context("Joining speculative output capture")??;
++            if let Some(client) = client.filter(|_| *uploads_enabled.borrow()) {
++                let upload = upload(&client, &uploads);
++                tokio::pin!(upload);
++                tokio::select! {
++                    result = &mut upload => {
++                        if let Err(error) = result {
++                            tracing::debug!(%error, "Speculative CAS upload failed; final upload remains authoritative");
++                        }
++                    }
++                    _ = uploads_enabled.changed() => {}
++                }
++            }
++            // Paths and their retention permits outlive all transport retries.
++            drop(uploads);
++            drop(permit);
++            Ok(prepared)
++        }.boxed());
++    }
++
++    fn collect(&mut self, result: Completed) {
++        match result {
++            Ok(entries) => {
++                if self.prepared.len() + entries.len() > PREPARED_HANDLES {
++                    self.prepared.retain(|_, entry| entry.is_available());
++                }
++                for entry in entries {
++                    let key = Arc::as_ptr(&entry) as usize;
++                    if self.prepared.len() < PREPARED_HANDLES {
++                        self.prepared.entry(key).or_insert(entry);
++                    }
++                }
++            }
++            Err(error) => {
++                tracing::debug!(%error, "Speculative output preparation failed; final processing remains authoritative")
++            }
++        }
++    }
++
++    pub(crate) async fn finish(&mut self, successful: bool, cancelled: impl Future<Output = ()>) {
++        self.watcher = None;
++        self.pending.clear();
++        self.queued.clear();
++        let mut retain = successful;
++        if !retain {
++            self.uploads.send_replace(false);
++        }
++        tokio::pin!(cancelled);
++        while !self.work.is_empty() {
++            tokio::select! {
++                _ = &mut cancelled, if retain => {
++                    retain = false;
++                    self.uploads.send_replace(false);
++                }
++                Some(result) = self.work.next() => self.collect(result),
++            }
++        }
++        if !retain {
++            self.prepared.clear();
++        }
++    }
++}
++
++struct Upload {
++    path: TempPath,
++    metadata: FileMetadata,
++    _retention: Arc<CaptureRetention>,
++}
++
++/// The clone length is explicit: a live file growing after fstat must not bypass
++/// retention accounting. Unsupported/unaligned reflinks use a bounded copy into
++/// private storage, never a hardlink or a read of live bytes during CAS transfer.
++fn snapshot(source: &mut File, destination: &mut File, size: u64) -> std::io::Result<()> {
++    #[repr(C)]
++    struct CloneRange {
++        source_fd: i64,
++        source_offset: u64,
++        source_length: u64,
++        destination_offset: u64,
++    }
++    unsafe extern "C" {
++        fn ioctl(fd: i32, request: std::ffi::c_ulong, ...) -> i32;
++    }
++    if size == 0 {
++        return Ok(());
++    }
++    let range = CloneRange {
++        source_fd: i64::from(source.as_raw_fd()),
++        source_offset: 0,
++        source_length: size,
++        destination_offset: 0,
++    };
++    if unsafe { ioctl(destination.as_raw_fd(), 0x4020940D, &range) } == 0 {
++        return Ok(());
++    }
++    let error = std::io::Error::last_os_error();
++    if !matches!(error.raw_os_error(), Some(18 | 22 | 25 | 95)) {
++        return Err(error);
++    }
++    destination.set_len(0)?;
++    destination.seek(SeekFrom::Start(0))?;
++    source.seek(SeekFrom::Start(0))?;
++    std::io::copy(&mut source.take(size), destination)?;
++    Ok(())
++}
++
++fn capture(
++    sources: Vec<(File, std::fs::Metadata, Arc<CaptureRetention>)>,
++    config: DigestConfig,
++    want_upload: bool,
++) -> buck2_error::Result<(Vec<Upload>, Vec<Arc<PreparedEntry>>)> {
++    let mut files = Vec::with_capacity(sources.len());
++    for (mut source, metadata, retention) in sources {
++        let mut staged = tempfile::Builder::new()
++            .prefix("view-")
++            .tempfile_in(retention.directory())?;
++        snapshot(&mut source, staged.as_file_mut(), metadata.len())?;
++        staged.as_file_mut().seek(SeekFrom::Start(0))?;
++        let digest = FileDigest::from_reader(staged.as_file_mut(), config.cas_digest_config())?;
++        let metadata = FileMetadata {
++            digest: TrackedFileDigest::new(digest, config.cas_digest_config()),
++            is_executable: metadata.mode() & 0o111 != 0,
++        };
++        files.push(PreparedFile {
++            path: staged.into_temp_path(),
++            metadata,
++            retention,
++        });
++    }
++    if local_content_store::enabled() {
++        let paths = files
++            .iter()
++            .map(|file| {
++                Ok((
++                    AbsNormPathBuf::new(file.path.to_path_buf())?,
++                    file.metadata.dupe(),
++                ))
++            })
++            .collect::<buck2_error::Result<Vec<_>>>()?;
++        // Only private paths are passed here: ingestion may replace them, but
++        // cannot replace a compiler inode while an open writer still owns it.
++        local_content_store::ingest_files(&paths, config)?;
++    }
++    let mut uploads = Vec::with_capacity(if want_upload { files.len() } else { 0 });
++    let mut prepared = Vec::with_capacity(if local_content_store::enabled() {
++        files.len()
++    } else {
++        0
++    });
++    for file in files {
++        if local_content_store::enabled() {
++            let mut source = File::open(&file.path)?;
++            let mode = if file.metadata.is_executable {
++                0o755
++            } else {
++                0o644
++            };
++            if source.metadata()?.mode() & 0o7777 != mode {
++                // A newly admitted object retains the original 0600 private
++                // file; normalize and sync that view. Reused store views have
++                // already been normalized and synced before ingestion returns.
++                source.set_permissions(Permissions::from_mode(mode))?;
++                source.sync_all()?;
++            }
++            if want_upload {
++                let mut staged = tempfile::Builder::new()
++                    .prefix("upload-")
++                    .tempfile_in(file.retention.directory())?;
++                snapshot(
++                    &mut source,
++                    staged.as_file_mut(),
++                    file.metadata.digest.data().size(),
++                )?;
++                // This source is already immutable and verified; the independent
++                // upload snapshot survives final publication's rename of the view.
++                staged
++                    .as_file()
++                    .set_permissions(Permissions::from_mode(0o444))?;
++                uploads.push(Upload {
++                    path: staged.into_temp_path(),
++                    metadata: file.metadata.dupe(),
++                    _retention: file.retention.clone(),
++                });
++            }
++            prepared.push(prepared_outputs::register(file)?);
++        } else {
++            // Without native view publication no second snapshot is necessary.
++            std::fs::set_permissions(&file.path, Permissions::from_mode(0o444))?;
++            uploads.push(Upload {
++                path: file.path,
++                metadata: file.metadata,
++                _retention: file.retention,
++            });
++        }
++    }
++    Ok((uploads, prepared))
++}
++
++async fn upload(
++    client: &ManagedRemoteExecutionClient,
++    files: &[Upload],
++) -> buck2_error::Result<()> {
++    let digests = files
++        .iter()
++        .map(|file| file.metadata.digest.dupe())
++        .collect();
++    let info = CasDownloadInfo::new_uploaded(client.use_case);
++    let presence = client
++        .check_presence(digests, NegativeCache::Allowed, &info)
++        .await?;
++    let missing = files
++        .iter()
++        .zip(presence)
++        .filter(|(_, present)| present.is_none())
++        .map(|(file, _)| {
++            Ok(NamedDigest {
++                name: file
++                    .path
++                    .to_str()
++                    .ok_or_else(|| {
++                        buck2_error::buck2_error!(
++                            buck2_error::ErrorTag::Input,
++                            "Non-UTF-8 speculative snapshot path"
++                        )
++                    })?
++                    .to_owned(),
++                digest: file.metadata.digest.to_re(),
++                ..Default::default()
++            })
++        })
++        .collect::<buck2_error::Result<Vec<_>>>()?;
++    if !missing.is_empty() {
++        client
++            .upload_files_and_directories(missing, Vec::new(), Vec::new())
++            .await?;
++    }
++    Ok(())
++}
++
++#[cfg(test)]
++mod tests {
++    use std::io::Write;
++
++    use super::*;
++
++    #[tokio::test]
++    async fn cancellation_after_producer_exit_joins_capture_and_stops_upload_wait() {
++        let root = tempfile::tempdir().unwrap();
++        let mut pipeline = OutputPipeline::new(
++            root.path(),
++            vec![root.path().join("output")],
++            None,
++            DigestConfig::testing_default(),
++        )
++        .unwrap()
++        .unwrap();
++        let completed = root.path().join("capture-completed");
++        let capture_output = completed.clone();
++        let (release, blocked) = std::sync::mpsc::sync_channel(0);
++        let capture = tokio::task::spawn_blocking(move || {
++            if blocked.recv().is_ok() {
++                std::fs::write(capture_output, b"capture joined").unwrap();
++            }
++        });
++        let mut uploads = pipeline.uploads.subscribe();
++        pipeline.work.push(
++            async move {
++                capture.await.unwrap();
++                let enabled = *uploads.borrow();
++                if enabled {
++                    uploads.changed().await.unwrap();
++                }
++                Ok(Vec::new())
++            }
++            .boxed(),
++        );
++        let finish = pipeline.finish(true, futures::future::ready(()));
++        tokio::pin!(finish);
++        assert!(futures::poll!(&mut finish).is_pending());
++        release.send(()).unwrap();
++        tokio::time::timeout(std::time::Duration::from_secs(5), &mut finish)
++            .await
++            .expect("cancellation must interrupt uploads after producer success");
++        assert_eq!(std::fs::read(completed).unwrap(), b"capture joined");
++    }
++
++    #[test]
++    fn snapshot_survives_producer_rewrite_and_unlink() -> std::io::Result<()> {
++        let mut producer = tempfile::NamedTempFile::new()?;
++        producer.write_all(b"first immutable bytes")?;
++        let mut captured = tempfile::tempfile()?;
++        snapshot(producer.as_file_mut(), &mut captured, 21)?;
++        producer.as_file_mut().seek(SeekFrom::Start(0))?;
++        producer.write_all(b"later mutable content")?;
++        drop(producer);
++        captured.seek(SeekFrom::Start(0))?;
++        let mut bytes = Vec::new();
++        captured.read_to_end(&mut bytes)?;
++        assert_eq!(bytes, b"first immutable bytes");
++        Ok(())
++    }
++
++    #[test]
++    fn snapshot_growth_never_exceeds_reserved_length() -> std::io::Result<()> {
++        let mut producer = tempfile::tempfile()?;
++        producer.write_all(&[0x5a; 8192])?;
++        let mut captured = tempfile::tempfile()?;
++        // The source grew after admission observed only its first block.
++        snapshot(&mut producer, &mut captured, 4096)?;
++        assert_eq!(captured.metadata()?.len(), 4096);
++        captured.seek(SeekFrom::Start(0))?;
++        let mut bytes = Vec::new();
++        captured.read_to_end(&mut bytes)?;
++        assert_eq!(bytes, vec![0x5a; 4096]);
++        Ok(())
++    }
++}
+diff --git a/app/buck2_execute_impl/src/executors/output_watcher.rs b/app/buck2_execute_impl/src/executors/output_watcher.rs
+new file mode 100644
+index 0000000..34b5ea7
+--- /dev/null
++++ b/app/buck2_execute_impl/src/executors/output_watcher.rs
+@@ -0,0 +1,852 @@
++/*
++ * Copyright (c) Meta Platforms, Inc. and affiliates.
++ *
++ * This source code is dual-licensed under either the MIT license found in the
++ * LICENSE-MIT file in the root directory of this source tree or the Apache
++ * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
++ * of this source tree. You may select, at your option, one of the
++ * above-listed licenses.
++ */
++
++//! Linux-only speculative output hints, never an assertion of output finality.
++//!
++//! Limits are per observer: 4,096 declared roots, 4,096 kernel watches, 4,096
++//! pending directory/root visits, 4,096 bytes per absolute path, a 64 KiB event
++//! buffer, and 256 candidates per batch. Exhaustion disables the optimization
++//! with an error rather than claiming complete coverage. Besides the project
++//! root and inotify descriptors, only the current directory iterator retains a
++//! descriptor; watched directories retain paths, not open files. Initial walks
++//! register directories without reporting old files. No filesystem polling is
++//! used, and missing/coalesced events are left to ordinary final processing.
++
++use std::collections::HashMap;
++use std::collections::VecDeque;
++use std::ffi::CString;
++use std::ffi::OsStr;
++use std::ffi::c_char;
++use std::ffi::c_int;
++use std::fs::File;
++use std::fs::OpenOptions;
++use std::fs::ReadDir;
++use std::io;
++use std::io::Read;
++use std::os::fd::AsRawFd;
++use std::os::fd::FromRawFd;
++use std::os::fd::RawFd;
++use std::os::unix::ffi::OsStrExt;
++use std::os::unix::fs::OpenOptionsExt;
++use std::path::Component;
++use std::path::Path;
++use std::path::PathBuf;
++
++use tokio::io::unix::AsyncFd;
++
++const MAX_ROOTS: usize = 4096;
++const MAX_WATCHES: usize = 4096;
++const MAX_PENDING: usize = 4096;
++const MAX_PATH_BYTES: usize = 4096;
++const EVENT_BUFFER_BYTES: usize = 64 * 1024;
++const MAX_BATCH: usize = 256;
++const WORK_BEFORE_YIELD: usize = 1024;
++const EVENT_HEADER_BYTES: usize = 16;
++const MAX_NAME_BYTES: usize = 255;
++
++// Linux UAPI (the native executor is built for Linux x86-64/aarch64).
++const O_NONBLOCK: c_int = 0x800;
++const O_DIRECTORY: c_int = 0x10000;
++const O_NOFOLLOW: c_int = 0x20000;
++const O_CLOEXEC: c_int = 0x80000;
++const IN_CLOSE_WRITE: u32 = 0x0000_0008;
++const IN_MOVED_TO: u32 = 0x0000_0080;
++const IN_CREATE: u32 = 0x0000_0100;
++const IN_DELETE_SELF: u32 = 0x0000_0400;
++const IN_MOVE_SELF: u32 = 0x0000_0800;
++const IN_Q_OVERFLOW: u32 = 0x0000_4000;
++const IN_IGNORED: u32 = 0x0000_8000;
++const IN_ONLYDIR: u32 = 0x0100_0000;
++const IN_ISDIR: u32 = 0x4000_0000;
++const WATCH_MASK: u32 =
++    IN_CLOSE_WRITE | IN_MOVED_TO | IN_CREATE | IN_DELETE_SELF | IN_MOVE_SELF | IN_ONLYDIR;
++
++unsafe extern "C" {
++    fn inotify_init1(flags: c_int) -> c_int;
++    fn inotify_add_watch(fd: c_int, pathname: *const c_char, mask: u32) -> c_int;
++    fn openat(dirfd: c_int, pathname: *const c_char, flags: c_int, ...) -> c_int;
++}
++
++enum Visit {
++    Root(PathBuf),
++    Directory { path: PathBuf, discover_files: bool },
++}
++
++struct DirectoryCursor {
++    path: PathBuf,
++    entries: ReadDir,
++    discover_files: bool,
++}
++
++pub(crate) struct OutputWatcher {
++    project_root: PathBuf,
++    root: File,
++    outputs: Vec<PathBuf>,
++    events: AsyncFd<File>,
++    watches: HashMap<c_int, PathBuf>,
++    pending: VecDeque<Visit>,
++    directory: Option<DirectoryCursor>,
++    event_buffer: Box<[u8]>,
++    event_start: usize,
++    event_end: usize,
++    failed: bool,
++}
++
++impl OutputWatcher {
++    /// Must be called inside a Tokio runtime with its I/O driver enabled.
++    /// `project_root` is a trusted canonical directory; outputs are absolute
++    /// declared paths strictly below it. Missing outputs may become files or
++    /// directories. A root is only traversed when it actually opens as a
++    /// directory, without following symlinks.
++    pub(crate) fn new(project_root: &Path, outputs: Vec<PathBuf>) -> io::Result<Self> {
++        validate_absolute_path(project_root)?;
++        if outputs.len() > MAX_ROOTS {
++            return Err(limit_error("declared output roots"));
++        }
++        let mut relative_outputs = Vec::with_capacity(outputs.len());
++        for output in outputs {
++            validate_absolute_path(&output)?;
++            let relative = output.strip_prefix(project_root).map_err(|_| {
++                io::Error::new(
++                    io::ErrorKind::InvalidInput,
++                    "output is outside project root",
++                )
++            })?;
++            if relative.as_os_str().is_empty() {
++                return Err(io::Error::new(
++                    io::ErrorKind::InvalidInput,
++                    "output must be strictly below project root",
++                ));
++            }
++            relative_outputs.push(relative.to_path_buf());
++        }
++        relative_outputs.sort_unstable();
++        relative_outputs.dedup();
++        // A directory root already owns any nested declared roots. A regular
++        // file cannot have descendants, so this also preserves file roots.
++        let mut roots: Vec<PathBuf> = Vec::with_capacity(relative_outputs.len());
++        for output in relative_outputs {
++            if !roots.last().is_some_and(|root| output.starts_with(root)) {
++                roots.push(output);
++            }
++        }
++
++        // Even the trusted root is opened component by component. No later
++        // watch registration or candidate read resolves an absolute live path.
++        let slash = OpenOptions::new()
++            .read(true)
++            .custom_flags(O_DIRECTORY | O_NOFOLLOW)
++            .open("/")?;
++        let root = open_directory_at(&slash, project_root.strip_prefix("/").unwrap())?;
++        drop(slash);
++        tokio::runtime::Handle::try_current()
++            .map_err(|error| io::Error::other(error.to_string()))?;
++        let descriptor = unsafe { inotify_init1(O_NONBLOCK | O_CLOEXEC) };
++        if descriptor < 0 {
++            return Err(io::Error::last_os_error());
++        }
++        // SAFETY: a successful inotify_init1 returns a new owned descriptor.
++        let events = AsyncFd::new(unsafe { File::from_raw_fd(descriptor) })?;
++        let mut watcher = Self {
++            project_root: project_root.to_path_buf(),
++            root,
++            outputs: roots,
++            events,
++            watches: HashMap::new(),
++            pending: VecDeque::new(),
++            directory: None,
++            event_buffer: vec![0; EVENT_BUFFER_BYTES].into_boxed_slice(),
++            event_start: 0,
++            event_end: 0,
++            failed: false,
++        };
++        for index in 0..watcher.outputs.len() {
++            let output = watcher.outputs[index].clone();
++            drop(watcher.visit_root(output, false)?);
++        }
++        // Initial contents are not candidates, including those in nested
++        // directories. Real close/move events during registration stay queued.
++        while watcher.directory.is_some() || !watcher.pending.is_empty() {
++            drop(watcher.scan_one()?);
++        }
++        Ok(watcher)
++    }
++
++    /// Returns speculative absolute paths, at most 256 at a time. A successful
++    /// return does not mean the writer has exited, or even stopped writing.
++    /// Cancellation while waiting consumes no candidates. After any error the
++    /// observer remains failed; the caller must use ordinary final processing.
++    pub(crate) async fn next_batch(&mut self) -> io::Result<Vec<PathBuf>> {
++        if self.failed {
++            return Err(io::Error::other("output candidate observer is disabled"));
++        }
++        let result = self.next_batch_inner().await;
++        if result.is_err() {
++            self.failed = true;
++        }
++        result
++    }
++
++    async fn next_batch_inner(&mut self) -> io::Result<Vec<PathBuf>> {
++        let mut batch = Vec::with_capacity(MAX_BATCH);
++        let mut work = 0;
++        loop {
++            let candidate = if self.event_start < self.event_end {
++                self.process_event()?
++            } else if self.directory.is_some() || !self.pending.is_empty() {
++                self.scan_one()?
++            } else {
++                if !batch.is_empty() {
++                    return Ok(batch);
++                }
++                let mut readiness = self.events.readable().await?;
++                match readiness.try_io(|events| {
++                    let mut file = events.get_ref();
++                    file.read(&mut self.event_buffer[..])
++                }) {
++                    Ok(Ok(0)) => {
++                        return Err(io::Error::new(
++                            io::ErrorKind::UnexpectedEof,
++                            "inotify descriptor closed",
++                        ));
++                    }
++                    Ok(Ok(length)) => {
++                        self.event_start = 0;
++                        self.event_end = length;
++                    }
++                    Ok(Err(error)) if error.kind() == io::ErrorKind::Interrupted => {}
++                    Ok(Err(error)) => return Err(error),
++                    Err(_) => {}
++                }
++                continue;
++            };
++            if let Some(path) = candidate {
++                batch.push(self.project_root.join(path));
++                if batch.len() == MAX_BATCH {
++                    return Ok(batch);
++                }
++            }
++            work += 1;
++            if work == WORK_BEFORE_YIELD {
++                // Never suspend with candidates only in this future's local
++                // state: cancellation would otherwise silently discard them.
++                if !batch.is_empty() {
++                    return Ok(batch);
++                }
++                tokio::task::yield_now().await;
++                work = 0;
++            }
++        }
++    }
++
++    /// Opens a candidate through the retained project directory descriptor.
++    /// The caller must still create an independent immutable snapshot and
++    /// validate against the authoritative final output; this is a live file.
++    pub(crate) fn open_candidate(&self, path: &Path) -> io::Result<File> {
++        validate_absolute_path(path)?;
++        let relative = path.strip_prefix(&self.project_root).map_err(|_| {
++            io::Error::new(
++                io::ErrorKind::PermissionDenied,
++                "candidate escapes project root",
++            )
++        })?;
++        if !self.owns(relative) {
++            return Err(io::Error::new(
++                io::ErrorKind::PermissionDenied,
++                "candidate is outside declared outputs",
++            ));
++        }
++        let name = relative.file_name().ok_or_else(|| {
++            io::Error::new(io::ErrorKind::InvalidInput, "candidate has no filename")
++        })?;
++        let directory = open_directory_at(&self.root, relative.parent().unwrap())?;
++        let file = open_component(directory.as_raw_fd(), name, O_NOFOLLOW | O_NONBLOCK)?;
++        if !file.metadata()?.is_file() {
++            return Err(io::Error::new(
++                io::ErrorKind::InvalidInput,
++                "candidate is not a regular file",
++            ));
++        }
++        Ok(file)
++    }
++
++    fn owns(&self, path: &Path) -> bool {
++        self.outputs.iter().any(|output| path.starts_with(output))
++    }
++
++    fn check_path_length(&self, path: &Path) -> io::Result<()> {
++        // Include the separator even for `/`; this is a conservative bound.
++        if self.project_root.as_os_str().len() + 1 + path.as_os_str().len() > MAX_PATH_BYTES {
++            return Err(limit_error("path bytes"));
++        }
++        Ok(())
++    }
++
++    fn enqueue(&mut self, visit: Visit) -> io::Result<()> {
++        if self.pending.len() == MAX_PENDING {
++            return Err(limit_error("pending directory visits"));
++        }
++        self.pending.push_back(visit);
++        Ok(())
++    }
++
++    fn watch_directory(&mut self, path: &Path, directory: &File) -> io::Result<bool> {
++        self.check_path_length(path)?;
++        // Check before the syscall: even a failing observer must never exceed
++        // its kernel-watch cap. At capacity, conservatively stop rather than
++        // attempt a registration that might be a new inode.
++        if self.watches.len() == MAX_WATCHES {
++            return Err(limit_error("directory watches"));
++        }
++        // The proc symlink intentionally names our already-open directory,
++        // rather than resolving the compiler's mutable path a second time.
++        let proc_path = CString::new(format!("/proc/self/fd/{}", directory.as_raw_fd()))
++            .expect("descriptor path contains no NUL");
++        let descriptor = unsafe {
++            inotify_add_watch(
++                self.events.get_ref().as_raw_fd(),
++                proc_path.as_ptr(),
++                WATCH_MASK,
++            )
++        };
++        if descriptor < 0 {
++            let error = io::Error::last_os_error();
++            if is_disappeared(&error) {
++                return Ok(false);
++            }
++            return Err(error);
++        }
++        if let Some(previous) = self.watches.get_mut(&descriptor) {
++            if previous.as_path() == path {
++                return Ok(false);
++            }
++            // A directory moved within the output namespace. Queued old
++            // events may now be attributed to its new path; both are hints.
++            *previous = path.to_path_buf();
++        } else {
++            self.watches.insert(descriptor, path.to_path_buf());
++        }
++        Ok(true)
++    }
++
++    fn visit_root(&mut self, path: PathBuf, discover_files: bool) -> io::Result<Option<PathBuf>> {
++        // Only the nearest existing parent is watched, never recursively
++        // scanned. Its creation events let us advance down missing ancestors.
++        let mut parent = path.parent().unwrap();
++        loop {
++            match open_directory_at(&self.root, parent) {
++                Ok(directory) => {
++                    self.watch_directory(parent, &directory)?;
++                    break;
++                }
++                Err(error) if is_disappeared(&error) => {
++                    let Some(ancestor) = parent.parent() else {
++                        return Err(error);
++                    };
++                    parent = ancestor;
++                }
++                Err(error) => return Err(error),
++            }
++        }
++        match open_directory_at(&self.root, &path) {
++            Ok(directory) => {
++                let added = self.watch_directory(&path, &directory)?;
++                if added || discover_files {
++                    self.enqueue(Visit::Directory {
++                        path,
++                        discover_files,
++                    })?;
++                }
++                Ok(None)
++            }
++            Err(error) if is_disappeared(&error) => {
++                if discover_files {
++                    match self.open_candidate(&self.project_root.join(&path)) {
++                        Ok(_) => return Ok(Some(path)),
++                        Err(error)
++                            if is_disappeared(&error)
++                                || error.kind() == io::ErrorKind::InvalidInput => {}
++                        Err(error) => return Err(error),
++                    }
++                }
++                Ok(None)
++            }
++            Err(error) => Err(error),
++        }
++    }
++
++    fn scan_one(&mut self) -> io::Result<Option<PathBuf>> {
++        if self.directory.is_none() {
++            let Some(visit) = self.pending.pop_front() else {
++                return Ok(None);
++            };
++            match visit {
++                Visit::Root(path) => return self.visit_root(path, true),
++                Visit::Directory {
++                    path,
++                    discover_files,
++                } => {
++                    let directory = match open_directory_at(&self.root, &path) {
++                        Ok(directory) => directory,
++                        Err(error) if is_disappeared(&error) => return Ok(None),
++                        Err(error) => return Err(error),
++                    };
++                    // read_dir owns its own transient descriptor. Child opens
++                    // are re-anchored at the project root, not this iterator,
++                    // so a renamed iterator cannot open an escaped descendant.
++                    let entries =
++                        match std::fs::read_dir(format!("/proc/self/fd/{}", directory.as_raw_fd()))
++                        {
++                            Ok(entries) => entries,
++                            Err(error) if is_disappeared(&error) => return Ok(None),
++                            Err(error) => return Err(error),
++                        };
++                    self.directory = Some(DirectoryCursor {
++                        path,
++                        entries,
++                        discover_files,
++                    });
++                }
++            }
++        }
++        let cursor = self.directory.as_mut().unwrap();
++        let Some(entry) = cursor.entries.next() else {
++            self.directory = None;
++            return Ok(None);
++        };
++        let entry = match entry {
++            Ok(entry) => entry,
++            Err(error) if is_disappeared(&error) => return Ok(None),
++            Err(error) => return Err(error),
++        };
++        let path = cursor.path.join(entry.file_name());
++        let discover_files = cursor.discover_files;
++        let kind = match entry.file_type() {
++            Ok(kind) => kind,
++            Err(error) if is_disappeared(&error) => return Ok(None),
++            Err(error) => return Err(error),
++        };
++        self.check_path_length(&path)?;
++        if kind.is_dir() {
++            match open_directory_at(&self.root, &path) {
++                Ok(directory) => {
++                    let added = self.watch_directory(&path, &directory)?;
++                    if added || discover_files {
++                        self.enqueue(Visit::Directory {
++                            path,
++                            discover_files,
++                        })?;
++                    }
++                }
++                Err(error) if is_disappeared(&error) => {}
++                Err(error) => return Err(error),
++            }
++        } else if discover_files && kind.is_file() {
++            return Ok(Some(path));
++        }
++        Ok(None)
++    }
++
++    fn process_event(&mut self) -> io::Result<Option<PathBuf>> {
++        let (event, length) = parse_event(&self.event_buffer[self.event_start..self.event_end])?;
++        self.event_start += length;
++        if event.mask & IN_Q_OVERFLOW != 0 {
++            return Err(io::Error::other(
++                "inotify output candidate queue overflowed",
++            ));
++        }
++        if event.mask & IN_IGNORED != 0 {
++            self.watches.remove(&event.descriptor);
++            return Ok(None);
++        }
++        let Some(directory) = self.watches.get(&event.descriptor) else {
++            return Ok(None);
++        };
++        let Some(name) = event.name else {
++            // MOVE_SELF can leave a stale watch path, but the kernel watch
++            // remains counted. All later reads resolve the declared path anew,
++            // so moving a watched directory outside cannot grant access there.
++            return Ok(None);
++        };
++        let mask = event.mask;
++        let path = directory.join(name);
++        if mask & IN_ISDIR != 0 {
++            if mask & (IN_CREATE | IN_MOVED_TO) == 0 {
++                return Ok(None);
++            }
++            if self.owns(&path) {
++                self.check_path_length(&path)?;
++                match open_directory_at(&self.root, &path) {
++                    Ok(directory) => {
++                        self.watch_directory(&path, &directory)?;
++                        self.enqueue(Visit::Directory {
++                            path,
++                            discover_files: true,
++                        })?;
++                    }
++                    Err(error) if is_disappeared(&error) => {}
++                    Err(error) => return Err(error),
++                }
++            } else {
++                // An ancestor of a missing output appeared. Visit only the
++                // declared roots below it; never scan this parent or siblings.
++                for index in 0..self.outputs.len() {
++                    if self.outputs[index].starts_with(&path) {
++                        self.enqueue(Visit::Root(self.outputs[index].clone()))?;
++                    }
++                }
++            }
++        } else if mask & (IN_CLOSE_WRITE | IN_MOVED_TO) != 0 && self.owns(&path) {
++            self.check_path_length(&path)?;
++            return Ok(Some(path));
++        }
++        Ok(None)
++    }
++}
++
++fn limit_error(resource: &str) -> io::Error {
++    io::Error::other(format!(
++        "output candidate observer limit exceeded: {resource}"
++    ))
++}
++
++fn validate_absolute_path(path: &Path) -> io::Result<()> {
++    if !path.is_absolute()
++        || path.as_os_str().len() > MAX_PATH_BYTES
++        || path.as_os_str().as_bytes().contains(&0)
++        || path
++            .components()
++            .any(|component| component == Component::ParentDir)
++    {
++        return Err(io::Error::new(
++            io::ErrorKind::InvalidInput,
++            "expected a bounded absolute path without parent traversal or NUL",
++        ));
++    }
++    Ok(())
++}
++
++fn is_disappeared(error: &io::Error) -> bool {
++    // ENOENT, ENOTDIR, ELOOP: a directory or symlink may have been replaced
++    // between notification, traversal, and open. None warrants following it.
++    matches!(error.raw_os_error(), Some(2 | 20 | 40))
++}
++
++fn open_directory_at(root: &File, path: &Path) -> io::Result<File> {
++    let mut directory: Option<File> = None;
++    for component in path.components() {
++        let Component::Normal(name) = component else {
++            return Err(io::Error::new(
++                io::ErrorKind::InvalidInput,
++                "directory traversal requires relative normal components",
++            ));
++        };
++        let parent = directory.as_ref().unwrap_or(root);
++        directory = Some(open_component(
++            parent.as_raw_fd(),
++            name,
++            O_DIRECTORY | O_NOFOLLOW,
++        )?);
++    }
++    match directory {
++        Some(directory) => Ok(directory),
++        None => root.try_clone(),
++    }
++}
++
++fn open_component(directory: RawFd, name: &OsStr, flags: c_int) -> io::Result<File> {
++    let bytes = name.as_bytes();
++    if bytes.is_empty()
++        || bytes.len() > MAX_NAME_BYTES
++        || bytes.contains(&0)
++        || bytes.contains(&b'/')
++        || bytes == b"."
++        || bytes == b".."
++    {
++        return Err(io::Error::new(
++            io::ErrorKind::InvalidInput,
++            "invalid path component",
++        ));
++    }
++    let mut terminated = [0u8; MAX_NAME_BYTES + 1];
++    terminated[..bytes.len()].copy_from_slice(bytes);
++    // O_RDONLY is zero. O_NONBLOCK on candidate leaves prevents FIFO opens
++    // from waiting before the regular-file metadata check can reject them.
++    let descriptor = unsafe { openat(directory, terminated.as_ptr().cast(), flags | O_CLOEXEC) };
++    if descriptor < 0 {
++        return Err(io::Error::last_os_error());
++    }
++    // SAFETY: openat returned a new descriptor and ownership is transferred.
++    Ok(unsafe { File::from_raw_fd(descriptor) })
++}
++
++struct Event<'a> {
++    descriptor: c_int,
++    mask: u32,
++    name: Option<&'a OsStr>,
++}
++
++fn parse_event(bytes: &[u8]) -> io::Result<(Event<'_>, usize)> {
++    let malformed = || io::Error::new(io::ErrorKind::InvalidData, "malformed inotify record");
++    if bytes.len() < EVENT_HEADER_BYTES {
++        return Err(malformed());
++    }
++    // Decode bytes rather than casting: read buffers need not be aligned, and
++    // even malformed lengths must never lead to an out-of-bounds dereference.
++    let descriptor = i32::from_ne_bytes(bytes[0..4].try_into().unwrap());
++    let mask = u32::from_ne_bytes(bytes[4..8].try_into().unwrap());
++    let name_length = u32::from_ne_bytes(bytes[12..16].try_into().unwrap()) as usize;
++    if name_length > MAX_NAME_BYTES + 1 || name_length > bytes.len() - EVENT_HEADER_BYTES {
++        return Err(malformed());
++    }
++    let length = EVENT_HEADER_BYTES + name_length;
++    let name = if name_length == 0 {
++        None
++    } else {
++        let padded = &bytes[EVENT_HEADER_BYTES..length];
++        let end = padded
++            .iter()
++            .position(|byte| *byte == 0)
++            .ok_or_else(malformed)?;
++        let name = &padded[..end];
++        if name.is_empty() || name.contains(&b'/') || name == b"." || name == b".." {
++            return Err(malformed());
++        }
++        Some(OsStr::from_bytes(name))
++    };
++    Ok((
++        Event {
++            descriptor,
++            mask,
++            name,
++        },
++        length,
++    ))
++}
++
++#[cfg(test)]
++mod tests {
++    use std::collections::HashSet;
++    use std::io::Write;
++    use std::os::unix::fs::symlink;
++    use std::time::Duration;
++
++    use super::*;
++
++    async fn observe(
++        watcher: &mut OutputWatcher,
++        expected: &[PathBuf],
++    ) -> io::Result<HashSet<PathBuf>> {
++        tokio::time::timeout(Duration::from_secs(5), async {
++            let mut observed = HashSet::new();
++            while !expected.iter().all(|path| observed.contains(path)) {
++                let batch = watcher.next_batch().await?;
++                assert!(!batch.is_empty());
++                assert!(batch.len() <= MAX_BATCH);
++                observed.extend(batch);
++            }
++            Ok(observed)
++        })
++        .await
++        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "missing candidate"))?
++    }
++
++    #[tokio::test]
++    async fn observes_closed_files_before_producer_exits_without_initial_stale_files()
++    -> io::Result<()> {
++        let project = tempfile::tempdir()?;
++        let root = project.path().canonicalize()?;
++        let output = root.join("output");
++        std::fs::create_dir_all(output.join("nested"))?;
++        let stale = output.join("nested/stale");
++        std::fs::write(&stale, b"old")?;
++        let mut watcher = OutputWatcher::new(&root, vec![output.clone()])?;
++        let fresh = output.join("nested/fresh");
++        let producer_path = fresh.clone();
++        let (release, wait) = std::sync::mpsc::channel::<()>();
++        let producer = std::thread::spawn(move || {
++            std::fs::write(producer_path, b"closed but producer is alive").unwrap();
++            let _ = wait.recv();
++        });
++        let observed = observe(&mut watcher, &[fresh]).await?;
++        assert!(!observed.contains(&stale));
++        assert!(!producer.is_finished());
++        release.send(()).unwrap();
++        producer.join().unwrap();
++        Ok(())
++    }
++
++    #[tokio::test]
++    async fn discovers_late_ancestors_and_moved_in_trees_without_scanning_siblings()
++    -> io::Result<()> {
++        let project = tempfile::tempdir()?;
++        let root = project.path().canonicalize()?;
++        let output = root.join("late/parent/output");
++        let sibling = root.join("late/unowned/file");
++        let mut watcher = OutputWatcher::new(&root, vec![output.clone()])?;
++        std::fs::create_dir_all(output.join("nested"))?;
++        std::fs::create_dir_all(sibling.parent().unwrap())?;
++        std::fs::write(&sibling, b"not ours")?;
++        let late = output.join("nested/late");
++        std::fs::write(&late, b"created before child watch")?;
++        let observed = observe(&mut watcher, &[late]).await?;
++        assert!(!observed.contains(&sibling));
++
++        let staging = root.join("staging");
++        std::fs::create_dir_all(staging.join("deep"))?;
++        std::fs::write(staging.join("deep/moved"), b"already closed")?;
++        std::fs::rename(staging, output.join("moved"))?;
++        observe(&mut watcher, &[output.join("moved/deep/moved")]).await?;
++        Ok(())
++    }
++
++    #[tokio::test]
++    async fn discovers_file_root_created_before_its_parent_watch() -> io::Result<()> {
++        let project = tempfile::tempdir()?;
++        let root = project.path().canonicalize()?;
++        let output = root.join("late/parent/file");
++        let mut watcher = OutputWatcher::new(&root, vec![output.clone()])?;
++        std::fs::create_dir_all(output.parent().unwrap())?;
++        std::fs::write(&output, b"file root")?;
++        observe(&mut watcher, &[output]).await?;
++        Ok(())
++    }
++
++    #[tokio::test]
++    async fn rejects_symlinks_fifos_traversal_and_outside_candidates() -> io::Result<()> {
++        unsafe extern "C" {
++            fn mkfifo(path: *const c_char, mode: u32) -> c_int;
++        }
++        let project = tempfile::tempdir()?;
++        let root = project.path().canonicalize()?;
++        let output = root.join("output");
++        std::fs::create_dir_all(output.join("parent"))?;
++        let watcher = OutputWatcher::new(&root, vec![output.clone()])?;
++        let outside = root.join("outside");
++        std::fs::create_dir(&outside)?;
++        std::fs::write(outside.join("file"), b"outside")?;
++        symlink(outside.join("file"), output.join("link"))?;
++        assert!(watcher.open_candidate(&output.join("link")).is_err());
++        assert!(watcher.open_candidate(&outside.join("file")).is_err());
++        assert!(
++            watcher
++                .open_candidate(&output.join("../outside/file"))
++                .is_err()
++        );
++        assert!(watcher.open_candidate(&output).is_err());
++
++        let fifo = output.join("fifo");
++        let fifo_name = CString::new(fifo.as_os_str().as_bytes()).unwrap();
++        assert_eq!(unsafe { mkfifo(fifo_name.as_ptr(), 0o600) }, 0);
++        assert!(watcher.open_candidate(&fifo).is_err());
++
++        std::fs::rename(output.join("parent"), root.join("old-parent"))?;
++        symlink(&outside, output.join("parent"))?;
++        assert!(watcher.open_candidate(&output.join("parent/file")).is_err());
++        let good = output.join("regular");
++        std::fs::write(&good, b"owned")?;
++        assert_eq!(watcher.open_candidate(&good)?.metadata()?.len(), 5);
++        Ok(())
++    }
++
++    #[tokio::test]
++    async fn bounds_batches_and_preserves_unparsed_events() -> io::Result<()> {
++        let project = tempfile::tempdir()?;
++        let root = project.path().canonicalize()?;
++        let output = root.join("output");
++        std::fs::create_dir(&output)?;
++        let mut watcher = OutputWatcher::new(&root, vec![output.clone()])?;
++        let mut expected = Vec::new();
++        for index in 0..MAX_BATCH + 17 {
++            let path = output.join(index.to_string());
++            std::fs::write(&path, b"candidate")?;
++            expected.push(path);
++        }
++        let observed = observe(&mut watcher, &expected).await?;
++        assert_eq!(observed.len(), expected.len());
++        Ok(())
++    }
++
++    #[tokio::test]
++    async fn cancelled_wait_does_not_poison_observer() -> io::Result<()> {
++        let project = tempfile::tempdir()?;
++        let root = project.path().canonicalize()?;
++        let output = root.join("file");
++        let mut watcher = OutputWatcher::new(&root, vec![output.clone()])?;
++        assert!(
++            tokio::time::timeout(Duration::from_millis(1), watcher.next_batch())
++                .await
++                .is_err()
++        );
++        let mut producer = File::create(&output)?;
++        producer.write_all(b"not closed yet")?;
++        drop(producer);
++        observe(&mut watcher, &[output]).await?;
++        Ok(())
++    }
++
++    #[tokio::test]
++    async fn overflow_is_explicit_and_permanently_disables_observer() -> io::Result<()> {
++        let project = tempfile::tempdir()?;
++        let root = project.path().canonicalize()?;
++        let mut watcher = OutputWatcher::new(&root, vec![root.join("file")])?;
++        watcher.event_buffer[0..4].copy_from_slice(&(-1i32).to_ne_bytes());
++        watcher.event_buffer[4..8].copy_from_slice(&IN_Q_OVERFLOW.to_ne_bytes());
++        watcher.event_end = EVENT_HEADER_BYTES;
++        assert!(
++            watcher
++                .next_batch()
++                .await
++                .unwrap_err()
++                .to_string()
++                .contains("overflow")
++        );
++        assert!(
++            watcher
++                .next_batch()
++                .await
++                .unwrap_err()
++                .to_string()
++                .contains("disabled")
++        );
++        Ok(())
++    }
++
++    #[test]
++    fn rejects_excess_roots_before_registering_descriptors() -> io::Result<()> {
++        let project = tempfile::tempdir()?;
++        let root = project.path().canonicalize()?;
++        // No Tokio runtime: validation must reject before AsyncFd creation.
++        assert!(OutputWatcher::new(&root, vec![root.join("file"); MAX_ROOTS + 1]).is_err());
++        assert!(OutputWatcher::new(&root, vec![root.join("../escape")]).is_err());
++        Ok(())
++    }
++
++    #[test]
++    fn malformed_event_records_are_rejected() {
++        assert!(parse_event(&[0; EVENT_HEADER_BYTES - 1]).is_err());
++        let mut record = [0u8; EVENT_HEADER_BYTES + 16];
++        record[12..16].copy_from_slice(&u32::MAX.to_ne_bytes());
++        assert!(parse_event(&record).is_err());
++        record[12..16].copy_from_slice(&16u32.to_ne_bytes());
++        record[EVENT_HEADER_BYTES..].fill(b'x');
++        assert!(parse_event(&record).is_err());
++        record[EVENT_HEADER_BYTES..].fill(0);
++        record[EVENT_HEADER_BYTES..EVENT_HEADER_BYTES + 3].copy_from_slice(b"../");
++        assert!(parse_event(&record).is_err());
++        record[EVENT_HEADER_BYTES..].fill(0);
++        record[EVENT_HEADER_BYTES..EVENT_HEADER_BYTES + 2].copy_from_slice(b"..");
++        assert!(parse_event(&record).is_err());
++        record[EVENT_HEADER_BYTES..EVENT_HEADER_BYTES + 2].copy_from_slice(b"ok");
++        let (event, length) = parse_event(&record).unwrap();
++        assert_eq!(event.name, Some(OsStr::new("ok")));
++        assert_eq!(length, record.len());
++    }
++}
+diff --git a/app/buck2_execute_impl/src/executors/re.rs b/app/buck2_execute_impl/src/executors/re.rs
+index 4bc2eec..395093e 100644
+--- a/app/buck2_execute_impl/src/executors/re.rs
++++ b/app/buck2_execute_impl/src/executors/re.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ use std::ops::ControlFlow;
+ use std::sync::Arc;
+@@ -123,6 +123,7 @@ impl ReExecutor {
+                     ProjectRelativePath::empty(),
+                     paths.input_directory(),
+                     Some(identity),
++                    buck2_execute::re::presence::NegativeCache::Allowed,
+                 )
+                 .await;
+             match res {
+diff --git a/app/buck2_execute_impl/src/materializers.rs b/app/buck2_execute_impl/src/materializers.rs
+index 9071daa..2b4f1d3 100644
+--- a/app/buck2_execute_impl/src/materializers.rs
++++ b/app/buck2_execute_impl/src/materializers.rs
+@@ -6,10 +6,12 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ pub mod artifact_type;
+ pub mod deferred;
+ pub mod immediate;
+ pub mod io;
+ pub(crate) mod local_content_store;
++#[cfg(target_os = "linux")]
++pub(crate) mod prepared_outputs;
+diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
+index 4e5b9f1..86f4d96 100644
+--- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
++++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ //! Optional, machine-local content store. Objects are never hardlinked into a
+ //! worktree: every publication is a verified COW snapshot and atomic rename.
+@@ -64,6 +64,9 @@ mod linux {
+     use rusqlite::params;
+     use tempfile::NamedTempFile;
+ 
++    use crate::materializers::prepared_outputs;
++    use crate::materializers::prepared_outputs::PreparedFile;
++
+     const INGEST_BATCH_BYTES: u64 = 64 * 1024 * 1024;
+     const INGEST_METADATA_BYTES: u64 = 256 * 1024 * 1024;
+ 
+@@ -182,10 +185,40 @@ mod linux {
+     }
+ 
+     struct Publication<'a> {
+-        file: NamedTempFile,
++        file: PublicationFile,
+         destination: &'a Path,
+     }
+ 
++    enum PublicationFile {
++        Staged(NamedTempFile),
++        // Hashed, normalized and synced while its producer was still running.
++        // Its independent upload snapshot does not move with this publication.
++        Prepared(PreparedFile),
++    }
++
++    impl PublicationFile {
++        fn needs_sync(&self) -> Option<&NamedTempFile> {
++            match self {
++                Self::Staged(file) => Some(file),
++                Self::Prepared(_) => None,
++            }
++        }
++
++        fn persist(self, destination: &Path) -> buck2_error::Result<()> {
++            match self {
++                Self::Staged(file) => {
++                    file.persist(destination).map_err(|error| error.error)?;
++                }
++                Self::Prepared(file) => {
++                    file.path
++                        .persist(destination)
++                        .map_err(|error| error.error)?;
++                }
++            }
++            Ok(())
++        }
++    }
++
+     struct GroupResult {
+         consumed: usize,
+         found: bool,
+@@ -720,7 +753,7 @@ mod linux {
+                 object.staged = Some(staged);
+                 if let IngestSource::Recovered(file) = source {
+                     publications.push(Publication {
+-                        file,
++                        file: PublicationFile::Staged(file),
+                         destination: requests[object.first_request].destination,
+                     });
+                 }
+@@ -732,6 +765,23 @@ mod linux {
+                     // object's extents and retains its existing executable mode.
+                     continue;
+                 }
++                if ingest {
++                    if let Some(file) = prepared_outputs::take(
++                        request.destination, object.digest, request.executable,
++                    )? {
++                        // Remove only the consumed private hint. The verified
++                        // final digest, not a timestamp, authorizes this view.
++                        self.db.execute(
++                            "DELETE FROM views WHERE path=?1",
++                            [file.path.to_str().ok_or_else(|| error("Non-UTF-8 prepared path"))?],
++                        )?;
++                        publications.push(Publication {
++                            file: PublicationFile::Prepared(file),
++                            destination: request.destination,
++                        });
++                        continue;
++                    }
++                }
+                 let publication = {
+                     let source = if let Some(staged) = &object.staged {
+                         staged.as_file()
+@@ -747,7 +797,7 @@ mod linux {
+                 };
+                 match publication {
+                     Ok(file) => publications.push(Publication {
+-                        file,
++                        file: PublicationFile::Staged(file),
+                         destination: request.destination,
+                     }),
+                     Err(error) => {
+@@ -774,7 +824,7 @@ mod linux {
+                 let mut files = objects
+                     .iter()
+                     .filter_map(|object| object.staged.as_ref())
+-                    .chain(publications.iter().map(|publication| &publication.file));
++                    .chain(publications.iter().filter_map(|publication| publication.file.needs_sync()));
+                 if let Some(first) = files.next() {
+                     if files.next().is_none() {
+                         // Singleton downloads and files do not start a pool.
+@@ -784,7 +834,7 @@ mod linux {
+                             objects
+                                 .par_iter()
+                                 .filter_map(|object| object.staged.as_ref())
+-                                .chain(publications.par_iter().map(|publication| &publication.file))
++                                .chain(publications.par_iter().filter_map(|publication| publication.file.needs_sync()))
+                                 .try_for_each(|file| file.as_file().sync_all())
+                         })?;
+                     }
+@@ -822,7 +872,7 @@ mod linux {
+             for publication in publications {
+                 let parent = publication.destination.parent()
+                     .ok_or_else(|| error("Missing output parent"))?;
+-                publication.file.persist(publication.destination).map_err(|error| error.error)?;
++                publication.file.persist(publication.destination)?;
+                 parents.insert(parent);
+             }
+             for parent in parents {
+@@ -1790,7 +1840,7 @@ pub(crate) fn artifact<D: ActionDirectory>(
+     Ok(())
+ }
+ 
+-fn ingest_files(
++pub(crate) fn ingest_files(
+     files: &[(AbsNormPathBuf, FileMetadata)],
+     config: DigestConfig,
+ ) -> buck2_error::Result<()> {
+diff --git a/app/buck2_execute_impl/src/materializers/prepared_outputs.rs b/app/buck2_execute_impl/src/materializers/prepared_outputs.rs
+new file mode 100644
+index 0000000..bb4f888
+--- /dev/null
++++ b/app/buck2_execute_impl/src/materializers/prepared_outputs.rs
+@@ -0,0 +1,793 @@
++/*
++ * Copyright (c) Meta Platforms, Inc. and affiliates.
++ *
++ * This source code is dual-licensed under either the MIT license found in the
++ * LICENSE-MIT file in the root directory of this source tree or the Apache
++ * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
++ * of this source tree. You may select, at your option, one of the
++ * above-listed licenses.
++ */
++
++//! Bounded ownership of private speculative output snapshots.
++//!
++//! A capture reserves space for two independent snapshots: a normalized
++//! publication view and a stable CAS upload source. Registration trusts only the
++//! caller's hash of the private snapshot, never metadata from a live compiler
++//! output. The final materializer supplies its independently computed digest.
++//! The registry owns weak references; action sessions own unconsumed entries,
++//! while consumed publication files and uploads own their retention separately.
++//! Publication views keep their final 0644/0755 mode. Immutability comes from
++//! exclusive private ownership and closed writer handles, not a chmod seal.
++
++use std::collections::HashMap;
++use std::fs;
++use std::fs::File;
++use std::fs::OpenOptions;
++use std::fs::Permissions;
++use std::io;
++use std::os::unix::fs::MetadataExt;
++use std::os::unix::fs::OpenOptionsExt;
++use std::os::unix::fs::PermissionsExt;
++use std::path::Path;
++use std::sync::Arc;
++use std::sync::LazyLock;
++use std::sync::Weak;
++
++use buck2_common::file_ops::metadata::FileDigest;
++use buck2_common::file_ops::metadata::FileMetadata;
++use parking_lot::Mutex;
++use tempfile::TempDir;
++use tempfile::TempPath;
++use tokio::sync::OwnedSemaphorePermit;
++use tokio::sync::Semaphore;
++
++const RETAINED_BYTES: u64 = 512 * 1024 * 1024;
++const SNAPSHOT_BLOCK: u64 = 4096;
++const RETAINED_PAIRS: usize = 4096;
++const DIRECTORY_PREFIX: &str = ".buck2-output-pipeline-";
++const O_NOFOLLOW: i32 = 0x20000;
++const O_NONBLOCK: i32 = 0x800;
++
++unsafe extern "C" {
++    fn geteuid() -> u32;
++}
++
++/// A private capture directory whose lock survives as long as either snapshot.
++/// The caller must place it outside every declared output root, under an owned
++/// output parent. Field order keeps the lock held throughout directory removal.
++pub(crate) struct CaptureDirectory {
++    directory: TempDir,
++    _lock: File,
++}
++
++impl CaptureDirectory {
++    pub(crate) fn create(parent: &Path) -> io::Result<Arc<Self>> {
++        clean_stale_directories(parent)?;
++        let directory = tempfile::Builder::new()
++            .prefix(DIRECTORY_PREFIX)
++            .tempdir_in(parent)?;
++        fs::set_permissions(directory.path(), Permissions::from_mode(0o700))?;
++        let lock = OpenOptions::new()
++            .read(true)
++            .write(true)
++            .create_new(true)
++            .mode(0o600)
++            .custom_flags(O_NOFOLLOW | O_NONBLOCK)
++            .open(directory.path().join("lock"))?;
++        lock.set_permissions(Permissions::from_mode(0o600))?;
++        // A concurrent scavenger can win the crash-before-lock window. Never
++        // wait on it or continue using a directory that it might be deleting.
++        lock.try_lock().map_err(io::Error::from)?;
++        let current = fs::symlink_metadata(directory.path().join("lock"))?;
++        if !same_inode(&lock.metadata()?, &current) {
++            return Err(io::Error::other("Capture directory lock was replaced"));
++        }
++        Ok(Arc::new(Self {
++            directory,
++            _lock: lock,
++        }))
++    }
++
++    pub(crate) fn path(&self) -> &Path {
++        self.directory.path()
++    }
++}
++
++fn same_inode(a: &fs::Metadata, b: &fs::Metadata) -> bool {
++    a.dev() == b.dev() && a.ino() == b.ino()
++}
++
++fn private_directory(metadata: &fs::Metadata, uid: u32) -> bool {
++    metadata.is_dir() && metadata.uid() == uid && metadata.mode() & 0o7777 == 0o700
++}
++
++fn private_lock(metadata: &fs::Metadata, uid: u32) -> bool {
++    metadata.is_file()
++        && metadata.uid() == uid
++        && metadata.nlink() == 1
++        && metadata.mode() & 0o7777 == 0o600
++}
++
++/// Best-effort scavenging of recognized, unlocked directories only. Iteration
++/// retains neither a list of candidates nor their file descriptors. Linux's
++/// remove_dir_all does not follow symlinks, including links inside the tree.
++fn clean_stale_directories(parent: &Path) -> io::Result<()> {
++    let uid = unsafe { geteuid() };
++    for entry in fs::read_dir(parent)? {
++        let Ok(entry) = entry else { continue };
++        if !entry
++            .file_name()
++            .as_encoded_bytes()
++            .starts_with(DIRECTORY_PREFIX.as_bytes())
++        {
++            continue;
++        }
++        let path = entry.path();
++        let Ok(directory_metadata) = fs::symlink_metadata(&path) else {
++            continue;
++        };
++        if !private_directory(&directory_metadata, uid) {
++            continue;
++        }
++        let lock_path = path.join("lock");
++        let original_lock = match fs::symlink_metadata(&lock_path) {
++            Ok(metadata) if private_lock(&metadata, uid) => metadata,
++            Err(error) if error.kind() == io::ErrorKind::NotFound => {
++                // remove_dir is itself the emptiness check: a concurrently
++                // created lock, an unrecognized file, or a symlink prevents it.
++                let _ignored = fs::remove_dir(&path);
++                continue;
++            }
++            _ => continue,
++        };
++        let Ok(lock) = OpenOptions::new()
++            .read(true)
++            .write(true)
++            .custom_flags(O_NOFOLLOW | O_NONBLOCK)
++            .open(&lock_path)
++        else {
++            continue;
++        };
++        let Ok(lock_metadata) = lock.metadata() else {
++            continue;
++        };
++        if !private_lock(&lock_metadata, uid)
++            || !same_inode(&original_lock, &lock_metadata)
++            || lock.try_lock().is_err()
++        {
++            continue;
++        }
++        let Ok(current_directory) = fs::symlink_metadata(&path) else {
++            continue;
++        };
++        let Ok(current_lock) = fs::symlink_metadata(&lock_path) else {
++            continue;
++        };
++        if !private_directory(&current_directory, uid)
++            || !same_inode(&directory_metadata, &current_directory)
++            || !private_lock(&current_lock, uid)
++            || !same_inode(&lock_metadata, &current_lock)
++        {
++            continue;
++        }
++        // Keep the exclusive lock alive until removal has finished. A live
++        // directory cannot be scavenged by another process opening its lock.
++        let _ignored = fs::remove_dir_all(&path);
++    }
++    Ok(())
++}
++
++struct RetentionBudget {
++    blocks: Arc<Semaphore>,
++    pairs: Arc<Semaphore>,
++}
++
++impl RetentionBudget {
++    fn new(blocks: usize, pairs: usize) -> Self {
++        Self {
++            blocks: Arc::new(Semaphore::new(blocks)),
++            pairs: Arc::new(Semaphore::new(pairs)),
++        }
++    }
++
++    fn reserve(
++        &self,
++        size: u64,
++        directory: Arc<CaptureDirectory>,
++    ) -> Option<Arc<CaptureRetention>> {
++        let blocks = size.checked_add(SNAPSHOT_BLOCK - 1)? / SNAPSHOT_BLOCK;
++        let blocks = blocks.max(1);
++        let charged = u32::try_from(blocks.checked_mul(2)?).ok()?;
++        let pair = self.pairs.clone().try_acquire_owned().ok()?;
++        let bytes = self.blocks.clone().try_acquire_many_owned(charged).ok()?;
++        Some(Arc::new(CaptureRetention {
++            directory,
++            snapshot_capacity: blocks * SNAPSHOT_BLOCK,
++            _bytes: bytes,
++            _pair: pair,
++        }))
++    }
++}
++
++static BUDGET: LazyLock<RetentionBudget> = LazyLock::new(|| {
++    RetentionBudget::new((RETAINED_BYTES / SNAPSHOT_BLOCK) as usize, RETAINED_PAIRS)
++});
++
++/// Shared by the publication view and the independent CAS upload snapshot.
++/// No source file descriptor is retained. Directory cleanup precedes permit
++/// release when this is the last owner of the directory.
++pub(crate) struct CaptureRetention {
++    directory: Arc<CaptureDirectory>,
++    snapshot_capacity: u64,
++    _bytes: OwnedSemaphorePermit,
++    _pair: OwnedSemaphorePermit,
++}
++
++impl CaptureRetention {
++    pub(crate) fn directory(&self) -> &Path {
++        self.directory.path()
++    }
++}
++
++/// Nonblocking admission, charging each of two snapshots in 4 KiB blocks, with
++/// one block per empty snapshot. Oversized captures are rejected, not exempted.
++pub(crate) fn reserve(
++    size: u64,
++    directory: Arc<CaptureDirectory>,
++) -> Option<Arc<CaptureRetention>> {
++    BUDGET.reserve(size, directory)
++}
++
++pub(crate) struct PreparedFile {
++    // Drop the file before its retention lease can release permits/directory.
++    pub(crate) path: TempPath,
++    pub(crate) metadata: FileMetadata,
++    pub(crate) retention: Arc<CaptureRetention>,
++}
++
++#[derive(Clone, Copy, Eq, PartialEq, Hash)]
++struct Key {
++    digest: FileDigest,
++    executable: bool,
++    device: u64,
++}
++
++#[derive(Default)]
++struct Registry {
++    entries: Mutex<HashMap<Key, Weak<PreparedEntry>>>,
++}
++
++static REGISTRY: LazyLock<Arc<Registry>> = LazyLock::new(|| Arc::new(Registry::default()));
++
++/// An action keeps this handle until materialization or cancellation. Once its
++/// file is taken, this handle retains neither the directory nor any permits.
++pub(crate) struct PreparedEntry {
++    key: Key,
++    registry: Arc<Registry>,
++    file: Mutex<Option<PreparedFile>>,
++}
++
++impl PreparedEntry {
++    pub(crate) fn is_available(&self) -> bool {
++        self.file.lock().is_some()
++    }
++}
++
++impl Registry {
++    fn register(self: &Arc<Self>, file: PreparedFile) -> io::Result<Arc<PreparedEntry>> {
++        // All filesystem operations, including dropping an unused duplicate,
++        // happen without the registry mutex held.
++        let metadata = fs::symlink_metadata(&file.path)?;
++        let expected_mode = if file.metadata.is_executable {
++            0o755
++        } else {
++            0o644
++        };
++        if file.path.parent() != Some(file.retention.directory())
++            || !metadata.is_file()
++            || metadata.nlink() != 1
++            || metadata.uid() != unsafe { geteuid() }
++            || metadata.len() != file.metadata.digest.size()
++            || metadata.len() > file.retention.snapshot_capacity
++            || metadata.mode() & 0o7777 != expected_mode
++        {
++            return Err(io::Error::new(
++                io::ErrorKind::InvalidInput,
++                "Prepared output must be a private normalized regular snapshot of the expected size",
++            ));
++        }
++        let key = Key {
++            digest: *file.metadata.digest.data(),
++            executable: file.metadata.is_executable,
++            device: metadata.dev(),
++        };
++        let mut entries = self.entries.lock();
++        let existing = entries.get(&key).and_then(Weak::upgrade);
++        let available = existing
++            .as_ref()
++            .is_some_and(|entry| entry.file.lock().is_some());
++        if available {
++            drop(entries);
++            // The incoming file and its lease drop outside the registry lock.
++            return Ok(existing.unwrap());
++        }
++        let entry = Arc::new(PreparedEntry {
++            key,
++            registry: self.clone(),
++            file: Mutex::new(Some(file)),
++        });
++        entries.insert(key, Arc::downgrade(&entry));
++        drop(entries);
++        // This can be the final strong reference, whose destructor locks the
++        // registry. Never drop it while holding either mutex.
++        drop(existing);
++        Ok(entry)
++    }
++
++    fn take(
++        &self,
++        destination: &Path,
++        digest: &FileDigest,
++        executable: bool,
++    ) -> io::Result<Option<PreparedFile>> {
++        if self.entries.lock().is_empty() {
++            return Ok(None);
++        }
++        let metadata = match fs::symlink_metadata(destination) {
++            Ok(metadata) => metadata,
++            // Cache restoration can publish a view before its destination
++            // exists. That path uses ordinary staging, not a producer snapshot.
++            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
++            Err(error) => return Err(error),
++        };
++        if !metadata.is_file() {
++            return Ok(None);
++        }
++        // Only the filesystem device is read from the destination. Its size,
++        // mtime and contents cannot substitute for the caller's final digest.
++        Ok(self.take_key(Key {
++            digest: *digest,
++            executable,
++            device: metadata.dev(),
++        }))
++    }
++
++    fn take_key(&self, key: Key) -> Option<PreparedFile> {
++        let entry = {
++            let mut entries = self.entries.lock();
++            entries.remove(&key).and_then(|entry| entry.upgrade())
++        };
++        // Removing the weak row first bounds consumed/dead registry metadata
++        // and lets a subsequent registration safely install a replacement.
++        entry.as_ref().and_then(|entry| entry.file.lock().take())
++    }
++}
++
++impl Drop for PreparedEntry {
++    fn drop(&mut self) {
++        let identity = self as *const Self;
++        let mut entries = self.registry.entries.lock();
++        if entries
++            .get(&self.key)
++            .is_some_and(|entry| std::ptr::eq(entry.as_ptr(), identity))
++        {
++            entries.remove(&self.key);
++        }
++        // The guard drops before the file field: no filesystem work or permit
++        // release under this lock, and an older entry cannot erase its successor.
++    }
++}
++
++/// The caller has already hashed, normalized and synchronized this private
++/// publication file. Registration validates its shape, not a live output path.
++pub(crate) fn register(file: PreparedFile) -> io::Result<Arc<PreparedEntry>> {
++    REGISTRY.register(file)
++}
++
++/// Consume at most one matching prepared publication view on the destination
++/// filesystem. The caller must provide the authoritative final output digest.
++pub(crate) fn take(
++    destination: &Path,
++    digest: &FileDigest,
++    executable: bool,
++) -> io::Result<Option<PreparedFile>> {
++    REGISTRY.take(destination, digest, executable)
++}
++
++#[cfg(test)]
++mod tests {
++    use std::io::Write;
++    use std::os::unix::fs::symlink;
++    use std::path::PathBuf;
++    use std::sync::Barrier;
++
++    use buck2_common::file_ops::metadata::TrackedFileDigest;
++    use buck2_execute::digest_config::DigestConfig;
++
++    use super::*;
++
++    fn budget() -> RetentionBudget {
++        RetentionBudget::new((RETAINED_BYTES / SNAPSHOT_BLOCK) as usize, RETAINED_PAIRS)
++    }
++
++    fn prepared(
++        budget: &RetentionBudget,
++        directory: Arc<CaptureDirectory>,
++        bytes: &[u8],
++        executable: bool,
++    ) -> io::Result<PreparedFile> {
++        let retention = budget.reserve(bytes.len() as u64, directory).unwrap();
++        let mut file = tempfile::NamedTempFile::new_in(retention.directory())?;
++        file.write_all(bytes)?;
++        file.as_file()
++            .set_permissions(Permissions::from_mode(if executable {
++                0o755
++            } else {
++                0o644
++            }))?;
++        file.as_file().sync_all()?;
++        Ok(PreparedFile {
++            path: file.into_temp_path(),
++            metadata: FileMetadata {
++                digest: TrackedFileDigest::from_content(
++                    bytes,
++                    DigestConfig::testing_default().cas_digest_config(),
++                ),
++                is_executable: executable,
++            },
++            retention,
++        })
++    }
++
++    fn stale_directory(parent: &Path, name: &str, with_lock: bool) -> io::Result<PathBuf> {
++        let path = parent.join(format!("{DIRECTORY_PREFIX}{name}"));
++        fs::create_dir(&path)?;
++        fs::set_permissions(&path, Permissions::from_mode(0o700))?;
++        if with_lock {
++            let lock = OpenOptions::new()
++                .create_new(true)
++                .write(true)
++                .mode(0o600)
++                .open(path.join("lock"))?;
++            lock.set_permissions(Permissions::from_mode(0o600))?;
++        }
++        Ok(path)
++    }
++
++    #[test]
++    fn byte_budget_saturates_and_releases_without_singleton_exception() -> io::Result<()> {
++        let parent = tempfile::tempdir()?;
++        let directory = CaptureDirectory::create(parent.path())?;
++        let budget = budget();
++        assert!(
++            budget
++                .reserve(RETAINED_BYTES / 2 + 1, directory.clone())
++                .is_none()
++        );
++        assert!(budget.reserve(u64::MAX, directory.clone()).is_none());
++        let full = budget
++            .reserve(RETAINED_BYTES / 2, directory.clone())
++            .unwrap();
++        assert_eq!(budget.blocks.available_permits(), 0);
++        assert!(budget.reserve(0, directory.clone()).is_none());
++        let upload = full.clone();
++        drop(full);
++        assert!(budget.reserve(1, directory.clone()).is_none());
++        drop(upload);
++        assert_eq!(budget.pairs.available_permits(), RETAINED_PAIRS);
++        assert!(budget.reserve(RETAINED_BYTES / 2, directory).is_some());
++        Ok(())
++    }
++
++    #[test]
++    fn rounds_each_snapshot_and_limits_retained_pairs() -> io::Result<()> {
++        let parent = tempfile::tempdir()?;
++        let directory = CaptureDirectory::create(parent.path())?;
++        let small = RetentionBudget::new(6, 4);
++        let empty = small.reserve(0, directory.clone()).unwrap();
++        assert_eq!(small.blocks.available_permits(), 4);
++        let rounded = small.reserve(4097, directory.clone()).unwrap();
++        assert_eq!(small.blocks.available_permits(), 0);
++        assert!(small.reserve(1, directory.clone()).is_none());
++        drop(rounded);
++        let single = small.reserve(4096, directory.clone()).unwrap();
++        assert_eq!(small.blocks.available_permits(), 2);
++        drop((empty, single));
++        assert_eq!(small.blocks.available_permits(), 6);
++        assert_eq!(small.pairs.available_permits(), 4);
++
++        let budget = budget();
++        let retained: Vec<_> = (0..RETAINED_PAIRS)
++            .map(|_| budget.reserve(0, directory.clone()).unwrap())
++            .collect();
++        assert!(budget.blocks.available_permits() > 0);
++        assert!(budget.reserve(0, directory.clone()).is_none());
++        drop(retained);
++        assert_eq!(budget.pairs.available_permits(), RETAINED_PAIRS);
++        assert!(budget.reserve(0, directory).is_some());
++        Ok(())
++    }
++
++    #[test]
++    fn deduplicates_until_consumed_and_does_not_retain_consumed_budget() -> io::Result<()> {
++        let parent = tempfile::tempdir()?;
++        let directory = CaptureDirectory::create(parent.path())?;
++        let budget = budget();
++        let registry = Arc::new(Registry::default());
++        let file = prepared(&budget, directory.clone(), b"snapshot", false)?;
++        let path = file.path.to_path_buf();
++        let digest = *file.metadata.digest.data();
++        let upload = file.retention.clone();
++        let retention = Arc::downgrade(&file.retention);
++        let entry = registry.register(file)?;
++        let duplicate = prepared(&budget, directory.clone(), b"snapshot", false)?;
++        let duplicate_path = duplicate.path.to_path_buf();
++        let duplicate_retention = Arc::downgrade(&duplicate.retention);
++        let second_owner = registry.register(duplicate)?;
++        assert!(Arc::ptr_eq(&entry, &second_owner));
++        assert!(!duplicate_path.exists());
++        assert!(duplicate_retention.upgrade().is_none());
++        assert_eq!(registry.entries.lock().len(), 1);
++
++        let destination = parent.path().join("output");
++        fs::write(&destination, b"snapshot")?;
++        let taken = registry.take(&destination, &digest, false)?.unwrap();
++        assert_eq!(&*taken.path, path.as_path());
++        assert!(registry.take(&destination, &digest, false)?.is_none());
++        assert!(registry.entries.lock().is_empty());
++        drop(taken);
++        assert!(!path.exists());
++        assert!(retention.upgrade().is_some());
++        drop(upload);
++        assert!(retention.upgrade().is_none());
++        assert_eq!(budget.pairs.available_permits(), RETAINED_PAIRS);
++        // Both action handles remain alive after all captured data was released.
++        drop((entry, second_owner));
++        Ok(())
++    }
++
++    #[test]
++    fn action_cancellation_cleans_unused_file_directory_and_weak_row() -> io::Result<()> {
++        let parent = tempfile::tempdir()?;
++        let directory = CaptureDirectory::create(parent.path())?;
++        let directory_path = directory.path().to_path_buf();
++        let directory_weak = Arc::downgrade(&directory);
++        let budget = budget();
++        let registry = Arc::new(Registry::default());
++        let file = prepared(&budget, directory, b"cancelled", true)?;
++        let path = file.path.to_path_buf();
++        let retention = Arc::downgrade(&file.retention);
++        let entry = registry.register(file)?;
++        let other_owner = entry.clone();
++        drop(entry);
++        assert!(path.exists());
++        drop(other_owner);
++        assert!(!path.exists());
++        assert!(!directory_path.exists());
++        assert!(directory_weak.upgrade().is_none());
++        assert!(retention.upgrade().is_none());
++        assert!(registry.entries.lock().is_empty());
++        assert_eq!(budget.pairs.available_permits(), RETAINED_PAIRS);
++        Ok(())
++    }
++
++    #[test]
++    fn dropping_consumed_entry_does_not_remove_same_key_replacement() -> io::Result<()> {
++        let parent = tempfile::tempdir()?;
++        let directory = CaptureDirectory::create(parent.path())?;
++        let budget = RetentionBudget::new(2, 1);
++        let registry = Arc::new(Registry::default());
++        let old = registry.register(prepared(&budget, directory.clone(), b"same", false)?)?;
++        drop(registry.take_key(old.key).unwrap());
++        // One pair is enough even though the consumed action entry still lives.
++        let replacement = registry.register(prepared(&budget, directory, b"same", false)?)?;
++        drop(old);
++        assert_eq!(registry.entries.lock().len(), 1);
++        assert!(registry.take_key(replacement.key).is_some());
++        assert!(registry.entries.lock().is_empty());
++        Ok(())
++    }
++
++    #[test]
++    fn requires_digest_mode_and_device_not_destination_size_or_mtime() -> io::Result<()> {
++        let parent = tempfile::tempdir()?;
++        let directory = CaptureDirectory::create(parent.path())?;
++        let budget = budget();
++        let registry = Arc::new(Registry::default());
++        let entry = registry.register(prepared(&budget, directory, b"expected", false)?)?;
++        let destination = parent.path().join("output");
++        assert!(
++            registry
++                .take(&destination, &entry.key.digest, false)?
++                .is_none()
++        );
++        fs::write(&destination, b"different bytes of a different size")?;
++        let wrong_digest = FileDigest::from_content(
++            b"unexpected",
++            DigestConfig::testing_default().cas_digest_config(),
++        );
++        assert!(registry.take(&destination, &wrong_digest, false)?.is_none());
++        assert!(
++            registry
++                .take(&destination, &entry.key.digest, true)?
++                .is_none()
++        );
++        assert!(
++            registry
++                .take_key(Key {
++                    device: entry.key.device.wrapping_add(1),
++                    ..entry.key
++                })
++                .is_none()
++        );
++        assert_eq!(registry.entries.lock().len(), 1);
++        // The lookup's authority is the supplied digest. Live-path metadata
++        // must not be used to accept/reject a digest supplied by the final hasher.
++        assert!(
++            registry
++                .take(&destination, &entry.key.digest, false)?
++                .is_some()
++        );
++        Ok(())
++    }
++
++    #[test]
++    fn never_follows_destination_symlinks_and_discards_dead_weak_rows() -> io::Result<()> {
++        let parent = tempfile::tempdir()?;
++        let directory = CaptureDirectory::create(parent.path())?;
++        let budget = budget();
++        let registry = Arc::new(Registry::default());
++        let file = prepared(&budget, directory, b"regular", false)?;
++        let destination = parent.path().join("link");
++        symlink(&file.path, &destination)?;
++        let entry = registry.register(file)?;
++        assert!(
++            registry
++                .take(&destination, &entry.key.digest, false)?
++                .is_none()
++        );
++        assert!(
++            registry
++                .take(parent.path(), &entry.key.digest, false)?
++                .is_none()
++        );
++        let key = entry.key;
++        drop(entry);
++        registry.entries.lock().insert(key, Weak::new());
++        assert!(registry.take_key(key).is_none());
++        assert!(registry.entries.lock().is_empty());
++        Ok(())
++    }
++
++    #[test]
++    fn rejects_wrong_size_aliases_symlinks_and_nonprivate_views() -> io::Result<()> {
++        let parent = tempfile::tempdir()?;
++        let directory = CaptureDirectory::create(parent.path())?;
++        let budget = budget();
++        let registry = Arc::new(Registry::default());
++        let mut wrong_size = prepared(&budget, directory.clone(), b"short", false)?;
++        wrong_size.metadata.digest = TrackedFileDigest::from_content(
++            b"a longer digest",
++            DigestConfig::testing_default().cas_digest_config(),
++        );
++        assert!(registry.register(wrong_size).is_err());
++
++        let mut undercharged = prepared(&budget, directory.clone(), &vec![0; 4097], false)?;
++        undercharged.retention = budget.reserve(1, directory.clone()).unwrap();
++        assert!(registry.register(undercharged).is_err());
++
++        let file = prepared(&budget, directory.clone(), b"target", false)?;
++        let target = parent.path().join("target");
++        fs::rename(&file.path, &target)?;
++        symlink(&target, &file.path)?;
++        assert!(registry.register(file).is_err());
++        assert_eq!(fs::read(&target)?, b"target");
++
++        let file = prepared(&budget, directory.clone(), b"aliased", false)?;
++        let alias = parent.path().join("alias");
++        fs::hard_link(&file.path, &alias)?;
++        assert!(registry.register(file).is_err());
++        assert_eq!(fs::read(alias)?, b"aliased");
++
++        let file = prepared(&budget, directory.clone(), b"not-a-directory", false)?;
++        let path = file.path.to_path_buf();
++        fs::remove_file(&path)?;
++        fs::create_dir(&path)?;
++        assert!(registry.register(file).is_err());
++        fs::remove_dir(path)?;
++
++        let mut file = prepared(&budget, directory, b"outside", false)?;
++        let outside = tempfile::NamedTempFile::new_in(parent.path())?.into_temp_path();
++        fs::rename(&file.path, &outside)?;
++        file.path = outside;
++        assert!(registry.register(file).is_err());
++        assert!(registry.entries.lock().is_empty());
++        assert_eq!(budget.pairs.available_permits(), RETAINED_PAIRS);
++        Ok(())
++    }
++
++    #[test]
++    fn concurrent_takers_consume_exactly_once() -> io::Result<()> {
++        let parent = tempfile::tempdir()?;
++        let directory = CaptureDirectory::create(parent.path())?;
++        let budget = budget();
++        let registry = Arc::new(Registry::default());
++        let entry = registry.register(prepared(&budget, directory, b"one-shot", false)?)?;
++        let barrier = Barrier::new(8);
++        let count = std::thread::scope(|scope| {
++            let threads: Vec<_> = (0..8)
++                .map(|_| {
++                    scope.spawn(|| {
++                        barrier.wait();
++                        usize::from(registry.take_key(entry.key).is_some())
++                    })
++                })
++                .collect();
++            threads
++                .into_iter()
++                .map(|thread| thread.join().unwrap())
++                .sum::<usize>()
++        });
++        assert_eq!(count, 1);
++        assert!(registry.entries.lock().is_empty());
++        assert_eq!(budget.pairs.available_permits(), RETAINED_PAIRS);
++        Ok(())
++    }
++
++    #[test]
++    fn scavenges_crashed_directories_without_following_symlinks() -> io::Result<()> {
++        let parent = tempfile::tempdir()?;
++        let outside = tempfile::tempdir()?;
++        fs::write(outside.path().join("keep"), b"outside")?;
++        let stale = stale_directory(parent.path(), "stale", true)?;
++        fs::write(stale.join("view-dead"), b"abandoned")?;
++        symlink(outside.path(), stale.join("upload-link"))?;
++        let empty = stale_directory(parent.path(), "before-lock", false)?;
++        let active = CaptureDirectory::create(parent.path())?;
++        assert!(!stale.exists());
++        assert!(!empty.exists());
++        assert_eq!(fs::read(outside.path().join("keep"))?, b"outside");
++        fs::write(active.path().join("view-live"), b"live")?;
++        let next = CaptureDirectory::create(parent.path())?;
++        assert_eq!(fs::read(active.path().join("view-live"))?, b"live");
++        assert!(next.path().exists());
++        Ok(())
++    }
++
++    #[test]
++    fn scavenger_preserves_unrecognized_directory_and_lock_shapes() -> io::Result<()> {
++        let parent = tempfile::tempdir()?;
++        let missing_lock = stale_directory(parent.path(), "unrecognized", false)?;
++        fs::write(missing_lock.join("keep"), b"unknown")?;
++        let wrong_directory_mode = stale_directory(parent.path(), "public", true)?;
++        fs::set_permissions(&wrong_directory_mode, Permissions::from_mode(0o755))?;
++        let wrong_lock_mode = stale_directory(parent.path(), "bad-lock", true)?;
++        fs::set_permissions(wrong_lock_mode.join("lock"), Permissions::from_mode(0o644))?;
++        let linked_lock = stale_directory(parent.path(), "linked-lock", true)?;
++        fs::hard_link(linked_lock.join("lock"), parent.path().join("lock-alias"))?;
++        let symlinked_lock = stale_directory(parent.path(), "symlinked-lock", false)?;
++        symlink(
++            parent.path().join("lock-alias"),
++            symlinked_lock.join("lock"),
++        )?;
++        let directory_link = parent
++            .path()
++            .join(format!("{DIRECTORY_PREFIX}directory-link"));
++        symlink(&missing_lock, &directory_link)?;
++        let ordinary = parent.path().join("unrelated");
++        fs::create_dir(&ordinary)?;
++        let _active = CaptureDirectory::create(parent.path())?;
++        for path in [
++            missing_lock,
++            wrong_directory_mode,
++            wrong_lock_mode,
++            linked_lock,
++            symlinked_lock,
++            directory_link,
++            ordinary,
++        ] {
++            assert!(fs::symlink_metadata(path).is_ok());
++        }
++        Ok(())
++    }
++}
+diff --git a/app/buck2_server/src/daemon/common.rs b/app/buck2_server/src/daemon/common.rs
+index d0791b0..76fdcdd 100644
+--- a/app/buck2_server/src/daemon/common.rs
++++ b/app/buck2_server/src/daemon/common.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ use std::sync::Arc;
+ use std::sync::OnceLock;
+@@ -37,6 +37,7 @@ use buck2_core::fs::project::ProjectRoot;
+ use buck2_events::daemon_id::DaemonId;
+ use buck2_execute::execute::blocking::BlockingExecutor;
+ use buck2_execute::execute::cache_uploader::NoOpCacheUploader;
++use buck2_execute::execute::cache_uploader::UploadCache;
+ use buck2_execute::execute::cache_uploader::force_cache_upload;
+ use buck2_execute::execute::prepared::NoOpCommandOptionalExecutor;
+ use buck2_execute::execute::prepared::PreparedCommandExecutor;
+@@ -350,10 +351,32 @@ impl HasCommandExecutor for CommandExecutorFactory {
+                     (action_cache_checker, remote_dep_file_cache_checker)
+                 };
+ 
++                let upload_limit = if force_cache_upload()? {
++                    Some(None)
++                } else if disable_caching {
++                    None
++                } else if let CacheUploadBehavior::Enabled { max_bytes } =
++                    remote_options.cache_upload_behavior
++                {
++                    Some(max_bytes)
++                } else {
++                    None
++                };
++                let cache_uploader = upload_limit.map(|max_bytes| Arc::new(CacheUploader::new(
++                    artifact_fs.dupe(),
++                    self.materializer.dupe(),
++                    re_client.dupe(),
++                    self.invocation_re_use_case,
++                    remote_options.re_properties.clone(),
++                    max_bytes,
++                    self.cache_upload_permission_checker.dupe(),
++                )));
++
+                 let executor: Option<Arc<dyn PreparedCommandExecutor>> =
+                     match &remote_options.executor {
+                         RemoteEnabledExecutor::Local(local) if !self.strategy.ban_local() => {
+-                            Some(Arc::new(local_executor_new(local)))
++                            Some(Arc::new(local_executor_new(local)
++                                .with_cache_uploader(cache_uploader.clone())))
+                         }
+                         RemoteEnabledExecutor::Remote(remote) if !self.strategy.ban_remote() => {
+                             Some(Arc::new(remote_executor_new(
+@@ -374,7 +397,8 @@ impl HasCommandExecutor for CommandExecutorFactory {
+                             let re_max_input_files_bytes = remote
+                                 .re_max_input_files_bytes
+                                 .unwrap_or(DEFAULT_RE_MAX_INPUT_FILE_BYTES);
+-                            let local = local_executor_new(local);
++                            let local = local_executor_new(local)
++                                .with_cache_uploader(cache_uploader.clone());
+                             let remote = remote_executor_new(
+                                 remote,
+                                 &re_client,
+@@ -435,40 +459,15 @@ impl HasCommandExecutor for CommandExecutorFactory {
+                         cache_checker_new()
+                     };
+ 
+-                let cache_uploader = if force_cache_upload()? {
+-                    Arc::new(CacheUploader::new(
+-                        artifact_fs.dupe(),
+-                        self.materializer.dupe(),
+-                        re_client.dupe(),
+-                        self.invocation_re_use_case,
+-                        remote_options.re_properties.clone(),
+-                        None,
+-                        self.cache_upload_permission_checker.dupe(),
+-                    )) as _
+-                } else if disable_caching {
+-                    Arc::new(NoOpCacheUploader {}) as _
+-                } else if let CacheUploadBehavior::Enabled { max_bytes } =
+-                    remote_options.cache_upload_behavior
+-                {
+-                    Arc::new(CacheUploader::new(
+-                        artifact_fs.dupe(),
+-                        self.materializer.dupe(),
+-                        re_client.dupe(),
+-                        self.invocation_re_use_case,
+-                        remote_options.re_properties.clone(),
+-                        max_bytes,
+-                        self.cache_upload_permission_checker.dupe(),
+-                    )) as _
+-                } else {
+-                    Arc::new(NoOpCacheUploader {}) as _
+-                };
+ 
+                 executor.map(|executor| CommandExecutorResponse {
+                     executor,
+                     platform: remote_options.re_properties.to_re_platform(),
+                     action_cache_checker,
+                     remote_dep_file_cache_checker,
+-                    cache_uploader,
++                    cache_uploader: cache_uploader
++                        .map(|uploader| uploader as Arc<dyn UploadCache>)
++                        .unwrap_or_else(|| Arc::new(NoOpCacheUploader {})),
+                     output_trees_download_config: self.output_trees_download_config.dupe(),
+                 })
+             }
+diff --git a/remote_execution/oss/re_grpc/src/client.rs b/remote_execution/oss/re_grpc/src/client.rs
+index c412866..b80bd1e 100644
+--- a/remote_execution/oss/re_grpc/src/client.rs
++++ b/remote_execution/oss/re_grpc/src/client.rs
+@@ -6,7 +6,7 @@
+  * License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+  * of this source tree. You may select, at your option, one of the
+  * above-listed licenses.
+- */
++*/
+ 
+ use std::collections::HashMap;
+ use std::env::VarError;
+@@ -30,7 +30,9 @@ use async_compression::tokio::bufread::ZstdEncoder;
+ use buck2_re_configuration::Buck2OssReConfiguration;
+ use buck2_re_configuration::HttpHeader;
+ use dupe::Dupe;
++use futures::SinkExt;
+ use futures::Stream;
++use futures::channel::mpsc::Receiver;
+ use futures::future::BoxFuture;
+ use futures::future::Future;
+ use futures::stream::BoxStream;
+@@ -78,6 +80,7 @@ use re_grpc_proto::google::rpc::Status;
+ use regex::Regex;
+ use tokio::fs::OpenOptions;
+ use tokio::io::AsyncBufRead;
++use tokio::io::AsyncBufReadExt;
+ use tokio::io::AsyncRead;
+ use tokio::io::AsyncReadExt;
+ use tokio::io::AsyncWriteExt;
+@@ -1069,7 +1072,7 @@ impl REClient {
+                         Ok(resp.into_inner())
+                     }
+                 },
+-                |segments| {
++                |segments: Receiver<WriteRequest>| {
+                     let headers = headers.clone();
+                     async move {
+                         let resp = self
+@@ -1078,7 +1081,7 @@ impl REClient {
+                             .write(tonic::Request::from_parts(
+                                 headers,
+                                 Default::default(),
+-                                futures::stream::iter(segments),
++                                segments,
+                             ))
+                             .await?;
+                         Ok(resp.into_inner())
+@@ -1750,6 +1753,92 @@ where
+     })
+ }
+ 
++/// Stream one attempt with bounded read-ahead. The producer is joined here, never spawned:
++/// cancelling the request drops its reader, and even an early successful server response
++/// must wait for source EOF (or a read error) before this attempt can succeed.
++async fn upload_bytestream<Byt>(
++    resource_name: String,
++    mut reader: Box<dyn AsyncBufRead + Unpin + Send>,
++    compressor: Option<Compressor>,
++    max_chunk_size: usize,
++    write: impl FnOnce(Receiver<WriteRequest>) -> Byt,
++) -> anyhow::Result<()>
++where
++    Byt: Future<Output = anyhow::Result<WriteResponse>> + Send,
++{
++    // Check before compression, which can emit a header even for empty input.
++    if reader.fill_buf().await?.is_empty() {
++        return Ok(());
++    }
++    let mut reader: Pin<Box<dyn AsyncRead + Unpin + Send>> = match compressor {
++        None => Pin::new(Box::new(reader)),
++        Some(Compressor::Zstd) => Pin::new(Box::new(ZstdEncoder::new(reader))),
++        Some(Compressor::Deflate) => Pin::new(Box::new(DeflateEncoder::new(reader))),
++        Some(Compressor::Brotli) => Pin::new(Box::new(BrotliEncoder::new(reader))),
++    };
++    // A zero batch limit disables batching, not ByteStream reads. Cap chunks
++    // independently of the server's batch limit to bound memory per active upload.
++    let chunk_size = if max_chunk_size == 0 {
++        64 * 1024
++    } else {
++        max_chunk_size.min(64 * 1024)
++    };
++    let (mut sender, receiver) = futures::channel::mpsc::channel(1);
++    let mut response_sender = sender.clone();
++    let produce = async {
++        let mut current_offset = 0;
++        let mut data = vec![0; chunk_size];
++        let n = reader.read(&mut data).await?;
++        data.truncate(n);
++        while !data.is_empty() {
++            // One chunk of look-ahead preserves finish_write on the last data
++            // frame, including when the source ends on an exact chunk boundary.
++            let mut next = vec![0; chunk_size];
++            let n = reader.read(&mut next).await?;
++            next.truncate(n);
++            let size = data.len() as i64;
++            if sender
++                .send(WriteRequest {
++                    resource_name: resource_name.clone(),
++                    write_offset: current_offset,
++                    finish_write: next.is_empty(),
++                    data,
++                })
++                .await
++                .is_err()
++            {
++                // A completed RPC no longer needs frames, but source failures
++                // must still fail the attempt. Drain without allocating frames.
++                current_offset += size + next.len() as i64;
++                if !next.is_empty() {
++                    current_offset +=
++                        tokio::io::copy(&mut reader, &mut tokio::io::sink()).await? as i64;
++                }
++                return anyhow::Ok(current_offset);
++            }
++            current_offset += size;
++            data = next;
++        }
++        // The response future also owns a sender so explicitly signal EOF.
++        sender.close_channel();
++        anyhow::Ok(current_offset)
++    };
++    let response = async {
++        let result = write(receiver).await;
++        // An early response may leave the RPC holding its stream. Closing the
++        // channel unblocks the producer; it still drains/checks the source.
++        response_sender.close_channel();
++        result
++    };
++    let (current_offset, response) = futures::try_join!(produce, response)?;
++    if response.committed_size != current_offset && response.committed_size != -1 {
++        return Err(anyhow::anyhow!(
++            "Failed to upload `{resource_name}`: invalid committed_size from WriteResponse"
++        ));
++    }
++    Ok(())
++}
++
+ async fn upload_impl<Byt, Cas>(
+     instance_name: &InstanceName,
+     request: UploadRequest,
+@@ -1757,7 +1846,7 @@ async fn upload_impl<Byt, Cas>(
+     max_total_batch_size: usize,
+     max_concurrent_uploads: Option<usize>,
+     cas_f: impl Fn(BatchUpdateBlobsRequest) -> Cas + Sync + Send + Copy,
+-    bystream_fut: impl Fn(Vec<WriteRequest>) -> Byt + Sync + Send + Copy,
++    bystream_fut: impl Fn(Receiver<WriteRequest>) -> Byt + Sync + Send + Copy,
+ ) -> anyhow::Result<UploadResponse>
+ where
+     Cas: Future<Output = anyhow::Result<BatchUpdateBlobsResponse>> + Send,
+@@ -1796,48 +1885,14 @@ where
+     // https://github.com/bazelbuild/remote-apis/blob/main/build/bazel/remote/execution/v2/remote_execution.proto#L205
+     let mut batched_blob_updates = BatchUploadReqAggregator::new(max_total_batch_size);
+ 
+-    // Adapt the given bystream_fut to take in an AsyncBufRead
+-    let bystream_fut = |resource_name: String, reader: Box<dyn AsyncBufRead + Unpin + Send>| async move {
+-        let mut reader: Pin<Box<dyn AsyncRead + Unpin + Send>> = match bystream_compressor {
+-            None => Pin::new(Box::new(reader)),
+-            Some(Compressor::Zstd) => Pin::new(Box::new(ZstdEncoder::new(reader))),
+-            Some(Compressor::Deflate) => Pin::new(Box::new(DeflateEncoder::new(reader))),
+-            Some(Compressor::Brotli) => Pin::new(Box::new(BrotliEncoder::new(reader))),
+-        };
+-
+-        let mut current_offset = 0;
+-        let mut upload_segments = Vec::new();
+-        let mut buf = vec![0; max_total_batch_size];
+-        loop {
+-            let n_read = reader.read(&mut buf).await?;
+-            if n_read == 0 {
+-                break;
+-            }
+-            upload_segments.push(WriteRequest {
+-                resource_name: resource_name.clone(),
+-                write_offset: current_offset,
+-                finish_write: false,
+-                data: buf[0..n_read].to_vec(),
+-            });
+-            current_offset += n_read as i64;
+-        }
+-        if let Some(last_segment) = upload_segments.last_mut() {
+-            last_segment.finish_write = true;
+-        }
+-
+-        if upload_segments.is_empty() {
+-            // As an optimization, we can silently skip uploading empty blobs
+-            return Ok(());
+-        }
+-
+-        let response = bystream_fut(upload_segments).await?;
+-        if response.committed_size != current_offset && response.committed_size != -1 {
+-            return Err(anyhow::anyhow!(
+-                "Failed to upload `{resource_name}`: invalid committed_size from WriteResponse"
+-            ));
+-        }
+-
+-        Ok(())
++    let bystream_fut = |resource_name, reader| {
++        upload_bytestream(
++            resource_name,
++            reader,
++            bystream_compressor,
++            max_total_batch_size,
++            bystream_fut,
++        )
+     };
+ 
+     // Create futures for any blobs that need uploading.
+@@ -2102,13 +2157,352 @@ fn substitute_env_vars_impl(
+ #[cfg(test)]
+ mod tests {
+     use core::sync::atomic::Ordering;
++    use std::sync::atomic::AtomicBool;
+     use std::sync::atomic::AtomicU16;
++    use std::sync::atomic::AtomicUsize;
+ 
+     use re_grpc_proto::build::bazel::remote::execution::v2::batch_read_blobs_response;
+     use re_grpc_proto::build::bazel::remote::execution::v2::batch_update_blobs_response;
+ 
+     use super::*;
+ 
++    struct UploadTestReader {
++        remaining: usize,
++        read_bytes: Arc<AtomicUsize>,
++        dropped: Arc<AtomicBool>,
++        fail_at_end: bool,
++    }
++
++    impl AsyncRead for UploadTestReader {
++        fn poll_read(
++            mut self: Pin<&mut Self>,
++            _cx: &mut std::task::Context<'_>,
++            buf: &mut tokio::io::ReadBuf<'_>,
++        ) -> std::task::Poll<io::Result<()>> {
++            if self.remaining == 0 && self.fail_at_end {
++                return std::task::Poll::Ready(Err(io::Error::other("source read failed")));
++            }
++            let n = self.remaining.min(buf.remaining());
++            buf.initialize_unfilled_to(n).fill(b'x');
++            buf.advance(n);
++            self.remaining -= n;
++            self.read_bytes.fetch_add(n, Ordering::SeqCst);
++            std::task::Poll::Ready(Ok(()))
++        }
++    }
++
++    impl Drop for UploadTestReader {
++        fn drop(&mut self) {
++            self.dropped.store(true, Ordering::SeqCst);
++        }
++    }
++
++    #[tokio::test]
++    async fn test_upload_stream_early_success_drains_source() -> anyhow::Result<()> {
++        for committed_size in [-1, 128] {
++            let read_bytes = Arc::new(AtomicUsize::new(0));
++            let dropped = Arc::new(AtomicBool::new(false));
++            let reader = UploadTestReader {
++                remaining: 128,
++                read_bytes: read_bytes.clone(),
++                dropped: dropped.clone(),
++                fail_at_end: false,
++            };
++            upload_bytestream(
++                "uploads/test".to_owned(),
++                Box::new(BufReader::with_capacity(4, reader)),
++                None,
++                4,
++                |_requests| async {
++                    assert!(read_bytes.load(Ordering::SeqCst) < 128);
++                    Ok(WriteResponse { committed_size })
++                },
++            )
++            .await?;
++            assert_eq!(read_bytes.load(Ordering::SeqCst), 128);
++            assert!(dropped.load(Ordering::SeqCst));
++        }
++        Ok(())
++    }
++
++    #[tokio::test]
++    async fn test_upload_stream_retry_reopens_file() -> anyhow::Result<()> {
++        let work = tempfile::tempdir()?;
++        let path = work.path().join("blob");
++        let data: Vec<u8> = (0..128).collect();
++        tokio::fs::write(&path, &data).await?;
++        let attempts = AtomicUsize::new(0);
++        let expected = &data;
++        upload_impl(
++            &InstanceName(None),
++            UploadRequest {
++                files_with_digest: Some(vec![NamedDigest {
++                    name: path.to_str().context("tempdir is not utf8")?.to_owned(),
++                    digest: TDigest {
++                        hash: "test".to_owned(),
++                        size_in_bytes: data.len() as i64,
++                        ..Default::default()
++                    },
++                    ..Default::default()
++                }]),
++                ..Default::default()
++            },
++            None,
++            4,
++            Some(1),
++            |_request| async { panic!("not a batch upload") },
++            |mut requests| {
++                let attempt = attempts.fetch_add(1, Ordering::SeqCst);
++                async move {
++                    let first = requests.next().await.unwrap();
++                    assert_eq!(first.write_offset, 0);
++                    assert_eq!(first.data, expected[..4]);
++                    if attempt == 0 {
++                        return Err(tonic::Status::unavailable("retry this attempt").into());
++                    }
++                    assert_eq!(attempt, 1);
++                    let mut received = first.data;
++                    let mut finished = false;
++                    while let Some(request) = requests.next().await {
++                        assert!(!finished);
++                        assert_eq!(request.write_offset, received.len() as i64);
++                        finished = request.finish_write;
++                        received.extend(request.data);
++                    }
++                    assert!(finished);
++                    assert_eq!(&received, expected);
++                    Ok(WriteResponse {
++                        committed_size: received.len() as i64,
++                    })
++                }
++            },
++        )
++        .await?;
++        assert_eq!(attempts.load(Ordering::SeqCst), 2);
++        Ok(())
++    }
++
++    #[tokio::test]
++    async fn test_upload_stream_backpressure_and_final_frame() -> anyhow::Result<()> {
++        for size in [127, 128] {
++            let read_bytes = Arc::new(AtomicUsize::new(0));
++            let dropped = Arc::new(AtomicBool::new(false));
++            let reader = UploadTestReader {
++                remaining: size,
++                read_bytes: read_bytes.clone(),
++                dropped: dropped.clone(),
++                fail_at_end: false,
++            };
++            let read_bytes_ref = &read_bytes;
++            upload_bytestream(
++                "uploads/test".to_owned(),
++                Box::new(BufReader::with_capacity(4, reader)),
++                None,
++                4,
++                |mut requests| async move {
++                    let mut offset = 0;
++                    while let Some(request) = requests.next().await {
++                        if offset == 0 {
++                            // The bounded producer must stop reading while the
++                            // consumer has not polled, not just split a full buffer.
++                            assert!(read_bytes_ref.load(Ordering::SeqCst) <= 32);
++                        }
++                        assert_eq!(request.resource_name, "uploads/test");
++                        assert_eq!(request.write_offset, offset as i64);
++                        assert!(!request.data.is_empty());
++                        assert!(request.data.len() <= 4);
++                        assert!(request.data.iter().all(|b| *b == b'x'));
++                        offset += request.data.len();
++                        assert_eq!(request.finish_write, offset == size);
++                    }
++                    assert_eq!(offset, size);
++                    Ok(WriteResponse {
++                        committed_size: offset as i64,
++                    })
++                },
++            )
++            .await?;
++            assert_eq!(read_bytes.load(Ordering::SeqCst), size);
++            assert!(dropped.load(Ordering::SeqCst));
++        }
++        Ok(())
++    }
++
++    #[tokio::test]
++    async fn test_upload_stream_read_error_after_early_success() {
++        for committed_size in [-1, 128] {
++            let read_bytes = Arc::new(AtomicUsize::new(0));
++            let dropped = Arc::new(AtomicBool::new(false));
++            let reader = UploadTestReader {
++                remaining: 128,
++                read_bytes: read_bytes.clone(),
++                dropped: dropped.clone(),
++                fail_at_end: true,
++            };
++            let error = upload_bytestream(
++                "uploads/test".to_owned(),
++                Box::new(BufReader::with_capacity(4, reader)),
++                None,
++                4,
++                |_requests| async {
++                    assert!(read_bytes.load(Ordering::SeqCst) < 128);
++                    Ok(WriteResponse { committed_size })
++                },
++            )
++            .await
++            .unwrap_err();
++            assert_eq!(error.to_string(), "source read failed");
++            assert_eq!(read_bytes.load(Ordering::SeqCst), 128);
++            assert!(dropped.load(Ordering::SeqCst));
++        }
++    }
++
++    #[tokio::test]
++    async fn test_upload_stream_read_error_cancels_rpc() {
++        let reader = UploadTestReader {
++            remaining: 128,
++            read_bytes: Arc::new(AtomicUsize::new(0)),
++            dropped: Arc::new(AtomicBool::new(false)),
++            fail_at_end: true,
++        };
++        let error = upload_bytestream(
++            "uploads/test".to_owned(),
++            Box::new(BufReader::with_capacity(4, reader)),
++            None,
++            4,
++            |mut requests| async move {
++                while let Some(request) = requests.next().await {
++                    assert!(!request.finish_write);
++                }
++                futures::future::pending::<anyhow::Result<WriteResponse>>().await
++            },
++        )
++        .await
++        .unwrap_err();
++        assert_eq!(error.to_string(), "source read failed");
++    }
++
++    #[tokio::test]
++    async fn test_upload_stream_cancellation_drops_source() {
++        let read_bytes = Arc::new(AtomicUsize::new(0));
++        let dropped = Arc::new(AtomicBool::new(false));
++        let reader = UploadTestReader {
++            remaining: 128,
++            read_bytes: read_bytes.clone(),
++            dropped: dropped.clone(),
++            fail_at_end: false,
++        };
++        let mut upload = Box::pin(upload_bytestream(
++            "uploads/test".to_owned(),
++            Box::new(BufReader::with_capacity(4, reader)),
++            None,
++            4,
++            |requests| async move {
++                // Retain the receiver without consuming it, as a stalled RPC does.
++                let result = futures::future::pending::<anyhow::Result<WriteResponse>>().await;
++                drop(requests);
++                result
++            },
++        ));
++        assert!(futures::poll!(upload.as_mut()).is_pending());
++        assert!(read_bytes.load(Ordering::SeqCst) <= 32);
++        assert!(!dropped.load(Ordering::SeqCst));
++        drop(upload);
++        assert!(dropped.load(Ordering::SeqCst));
++    }
++
++    #[tokio::test]
++    async fn test_upload_stream_rpc_error_drops_source() {
++        let read_bytes = Arc::new(AtomicUsize::new(0));
++        let dropped = Arc::new(AtomicBool::new(false));
++        let reader = UploadTestReader {
++            remaining: 128,
++            read_bytes: read_bytes.clone(),
++            dropped: dropped.clone(),
++            fail_at_end: false,
++        };
++        let error = upload_bytestream(
++            "uploads/test".to_owned(),
++            Box::new(BufReader::with_capacity(4, reader)),
++            None,
++            4,
++            |_requests| async { Err(anyhow::anyhow!("RPC failed")) },
++        )
++        .await
++        .unwrap_err();
++        assert_eq!(error.to_string(), "RPC failed");
++        assert!(read_bytes.load(Ordering::SeqCst) < 128);
++        assert!(dropped.load(Ordering::SeqCst));
++    }
++
++    #[tokio::test]
++    async fn test_upload_stream_compressors() -> anyhow::Result<()> {
++        let data: Vec<u8> = (0..8192).map(|i| (i % 251) as u8).collect();
++        for compressor in [
++            None,
++            Some(Compressor::Zstd),
++            Some(Compressor::Deflate),
++            Some(Compressor::Brotli),
++        ] {
++            let expected = &data;
++            upload_bytestream(
++                "uploads/test".to_owned(),
++                Box::new(Cursor::new(data.clone())),
++                compressor,
++                13,
++                |mut requests| async move {
++                    let mut encoded = Vec::new();
++                    let mut finished = false;
++                    while let Some(request) = requests.next().await {
++                        assert!(!finished);
++                        assert_eq!(request.write_offset, encoded.len() as i64);
++                        assert!(!request.data.is_empty());
++                        assert!(request.data.len() <= 13);
++                        finished = request.finish_write;
++                        encoded.extend(request.data);
++                    }
++                    assert!(finished);
++                    let committed_size = encoded.len() as i64;
++                    let mut decoder: Box<dyn AsyncRead + Unpin + Send> = match compressor {
++                        None => Box::new(Cursor::new(encoded)),
++                        Some(Compressor::Zstd) => Box::new(ZstdDecoder::new(Cursor::new(encoded))),
++                        Some(Compressor::Deflate) => {
++                            Box::new(DeflateDecoder::new(Cursor::new(encoded)))
++                        }
++                        Some(Compressor::Brotli) => {
++                            Box::new(BrotliDecoder::new(Cursor::new(encoded)))
++                        }
++                    };
++                    let mut decoded = Vec::new();
++                    decoder.read_to_end(&mut decoded).await?;
++                    assert_eq!(&decoded, expected);
++                    Ok(WriteResponse { committed_size })
++                },
++            )
++            .await?;
++        }
++        Ok(())
++    }
++
++    #[tokio::test]
++    async fn test_upload_stream_zero_batch_limit() -> anyhow::Result<()> {
++        upload_bytestream(
++            "uploads/test".to_owned(),
++            Box::new(Cursor::new(b"data".to_vec())),
++            None,
++            0,
++            |mut requests| async move {
++                let request = requests.next().await.unwrap();
++                assert_eq!(request.data, b"data");
++                assert_eq!(request.write_offset, 0);
++                assert!(request.finish_write);
++                assert!(requests.next().await.is_none());
++                Ok(WriteResponse { committed_size: 4 })
++            },
++        )
++        .await
++    }
++
+     fn missing_input_status(violation_type: &str, subject: &str) -> Status {
+         Status {
+             code: TCode::FAILED_PRECONDITION.0,
+@@ -3147,6 +3541,7 @@ mod tests {
+             |write_reqs| {
+                 let blob_data = blob_data.clone();
+                 async move {
++                    let write_reqs = write_reqs.collect::<Vec<_>>().await;
+                     assert_eq!(write_reqs.len(), 2);
+                     assert_eq!(write_reqs[0].write_offset, 0);
+                     assert!(!write_reqs[0].finish_write);
+@@ -3223,6 +3618,7 @@ mod tests {
+             |write_reqs| {
+                 let blob_data2 = blob_data2.clone();
+                 async move {
++                    let write_reqs = write_reqs.collect::<Vec<_>>().await;
+                     assert_eq!(write_reqs.len(), 2);
+                     assert_eq!(write_reqs[0].write_offset, 0);
+                     assert!(!write_reqs[0].finish_write);
+@@ -3337,6 +3733,7 @@ mod tests {
+                 panic!("Not called");
+             },
+             |write_reqs| async move {
++                let write_reqs = write_reqs.collect::<Vec<_>>().await;
+                 assert_eq!(write_reqs.len(), 2);
+                 assert!(write_reqs[1].finish_write);
+                 anyhow::Ok(WriteResponse { committed_size: 6 })
+@@ -3456,6 +3853,7 @@ mod tests {
+                 panic!("Not called");
+             },
+             |write_reqs| async move {
++                let write_reqs = write_reqs.collect::<Vec<_>>().await;
+                 assert!(write_reqs[0].resource_name.starts_with("instance/uploads/"));
+                 assert!(write_reqs[0].resource_name.ends_with("/blobs/aa/3"));
+                 anyhow::Ok(WriteResponse { committed_size: 3 })
+@@ -3503,6 +3901,7 @@ mod tests {
+                 panic!("Not called");
+             },
+             |write_reqs| async move {
++                let write_reqs = write_reqs.collect::<Vec<_>>().await;
+                 assert!(write_reqs[0].resource_name.starts_with("instance/uploads/"));
+                 assert!(
+                     write_reqs[0]
+@@ -3648,6 +4047,7 @@ async fn test_upload_compressed() -> anyhow::Result<()> {
+         },
+         {
+             |write_reqs| async move {
++                let write_reqs = write_reqs.collect::<Vec<_>>().await;
+                 let compressed_data: Vec<u8> =
+                     write_reqs.iter().flat_map(|wr| wr.data.clone()).collect();
+                 let mut data = vec![];
+diff --git a/tests/core/executor/test_cache_uploads.py b/tests/core/executor/test_cache_uploads.py
+index c27b2f6..3741a63 100644
+--- a/tests/core/executor/test_cache_uploads.py
++++ b/tests/core/executor/test_cache_uploads.py
+@@ -12,6 +12,7 @@
+ import sys
+ 
+ from buck2.tests.e2e_util.api.buck import Buck
++from buck2.tests.e2e_util.asserts import expect_failure
+ from buck2.tests.e2e_util.buck_workspace import buck_test
+ from buck2.tests.e2e_util.helper.utils import json_get, random_string
+ 
+@@ -99,3 +100,51 @@ async def test_re_uploads_default(buck: Buck) -> None:
+     ]
+     await buck.build("root//:write_default", *args)
+     await _assert_locally_executed_upload_attempted(buck, 1)
++
++
++@buck_test()
++async def test_invalid_outputs_do_not_publish_cache_roots(buck: Buck) -> None:
++    for target, error in [
++        ("write_missing_output", "Action failed to produce outputs"),
++        ("write_wrong_output_type", "Action didn't produce output of the right type"),
++    ]:
++        await expect_failure(
++            buck.build(
++                f"root//:{target}",
++                "-c",
++                f"write.text={random_string()}",
++            ),
++            stderr_regex=error,
++        )
++        # Unlike the positive upload helper, reject every upload attempt, including
++        # infrastructure failures. Invalid outputs must never reach the uploader.
++        log = (await buck.log("show")).stdout.strip().splitlines()
++        uploads = [
++            event
++            for line in log
++            if (
++                event := json_get(
++                    line, "Event", "data", "SpanEnd", "data", "CacheUpload"
++                )
++            )
++            is not None
++        ]
++        assert not uploads, uploads
++        commands = [
++            command
++            for line in log
++            for command in (
++                json_get(
++                    line,
++                    "Event",
++                    "data",
++                    "SpanEnd",
++                    "data",
++                    "ActionExecution",
++                    "commands",
++                )
++                or []
++            )
++        ]
++        assert [command["status"] for command in commands] == [{"Success": {}}]
++        assert commands[0]["details"]["signed_exit_code"] == 0
+diff --git a/tests/core/executor/test_cache_uploads_data/TARGETS.fixture b/tests/core/executor/test_cache_uploads_data/TARGETS.fixture
+index ae2bccd..a7baca8 100644
+--- a/tests/core/executor/test_cache_uploads_data/TARGETS.fixture
++++ b/tests/core/executor/test_cache_uploads_data/TARGETS.fixture
+@@ -37,3 +37,24 @@ write(
+     default_target_platform = "//platforms:target",
+     exec_compatible_with = ["//platforms:cache_uploads"],
+ )
++
++# Both commands exit successfully, but neither may publish a successful cache root.
++write(
++    name = "write_missing_output",
++    format = "{}.unexpected",
++    text = read_config("write", "text") or fail("text missing"),
++    allow_cache_upload = True,
++    local_only = True,
++    default_target_platform = "//platforms:target",
++    exec_compatible_with = ["//platforms:cache_uploads"],
++)
++
++write(
++    name = "write_wrong_output_type",
++    dir = True,
++    text = read_config("write", "text") or fail("text missing"),
++    allow_cache_upload = True,
++    local_only = True,
++    default_target_platform = "//platforms:target",
++    exec_compatible_with = ["//platforms:cache_uploads"],
++)
