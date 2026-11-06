@@ -34,6 +34,9 @@ let
   };
   esp = config.boot.loader.efi.efiSysMountPoint;
   switches = lib.optionals cfg.t6030Handoff m1n1.t6030Switches;
+  # Replaces m1n1/boot.bin verified, keeping the copy it replaces
+  # (boot-bin/boot_bin.py).
+  bootBinTool = ./boot-bin/boot_bin.py;
 
   # m1n1's second stage: m1n1, every Apple device tree (m1n1 picks the Mac's),
   # U-Boot, then m1n1's settings, one per line.
@@ -159,7 +162,12 @@ in
 
         # U-Boot has no EFI variables to write.
         boot.loader.efi.canTouchEfiVariables = lib.mkForce false;
-        boot.loader.systemd-boot.extraFiles."m1n1/boot.bin" = bootBin;
+        # m1n1/boot.bin is shared by every generation, so it is replaced
+        # verified and its previous copy kept (boot-bin/boot_bin.py), not
+        # with systemd-boot's extraFiles, which delete it first. On a system
+        # that had it in extraFiles, NixOS deletes it once more before this
+        # runs; the copy the running system installed is then kept from its
+        # closure.
         boot.loader.systemd-boot.extraInstallCommands = ''
           if [ -f ${esp}/vendorfw/firmware.cpio ]; then
             for entry in ${esp}/loader/entries/nixos-*.conf; do
@@ -169,6 +177,8 @@ in
               fi
             done
           fi
+          PATH=${config.nix.package.out}/bin:$PATH ${pkgs.python3.interpreter} ${bootBinTool} install \
+            --esp ${esp} --source ${bootBin} --system "$1" --recover-from /run/current-system
         '';
         system.build.appleSiliconBootBin = bootBin;
 
