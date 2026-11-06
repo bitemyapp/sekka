@@ -1,8 +1,11 @@
-//! An OpenAI-compatible chat client with streaming (llama.cpp's
-//! llama-server, vLLM and SGLang serve this API), with llama.cpp's extras:
-//! `cache_prompt`, `timings`, `/props`, and router mode's 503 while a
-//! model loads.
+//! The model client, streaming: an OpenAI-compatible chat client for the
+//! local server (llama.cpp's llama-server, vLLM and SGLang serve this API)
+//! with llama.cpp's extras (`cache_prompt`, `timings`, `/props`, router
+//! mode's 503 while a model loads), and the cloud providers' own APIs,
+//! whose requests and events [`crate::anthropic`] and [`crate::responses`]
+//! translate.
 
+use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Read};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
@@ -12,6 +15,7 @@ use serde_json::{Map, Value, json};
 
 use crate::chat::{Content, Message, Part, Role, WireCall};
 use crate::ids::{CallId, Tokens};
+use crate::provider::Wire;
 
 /// A piece of the reply as it streams.
 #[derive(Clone, Debug, PartialEq)]
@@ -32,6 +36,12 @@ pub(crate) struct Reply {
     pub cached_tokens: Tokens,
     pub decode_tps: Option<f32>,
     pub elapsed: Duration,
+    /// Prompt tokens a second (llama.cpp reports it).
+    pub prefill_tps: Option<f32>,
+    /// From sending the request to the first token of any kind.
+    pub first_token: Option<Duration>,
+    /// A cloud API's reply as it came, to replay unchanged.
+    pub raw: Option<Vec<Value>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -47,6 +57,8 @@ pub(crate) enum LlmError {
         status: u16,
         body: String,
     },
+    /// A cloud service refused the API key (401, 403).
+    Auth(String),
     /// The stream broke off or made no sense.
     Stream(String),
     /// The model got stuck repeating itself (twice in a row).
@@ -56,7 +68,7 @@ pub(crate) enum LlmError {
 impl LlmError {
     pub(crate) fn retryable(&self) -> bool {
         matches!(self, LlmError::Unreachable(_) | LlmError::Stream(_) | LlmError::Degenerate(_))
-            || matches!(self, LlmError::Http { status, .. } if *status >= 500)
+            || matches!(self, LlmError::Http { status, .. } if *status >= 500 || *status == 429)
     }
 }
 
@@ -68,6 +80,7 @@ impl std::fmt::Display for LlmError {
             LlmError::ToolCallParse(e) => write!(f, "the server couldn't parse the model's tool call: {e}"),
             LlmError::ContextFull(e) => write!(f, "the conversation is longer than the model's context: {e}"),
             LlmError::Http { status, body } => write!(f, "the model server answered {status}: {body}"),
+            LlmError::Auth(e) => write!(f, "the API key was refused ({e}); connect the account again in Models"),
             LlmError::Stream(e) => write!(f, "the model's reply broke off: {e}"),
             LlmError::Degenerate(e) => write!(f, "the model got stuck repeating itself ({e})"),
         }
@@ -83,14 +96,17 @@ pub(crate) struct Client {
     base_url: String,
     api_key: Option<String>,
     pub model: String,
+    pub wire: Wire,
 }
 
 /// How long router mode may take to load a model before Tasuke gives up.
 const LOADING_LIMIT: Duration = Duration::from_secs(600);
 const CONNECT_RETRIES: u32 = 4;
+/// A cloud service's "slow down" (429, Anthropic's 529): waits before trying again.
+const BUSY_RETRIES: u32 = 4;
 
 impl Client {
-    pub(crate) fn new(base_url: &str, model: &str, api_key: Option<String>, timeout: Duration) -> Client {
+    pub(crate) fn new(base_url: &str, model: &str, api_key: Option<String>, timeout: Duration, wire: Wire) -> Client {
         let config = ureq::Agent::config_builder()
             .http_status_as_error(false)
             .timeout_connect(Some(Duration::from_secs(10)))
@@ -101,6 +117,50 @@ impl Client {
             base_url: base_url.trim_end_matches('/').to_owned(),
             api_key: api_key.filter(|k| !k.is_empty()),
             model: model.to_owned(),
+            wire,
+        }
+    }
+
+    /// The request body for `messages` in this client's wire format.
+    pub(crate) fn body(
+        &self,
+        messages: &[Message],
+        tools: &[Value],
+        max_tokens: Tokens,
+        params: &Map<String, Value>,
+        keep_reasoning: bool,
+    ) -> Value {
+        match self.wire {
+            Wire::Chat => request_body(&self.model, messages, tools, max_tokens, params, keep_reasoning),
+            Wire::Anthropic => crate::anthropic::body(&self.model, messages, tools, max_tokens, params),
+            Wire::Responses => crate::responses::body(&self.model, messages, tools, max_tokens, params),
+        }
+    }
+
+    fn endpoint(&self) -> String {
+        let path = match self.wire {
+            Wire::Chat => "chat/completions",
+            Wire::Anthropic => "messages",
+            Wire::Responses => "responses",
+        };
+        format!("{}/{path}", self.base_url)
+    }
+
+    /// The headers that carry the key (and Anthropic's version and betas).
+    fn headers(&self) -> Vec<(String, String)> {
+        let Some(k) = &self.api_key else { return Vec::new() };
+        match self.wire {
+            Wire::Chat | Wire::Responses => vec![("Authorization".into(), format!("Bearer {k}"))],
+            Wire::Anthropic => {
+                let mut h = vec![
+                    ("x-api-key".into(), k.clone()),
+                    ("anthropic-version".into(), tasuke_models::cloud::ANTHROPIC_VERSION.into()),
+                ];
+                if let Some(beta) = crate::anthropic::betas(&self.model) {
+                    h.push(("anthropic-beta".into(), beta.into()));
+                }
+                h
+            }
         }
     }
 
@@ -115,8 +175,12 @@ impl Client {
         self.agent.get(&url).config().timeout_global(Some(Duration::from_secs(2))).build().call().is_ok()
     }
 
-    /// The context size the server gives each request (`n_ctx` in `/props`).
+    /// The context size the server gives each request (`n_ctx` in `/props`);
+    /// a cloud API doesn't say (the caller knows its models').
     pub(crate) fn context_size(&self) -> Option<Tokens> {
+        if self.wire.is_cloud() {
+            return None;
+        }
         let urls =
             [format!("{}/props?model={}", self.root(), url_escape(&self.model)), format!("{}/props", self.root())];
         for url in urls {
@@ -150,6 +214,7 @@ impl Client {
     ) -> Result<Reply, LlmError> {
         let mut connect_failures = 0;
         let mut server_errors = 0;
+        let mut busy = 0;
         let mut parse_failures = 0;
         let mut degenerate = 0;
         let mut loading_since: Option<Instant> = None;
@@ -205,24 +270,33 @@ impl Client {
                     }
                     sleep_unless_cancelled(Duration::from_secs(3), cancel)?;
                 }
+                Err(Attempt::Busy { status, body: text }) => {
+                    busy += 1;
+                    if busy > BUSY_RETRIES {
+                        return Err(LlmError::Http { status, body: text });
+                    }
+                    on_notice("The service is busy; trying again…".into());
+                    sleep_unless_cancelled(Duration::from_secs(2u64 << busy.min(4)), cancel)?;
+                }
             }
         }
     }
 
     fn attempt(&self, body: &Value, cancel: &AtomicBool, on_delta: &mut dyn FnMut(Delta)) -> Result<Reply, Attempt> {
         let (tx, rx) = mpsc::channel::<Chunk>();
-        let url = format!("{}/chat/completions", self.base_url);
+        let url = self.endpoint();
         let agent = self.agent.clone();
-        let key = self.api_key.clone();
+        let headers = self.headers();
         let bytes = serde_json::to_vec(body).map_err(|e| Attempt::Fatal(LlmError::Stream(e.to_string())))?;
+        let sent = Instant::now();
         // The request runs on its own thread so a cancel needn't wait for
         // the next token (prefill can take minutes); dropping the receiver
         // makes the thread drop the connection, which stops the server.
         std::thread::Builder::new()
             .name("tasuke-llm".into())
-            .spawn(move || stream_request(agent, url, key, bytes, tx))
+            .spawn(move || stream_request(agent, url, headers, bytes, tx))
             .map_err(|e| Attempt::Fatal(LlmError::Stream(e.to_string())))?;
-        let mut acc = Accumulator::default();
+        let mut acc = Accumulator::new(self.wire, sent);
         loop {
             if cancel.load(Ordering::SeqCst) {
                 return Err(Attempt::Fatal(LlmError::Cancelled));
@@ -233,18 +307,19 @@ impl Client {
                         Ok(v) => v,
                         Err(_) => continue,
                     };
-                    if let Some(err) = v.get("error") {
-                        return Err(classify_error(500, &error_text(err)));
-                    }
-                    for d in acc.feed(&v) {
+                    let deltas = match acc.feed(&v) {
+                        Ok(d) => d,
+                        Err(e) => return Err(classify_error(e.status, &e.message, self.wire.is_cloud())),
+                    };
+                    for d in deltas {
                         on_delta(d);
                     }
                     if let Some(unit) = acc.degenerate() {
                         return Err(Attempt::Degenerate(format!("it kept writing {unit:?}")));
                     }
                 }
-                Ok(Chunk::StreamError(text)) => return Err(classify_error(500, &text)),
-                Ok(Chunk::Status(status, text)) => return Err(classify_error(status, &text)),
+                Ok(Chunk::StreamError(text)) => return Err(classify_error(500, &text, self.wire.is_cloud())),
+                Ok(Chunk::Status(status, text)) => return Err(classify_error(status, &text, self.wire.is_cloud())),
                 Ok(Chunk::Connect(e)) => return Err(Attempt::Connect(e)),
                 Ok(Chunk::Broken(e)) => {
                     return Err(Attempt::Fatal(LlmError::Stream(e)));
@@ -273,8 +348,22 @@ enum Attempt {
     Loading(String),
     ParseToolCall(String),
     Degenerate(String),
-    Server { status: u16, body: String },
+    Server {
+        status: u16,
+        body: String,
+    },
+    /// A cloud service asks to slow down (429, Anthropic's 529 "overloaded").
+    Busy {
+        status: u16,
+        body: String,
+    },
     Fatal(LlmError),
+}
+
+/// A failure an event in the stream reported.
+pub(crate) struct StreamFailure {
+    pub status: u16,
+    pub message: String,
 }
 
 fn error_text(err: &Value) -> String {
@@ -284,18 +373,34 @@ fn error_text(err: &Value) -> String {
     }
 }
 
+/// The message in an error body: `{"error": {"message": …}}` (OpenAI,
+/// Anthropic) or `{"error": "…"}`; else the text itself.
+fn error_message(text: &str) -> String {
+    serde_json::from_str::<Value>(text)
+        .ok()
+        .and_then(|v| v.get("error").map(error_text))
+        .unwrap_or_else(|| text.to_owned())
+}
+
 /// What a failed response means for retrying.
-fn classify_error(status: u16, text: &str) -> Attempt {
+fn classify_error(status: u16, text: &str, cloud: bool) -> Attempt {
+    let message = error_message(text).chars().take(2000).collect::<String>();
     let lower = text.to_lowercase();
-    let message = text.chars().take(2000).collect::<String>();
     if lower.contains("parse tool call") || (lower.contains("tool call") && lower.contains("parse")) {
         return Attempt::ParseToolCall(message);
+    }
+    if cloud && (status == 401 || status == 403) {
+        return Attempt::Fatal(LlmError::Auth(message));
+    }
+    if cloud && (status == 429 || status == 503 || status == 529 || lower.contains("overloaded")) {
+        return Attempt::Busy { status, body: message };
     }
     if status == 503 || lower.contains("loading model") {
         return Attempt::Loading(message);
     }
     if (lower.contains("context") && (lower.contains("exceed") || lower.contains("too long") || lower.contains("size")))
         || lower.contains("exceeds the available context")
+        || lower.contains("prompt is too long")
     {
         return Attempt::Fatal(LlmError::ContextFull(message));
     }
@@ -315,10 +420,16 @@ enum Chunk {
     Done,
 }
 
-fn stream_request(agent: ureq::Agent, url: String, key: Option<String>, body: Vec<u8>, tx: mpsc::Sender<Chunk>) {
+fn stream_request(
+    agent: ureq::Agent,
+    url: String,
+    headers: Vec<(String, String)>,
+    body: Vec<u8>,
+    tx: mpsc::Sender<Chunk>,
+) {
     let mut req = agent.post(&url).header("Content-Type", "application/json").header("Accept", "text/event-stream");
-    if let Some(k) = &key {
-        req = req.header("Authorization", &format!("Bearer {k}"));
+    for (k, v) in &headers {
+        req = req.header(k.as_str(), v.as_str());
     }
     let resp = match req.send(&body[..]) {
         Ok(r) => r,
@@ -374,13 +485,19 @@ fn stream_request(agent: ureq::Agent, url: String, key: Option<String>, body: Ve
 }
 
 /// Assembles the streamed chunks into a reply.
-#[derive(Default)]
-struct Accumulator {
-    reply: Reply,
-    /// Tool calls by their stream index.
-    calls: Vec<(u64, Option<String>, String, String)>,
+pub(crate) struct Accumulator {
+    pub(crate) wire: Wire,
+    pub(crate) reply: Reply,
+    /// Tool calls by their stream index: index, id, name, arguments.
+    pub(crate) calls: Vec<(u64, Option<String>, String, String)>,
+    /// A cloud API's output as it came, by its index (Claude's blocks,
+    /// OpenAI's items).
+    pub(crate) raw: BTreeMap<u64, Value>,
     /// How much text had been looked at for repetition.
     checked: usize,
+    sent: Instant,
+    first: Option<Instant>,
+    last: Option<Instant>,
 }
 
 /// The tail that is looked at for a loop, and the longest repeating unit.
@@ -403,6 +520,19 @@ fn looping(text: &str) -> Option<String> {
 }
 
 impl Accumulator {
+    pub(crate) fn new(wire: Wire, sent: Instant) -> Accumulator {
+        Accumulator {
+            wire,
+            reply: Reply::default(),
+            calls: Vec::new(),
+            raw: BTreeMap::new(),
+            checked: 0,
+            sent,
+            first: None,
+            last: None,
+        }
+    }
+
     /// Whether the reply has turned into a loop (checked every 256 bytes).
     fn degenerate(&mut self) -> Option<String> {
         let len = self.reply.content.len() + self.reply.reasoning.len();
@@ -413,7 +543,39 @@ impl Accumulator {
         looping(&self.reply.content).or_else(|| looping(&self.reply.reasoning))
     }
 
-    fn feed(&mut self, v: &Value) -> Vec<Delta> {
+    /// The call streaming at `index`, made when first seen.
+    pub(crate) fn call_at(&mut self, index: u64) -> &mut (u64, Option<String>, String, String) {
+        let i = match self.calls.iter().position(|c| c.0 == index) {
+            Some(i) => i,
+            None => {
+                self.calls.push((index, None, String::new(), String::new()));
+                self.calls.len() - 1
+            }
+        };
+        &mut self.calls[i]
+    }
+
+    /// One event of the stream, in this wire's format.
+    pub(crate) fn feed(&mut self, v: &Value) -> Result<Vec<Delta>, StreamFailure> {
+        let out = match self.wire {
+            Wire::Chat => {
+                if let Some(err) = v.get("error") {
+                    return Err(StreamFailure { status: 500, message: error_text(err) });
+                }
+                self.feed_chat(v)
+            }
+            Wire::Anthropic => crate::anthropic::feed(self, v)?,
+            Wire::Responses => crate::responses::feed(self, v)?,
+        };
+        if !out.is_empty() {
+            let now = Instant::now();
+            self.first.get_or_insert(now);
+            self.last = Some(now);
+        }
+        Ok(out)
+    }
+
+    fn feed_chat(&mut self, v: &Value) -> Vec<Delta> {
         let mut out = Vec::new();
         if let Some(choice) = v.get("choices").and_then(|c| c.get(0)) {
             let delta = choice.get("delta").or_else(|| choice.get("message"));
@@ -480,6 +642,9 @@ impl Accumulator {
             if let Some(tps) = n("predicted_per_second") {
                 self.reply.decode_tps = Some(tps as f32);
             }
+            if let Some(tps) = n("prompt_per_second").filter(|t| t.is_finite() && *t > 0.0) {
+                self.reply.prefill_tps = Some(tps as f32);
+            }
             if self.reply.prompt_tokens.0 == 0 {
                 // llama.cpp's prompt_n counts only what it processed.
                 let total = n("prompt_n").unwrap_or(0.0) + n("cache_n").unwrap_or(0.0);
@@ -499,7 +664,7 @@ impl Accumulator {
         out
     }
 
-    fn finish(mut self) -> Reply {
+    pub(crate) fn finish(mut self) -> Reply {
         self.calls.sort_by_key(|c| c.0);
         self.reply.calls = self
             .calls
@@ -511,6 +676,21 @@ impl Accumulator {
                 arguments,
             })
             .collect();
+        self.reply.first_token = self.first.map(|f| f.duration_since(self.sent));
+        // A cloud API reports no rate: the tokens it billed over the time
+        // they streamed in.
+        if self.reply.decode_tps.is_none()
+            && let (Some(first), Some(last)) = (self.first, self.last)
+        {
+            let secs = last.duration_since(first).as_secs_f32();
+            let n = self.reply.completion_tokens.0;
+            if secs > 0.05 && n > 1 {
+                self.reply.decode_tps = Some((n - 1) as f32 / secs);
+            }
+        }
+        if !self.raw.is_empty() {
+            self.reply.raw = Some(self.raw.into_values().collect());
+        }
         self.reply
     }
 }
@@ -642,7 +822,7 @@ mod tests {
 
     #[test]
     fn accumulates_content_reasoning_and_tool_calls_by_index() {
-        let mut a = Accumulator::default();
+        let mut a = Accumulator::new(Wire::Chat, Instant::now());
         let chunks = [
             json!({"choices":[{"delta":{"reasoning_content":"Think"}}]}),
             json!({"choices":[{"delta":{"content":"Let me "}}]}),
@@ -657,7 +837,7 @@ mod tests {
         ];
         let mut deltas = Vec::new();
         for c in &chunks {
-            deltas.extend(a.feed(c));
+            deltas.extend(a.feed_chat(c));
         }
         assert_eq!(
             deltas,
@@ -677,8 +857,8 @@ mod tests {
 
     #[test]
     fn llama_timings_stand_in_for_usage() {
-        let mut a = Accumulator::default();
-        a.feed(&json!({"choices":[{"delta":{"content":"hi"},"finish_reason":"stop"}],
+        let mut a = Accumulator::new(Wire::Chat, Instant::now());
+        a.feed_chat(&json!({"choices":[{"delta":{"content":"hi"},"finish_reason":"stop"}],
                        "timings":{"prompt_n":20,"cache_n":80,"predicted_n":5,"predicted_per_second":50.0}}));
         let r = a.finish();
         assert_eq!((r.prompt_tokens, r.completion_tokens, r.cached_tokens), (Tokens(100), Tokens(5), Tokens(80)));
@@ -687,16 +867,30 @@ mod tests {
     #[test]
     fn errors_are_classified() {
         assert!(matches!(
-            classify_error(500, "Failed to parse tool call arguments as JSON"),
+            classify_error(500, "Failed to parse tool call arguments as JSON", false),
             Attempt::ParseToolCall(_)
         ));
-        assert!(matches!(classify_error(503, "{\"error\":\"Loading model\"}"), Attempt::Loading(_)));
+        assert!(matches!(classify_error(503, "{\"error\":\"Loading model\"}", false), Attempt::Loading(_)));
         assert!(matches!(
-            classify_error(400, "the request exceeds the available context size, try increasing it"),
+            classify_error(400, "the request exceeds the available context size, try increasing it", false),
             Attempt::Fatal(LlmError::ContextFull(_))
         ));
-        assert!(matches!(classify_error(502, "bad gateway"), Attempt::Server { status: 502, .. }));
-        assert!(matches!(classify_error(401, "Invalid API Key"), Attempt::Fatal(LlmError::Http { status: 401, .. })));
+        assert!(matches!(classify_error(502, "bad gateway", false), Attempt::Server { status: 502, .. }));
+        assert!(matches!(
+            classify_error(401, "Invalid API Key", false),
+            Attempt::Fatal(LlmError::Http { status: 401, .. })
+        ));
+        // A cloud service: the key, and "slow down", mean other things.
+        assert!(matches!(
+            classify_error(401, r#"{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}"#, true),
+            Attempt::Fatal(LlmError::Auth(m)) if m == "invalid x-api-key"
+        ));
+        assert!(matches!(classify_error(429, "rate limited", true), Attempt::Busy { status: 429, .. }));
+        assert!(matches!(classify_error(529, "Overloaded", true), Attempt::Busy { .. }));
+        assert!(matches!(
+            classify_error(400, "prompt is too long: 1000001 tokens", true),
+            Attempt::Fatal(LlmError::ContextFull(_))
+        ));
     }
 
     #[test]
@@ -792,7 +986,7 @@ mod tests {
             "[DONE]",
         ]);
         let (url, server) = serve(vec![loading.to_string(), ok]);
-        let c = Client::new(&url, "gemma", Some("k".into()), Duration::from_secs(30));
+        let c = Client::new(&url, "gemma", Some("k".into()), Duration::from_secs(30), Wire::Chat);
         let cancel = AtomicBool::new(false);
         let mut text = String::new();
         let mut notices = Vec::new();
@@ -824,7 +1018,7 @@ mod tests {
         let bad = bad
             .replace("Content-Length: 46", &format!("Content-Length: {}", bad.split("\r\n\r\n").nth(1).unwrap().len()));
         let (url, server) = serve(vec![bad.clone(), bad]);
-        let c = Client::new(&url, "m", None, Duration::from_secs(30));
+        let c = Client::new(&url, "m", None, Duration::from_secs(30), Wire::Chat);
         let body = request_body("m", &[Message::user("hi")], &[], Tokens(10), &Map::new(), false);
         let err = c.chat(&body, &AtomicBool::new(false), &mut |_| {}, &mut |_| {}).unwrap_err();
         assert!(matches!(err, LlmError::ToolCallParse(_)), "{err:?}");
@@ -836,7 +1030,7 @@ mod tests {
         let body = "data: {\"choices\":[{\"delta\":{\"content\":\"x\"}}]}\n\nerror: {\"code\":500,\"message\":\"Failed to parse tool call\"}\n\n";
         let resp = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
         let (url, server) = serve(vec![resp.clone(), resp]);
-        let c = Client::new(&url, "m", None, Duration::from_secs(30));
+        let c = Client::new(&url, "m", None, Duration::from_secs(30), Wire::Chat);
         let req = request_body("m", &[Message::user("hi")], &[], Tokens(10), &Map::new(), false);
         let err = c.chat(&req, &AtomicBool::new(false), &mut |_| {}, &mut |_| {}).unwrap_err();
         assert!(matches!(err, LlmError::ToolCallParse(_)), "{err:?}");
@@ -853,7 +1047,7 @@ mod tests {
             std::thread::sleep(Duration::from_secs(5));
             drop(s);
         });
-        let c = Client::new(&url, "m", None, Duration::from_secs(30));
+        let c = Client::new(&url, "m", None, Duration::from_secs(30), Wire::Chat);
         let cancel = std::sync::Arc::new(AtomicBool::new(false));
         let flag = cancel.clone();
         std::thread::spawn(move || {
@@ -872,7 +1066,7 @@ mod tests {
         let body = r#"{"default_generation_settings":{"n_ctx":49152}}"#;
         let resp = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
         let (url, server) = serve(vec![resp]);
-        let c = Client::new(&url, "m", None, Duration::from_secs(30));
+        let c = Client::new(&url, "m", None, Duration::from_secs(30), Wire::Chat);
         assert_eq!(c.context_size(), Some(Tokens(49152)));
         let req = &server.join().unwrap()[0];
         assert!(req.starts_with("GET /props?model=m "), "{req}");

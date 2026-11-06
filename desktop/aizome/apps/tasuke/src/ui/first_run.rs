@@ -6,6 +6,8 @@ use aizome_kit::widgets::layout::column as column_of;
 use aizome_kit::{column, row};
 
 use super::{bar, models::machine, models::tag};
+use tasuke_models::CloudProvider;
+
 use crate::app::{FirstRun, Msg, Tasuke};
 use crate::models::{self, FitBar, size, time_at};
 
@@ -79,6 +81,19 @@ mod tests {
     }
 }
 
+/// The other way to start: a Claude or OpenAI account instead of a
+/// download (primary when nothing fits here).
+fn account_button(app: &Tasuke, primary: bool) -> Element<Msg> {
+    let best = app.models.best_cloud(CloudProvider::Anthropic);
+    let b = button("Use a Cloud Account…").icon(Icon::Cloud).on_press(Msg::Connect(CloudProvider::Anthropic, best));
+    if primary { b.primary().into() } else { b.into() }
+}
+
+/// What a cloud account means, said before one is chosen.
+const CLOUD_WORDS: &str = "A cloud account is the other way: a Claude or GPT model through your own Anthropic or \
+                           OpenAI account, with nothing to download. Tasuke works the same, but what you ask, and \
+                           what it sees while it works, is sent to the company you choose.";
+
 pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
     let hw = app.models.hardware.as_ref();
     let choice = app.first_choice();
@@ -150,6 +165,7 @@ pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
                                 .primary()
                                 .on_press(Msg::FirstRunDownload),
                             button("Choose Another…").on_press(Msg::FirstRunSkip),
+                            account_button(app, false),
                         ]
                         .spacing(8.0)
                         .into(),
@@ -166,11 +182,16 @@ pub fn view(app: &Tasuke, step: &FirstRun) -> Element<Msg> {
                         .line_height(1.4)
                         .into(),
                     );
+                    parts.push(text(CLOUD_WORDS).size(12.0).role(Role::Text3).wrap().line_height(1.4).into());
                 }
-                _ => parts.push(para(
-                    "None of the catalog's models fits this computer's memory well enough to be useful. \
-                     Models lists them all with what each would need.",
-                )),
+                _ => {
+                    parts.push(para(
+                        "None of the catalog's models fits this computer's memory well enough to be useful. \
+                         Models lists them all with what each would need.",
+                    ));
+                    parts.push(para(CLOUD_WORDS));
+                    parts.push(account_button(app, true));
+                }
             }
             frame(parts)
         }

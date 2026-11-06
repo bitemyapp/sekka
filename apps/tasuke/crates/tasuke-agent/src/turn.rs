@@ -8,12 +8,12 @@
 use std::time::Instant;
 
 use crate::agent::Control;
-use crate::chat::{Content, Message, Part, Role, WireCall};
+use crate::chat::{Content, Message, Part, RawTurn, Role, WireCall};
 use crate::context;
 use crate::desktop::Desktop;
 use crate::event::{Approval, Decision, Event, FinishReason, Level, ToolCall, ToolOutput, ToolStatus, Usage};
 use crate::ids::{CallId, Timestamp, Tokens, TurnNumber, random_hex};
-use crate::llm::{Client, Delta, LlmError, request_body};
+use crate::llm::{Client, Delta, LlmError};
 use crate::memory::Memory;
 use crate::options::Options;
 use crate::session::{Record, Session, Writer};
@@ -89,6 +89,9 @@ impl Out<'_> {
 
 pub(crate) fn run(session: &Session, text: &str, mut options: Options, ctl: &Control) {
     options.session = Some(session.id().clone());
+    // A cloud key is looked up here, on the turn's thread: a locked keyring may
+    // ask to be unlocked, and the window mustn't wait for that.
+    options.resolve_key();
     let (mut history, last) = session.history().unwrap_or_else(|_| (Vec::new(), TurnNumber(0)));
     let turn = last.next();
     let writer = match Writer::open(session) {
@@ -121,7 +124,13 @@ struct Loop<'a> {
 
 impl<'a> Loop<'a> {
     fn new(options: &'a Options, ctl: &'a Control, session: &Session) -> Loop<'a> {
-        let client = Client::new(&options.base_url, &options.model, options.api_key.clone(), options.request_timeout);
+        let client = Client::new(
+            &options.base_url,
+            &options.model,
+            options.api_key.clone(),
+            options.request_timeout,
+            options.wire(),
+        );
         let desktop = Desktop::new(options, ctl.cancel_flag(), session.files_dir());
         Loop { options, ctl, client, desktop, started: Instant::now() }
     }
@@ -130,7 +139,10 @@ impl<'a> Loop<'a> {
     /// (router mode loads the model on the first request).
     fn ensure_server(&self, out: &mut Out<'_>) {
         let own = format!("http://127.0.0.1:{}/v1", crate::options::DEFAULT_PORT);
-        if self.options.base_url.trim_end_matches('/') != own || self.client.reachable() {
+        if self.options.provider.is_some()
+            || self.options.base_url.trim_end_matches('/') != own
+            || self.client.reachable()
+        {
             return;
         }
         out.send(Event::Notice { level: Level::Info, text: "Starting the model server…".into() });
@@ -146,6 +158,18 @@ impl<'a> Loop<'a> {
 
     fn run(&mut self, out: &mut Out<'_>, history: &mut Vec<Message>, usage: &mut Usage) -> (FinishReason, Option<f32>) {
         let o = self.options;
+        if let Some(p) = o.provider
+            && o.api_key.is_none()
+        {
+            out.send(Event::Error {
+                text: format!(
+                    "No {} account is connected: connect it in Models, or choose a local model.",
+                    p.company()
+                ),
+                retryable: false,
+            });
+            return (FinishReason::Failed, None);
+        }
         self.ensure_server(out);
         let n_ctx = self.client.context_size().unwrap_or(o.context_fallback);
         let memory = Memory::load(&o.data_dir).map(|m| m.prompt_block()).unwrap_or_default();
@@ -189,16 +213,21 @@ impl<'a> Loop<'a> {
 
             // Keep inside the context: drop old screenshots always, trim
             // old outputs once the context is half full, summarize at 3/4.
-            context::drop_old_images(history, KEEP_IMAGES);
-            if self.fill(history, &system, n_ctx) > TRIM_AT && context::stub_old_outputs(history, KEEP_OUTPUTS) > 0 {
-                out.send(Event::Notice {
-                    level: Level::Info,
-                    text: "Trimmed older command output to make room.".into(),
-                });
-            }
-            if self.fill(history, &system, n_ctx) > SUMMARIZE_AT && !summarized {
-                summarized = true;
-                self.summarize(out, history, &system, usage);
+            // Not for Claude: an edited history voids its later thinking,
+            // and its context is a million tokens, cached.
+            if !o.wire().append_only() {
+                context::drop_old_images(history, KEEP_IMAGES);
+                if self.fill(history, &system, n_ctx) > TRIM_AT && context::stub_old_outputs(history, KEEP_OUTPUTS) > 0
+                {
+                    out.send(Event::Notice {
+                        level: Level::Info,
+                        text: "Trimmed older command output to make room.".into(),
+                    });
+                }
+                if self.fill(history, &system, n_ctx) > SUMMARIZE_AT && !summarized {
+                    summarized = true;
+                    self.summarize(out, history, &system, usage);
+                }
             }
 
             let offered = tools::schemas(o, self.screen_size());
@@ -206,8 +235,7 @@ impl<'a> Loop<'a> {
             let mut messages = Vec::with_capacity(history.len() + 1);
             messages.push(Message::system(system.clone()));
             messages.extend(history.iter().cloned());
-            let body =
-                request_body(&o.model, &messages, &offered, o.max_output_tokens, &o.request_params, o.keep_reasoning);
+            let body = self.client.body(&messages, &offered, o.max_output_tokens, &o.request_params, o.keep_reasoning);
             let reply = {
                 let ctl = self.ctl;
                 let mut deltas = Vec::new();
@@ -243,7 +271,7 @@ impl<'a> Loop<'a> {
                     out.message(history, Message::user(context::PARSE_RETRY));
                     continue;
                 }
-                Err(LlmError::ContextFull(_)) if !summarized => {
+                Err(LlmError::ContextFull(_)) if !summarized && !o.wire().append_only() => {
                     summarized = true;
                     self.summarize(out, history, &system, usage);
                     continue;
@@ -261,10 +289,11 @@ impl<'a> Loop<'a> {
             usage.llm_seconds += reply.elapsed.as_secs_f32();
             tps = reply.decode_tps.or(tps);
 
-            // Calls: the API's, else ones written in the text.
+            // Calls: the API's, else ones written in the text (a local model's
+            // habit; a cloud model's reply goes back as it came).
             let mut calls = reply.calls.clone();
             let mut content = reply.content.clone();
-            if calls.is_empty() {
+            if calls.is_empty() && !o.wire().is_cloud() {
                 let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
                 let found = textcalls::find(&reply.content, &name_refs);
                 if !found.is_empty() {
@@ -287,8 +316,16 @@ impl<'a> Loop<'a> {
             let mut assistant = Message::assistant(content.clone());
             assistant.reasoning = (!reply.reasoning.is_empty()).then(|| reply.reasoning.clone());
             assistant.tool_calls = calls.clone();
+            assistant.raw = reply.raw.clone().map(|items| RawTurn { wire: o.wire(), model: o.model.clone(), items });
             out.message(history, assistant);
 
+            if reply.finish_reason.as_deref() == Some("refusal") {
+                out.send(Event::Error {
+                    text: "The model declined this request. Try rephrasing it, or another model.".into(),
+                    retryable: false,
+                });
+                return (FinishReason::Failed, tps);
+            }
             if calls.is_empty() {
                 if reply.finish_reason.as_deref() == Some("length") {
                     out.send(Event::Notice {
@@ -390,7 +427,7 @@ impl<'a> Loop<'a> {
         let mut params = self.options.request_params.clone();
         // Thinking only slows a summary down.
         params.insert("chat_template_kwargs".into(), serde_json::json!({"enable_thinking": false}));
-        let body = request_body(&self.options.model, &messages, &[], Tokens(800), &params, false);
+        let body = self.client.body(&messages, &[], Tokens(800), &params, false);
         let reply = self.client.chat(&body, self.ctl.cancel_flag(), &mut |_| {}, &mut |_| {});
         // The model's summary, or one built here when it fails (the context is
         // full, the server is struggling): a turn must not die of a long conversation.
@@ -545,6 +582,159 @@ mod tests {
             events.push(e);
         }
         events
+    }
+
+    /// A Claude reply as Anthropic streams it: thinking, then a call or text.
+    fn sse_claude(call: Option<(&str, serde_json::Value)>, text: &str) -> String {
+        let ev = |v: serde_json::Value| format!("event: {}\ndata: {v}\n\n", v["type"].as_str().unwrap_or(""));
+        let mut s = ev(
+            serde_json::json!({"type": "message_start", "message": {"usage": {"input_tokens": 50, "output_tokens": 1}}}),
+        );
+        s += &ev(
+            serde_json::json!({"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": "", "signature": ""}}),
+        );
+        s += &ev(
+            serde_json::json!({"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "Look first."}}),
+        );
+        s += &ev(
+            serde_json::json!({"type": "content_block_delta", "index": 0, "delta": {"type": "signature_delta", "signature": "c2lnbmVk"}}),
+        );
+        s += &ev(serde_json::json!({"type": "content_block_stop", "index": 0}));
+        let stop = match call {
+            Some((name, args)) => {
+                s += &ev(
+                    serde_json::json!({"type": "content_block_start", "index": 1, "content_block": {"type": "tool_use", "id": "toolu_01", "name": name, "input": {}}}),
+                );
+                s += &ev(
+                    serde_json::json!({"type": "content_block_delta", "index": 1, "delta": {"type": "input_json_delta", "partial_json": args.to_string()}}),
+                );
+                s += &ev(serde_json::json!({"type": "content_block_stop", "index": 1}));
+                "tool_use"
+            }
+            None => {
+                s += &ev(
+                    serde_json::json!({"type": "content_block_start", "index": 1, "content_block": {"type": "text", "text": ""}}),
+                );
+                s += &ev(
+                    serde_json::json!({"type": "content_block_delta", "index": 1, "delta": {"type": "text_delta", "text": text}}),
+                );
+                s += &ev(serde_json::json!({"type": "content_block_stop", "index": 1}));
+                "end_turn"
+            }
+        };
+        s += &ev(
+            serde_json::json!({"type": "message_delta", "delta": {"stop_reason": stop}, "usage": {"output_tokens": 30}}),
+        );
+        s += &ev(serde_json::json!({"type": "message_stop"}));
+        s
+    }
+
+    #[test]
+    fn a_claude_turn_replays_its_signed_thinking_unchanged() {
+        let (url, server) = serve(vec![
+            sse_claude(Some(("run_command", serde_json::json!({"command": "echo looked", "purpose": "look"}))), ""),
+            sse_claude(None, "All done."),
+        ]);
+        let (mut o, dir) = options(&url);
+        o.provider = Some(tasuke_models::CloudProvider::Anthropic);
+        o.model = "claude-sonnet-5-5".into();
+        o.api_key = Some("sk-ant-test".into());
+        let session = Session::create(&dir).unwrap();
+        let turn = crate::Agent::start(&session, "check things", o);
+        let events = drain(&turn, |_| Some(Decision::Allow));
+        assert!(
+            events.iter().any(|e| matches!(e, Event::TurnFinished { reason: FinishReason::Answered, .. })),
+            "{events:?}"
+        );
+        let seen = server.join().unwrap();
+        let first: serde_json::Value = serde_json::from_str(&seen[0]).unwrap();
+        assert!(first["system"].as_str().unwrap().contains("in Anthropic's cloud"), "the prompt says where it runs");
+        assert!(!first["system"].as_str().unwrap().contains("nothing you see leaves it"));
+        let second: serde_json::Value = serde_json::from_str(&seen[1]).unwrap();
+        let m = second["messages"].as_array().unwrap();
+        assert_eq!(m[1]["role"], "assistant");
+        assert_eq!(
+            m[1]["content"][0],
+            serde_json::json!({"type": "thinking", "thinking": "Look first.", "signature": "c2lnbmVk"})
+        );
+        assert_eq!(m[1]["content"][1]["input"]["command"], "echo looked");
+        assert_eq!(m[2]["content"][0]["type"], "tool_result");
+        assert_eq!(m[2]["content"][0]["tool_use_id"], "toolu_01");
+        assert!(m[2]["content"][0]["content"].as_str().unwrap().contains("looked"));
+        // The first request's turns are the second's prefix, byte for byte.
+        let a = serde_json::to_string(&first["messages"][0]).unwrap();
+        let b = serde_json::to_string(&m[0]).unwrap();
+        assert_eq!(a, b, "append-only: the opening message unchanged");
+        std::fs::remove_dir_all(dir.path()).ok();
+    }
+
+    /// A GPT reply as the Responses API streams it: reasoning, then a call or text.
+    fn sse_gpt(call: Option<(&str, serde_json::Value)>, text: &str) -> String {
+        let ev = |v: serde_json::Value| format!("event: {}\ndata: {v}\n\n", v["type"].as_str().unwrap_or(""));
+        let reasoning =
+            serde_json::json!({"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "gAAA"});
+        let mut s = ev(
+            serde_json::json!({"type": "response.output_item.added", "output_index": 0, "item": {"type": "reasoning", "id": "rs_1"}}),
+        );
+        s += &ev(serde_json::json!({"type": "response.output_item.done", "output_index": 0, "item": reasoning}));
+        match call {
+            Some((name, args)) => {
+                let item = serde_json::json!({"type": "function_call", "id": "fc_1", "call_id": "call_9", "name": name, "arguments": args.to_string(), "status": "completed"});
+                s += &ev(
+                    serde_json::json!({"type": "response.output_item.added", "output_index": 1, "item": {"type": "function_call", "id": "fc_1", "call_id": "call_9", "name": name, "arguments": ""}}),
+                );
+                s += &ev(
+                    serde_json::json!({"type": "response.function_call_arguments.delta", "output_index": 1, "delta": args.to_string()}),
+                );
+                s += &ev(serde_json::json!({"type": "response.output_item.done", "output_index": 1, "item": item}));
+            }
+            None => {
+                s += &ev(
+                    serde_json::json!({"type": "response.output_item.added", "output_index": 1, "item": {"type": "message", "id": "msg_1"}}),
+                );
+                s += &ev(serde_json::json!({"type": "response.output_text.delta", "output_index": 1, "delta": text}));
+                s += &ev(
+                    serde_json::json!({"type": "response.output_item.done", "output_index": 1, "item": {"type": "message", "id": "msg_1", "role": "assistant", "content": [{"type": "output_text", "text": text}]}}),
+                );
+            }
+        }
+        s += &ev(
+            serde_json::json!({"type": "response.completed", "response": {"usage": {"input_tokens": 80, "output_tokens": 20}}}),
+        );
+        s
+    }
+
+    #[test]
+    fn a_gpt_turn_sends_back_its_reasoning_and_the_call_output() {
+        let (url, server) = serve(vec![
+            sse_gpt(Some(("run_command", serde_json::json!({"command": "echo looked", "purpose": "look"}))), ""),
+            sse_gpt(None, "All done."),
+        ]);
+        let (mut o, dir) = options(&url);
+        o.provider = Some(tasuke_models::CloudProvider::OpenAi);
+        o.model = "gpt-6-luna".into();
+        o.api_key = Some("sk-test".into());
+        let session = Session::create(&dir).unwrap();
+        let turn = crate::Agent::start(&session, "check things", o);
+        let events = drain(&turn, |_| Some(Decision::Allow));
+        assert!(
+            events.iter().any(|e| matches!(e, Event::TurnFinished { reason: FinishReason::Answered, .. })),
+            "{events:?}"
+        );
+        let seen = server.join().unwrap();
+        let first: serde_json::Value = serde_json::from_str(&seen[0]).unwrap();
+        assert_eq!(first["store"], false);
+        assert!(first["instructions"].as_str().unwrap().contains("in OpenAI's cloud"));
+        let second: serde_json::Value = serde_json::from_str(&seen[1]).unwrap();
+        let input = second["input"].as_array().unwrap();
+        assert_eq!(input[1], serde_json::json!({"type": "reasoning", "summary": [], "encrypted_content": "gAAA"}));
+        assert_eq!(input[2]["type"], "function_call");
+        assert_eq!(input[2]["call_id"], "call_9");
+        assert!(input[2].get("id").is_none() && input[2].get("status").is_none(), "{}", input[2]);
+        assert_eq!(input[3]["type"], "function_call_output");
+        assert_eq!(input[3]["call_id"], "call_9");
+        assert!(input[3]["output"].as_str().unwrap().contains("looked"));
+        std::fs::remove_dir_all(dir.path()).ok();
     }
 
     #[test]

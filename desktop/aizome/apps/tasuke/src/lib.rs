@@ -3,8 +3,8 @@
 
 pub mod agent;
 pub mod app;
-pub mod compare;
 pub mod approval;
+pub mod compare;
 pub mod diff;
 pub mod fixture;
 pub mod fold;

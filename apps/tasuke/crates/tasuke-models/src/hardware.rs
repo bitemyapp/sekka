@@ -301,7 +301,9 @@ fn drm_cards(sys: &Path) -> Vec<DrmCard> {
     let mut names: Vec<String> = entries
         .filter_map(|e| e.ok())
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|n| n.strip_prefix("card").is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())))
+        .filter(|n| {
+            n.strip_prefix("card").is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()))
+        })
         .collect();
     names.sort_by_key(|n| n[4..].parse::<u32>().unwrap_or(u32::MAX));
     let connectors: Vec<String> = fs::read_dir(&drm)
@@ -319,9 +321,10 @@ fn drm_cards(sys: &Path) -> Vec<DrmCard> {
             }
             let pci = pci_address(&device);
             let prefix = format!("{name}-");
-            let drives_display = connectors.iter().filter(|c| c.starts_with(&prefix)).any(|c| {
-                fs::read_to_string(drm.join(c).join("status")).is_ok_and(|s| s.trim() == "connected")
-            });
+            let drives_display = connectors
+                .iter()
+                .filter(|c| c.starts_with(&prefix))
+                .any(|c| fs::read_to_string(drm.join(c).join("status")).is_ok_and(|s| s.trim() == "connected"));
             Some(DrmCard { dir, vendor: GpuVendor::from_pci(vendor as u32), pci, drives_display })
         })
         .collect()
@@ -376,7 +379,8 @@ fn amd_gpu(card: &DrmCard, ram: &Ram) -> Gpu {
         (false, Some(total)) => GpuMemory::Dedicated { total, free: total - vram_used.unwrap_or_default() },
         (false, None) => GpuMemory::Unknown,
     };
-    let name = amd_name(&device).unwrap_or_else(|| if integrated { "AMD Radeon (integrated)" } else { "AMD Radeon" }.to_owned());
+    let name = amd_name(&device)
+        .unwrap_or_else(|| if integrated { "AMD Radeon (integrated)" } else { "AMD Radeon" }.to_owned());
     let bandwidth = if integrated {
         read_hex(&device.join("device")).and_then(amd_integrated).and_then(|(_, bw)| bw)
     } else {

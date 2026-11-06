@@ -6,6 +6,7 @@
   lib,
   rustPlatform,
   bash,
+  libsecret,
 }:
 let
   # Content-addressed source: the same derivation wherever the checkout is.
@@ -33,6 +34,9 @@ rustPlatform.buildRustPackage {
   env.TASUKE_HELPER_PATH = "${placeholder "out"}/libexec/tasuke-helper";
   # Root commands run in the system's shell, from this package.
   env.TASUKE_BASH = "${bash}/bin/bash";
+  # Claude and OpenAI API keys are kept in the keyring through this tool
+  # (Sekka passes the libsecret with the Secret Service key-exchange fix).
+  env.TASUKE_SECRET_TOOL_PATH = "${libsecret}/bin/secret-tool";
   postInstall = ''
     # Only through pkexec, under its own action, which names it by this path.
     mkdir -p $out/libexec $out/share/polkit-1/actions $out/share/tasuke

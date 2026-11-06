@@ -15,21 +15,26 @@
 //! ```
 
 pub mod catalog;
+pub mod cloud;
 pub mod config;
 pub mod download;
 pub mod fit;
 pub mod hardware;
 pub mod recommend;
+pub mod secrets;
 pub mod server;
+pub mod speeds;
 pub mod store;
 pub mod units;
 
 pub use catalog::{Architecture, Catalog, Coords, Entry, FileKind, ModelFile, Role, Scores, Tally};
+pub use cloud::{ApiKey, CheckError, CloudModelInfo, CloudModelRef, CloudProvider};
 pub use config::{Config, Paths};
 pub use download::{Download, DownloadError, DownloadEvent, DownloadHandle, DownloadOptions, Progress};
 pub use fit::{Fit, FitOptions, KvCacheType, MemoryBasis, ModelFit};
 pub use hardware::{Cpu, Gpu, GpuIndex, GpuMemory, GpuVendor, Hardware, Probe, Ram};
 pub use recommend::{Preferences, Recommendation, recommend};
 pub use server::{Client, Health, ModelStatus, Presets, ServedModel, Server, ServerError, ServerStatus, UnitState};
+pub use speeds::{Measured, Speeds};
 pub use store::{InstallState, Installed, Store};
 pub use units::{Bytes, BytesPerSecond, BytesPerToken, ContextTokens, ModelId, Port, TokensPerSecond};

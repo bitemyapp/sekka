@@ -1,11 +1,13 @@
 //! The conversation as the model sees it: chat messages, kept in the
-//! session file and turned into the OpenAI wire format per request.
+//! session file and turned into the API's wire format per request (OpenAI's
+//! chat locally; Anthropic's or OpenAI's own for a cloud model).
 
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 use crate::ids::CallId;
+pub use crate::provider::{RawTurn, Wire};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -101,6 +103,9 @@ pub struct Message {
     pub tool_calls: Vec<WireCall>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<CallId>,
+    /// A cloud model's reply as its API gave it, replayed unchanged.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw: Option<RawTurn>,
 }
 
 impl Message {
@@ -121,6 +126,6 @@ impl Message {
     }
 
     pub fn new(role: Role, content: Content) -> Message {
-        Message { role, content, reasoning: None, tool_calls: Vec::new(), tool_call_id: None }
+        Message { role, content, reasoning: None, tool_calls: Vec::new(), tool_call_id: None, raw: None }
     }
 }

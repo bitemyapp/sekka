@@ -180,6 +180,10 @@ rustPlatform.buildRustPackage {
   GGML_FMA = "OFF";
   GGML_F16C = "OFF";
 
+  # Tasuke keeps Claude and OpenAI API keys in the keyring through this
+  # secret-tool: the libsecret with the Secret Service key-exchange fix.
+  TASUKE_SECRET_TOOL_PATH = "${libsecret}/bin/secret-tool";
+
   postPatch = ''
     patchShebangs scripts
   '';

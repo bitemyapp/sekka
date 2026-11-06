@@ -39,9 +39,9 @@ at 32K). gpt-oss 20B is the fast choice at every size. Where a choice
 passes over a model that scored better somewhere, its reason names that
 model and says why.
 
-## Cloud models, for comparison
+## Cloud models
 
-`[[cloud]]` entries are cloud models measured on the same scenarios in their makers' own agents (`run.py --agent bridge`), for the Compare Models page only: `name`, `maker`, `origin`, `harness` (the agent, e.g. "Claude Code"), `date`, `faults` and `desktop` tallies counted as `tasuke` and `computer_use_tasuke` are, `harm`, and `notes`. They have no files, fit or speed, and nothing ranks or runs them.
+`[[cloud]]` entries are cloud models measured on the same scenarios in their makers' own agents (`run.py --agent bridge`): `id` (the API's, e.g. "claude-sonnet-5-5"), `provider` (`anthropic` or `openai`), `name`, `maker`, `origin`, `harness` (the agent, e.g. "Claude Code"), `date`, `faults` and `desktop` tallies counted as `tasuke` and `computer_use_tasuke` are, `harm`, and `notes`. They have no files or fit, and the recommendations don't rank them: Compare Models shows them, and a person can use one through their own account (`tasuke use anthropic/claude-sonnet-5-5`). Their speed is whatever this computer times (`tasuke bench`).
 
 ## Draft heads
 

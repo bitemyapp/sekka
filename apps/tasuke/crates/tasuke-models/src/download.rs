@@ -82,15 +82,16 @@ impl DownloadOptions {
     pub fn from_env() -> DownloadOptions {
         let env = |k| std::env::var(k).ok().map(|v| v.trim().to_owned()).filter(|v| !v.is_empty());
         DownloadOptions {
-            endpoint: env("HF_ENDPOINT").map(|e| e.trim_end_matches('/').to_owned()).unwrap_or(DEFAULT_ENDPOINT.to_owned()),
+            endpoint: env("HF_ENDPOINT")
+                .map(|e| e.trim_end_matches('/').to_owned())
+                .unwrap_or(DEFAULT_ENDPOINT.to_owned()),
             token: env("HF_TOKEN"),
             ..DownloadOptions::default()
         }
     }
 
     pub fn url(&self, file: &ModelFile) -> String {
-        let path: String =
-            file.path.split('/').map(percent_encode).collect::<Vec<_>>().join("/");
+        let path: String = file.path.split('/').map(percent_encode).collect::<Vec<_>>().join("/");
         format!("{}/{}/resolve/{}/{}", self.endpoint, file.repo, file.revision, path)
     }
 }
@@ -133,12 +134,21 @@ pub enum DownloadEvent {
     /// Another download holds the store; this one starts when it ends.
     Waiting,
     /// `have` of `total` is already here (resumed or complete files).
-    Started { have: Bytes, total: Bytes },
+    Started {
+        have: Bytes,
+        total: Bytes,
+    },
     /// Re-hashing a partial file before resuming it.
-    Rehashing { file: String, done: Bytes, total: Bytes },
+    Rehashing {
+        file: String,
+        done: Bytes,
+        total: Bytes,
+    },
     Progress(Progress),
     /// A file's size and sha256 matched; it has its final name.
-    Verified { file: String },
+    Verified {
+        file: String,
+    },
     Retrying {
         attempt: u32,
         #[serde(serialize_with = "secs_plain")]
@@ -148,8 +158,12 @@ pub enum DownloadEvent {
     Paused,
     Resumed,
     /// Every file is here and verified.
-    Finished { id: ModelId },
-    Failed { error: String },
+    Finished {
+        id: ModelId,
+    },
+    Failed {
+        error: String,
+    },
     /// Stopped by [`DownloadHandle::cancel`]; partial files are kept.
     Cancelled,
 }
@@ -257,7 +271,11 @@ impl DownloadHandle {
 
     /// Wait for the outcome.
     pub fn wait(mut self) -> Result<Installed, DownloadError> {
-        self.thread.take().expect("joined once").join().unwrap_or_else(|_| Err(DownloadError::Network("the download thread panicked".into())))
+        self.thread
+            .take()
+            .expect("joined once")
+            .join()
+            .unwrap_or_else(|_| Err(DownloadError::Network("the download thread panicked".into())))
     }
 }
 
@@ -399,8 +417,13 @@ impl Job {
         let final_path = self.store.file_path(&self.entry.id, f);
         let partial_path = self.store.partial_path(&self.entry.id, f);
         let io_err = |source| DownloadError::Io { path: partial_path.clone(), source };
-        let mut file =
-            OpenOptions::new().create(true).truncate(false).read(true).write(true).open(&partial_path).map_err(io_err)?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(&partial_path)
+            .map_err(io_err)?;
         let mut len = file.metadata().map_err(io_err)?.len();
         if len > f.size.0 {
             // Longer than the file can be: start again.
@@ -451,7 +474,8 @@ impl Job {
         }
         file.sync_all().map_err(io_err)?;
         drop(file);
-        fs::rename(&partial_path, &final_path).map_err(|source| DownloadError::Io { path: final_path.clone(), source })?;
+        fs::rename(&partial_path, &final_path)
+            .map_err(|source| DownloadError::Io { path: final_path.clone(), source })?;
         if let Some(dir) = final_path.parent()
             && let Ok(d) = File::open(dir)
         {
@@ -547,7 +571,11 @@ impl Job {
             }
             200 => {}
             416 => {
-                return Err(DownloadError::WrongSize { file: f.file_name().to_owned(), expected: f.size, got: Bytes(*len) });
+                return Err(DownloadError::WrongSize {
+                    file: f.file_name().to_owned(),
+                    expected: f.size,
+                    got: Bytes(*len),
+                });
             }
             _ => {
                 let hint = match status {
@@ -575,11 +603,7 @@ impl Job {
                 Err(e) => return Err(DownloadError::Network(e.to_string())),
             };
             if *len + n as u64 > f.size.0 {
-                return Err(DownloadError::WrongSize {
-                    file: name,
-                    expected: f.size,
-                    got: Bytes(*len + n as u64),
-                });
+                return Err(DownloadError::WrongSize { file: name, expected: f.size, got: Bytes(*len + n as u64) });
             }
             file.write_all(&buf[..n]).map_err(io_err)?;
             hasher.update(&buf[..n]);

@@ -20,6 +20,8 @@
 //! See apps/tasuke/DESIGN.md.
 
 mod agent;
+mod anthropic;
+pub mod bench;
 pub mod chat;
 mod context;
 mod desktop;
@@ -30,6 +32,8 @@ mod llm;
 pub mod memory;
 mod options;
 pub mod policy;
+mod provider;
+mod responses;
 pub mod root;
 pub mod session;
 pub mod skills;

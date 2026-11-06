@@ -208,6 +208,8 @@ The **Models** page looks at your computer's graphics memory (or shared
 memory on machines that have it) and recommends models that fit, with who
 made each one, where it comes from, its licence, and how it did in Sekka's
 own evaluations. You choose, download once, and switch any time.
+**Compare Models** puts every model Sekka measured side by side, local and
+cloud, and **Measure Speed** times any of them on your computer.
 
 [![Tasuke explaining a full disk and asking before it frees space](desktop/aizome/docs/screenshots/tasuke/night-diagnose.png)](desktop/aizome/docs/screenshots/tasuke/night-diagnose.png)
 
@@ -215,7 +217,12 @@ own evaluations. You choose, download once, and switch any time.
 
 Today Tasuke needs a graphics card with at least 8 GB of memory, or
 a machine with at least 16 GB of shared memory, to be useful; smaller models
-make more mistakes, and the window says how each one measured. Desktop
+make more mistakes, and the window says how each one measured. Without that,
+Tasuke can use a Claude or GPT model through your own Anthropic or OpenAI
+account instead: you paste an API key once (it stays in your keyring), the
+company bills your account by use, and while that model is in use, what you
+ask and what Tasuke sees is sent to that company. The window says so
+wherever the model shows, and commands still wait for your **Run**. Desktop
 control works best in Aizome's own apps. It is opt-in for now
 (`programs.tasuke.enable`), not yet one of Genkan's choices.
 

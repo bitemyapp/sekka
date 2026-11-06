@@ -5,8 +5,10 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::Deserialize;
+use tasuke_models::CloudProvider;
 
 use crate::ids::{StepBudget, Tokens};
+use crate::provider::Wire;
 use crate::skills::Skills;
 
 /// The model server's port when the user unit runs it (DESIGN.md).
@@ -155,11 +157,14 @@ pub struct Options {
     pub act: bool,
     /// The desktop tools (screenshot, clicks, keys): off until the person turns it on.
     pub desktop_control: bool,
-    /// The OpenAI-compatible endpoint, ending in `/v1`.
+    /// The OpenAI-compatible endpoint, ending in `/v1` (a cloud provider's
+    /// API root for a cloud model).
     pub base_url: String,
     /// The model id the server knows (router mode loads it on demand).
     pub model: String,
     pub api_key: Option<String>,
+    /// Whose cloud the model runs in; `None` for the local server.
+    pub provider: Option<CloudProvider>,
     pub step_budget: StepBudget,
     /// A wall-clock limit for the turn (the eval's safety net); none by default.
     pub time_limit: Option<Duration>,
@@ -212,6 +217,7 @@ impl Options {
             base_url: base_url.into(),
             model: model.into(),
             api_key: None,
+            provider: None,
             step_budget: StepBudget::default(),
             time_limit: None,
             vision: false,
@@ -236,12 +242,17 @@ impl Options {
     }
 
     /// The user's settings (`~/.config/tasuke/config.toml`), the router's
-    /// API key file, the installed skills.
+    /// API key file (or, for a cloud model, the account's key from the
+    /// keyring), the installed skills.
     pub fn from_config() -> Options {
         let config = Config::load();
         let port = config.server.port.unwrap_or(DEFAULT_PORT);
-        let mut o = Options::new(format!("http://127.0.0.1:{port}/v1"), config.model.id.clone().unwrap_or_default());
+        let model = config.model.id.clone().unwrap_or_default();
+        let mut o = Options::new(format!("http://127.0.0.1:{port}/v1"), model.clone());
         o.api_key = read_api_key();
+        if let Some(p) = config.model.provider.as_deref().and_then(CloudProvider::parse) {
+            o.use_cloud(p, &model);
+        }
         if let Some(c) = config.model.context {
             o.context_fallback = Tokens(c);
         }
@@ -253,6 +264,55 @@ impl Options {
         }
         o.skills = Skills::discover();
         o
+    }
+
+    /// Run a cloud model through the person's own account, its key from the
+    /// keyring (or the provider's environment variable). Claude and GPT see
+    /// images, and numbered controls help them as they help local models.
+    pub fn use_cloud(&mut self, provider: CloudProvider, model: &str) {
+        self.provider = Some(provider);
+        self.base_url = provider.api_base();
+        self.model = model.to_owned();
+        // The key is looked up when it's needed ([`Options::resolve_key`]), off
+        // the window's thread.
+        self.api_key = None;
+        self.vision = true;
+        self.set_of_marks = true;
+        self.coords = Coords::Pixel;
+        self.context_fallback = Tokens(provider.default_context());
+        // Local sampling settings mean nothing to a cloud API (and Claude refuses them).
+        self.request_params.clear();
+        self.keep_reasoning = false;
+    }
+
+    /// A cloud model's key, from the keyring or the environment, unless one
+    /// was given. The keyring may be slow (or ask to be unlocked): call it
+    /// off any window's thread.
+    pub fn resolve_key(&mut self) {
+        if let Some(p) = self.provider
+            && self.api_key.is_none()
+        {
+            self.api_key = tasuke_models::secrets::key_for(p).map(|k| k.expose().to_owned());
+        }
+    }
+
+    /// Run `model` on Tasuke's own model server, undoing [`Options::use_cloud`].
+    pub fn use_local(&mut self, model: &str) {
+        let port = Config::load().server.port.unwrap_or(DEFAULT_PORT);
+        let fresh = Options::new(format!("http://127.0.0.1:{port}/v1"), model);
+        self.provider = None;
+        self.base_url = fresh.base_url;
+        self.model = fresh.model;
+        self.api_key = read_api_key();
+        self.vision = fresh.vision;
+        self.set_of_marks = fresh.set_of_marks;
+        self.coords = fresh.coords;
+        self.context_fallback = fresh.context_fallback;
+    }
+
+    /// The API this turn speaks.
+    pub fn wire(&self) -> Wire {
+        Wire::of(self.provider)
     }
 }
 
@@ -285,6 +345,8 @@ pub struct Config {
 #[serde(default)]
 pub struct ModelConfig {
     pub id: Option<String>,
+    /// "anthropic" or "openai" when `id` is a cloud model.
+    pub provider: Option<String>,
     pub context: Option<u64>,
 }
 

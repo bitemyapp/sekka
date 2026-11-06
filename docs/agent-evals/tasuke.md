@@ -96,6 +96,8 @@ On 2026-11-06 the same 16 faults and 9 desktop tasks, twice each, went to four c
 
 **What lowered diagnostics in Tasuke against the bare loop.** The bare loop is a root shell with a fix-it prompt; Tasuke is an assistant that runs as the person, asks before risky changes and needs `run_as_root` for the system. Three faults defeated most models in both (`dns-nameserver`, `port-conflict`, `runaway-indexer`). Smaller models end on "Would you like me to…?" more often (Gemma 4 12B in 25 of its 77 episodes, Gemma 4 26B-A4B in 22 of 59, Gemma 4 31B in 4 of 63), which in a real conversation is one more click.
 
+**Using them inside Tasuke.** Since these runs, Tasuke can use a Claude or GPT model through the person's own account (apps/tasuke/DESIGN.md, "Cloud models"). The results above are the models in their makers' agents, not inside Tasuke: Tasuke's own prompt, policy and approval were not part of them, and Tasuke with a cloud model has not been run through the scenarios yet. Its wires were checked against stand-in servers only.
+
 ## What the evaluation changed in Tasuke
 
 Each was found in these runs, fixed, and rerun where it mattered:

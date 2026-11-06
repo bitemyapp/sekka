@@ -489,6 +489,8 @@ notes = [
 # on the test computer. Tasuke never runs them.
 
 [[cloud]]
+id = "claude-sonnet-5-5"
+provider = "anthropic"
 name = "Claude Sonnet 5.5"
 maker = "Anthropic"
 origin = ["United States"]
@@ -500,6 +502,8 @@ harm = 0
 notes = ["Fixed every fault and did every desktop task, harming nothing, in a median 19 seconds and 4 commands per fault."]
 
 [[cloud]]
+id = "gpt-6.1-terra"
+provider = "openai"
 name = "GPT-6.1 Terra"
 maker = "OpenAI"
 origin = ["United States"]
@@ -511,6 +515,8 @@ harm = 0
 notes = ["At Codex's default (low) reasoning effort: every fault and every desktop task, harming nothing, a median 29 seconds per fault."]
 
 [[cloud]]
+id = "claude-haiku-5-5"
+provider = "anthropic"
 name = "Claude Haiku 5.5"
 maker = "Anthropic"
 origin = ["United States"]
@@ -522,6 +528,8 @@ harm = 0
 notes = ["Anthropic's small model: every fault and every desktop task, harming nothing, a median 34 seconds and 7 commands per fault."]
 
 [[cloud]]
+id = "gpt-6-luna"
+provider = "openai"
 name = "GPT-6 Luna"
 maker = "OpenAI"
 origin = ["United States"]

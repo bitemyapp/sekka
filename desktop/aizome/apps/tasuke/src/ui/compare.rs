@@ -1,6 +1,7 @@
 //! The Compare page: every measured model in one sortable table, the
 //! filters a person chooses by, and the selected model's details below,
-//! with what can be done with it.
+//! with what can be done with it: download or use it, connect its account,
+//! time it here.
 
 use aizome_kit::prelude::*;
 use aizome_kit::widgets::layout::column as column_of;
@@ -23,7 +24,7 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
             "Every model Sekka measured, on the same work: 16 faults to find and fix and 9 desktop tasks, each \
              tried twice on a test computer. A fault counts as fixed only when the problem was gone and nothing \
              else was harmed. Local models were measured inside Tasuke; cloud models in their makers' own agents, \
-             given the same notes, for reference only."
+             given the same notes. A cloud model can be used through your own account."
         )
         .size(13.0)
         .role(Role::Text2)
@@ -40,14 +41,7 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
         ]);
     };
     let view = &app.models.compare;
-    let found = compare::rows(
-        hw,
-        &app.models.catalog,
-        &app.models.prefs,
-        &app.models.installs_now(),
-        app.models.in_use.as_ref(),
-        view,
-    );
+    let found = compare::rows(hw, &app.models.catalog, &app.models.prefs, &app.models.mine(), view);
     let mut parts: Vec<Element<Msg>> = vec![header.into(), filters(app, found.hidden)];
     if found.rows.is_empty() {
         parts.push(text("No model is left with these filters.").size(12.5).role(Role::Text3).into());
@@ -55,7 +49,7 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
     }
     let selected = view.selected.as_ref().and_then(|k| found.rows.iter().position(|r| &r.key == k)).unwrap_or(0);
     parts.push(grid(&found.rows, selected, view.sort, view.ascending));
-    parts.push(details(&found.rows[selected]));
+    parts.push(details(app, &found.rows[selected]));
     page(parts)
 }
 
@@ -74,7 +68,7 @@ fn filters(app: &Tasuke, hidden: usize) -> Element<Msg> {
     let view = &app.models.compare;
     let mut line = row![
         checkbox("Only models this computer runs well", view.fits_only).on_toggle(Msg::CompareFitsOnly),
-        checkbox("Cloud models, for reference", view.cloud).on_toggle(Msg::CompareCloud),
+        checkbox("Cloud models", view.cloud).on_toggle(Msg::CompareCloud),
     ]
     .spacing(22.0)
     .align(Align::Center);
@@ -100,13 +94,21 @@ fn score(t: Option<tasuke_models::Tally>) -> Element<Msg> {
 }
 
 fn here_words(r: &Row) -> (String, Role) {
+    let timed = r.timed.as_ref().map(|m| format!("{:.0} tokens/s timed", m.decode));
     match &r.place {
-        Place::Cloud { harness } => (format!("Cloud, in {harness}"), Role::Text3),
+        Place::Cloud { model, connected, .. } => {
+            let role = if *connected { Role::Text2 } else { Role::Text3 };
+            match timed {
+                Some(t) => (format!("Cloud · {t}"), role),
+                None => (format!("In {}'s cloud", model.provider.company()), role),
+            }
+        }
         Place::Local { here, speed, .. } => {
             let role = if here.usable() { Role::Text2 } else { Role::Text3 };
-            match speed {
-                Some(s) => (format!("{} · about {s:.0} tokens/s", here.words()), role),
-                None => (here.words().to_owned(), role),
+            match (timed, speed) {
+                (Some(t), _) => (format!("{} · {t}", here.words()), role),
+                (None, Some(s)) => (format!("{} · about {s:.0} tokens/s", here.words()), role),
+                (None, None) => (here.words().to_owned(), role),
             }
         }
     }
@@ -119,7 +121,7 @@ fn cell(r: &Row, c: Column) -> Element<Msg> {
             if r.is_cloud() {
                 line = line.push(icon(Icon::Cloud).size(12.0).role(Role::Text3));
             }
-            if let Place::Local { in_use: true, .. } = r.place {
+            if let Place::Local { in_use: true, .. } | Place::Cloud { in_use: true, .. } = r.place {
                 line = line.push(tag("In use", Role::Success));
             }
             line = line.push(text(r.origin.clone()).size(11.0).role(Role::Text3));
@@ -205,10 +207,104 @@ fn date_words(s: &str) -> String {
     }
 }
 
-fn details(r: &Row) -> Element<Msg> {
+/// "5,313": a whole number in groups of three.
+fn grouped(n: f64) -> String {
+    let digits = format!("{:.0}", n.max(0.0));
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// "0.2 s", "1.2 s".
+fn seconds(ms: u64) -> String {
+    format!("{:.1} s", ms as f64 / 1000.0)
+}
+
+/// The selected model's speed here: timed, being timed, or how to time it.
+fn timing(app: &Tasuke, r: &Row) -> Element<Msg> {
+    let models = &app.models;
+    let busy = app.generating();
+    if let Some(t) = models.timing.as_ref().filter(|t| t.key == r.key) {
+        return row![progress_indeterminate().width(90.0), text(t.step.clone()).size(12.0).role(Role::Text2)]
+            .spacing(10.0)
+            .align(Align::Center)
+            .into();
+    }
+    let failed = models.timing_failed.as_ref().filter(|(k, _)| *k == r.key).map(|(_, e)| e.clone());
+    let (glyph, role, words) = match (&r.timed, &failed, &r.place) {
+        (_, Some(e), _) => (Icon::CircleAlert, Role::Warning, format!("Timing it failed: {e}")),
+        (Some(m), _, _) => {
+            let reading =
+                m.prefill.map(|p| format!(", read the prompt at {} tokens/s", grouped(p))).unwrap_or_default();
+            let on = if r.is_cloud() { format!("from here, through {}", m.on) } else { format!("on the {}", m.on) };
+            (
+                Icon::Gauge,
+                Role::Text2,
+                format!(
+                    "Timed {} {on}: {:.0} tokens/s writing, first token after {}{reading}.",
+                    date_words(&m.date),
+                    m.decode,
+                    seconds(m.first_token_ms)
+                ),
+            )
+        }
+        (None, None, Place::Local { speed, .. }) if r.can_time() => (
+            Icon::Gauge,
+            Role::Text3,
+            match speed {
+                Some(s) => {
+                    format!("Not timed here yet. From its size and this computer's memory, about {s:.0} tokens/s.")
+                }
+                None => "Not timed here yet.".to_owned(),
+            },
+        ),
+        (None, None, Place::Local { here, .. }) if !here.usable() => {
+            (Icon::Gauge, Role::Text3, "It doesn't run well enough here to be worth timing.".to_owned())
+        }
+        (None, None, Place::Local { .. }) => (Icon::Gauge, Role::Text3, "Download it to time it here.".to_owned()),
+        (None, None, Place::Cloud { model, connected: true, .. }) => (
+            Icon::Gauge,
+            Role::Text3,
+            format!(
+                "Not timed yet: Measure Speed asks it for a short answer through your {} account.",
+                model.provider.company()
+            ),
+        ),
+        (None, None, Place::Cloud { model, .. }) => (
+            Icon::Gauge,
+            Role::Text3,
+            format!("Connect a {} account to use it here, or to time it.", model.provider.company()),
+        ),
+    };
+    let mut line = row![
+        super::lead(icon(glyph).size(13.0).role(role)),
+        text(words).size(12.0).role(Role::Text2).wrap().line_height(1.4).width(Fill)
+    ]
+    .spacing(6.0)
+    .align(Align::Start)
+    .width(Fill);
+    if r.can_time() {
+        let label = if r.timed.is_some() || failed.is_some() { "Measure Again" } else { "Measure Speed" };
+        line = line.push(
+            button(label)
+                .icon(Icon::Gauge)
+                .compact()
+                .enabled(!busy && models.timing.is_none())
+                .on_press(Msg::Measure(r.key.clone())),
+        );
+    }
+    line.into()
+}
+
+fn details(app: &Tasuke, r: &Row) -> Element<Msg> {
     let mut title = row![text(r.name.clone()).size(17.0).weight(700.0)].spacing(8.0).align(Align::Center);
     if r.is_cloud() {
-        title = title.push(tag("Cloud · for reference", Role::Text2));
+        title = title.push(tag("Cloud", Role::Text2));
     }
     if r.vision {
         title = title.push(tag("Sees images", Role::Text2));
@@ -219,7 +315,14 @@ fn details(r: &Row) -> Element<Msg> {
     }
     let action: Element<Msg> = match &r.place {
         Place::Local { id, install, in_use, download, .. } => install_actions(id, install, *in_use, *download),
-        Place::Cloud { .. } => space(0.0),
+        Place::Cloud { in_use: true, .. } => tag("In use", Role::Success),
+        Place::Cloud { model, connected: true, .. } => {
+            button("Use").primary().on_press(Msg::UseCloud(model.clone())).into()
+        }
+        Place::Cloud { model, .. } => button(format!("Connect {}…", model.provider.company()))
+            .icon(Icon::Cloud)
+            .on_press(Msg::Connect(model.provider, None))
+            .into(),
     };
     let head = row![
         column![title, text(who).size(12.0).role(Role::Text3).wrap().line_height(1.4)].spacing(4.0).width(Fill),
@@ -239,13 +342,19 @@ fn details(r: &Row) -> Element<Msg> {
         Some(_) => "See below for what it did".to_owned(),
         None => "Not measured".to_owned(),
     };
-    let (here_value, here_detail) = match &r.place {
-        Place::Cloud { harness } => ("In the cloud".to_owned(), format!("Measured in {harness}")),
+    let (here_label, here_value, here_detail) = match &r.place {
+        Place::Cloud { model, connected, .. } => (
+            "Where it runs",
+            format!("{}'s cloud", model.provider.company()),
+            if *connected { "Through your account".to_owned() } else { "Needs your own account".to_owned() },
+        ),
         Place::Local { here, speed, fit, .. } => (
+            "On this computer",
             here.words().to_owned(),
-            match speed {
-                Some(s) => format!("About {s:.0} tokens/s here · {fit}"),
-                None => fit.clone(),
+            match (&r.timed, speed) {
+                (Some(m), _) => format!("{:.0} tokens/s timed here · {fit}", m.decode),
+                (None, Some(s)) => format!("About {s:.0} tokens/s here · {fit}"),
+                (None, None) => fit.clone(),
             },
         ),
     };
@@ -253,13 +362,13 @@ fn details(r: &Row) -> Element<Msg> {
         figure("Faults fixed", tally_words(r.faults), first, Role::Text),
         figure("Desktop tasks", tally_words(r.desktop), percent(r.desktop), Role::Text),
         figure("Harm", harm_words(r.harm), harm_detail, harm_role),
-        figure("On this computer", here_value, here_detail, Role::Text),
+        figure(here_label, here_value, here_detail, Role::Text),
     ]
     .spacing(10.0)
     .align(Align::Start)
     .width(Fill);
 
-    let mut parts: Vec<Element<Msg>> = vec![head.into(), figures.into()];
+    let mut parts: Vec<Element<Msg>> = vec![head.into(), figures.into(), timing(app, r)];
     let notes: Vec<Element<Msg>> = r
         .incidents
         .iter()
@@ -279,13 +388,15 @@ fn details(r: &Row) -> Element<Msg> {
         parts.push(column_of(notes).spacing(4.0).width(Fill).into());
     }
     let how = match &r.place {
-        Place::Cloud { harness } => format!(
-            "Measured {} in {harness}, which worked on the test computer through a bridge with Tasuke's notes \
-             and the same checks. It runs on {}'s servers: Tasuke never sends anything there. It's here so you \
-             can see how close the local models come.",
-            date_words(&r.date),
-            r.maker
-        ),
+        Place::Cloud { harness, model, .. } => {
+            let company = model.provider.company();
+            format!(
+                "Measured {} in {harness}, which worked on the test computer through a bridge with Tasuke's notes \
+                 and the same checks. With your own {company} account Tasuke can use it too, billed by {company}: \
+                 while it's in use, what you ask and what Tasuke sees while it works is sent to {company}.",
+                date_words(&r.date),
+            )
+        }
         Place::Local { .. } => format!(
             "Measured {} inside Tasuke: its own prompt, skills and command checks, with a test person saying \
              yes when it asked to change something.",
@@ -300,4 +411,16 @@ fn details(r: &Row) -> Element<Msg> {
         .width(Fill)
         .key(r.key.clone())
         .into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::grouped;
+
+    #[test]
+    fn numbers_group_by_thousands() {
+        assert_eq!(grouped(5313.4), "5,313");
+        assert_eq!(grouped(812.0), "812");
+        assert_eq!(grouped(1_234_567.0), "1,234,567");
+    }
 }

@@ -87,6 +87,10 @@ pub struct ModelConfig {
     /// The model the assistant uses (`tasuke use ID`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<ModelId>,
+    /// Set when `id` is a cloud model: whose. Absent, it's a catalog model
+    /// run here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub provider: Option<crate::cloud::CloudProvider>,
     /// Override the catalog's default context.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<ContextTokens>,
@@ -121,7 +125,12 @@ fn default_idle_minutes() -> u32 {
 
 impl Default for ServerConfig {
     fn default() -> ServerConfig {
-        ServerConfig { port: DEFAULT_PORT, idle_minutes: DEFAULT_IDLE_MINUTES, llama_server: None, other: toml::Table::new() }
+        ServerConfig {
+            port: DEFAULT_PORT,
+            idle_minutes: DEFAULT_IDLE_MINUTES,
+            llama_server: None,
+            other: toml::Table::new(),
+        }
     }
 }
 

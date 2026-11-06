@@ -4,6 +4,7 @@
 mod bar;
 mod cards;
 mod compare;
+mod connect;
 mod conversation;
 mod first_run;
 mod memory;
@@ -13,10 +14,15 @@ use aizome_kit::prelude::*;
 use aizome_kit::widgets::layout::column as column_of;
 use aizome_kit::{column, row};
 
-use crate::app::{ConvId, Msg, Page, Tasuke};
+use crate::app::{Connect, ConvId, Msg, Page, Tasuke};
 
 /// The widest a reading column gets.
 pub(crate) const READING: f64 = 720.0;
+
+/// The sheet connecting a cloud account.
+pub fn connect_sheet(app: &Tasuke, c: &Connect) -> Element<Msg> {
+    connect::view(app, c)
+}
 
 pub fn view(app: &Tasuke) -> Element<Msg> {
     if let Some(step) = &app.first_run {
@@ -34,17 +40,19 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
     sidebar_layout(sidebar(app), container(page).fill(Tone::Surface).width(Fill).height(Fill)).first_size(248.0).into()
 }
 
-fn brand() -> Element<Msg> {
+fn brand(app: &Tasuke) -> Element<Msg> {
+    let place = match app.chip.state {
+        crate::app::ModelState::Cloud(p) | crate::app::ModelState::NoAccount(p) => {
+            format!("助 Assistant · with {}", p.company())
+        }
+        _ => "助 Assistant · on this computer".to_owned(),
+    };
     row![
         container(icon(Icon::MessageSquare).size(18.0).role(Role::Accent))
             .padding(5.0)
             .fill(Tone::Chrome)
             .border(Edge::Line),
-        column![
-            text("Tasuke").size(15.0).weight(700.0),
-            text("助 Assistant · on this computer").size(11.0).role(Role::Text3),
-        ]
-        .spacing(1.0),
+        column![text("Tasuke").size(15.0).weight(700.0), text(place).size(11.0).role(Role::Text3),].spacing(1.0),
     ]
     .spacing(10.0)
     .padding([14.0, 12.0, 12.0, 12.0])
@@ -96,7 +104,7 @@ fn sidebar(app: &Tasuke) -> Element<Msg> {
         .on_press(Msg::Show(Page::Memory))
         .detail(app.notes.len().to_string());
     column![
-        brand(),
+        brand(app),
         divider().edge(Edge::Line),
         container(new).padding([8.0, 6.0, 4.0, 6.0]).width(Fill),
         aizome_kit::caption("Conversations"),

@@ -24,13 +24,13 @@ pub enum Failure {
     Failed(String),
 }
 
-type Result<T = ()> = std::result::Result<T, Failure>;
+pub(crate) type Result<T = ()> = std::result::Result<T, Failure>;
 
-fn failed(e: impl Display) -> Failure {
+pub(crate) fn failed(e: impl Display) -> Failure {
     Failure::Failed(e.to_string())
 }
 
-fn usage(e: impl Display) -> Failure {
+pub(crate) fn usage(e: impl Display) -> Failure {
     Failure::Usage(e.to_string())
 }
 
@@ -57,6 +57,11 @@ pub fn run(command: &str, words: Vec<String>) -> Result {
             let id = args.positional().ok_or_else(|| usage("which model? (tasuke models lists them)"))?;
             args.finish().map_err(usage)?;
             let ctx = Context::load()?;
+            if command == "use"
+                && let Some(r) = tasuke_models::CloudModelRef::parse(&id)
+            {
+                return use_cloud(&ctx, &r);
+            }
             let entry = ctx.entry(&id)?;
             match command {
                 "download" => download(&ctx, entry),
@@ -130,7 +135,7 @@ impl Context {
     }
 }
 
-fn print_json(value: &impl serde::Serialize) -> Result {
+pub(crate) fn print_json(value: &impl serde::Serialize) -> Result {
     let text = serde_json::to_string_pretty(value).map_err(failed)?;
     println!("{text}");
     Ok(())
@@ -535,6 +540,7 @@ fn remove(ctx: &Context, entry: &Entry) -> Result {
 fn use_model(ctx: &Context, entry: &Entry) -> Result {
     let mut config = ctx.config.clone();
     config.model.id = Some(entry.id.clone());
+    config.model.provider = None;
     config.save(&ctx.paths).map_err(failed)?;
     eprintln!("Tasuke now uses {} ({}).", entry.name, entry.id);
     let hw = Hardware::detect();
@@ -555,6 +561,22 @@ fn use_model(ctx: &Context, entry: &Entry) -> Result {
             Ok(()) => eprintln!("Restarted the model server to serve it."),
             Err(e) => eprintln!("Restart the model server to serve it ({e})."),
         }
+    }
+    Ok(())
+}
+
+/// Make a cloud model Tasuke's model, through the person's own account.
+fn use_cloud(ctx: &Context, r: &tasuke_models::CloudModelRef) -> Result {
+    let company = r.provider.company();
+    let name = ctx.catalog.cloud.iter().find(|c| c.provider == r.provider && c.id == r.id).map(|c| c.name.clone());
+    let mut config = ctx.config.clone();
+    config.model.id = Some(ModelId::new(r.id.clone()));
+    config.model.provider = Some(r.provider);
+    config.save(&ctx.paths).map_err(failed)?;
+    eprintln!("Tasuke now uses {} ({}), in {company}'s cloud.", name.as_deref().unwrap_or(&r.id), r.key());
+    eprintln!("What Tasuke sees in a conversation is sent to {company}; tasuke use ID goes back to a local model.");
+    if tasuke_models::secrets::key_for(r.provider).is_none() {
+        eprintln!("No {company} account is connected yet: tasuke account add {}", r.provider.as_str());
     }
     Ok(())
 }

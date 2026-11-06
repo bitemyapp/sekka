@@ -9,7 +9,9 @@
 //! print, with made-up numbers.
 
 use serde_json::json;
-use tasuke_models::{Bytes, Cpu, Gpu, GpuMemory, GpuVendor, Hardware, Ram};
+use tasuke_models::{
+    Bytes, Catalog, CloudModelRef, CloudProvider, Cpu, Gpu, GpuMemory, GpuVendor, Hardware, Measured, ModelId, Ram,
+};
 
 use crate::agent::Approval;
 use crate::script::{Builder, Script};
@@ -105,6 +107,47 @@ pub struct Conversation {
 }
 
 /// The notes in Memory.
+/// A timing as Measure would make it, made up: a local model a little under
+/// the catalog's estimate for the machine, a cloud model at a made-up speed.
+pub fn timing(key: &str, catalog: &Catalog, hw: &Hardware) -> Option<Measured> {
+    let made = |decode: f64, first_token_ms: u64, prefill: Option<f64>, tokens: u64, on: String| Measured {
+        decode: (decode * 10.0).round() / 10.0,
+        first_token_ms,
+        prefill,
+        tokens,
+        date: "2026-11-05".into(),
+        on,
+    };
+    if let Some(r) = CloudModelRef::parse(key) {
+        return Some(match r.provider {
+            CloudProvider::Anthropic => made(74.3, 1180, None, 331, "Anthropic".into()),
+            CloudProvider::OpenAi => made(96.1, 2240, None, 402, "OpenAI".into()),
+        });
+    }
+    let entry = catalog.get(&ModelId::new(key))?;
+    let fit = tasuke_models::fit::fit(entry, hw, tasuke_models::FitOptions::default());
+    let estimate = tasuke_models::fit::estimate_decode(entry, &fit, hw, &catalog.reference)?.0 as f64;
+    Some(made(estimate * 0.94, 190, Some(estimate * 46.0), 356, tasuke_models::speeds::place(&fit, hw)))
+}
+
+/// The models a made-up account can use, by name.
+pub fn account_models(p: CloudProvider) -> Vec<String> {
+    let names: &[&str] = match p {
+        CloudProvider::Anthropic => &["Claude Fable 5.1", "Claude Opus 5.5", "Claude Sonnet 5.5", "Claude Haiku 5.5"],
+        CloudProvider::OpenAi => &["GPT-6 Astra", "GPT-6.1 Terra", "GPT-6 Luna"],
+    };
+    names.iter().map(|n| (*n).to_owned()).collect()
+}
+
+/// A made-up provider's check of a pasted key: one of its shape is taken.
+pub fn check(p: CloudProvider, key: &tasuke_models::ApiKey) -> Result<Vec<String>, String> {
+    if key.expose().starts_with(p.key_prefix()) && key.expose().len() >= 20 {
+        Ok(account_models(p))
+    } else {
+        Err(crate::app::check_words(p, &tasuke_models::CheckError::Rejected))
+    }
+}
+
 pub fn notes() -> Vec<(String, &'static str, Millis)> {
     let n = CLOCK.now;
     vec![
@@ -393,7 +436,8 @@ const ERRORS: &str = "Nov 05 08:11:02 studio kernel: ACPI BIOS Error (bug): Coul
 Nov 05 08:11:02 studio kernel: ACPI Error: Aborting method \\_SB.PCI0.GPP0.SWUS._PRW due to previous error (AE_NOT_FOUND)";
 
 /// `system_usage` on the desktop: `/` and `/home` share a device, so it is listed once.
-const USAGE: &str = "Memory: 62 GiB in all; 51 GiB available to programs (82%), 11 GiB in use. Swap: 0 bytes of 31 GiB in use.
+const USAGE: &str =
+    "Memory: 62 GiB in all; 51 GiB available to programs (82%), 11 GiB in use. Swap: 0 bytes of 31 GiB in use.
 Processor: 2% busy over the last 0.5 s, across 32 threads.
 
 Using the most memory (resident memory, and its share of all memory):

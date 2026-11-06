@@ -81,6 +81,10 @@ fn model_line(app: &Tasuke) -> Element<Msg> {
             format!("{name} is here, but the model server isn't running. It starts when you send something.")
         }
         ModelState::Failed => format!("{name} couldn't be loaded last time. Models says more."),
+        ModelState::Cloud(p) => format!("{name} runs in {}'s cloud, through your account.", p.company()),
+        ModelState::NoAccount(p) => {
+            format!("{name} needs your {} account, which isn't connected. Models connects it.", p.company())
+        }
     };
     row![icon(glyph).size(13.0).role(role), text(words).size(12.0).role(Role::Text3)].spacing(6.0).into()
 }
@@ -105,18 +109,33 @@ fn home(app: &Tasuke, c: &Conversation) -> Element<Msg> {
             .wrap().line_height(1.4),
         container(model_line(app)).padding([2.0, 0.0, 10.0, 0.0]),
         column_of(pairs).spacing(10.0).width(Fill),
-        container(
-            row![
-                icon(Icon::Lock).size(13.0).role(Role::Text3),
-                text("Private: it runs on this computer, and nothing you ask leaves it.").size(12.0).role(Role::Text3),
-            ]
-            .spacing(6.0)
-        )
-        .padding([10.0, 0.0, 0.0, 0.0]),
+        container(privacy(app)).padding([10.0, 0.0, 0.0, 0.0]),
     ]
     .spacing(8.0)
     .max_width(600.0);
     container(content).center().padding([24.0, 32.0]).width(Fill).height(Fill).into()
+}
+
+/// Where what's asked goes: nowhere, or to the cloud model's company.
+fn privacy(app: &Tasuke) -> Element<Msg> {
+    let (glyph, words) = match app.chip.state {
+        ModelState::Cloud(p) | ModelState::NoAccount(p) => (
+            Icon::Cloud,
+            format!(
+                "Through your {} account: what you ask, and what Tasuke sees while it works, is sent to {}.",
+                p.company(),
+                p.company()
+            ),
+        ),
+        _ => (Icon::Lock, "Private: it runs on this computer, and nothing you ask leaves it.".to_owned()),
+    };
+    row![
+        super::lead(icon(glyph).size(13.0).role(Role::Text3)),
+        text(words).size(12.0).role(Role::Text3).wrap().line_height(1.4)
+    ]
+    .spacing(6.0)
+    .align(Align::Start)
+    .into()
 }
 
 pub(crate) fn state_glyph(s: ModelState) -> (Icon, Role) {
@@ -127,6 +146,8 @@ pub(crate) fn state_glyph(s: ModelState) -> (Icon, Role) {
         ModelState::Missing => (Icon::CircleAlert, Role::Warning),
         ModelState::Off => (Icon::CircleMinus, Role::Warning),
         ModelState::Failed => (Icon::CircleX, Role::Danger),
+        ModelState::Cloud(_) => (Icon::Cloud, Role::Accent),
+        ModelState::NoAccount(_) => (Icon::CircleAlert, Role::Warning),
     }
 }
 
@@ -279,8 +300,12 @@ fn chip(app: &Tasuke) -> Element<Msg> {
     let mut words = vec![
         Span::new(if app.chip.name.is_empty() { "No model".to_owned() } else { app.chip.name.clone() }).weight(600.0),
     ];
-    let mut rest = format!(" · on this computer · {}", app.chip.state.words());
-    if let (Some(tps), ModelState::Ready | ModelState::Asleep) = (app.speed, app.chip.state) {
+    let mut rest = if app.chip.state.is_cloud() {
+        format!(" · {}", app.chip.state.words())
+    } else {
+        format!(" · on this computer · {}", app.chip.state.words())
+    };
+    if let (Some(tps), ModelState::Ready | ModelState::Asleep | ModelState::Cloud(_)) = (app.speed, app.chip.state) {
         rest.push_str(&format!(" · {tps:.0} tokens/s"));
     }
     words.push(Span::new(rest).role(Role::Text3));

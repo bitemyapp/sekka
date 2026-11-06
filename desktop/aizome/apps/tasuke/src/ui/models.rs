@@ -7,10 +7,10 @@ use aizome_kit::prelude::*;
 use aizome_kit::widgets::layout::column as column_of;
 use aizome_kit::{column, row};
 
-use tasuke_models::{Bytes, ModelId};
+use tasuke_models::{Bytes, CloudModelRef, CloudProvider, ModelId};
 
 use super::bar;
-use crate::app::{Msg, Page, Tasuke};
+use crate::app::{Account, Msg, Page, Tasuke};
 use crate::models::{self, Card, Device, DeviceKind, Install, Section, size};
 
 const WIDE: f64 = 860.0;
@@ -20,8 +20,8 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
         column![
             text("Models").size(22.0).weight(700.0),
             text(
-                "Everything runs on this computer. Sekka measured each of these models doing Tasuke's work, \
-                 and what fits is worked out from this computer's memory."
+                "These run on this computer. Sekka measured each of them doing Tasuke's work, and what fits \
+                 is worked out from this computer's memory. Cloud accounts, below, are optional."
             )
             .size(13.0)
             .role(Role::Text2)
@@ -64,8 +64,9 @@ pub fn view(app: &Tasuke) -> Element<Msg> {
                 app.models.in_use.as_ref(),
             );
             for s in &sections {
-                parts.push(section(s));
+                parts.push(section(app, s));
             }
+            parts.push(accounts(app));
             parts.push(origins(app));
         }
     }
@@ -142,7 +143,7 @@ pub(crate) fn machine(app: &Tasuke, hw: &tasuke_models::Hardware) -> Element<Msg
     body.width(Fill).into()
 }
 
-fn section(s: &Section) -> Element<Msg> {
+fn section(app: &Tasuke, s: &Section) -> Element<Msg> {
     let mut parts: Vec<Element<Msg>> = vec![
         column![
             text(s.title).size(16.0).weight(700.0),
@@ -156,11 +157,11 @@ fn section(s: &Section) -> Element<Msg> {
             parts.push(text("Nothing in the catalog fits this computer for this.").size(12.5).role(Role::Text3).into())
         }
         Some((first, rest)) => {
-            parts.push(card(first, true));
+            parts.push(card(app, first, true));
             if !rest.is_empty() {
                 parts.push(aizome_kit::caption(format!("Also fits · {}", rest.len())));
                 for c in rest {
-                    parts.push(card(c, false));
+                    parts.push(card(app, c, false));
                 }
             }
         }
@@ -212,7 +213,7 @@ pub(crate) fn install_actions(id: &ModelId, install: &Install, in_use: bool, dow
 
 /// A model: name and tags, maker, lineage and licence; the fit bar;
 /// score, speed and size; why it's recommended; what to know.
-fn card(c: &Card, first: bool) -> Element<Msg> {
+fn card(app: &Tasuke, c: &Card, first: bool) -> Element<Msg> {
     let mut tags = row![text(c.name.clone()).size(16.0).weight(700.0)].spacing(8.0);
     if first {
         tags = tags.push(tag("Recommended", Role::Accent));
@@ -255,8 +256,10 @@ fn card(c: &Card, first: bool) -> Element<Msg> {
         _ => c.score_words.clone(),
     };
     let mut facts = row![fact(Icon::ListChecks, score)].spacing(18.0);
-    if let Some(s) = c.speed {
-        facts = facts.push(fact(Icon::Gauge, format!("about {s:.0} tokens/s here")));
+    match (app.models.speeds.get(c.id.as_str()), c.speed) {
+        (Some(m), _) => facts = facts.push(fact(Icon::Gauge, format!("{:.0} tokens/s, timed here", m.decode))),
+        (None, Some(s)) => facts = facts.push(fact(Icon::Gauge, format!("about {s:.0} tokens/s here"))),
+        (None, None) => {}
     }
     facts = facts.push(fact(Icon::HardDriveDownload, format!("{} · {}", size(c.download), c.quant)));
     parts.push(facts.into());
@@ -289,6 +292,101 @@ fn card(c: &Card, first: bool) -> Element<Msg> {
         .width(Fill)
         .key(c.id.0.clone())
         .into()
+}
+
+/// Claude and OpenAI accounts: each connected or not, and its models to use.
+fn accounts(app: &Tasuke) -> Element<Msg> {
+    let models = &app.models;
+    let mut blocks: Vec<Element<Msg>> = Vec::new();
+    for (i, &p) in CloudProvider::ALL.iter().enumerate() {
+        if i > 0 {
+            blocks.push(divider().edge(Edge::Line).into());
+        }
+        let account = models.account(p);
+        let (status, role) = match account {
+            Account::Unknown => ("Looking in the keyring…".to_owned(), Role::Text3),
+            Account::Absent => ("Not connected".to_owned(), Role::Text3),
+            Account::Connected { hint, from_env: false } => (format!("Connected · key {hint}"), Role::Text2),
+            Account::Connected { hint, from_env: true } => {
+                (format!("Connected · key {hint}, from {}", p.env_var()), Role::Text2)
+            }
+        };
+        let control: Element<Msg> = match account {
+            Account::Connected { from_env: false, .. } => button("Disconnect").on_press(Msg::Disconnect(p)).into(),
+            Account::Connected { from_env: true, .. } => space(0.0),
+            _ => button("Connect…").icon(Icon::Cloud).on_press(Msg::Connect(p, None)).into(),
+        };
+        blocks.push(
+            row![
+                icon(Icon::Cloud).size(16.0).role(Role::Text2),
+                text(format!("{} · {}", p.family(), p.company())).size(13.0).weight(600.0),
+                text(status).size(12.5).role(role),
+                spacer(),
+                control,
+            ]
+            .spacing(10.0)
+            .align(Align::Center)
+            .width(Fill)
+            .into(),
+        );
+        if !account.connected() {
+            continue;
+        }
+        for c in models.catalog.cloud.iter().filter(|c| c.provider == p) {
+            let r = CloudModelRef { provider: p, id: c.id.clone() };
+            let use_it: Element<Msg> = if models.cloud.as_ref() == Some(&r) {
+                tag("In use", Role::Success)
+            } else {
+                button("Use").compact().on_press(Msg::UseCloud(r.clone())).into()
+            };
+            let mut facts = format!("Fixed {} of {} faults", c.faults.passed, c.faults.total);
+            if let Some(m) = models.speeds.get(&r.key()) {
+                facts.push_str(&format!(" · {:.0} tokens/s, timed here", m.decode));
+            }
+            blocks.push(
+                row![
+                    space(26.0),
+                    text(c.name.clone()).size(12.5),
+                    text(facts).size(12.0).role(Role::Text3),
+                    spacer(),
+                    use_it,
+                ]
+                .spacing(10.0)
+                .align(Align::Center)
+                .width(Fill)
+                .into(),
+            );
+        }
+    }
+    blocks.push(
+        row![
+            super::lead(icon(Icon::Info).size(13.0).role(Role::Text3)),
+            text(
+                "Optional. With your own account, Tasuke can use a Claude or GPT model instead of one on this \
+                 computer: worth it when this computer is too small for a good one. While one is in use, what you \
+                 ask and what Tasuke sees while it works is sent to its company, which bills your account. Compare \
+                 All shows how each did, and times any of them here."
+            )
+            .size(12.0)
+            .role(Role::Text3)
+            .wrap()
+            .line_height(1.4)
+        ]
+        .spacing(8.0)
+        .align(Align::Start)
+        .into(),
+    );
+    column![
+        aizome_kit::caption("Cloud accounts"),
+        container(column_of(blocks).spacing(10.0).width(Fill))
+            .padding([12.0, 14.0])
+            .fill(Tone::Chrome)
+            .border(Edge::Line)
+            .width(Fill),
+    ]
+    .width(Fill)
+    .key("accounts")
+    .into()
 }
 
 /// Hide models by where their makers are.

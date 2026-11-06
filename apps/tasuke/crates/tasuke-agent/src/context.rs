@@ -53,6 +53,19 @@ before the first action, act one step at a time, and check each step's result be
 /// The system prompt for a request.
 pub(crate) fn system_prompt(options: &Options, memory_block: &str) -> String {
     let mut s = String::from(ROLE);
+    if let Some(p) = options.provider {
+        // Say where it really runs: the person chose a cloud model.
+        s = s.replacen(
+            "You run privately on this machine: nothing you see leaves it.",
+            &format!(
+                "You run in {}'s cloud through the person's own account, by their choice: what you see in this \
+                 conversation is sent to {}.",
+                p.company(),
+                p.company()
+            ),
+            1,
+        );
+    }
     if !options.act {
         s.push_str("\n\n");
         s.push_str(READ_ONLY);

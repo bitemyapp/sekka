@@ -386,7 +386,10 @@ impl Client {
     fn get_json(&self, path: &str) -> Result<serde_json::Value, ServerError> {
         let (status, body) = self.get(path)?;
         if status != 200 {
-            return Err(ServerError::Http { url: format!("{}{path}", self.base), detail: format!("HTTP {status}: {body}") });
+            return Err(ServerError::Http {
+                url: format!("{}{path}", self.base),
+                detail: format!("HTTP {status}: {body}"),
+            });
         }
         serde_json::from_str(&body)
             .map_err(|e| ServerError::Http { url: format!("{}{path}", self.base), detail: e.to_string() })
@@ -429,7 +432,8 @@ pub(crate) fn parse_models(v: &serde_json::Value) -> Vec<ServedModel> {
         .iter()
         .filter_map(|m| {
             let id = m.get("id")?.as_str()?.to_owned();
-            let status = m.pointer("/status/value").and_then(|s| s.as_str()).map_or(ModelStatus::Unloaded, ModelStatus::parse);
+            let status =
+                m.pointer("/status/value").and_then(|s| s.as_str()).map_or(ModelStatus::Unloaded, ModelStatus::parse);
             let failed = m.pointer("/status/failed").and_then(|b| b.as_bool()).unwrap_or(false);
             Some(ServedModel { id, status, failed })
         })
@@ -593,15 +597,32 @@ mod tests {
 
     #[test]
     fn cli_args_become_ini_keys() {
-        let args: Vec<String> =
-            ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2", "-ctk", "q8_0", "--no-mmap", "--temp", "-0.5", "--x=y"]
-                .iter()
-                .map(|s| s.to_string())
-                .collect();
+        let args: Vec<String> = [
+            "--spec-type",
+            "draft-mtp",
+            "--spec-draft-n-max",
+            "2",
+            "-ctk",
+            "q8_0",
+            "--no-mmap",
+            "--temp",
+            "-0.5",
+            "--x=y",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
         assert_eq!(
             cli_args_to_ini(&args),
-            [("spec-type", "draft-mtp"), ("spec-draft-n-max", "2"), ("ctk", "q8_0"), ("no-mmap", "true"), ("temp", "-0.5"), ("x", "y")]
-                .map(|(k, v)| (k.to_owned(), v.to_owned()))
+            [
+                ("spec-type", "draft-mtp"),
+                ("spec-draft-n-max", "2"),
+                ("ctk", "q8_0"),
+                ("no-mmap", "true"),
+                ("temp", "-0.5"),
+                ("x", "y")
+            ]
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
         );
     }
 

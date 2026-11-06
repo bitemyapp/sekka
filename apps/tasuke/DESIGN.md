@@ -12,7 +12,7 @@ The design follows the agent evaluations in `tests/agent-evals` (docs/agent-eval
 
 ## Principles
 
-- **Private and local.** The model runs in llama.cpp on this machine. Nothing leaves it unless the user asks for something that does (a download, a web page).
+- **Private and local.** The model runs in llama.cpp on this machine. Nothing leaves it unless the user asks for something that does (a download, a web page). The one exception is the person's own choice: a Claude or GPT model through their own Anthropic or OpenAI account (see "Cloud models"), for when this computer is too small for a good model. Then the conversation, screenshots included, goes to that company, and the window says so wherever the model shows. Commands still run here, behind the same policy and approvals.
 - **Trustworthy before clever.**
   - Inspection is automatic. Anything that changes the system needs the user's approval, shown as the exact command with the model's stated purpose.
   - Root needs approval plus polkit authentication.
@@ -52,7 +52,9 @@ The libraries are UI-independent, as with Yukimi (`apps/yukimi` holds the librar
 
 | What | Where |
 |---|---|
-| Settings | `~/.config/tasuke/config.toml` (`[model] id, context`, `[server] port, idle_minutes`, `[agent] act, desktop_control`) |
+| Settings | `~/.config/tasuke/config.toml` (`[model] id, provider, context`, `[server] port, idle_minutes`, `[agent] act, desktop_control`); `provider` (`anthropic`, `openai`) makes `id` a cloud model |
+| Cloud API keys | The Secret Service (the keyring), one item per provider with the attributes `application tasuke provider anthropic` or `openai`, written and read through libsecret's `secret-tool` (Sekka's patched libsecret, its path built in). Never in Tasuke's files. The CLI also reads `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`. |
+| Timings | `~/.local/share/tasuke/speeds.toml`: each model's last timing here (`tasuke bench`, Measure Speed), by catalog id or `anthropic/claude-…` |
 | Downloaded models | `~/.local/share/tasuke/models/<model-id>/<file>`. `<file>.partial` while downloading, renamed once its sha256 matches. |
 | Router presets | `~/.local/share/tasuke/models.ini`, written by `tasuke-models` from the catalog and the downloaded files |
 | Conversations | `~/.local/share/tasuke/sessions/<id>.jsonl`: append-only, one event per line, crash-safe. The title and timestamps come from the first lines. |
@@ -173,6 +175,19 @@ pub enum Event {
 - Status comes from `/health`, `/models` and `/props`.
 - The CLI's `--foreground` runs llama-server directly, for machines without the unit.
 
+## Cloud models
+
+Sekka measured Claude and GPT models on the same scenarios as the local ones (docs/agent-evals/tasuke.md), and a person can use one through their own account: the catalog's `[[cloud]]` entries carry the API's id and the provider. The agent loop, tools, policy, approvals, skills and memory are the same; what differs is the wire and what the history may lose.
+
+- **Wires** (`tasuke-agent/src/provider.rs`): llama.cpp speaks Chat Completions; Claude speaks Anthropic's Messages API (`anthropic.rs`); GPT speaks OpenAI's Responses API (`responses.rs`). Each streams, and each reply keeps the provider's own output (`Message::raw`), which goes back unchanged on the next request.
+- **Claude's history is append-only.** Claude's thinking blocks are signed and must come back unchanged, so for Claude the loop doesn't drop old screenshots, trim or summarize; its 1M-token context leaves room. Adaptive thinking (summarized), prompt caching, eager tool-input streaming, and server-side fallbacks (`fallbacks: "default"`) on the models that have them (Opus 5.5, Fable 5.1, Sonnet 5.5).
+- **GPT** gets `store: false` with its encrypted reasoning returned and sent back; the loop may drop old screenshots there as it does locally.
+- **The prompt says where it runs**: "You run in Anthropic's cloud through the person's own account, by their choice", in place of "You run privately on this machine".
+- **Errors** come back in the person's words: a refused key says to connect the account again, a refusal says the model declined, and busy or rate-limited services (429, 503, 529) are retried with backoff.
+- **Keys** are checked with the provider's `/v1/models` before they are kept (a 401 is "not accepted", a 402 or `insufficient_quota` is billing), and looked up on the turn's own thread: a locked keyring may ask to be unlocked, and the window doesn't wait.
+
+**Timing.** `tasuke bench` and Measure Speed send every model the same request (about 200 words of plain prose, at most 400 tokens; thinking off locally, low effort in the cloud) and time it from the stream: first token, then tokens a second until the last, plus llama.cpp's own prompt rate. A local model is loaded by a warm-up request first, so loading isn't counted; a cloud model is timed as this computer sees it, network included.
+
 ## CLI (`tasuke`)
 
 ```
@@ -180,8 +195,12 @@ tasuke hardware [--json]
 tasuke recommend [--role assistant|desktop|fast] [--json]
 tasuke models [--json]                      catalog with fit and download state
 tasuke download ID | tasuke remove ID | tasuke use ID
+tasuke use anthropic/ID | openai/ID         a cloud model through a connected account
+tasuke account [list] [--json]              the accounts connected
+tasuke account add|remove anthropic|openai  paste a key (checked, kept in the keyring); forget it
+tasuke bench [ID | anthropic/ID | openai/ID] [--json]   time a model here (default: Tasuke's own)
 tasuke server start|stop|status [--foreground]
-tasuke ask [--act] [--desktop] [--approve never|ask|all] [--base-url URL --model NAME] "request"
+tasuke ask [--act] [--desktop] [--approve never|ask|all] [--model ID|anthropic/ID] [--base-url URL --model NAME] "request"
 ```
 
 `ask` streams the turn to the terminal, asking approvals on the TTY. The eval VM runs it as root with `--approve all --base-url http://10.0.2.2:PORT`, so the same scenarios grade the product's agent. As root, `run_as_root` runs directly, without pkexec.
@@ -196,14 +215,16 @@ The window follows Omperor's principles (`~/work/omperor-aizome/docs/PRODUCT_DIR
   - Each tool call is a compact row (verb and command or target, then its state), expanding to the full output.
   - Approval cards are inline. They show the command in monospace, the purpose, and why approval is needed. The buttons are **Run** / **Run as administrator** and **Don't run**, with no default button.
   - Screenshots show as thumbnails.
-- **Composer:** the Act and Desktop control toggles. The model chip shows its state: loading, ready, or asleep (it loads on send), plus speed. Stop is there while a turn runs.
+- **Composer:** the Act and Desktop control toggles. The model chip shows its state: loading, ready, or asleep (it loads on send), plus speed; a cloud model's says whose cloud ("in Anthropic's cloud") or that its account isn't connected, and the first page's privacy line says what is sent to whom. Stop is there while a turn runs.
 - **Models:**
   - The hardware summary.
   - Recommended models per role, with fit, size, speed estimate, scores, maker and lineage, licence and notes.
   - Download (with progress, pause and cancel), Use, and Remove.
   - The server's state and its idle-unload setting.
-- **Compare Models** (⇧⌘3, or Compare All on Models): every model Sekka measured in one table, sortable by faults fixed, desktop tasks, harm, how it would run here and download size, with each local model's download or Use beside its details. "Only models this computer runs well" keeps those that fit and reach the same 10 tokens/s floor the recommendations use. Cloud models measured on the same scenarios (in their makers' own agents, through the eval bridge) are rows for reference: no download, no fit, and Tasuke never sends anything to them. Models hidden by origin stay hidden here, with a count.
-- **First run:** detect the hardware, recommend a model, download it, and say hello. While it downloads, the window explains what is happening and how long it will take.
+  - Cloud accounts: Anthropic and OpenAI, each connected (with its key's ends) or not, Connect… or Disconnect, and the connected account's models with Use.
+- **Compare Models** (⇧⌘3, or Compare All on Models): every model Sekka measured in one table, sortable by faults fixed, desktop tasks, harm, where it runs and how fast, and download size. The selected model's details carry what can be done with it: a local model's download, Use and Remove; a cloud model's Use, or Connect when its account isn't. Measure Speed times the selected model here (a downloaded local model that runs well here, or a cloud model with its account), on a worker thread with its steps shown; the timing replaces the estimate in the table and is kept. "Only models this computer runs well" keeps those that fit and reach the same 10 tokens/s floor the recommendations use. Cloud models were measured in their makers' own agents through the eval bridge. Models hidden by origin stay hidden here, with a count.
+- **Connecting an account** is a sheet: Claude or OpenAI, what using one means (what is sent, who bills it), a button opening the provider's API-key page, a password field for the key, Connect. The key is checked in the background and kept in the keyring; a refused key, a billing problem or no network says so under the field. Connected, it lists the models the account can use; opened from Use, or from first run, it also switches to the model.
+- **First run:** detect the hardware, recommend a model, download it, and say hello. While it downloads, the window explains what is happening and how long it will take. Use a Cloud Account… beside Download connects an account instead (the primary button when nothing fits), and goes straight to the conversation.
 
 ## Since the first draft (2026-11-05)
 

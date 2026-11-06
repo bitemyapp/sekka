@@ -7,7 +7,9 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::units::{BillionParams, Bytes, BytesPerToken, ContextTokens, ModelId, RepoId, Revision, Sha256, TokensPerSecond};
+use crate::units::{
+    BillionParams, Bytes, BytesPerToken, ContextTokens, ModelId, RepoId, Revision, Sha256, TokensPerSecond,
+};
 
 /// The catalog shipped with Tasuke.
 pub const DEFAULT_CATALOG: &str = include_str!("../../../catalog/models.toml");
@@ -30,9 +32,12 @@ pub struct Catalog {
 
 /// A cloud model measured on Sekka's scenarios through its maker's own
 /// agent, so a person can see how near the local models come. It has no
-/// files, fit or speed here.
+/// files or fit; with an account for its provider it can be used and timed.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CloudModel {
+    /// The API's id for it: "claude-sonnet-5-5".
+    pub id: String,
+    pub provider: crate::cloud::CloudProvider,
     pub name: String,
     pub maker: String,
     pub origin: Vec<String>,

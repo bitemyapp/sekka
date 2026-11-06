@@ -12,10 +12,12 @@ use std::sync::mpsc::TryRecvError;
 use aizome_kit::MsgSender;
 use aizome_kit::prelude::*;
 use tasuke_agent as agent;
-use tasuke_models::{Catalog, Config, DownloadEvent, Entry, Hardware, ModelId, Paths, Preferences, Store};
+use tasuke_models::{
+    ApiKey, Catalog, CloudProvider, Config, DownloadEvent, Entry, Hardware, ModelId, Paths, Preferences, Store, secrets,
+};
 
 use crate::agent::{Approval, Decision, Event, FinishReason, Level, Outcome, ToolCall, ToolOutput, Usage};
-use crate::app::{Backend, Chip, ConvId, DownloadNews, ModelState, Msg, Note, Tasuke, Turn};
+use crate::app::{Account, Backend, Chip, ConvId, DownloadNews, ModelState, Msg, Note, Tasuke, Turn};
 use crate::models::{Install, install_of};
 use crate::transcript::{Millis, Transcript};
 
@@ -176,8 +178,9 @@ pub fn load(t: &mut Tasuke) {
     let Backend::Live(env) = &t.backend else { return };
     let config = env.config();
     t.models.prefs = config.recommend.clone();
-    t.models.in_use = config.model.id.clone();
+    t.models.in_use = config.model.id.clone().filter(|_| config.model.provider.is_none());
     t.models.idle_minutes = config.server.idle_minutes;
+    t.models.speeds = tasuke_models::Speeds::load(&tasuke_models::Speeds::path(&env.paths));
     t.models.server = "Looking…".to_owned();
     let catalog: &Catalog = &t.models.catalog;
     let store = env.store();
@@ -191,6 +194,12 @@ pub fn load(t: &mut Tasuke) {
         name: name.unwrap_or_default(),
         state: if installed { ModelState::Asleep } else { ModelState::Missing },
     };
+    // A cloud model: its account is looked up once the window is open.
+    if let (Some(p), Some(id)) = (config.model.provider, config.model.id.clone()) {
+        let r = tasuke_models::CloudModelRef { provider: p, id: id.0 };
+        t.chip = Chip { name: t.models.cloud_name(&r), state: ModelState::Cloud(p) };
+        t.models.cloud = Some(r);
+    }
     if t.chip.state == ModelState::Missing && t.models.in_use.is_none() {
         t.first_run = Some(crate::app::FirstRun::Looking);
     }
@@ -293,6 +302,88 @@ pub fn launched(t: &mut Tasuke, cx: &mut Cx<Msg>) {
         cx.spawn(move || Msg::Loaded(Box::new(read(&data))));
     }
     cx.spawn(|| Msg::Hardware(Box::new(Hardware::detect())));
+    cx.spawn(|| Msg::Accounts(accounts()));
+}
+
+/// Each provider's account: a key in the keyring, or in the environment.
+pub fn accounts() -> Vec<(CloudProvider, Account)> {
+    CloudProvider::ALL
+        .iter()
+        .map(|&p| {
+            let a = match secrets::lookup(p) {
+                Some(k) => Account::Connected { hint: k.hint(), from_env: false },
+                None => match std::env::var(p.env_var()).ok().and_then(|k| ApiKey::new(&k)) {
+                    Some(k) => Account::Connected { hint: k.hint(), from_env: true },
+                    None => Account::Absent,
+                },
+            };
+            (p, a)
+        })
+        .collect()
+}
+
+/// Check `key` with its provider and, if it's good, keep it in the keyring:
+/// the account's models by name, or why not.
+pub fn connect(p: CloudProvider, key: &ApiKey) -> Result<Vec<String>, String> {
+    let models = tasuke_models::cloud::check(p, key).map_err(|e| crate::app::check_words(p, &e))?;
+    secrets::store(p, key).map_err(|e| format!("The key is good, but the keyring couldn't keep it: {e}"))?;
+    Ok(models.into_iter().map(|m| m.name).collect())
+}
+
+/// Forget the provider's key; the accounts as they are then.
+pub fn disconnect(p: CloudProvider) -> Vec<(CloudProvider, Account)> {
+    if let Err(e) = secrets::clear(p) {
+        log::warn!("removing the {} key: {e}", p.company());
+    }
+    accounts()
+}
+
+/// Time a model on its own thread, as `tasuke bench` does, and keep the
+/// result in `speeds.toml`. Its steps and result come back as messages.
+pub fn measure(
+    env: &Env,
+    key: String,
+    cloud: Option<tasuke_models::CloudModelRef>,
+    catalog: &Catalog,
+    hw: Option<Hardware>,
+    stream: Option<MsgSender<Msg>>,
+) {
+    let Some(stream) = stream else { return };
+    let path = tasuke_models::Speeds::path(&env.paths);
+    let entry = catalog.get(&ModelId::new(key.clone())).cloned();
+    let _ = std::thread::Builder::new().name("tasuke-measure".into()).spawn(move || {
+        let mut o = agent::Options::from_config();
+        let on = match (&cloud, &entry, &hw) {
+            (Some(r), _, _) => {
+                o.use_cloud(r.provider, &r.id);
+                r.provider.company().to_owned()
+            }
+            (None, Some(e), Some(hw)) => {
+                o.use_local(e.id.as_str());
+                let fit = tasuke_models::fit::fit(e, hw, tasuke_models::FitOptions::default());
+                tasuke_models::speeds::place(&fit, hw)
+            }
+            (None, _, _) => {
+                stream.send(Msg::Measured(key, Err("it isn't in the catalog".into())));
+                return;
+            }
+        };
+        o.resolve_key();
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        let step_key = key.clone();
+        let result = agent::bench::measure(&o, &cancel, &mut |s| {
+            stream.send(Msg::Measuring(step_key.clone(), s.to_owned()));
+        })
+        .map(|speed| speed.measured(&on));
+        if let Ok(m) = &result {
+            let mut speeds = tasuke_models::Speeds::load(&path);
+            speeds.record(&key, m.clone());
+            if let Err(e) = speeds.save(&path) {
+                log::warn!("saving the timing: {e}");
+            }
+        }
+        stream.send(Msg::Measured(key, result));
+    });
 }
 
 /// Start a turn of `id` with `text`.
@@ -357,6 +448,17 @@ pub fn forget(env: &Env, id: &str) {
 pub fn save_model(env: &Env, id: &ModelId) {
     let mut c = env.config();
     c.model.id = Some(id.clone());
+    c.model.provider = None;
+    if let Err(e) = c.save(&env.paths) {
+        log::warn!("saving the model choice: {e}");
+    }
+}
+
+/// A cloud model as the choice (`tasuke use anthropic/claude-…`).
+pub fn save_cloud(env: &Env, r: &tasuke_models::CloudModelRef) {
+    let mut c = env.config();
+    c.model.id = Some(ModelId::new(r.id.clone()));
+    c.model.provider = Some(r.provider);
     if let Err(e) = c.save(&env.paths) {
         log::warn!("saving the model choice: {e}");
     }

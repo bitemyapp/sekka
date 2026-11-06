@@ -528,7 +528,8 @@ fn card(
         lineage.push_str(&format!(" · from {}", entry.lineage[1..].join(", ")));
     }
     let measured = entry.speed.as_ref().map(|s| {
-        let drafting = entry.draft.as_ref().map(|d| format!(", {:.0} with its draft head", s.decode.0 as f64 * d.speedup));
+        let drafting =
+            entry.draft.as_ref().map(|d| format!(", {:.0} with its draft head", s.decode.0 as f64 * d.speedup));
         format!("{:.0} tokens/s on an {}{}", s.decode.0, catalog.reference.gpu, drafting.unwrap_or_default())
     });
     Card {

@@ -40,7 +40,11 @@ rec {
   tasuke = {
     outPath = ../apps/tasuke;
     nixosModules.default = import ../apps/tasuke/nix/module.nix tasuke;
-    packages.${system}.tasuke = pkgs.callPackage ../apps/tasuke/nix/package.nix { };
+    # Cloud API keys go to the keyring through the libsecret with the Secret
+    # Service key-exchange fix.
+    packages.${system}.tasuke = pkgs.callPackage ../apps/tasuke/nix/package.nix {
+      libsecret = import ./libsecret-dh-padding.nix { inherit (pkgs) lib libsecret; };
+    };
   };
   kakehashi = {
     outPath = ../apps/kakehashi;

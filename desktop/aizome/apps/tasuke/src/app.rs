@@ -15,7 +15,9 @@ use std::time::{Duration, Instant};
 use aizome_kit::MsgSender;
 use aizome_kit::WindowState;
 use aizome_kit::prelude::*;
-use tasuke_models::{Bytes, Catalog, Hardware, ModelId, Preferences};
+use tasuke_models::{
+    ApiKey, Bytes, Catalog, CloudModelRef, CloudProvider, Hardware, Measured, ModelId, Preferences, Speeds,
+};
 
 use crate::agent::{Decision, Event, Level};
 use crate::fixture;
@@ -137,6 +139,10 @@ pub enum ModelState {
     Off,
     /// The router tried to load it and couldn't.
     Failed,
+    /// A cloud model, its account connected.
+    Cloud(CloudProvider),
+    /// A cloud model whose account isn't connected (or was disconnected).
+    NoAccount(CloudProvider),
 }
 
 impl ModelState {
@@ -148,8 +154,67 @@ impl ModelState {
             ModelState::Missing => "not downloaded",
             ModelState::Off => "server stopped",
             ModelState::Failed => "couldn't load",
+            ModelState::Cloud(CloudProvider::Anthropic) => "in Anthropic's cloud",
+            ModelState::Cloud(CloudProvider::OpenAi) => "in OpenAI's cloud",
+            ModelState::NoAccount(_) => "account not connected",
         }
     }
+
+    pub fn is_cloud(self) -> bool {
+        matches!(self, ModelState::Cloud(_) | ModelState::NoAccount(_))
+    }
+}
+
+/// A cloud account, as the window knows it.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Account {
+    /// Not looked up yet: the keyring is read after the window opens.
+    Unknown,
+    Absent,
+    /// Its key's ends ("sk-ant-…7a3f"), and whether it comes from the
+    /// environment (`ANTHROPIC_API_KEY`) rather than the keyring.
+    Connected {
+        hint: String,
+        from_env: bool,
+    },
+}
+
+impl Account {
+    pub fn connected(&self) -> bool {
+        matches!(self, Account::Connected { .. })
+    }
+}
+
+/// Connecting an account, on its sheet.
+pub struct Connect {
+    pub sheet: WindowKey,
+    pub provider: CloudProvider,
+    /// The key as pasted (shown as dots).
+    pub key: String,
+    pub step: ConnectStep,
+    /// The model to use once connected: Use pressed on a cloud model, or
+    /// first run's way to a cloud account.
+    pub then_use: Option<CloudModelRef>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ConnectStep {
+    Editing {
+        error: Option<String>,
+    },
+    Checking,
+    /// The models the account can use, by name.
+    Connected {
+        models: Vec<String>,
+    },
+}
+
+/// A model being timed, and what's happening.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Timing {
+    /// The row's key: a catalog id, or "anthropic/claude-…".
+    pub key: String,
+    pub step: String,
 }
 
 /// A download under way.
@@ -169,7 +234,16 @@ pub struct Models {
     pub catalog: Catalog,
     pub prefs: Preferences,
     pub installs: Installs,
+    /// The local model in use (none while a cloud model is).
     pub in_use: Option<ModelId>,
+    /// The cloud model in use, when it's one.
+    pub cloud: Option<CloudModelRef>,
+    pub accounts: Vec<(CloudProvider, Account)>,
+    /// Speeds timed on this computer (`speeds.toml`).
+    pub speeds: Speeds,
+    pub timing: Option<Timing>,
+    /// The last timing that failed: its key and why.
+    pub timing_failed: Option<(String, String)>,
     pub download: Option<Downloading>,
     /// The model server, in words.
     pub server: String,
@@ -196,6 +270,52 @@ impl Models {
             i.insert(d.id.clone(), Install::Downloading(d.progress.clone()));
         }
         i
+    }
+
+    pub fn account(&self, p: CloudProvider) -> &Account {
+        self.accounts.iter().find(|(q, _)| *q == p).map_or(&Account::Unknown, |(_, a)| a)
+    }
+
+    pub fn set_account(&mut self, p: CloudProvider, a: Account) {
+        self.accounts.retain(|(q, _)| *q != p);
+        self.accounts.push((p, a));
+        self.accounts.sort_by_key(|(q, _)| *q);
+    }
+
+    /// What the Compare page needs of this person's things.
+    pub fn mine(&self) -> crate::compare::Mine {
+        crate::compare::Mine {
+            installs: self.installs_now(),
+            in_use: self.in_use.clone(),
+            cloud: self.cloud.clone(),
+            connected: self.accounts.iter().filter(|(_, a)| a.connected()).map(|(p, _)| *p).collect(),
+            speeds: self.speeds.clone(),
+        }
+    }
+
+    /// A cloud model's name, as the catalog has it.
+    pub fn cloud_name(&self, r: &CloudModelRef) -> String {
+        self.catalog
+            .cloud
+            .iter()
+            .find(|c| c.provider == r.provider && c.id == r.id)
+            .map_or(r.id.clone(), |c| c.name.clone())
+    }
+
+    /// The provider's model that did best in Sekka's evaluations; of equals,
+    /// the catalog's first.
+    pub fn best_cloud(&self, p: CloudProvider) -> Option<CloudModelRef> {
+        self.catalog
+            .cloud
+            .iter()
+            .rev()
+            .filter(|c| c.provider == p)
+            .max_by(|a, b| {
+                (a.faults.share(), a.desktop.share())
+                    .partial_cmp(&(b.faults.share(), b.desktop.share()))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|c| CloudModelRef { provider: p, id: c.id.clone() })
     }
 }
 
@@ -272,6 +392,25 @@ pub enum Msg {
     CompareSelect(Option<String>),
     CompareFitsOnly(bool),
     CompareCloud(bool),
+    /// Time a model here, by its row's key.
+    Measure(String),
+    /// What the timing is doing.
+    Measuring(String, String),
+    Measured(String, Result<Measured, String>),
+    // Accounts.
+    /// Open the sheet that connects an account, and what to use once it is.
+    Connect(CloudProvider, Option<CloudModelRef>),
+    ConnectProvider(CloudProvider),
+    ConnectKey(String),
+    ConnectCheck,
+    /// The provider's answer: the models the key can use, or why not.
+    ConnectChecked(CloudProvider, Result<Vec<String>, String>),
+    ConnectClose,
+    Disconnect(CloudProvider),
+    /// The accounts, as the keyring has them.
+    Accounts(Vec<(CloudProvider, Account)>),
+    /// Use a cloud model (connecting its account first if it isn't).
+    UseCloud(CloudModelRef),
     // Memory.
     Forget(String),
     // First run.
@@ -340,6 +479,8 @@ pub struct Tasuke {
     title: String,
     /// Conversations still being read from disk.
     pub loading: bool,
+    /// The account being connected, on its sheet.
+    pub connect: Option<Connect>,
 }
 
 /// The fixtures `--fixture` takes.
@@ -355,6 +496,10 @@ pub const FIXTURES: &[&str] = &[
     "models-unified",
     "compare",
     "compare-8gb",
+    "compare-cloud",
+    "connect",
+    "connected",
+    "cloud-home",
     "downloading",
     "first-run",
     "memory",
@@ -376,6 +521,11 @@ impl Tasuke {
                 prefs: Preferences::default(),
                 installs: Installs::new(),
                 in_use: None,
+                cloud: None,
+                accounts: Vec::new(),
+                speeds: Speeds::default(),
+                timing: None,
+                timing_failed: None,
                 download: None,
                 server: String::new(),
                 idle_minutes: 10,
@@ -397,6 +547,7 @@ impl Tasuke {
             suspended: false,
             title: String::new(),
             loading: false,
+            connect: None,
         }
     }
 
@@ -409,18 +560,36 @@ impl Tasuke {
         let mut t = Tasuke::empty(Backend::Fixture, fixture::CLOCK, true);
         t.fixture = Some(name.to_owned());
         let hw = match name {
-            "models-8gb" | "compare-8gb" | "first-run" | "downloading" => fixture::laptop_8gb(),
+            "models-8gb" | "compare-8gb" | "first-run" | "downloading" | "connect" | "connected" | "cloud-home" => {
+                fixture::laptop_8gb()
+            }
             "models-unified" => fixture::apu_128gb(),
             _ => fixture::desktop_32gb(),
         };
+        let anthropic = if matches!(name, "compare-cloud" | "connected" | "cloud-home") {
+            Account::Connected { hint: "sk-ant-…7a3f".into(), from_env: false }
+        } else {
+            Account::Absent
+        };
+        t.models.set_account(CloudProvider::Anthropic, anthropic);
+        t.models.set_account(CloudProvider::OpenAi, Account::Absent);
+        if matches!(name, "compare" | "compare-cloud") {
+            for key in
+                ["gemma-4-31b", "anthropic/claude-sonnet-5-5"].into_iter().take(if name == "compare" { 1 } else { 2 })
+            {
+                if let Some(m) = fixture::timing(key, &t.models.catalog, &hw) {
+                    t.models.speeds.record(key, m);
+                }
+            }
+        }
         t.models.server = format!("Running · a model unloads after {} minutes unused", t.models.idle_minutes);
         t.notes =
             fixture::notes().into_iter().map(|(id, text, created)| Note { id, text: text.into(), created }).collect();
         // What's downloaded on each machine.
         let installed: &[&str] = match name {
-            "models-8gb" | "compare-8gb" => &["gemma-4-12b"],
+            "models-8gb" | "compare-8gb" | "cloud-home" | "connected" => &["gemma-4-12b"],
             "models-unified" => &["gemma-4-31b"],
-            "first-run" | "downloading" => &[],
+            "first-run" | "downloading" | "connect" => &[],
             _ => &["gemma-4-31b", "gpt-oss-20b"],
         };
         for id in installed {
@@ -532,6 +701,10 @@ impl Tasuke {
                 t.models.compare.selected = Some("gemma-4-26b-a4b".into());
                 Page::Compare
             }
+            "compare-cloud" => {
+                t.models.compare.selected = Some("anthropic/claude-sonnet-5-5".into());
+                Page::Compare
+            }
             "memory" => Page::Memory,
             _ => Page::Conversation(t.new_conversation_id()),
         };
@@ -567,6 +740,35 @@ impl Tasuke {
         if name == "home" {
             t.chip.state = ModelState::Asleep;
         }
+        // Someone whose laptop runs only a small model well, connecting their
+        // Claude account from first run; then using it.
+        if matches!(name, "connect" | "connected") {
+            t.conversations.clear();
+            t.notes.clear();
+            t.speed = None;
+            let id = t.new_conversation_id();
+            t.page = Page::Conversation(id);
+            if name == "connect" {
+                t.first_run = Some(FirstRun::Recommend);
+            }
+        }
+        if matches!(name, "connected" | "cloud-home") {
+            if let Some(r) = t.models.best_cloud(CloudProvider::Anthropic) {
+                t.use_cloud(r);
+            }
+            t.speed = None;
+        }
+        if matches!(name, "connect" | "connected") {
+            let then_use = t.models.best_cloud(CloudProvider::Anthropic);
+            let step = if name == "connect" {
+                ConnectStep::Editing { error: None }
+            } else {
+                ConnectStep::Connected { models: fixture::account_models(CloudProvider::Anthropic) }
+            };
+            let key = if name == "connect" { "sk-ant-api03-fixture-key-7a3f".to_owned() } else { String::new() };
+            t.connect =
+                Some(Connect { sheet: WindowKey::NONE, provider: CloudProvider::Anthropic, key, step, then_use });
+        }
         Some(t)
     }
 
@@ -596,6 +798,12 @@ impl Tasuke {
         let id = ConvId(self.next_id);
         self.conversations.push(Conversation::new(id, at, act, desktop));
         id
+    }
+
+    /// A turn is running, not waiting for the person: the model is busy, and
+    /// timing it now would measure neither well.
+    pub fn generating(&self) -> bool {
+        self.conversations.iter().any(|c| c.turn.is_some() && !c.needs_you())
     }
 
     /// The empty conversation New shows: the one there is, or a new one.
@@ -722,6 +930,10 @@ impl Tasuke {
         let now = self.now();
         let fixture = self.backend.is_fixture();
         let missing = self.chip.state == ModelState::Missing && !fixture;
+        let no_account = match self.chip.state {
+            ModelState::NoAccount(p) => Some(p.company()),
+            _ => None,
+        };
         let Some(c) = self.conversation_mut(id) else { return };
         if c.turn.is_some() || c.transcript.busy {
             return;
@@ -738,6 +950,19 @@ impl Tasuke {
                 Event::Notice {
                     level: Level::Warning,
                     text: "No model is downloaded yet. Choose one in Models, and it will answer.".into(),
+                },
+                now,
+            );
+            return;
+        }
+        if let Some(company) = no_account {
+            c.transcript.apply(
+                Event::Notice {
+                    level: Level::Warning,
+                    text: format!(
+                        "Tasuke uses a {company} model, but no {company} account is connected. Connect it in \
+                         Models, or choose a model on this computer."
+                    ),
                 },
                 now,
             );
@@ -818,7 +1043,7 @@ impl Tasuke {
     fn download_finished(&mut self, id: &ModelId) {
         self.models.download = None;
         self.models.installs.insert(id.clone(), Install::Installed);
-        if self.models.in_use.is_none() {
+        if self.models.in_use.is_none() && self.models.cloud.is_none() {
             self.use_model(id.clone());
         }
         if self.first_run == Some(FirstRun::Downloading) {
@@ -828,12 +1053,103 @@ impl Tasuke {
 
     fn use_model(&mut self, id: ModelId) {
         let name = self.models.catalog.get(&id).map(|e| e.name.clone()).unwrap_or_else(|| id.0.clone());
+        if self.chip.name != name {
+            // The last turn's speed was another model's.
+            self.speed = None;
+        }
         self.chip = Chip { name, state: ModelState::Asleep };
         #[cfg(feature = "live")]
         if let Backend::Live(env) = &self.backend {
             crate::live::save_model(env, &id);
         }
         self.models.in_use = Some(id);
+        self.models.cloud = None;
+    }
+
+    /// Make a cloud model Tasuke's, through the person's account.
+    pub(crate) fn use_cloud(&mut self, r: CloudModelRef) {
+        let name = self.models.cloud_name(&r);
+        if self.chip.name != name {
+            self.speed = None;
+        }
+        let state = if self.models.account(r.provider).connected() {
+            ModelState::Cloud(r.provider)
+        } else {
+            ModelState::NoAccount(r.provider)
+        };
+        self.chip = Chip { name, state };
+        #[cfg(feature = "live")]
+        if let Backend::Live(env) = &self.backend {
+            crate::live::save_cloud(env, &r);
+        }
+        self.models.in_use = None;
+        self.models.cloud = Some(r);
+    }
+
+    /// The chip, after an account came or went.
+    fn account_changed(&mut self) {
+        if let Some(r) = &self.models.cloud {
+            let p = r.provider;
+            self.chip.state =
+                if self.models.account(p).connected() { ModelState::Cloud(p) } else { ModelState::NoAccount(p) };
+        }
+    }
+
+    fn open_connect(&mut self, provider: CloudProvider, then_use: Option<CloudModelRef>, cx: &mut Cx<Msg>) {
+        if self.connect.is_some() {
+            return;
+        }
+        let Some(w) = self.window else { return };
+        let sheet = cx.show_sheet(w);
+        self.connect =
+            Some(Connect { sheet, provider, key: String::new(), step: ConnectStep::Editing { error: None }, then_use });
+        cx.focus("connect-key");
+    }
+
+    /// Time the model whose row's key is `key`, on another thread (or, for
+    /// a fixture, made up on timers).
+    fn measure(&mut self, key: String, cx: &mut Cx<Msg>) {
+        if self.models.timing.is_some() || self.generating() {
+            return;
+        }
+        let cloud = CloudModelRef::parse(&key);
+        // A local model's timing says which GPU it ran on.
+        let hw = self.models.hardware.clone();
+        if cloud.is_none() && hw.is_none() {
+            return;
+        }
+        let first = if cloud.is_some() { "Measuring…" } else { "Loading the model…" };
+        self.models.timing = Some(Timing { key: key.clone(), step: "Starting…".into() });
+        self.models.timing_failed = None;
+        match &self.backend {
+            Backend::Fixture => {
+                let made_up = hw
+                    .as_ref()
+                    .and_then(|hw| fixture::timing(&key, &self.models.catalog, hw))
+                    .ok_or_else(|| "it isn't a model Tasuke can run".to_owned());
+                cx.after(Duration::from_millis(400), Msg::Measuring(key.clone(), first.into()));
+                if cloud.is_none() {
+                    cx.after(Duration::from_millis(1400), Msg::Measuring(key.clone(), "Measuring…".into()));
+                }
+                cx.after(Duration::from_millis(2600), Msg::Measured(key, made_up));
+            }
+            #[cfg(feature = "live")]
+            Backend::Live(env) => {
+                crate::live::measure(env, key, cloud, &self.models.catalog, hw, self.stream.clone());
+            }
+        }
+    }
+}
+
+/// Why a key didn't check out, in the window's words.
+pub fn check_words(p: CloudProvider, e: &tasuke_models::CheckError) -> String {
+    use tasuke_models::CheckError;
+    let company = p.company();
+    match e {
+        CheckError::Rejected => format!("{company} didn't accept that key. Check that it was copied whole."),
+        CheckError::Billing(m) => format!("The key works, but the account can't pay for requests yet: {m}"),
+        CheckError::Unreachable(_) => format!("{company} couldn't be reached. Is this computer online?"),
+        CheckError::Other { status, message } => format!("{company} answered {status}: {message}"),
     }
 }
 
@@ -853,6 +1169,10 @@ impl Program for Tasuke {
         cx.every(Duration::from_secs(30), Msg::Tick);
         if self.models.download.as_ref().is_some_and(|d| d.simulated) {
             cx.after(Duration::from_millis(250), Msg::DownloadTick);
+        }
+        // A fixture's sheet, open from the start.
+        if let Some(c) = self.connect.as_mut() {
+            c.sheet = cx.show_sheet(w);
         }
         #[cfg(feature = "live")]
         if let Backend::Live(_) = &self.backend {
@@ -900,7 +1220,10 @@ impl Program for Tasuke {
         }
     }
 
-    fn view(&self, _window: WindowKey) -> Element<Msg> {
+    fn view(&self, window: WindowKey) -> Element<Msg> {
+        if let Some(c) = self.connect.as_ref().filter(|c| c.sheet == window) {
+            return crate::ui::connect_sheet(self, c);
+        }
         crate::ui::view(self)
     }
 }
@@ -1049,7 +1372,10 @@ impl Tasuke {
                 let in_use = self.models.in_use.clone();
                 let installed = in_use.as_ref().is_some_and(|id| self.models.install(id) == Install::Installed);
                 let busy = self.conversations.iter().any(|c| c.turn.is_some());
-                self.chip.state = crate::server::chip_state(&p, in_use.as_ref(), installed, busy, self.chip.state);
+                // A cloud model's state is its account's, not the server's.
+                if self.models.cloud.is_none() {
+                    self.chip.state = crate::server::chip_state(&p, in_use.as_ref(), installed, busy, self.chip.state);
+                }
                 let name = self.chip.name.clone();
                 self.models.server =
                     crate::server::line(&p, in_use.as_ref().map(|id| (id, name.as_str())), self.models.idle_minutes);
@@ -1090,6 +1416,114 @@ impl Tasuke {
             Msg::CompareSelect(key) => self.models.compare.selected = key,
             Msg::CompareFitsOnly(on) => self.models.compare.fits_only = on,
             Msg::CompareCloud(on) => self.models.compare.cloud = on,
+            Msg::Measure(key) => self.measure(key, cx),
+            Msg::Measuring(key, step) => {
+                if let Some(t) = self.models.timing.as_mut().filter(|t| t.key == key) {
+                    t.step = step;
+                }
+            }
+            Msg::Measured(key, result) => {
+                if self.models.timing.as_ref().is_some_and(|t| t.key == key) {
+                    self.models.timing = None;
+                }
+                match result {
+                    Ok(m) => self.models.speeds.record(&key, m),
+                    Err(e) => self.models.timing_failed = Some((key, e)),
+                }
+            }
+            Msg::Connect(p, then_use) => self.open_connect(p, then_use, cx),
+            Msg::ConnectProvider(p) => {
+                let best = self.models.best_cloud(p);
+                if let Some(c) = self.connect.as_mut().filter(|c| c.step != ConnectStep::Checking && c.provider != p) {
+                    c.provider = p;
+                    c.key.clear();
+                    c.step = ConnectStep::Editing { error: None };
+                    // A model of the other provider was to be used: this one's best instead.
+                    if c.then_use.is_some() {
+                        c.then_use = best;
+                    }
+                }
+                cx.focus("connect-key");
+            }
+            Msg::ConnectKey(k) => {
+                if let Some(c) = self.connect.as_mut().filter(|c| c.step != ConnectStep::Checking) {
+                    c.key = k;
+                    c.step = ConnectStep::Editing { error: None };
+                }
+            }
+            Msg::ConnectCheck => {
+                let Some(c) = self.connect.as_mut().filter(|c| matches!(c.step, ConnectStep::Editing { .. })) else {
+                    return;
+                };
+                let p = c.provider;
+                let Some(key) = ApiKey::new(&c.key) else {
+                    c.step = ConnectStep::Editing { error: Some("Paste the key first.".into()) };
+                    return;
+                };
+                c.step = ConnectStep::Checking;
+                match &self.backend {
+                    Backend::Fixture => cx.spawn(move || {
+                        std::thread::sleep(Duration::from_millis(700));
+                        Msg::ConnectChecked(p, fixture::check(p, &key))
+                    }),
+                    #[cfg(feature = "live")]
+                    Backend::Live(_) => cx.spawn(move || Msg::ConnectChecked(p, crate::live::connect(p, &key))),
+                }
+            }
+            Msg::ConnectChecked(p, result) => {
+                let hint = self.connect.as_ref().filter(|c| c.provider == p).and_then(|c| ApiKey::new(&c.key));
+                if result.is_ok() {
+                    // Kept in the keyring even if the sheet was closed meanwhile.
+                    let hint = hint.map_or_else(|| "kept in the keyring".to_owned(), |k| k.hint());
+                    self.models.set_account(p, Account::Connected { hint, from_env: false });
+                    self.account_changed();
+                }
+                let Some(c) = self.connect.as_mut().filter(|c| c.provider == p && c.step == ConnectStep::Checking)
+                else {
+                    return;
+                };
+                match result {
+                    Ok(models) => {
+                        c.key.clear();
+                        c.step = ConnectStep::Connected { models };
+                        if let Some(r) = c.then_use.clone() {
+                            self.use_cloud(r);
+                            if self.first_run.is_some() {
+                                self.first_run = None;
+                                let id = self.new_conversation_id();
+                                self.page = Page::Conversation(id);
+                            }
+                        }
+                    }
+                    Err(e) => c.step = ConnectStep::Editing { error: Some(e) },
+                }
+            }
+            Msg::ConnectClose => {
+                if let Some(c) = self.connect.take() {
+                    cx.close_window(c.sheet);
+                }
+            }
+            Msg::Disconnect(p) => {
+                self.models.set_account(p, Account::Absent);
+                self.account_changed();
+                #[cfg(feature = "live")]
+                if let Backend::Live(_) = &self.backend {
+                    cx.spawn(move || Msg::Accounts(crate::live::disconnect(p)));
+                }
+            }
+            Msg::Accounts(list) => {
+                for (p, a) in list {
+                    self.models.set_account(p, a);
+                }
+                self.account_changed();
+            }
+            Msg::UseCloud(r) => {
+                if self.models.account(r.provider).connected() {
+                    self.use_cloud(r);
+                } else {
+                    self.open_connect(r.provider, Some(r), cx);
+                }
+            }
             Msg::Download(id) => self.start_download(id, cx),
             Msg::Pause => {
                 if let Some(d) = &mut self.models.download {

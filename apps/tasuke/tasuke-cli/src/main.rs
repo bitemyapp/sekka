@@ -8,8 +8,10 @@
 
 use std::process::ExitCode;
 
+mod accounts;
 mod args;
 mod ask;
+mod bench;
 mod checkup;
 mod models;
 mod table;
@@ -24,6 +26,13 @@ usage: tasuke COMMAND [options]
   download ID                          download a model (progress on stderr)
   remove ID                            delete a downloaded model
   use ID                               make it Tasuke's model
+  use anthropic/ID | openai/ID         use a cloud model through your own account
+  account [list] [--json]              the Claude and OpenAI accounts connected
+  account add anthropic|openai         connect one: paste an API key, checked and
+                                       kept in the desktop's keyring
+  account remove anthropic|openai      disconnect it
+  bench [ID|anthropic/ID|openai/ID] [--json]
+                                       time a model here (default: Tasuke's own)
   server start [--foreground]          start the model server (the user unit
                                        tasuke-llm.service, or here and now)
   server stop                          stop it
@@ -48,8 +57,13 @@ fn main() -> ExitCode {
         }
         "ask" => ask::run(rest),
         "checkup" => checkup::run(rest),
-        "hardware" | "recommend" | "models" | "download" | "remove" | "use" | "server" => {
-            match models::run(command, rest.to_vec()) {
+        "hardware" | "recommend" | "models" | "download" | "remove" | "use" | "server" | "account" | "bench" => {
+            let result = match command.as_str() {
+                "account" => accounts::run(rest.to_vec()),
+                "bench" => bench::run(rest.to_vec()),
+                _ => models::run(command, rest.to_vec()),
+            };
+            match result {
                 Ok(()) => 0,
                 Err(models::Failure::Usage(e)) => {
                     eprintln!("tasuke {command}: {e}");

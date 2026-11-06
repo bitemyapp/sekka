@@ -30,6 +30,10 @@ fn a_turn_runs_on_the_agent_and_its_events_reach_the_window() {
         std::env::set_var("XDG_DATA_HOME", &data);
         std::env::set_var("TASUKE_DATA_DIR", data.join("tasuke"));
         std::env::remove_var("XDG_RUNTIME_DIR");
+        // No keyring: the accounts are looked up, and none is found.
+        std::env::set_var("TASUKE_SECRET_TOOL", root.join("no-secret-tool"));
+        std::env::remove_var("ANTHROPIC_API_KEY");
+        std::env::remove_var("OPENAI_API_KEY");
     }
     std::fs::create_dir_all(config.join("tasuke")).unwrap();
     // A port nothing listens on, and not Tasuke's own: the agent then

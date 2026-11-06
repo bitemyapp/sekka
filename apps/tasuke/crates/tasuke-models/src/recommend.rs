@@ -92,9 +92,10 @@ pub fn ranking_basis<'e>(entries: impl IntoIterator<Item = &'e Entry>, role: Rol
 /// The largest memory budget for a model on `hw`: its best GPU, unified
 /// memory, or RAM.
 pub fn best_budget(hw: &Hardware) -> Bytes {
-    let gpus = hw.gpus.iter().filter_map(|g| {
-        fit::gpu_budget(g, fit::MemoryBasis::Total).or_else(|| fit::unified_budget(g, hw))
-    });
+    let gpus = hw
+        .gpus
+        .iter()
+        .filter_map(|g| fit::gpu_budget(g, fit::MemoryBasis::Total).or_else(|| fit::unified_budget(g, hw)));
     gpus.max().unwrap_or(Bytes::ZERO)
 }
 
@@ -102,7 +103,12 @@ pub fn best_budget(hw: &Hardware) -> Bytes {
 /// tier the machine reaches, whose model fits on a GPU (or in unified memory),
 /// with or without some experts in system RAM: on 8 GiB cards the curated
 /// choice is a mixture of experts placed that way, deliberately.
-pub fn curated_default<'c>(hw: &Hardware, catalog: &'c Catalog, role: Role, prefs: &Preferences) -> Option<&'c crate::catalog::CuratedDefault> {
+pub fn curated_default<'c>(
+    hw: &Hardware,
+    catalog: &'c Catalog,
+    role: Role,
+    prefs: &Preferences,
+) -> Option<&'c crate::catalog::CuratedDefault> {
     let budget = best_budget(hw);
     let mut candidates: Vec<_> = catalog.defaults.iter().filter(|d| d.role == role && d.min_budget <= budget).collect();
     candidates.sort_by_key(|d| std::cmp::Reverse(d.min_budget));

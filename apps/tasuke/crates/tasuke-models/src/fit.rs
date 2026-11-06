@@ -168,9 +168,10 @@ impl Fit {
 
     pub fn context(&self) -> Option<ContextTokens> {
         match *self {
-            Fit::Gpu { ctx, .. } | Fit::GpuWithExpertOffload { ctx, .. } | Fit::Unified { ctx, .. } | Fit::Cpu { ctx, .. } => {
-                Some(ctx)
-            }
+            Fit::Gpu { ctx, .. }
+            | Fit::GpuWithExpertOffload { ctx, .. }
+            | Fit::Unified { ctx, .. }
+            | Fit::Cpu { ctx, .. } => Some(ctx),
             Fit::TooLarge { .. } => None,
         }
     }
@@ -207,7 +208,9 @@ impl Fit {
                 gpu_name(gpu),
                 cpu_expert_layers.0
             ),
-            Fit::Unified { gpu, ctx, need, .. } => format!("in unified memory on the {} ({need}), {ctx} context", gpu_name(gpu)),
+            Fit::Unified { gpu, ctx, need, .. } => {
+                format!("in unified memory on the {} ({need}), {ctx} context", gpu_name(gpu))
+            }
             Fit::Cpu { ctx, need, .. } => format!("on the CPU in RAM ({need}), {ctx} context"),
             Fit::TooLarge { needed, available } => format!("too large: needs {needed}, this machine has {available}"),
         }
@@ -308,12 +311,8 @@ pub fn ram_budget(hw: &Hardware) -> Bytes {
 pub fn fit(entry: &Entry, hw: &Hardware, opts: FitOptions) -> Fit {
     let wanted = opts.context.unwrap_or(entry.context.default);
     // Dedicated GPUs, largest budget first.
-    let mut dedicated: Vec<(GpuIndex, Bytes)> = hw
-        .gpus
-        .iter()
-        .enumerate()
-        .filter_map(|(i, g)| gpu_budget(g, opts.basis).map(|b| (GpuIndex(i), b)))
-        .collect();
+    let mut dedicated: Vec<(GpuIndex, Bytes)> =
+        hw.gpus.iter().enumerate().filter_map(|(i, g)| gpu_budget(g, opts.basis).map(|b| (GpuIndex(i), b))).collect();
     dedicated.sort_by_key(|&(_, b)| std::cmp::Reverse(b));
     let unified: Vec<(GpuIndex, Bytes)> =
         hw.gpus.iter().enumerate().filter_map(|(i, g)| unified_budget(g, hw).map(|b| (GpuIndex(i), b))).collect();
@@ -403,7 +402,8 @@ pub fn estimate_decode(entry: &Entry, fit: &Fit, hw: &Hardware, reference: &Refe
             let moved = expert_bytes.0 as f64 * f64::from(cpu_expert_layers.0) / f64::from(expert_layers.max(1));
             let ram_bytes = moved * entry.architecture.expert_read_fraction();
             let gpu_bytes = (active.0 as f64 - ram_bytes).max(0.0);
-            let secs = gpu_bytes / (gpu_bw.0 * DECODE_EFFICIENCY) + ram_bytes / (ASSUMED_RAM_BANDWIDTH.0 * DECODE_EFFICIENCY);
+            let secs =
+                gpu_bytes / (gpu_bw.0 * DECODE_EFFICIENCY) + ram_bytes / (ASSUMED_RAM_BANDWIDTH.0 * DECODE_EFFICIENCY);
             Some(TokensPerSecond((1.0 / secs) as f32))
         }
         Fit::Cpu { .. } => {

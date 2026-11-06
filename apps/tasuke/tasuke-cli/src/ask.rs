@@ -25,6 +25,8 @@ usage: tasuke ask [options] REQUEST…   (REQUEST - reads it from stdin)
   --session ID             continue a conversation
   --json                   print every event as a JSON line
   --answer-file PATH       also write the final answer there
+  --model ID               a downloaded model, or anthropic/ID or openai/ID for
+                           a cloud model through a connected account
   --base-url URL --model NAME --api-key KEY
                            a server other than Tasuke's own
   --vision --coords pixel|norm1000|norm1|affine:XS,XO,YS,YO --marks --desktop-only
@@ -71,6 +73,7 @@ fn ask(args: &[String]) -> Result<i32, String> {
     let mut text = Vec::new();
     let mut explicit_vision = false;
     let mut explicit_coords = false;
+    let (mut base_url, mut model, mut api_key) = (None, None, None);
     let mut it = args.iter();
     while let Some(a) = it.next() {
         let mut val = |name: &str| it.next().cloned().ok_or_else(|| format!("{name} needs a value"));
@@ -93,9 +96,9 @@ fn ask(args: &[String]) -> Result<i32, String> {
             "--session" => session_id = Some(SessionId::parse(&val(a)?).ok_or("not a session id")?),
             "--json" => json = true,
             "--answer-file" => answer_file = Some(PathBuf::from(val(a)?)),
-            "--base-url" => o.base_url = val(a)?,
-            "--model" => o.model = val(a)?,
-            "--api-key" => o.api_key = Some(val(a)?),
+            "--base-url" => base_url = Some(val(a)?),
+            "--model" => model = Some(val(a)?),
+            "--api-key" => api_key = Some(val(a)?),
             "--vision" => {
                 o.vision = true;
                 explicit_vision = true;
@@ -130,6 +133,19 @@ fn ask(args: &[String]) -> Result<i32, String> {
             s if s.starts_with("--") => return Err(format!("unknown option {s}\n{USAGE}")),
             _ => text.push(a.clone()),
         }
+    }
+    // "anthropic/claude-haiku-5-5" is a cloud model; a bare id is a local one.
+    match model.as_deref().map(|m| (m, tasuke_models::CloudModelRef::parse(m))) {
+        Some((_, Some(r))) => o.use_cloud(r.provider, &r.id),
+        Some((m, None)) if o.provider.is_some() => o.use_local(m),
+        Some((m, None)) => o.model = m.to_owned(),
+        None => {}
+    }
+    if let Some(u) = base_url {
+        o.base_url = u;
+    }
+    if let Some(k) = api_key {
+        o.api_key = Some(k);
     }
     let mut request = text.join(" ");
     if request == "-" || (request.is_empty() && !std::io::stdin().is_terminal()) {

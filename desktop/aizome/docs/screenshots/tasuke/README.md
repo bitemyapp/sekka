@@ -19,6 +19,13 @@ ImageMagick's `compare`).
   64 GB; a Ryzen AI Max+ 395 whose Radeon 8060S shares 128 GB), the
   conversations and every command's output in them, and the notes in
   Memory. No computer's or person's data is shown.
+- **Made up, for the cloud accounts**: the connected Anthropic account and
+  its key's ends (`sk-ant-…7a3f`), the key typed into the Connect sheet
+  (shown as dots), the list of models the account can use, and every timing
+  ("74 tokens/s timed", "109 tokens/s timed"). A fixture's local timing is
+  the catalog's estimate for that machine less 6%; its cloud timings are
+  numbers chosen for the picture. No key was checked, no keyring was
+  touched, and nothing was sent to Anthropic or OpenAI.
 - **Scripted**: fixtures don't run Tasuke's agent or a model. Their
   conversations are scripted event streams (`src/script.rs`) played into
   the same transcript the agent's events fill, following the agent's
@@ -68,6 +75,18 @@ then.
   The four Compare Models pictures were taken with the release profile
   (`cargo build --release -p aizome-tasuke`) at `132f30eb`. The six
   Models pictures, whose header gained Compare All, were not taken again.
+  On 6 November 2026, when Tasuke gained Claude and OpenAI accounts and
+  Measure Speed, the eight cloud-account pictures were taken with the
+  release profile, built from the working tree of the commit that adds
+  them, and fourteen others were taken again from the same build. Against
+  their earlier takes, `compare` finds changes only here: on the Models
+  pictures, the header's first sentence; on first run, from the buttons
+  down (Use a Cloud Account… and the sentence about it); on the first page,
+  the column of text and suggestions, which moved a few pixels when the
+  privacy line became wrapping text beside its icon; on Compare Models,
+  from the header down, where the cloud rows now say where they run, the
+  column is "Where it runs", and the 8 GB laptop's selected model has its
+  timing line.
 - **Display**: a private headless sway 1.12 with the pixman renderer
   (`desktop/aizome/sukumo/scripts/headless-wayland`, `SIZE=1440x900`),
   with `WAYLAND_DISPLAY`, `DISPLAY` and `AIZOME_SHELL_SOCKET` unset. The
@@ -96,9 +115,13 @@ then.
 | `night-models-8gb.png`, `day-models-8gb.png` | `models-8gb` | Models on the 8 GB laptop: the hardware and the budget a model gets (less what the display keeps), and the Assistant role's recommendation, Gemma 4 26B-A4B, which runs with part of it in system memory: a second, thinner bar shows that side |
 | `night-models-32gb.png`, `day-models-32gb.png` | `models-32gb` | Models on the 32 GB desktop: the recommendation in use, and gpt-oss 20B, the fast model, downloaded, with Use and Remove |
 | `night-models-unified.png`, `day-models-unified.png` | `models-unified` | Models on the 128 GB unified-memory machine |
-| `night-compare.png`, `day-compare.png` | `compare` | Compare Models on the 32 GB desktop: every model Sekka measured, sorted by faults fixed, with the four cloud models (Claude Code, Codex) as reference rows, each local model's speed and placement here and its download size, Gemma 4 31B selected with its figures, notes and Remove |
-| `night-compare-8gb.png`, `day-compare-8gb.png` | `compare-8gb` | Compare Models on the 8 GB laptop with "Only models this computer runs well": what fits with part of it in system memory and reaches 10 tokens/s, the cloud rows still there for reference, Gemma 4 26B-A4B selected with its Download |
-| `night-first-run.png`, `day-first-run.png` | `first-run` | First run on the 8 GB laptop: the hardware, the recommendation (Gemma 4 26B-A4B) with both its fit bars and its incident from the evaluations, Download with how long it takes at 100 Mbit/s |
+| `night-compare.png`, `day-compare.png` | `compare` | Compare Models on the 32 GB desktop: every model Sekka measured, sorted by faults fixed, with the four cloud models (measured in Claude Code and Codex) saying whose cloud they run in, each local model's placement and speed here (Gemma 4 31B's timed, the others estimated) and its download size; Gemma 4 31B is selected, its details below the fold |
+| `night-compare-8gb.png`, `day-compare-8gb.png` | `compare-8gb` | Compare Models on the 8 GB laptop with "Only models this computer runs well": what fits with part of it in system memory and reaches 10 tokens/s, the cloud rows still there, Gemma 4 26B-A4B selected with its Download and, under its figures, that downloading it lets it be timed here |
+| `night-compare-cloud.png`, `day-compare-cloud.png` | `compare-cloud` | Compare Models with an Anthropic account connected: Claude Sonnet 5.5 selected, with its made-up timing in the table ("Cloud · 74 tokens/s timed") |
+| `night-connect.png`, `day-connect.png` | `connect` | First run on the 8 GB laptop with Use a Cloud Account… pressed: the Connect sheet, Claude chosen, what using it means, the link to Anthropic's key page, a made-up key in the password field, Cancel and Connect |
+| `night-connected.png`, `day-connected.png` | `connected` | The sheet after the key checked out: the models the account can use, and that Tasuke now uses Claude Sonnet 5.5; behind it, the first page with the chip and privacy line saying it's Anthropic's cloud, and the sidebar "with Anthropic" |
+| `night-cloud-home.png`, `day-cloud-home.png` | `cloud-home` | The first page while Claude Sonnet 5.5 is in use, with earlier conversations: where it runs, and what is sent to whom |
+| `night-first-run.png`, `day-first-run.png` | `first-run` | First run on the 8 GB laptop: the hardware, the recommendation (Gemma 4 26B-A4B) with both its fit bars and its incident from the evaluations, Download with how long it takes at 100 Mbit/s, and Use a Cloud Account… with what a cloud account means |
 | `night-downloading.png`, `day-downloading.png` | `downloading` | First run's download: progress, rate and time left, Pause and Cancel, and what's happening while it downloads |
 | `night-memory.png`, `day-memory.png` | `memory` | Memory: the notes, when each was made, Remove, and that they're background, not instructions |
 
@@ -106,6 +129,11 @@ The Night and Day goldens in `desktop/aizome/apps/tasuke/tests/snapshots/`
 are headless renders of the same fixtures by the kit's offscreen
 renderer, at the window's own 1180 × 780 without a menu bar
 (`cargo test -p aizome-tasuke --test look`), not window captures.
+Three are scrolled to what the window shows below the fold:
+`compare-details-*` and `compare-cloud-details-*` (the selected model's
+details, with Remove or Use and its timing line with Measure
+Again) and `models-accounts-*` (Models' cloud accounts, Anthropic
+connected with Claude Sonnet 5.5 in use).
 
 ## From the VM tests
 
