@@ -9,6 +9,7 @@ rust-version.workspace = true
 
 [dependencies]
 aizome-ipc = { path = "../../../../desktop/aizome/crates/aizome-ipc" }
+aizome-typestate = { path = "../../../../desktop/aizome/crates/aizome-typestate" }
 yukimi-store.workspace = true
 yukimi-config.workspace = true
 serde.workspace = true

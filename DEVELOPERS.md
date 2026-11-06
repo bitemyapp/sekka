@@ -1164,8 +1164,10 @@ require manual migration. Failed builds and cancellation before activation
 restore the touched files, and root's channels profile when the change
 updated it. A helper process lock serializes Yukimi changes; configuration
 snapshots under `/var/lib/yukimi/configurations` accompany generations,
-including `flake.nix` for rollback across migration. Activation is allowed
-to finish once started; it never initiates a reboot.
+including `flake.nix` for rollback across migration. Each snapshot records
+the system it was kept for, and is used only for that generation, because Nix
+reuses the numbers of deleted generations. Activation is allowed to finish
+once started; it never initiates a reboot.
 
 The helper's typed steps live in its library (`yukimi_helper`), each
 guarantee shown by a `compile_fail` doctest. Run them with

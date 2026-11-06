@@ -10,6 +10,7 @@
 //! - [`diff`]: what changed between two of them, package by package.
 //! - [`profile`]: packages a user installed for themselves.
 //! - [`reclaim`]: what deleting generations gives back, on disk.
+//! - [`saved`]: the configuration each system generation was built from.
 //! - [`catalog`]: well-known applications to offer, Yukimi's and the
 //!   system's.
 //! - [`channels`]: where a system without a flake gets Nixpkgs from.
@@ -29,6 +30,7 @@ pub mod log;
 pub mod nix;
 pub mod profile;
 pub mod reclaim;
+pub mod saved;
 pub mod setup;
 pub mod updates;
 
@@ -36,13 +38,8 @@ pub mod updates;
 pub const CONFIG_DIR: &str = "/etc/nixos";
 
 /// Where Yukimi's helper keeps a copy of the configuration each system
-/// generation was built from, as `generation-<n>`.
+/// generation was built from, as `generation-<n>` ([`saved`]).
 pub const SAVED_CONFIGURATIONS: &str = "/var/lib/yukimi/configurations";
-
-/// The copy of generation `generation`'s configuration.
-pub fn saved_configuration(generation: u32) -> std::path::PathBuf {
-    std::path::Path::new(SAVED_CONFIGURATIONS).join(format!("generation-{generation}"))
-}
 
 /// Bytes as a person reads them: `1.4 GB`, `312 MB`, `40 kB`.
 pub fn human_size(bytes: u64) -> String {
