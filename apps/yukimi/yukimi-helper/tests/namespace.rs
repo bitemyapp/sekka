@@ -24,3 +24,10 @@ fn script(name: &str) {
 fn a_later_boot_supersedes_a_failed_activation() {
     script("repro_yuk_02.sh");
 }
+
+/// YUK-09: a failed or stopped change puts root's channels back.
+#[test]
+#[ignore = "needs unprivileged user namespaces"]
+fn a_failed_or_stopped_change_puts_the_channels_back() {
+    script("repro_yuk_09.sh");
+}
