@@ -239,6 +239,16 @@ impl Ui {
         self.sheet.as_ref().map(|s| s.panel.clone())
     }
 
+    /// Scroll the page to its end, as someone reading down it would.
+    #[cfg(feature = "simulation")]
+    pub fn scroll_to_end(&self) {
+        if let Some(content) = self.window.contentView() {
+            content.layoutSubtreeIfNeeded();
+        }
+        let end = self.document.bounds().size.height;
+        self.document.scrollRectToVisible(NSRect::new(NSPoint::new(0.0, end - 1.0), NSSize::new(1.0, 1.0)));
+    }
+
     fn run(&mut self, effect: Effect) {
         if let Some(main) = self.runtime.run(effect) {
             match main {
@@ -338,8 +348,12 @@ impl Ui {
             }
             self.document.addSubview(&body);
             ui::pin(&body, &self.document, 52.0, 36.0, 28.0, 36.0);
+            // Words, rows and bars take the page's width, so they wrap and
+            // stretch with it; a button (the notice's Dismiss) keeps its own.
             for v in body.arrangedSubviews().iter() {
-                ui::fill_width(&v, &body, 0.0);
+                if v.downcast_ref::<NSButton>().is_none() {
+                    ui::fill_width(&v, &body, 0.0);
+                }
             }
             for v in self.bar.arrangedSubviews().iter() {
                 self.bar.removeArrangedSubview(&v);

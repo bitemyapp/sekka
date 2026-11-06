@@ -10,10 +10,10 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
-    NSAppearance, NSAppearanceNameDarkAqua, NSButton, NSColor, NSFont, NSFontWeightBold,
-    NSFontWeightMedium, NSFontWeightRegular, NSFontWeightSemibold, NSLayoutAttribute,
-    NSLineBreakMode, NSStackView, NSStackViewDistribution, NSTextField, NSUserInterfaceLayoutOrientation,
-    NSView,
+    NSAppearance, NSAppearanceNameDarkAqua, NSButton, NSClickGestureRecognizer, NSColor, NSFont,
+    NSFontWeightBold, NSFontWeightMedium, NSFontWeightRegular, NSFontWeightSemibold,
+    NSLayoutAttribute, NSLayoutConstraintOrientation, NSLineBreakMode, NSStackView,
+    NSStackViewDistribution, NSTextField, NSUserInterfaceLayoutOrientation, NSView,
 };
 use objc2_foundation::{NSArray, NSEdgeInsets, NSObjectProtocol, NSString};
 
@@ -134,13 +134,19 @@ pub fn primary(
     b
 }
 
+/// A checkbox whose words wrap, for sentences someone has to read before
+/// ticking: an untitled box beside a wrapping label, in a row that takes
+/// the page's width. (A checkbox's own title stays on one line, and a
+/// narrow window cut it off.) Clicking the words toggles the box, as
+/// clicking a title does, and VoiceOver reads the box with the whole
+/// sentence.
 pub fn checkbox(
     mtm: MainThreadMarker,
     targets: &mut Targets,
     title: &str,
     on: bool,
     mut action: impl FnMut(bool) + 'static,
-) -> Retained<NSButton> {
+) -> Retained<NSStackView> {
     let cell: std::rc::Rc<RefCell<Option<Retained<NSButton>>>> = Default::default();
     let weak = cell.clone();
     let target = targets.keep(Target::new(mtm, move || {
@@ -148,16 +154,32 @@ pub fn checkbox(
             action(b.state() == objc2_app_kit::NSControlStateValueOn);
         }
     }));
-    let b = unsafe { NSButton::checkboxWithTitle_target_action(&ns(title), Some(&target), Some(sel!(fire:)), mtm) };
+    let b = unsafe { NSButton::checkboxWithTitle_target_action(&ns(""), Some(&target), Some(sel!(fire:)), mtm) };
     b.setState(if on {
         objc2_app_kit::NSControlStateValueOn
     } else {
         objc2_app_kit::NSControlStateValueOff
     });
-    // The checkbox's own title wraps poorly; keep it on one line and let
-    // the page give it room.
+    label(&b, title);
+    b.setContentHuggingPriority_forOrientation(750.0, NSLayoutConstraintOrientation::Horizontal);
     *cell.borrow_mut() = Some(b.clone());
-    b
+
+    let words = text(mtm, title, 13.0, Weight::Regular);
+    // The box already says it all to VoiceOver.
+    words.setAccessibilityElement(false);
+    // Narrower than the sentence, the words wrap rather than push the row
+    // wider than the page.
+    words.setContentCompressionResistancePriority_forOrientation(250.0, NSLayoutConstraintOrientation::Horizontal);
+    let press = b.clone();
+    let click = targets.keep(Target::new(mtm, move || unsafe { press.performClick(None) }));
+    let gesture = unsafe {
+        NSClickGestureRecognizer::initWithTarget_action(NSClickGestureRecognizer::alloc(mtm), Some(&click), Some(sel!(fire:)))
+    };
+    words.addGestureRecognizer(&gesture);
+
+    let row = stack(mtm, false, 6.0, &[&b, &words]);
+    row.setAlignment(NSLayoutAttribute::Top);
+    row
 }
 
 pub fn stack(mtm: MainThreadMarker, vertical: bool, spacing: f64, views: &[&NSView]) -> Retained<NSStackView> {

@@ -13,7 +13,8 @@ use objc2::MainThreadMarker;
 use objc2_app_kit::{
     NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSBitmapImageFileType, NSView,
 };
-use objc2_foundation::NSDictionary;
+use objc2_foundation::{NSDictionary, NSSize};
+use sekka_mac_appkit::ui;
 use sekka_mac_contract::{ArtifactRole, Progress, Stage};
 
 use super::window::Ui;
@@ -32,6 +33,10 @@ fn capture(view: &NSView, path: &Path) -> Result<(), String> {
         .ok_or("AppKit couldn't encode the PNG")?;
     fs::write(path, png.to_vec()).map_err(|e| format!("{}: {e}", path.display()))
 }
+
+/// States also captured at the window's smallest size: the review, whose
+/// sentences must be read in full before they are ticked.
+const SMALLEST: [(Scenario, &str); 1] = [(Scenario::Normal, "review-ready")];
 
 /// The states worth looking at, per scenario: (name, how to get there).
 fn states(scenario: Scenario) -> Vec<(&'static str, Vec<Msg>)> {
@@ -139,12 +144,25 @@ pub fn run(mtm: MainThreadMarker, dir: &Path) -> Result<usize, String> {
                 }
                 let ui = Ui::new(mtm, env.clone() as Arc<dyn Environment>, true, model, Vec::new());
                 let u = ui.borrow();
+                // Every capture at the window's first size, whatever size
+                // the app was last left at, and without saving one.
+                u.window.setFrameAutosaveName(&ui::ns(""));
+                u.window.setContentSize(NSSize::new(860.0, 600.0));
                 let named = NSAppearance::appearanceNamed(appearance);
                 u.window.setAppearance(named.as_deref());
                 let content = u.window.contentView().ok_or("no content view")?;
                 let file = dir.join(format!("{}-{name}-{label}.png", scenario.name()));
                 capture(&content, &file)?;
                 written += 1;
+                if SMALLEST.contains(&(scenario, name)) {
+                    // The smallest window still shows everything, wrapped
+                    // rather than cut off: its top, and its end.
+                    u.window.setContentSize(u.window.contentMinSize());
+                    capture(&content, &dir.join(format!("{}-{name}-smallest-{label}.png", scenario.name())))?;
+                    u.scroll_to_end();
+                    capture(&content, &dir.join(format!("{}-{name}-smallest-end-{label}.png", scenario.name())))?;
+                    written += 2;
+                }
                 if let Some(sheet) = u.sheet_window() {
                     sheet.setAppearance(named.as_deref());
                     if let Some(c) = sheet.contentView() {
