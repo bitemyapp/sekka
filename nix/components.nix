@@ -3,6 +3,7 @@
 # from other repositories from Sekka's own inputs of those names.
 {
   nixpkgs,
+  crane,
   applications,
   superluminal,
   tracy,
@@ -13,7 +14,7 @@ let
   pkgs = nixpkgs.legacyPackages.${system};
 in
 rec {
-  aizome = import ../desktop/aizome/nix { inherit nixpkgs; };
+  aizome = import ../desktop/aizome/nix { inherit nixpkgs crane; };
   tatami = {
     outPath = ../desktop/tatami;
     nixosModules.default = ../desktop/tatami/module.nix;
