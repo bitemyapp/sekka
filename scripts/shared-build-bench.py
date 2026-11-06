@@ -48,7 +48,9 @@ run remotely, and do not by themselves prove local runtime or manager coverage.
 Libtest counts are retained even for failed test commands, never only successes.
 
 Storage command must emit compsize's compression-aware TOTAL row and receives
-ALL selected roots in ONE invocation. Roots may use glob:PATH; unmatched roots
+ALL selected roots in ONE invocation. Roots may use glob:PATH, or untracked:GLOB for
+the paths git ignores or does not track in each matching checkout (its build state,
+leaving tracked source out of the sharing figure); unmatched roots
 fail. Separate active/immutable unions are never summed. The sharing denominator
 is the one-tree post-edit/revert workload, not the smaller original cold cache.
 Storage roots are checked by Btrfs filesystem UUID, not st_dev: separate Btrfs
@@ -1111,6 +1113,20 @@ class Bench:
                 if not matches:
                     raise RuntimeError(f'storage glob has no roots: {value}')
                 roots.extend(Path(path).resolve() for path in matches)
+            elif value.startswith('untracked:'):
+                # Build state in each matching checkout: whatever git ignores or does not
+                # track. Tracked source is the checkout's own size, kept apart by the gates.
+                import glob
+                matches = sorted(glob.glob(value[10:]))
+                if not matches:
+                    raise RuntimeError(f'storage glob has no roots: {value}')
+                for tree in matches:
+                    listing = subprocess.check_output(
+                        ['git', '-C', tree, 'status', '--porcelain', '-z', '--ignored', '--untracked-files=normal'])
+                    entries = [Path(tree).resolve() / entry[3:].decode().rstrip('/')
+                               for entry in listing.split(b'\0') if entry[:3] in (b'?? ', b'!! ')]
+                    # A symlink's target is either another root or outside the workload.
+                    roots.extend(path for path in entries if not path.is_symlink())
             else:
                 roots.append(Path(value).resolve())
         if any(not path.exists() for path in roots):
