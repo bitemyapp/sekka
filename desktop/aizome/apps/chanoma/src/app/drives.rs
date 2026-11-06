@@ -6,16 +6,17 @@
 //! folders back (the library is read again, and the picker's places). One
 //! that couldn't be opened is said once, in a note
 //! at the top: not again each time Chanoma starts, nor while it stays
-//! broken, but again if it opens one day and later fails. The settings'
-//! Folders keep saying which drives couldn't be opened, and why, with a
-//! way to try again.
+//! broken, but again if it opens one day and later fails. A drive open in
+//! another account's folder, where this one can't read it, is said the same
+//! way. The settings' Folders keep saying which drives couldn't be opened,
+//! and why, with a way to try again.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::path::Path;
 
 use aizome_kit::MsgSender;
 use aizome_kit::prelude::*;
-use aizome_sys::disks::{Automount, Disks, Outcome};
+use aizome_sys::disks::{Automount, Disks, DisksState, Outcome};
 use serde::{Deserialize, Serialize};
 
 use super::{Chanoma, Msg};
@@ -46,7 +47,33 @@ pub struct Drives {
     pub automount: Automount,
     pub unopened: Vec<Unopened>,
     pub warned: Warned,
+    /// Drives found open where this account can't read them, by block.
+    pub elsewhere: HashSet<String>,
     path: std::path::PathBuf,
+}
+
+/// Drives open in another account's folder (`/run/media/USER` is that
+/// account's alone), as when a grown-up's desktop opened one before the TV
+/// account logged in: said as drives that couldn't be opened, each once
+/// while it stays open there.
+pub fn elsewhere(state: &DisksState, told: &mut HashSet<String>) -> Vec<Outcome> {
+    let volumes = state.volumes();
+    told.retain(|b| volumes.iter().any(|v| &v.block == b && v.mount_point.is_some()));
+    volumes
+        .into_iter()
+        .filter_map(|v| {
+            let at = v.mount_point.clone()?;
+            // Asks only of the folders above the drive, never the drive.
+            let denied = matches!(std::fs::metadata(&at), Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied);
+            if !denied || !told.insert(v.block.clone()) {
+                return None;
+            }
+            let (label, uuid) =
+                state.block(&v.block).map(|b| (b.id_label.clone(), b.id_uuid.clone())).unwrap_or_default();
+            let why = format!("It's open in another account ({at}): eject it there, or unplug it and plug it back in");
+            Some(Outcome { volume: v, label, uuid, result: Err(why) })
+        })
+        .collect()
 }
 
 /// How a folder's drive is, for the settings.
@@ -94,7 +121,8 @@ impl Chanoma {
     /// UDisks said something: open what's new, and take in what opened.
     pub fn drives_changed(&mut self, cx: &mut Cx<Msg>) {
         let Some(disks) = &self.drives.disks else { return };
-        let outcomes = self.drives.automount.update(disks);
+        let mut outcomes = self.drives.automount.update(disks);
+        outcomes.extend(elsewhere(&disks.snapshot(), &mut self.drives.elsewhere));
         self.opened(outcomes, cx);
     }
 
@@ -150,6 +178,60 @@ impl Chanoma {
         }
         let u = self.drives.unopened.remove(i);
         self.drives.automount.try_again(&u.block);
+        self.drives.elsewhere.remove(&u.block);
         self.drives_changed(cx);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aizome_sys::disks::{BlockDevice, Drive, Filesystem};
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn a_drive_open_in_another_accounts_folder_is_said_once_while_it_stays_there() {
+        // Another account's /run/media/USER: this one may not look in.
+        let theirs = std::env::temp_dir().join(format!("chanoma-elsewhere-{}", std::process::id()));
+        let at = theirs.join("Extreme Pro");
+        std::fs::create_dir_all(&at).unwrap();
+        std::fs::set_permissions(&theirs, std::fs::Permissions::from_mode(0o000)).unwrap();
+        let state = |mounted: Option<&Path>| DisksState {
+            available: true,
+            drives: vec![Drive { path: "usb".into(), removable: true, ..Default::default() }],
+            blocks: vec![BlockDevice {
+                path: "sda1".into(),
+                drive: Some("usb".into()),
+                id_label: "Extreme Pro".into(),
+                id_uuid: "648D-C135".into(),
+                hint_auto: true,
+                filesystem: Some(Filesystem {
+                    mount_points: mounted.map(|m| m.display().to_string()).into_iter().collect(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        if std::fs::metadata(&at).is_ok() {
+            // Root looks in every folder: nothing to try here.
+            std::fs::set_permissions(&theirs, std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::remove_dir_all(&theirs).unwrap();
+            return;
+        }
+        let mut told = HashSet::new();
+        let found = elsewhere(&state(Some(&at)), &mut told);
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].label.as_str(), found[0].uuid.as_str()), ("Extreme Pro", "648D-C135"));
+        assert!(found[0].result.as_ref().unwrap_err().contains("open in another account"));
+        assert!(elsewhere(&state(Some(&at)), &mut told).is_empty(), "said once");
+        // Unmounted there (ejected, or unplugged): forgotten, so said again
+        // if it comes back the same way.
+        assert!(elsewhere(&state(None), &mut told).is_empty());
+        assert_eq!(elsewhere(&state(Some(&at)), &mut told).len(), 1);
+        // Readable (this account's own): nothing to say.
+        std::fs::set_permissions(&theirs, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(elsewhere(&state(Some(&at)), &mut HashSet::new()).is_empty());
+        std::fs::remove_dir_all(&theirs).unwrap();
     }
 }
