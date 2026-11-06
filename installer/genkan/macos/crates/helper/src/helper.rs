@@ -590,6 +590,15 @@ impl<P: Platform> Helper<P> {
         let Some(owner) = self.owner(installation, &journal) else {
             return refuse(HelperRefusalCode::State, "The installation doesn't record its owner.");
         };
+        // What the boot partition held when it was written and read back;
+        // the engine checks it still holds exactly that before it vouches
+        // for the installation again.
+        let Some(esp_inventory) = esp_inventory(journal.records()) else {
+            return refuse(
+                HelperRefusalCode::State,
+                "The installation's record doesn't say what its boot partition holds, so the startup disk can't be set again safely.",
+            );
+        };
         if let Err(e) = self.platform.authenticate_owner(&owner, &password) {
             return refuse(HelperRefusalCode::Authorization, e.to_string());
         }
@@ -616,7 +625,9 @@ impl<P: Platform> Helper<P> {
         let before = journal.records().len();
         let mut process = match self.platform.start_engine(
             &engine,
-            crate::EngineRun::StartupDisk,
+            crate::EngineRun::StartupDisk {
+                esp_inventory: &esp_inventory,
+            },
             installation,
             &plan_path,
             &owner,
@@ -812,6 +823,18 @@ impl<P: Platform> Helper<P> {
 
 /// `s` as one line of [`Text`]: control characters become spaces, and it is
 /// cut on a character boundary to what a `Text` holds.
+/// The `esp-inventory` the Esp stage recorded when it completed.
+fn esp_inventory(records: &[sekka_mac_contract::Record]) -> Option<Digest> {
+    records.iter().rev().find_map(|r| match &r.event {
+        Event::Completed {
+            stage: Stage::Esp,
+            facts,
+            ..
+        } => fact(facts, "esp-inventory")?.parse().ok(),
+        _ => None,
+    })
+}
+
 fn text(s: &str) -> Text {
     let mut clean = String::with_capacity(s.len().min(TEXT_BYTES));
     for c in s.chars().map(|c| if c.is_control() { ' ' } else { c }) {

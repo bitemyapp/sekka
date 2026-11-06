@@ -178,6 +178,10 @@ impl Platform for MacPlatform {
         drop(password);
         let id = installation.to_string();
         let plan = plan.to_str().unwrap_or_default();
+        let inventory = match run {
+            EngineRun::StartupDisk { esp_inventory } => esp_inventory.to_string(),
+            EngineRun::Execute { .. } => String::new(),
+        };
         let args: Vec<&str> = match run {
             EngineRun::Execute { assets } => vec![
                 "execute",
@@ -190,7 +194,17 @@ impl Platform for MacPlatform {
                 "--owner",
                 owner,
             ],
-            EngineRun::StartupDisk => vec!["startup-disk", "--plan", plan, "--installation", &id, "--owner", owner],
+            EngineRun::StartupDisk { .. } => vec![
+                "startup-disk",
+                "--plan",
+                plan,
+                "--installation",
+                &id,
+                "--owner",
+                owner,
+                "--esp-inventory",
+                &inventory,
+            ],
         };
         let mut command = sekka_mac_engine::command(engine, &args)
         .map_err(|e| PlatformError::Engine(e.to_string()))?;

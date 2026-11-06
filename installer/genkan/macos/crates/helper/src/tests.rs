@@ -97,8 +97,14 @@ fn checkpoint_facts(stage: Stage, plan: &Plan) -> Vec<Fact> {
             f("root-offset", &root.offset),
             f("root-size", &root.size),
         ],
+        Stage::Esp => vec![f("esp-inventory", &esp_inventory())],
         _ => vec![Fact::new("checked", stage.title()).unwrap()],
     }
+}
+
+/// The inventory the fake engine's Esp stage records.
+fn esp_inventory() -> Digest {
+    Digest::of(b"the new ESP's files")
 }
 
 struct Fake {
@@ -191,7 +197,8 @@ impl Platform for Fake {
                 *self.engine_runs.lock().unwrap() += 1;
                 (EngineMode::Execute, *self.script.lock().unwrap())
             }
-            crate::EngineRun::StartupDisk => {
+            crate::EngineRun::StartupDisk { esp_inventory: inventory } => {
+                assert_eq!(*inventory, esp_inventory(), "the retry checks the ESP against its own record");
                 *self.startup_runs.lock().unwrap() += 1;
                 let script = match *self.script.lock().unwrap() {
                     Script::Refuse(why) => Script::Refuse(why),
@@ -1049,6 +1056,61 @@ fn an_installation_stopped_during_a_download_can_be_cancelled_after_a_restart() 
         );
         assert_eq!(w.finish(w.begun()).0, InstallState::WaitingForRecovery, "{open:?}");
     }
+}
+
+#[test]
+fn a_retry_needs_the_esp_inventory_its_record_kept() {
+    // A record whose Esp stage kept no inventory (an earlier helper's): the
+    // engine couldn't check the ESP, so the retry is refused before the
+    // password is checked, and nothing runs.
+    let w = world(Script::Happy);
+    let id = Uuid::random().unwrap();
+    let mut j = Journal::create(
+        FsStorage,
+        &w.journals(),
+        id,
+        at(),
+        Event::Opened {
+            plan: Box::new(w.plan.clone()),
+            plan_digest: w.plan.digest().unwrap(),
+            app: "0.1.0".parse().unwrap(),
+            helper: "0.1.0".parse().unwrap(),
+        },
+    )
+    .unwrap();
+    let shrinks = w.plan.actions.iter().any(|a| matches!(a, Action::ShrinkContainer { .. }));
+    let stages = std::iter::once(Stage::Import).chain(macos_stages(shrinks));
+    for stage in stages.take_while(|s| *s != Stage::StartupDisk) {
+        let (facts, verification) = match stage {
+            Stage::Import => (vec![Fact::new("owner", "owner").unwrap()], Verification::SourceHashed),
+            Stage::Esp => (vec![Fact::new("checked", stage.title()).unwrap()], Verification::ReadBack),
+            _ => (checkpoint_facts(stage, &w.plan), Verification::Inspected),
+        };
+        j.append(at(), Event::Intent { stage }).unwrap();
+        j.append(at(), Event::Completed { stage, facts, verification }).unwrap();
+    }
+    j.append(at(), Event::Intent { stage: Stage::StartupDisk }).unwrap();
+    j.append(
+        at(),
+        Event::Failed {
+            stage: Stage::StartupDisk,
+            failure: Failure {
+                code: "bless-failed".parse().unwrap(),
+                message: "bless couldn't set the startup disk".parse().unwrap(),
+                apple_diagnostic: None,
+                disk_changed: DiskChanged::No,
+            },
+        },
+    )
+    .unwrap();
+    assert_eq!(j.state(), &InstallState::StartupDiskFailed);
+    let passwords: [&[u8]; 2] = [PASSWORD, b"nope"];
+    for password in passwords {
+        let (code, message) = refused(w.ask(Request::RetryStartupDisk { installation: id }, Some(password)));
+        assert_eq!(code, HelperRefusalCode::State, "{message}");
+        assert!(message.contains("boot partition"), "{message}");
+    }
+    assert_eq!(*w.fake().startup_runs.lock().unwrap(), 0);
 }
 
 #[test]

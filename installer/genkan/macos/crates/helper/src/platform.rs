@@ -20,8 +20,9 @@ pub use sekka_mac_engine::EngineInstall;
 pub enum EngineRun<'a> {
     /// The whole installation, from the helper's imported assets.
     Execute { assets: &'a Path },
-    /// Only the startup-disk stage again.
-    StartupDisk,
+    /// Only the startup-disk stage again. The engine refuses unless the ESP
+    /// still holds exactly what its Esp stage recorded (`esp-inventory`).
+    StartupDisk { esp_inventory: &'a Digest },
 }
 
 /// The longest password handed to the engine, as it reads it.
