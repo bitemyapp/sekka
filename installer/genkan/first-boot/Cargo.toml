@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Sekka's first-boot setup on Linux: the root helper behind Aizome's login
+# screen that creates the owner's account and records their choices
+# (docs/apple-silicon/first-boot-setup.md). A Cargo workspace of its own.
+# It reuses Genkan's validation (rust/, without its network and zone map
+# features) and the Mac installer's handoff (macos/crates/contract) by
+# path, with Genkan's exact versions, and shares no workspace with either.
+[workspace]
+resolver = "3"
+
+[package]
+name = "sekka-setup-helper"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "GPL-3.0-or-later"
+description = "Sekka's first-boot setup helper: one validated account and configuration, for the login screen"
+publish = false
+
+[dependencies]
+calamares-nixos = { path = "../rust", default-features = false }
+sekka-mac-contract = { path = "../macos/crates/contract" }
+anyhow = "=1.0.100"
+libc = "=0.2.177"
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.145"
+sha-crypt = "=0.5.0"
+zeroize = { version = "=1.8.2", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "=3.23.0"
+
+[[bin]]
+name = "sekka-setup-helper"
+path = "src/main.rs"
+
+[profile.release]
+panic = "abort"
+strip = "symbols"
