@@ -55,6 +55,8 @@ pub enum PanelMsg {
     /// Open Myaku at the process of an app that holds the screen on:
     /// quitting it is Myaku's to do, with its confirmation.
     HolderInMyaku(crate::holders::Pid),
+    /// Panel Self Refresh turned on or off.
+    PanelRefresh(bool),
     /// Open Koyomi at a day (`YYYY-MM-DD`).
     OpenDay(String),
     /// Open Tokei's world clocks.
@@ -146,6 +148,8 @@ pub struct BatteryPanel {
     pub modes: Vec<String>,
     pub mode: Option<usize>,
     pub keep_awake: aizome_awake::Status,
+    /// Panel Self Refresh, where the built-in panel can: on or not.
+    pub panel_refresh: Option<bool>,
 }
 
 /// The cup's panel: Keep Awake, and the apps holding the screen on.
@@ -639,10 +643,36 @@ fn battery(p: &BatteryPanel) -> Vec<Element<PanelMsg>> {
         Some(toggle(p.keep_awake != aizome_awake::Status::Off).on_toggle(PanelMsg::KeepAwake).into()),
         ROW,
     ));
+    if let Some(on) = p.panel_refresh {
+        v.push(labelled(
+            "Panel Self Refresh",
+            typeface::WEIGHT_REGULAR,
+            Some(toggle(on).on_toggle(PanelMsg::PanelRefresh).into()),
+            ROW,
+        ));
+        let lines = PANEL_REFRESH_TEXT;
+        v.push(
+            drawn(WIDTH, PANEL_REFRESH_LINES, lines, move |cx| {
+                let t = cx.theme();
+                let s = ui(t, typeface::SMALL, typeface::WEIGHT_REGULAR, t.text3());
+                for (i, line) in lines.iter().enumerate() {
+                    let y = i as f64 * 17.0;
+                    cx.draw_text_in(line, &s, Rect::new(PAD, y, WIDTH - PAD, y + 17.0), Align::Start);
+                }
+            })
+            .text(lines.join(" "), SemanticRole::Label)
+            .into(),
+        );
+    }
     v.push(sep());
     v.push(settings_row("Battery Settings…", "power"));
     v
 }
+
+/// What Panel Self Refresh is, under its switch.
+const PANEL_REFRESH_TEXT: [&str; 2] =
+    ["The screen keeps its picture by itself while", "nothing moves: saves battery, can feel laggy."];
+const PANEL_REFRESH_LINES: f64 = 38.0;
 
 /// Keep Awake's two lines under its switch.
 const AWAKE_TEXT: f64 = 40.0;
@@ -981,7 +1011,14 @@ pub fn height(p: &Panel) -> f64 {
             };
             HEAD + AWAKE_TEXT + holders + sep + ROW
         }
-        Panel::Battery(b) => HEAD + 34.0 + if b.modes.is_empty() { 0.0 } else { 24.0 + 30.0 } + ROW + sep + ROW,
+        Panel::Battery(b) => {
+            HEAD + 34.0
+                + if b.modes.is_empty() { 0.0 } else { 24.0 + 30.0 }
+                + ROW
+                + if b.panel_refresh.is_some() { ROW + PANEL_REFRESH_LINES } else { 0.0 }
+                + sep
+                + ROW
+        }
         Panel::Clock(c) => {
             let weeks = crate::clock::month_grid(c.now.year, c.now.month).len();
             let events = c.events.as_ref().map_or(0.0, |e| sep + e.len().clamp(1, EVENTS) as f64 * ROW);

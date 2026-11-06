@@ -50,6 +50,9 @@ pub enum Msg {
     /// A timer of the cup's came due: apps have held the screen on a
     /// while, or one let go a moment ago (`holders.rs`).
     Holders(crate::holders::Due),
+    /// Panel Self Refresh's helper finished turning it on (or off), or
+    /// said why not.
+    PanelRefreshSet(bool, Result<(), String>),
     /// The clock's label turned.
     Tick,
     TimeChanged,
@@ -440,6 +443,9 @@ pub struct Shell {
     /// The systemd units processes run in, by process ID, for tests (the
     /// running shell reads `/proc`).
     pub units_fixture: Option<HashMap<u32, String>>,
+    /// Panel Self Refresh as last turned in the battery menu, until its
+    /// helper's status says otherwise (`None`: as the status says).
+    pub panel_refresh: Option<bool>,
     /// GeoClue is being asked where the computer is; when it last answered.
     pub(crate) locating: bool,
     pub(crate) located_at: Option<std::time::Instant>,
@@ -571,6 +577,7 @@ impl Shell {
             shell_before: None,
             programs_fixture: None,
             units_fixture: None,
+            panel_refresh: None,
             locating: false,
             located_at: None,
             recording: None,
@@ -1798,6 +1805,7 @@ impl Program for Shell {
             Msg::Awake(s) => self.keep_awake_status(s, cx),
             Msg::AwakeSet(r) => self.keep_awake_set(r, cx),
             Msg::Holders(due) => self.holders_due(due, cx),
+            Msg::PanelRefreshSet(on, r) => self.panel_refresh_set(on, r),
             Msg::Tick => {
                 self.refresh_clock(cx);
                 self.arm_clock(cx);
