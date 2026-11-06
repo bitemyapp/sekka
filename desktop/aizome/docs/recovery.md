@@ -158,14 +158,17 @@ overlay. So, from outside it (`watchdog.rs`):
   lose their windows then, which can't be helped.
 - **A stall watcher thread.** The loop beats on every iteration. After
   2 s without one the thread logs that the loop is stalled; at 18 s (60%
-  of the watchdog's time) it captures the main thread's backtrace (a
-  signal handler on that thread takes it; symbols resolve on the watcher
-  thread), the kernel's `wchan` and `syscall` for it, logs them, and
+  of the watchdog's time) it reads the main thread's kernel stack,
+  `wchan`, `syscall` and scheduling state from `/proc`, logs them, and
   appends them to `~/.local/state/aizome/stall.log` with a marker beside
   it. If the loop comes back the marker goes ("recovered after …"); if
   the compositor was stopped instead, the next one opens the recovery
   overlay with "Aizome stopped responding at HH:MM and was restarted;
   apps that were open had to close" and where the details are.
+  Unavailable kernel diagnostics include the read error. The watcher
+  never interrupts the main thread to allocate or unwind in a signal
+  handler: that could deadlock on the allocator or loader. A user-space
+  backtrace requires an external debugger or systemd's core dump.
 - `aizomectl debug-stall SECONDS` blocks the main loop (at most 60 s), to
   try all this; the NixOS VM test does.
 

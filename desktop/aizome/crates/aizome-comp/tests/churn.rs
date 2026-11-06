@@ -109,6 +109,10 @@ fn the_window_manager_survives_churn() {
         }
     }
     assert!(matches!(c.request(Request::Version), Response::Version { .. }));
+    let Response::Stats { stats } = c.request(Request::Stats { reset: false }) else { panic!("no stats") };
+    assert!(stats.logic.healthy, "churn left the window manager on its recovery path: {:?}", stats.logic);
+    assert_eq!(stats.logic.rollbacks, 0, "churn must not hide recovered panics: {:?}", stats.logic);
+    assert!(stats.logic.last_error.is_none(), "unexpected logic error: {:?}", stats.logic);
     drop(clients);
     c.wait_windows("all closed", |ws| ws.is_empty());
 }

@@ -54,6 +54,7 @@ fn state_type() -> TypeId {
 // ---- life ----------------------------------------------------------------------
 
 fn init(st: &mut State, saved: Option<&[u8]>) -> Result<(), String> {
+    crate::TEST_PANICKED.store(false, std::sync::atomic::Ordering::Relaxed);
     let mut logic = Logic::new(&st.az.settings);
     let mut slides = Vec::new();
     if let Some(bytes) = saved {
@@ -78,6 +79,7 @@ fn init(st: &mut State, saved: Option<&[u8]>) -> Result<(), String> {
 }
 
 fn save(st: &mut State) -> Result<Vec<u8>, String> {
+    assert!(!crate::TEST_PANICKED.load(std::sync::atomic::Ordering::Relaxed), "poisoned state was revisited by save");
     let l = st.lg.r();
     let saved = Saved {
         model: Some(l.wm.clone()),
@@ -89,6 +91,10 @@ fn save(st: &mut State) -> Result<Vec<u8>, String> {
 }
 
 fn quiesce(st: &mut State) {
+    assert!(
+        !crate::TEST_PANICKED.load(std::sync::atomic::Ordering::Relaxed),
+        "poisoned state was revisited by quiesce"
+    );
     crate::overlays::close_all(st);
     let l = st.lg.m();
     l.interactive = Default::default();

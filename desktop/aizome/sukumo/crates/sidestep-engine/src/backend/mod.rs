@@ -929,11 +929,8 @@ fn replaced(rects: &[Rect], ops: &[Op], width: u32, height: u32, scale: f64) -> 
 }
 
 /// A shared-memory buffer's bytes as pixels. Pool slots are page-aligned.
-pub fn as_pixels(bytes: &mut [u8]) -> &mut [u32] {
-    // SAFETY: the pool maps whole pages, so the bytes are 4-byte aligned, and
-    // any bit pattern is a valid u32.
-    unsafe { std::slice::from_raw_parts_mut(bytes.as_mut_ptr().cast::<u32>(), bytes.len() / 4) }
-}
+pub use pixels::as_pixels;
+mod pixels;
 
 /// `r` (points) in pixels at `scale`, grown to whole pixels.
 fn to_px(r: &Rect, scale: f64) -> Rect {

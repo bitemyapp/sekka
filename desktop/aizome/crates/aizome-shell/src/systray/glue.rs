@@ -261,17 +261,18 @@ impl Shell {
             }
             PanelMsg::Wifi(on) => {
                 if let Some(n) = &sys.network {
-                    let _ = n.set_wifi_enabled(on);
+                    sys.observe("Set Wi-Fi", n.set_wifi_enabled(on));
                 }
             }
             PanelMsg::Airplane(on) => {
                 if let Some(n) = &sys.network {
-                    let _ = n.set_airplane_mode(on);
+                    sys.observe("Set airplane mode", n.set_airplane_mode(on));
                 }
             }
             PanelMsg::Vpn(uuid, on) => {
                 if let Some(n) = &sys.network {
-                    let _ = if on { n.activate(&uuid) } else { n.deactivate(&uuid) };
+                    let name = n.snapshot().connection(&uuid).map(|c| c.id.clone()).unwrap_or_else(|| "VPN".into());
+                    sys.observe(format!("Set {name}"), if on { n.activate(&uuid) } else { n.deactivate(&uuid) });
                 }
             }
             PanelMsg::Network(ssid) => {
@@ -290,7 +291,7 @@ impl Shell {
                 } else if let Some(n) = &sys.network {
                     let s = n.snapshot();
                     if let Some(net) = s.network(&ssid) {
-                        let _ = n.connect(net, None);
+                        sys.observe(format!("Connect to {ssid}"), n.connect(net, None));
                     }
                 }
             }
@@ -304,7 +305,7 @@ impl Shell {
                 if let Some(n) = &sys.network {
                     let s = n.snapshot();
                     if let Some(net) = s.network(&ssid) {
-                        let _ = n.connect(net, Some(&pw));
+                        sys.observe(format!("Connect to {ssid}"), n.connect(net, Some(&pw)));
                     }
                 }
             }
@@ -312,7 +313,7 @@ impl Shell {
                 if let Some(a) = &sys.audio
                     && let Some(d) = a.snapshot().default_output()
                 {
-                    let _ = a.set_sink_volume(d.index, v);
+                    sys.observe("Set volume", a.set_sink_volume(d.index, v));
                 }
             }
             PanelMsg::VolumeSet => {
@@ -321,24 +322,24 @@ impl Shell {
             }
             PanelMsg::Mute => {
                 if let Some(a) = &sys.audio {
-                    let _ = a.toggle_mute();
+                    sys.observe("Set mute", a.toggle_mute());
                 }
             }
             PanelMsg::Output(name) => {
                 if let Some(a) = &sys.audio {
-                    let _ = a.set_default_sink(&name);
+                    sys.observe("Set sound output", a.set_default_sink(&name));
                 }
             }
             PanelMsg::InputVolume(v) => {
                 if let Some(a) = &sys.audio
                     && let Some(d) = a.snapshot().default_input()
                 {
-                    let _ = a.set_source_volume(d.index, v);
+                    sys.observe("Set microphone volume", a.set_source_volume(d.index, v));
                 }
             }
             PanelMsg::InputMute => {
                 if let Some(a) = &sys.audio {
-                    let _ = a.toggle_microphone_mute();
+                    sys.observe("Set microphone mute", a.toggle_microphone_mute());
                 }
             }
             PanelMsg::Media(verb) => sys.media_control(verb),
@@ -346,18 +347,23 @@ impl Shell {
                 if let Some(b) = &sys.bluetooth {
                     let s = b.snapshot();
                     if let Some(a) = s.default_adapter() {
-                        let _ = b.set_powered(&a.path, on);
+                        sys.observe("Set Bluetooth power", b.set_powered(&a.path, on));
                     }
                 }
             }
             PanelMsg::Device(path, connect) => {
                 if let Some(b) = &sys.bluetooth {
-                    let _ = if connect { b.connect(&path) } else { b.disconnect(&path) };
+                    let name =
+                        b.snapshot().device(&path).map(|d| d.name.clone()).unwrap_or_else(|| "Bluetooth device".into());
+                    sys.observe(
+                        format!("Change connection to {name}"),
+                        if connect { b.connect(&path) } else { b.disconnect(&path) },
+                    );
                 }
             }
             PanelMsg::Brightness(name, v) => {
                 if let Some(b) = &sys.backlight {
-                    let _ = b.set_fraction(&name, v);
+                    sys.observe("Set display brightness", b.set_fraction(&name, v));
                 }
             }
             PanelMsg::Theme(i) => {
@@ -400,7 +406,7 @@ impl Shell {
             }
             PanelMsg::PowerMode(mode) => {
                 if let Some(p) = &sys.profiles {
-                    let _ = p.set_active(&mode);
+                    sys.observe("Set power mode", p.set_active(&mode));
                 }
             }
         }

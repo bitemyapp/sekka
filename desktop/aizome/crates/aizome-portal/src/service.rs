@@ -24,13 +24,30 @@ pub const MAX_OPEN: usize = 16;
 pub type Launcher = Arc<dyn Fn() -> Command + Send + Sync>;
 
 /// This program again, as a chooser.
-pub fn own_chooser() -> Launcher {
-    Arc::new(|| {
-        let exe = std::env::current_exe().unwrap_or_else(|_| "aizome-portal".into());
-        let mut c = Command::new(exe);
+pub fn own_chooser() -> std::io::Result<Launcher> {
+    // Pin the chooser to this service's build. A PATH fallback can select
+    // another installation with a different request/answer protocol.
+    let exe = std::env::current_exe()?;
+    Ok(Arc::new(move || {
+        let mut c = Command::new(&exe);
         c.arg("--file-chooser");
         c
-    })
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn own_chooser_uses_this_executable_in_chooser_mode() {
+        let launch = own_chooser().unwrap();
+        let mut first = launch();
+        assert_eq!(first.get_program(), std::env::current_exe().unwrap());
+        assert_eq!(first.get_args().collect::<Vec<_>>(), ["--file-chooser"]);
+        first.arg("only-for-this-request");
+        assert_eq!(launch().get_args().collect::<Vec<_>>(), ["--file-chooser"]);
+    }
 }
 
 pub struct FileChooser {
@@ -146,7 +163,7 @@ impl RequestHandle {
 pub fn serve() -> Result<(), Box<dyn std::error::Error>> {
     // Served before the name is taken, so that no call finds nothing.
     let connection = zbus::blocking::connection::Builder::session()?
-        .serve_at(crate::OBJECT_PATH, FileChooser::new(own_chooser()))?
+        .serve_at(crate::OBJECT_PATH, FileChooser::new(own_chooser()?))?
         .name(crate::BUS_NAME)?
         .build()?;
     log::info!("serving {}", crate::BUS_NAME);
