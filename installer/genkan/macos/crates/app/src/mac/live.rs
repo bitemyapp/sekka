@@ -382,6 +382,23 @@ impl Environment for Live {
         events_reply(self.helper(Request::Reconcile { installation }, None))
     }
 
+    fn full_name(&self, account: &str) -> Option<String> {
+        // The directory's RealName, which the password database gives as
+        // the GECOS field; anyone may read it.
+        let name = std::ffi::CString::new(account).ok()?;
+        let mut entry: libc::passwd = unsafe { std::mem::zeroed() };
+        let mut buffer = vec![0 as libc::c_char; 16 * 1024];
+        let mut found: *mut libc::passwd = std::ptr::null_mut();
+        // SAFETY: every pointer is valid for the call, and the entry's
+        // strings live in `buffer`, which outlives their use here.
+        let status = unsafe { libc::getpwnam_r(name.as_ptr(), &mut entry, buffer.as_mut_ptr(), buffer.len(), &mut found) };
+        if status != 0 || found.is_null() || entry.pw_gecos.is_null() {
+            return None;
+        }
+        let full = unsafe { std::ffi::CStr::from_ptr(entry.pw_gecos) }.to_string_lossy().trim().to_string();
+        (!full.is_empty()).then_some(full)
+    }
+
     fn diagnostics(&self, installation: Uuid) -> Vec<String> {
         match self.helper(Request::Diagnostics { installation }, None) {
             Ok(Response::Diagnostics { lines }) => lines.into_iter().map(|l| l.to_string()).collect(),

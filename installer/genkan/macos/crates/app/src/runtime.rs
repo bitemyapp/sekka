@@ -102,6 +102,10 @@ impl Runtime {
             Effect::Reconcile(id) => self.spawn("reconcile", move |env, tx| {
                 let _ = tx.send(Msg::Reconciled(env.reconcile(id)));
             }),
+            Effect::FullName(account) => self.spawn("full name", move |env, tx| {
+                let name = env.full_name(&account);
+                let _ = tx.send(Msg::FullName { account, name });
+            }),
             Effect::Diagnostics(id) => self.spawn("diagnostics", move |env, tx| {
                 let _ = tx.send(Msg::Diagnostics(env.diagnostics(id)));
             }),

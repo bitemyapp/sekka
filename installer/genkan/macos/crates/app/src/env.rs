@@ -92,6 +92,9 @@ pub trait Environment: Send + Sync + 'static {
     /// find nothing to change, or refuse (the helper on this branch can't
     /// look yet).
     fn reconcile(&self, installation: Uuid) -> Result<Events, HelperRefusal>;
+    /// An account's full name, as Users & Groups and recoveryOS show it,
+    /// when this Mac knows the account.
+    fn full_name(&self, account: &str) -> Option<String>;
     fn diagnostics(&self, installation: Uuid) -> Vec<String>;
     /// Delete the app's downloads once the helper has its own copies.
     fn remove_staging(&self);

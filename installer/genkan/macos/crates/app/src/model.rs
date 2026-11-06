@@ -113,6 +113,8 @@ pub enum Msg {
     CancelAnswered(Result<(), HelperRefusal>),
     Retried(Result<Events, HelperRefusal>),
     Reconciled(Result<Events, HelperRefusal>),
+    /// An account's full name, when this Mac knows it.
+    FullName { account: String, name: Option<String> },
     Diagnostics(Vec<String>),
 
     CheckAgain,
@@ -154,6 +156,8 @@ pub enum Effect {
     Cancel(Uuid),
     RetryStartupDisk(Uuid, Secret),
     Reconcile(Uuid),
+    /// Look up the full name recoveryOS lists an account by.
+    FullName(String),
     Diagnostics(Uuid),
     CopyToPasteboard(String),
     ShutDown,
@@ -194,6 +198,8 @@ pub struct Model {
     /// the helper recorded it. Recovery asks for the same account, and so
     /// does setting the startup disk again.
     pub owner: Option<String>,
+    /// That administrator's full name, once looked up.
+    pub owner_full_name: Option<String>,
     pub records: Vec<Record>,
     pub state: Option<InstallState>,
     pub progress: Option<Progress>,
@@ -234,6 +240,7 @@ impl Model {
             registration: None,
             installation: None,
             owner: None,
+            owner_full_name: None,
             records: Vec::new(),
             state: None,
             progress: None,
@@ -672,16 +679,18 @@ impl Model {
                 Vec::new()
             }
             Msg::Begun(Ok(installation)) => {
-                self.owner = self.authorization.take().map(|a| a.owner);
+                let owner = self.authorization.take().map(|a| a.owner);
+                let mut effects = self.set_owner(owner);
                 self.installation = Some(installation);
                 self.records.clear();
                 self.screen = Screen::Installing;
                 self.running = true;
-                vec![Effect::Poll {
+                effects.push(Effect::Poll {
                     installation,
                     after: 0,
                     delay_ms: 0,
-                }]
+                });
+                effects
             }
             Msg::Begun(Err(refusal)) => self.refused(refusal),
             Msg::Events(Ok(events)) => self.events(events),
@@ -753,6 +762,12 @@ impl Model {
                 }
                 self.decide()
             }
+            Msg::FullName { account, name } => {
+                if self.owner.as_deref() == Some(account.as_str()) {
+                    self.owner_full_name = name;
+                }
+                Vec::new()
+            }
             Msg::CopyDiagnostics => match self.installation {
                 Some(id) => vec![Effect::Diagnostics(id)],
                 None => vec![Effect::CopyToPasteboard(self.report(&[]))],
@@ -784,6 +799,7 @@ impl Model {
         self.rechecking = false;
         self.installation = None;
         self.owner = None;
+        self.owner_full_name = None;
         self.records.clear();
         self.state = None;
         self.reconciling = None;
@@ -909,22 +925,30 @@ impl Model {
                 self.records.push(r);
             }
         }
-        if let Some(owner) = self.records.iter().find_map(|r| match &r.event {
+        let recorded = self.records.iter().find_map(|r| match &r.event {
             sekka_mac_contract::Event::Completed {
                 stage: Stage::Import,
                 facts,
                 ..
             } => facts.iter().find(|f| f.name.as_str() == "owner").map(|f| f.value.to_string()),
             _ => None,
-        }) {
-            self.owner = Some(owner);
-        }
+        });
+        let mut effects = match recorded {
+            Some(owner) => self.set_owner(Some(owner)),
+            None => Vec::new(),
+        };
         self.progress = events.progress;
         self.running = events.running;
         let state = events.state;
         self.state = Some(state.clone());
+        effects.extend(self.follow(state));
+        effects
+    }
+
+    /// Where an installation's latest state leaves the person.
+    fn follow(&mut self, state: InstallState) -> Vec<Effect> {
         let Some(installation) = self.installation else { return Vec::new() };
-        if events.running {
+        if self.running {
             self.screen = Screen::Installing;
             return vec![Effect::Poll {
                 installation,
@@ -968,14 +992,28 @@ impl Model {
         }
     }
 
+    /// Keep the administrator who authorized the installation, and look up
+    /// the full name recoveryOS lists that account by.
+    fn set_owner(&mut self, owner: Option<String>) -> Vec<Effect> {
+        if owner == self.owner {
+            return Vec::new();
+        }
+        self.owner = owner;
+        self.owner_full_name = None;
+        match &self.owner {
+            Some(owner) if *owner != self.user.0 => vec![Effect::FullName(owner.clone())],
+            _ => Vec::new(),
+        }
+    }
+
     /// The installation's administrator as recoveryOS lists accounts: by
-    /// full name when it is the account running the app.
+    /// full name, once it is known, and by short name until then.
     pub fn owner_name(&self) -> Option<String> {
         let owner = self.owner.as_ref()?;
         Some(if *owner == self.user.0 && !self.user.1.is_empty() {
             self.user.1.clone()
         } else {
-            owner.clone()
+            self.owner_full_name.clone().unwrap_or_else(|| owner.clone())
         })
     }
 
@@ -1300,6 +1338,7 @@ impl Model {
         out.extend(self.log.iter().cloned());
         let mut names = vec![self.user.0.as_str()];
         names.extend(self.owner.as_deref());
+        names.extend(self.owner_full_name.as_deref());
         out.iter()
             .map(|l| sekka_redact(l, &names))
             .collect::<Vec<_>>()

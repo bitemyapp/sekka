@@ -571,6 +571,13 @@ impl Environment for Simulation {
             progress: None,
         })
     }
+    fn full_name(&self, account: &str) -> Option<String> {
+        match account {
+            "chris" => Some("Chris Allen".into()),
+            "admin" => Some("Sam Admin".into()),
+            _ => None,
+        }
+    }
     fn diagnostics(&self, _: Uuid) -> Vec<String> {
         vec!["Simulated diagnostics: nothing real happened.".into()]
     }
@@ -614,6 +621,10 @@ pub fn settle(env: &Simulation, model: &mut Model, effects: Vec<Effect>) -> Vec<
             Effect::Cancel(id) => vec![Msg::CancelAnswered(env.cancel(id))],
             Effect::RetryStartupDisk(id, p) => vec![Msg::Retried(env.retry_startup_disk(id, p))],
             Effect::Reconcile(id) => vec![Msg::Reconciled(env.reconcile(id))],
+            Effect::FullName(account) => vec![Msg::FullName {
+                name: env.full_name(&account),
+                account,
+            }],
             Effect::Diagnostics(id) => vec![Msg::Diagnostics(env.diagnostics(id))],
             Effect::CopyToPasteboard(text) => {
                 copied.push(text);

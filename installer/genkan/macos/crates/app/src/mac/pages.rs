@@ -216,7 +216,7 @@ pub fn key(m: &Model) -> String {
         m.to_download.map(|n| n > 0),
         m.size_range(),
         m.staged.is_empty(),
-        m.owner,
+        m.owner_name(),
         m.recovery_unconfirmed(),
     )
 }

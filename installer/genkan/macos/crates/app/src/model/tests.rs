@@ -346,9 +346,13 @@ fn the_administrator_who_authorized_is_the_one_recovery_and_a_retry_ask_for() {
     });
     assert_eq!(j.model.screen, Screen::Stopped);
     assert_eq!(j.model.owner.as_deref(), Some("admin"));
-    // Another administrator than the app's user: named as typed.
-    assert_eq!(j.model.owner_name().as_deref(), Some("admin"));
-    assert!(crate::text::human_step(sekka_mac_contract::HumanStep::AuthorizeInRecovery, "Sekka", j.model.owner_name().as_deref()).contains("admin"));
+
+    // recoveryOS lists accounts by full name.
+    assert_eq!(j.model.owner_name().as_deref(), Some("Sam Admin"));
+    assert!(
+        crate::text::human_step(sekka_mac_contract::HumanStep::AuthorizeInRecovery, "Sekka", j.model.owner_name().as_deref())
+            .contains("Sign in as Sam Admin,")
+    );
 
     j.send(Msg::RetryStartupDisk);
     assert_eq!(j.model.authorization.as_ref().unwrap().owner, "admin");
