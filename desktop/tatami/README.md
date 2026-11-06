@@ -66,8 +66,9 @@ started with on every reload, and the `/etc` path would pin the store copy
 the session began with. Its components are systemd user units wanted by the
 session's own target, so they never start elsewhere.
 `config/hypr/hyprland.lua` contains only declarative `hl.*` calls: v4's
-window rules and key bindings, minus Arch-specific ones. It also loads the
-display settings chosen in the Displays window and with Super+/, then the
+window rules and key bindings, minus Arch-specific ones. It also loads
+Aizome's settings for the connected displays, then the display settings
+chosen in the Displays window and with Super+/, then the
 session's monitor state, which the helper writes before every reload and as
 it turns a display off, so a reload turns no monitor on or off. Both Shift keys together toggle Caps Lock. The module
 appends the system's keyboard layout (`services.xserver.xkb`); non-Latin
@@ -220,6 +221,19 @@ are kept under its make, model and serial (Hyprland's `desc:`), so they
 follow it to another port or dock, or under its connector when two displays
 describe themselves the same. With `TATAMI_DISPLAYS_DRY_RUN=1` the window
 prints what it would apply instead.
+
+A display set up in Aizome's Settings but not here comes up as Aizome shows
+it: with its resolution, refresh rate, scale, rotation, place in the
+arrangement and mirroring from `~/.config/aizome/settings.toml`. Tatami
+recognizes it from its EDID as Aizome does, by make, model and serial or by
+connector. The helper writes rules for those displays to
+`aizome-displays.lua` in the session's runtime directory as the session
+starts, before each reload and when a display is connected or removed, and
+the configuration loads them before `displays.lua`. Once a display is
+changed here, in the Displays window or with Super+/, Tatami keeps its own
+settings for it, and a later change in Aizome no longer reaches Tatami.
+Aizome's main display is not followed, and neither is a display Aizome keeps
+off: Tatami turns it on at login, beside the others.
 
 It has Tatami's look, Tokyo Night in JetBrainsMono Nerd Font with square
 corners, from `config/tatami-displays/style-dark.css`
