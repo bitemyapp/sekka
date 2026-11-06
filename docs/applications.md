@@ -1,6 +1,6 @@
 # Optional applications
 
-The installer presents 36 choices with checkboxes, categories, search and short
+The installer presents 37 choices with checkboxes, categories, search and short
 descriptions. fish is no longer one of them: it comes with Aizome
 (`calamares.fish`; see DEVELOPERS.md), and systems that chose it keep it.
 Firefox starts selected. Empty selection is supported. The review screen lists
@@ -22,7 +22,7 @@ pins were selected on 2026-10-04:
 | Source | Pin | Use |
 | --- | --- | --- |
 | [NixOS/nixpkgs](https://github.com/NixOS/nixpkgs) | `a7868a727837f3c09cee2ce0ca671c76b1589fed` | Browsers, editors, terminals, developer tools, productivity, communication and media |
-| [Numtide llm-agents.nix](https://github.com/numtide/llm-agents.nix) | `372f0337e8170e55ff0c017cd43ab73b02a062ad` | Codex, ChatGPT, Claude Code, Claude Desktop and OpenCode |
+| [Numtide llm-agents.nix](https://github.com/numtide/llm-agents.nix) | `372f0337e8170e55ff0c017cd43ab73b02a062ad` | Codex, ChatGPT, Claude Code, Claude Desktop, OpenCode and T3 Code |
 | [oh-my-pi upstream](https://github.com/can1357/oh-my-pi) | Tracks `main`; exact revision in `flake.lock` | oh-my-pi |
 | [bitemyapp/superluminal-nix-linux](https://github.com/bitemyapp/superluminal-nix-linux) | `eacbc06314c5c590e2cc74d95d082911759b59f0` (1.0.7705.679-alpha), added 2026-10-16 | Superluminal |
 | [bitemyapp/tracy-flake](https://github.com/bitemyapp/tracy-flake), forked from [Quince-Pie/tracy-flake](https://github.com/Quince-Pie/tracy-flake) | `1f0bf6eaee8e965848274caa7f4ab6d2ff877f97` (0.14.1), added 2026-10-16 | Tracy Profiler |
