@@ -2950,12 +2950,20 @@ installer/genkan/macos/packaging/build-app.sh --engine ENGINE.tar.gz --icon AppI
 scenario in light and dark through AppKit. Production builds refuse both.
 Development builds also read their catalog from `SEKKA_INSTALLER_CATALOG`
 (a file, still verified with the development key). A release
-(`build-app.sh --release`) needs a clean checkout, `SEKKA_TEAM_ID` and
-`SEKKA_SIGNING_IDENTITY`; the app and helper name each other's team in
-their code-signing requirements and won't build for production without
-it. `packaging/notarize.sh` and `packaging/make-dmg.sh` finish a release;
-`packaging/publish-dry-run.py` checks a candidate and prints what
-publication would upload, catalog last, and uploads nothing.
+(`build-app.sh --release`) needs a clean checkout, `SEKKA_TEAM_ID`,
+`SEKKA_SIGNING_IDENTITY` and `SEKKA_ENGINE_TEAM_ID` (the team that signed
+the engine's Python runtime, which must be the one
+`engine/source-lock.json` pins); the app and helper name each other's team
+in their code-signing requirements and won't build for production without
+it. Its Mach-O audit (`macho-audit.json`) accepts the runtime's team only
+inside the engine archive, and libffi, which Asahi ships signed ad hoc,
+only by its pinned digest. `packaging/notarize.sh` and
+`packaging/make-dmg.sh` finish a release; `packaging/publish-dry-run.py
+--tool PATH-TO-sekka-mac-tool CANDIDATE` checks a candidate (its ledger
+through `sekka-mac-tool ledger check`, its catalog through `verify`) and
+prints what publication would upload, catalog last, and uploads nothing.
+`build-app.sh` replaces its output folder only if it made it; delete a
+`target/package` left by an older version once.
 
 **Catalogs.** `sekka-mac-tool catalog SPEC` makes a catalog (checked like
 any other), `sign KEYFILE KEY-ID` or `sign --development …` signs it,

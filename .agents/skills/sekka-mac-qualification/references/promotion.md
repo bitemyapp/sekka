@@ -17,8 +17,12 @@ Promotion uses the exact qualified bytes; nothing is rebuilt.
    engine.tar.gz=ENGINE_TEAM` over the app and recovery.zip (build-app.sh
    --release runs it into `macho-audit.json`) shows every Mach-O signed by
    Sekka's team, except Asahi's Python runtime inside the engine archive,
-   signed by the team `engine/source-lock.json` pins as `runtime_team`;
-   `spctl --assess` accepts the notarized app.
+   signed by the team `engine/source-lock.json` pins as `runtime_team`, and
+   the one file it lists as `runtime_adhoc` (libffi, signed ad hoc), by its
+   digest; `spctl --assess` accepts the notarized app. Read the notary log
+   for any file inside `engine.tar.gz`: whether notarization accepts libffi
+   there hasn't been seen yet, and if the log names it, the runtime is
+   re-signed at pack time and the engine gets a new digest.
 4. M9-04: the dry run's upload list is reviewed.
 5. M9-05: publication itself is a separate, explicitly authorized request
    from the user. Afterwards, download the public bytes independently and

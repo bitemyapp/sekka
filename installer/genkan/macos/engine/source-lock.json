@@ -14,6 +14,14 @@
     "runtime": "Python 3.13 as Frameworks/Python.framework/Versions/3.13, with its own code signature (Versions/3.13/_CodeSignature/CodeResources seals lib/python3.13/site-packages)",
     "runtime_team": "BMM5U3QVKW",
     "runtime_signers": "2026-11-06, read from the tarball's Mach-O code signatures in place (nothing run): 79 Mach-Os are signed by Developer ID Application: Python Software Foundation (BMM5U3QVKW) with the hardened runtime; Versions/3.13/lib/libffi.8.dylib is signed ad hoc, with no team; python.o, libtclstub8.6.a and libtkstub8.6.a are universal bitcode and static archives, not signed code. build-app.sh --release requires SEKKA_ENGINE_TEAM_ID to be runtime_team, and its audit allows that team only inside engine.tar.gz",
+    "runtime_adhoc": [
+      {
+        "path": "Frameworks/Python.framework/Versions/3.13/lib/libffi.8.dylib",
+        "size": 137520,
+        "sha256": "sha256:7e4d3aee6d6559a734adfdeddb4ce27d4246e96df870d5bb48bc7c0eb61abc99",
+        "why": "Asahi ships it signed ad hoc; ctypes needs it (Asahi's util.py and asahi_firmware/img4.py import ctypes), so it can't be left out, and re-signing it would change the engine's digest. Hashed 2026-11-06 from the pinned tarball. Notarization of an app carrying it inside engine.tar.gz is unconfirmed: if the notary log names it, re-sign the runtime at pack time instead."
+      }
+    ],
     "checked": "2026-11-06: the tarball's main.py, osinstall.py, stub.py, diskutil.py, system.py, osenum.py, urlcache.py, util.py, m1n1.py, bugs.py, reporting.py, asahi_firmware/ and step2/ are byte-identical to src/ and asahi_firmware/ at the tag",
     "used": [
       "system.SystemInfo (ioreg device tree and service planes, nvram, bputil, SystemVersion and SFR plists, console user)",

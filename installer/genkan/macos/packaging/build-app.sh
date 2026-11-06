@@ -15,7 +15,9 @@
 # archive, which is Asahi's, signed by its own team and never re-signed
 # (that would change the engine's digest): a release names that team as
 # SEKKA_ENGINE_TEAM_ID, which must be the runtime_team that
-# engine/source-lock.json pins. The engine archive and icon come from the
+# engine/source-lock.json pins. The one runtime file Asahi ships signed ad
+# hoc (libffi) is accepted by the exact digest the lock records as
+# runtime_adhoc, and nothing else is. The engine archive and icon come from the
 # root flake:
 #
 #   nix build .#packages.aarch64-linux.mac-engine .#packages.aarch64-darwin.mac-installer-icon
@@ -112,10 +114,10 @@ fi
 
 target=aarch64-apple-darwin
 export MACOSX_DEPLOYMENT_TARGET=14.0
-cargo build --locked --release --target "$target" -p sekka-installer "${features[@]}" --manifest-path "$workspace/Cargo.toml"
+cargo build --locked --release --target "$target" -p sekka-installer ${features[@]+"${features[@]}"} --manifest-path "$workspace/Cargo.toml"
 helper_features=()
 $release && helper_features=(--features production)
-cargo build --locked --release --target "$target" -p sekka-mac-helper "${helper_features[@]}" --manifest-path "$workspace/Cargo.toml"
+cargo build --locked --release --target "$target" -p sekka-mac-helper ${helper_features[@]+"${helper_features[@]}"} --manifest-path "$workspace/Cargo.toml"
 # Recovery stubs can be older than the Mac's macOS.
 MACOSX_DEPLOYMENT_TARGET=13.0 cargo build --locked --release --target "$target" -p sekka-recovery --manifest-path "$workspace/Cargo.toml"
 bin="$workspace/target/$target/$profile"
@@ -167,6 +169,11 @@ codesign --verify --deep --strict "$recovery"
 audit=(--verify)
 if $release; then
   audit+=(--team "$SEKKA_TEAM_ID" --archive-team "engine.tar.gz=$SEKKA_ENGINE_TEAM_ID")
+  while read -r digest; do
+    audit+=(--allow-adhoc "engine.tar.gz=$digest")
+  done < <(python3 -I -c 'import json, sys
+for f in json.load(open(sys.argv[1]))["asahi_installer"].get("runtime_adhoc", []):
+    print(f["sha256"])' "$workspace/engine/source-lock.json")
 fi
 python3 "$here/audit-macho.py" "${audit[@]}" "$app" "$out/recovery.zip" > "$out/macho-audit.json"
 python3 "$here/provenance.py" --workspace "$workspace" --release "$release" \

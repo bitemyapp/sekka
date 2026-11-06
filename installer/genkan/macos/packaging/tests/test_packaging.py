@@ -104,6 +104,46 @@ class AuditTest(unittest.TestCase):
             finally:
                 audit.signature = saved
 
+    def test_one_ad_hoc_library_is_accepted_by_its_digest(self):
+        """Asahi's runtime ships libffi signed ad hoc; that exact file, inside
+        the engine archive, and nothing else."""
+        ffi = MACHO + b"ffi"
+        ffi_digest = "sha256:" + hashlib.sha256(ffi).hexdigest()
+        with tempfile.TemporaryDirectory() as d:
+            engine = os.path.join(d, "engine.tar.gz")
+            with open(engine, "wb") as f:
+                f.write(tar_gz([("Frameworks/Python.framework/Versions/3.13/bin/python3.13", MACHO + b"psf"),
+                                ("Frameworks/Python.framework/Versions/3.13/lib/libffi.8.dylib", ffi)]))
+
+            def signed_by(data):
+                return True, "BMM5U3QVKW" if b"psf" in data else "not set"
+
+            saved = audit.signature
+            audit.signature = signed_by
+            try:
+                teams = {"engine.tar.gz": "BMM5U3QVKW"}
+                [problem] = audit.audit([engine], True, "SEKKATEAM1", teams)[1]
+                self.assertIn("libffi.8.dylib inside", problem)
+                machos, problems = audit.audit([engine], True, "SEKKATEAM1", teams, {"engine.tar.gz": {ffi_digest}})
+                self.assertEqual(problems, [])
+                self.assertIn(ffi_digest, [m["digest"] for m in machos])
+                # Another archive's exception doesn't apply here.
+                self.assertEqual(len(audit.audit([engine], True, "SEKKATEAM1", teams, {"recovery.zip": {ffi_digest}})[1]), 2)
+                # Changed bytes aren't the excepted file, and the exception is then stale.
+                other = "sha256:" + "0" * 64
+                problems = audit.audit([engine], True, "SEKKATEAM1", teams, {"engine.tar.gz": {other}})[1]
+                self.assertEqual(len(problems), 2)
+                self.assertTrue(any("remove its exception" in p for p in problems))
+                # It excuses only an ad hoc signature, not another team's.
+                audit.signature = lambda data: (True, "BMM5U3QVKW" if b"psf" in data else "OTHERTEAM1")
+                self.assertEqual(len(audit.audit([engine], True, "SEKKATEAM1", teams, {"engine.tar.gz": {ffi_digest}})[1]), 2)
+            finally:
+                audit.signature = saved
+        self.assertEqual(audit.allow_adhoc("engine.tar.gz=" + ffi_digest), ("engine.tar.gz", ffi_digest))
+        for bad in ("engine.tar.gz", "engine.tar.gz=abc", "engine.tar.gz=sha256:" + "A" * 64, "Engine/x=" + ffi_digest):
+            with self.assertRaises(Exception):
+                audit.allow_adhoc(bad)
+
     def test_archive_teams_name_an_archive_and_a_team(self):
         self.assertEqual(audit.archive_team("engine.tar.gz=BMM5U3QVKW"), ("engine.tar.gz", "BMM5U3QVKW"))
         for bad in ("engine.tar.gz", "=BMM5U3QVKW", "engine.tar.gz=", "Engine/engine.tar.gz=BMM5U3QVKW"):
