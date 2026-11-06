@@ -219,6 +219,31 @@ fn rollback_and_conflicts_are_refused_and_the_store_survives_reopening() {
 }
 
 #[test]
+fn a_bad_release_is_withdrawn_by_a_newer_catalog_without_it() {
+    // Withdrawing is publishing the next serial without the release, with
+    // a notice saying why. Once a Mac has seen it, the catalog that offered
+    // the bad release is a rollback and is refused, whoever serves it.
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = AcceptedStore::open(&dir.path().join("accepted.json")).unwrap();
+    let offered = verify(&sign(catalog(4)), &dev_config(), now()).unwrap();
+    store.accept(&offered, now()).unwrap();
+    let mut withdrawal = catalog(5);
+    withdrawal.releases.clear();
+    withdrawal.notice = Some(
+        "The last development build was withdrawn: it can't start on some Macs."
+            .parse()
+            .unwrap(),
+    );
+    let withdrawn = verify(&sign(withdrawal), &dev_config(), now()).unwrap();
+    store.accept(&withdrawn, now()).unwrap();
+    assert!(withdrawn.catalog().releases.is_empty());
+    assert_eq!(
+        store.accept(&offered, now()).unwrap_err(),
+        TrustError::Rollback { offered: 4, accepted: 5 }
+    );
+}
+
+#[test]
 fn a_damaged_store_is_reported_not_reset() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("accepted.json");
