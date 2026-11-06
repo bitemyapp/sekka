@@ -591,10 +591,23 @@ pub enum StackNewWindows {
     AnyApp,
 }
 
+/// How windows are laid out on their Desks.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WindowLayout {
+    /// Where they open, or where they're moved to (the default).
+    #[default]
+    Floating,
+    /// Each fills its Desk beside the Deskbar; dialogs, windows that can't
+    /// grow to it and ones floated by hand float.
+    Tiled,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Windows {
     pub stack_new_windows: StackNewWindows,
+    pub layout: WindowLayout,
     /// The switch `stack_new_windows` replaced, for the same app's windows
     /// alone: off reads as `None` in a file without the choice (see
     /// [`Settings::from_toml`]). It's written from the choice, not from
@@ -612,6 +625,7 @@ impl Default for Windows {
     fn default() -> Self {
         Windows {
             stack_new_windows: StackNewWindows::SameApp,
+            layout: WindowLayout::Floating,
             legacy_stack_same_app: None,
             focus_follows: FocusFollows::Click,
             remember_geometry: true,
@@ -912,6 +926,7 @@ mod tests {
         assert_eq!(s.desks_or_default()[0].name, "1");
         assert!(s.keys.command_key_for_all_apps);
         assert_eq!(s.windows.stack_new_windows, StackNewWindows::SameApp);
+        assert_eq!(s.windows.layout, WindowLayout::Floating);
         assert_eq!(s.appearance.cursor_theme, "Adwaita");
         assert_eq!(s.appearance.motion_ms(), 80);
     }
@@ -1067,6 +1082,15 @@ backlight = "dim"
         let back = Settings::load_from(&path).unwrap();
         assert_eq!(back, s);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn tiling_is_read_and_written() {
+        let s = Settings::from_toml("[windows]\nlayout = \"tiled\"\n").unwrap();
+        assert_eq!(s.windows.layout, WindowLayout::Tiled);
+        let text = s.to_toml().unwrap();
+        assert!(text.contains("layout = \"tiled\"\n"), "{text}");
+        assert_eq!(Settings::from_toml(&text).unwrap(), s);
     }
 
     #[test]

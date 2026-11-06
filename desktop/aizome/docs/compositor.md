@@ -373,6 +373,26 @@ Notes for client authors:
   still written beside it (off only for `none`), for a compositor from
   before the choice that's still running after an update or booted from
   an older generation; a file without `stack_new_windows` goes by it.
+- **Tiling** (`[windows] layout = "tiled"`; `floating`, the default, is
+  as above): every window fills its Desk beside the Deskbar, as Fill
+  does, so it follows the area as displays, bars and the Deskbar change
+  (not an auto-hidden Deskbar, which covers windows rather than moving
+  them). A new window is told the area's size before it first draws, and
+  opens filled. Dialogs float over their windows; so do windows that
+  can't grow to the area (a fixed size, or a largest size short of it),
+  kept above the tiles, and windows floated by hand (the marking menu's
+  float), which are free to move and size. Full screen still takes the
+  display and comes back to the tile; ⌥❖←/⌥❖→ splits stay split, and
+  Fill (⌥❖↑) takes them back. A tiled window doesn't move or resize: its edges and
+  ⌃❖-right-drag don't resize it, IPC `move`/`resize` are refused, and Fill
+  won't turn off; a drag by its tab can stack it or tear it out of its
+  group, and it fills again where it's dropped. With `any-app` stacking,
+  windows open as tabs of one filled frame (i3's tabbed layout). Tiling
+  marks what it did on each window (`tiling` in the model) and undoes
+  only that when it goes off: windows it filled return to their free
+  places (where the app last left them, or two thirds of the area across
+  and three quarters down for one that opened tiled), windows it floated
+  come down, and windows filled by hand stay filled.
 - **Desks**: four by default (settings `[[desks]]`). Each display shows a
   Desk of its own, as XMonad's screens show workspaces: the main display
   starts on the first, the others on the next ones. The current Desk is

@@ -30,6 +30,14 @@ fn window_arg(st: &State, id: Option<WinId>) -> Result<WinId, String> {
     }
 }
 
+/// A tiled window stays where tiling put it.
+fn tiled_in_place(st: &State, id: WinId) -> Result<(), String> {
+    match crate::tiling::holds(st, id) {
+        true => Err(format!("window {id} is tiled; float it to move or resize it")),
+        false => Ok(()),
+    }
+}
+
 fn desk_arg(st: &State, d: &DeskSel) -> Result<DeskId, String> {
     let wm = &st.lg.r().wm;
     match d {
@@ -210,16 +218,19 @@ fn wm_request(st: &mut State, req: Request) -> Result<Option<Response>, String> 
             if !st.unstack(id, None) {
                 return Err(format!("window {id} isn't stacked"));
             }
+            crate::tiling::retile(st);
             Response::Ok
         }
         Request::Move { id, x, y } => {
             let id = window_arg(st, id)?;
+            tiled_in_place(st, id)?;
             st.move_window(id, x, y);
             crate::actions::adopt_screen(st, id);
             Response::Ok
         }
         Request::Resize { id, rect } => {
             let id = window_arg(st, id)?;
+            tiled_in_place(st, id)?;
             st.resize_window(id, Rect::new(rect.x, rect.y, rect.w, rect.h));
             Response::Ok
         }

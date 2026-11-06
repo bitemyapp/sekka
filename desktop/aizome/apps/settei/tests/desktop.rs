@@ -1,9 +1,9 @@
-//! Desktop & Deskbar preferences (the Deskbar, which new windows stack)
-//! through the Settings controls and persisted file.
+//! Desktop & Deskbar preferences (the Deskbar, which new windows stack,
+//! tiling) through the Settings controls and persisted file.
 
 mod common;
 
-use aizome_config::{Settings, StackNewWindows};
+use aizome_config::{Settings, StackNewWindows, WindowLayout};
 use aizome_kit::layout::{Point, Size};
 use aizome_kit::sidestep_ui::{Key, Modifiers, NamedKey};
 use aizome_kit::testing::Harness;
@@ -92,5 +92,32 @@ fn stacking_new_windows_is_found_by_what_it_stacks() {
     for query in ["stack new windows", "tabs", "same app", "any app", "all windows", "tabbed"] {
         let hits = settei::search::find(query, &infos);
         assert!(hits.iter().any(|h| h.entries.iter().any(|e| e.id == "stack-new")), "{query}");
+    }
+}
+
+#[test]
+fn tiling_is_a_switch_that_saves() {
+    let (mut h, path) = common::open("tile-windows", "desktop.tile");
+    let w = h.window();
+    h.resize(w, Size::new(940.0, 1100.0));
+    let row = h.find_id(w, "entry:desktop.tile").expect("searchable tiling option");
+    h.click(w, Point::new(row.x1 - 28.0, row.center().y));
+    h.program().shared.flush();
+    assert_eq!(Settings::load_from(&path).unwrap().windows.layout, WindowLayout::Tiled);
+    h.save_png(w, common::shots_dir().join("desktop-tile.png"), 1.0);
+    h.click(w, Point::new(row.x1 - 28.0, row.center().y));
+    h.program().shared.flush();
+    assert_eq!(Settings::load_from(&path).unwrap().windows.layout, WindowLayout::Floating);
+}
+
+#[test]
+fn tiling_is_found_by_its_names() {
+    let panes = settei::panes::all();
+    let desktop = panes.iter().find(|p| p.id() == "desktop").unwrap();
+    let entries = desktop.entries();
+    let infos = [settei::search::PaneInfo { title: "Desktop & Deskbar", keywords: &[], entries: &entries }];
+    for query in ["tile windows", "tiling", "maximise", "maximize", "monocle"] {
+        let hits = settei::search::find(query, &infos);
+        assert!(hits.iter().any(|h| h.entries.iter().any(|e| e.id == "tile")), "{query}");
     }
 }

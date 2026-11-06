@@ -37,6 +37,16 @@ pub enum Side {
     Right,
 }
 
+/// What tiling did to a window, for tiling going off to undo (see
+/// `crate::tiling`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Tiling {
+    /// Filled it, from a free place.
+    Filled,
+    /// Floated it: it can't grow to fill.
+    Floated,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Win {
@@ -59,6 +69,7 @@ pub struct Win {
     pub urgent: bool,
     /// Kept above other windows.
     pub float: bool,
+    pub tiling: Option<Tiling>,
     pub group: Option<GroupId>,
     /// How far the tab has been slid along the top edge (⇧-drag), in points.
     pub tab_offset: i32,
@@ -282,6 +293,7 @@ impl Model {
                 hidden: false,
                 urgent: false,
                 float: false,
+                tiling: None,
                 group: None,
                 tab_offset: 0,
                 parent,
@@ -834,9 +846,9 @@ impl Model {
                 g
             }
         };
-        let (rect, desk, sticky, placement, restore, offset, frame, home) = {
+        let (rect, desk, sticky, placement, restore, tiling, offset, frame, home) = {
             let w = &self.wins[&a];
-            (w.rect, w.desk, w.sticky, w.placement, w.restore, w.tab_offset, w.frame, w.home)
+            (w.rect, w.desk, w.sticky, w.placement, w.restore, w.tiling, w.tab_offset, w.frame, w.home)
         };
         for m in &incoming {
             let w = self.wins.get_mut(m).unwrap();
@@ -846,6 +858,7 @@ impl Model {
             w.sticky = sticky;
             w.placement = placement;
             w.restore = restore;
+            w.tiling = tiling;
             w.tab_offset = offset;
             w.minimised = false;
             w.frame = frame;

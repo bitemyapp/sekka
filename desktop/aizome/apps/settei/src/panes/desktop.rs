@@ -1,12 +1,12 @@
 //! Desktop & Deskbar: the Desks (names, folders, added and removed), the
 //! Deskbar (folded, its pinned apps, the Shelf), the desktop's icons, and
-//! how windows behave (stacking, a tab's double-click, focus, the command
-//! key everywhere). `[desks]`, `[deskbar]`, `[desktop]`, `[windows]` and
-//! `[keys]`, applied by the compositor and the shell.
+//! how windows behave (stacking, tiling, a tab's double-click, focus, the
+//! command key everywhere). `[desks]`, `[deskbar]`, `[desktop]`,
+//! `[windows]` and `[keys]`, applied by the compositor and the shell.
 
 use std::path::PathBuf;
 
-use aizome_config::{DESKBAR_SIZES, DeskConfig, DeskbarSide, FocusFollows, StackNewWindows};
+use aizome_config::{DESKBAR_SIZES, DeskConfig, DeskbarSide, FocusFollows, StackNewWindows, WindowLayout};
 use aizome_kit::prelude::*;
 use aizome_kit::row;
 use aizome_sys::apps::AppIndex;
@@ -49,6 +49,7 @@ pub enum Msg {
     Unpin(String),
     Icon(&'static str, bool),
     Stack(usize),
+    Tiling(bool),
     DoubleClick(usize),
     FocusFollows(bool),
     Remember(bool),
@@ -140,6 +141,14 @@ impl Pane for Desktop {
                 "any app",
                 "all windows",
                 "tabbed",
+            ]),
+            SettingEntry::new("tile", "Tile windows").keywords(&[
+                "tiling",
+                "tiled",
+                "maximise",
+                "maximize",
+                "fill the desk",
+                "monocle",
             ]),
             SettingEntry::new("double-click", "Double-click a tab").keywords(&[
                 "zoom",
@@ -301,6 +310,9 @@ impl Pane for Desktop {
             }),
             Msg::Icon(key, on) => cx.change(|s| extra::set(extra::section(s, "desktop"), key, on)),
             Msg::Stack(i) => cx.change(|s| s.windows.stack_new_windows = STACK_NEW[i.min(2)].0),
+            Msg::Tiling(on) => {
+                cx.change(|s| s.windows.layout = if on { WindowLayout::Tiled } else { WindowLayout::Floating })
+            }
             Msg::DoubleClick(i) => {
                 cx.change(|s| extra::set(&mut s.windows.extra, "tab_double_click", DOUBLE_CLICK[i.min(2)].0))
             }
@@ -448,6 +460,12 @@ impl Pane for Desktop {
             form::row("Stack new windows", form::choice(&STACK_NEW.map(|s| s.1), stack_i, Msg::Stack))
                 .entry("stack-new")
                 .help(STACK_NEW[stack_i].2),
+            form::row("Tile windows", toggle(w.layout == WindowLayout::Tiled).on_toggle(Msg::Tiling))
+                .entry("tile")
+                .help(
+                    "Each window fills the Desk beside the Deskbar and resizes with it. Dialogs, fixed-size windows \
+                 and ones you float stay floating. With All windows of any app, windows open as tabs of one frame.",
+                ),
             form::row("Double-click a tab to", form::choice(&DOUBLE_CLICK.map(|d| d.1), dc_i, Msg::DoubleClick))
                 .entry("double-click"),
             form::row(
