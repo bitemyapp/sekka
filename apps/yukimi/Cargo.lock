@@ -17,6 +17,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "aizome-typestate"
+version = "0.1.0"
+
+[[package]]
 name = "base64"
 version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -700,6 +704,7 @@ name = "yukimi-system"
 version = "0.1.0"
 dependencies = [
  "aizome-ipc",
+ "aizome-typestate",
  "libc",
  "serde",
  "serde_json",

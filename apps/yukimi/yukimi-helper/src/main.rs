@@ -39,13 +39,16 @@
 //!   deleting generations would give back (see `yukimi_system::reclaim`).
 //!
 //! Each generation's configuration is kept: a copy of the configuration's
-//! directory in [`SAVED`]`/generation-<n>`. So going back to a generation
+//! directory in [`SAVED`]`/generation-<n>`, which records the system it was
+//! kept for ([`yukimi_helper::snapshots`]). So going back to a generation
 //! brings back the choices that made it, and the next change builds on
 //! those.
 //!
 //! Progress goes to standard error in Nix's machine-readable log format,
 //! which Yukimi shows; the outcome goes to standard output as JSON. When
 //! standard input is a pipe and Yukimi closes it, the helper stops what it
+//! is doing and puts the configuration back, unless the new system is
+//! already being started, which is never interrupted.
 use std::io::Write;
 
 mod transaction;
@@ -58,19 +61,19 @@ use yukimi_config::sekka;
 use yukimi_config::{branch, edit, lock};
 use yukimi_helper::change::RestorePoint;
 use yukimi_helper::process::{
-    self, Failure, PATH, Result, command, nix, output, report, run, stage, stage_done, stop, wait, watch_for_stop,
+    Failure, PATH, Result, command, nix, output, report, run, stage, stage_done, stop, wait, watch_for_stop,
 };
+use yukimi_helper::{process, snapshots};
 use yukimi_system::catalog;
 use yukimi_system::completion::{self, Receipt};
 use yukimi_system::people;
 use yukimi_system::preflight;
+use yukimi_system::saved::{GenerationId, Snapshot};
 use yukimi_system::setup::{Choice, Kind, Setup};
 
-const PROFILE: &str = "/nix/var/nix/profiles/system";
+const PROFILE: &str = yukimi_system::generations::SYSTEM_PROFILE;
 /// Where each generation's configuration is kept, as `generation-<n>`.
 const SAVED: &str = yukimi_system::SAVED_CONFIGURATIONS;
-/// Files bigger than this aren't configuration, and aren't kept with it.
-const LARGEST_KEPT: u64 = 1 << 20;
 /// Where Nix keeps the store and builds; the one with least room counts.
 const BUILD_PLACES: [&str; 2] = ["/nix", "/tmp"];
 /// A new system isn't built with less room than this.
@@ -78,104 +81,9 @@ const SPACE_NEEDED: u64 = 10_000_000_000;
 /// Building stops when room falls below this, rather than fill the disk.
 const SPACE_FLOOR: u64 = 4_000_000_000;
 
-/// The number of the system generation the profile points at.
-fn current_generation() -> Option<u32> {
-    let link = std::fs::read_link(PROFILE).ok()?;
-    generation_number(link.file_name()?.to_str()?)
-}
-
-/// `system-12-link` is generation 12.
-fn generation_number(link: &str) -> Option<u32> {
-    link.strip_prefix("system-")?.strip_suffix("-link")?.parse().ok()
-}
-
-fn saved(generation: u32) -> PathBuf {
-    yukimi_system::saved_configuration(generation)
-}
-
-/// Copy a configuration directory: its files and folders, not hidden ones
-/// (such as a Git directory), build results or large files. Each file keeps
-/// its permissions, so a file only its owner may read (in a configuration
-/// kept in a home directory, say) stays that way.
-fn copy_configuration(from: &Path, to: &Path) -> Result<()> {
-    std::fs::create_dir_all(to)?;
-    for entry in std::fs::read_dir(from)? {
-        let entry = entry?;
-        let name = entry.file_name();
-        let text = name.to_string_lossy();
-        if text.starts_with('.') || text.starts_with("result") {
-            continue;
-        }
-        let (from, to) = (entry.path(), to.join(&name));
-        let kind = entry.file_type()?;
-        if kind.is_dir() {
-            copy_configuration(&from, &to)?;
-        } else if kind.is_file() && entry.metadata()?.len() <= LARGEST_KEPT {
-            std::fs::copy(&from, &to)?;
-        }
-    }
-    Ok(())
-}
-
-/// Keep the configuration as generation `generation`'s, unless one is kept
-/// already (or `replace`).
-fn save_configuration(setup: &Setup, generation: u32, replace: bool) -> Result<()> {
-    let dir = saved(generation);
-    if dir.is_dir() && !replace {
-        return Ok(());
-    }
-    let partial = dir.with_extension("new");
-    let _ = std::fs::remove_dir_all(&partial);
-    copy_configuration(&setup.dir, &partial)?;
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::rename(&partial, &dir)?;
-    Ok(())
-}
-
-/// Put back the files Yukimi changes (the lock file, its own file, the main
-/// configuration file) as a kept configuration has them. A file someone
-/// changed since the running generation was built is left as it is, so
-/// that nothing written by hand is lost. Returns the files left alone.
-fn restore_choices(setup: &Setup, kept: &Path, running: Option<&Path>) -> Vec<PathBuf> {
-    let mut files = vec![setup.dir.join("flake.nix"), setup.dir.join("flake.lock")];
-    files.extend(setup.main.clone());
-    files.extend(setup.packages_file());
-    let mut left = Vec::new();
-    for file in files {
-        let Ok(relative) = file.strip_prefix(&setup.dir) else { continue };
-        let now = std::fs::read(&file).ok();
-        let then = std::fs::read(kept.join(relative)).ok();
-        if now == then {
-            continue;
-        }
-        // Unchanged since the running generation was made from it?
-        let untouched = running.is_some_and(|r| std::fs::read(r.join(relative)).ok() == now);
-        if !untouched {
-            left.push(file);
-            continue;
-        }
-        let _ = match then {
-            Some(bytes) => std::fs::write(&file, bytes),
-            None => std::fs::remove_file(&file),
-        };
-    }
-    left
-}
-
-/// Forget the configurations of generations that no longer exist.
-fn prune_saved() {
-    let Ok(entries) = std::fs::read_dir(SAVED) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let generation = name.strip_prefix("generation-").and_then(|n| n.parse::<u32>().ok());
-        let exists =
-            generation.map(|g| Path::new(&format!("{PROFILE}-{g}-link")).symlink_metadata().is_ok()).unwrap_or(false);
-        if !exists {
-            let _ = std::fs::remove_dir_all(entry.path());
-        }
-    }
+/// The system generation the profile points at now.
+fn current_generation() -> Option<GenerationId> {
+    GenerationId::current(Path::new(PROFILE))
 }
 
 fn split_list(value: &str) -> Vec<String> {
@@ -362,7 +270,7 @@ fn activate(setup: &Setup, system: &str, mode: &str) -> Result<()> {
     run(set, "Setting the system profile")?;
     // The configuration that built it, for going back to it later.
     if let Some(generation) = current_generation() {
-        let _ = save_configuration(setup, generation, true);
+        let _ = snapshots::save(setup, Path::new(SAVED), &generation);
     }
     switch(&format!("{system}/bin/switch-to-configuration"), mode)
 }
@@ -687,7 +595,7 @@ fn change(args: &[String]) -> Result<String> {
     // The configuration as it is belongs to the running generation: keep it,
     // so going back to that generation brings it back.
     if let Some(generation) = current_generation() {
-        let saved = save_configuration(&setup, generation, false);
+        let saved = snapshots::keep(&setup, Path::new(SAVED), &generation);
         if change.sekka {
             saved?;
         }
@@ -844,9 +752,9 @@ fn rollback(args: &[String]) -> Result<String> {
         .first()
         .and_then(|g| g.parse().ok())
         .ok_or_else(|| Failure("rollback needs a generation number".into()))?;
-    if Path::new(&format!("{PROFILE}-{generation}-link")).symlink_metadata().is_err() {
+    let Some(chosen) = GenerationId::read(Path::new(PROFILE), generation) else {
         return Err(Failure(format!("There is no generation {generation}")));
-    }
+    };
     let setup = Setup::detect();
     let target = std::fs::canonicalize(format!("{PROFILE}-{generation}-link"))?;
     let active = std::fs::canonicalize("/run/current-system")?;
@@ -854,8 +762,8 @@ fn rollback(args: &[String]) -> Result<String> {
     let reasons = completion::plan(&booted, &active, &target);
     let mode = activation_mode("auto", &reasons)?;
     let running = current_generation();
-    if let Some(current) = running {
-        let _ = save_configuration(&setup, current, false);
+    if let Some(current) = &running {
+        let _ = snapshots::keep(&setup, Path::new(SAVED), current);
     }
     stage(1, &format!("Returning to generation {generation}"));
     // Nothing is changed before the commit, so there is nothing to put back.
@@ -866,12 +774,13 @@ fn rollback(args: &[String]) -> Result<String> {
     let activating = Receipt::activating(std::fs::canonicalize(PROFILE)?, reasons);
     save_update(activating.receipt())?;
     // The configuration follows the system, so the next change builds on
-    // what this generation was made from.
-    let kept = saved(generation).is_dir();
+    // what this generation was made from: the copy kept for this very
+    // generation, not for an earlier one that had its number.
+    let kept = Snapshot::of(Path::new(SAVED), &chosen);
     let mut left = Vec::new();
-    if kept {
-        let running = running.map(saved).filter(|dir| dir.is_dir());
-        left = restore_choices(&setup, &saved(generation), running.as_deref());
+    if let Some(kept) = &kept {
+        let running = running.and_then(|r| Snapshot::of(Path::new(SAVED), &r));
+        left = snapshots::restore_choices(&setup, kept, running.as_ref());
         for file in &left {
             report(1, &format!("{} was changed by hand since, so it was left as it is", file.display()));
         }
@@ -887,7 +796,7 @@ fn rollback(args: &[String]) -> Result<String> {
     }
     stage_done(1);
     let left: Vec<String> = left.iter().map(|f| f.display().to_string()).collect();
-    Ok(serde_json::json!({"ok": true, "generation": generation, "configuration": kept, "left": left,
+    Ok(serde_json::json!({"ok": true, "generation": generation, "configuration": kept.is_some(), "left": left,
         "system": system, "mode": mode, "completion": completion::read_system()})
     .to_string())
 }
@@ -913,7 +822,7 @@ fn clean(args: &[String]) -> Result<String> {
         let mut delete = command("nix-env");
         delete.args(["-p", PROFILE, "--delete-generations", &format!("{days}d")]);
         run(delete, "Deleting old generations")?;
-        prune_saved();
+        snapshots::prune(Path::new(SAVED), Path::new(PROFILE));
         stage_done(1);
     }
     stage(2, "Collecting garbage");
@@ -1048,7 +957,7 @@ fn refusal(
 
 fn delete(args: &[String]) -> Result<String> {
     let deletion = Deletion::parse(args)?;
-    let selected = current_generation();
+    let selected = current_generation().map(|g| g.number());
     let running = std::fs::canonicalize("/run/current-system").ok();
     let booted = std::fs::canonicalize("/run/booted-system").ok();
     for &number in &deletion.generations {
@@ -1077,10 +986,8 @@ fn delete(args: &[String]) -> Result<String> {
     let mut delete = command("nix-env");
     delete.args(["-p", PROFILE, "--delete-generations"]).args(deletion.generations.iter().map(u32::to_string));
     run(delete, "Deleting the generation")?;
-    for &number in &deletion.generations {
-        let _ = std::fs::remove_dir_all(saved(number));
-    }
-    prune_saved();
+    // Their kept configurations go with them.
+    snapshots::prune(Path::new(SAVED), Path::new(PROFILE));
     stage_done(1);
     // The boot menu lists only generations that still exist.
     stage(2, "Updating the boot menu");
@@ -1327,8 +1234,6 @@ mod tests {
         assert!(split_list("").is_empty());
         assert!(valid_host("acer-predator") && !valid_host("a b") && !valid_host("x\"y"));
         assert!(valid_user("alice") && !valid_user("a:b") && !valid_user(""));
-        assert_eq!(generation_number("system-12-link"), Some(12));
-        assert_eq!(generation_number("system"), None);
     }
 
     #[test]
@@ -1516,62 +1421,5 @@ mod tests {
         assert_eq!(on, "{ ... }:\n{\n  calamares.desktops = [ \"aizome\" ];\n  calamares.autoLogin = \"kara\";\n}\n");
         let nobody = write_choice(&on, &auto, &v(&[])).unwrap();
         assert_eq!(nobody, on.replace("\"kara\"", "\"\""));
-    }
-
-    #[test]
-    fn configurations_copy_without_hidden_or_large_files() {
-        let dir = std::env::temp_dir().join(format!("yukimi-copy-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        let (from, to) = (dir.join("nixos"), dir.join("saved"));
-        std::fs::create_dir_all(from.join("modules")).unwrap();
-        std::fs::create_dir_all(from.join(".git")).unwrap();
-        std::fs::write(from.join("configuration.nix"), "{ }").unwrap();
-        std::fs::write(from.join("modules/desk.nix"), "{ }").unwrap();
-        std::fs::write(from.join(".git/HEAD"), "ref").unwrap();
-        std::fs::write(from.join("wallpaper.png"), vec![0u8; (LARGEST_KEPT + 1) as usize]).unwrap();
-        copy_configuration(&from, &to).unwrap();
-        assert_eq!(std::fs::read_to_string(to.join("configuration.nix")).unwrap(), "{ }");
-        assert!(to.join("modules/desk.nix").is_file());
-        assert!(!to.join(".git").exists() && !to.join("wallpaper.png").exists());
-        // A private file stays private.
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::write(from.join("secrets.nix"), "{ }").unwrap();
-        std::fs::set_permissions(from.join("secrets.nix"), std::fs::Permissions::from_mode(0o600)).unwrap();
-        copy_configuration(&from, &to).unwrap();
-        assert_eq!(std::fs::metadata(to.join("secrets.nix")).unwrap().permissions().mode() & 0o777, 0o600);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn going_back_keeps_what_was_written_by_hand() {
-        let dir = std::env::temp_dir().join(format!("yukimi-restore-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        let (config, older, running) = (dir.join("nixos"), dir.join("generation-1"), dir.join("generation-2"));
-        for d in [&config, &older, &running] {
-            std::fs::create_dir_all(d).unwrap();
-        }
-        // Migration changes flake.nix too; it must go back with its lock.
-        std::fs::write(older.join("flake.nix"), "old repositories").unwrap();
-        std::fs::write(running.join("flake.nix"), "sekka").unwrap();
-        std::fs::write(config.join("flake.nix"), "sekka").unwrap();
-        // flake.lock: unchanged since generation 2, so it goes back to 1's.
-        std::fs::write(older.join("flake.lock"), "lock 1").unwrap();
-        std::fs::write(running.join("flake.lock"), "lock 2").unwrap();
-        std::fs::write(config.join("flake.lock"), "lock 2").unwrap();
-        // configuration.nix: edited by hand since generation 2, so it stays.
-        std::fs::write(older.join("configuration.nix"), "{ a = 1; }").unwrap();
-        std::fs::write(running.join("configuration.nix"), "{ a = 2; }").unwrap();
-        std::fs::write(config.join("configuration.nix"), "{ a = 3; }").unwrap();
-        // yukimi.nix: generation 1 had none.
-        std::fs::write(running.join("yukimi.nix"), "{ }").unwrap();
-        std::fs::write(config.join("yukimi.nix"), "{ }").unwrap();
-        let setup = Setup::detect_in(&config, Default::default(), "acer");
-        let left = restore_choices(&setup, &older, Some(&running));
-        assert_eq!(std::fs::read_to_string(config.join("flake.nix")).unwrap(), "old repositories");
-        assert_eq!(std::fs::read_to_string(config.join("flake.lock")).unwrap(), "lock 1");
-        assert_eq!(std::fs::read_to_string(config.join("configuration.nix")).unwrap(), "{ a = 3; }");
-        assert!(!config.join("yukimi.nix").exists());
-        assert_eq!(left, vec![config.join("configuration.nix")]);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

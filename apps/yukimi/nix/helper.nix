@@ -18,6 +18,9 @@ let
       # Completion detection uses the UI-independent Aizome IPC protocol.
       ../../../desktop/aizome/Cargo.toml
       ../../../desktop/aizome/crates/aizome-ipc
+      # Saved configurations name their generation through its typestate
+      # support (`SameTarget`).
+      ../../../desktop/aizome/crates/aizome-typestate
       ../../../desktop/aizome/session/aizome-session
     ];
   };

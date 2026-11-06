@@ -5,6 +5,7 @@ use std::path::Path;
 
 use yukimi_config::lock::{FlakeLock, Input, Locked, Movement};
 use yukimi_system::generations::Generation;
+use yukimi_system::saved::{GenerationId, Snapshot};
 
 #[derive(Clone, Debug, Default)]
 pub struct History {
@@ -16,9 +17,11 @@ pub struct History {
 impl History {
     pub fn load(root: &Path, generations: &[Generation]) -> Self {
         Self {
+            // Each generation's own copy: not one kept for an earlier
+            // generation that had its number.
             snapshots: generations
                 .iter()
-                .filter_map(|g| Some((g.number, read_inputs(&root.join(format!("generation-{}", g.number)))?)))
+                .filter_map(|g| Some((g.number, read_inputs(Snapshot::of(root, &GenerationId::listed(g))?.dir())?)))
                 .collect(),
             active: generations.iter().filter(|g| g.active).max_by_key(|g| (g.current, g.number)).map(|g| g.number),
             current: generations.iter().find(|g| g.current).map(|g| g.number),
@@ -239,6 +242,13 @@ mod tests {
             assert_eq!(link.url, "https://github.com/bitemyapp/sekka/compare/aaa..bbb");
             assert!(link.tooltip.contains("24 → 26"));
         }
+        // YUK-10: a copy kept for an earlier generation 26, which Nix
+        // deleted before building today's, isn't today's 26's history.
+        let mut older = generations.iter().find(|g| g.number == 26).unwrap().clone();
+        older.target = generations[0].target.clone();
+        yukimi_system::saved::mark(&dir.join("generation-26"), &GenerationId::listed(&older)).unwrap();
+        let loaded = History::load(&dir, &generations);
+        assert!(!loaded.snapshots.contains_key(&26) && loaded.snapshots.contains_key(&27));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

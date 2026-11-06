@@ -6369,6 +6369,7 @@ name = "yukimi-system"
 version = "0.1.0"
 dependencies = [
  "aizome-ipc",
+ "aizome-typestate",
  "libc",
  "serde",
  "serde_json",
