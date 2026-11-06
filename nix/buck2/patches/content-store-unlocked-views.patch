@@ -1,0 +1,453 @@
+Subject: [PATCH] Publish content-store views after releasing the store locks
+
+Base: facebook/buck2 9a1876786f32806f6b65fc51f4c1c3077efc38a5 plus the
+preceding Sekka patches.
+
+Every store access held the process mutex and the cross-process lock
+while it cloned each view, re-hashed it to verify the snapshot, synced
+it and renamed it. Five worktrees materializing inputs at once took
+turns: summed input materialization reached ~700 s per tree against
+0.6 s alone.
+
+A view of an existing canonical object now needs only its lookup and
+recorded access under the locks. It is cloned from the open object (whose
+descriptor keeps its extents if a peer evicts it), verified, synced and
+renamed afterwards, and parent directories are synced before success is
+reported. Nothing is renamed unless every snapshot verified. A failed
+publication removes its group's view hints and any object that no longer
+verifies, under the locks, as the rolled-back transaction did. At most
+one group of deferred views holds descriptors at a time. New objects keep
+the fully locked path. Staging slots are cleared before the first
+canonical stage of a quantum instead of on every access, so lookups skip
+that directory sync.
+
+diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
+index 60b6c1e..fc55609 100644
+--- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
++++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
+@@ -57,7 +57,6 @@ mod linux {
+     use buck2_error::BuckErrorContext;
+     use buck2_execute::digest_config::DigestConfig;
+     use buck2_fs::paths::abs_norm_path::AbsNormPathBuf;
+-    use rayon::iter::IndexedParallelIterator;
+     use rayon::iter::IntoParallelRefMutIterator;
+     use rayon::iter::IntoParallelRefIterator;
+     use rayon::iter::ParallelIterator;
+@@ -232,6 +231,23 @@ mod linux {
+         consumed: usize,
+         found: bool,
+         staging_bytes: u64,
++        deferred: Vec<Deferred>,
++    }
++
++    /// A view of an existing canonical object, published once the store locks
++    /// are released. Its descriptor, not the object's name, is the source.
++    struct Deferred {
++        source: File,
++        key: String,
++        destination: PathBuf,
++        digest: FileDigest,
++        executable: bool,
++    }
++
++    struct PublishFailure {
++        /// The deferred view that failed to stage, if one did; its object may be corrupt.
++        view: Option<usize>,
++        error: buck2_error::Error,
+     }
+ 
+     pub(super) struct Store {
+@@ -596,13 +612,14 @@ mod linux {
+         ) -> buck2_error::Result<GroupResult> {
+             let mut files = files.peekable();
+             let mut transaction = None;
+-            let mut result = GroupResult { consumed: 0, found: true, staging_bytes: 0 };
++            let mut result = GroupResult {
++                consumed: 0, found: true, staging_bytes: 0, deferred: Vec::new(),
++            };
+             let mut parents = HashSet::new();
+-            if files.peek().is_some() {
+-                // No peer can create staging files while this quantum owns
+-                // both locks; completed groups remove all their own stages.
+-                self.clear_staging()?;
+-            }
++            // No peer can create staging files while this quantum owns both
++            // locks; completed groups remove all their own stages. Clearing
++            // waits for the first canonical stage, so lookups skip its sync.
++            let mut staging_cleared = false;
+             while result.consumed < super::INGEST_METADATA_FILES {
+                 let Some((_, digest, _)) = files.peek() else {
+                     break;
+@@ -618,12 +635,18 @@ mod linux {
+                     remaining_bytes,
+                     &mut transaction,
+                     &mut parents,
++                    &mut staging_cleared,
+                 )?;
+                 files.nth(group.consumed - 1);
+                 result.consumed += group.consumed;
+                 result.found &= group.found;
+                 result.staging_bytes = result.staging_bytes.saturating_add(group.staging_bytes);
+-                if transaction.is_none() || result.staging_bytes >= INGEST_METADATA_BYTES {
++                result.deferred.extend(group.deferred);
++                // Deferred views hold their objects' descriptors until published:
++                // at most one group's worth, as staged publications did.
++                if transaction.is_none() || result.staging_bytes >= INGEST_METADATA_BYTES
++                    || !result.deferred.is_empty()
++                {
+                     break;
+                 }
+             }
+@@ -647,6 +670,7 @@ mod linux {
+             byte_budget: u64,
+             transaction: &mut Option<rusqlite::Transaction<'store>>,
+             parents: &mut HashSet<&'a Path>,
++            staging_cleared: &mut bool,
+         ) -> buck2_error::Result<GroupResult> {
+             let capacity = files.size_hint().1
+                 .unwrap_or(super::INGEST_BATCH_FILES)
+@@ -706,7 +730,9 @@ mod linux {
+                 }
+             }
+             if requests.is_empty() {
+-                return Ok(GroupResult { consumed: 0, found: true, staging_bytes: 0 });
++                return Ok(GroupResult {
++                    consumed: 0, found: true, staging_bytes: 0, deferred: Vec::new(),
++                });
+             }
+ 
+             if transaction.is_none() {
+@@ -756,6 +782,7 @@ mod linux {
+                         transaction.take().expect("active group transaction").commit()?;
+                         return Ok(GroupResult {
+                             consumed: requests.len(), found: false, staging_bytes: staged_bytes,
++                            deferred: Vec::new(),
+                         });
+                     }
+                 });
+@@ -774,6 +801,10 @@ mod linux {
+             // Reserve room before creating canonical staging files, so even
+             // those temporary CAS bytes/entries fit alongside remaining objects.
+             // A recovered view is beside its destination, not inside the CAS.
++            if new_entries != 0 && !*staging_cleared {
++                self.clear_staging()?;
++                *staging_cleared = true;
++            }
+             for (slot, object) in objects.iter_mut().filter(|object| object.new).enumerate() {
+                 object.staged = Some(self.stage_canonical(slot)?);
+             }
+@@ -805,82 +836,71 @@ mod linux {
+                     });
+                 }
+             }
+-            let prepare_publication = |(index, request): (usize, &IngestRequest<'a>)|
+-                -> buck2_error::Result<Option<Publication<'a>>> {
++            // A view of an existing canonical object needs only the lookup above
++            // and the access recorded below while both locks are held. It is
++            // cloned from the open object, verified, synced and renamed after
++            // they are released (publish_deferred): five worktrees materializing
++            // at once otherwise take turns hashing every view. The descriptor
++            // keeps the object's extents even if a peer evicts it meanwhile.
++            let mut deferred = Vec::new();
++            let mut locked = Vec::new();
++            for (index, request) in requests.iter().enumerate() {
+                 let object = &objects[request.object];
+                 if object.new && index == object.first_request {
+                     // The original produced file already shares the new COW
+                     // object's extents and retains its existing executable mode.
+-                    return Ok(None);
++                    continue;
+                 }
+                 if ingest {
+                     if let Some(file) = prepared_outputs::take(
+                         request.destination, object.digest, request.executable,
+                     )? {
+-                        return Ok(Some(Publication {
++                        // Remove only the consumed private hint. Final
++                        // digests, not timestamps, authorize prepared views.
++                        self.db.execute(
++                            "DELETE FROM views WHERE path=?1",
++                            [file.path.to_str().ok_or_else(|| error("Non-UTF-8 prepared path"))?],
++                        )?;
++                        publications.push(Publication {
+                             file: PublicationFile::Prepared(file),
+                             destination: request.destination,
+-                        }));
++                        });
++                        continue;
+                     }
+                 }
+-                let source = if let Some(staged) = &object.staged {
+-                    staged.as_file()
+-                } else {
+-                    match object.source.as_ref().expect("canonical source prepared") {
+-                        IngestSource::Canonical(file) => file,
+-                        _ => unreachable!("existing canonical object"),
+-                    }
+-                };
++                match (&object.staged, object.source.as_ref()) {
++                    (None, Some(IngestSource::Canonical(file))) => deferred.push(Deferred {
++                        source: file.try_clone()?,
++                        key: object.key.clone(),
++                        destination: request.destination.to_path_buf(),
++                        digest: object.digest.clone(),
++                        executable: request.executable,
++                    }),
++                    _ => locked.push(request),
++                }
++            }
++            // The rest copy a new object's stage, which is renamed below.
++            let stage_locked = |request: &&IngestRequest<'a>|
++                -> buck2_error::Result<Publication<'a>> {
++                let object = &objects[request.object];
++                let staged = object.staged.as_ref().expect("new canonical object staged");
+                 Self::stage_publication(
+-                    source, request.destination, object.digest, request.executable, config,
+-                ).map(|file| Some(Publication {
++                    staged.as_file(), request.destination, object.digest, request.executable, config,
++                ).map(|file| Publication {
+                     file: PublicationFile::Staged(file),
+                     destination: request.destination,
+-                }))
++                })
+             };
+-            // Keep ordered results until every worker has joined. Errors cannot
+-            // remove a canonical source while another snapshot still reads it.
+-            let mut single = None;
+-            let staged: Vec<_> = if new_entries == requests.len() as u64 {
+-                Vec::new()
+-            } else if requests.len() > 1 {
++            // Keep ordered results until every worker has joined.
++            let staged: Vec<_> = if locked.len() > 1 {
+                 FILE_IO.as_ref().map_err(error)?.install(|| {
+-                    requests.par_iter().enumerate().map(prepare_publication).collect()
++                    locked.par_iter().map(stage_locked).collect()
+                 })
+             } else {
+-                single = Some(prepare_publication((0, &requests[0])));
+-                Vec::new()
++                locked.iter().map(stage_locked).collect()
+             };
+-            for (request, publication) in requests.iter().zip(single.into_iter().chain(staged)) {
+-                let object = &mut objects[request.object];
+-                match publication {
+-                    Ok(None) => {}
+-                    Ok(Some(publication)) => {
+-                        if let PublicationFile::Prepared(file) = &publication.file {
+-                            // Remove only the consumed private hint. Final
+-                            // digests, not timestamps, authorize prepared views.
+-                            self.db.execute(
+-                                "DELETE FROM views WHERE path=?1",
+-                                [file.path.to_str().ok_or_else(|| error("Non-UTF-8 prepared path"))?],
+-                            )?;
+-                        }
+-                        publications.push(publication);
+-                    }
+-                    Err(error) => {
+-                        // Destination I/O/reflink errors are not corruption.
+-                        if let Some(IngestSource::Canonical(source)) = object.source.as_mut() {
+-                            if verify(source, object.digest, config).is_err() {
+-                                remove(&object.path)?;
+-                                self.db.execute("DELETE FROM objects WHERE key=?1", [&object.key])?;
+-                                // No new accounting or canonical renames have
+-                                // occurred. Commit only removals/hint cleanup.
+-                                File::open(&self.root)?.sync_all()?;
+-                                transaction.take().expect("active group transaction").commit()?;
+-                            }
+-                        }
+-                        return Err(error);
+-                    }
+-                }
++            for publication in staged {
++                publications.push(publication?);
+             }
+ 
+             // Every verified snapshot must be durable before accounting or
+@@ -941,10 +961,86 @@ mod linux {
+                 parents.insert(parent);
+             }
+             Ok(GroupResult {
+-                consumed: requests.len(), found: true, staging_bytes: staged_bytes,
++                consumed: requests.len(), found: true, staging_bytes: staged_bytes, deferred,
+             })
+         }
+ 
++        /// Clones, verifies and syncs every view `stage_group` deferred, then
++        /// renames them and makes the renames durable, without the store locks:
++        /// each reads only its own open object and writes beside its own
++        /// destination. Nothing is renamed unless every snapshot verified.
++        fn publish_deferred(
++            deferred: &[Deferred],
++            config: DigestConfig,
++        ) -> Result<(), PublishFailure> {
++            let stage = |view: &Deferred| -> buck2_error::Result<NamedTempFile> {
++                let staged = Self::stage_publication(
++                    &view.source, &view.destination, &view.digest, view.executable, config,
++                )?;
++                staged.as_file().sync_all()?;
++                Ok(staged)
++            };
++            let staged: Vec<_> = if deferred.len() > 1 {
++                let pool = FILE_IO.as_ref().map_err(|message| PublishFailure {
++                    view: None, error: error(message),
++                })?;
++                pool.install(|| deferred.par_iter().map(stage).collect())
++            } else {
++                deferred.iter().map(stage).collect()
++            };
++            let mut files = Vec::with_capacity(staged.len());
++            for (index, result) in staged.into_iter().enumerate() {
++                match result {
++                    Ok(file) => files.push(file),
++                    Err(error) => return Err(PublishFailure { view: Some(index), error }),
++                }
++            }
++            let failure = |error: std::io::Error| PublishFailure { view: None, error: error.into() };
++            let mut parents = HashSet::new();
++            for (file, view) in files.into_iter().zip(deferred) {
++                file.persist(&view.destination).map_err(|error| failure(error.error))?;
++                parents.extend(view.destination.parent());
++            }
++            for parent in parents {
++                File::open(parent).and_then(|parent| parent.sync_all()).map_err(failure)?;
++            }
++            Ok(())
++        }
++
++        /// After deferred publication failed. No hint may name a view of the
++        /// failed group, as when its transaction rolled back under the locks.
++        /// Destination I/O and reflink errors are not corruption, but an object
++        /// whose view failed to stage is removed if it no longer verifies.
++        fn after_failed_publication(
++            &self,
++            deferred: &[Deferred],
++            failure: &PublishFailure,
++            config: DigestConfig,
++        ) -> buck2_error::Result<()> {
++            let transaction = self.db.unchecked_transaction()?;
++            for view in deferred {
++                self.db.execute(
++                    "DELETE FROM views WHERE path=?1",
++                    [view.destination.to_str().ok_or_else(|| error("Non-UTF-8 artifact view path"))?],
++                )?;
++            }
++            transaction.commit()?;
++            let Some(view) = failure.view.map(|index| &deferred[index]) else {
++                return Ok(());
++            };
++            let path = self.root.join(&view.key);
++            let Ok(mut source) = open_file(&path) else {
++                return Ok(());
++            };
++            if verify(&mut source, &view.digest, config).is_err() {
++                remove(&path)?;
++                self.db.execute("DELETE FROM objects WHERE key=?1", [&view.key])?;
++                File::open(&self.root)?.sync_all()?;
++            }
++            Ok(())
++        }
++
++        #[cfg(test)]
+         fn access(
+             &self,
+             destination: &Path,
+@@ -953,11 +1049,16 @@ mod linux {
+             config: DigestConfig,
+             ingest: bool,
+         ) -> buck2_error::Result<bool> {
+-            Ok(self.access_group(
++            let group = self.access_group(
+                 std::iter::once((destination, digest, executable)),
+                 config,
+                 ingest,
+-            )?.found)
++            )?;
++            if let Err(failure) = Self::publish_deferred(&group.deferred, config) {
++                self.after_failed_publication(&group.deferred, &failure, config)?;
++                return Err(failure.error);
++            }
++            Ok(group.found)
+         }
+ 
+         // The entire group's accesses share the caller's FULL transaction.
+@@ -1023,9 +1124,25 @@ mod linux {
+         config: DigestConfig,
+         ingest: bool,
+     ) -> buck2_error::Result<bool> {
+-        with_store(false, |store| {
+-            store.access(destination, digest, executable, config, ingest)
+-        })
++        let (found, deferred) = with_store((false, Vec::new()), |store| {
++            let group = store.access_group(
++                std::iter::once((destination, digest, executable)),
++                config,
++                ingest,
++            )?;
++            Ok((group.found, group.deferred))
++        })?;
++        publish(deferred, config)?;
++        Ok(found)
++    }
++
++    // Deferred views publish after both locks are released; see stage_group.
++    fn publish(deferred: Vec<Deferred>, config: DigestConfig) -> buck2_error::Result<()> {
++        if let Err(failure) = Store::publish_deferred(&deferred, config) {
++            with_store((), |store| store.after_failed_publication(&deferred, &failure, config))?;
++            return Err::<(), _>(failure.error).buck_error_context("Buck2 verified local content store");
++        }
++        Ok(())
+     }
+ 
+     pub(super) fn ingest_files(
+@@ -1036,7 +1153,7 @@ mod linux {
+         while offset < files.len() {
+             // Release both locks at metadata-quanta boundaries, including
+             // earlier boundaries required by new canonical accounting.
+-            offset += with_store(files.len() - offset, |store| {
++            let (consumed, deferred) = with_store((files.len() - offset, Vec::new()), |store| {
+                 let group = store.access_group(
+                     files[offset..].iter().map(|(path, metadata)| {
+                         (path.as_path(), metadata.digest.data(), metadata.is_executable)
+@@ -1044,8 +1161,10 @@ mod linux {
+                     config,
+                     true,
+                 )?;
+-                Ok(group.consumed)
++                Ok((group.consumed, group.deferred))
+             })?;
++            publish(deferred, config)?;
++            offset += consumed;
+         }
+         Ok(())
+     }
+@@ -1195,6 +1314,13 @@ mod linux {
+                 let unlock = store.lock.unlock();
+                 let group = result?;
+                 unlock?;
++                if let Err(failure) = Store::publish_deferred(&group.deferred, config) {
++                    store.lock.lock()?;
++                    let cleanup = store.after_failed_publication(&group.deferred, &failure, config);
++                    store.lock.unlock()?;
++                    cleanup?;
++                    return Err(failure.error);
++                }
+                 offset += group.consumed;
+             }
+             Ok(())
+@@ -1375,10 +1501,14 @@ mod linux {
+             let bad = temp.path().join("directory");
+             fs::create_dir(&bad)?;
+             fs::write(bad.join("keep"), b"untouched")?;
+-            assert!(store.access_group(
++            // Views of the existing object publish after the locks are released.
++            let group = store.access_group(
+                 [(good.as_path(), &digest, false), (bad.as_path(), &digest, true)].into_iter(),
+                 config, true,
+-            ).is_err());
++            )?;
++            let failure = Store::publish_deferred(&group.deferred, config)
++                .err().expect("publishing over a directory fails");
++            store.after_failed_publication(&group.deferred, &failure, config)?;
+             // The first rename may already have happened. It contains verified
+             // bytes, but the failing group must never be declared successful.
+             assert_eq!(fs::read(&good)?, b"correct");
