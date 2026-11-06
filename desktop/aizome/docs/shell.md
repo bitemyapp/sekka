@@ -115,8 +115,19 @@ menu opening closes it too. The panels:
   segmented control, Size (small, medium, large), Night Light switch if
   available; "Displays Settings…".
 - **Battery & power**: charge, state and time left, a 24h charge sparkline
-  if cheap, power mode (Power Saver, Balanced, Performance); "Battery
-  Settings…".
+  if cheap, power mode (Power Saver, Balanced, Performance), Keep Awake,
+  and, where the built-in panel can refresh itself (PSR or Panel Replay on
+  Intel's drivers), a Panel Self Refresh switch with a line on what it is;
+  "Battery Settings…". Panel Self Refresh is off until it's turned on: it
+  saves battery while nothing on screen moves, but on some panels it
+  costs smoothness or flashes a stray line (the X1 Carbon Gen 14's OLED on
+  Linux 7.3 does both). Its helper (`aizome-panel-refresh`, through pkexec
+  with no password for whoever is at the computer) keeps the choice in
+  `/var/lib/aizome/panel-refresh` and sets the driver's PSR debug file;
+  the `aizome-panel-refresh` service puts the choice back at each start
+  and leaves what it found in `/run/aizome/panel-refresh.toml`, which the
+  menu reads (`aizome_sys::panel_refresh`). The display's refresh rate is
+  left as Displays sets it.
 - **Clock**: the month (today in `focus`), the next events from Koyomi's
   store if present, world clocks from Tokei's; "Date & Time Settings…".
 

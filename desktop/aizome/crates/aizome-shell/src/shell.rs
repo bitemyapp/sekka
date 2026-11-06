@@ -47,6 +47,9 @@ pub enum Msg {
     Awake(aizome_awake::Status),
     /// `aizome-awake on` or `off` finished: on or off, or why not.
     AwakeSet(Result<bool, String>),
+    /// Panel Self Refresh's helper finished turning it on (or off), or
+    /// said why not.
+    PanelRefreshSet(bool, Result<(), String>),
     /// The clock's label turned.
     Tick,
     TimeChanged,
@@ -361,6 +364,9 @@ pub struct Shell {
     pub night: Option<aizome_ipc::NightLightState>,
     /// Keep Awake, as the watcher last saw it (`awake.rs`).
     pub awake: aizome_awake::Status,
+    /// Panel Self Refresh as last turned in the battery menu, until its
+    /// helper's status says otherwise (`None`: as the status says).
+    pub panel_refresh: Option<bool>,
     /// GeoClue is being asked where the computer is; when it last answered.
     pub(crate) locating: bool,
     pub(crate) located_at: Option<std::time::Instant>,
@@ -480,6 +486,7 @@ impl Shell {
             logind_power_key: None,
             night: None,
             awake: aizome_awake::Status::Off,
+            panel_refresh: None,
             locating: false,
             located_at: None,
             recording: None,
@@ -1538,6 +1545,7 @@ impl Program for Shell {
             Msg::Meters(r) => self.meters = r,
             Msg::Awake(s) => self.keep_awake_status(s, cx),
             Msg::AwakeSet(r) => self.keep_awake_set(r, cx),
+            Msg::PanelRefreshSet(on, r) => self.panel_refresh_set(on, r),
             Msg::Tick => {
                 self.refresh_clock(cx);
                 self.arm_clock(cx);

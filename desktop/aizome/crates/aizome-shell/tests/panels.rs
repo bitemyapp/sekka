@@ -79,6 +79,7 @@ fn fixture() -> aizome_shell::systray::glue::Fixture {
             modes: vec!["power-saver".into(), "balanced".into(), "performance".into()],
             mode: Some(1),
             keep_awake: Default::default(),
+            panel_refresh: None,
         }),
     );
     f.insert(
@@ -476,4 +477,36 @@ fn keep_awake_shows_its_cup_and_switches_from_its_panels() {
     assert_eq!(h.program().awake, Status::On);
     h.send(Msg::Run(Action::ToggleKeepAwake));
     assert_eq!(h.program().awake, Status::Off);
+}
+
+/// Panel Self Refresh: in the Battery panel only where the built-in panel
+/// can refresh itself, with what it is under its switch; turned on there,
+/// it shows on at once. (A test's shell doesn't run its helper.)
+#[test]
+fn panel_self_refresh_switches_in_the_battery_panel_where_the_panel_can() {
+    let mut h = scene(false);
+    h.program_mut().panels_fixture = Some(fixture());
+    let p = open(&mut h, TrayWidget::Battery);
+    assert!(!h.texts(p).iter().any(|t| t == "Panel Self Refresh"), "not where the panel can't");
+    h.send(Msg::Panel(PanelMsg::Close));
+
+    let mut f = fixture();
+    if let Some(Panel::Battery(b)) = f.get_mut(&TrayWidget::Battery) {
+        b.panel_refresh = Some(false);
+    }
+    h.program_mut().panels_fixture = Some(f);
+    let p = open(&mut h, TrayWidget::Battery);
+    let texts = h.texts(p);
+    assert!(texts.iter().any(|t| t == "Panel Self Refresh"), "{texts:?}");
+    assert!(texts.iter().any(|t| t.contains("saves battery")), "{texts:?}");
+    let data = h.program().panel_data(TrayWidget::Battery);
+    assert_eq!(h.size(p).height, aizome_shell::systray::panels::size(&data).height);
+    h.save_png(p, shots().join("panel-battery-self-refresh.png"), 2.0);
+    h.send(Msg::Panel(PanelMsg::PanelRefresh(true)));
+    assert_eq!(h.program().panel_refresh, Some(true));
+    let Panel::Battery(b) = h.program().panel_data(TrayWidget::Battery) else { panic!() };
+    assert_eq!(b.panel_refresh, Some(true));
+    // Its helper refusing puts it back as its status says.
+    h.send(Msg::PanelRefreshSet(true, Err("Not allowed".into())));
+    assert_eq!(h.program().panel_refresh, None);
 }

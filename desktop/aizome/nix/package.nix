@@ -364,6 +364,10 @@ rustPlatform.buildRustPackage (
       mv $out/bin/aizome-tv-account $out/libexec/
       substitute apps/settei/data/org.aizome.TvAccount.policy.in $out/share/polkit-1/actions/org.aizome.TvAccount.policy \
         --subst-var-by helper $out/libexec/aizome-tv-account
+      # Panel Self Refresh's (the battery menu), likewise.
+      mv $out/bin/aizome-panel-refresh $out/libexec/
+      substitute crates/aizome-sys/data/org.aizome.PanelRefresh.policy.in $out/share/polkit-1/actions/org.aizome.PanelRefresh.policy \
+        --subst-var-by helper $out/libexec/aizome-panel-refresh
       install -Dm644 apps/hotaru/data/org.aizome.Hotaru.svg $out/share/icons/hicolor/scalable/apps/org.aizome.Hotaru.svg
       install -Dm644 ${ghosttyLicense} $out/share/licenses/hotaru/Ghostty-MIT.txt
       install -m644 crates/hotaru-link-regex/vendor/oniguruma/LICENSE $out/share/licenses/hotaru/Oniguruma-BSD-2-Clause.txt
