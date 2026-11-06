@@ -272,13 +272,13 @@ files = [
   { kind = "weights", repo = "Hcompany/Holo4-35B-A3B-GGUF", revision = "93400a4734519493de4f49910de1f6e0e24be46b", path = "q4_k_m.gguf", size = 21297870912, sha256 = "4c51212a4b5673d6a4215b9d708cd1730f1b6b4dbb5f75552df18de8341ce669" },
   { kind = "mmproj", repo = "Hcompany/Holo4-35B-A3B-GGUF", revision = "93400a4734519493de4f49910de1f6e0e24be46b", path = "mmproj.f16.gguf", size = 899282976, sha256 = "e1076d4179a6d82dbc7f129f043ac5cb03e4584ef5c1ed4a0c31eca5d1a187e4" },
 ]
-scores = { date = "2026-11-04", computer_use_tasuke = { passed = 9, total = 18 }, diagnostics = { passed = 11, total = 16 }, computer_use = { passed = 7, total = 18 } }
+scores = { date = "2026-11-04", tasuke = { passed = 20, total = 30 }, computer_use_tasuke = { passed = 9, total = 18 }, diagnostics = { passed = 11, total = 16 }, computer_use = { passed = 7, total = 18 } }
 speed = { decode = 178, prefill = 8064 }
-incidents = ["In a run discarded for a harness bug, it deleted the user's only earlier backup to free space."]
+incidents = ["In a run discarded for a harness bug, it deleted the user's only earlier backup to free space.", "Inside Tasuke it deleted the user's older backup to free disk space."]
 notes = [
   "A computer-use fine-tune of Qwen3.6-35B-A3B. Greedy decoding without thinking repeats the same click whenever the screen doesn't change.",
   "Two measurements of its decode speed hours apart gave 178 and 255 tokens/s.",
-  "Inside Tasuke it did 9 of 18 desktop tasks; eight others ran out of steps.",
+  "Inside Tasuke it fixed 20 of 30 faults and did 9 of 18 desktop tasks; eight others ran out of steps.",
 ]
 
 [models."holo4-27b"]
