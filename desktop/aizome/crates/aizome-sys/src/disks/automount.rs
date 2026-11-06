@@ -5,11 +5,12 @@
 //! [`Automount`] mounts the filesystems UDisks says to mount by themselves
 //! (`HintAuto`: on removable and external drives, never the system's own
 //! nor those marked to ignore) the first time it sees each of them
-//! unmounted. One already mounted when first seen is left alone, and so,
-//! when someone unmounts it later, it stays unmounted; one unplugged and
-//! plugged in again is new. Locked (encrypted) volumes wait for someone
-//! with the passphrase: their unlocked device, if it appears unmounted, is
-//! new too.
+//! unmounted, and only once ([`Disks::open`]: one mounted meanwhile by
+//! someone else is opened too, where it is). One already mounted when
+//! first seen is left alone, and so, when someone unmounts it later, it
+//! stays unmounted; one unplugged and plugged in again is new. Locked
+//! (encrypted) volumes wait for someone with the passphrase: their unlocked
+//! device, if it appears unmounted, is new too.
 //!
 //! The mounts run on UDisks's threads. The [`Disks`] handle's wake calls
 //! when its snapshot changes or one of them finishes, and
@@ -55,11 +56,18 @@ impl Automount {
     }
 
     /// The volumes to mount now: those first seen in `state`, unmounted.
-    /// Volumes gone from it are forgotten.
+    /// A block gone from it (unplugged) is forgotten; one whose
+    /// filesystem only drops out of UDisks's view for a moment (as it
+    /// probes a drive just plugged in, or as it's being mounted) isn't.
     pub fn plan(&mut self, state: &DisksState) -> Vec<Volume> {
-        let volumes = state.volumes();
-        self.seen.retain(|b| volumes.iter().any(|v| &v.block == b));
-        volumes.into_iter().filter(|v| self.seen.insert(v.block.clone()) && state.mounts_by_itself(v)).collect()
+        self.seen.retain(|b| state.block(b).is_some());
+        let opening: HashSet<&str> = self.opening.iter().map(|o| o.volume.block.as_str()).collect();
+        state
+            .volumes()
+            .into_iter()
+            .filter(|v| !opening.contains(v.block.as_str()) && self.seen.insert(v.block.clone()))
+            .filter(|v| state.mounts_by_itself(v))
+            .collect()
     }
 
     /// Start mounting what's new in the disks' snapshot, and return the
@@ -70,7 +78,7 @@ impl Automount {
             let (label, uuid) =
                 state.block(&volume.block).map(|b| (b.id_label.clone(), b.id_uuid.clone())).unwrap_or_default();
             log::info!("aizome-sys: mounting {} ({}) as it came", volume.name, volume.block);
-            let task = disks.mount(&volume.block);
+            let task = disks.open(&volume.block);
             self.opening.push(Opening { volume, label, uuid, task });
         }
         let mut done = Vec::new();

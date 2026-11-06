@@ -52,6 +52,20 @@ fn a_drive_plugged_in_is_mounted_once() {
 }
 
 #[test]
+fn a_filesystem_that_drops_out_of_view_for_a_moment_is_not_mounted_again() {
+    // UDisks can drop a block's filesystem for a moment, probing a drive
+    // just plugged in or as it's mounted: the drive is still there, and
+    // mounting it again would be refused as already mounted.
+    let mut a = Automount::new();
+    let one = stick(1, false);
+    assert_eq!(planned(&mut a, &state(&[&one])), ["sd1"]);
+    let mut probing = stick(1, false);
+    probing.1.filesystem = None;
+    assert!(planned(&mut a, &state(&[&probing])).is_empty());
+    assert!(planned(&mut a, &state(&[&one])).is_empty(), "the same drive");
+}
+
+#[test]
 fn a_drive_mounted_when_first_seen_stays_as_it_is() {
     let mut a = Automount::new();
     let two = stick(2, false);
