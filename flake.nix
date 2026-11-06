@@ -328,7 +328,12 @@
       };
       # Apple Silicon Macs (nix/apple-silicon).
       packages.aarch64-linux = import ./nix/apple-silicon {
-        inherit inputs nixpkgs hyprlandOverlay;
+        inherit
+          inputs
+          nixpkgs
+          hyprlandOverlay
+          self
+          ;
         revision = self.shortRev or self.dirtyShortRev or "unknown";
       };
       checks.${system} = {
@@ -880,6 +885,14 @@
           } > /dev/null
           touch $out
         '';
+        # The Mac images' installed flake and lock (nix/apple-silicon), through
+        # the same backend parser.
+        apple-installed-template =
+          (import ./nix/apple-silicon/tests.nix {
+            inherit pkgs self;
+            inherit (nixpkgs) lib;
+          }).templateCheck
+            { inherit pkgs fixture; };
         release-assets = pkgs.runCommand "release-asset-tests" { nativeBuildInputs = [ pkgs.python3 ]; } ''
           mkdir -p scripts tests
           cp ${./scripts/prepare-release.py} scripts/prepare-release.py

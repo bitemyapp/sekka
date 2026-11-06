@@ -7,11 +7,25 @@
   inputs,
   nixpkgs,
   hyprlandOverlay,
+  # Sekka's own flake: its source and revision pin the installed flake.lock
+  # the Mac images ship (installed-flake.nix).
+  self,
   # Sekka's revision, which names the Asahi installer package.
   revision,
 }:
 let
-  image = import ./image.nix { inherit inputs nixpkgs revision; };
+  image = import ./image.nix {
+    inherit
+      inputs
+      nixpkgs
+      self
+      revision
+      ;
+  };
+  tests = import ./tests.nix {
+    inherit pkgs self;
+    inherit (nixpkgs) lib;
+  };
   system = "aarch64-linux";
   pkgs = nixpkgs.legacyPackages.${system};
   hyprlandPkgs = pkgs.extend hyprlandOverlay;
@@ -90,11 +104,22 @@ in
   mesa-m3-abi-check = graphics.abiCheck;
   m3-gpu-session-env-test = graphics.sessionEnvTest;
 
-  # The Asahi installer's OS package for the J514S, with installer_data.json
-  # and install-sekka.sh (image.nix).
+  # The developer image: the Asahi installer's OS package for the J514S, with
+  # installer_data.json and install-sekka.sh (image.nix).
   mac-installer-j514s = image.bundle;
-  image-j514s-system = image.toplevel;
-  image-j514s-esp = image.esp;
+  image-j514s-system = image.developer.toplevel;
+  image-j514s-esp = image.developer.esp;
+  # The product image's release set for Sekka's macOS installer: payload,
+  # installer data, manifest (sekka.mac.manifest/1) and /etc/nixos.
+  mac-release-j514s = image.release;
+  mac-release-j514s-system = image.product.toplevel;
+  mac-release-j514s-esp = image.product.esp;
+  mac-release-j514s-root = image.product.rootImage;
+  mac-release-j514s-etc-nixos = image.product.etcNixos;
+  mac-release-j514s-image-check = image.product.imageCheck;
+  # The image's scripts and its installed flake against Genkan's own
+  # template parser (tests.nix).
+  mac-image-tests = tests.all;
 
   installed-j514s = j514s.config.system.build.toplevel;
   installed-j514s-boot-bin = j514s.config.system.build.appleSiliconBootBin;

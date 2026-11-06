@@ -2,20 +2,35 @@
 # M3 Pro (J514S). The Asahi installer, run from macOS, shrinks macOS, creates
 # the EFI system partition and the root partition, and writes them from an OS
 # package: a zip of the partition's files (esp/) and a raw filesystem image
-# (root.img). installer_data.json describes the package; Sekka's bootstrap
-# (install-sekka.sh) runs the unmodified installer with it, from this
-# directory, so no USB stick or download server is needed.
+# (root.img).
+#
+# Two images come from one installed-system configuration:
+# - the product image (mac-release-j514s): product/, the configuration that
+#   also ships in its /etc/nixos. It has no account and no password, and it
+#   finds its partitions by the per-install identity Sekka's Mac installer
+#   hands off (identity.nix). The release set adds the manifest
+#   (sekka.mac.manifest/1) that a catalog binds.
+# - the developer image (mac-installer-j514s): developer/, the same
+#   configuration plus developer.nix (the `sekka` account and the Asahi
+#   installer's fixed labels), with installer_data.json and install-sekka.sh
+#   for the unmodified Asahi installer, which hands nothing off.
+#
+# Each image's system is evaluated by calling its own /etc/nixos flake.nix with
+# the inputs its shipped flake.lock locks (installed-flake.nix), so rebuilding
+# /etc/nixos unchanged gives the same system. The root image also holds the
+# sources that evaluation reads (seeds), so it works offline.
 #
 # The installer's m1n1 first stage chainloads m1n1/boot.bin from the new EFI
-# system partition and gives it that partition's UUID; it also copies Apple's
-# firmware for this Mac to vendorfw/ there (copy_firmware). The ESP here is
-# what NixOS's systemd-boot would write for the first generation, with the
-# firmware archive as the entry's first initrd; NixOS takes it over at the
-# first rebuild. The root image holds the system's closure, registered in the
-# Nix database on first boot, and grows to fill its partition.
+# system partition; it also copies Apple's firmware for this Mac to vendorfw/
+# there (copy_firmware). The ESP is what NixOS's systemd-boot would write for
+# the first generation, with the firmware archive as the entry's first initrd;
+# NixOS takes it over at the first rebuild. The root image holds the system's
+# closure, registered in the Nix database on first boot, and grows to fill its
+# partition.
 {
   inputs,
   nixpkgs,
+  self,
   revision,
 }:
 let
@@ -27,204 +42,294 @@ let
   # The FAT serial the installer gives the EFI system partition
   # (newfs_msdos -I), and its /dev/disk/by-uuid name.
   espVolumeId = "0x5ecca5e1";
-  espUuid = "5ECC-A5E1";
   rootLabel = "sekka-root";
+  rootUuid = "5ecca000-0000-4000-8000-000000000001";
   # The installer's ESP for UEFI-only installs is 500 MB; NixOS keeps a
-  # kernel and initrd per generation there, so this one is larger.
+  # kernel and initrd per generation there, so this one is larger
+  # (installer/genkan/macos, plan.rs ESP_BYTES).
   espSize = 1024 * 1024 * 1024;
+  # The stub macOS the Asahi installer creates (plan.rs STUB_BYTES).
+  stubBytes = 2500000000 / 1048576 * 1048576;
 
-  nixos = nixpkgs.lib.nixosSystem {
-    inherit system;
-    specialArgs = {
-      applicationPkgs = import inputs.applications {
-        inherit system;
-        config.allowUnfree = true;
-      };
-      aiPackages = inputs.ai-apps.packages.${system};
-      ompPackage = inputs.omp.packages.${system}.omp;
-    };
-    modules = [
-      inputs.determinate.nixosModules.default
-      inputs.calamares.nixosModules.default
-      (
-        { config, pkgs, ... }:
-        {
-          calamares = {
-            installUser = "sekka";
-            applications = [ "firefox" ];
-            desktops = [ "tatami" ];
-            defaultDesktop = "tatami";
-            tuning.enable = true;
-            appleSilicon = {
-              enable = true;
-              t6030Handoff = true;
-            };
-          };
-          boot.loader.systemd-boot.enable = true;
-          # QEMU's virt machine reaches its disks through virtio-mmio, so this
-          # same image boots in a test VM; on a Mac the module never loads.
-          boot.initrd.availableKernelModules = [ "virtio_mmio" ];
-          boot.loader.systemd-boot.configurationLimit = 5;
-          fileSystems."/" = {
-            device = "/dev/disk/by-label/${rootLabel}";
-            fsType = "ext4";
-            options = [ "noatime" ];
-            # The installer grows the partition (expand); this grows ext4.
-            autoResize = true;
-          };
-          fileSystems."/boot" = {
-            device = "/dev/disk/by-uuid/${espUuid}";
-            fsType = "vfat";
-            options = [
-              "fmask=0077"
-              "dmask=0077"
-            ];
-          };
-          networking.hostName = "sekka";
-          networking.networkmanager.enable = true;
-          hardware.enableRedistributableFirmware = true;
-          time.timeZone = "UTC";
-          i18n.defaultLocale = "en_US.UTF-8";
-          services.xserver.xkb.layout = "us";
-          console.useXkbConfig = true;
-          services.printing.enable = true;
-          services.pipewire = {
-            enable = true;
-            alsa.enable = true;
-            pulse.enable = true;
-          };
-          users.mutableUsers = true;
-          users.users.root.initialHashedPassword = "!";
-          # A developer image: Genkan has no first-boot setup for Macs yet.
-          # Change the password after the first login (passwd).
-          users.users.sekka = {
-            isNormalUser = true;
-            description = "Sekka";
-            extraGroups = [
-              "networkmanager"
-              "wheel"
-            ];
-            initialPassword = "sekka";
-          };
-          nixpkgs.config.allowUnfree = true;
-          system.stateVersion = "26.11";
+  installed = import ./installed-flake.nix { inherit lib self; };
+  lockFile = pkgs.writeText "flake.lock" (builtins.toJSON installed.lock);
+  # The tracked /etc/nixos files must be exactly what the template renders.
+  same =
+    what: a: b:
+    if a == b then true else throw "nix/apple-silicon: ${what} differs from what it must equal";
+  checked =
+    assert same "product/flake.nix" (builtins.readFile ./product/flake.nix) installed.flake;
+    assert same "developer/flake.nix" (builtins.readFile ./developer/flake.nix) installed.flake;
+    assert same "developer/configuration.nix" (builtins.readFile ./developer/configuration.nix) (
+      builtins.readFile ./product/configuration.nix
+    );
+    true;
 
-          # The root image's store paths become the Nix database, and the
-          # booted system the system profile, once, before anything uses Nix.
-          systemd.services.sekka-image-first-boot = {
-            description = "Register the image's Nix store";
-            wantedBy = [ "sysinit.target" ];
-            before = [
-              "sysinit.target"
-              "nix-daemon.socket"
-              "nix-daemon.service"
-            ];
-            after = [ "local-fs.target" ];
-            unitConfig = {
-              DefaultDependencies = false;
-              ConditionPathExists = "/nix-path-registration";
-            };
-            serviceConfig.Type = "oneshot";
-            script = ''
-              ${config.nix.package.out}/bin/nix-store --load-db < /nix-path-registration
-              touch /etc/NIXOS
-              ${config.nix.package.out}/bin/nix-env -p /nix/var/nix/profiles/system --set /run/current-system
-              rm -f /nix-path-registration
-            '';
-          };
-        }
-      )
-    ];
-  };
+  # The sources evaluating /etc/nixos reads, by their path in the lock (from
+  # Sekka's own inputs; the installed lock nests them beneath Sekka), and
+  # Sekka's own source. This is the set an evaluation in an empty store with
+  # no network needed (2026-11-06): the rest of the lock is never fetched by
+  # it, as it holds other platforms' Nix daemons, Nix's and its tools' own
+  # development inputs, and the catalog's AI, oh-my-pi, Superluminal, Tracy
+  # and Uta applications, which the image doesn't select. A selection or
+  # input update that needs another source fails the offline evaluation in
+  # the VM test (boot-image-in-vm.sh), which names the missing input.
+  seedInputs = [
+    [ "nixpkgs" ]
+    [ "applications" ]
+    [ "determinate" ]
+    [ "determinate" "nixpkgs" ]
+    [ "determinate" "determinate-nixd-aarch64-linux" ]
+    [ "determinate" "nix" ]
+    [ "determinate" "nix" "nixpkgs" ]
+    [ "determinate" "nix" "bdwgc" ]
+    [ "fh" ]
+    [ "fh" "nixpkgs" ]
+    [ "fh" "crane" ]
+    [ "fh" "fenix" ]
+  ];
+  seedOf =
+    path:
+    let
+      input = lib.foldl' (acc: n: acc.inputs.${n}) { inherit (self) inputs; } path;
+    in
+    input.outPath;
+  seeds = lib.unique ([ self.outPath ] ++ map seedOf seedInputs);
 
-  inherit (nixos.config.system.build) toplevel;
+  python = pkgs.python3.interpreter;
 
-  rootImage = pkgs.callPackage "${nixpkgs}/nixos/lib/make-ext4-fs.nix" {
-    storePaths = [ toplevel ];
-    volumeLabel = rootLabel;
-    uuid = "5ecca000-0000-4000-8000-000000000001";
-  };
-
-  # What NixOS's systemd-boot writes for generation 1, plus the firmware.
-  esp = pkgs.runCommand "${name}-esp" { } ''
-    mkdir -p $out/m1n1 $out/EFI/BOOT $out/EFI/systemd $out/EFI/nixos $out/loader/entries
-    cp ${nixos.config.system.build.appleSiliconBootBin} $out/m1n1/boot.bin
-    boot=${nixos.config.systemd.package}/lib/systemd/boot/efi/systemd-bootaa64.efi
-    cp $boot $out/EFI/BOOT/BOOTAA64.EFI
-    cp $boot $out/EFI/systemd/systemd-bootaa64.efi
-    cp ${toplevel}/kernel $out/EFI/nixos/kernel.efi
-    cp ${toplevel}/initrd $out/EFI/nixos/initrd.efi
-    printf 'timeout 3\ndefault nixos-generation-1.conf\nconsole-mode keep\neditor no\n' \
-      > $out/loader/loader.conf
+  build =
     {
-      echo "title Sekka"
-      echo "version Generation 1 (image ${revision})"
-      echo "linux /EFI/nixos/kernel.efi"
-      echo "initrd /vendorfw/firmware.cpio"
-      echo "initrd /EFI/nixos/initrd.efi"
-      echo "options init=${toplevel}/init $(cat ${toplevel}/kernel-params)"
-    } > $out/loader/entries/nixos-generation-1.conf
-  '';
+      variant,
+      dir,
+      etcFiles,
+      title,
+    }:
+    rec {
+      nixos =
+        assert checked;
+        ((import (dir + "/flake.nix")).outputs {
+          inherit (inputs)
+            nixpkgs
+            determinate
+            fh
+            applications
+            ai-apps
+            omp
+            ;
+          sekka = self;
+        }).nixosConfigurations.sekka;
+      inherit (nixos.config.system.build) toplevel;
+      bootBin = nixos.config.system.build.appleSiliconBootBin;
+      handoff = nixos.config.calamares.appleSilicon.identity.handoff;
 
-  package = pkgs.runCommand "${name}.zip" { nativeBuildInputs = [ pkgs.zip ]; } ''
-    size=$(stat -c %s ${rootImage})
-    if (( size % 4096 )); then
-      echo "root.img is $size bytes, not a multiple of 4 KiB" >&2
-      exit 1
-    fi
-    mkdir work && cd work
-    cp -r ${esp} esp
-    chmod -R u+w esp
-    ln -s ${rootImage} root.img
-    # Stored, not compressed: the package is read from this disk.
-    zip -0 -r -X -q $out esp root.img
-  '';
+      # /etc/nixos: the flake, its exact lock and the configuration.
+      etcNixos = pkgs.runCommand "${name}-${variant}-etc-nixos" { } ''
+        mkdir -p $out
+        ${lib.concatMapStrings (f: "cp ${dir + "/${f}"} $out/${f}\n") etcFiles}
+        cp ${lockFile} $out/flake.lock
+        chmod 644 $out/*
+      '';
 
-  installerData = pkgs.writeText "installer_data.json" (
-    builtins.toJSON {
-      os_list = [
-        {
-          name = "Sekka (14-inch MacBook Pro M3 Pro, developer image ${revision})";
-          default_os_name = "Sekka";
-          boot_object = "m1n1.bin";
-          next_object = "m1n1/boot.bin";
-          package = "${name}.zip";
-          # The macOS 14.8.3 OS firmware Asahi gives M3 Macs, which the GPU and
-          # display drivers were tested with.
-          supported_fw = [ "14.8.3" ];
-          partitions = [
+      storePaths = [ toplevel ] ++ seeds;
+      closureInfo = pkgs.closureInfo { rootPaths = storePaths; };
+      rootImage = pkgs.callPackage "${nixpkgs}/nixos/lib/make-ext4-fs.nix" {
+        inherit storePaths;
+        volumeLabel = rootLabel;
+        uuid = rootUuid;
+        populateImageCommands = ''
+          mkdir -p ./files/etc/nixos
+          cp ${etcNixos}/* ./files/etc/nixos/
+          chmod 755 ./files/etc ./files/etc/nixos
+          chmod 644 ./files/etc/nixos/*
+        '';
+      };
+
+      # What NixOS's systemd-boot writes for generation 1, plus the firmware
+      # and the boot.bin record (boot-bin/boot_bin.py). The product entry
+      # carries the handoff's placeholders, once each.
+      esp =
+        pkgs.runCommand "${name}-${variant}-esp"
+          {
+            nativeBuildInputs = [ pkgs.python3 ];
+          }
+          ''
+            mkdir -p $out/m1n1 $out/EFI/BOOT $out/EFI/systemd $out/EFI/nixos $out/loader/entries $out/sekka
+            cp ${bootBin} $out/m1n1/boot.bin
+            boot=${nixos.config.systemd.package}/lib/systemd/boot/efi/systemd-bootaa64.efi
+            cp $boot $out/EFI/BOOT/BOOTAA64.EFI
+            cp $boot $out/EFI/systemd/systemd-bootaa64.efi
+            cp ${toplevel}/kernel $out/EFI/nixos/kernel.efi
+            cp ${toplevel}/initrd $out/EFI/nixos/initrd.efi
+            printf 'timeout 3\ndefault nixos-generation-1.conf\nconsole-mode keep\neditor no\n' \
+              > $out/loader/loader.conf
+            entry=$out/loader/entries/nixos-generation-1.conf
             {
-              name = "EFI";
-              type = "EFI";
-              size = "${toString espSize}B";
-              format = "fat";
-              volume_id = espVolumeId;
-              copy_firmware = true;
-              copy_installer_data = true;
-              source = "esp";
-            }
-            {
-              name = "Root";
-              type = "Linux";
-              size = "@ROOT_SIZE@B";
-              expand = true;
-              image = "root.img";
-            }
-          ];
-        }
-      ];
-    }
-  );
+              echo "title Sekka"
+              echo "version Generation 1 (${title} ${revision})"
+              echo "linux /EFI/nixos/kernel.efi"
+              echo "initrd /vendorfw/firmware.cpio"
+              echo "initrd /EFI/nixos/initrd.efi"
+              echo "options init=${toplevel}/init $(cat ${toplevel}/kernel-params)"
+            } > $entry
+            for p in @SEKKA_ROOT_PARTUUID@ @SEKKA_ESP_PARTUUID@; do
+              n=$( (grep -o "$p" $entry || true) | wc -l)
+              if [ "$n" != ${if handoff then "1" else "0"} ]; then
+                echo "$entry has $p $n times" >&2
+                exit 1
+              fi
+            done
+            # The record boot_bin.py keeps, for the copy the image installs.
+            PYTHONPATH=${./boot-bin} ${python} -c '
+            import sys, boot_bin as b
+            data = open(sys.argv[1], "rb").read()
+            current = b.entry(data, source=sys.argv[1], system=sys.argv[2])
+            record = dict(b.empty_record(), current=current, history=[current])
+            open(sys.argv[3], "wb").write(b.canonical(record))
+            ' ${bootBin} ${toplevel} $out/sekka/boot-bin.json
+          '';
+
+      # Before packaging: the registration lists exactly the closure, every
+      # path is in the image's bytes with its registered NAR hash, and
+      # /etc/nixos holds the shipped files (release/check_image.py).
+      imageCheck =
+        pkgs.runCommand "${name}-${variant}-image-check"
+          {
+            nativeBuildInputs = [
+              pkgs.e2fsprogs
+              pkgs.python3
+            ];
+          }
+          ''
+            python3 ${./release/check_image.py} \
+              --image ${rootImage} --closure-info ${closureInfo} --etc-nixos ${etcNixos} \
+              --label ${rootLabel} --uuid ${rootUuid} --report $out
+          '';
+
+      payload =
+        pkgs.runCommand "${name}.zip"
+          {
+            nativeBuildInputs = [ pkgs.zip ];
+            # Packaged only after the image passed its checks.
+            checkedImage = imageCheck;
+          }
+          ''
+            size=$(stat -c %s ${rootImage})
+            if (( size % 4096 )); then
+              echo "root.img is $size bytes, not a multiple of 4 KiB" >&2
+              exit 1
+            fi
+            mkdir work && cd work
+            cp -r ${esp} esp
+            chmod -R u+w esp
+            ln -s ${rootImage} root.img
+            # Stored, not compressed: the package is read from this disk.
+            zip -0 -r -X -q $out esp root.img
+          '';
+
+      installerData =
+        pkgs.runCommand "installer_data.json"
+          {
+            text = builtins.toJSON {
+              os_list = [
+                {
+                  name = "Sekka (14-inch MacBook Pro M3 Pro, ${title} ${revision})";
+                  default_os_name = "Sekka";
+                  boot_object = "m1n1.bin";
+                  next_object = "m1n1/boot.bin";
+                  package = "${name}.zip";
+                  # The macOS 14.8.3 OS firmware Asahi gives M3 Macs, which the GPU
+                  # and display drivers were tested with.
+                  supported_fw = [ "14.8.3" ];
+                  partitions = [
+                    {
+                      name = "EFI";
+                      type = "EFI";
+                      size = "${toString espSize}B";
+                      format = "fat";
+                      volume_id = espVolumeId;
+                      copy_firmware = true;
+                      copy_installer_data = true;
+                      source = "esp";
+                    }
+                    {
+                      name = "Root";
+                      type = "Linux";
+                      size = "@ROOT_SIZE@B";
+                      expand = true;
+                      image = "root.img";
+                    }
+                  ];
+                }
+              ];
+            };
+            passAsFile = [ "text" ];
+          }
+          ''
+            substitute $textPath $out --replace-fail @ROOT_SIZE@ "$(stat -c %s ${rootImage})"
+          '';
+    };
+
+  product = build {
+    variant = "product";
+    dir = ./product;
+    etcFiles = [
+      "flake.nix"
+      "configuration.nix"
+    ];
+    title = "image";
+  };
+
+  developer = build {
+    variant = "developer";
+    dir = ./developer;
+    etcFiles = [
+      "flake.nix"
+      "configuration.nix"
+      "developer.nix"
+    ];
+    title = "developer image";
+  };
+
+  # The release set the macOS app consumes: the payload, its installer data,
+  # the manifest and the shipped /etc/nixos. It carries no installer script:
+  # installed without the handoff, the product image stops in its initrd
+  # and says why.
+  release =
+    pkgs.runCommand "${name}-mac-release"
+      {
+        nativeBuildInputs = [ pkgs.python3 ];
+      }
+      ''
+        mkdir -p $out/os $out/nixos $out/checks
+        ln -s ${product.payload} $out/os/${name}.zip
+        cp ${product.installerData} $out/installer_data.json
+        cp ${product.etcNixos}/* $out/nixos/
+        cp ${product.imageCheck} $out/checks/image.txt
+        python3 ${./release/manifest.py} \
+          --release ${name} --profile j514s --variant product \
+          --revision ${self.rev or (lib.removeSuffix "-dirty" (self.dirtyRev or "0000000000000000000000000000000000000000"))} \
+          --clean ${if self ? rev then "true" else "false"} \
+          --nar-hash ${self.narHash} --update-ref ${installed.ref} \
+          --lock ${lockFile} --toplevel ${product.toplevel} --closure-info ${product.closureInfo} \
+          --seeds ${pkgs.writeText "seeds" (lib.concatLines seeds)} \
+          --root-image ${product.rootImage} --root-label ${rootLabel} --root-uuid ${rootUuid} \
+          --esp ${product.esp} --esp-bytes ${toString espSize} --esp-volume-id ${espVolumeId} \
+          --generations ${toString product.nixos.config.boot.loader.systemd-boot.configurationLimit} \
+          --payload $out/os/${name}.zip --installer-data $out/installer_data.json \
+          --stub-bytes ${toString stubBytes} \
+          --out $out/manifest.json
+        (cd $out && sha256sum installer_data.json manifest.json os/${name}.zip nixos/* > SHA256SUMS)
+      '';
 in
 {
-  inherit nixos toplevel esp;
+  inherit product developer release;
   # The directory to run install-sekka.sh from: installer_data.json, the OS
   # package under os/ (the installer's REPO_BASE layout) and the bootstrap.
   bundle = pkgs.runCommand "${name}-mac-installer" { } ''
     mkdir -p $out/os
-    ln -s ${package} $out/os/${name}.zip
-    substitute ${installerData} $out/installer_data.json \
-      --replace-fail @ROOT_SIZE@ "$(stat -c %s ${rootImage})"
+    ln -s ${developer.payload} $out/os/${name}.zip
+    cp ${developer.installerData} $out/installer_data.json
     install -m755 ${./install-sekka.sh} $out/install-sekka.sh
   '';
 }

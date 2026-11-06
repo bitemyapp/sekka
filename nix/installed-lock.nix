@@ -1,8 +1,16 @@
 # The installed flake adds Sekka itself to the image's external dependency lock.
 # Dirty development images retain their exact store source; release images pin
-# the GitHub commit. Both then follow the nightly branch, and the inputs the
-# installed flake names (templates/flake.nix.in) follow the Sekka they are at.
-{ self }:
+# the GitHub commit. Both then follow `ref` (the nightly branch for PCs; the
+# Apple Silicon integration branch for Macs until that platform is on main),
+# and the inputs the installed flake names (templates/flake.nix.in) follow the
+# Sekka they are at. The default arguments give exactly the lock the PC media
+# have always shipped.
+{
+  self,
+  # The branch updates follow: the `original` ref, which must match the
+  # installed flake.nix's `inputs.sekka.url` for Nix to accept the lock.
+  ref ? "nightly",
+}:
 let
   base = builtins.fromJSON (builtins.readFile ../flake.lock);
   external = base.nodes.${base.root}.inputs;
@@ -73,7 +81,7 @@ base
         type = "github";
         owner = "bitemyapp";
         repo = "sekka";
-        ref = "nightly";
+        inherit ref;
       };
       inputs = external;
     };
