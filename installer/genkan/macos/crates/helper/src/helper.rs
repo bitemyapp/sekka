@@ -522,6 +522,20 @@ impl<P: Platform> Helper<P> {
         };
         match journal.state() {
             InstallState::Planned | InstallState::AssetsVerified => {
+                // Its run stopped inside a stage that changes nothing (the
+                // helper or the Mac restarted during the download): the
+                // record says so before it is closed.
+                if let Some(stage) = open_stage(journal.records()) {
+                    let failure = Failure {
+                        code: "interrupted".parse().unwrap(),
+                        message: text("This step stopped part way, when the helper or the Mac restarted. Nothing on the disk changed."),
+                        apple_diagnostic: None,
+                        disk_changed: DiskChanged::No,
+                    };
+                    if let Err(e) = journal.append(self.platform.now(), Event::Failed { stage, failure }) {
+                        return refuse(HelperRefusalCode::State, e.to_string());
+                    }
+                }
                 match journal.append(self.platform.now(), Event::Cancelled) {
                     Ok(_) => Response::Cancelled,
                     Err(e) => refuse(HelperRefusalCode::State, e.to_string()),
@@ -858,6 +872,16 @@ impl<P: Platform> Run<P> {
         self.active.log(line);
     }
 
+    fn append(&mut self, event: Event) -> bool {
+        match self.journal.append(self.platform.now(), event) {
+            Ok(_) => true,
+            Err(e) => {
+                self.log(format!("The record couldn't be written: {e}"));
+                false
+            }
+        }
+    }
+
     fn fail(&mut self, stage: Stage, code: &str, message: &str, disk_changed: DiskChanged) {
         self.log(format!("{stage:?} failed: {message}"));
         let failure = Failure {
@@ -866,9 +890,7 @@ impl<P: Platform> Run<P> {
             apple_diagnostic: None,
             disk_changed,
         };
-        let _ = self
-            .journal
-            .append(self.platform.now(), Event::Failed { stage, failure });
+        self.append(Event::Failed { stage, failure });
     }
 
     fn run(mut self) {
@@ -881,9 +903,7 @@ impl<P: Platform> Run<P> {
     }
 
     fn install(&mut self) {
-        let now = self.platform.now();
-        if let Err(e) = self.journal.append(now, Event::Intent { stage: Stage::Import }) {
-            self.log(format!("The record couldn't be written: {e}"));
+        if !self.append(Event::Intent { stage: Stage::Import }) {
             return;
         }
         let dir = self.paths.staging(self.journal.installation());
@@ -894,7 +914,7 @@ impl<P: Platform> Run<P> {
         let mut facts = vec![Fact::new("owner", &self.owner).expect("account names are text")];
         for (name, source, expect) in self.staged.clone() {
             if self.active.cancel.load(Ordering::SeqCst) {
-                return self.cancelled(Stage::Import);
+                return self.cancelled(Some(Stage::Import));
             }
             match sekka_mac_stage::import(
                 Path::new(&source),
@@ -908,7 +928,7 @@ impl<P: Platform> Run<P> {
                 Ok(file) => {
                     facts.push(Fact::new(&name.replace('_', "-"), file.digest).expect("digest is text"));
                 }
-                Err(sekka_mac_stage::StageError::Cancelled) => return self.cancelled(Stage::Import),
+                Err(sekka_mac_stage::StageError::Cancelled) => return self.cancelled(Some(Stage::Import)),
                 Err(e) => return self.fail(Stage::Import, "download", &e.to_string(), DiskChanged::No),
             }
         }
@@ -916,15 +936,11 @@ impl<P: Platform> Run<P> {
         if let Err(e) = fs::write(&plan_path, &self.plan_bytes) {
             return self.fail(Stage::Import, "staging", &e.to_string(), DiskChanged::No);
         }
-        if let Err(e) = self.journal.append(
-            self.platform.now(),
-            Event::Completed {
-                stage: Stage::Import,
-                facts,
-                verification: Verification::SourceHashed,
-            },
-        ) {
-            self.log(format!("The record couldn't be written: {e}"));
+        if !self.append(Event::Completed {
+            stage: Stage::Import,
+            facts,
+            verification: Verification::SourceHashed,
+        }) {
             return;
         }
 
@@ -939,9 +955,9 @@ impl<P: Platform> Run<P> {
         ) {
             Ok(p) => p,
             Err(e) => {
-                let _ = self
-                    .journal
-                    .append(self.platform.now(), Event::Intent { stage: Stage::AppleInputs });
+                if !self.append(Event::Intent { stage: Stage::AppleInputs }) {
+                    return;
+                }
                 return self.fail(Stage::AppleInputs, "engine", &e.to_string(), DiskChanged::No);
             }
         };
@@ -986,28 +1002,28 @@ impl<P: Platform> Run<P> {
                     DriveError::Cancelled => "cancelled",
                     _ => "engine-stopped",
                 };
-                match transcript.open_stage() {
-                    Some(stage) if cancelled && !stage.mutates() => self.cancelled(stage),
+                // What the journal says started, not the transcript: the
+                // engine may have announced a stage the helper never
+                // acknowledged (it was cancelled, or its intent couldn't be
+                // written), and that stage changed nothing.
+                let changed = self.disk_changed();
+                match open_stage(self.journal.records()) {
+                    Some(stage) if cancelled && !stage.mutates() => self.cancelled(Some(stage)),
                     Some(stage) => {
                         let changed = if stage.mutates() { DiskChanged::Unknown } else { DiskChanged::No };
                         self.fail(stage, code, &e.to_string(), changed);
                     }
+                    // Cancelled between stages before anything that changes
+                    // the disk began: it is closed as cancelled, with no
+                    // record of the stage the engine was about to start.
+                    None if cancelled && !changed => self.cancelled(None),
                     // Between stages: the next stage never got its
                     // acknowledgement, so it changed nothing. Recording it
                     // as failed keeps the journal's account complete; the
                     // state machine counts earlier stages' changes.
                     None => {
                         let Some(next) = transcript.next_stage() else { return };
-                        if self
-                            .journal
-                            .append(self.platform.now(), Event::Intent { stage: next })
-                            .is_err()
-                        {
-                            return;
-                        }
-                        if cancelled && !self.disk_changed() {
-                            self.cancelled(next);
-                        } else {
+                        if self.append(Event::Intent { stage: next }) {
                             self.fail(next, code, &e.to_string(), DiskChanged::No);
                         }
                     }
@@ -1024,9 +1040,13 @@ impl<P: Platform> Run<P> {
             .any(|r| matches!(&r.event, Event::Intent { stage } if stage.mutates()))
     }
 
-    fn cancelled(&mut self, stage: Stage) {
-        self.fail(stage, "cancelled", "Cancelled before anything on the disk changed.", DiskChanged::No);
-        let _ = self.journal.append(self.platform.now(), Event::Cancelled);
+    /// Close the installation as cancelled, recording first that the stage
+    /// it was in (one that changes nothing) stopped.
+    fn cancelled(&mut self, stage: Option<Stage>) {
+        if let Some(stage) = stage {
+            self.fail(stage, "cancelled", "Cancelled before anything on the disk changed.", DiskChanged::No);
+        }
+        self.append(Event::Cancelled);
     }
 }
 

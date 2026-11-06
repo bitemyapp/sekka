@@ -26,6 +26,12 @@ enum Script {
     Skip(Stage),
     /// Wait inside this stage until terminated.
     Hang(Stage),
+    /// Before this stage, wait until terminated, then announce it anyway:
+    /// a cancel that arrives while the stage's intent is on its way.
+    AnnounceAfterStop(Stage),
+    /// Before this stage, wait until terminated, then end without
+    /// announcing it: the signal lands between stages.
+    EndBefore(Stage),
     /// Refuse before any stage began, saying this.
     Refuse(&'static str),
 }
@@ -193,6 +199,14 @@ impl ScriptedEngine {
             for stage in stages {
                 if script == Script::Skip(stage) {
                     continue;
+                }
+                if matches!(script, Script::AnnounceAfterStop(s) | Script::EndBefore(s) if s == stage) {
+                    while !stopped.load(Ordering::SeqCst) {
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    if script == Script::EndBefore(stage) {
+                        return;
+                    }
                 }
                 let n = send(EngineBody::Intent { stage, plan: digest });
                 // Wait for the acknowledgement; the journal must already
@@ -446,6 +460,18 @@ impl World {
             }
         }
         panic!("the installation never finished");
+    }
+    /// Poll until the journal holds a record matching `event`.
+    fn wait_for(&self, id: Uuid, event: impl Fn(&Event) -> bool) {
+        for _ in 0..500 {
+            if let Response::Events { records, .. } = self.ask(Request::Events { installation: id, after: 0 }, None)
+                && records.iter().any(|r| event(&r.event))
+            {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        panic!("the record never appeared");
     }
     fn fake(&self) -> &Fake {
         self.helper.platform_for_tests()
@@ -768,6 +794,51 @@ fn cancelling_is_allowed_only_before_the_disk_changes() {
     // Let the test end: stop the hanging engine directly.
     w.helper.terminate_for_tests(id);
     w.finish(id);
+}
+
+#[test]
+fn a_cancel_between_apple_inputs_and_the_first_disk_stage_is_a_cancel() {
+    // Whether the engine's next intent is already on its way when the
+    // cancel lands, or the signal stops it before it writes one, the first
+    // stage that changes the disk was never acknowledged: nothing changed,
+    // and the record says cancelled, not that resizing failed.
+    for script in [Script::AnnounceAfterStop(Stage::Shrink), Script::EndBefore(Stage::Shrink)] {
+        let w = world(script);
+        let id = w.begun();
+        w.wait_for(id, |e| matches!(e, Event::Completed { stage: Stage::AppleInputs, .. }));
+        assert_eq!(w.ask(Request::Cancel { installation: id }, None), Response::Cancelled);
+        let (state, records) = w.finish(id);
+        assert_eq!(state, InstallState::Cancelled, "{script:?}");
+        assert!(
+            records.iter().all(|r| !matches!(
+                r.event,
+                Event::Intent { stage: Stage::Shrink } | Event::Failed { stage: Stage::Shrink, .. }
+            )),
+            "{script:?}: {records:?}"
+        );
+        *w.fake().script.lock().unwrap() = Script::Happy;
+        assert_eq!(w.finish(w.begun()).0, InstallState::WaitingForRecovery, "{script:?}");
+    }
+}
+
+#[test]
+fn an_installation_stopped_during_a_download_can_be_cancelled_after_a_restart() {
+    for open in [Stage::Import, Stage::AppleInputs] {
+        let w = world(Script::Happy);
+        let id = abandoned(&w, open);
+        assert_eq!(refused(w.begin()).0, HelperRefusalCode::Busy, "{open:?}: it blocks another");
+        assert_eq!(w.ask(Request::Cancel { installation: id }, None), Response::Cancelled);
+        let (state, records) = w.finish(id);
+        assert_eq!(state, InstallState::Cancelled);
+        assert!(
+            records.iter().any(|r| matches!(
+                &r.event,
+                Event::Failed { stage, failure } if *stage == open && failure.code.as_str() == "interrupted"
+            )),
+            "{open:?}: {records:?}"
+        );
+        assert_eq!(w.finish(w.begun()).0, InstallState::WaitingForRecovery, "{open:?}");
+    }
 }
 
 #[test]
