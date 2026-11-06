@@ -2,7 +2,8 @@
 # - the installed flake and its generated lock, through Genkan's own
 #   Template::parse (the VM fixture's validate-template, as template-lock runs
 #   it for PCs), with a lock that adds an input at the root as its failing
-#   control, and the shipped flake.nix as exactly the parser's output;
+#   control, and installed-flake.nix's rendering as exactly the parser's
+#   output;
 # - boot.bin's verified replacement (boot-bin/test_boot_bin.py);
 # - the identity record and boot-entry filling (identity/test_install_identity.py);
 # - the initrd's identity check and udev helper (identity/test-check.sh).
@@ -22,9 +23,11 @@ let
         nativeBuildInputs = [ pkgs.python3 ];
         template = installed.template;
         lock = builtins.toJSON installed.lock;
+        named = installed.named "sekka-test";
         passAsFile = [
           "template"
           "lock"
+          "named"
         ];
       }
       ''
@@ -32,9 +35,10 @@ let
         cp $lockPath flake.lock
         # The real backend parser accepts the rendered template and lock...
         ${fixture}/bin/calamares-vm-fixture validate-template template.nix.in flake.lock > parsed.nix
-        # ...and its output, with this host name, is the flake the image ships.
-        sed 's/"sekka-test"/"sekka"/' parsed.nix > expected.nix
-        cmp expected.nix ${./product/flake.nix}
+        # ...and writes, for a host name, exactly what installed-flake.nix
+        # renders, from which the shipped flake (named by the configuration's
+        # host name; checked at evaluation) differs only in that name.
+        cmp parsed.nix $namedPath
         python3 - <<'EOF'
         import json
         lock = json.load(open("flake.lock"))

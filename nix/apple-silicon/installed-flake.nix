@@ -2,18 +2,24 @@
 # (templates/flake.nix.in), rendered for another system and update branch,
 # and the lock nix/installed-lock.nix derives from the image's own source.
 #
-# Only the system, the branch Sekka follows and the header comment change.
 # The template's inputs (Sekka plus the six Genkan's parser requires to
 # follow Sekka's) and its module list stay exactly as they are, so the
 # installed lock passes the same Template::parse check as on PCs
-# (tests.nix), and Yukimi treats the flake as it treats a PC's.
+# (tests.nix), and Yukimi treats the flake as it treats a PC's. What changes:
+# - the system, the branch Sekka follows and the header comment;
+# - the configuration's name. Genkan writes the host name chosen before
+#   installing; a Mac image is set up after, so its flake names the
+#   configuration by the host name the configuration itself sets (setup.nix,
+#   written by first-boot setup), as Yukimi and nixos-rebuild look it up,
+#   and "sekka" while it is empty, before setup.
 {
   lib,
   self,
   system ? "aarch64-linux",
   # Until the platform is on main, Macs follow the Apple integration branch.
   ref ? "fix/apple-silicon-aizome",
-  hostname ? "sekka",
+  # The name before setup chooses one.
+  fallback ? "sekka",
 }:
 let
   source = builtins.readFile ../../templates/flake.nix.in;
@@ -62,14 +68,39 @@ let
       count = 4;
     }
   ];
-in
-{
-  inherit template ref system;
-  # Genkan quotes the host name as a Nix string (config.rs, nix_string).
-  flake = replace template {
+  # What Genkan's parser writes for a host name (config.rs, nix_string).
+  named = hostname: replace template {
     from = "@HOSTNAME@";
     to = builtins.toJSON hostname;
     count = 1;
   };
+in
+{
+  inherit
+    template
+    named
+    ref
+    system
+    ;
+  # The parser's output for a stand-in name, then named by the configuration.
+  flake =
+    builtins.foldl' replace (named "@HOSTNAME@") [
+      {
+        from = "    nixosConfigurations.\"@HOSTNAME@\" = nixpkgs.lib.nixosSystem {";
+        to =
+          "    # Named after the host name the configuration sets (setup.nix, from\n"
+          + "    # first-boot setup), as Yukimi and nixos-rebuild look it up, and\n"
+          + "    # \"${fallback}\" before setup has chosen one.\n"
+          + "    nixosConfigurations =\n"
+          + "      (c: { \${if c.config.networking.hostName == \"\" then \"${fallback}\" else c.config.networking.hostName} = c; })\n"
+          + "      (nixpkgs.lib.nixosSystem {";
+        count = 1;
+      }
+      {
+        from = "      ];\n    };\n  };\n}";
+        to = "      ];\n    });\n  };\n}";
+        count = 1;
+      }
+    ];
   lock = import ../installed-lock.nix { inherit self ref; };
 }

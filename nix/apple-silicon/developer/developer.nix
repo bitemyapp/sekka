@@ -4,11 +4,18 @@
 # and the root image keeps its label. So this system finds them by those,
 # which two such installations visible at once would share, and it has a
 # developer account, `sekka` with password `sekka`; change it with `passwd`.
-# Product images have neither (configuration.nix, identity.nix).
+# It is never set up at first boot, and no update puts it into setup.
+# Product images have neither (configuration.nix, identity.nix, setup.nix).
 { lib, ... }:
 {
-  calamares.installUser = "sekka";
+  calamares.firstBootSetup.enable = lib.mkForce false;
   calamares.appleSilicon.identity.handoff = lib.mkForce false;
+  calamares.installUser = "sekka";
+  # What first-boot setup would otherwise choose.
+  networking.hostName = "sekka";
+  time.timeZone = "UTC";
+  i18n.defaultLocale = "en_US.UTF-8";
+  services.xserver.xkb.layout = "us";
   fileSystems."/" = {
     device = "/dev/disk/by-label/sekka-root";
     fsType = "ext4";

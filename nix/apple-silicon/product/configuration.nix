@@ -6,9 +6,10 @@
 # - identity.nix: this installation's own root and EFI system partition,
 #   written once at the first start from the installer's handoff
 #   (sekka-install-identity.service);
-# - setup.nix: the owner's account and choices, written by first-boot setup;
-# - developer.nix: only in developer images (the `sekka` account and the
-#   Asahi installer's fixed partition labels).
+# - setup.nix: the owner's account and choices, written by first-boot setup
+#   (calamares.firstBootSetup, below);
+# - developer.nix: only in developer images (the `sekka` account, no setup,
+#   and the Asahi installer's fixed partition labels).
 { lib, pkgs, ... }:
 {
   imports = builtins.filter builtins.pathExists [
@@ -23,7 +24,8 @@
       "aizome"
       "tatami"
     ];
-    defaultDesktop = "aizome";
+    # setup.nix names the owner's choice.
+    defaultDesktop = lib.mkDefault "aizome";
     loginScreen = "aizome";
     tuning.enable = true;
     bootSplash.enable = true;
@@ -39,24 +41,18 @@
     };
   };
 
-  # FIRST-BOOT SETUP. Once Sekka's first-boot setup module is part of Sekka,
-  # enable it here, and only here:
-  #   calamares.firstBootSetup.enable = true;
+  # FIRST-BOOT SETUP on Aizome's login screen (installer/genkan/first-boot):
+  # with no account yet, it asks for the owner's language, keyboard, time
+  # zone, account and desktop and writes setup.nix. Until then its module
+  # gives the host name, time zone, locale, keyboard and installing user
+  # their defaults, so this file sets none of them.
+  calamares.firstBootSetup.enable = true;
 
   boot.loader.systemd-boot.enable = true;
   boot.loader.systemd-boot.configurationLimit = 5;
   # QEMU's virt machine reaches its disks through virtio-mmio, so this same
   # system boots in a test VM; on a Mac the module never loads.
   boot.initrd.availableKernelModules = [ "virtio_mmio" ];
-
-  # Defaults that setup.nix replaces with the owner's choices. Genkan's
-  # modules name the account it created; until setup creates the owner's,
-  # that is root, which has no password.
-  calamares.installUser = lib.mkDefault "root";
-  networking.hostName = lib.mkDefault "sekka";
-  time.timeZone = lib.mkDefault "UTC";
-  i18n.defaultLocale = lib.mkDefault "en_US.UTF-8";
-  services.xserver.xkb.layout = lib.mkDefault "us";
 
   networking.networkmanager.enable = true;
   hardware.enableRedistributableFirmware = true;

@@ -142,7 +142,8 @@ let
       # misses structured attributes, which the initrd uses).
       inputsOf =
         drv: pkgs.writeText "${drv.name}-inputs.json" (builtins.toJSON (removeAttrs drv.drvAttrs [ "name" ]));
-      rebuildInputs = pkgs.linkFarm "${name}-${variant}-rebuild-inputs" [
+      rebuildInputs = pkgs.linkFarm "${name}-${variant}-rebuild-inputs" (
+        [
         {
           name = "stdenv";
           path = pkgs.stdenvNoCC;
@@ -164,7 +165,13 @@ let
           name = "system";
           path = inputsOf toplevel;
         }
-      ];
+      ]
+      # The console's keymap, made from the keyboard layout setup chooses.
+        ++ lib.optional (lib.isDerivation nixos.config.console.keyMap) {
+          name = "console-keymap";
+          path = inputsOf nixos.config.console.keyMap;
+        }
+      );
 
       storePaths = [
         toplevel

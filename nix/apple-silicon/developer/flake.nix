@@ -12,7 +12,12 @@
   inputs.omp.follows = "sekka/omp";
 
   outputs = { nixpkgs, determinate, fh, applications, ai-apps, omp, sekka, ... }: {
-    nixosConfigurations."sekka" = nixpkgs.lib.nixosSystem {
+    # Named after the host name the configuration sets (setup.nix, from
+    # first-boot setup), as Yukimi and nixos-rebuild look it up, and
+    # "sekka" before setup has chosen one.
+    nixosConfigurations =
+      (c: { ${if c.config.networking.hostName == "" then "sekka" else c.config.networking.hostName} = c; })
+      (nixpkgs.lib.nixosSystem {
       system = "aarch64-linux";
       specialArgs = {
         applicationPkgs = import applications {
@@ -30,6 +35,6 @@
           environment.systemPackages = [ fh.packages.${pkgs.stdenv.hostPlatform.system}.default ];
         })
       ];
-    };
+    });
   };
 }
