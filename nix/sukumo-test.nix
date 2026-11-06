@@ -71,6 +71,12 @@ pkgs.rustPlatform.buildRustPackage {
     cargo test "''${flags[@]}" -p sidestep-engine --lib
     cargo test "''${flags[@]}" -p sidestep-ui --lib \
       --test headless --test offscreen --test desktop --test scrolling --test drag_out
+    # The doctests of every crate with one that must not compile, their
+    # error codes checked.
+    source ${./checked-doctests.sh}
+    for package in $(compile_fail_packages crates); do
+      cargo test "''${flags[@]}" --doc -p "$package"
+    done
     # The Wayland tests under a headless sway, with a session bus of their
     # own: Nixpkgs' sway starts one itself when there's none, from /etc's
     # configuration, which a sandbox hasn't got. They pass by skipping where

@@ -50,7 +50,8 @@ For each bug:
    such probes.
 2. **Checked error codes.** Stable rustdoc doesn't check those codes, so
    they were checked with `RUSTC_BOOTSTRAP=1 cargo test --doc`, which does.
-   `DEVELOPERS.md` says to run them that way.
+   `DEVELOPERS.md` says to run them that way, and the Nix checks now do
+   (`nix/checked-doctests.sh`).
 3. **A regression test.** The bug's reproduction from the catalog became its
    regression test. It fails on main and passes here.
 4. **An independent review.** A second agent tried to write each mistake
