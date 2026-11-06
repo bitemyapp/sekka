@@ -28,9 +28,14 @@ impl Paths {
     pub fn journals(&self) -> PathBuf {
         self.root.join("installations")
     }
-    /// The imported downloads and the plan for one installation.
+    /// Every installation's staging, by installation identity.
+    pub fn all_staging(&self) -> PathBuf {
+        self.root.join("staging")
+    }
+    /// The imported downloads and the plan for one installation. The
+    /// downloads are removed once its run is over; the plan stays.
     pub fn staging(&self, installation: Uuid) -> PathBuf {
-        self.root.join("staging").join(installation.to_string())
+        self.all_staging().join(installation.to_string())
     }
     pub fn accepted(&self) -> PathBuf {
         self.root.join("accepted-catalogs.json")

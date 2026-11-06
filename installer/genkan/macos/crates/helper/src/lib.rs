@@ -13,7 +13,7 @@
 //! - it inspects the Mac itself, as root, derives the plan itself, and
 //!   starts only if that plan's digest is the one the owner confirmed;
 //! - it copies the app's downloads into its own staging, hashing them
-//!   against the catalog as it copies;
+//!   against the catalog as it copies, and removes them once the run ends;
 //! - it runs one installation at a time, under a journal that records each
 //!   stage before the engine may begin it.
 //!

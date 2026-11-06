@@ -24,6 +24,8 @@ use crate::{Paths, Platform, Secret, redact};
 const LOG_LINES: usize = 2000;
 /// The most a [`Text`] holds, in bytes.
 const TEXT_BYTES: usize = 2048;
+/// What a run's staging keeps once its downloads are removed.
+const PLAN_FILE: &str = "plan.json";
 
 pub struct Helper<P: Platform> {
     platform: Arc<P>,
@@ -62,6 +64,17 @@ impl<P: Platform> Helper<P> {
     pub fn new(platform: P, paths: Paths, trust: TrustConfig, version: Version) -> std::io::Result<Self> {
         for dir in [paths.root().to_path_buf(), paths.journals()] {
             fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir)?;
+        }
+        // Nothing runs yet. Downloads imported for earlier runs are of no
+        // use now (a run never resumes, and a retry needs only the plan),
+        // and their clones hold their space from macOS until removed.
+        if let Ok(entries) = fs::read_dir(paths.all_staging()) {
+            for entry in entries.flatten() {
+                let named = entry.file_name().to_str().is_some_and(|n| n.parse::<Uuid>().is_ok());
+                if named && entry.file_type().is_ok_and(|t| t.is_dir()) {
+                    let _ = remove_downloads(&entry.path());
+                }
+            }
         }
         Ok(Self {
             platform: Arc::new(platform),
@@ -468,7 +481,7 @@ impl<P: Platform> Helper<P> {
             Err(e) => return refuse(HelperRefusalCode::Download, e.to_string()),
         };
         let dir = self.paths.staging(installation);
-        let plan_path = dir.join("plan.json");
+        let plan_path = dir.join(PLAN_FILE);
         let written = fs::DirBuilder::new()
             .recursive(true)
             .mode(0o700)
@@ -613,6 +626,31 @@ fn text(s: &str) -> Text {
     clean.parse().unwrap_or_else(|_| "(unreadable)".parse().expect("plain text"))
 }
 
+/// Remove an installation's imported downloads from the helper's staging,
+/// keeping its plan (a retry of the startup disk rewrites it anyway). The
+/// app removes its own copies; on APFS these are clones, which keep the
+/// downloads' space from macOS for as long as they exist.
+fn remove_downloads(dir: &Path) -> std::io::Result<()> {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    let mut first = Ok(());
+    for entry in entries {
+        let removed = entry.and_then(|entry| {
+            if entry.file_name() == PLAN_FILE || entry.file_type()?.is_dir() {
+                return Ok(());
+            }
+            fs::remove_file(entry.path())
+        });
+        if first.is_ok() {
+            first = removed;
+        }
+    }
+    first
+}
+
 /// Every fact the installation's completed stages recorded, in order.
 fn recorded_facts(records: &[Record]) -> Vec<Fact> {
     records
@@ -731,6 +769,10 @@ impl<P: Platform> Run<P> {
 
     fn run(mut self) {
         self.install();
+        // Whatever the outcome, nothing reads the downloads again.
+        if let Err(e) = remove_downloads(&self.paths.staging(self.journal.installation())) {
+            self.log(format!("The imported downloads couldn't all be removed: {e}"));
+        }
         let mut s = self.active.shared.lock().unwrap();
         s.running = false;
         s.mutating = false;
@@ -770,7 +812,7 @@ impl<P: Platform> Run<P> {
                 Err(e) => return self.fail(Stage::Import, "download", &e.to_string(), DiskChanged::No),
             }
         }
-        let plan_path = dir.join("plan.json");
+        let plan_path = dir.join(PLAN_FILE);
         if let Err(e) = fs::write(&plan_path, &self.plan_bytes) {
             return self.fail(Stage::Import, "staging", &e.to_string(), DiskChanged::No);
         }

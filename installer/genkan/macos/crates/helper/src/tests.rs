@@ -33,6 +33,8 @@ enum Script {
 struct Fake {
     dir: PathBuf,
     inspection: Mutex<Inspection>,
+    /// What the engine found in the helper's staging when it started.
+    staged_at_start: Mutex<Vec<(String, Vec<u8>)>>,
     script: Mutex<Script>,
     startup_disk_ok: AtomicBool,
     /// Every acknowledgement found its intent already in the journal.
@@ -81,7 +83,15 @@ impl Platform for Fake {
         let plan: Plan = canonical::from_slice(&std::fs::read(plan).unwrap(), limits::PLAN, PlanSchema::VALUE).unwrap();
         let (mode, script) = match run {
             crate::EngineRun::Execute { assets } => {
-                assert!(assets.join("payload.zip").exists());
+                let mut found: Vec<(String, Vec<u8>)> = std::fs::read_dir(assets)
+                    .unwrap()
+                    .map(|e| {
+                        let e = e.unwrap();
+                        (e.file_name().to_string_lossy().into_owned(), std::fs::read(e.path()).unwrap())
+                    })
+                    .collect();
+                found.sort();
+                *self.staged_at_start.lock().unwrap() = found;
                 *self.engine_runs.lock().unwrap() += 1;
                 (EngineMode::Execute, *self.script.lock().unwrap())
             }
@@ -309,6 +319,7 @@ fn fake(dir: &Path, script: Script) -> Fake {
     Fake {
         dir: dir.into(),
         inspection: Mutex::new(samples::inspection()),
+        staged_at_start: Mutex::new(Vec::new()),
         script: Mutex::new(script),
         startup_disk_ok: AtomicBool::new(true),
         ordering_held: Arc::new(AtomicBool::new(true)),
@@ -520,9 +531,14 @@ fn a_complete_installation_waits_for_recovery_with_every_stage_journaled_first()
     let mut expected = vec![Stage::Import];
     expected.extend(macos_stages(true));
     assert_eq!(completed, expected);
-    // The imported downloads are the helper's own copies.
+    // The engine ran from the helper's own copies of the downloads. Once it
+    // is done they are removed (they hold their space from macOS), and only
+    // the plan stays.
+    let found: Vec<String> = w.fake().staged_at_start.lock().unwrap().iter().map(|(n, _)| n.clone()).collect();
+    assert_eq!(found, ["installer_data.json", "manifest.json", "payload.zip", "plan.json", "recovery.zip"]);
     let staged = w.helper.paths_for_tests().staging(id);
-    assert!(staged.join("payload.zip").exists() && staged.join("plan.json").exists());
+    let left: Vec<_> = std::fs::read_dir(&staged).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert_eq!(left, ["plan.json"]);
     // Diagnostics name no account.
     let Response::Diagnostics { lines } = w.ask(Request::Diagnostics { installation: id }, None) else { panic!() };
     assert!(lines.iter().all(|l| !l.as_str().contains("owner")), "{lines:?}");
@@ -530,6 +546,19 @@ fn a_complete_installation_waits_for_recovery_with_every_stage_journaled_first()
     let Response::Status { installations } = w.ask(Request::Status, None) else { panic!() };
     assert_eq!(installations.len(), 1);
     assert_eq!(installations[0].state, InstallState::WaitingForRecovery);
+}
+
+#[test]
+fn downloads_left_by_an_earlier_run_are_removed_when_the_helper_starts() {
+    let w = world(Script::Happy);
+    let staged = w.helper.paths_for_tests().staging(Uuid::random().unwrap());
+    std::fs::create_dir_all(&staged).unwrap();
+    for name in ["payload.zip", "recovery.zip", "plan.json"] {
+        std::fs::write(staged.join(name), b"x").unwrap();
+    }
+    let _w = w.restarted(Script::Happy);
+    let left: Vec<_> = std::fs::read_dir(&staged).unwrap().map(|e| e.unwrap().file_name()).collect();
+    assert_eq!(left, ["plan.json"]);
 }
 
 #[test]
@@ -597,9 +626,9 @@ fn imported_files_are_named_by_their_role_not_the_apps_path() {
     };
     let (state, _) = w.finish(id);
     assert_eq!(state, InstallState::WaitingForRecovery);
-    let staged = w.helper.paths_for_tests().staging(id);
-    assert_eq!(std::fs::read(staged.join("installer_data.json")).unwrap(), b"{\"os_list\":[]}");
-    assert!(!staged.join("recovery-copy.zip").exists());
+    let found = w.fake().staged_at_start.lock().unwrap().clone();
+    assert!(found.contains(&("installer_data.json".into(), b"{\"os_list\":[]}".to_vec())), "{found:?}");
+    assert!(found.iter().all(|(name, _)| name != "recovery-copy.zip"));
 }
 
 #[test]
