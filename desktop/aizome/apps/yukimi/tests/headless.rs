@@ -487,6 +487,18 @@ fn unselecting_runs_and_selecting_none() {
 }
 
 #[test]
+fn the_heaviest_can_be_grouped_by_app() {
+    let (mut h, w, _) = sample(WORKS);
+    h.send(Msg::Show(Page::Storage));
+    let group = h.find_id(w, "group-by-app").expect("the box").center();
+    h.click(w, group);
+    assert!(h.program().by_app);
+    assert!(has(&h, w, "ghc") && has(&h, w, "9.10.3"));
+    h.click(w, group);
+    assert!(!h.program().by_app);
+}
+
+#[test]
 fn cleaning_up_says_what_comes_back() {
     let (mut h, w, _) = sample(WORKS);
     h.send(Msg::Show(Page::Storage));

@@ -55,14 +55,16 @@ pub struct Composition {
     pub garbage_paths: usize,
 }
 
-/// A package in a store at one version, with the size of all its paths.
+/// A package in a store, at one version or with its versions grouped, with
+/// the size of all its paths.
 #[derive(Clone, Debug)]
 pub struct Heavy {
     pub name: String,
-    pub version: String,
+    /// Its versions, newest first: one, unless grouped by app.
+    pub versions: Vec<String>,
     pub size: u64,
-    /// How many builds of that version the paths come from: two llvm
-    /// 21.1.8s made differently are two copies.
+    /// How many builds the paths come from: two llvm 21.1.8s made
+    /// differently are two copies.
     pub builds: usize,
 }
 
@@ -95,8 +97,10 @@ pub struct Store {
     pub reclaim: Reclaim,
     /// Packages of the running system's `environment.systemPackages`.
     pub system_packages: Vec<SystemPackage>,
-    /// The heaviest packages in the running system.
+    /// The heaviest packages in the running system, one for each version.
     pub heaviest: Vec<Heavy>,
+    /// The same with each app's versions grouped.
+    pub heaviest_apps: Vec<Heavy>,
     /// How big each system generation is, oldest first: everything it
     /// needs (its closure), shared with the others or not. Not what
     /// deleting one gives back; that is [`Freeable`].
@@ -535,7 +539,7 @@ impl Store {
         store.composition = composition(&store.graph, &gc_roots, keep);
         store.reclaim = Reclaim::new(&store.graph, &gc_roots, keep);
         store.system_packages = system_packages(&store.graph);
-        store.heaviest = heaviest(&store.graph, 24);
+        (store.heaviest, store.heaviest_apps) = heaviest(&store.graph, 24);
         store.generation_sizes = generations
             .iter()
             .map(|g| (g.number, store.closure_of(&g.target).iter().map(|&id| store.graph.info(id).nar_size).sum()))
@@ -613,19 +617,28 @@ fn system_packages(graph: &Graph) -> Vec<SystemPackage> {
     by_name.into_values().collect()
 }
 
-/// The heaviest packages in the running system's closure.
-fn heaviest(graph: &Graph, count: usize) -> Vec<Heavy> {
+/// The heaviest packages in the running system's closure: one for each
+/// version, and with each app's versions grouped.
+fn heaviest(graph: &Graph, count: usize) -> (Vec<Heavy>, Vec<Heavy>) {
     let Some(current) = std::fs::read_link("/run/current-system").ok().and_then(|p| graph.lookup(p.to_str()?)) else {
-        return Vec::new();
+        return Default::default();
     };
-    heaviest_from(graph, current, count)
+    let versions = by_version(graph, current);
+    (heaviest_of(versions.clone(), count), heaviest_of(by_app(versions), count))
 }
 
-/// The heaviest packages in `top`'s closure, one for each name and version:
-/// a build's outputs (`lib32`, `firmware`, `jre`, …) together, named as the
+/// The `count` largest.
+fn heaviest_of(mut list: Vec<Heavy>, count: usize) -> Vec<Heavy> {
+    list.sort_by_key(|h| std::cmp::Reverse(h.size));
+    list.truncate(count);
+    list
+}
+
+/// The packages in `top`'s closure, one for each name and version: a
+/// build's outputs (`lib32`, `firmware`, `jre`, …) together, named as the
 /// derivation that made them when the store records it, and other versions
 /// (openjdk 25, 21 and 17) apart.
-fn heaviest_from(graph: &Graph, top: PathId, count: usize) -> Vec<Heavy> {
+fn by_version(graph: &Graph, top: PathId) -> Vec<Heavy> {
     let mut by_version: HashMap<(String, String), (Heavy, BTreeSet<String>)> = HashMap::new();
     for id in graph.closure([top]) {
         let Some(path) = graph.store_path(id) else { continue };
@@ -643,16 +656,38 @@ fn heaviest_from(graph: &Graph, top: PathId, count: usize) -> Vec<Heavy> {
             None => (path.name(), path.version()),
         };
         let (heavy, builds) = by_version.entry((name.to_owned(), version.to_owned())).or_insert_with(|| {
-            (Heavy { name: name.to_owned(), version: version.to_owned(), size: 0, builds: 0 }, BTreeSet::new())
+            let heavy = Heavy { name: name.to_owned(), versions: vec![version.to_owned()], size: 0, builds: 0 };
+            (heavy, BTreeSet::new())
         });
         heavy.size += info.nar_size;
         builds.insert(made_by.map_or_else(|| path.as_str().to_owned(), |drv| drv.as_str().to_owned()));
     }
-    let mut list: Vec<Heavy> =
-        by_version.into_values().map(|(heavy, builds)| Heavy { builds: builds.len(), ..heavy }).collect();
-    list.sort_by_key(|h| std::cmp::Reverse(h.size));
-    list.truncate(count);
-    list
+    by_version.into_values().map(|(heavy, builds)| Heavy { builds: builds.len(), ..heavy }).collect()
+}
+
+/// Each app's versions grouped: their sizes and builds added up, the
+/// versions newest first.
+fn by_app(versions: Vec<Heavy>) -> Vec<Heavy> {
+    let mut by_name: HashMap<String, Heavy> = HashMap::new();
+    for heavy in versions {
+        match by_name.get_mut(&heavy.name) {
+            Some(app) => {
+                app.size += heavy.size;
+                app.builds += heavy.builds;
+                app.versions.extend(heavy.versions);
+            }
+            None => {
+                by_name.insert(heavy.name.clone(), heavy);
+            }
+        }
+    }
+    by_name
+        .into_values()
+        .map(|mut app| {
+            app.versions.sort_by(|a, b| yukimi_store::compare_versions(b, a));
+            app
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -898,9 +933,10 @@ mod tests {
             .collect();
         let edges: Vec<(usize, usize)> = (1..paths.len()).map(|i| (0, i)).collect();
         let graph = Graph::from_parts(nodes, &edges);
-        let heaviest = heaviest_from(&graph, PathId::from_index(0), 10);
+        let versions = by_version(&graph, PathId::from_index(0));
+        let heaviest = heaviest_of(versions.clone(), 10);
         let row = |name: &str, version: &str| {
-            let h = heaviest.iter().find(|h| h.name == name && h.version == version);
+            let h = heaviest.iter().find(|h| h.name == name && h.versions == [version]);
             h.map(|h| (h.size, h.builds)).unwrap_or_else(|| panic!("{name} {version} in {heaviest:?}"))
         };
         assert_eq!(row("llvm", "21.1.8"), (577 + 564, 2));
@@ -911,6 +947,13 @@ mod tests {
         assert_eq!(row("zstd", "1.5.7"), (2, 1));
         assert_eq!(heaviest[0].name, "llvm");
         assert_eq!(heaviest.len(), 6);
+        // Grouped by app, openjdk's versions together, newest first.
+        let apps = heaviest_of(by_app(versions), 10);
+        let openjdk = apps.iter().find(|h| h.name == "openjdk").expect("openjdk");
+        assert_eq!(openjdk.versions, ["25.0.5.0.3+1", "8u504-b01"]);
+        assert_eq!((openjdk.size, openjdk.builds), (688 + 94 + 109, 2));
+        assert_eq!(apps.len(), 5);
+        assert_eq!(apps[0].name, "llvm");
     }
 
     #[test]

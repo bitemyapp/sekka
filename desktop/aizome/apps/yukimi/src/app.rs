@@ -340,6 +340,8 @@ pub enum Msg {
     Older(usize),
     CleanUp,
     ToggleRoots,
+    /// Group the heaviest packages' versions by app, or list each version.
+    GroupByApp(bool),
 
     // Operations.
     Confirm {
@@ -435,6 +437,8 @@ pub struct Yukimi {
     /// keep them all.
     pub older: usize,
     pub roots_open: bool,
+    /// The heaviest packages with each app's versions grouped.
+    pub by_app: bool,
 
     pub branch: Option<BranchChooser>,
     pub comparison: Option<ComparisonSheet>,
@@ -514,6 +518,7 @@ impl Yukimi {
             ticked: Ticked::default(),
             older: 1,
             roots_open: false,
+            by_app: false,
             branch: None,
             comparison: None,
             draft: BTreeMap::new(),
@@ -1741,6 +1746,7 @@ impl Program for Yukimi {
                 );
             }
             Msg::ToggleRoots => self.roots_open = !self.roots_open,
+            Msg::GroupByApp(on) => self.by_app = on,
 
             Msg::Confirm { heading, body, action, operation } => self.confirm(heading, body, action, operation, cx),
             Msg::Run(operation) => self.run(operation, cx),

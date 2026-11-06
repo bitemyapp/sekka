@@ -329,7 +329,7 @@ pub fn store(generations: &[Generation], graph: Graph) -> Store {
         .chain(AFTER.iter())
         .map(|(full, size)| {
             let (name, version) = yukimi_store::path::split_name(full);
-            Heavy { name: name.to_owned(), version: version.to_owned(), size: *size, builds: 1 }
+            Heavy { name: name.to_owned(), versions: vec![version.to_owned()], size: *size, builds: 1 }
         })
         .collect();
     heaviest.sort_by_key(|h| std::cmp::Reverse(h.size));
@@ -367,6 +367,8 @@ pub fn store(generations: &[Generation], graph: Graph) -> Store {
         },
         reclaim: Default::default(),
         system_packages,
+        // The sample runs one version of each, so grouping changes nothing.
+        heaviest_apps: heaviest.clone(),
         heaviest,
         latest,
         generation_sizes: generations.iter().zip(sizes).map(|(g, s)| (g.number, (s * GB as f64) as u64)).collect(),

@@ -8,7 +8,7 @@ use yukimi_system::human_size;
 use super::widgets::{Dye, bar, tap};
 use super::{caption, group, group_digits, heading, mono, panel, swatch};
 use crate::app::{Msg, Yukimi};
-use crate::model::Composition;
+use crate::model::{Composition, Heavy};
 
 /// The parts of the store: a title, what it is, its size, and its dye.
 pub fn parts(c: &Composition) -> [(&'static str, &'static str, u64, Dye); 5] {
@@ -19,6 +19,21 @@ pub fn parts(c: &Composition) -> [(&'static str, &'static str, u64, Dye); 5] {
         ("Projects and dev shells", "Build results and development environments.", c.projects, Dye::Green),
         ("Garbage", "Needed by nothing. Cleaning up removes it.", c.garbage, Dye::Faint),
     ]
+}
+
+/// A heavy package's version and how many builds it came from, or its
+/// versions grouped, newest first: up to four.
+fn versions_line(p: &Heavy) -> String {
+    let named: Vec<String> = p.versions.iter().filter(|v| !v.is_empty()).cloned().collect();
+    match named.as_slice() {
+        [one] if p.builds > 1 => format!("{one} · {} builds", p.builds),
+        many if many.len() <= 4 => crate::app::words(many),
+        many => {
+            let mut shown = many[..3].to_vec();
+            shown.push(format!("{} more", many.len() - 3));
+            crate::app::words(&shown)
+        }
+    }
 }
 
 /// The bar's segments: each part's share of the store.
@@ -151,22 +166,17 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
     .spacing(6.0)
     .width(Fill);
 
-    // The heaviest packages, each with its share of the heaviest.
-    let largest = store.heaviest.first().map(|h| h.size).unwrap_or(1).max(1) as f64;
-    let heavy: Vec<Element<Msg>> = store
-        .heaviest
+    // The heaviest packages, each with its share of the heaviest: each
+    // version, or each app's versions together.
+    let heaviest = if app.by_app { &store.heaviest_apps } else { &store.heaviest };
+    let largest = heaviest.first().map(|h| h.size).unwrap_or(1).max(1) as f64;
+    let heavy: Vec<Element<Msg>> = heaviest
         .iter()
         .map(|p| {
             row![
                 column![
                     text(p.name.clone()).weight(600.0),
-                    text(match p.builds {
-                        0 | 1 => p.version.clone(),
-                        n => format!("{} · {n} builds", p.version),
-                    })
-                    .mono()
-                    .size(11.0)
-                    .role(Role::Text3),
+                    text(versions_line(p)).mono().size(11.0).role(Role::Text3),
                 ]
                 .spacing(1.0)
                 .width(Length::fill_portion::<2>()),
@@ -222,7 +232,18 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
         whole,
         super::list(legend),
         clean,
-        group("Heaviest in the running system", None, None, heavy),
+        group(
+            "Heaviest in the running system",
+            None,
+            Some(
+                checkbox("Group versions by app", app.by_app)
+                    .on_toggle(Msg::GroupByApp)
+                    .tooltip("One row for each app, its versions added up")
+                    .id("group-by-app")
+                    .into()
+            ),
+            heavy
+        ),
         group(
             "What keeps things in the store",
             Some("Garbage-collector roots: links to store paths that keep them and all they need.".to_owned()),
