@@ -81,6 +81,30 @@ fn drops_after_one_part(d: &[u8]) -> Fake {
         (n >= 1).then(|| Err(TransportError::Retryable("the network connection was lost".into())))
     })
 }
+/// The bytes in staging now.
+fn staged_bytes(dir: &StagingDir) -> u64 {
+    fs::read_dir(dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().metadata().unwrap().len())
+        .sum()
+}
+/// Stage `files` in this order, as the app does, and say the most staging
+/// ever held beyond what it held before.
+fn peak_extra(dir: &StagingDir, files: &[(&str, &[u8])]) -> u64 {
+    let before = staged_bytes(dir);
+    let mut peak = 0;
+    let cancel = AtomicBool::new(false);
+    for (name, d) in files {
+        let fake = Fake::new(d.to_vec());
+        stager(dir, &fake, &cancel)
+            .stage(name, &url(), &expect(d), &mut |_| {
+                peak = peak.max(staged_bytes(dir).saturating_sub(before));
+            })
+            .unwrap();
+        peak = peak.max(staged_bytes(dir).saturating_sub(before));
+    }
+    peak
+}
 
 const SIZE: usize = 40 * 1024 * 1024 + 123;
 
@@ -275,9 +299,10 @@ fn another_releases_partial_download_is_removed_not_resumed() {
     stager(&dir, &drops_after_one_part(&old), &cancel)
         .stage("payload.zip", &url(), &expect(&old), &mut |_| {})
         .unwrap_err();
-    // The old release's part counts toward the old release only.
+    // Progress toward the old release; for the new one, room staging gets
+    // back before it downloads.
     assert_eq!(dir.bytes_needed(&[("payload.zip", &expect(&old))]), SIZE as u64 - PART);
-    assert_eq!(dir.bytes_needed(&[("payload.zip", &expect(&new))]), SIZE as u64);
+    assert_eq!(dir.bytes_needed(&[("payload.zip", &expect(&new))]), SIZE as u64 - PART);
 
     let fake = Fake::new(new.clone());
     let mut events = Vec::new();
@@ -298,7 +323,6 @@ fn a_partial_download_that_doesnt_say_whose_it_is_is_removed() {
     // Even the right bytes: nothing says which file they began.
     let unnamed = dir.path().join("payload.zip.partial");
     fs::write(&unnamed, &d[..PART as usize]).unwrap();
-    assert_eq!(dir.bytes_needed(&[("payload.zip", &expect(&d))]), SIZE as u64);
     let fake = Fake::new(d.clone());
     let cancel = AtomicBool::new(false);
     stager(&dir, &fake, &cancel)
@@ -330,6 +354,44 @@ fn a_reused_file_still_removes_its_other_partial_downloads() {
     assert_eq!(events, vec![StageEvent::Reused]);
     assert!(!stale.exists());
     assert!(payload.exists() && lookalike.exists(), "only this file's downloads are removed");
+}
+
+#[test]
+fn what_staging_removes_first_is_room_the_estimate_counts() {
+    let (_t, dir) = staging();
+    let old = data(SIZE);
+    let payload: Vec<u8> = old.iter().map(|b| b ^ 0x5a).collect();
+    let manifest = data(1000);
+    // Two parts of another release's payload, a download whose name doesn't
+    // say whose it is, and another release's smaller manifest, finished.
+    fs::write(in_progress(&dir, "payload.zip", &old), &old[..2 * PART as usize]).unwrap();
+    fs::write(dir.path().join("payload.zip.partial"), [0; 4096]).unwrap();
+    fs::write(dir.path().join("manifest.json"), [0; 600]).unwrap();
+    let estimate = dir.bytes_needed(&[
+        ("payload.zip", &expect(&payload)),
+        ("manifest.json", &expect(&manifest)),
+    ]);
+    assert_eq!(estimate, SIZE as u64 - 2 * PART - 4096 + 400);
+    let peak = peak_extra(&dir, &[("manifest.json", &manifest), ("payload.zip", &payload)]);
+    assert_eq!(estimate, peak);
+}
+
+#[test]
+fn one_files_leftovers_make_no_room_for_another() {
+    let (_t, dir) = staging();
+    let old = data(SIZE);
+    // A small payload for a release after a large one.
+    let payload = data(1000);
+    let manifest = data(2000);
+    fs::write(in_progress(&dir, "payload.zip", &old), &old[..2 * PART as usize]).unwrap();
+    let estimate = dir.bytes_needed(&[
+        ("payload.zip", &expect(&payload)),
+        ("manifest.json", &expect(&manifest)),
+    ]);
+    // The manifest is staged before the payload frees anything.
+    assert_eq!(estimate, 2000);
+    let peak = peak_extra(&dir, &[("manifest.json", &manifest), ("payload.zip", &payload)]);
+    assert_eq!(estimate, peak);
 }
 
 #[test]

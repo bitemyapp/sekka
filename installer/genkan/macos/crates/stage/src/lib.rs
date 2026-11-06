@@ -11,8 +11,8 @@
 //! whole file hashed against the catalog; until then it lives under a
 //! `.partial` name and is never used. That name carries the digest the file
 //! must have, so what is left of another release's download is removed,
-//! never resumed into this one or counted toward it. A finished file found
-//! later is hashed again before it is reused.
+//! never resumed into this one or counted as its progress. A finished file
+//! found later is hashed again before it is reused.
 //!
 //! Nothing here touches a disk other than the staging directory, and
 //! nothing here is reachable before the person chooses to download.
@@ -185,32 +185,54 @@ impl StagingDir {
 
     /// The bytes the files named here still need, given what is already
     /// staged: the peak extra space downloading them takes. A download in
-    /// progress counts only toward the digest it was started for; one left
-    /// from another release counts for nothing (staging removes it).
+    /// progress is progress only for the digest it was started for. What
+    /// staging removes before it downloads a file (another release's
+    /// download in progress, a finished file of the wrong size) is room that
+    /// file gets back first, so it counts against what the file needs, down
+    /// to nothing; never toward another file, since the order they are
+    /// staged in isn't known here.
     pub fn bytes_needed(&self, files: &[(&str, &Expect)]) -> u64 {
         files
             .iter()
             .map(|(name, expect)| {
                 let Ok(path) = self.file(name) else { return expect.size };
-                if regular_size(&path) == Some(expect.size) {
+                let finished = regular_size(&path);
+                if finished == Some(expect.size) {
+                    // Reused, or removed before as many bytes come back.
                     return 0;
                 }
                 let partial = partial_name(&path, &expect.digest);
-                expect.size - regular_size(&partial).unwrap_or(0).min(expect.size)
+                let kept = regular_size(&partial).unwrap_or(0);
+                let freed: u64 = self
+                    .other_partials(name, &partial)
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|p| regular_size(p))
+                    .chain(finished)
+                    .sum();
+                expect.size.saturating_sub(kept.saturating_add(freed))
             })
             .sum()
     }
 
-    /// Remove every download in progress for `name` but `keep`: those for
-    /// another digest, and those whose name doesn't say which. None of them
-    /// can become this file, and each may hold gigabytes.
-    fn discard_partials(&self, name: &str, keep: &Path) -> Result<(), StageError> {
+    /// Every download in progress for `name` but `keep`: those for another
+    /// digest, and those whose name doesn't say which. None of them can
+    /// become this file, and each may hold gigabytes.
+    fn other_partials(&self, name: &str, keep: &Path) -> io::Result<Vec<PathBuf>> {
+        let mut found = Vec::new();
         for entry in fs::read_dir(&self.path)? {
             let entry = entry?;
             let path = entry.path();
-            if path == keep || !is_partial_of(name, &entry.file_name()) {
-                continue;
+            if path != keep && is_partial_of(name, &entry.file_name()) {
+                found.push(path);
             }
+        }
+        Ok(found)
+    }
+
+    /// Remove the other downloads in progress for `name`.
+    fn discard_partials(&self, name: &str, keep: &Path) -> Result<(), StageError> {
+        for path in self.other_partials(name, keep)? {
             match fs::remove_file(&path) {
                 Ok(()) => {}
                 Err(e) if e.kind() == io::ErrorKind::NotFound => {}
