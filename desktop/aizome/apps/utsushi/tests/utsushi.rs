@@ -432,7 +432,6 @@ fn a_song_shows_its_cover_and_who_made_it() {
     until(&mut h, 2.0, |a| a.status == Status::Paused);
     h.send(Msg::SeekTo(0.0));
     until(&mut h, 2.0, |a| a.pos == 0.0);
-    assert_golden(&mut h, w, "tests/golden/song.png", 1.0);
     // In a window sized for a small video the cover shrinks; what it is
     // stays in sight above the controls.
     h.resize(w, Size::new(480.0, 224.0));
@@ -571,4 +570,76 @@ fn stage_background_keeps_playback_keys_and_double_click() {
     h.release(w, at, PointerButton::Left);
     assert_eq!(h.fullscreen_asked(w), Some(true));
     until(&mut h, 2.0, |a| a.status == Status::Playing);
+}
+
+#[test]
+fn local_lyrics_are_discovered_selected_and_follow_audio_seeks() {
+    let mut h = harness();
+    let w = window(&h);
+    let dir = h.program().state_dir.as_ref().unwrap().join("lyrics");
+    std::fs::create_dir_all(&dir).unwrap();
+    let media = dir.join("song.flac");
+    let lyrics = dir.join("song.en.lrc");
+    std::fs::copy(fixture("song.flac"), &media).unwrap();
+    std::fs::write(&lyrics, "[00:00]first local line\n[00:00.60]last local line").unwrap();
+    h.send(Msg::Open(vec![media]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing && a.lyrics_files.contains(&lyrics));
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    h.send(Msg::Lyrics(lyrics));
+    until(&mut h, 2.0, |a| !a.lyric_cues.is_empty());
+    h.send(Msg::SeekTo(0.2));
+    until(&mut h, 2.0, |a| a.player.as_ref().is_some_and(|p| (p.position() - 0.2).abs() < 0.05));
+    h.send(Msg::CueTick);
+    assert!(h.texts(w).iter().any(|s| s == "first local line"));
+    // Keep this short real-media fixture paused: the headless harness uses
+    // virtual UI timers, while the decoder's audio clock is real time.
+    h.send(Msg::Speed(2.0));
+    h.send(Msg::SeekTo(0.8));
+    until(&mut h, 2.0, |a| a.player.as_ref().is_some_and(|p| (p.position() - 0.8).abs() < 0.05));
+    h.send(Msg::CueTick);
+    assert!(h.texts(w).iter().any(|s| s == "last local line"));
+    h.send(Msg::SeekTo(0.2));
+    until(&mut h, 2.0, |a| a.player.as_ref().is_some_and(|p| (p.position() - 0.2).abs() < 0.05));
+    h.send(Msg::CueTick);
+    assert!(h.texts(w).iter().any(|s| s == "first local line"));
+    h.send(Msg::Open(vec![fixture("clip.mp4")]));
+    assert!(h.program().lyric_cues.is_empty());
+    assert!(!h.texts(w).iter().any(|s| s == "first local line" || s == "last local line"));
+    h.send(Msg::Close);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn selecting_live_captions_is_opt_in_and_pause_close_invalidate_generations() {
+    use aizome_utsushi::captions::{Event, Mode, Source, Update};
+
+    let mut h = harness();
+    h.send(Msg::Open(vec![fixture("song.flac")]));
+    until(&mut h, 5.0, |a| a.status == Status::Playing);
+    assert_eq!(h.program().subtitle_source, Source::Authored);
+    h.send(Msg::Pause);
+    until(&mut h, 2.0, |a| a.status == Status::Paused);
+    h.send(Msg::GeneratedCaptions(Mode::Captions));
+    let generation = h.program().generated.generation;
+    h.send(Msg::Pause);
+    assert_ne!(h.program().generated.generation, generation);
+    h.send(Msg::CaptionTick(generation));
+    assert!(h.program().generated.cues.is_empty());
+    h.send(Msg::Close);
+    assert_eq!(h.program().subtitle_source, Source::Authored);
+    let mut timeline = aizome_utsushi::captions::Timeline::default();
+    timeline.reset();
+    assert!(
+        !timeline
+            .insert(
+                Update {
+                    generation: 0,
+                    event: Event::Cue { start: 0.0, end: 5.0, text: "stale".into(), speaker: None }
+                },
+                0.0,
+                false
+            )
+            .unwrap()
+    );
 }

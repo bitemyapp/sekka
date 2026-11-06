@@ -1,0 +1,278 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-05",
+  "status": "PROVISIONAL_ONLY_STRICT_GATE_FAILED",
+  "validated_reference_count": 0,
+  "strict_gate_passed": false,
+  "scope": "Three outcome-blind English studio-interview clips from one publisher; not a representative YouTube benchmark.",
+  "hardware": {
+    "cpu": "AMD Ryzen 7 9800X3D",
+    "gpu": "NVIDIA GeForce RTX 5090",
+    "inference_backend": "Whisper.cpp Vulkan and OpenBLAS",
+    "build": "Cargo debug; local root-flake development shell"
+  },
+  "configuration": {
+    "language": "en",
+    "sample_rate": 16000,
+    "file_window_seconds": 30,
+    "custom_prompt": false,
+    "translation": false,
+    "diarization": false,
+    "file_caption_startup": "load_only"
+  },
+  "normalization_policy": "Unicode NFKC/casefold; L/N/M words; internal apostrophes retained; other punctuation/symbols become spaces; no word removal",
+  "clip_policy": "source seconds [start,end); timed segments by onset; crossing untimed cues rejected",
+  "models": [
+    {
+      "name": "large-v3-turbo-q8_0",
+      "sha256": "317eb69c11673c9de1e1f0d459b253999804ec71ac4c23c17ecf5fbe24e259a1",
+      "bytes": 874188075
+    },
+    {
+      "name": "large-v3",
+      "sha256": "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2",
+      "bytes": 3095033483
+    }
+  ],
+  "model_repository": "ggerganov/whisper.cpp",
+  "model_revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+  "videos": [
+    {
+      "id": "DcWqzZ3I2cY",
+      "source_url": "https://www.youtube.com/watch?v=DcWqzZ3I2cY",
+      "title": "Jeff Bezos: Amazon and Blue Origin | Lex Fridman Podcast #405",
+      "clip": {
+        "start": 41,
+        "end": 127
+      },
+      "media_sha256": "724bf859c64b17db0fd7c3aef1840a8504e6c16922e8d940d75c1b46d044d97a",
+      "reference": {
+        "source_url": "https://lexfridman.com/jeff-bezos-transcript/",
+        "sha256": "84d775b8b9ee448d1c1238e5b003d218f0969d2c25abbef9517bef4028e7abc7",
+        "validated": false,
+        "basis": "publisher_human_transcript_unverified_against_exact_audio"
+      },
+      "youtube_auto": {
+        "track_kind": "asr",
+        "language": "en",
+        "translated": false,
+        "sha256": "2311bd39b349dd728621664b1b0fb06031c13d9364b0441af865a04681d2afe2",
+        "score": {
+          "reference_words": 250,
+          "hypothesis_words": 280,
+          "substitutions": 6,
+          "deletions": 4,
+          "insertions": 34,
+          "errors": 44,
+          "wer": 0.176
+        }
+      },
+      "koe": {
+        "large_v3": {
+          "reference_words": 250,
+          "hypothesis_words": 264,
+          "substitutions": 4,
+          "deletions": 7,
+          "insertions": 21,
+          "errors": 32,
+          "wer": 0.128,
+          "outcome": "win",
+          "wall_seconds": 34.532,
+          "ndjson_sha256": "9bad222721af027f6d729974b44a208b0b1a1a26aba1f4e3034b6978d434a82d"
+        },
+        "large_v3_turbo_q8_0": {
+          "reference_words": 250,
+          "hypothesis_words": 266,
+          "substitutions": 5,
+          "deletions": 6,
+          "insertions": 22,
+          "errors": 33,
+          "wer": 0.132,
+          "outcome": "win",
+          "wall_seconds": 6.638,
+          "ndjson_sha256": "499a04bcf6290f05cd6b6065b7d861a64bb4bf23b608b26efb3767109f35c119"
+        }
+      }
+    },
+    {
+      "id": "jvqFAi7vkBc",
+      "source_url": "https://www.youtube.com/watch?v=jvqFAi7vkBc",
+      "title": "Sam Altman: OpenAI, GPT-5, Sora, Board Saga, Elon Musk, Ilya, Power & AGI | Lex Fridman Podcast #419",
+      "clip": {
+        "start": 182,
+        "end": 278
+      },
+      "media_sha256": "73045a73cbe53835a500a397ef155fb4b0b46daa19eb1348befcf1b470a28bcf",
+      "reference": {
+        "source_url": "https://lexfridman.com/sam-altman-2-transcript/",
+        "sha256": "491b5a7acbe0eedc943075c5dcf9aa06fb816742802f70c8a2f34b865c1b5005",
+        "validated": false,
+        "basis": "publisher_human_transcript_unverified_against_exact_audio"
+      },
+      "youtube_auto": {
+        "track_kind": "asr",
+        "language": "en",
+        "translated": false,
+        "sha256": "9730c9d754633184b70951afb8061146ab39bfcb86b89a4c6a21d7af7a47d1a1",
+        "score": {
+          "reference_words": 229,
+          "hypothesis_words": 259,
+          "substitutions": 1,
+          "deletions": 0,
+          "insertions": 30,
+          "errors": 31,
+          "wer": 0.13537117903930132
+        }
+      },
+      "koe": {
+        "large_v3": {
+          "reference_words": 229,
+          "hypothesis_words": 247,
+          "substitutions": 3,
+          "deletions": 1,
+          "insertions": 19,
+          "errors": 23,
+          "wer": 0.10043668122270742,
+          "outcome": "win",
+          "wall_seconds": 37.553,
+          "ndjson_sha256": "c5a9049da3908d30f96f34c1e20636b3b9fc155d6a06d1de0da6188775205d6d"
+        },
+        "large_v3_turbo_q8_0": {
+          "reference_words": 229,
+          "hypothesis_words": 245,
+          "substitutions": 4,
+          "deletions": 1,
+          "insertions": 17,
+          "errors": 22,
+          "wer": 0.09606986899563319,
+          "outcome": "win",
+          "wall_seconds": 9.219,
+          "ndjson_sha256": "61d161356be4e622ed86ad28738587d82e66e51e41b04bbd23a27f63fbb4122e"
+        }
+      }
+    },
+    {
+      "id": "nepKKz-MzFM",
+      "source_url": "https://www.youtube.com/watch?v=nepKKz-MzFM",
+      "title": "FFmpeg: The Incredible Technology Behind Video on the Internet | Lex Fridman Podcast #496",
+      "clip": {
+        "start": 721,
+        "end": 845
+      },
+      "media_sha256": "11b33f44d44a668df6a501b5d544aefe97886e2b65a2f00e714fbe7a29cb31c0",
+      "reference": {
+        "source_url": "https://lexfridman.com/ffmpeg-transcript/",
+        "sha256": "b1425170b3d3339599b94b0e635bb33f5e9e0969a9520d7f754c7673a2ef2401",
+        "validated": false,
+        "basis": "publisher_human_transcript_unverified_against_exact_audio"
+      },
+      "youtube_auto": {
+        "track_kind": "asr",
+        "language": "en",
+        "translated": false,
+        "sha256": "12d928ef0d9d1d9c787eac80e0b74028b3206c22cf9a67c74468677308d486a7",
+        "score": {
+          "reference_words": 395,
+          "hypothesis_words": 390,
+          "substitutions": 9,
+          "deletions": 8,
+          "insertions": 3,
+          "errors": 20,
+          "wer": 0.05063291139240506
+        }
+      },
+      "koe": {
+        "large_v3": {
+          "reference_words": 395,
+          "hypothesis_words": 388,
+          "substitutions": 11,
+          "deletions": 9,
+          "insertions": 2,
+          "errors": 22,
+          "wer": 0.05569620253164557,
+          "outcome": "loss",
+          "wall_seconds": 13.705,
+          "ndjson_sha256": "2ce1d8f4c8531490b14b385d5abc44e1144be5aaf9f89d37152ab93e69fa9de4"
+        },
+        "large_v3_turbo_q8_0": {
+          "reference_words": 395,
+          "hypothesis_words": 387,
+          "substitutions": 13,
+          "deletions": 12,
+          "insertions": 4,
+          "errors": 29,
+          "wer": 0.07341772151898734,
+          "outcome": "loss",
+          "wall_seconds": 5.871,
+          "ndjson_sha256": "f287f97a3d59b05e3f89b5600fe77ed8ce2a04f9737184cd6d37f62ecf8cdbbc"
+        }
+      }
+    }
+  ],
+  "gate": {
+    "rule": "strictly lower Koe WER on every manifest video; ties fail",
+    "passed": false,
+    "unvalidated_references": [
+      "DcWqzZ3I2cY",
+      "jvqFAi7vkBc",
+      "nepKKz-MzFM"
+    ],
+    "regressions": [
+      "nepKKz-MzFM"
+    ],
+    "ties": []
+  },
+  "independent_audio_experiment": {
+    "model": "Qwen/Qwen2-Audio-7B-Instruct",
+    "revision": "0a095220c30b7b31434169c3086508ef3ea5bf0a",
+    "torch": "2.9.1+cu128",
+    "audio_model_ran": true,
+    "clips": 3,
+    "passes_per_segment": 2,
+    "prompts": [
+      "Transcribe exactly the speech in this audio in English. Include all spoken words, repetitions, false starts, and fillers such as um and uh. Do not summarize, improve grammar, add words, or identify speakers. Return only the verbatim transcript. If a word cannot be understood, write [unclear].",
+      "Listen carefully to the attached audio and write every word that is actually spoken, including repeated words, hesitations, and unfinished phrases. This is a verbatim transcription for checking captions, not a cleaned-up transcript. Do not infer missing words. Mark unintelligible speech as [unclear]. Output only the transcript in English."
+    ],
+    "blind_to_both_contestants_and_publisher": true,
+    "validated": false,
+    "findings": [
+      "Publisher text omits some words that both independent audio passes transcribe.",
+      "Independent passes disagree, including forty five versus fifty and decompact versus decompound.",
+      "Audio-model output is not promoted to ground truth; exact clip alignment and discrepancies remain unresolved."
+    ]
+  },
+  "limitations": [
+    "WER values are provisional comparisons to publisher excerpts, not certified transcription accuracy.",
+    "Neither candidate strictly beats YouTube on every evaluated clip.",
+    "Reference omissions and boundary mismatches can change the ranking.",
+    "No human auditory review or GPT-6-Astra audio review was performed.",
+    "Speaker diarization, noisy audio, non-English speech, singing and live latency are not scored by this corpus.",
+    "Inference wall times are observations on this GPU, not real-time guarantees on other hardware.",
+    "Final inference runs overlapped package compilation and player smoke checks; wall times are not a controlled performance benchmark."
+  ],
+  "reproduction": {
+    "evaluator": "desktop/aizome/scripts/evaluate-captions.py",
+    "tests": "desktop/aizome/scripts/test-evaluate-captions.py",
+    "manifest_sha256": "8fa46da81a2be12f618e34730cffd5e871c44a574882ddb8b98c9b7c08f88781",
+    "local_raw_evidence_directory": "/tmp/sekka-caption-eval",
+    "redistributed_media": false
+  },
+  "additional_reference_review_attempts": [
+    {
+      "service": "https://huggingface.co/spaces/Qwen/Qwen3-Omni-Demo",
+      "space_revision": "f04f51c20aeae49bca0005aa99e56bbdfd4267aa",
+      "model_requested_by_demo": "qwen3-omni-flash-2025-12-01",
+      "model_selection_source": "https://huggingface.co/spaces/Qwen/Qwen3-Omni-Demo/raw/f04f51c20aeae49bca0005aa99e56bbdfd4267aa/app.py",
+      "uploaded_public_clip": "DcWqzZ3I2cY",
+      "audio_only": true,
+      "competitor_or_reference_text_supplied": false,
+      "result": "Both the actual audio request and a minimal text-only service diagnostic ended with SSE event:error, data:null. No transcript was returned.",
+      "transcript_returned": false,
+      "raw_evidence": [
+        "DcWqzZ3I2cY/hosted-review-request.json",
+        "DcWqzZ3I2cY/hosted-review-events.txt",
+        "hosted-review-service-diagnostic.json"
+      ]
+    }
+  ]
+}

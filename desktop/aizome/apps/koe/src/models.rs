@@ -15,7 +15,14 @@ use std::{
 pub struct Catalog {
     pub repository: String,
     pub revision: String,
+    #[serde(default)]
+    pub sources: std::collections::BTreeMap<String, Source>,
     pub models: Vec<Model>,
+}
+#[derive(Deserialize)]
+pub struct Source {
+    pub repository: String,
+    pub revision: String,
 }
 #[derive(Clone, Debug, Deserialize)]
 pub struct Model {
@@ -29,6 +36,15 @@ impl Model {
     }
     /// "Base", "Base (English)".
     pub fn title(&self) -> String {
+        if self.name == "large-v3" {
+            return "Large v3".into();
+        }
+        if self.name == "large-v3-turbo-q8_0" {
+            return "Large v3 Turbo (8-bit)".into();
+        }
+        if self.name == "small.en-tdrz" {
+            return "Small (English, speaker turns)".into();
+        }
         let (size, english) = match self.name.strip_suffix(".en") {
             Some(size) => (size, true),
             None => (self.name.as_str(), false),
@@ -39,6 +55,21 @@ impl Model {
     }
     /// What it's for, as the window says it.
     pub fn description(&self) -> String {
+        if self.name == "large-v3" {
+            return format!(
+                "Many languages · {} · full-size captioning model; needs more memory and computation",
+                size_text(self.bytes)
+            );
+        }
+        if self.name == "large-v3-turbo-q8_0" {
+            return format!(
+                "Many languages · {} · larger captioning model; no speaker-turn detection",
+                size_text(self.bytes)
+            );
+        }
+        if self.name == "small.en-tdrz" {
+            return format!("English only · {} · detects speaker turns, not identities", size_text(self.bytes));
+        }
         let languages = if self.name.ends_with(".en") { "English only" } else { "Many languages" };
         let speed = match self.name.trim_end_matches(".en") {
             "tiny" => "fastest, least accurate",
@@ -77,6 +108,15 @@ pub fn directory() -> Result<PathBuf> {
 pub fn source() -> String {
     let catalog = catalog();
     format!("https://huggingface.co/{}/resolve/{}", catalog.repository, catalog.revision)
+}
+
+/// A model's pinned origin; most share the Whisper catalog's repository.
+pub fn source_for(model: &Model) -> String {
+    let catalog = catalog();
+    match catalog.sources.get(&model.name) {
+        Some(source) => format!("https://huggingface.co/{}/resolve/{}", source.repository, source.revision),
+        None => format!("https://huggingface.co/{}/resolve/{}", catalog.repository, catalog.revision),
+    }
 }
 
 /// What's in the folder for a model.
@@ -140,7 +180,8 @@ pub fn remove(dir: &Path, model: &Model) -> Result<()> {
 
 pub async fn download(name: &str, dir: &Path) -> Result<PathBuf> {
     eprintln!("Downloading {name}, pinned SHA-256 from the catalog");
-    download_from(&source(), &find(name)?, dir, &AtomicBool::new(false), |_| {}).await
+    let model = find(name)?;
+    download_from(&source_for(&model), &model, dir, &AtomicBool::new(false), |_| {}).await
 }
 
 /// How old a partial download's file must be before it's taken as

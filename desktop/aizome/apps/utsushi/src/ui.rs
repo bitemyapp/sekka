@@ -15,6 +15,7 @@ use aizome_kit::{column, over_video, row, video_surface};
 use aizome_media::{CueBody, FramePath};
 
 use crate::app::{Msg, Repeat, Status, Utsushi, VIDEO, display_name};
+use crate::captions::{Mode as CaptionMode, Source as SubtitleSource};
 use crate::widgets::{clock, subtitle_place, timeline};
 
 /// The control bar's height.
@@ -45,13 +46,18 @@ fn stage(app: &Utsushi) -> Element<Msg> {
                     .key("video")
                     .into(),
             );
-            if let Some(subs) = subtitles(app) {
-                layers.push(subs.key("subtitles"));
-            }
         }
         (Some(_), _) => layers.push(music(app)),
         (None, Status::Loading) => layers.push(container(text("")).fill(Tone::Sunk).width(Fill).height(Fill).into()),
         (None, _) => layers.push(empty(app)),
+    }
+    if app.info.is_some() {
+        if let Some(subs) = subtitles(app) {
+            layers.push(subs.key("subtitles"));
+        }
+        if let Some(notice) = caption_status(app) {
+            layers.push(notice.key("caption-status"));
+        }
     }
     if let Some(at) = app.resumed.filter(|_| app.info.is_some()) {
         layers.push(resumed(at).key("resumed"));
@@ -194,6 +200,49 @@ fn keys(k: &aizome_kit::sidestep_ui::KeyEvent) -> Option<Msg> {
     }
 }
 
+/// Source and errors stay visible without replacing the playing media.
+fn caption_status(app: &Utsushi) -> Option<Element<Msg>> {
+    let label = match &app.subtitle_source {
+        SubtitleSource::Authored => return None,
+        SubtitleSource::Generated(CaptionMode::Captions) => "Live captions · machine-generated locally".to_owned(),
+        SubtitleSource::Generated(CaptionMode::Turns) => {
+            "Live captions · detected turns, not speaker identities".to_owned()
+        }
+        SubtitleSource::Generated(CaptionMode::Lyrics) => {
+            "Machine-generated lyrics · singing recognition is unreliable".to_owned()
+        }
+        SubtitleSource::Lyrics(path) => {
+            format!("Local lyrics · {}", path.file_name().unwrap_or_default().to_string_lossy())
+        }
+    };
+    let mut lines: Vec<Element<Msg>> = vec![text(label).size(12.0).color(Color::WHITE).wrap().into()];
+    if let Some(notice) = &app.caption_notice {
+        lines.push(text(notice.clone()).size(12.0).color(Color::WHITE).wrap().max_width(640.0).into());
+    }
+    if matches!(app.subtitle_source, SubtitleSource::Generated(_)) {
+        lines.push(
+            row![
+                button("Open Koe / Models…").compact().on_press(Msg::CaptionSetup),
+                button("Retry from Here").compact().on_press(Msg::RetryCaptions).enabled(app.playing()),
+                button("Off").compact().on_press(Msg::Subtitles(None)),
+            ]
+            .spacing(8.0)
+            .into(),
+        );
+    }
+    let panel =
+        crate::widgets::scrim(container(aizome_kit::widgets::layout::column(lines).spacing(5.0)).padding(8.0).into());
+    Some(
+        container(over_video(panel))
+            .padding(12.0)
+            .align_x(Align::Center)
+            .align_y(Align::Start)
+            .width(Fill)
+            .height(Fill)
+            .into(),
+    )
+}
+
 /// The cues showing, in a box over the picture's bottom, or in the
 /// letterbox under it where they fit.
 fn subtitles(app: &Utsushi) -> Option<Element<Msg>> {
@@ -212,7 +261,7 @@ fn subtitles(app: &Utsushi) -> Option<Element<Msg>> {
             CueBody::Text { text: words, italic, top: t } => {
                 top |= *t;
                 for line in words.lines() {
-                    let t = text(line.to_owned()).color(Color::WHITE).size(size).weight(560.0);
+                    let t = text(line.to_owned()).color(Color::WHITE).size(size).weight(560.0).wrap().center();
                     lines.push(if *italic { t.italic() } else { t }.into());
                 }
             }
@@ -476,15 +525,15 @@ fn bar(app: &Utsushi, floating: bool) -> Element<Msg> {
                 .into(),
         );
     }
-    let tracks = app.info.as_ref().is_some_and(|i| !i.subtitles.is_empty() || i.audio.len() > 1 || i.video.is_some());
+    let tracks = have;
     if tracks {
         items.push(
             icon_button(Icon::Captions)
                 .toolbar()
-                .selected(app.sub_track.is_some())
+                .selected(app.sub_track.is_some() || app.subtitle_source != SubtitleSource::Authored)
                 .on_press(Msg::TracksMenu)
                 .id("tracks")
-                .tooltip("Subtitles and Audio")
+                .tooltip("Subtitles, Live Captions, Lyrics and Audio")
                 .into(),
         );
     }
@@ -507,11 +556,16 @@ fn trim(x: f64) -> String {
 pub fn tracks_menu(app: &Utsushi) -> Menu<Msg> {
     let mut m = Menu::new("Tracks");
     let Some(info) = &app.info else { return m };
-    m = m.header("Subtitles").item(MenuItem::new("Off", Msg::Subtitles(None)).checked(app.sub_track.is_none()));
+    let authored = app.subtitle_source == SubtitleSource::Authored;
+    m = m
+        .header("Subtitles")
+        .item(MenuItem::new("Off", Msg::Subtitles(None)).checked(authored && app.sub_track.is_none()));
     for (i, t) in info.subtitles.iter().enumerate() {
-        m = m.item(MenuItem::new(t.label(i + 1), Msg::Subtitles(Some(i))).checked(app.sub_track == Some(i)));
+        m = m
+            .item(MenuItem::new(t.label(i + 1), Msg::Subtitles(Some(i))).checked(authored && app.sub_track == Some(i)));
     }
     m = m.item(MenuItem::new("Add Subtitle File…", Msg::AddSubtitles));
+    m = caption_sources(app, m);
     if !info.audio.is_empty() {
         m = m.separator().header("Audio");
         for (i, t) in info.audio.iter().enumerate() {
@@ -519,6 +573,34 @@ pub fn tracks_menu(app: &Utsushi) -> Menu<Msg> {
         }
     }
     m.separator().submenu(speed_menu(app))
+}
+
+fn caption_sources(app: &Utsushi, mut menu: Menu<Msg>) -> Menu<Msg> {
+    let can_generate = app.info.as_ref().is_some_and(|info| !info.audio.is_empty());
+    menu = menu.separator().header("Local, machine-generated");
+    for (label, mode) in [
+        ("Live Captions", CaptionMode::Captions),
+        ("Live Captions with Detected Speaker Turns", CaptionMode::Turns),
+        ("Generate Lyrics (singing may be inaccurate)", CaptionMode::Lyrics),
+    ] {
+        menu = menu.item(
+            MenuItem::new(label, Msg::GeneratedCaptions(mode))
+                .checked(app.subtitle_source == SubtitleSource::Generated(mode))
+                .enabled(can_generate),
+        );
+    }
+    menu = menu
+        .item(MenuItem::new("Open Koe / Configure Local Models…", Msg::CaptionSetup))
+        .separator()
+        .header("Synchronized local lyrics");
+    for path in &app.lyrics_files {
+        let label = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+        menu = menu.item(
+            MenuItem::new(label, Msg::Lyrics(path.clone()))
+                .checked(app.subtitle_source == SubtitleSource::Lyrics(path.clone())),
+        );
+    }
+    menu.item(MenuItem::new("Add Lyrics File (.lrc)…", Msg::AddLyrics).enabled(app.info.is_some()))
 }
 
 pub fn speed_menu(app: &Utsushi) -> Menu<Msg> {
@@ -611,15 +693,18 @@ pub fn menus(app: &Utsushi) -> MenuBar<Msg> {
         .item(MenuItem::new("Faster", Msg::SpeedBy(1)).shortcut(key(ShortcutKey::Char(']'))).enabled(have))
         .submenu(speed_menu(app))
         .submenu(repeat);
-    let mut subs = Menu::new("Subtitles")
-        .item(MenuItem::new("Off", Msg::Subtitles(None)).checked(app.sub_track.is_none()).enabled(have));
+    let authored = app.subtitle_source == SubtitleSource::Authored;
+    let mut subs = Menu::new("Subtitles and Lyrics")
+        .item(MenuItem::new("Off", Msg::Subtitles(None)).checked(authored && app.sub_track.is_none()).enabled(have));
     let mut audio = Menu::new("Audio")
         .item(MenuItem::new("Louder", Msg::VolumeBy(0.05)).shortcut(key(ShortcutKey::Up)))
         .item(MenuItem::new("Quieter", Msg::VolumeBy(-0.05)).shortcut(key(ShortcutKey::Down)))
         .item(MenuItem::new("Mute", Msg::Mute).shortcut(key(ShortcutKey::Char('M'))).checked(app.muted));
     if let Some(info) = &app.info {
         for (i, t) in info.subtitles.iter().enumerate() {
-            subs = subs.item(MenuItem::new(t.label(i + 1), Msg::Subtitles(Some(i))).checked(app.sub_track == Some(i)));
+            subs = subs.item(
+                MenuItem::new(t.label(i + 1), Msg::Subtitles(Some(i))).checked(authored && app.sub_track == Some(i)),
+            );
         }
         if !info.audio.is_empty() {
             audio = audio.separator();
@@ -629,6 +714,7 @@ pub fn menus(app: &Utsushi) -> MenuBar<Msg> {
             }
         }
     }
+    subs = caption_sources(app, subs);
     subs = subs
         .separator()
         .item(MenuItem::new("Next Subtitles", Msg::CycleSubtitles).shortcut(key(ShortcutKey::Char('C'))).enabled(have))
@@ -653,7 +739,7 @@ pub fn menus(app: &Utsushi) -> MenuBar<Msg> {
             )
             .enabled(app.sub_delay != 0.0),
         )
-        .item(MenuItem::new("Add Subtitle File…", Msg::AddSubtitles).enabled(video));
+        .item(MenuItem::new("Add Subtitle File…", Msg::AddSubtitles).enabled(have));
     let view = Menu::new("View").item(
         MenuItem::new(if app.fullscreen { "Exit Full Screen" } else { "Enter Full Screen" }, Msg::ToggleFullscreen)
             .shortcut(key(ShortcutKey::Char('F')))

@@ -79,6 +79,24 @@ enum Command {
         #[arg(long)]
         model: Option<PathBuf>,
     },
+    /// Caption system output (never the microphone), or a local media file.
+    Captions {
+        /// Stream timestamped NDJSON instead of opening the caption window.
+        #[arg(long)]
+        json: bool,
+        /// Decode this local media file instead of monitoring system output.
+        #[arg(long, requires = "json")]
+        input: Option<PathBuf>,
+        /// Begin at this absolute media time in seconds.
+        #[arg(long, requires = "input")]
+        start: Option<f64>,
+        /// Zero-based audio stream ordinal (not the container stream index).
+        #[arg(long, requires = "input")]
+        audio_track: Option<usize>,
+        /// Detect English speaker turns using verified small.en-tdrz weights.
+        #[arg(long, requires = "json")]
+        diarize: bool,
+    },
     /// Show, validate, or create configuration.
     Config {
         #[command(subcommand)]
@@ -229,6 +247,7 @@ fn main() {
                     | Command::Words { .. }
                     | Command::Examples { .. }
                     | Command::Transcribe { .. }
+                    | Command::Captions { .. }
                     | Command::Config { .. }
                     | Command::Doctor
                     | Command::Model {
@@ -253,6 +272,7 @@ fn main() {
         };
         match cli.command {
             None => window(session, cli.page.as_deref()),
+            Some(Command::Captions { json: false, .. }) => koe::caption_app::run(session.config),
             // Quietly: systemd only wants the answer.
             Some(Command::Enabled) => std::process::exit(if service::enabled(&session.config) { 0 } else { 1 }),
             Some(command) => tokio::runtime::Builder::new_multi_thread()
@@ -345,6 +365,23 @@ async fn run(session: Session, command: Command) -> Result<()> {
         Command::Record { action: Action::Subscribe } => watch(&socket, false).await?,
         Command::Record { action } => record(session, action).await?,
         Command::Watch { waybar } => watch(&socket, waybar).await?,
+        Command::Captions { json: true, input, start, audio_track, diarize } => {
+            let config = Config::load(&path).map_err(|error| {
+                println!("{}", json!({ "type": "error", "message": format!("{error:#}") }));
+                error
+            })?;
+            koe::captions::run(
+                config,
+                koe::captions::Options {
+                    input,
+                    start: start.unwrap_or(0.0),
+                    audio_track: audio_track.unwrap_or(0),
+                    diarize,
+                },
+            )
+            .await?;
+        }
+        Command::Captions { json: false, .. } => unreachable!("caption window opens before the runtime starts"),
         Command::Transcribe { input, model } => {
             let mut config = Config::load(&path)?;
             if let Some(model) = model {

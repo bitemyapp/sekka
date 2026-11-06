@@ -334,7 +334,7 @@ fn model_section(app: &Koe) -> Element<Msg> {
 
 fn recognition_section(app: &Koe) -> Element<Msg> {
     let engine = &app.config.engine;
-    let english_only = app.model_in_use().is_some_and(|m| m.name.ends_with(".en"));
+    let english_only = app.model_in_use().is_some_and(|m| m.name.ends_with(".en") || m.name == "small.en-tdrz");
     let languages = language_options(&engine.language);
     let selected = if english_only {
         languages.iter().position(|(c, _)| c == "en")

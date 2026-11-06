@@ -325,6 +325,14 @@ rustPlatform.buildRustPackage {
       fi
     done
     wrapProgram $yukimi/libexec/aizome-yukimi --set-default AIZOME_FONT_DIR ${fonts}
+    # Captions decode local media and capture output monitors independently
+    # of the dictation service's environment.
+    wrapProgram $out/bin/aizome-koe \
+      --prefix PATH : ${lib.makeBinPath [ ffmpeg pipewire ]} \
+      --set-default AIZOME_FONT_DIR ${fonts}
+    wrapProgram $out/bin/aizome-utsushi \
+      --prefix PATH : "$out/bin" \
+      --set-default AIZOME_FONT_DIR ${fonts}
     wrapProgram $out/bin/aizome-hotaru \
       --set-default AIZOME_FONT_DIR ${fonts} \
       --set-default HOTARU_FONT_DIR ${hotaruFonts} \

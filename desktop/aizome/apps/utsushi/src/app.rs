@@ -19,6 +19,7 @@ use aizome_kit::WindowState;
 use aizome_kit::prelude::*;
 use aizome_media::{AudioChoice, Cue, CueBody, Event, MediaInfo, Options, Pipeline, PlayState, Player, StreamKind};
 
+use crate::captions::{self, Mode as CaptionMode, Source as SubtitleSource};
 use crate::mpris::{self, Mpris};
 use crate::store::{Recent, Store};
 
@@ -87,6 +88,16 @@ pub enum Msg {
     SubtitleDelay(Option<f64>),
     AddSubtitles,
     SubtitlesChosen(Option<Vec<PathBuf>>),
+    GeneratedCaptions(CaptionMode),
+    CaptionTick(u64),
+    CaptionSetup,
+    CaptionSetupFailed(String),
+    RetryCaptions,
+    LyricsFound(u64, Vec<PathBuf>),
+    Lyrics(PathBuf),
+    AddLyrics,
+    LyricsChosen(u64, Option<Vec<PathBuf>>),
+    LyricsLoaded(u64, u64, PathBuf, Result<Vec<Cue>, String>),
     ToggleFullscreen,
     Escape,
     /// A click on the picture (1, or 2 for a double click).
@@ -175,6 +186,16 @@ pub struct Utsushi {
     /// Seconds the subtitles are moved later (earlier when negative):
     /// for a subtitle file timed to another cut of the film.
     pub sub_delay: f64,
+    /// Authored tracks stay selected in the player while another source shows.
+    pub subtitle_source: SubtitleSource,
+    pub generated: captions::Timeline,
+    caption_job: Option<captions::Job>,
+    caption_timer: Option<TimerHandle>,
+    pub caption_notice: Option<String>,
+    caption_seeking: bool,
+    pub lyrics_files: Vec<PathBuf>,
+    pub lyric_cues: Vec<Cue>,
+    lyrics_request: u64,
     pub fullscreen: bool,
     pub maximized: bool,
     /// The desktop isn't showing the window.
@@ -183,6 +204,8 @@ pub struct Utsushi {
     pub controls: bool,
     /// The pointer is over the full-screen controls: they stay.
     over_controls: bool,
+    /// Restore the first click's playback state, not a delayed decoder acknowledgement.
+    stage_click_playing: Option<bool>,
     /// Menus open from the controls: they stay under them (the pointer
     /// in a menu is off the window).
     controls_menus: u32,
@@ -242,11 +265,21 @@ impl Utsushi {
             cues: Vec::new(),
             cue_pos: 0.0,
             sub_delay: 0.0,
+            subtitle_source: SubtitleSource::Authored,
+            generated: captions::Timeline::default(),
+            caption_job: None,
+            caption_timer: None,
+            caption_notice: None,
+            caption_seeking: false,
+            lyrics_files: Vec::new(),
+            lyric_cues: Vec::new(),
+            lyrics_request: 0,
             fullscreen: false,
             maximized: false,
             hidden: false,
             controls: true,
             over_controls: false,
+            stage_click_playing: None,
             controls_menus: 0,
             controls_timer: None,
             controls_shown_at: None,
@@ -293,15 +326,135 @@ impl Utsushi {
         self.current.is_some_and(|i| i + 1 < self.queue.len())
     }
 
-    /// The cues showing now.
+    pub fn displayed_cues(&self) -> &[Cue] {
+        match self.subtitle_source {
+            SubtitleSource::Authored => &self.cues,
+            SubtitleSource::Generated(_) => &self.generated.cues,
+            SubtitleSource::Lyrics(_) => &self.lyric_cues,
+        }
+    }
+
+    fn cue_delay(&self) -> f64 {
+        if matches!(self.subtitle_source, SubtitleSource::Generated(_)) { 0.0 } else { self.sub_delay }
+    }
+
+    /// The cues showing now. Cue ends are exclusive, including the last lyric.
     pub fn active_cues(&self) -> Vec<&Cue> {
-        let p = self.cue_pos - self.sub_delay;
-        self.cues.iter().filter(|c| c.start <= p + 1e-3 && p < c.end).collect()
+        let p = self.cue_pos - self.cue_delay();
+        self.displayed_cues().iter().filter(|c| c.start <= p && p < c.end).collect()
+    }
+
+    fn stop_captions(&mut self, cx: &mut Cx<Msg>) {
+        if let Some(timer) = self.caption_timer.take() {
+            cx.cancel(timer);
+        }
+        self.caption_job = None;
+        self.generated.reset();
+    }
+
+    fn start_captions(&mut self, at: f64, cx: &mut Cx<Msg>) {
+        let SubtitleSource::Generated(mode) = self.subtitle_source else { return };
+        if !self.playing() || self.caption_seeking || self.scrub.is_some() || self.caption_job.is_some() {
+            return;
+        }
+        let Some(path) = self.current_path() else { return };
+        let Some(track) = self.audio_track else {
+            self.caption_notice = Some("Choose an audio track to generate captions.".into());
+            return;
+        };
+        match captions::Job::start(path, at, track, mode, self.generated.generation) {
+            Ok(job) => {
+                self.caption_job = Some(job);
+                self.caption_notice = Some("Starting Koe with your local model…".into());
+                self.caption_timer =
+                    Some(cx.after(Duration::from_millis(100), Msg::CaptionTick(self.generated.generation)));
+            }
+            Err(error) => self.caption_notice = Some(error),
+        }
+    }
+
+    fn poll_captions(&mut self, generation: u64, cx: &mut Cx<Msg>) {
+        if generation != self.generated.generation {
+            return;
+        }
+        self.caption_timer = None;
+        let pos = self.player().map_or(self.pos, Player::position);
+        self.cue_pos = pos;
+        self.generated.prune(pos);
+        for _ in 0..16 {
+            if !self.generated.wants_more(pos) {
+                break;
+            }
+            let Some(job) = &self.caption_job else { break };
+            let update = match job.try_recv() {
+                Ok(update) => update,
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    self.caption_job = None;
+                    break;
+                }
+            };
+            if update.generation != self.generated.generation {
+                continue;
+            }
+            match update.event {
+                captions::Event::Ready => self.caption_notice = Some("Generating locally with Koe…".into()),
+                captions::Event::Cue { .. } => {
+                    let turns = self.subtitle_source == SubtitleSource::Generated(CaptionMode::Turns);
+                    match self.generated.insert(update, pos, turns) {
+                        Ok(true) => self.caption_notice = None,
+                        Ok(false) => {}
+                        Err(error) => {
+                            self.stop_captions(cx);
+                            self.caption_notice = Some(error);
+                            break;
+                        }
+                    }
+                }
+                captions::Event::Gap { message } => self.caption_notice = Some(format!("Caption gap: {message}")),
+                captions::Event::Error { message } => {
+                    self.stop_captions(cx);
+                    self.caption_notice = Some(message);
+                    break;
+                }
+                captions::Event::Finished => {
+                    self.caption_job = None;
+                    if self.generated.cues.is_empty() && self.caption_notice.is_some() {
+                        self.caption_notice = Some("Koe finished without captions at this position.".into());
+                    }
+                    break;
+                }
+            }
+        }
+        if self.caption_job.is_some() {
+            self.caption_timer =
+                Some(cx.after(Duration::from_millis(100), Msg::CaptionTick(self.generated.generation)));
+        }
+        self.schedule(cx);
+    }
+
+    fn select_lyrics(&mut self, path: PathBuf, cx: &mut Cx<Msg>) {
+        self.stop_captions(cx);
+        self.lyrics_request = self.lyrics_request.wrapping_add(1);
+        self.subtitle_source = SubtitleSource::Lyrics(path.clone());
+        self.lyric_cues.clear();
+        self.caption_notice = Some("Reading local lyrics…".into());
+        let item = self.item;
+        let request = self.lyrics_request;
+        let duration = self.duration();
+        cx.spawn(move || {
+            let result = crate::lyrics::load(&path, duration);
+            Msg::LyricsLoaded(item, request, path, result)
+        });
+        self.schedule(cx);
     }
 
     pub fn chapters(&self) -> Rc<Vec<(f64, Option<String>)>> {
         Rc::new(
-            self.info.as_ref().map(|i| i.chapters.iter().map(|c| (c.start, c.title.clone())).collect()).unwrap_or_default(),
+            self.info
+                .as_ref()
+                .map(|i| i.chapters.iter().map(|c| (c.start, c.title.clone())).collect())
+                .unwrap_or_default(),
         )
     }
 
@@ -312,9 +465,20 @@ impl Utsushi {
     /// Play item `i` of the queue (where it was left, if it was).
     fn load(&mut self, i: usize, cx: &mut Cx<Msg>) {
         self.leave();
+        self.stop_captions(cx);
+        self.subtitle_source = SubtitleSource::Authored;
+        self.caption_notice = None;
+        self.caption_seeking = false;
+        self.audio_track = None;
+        self.sub_track = None;
+        self.lyrics_files.clear();
+        self.lyric_cues.clear();
         let Some(path) = self.queue.get(i).cloned() else { return };
         self.current = Some(i);
         self.item += 1;
+        let item = self.item;
+        let lyrics_path = path.clone();
+        cx.spawn(move || Msg::LyricsFound(item, crate::lyrics::beside(&lyrics_path)));
         self.info = None;
         self.error = None;
         self.cover = None;
@@ -355,6 +519,8 @@ impl Utsushi {
             return;
         }
         let to = to.clamp(0.0, d);
+        self.stop_captions(cx);
+        self.caption_seeking = true;
         if let Some(p) = self.player() {
             p.seek(to, true);
         }
@@ -384,7 +550,11 @@ impl Utsushi {
         }
     }
 
-    fn pause(&mut self, _cx: &mut Cx<Msg>) {
+    fn pause(&mut self, cx: &mut Cx<Msg>) {
+        self.stop_captions(cx);
+        if matches!(self.subtitle_source, SubtitleSource::Generated(_)) {
+            self.caption_notice = Some("Live captions paused; play to restart from here.".into());
+        }
         if let Some(p) = self.player() {
             p.pause();
         }
@@ -415,12 +585,12 @@ impl Utsushi {
         let pos = p.position();
         let speed = self.speed.max(0.1);
         // Subtitles: their next start or end.
-        let delay = self.sub_delay;
+        let delay = self.cue_delay();
         let next_cue = self
-            .cues
+            .displayed_cues()
             .iter()
             .flat_map(|c| [c.start + delay, c.end + delay])
-            .filter(|t| *t > pos + 1e-3 && t.is_finite())
+            .filter(|t| *t > pos && t.is_finite())
             .fold(f64::INFINITY, f64::min);
         if next_cue.is_finite() {
             self.cue_timer = Some(cx.after(Duration::from_secs_f64((next_cue - pos) / speed + 0.002), Msg::CueTick));
@@ -565,6 +735,7 @@ impl Utsushi {
                 self.publish();
             }
             Event::Failed(msg) => {
+                self.stop_captions(cx);
                 self.status = Status::Failed;
                 self.error = Some(msg);
                 self.schedule(cx);
@@ -578,6 +749,21 @@ impl Utsushi {
                 };
                 self.pos = self.player().map_or(self.pos, Player::position);
                 self.cue_pos = self.pos;
+                if s == PlayState::Playing {
+                    self.start_captions(self.pos, cx);
+                } else {
+                    self.stop_captions(cx);
+                    if matches!(self.subtitle_source, SubtitleSource::Generated(_)) {
+                        self.caption_notice = Some(
+                            if s == PlayState::Paused {
+                                "Live captions paused; play to restart from here."
+                            } else {
+                                "Playback finished."
+                            }
+                            .into(),
+                        );
+                    }
+                }
                 if s == PlayState::Ended {
                     self.leave();
                     match self.repeat {
@@ -612,6 +798,9 @@ impl Utsushi {
                 if self.status == Status::Loading {
                     self.status = Status::Paused;
                 }
+                self.stop_captions(cx);
+                self.caption_seeking = false;
+                self.start_captions(t, cx);
                 self.schedule(cx);
             }
             Event::Cues(mut cues) => {
@@ -633,8 +822,16 @@ impl Utsushi {
             Event::ClearCues => self.cues.clear(),
             Event::Pipeline(p) => self.pipeline = p,
             Event::Selected { audio, subtitles } => {
+                let changed = self.audio_track != audio;
+                if changed {
+                    self.stop_captions(cx);
+                }
                 self.audio_track = audio;
                 self.sub_track = subtitles;
+                if changed {
+                    let at = self.player().map_or(self.pos, Player::position);
+                    self.start_captions(at, cx);
+                }
             }
         }
     }
@@ -794,10 +991,13 @@ impl Program for Utsushi {
                 cx.activate(self.window);
             }
             Msg::OpenPanel => {
-                let dialog = FileDialog::new().title("Open").multiple().filter("Videos and music", &[
-                    "mp4", "m4v", "mkv", "webm", "mov", "avi", "mpg", "ts", "ogv", "mp3", "m4a", "flac", "ogg", "opus",
-                    "wav", "aac",
-                ]);
+                let dialog = FileDialog::new().title("Open").multiple().filter(
+                    "Videos and music",
+                    &[
+                        "mp4", "m4v", "mkv", "webm", "mov", "avi", "mpg", "ts", "ogv", "mp3", "m4a", "flac", "ogg",
+                        "opus", "wav", "aac",
+                    ],
+                );
                 cx.open_panel(self.window, dialog, Msg::Chosen);
             }
             Msg::Chosen(Some(paths)) => cx.send(Msg::Open(paths)),
@@ -823,6 +1023,9 @@ impl Program for Utsushi {
             Msg::Scrub(s) => match s {
                 Scrub::Start(t) => {
                     self.scrub_playing = self.playing();
+                    self.stop_captions(cx);
+                    self.caption_seeking = true;
+                    self.cue_pos = t;
                     if self.scrub_playing
                         && let Some(p) = self.player()
                     {
@@ -836,6 +1039,7 @@ impl Program for Utsushi {
                 }
                 Scrub::Move(t) => {
                     self.scrub = Some(t);
+                    self.cue_pos = t;
                     // A keyframe now and then while dragging: what's there.
                     if self.last_scrub_seek.is_none_or(|i| i.elapsed() > Duration::from_millis(60)) {
                         self.last_scrub_seek = Some(Instant::now());
@@ -853,6 +1057,7 @@ impl Program for Utsushi {
                 }
             },
             Msg::Step(forward) => {
+                self.stop_captions(cx);
                 if let Some(p) = self.player() {
                     p.step(forward);
                 }
@@ -890,6 +1095,7 @@ impl Program for Utsushi {
                 if let Some(p) = self.player() {
                     p.set_speed(s);
                 }
+                self.cue_pos = self.player().map_or(self.cue_pos, Player::position);
                 self.schedule(cx);
                 self.publish();
             }
@@ -904,11 +1110,23 @@ impl Program for Utsushi {
                 self.publish();
             }
             Msg::Audio(i) => {
+                if i != self.audio_track {
+                    self.stop_captions(cx);
+                    self.caption_seeking = self.info.as_ref().is_some_and(|info| info.seekable);
+                }
                 if let Some(p) = self.player() {
                     p.select_audio(i);
                 }
             }
             Msg::Subtitles(i) => {
+                self.stop_captions(cx);
+                self.subtitle_source = SubtitleSource::Authored;
+                self.caption_notice = None;
+                if i != self.sub_track || i.is_none() {
+                    self.cues.clear();
+                }
+                self.cue_pos = self.player().map_or(self.pos, Player::position);
+                self.schedule(cx);
                 if let Some(p) = self.player() {
                     p.select_subtitles(i);
                 }
@@ -922,6 +1140,8 @@ impl Program for Utsushi {
                         Some(_) => None,
                     };
                     cx.send(Msg::Subtitles(next));
+                } else if self.subtitle_source != SubtitleSource::Authored {
+                    cx.send(Msg::Subtitles(None));
                 }
             }
             Msg::SubtitleDelay(d) => {
@@ -938,11 +1158,92 @@ impl Program for Utsushi {
                 cx.open_panel(self.window, dialog, Msg::SubtitlesChosen);
             }
             Msg::SubtitlesChosen(Some(paths)) => {
+                self.stop_captions(cx);
+                self.subtitle_source = SubtitleSource::Authored;
+                self.caption_notice = None;
                 if let (Some(p), Some(path)) = (self.player(), paths.into_iter().next()) {
                     p.add_subtitles(path);
                 }
             }
             Msg::SubtitlesChosen(None) => {}
+            Msg::GeneratedCaptions(mode) => {
+                self.stop_captions(cx);
+                self.subtitle_source = SubtitleSource::Generated(mode);
+                self.caption_notice = Some("Play to generate captions locally. Models are configured in Koe.".into());
+                let at = self.player().map_or(self.pos, Player::position);
+                self.start_captions(at, cx);
+                self.schedule(cx);
+            }
+            Msg::CaptionTick(generation) => self.poll_captions(generation, cx),
+            Msg::RetryCaptions => {
+                self.stop_captions(cx);
+                let at = self.player().map_or(self.pos, Player::position);
+                self.start_captions(at, cx);
+                self.schedule(cx);
+            }
+            Msg::CaptionSetup => {
+                let sender = cx.stream();
+                std::thread::spawn(move || match std::process::Command::new("aizome-koe").spawn() {
+                    Ok(mut child) => {
+                        let _ = child.wait();
+                    }
+                    Err(error) => {
+                        sender.send(Msg::CaptionSetupFailed(format!(
+                            "Cannot open Koe: {error}. Install or enable the Koe app to configure a local model."
+                        )));
+                    }
+                });
+            }
+            Msg::CaptionSetupFailed(error) => {
+                self.caption_notice = Some(error.clone());
+                cx.notify("Cannot open Koe", &error);
+            }
+            Msg::LyricsFound(item, paths) => {
+                if item == self.item && self.current.is_some() {
+                    for path in paths {
+                        if !self.lyrics_files.contains(&path) {
+                            self.lyrics_files.push(path);
+                        }
+                    }
+                    self.lyrics_files.sort();
+                }
+            }
+            Msg::Lyrics(path) => self.select_lyrics(path, cx),
+            Msg::AddLyrics => {
+                let mut dialog = FileDialog::new().title("Add Synchronized Lyrics").filter("LRC lyrics", &["lrc"]);
+                if let Some(dir) = self.current_path().and_then(Path::parent) {
+                    dialog = dialog.directory(dir);
+                }
+                let item = self.item;
+                cx.open_panel(self.window, dialog, move |paths| Msg::LyricsChosen(item, paths));
+            }
+            Msg::LyricsChosen(item, paths) => {
+                if item == self.item
+                    && self.current.is_some()
+                    && let Some(path) = paths.and_then(|paths| paths.into_iter().next())
+                {
+                    self.select_lyrics(path, cx);
+                }
+            }
+            Msg::LyricsLoaded(item, request, path, result) => {
+                if item == self.item
+                    && request == self.lyrics_request
+                    && self.subtitle_source == SubtitleSource::Lyrics(path.clone())
+                {
+                    match result {
+                        Ok(cues) => {
+                            self.lyric_cues = cues;
+                            self.caption_notice = None;
+                            if !self.lyrics_files.contains(&path) {
+                                self.lyrics_files.push(path);
+                            }
+                        }
+                        Err(error) => self.caption_notice = Some(error),
+                    }
+                    self.cue_pos = self.player().map_or(self.pos, Player::position);
+                    self.schedule(cx);
+                }
+            }
             Msg::ToggleFullscreen => cx.set_fullscreen(self.window, !self.fullscreen),
             Msg::Escape => {
                 if self.fullscreen {
@@ -951,13 +1252,18 @@ impl Program for Utsushi {
             }
             Msg::StageClick(n) => {
                 if n >= 2 {
-                    // The first click toggled; a double click is for full
-                    // screen, so it goes back.
-                    self.toggle(cx);
+                    // Decoder acknowledgements are asynchronous; toggling the
+                    // observed status twice can otherwise send Pause twice.
+                    match self.stage_click_playing.take() {
+                        Some(true) => self.play(cx),
+                        Some(false) => self.pause(cx),
+                        None => {}
+                    }
                     if self.has_video() {
                         cx.set_fullscreen(self.window, !self.fullscreen);
                     }
                 } else if self.info.is_some() {
+                    self.stage_click_playing = Some(self.playing());
                     self.toggle(cx);
                 } else if self.status == Status::Empty {
                     cx.send(Msg::OpenPanel);
@@ -992,6 +1298,7 @@ impl Program for Utsushi {
             Msg::Tick => {
                 self.tick = None;
                 self.pos = self.player().map_or(self.pos, Player::position);
+                self.cue_pos = self.pos;
                 if let Some(r) = cx.element_rect(self.window, "stage") {
                     self.stage = r.size();
                 }
@@ -1103,6 +1410,12 @@ impl Program for Utsushi {
             Msg::ClearRecent => self.store.clear_recent(),
             Msg::Close => {
                 self.leave();
+                self.stop_captions(cx);
+                self.subtitle_source = SubtitleSource::Authored;
+                self.caption_notice = None;
+                self.caption_seeking = false;
+                self.lyrics_files.clear();
+                self.lyric_cues.clear();
                 if let Some(p) = self.player() {
                     p.close();
                 }
@@ -1183,6 +1496,7 @@ impl Program for Utsushi {
             return false;
         }
         self.leave();
+        self.stop_captions(cx);
         self.store.prefs.volume = self.volume;
         self.store.prefs.muted = self.muted;
         self.store.save_prefs();

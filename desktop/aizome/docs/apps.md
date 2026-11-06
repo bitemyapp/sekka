@@ -961,6 +961,32 @@ rest); folders play their files in Hako's natural order.
   reduced to italics and top placement. Subtitles ▸ Show Earlier and
   Show Later move them for a file timed to another cut, until Original
   Timing or the next item.
+- **Live captions**: Subtitles and Lyrics (or the captions button beside
+  volume, including for music) offers local Koe captions, detected speaker
+  turns, and machine-generated lyrics. Open Koe / Models… selects or
+  downloads a model explicitly; dictation does not need to be enabled.
+  Only the current local file and selected audio track are decoded.
+  Pausing stops recognition; resuming or seeking starts from the current
+  media time. Changing files, tracks or subtitle sources discards old results.
+  Missing models and recognition failures appear in the player with Retry
+  from Here and Off.
+- **Lyrics**: `Song.lrc` and `Song.en.lrc` beside `Song.flac` appear in
+  Subtitles and Lyrics; Add Lyrics File… chooses another UTF-8 LRC file.
+  Multiple timestamps, signed millisecond offsets and blank timed lines
+  are supported. Positive LRC offsets show words earlier. Lyrics follow
+  playback position, speed and subtitle delay, including backward seeks.
+  Music shows lyrics in the same high-contrast subtitle boxes as video.
+  Generated lyrics are speech recognition, not a lyrics lookup service;
+  singing and accompaniment can produce incorrect or invented words.
+- **Caption limits**: recognition needs extra CPU/GPU and memory, may arrive
+  late, and can be wrong. Playback does not wait for model startup, so
+  opening lines can be missed; seek back once recognition is running if
+  you need to replay the opening. Detected turns require the English
+  tinydiarize model and mark possible speaker changes, not persistent
+  speaker identities. No captions, audio or lyrics history is saved.
+  Authored subtitles remain selectable; choose them when available.
+  See [Koe](koe.md#live-captions) for system-wide output captions and
+  privacy details.
 - **Where it was**: a film over five minutes long opens where it was
   left (with Start Over for a few seconds), unless that was in its first
   or last thirty seconds. Open Recent keeps twenty items.
@@ -1026,6 +1052,10 @@ a second; mpv `--hwdec=vaapi --vo=dmabuf-wayland` 2.2% and 405; mpv
 PipeWire's daemon at 50 a second; `mpv --no-video` 1.0% and 246, the
 daemon at 99. That machine's PipeWire was capped at 2048-frame cycles
 (before the module's change); see `docs/performance.md`.
+
+Those playback measurements exclude opt-in caption recognition and its
+separate audio decoder. A larger speech model can cost substantially more
+than playback itself.
 
 As built, the limits: no gapless playback between songs; colours are
 the compositor's YUV conversion, which Aizome doesn't yet tell BT.709

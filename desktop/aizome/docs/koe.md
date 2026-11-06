@@ -31,8 +31,10 @@ the palette. The **Dictation** page has everything:
   service now and at every login; off stops it, and it no longer starts.
   Without a model it stays off.
 - **Speech Model**: Tiny, Base and Small, each for many languages or
-  English only, with their sizes. Download, Use and Remove… (which says how
-  much it frees; the model in use can be removed only with dictation off).
+  English only; Large v3 and Large v3 Turbo (8-bit) for larger captioning
+  models; and Small (English, speaker turns) for experimental turn detection.
+  Download, Use and Remove… show their sizes (the model in use can be
+  removed only with dictation off).
   A model that isn't the catalog's size shows as Incomplete, with Download
   Again. Show in Files opens the folder.
 - **Recognition**: the language (or Detect automatically; English-only
@@ -89,6 +91,45 @@ take it as their image-attachment Ctrl+V), Ctrl+V elsewhere.
   microphone.
 - **Notifications** say when Koe is listening, transcribing and done, and
   what went wrong; never what you said.
+
+## Live Captions
+
+**Open Live Captions** in Koe, or its launcher action **Live Captions**,
+opens a separate window for speech playing on this computer. Opening it
+does not capture anything. Select a downloaded local model in Koe, then
+press **Start**; dictation can stay off. **Stop**, closing the window, or
+quitting stops capture and clears the text.
+
+- The source is the **default system audio output**, not the microphone.
+  It includes other applications audible through that output, not just the
+  focused app. Microphone selection in dictation does not affect captions.
+  Changing output devices may require Stop and Start.
+- Text is white on black, with size controls from 20 to 56 points and six
+  recent cues in memory. The capture indicator remains visible. Resize or
+  position the window beside other applications; it is a normal window,
+  not an always-on-top overlay.
+- Recognition stays local. Captions do not use the HTTP backend, type into
+  applications, replace the clipboard, or save audio or transcript history.
+  System swap and desktop screenshots can still contain displayed text.
+- Live recognition processes six-second windows, plus inference time.
+  Larger models need more memory and computation; they may not keep up on
+  the processor. If inference falls behind, a visible gap reports skipped
+  audio rather than allowing an unbounded backlog.
+  Initial model and GPU setup can take tens of seconds. Wait for
+  **CAPTURING** before starting the audio you want transcribed.
+- **Detect speaker turns** needs the verified `small.en-tdrz` model,
+  English, and translation off. It uses
+  [tinydiarize](https://github.com/akashmjn/tinydiarize)'s experimental
+  speaker-change predictions. Labels identify turns within each window,
+  not named people or persistent speaker identities across windows.
+
+Utsushi's **Subtitles and Lyrics** menu can generate captions from its
+current local file and audio track through Koe, without capturing other
+applications. It also offers detected turns, machine-generated lyrics, and
+synchronized local `.lrc` files. Authored subtitles and lyrics are preferable
+when available: recognition can omit, repeat or invent words, especially
+with music, noise, overlapping speakers, or a recognition-window boundary.
+No claim of greater accuracy than YouTube's automatic subtitles is implied.
 
 ## Vocabulary and Teaching
 
@@ -187,6 +228,10 @@ aizome-koe status                  # one JSON status
 aizome-koe watch                   # newline-delimited JSON as it changes
 aizome-koe model list|download NAME|verify NAME|remove NAME|unload
 aizome-koe transcribe speech.wav   # mono 16 kHz WAV to stdout, no clipboard
+aizome-koe captions               # opt-in system-output caption window
+aizome-koe captions --json        # system-output cues as NDJSON; Ctrl-C stops
+aizome-koe captions --json --input film.mkv --start 42.5 --audio-track 0
+aizome-koe captions --json --input interview.mp4 --diarize
 aizome-koe config show|check|init
 aizome-koe doctor                  # what's set up and what's missing
 aizome-koe packs list|show|create|edit|remove|import|export|enable|disable|export-examples
@@ -202,6 +247,22 @@ Packs and words: `aizome-koe packs create "Desktop terms" --enable`,
 `aizome-koe words add desktop-terms Fusen --alias "who sen"`,
 `aizome-koe words edit sekka Aizome --add-alias Aizoma --remove-alias IZOMA`.
 Exports never overwrite: they need new paths.
+
+Caption NDJSON is separate from the dictation control protocol below.
+It emits `{"type":"ready"}`, then
+`{"type":"cue","start":42.5,"end":45.0,"text":"…","speaker":"…"}`.
+Times are absolute media seconds for files; `speaker` is omitted without
+turn detection. `gap` and `error` events carry a `message`. File EOF ends
+the stream; decoding errors exit unsuccessfully. File input uses
+thirty-second recognition windows with bounded backpressure, not
+real-time playback capture. `--audio-track` is the zero-based audio-track
+ordinal, not the container's stream index. Inputs must be local files.
+Neither launching the CLI nor opening the window enables dictation.
+
+File-caption startup loads and validates the model without transcribing
+synthetic silence. Live output capture warms inference before opening its
+audio source, so cold GPU setup does not consume its bounded audio queue.
+Dictation's separate service warm-up is unchanged.
 
 ## The control protocol
 
@@ -304,11 +365,11 @@ keys, teaching, settings applied without a restart, `enable` and
 cancelled and damaged downloads, cancelling or closing while the server is
 silent, settings saved as they change and while the switch works, an
 unreadable `koe.toml` reset while the service records, teaching through
-the Vocabulary page), and golden
-images of the pages (`tests/snapshots`, `AIZOME_UPDATE_GOLDENS=1`).
-`KOE_TEST_SCREENSHOTS=DIR cargo test -p aizome-koe --test look` also
-writes the whole Dictation page. Nothing uses the session's microphone,
-clipboard, keyboard or compositor. Ignored, by hand:
+the Vocabulary page), and caption queue overflow, file backpressure,
+absolute timestamps, cancellation and source-process reaping. UI verification
+uses real interaction and screenshots rather than re-pinning pixel-layout
+goldens whenever controls change. Ordinary tests do not use the session's
+microphone, clipboard, keyboard or compositor. Ignored, by hand:
 
 - `--test tray -- --ignored`: a private `dbus-daemon` and
   StatusNotifierWatcher, real DBusMenu clicks, re-registration after the
