@@ -9,13 +9,16 @@
 //! stalled part times out (the transport's idle timeout) and is retried a
 //! bounded number of times with backoff. Only after the last byte is the
 //! whole file hashed against the catalog; until then it lives under a
-//! `.partial` name and is never used. A finished file found later is hashed
-//! again before it is reused.
+//! `.partial` name and is never used. That name carries the digest the file
+//! must have, so what is left of another release's download is removed,
+//! never resumed into this one or counted toward it. A finished file found
+//! later is hashed again before it is reused.
 //!
 //! Nothing here touches a disk other than the staging directory, and
 //! nothing here is reachable before the person chooses to download.
 #![deny(unsafe_code)]
 
+use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
@@ -166,8 +169,10 @@ impl StagingDir {
     }
 
     fn file(&self, name: &str) -> Result<PathBuf, StageError> {
+        // A `.partial` name is a download in progress, never a file's own.
         let plain = !name.is_empty()
             && !name.starts_with('.')
+            && !name.ends_with(".partial")
             && name.len() <= 128
             && name
                 .bytes()
@@ -179,7 +184,9 @@ impl StagingDir {
     }
 
     /// The bytes the files named here still need, given what is already
-    /// staged: the peak extra space downloading them takes.
+    /// staged: the peak extra space downloading them takes. A download in
+    /// progress counts only toward the digest it was started for; one left
+    /// from another release counts for nothing (staging removes it).
     pub fn bytes_needed(&self, files: &[(&str, &Expect)]) -> u64 {
         files
             .iter()
@@ -188,10 +195,29 @@ impl StagingDir {
                 if regular_size(&path) == Some(expect.size) {
                     return 0;
                 }
-                let partial = partial_name(&path);
+                let partial = partial_name(&path, &expect.digest);
                 expect.size - regular_size(&partial).unwrap_or(0).min(expect.size)
             })
             .sum()
+    }
+
+    /// Remove every download in progress for `name` but `keep`: those for
+    /// another digest, and those whose name doesn't say which. None of them
+    /// can become this file, and each may hold gigabytes.
+    fn discard_partials(&self, name: &str, keep: &Path) -> Result<(), StageError> {
+        for entry in fs::read_dir(&self.path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path == keep || !is_partial_of(name, &entry.file_name()) {
+                continue;
+            }
+            match fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.into()),
+            }
+        }
+        Ok(())
     }
 
     /// Hash a finished file from an earlier run and keep it if it is still
@@ -216,10 +242,27 @@ impl StagingDir {
     }
 }
 
-fn partial_name(path: &Path) -> PathBuf {
+/// Where the download of `path` with this digest waits until it is whole.
+fn partial_name(path: &Path, digest: &Digest) -> PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(".partial");
+    name.push(format!(".{}.partial", digest.hex()));
     path.with_file_name(name)
+}
+
+/// Whether `file` is a download in progress for `name`: of any digest, or
+/// from before a partial's name carried one.
+fn is_partial_of(name: &str, file: &OsStr) -> bool {
+    let Some(middle) = file
+        .to_str()
+        .and_then(|f| f.strip_prefix(name))
+        .and_then(|rest| rest.strip_suffix(".partial"))
+    else {
+        return false;
+    };
+    match middle.strip_prefix('.') {
+        Some(hex) => Digest::from_hex(hex).is_ok(),
+        None => middle.is_empty(),
+    }
 }
 
 fn regular_size(path: &Path) -> Option<u64> {
@@ -319,12 +362,13 @@ impl<'a, T: Transport> Stager<'a, T> {
         expect: &Expect,
         on: &mut dyn FnMut(StageEvent),
     ) -> Result<StagedFile, StageError> {
+        let path = self.dir.file(name)?;
+        let partial = partial_name(&path, &expect.digest);
+        self.dir.discard_partials(name, &partial)?;
         if let Some(file) = self.dir.verified(name, expect)? {
             on(StageEvent::Reused);
             return Ok(file);
         }
-        let path = self.dir.file(name)?;
-        let partial = partial_name(&path);
         // A corrupt result gets one fresh download: a bad byte from a
         // flaky connection shouldn't strand the person, but a server that
         // keeps serving the wrong file must not be fetched forever.

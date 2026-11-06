@@ -71,6 +71,16 @@ fn stager<'a>(dir: &'a StagingDir, fake: &'a Fake, cancel: &'a AtomicBool) -> St
     s.space = |_| Ok(u64::MAX);
     s
 }
+/// Where the download of `d` as `name` waits until it is whole.
+fn in_progress(dir: &StagingDir, name: &str, d: &[u8]) -> PathBuf {
+    partial_name(&dir.path().join(name), &Digest::of(d))
+}
+/// A server whose connection drops after its first part.
+fn drops_after_one_part(d: &[u8]) -> Fake {
+    Fake::scripted(d.to_vec(), |n, _, _| {
+        (n >= 1).then(|| Err(TransportError::Retryable("the network connection was lost".into())))
+    })
+}
 
 const SIZE: usize = 40 * 1024 * 1024 + 123;
 
@@ -105,14 +115,12 @@ fn a_dropped_network_resumes_at_the_last_whole_part() {
     let (_t, dir) = staging();
     let d = data(SIZE);
     let cancel = AtomicBool::new(false);
-    let dead = Fake::scripted(d.clone(), |n, _, _| {
-        (n >= 1).then(|| Err(TransportError::Retryable("the network connection was lost".into())))
-    });
+    let dead = drops_after_one_part(&d);
     let err = stager(&dir, &dead, &cancel)
         .stage("payload.zip", &url(), &expect(&d), &mut |_| {})
         .unwrap_err();
     assert!(matches!(err, StageError::Network { attempts: 6, .. }));
-    let partial = dir.path().join("payload.zip.partial");
+    let partial = in_progress(&dir, "payload.zip", &d);
     assert_eq!(fs::metadata(&partial).unwrap().len(), PART);
     // A torn tail beyond the last part is discarded on resume.
     let mut f = OpenOptions::new().append(true).open(&partial).unwrap();
@@ -207,8 +215,7 @@ fn a_substituted_file_is_refused_after_one_fresh_try() {
         .unwrap_err();
     assert!(matches!(err, StageError::Corrupt { .. }));
     assert_eq!(fake.requests.borrow().len(), 6, "downloaded twice, then stopped");
-    assert!(!dir.path().join("payload.zip").exists());
-    assert!(!dir.path().join("payload.zip.partial").exists());
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0, "nothing is left");
 
     // Corrupt once, right the second time: succeeds.
     let flip = std::cell::Cell::new(true);
@@ -256,7 +263,73 @@ fn cancelling_keeps_what_was_downloaded() {
         })
         .unwrap_err();
     assert_eq!(err, StageError::Cancelled);
-    assert_eq!(fs::metadata(dir.path().join("payload.zip.partial")).unwrap().len(), PART);
+    assert_eq!(fs::metadata(in_progress(&dir, "payload.zip", &d)).unwrap().len(), PART);
+}
+
+#[test]
+fn another_releases_partial_download_is_removed_not_resumed() {
+    let (_t, dir) = staging();
+    let old = data(SIZE);
+    let new: Vec<u8> = old.iter().map(|b| b ^ 0x5a).collect();
+    let cancel = AtomicBool::new(false);
+    stager(&dir, &drops_after_one_part(&old), &cancel)
+        .stage("payload.zip", &url(), &expect(&old), &mut |_| {})
+        .unwrap_err();
+    // The old release's part counts toward the old release only.
+    assert_eq!(dir.bytes_needed(&[("payload.zip", &expect(&old))]), SIZE as u64 - PART);
+    assert_eq!(dir.bytes_needed(&[("payload.zip", &expect(&new))]), SIZE as u64);
+
+    let fake = Fake::new(new.clone());
+    let mut events = Vec::new();
+    let file = stager(&dir, &fake, &cancel)
+        .stage("payload.zip", &url(), &expect(&new), &mut |e| events.push(e))
+        .unwrap();
+    assert_eq!(fs::read(&file.path).unwrap(), new);
+    assert_eq!(*fake.requests.borrow(), vec![0, PART, 2 * PART], "downloaded once, from the start");
+    assert_eq!(events.iter().filter(|e| **e == StageEvent::Verifying).count(), 1);
+    assert_eq!(events[0], StageEvent::Progress { done: 0, total: SIZE as u64 });
+    assert!(!in_progress(&dir, "payload.zip", &old).exists());
+}
+
+#[test]
+fn a_partial_download_that_doesnt_say_whose_it_is_is_removed() {
+    let (_t, dir) = staging();
+    let d = data(SIZE);
+    // Even the right bytes: nothing says which file they began.
+    let unnamed = dir.path().join("payload.zip.partial");
+    fs::write(&unnamed, &d[..PART as usize]).unwrap();
+    assert_eq!(dir.bytes_needed(&[("payload.zip", &expect(&d))]), SIZE as u64);
+    let fake = Fake::new(d.clone());
+    let cancel = AtomicBool::new(false);
+    stager(&dir, &fake, &cancel)
+        .stage("payload.zip", &url(), &expect(&d), &mut |_| {})
+        .unwrap();
+    assert_eq!(*fake.requests.borrow(), vec![0, PART, 2 * PART]);
+    assert!(!unnamed.exists());
+}
+
+#[test]
+fn a_reused_file_still_removes_its_other_partial_downloads() {
+    let (_t, dir) = staging();
+    let d = data(1000);
+    let old: Vec<u8> = d.iter().rev().copied().collect();
+    fs::write(dir.path().join("manifest.json"), &d).unwrap();
+    let stale = in_progress(&dir, "manifest.json", &old);
+    fs::write(&stale, &old[..500]).unwrap();
+    // Another file's download, and a file whose name merely begins the same.
+    let payload = in_progress(&dir, "payload.zip", &old);
+    fs::write(&payload, &old[..500]).unwrap();
+    let lookalike = dir.path().join("manifest.json5.partial");
+    fs::write(&lookalike, b"{}").unwrap();
+    let fake = Fake::new(d.clone());
+    let cancel = AtomicBool::new(false);
+    let mut events = Vec::new();
+    stager(&dir, &fake, &cancel)
+        .stage("manifest.json", &url(), &expect(&d), &mut |e| events.push(e))
+        .unwrap();
+    assert_eq!(events, vec![StageEvent::Reused]);
+    assert!(!stale.exists());
+    assert!(payload.exists() && lookalike.exists(), "only this file's downloads are removed");
 }
 
 #[test]
@@ -292,6 +365,7 @@ fn staging_must_be_private() {
     let (_t, dir) = staging();
     assert!(dir.file("../escape").is_err());
     assert!(dir.file(".hidden").is_err());
+    assert!(dir.file("payload.zip.partial").is_err());
 }
 
 fn import_setup() -> (tempfile::TempDir, PathBuf, StagingDir, Vec<u8>) {
