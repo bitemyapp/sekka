@@ -379,6 +379,26 @@ aliases. Actual LAN probes cover fresh-root hits, disabled writes, compiler
 failures, reverts and shared-donor preservation. These are correctness checks,
 not proof of a full-workspace performance or storage win.
 
+Linux local execution pipelines output preparation while the producer runs.
+Close-write and move events are hints: candidates are captured into private
+independent snapshots, hashed, normalized and synchronized, with optional early
+CAS upload. Four process-wide batches of at most eight files share a 512 MiB,
+4,096-pair retention budget, charging both snapshots rounded to 4 KiB blocks;
+oversized candidates use the ordinary final path. CAS streaming uses
+bounded 64 KiB frames rather than buffering each complete file. Separate upload
+snapshots remain stable across retries and publication of writable worktree
+views. Final output membership, types, executable bits and full content hashes
+remain authoritative; failed or cancelled producers publish no successful
+action result. Missing prepared views fall back to ordinary materialization.
+Remote write policy and permission checks still apply. A configured whole-action
+upload-size limit disables speculative remote transfers, not local preparation.
+Final root publication remains synchronous; remote-worker ingestion is unchanged.
+The controlled LAN proof observed early blobs without an early action root,
+then verified same-size rewrites, executable-mode changes, fresh-root restoration,
+failure/cancellation rejection and ignored external symlinks. The native
+525-file smoke also checked writable single-link views and mutation isolation.
+Neither fixture establishes full-workspace latency or storage acceptance.
+
 Ready local compiler actions are prioritized by their longest reverse
 dependency path in Cargo's resolved unit graph. A dependency can retain a
 higher rank even when it is also a requested root. Higher-ranked ready actions
