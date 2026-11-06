@@ -2,8 +2,16 @@
   pkgs,
   aquamarine,
   hyprland,
-  unpatchedAquamarine,
 }:
+let
+  # The same library without the null-connector fix, whether it came from
+  # upstream (0.16.0 and newer) or from Sekka's backport (older releases).
+  unfixedAquamarine = aquamarine.overrideAttrs (old: {
+    postPatch = (old.postPatch or "") + ''
+      patch -R -p1 < ${./patches/aquamarine-null-connector.patch}
+    '';
+  });
+in
 pkgs.gcc16Stdenv.mkDerivation {
   name = "aquamarine-null-connector-check";
   dontUnpack = true;
@@ -17,21 +25,17 @@ pkgs.gcc16Stdenv.mkDerivation {
     runHook preCheck
     ulimit -c 0
     ./null-connector
-    echo 'Patched Aquamarine handles null connectors'
+    echo 'Aquamarine handles null connectors'
     # Prove this test detects the original bug, using the same executable.
-    echo 'Negative control: expecting SIGSEGV from unpatched Aquamarine'
+    echo 'Negative control: expecting SIGSEGV from Aquamarine without the fix'
     set +e
-    LD_LIBRARY_PATH=${unpatchedAquamarine}/lib ./null-connector
+    LD_LIBRARY_PATH=${unfixedAquamarine}/lib ./null-connector
     status=$?
     set -e
     test "$status" -eq 139
     # Check the compositor's runtime binding, not merely its build inputs.
     ldd ${hyprland}/bin/.Hyprland-wrapped > hyprland-libraries
     grep -F '${aquamarine}/lib/libaquamarine.so' hyprland-libraries
-    if grep -F '${unpatchedAquamarine}/' hyprland-libraries; then
-      echo 'Hyprland still loads unpatched Aquamarine' >&2
-      exit 1
-    fi
     runHook postCheck
   '';
   doCheck = true;

@@ -21,7 +21,7 @@ in
 pkgs.testers.runNixOSTest {
   name = "yukimi-discover";
   globalTimeout = 2400;
-  # Sekka's desktop module adds its Aquamarine fix as a Nixpkgs overlay.
+  # Sekka's desktop module adds its Hyprland fixes as Nixpkgs overlays.
   node.pkgsReadOnly = false;
   nodes.tatami =
     { pkgs, ... }:

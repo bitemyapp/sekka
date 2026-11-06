@@ -1080,7 +1080,7 @@ pub fn status(site: &Site) -> Result<Page> {
       <tr><th scope="row">Displays and lid</th><td>The display helper runs against a fake Hyprland and a fake lid. Real Hyprland runs in a virtual machine with simulated screens and a simulated lid switch.</td></tr>
       <tr><th scope="row">Keep Awake</th><td>Real logind and polkit inhibition in a virtual machine, including a failing holder, a logind restart and boot persistence.</td></tr>
       <tr><th scope="row">USB wake</th><td>Fixtures for hub paths, unrelated devices and reconnect-like resets.</td></tr>
-      <tr><th scope="row">Hyprland crash fix</th><td>Sekka patches Aquamarine's null-connector teardown. A test runs the real library with null connectors and confirms the unpatched one crashes.</td></tr>
+      <tr><th scope="row">Hyprland crash fix</th><td>Aquamarine 0.16 fixes its null-connector teardown crash, and Sekka backports the fix to older releases. A test runs the real library with null connectors and confirms a build without the fix crashes.</td></tr>
     </tbody>
   </table></div>
 </section>

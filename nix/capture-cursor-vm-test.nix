@@ -78,11 +78,12 @@ pkgs.testers.runNixOSTest {
             self.signature = machine.succeed("basename /run/user/1000/hypr/*").strip()
             self.wayland = ""
             self.pid = 0
-            # The command socket appears before the instance's lock metadata.
+            # The command socket appears before the instance's lock metadata,
+            # and until then hyprctl prints "\n]" (it pops its own "[").
             # Wait for the actual API result instead of racing that startup gap.
             def instance_ready():
-                raw = self.run("hyprctl -j instances")
-                if not raw.strip():
+                raw = self.run("hyprctl -j instances").strip()
+                if raw in ("", "]"):
                     return False
                 instances = json.loads(raw)
                 if len(instances) != 1 or not instances[0].get("wl_socket"):

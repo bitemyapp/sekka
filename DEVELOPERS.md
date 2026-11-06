@@ -735,24 +735,24 @@ check covers live boot configurations and prebuilt installed systems.
 These are component checks, not ISO qualification. When upstream fixes this
 window, review and remove the patch and its failing control together.
 
-Sekka backports Aquamarine's upstream null-connector teardown fix
-[`fc77bd58`](https://github.com/hyprwm/aquamarine/commit/fc77bd58a2c9ef6d0760a7c9c3b7b6670f956f28)
-onto Nixpkgs' 0.15.1 through `nix/overlays/aquamarine.nix`. Both Tatami and
-vanilla Hyprland import the shared module, including Genkan's prebuilt installed
-systems. The overlay also rebuilds Hyprland against the patched library; updating
-an unrelated application package set alone would not change that runtime dependency.
+Aquamarine 0.16.0 includes its upstream null-connector teardown fix
+[`fc77bd58`](https://github.com/hyprwm/aquamarine/commit/fc77bd58a2c9ef6d0760a7c9c3b7b6670f956f28),
+so with Sekka's own lock `nix/overlays/aquamarine.nix` leaves Nixpkgs' package
+unchanged. It still backports the fix to older Aquamarine, for flakes whose
+Sekka follows an older Nixpkgs of their own (`inputs.sekka.inputs.nixpkgs.follows`);
+that build keeps the older version string, and its distinct Nix store path
+identifies it. Both Tatami and vanilla Hyprland import the shared module,
+including Genkan's prebuilt installed systems.
 `nix build .#checks.x86_64-linux.aquamarine` exercises the real library with null
-connectors, confirms the original library crashes on the same test, and verifies
-Hyprland's runtime linkage. It needs no GPU or running graphical session.
-`nix build .#checks.x86_64-linux.hyprland-packages` checks package selection
-through the installed-system, ISO reference and standalone desktop modules.
-The backport keeps the 0.15.1 version string; its distinct Nix store path
-identifies the patched build.
-When Nixpkgs includes the fix, remove the backport and its negative control after
-verifying the regression test passes with the new upstream package. A patch
-failure during an input update requires that review; do not just skip the patch.
+connectors, confirms the same library with the fix reverted crashes on the same
+test, and verifies Hyprland's runtime linkage. It needs no GPU or running
+graphical session, and it covers only the Aquamarine Sekka's lock selects, not
+the backport. `nix build .#checks.x86_64-linux.hyprland-packages` checks package
+selection through the installed-system, ISO reference and standalone desktop
+modules. A patch failure during an input update requires review; do not just
+skip the patch.
 
-Hyprland itself carries `nix/patches/hyprland-screenshare-sessions.patch`
+Hyprland carries `nix/patches/hyprland-screenshare-sessions.patch`
 (`nix/overlays/hyprland.nix`), which is proposed upstream as the same commit.
 The overlay selects the `-0.57.patch` variants of both Hyprland fixes for
 0.57 and newer, adapting them to explicit rendering contexts and workspace
@@ -1221,8 +1221,8 @@ Standalone users can import `sekka.nixosModules.tatami` with `programs.tatami.en
 
 ## Binary cache
 
-`https://cache.sekka.computer` serves Sekka's own packages and the patched
-Aquamarine and Hyprland, so installations and updates download them instead of
+`https://cache.sekka.computer` serves Sekka's own packages and its patched
+Hyprland stack, so installations and updates download them instead of
 compiling them. It is the Cloudflare R2 bucket `sekka-cache` behind a custom
 domain in the maintainer's Cloudflare account; `sekka.computer` is registered
 at Porkbun with Cloudflare DNS. Paths are signed with `cache.sekka.computer-1`.
@@ -1266,7 +1266,7 @@ one with all of those desktops together, and one with every free catalog
 application, so everything Sekka's modules
 change and every application one can choose is covered without a list to
 keep up:
-Hyprland and what uses its patched Aquamarine (hyprlauncher among them),
+Hyprland and what uses its patched Hyprtoolkit (hyprlauncher among them),
 Elephant, the wallpapers. It then uploads just the paths that none of
 cache.nixos.org, Determinate's cache and numtide's cache serve (about 0.8 GiB),
 archives before the narinfos that point to them, and skips objects already in
