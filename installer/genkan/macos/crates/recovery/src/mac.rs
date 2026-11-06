@@ -5,7 +5,7 @@
 use std::cell::RefCell;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
@@ -28,26 +28,14 @@ use sekka_mac_appkit::views::{CrestView, Mark, MarkView};
 use sekka_mac_contract::Uuid;
 use zeroize::Zeroize;
 
+use crate::command;
 use crate::finish::{Environment, FinishError, Finisher, Phase, System};
 use crate::install::{Install, volume_of};
 use crate::pty::{self, AuthError, Program};
 use crate::screen::{self, Screen};
 
-const PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";
-
 fn run(program: &str, args: &[&str]) -> Result<String, String> {
-    let out = Command::new(program)
-        .args(args)
-        .env_clear()
-        .env("PATH", PATH)
-        .env("LC_ALL", "C")
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|e| format!("{program}: {e}"))?;
-    if !out.status.success() {
-        return Err(format!("{program} failed: {}", String::from_utf8_lossy(&out.stderr).trim()));
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    command::output(program, args, command::TIMEOUT)
 }
 
 fn plist_string(xml: &str, key: &str) -> Option<String> {

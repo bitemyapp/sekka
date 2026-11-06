@@ -10,6 +10,7 @@
 //! started from before anything is asked. It can't resize, partition or
 //! write Linux: it runs `bputil`, `kmutil configure-boot` and `bless` for
 //! one volume, and retrying it repeats only those, with the same boot object.
+pub mod command;
 pub mod finish;
 pub mod install;
 pub mod pty;
