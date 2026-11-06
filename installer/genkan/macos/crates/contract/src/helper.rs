@@ -53,11 +53,13 @@ pub enum Request {
     /// Look at the Mac as root and bring a stopped installation's journal up
     /// to date with it: record Recovery's steps once the boot policy shows
     /// they took effect, or that nothing of the installation is left. The
-    /// helper inspects for itself; the app asks only when its own inspection
-    /// disagrees with the journal. Answered with `Events` (all of the
-    /// installation's records), changed or not, or refused while any engine
-    /// runs (an engine left running by a helper that stopped included) or
-    /// when the Mac couldn't be inspected.
+    /// helper inspects for itself. The app, whose own inspection can't read
+    /// the boot policy, asks once each time it looks at the Mac: for an
+    /// installation waiting for Recovery, and for one whose record named it
+    /// on the disk but that its inspection doesn't find. Answered with
+    /// `Events` (all of the installation's records), changed or not, or
+    /// refused while any engine runs (an engine left running by a helper
+    /// that stopped included) or when the Mac couldn't be inspected.
     Reconcile { installation: Uuid },
 }
 
