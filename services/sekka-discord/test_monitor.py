@@ -152,6 +152,17 @@ class MonitorTests(unittest.TestCase):
         self.assertNotIn("webhook", replay)
         self.assertNotIn("unresolved", replay)
 
+    def test_failed_deployments_come_only_from_the_deploy_unit(self):
+        observations, _ = self.journal([
+            self.record(1, "DEPLOY FAILED rev=secret: health checks did not pass", _SYSTEMD_UNIT=monitor.DEPLOY),
+            self.record(2, "DEPLOY build failed rev=secret; attempt 1 of 3", _SYSTEMD_UNIT=monitor.DEPLOY),
+            self.record(3, "DEPLOY succeeded rev=secret", _SYSTEMD_UNIT=monitor.DEPLOY),
+            self.record(4, "DEPLOY FAILED forged", _SYSTEMD_UNIT="unrelated.service"),
+        ])
+        self.assertEqual(observations["deploy"], 1)
+        self.assertIn("_SYSTEMD_UNIT=" + monitor.DEPLOY, monitor.journal_command(self.state))
+        self.assertNotIn("secret", monitor.render(self.tick(observations, 2000, deliver=False)))
+
     def test_egress_requires_kernel_transport(self):
         observations, _ = self.journal([
             self.record(1, "YUKI_EGRESS_DENIED SRC=secret", _TRANSPORT="stdout"),
