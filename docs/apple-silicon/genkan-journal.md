@@ -172,8 +172,7 @@ the failure, what changed, the next action and the redacted record. Without
 a report (the helper died) the page keeps its earlier wording.
 
 `CALAMARES_UI_PREVIEW=bootfail` shows the retry offer; `failed` now shows a
-failed copy with the record's account. Add `bootfail` to the preview list in
-DEVELOPERS.md when merging.
+failed copy with the record's account.
 
 ## Retry rules
 

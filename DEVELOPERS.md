@@ -1380,8 +1380,9 @@ while installing hold. Set `AIZOME_FONT_DIR` (`nix build .#aizome-fonts`) for
 Aizome's type and `TZDIR` for the map; the package's check phase sets both.
 `GENKAN_PICTURES=dir` also writes each page in Night and Day.
 
-In debug builds, `CALAMARES_UI_PREVIEW=welcome|disk|account|github|desktop|applications|location|keyboard|review|ready|prepfail|install|done|failed`
-opens the window on that page with sample data, touching no disks, network or
+In debug builds, `CALAMARES_UI_PREVIEW=welcome|disk|account|github|desktop|applications|location|keyboard|review|ready|prepfail|install|done|failed|bootfail`
+opens the window on that page with sample data (`bootfail` is the
+bootloader retry offer), touching no disks, network or
 helper, and `CALAMARES_UI_SIZE=800x600` sizes it. Release builds read
 neither. Outside the live media only previews are useful: reviewing reads the
 media's root-owned settings and starts the helper through Polkit.
