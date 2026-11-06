@@ -304,8 +304,9 @@ mod tests {
         }
     }
 
-    const MACOS: [Stage; 10] = [
+    const MACOS: [Stage; 11] = [
         Stage::Import,
+        Stage::AppleInputs,
         Stage::Shrink,
         Stage::StubPartition,
         Stage::StubSystem,
@@ -337,7 +338,9 @@ mod tests {
     #[test]
     fn an_interrupted_stage_is_never_replayed_blindly() {
         let mut c = Chain::new();
-        c.stage(Stage::Import).push(Event::Intent { stage: Stage::Shrink });
+        c.stage(Stage::Import)
+            .stage(Stage::AppleInputs)
+            .push(Event::Intent { stage: Stage::Shrink });
         let s = c.state().unwrap();
         assert_eq!(s, InstallState::MutationStarted { stage: Stage::Shrink });
         assert_eq!(s.permitted(), &[NextAction::InspectActualState, NextAction::ExportDiagnostics]);
@@ -347,12 +350,12 @@ mod tests {
     #[test]
     fn a_resize_that_changed_nothing_allows_a_new_plan() {
         let mut c = Chain::new();
-        c.stage(Stage::Import).fail(Stage::Shrink, DiskChanged::No);
+        c.stage(Stage::Import).stage(Stage::AppleInputs).fail(Stage::Shrink, DiskChanged::No);
         let s = c.state().unwrap();
         assert!(s.permitted().contains(&NextAction::Reinspect));
         assert!(s.allows_new_installation());
         let mut c = Chain::new();
-        c.stage(Stage::Import).fail(Stage::Shrink, DiskChanged::Unknown);
+        c.stage(Stage::Import).stage(Stage::AppleInputs).fail(Stage::Shrink, DiskChanged::Unknown);
         assert!(!c.state().unwrap().allows_new_installation());
         // Shrinking is never retried within the same installation.
         c.push(Event::Intent { stage: Stage::Shrink });
@@ -362,7 +365,7 @@ mod tests {
     #[test]
     fn only_the_startup_disk_is_retried_after_the_payload_is_verified() {
         let mut c = Chain::new();
-        for s in &MACOS[..9] {
+        for s in &MACOS[..10] {
             c.stage(*s);
         }
         c.fail(Stage::StartupDisk, DiskChanged::No);
@@ -371,7 +374,7 @@ mod tests {
         c.stage(Stage::StartupDisk);
         assert_eq!(c.state().unwrap(), InstallState::WaitingForRecovery);
         let mut bad = Chain::new();
-        for s in &MACOS[..9] {
+        for s in &MACOS[..10] {
             bad.stage(*s);
         }
         bad.fail(Stage::StartupDisk, DiskChanged::No).push(Event::Intent { stage: Stage::Root });
@@ -389,14 +392,17 @@ mod tests {
         c.push(Event::Intent { stage: Stage::Shrink });
         assert!(c.state().is_err());
         let mut c = Chain::new();
-        c.stage(Stage::Import).stage(Stage::Shrink).push(Event::Cancelled);
+        c.stage(Stage::Import)
+            .stage(Stage::AppleInputs)
+            .stage(Stage::Shrink)
+            .push(Event::Cancelled);
         assert!(c.state().is_err(), "a changed disk can't be cancelled away");
     }
 
     #[test]
     fn a_tampered_record_breaks_the_chain() {
         let mut c = Chain::new();
-        c.stage(Stage::Import).stage(Stage::Shrink);
+        c.stage(Stage::Import).stage(Stage::AppleInputs);
         c.0[2].at = Timestamp::from_unix(1);
         assert!(c.state().is_err());
     }

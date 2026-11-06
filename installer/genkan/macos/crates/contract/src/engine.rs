@@ -335,12 +335,14 @@ mod tests {
     fn early_completion_and_skipped_stages_are_refused() {
         let mut w = W::new();
         w.hello(EngineMode::Execute);
+        stage(&mut w, Stage::AppleInputs);
         stage(&mut w, Stage::Shrink);
         w.push(EngineBody::Completion { outcome: EngineOutcome::WaitingForRecovery });
         assert!(w.run(Transcript::execute(plan(), true)).is_err());
 
         let mut w = W::new();
         w.hello(EngineMode::Execute);
+        stage(&mut w, Stage::AppleInputs);
         stage(&mut w, Stage::StubPartition);
         assert!(w.run(Transcript::execute(plan(), true)).is_err(), "the shrink was skipped");
         assert!(w.run(Transcript::execute(plan(), false)).is_ok(), "no shrink was planned");
@@ -350,7 +352,7 @@ mod tests {
     fn a_different_plan_or_sequence_is_refused() {
         let mut w = W::new();
         w.hello(EngineMode::Execute).push(EngineBody::Intent {
-            stage: Stage::Shrink,
+            stage: Stage::AppleInputs,
             plan: Digest::of(b"another"),
         });
         assert!(w.run(Transcript::execute(plan(), true)).is_err());
@@ -358,7 +360,7 @@ mod tests {
         let mut w = W::new();
         w.hello(EngineMode::Execute);
         w.seq += 1;
-        stage(&mut w, Stage::Shrink);
+        stage(&mut w, Stage::AppleInputs);
         assert!(w.run(Transcript::execute(plan(), true)).is_err());
     }
 
@@ -371,8 +373,9 @@ mod tests {
             disk_changed: DiskChanged::No,
         };
         let mut w = W::new();
-        w.hello(EngineMode::Execute)
-            .push(EngineBody::Intent { stage: Stage::Shrink, plan: plan() })
+        w.hello(EngineMode::Execute);
+        stage(&mut w, Stage::AppleInputs);
+        w.push(EngineBody::Intent { stage: Stage::Shrink, plan: plan() })
             .push(EngineBody::Failure {
                 stage: Some(Stage::Shrink),
                 failure: failure.clone(),
@@ -387,8 +390,8 @@ mod tests {
             Some(EngineOutcome::Failed)
         );
         let mut more = W::new();
-        more.lines = w.lines[..3].to_vec();
-        more.seq = 3;
+        more.lines = w.lines[..6].to_vec();
+        more.seq = 6;
         more.push(EngineBody::Intent { stage: Stage::StubPartition, plan: plan() });
         assert!(more.run(Transcript::execute(plan(), true)).is_err());
     }

@@ -59,6 +59,9 @@ pub enum Stage {
     /// Copy the verified downloads into the helper's private staging and
     /// verify them again. Changes no disk.
     Import,
+    /// Fetch the parts of Apple's restore image the stub needs, and
+    /// authenticate them against Apple's signed manifest. Changes no disk.
+    AppleInputs,
     /// Shrink the macOS container (only when the plan does).
     Shrink,
     /// Create the stub's APFS container.
@@ -85,8 +88,9 @@ pub enum Stage {
 }
 
 impl Stage {
-    pub const ORDER: [Stage; 12] = [
+    pub const ORDER: [Stage; 13] = [
         Stage::Import,
+        Stage::AppleInputs,
         Stage::Shrink,
         Stage::StubPartition,
         Stage::StubSystem,
@@ -102,7 +106,7 @@ impl Stage {
 
     /// Whether the stage changes a disk or the boot policy.
     pub fn mutates(self) -> bool {
-        self != Stage::Import
+        !matches!(self, Stage::Import | Stage::AppleInputs)
     }
 
     /// Whether repeating it after a failure could make things worse. Only
@@ -112,7 +116,11 @@ impl Stage {
     pub fn retry_allowed(self) -> bool {
         matches!(
             self,
-            Stage::Import | Stage::StartupDisk | Stage::Enrollment | Stage::StartupSelection
+            Stage::Import
+                | Stage::AppleInputs
+                | Stage::StartupDisk
+                | Stage::Enrollment
+                | Stage::StartupSelection
         )
     }
 
@@ -123,6 +131,7 @@ impl Stage {
     pub fn title(self) -> &'static str {
         match self {
             Stage::Import => "Checking the downloads",
+            Stage::AppleInputs => "Downloading Apple's startup files",
             Stage::Shrink => "Making room on the disk",
             Stage::StubPartition => "Creating Sekka's startup volume",
             Stage::StubSystem => "Installing the startup volume",
