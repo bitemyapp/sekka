@@ -7,6 +7,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-comp-logic:cargo-source",
     deps = [":12b7948a922b79e267b0", ":c7d2c5901a44c7b6d32f", ":a8ccc9324a791be4172c", ":a99f568e74555af44f5f", ":4ea8ef0dc8c7f96796fa", ":0947b8d4139237c66fdc", ":b706d490bb8b2d8adf73", ":5079bc04ba6051b4f5fa", ":4feeb3f1b5ffea3c4cc4", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":902a9003323df069eb88", ":f913ad926c756fd14a8d", ":cc03675ab0c2a96ce365"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -16,6 +17,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c3dcf2e7c3b1a64a8519",
     deps = [":20728186e2b79e20c5aa"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -25,6 +27,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a22040cf832532e70fb1",
     deps = [":33c93ced6b5d5f595004"],
     extra_sources = {},
+    priority = 20,
     visibility = ["PUBLIC"],
 )
 
@@ -34,6 +37,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e8d65eb8e41335d900f7",
     deps = [":566a0bbe2ecbe795b602"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -43,6 +47,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-309326c6c0a4fa7a397a",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -52,6 +57,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8ca68c20ba662c55b4b8",
     deps = [":9c0691214d232d03b452", ":574866efcb981a9f71a3", ":83304660f783cc595968", ":052d0f40936fe578f213", ":3cb6c151183e9fa2f204"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -61,6 +67,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a3eab5d669b8db51b79d",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -70,6 +77,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-70775f67974c3070c802",
     deps = [":494ea5541c746846f465"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -79,6 +87,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8e1ca6003dafb4493cf4",
     deps = [":23353664f9ee0c6c5da1", ":a0c20ec7db666ef3e615", ":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":3dbb0d6ca058b955bb11"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -88,6 +97,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cf547b6a36546201a41f",
     deps = [":2f45a4544aaff8d67eaf", ":4bd1dad268628e503f14"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -97,6 +107,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-6c8e931771cc96ea4375",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -106,6 +117,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/hako:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":ef6199fadd7353a0d888", ":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":27a0deca630ebb1b4fa0", ":6bf7e048b25e6f7ffdb8", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":eababbfd98ed28679ccb", ":5079bc04ba6051b4f5fa", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":fadc7bddb907a5fc48d2", ":2d7f51fe749f4ce11136", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -115,6 +127,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cc8c40eaf1b1ebfaacc8",
     deps = [":9cce7350607045921717"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -124,6 +137,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-1b72da9cc23aa463dc5c",
     deps = [":1b808a858324dc433655"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -133,6 +147,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-aa7e86c0193b15c26f9d",
     deps = [],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -142,6 +157,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c92fbbb05de69a90eedf",
     deps = [":1580c76ba08582193c1f"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -151,6 +167,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-portal:cargo-source",
     deps = [":ef6199fadd7353a0d888", ":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":27a0deca630ebb1b4fa0", ":cbe3bc9c416ead4647c1", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -160,6 +177,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-dbabd14e30ccfbeccafc",
     deps = [":07d7aedd3530fdfe22fd"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -169,6 +187,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-1489d063691a0fb4b234",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -178,6 +197,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/tenki:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":37d8af3eedc5bcbb872e", ":6bf7e048b25e6f7ffdb8", ":f0a7a198f5d503218d15", ":ee0d1cecd7ba8fa9ac7f", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136", ":22b4be14ccfdb1144d4b", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -187,6 +207,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8f9ffa9872d3d1de6f21",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -196,6 +217,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a49f91bd32dcecf21fdc",
     deps = [],
     extra_sources = {},
+    priority = 14,
     visibility = ["PUBLIC"],
 )
 
@@ -205,6 +227,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-836cc1e41d1fe7363350",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -214,6 +237,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4dc34046819ca5c819aa",
     deps = [":37cdd6db8e08aae9986e", ":2e4207a24737b39d5240"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -223,6 +247,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-33bfa7999bf08324882a",
     deps = [],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -232,6 +257,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-afed2663b055c46bc895",
     deps = [":5afd3398632c939f22fb"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -241,6 +267,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0713306e32d5f28cb272",
     deps = [":ed6314d5572b63e80dae"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -250,6 +277,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8d28bc2e25cda654c6ba",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -259,6 +287,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-aa7e86c0193b15c26f9d",
     deps = [":75a6ce8ddb125ce13afd", ":9d79926a9d609b1db76e", ":85866063dfd4ae24be13"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -268,6 +297,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-de7093fc75f1d6fdfd3d",
     deps = [":706256b3bacfe40584d9"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -277,6 +307,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-1e0513e7e7ea8754521b",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -286,6 +317,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-1b21e39ad0835399243d",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -295,6 +327,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b30bcbe601c0507e81c9",
     deps = [":0947b8d4139237c66fdc", ":f5fb88a7e2e93338de7a", ":b3585dfacc94f8951f4e", ":bb9f280f106c3f4530dd", ":e7f115fd276c462ff268", ":0af2700945c041d35759", ":c5f18a087de6b2012a9a", ":89fe3222cca96072991a", ":865f1cec6d266ce075ed", ":d6ede75356aed0cb6611"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -304,6 +337,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/annai:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -313,6 +347,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-dbabd14e30ccfbeccafc",
     deps = [":f6addf14281f1246dff0"],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -322,6 +357,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0d389da62dd940e59cfa",
     deps = [":1b808a858324dc433655"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -331,6 +367,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0edf5df5a68ceef5c560",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -340,6 +377,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-db81b819c2c24b8319e0",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -349,6 +387,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3d9cb620c8d8067088c6",
     deps = [],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -358,6 +397,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cd218ca306257b4e7ef2",
     deps = [":687e9b043c2649ec95ee", ":f5fb88a7e2e93338de7a", ":534b733c8a8b0ebeced8"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -367,6 +407,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3a93e29d0002b3e6e4bf",
     deps = [":4ccaf8b03efffaea516f", ":244815587565241b0790", ":79956f35b0e10bb79a33", ":dc9edf1c15457f5610c8", ":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":93f835ee317648e1f590", ":e679a1f605850f2138c9", ":fe59cea978e8e1c85956", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -376,6 +417,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d85b69afc3ae9049e8ea",
     deps = [":9a32bb3c41a20691d9d1", ":739e335a5038151da724", ":bb9f280f106c3f4530dd", ":f9cd39d870011543e014", ":53bd2fe6e343140f84bd", ":5ff0ff0c9f43488a1c08", ":ebba7470a5a3d3c74cd8", ":28286c1d2e07b8a37b4c", ":48bc6ceb95d44172a922"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -385,6 +427,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-comp:cargo-source",
     deps = [],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -394,6 +437,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5f18feabd357f2cb7966",
     deps = [":d1b351dc59102b3e678a", ":d1667ae02a307cfcad49", ":3f501223a26cea454bfc", ":de317a5cbb8ced8cc567", ":2914dda88ce9473681c0", ":7f66bd901842deacd38c", ":7af7253b1ef78027f846"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -403,6 +447,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9c73afbf582ea9e502b0",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -412,6 +457,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b57caa6a257c87766413",
     deps = [":7da2e0fc6edb41f2c7bb"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -421,6 +467,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ef9c9874927747a26c36",
     deps = [":b3585dfacc94f8951f4e"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -430,6 +477,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-642f33eb94bd369faa5d",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -439,6 +487,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-83b37c735810731768ba",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -448,6 +497,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-72ce583b6febe051b55a",
     deps = [":f63ef1dac885e11e3723", ":4f50cd0d536fae660c0c", ":52963602179a3f1d3344", ":efcc70b4370a500a522e"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -457,6 +507,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-59666b08f20117094de6",
     deps = [":c3815d1c872bfdf18238", ":51cb5bfdc10fbc816bd5", ":494ea5541c746846f465"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -466,6 +517,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-09fc3360f4855907fe98",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -475,6 +527,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-16f406eab67d32052e02",
     deps = [":c3815d1c872bfdf18238"],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -484,6 +537,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b6f9eb83fa791196c0fa",
     deps = [":bb9f280f106c3f4530dd"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -493,6 +547,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-565cb7f8805bcf690cac",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -502,6 +557,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cc8c40eaf1b1ebfaacc8",
     deps = [":574866efcb981a9f71a3", ":023fb2242ffcf8686977"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -511,6 +567,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5b26474d99152296cb0d",
     deps = [":c3815d1c872bfdf18238"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -520,6 +577,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-067eb61fc482d428a5d0",
     deps = [],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -529,6 +587,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/settei:cargo-source",
     deps = [":64230fe05343a8f4b32a", ":a8ccc9324a791be4172c", ":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":27a0deca630ebb1b4fa0", ":6bf7e048b25e6f7ffdb8", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":adb854f5f623c8e17f00", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -538,6 +597,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-bb59761a0639c465d778",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -547,6 +607,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-60d8de1469a1fdff7ba2",
     deps = [":2b834bf8715779903ebd"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -556,6 +617,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-fceba7b3a6d6978d2267",
     deps = [":784c067731d773f7def1"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -565,6 +627,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c4d0b32ceeab931f6f68",
     deps = [":8fdc6469236c3622296a", ":b0e267a3b7892e2221bd"],
     extra_sources = {},
+    priority = 18,
     visibility = ["PUBLIC"],
 )
 
@@ -574,6 +637,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0424c9e729dc57e6f631",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -583,6 +647,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e3992515b0e5cc47f636",
     deps = [":939b8a27cb039b848d73"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -592,6 +657,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0b6fa187db19e9624c6a",
     deps = [":fedaf6807968c9282c82"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -601,6 +667,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2deae4ece6e3e640f2d7",
     deps = [":f5fb88a7e2e93338de7a"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -610,6 +677,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-062766b2a467abc9610d",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -619,6 +687,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f021ae199b8be51d32ae",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -628,6 +697,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2bcd210e4147700a3abc",
     deps = [":f5fb88a7e2e93338de7a", ":123889e6dbe48135b57c", ":052d0f40936fe578f213"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -637,6 +707,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-comp-core:cargo-source",
     deps = [":fecc96417673e64a9bd1", ":46be12360a883b226d63", ":a8ccc9324a791be4172c", ":a99f568e74555af44f5f", ":4ea8ef0dc8c7f96796fa", ":0947b8d4139237c66fdc", ":b706d490bb8b2d8adf73", ":c59233944c4ba1155473", ":5079bc04ba6051b4f5fa", ":4feeb3f1b5ffea3c4cc4", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":902a9003323df069eb88", ":f913ad926c756fd14a8d", ":cc03675ab0c2a96ce365", ":77227070b86a6dcdc837", ":6bd5fd9dfb155149bbf7", ":380d64e19964613cf80f"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -646,6 +717,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-83140c24cd591e74dc23",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -655,6 +727,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-11a5aa08d7d577b9dd18",
     deps = [":1ca1412e8851e8e4c29d"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -664,6 +737,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8d7a94338d311c26c3f6",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -673,6 +747,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/utsushi:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":b2e910f14e587eec4bb5", ":bfcb84a4953f70de0cd4", ":ee0d1cecd7ba8fa9ac7f", ":f6b9bc4ef3a93e5f0548", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":fadc7bddb907a5fc48d2", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -682,6 +757,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d4d4834e3f98cc43baf5",
     deps = [":89431e27634bec99a475"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -691,6 +767,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-939fca9b69651cc85fee",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -700,6 +777,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cbf0eeae0b01b0984732",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -709,6 +787,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/tokei:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":37d8af3eedc5bcbb872e", ":ee0d1cecd7ba8fa9ac7f", ":adb854f5f623c8e17f00", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -718,6 +797,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-81529ab8061b7657312e",
     deps = [":494ea5541c746846f465"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -727,6 +807,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-47384334ff733908e225",
     deps = [":f5fb88a7e2e93338de7a", ":37cdd6db8e08aae9986e", ":594167e8aff1ddc72f4f", ":f6b9bc4ef3a93e5f0548", ":2e56bf3ec8e188925afb", ":720bf623839fc0d8ad94", ":ee3beffcbdb1c8255f35", ":2bb0767549b394739cf5"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -736,6 +817,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ee040fb2ecda525f47ac",
     deps = [":0947b8d4139237c66fdc", ":f5fb88a7e2e93338de7a", ":b2bfd018a94eaad2cd8f", ":e7f115fd276c462ff268"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -745,6 +827,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d6a4e033073deff3298b",
     deps = [":99d78837b077864aee35"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -754,6 +837,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-34b993c1946b8456537b",
     deps = [":0812f0eb92b7ceec2679", ":1b808a858324dc433655", ":939a7f92b899719819ba", ":b7d468e99cc5cfc6fe04"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -763,6 +847,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3cb88650d73bfe6b9624",
     deps = [":6c4054e2ce667721cd2c", ":e93c05131cd64c8cb694", ":bb9f280f106c3f4530dd", ":1b808a858324dc433655", ":939a7f92b899719819ba", ":a54137065c127fae5331", ":2dc0fd4e705a6e75f902"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -772,6 +857,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a51eb21e78a1fe45e7d3",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -781,6 +867,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-367e69457aeda3954f9c",
     deps = [":84fa5981ee3b8d7950cb", ":e2e1edc50173c8df6cbb", ":380d64e19964613cf80f"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -790,6 +877,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f166e60c1c1fedbc9267",
     deps = [":bdb4422f841ff0d85996"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -799,6 +887,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5ef12be27e4d4fdce8e4",
     deps = [":0947b8d4139237c66fdc", ":22ee423c5c7627dc6bfe", ":e2e1edc50173c8df6cbb", ":cac1a5505b5a6df4b7c0", ":783dff643a8dc342172a"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -808,6 +897,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2f5a36e44b66a504f5bb",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -817,6 +907,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-11a5aa08d7d577b9dd18",
     deps = [":7d11fee907c675119824"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -826,6 +917,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f44bf3c3ab7474e11404",
     deps = [":043d1b2738a158d793d2", ":3835c0d8ec2bda2762ac"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -835,6 +927,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-08a64c16a8aff49710c6",
     deps = [":0947b8d4139237c66fdc", ":043d1b2738a158d793d2", ":d1667ae02a307cfcad49", ":1d0c99bb0cdf429e3741", ":f5ce6ff349888807fc84", ":3f501223a26cea454bfc", ":0a8f00ffbde641126122", ":7f66bd901842deacd38c", ":7af7253b1ef78027f846", ":93e76638b8f7fcda027f"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -844,6 +937,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-830d2147f91240eeb16b",
     deps = [":a093bfa232c005b5d3a2"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -853,6 +947,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-db72e9f2a6b59441b07f",
     deps = [":bb9f280f106c3f4530dd", ":052d0f40936fe578f213", ":3457bc30e3305aab39fd", ":d63f75b496886c2d7e0e", ":564c7573bb474294812d", ":1ec91ff38e93961d6ffa", ":e45be97cd500d34d6b57", ":6c08d50fde82e1dfaaaa"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -862,6 +957,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b7b1b32e4634e7e2638a",
     deps = [":3457bc30e3305aab39fd", ":564c7573bb474294812d", ":fd580d2d0def0edfe8b1"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -871,6 +967,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-power-meter:cargo-source",
     deps = [":b706d490bb8b2d8adf73"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -880,6 +977,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/kura:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":2df7ce4dac3405312376", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":b7dfda5a07255d08ecd4"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -889,6 +987,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2048cb650aca5433ee69",
     deps = [":02164f702570781c435b"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -898,6 +997,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-1e0513e7e7ea8754521b",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -907,6 +1007,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2cc81f30fbd88f8e20de",
     deps = [":739e335a5038151da724", ":789244711340fd735a83", ":09e94c2c5bf7da0a9059", ":35492309807c2ff5133d", ":6a2d02d50ed92d28741f", ":48bc6ceb95d44172a922"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -916,6 +1017,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/myaku:cargo-source",
     deps = [":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":6bf7e048b25e6f7ffdb8", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -925,6 +1027,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-7fc53cf0e98357b95381",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -934,6 +1037,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c3dcf2e7c3b1a64a8519",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -943,6 +1047,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-32c9b1a8b257fdf65682",
     deps = [":0213684cb4e30f9b2d24", ":e7f115fd276c462ff268", ":bd20b4fc52c688c9b053"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -952,6 +1057,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ea033e4e692e9b9763d3",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -961,6 +1067,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d5195ba0839a69e74d5f",
     deps = [":3572c03220666c8618d7", ":52a17146c352972446d6", ":bb9f280f106c3f4530dd", ":066e1508f00f2820c140", ":1dff76857f3ed3296c9e", ":564c7573bb474294812d", ":31bfd76bd476b80e3b8b", ":360a3c02596a24c03bf2", ":7153d931cbfb806dfc46"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -970,6 +1077,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-829a2d696028503ca441",
     deps = [":3cb6c151183e9fa2f204"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -979,6 +1087,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-16f406eab67d32052e02",
     deps = [":5bc98f639fd3d811cdc9", ":84fa5981ee3b8d7950cb", ":f7bd7180682410294454", ":e7f115fd276c462ff268", ":ef4ec2c601feeca910e0", ":244aef08fdc0eeb16b90"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -988,6 +1097,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-715f4d70659e9fbdafc0",
     deps = [":1111e981fceaf6b3f0f0", ":3dbb0d6ca058b955bb11"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -997,6 +1107,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-49595663430aa496059f",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1006,6 +1117,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5d35a4e1d25adf656fb3",
     deps = [":26b759e1c10dd0623e99", ":a0c20ec7db666ef3e615"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1015,6 +1127,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-227124bcbb9fe03ff23a",
     deps = [":fffb70b5a4d9adde683a"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -1024,6 +1137,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-60c6255cf55ee9dfefe6",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -1033,6 +1147,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-47426d8cfbc17f33f359",
     deps = [":0947b8d4139237c66fdc", ":22ee423c5c7627dc6bfe", ":e2e1edc50173c8df6cbb", ":1b5fa0efbdab5c210eaa", ":cac1a5505b5a6df4b7c0", ":783dff643a8dc342172a"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -1042,6 +1157,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-81529ab8061b7657312e",
     deps = [":1736e330669f8a7ae069"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -1051,6 +1167,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3e51690ddc9c9dcc51fe",
     deps = [":939a7f92b899719819ba"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -1060,6 +1177,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5e296605960cfcec64a7",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1069,6 +1187,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3d9cb620c8d8067088c6",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -1078,6 +1197,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0a8e94aadab5f0a4f101",
     deps = [":8730fe949d60cb0369f5", ":bb9f280f106c3f4530dd", ":052d0f40936fe578f213", ":ca836b4704919d74b81c"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -1087,6 +1207,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0bd62a4b5537e3057c49",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1096,6 +1217,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-de4590e0a0f789d7013e",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1105,6 +1227,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b2f49c12d85462f18b7d",
     deps = [":ee25f60880b3de2b7ab6", ":edae2960e7cceb8566a1"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1114,6 +1237,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-eaccddf6c654809a1e75",
     deps = [":22ee423c5c7627dc6bfe", ":244aef08fdc0eeb16b90"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -1123,6 +1247,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-03f0b1d700dd2dd99d8b",
     deps = [":a78b209e9324930fb66c"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1132,6 +1257,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-067eb61fc482d428a5d0",
     deps = [":0f8402027de1c4b23bfb"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -1141,6 +1267,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-db81b819c2c24b8319e0",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -1150,6 +1277,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-29e0711faec471db0968",
     deps = [],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -1159,6 +1287,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-ipc:cargo-source",
     deps = [":a99f568e74555af44f5f", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -1168,6 +1297,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-search:cargo-source",
     deps = [":19b9d412199b43588fcf", ":bb9f280f106c3f4530dd", ":aea33f5b56e87001445f", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -1177,6 +1307,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-14201b5af67e407c2498",
     deps = [":f5fb88a7e2e93338de7a", ":b2bfd018a94eaad2cd8f"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -1186,6 +1317,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4ff7096d57ebe35c801d",
     deps = [":9a32bb3c41a20691d9d1", ":5ff0ff0c9f43488a1c08", ":ebba7470a5a3d3c74cd8"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -1195,6 +1327,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b603bf8bf9b7fff14ec4",
     deps = [":3f501223a26cea454bfc"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -1204,6 +1337,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5f2ad6410d13ab4bb24b",
     deps = [":043d1b2738a158d793d2", ":b706d490bb8b2d8adf73", ":56d697b92bec7bdc2990", ":3f501223a26cea454bfc", ":e31ae31d4166a89faae3", ":9b687143f1de22fb4aa1", ":ea58c717ff5ac4146fb3"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1213,6 +1347,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d257238ca2cb66aba73d",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1222,6 +1357,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2b834bfcc0d9a0e972de",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":3dbb0d6ca058b955bb11"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -1231,6 +1367,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-37c5335335b1270103d2",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -1240,6 +1377,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a23bfe6c31b183628eda",
     deps = [":494ea5541c746846f465"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1249,6 +1387,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3dc44b7e92b929da6891",
     deps = [":9f5d88c4b25c5ddb30ec"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1258,6 +1397,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b2f49c12d85462f18b7d",
     deps = [":50ab0aea72b32400b723", ":93d3a833e79e3e2e0f35"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1267,6 +1407,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-69f6da6a42f30157a323",
     deps = [":84343dbfd56cdc80a6c1", ":ab2564fca17498a7ac6e"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1276,6 +1417,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-982548b708c869636c74",
     deps = [":f5fb88a7e2e93338de7a", ":1f66bc7f9646dfdf40c4", ":5079bc04ba6051b4f5fa", ":91d76c7f94fd406a8030"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -1285,6 +1427,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-575ef5d0dbe3344e5f04",
     deps = [":bb9f280f106c3f4530dd", ":052d0f40936fe578f213", ":feac3ccfa4821f71b8b0"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -1294,6 +1437,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-bc5afb106d7df62fe618",
     deps = [":9d79926a9d609b1db76e", ":b45845eaaec7d83c2c7d", ":d59a6485139b3a643615", ":f0681de8fdc1aa28d1ac", ":a4555318804784a75d22", ":aedb6e66537d06b9aa1c"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1303,6 +1447,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-71d127f2a6e3b2a160d7",
     deps = [":a54137065c127fae5331"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1312,6 +1457,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/kura:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":b7dfda5a07255d08ecd4"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -1321,6 +1467,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-83349ab74125f45ca495",
     deps = [],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -1330,6 +1477,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-24af1af18fd67c409880",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1339,6 +1487,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-13bca67f66cec8dd0eab",
     deps = [":687e9b043c2649ec95ee", ":f5fb88a7e2e93338de7a", ":534b733c8a8b0ebeced8"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -1348,6 +1497,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-dad73ab4ba5e1d8e1cd5",
     deps = [":12dd40d08bfd9b44813a", ":b663817996a2dd09aef6", ":e7f115fd276c462ff268"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1357,6 +1507,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9dc3d395a1cf4e9ff8eb",
     deps = [":b578cd47b15bfb39357f", ":3f501223a26cea454bfc"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -1366,6 +1517,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f9fd15cdb7a4964f740d",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1375,6 +1527,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d8e217fd49d96812c7eb",
     deps = [":ae0a8ea455e6482eec15", ":d2f2d89a8e5bfd23ee22", ":09e94c2c5bf7da0a9059", ":e7f115fd276c462ff268", ":48bc6ceb95d44172a922"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -1384,6 +1537,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-59c00eca6b34d7f1b4af",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1393,6 +1547,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ac915f26829b01a99905",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1402,6 +1557,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/tokei:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":37d8af3eedc5bcbb872e", ":1615872866f32855abd3", ":ee0d1cecd7ba8fa9ac7f", ":adb854f5f623c8e17f00", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -1411,6 +1567,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-16a1fc1061cf8deed571",
     deps = [":bea939b7beec3a838e04"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1420,6 +1577,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/hotaru:cargo-source",
     deps = [":82e058b950a08d77a794", ":37d8af3eedc5bcbb872e", ":27a0deca630ebb1b4fa0", ":4ea8ef0dc8c7f96796fa", ":67e0ab4ec0a391a8e5ef", ":ee0d1cecd7ba8fa9ac7f", ":a6af084f381e1461b93c", ":b35f3b193431f37655e7", ":f8e526dc9ae8cd84e813", ":ad0473731a53446080e1", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -1429,6 +1587,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3612d8648289378684a3",
     deps = [":37cdd6db8e08aae9986e"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1438,6 +1597,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d4ddc28d238670adc644",
     deps = [":3572c03220666c8618d7", ":1d0c99bb0cdf429e3741", ":3077605040c4ae1cd654", ":bb9f280f106c3f4530dd"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -1447,6 +1607,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-comp-core:cargo-source",
     deps = [":85ff0600baae789985cd", ":63d1fa18167ad555ed7f"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -1456,6 +1617,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-28fa0dc4d0175747c470",
     deps = [":d172ad34f05cac460c97"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -1465,6 +1627,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-70775f67974c3070c802",
     deps = [":01bb027b538f0ca0212d"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1474,6 +1637,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-062766b2a467abc9610d",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1483,6 +1647,7 @@ cargo_unit(
     source = "//apps/hotaru/vendor/simdutf8:cargo-source",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -1492,6 +1657,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-66eb998539218c7cd97e",
     deps = [":043d1b2738a158d793d2", ":d1b351dc59102b3e678a", ":1d0c99bb0cdf429e3741", ":f5ce6ff349888807fc84", ":3f501223a26cea454bfc"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -1501,6 +1667,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a22040cf832532e70fb1",
     deps = [],
     extra_sources = {},
+    priority = 21,
     visibility = ["PUBLIC"],
 )
 
@@ -1510,6 +1677,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4a5c75ad3453e690c9c8",
     deps = [":574866efcb981a9f71a3", ":3c1db842a2595337c7cf", ":6fe24e37ab9c7062f317", ":fd580d2d0def0edfe8b1"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -1519,6 +1687,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-7df8fca5b5fcf9af03e4",
     deps = [":e7f115fd276c462ff268", ":81fdb64dc03f8b31958b"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -1528,6 +1697,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-de7093fc75f1d6fdfd3d",
     deps = [":062f1694136f5b1db12e"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -1537,6 +1707,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-df5337e7d06614b222c4",
     deps = [":53bd2fe6e343140f84bd", ":48bc6ceb95d44172a922"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -1546,6 +1717,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-92eec9c6be1dd03de8b0",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1555,6 +1727,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/nisshi:cargo-source",
     deps = [":0812f0eb92b7ceec2679", ":37d8af3eedc5bcbb872e", ":ee0d1cecd7ba8fa9ac7f", ":adb854f5f623c8e17f00", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":1b808a858324dc433655", ":193be90d071a4d1e34b7", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -1564,6 +1737,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-55c136b2616762d0d15a",
     deps = [":d57c361c7616a9cab463"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1573,6 +1747,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3a93e29d0002b3e6e4bf",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1582,6 +1757,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ffab23db93b56bf7e1f8",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -1591,6 +1767,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5c838ee3c7e7231f42fe",
     deps = [":574866efcb981a9f71a3", ":b291cf75c605fee93aeb", ":b706d490bb8b2d8adf73"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1600,6 +1777,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2235133c57b30cea0929",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1609,6 +1787,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-kit:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":e60fd6c5a953ed3e616e", ":3d7b0e1734f14111a856", ":4ea8ef0dc8c7f96796fa", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":5079bc04ba6051b4f5fa", ":34b2f4d00fd0d85d6579", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":902a9003323df069eb88", ":2d7f51fe749f4ce11136", ":e7002893ed246b65a8ef"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -1618,6 +1797,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ba0dda08850f624320d7",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -1627,6 +1807,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-fdf31701b1355b8dd204",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1636,6 +1817,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f0079ceadbbd01fab4d1",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1645,6 +1827,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-939b294bd303b3eb167f",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1654,6 +1837,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-14629f5ad7aac43728ed",
     deps = [":89431e27634bec99a475"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1663,6 +1847,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a197b786cdd901fee590",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1672,6 +1857,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5131d1bd3ce1e7ac36f7",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -1681,6 +1867,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cc07cce3ecce342e451a",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1690,6 +1877,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3269daa55a0267e0f1f1",
     deps = [":429e8e7417ac5c7fcbfd"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1699,6 +1887,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-10592e7f1621df6f1c04",
     deps = [":f5fb88a7e2e93338de7a", ":6c44059079d1192088ed", ":2e56bf3ec8e188925afb", ":423dc1774f387d0a20a7", ":e7f115fd276c462ff268"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1708,6 +1897,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e4a920ab464edadd58b0",
     deps = [":574866efcb981a9f71a3", ":b706d490bb8b2d8adf73"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1717,6 +1907,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-6071347b76a8a8bb4e72",
     deps = [":9c67cbaf84b078e9937c", ":89b2c998fb18411a53fa"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -1726,6 +1917,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-28fa0dc4d0175747c470",
     deps = [":3238c0d3c7451961adb8", ":e352cc30fd6093c421ad"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -1735,6 +1927,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-shell:cargo-source",
     deps = [":64230fe05343a8f4b32a", ":a8ccc9324a791be4172c", ":82e058b950a08d77a794", ":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":27a0deca630ebb1b4fa0", ":3d7b0e1734f14111a856", ":6bf7e048b25e6f7ffdb8", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":adb854f5f623c8e17f00", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":4feeb3f1b5ffea3c4cc4", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -1744,6 +1937,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-1e9fa68ec6c3d974264c",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -1753,6 +1947,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-shell-proto:cargo-source",
     deps = [":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -1762,6 +1957,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-208537a83c75f6079c0a",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":f0004498bb03e5847e9c"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -1771,6 +1967,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9f5ef52d585b5b0cb095",
     deps = [":8730fe949d60cb0369f5", ":052d0f40936fe578f213", ":d3aef89d3c85dc00ba36"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1780,6 +1977,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/settei:cargo-source",
     deps = [":64230fe05343a8f4b32a", ":a8ccc9324a791be4172c", ":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":27a0deca630ebb1b4fa0", ":1099fd7d6da6615bd3ce", ":6bf7e048b25e6f7ffdb8", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":adb854f5f623c8e17f00", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -1789,6 +1987,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8a140c5be93a3b78e84f",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -1798,6 +1997,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-db9c4f8aaa3665c64195",
     deps = [],
     extra_sources = {},
+    priority = 13,
     visibility = ["PUBLIC"],
 )
 
@@ -1807,6 +2007,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e5fca471a0283b80ce31",
     deps = [":a77f18cbe7a758e1cef9", ":e2cbe6058568c51de9a2", ":0908192675980082fc3d", ":9cf7bc71241ac5411070", ":3f501223a26cea454bfc", ":a43fe76d428a80b4e278"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1816,6 +2017,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b85ba9e389aded015053",
     deps = [":ab7894a73d6ccec64439", ":b706d490bb8b2d8adf73", ":cadf003c6d6110a475df"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1825,6 +2027,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3f90413deebcf5d902f7",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1834,6 +2037,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-426927beac7e971b1bc9",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -1843,6 +2047,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-12490bc5c5d0e93e67e5",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1852,6 +2057,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3269daa55a0267e0f1f1",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1861,6 +2067,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d7754215d2552e02973a",
     deps = [":043d1b2738a158d793d2", ":d1b351dc59102b3e678a", ":d852bac7ef2f9f3f1b72", ":3f501223a26cea454bfc", ":2914dda88ce9473681c0"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -1870,6 +2077,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3a396dcb0fef7c4d32fc",
     deps = [":0947b8d4139237c66fdc", ":f5fb88a7e2e93338de7a", ":5bc7fb5708b69e08a41e", ":c5faecae45cec6940139", ":be6e7148c204841fd084"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -1879,6 +2087,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-39af9da5a2287f3d2845",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -1888,6 +2097,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-92a8ed349a106826e3ef",
     deps = [":78ab93030a0841c38a4d", ":48901bf41797380e6e84"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1897,6 +2107,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ad35260edcd56875eaef",
     deps = [],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -1906,6 +2117,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0e7d5c72e4144d47d9b7",
     deps = [":1d0c99bb0cdf429e3741", ":eaf29bcd09cb4de3fa39", ":e3284446d81866abc515", ":1dff76857f3ed3296c9e", ":2914dda88ce9473681c0", ":f2e1a5d2813fd210af98", ":7af7253b1ef78027f846", ":7153d931cbfb806dfc46"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -1915,6 +2127,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e8220d7d75cc872e822d",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1924,6 +2137,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-comp-core:cargo-source",
     deps = [":31c206a34edda957f894"],
     extra_sources = {"desktop/aizome": "//desktop/aizome:cargo-workspace", "apps/hotaru/vendor/simdutf8": "//apps/hotaru/vendor/simdutf8:cargo-source", "desktop/aizome/crates/aizome-apps": "//desktop/aizome/crates/aizome-apps:cargo-source", "desktop/aizome/crates/aizome-config": "//desktop/aizome/crates/aizome-config:cargo-source", "desktop/aizome/crates/aizome-ipc": "//desktop/aizome/crates/aizome-ipc:cargo-source", "desktop/aizome/crates/aizome-theme": "//desktop/aizome/crates/aizome-theme:cargo-source", "desktop/aizome/sukumo/crates/sidestep-engine": "//desktop/aizome/sukumo/crates/sidestep-engine:cargo-source", "desktop/aizome/sukumo/crates/sidestep-ui": "//desktop/aizome/sukumo/crates/sidestep-ui:cargo-source"},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -1933,6 +2147,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f715e6ed9ba4e9b0ee4c",
     deps = [":9d2901f59ef14d4d8aa8"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -1942,6 +2157,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-awake:cargo-source",
     deps = [":64230fe05343a8f4b32a", ":b706d490bb8b2d8adf73", ":ed55b1c5ba5bbd338193", ":e2e1edc50173c8df6cbb", ":1b5fa0efbdab5c210eaa", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -1951,6 +2167,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-89340a962000d053c43a",
     deps = [":0947b8d4139237c66fdc", ":6aa50ff7c438953eff78", ":525004dd57c11114089d", ":8b109b1cd91e5356cf62", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":922942ddbc2b71356b84", ":be6e7148c204841fd084", ":d803ca3fb7d87891ae10", ":a2d357404eedb5da6eb0", ":22ee423c5c7627dc6bfe", ":e2e1edc50173c8df6cbb", ":dd42974b4cf0f333e909", ":1a7209e72d084887af7d", ":1b5fa0efbdab5c210eaa", ":23a8dfdf4637f51af4ce", ":cac1a5505b5a6df4b7c0", ":d3bf74bd522448a5ada1"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -1960,6 +2177,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-206386084c774cb2939d",
     deps = [":0947b8d4139237c66fdc", ":abf21d3a4abe923d7e3d", ":84fa5981ee3b8d7950cb", ":cc03675ab0c2a96ce365"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -1969,6 +2187,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f449ba165e0f42370dd3",
     deps = [":25433e4611081bfb792c", ":edae2960e7cceb8566a1"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -1978,6 +2197,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-effdbf08ca25efb0e29c",
     deps = [":5ff0ff0c9f43488a1c08", ":ebba7470a5a3d3c74cd8", ":a149f44e4af63ca5287f"],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -1987,6 +2207,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b941f8e01eb542c72e79",
     deps = [],
     extra_sources = {},
+    priority = 14,
     visibility = ["PUBLIC"],
 )
 
@@ -1996,6 +2217,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a7659807d526f4ce7647",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -2005,6 +2227,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/soroban:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":27a0deca630ebb1b4fa0", ":f6c3680438452960e185", ":ee0d1cecd7ba8fa9ac7f", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -2014,6 +2237,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d2f71884b379d10c8288",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -2023,6 +2247,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/nisshi:cargo-source",
     deps = [":0812f0eb92b7ceec2679", ":37d8af3eedc5bcbb872e", ":35ba4900ecee927f5630", ":ee0d1cecd7ba8fa9ac7f", ":adb854f5f623c8e17f00", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":1b808a858324dc433655", ":193be90d071a4d1e34b7", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -2032,6 +2257,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9bda305411d1bbcc2e46",
     deps = [":a61c63603f792bcbec9d"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -2041,6 +2267,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0746e7950b4c880c3e1a",
     deps = [":9a32bb3c41a20691d9d1", ":ae0a8ea455e6482eec15", ":739e335a5038151da724", ":1375fac9d178313dea73", ":09e94c2c5bf7da0a9059", ":28286c1d2e07b8a37b4c", ":48bc6ceb95d44172a922"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -2050,6 +2277,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f715e6ed9ba4e9b0ee4c",
     deps = [":471e5b3b741d12d9ee9a"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -2059,6 +2287,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3a93e29d0002b3e6e4bf",
     deps = [":35fc589c60f8951791d7", ":9a5cb4fd10a61fef1d5a"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -2068,6 +2297,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9e78cd59ed94bb775c13",
     deps = [":c5faecae45cec6940139", ":78b96cd19e38a5a26a48", ":88453f450c390b5bccd4", ":a2d357404eedb5da6eb0"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -2077,6 +2307,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f73f7b035724b5d04391",
     deps = [":bdb4422f841ff0d85996", ":0c05a9772717ac69c044"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -2086,6 +2317,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c689547e8e7a24c06d08",
     deps = [":617363f5f61b73bf1537"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -2095,6 +2327,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-7a400bcf0ea1f8094307",
     deps = [":687e9b043c2649ec95ee", ":12dd40d08bfd9b44813a", ":f5fb88a7e2e93338de7a", ":574866efcb981a9f71a3", ":bb9f280f106c3f4530dd", ":2e44cdaa56c51f04161a"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -2104,6 +2337,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-theme:cargo-source",
     deps = [":062ba2b3a5b1ad6f8af5"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -2113,6 +2347,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8f17039a7a1e89f2c154",
     deps = [],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -2122,6 +2357,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a60ef2e516c6b007bb68",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -2131,6 +2367,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-32b9412381bc5118bb24",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -2140,6 +2377,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-51a3324e4797503f09a5",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -2149,6 +2387,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a0c6d6a556ecfc5e000a",
     deps = [":bb9f280f106c3f4530dd", ":c8e814c6599f48aed2de", ":7a051ed9bd661b01e187", ":7f1ffe70facd1c2fa070", ":de778f0a3be9a85c2e84", ":6fd9571f1cbe397093fe"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -2158,6 +2397,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-6658bba1e16aebe71fd4",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -2167,6 +2407,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-fe6d6299c3d187d879d1",
     deps = [":0947b8d4139237c66fdc", ":0eca66344f301976afb7", ":b23069276c7bebf17343", ":52a17146c352972446d6", ":a76e19f1c58fa1c8ae9f"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -2176,6 +2417,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b2f49c12d85462f18b7d",
     deps = [":7ea8286faefa15f9dd9c"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -2185,6 +2427,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e9606fba9d8be0e1effd",
     deps = [":9ddc2f8683fd1b6faf19", ":574866efcb981a9f71a3", ":d1b351dc59102b3e678a", ":9407118b5b21a4deef98", ":84fa5981ee3b8d7950cb", ":e31ae31d4166a89faae3"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -2194,6 +2437,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a3cbe6d3ebabcc68edff",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -2203,6 +2447,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-34fe54d03254959cc1b7",
     deps = [":1dbde98509854dcc5d34", ":ffa259acbe4dd1d05a7a", ":b3711f6be29418087ee5"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -2212,6 +2457,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8cb870b0d2db88fe697d",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -2221,6 +2467,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-7744ad117aafefb970f8",
     deps = [":6aa50ff7c438953eff78", ":be6e7148c204841fd084", ":22ee423c5c7627dc6bfe", ":e2e1edc50173c8df6cbb"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -2230,6 +2477,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-26462ecd60ab5afde3cf",
     deps = [":663145f2cb614ca4abed"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -2239,6 +2487,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b060ab95a61703b99c8f",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -2248,6 +2497,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9c37293931952c5b1594",
     deps = [":8c2a2f844c1cb478fcb0"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -2257,6 +2507,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5f3c13af27b1eeff0de8",
     deps = [":0eca66344f301976afb7", ":c185597c4020c4a0ca18", ":592e6a332da92cd35ce9"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -2266,6 +2517,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-fda79aee3d35c9b8f2a0",
     deps = [":4aef89a9583f80c83c6f"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -2275,6 +2527,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-951945ba64b3fbfdadcf",
     deps = [":56afcddfd99d173c01d9", ":413982b214d57c987783", ":9ddc2f8683fd1b6faf19", ":ca16c91d86a7817b255f", ":a0e6333381cd2e136a11", ":74f7682599517d83d86a", ":9cf7bc71241ac5411070", ":d1667ae02a307cfcad49", ":6b9a4804935366d07cc5", ":062ba2b3a5b1ad6f8af5", ":28819aaf1272a4dd4ff4", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -2284,6 +2537,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5af986176c7d66dbac72",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -2293,6 +2547,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-7e82105a1c3c4ff8b727",
     deps = [":df543f5c779dea55c1e4", ":232fe32fd7714360ce77", ":5118497e92e86c5a1235", ":504ff220d2a0fa41e3e9"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -2302,6 +2557,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-be419e769de0cc0c91b4",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -2311,6 +2567,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e504cbcc9d845e892ffb",
     deps = [":6c08d50fde82e1dfaaaa"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -2320,6 +2577,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e8d65eb8e41335d900f7",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -2329,6 +2587,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ad35260edcd56875eaef",
     deps = [":bbcae8abe68b1adf7b4f", ":745c07be1830dc4200d7", ":244815587565241b0790", ":79956f35b0e10bb79a33", ":dc9edf1c15457f5610c8", ":92ba532a1574ba206bd2", ":ffa259acbe4dd1d05a7a", ":dd5ba9a432a7c876e7e8", ":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":93f835ee317648e1f590", ":e679a1f605850f2138c9", ":d7b8ab8a87b73b513771", ":3dbb0d6ca058b955bb11"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -2338,6 +2597,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-012cadacf4d118c9b36f",
     deps = [":9f5d88c4b25c5ddb30ec"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -2347,6 +2607,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a69d174efcc6a640ffdd",
     deps = [":0947b8d4139237c66fdc", ":f0b000e3b1aa96c3dd4b", ":b706d490bb8b2d8adf73", ":7a5db777acaa3e3dff9e", ":d54f11978c6b73d445ae", ":fbd7770236516424eed0", ":84fa5981ee3b8d7950cb"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -2356,6 +2617,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b22fd46386d8f963da63",
     deps = [":b706d490bb8b2d8adf73"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -2365,6 +2627,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ab6a2a7db4cc04976328",
     deps = [],
     extra_sources = {},
+    priority = 14,
     visibility = ["PUBLIC"],
 )
 
@@ -2374,6 +2637,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a69d174efcc6a640ffdd",
     deps = [":c3815d1c872bfdf18238", ":8fd2d570c5f94cf335c5"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -2383,6 +2647,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-portal:cargo-source",
     deps = [":ef6199fadd7353a0d888", ":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":038ca8f7a229e7d5c991", ":27a0deca630ebb1b4fa0", ":cbe3bc9c416ead4647c1", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -2392,6 +2657,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0f7f812673483800c9a0",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -2401,6 +2667,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-163a5ccb16c4d659f64e",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -2410,6 +2677,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4f3293d876edd822db28",
     deps = [":0947b8d4139237c66fdc", ":ae2bbcb2320fe8aaf223", ":af7266d856f5e53a7bea", ":2e56bf3ec8e188925afb", ":e5a7ae53e4e3dc130e52", ":989b8fae3ef824450641", ":ee3beffcbdb1c8255f35", ":124ceb145f4f3c37f94a", ":8c184626f8a2946639c8", ":e7f115fd276c462ff268", ":5ff0ff0c9f43488a1c08"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -2419,6 +2687,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-afed2663b055c46bc895",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -2428,6 +2697,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-55c136b2616762d0d15a",
     deps = [":35ed575a9223bd100fdc"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -2437,6 +2707,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-bde4c5496a6e2ead7828",
     deps = [":8af78927611fb6bd0635", ":84fa5981ee3b8d7950cb"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -2446,6 +2717,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-463c070cdd6a238607db",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -2455,6 +2727,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a7d5cca29f495f1c7b9d",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -2464,6 +2737,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cf34dacf706f827462ef",
     deps = [":03ad25b6a0565f4b0986"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -2473,6 +2747,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9d2f172aecd0ac5d8a5b",
     deps = [":e9e55f8558cdbd8a78f0", ":4c53c2eb314531365844"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -2482,6 +2757,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-6071347b76a8a8bb4e72",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -2491,6 +2767,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e0d888c78c503d1ae6bc",
     deps = [":09db718bf61f548c52e6", ":c3815d1c872bfdf18238", ":ff57a2be7c218dacf033", ":494ea5541c746846f465"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -2500,6 +2777,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ec28d6eb3e856e2be764",
     deps = [],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -2509,6 +2787,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a9d60239b7cc326edba3",
     deps = [":f9cd39d870011543e014", ":af84c34e12aa05434702", ":ebba7470a5a3d3c74cd8"],
     extra_sources = {},
+    priority = 13,
     visibility = ["PUBLIC"],
 )
 
@@ -2518,6 +2797,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/yukimi:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":7f6466fa77a3bc317b02", ":bccae152bb2441b40c2b", ":e7d1bec8ca5bbd9e5b87"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -2527,6 +2807,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cb9030b147283e9cb830",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -2536,6 +2817,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-fef8d7788e171857a8a2",
     deps = [":c7b7d7b6a23f79b83114", ":776bf5c383d3f43393ec"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -2545,6 +2827,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c689547e8e7a24c06d08",
     deps = [":706256b3bacfe40584d9"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -2554,6 +2837,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e0d888c78c503d1ae6bc",
     deps = [":5f3335d4dcdd246d5c86"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -2563,6 +2847,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-db9c4f8aaa3665c64195",
     deps = [":3fccc7c2e5ec80532a26"],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -2572,6 +2857,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-network-agent:cargo-source",
     deps = [":c3815d1c872bfdf18238", ":494ea5541c746846f465"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -2581,6 +2867,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-830d2147f91240eeb16b",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -2590,6 +2877,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b9f836765707e73926f5",
     deps = [":574866efcb981a9f71a3"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -2599,6 +2887,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-55c136b2616762d0d15a",
     deps = [":015339ad5060a8107d0c", ":0947b8d4139237c66fdc", ":f5fb88a7e2e93338de7a", ":6aa50ff7c438953eff78", ":8b109b1cd91e5356cf62", ":1133e52d5b86fd61f75d", ":b706d490bb8b2d8adf73", ":922942ddbc2b71356b84", ":066e1508f00f2820c140", ":41c68864d41a40e0ab23", ":be6e7148c204841fd084", ":475500d67c75c3d47e97", ":d8e608f3c5fb400e91f3", ":cc03675ab0c2a96ce365", ":22ee423c5c7627dc6bfe", ":e2e1edc50173c8df6cbb", ":1b5fa0efbdab5c210eaa", ":ffe20638555d0cfb32a9", ":5bc51316185d9bd9738b", ":e0a3cf299491ccefd994", ":6bd5fd9dfb155149bbf7", ":861c21da742aca52508b"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -2608,6 +2897,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-de7093fc75f1d6fdfd3d",
     deps = [":350bdf51dafd8b10e1f7"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -2617,6 +2907,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-bc5afb106d7df62fe618",
     deps = [":03ad25b6a0565f4b0986", ":5c28b97a9500ea5fa369", ":b39b732e49262958882b", ":11800609b849e59911e3", ":017eda5d9d9b23123b0d", ":011452829511babd5fe3"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -2626,6 +2917,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-awake:cargo-source",
     deps = [":b706d490bb8b2d8adf73", ":ed55b1c5ba5bbd338193", ":e2e1edc50173c8df6cbb", ":1b5fa0efbdab5c210eaa", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -2635,6 +2927,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-39af9da5a2287f3d2845",
     deps = [":936675e1073625e8f76c", ":b57318c88234be11eca9"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -2644,6 +2937,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a2ebda073ee5b9e7d773",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -2653,6 +2947,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-970029509be80714108d",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -2662,6 +2957,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a3575b91d03fbc627b4e",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":f0004498bb03e5847e9c"],
     extra_sources = {},
+    priority = 17,
     visibility = ["PUBLIC"],
 )
 
@@ -2671,6 +2967,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-26462ecd60ab5afde3cf",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -2680,6 +2977,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0d5b16857d8b75a6f1d4",
     deps = [":1f66bc7f9646dfdf40c4", ":423dc1774f387d0a20a7", ":922942ddbc2b71356b84", ":e70c4a5897a0766a2646", ":b2bfd018a94eaad2cd8f", ":e7f115fd276c462ff268", ":3dcd253228606bdcdb1f"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -2689,6 +2987,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a64e590fb61088fc5c1f",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -2698,6 +2997,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4a5c75ad3453e690c9c8",
     deps = [":c3815d1c872bfdf18238"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -2707,6 +3007,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e1a5f5913968fabea33f",
     deps = [":6ebac54a865427b3a7fa", ":55ea4faae9e00951c01b", ":11800609b849e59911e3", ":939b8a27cb039b848d73"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -2716,6 +3017,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-037f2a9e7502345f914b",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -2725,6 +3027,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0f5cd97bd46d080a9c5f",
     deps = [":ade42d0a21305826dfcf", ":3835c0d8ec2bda2762ac", ":523445e25f5fcbb908b3", ":062ba2b3a5b1ad6f8af5"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -2734,6 +3037,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8bd91d55f8258baaccc7",
     deps = [":1fa1de0db3f9803404c1", ":60ebeb4dc334094c78d5", ":776bf5c383d3f43393ec", ":939b8a27cb039b848d73", ":ff6e31413a3ac9d888b8", ":e684bc44c5a275679bd4", ":fd97f388b163f59181d7"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -2743,6 +3047,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8f53ef2e20fc56a0851d",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -2752,6 +3057,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b57caa6a257c87766413",
     deps = [":0aaf9768b86aaab05901"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -2761,6 +3067,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-970029509be80714108d",
     deps = [":64f7b700dbbe31454bd2"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -2770,6 +3077,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c5a7b80455282a9fb48e",
     deps = [":9a32bb3c41a20691d9d1", ":48bc6ceb95d44172a922"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -2779,6 +3087,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a1991191d3c5327d9623",
     deps = [":0eae9c7af5561602470e", ":b4745bc5b1c9358de8f7"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -2788,6 +3097,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f4f51c669a4be08766b3",
     deps = [":0947b8d4139237c66fdc", ":bb9f280f106c3f4530dd", ":abf21d3a4abe923d7e3d", ":be6e7148c204841fd084", ":a43fe76d428a80b4e278", ":a2d357404eedb5da6eb0"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -2797,6 +3107,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/fusen:cargo-source",
     deps = [":77aca925218fd9c431a0", ":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":dc60f6ca1966ad055b0c", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":34b2f4d00fd0d85d6579", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -2806,6 +3117,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-853e4466ab7a08aa0958",
     deps = [],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -2815,6 +3127,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-022e10087b268a9ab15b",
     deps = [":3b20613aa67d6effa887", ":755e02306493b657a610", ":b706d490bb8b2d8adf73", ":c59233944c4ba1155473", ":052d0f40936fe578f213", ":84fa5981ee3b8d7950cb", ":24339493ae196cab98a9"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -2824,6 +3137,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-sys:cargo-source",
     deps = [":fecc96417673e64a9bd1", ":9ddc2f8683fd1b6faf19", ":b578cd47b15bfb39357f", ":9cf7bc71241ac5411070", ":b706d490bb8b2d8adf73", ":8d19e2767d6ee5fc2a91", ":bb9f280f106c3f4530dd", ":02d7aa75633f5f67b51f", ":062ba2b3a5b1ad6f8af5", ":6a41b46fb9fb2c99ac89", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -2833,6 +3147,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0658fc1a262e8d08cba6",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -2842,6 +3157,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2dcf3795ac5c7f270f50",
     deps = [":e5bb3de68f844b882cda", ":6428c4919bea222dccc4", ":b57318c88234be11eca9"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -2851,6 +3167,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-15fa60efc8dcfb672b88",
     deps = [":f5fb88a7e2e93338de7a"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -2860,6 +3177,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-aa7e86c0193b15c26f9d",
     deps = [":03030a2705daf93126d7"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -2869,6 +3187,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c8ee15e8cc045d3a4ecc",
     deps = [":5bdf46c2538ff8bdaed1", ":0eca66344f301976afb7", ":b23069276c7bebf17343", ":52a17146c352972446d6", ":a76e19f1c58fa1c8ae9f"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -2878,6 +3197,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8b4ad15113b1b9f2350e",
     deps = [":934f59462f2c65f183ce", ":955d8f2262e95a0c6295"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -2887,6 +3207,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ed05c396f417c8fbb7f3",
     deps = [],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -2896,6 +3217,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3aa95eb245fcfa4d9fda",
     deps = [],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -2905,6 +3227,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/tansu:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":6bf7e048b25e6f7ffdb8", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":bb9f280f106c3f4530dd"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -2914,6 +3237,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e43d971bb02c790832b9",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -2923,6 +3247,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-33ed5b12bf6e1fe90174",
     deps = [":0947b8d4139237c66fdc", ":ae1778ff9d2de3e98141", ":0d90c7d87323ae79f31e", ":7c81b44965818a4102e8", ":edfe6b609df9b3219c52", ":e7f115fd276c462ff268"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -2932,6 +3257,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ae85b93f4c30aaadf3f9",
     deps = [":67e0ab4ec0a391a8e5ef", ":39bb56ae45aa54dfff08", ":52a17146c352972446d6", ":cfb92bd3199c4d9bc145", ":af15718a1485af448bce", ":2e56bf3ec8e188925afb", ":bb9f280f106c3f4530dd", ":c8e814c6599f48aed2de", ":02d7aa75633f5f67b51f", ":07708d1218f53c80fd81", ":db1dd15220652695dedc", ":124ceb145f4f3c37f94a", ":534b733c8a8b0ebeced8", ":7f1ffe70facd1c2fa070", ":097717d9d740a37e6a4d", ":8d139a7bfd8484e79fbe", ":d6ede75356aed0cb6611", ":1269c4939364e9104d0e", ":74cf71d2e7c20a38c63d"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -2941,6 +3267,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4a5c75ad3453e690c9c8",
     deps = [":6771eefc87788a893002"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -2950,6 +3277,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-79cb6c89a96752ad6fa2",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -2959,6 +3287,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8d57b61585f284fc537f",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -2968,6 +3297,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-22bc20bea3a3d7c17dc3",
     deps = [":564c7573bb474294812d"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -2977,6 +3307,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9a02714727710a75d7bd",
     deps = [":89431e27634bec99a475", ":0c6a220f9fd5c5a0d1b7"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -2986,6 +3317,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-ipc:cargo-source",
     deps = [":a99f568e74555af44f5f", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -2995,6 +3327,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-58b8df0b0ee267dcf927",
     deps = [":9a32bb3c41a20691d9d1", ":7d309670c40d31a7d16f", ":6a2d02d50ed92d28741f", ":53bd2fe6e343140f84bd", ":48bc6ceb95d44172a922"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -3004,6 +3337,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0d0e31618e761b577b10",
     deps = [":062ba2b3a5b1ad6f8af5", ":3816bf349b16dd2c4972", ":842dfc7447a78848d2b2"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3013,6 +3347,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ad35260edcd56875eaef",
     deps = [":45705e19c8420ad23065", ":9a5cb4fd10a61fef1d5a", ":058ecba35e4c7f24652b"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -3022,6 +3357,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-bb6fa69aa3f35055cf9d",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3031,6 +3367,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ba3ac7fbfa17f6e38f1f",
     deps = [":d1b351dc59102b3e678a"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3040,6 +3377,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c4d0b32ceeab931f6f68",
     deps = [":7d2c1494299e39dc39ed"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -3049,6 +3387,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-202961692cc73dc6c898",
     deps = [":84fa5981ee3b8d7950cb"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -3058,6 +3397,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-aa7e86c0193b15c26f9d",
     deps = [":03030a2705daf93126d7"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -3067,6 +3407,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b3e4a3561ac8527c96c6",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3076,6 +3417,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d10a7fa30663b20b5b6f",
     deps = [":f8ed67eba4e392455717"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -3085,6 +3427,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5afe2e22fc2c3c73449e",
     deps = [],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -3094,6 +3437,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b61734035d57d05702f7",
     deps = [":23fa090f53efdbd2a513", ":6fc63707d5014fe5cf51", ":052d0f40936fe578f213", ":939a7f92b899719819ba", ":9a9eb0d71ab7ba3e2205", ":d8f4cb2534e98cb2c3ed", ":cc03675ab0c2a96ce365", ":feac3ccfa4821f71b8b0", ":2c386a4a9d5dae258b36"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -3103,6 +3447,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-aa7e86c0193b15c26f9d",
     deps = [":6c6b8ebca86cbc7412d5", ":03ad25b6a0565f4b0986", ":85866063dfd4ae24be13"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -3112,6 +3457,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-51a3324e4797503f09a5",
     deps = [],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -3121,6 +3467,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/fusen:cargo-source",
     deps = [":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":dc60f6ca1966ad055b0c", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":34b2f4d00fd0d85d6579", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -3130,6 +3477,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-832940bd517c9c880c83",
     deps = [":0947b8d4139237c66fdc", ":5bc98f639fd3d811cdc9", ":84fa5981ee3b8d7950cb", ":22ee423c5c7627dc6bfe", ":cac1a5505b5a6df4b7c0"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -3139,6 +3487,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-fceba7b3a6d6978d2267",
     deps = [":b45669b57a76a0d8afc2"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -3148,6 +3497,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-afed2663b055c46bc895",
     deps = [":05613adab1a15771b7b2"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -3157,6 +3507,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-60d8de1469a1fdff7ba2",
     deps = [":25433e4611081bfb792c"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -3166,6 +3517,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-009ac75c4388d15885bd",
     deps = [":aa804bf5169669ff62e3", ":ed242371c98c97504522"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -3175,6 +3527,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-bafa6488053396080de5",
     deps = [":ab81e751734e2780709b"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3184,6 +3537,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e0c758f2b94296576caa",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3193,6 +3547,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-898a03daf5afaa907256",
     deps = [":4dfb8904ae23a971f0fc"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -3202,6 +3557,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-bb8a86b2823f81e74f58",
     deps = [":048b44e5dd17bba0fc84", ":0613de9b0cf0d18915e1"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -3211,6 +3567,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e5817f472d9c9d5ffaec",
     deps = [":f5fb88a7e2e93338de7a"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -3220,6 +3577,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c17f784ac6c92c9a7bcf",
     deps = [":6ff66c4544bf59e19d6c"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3229,6 +3587,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a69d174efcc6a640ffdd",
     deps = [":576c99260d3ab2c5593b", ":84343dbfd56cdc80a6c1"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3238,6 +3597,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-bd7e17f4563af16b36a7",
     deps = [],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -3247,6 +3607,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cfa5c68e762fe04bf409",
     deps = [":e8d574d3e79fd4dded42"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -3256,6 +3617,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0160065366f784a2e9cf",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3265,6 +3627,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e8d65eb8e41335d900f7",
     deps = [":fcbc341d6b3455c5e770", ":01122a8e7387df02a220", ":68f10f774be0305e4d00", ":bb9f280f106c3f4530dd"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -3274,6 +3637,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e648f2da0a6a1f878b2c",
     deps = [":1f66bc7f9646dfdf40c4"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3283,6 +3647,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-11a5aa08d7d577b9dd18",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -3292,6 +3657,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c4d0b32ceeab931f6f68",
     deps = [],
     extra_sources = {},
+    priority = 20,
     visibility = ["PUBLIC"],
 )
 
@@ -3301,6 +3667,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d698c7e8e27735d69b22",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -3310,6 +3677,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b57caa6a257c87766413",
     deps = [":494ea5541c746846f465"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -3319,6 +3687,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4a15cd8aacdfead32b83",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -3328,6 +3697,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b2f49c12d85462f18b7d",
     deps = [":706256b3bacfe40584d9"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -3337,6 +3707,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-59b5fd911651bafbcf98",
     deps = [":2e56bf3ec8e188925afb", ":124ceb145f4f3c37f94a"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3346,6 +3717,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/koyomi:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":37d8af3eedc5bcbb872e", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":adb854f5f623c8e17f00", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -3355,6 +3727,7 @@ cargo_unit(
     source = "//apps/yukimi/crates/yukimi-config:cargo-source",
     deps = [":d03782adc208912c1879", ":545e71afe9aa80f8b47e", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":3c49c8c566dd8f429422"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -3364,6 +3737,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a3b6df15c0cedfd154e8",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3373,6 +3747,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-69f6da6a42f30157a323",
     deps = [":d54f11978c6b73d445ae", ":2baa1590da43a7cf5361"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -3382,6 +3757,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-70b867db952c080c381f",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3391,6 +3767,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-face:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":4ea8ef0dc8c7f96796fa"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -3400,6 +3777,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-03f0b1d700dd2dd99d8b",
     deps = [":574866efcb981a9f71a3", ":260caf56e6dec216cb03", ":b706d490bb8b2d8adf73"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -3409,6 +3787,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-48cf488e8905e926e7b8",
     deps = [":6675067869572d86810b", ":18cecd7952a655ed61de", ":1f66bc7f9646dfdf40c4", ":2f45a4544aaff8d67eaf", ":4bd1dad268628e503f14", ":d8f1f9646f4861d85a43", ":423dc1774f387d0a20a7", ":e70c4a5897a0766a2646", ":8dce2f41216eebf790ec", ":27be25a5a3ffadc5c59d"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -3418,6 +3797,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0a8e94aadab5f0a4f101",
     deps = [":494ea5541c746846f465"],
     extra_sources = {},
+    priority = 13,
     visibility = ["PUBLIC"],
 )
 
@@ -3427,6 +3807,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8bd91d55f8258baaccc7",
     deps = [":063ab89d79540b06e806", ":d05492fd5120fe69cd55", ":062ba2b3a5b1ad6f8af5", ":3816bf349b16dd2c4972", ":8a8d2a07efa2ccb2196e", ":e684bc44c5a275679bd4", ":c8f01ad7e1fcb84ce9f7"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -3436,6 +3817,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9deb58e9a2f8eeb41c02",
     deps = [":aae65ac16abeef4397bd"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -3445,6 +3827,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-db9c4f8aaa3665c64195",
     deps = [":0947b8d4139237c66fdc", ":b149d570568a260e9171", ":61abced45babd2c8ed4c"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -3454,6 +3837,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/myaku:cargo-source",
     deps = [":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":1fc145e3cc0ffc13261c", ":6bf7e048b25e6f7ffdb8", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -3463,6 +3847,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8d7a94338d311c26c3f6",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -3472,6 +3857,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0fba7791226ec915e3d6",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -3481,6 +3867,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-1353469b349e6663c2c6",
     deps = [":cedb5420a65b38f9a8f9", ":cbc491e02a07d10da842", ":c0df8011447cf2ac2bd2"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3490,6 +3877,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-dee4d4dc8618fdc59785",
     deps = [":0947b8d4139237c66fdc", ":8730fe949d60cb0369f5", ":bb9f280f106c3f4530dd", ":052d0f40936fe578f213", ":d3bf74bd522448a5ada1"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3499,6 +3887,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-60e3e745b86d597e2365",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -3508,6 +3897,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-17a1d7b837758c70d0f7",
     deps = [":c59233944c4ba1155473"],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -3517,6 +3907,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-32b9412381bc5118bb24",
     deps = [":d782b27bd23e014227c3"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3526,6 +3917,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-comp-logic:cargo-source",
     deps = [":85ff0600baae789985cd"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -3535,6 +3927,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-fceba7b3a6d6978d2267",
     deps = [":10ed5362be4b97c691ad"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -3544,6 +3937,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-29dfdee5d2067372b37c",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -3553,6 +3947,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-6ef9d7bddb9a382b66f8",
     deps = [":0d495ac1f8c2c32efffd", ":999c04dddbfd0fafcd6f"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -3562,6 +3957,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8bf44aa7d7f76e5d0cca",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -3571,6 +3967,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/annai:cargo-source",
     deps = [":07aa9a1cc302ff49cc78", ":37d8af3eedc5bcbb872e", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -3580,6 +3977,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-7f39b2e7f41b725e9214",
     deps = [":062ba2b3a5b1ad6f8af5"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -3589,6 +3987,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-fc4ebf597281d6753996",
     deps = [":394eccfc48409a7c67ab"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3598,6 +3997,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9c37293931952c5b1594",
     deps = [":529daa789d83122efe4d", ":ea9819b677341d760ff9"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -3607,6 +4007,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d96b4d1bed911d101f1a",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -3616,6 +4017,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3db60fb10a1f41c04d95",
     deps = [":f5fb88a7e2e93338de7a", ":126e1f10d15b1de75f62"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -3625,6 +4027,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9c37293931952c5b1594",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -3634,6 +4037,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f8af50a525bc924aa192",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3643,6 +4047,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-fd6bed6649c099829315",
     deps = [":0947b8d4139237c66fdc", ":b706d490bb8b2d8adf73", ":e5f725e745f78df517b1", ":a4d92b425357ab17198f", ":89431e27634bec99a475"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -3652,6 +4057,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a8344a1febb0993ddbc2",
     deps = [":4bd1dad268628e503f14"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -3661,6 +4067,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-09dd1e20e50430197c96",
     deps = [":78b4a62bd0be97e675f1", ":2a7bd0643d09b304aabd", ":494ea5541c746846f465", ":a37a2d8fb01a9fa34931", ":58df43001c985666f156"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -3670,6 +4077,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a22040cf832532e70fb1",
     deps = [":00c34d8b694470f42d24", ":f0004498bb03e5847e9c"],
     extra_sources = {},
+    priority = 19,
     visibility = ["PUBLIC"],
 )
 
@@ -3679,6 +4087,7 @@ cargo_unit(
     source = "//desktop/aizome/sukumo/crates/sidestep-ui:cargo-source",
     deps = [":2e56bf3ec8e188925afb", ":fadc7bddb907a5fc48d2", ":475500d67c75c3d47e97", ":4e77ebf0b95b2c0033a1"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -3688,6 +4097,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e2d138d1b6aaf2baecc8",
     deps = [":f5fb88a7e2e93338de7a", ":dd85685c85057c924225", ":8a8fefff5692e7c507dd", ":bb9f280f106c3f4530dd", ":3ba05b5f4ceacce4a9c2", ":5079bc04ba6051b4f5fa", ":e7f115fd276c462ff268", ":3c49c8c566dd8f429422"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -3697,6 +4107,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a7659807d526f4ce7647",
     deps = [":499812b8047a576cef8c"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -3706,6 +4117,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-7941a4a7dd9a3d1eb4fc",
     deps = [":b706d490bb8b2d8adf73"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -3715,6 +4127,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-43a28e8d1f2f7571dcce",
     deps = [":27821459a61a0fb66f56"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -3724,6 +4137,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0bd62a4b5537e3057c49",
     deps = [],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -3733,6 +4147,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-39af9da5a2287f3d2845",
     deps = [":44afe8080c9b540fbe6a"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -3742,6 +4157,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2ea2e066a9092f12a7f3",
     deps = [":0812f0eb92b7ceec2679", ":1b808a858324dc433655", ":b7d468e99cc5cfc6fe04"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -3751,6 +4167,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f0079ceadbbd01fab4d1",
     deps = [],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -3760,6 +4177,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-266c32e8360c7925ece6",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -3769,6 +4187,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0bd7b66737a33699dbcd",
     deps = [":ade42d0a21305826dfcf", ":212ae7123d7f5755f263", ":066e1508f00f2820c140"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -3778,6 +4197,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-34b993c1946b8456537b",
     deps = [":dc1e7aefe5976899b2fb", ":bba54ce0fb987b7c4e3e"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -3787,6 +4207,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/tansu:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":6bf7e048b25e6f7ffdb8", ":6f2dc0f43fcfd9a4939d", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":bb9f280f106c3f4530dd"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -3796,6 +4217,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b6222dffa039e1bb2b17",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -3805,6 +4227,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-73ab83121e48ff0c4db0",
     deps = [":f79ad0a5e012e545b257", ":413982b214d57c987783", ":9ddc2f8683fd1b6faf19", ":ca16c91d86a7817b255f", ":f0275a8e1ca2eb9fed69", ":7982348889700bc63f7d", ":a77f18cbe7a758e1cef9", ":159b840c3be17a213091", ":bce592a710249cfa11b6", ":d05492fd5120fe69cd55", ":b578cd47b15bfb39357f", ":d1b351dc59102b3e678a", ":9cf7bc71241ac5411070", ":c84490c85b62c294fdf9", ":b706d490bb8b2d8adf73", ":a5227dc6c3021c5878d0", ":84fa5981ee3b8d7950cb", ":062ba2b3a5b1ad6f8af5", ":669b3bf20a0c3f24b3dd", ":cc03675ab0c2a96ce365", ":ae1809d39490b1501337", ":3816bf349b16dd2c4972", ":f557f36a50c7fbe3a9bd", ":73ff69f3bc4ce87a14f4", ":842dfc7447a78848d2b2"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -3814,6 +4237,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-90b6d0991d385b5ad62e",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -3823,6 +4247,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2048cb650aca5433ee69",
     deps = [],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -3832,6 +4257,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e5696537b421b5978216",
     deps = [":0947b8d4139237c66fdc", ":b706d490bb8b2d8adf73", ":56b95f4f6b2a5b7e6a2c", ":d54f11978c6b73d445ae", ":81d2cc01aaef1484f765", ":84fa5981ee3b8d7950cb"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -3841,6 +4267,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-03f6360e2988f745ec06",
     deps = [":1b808a858324dc433655"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -3850,6 +4277,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e0d888c78c503d1ae6bc",
     deps = [":617b07e81ef8a2ba9306", ":b706d490bb8b2d8adf73"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -3859,6 +4287,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-234e2c031385db99f696",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3868,6 +4297,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8dd69376eeceff06b7ae",
     deps = [":2afecbf4be274bfd6515", ":574866efcb981a9f71a3", ":3835c0d8ec2bda2762ac", ":97dc9328620a1a055fe1", ":e7c121e7a884877d4254"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -3877,6 +4307,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-bcfc061246aa00f472d3",
     deps = [":01c7ff432eddcc7498f2", ":ac82a86884f4408d915b"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -3886,6 +4317,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-63d18ababfc8a6f95b08",
     deps = [":2a7bd0643d09b304aabd", ":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -3895,6 +4327,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c6ed8783e83a08493d49",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd", ":aa969e358469348d1317"],
     extra_sources = {},
+    priority = 15,
     visibility = ["PUBLIC"],
 )
 
@@ -3904,6 +4337,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d6a4e033073deff3298b",
     deps = [":13863bae514692346ad2"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3913,6 +4347,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d37f0fc574986fd49a34",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -3922,6 +4357,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-32a296c63ecfb3f3e39a",
     deps = [":e35c3694be1501d693b7"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -3931,6 +4367,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c3dcf2e7c3b1a64a8519",
     deps = [":0008fafd4c3f09763979"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -3940,6 +4377,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a819701ca579f1af5e76",
     deps = [":f53f62f96f7436cfc52d"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -3949,6 +4387,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-network-agent:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":b2817b7464f44a191e90", ":b1cd352dda7a3b6fa84d", ":cbe3bc9c416ead4647c1", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -3958,6 +4397,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9250cf9207528950ed03",
     deps = [":b706d490bb8b2d8adf73"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -3967,6 +4407,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c999c9634331b37fac76",
     deps = [":b5a2a469773ee19a6aa3"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -3976,6 +4417,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8ca68c20ba662c55b4b8",
     deps = [":e2419db3c9f2dd3d262f"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -3985,6 +4427,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-13e8ff53153930289d4e",
     deps = [":b45669b57a76a0d8afc2"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -3994,6 +4437,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2a22ca040fc39a633d17",
     deps = [":6ff66c4544bf59e19d6c"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -4003,6 +4447,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-6071347b76a8a8bb4e72",
     deps = [":5ef29f1aba6c067d1ae5"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -4012,6 +4457,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2c5789cfdc17532e106d",
     deps = [":e4f2e5460683a8e9bfb5", ":d5de7d7093e221d86fc2"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -4021,6 +4467,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cc8c40eaf1b1ebfaacc8",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -4030,6 +4477,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4a3d75478fb1024f951a",
     deps = [":a35e13bc64fd3b56f6cd"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -4039,6 +4487,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4716ce17aa1b04035fe6",
     deps = [":0908192675980082fc3d", ":d1b351dc59102b3e678a", ":9407118b5b21a4deef98", ":bbe431e82658ef052886", ":3f501223a26cea454bfc"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -4048,6 +4497,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f715e6ed9ba4e9b0ee4c",
     deps = [":56adf249acf09dfb194a", ":cedb5420a65b38f9a8f9", ":0f112bd21e781127bfe2", ":0842065019fbc3808011", ":2ed2752bcf889281048e"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -4057,6 +4507,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a23bfe6c31b183628eda",
     deps = [":2a8bc3087f9a46f13f75"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -4066,6 +4517,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-dbabd14e30ccfbeccafc",
     deps = [":ba427c395d37162fe536"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -4075,6 +4527,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-13e8ff53153930289d4e",
     deps = [":fe89822023661a3e73d8", ":574866efcb981a9f71a3", ":e2cbe6058568c51de9a2", ":9407118b5b21a4deef98", ":9cf7bc71241ac5411070", ":bbe431e82658ef052886", ":abf21d3a4abe923d7e3d", ":84fa5981ee3b8d7950cb", ":a43fe76d428a80b4e278"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -4084,6 +4537,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-comp:cargo-source",
     deps = [":d2dccebeabf5a5182781", ":12b7948a922b79e267b0", ":0000e81352d0dd614773"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -4093,6 +4547,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-fa9a8573b6cb34797ab7",
     deps = [":0947b8d4139237c66fdc", ":22ee423c5c7627dc6bfe", ":1b5fa0efbdab5c210eaa", ":cac1a5505b5a6df4b7c0", ":783dff643a8dc342172a"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -4102,6 +4557,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0b6fa187db19e9624c6a",
     deps = [":fedaf6807968c9282c82"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -4111,6 +4567,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a51eb21e78a1fe45e7d3",
     deps = [":cf728268ddd3e416ec26"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -4120,6 +4577,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-830d2147f91240eeb16b",
     deps = [":632558f23bcf04f5b3b6"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -4129,6 +4587,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f659ec7fc1f7ba943dab",
     deps = [":32929bede402a64f3482"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -4138,6 +4597,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2dcf3795ac5c7f270f50",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -4147,6 +4607,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-543bb214470dc940a08e",
     deps = [":b57318c88234be11eca9"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -4156,6 +4617,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f903d551f01b214464c6",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 13,
     visibility = ["PUBLIC"],
 )
 
@@ -4165,6 +4627,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4a3d75478fb1024f951a",
     deps = [":9cf26288cccfc1a75895", ":29874a01d1b15ef07054"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -4174,6 +4637,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4a3d75478fb1024f951a",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -4183,6 +4647,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0500a7bac4e23ef20990",
     deps = [":5c28b97a9500ea5fa369", ":55ea4faae9e00951c01b", ":11800609b849e59911e3", ":939b8a27cb039b848d73"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -4192,6 +4657,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d123c02aecee94386def",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -4201,6 +4667,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a3eab5d669b8db51b79d",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -4210,6 +4677,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c4104cf334a346abb389",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":3dbb0d6ca058b955bb11"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -4219,6 +4687,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4804b6df4f36439502bb",
     deps = [":c2d3ad6c2de561109b66", ":7ea508def7d14632f2a5"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -4228,6 +4697,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2538788ee34beb0c6295",
     deps = [":d1b351dc59102b3e678a", ":3f501223a26cea454bfc"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -4237,6 +4707,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e37ac588202245223395",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -4246,6 +4717,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9bda305411d1bbcc2e46",
     deps = [":f38fcab3b85f6d122338"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -4255,6 +4727,7 @@ cargo_unit(
     source = "//apps/hotaru/crates/hotaru-core:cargo-source",
     deps = [":97dd824f8e409550cadc", ":0a98989fb2b473811e6c", ":329520c94825b3896a44", ":f06cb06347bbc2ce7dd4"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -4264,6 +4737,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-07b44149ae204484517d",
     deps = [":4ec82c921cda0e6cef4f", ":7a7672d9276df6695eb8"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -4273,6 +4747,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9c2800ed7026e9744e99",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -4282,6 +4757,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-03f0b1d700dd2dd99d8b",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -4291,6 +4767,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-83349ab74125f45ca495",
     deps = [":2e07cec038be546c2632"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -4300,6 +4777,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-config:cargo-source",
     deps = [":4ea8ef0dc8c7f96796fa", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -4309,6 +4787,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a7659807d526f4ce7647",
     deps = [":921a01dd30ea464e5a03", ":b706d490bb8b2d8adf73"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -4318,6 +4797,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-ipc:cargo-source",
     deps = [":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -4327,6 +4807,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9fc1019504d3ff44543b",
     deps = [":27be25a5a3ffadc5c59d", ":3ab6b41ae8b507cfed5c", ":fc2ca76aca53b8bb1046"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -4336,6 +4817,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-36bfbe8c3855f7bb32b1",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -4345,6 +4827,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f2b49a386619995434cc",
     deps = [],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -4354,6 +4837,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e06d3a10c87212ae335c",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 16,
     visibility = ["PUBLIC"],
 )
 
@@ -4363,6 +4847,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9deb58e9a2f8eeb41c02",
     deps = [":56adf249acf09dfb194a", ":c3815d1c872bfdf18238", ":8fd2d570c5f94cf335c5"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -4372,6 +4857,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-greeter:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":82e058b950a08d77a794", ":37d8af3eedc5bcbb872e", ":6bf7e048b25e6f7ffdb8", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -4381,6 +4867,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/hotaru-link-regex:cargo-source",
     deps = [":c3815d1c872bfdf18238"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -4390,6 +4877,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/shiori:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":37d8af3eedc5bcbb872e", ":ca98cb70fbd1ae97dd46", ":ee0d1cecd7ba8fa9ac7f", ":183e7fefe617f21f7338", ":af7266d856f5e53a7bea", ":b706d490bb8b2d8adf73", ":c59233944c4ba1155473", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -4399,6 +4887,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-69f6da6a42f30157a323",
     deps = [":56adf249acf09dfb194a", ":8fd2d570c5f94cf335c5"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -4408,6 +4897,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5afe2e22fc2c3c73449e",
     deps = [":acba671d59cf2521b22a"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -4417,6 +4907,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ca1ce3447c7c29fc9b69",
     deps = [":0908192675980082fc3d", ":368ad29a9275d35f39bf", ":052d0f40936fe578f213", ":84fa5981ee3b8d7950cb"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -4426,6 +4917,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cfa5c68e762fe04bf409",
     deps = [":7ada653d1d0bc828f6c0", ":b706d490bb8b2d8adf73"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -4435,6 +4927,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-bafa6488053396080de5",
     deps = [":bc2e84ca5858c81f7eed"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -4444,6 +4937,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b139c204042c065df138",
     deps = [":574866efcb981a9f71a3", ":84fa5981ee3b8d7950cb"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -4453,6 +4947,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-greeter:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":82e058b950a08d77a794", ":aaf2a7f50f469099a237", ":37d8af3eedc5bcbb872e", ":6bf7e048b25e6f7ffdb8", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -4462,6 +4957,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f659ec7fc1f7ba943dab",
     deps = [":124ceb145f4f3c37f94a"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -4471,6 +4967,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5afe2e22fc2c3c73449e",
     deps = [":76eca9cc4a4c50f3294c"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -4480,6 +4977,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/yukimi:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":4ea8ef0dc8c7f96796fa", ":60457fd4e037527f5008", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":7f6466fa77a3bc317b02", ":bccae152bb2441b40c2b", ":e7d1bec8ca5bbd9e5b87"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -4489,6 +4987,7 @@ cargo_unit(
     source = "//apps/hotaru/crates/hotaru-sprites:cargo-source",
     deps = [],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -4498,6 +4997,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9f90fd3467a284a0e90a",
     deps = [":b61ace8594e6e1a3478f", ":e141a02452ee185b47ba"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -4507,6 +5007,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-586f772678357fc8d459",
     deps = [":066e1508f00f2820c140"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -4516,6 +5017,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b2ec165e2acd68217765",
     deps = [":9a32bb3c41a20691d9d1", ":35492309807c2ff5133d", ":bd20b4fc52c688c9b053", ":5ff0ff0c9f43488a1c08", ":ebba7470a5a3d3c74cd8", ":48bc6ceb95d44172a922"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -4525,6 +5027,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-148ce25f2051b0e25309",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -4534,6 +5037,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-44d31524734267c8a522",
     deps = [":9d79926a9d609b1db76e"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -4543,6 +5047,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5d769c5feb4b32558d62",
     deps = [":224d718da1eddf0622e1", ":e7f115fd276c462ff268"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -4552,6 +5057,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cda8814147de74d7f9eb",
     deps = [":1b808a858324dc433655", ":e7002893ed246b65a8ef"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -4561,6 +5067,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-309326c6c0a4fa7a397a",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -4570,6 +5077,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-015138599d7d5b1a0dcd",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -4579,6 +5087,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9d2f172aecd0ac5d8a5b",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -4588,6 +5097,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-256e992fe3959453d599",
     deps = [":52a17146c352972446d6", ":2e4207a24737b39d5240", ":04ac0bc4309f79042562", ":31b2387646b501ee8808", ":1b808a858324dc433655", ":ee3beffcbdb1c8255f35", ":e7f115fd276c462ff268", ":7a1ae9bce51681f04df1"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -4597,6 +5107,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b1aaf5529b688fccb5f8",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd", ":aa969e358469348d1317"],
     extra_sources = {},
+    priority = 14,
     visibility = ["PUBLIC"],
 )
 
@@ -4606,6 +5117,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c4d0b32ceeab931f6f68",
     deps = [":7d2c1494299e39dc39ed"],
     extra_sources = {},
+    priority = 19,
     visibility = ["PUBLIC"],
 )
 
@@ -4615,6 +5127,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e739f3d7d9cd34ea8ee2",
     deps = [],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -4624,6 +5137,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-network-agent:cargo-source",
     deps = [":62939b9d47e4b27814ce"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -4633,6 +5147,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/shashin:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":82e058b950a08d77a794", ":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":ee0d1cecd7ba8fa9ac7f", ":f6b9bc4ef3a93e5f0548", ":2336a10b87fad0a36523", ":bb9f280f106c3f4530dd", ":eababbfd98ed28679ccb", ":5079bc04ba6051b4f5fa", ":4feeb3f1b5ffea3c4cc4", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":fadc7bddb907a5fc48d2"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -4642,6 +5157,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3402947a650617c068e0",
     deps = [":7a7672d9276df6695eb8"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -4651,6 +5167,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-network-agent:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":b1cd352dda7a3b6fa84d", ":cbe3bc9c416ead4647c1", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -4660,6 +5177,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5c838ee3c7e7231f42fe",
     deps = [":bad05a11090f3ace148f"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -4669,6 +5187,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-311b603d7be2d08d7406",
     deps = [":f5fb88a7e2e93338de7a", ":123889e6dbe48135b57c", ":052d0f40936fe578f213"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -4678,6 +5197,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-media:cargo-source",
     deps = [":97695d7f7daa2cb8ae0e", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":95cfc002269d6a442ee5", ":902a9003323df069eb88"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -4687,6 +5207,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cbe3b6d7ee56474b93d4",
     deps = [":bde2201a0d5aa6fea0da"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -4696,6 +5217,7 @@ cargo_unit(
     source = "//apps/hotaru/crates/hotaru-io:cargo-source",
     deps = [":a6af084f381e1461b93c", ":b706d490bb8b2d8adf73"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -4705,6 +5227,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5d1e01593b990c9d5a2e",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -4714,6 +5237,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/hotaru:cargo-source",
     deps = [":82e058b950a08d77a794", ":3085251044bb057d7d62", ":37d8af3eedc5bcbb872e", ":27a0deca630ebb1b4fa0", ":4ea8ef0dc8c7f96796fa", ":67e0ab4ec0a391a8e5ef", ":ee0d1cecd7ba8fa9ac7f", ":a6af084f381e1461b93c", ":b35f3b193431f37655e7", ":f8e526dc9ae8cd84e813", ":ad0473731a53446080e1", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -4723,6 +5247,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-46b2ea873f201ca2724b",
     deps = [":03ad25b6a0565f4b0986"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -4732,6 +5257,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f449ba165e0f42370dd3",
     deps = [":2b834bf8715779903ebd", ":93d3a833e79e3e2e0f35"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -4741,6 +5267,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-59666b08f20117094de6",
     deps = [":0d6a3ff5f73492b13841"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -4750,6 +5277,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-6e5d99b840cac49d41f8",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -4759,6 +5287,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cf34dacf706f827462ef",
     deps = [":9d79926a9d609b1db76e"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -4768,6 +5297,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-1353469b349e6663c2c6",
     deps = [":574866efcb981a9f71a3", ":46389420b40d6f013579", ":45541d3274df1639ee85"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -4777,6 +5307,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a2ebda073ee5b9e7d773",
     deps = [":d395dde8183fba51e7c0"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -4786,6 +5317,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e37e8167d7c5263b84ac",
     deps = [":bbe431e82658ef052886", ":3f501223a26cea454bfc"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -4795,6 +5327,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c999c9634331b37fac76",
     deps = [":494ea5541c746846f465"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -4804,6 +5337,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-25ab1724d1b2043869a6",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -4813,6 +5347,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-7e0f5211b60597cef327",
     deps = [":12dd40d08bfd9b44813a"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -4822,6 +5357,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0b6fa187db19e9624c6a",
     deps = [":9eda15aaa8dcbc66973b"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -4831,6 +5367,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0b6fa187db19e9624c6a",
     deps = [":12004e7759ffb83dfaaa"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -4840,6 +5377,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9da7a61ecce2e665efdf",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -4849,6 +5387,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a6574a111defebe8e7e8",
     deps = [],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -4858,6 +5397,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/koe:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":4b5dee3754dca26d873d", ":89c2ed94798df11c904a", ":ee0d1cecd7ba8fa9ac7f", ":f1468b52e7923ffff81d", ":5376f0b3df3fb03d02f8", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":193be90d071a4d1e34b7", ":f2821b187a2b8942777f", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":b4745bc5b1c9358de8f7", ":ab762cfa905bb604cc6b", ":2914dda88ce9473681c0", ":2d7f51fe749f4ce11136", ":5c2c90a8837c1e243ae4"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -4867,6 +5407,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9f5ef52d585b5b0cb095",
     deps = [":494ea5541c746846f465"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -4876,6 +5417,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-dbabd14e30ccfbeccafc",
     deps = [":f6addf14281f1246dff0"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -4885,6 +5427,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5c838ee3c7e7231f42fe",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -4894,6 +5437,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-81529ab8061b7657312e",
     deps = [":12dd40d08bfd9b44813a", ":9748ae20f7cc23fa72cf", ":574866efcb981a9f71a3", ":f71648e45b8747eba0a2", ":1f66bc7f9646dfdf40c4", ":d71f658ae1a8db717995", ":ee6e3bb37da8d2c172a8", ":23be3d8c5daf5d7a0700", ":d049083b6a8670006672", ":ce8e67a764bd04f99876", ":6341edc8a6897384f54f", ":e7f115fd276c462ff268", ":3c49c8c566dd8f429422", ":4feaa7984225cb5f8f76"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -4903,6 +5447,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-49b59f5de4bbf4784b86",
     deps = [],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -4912,6 +5457,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9da7a61ecce2e665efdf",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -4921,6 +5467,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-1593bbb68f066d916802",
     deps = [":ee58d4ef9299186226b1", ":779a5d92bd22f43a47cc"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -4930,6 +5477,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9e565bd250beb4711201",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -4939,6 +5487,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a3575b91d03fbc627b4e",
     deps = [":bdf8b7642eb850cfc855", ":ec9fa662f60e315e28fb", ":42288f4a2c36b4bae79d"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -4948,6 +5497,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-bafa6488053396080de5",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -4957,6 +5507,7 @@ cargo_unit(
     source = "//apps/yukimi/crates/yukimi-store:cargo-source",
     deps = [":6fd3660588e5c84102d8", ":3c49c8c566dd8f429422"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -4966,6 +5517,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8c903254508f48417569",
     deps = [":cbe3bc9c416ead4647c1", ":a77f18cbe7a758e1cef9", ":9407118b5b21a4deef98", ":9cf7bc71241ac5411070", ":e4ee5704bee99f748b22"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -4975,6 +5527,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c6f5a3df68fb8311916d",
     deps = [],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -4984,6 +5537,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2f5a36e44b66a504f5bb",
     deps = [],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -4993,6 +5547,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-83349ab74125f45ca495",
     deps = [":a86d7cda1b0594dace96"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -5002,6 +5557,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-db72e9f2a6b59441b07f",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5011,6 +5567,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a22040cf832532e70fb1",
     deps = [":ea287f1044357b0c0d43", ":42288f4a2c36b4bae79d"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -5020,6 +5577,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-713fd076051992cd2f03",
     deps = [":67e0a3dc14c3323a0e0e"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -5029,6 +5587,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-970029509be80714108d",
     deps = [":0947b8d4139237c66fdc", ":6f18d35cc06f7bab67c9", ":6a26246614d8de61f056"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -5038,6 +5597,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-16a1fc1061cf8deed571",
     deps = [":dab7982ea56d8bbe1f19"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5047,6 +5607,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-1c1ab2d1a4d31b3fafa7",
     deps = [":0947b8d4139237c66fdc", ":449754ed1441e2737525", ":c5faecae45cec6940139", ":a91f4431cc5ba9b76fbe", ":b706d490bb8b2d8adf73"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -5056,6 +5617,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/utsushi:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":b2e910f14e587eec4bb5", ":ee0d1cecd7ba8fa9ac7f", ":f6b9bc4ef3a93e5f0548", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":fadc7bddb907a5fc48d2", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -5065,6 +5627,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-821e2c2b494cb9eb2e83",
     deps = [":23088527ef21e1559dfb"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -5074,6 +5637,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-92a8ed349a106826e3ef",
     deps = [":10bb10adbbae7827e059", ":b3cd13e49e06f0eee649"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5083,6 +5647,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3e8b3be251d0eb596603",
     deps = [":4ec82c921cda0e6cef4f", ":7a7672d9276df6695eb8"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -5092,6 +5657,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-bbd83cd8c306608a0ceb",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -5101,6 +5667,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-459858a31a55811da4be",
     deps = [":045522b50433de87dca0", ":fe59cea978e8e1c85956"],
     extra_sources = {},
+    priority = 13,
     visibility = ["PUBLIC"],
 )
 
@@ -5110,6 +5677,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e46dc692d45347702d6f",
     deps = [":574866efcb981a9f71a3"],
     extra_sources = {},
+    priority = 13,
     visibility = ["PUBLIC"],
 )
 
@@ -5119,6 +5687,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cf35fa30edc8ad894b6e",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5128,6 +5697,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2192288e5eafb242e4ff",
     deps = [":deca149426c23117eeba"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5137,6 +5707,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c3a5eb52b437895ffec4",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":3dbb0d6ca058b955bb11"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -5146,6 +5717,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-comp-logic:cargo-source",
     deps = [":888a9ac773192b2e6d37"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -5155,6 +5727,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-47011e3e48d3eb7033d1",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5164,6 +5737,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-47fed4fc7472fdfad3b3",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5173,6 +5747,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-fee261079fac4d9f9f3a",
     deps = [":bdf8b7642eb850cfc855", ":ec9fa662f60e315e28fb", ":062ba2b3a5b1ad6f8af5", ":bbeb2bed5b1e50bff560", ":3816bf349b16dd2c4972"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5182,6 +5757,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-85836a0fef8663f3a65a",
     deps = [":b578cd47b15bfb39357f", ":2e60aca57452c6dfb9f7", ":3f501223a26cea454bfc"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5191,6 +5767,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0a8e94aadab5f0a4f101",
     deps = [":838834495ca5922f5484"],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -5200,6 +5777,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/shiori:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":37d8af3eedc5bcbb872e", ":ee0d1cecd7ba8fa9ac7f", ":183e7fefe617f21f7338", ":af7266d856f5e53a7bea", ":b706d490bb8b2d8adf73", ":c59233944c4ba1155473", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -5209,6 +5787,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ed6487593d519e61daac",
     deps = [":8fdc6469236c3622296a", ":1af3c2fb6680daa95487", ":1111e981fceaf6b3f0f0"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -5218,6 +5797,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a23bfe6c31b183628eda",
     deps = [":b706d490bb8b2d8adf73", ":9d495824b7b27dcece16"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5227,6 +5807,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e8220d7d75cc872e822d",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5236,6 +5817,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-aa0163c292d3629a529b",
     deps = [":e2cbe6058568c51de9a2", ":2e60aca57452c6dfb9f7", ":d1b351dc59102b3e678a", ":3f501223a26cea454bfc"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5245,6 +5827,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a3cc4ea65ef73e3c20ae",
     deps = [":bb9f280f106c3f4530dd", ":3f501223a26cea454bfc", ":da2b0ded5298e9705e62", ":feac3ccfa4821f71b8b0"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5254,6 +5837,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-shell:cargo-source",
     deps = [":64230fe05343a8f4b32a", ":a8ccc9324a791be4172c", ":82e058b950a08d77a794", ":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":27a0deca630ebb1b4fa0", ":3cf5c676c9e201091ea6", ":3d7b0e1734f14111a856", ":6bf7e048b25e6f7ffdb8", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":adb854f5f623c8e17f00", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":4feeb3f1b5ffea3c4cc4", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -5263,6 +5847,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-6d4719b3ce5a87c3dca8",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -5272,6 +5857,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5ce5c8628d706b79de7d",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -5281,6 +5867,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c689547e8e7a24c06d08",
     deps = [":574866efcb981a9f71a3", ":4e33092a575b4f9cf1c6", ":e389b5f9744f427a3fcf"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5290,6 +5877,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ab6a2a7db4cc04976328",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -5299,6 +5887,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a51eb21e78a1fe45e7d3",
     deps = [":1a210dd57544ab2d2244"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5308,6 +5897,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-79c0ce1aa7ecd1cfdec4",
     deps = [":d31bdd8efc28c8db45c0", ":bb9f280f106c3f4530dd", ":922942ddbc2b71356b84", ":63c4468ee1548edf02c1", ":d9e7fe5ad1536f73c89e", ":0af2700945c041d35759"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5317,6 +5907,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-1500e9e712fe2fc7feac",
     deps = [":545e71afe9aa80f8b47e"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -5326,6 +5917,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a601743a4ebe1f67d4e0",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5335,6 +5927,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-fef8d7788e171857a8a2",
     deps = [":c7b7d7b6a23f79b83114", ":062ba2b3a5b1ad6f8af5"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5344,6 +5937,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e46dc692d45347702d6f",
     deps = [":cedb5420a65b38f9a8f9"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -5353,6 +5947,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-dde0136cfec2401f2d3a",
     deps = [":d1b351dc59102b3e678a", ":2fc1e49a32ccae756a1c", ":03e5ef431a101a3da87c", ":3f501223a26cea454bfc", ":a43fe76d428a80b4e278"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5362,6 +5957,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3269daa55a0267e0f1f1",
     deps = [":142e2aee230174d472ae", ":3b364cf3350d7f0841f8", ":89431e27634bec99a475"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -5371,6 +5967,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-28fa0dc4d0175747c470",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -5380,6 +5977,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-98e16a04f0451a0d9fbd",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -5389,6 +5987,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-comp:cargo-source",
     deps = [":0a31d85f13d7824dc956"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -5398,6 +5997,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-90b6d0991d385b5ad62e",
     deps = [":952d58bf9efa160179eb"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -5407,6 +6007,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ed05c396f417c8fbb7f3",
     deps = [":e65609e077f1e4b3880c"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -5416,6 +6017,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5af6c6290fd458bc82ee",
     deps = [":239882f6c221ee949f41"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5425,6 +6027,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a2ebda073ee5b9e7d773",
     deps = [":64750481a5140d07f08a"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -5434,6 +6037,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9f5ef52d585b5b0cb095",
     deps = [":b9c01c14a9c4782e12b5"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -5443,6 +6047,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e53f15b1af72126b07a9",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5452,6 +6057,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9deb58e9a2f8eeb41c02",
     deps = [":84343dbfd56cdc80a6c1"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5461,6 +6067,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-6d7267a1b3358ab19cb9",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5470,6 +6077,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-46b2ea873f201ca2724b",
     deps = [":9d79926a9d609b1db76e"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5479,6 +6087,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-7e7b4cb84922bae901e9",
     deps = [":574866efcb981a9f71a3", ":3cb6c151183e9fa2f204"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -5488,6 +6097,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-693a1618556b5365aac1",
     deps = [":83304660f783cc595968"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5497,6 +6107,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9682b1554c70c09fe301",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5506,6 +6117,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/sumi:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":dc60f6ca1966ad055b0c", ":ee0d1cecd7ba8fa9ac7f", ":bb9f280f106c3f4530dd", ":193be90d071a4d1e34b7", ":34b2f4d00fd0d85d6579", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -5515,6 +6127,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-89340a962000d053c43a",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -5524,6 +6137,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-db72e9f2a6b59441b07f",
     deps = [":6fe24e37ab9c7062f317", ":bde2d7a1219158ca4b2a"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5533,6 +6147,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-73458c8398b772409591",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5542,6 +6157,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8b4ad15113b1b9f2350e",
     deps = [":24c78821084512c074a8", ":1f66bc7f9646dfdf40c4"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5551,6 +6167,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-32b9412381bc5118bb24",
     deps = [":4f616ae82d529671b945"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5560,6 +6177,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b671e6af7f1839418226",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -5569,6 +6187,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-89340a962000d053c43a",
     deps = [":d63bb1c9a3fe9ff593a8"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5578,6 +6197,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4b6bca17290b3cadc6c4",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -5587,6 +6207,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-40b61aa4a82125b097d3",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5596,6 +6217,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-36ed3bfc1d8ea91cbdbe",
     deps = [":ae0a8ea455e6482eec15", ":1fa1fd600935894c192f", ":09e94c2c5bf7da0a9059", ":ab5d8570f1581f5c02e3", ":35492309807c2ff5133d", ":e7f115fd276c462ff268", ":bd20b4fc52c688c9b053", ":48bc6ceb95d44172a922"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5605,6 +6227,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-624c005ad860b29f7142",
     deps = [":574866efcb981a9f71a3"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -5614,6 +6237,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-kit:cargo-source",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5623,6 +6247,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/koe:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":b94b38756e1442c56964", ":4b5dee3754dca26d873d", ":89c2ed94798df11c904a", ":ee0d1cecd7ba8fa9ac7f", ":f1468b52e7923ffff81d", ":5376f0b3df3fb03d02f8", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":193be90d071a4d1e34b7", ":f2821b187a2b8942777f", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":b4745bc5b1c9358de8f7", ":ab762cfa905bb604cc6b", ":2914dda88ce9473681c0", ":2d7f51fe749f4ce11136", ":5c2c90a8837c1e243ae4"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -5632,6 +6257,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-85b5742caf63eb254834",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5641,6 +6267,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ce8bbdad76d2a4c4903f",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5650,6 +6277,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8027b8f1f17fd180c4ee",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":3dbb0d6ca058b955bb11"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5659,6 +6287,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-16a1fc1061cf8deed571",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -5668,6 +6297,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-6dc5bf26cb8da1d1366a",
     deps = [":bb9f280f106c3f4530dd"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5677,6 +6307,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d6a4e033073deff3298b",
     deps = [":10af715cd9e563ea4654", ":18d370f00de0fea960cd", ":8562959af73d81a7f578"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -5686,6 +6317,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2ea2e066a9092f12a7f3",
     deps = [":bba54ce0fb987b7c4e3e"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -5695,6 +6327,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0d0e31618e761b577b10",
     deps = [":776bf5c383d3f43393ec", ":939b8a27cb039b848d73", ":68762da1897d46fd1b24"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5704,6 +6337,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/sumi:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":ee0d1cecd7ba8fa9ac7f", ":bb9f280f106c3f4530dd", ":193be90d071a4d1e34b7", ":34b2f4d00fd0d85d6579", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -5713,6 +6347,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-32a296c63ecfb3f3e39a",
     deps = [":9a5cb4fd10a61fef1d5a", ":5f88e139d288ae501b55", ":b71a24fd6d9b3f134146", ":d1620ac349a8f6786ece"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -5722,6 +6357,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a935f5a5d038ad85e761",
     deps = [":0947b8d4139237c66fdc", ":8b109b1cd91e5356cf62", ":22ee423c5c7627dc6bfe"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5731,6 +6367,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0713306e32d5f28cb272",
     deps = [":058ecba35e4c7f24652b", ":8fdc6469236c3622296a", ":3dbb0d6ca058b955bb11"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -5740,6 +6377,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a90fd9e4fe1a280091c2",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5749,6 +6387,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/nisshi:cargo-source",
     deps = [":0812f0eb92b7ceec2679", ":37d8af3eedc5bcbb872e", ":35ba4900ecee927f5630", ":ee0d1cecd7ba8fa9ac7f", ":adb854f5f623c8e17f00", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":1b808a858324dc433655", ":193be90d071a4d1e34b7", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -5758,6 +6397,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-70ff68156dde8886a88c",
     deps = [":d1b351dc59102b3e678a"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5767,6 +6407,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-6688510d7bfe23bde9c7",
     deps = [":687e9b043c2649ec95ee", ":12dd40d08bfd9b44813a", ":f5fb88a7e2e93338de7a", ":574866efcb981a9f71a3", ":bb9f280f106c3f4530dd", ":6d99c5b4b84597168924", ":097717d9d740a37e6a4d"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -5776,6 +6417,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2192288e5eafb242e4ff",
     deps = [":ff6a8f8602ae33a5d2c1"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5785,6 +6427,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d82b89d84d95103b1fc7",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5794,6 +6437,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c999c9634331b37fac76",
     deps = [":b706d490bb8b2d8adf73", ":052d0f40936fe578f213", ":9bd3d4a64480254eab6d"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5803,6 +6447,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a5534f3537dbe87adf7a",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5812,6 +6457,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f17597988856bcdbdfaf",
     deps = [":2f45b0cc6e563e4c98e9"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5821,6 +6467,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8ca68c20ba662c55b4b8",
     deps = [":706256b3bacfe40584d9"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5830,6 +6477,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-6c73f859265e902015d5",
     deps = [":b57318c88234be11eca9"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -5839,6 +6487,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-90b6d0991d385b5ad62e",
     deps = [":0947b8d4139237c66fdc", ":84fa5981ee3b8d7950cb", ":22ee423c5c7627dc6bfe", ":d2e3c2aa7b3b962fc9f7", ":cac1a5505b5a6df4b7c0"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -5848,6 +6497,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-061ad58a82fc282d58e5",
     deps = [":fcbc341d6b3455c5e770", ":b706d490bb8b2d8adf73"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5857,6 +6507,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-38cd302861e33a9c0fd2",
     deps = [":3572c03220666c8618d7", ":043d1b2738a158d793d2", ":74f7682599517d83d86a", ":d1667ae02a307cfcad49", ":1d0c99bb0cdf429e3741", ":f5ce6ff349888807fc84", ":3077605040c4ae1cd654", ":eaf29bcd09cb4de3fa39", ":60e15977bdd6df5d3520", ":b706d490bb8b2d8adf73", ":066e1508f00f2820c140", ":3f501223a26cea454bfc", ":9b687143f1de22fb4aa1", ":2914dda88ce9473681c0", ":7af7253b1ef78027f846", ":cc03675ab0c2a96ce365"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -5866,6 +6517,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-daab30297e5861d903f7",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":3dbb0d6ca058b955bb11"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -5875,6 +6527,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-32a296c63ecfb3f3e39a",
     deps = [":5f88e139d288ae501b55"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -5884,6 +6537,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-5b4a113be373f2405c7d",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -5893,6 +6547,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a355bd7e53952632d744",
     deps = [":0947b8d4139237c66fdc", ":9a65878603161d7e7b4a", ":b706d490bb8b2d8adf73", ":419dc31601ba8def5529"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -5902,6 +6557,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-3384b1b4b5b066db9b37",
     deps = [":cc842c37e1032c3b2be7", ":52a17146c352972446d6", ":d5babfe6e85b9cfc21aa", ":0613de9b0cf0d18915e1", ":7ea508def7d14632f2a5", ":9c6543f3989a7177e27b"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5911,6 +6567,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a0e260e7bf7df3f7a3da",
     deps = [],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5920,6 +6577,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8b8986c365cbb3ed1cab",
     deps = [":1fe02e34e5d366d69b26", ":0908192675980082fc3d", ":9407118b5b21a4deef98"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5929,6 +6587,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-8d3502bd6e3cdc3a7bb2",
     deps = [":22d0c816a81636ad9af6", ":d5de7d7093e221d86fc2"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5938,6 +6597,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-81e28ea9cd33287cfd0b",
     deps = [":89431e27634bec99a475", ":0c6a220f9fd5c5a0d1b7"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -5947,6 +6607,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2dcf3795ac5c7f270f50",
     deps = [":a0db7d954b092d59ca04"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -5956,6 +6617,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-70775f67974c3070c802",
     deps = [":b706d490bb8b2d8adf73", ":326b6176c8abfc4c22c2", ":a4d92b425357ab17198f", ":89431e27634bec99a475"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -5965,6 +6627,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-kit:cargo-source",
     deps = [":d8fbc792c82fdd826feb"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -5974,6 +6637,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ed05c396f417c8fbb7f3",
     deps = [":6ee16253fa83bf4f5f80"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -5983,6 +6647,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-386ea51144391022d718",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -5992,6 +6657,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0413d7a89bd721dd5b77",
     deps = [":bdfdaa2218bf5b6223e8", ":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd", ":fd97f388b163f59181d7"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -6001,6 +6667,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4bb20ee5f79f756e06eb",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -6010,6 +6677,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-bd9b82f09af78cd971d8",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -6019,6 +6687,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/koyomi:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":37d8af3eedc5bcbb872e", ":7f6354485c4c8e845e7b", ":4ea8ef0dc8c7f96796fa", ":ee0d1cecd7ba8fa9ac7f", ":adb854f5f623c8e17f00", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -6028,6 +6697,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-26462ecd60ab5afde3cf",
     deps = [":526830b3ef2aca6cb0ee"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -6037,6 +6707,7 @@ cargo_unit(
     source = "//apps/yukimi/crates/yukimi-system:cargo-source",
     deps = [":a99f568e74555af44f5f", ":b706d490bb8b2d8adf73", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":3c49c8c566dd8f429422", ":22b4be14ccfdb1144d4b", ":7f6466fa77a3bc317b02", ":bccae152bb2441b40c2b"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -6046,6 +6717,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-f2b49a386619995434cc",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -6055,6 +6727,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-cfa5c68e762fe04bf409",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -6064,6 +6737,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e8d521ff1d3fb9d050e7",
     deps = [":0812f0eb92b7ceec2679", ":9748ae20f7cc23fa72cf", ":bb9f280f106c3f4530dd", ":939a7f92b899719819ba", ":b7d468e99cc5cfc6fe04"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -6073,6 +6747,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9d2f172aecd0ac5d8a5b",
     deps = [":af5550b3aebdb3ed17a9", ":471e5b3b741d12d9ee9a"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -6082,6 +6757,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a22040cf832532e70fb1",
     deps = [":33c93ced6b5d5f595004"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -6091,6 +6767,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-6f3936709d6b89cfb1eb",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -6100,6 +6777,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b03182ffb0bc40357595",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -6109,6 +6787,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-08b9b0dde560b9982980",
     deps = [],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -6118,6 +6797,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-eaa13256e6a2081eaa83",
     deps = [":1fe02e34e5d366d69b26", ":043d1b2738a158d793d2", ":d1b351dc59102b3e678a", ":1d0c99bb0cdf429e3741", ":f5ce6ff349888807fc84", ":3077605040c4ae1cd654", ":3835c0d8ec2bda2762ac", ":3f501223a26cea454bfc", ":e7f115fd276c462ff268", ":2914dda88ce9473681c0", ":030df313c1371c2f342f"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -6127,6 +6807,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-dd15acf7ff560fd26a00",
     deps = [":99a7d90f0f384e880480"],
     extra_sources = {},
+    priority = 14,
     visibility = ["PUBLIC"],
 )
 
@@ -6136,6 +6817,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c4d0b32ceeab931f6f68",
     deps = [":bdf8b7642eb850cfc855", ":75030dcf72e7381f2a92"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -6145,6 +6827,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-067eb61fc482d428a5d0",
     deps = [":2691109c9fdb98ee422a"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -6154,6 +6837,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9682b1554c70c09fe301",
     deps = [":3835c0d8ec2bda2762ac", ":1b808a858324dc433655", ":9d79926a9d609b1db76e", ":f4099dc89a39e67d246b", ":e7c121e7a884877d4254"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -6163,6 +6847,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0713306e32d5f28cb272",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -6172,6 +6857,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-266c32e8360c7925ece6",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -6181,6 +6867,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d10a7fa30663b20b5b6f",
     deps = [":76de73c15770ad3db319"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -6190,6 +6877,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b3b98707d09f78a8052a",
     deps = [":f63ef1dac885e11e3723", ":4f50cd0d536fae660c0c", ":0e581ca17f6b674ae977", ":adb854f5f623c8e17f00", ":bb9f280f106c3f4530dd"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -6199,6 +6887,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-b2f49c12d85462f18b7d",
     deps = [":7ea8286faefa15f9dd9c"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -6208,6 +6897,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-386ea51144391022d718",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -6217,6 +6907,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-a60ef2e516c6b007bb68",
     deps = [],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -6226,6 +6917,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-86e9fb1a1ffa75395604",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -6235,6 +6927,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-16f406eab67d32052e02",
     deps = [":0e50366d346bf26e67b1"],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -6244,6 +6937,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/hako:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":27a0deca630ebb1b4fa0", ":6bf7e048b25e6f7ffdb8", ":ee0d1cecd7ba8fa9ac7f", ":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd", ":eababbfd98ed28679ccb", ":5079bc04ba6051b4f5fa", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":fadc7bddb907a5fc48d2", ":2d7f51fe749f4ce11136", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -6253,6 +6947,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-999df3c316ed2ffaa932",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -6262,6 +6957,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-426927beac7e971b1bc9",
     deps = [],
     extra_sources = {},
+    priority = 20,
     visibility = ["PUBLIC"],
 )
 
@@ -6271,6 +6967,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-abf599b640091a9d1f74",
     deps = [":cbe3bc9c416ead4647c1", ":9ddc2f8683fd1b6faf19", ":ca16c91d86a7817b255f", ":50d3d7c316096fc60b2b", ":a77f18cbe7a758e1cef9", ":574866efcb981a9f71a3", ":b578cd47b15bfb39357f", ":9cf7bc71241ac5411070", ":84fa5981ee3b8d7950cb"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -6280,6 +6977,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e3992515b0e5cc47f636",
     deps = [":3816bf349b16dd2c4972"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -6289,6 +6987,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-08813d6064f4bf6a4057",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -6298,6 +6997,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/tenki:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":37d8af3eedc5bcbb872e", ":6bf7e048b25e6f7ffdb8", ":ee0d1cecd7ba8fa9ac7f", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":2d7f51fe749f4ce11136", ":22b4be14ccfdb1144d4b", ":9517472074f0d79dc6b5"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -6307,6 +7007,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-234e4e8653b836e9242c",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -6316,6 +7017,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-34744a6f745d10e8bf35",
     deps = [],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -6325,6 +7027,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0f2d194783927644e813",
     deps = [":67e0ab4ec0a391a8e5ef", ":043d1b2738a158d793d2", ":d1b351dc59102b3e678a", ":d1667ae02a307cfcad49", ":1d0c99bb0cdf429e3741", ":f5ce6ff349888807fc84", ":3332393472d834b79185", ":eaf29bcd09cb4de3fa39", ":460d0ffae7b973290156", ":e3284446d81866abc515", ":bb9f280f106c3f4530dd", ":db959e6b15246e9b0c30", ":066e1508f00f2820c140", ":3f501223a26cea454bfc", ":1dff76857f3ed3296c9e", ":564c7573bb474294812d", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":67e29e802d58e8e0da09", ":de317a5cbb8ced8cc567", ":2914dda88ce9473681c0", ":f2e1a5d2813fd210af98", ":43c7760b0d4f6faa7da6", ":0a8f00ffbde641126122", ":1d5718556626c28d6751", ":7af7253b1ef78027f846", ":93e76638b8f7fcda027f", ":7153d931cbfb806dfc46"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -6334,6 +7037,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-03e1641811f47495e8d2",
     deps = [":1dff76857f3ed3296c9e", ":2914dda88ce9473681c0"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -6343,6 +7047,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9bda305411d1bbcc2e46",
     deps = [],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -6352,6 +7057,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/shashin:cargo-source",
     deps = [":a8ccc9324a791be4172c", ":82e058b950a08d77a794", ":a99f568e74555af44f5f", ":37d8af3eedc5bcbb872e", ":b21145ad473a92fd7f39", ":ee0d1cecd7ba8fa9ac7f", ":f6b9bc4ef3a93e5f0548", ":2336a10b87fad0a36523", ":bb9f280f106c3f4530dd", ":eababbfd98ed28679ccb", ":5079bc04ba6051b4f5fa", ":4feeb3f1b5ffea3c4cc4", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193", ":fadc7bddb907a5fc48d2"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -6361,6 +7067,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-9682b1554c70c09fe301",
     deps = [":d5f856273c22d3c4864a"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -6370,6 +7077,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-113d03c1790e3c85346b",
     deps = [],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -6379,6 +7087,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-7592c641c0ef1894a2af",
     deps = [":bdfdaa2218bf5b6223e8", ":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":6515349504a71aea5fbd", ":dc3c2417f808b469a098", ":68762da1897d46fd1b24", ":fd97f388b163f59181d7"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -6388,6 +7097,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-03a382e7e32df8570436",
     deps = [":043d1b2738a158d793d2", ":1d0c99bb0cdf429e3741"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -6397,6 +7107,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2e7c33f8a7e815041567",
     deps = [":3d035370837573f093d8"],
     extra_sources = {},
+    priority = 10,
     visibility = ["PUBLIC"],
 )
 
@@ -6406,6 +7117,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-96cce738dea0fdbee415",
     deps = [":4f50cd0d536fae660c0c", ":e1c0eadffcd4396d1890", ":24cc3d8123130f732edb", ":d9e2398710bb711982d7", ":761c4edfc3ed893229df", ":2f45b0cc6e563e4c98e9"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -6415,6 +7127,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-dbabd14e30ccfbeccafc",
     deps = [],
     extra_sources = {},
+    priority = 13,
     visibility = ["PUBLIC"],
 )
 
@@ -6424,6 +7137,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-adbb78628854d46ebe88",
     deps = [":f5fb88a7e2e93338de7a", ":048b44e5dd17bba0fc84", ":c2d3ad6c2de561109b66", ":a4f0547360da46211cdb", ":7a0256ab260c4cfbe149", ":e5a7ae53e4e3dc130e52", ":89431e27634bec99a475", ":5079bc04ba6051b4f5fa", ":e3c7242407159ccd140b", ":6ff66c4544bf59e19d6c", ":9c6543f3989a7177e27b"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -6433,6 +7147,7 @@ cargo_unit(
     source = "//desktop/aizome/apps/soroban:cargo-source",
     deps = [":37d8af3eedc5bcbb872e", ":27a0deca630ebb1b4fa0", ":ee0d1cecd7ba8fa9ac7f", ":bb9f280f106c3f4530dd", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193"],
     extra_sources = {},
+    priority = 1,
     visibility = ["PUBLIC"],
 )
 
@@ -6442,6 +7157,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0f8d90133216cad6e131",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -6451,6 +7167,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-ffc3422613674b8124d2",
     deps = [":b578cd47b15bfb39357f", ":2e60aca57452c6dfb9f7", ":d1b351dc59102b3e678a", ":3f501223a26cea454bfc"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -6460,6 +7177,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-da0c4e29245ab1b44d5c",
     deps = [],
     extra_sources = {},
+    priority = 11,
     visibility = ["PUBLIC"],
 )
 
@@ -6469,6 +7187,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/hotaru-link-regex:cargo-source",
     deps = [":feb001ee38bf130875cd"],
     extra_sources = {},
+    priority = 2,
     visibility = ["PUBLIC"],
 )
 
@@ -6478,6 +7197,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-d10a7fa30663b20b5b6f",
     deps = [":c3815d1c872bfdf18238", ":494ea5541c746846f465", ":296089d71aa1f5647a30"],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -6487,6 +7207,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-59666b08f20117094de6",
     deps = [":cce3acdf3f0464e65f3e", ":aa6e5337b5c51f6e48fc", ":37fe38a585f0b401e667", ":0947b8d4139237c66fdc", ":47592b394a42f210beb6", ":d16a23adae5ffef63ac5", ":8b109b1cd91e5356cf62", ":5bc98f639fd3d811cdc9", ":449754ed1441e2737525", ":5bc7fb5708b69e08a41e", ":c5faecae45cec6940139", ":fcbc341d6b3455c5e770", ":bf69c30bfc573c058d76", ":d71f658ae1a8db717995", ":e39a86f15a9437621023", ":b706d490bb8b2d8adf73", ":c59233944c4ba1155473", ":7be069d3b137169333c8", ":4d641681a4d9c288e445", ":bfd2c5585a3ec8eb14eb", ":9c70d3e44526b4d4b225", ":84fa5981ee3b8d7950cb", ":b4745bc5b1c9358de8f7", ":e7f115fd276c462ff268", ":b43d53fceb3c70b58f64", ":ab762cfa905bb604cc6b", ":3c49c8c566dd8f429422", ":cc03675ab0c2a96ce365", ":419dc31601ba8def5529", ":e2e1edc50173c8df6cbb", ":1a7209e72d084887af7d", ":25faa4d558d281ea3a69", ":1b5fa0efbdab5c210eaa", ":9e759b0b9ac234c4998a", ":23a8dfdf4637f51af4ce", ":783dff643a8dc342172a", ":6397563884fbf37556c1", ":fa26578d1c31fbaca273"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -6496,6 +7217,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-4ffabe1ac93b1d7cebe3",
     deps = [],
     extra_sources = {},
+    priority = 14,
     visibility = ["PUBLIC"],
 )
 
@@ -6505,6 +7227,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-6d1b3a7e81f0cc90f865",
     deps = [":b706d490bb8b2d8adf73", ":922942ddbc2b71356b84", ":d3bf74bd522448a5ada1"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -6514,6 +7237,7 @@ cargo_unit(
     source = "//desktop/aizome/sukumo/crates/sidestep-engine:cargo-source",
     deps = [":6675067869572d86810b", ":18cecd7952a655ed61de", ":4bd1dad268628e503f14", ":09e94c2c5bf7da0a9059", ":f6b9bc4ef3a93e5f0548", ":bae9ec693cc1975ce38a", ":2e56bf3ec8e188925afb", ":c59233944c4ba1155473", ":837051d505d764708086", ":84fa5981ee3b8d7950cb", ":27be25a5a3ffadc5c59d", ":475500d67c75c3d47e97", ":aa584328ce5c8af4f7c6", ":4e77ebf0b95b2c0033a1", ":1a7209e72d084887af7d"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -6523,6 +7247,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-13af6f29799f2a56be2b",
     deps = [":1b808a858324dc433655"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -6532,6 +7257,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c83225caed0240f78214",
     deps = [],
     extra_sources = {},
+    priority = 7,
     visibility = ["PUBLIC"],
 )
 
@@ -6541,6 +7267,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-ipc:cargo-source",
     deps = [":a99f568e74555af44f5f", ":062ba2b3a5b1ad6f8af5", ":ed55b1c5ba5bbd338193"],
     extra_sources = {},
+    priority = 0,
     visibility = ["PUBLIC"],
 )
 
@@ -6550,6 +7277,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-aeed07a20a5eea0a9ec7",
     deps = [":b706d490bb8b2d8adf73"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -6559,6 +7287,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-31b120f824182ee7d6c9",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -6568,6 +7297,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-fee261079fac4d9f9f3a",
     deps = [":8fdc6469236c3622296a", ":1111e981fceaf6b3f0f0", ":776bf5c383d3f43393ec", ":6515349504a71aea5fbd", ":939b8a27cb039b848d73"],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -6577,6 +7307,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-dc2d1ba4f198399a141f",
     deps = [],
     extra_sources = {},
+    priority = 14,
     visibility = ["PUBLIC"],
 )
 
@@ -6586,6 +7317,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-13e8ff53153930289d4e",
     deps = [":9c4940a6bf97c08dfe56"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -6595,6 +7327,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-e847060dd03c20cd0106",
     deps = [":052d0f40936fe578f213"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -6604,6 +7337,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/hotaru-link-regex:cargo-source",
     deps = [":ab15f5ee7bec6e67f919"],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 
@@ -6613,6 +7347,7 @@ cargo_unit(
     source = "//desktop/aizome/crates/aizome-apps:cargo-source",
     deps = [":b706d490bb8b2d8adf73", ":bb9f280f106c3f4530dd"],
     extra_sources = {},
+    priority = 4,
     visibility = ["PUBLIC"],
 )
 
@@ -6622,6 +7357,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-0b6fa187db19e9624c6a",
     deps = [],
     extra_sources = {},
+    priority = 12,
     visibility = ["PUBLIC"],
 )
 
@@ -6631,6 +7367,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-510601de44e7130aad21",
     deps = [":b71a24fd6d9b3f134146"],
     extra_sources = {},
+    priority = 6,
     visibility = ["PUBLIC"],
 )
 
@@ -6640,6 +7377,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-2192288e5eafb242e4ff",
     deps = [],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -6649,6 +7387,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-7f39b2e7f41b725e9214",
     deps = [":776bf5c383d3f43393ec"],
     extra_sources = {},
+    priority = 8,
     visibility = ["PUBLIC"],
 )
 
@@ -6658,6 +7397,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-49b59f5de4bbf4784b86",
     deps = [],
     extra_sources = {},
+    priority = 9,
     visibility = ["PUBLIC"],
 )
 
@@ -6667,6 +7407,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-c8452781692b3d9717e9",
     deps = [":0947b8d4139237c66fdc", ":22ee423c5c7627dc6bfe", ":e2e1edc50173c8df6cbb", ":1b5fa0efbdab5c210eaa", ":cac1a5505b5a6df4b7c0"],
     extra_sources = {},
+    priority = 5,
     visibility = ["PUBLIC"],
 )
 
@@ -6676,6 +7417,7 @@ cargo_unit(
     source = "//build/buck2/sources:source-375c0dc380ce4fabecfd",
     deps = [],
     extra_sources = {},
+    priority = 3,
     visibility = ["PUBLIC"],
 )
 

@@ -10,13 +10,13 @@ cargo_source(
 
 alias(
     name = "tansu-build-dev",
-    actual = "//build/buck2/graph/dev:cf6252ae28928d50390b",
+    actual = "//build/buck2/graph/dev:8f7fad7161afbab29107",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-tansu-build-dev",
-    actual = "//build/buck2/graph/dev:f14faef8e236ed744efa",
+    actual = "//build/buck2/graph/dev:bd60119f23c4d42bc0ae",
     visibility = ["PUBLIC"],
 )
 
@@ -45,44 +45,44 @@ alias(
 )
 
 alias(
-    name = "aizome-tansu-test-test-bin",
-    actual = "//build/buck2/graph/test:40e0e3665ce1fd991f9e",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "resize-test-test-test",
-    actual = "//build/buck2/graph/test:a08f4d2c7c7365f9c696",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "tansu-test-test-lib",
-    actual = "//build/buck2/graph/test:a17745bf1a4ec0a47b94",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "perf-test-test-test",
-    actual = "//build/buck2/graph/test:e6a665d604f42e1b7e63",
-    visibility = ["PUBLIC"],
-)
-
-alias(
     name = "look-test-test-test",
-    actual = "//build/buck2/graph/test:f6c3063b2636cc38a866",
+    actual = "//build/buck2/graph/test:0730238e5dff59f39e65",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "udisks-test-test-test",
-    actual = "//build/buck2/graph/test:fe074d5350c245a1797d",
+    actual = "//build/buck2/graph/test:09867e40184d048bce61",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "perf-test-test-test",
+    actual = "//build/buck2/graph/test:11875f05abcbb650394e",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-tansu-test-test-bin",
+    actual = "//build/buck2/graph/test:290dbce44edb0db6901d",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "resize-test-test-test",
+    actual = "//build/buck2/graph/test:a324392ae6796e8d5fe3",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "ui-test-test-test",
-    actual = "//build/buck2/graph/test:ff42a1c6ec4235c94793",
+    actual = "//build/buck2/graph/test:a7304d535cd964f53c94",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "tansu-test-test-lib",
+    actual = "//build/buck2/graph/test:bd01f553ae04e7def438",
     visibility = ["PUBLIC"],
 )
 

@@ -10,19 +10,19 @@ cargo_source(
 
 alias(
     name = "aizome-nisshi-helper-build-dev",
-    actual = "//build/buck2/graph/dev:489e9573dd6e52e9df5e",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-nisshi-build-dev",
-    actual = "//build/buck2/graph/dev:6a5c395fe39436c95bf3",
+    actual = "//build/buck2/graph/dev:1938ac8816f7e1c6f8f6",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "nisshi-build-dev",
-    actual = "//build/buck2/graph/dev:ba58339b55d312671218",
+    actual = "//build/buck2/graph/dev:95225fd4df9d18cbb9dd",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-nisshi-build-dev",
+    actual = "//build/buck2/graph/dev:ebf829b6009a4f17d8e3",
     visibility = ["PUBLIC"],
 )
 
@@ -63,44 +63,44 @@ alias(
 )
 
 alias(
-    name = "aizome-nisshi-helper-test-test-bin",
-    actual = "//build/buck2/graph/test:4191da65b1fc86fc24b0",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-nisshi-test-test-bin",
-    actual = "//build/buck2/graph/test:48ed7a0c8199168a91cf",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "reader-test-test-test",
-    actual = "//build/buck2/graph/test:509d6a249735eafc722b",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "nisshi-test-test-lib",
-    actual = "//build/buck2/graph/test:6dcfaa95f331d03575e0",
+    name = "look-test-test-test",
+    actual = "//build/buck2/graph/test:0c2cf4950476029db2e4",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "ui-test-test-test",
-    actual = "//build/buck2/graph/test:8cc42fe702a61d5c23c2",
+    actual = "//build/buck2/graph/test:1120f191e1e8bf9f6c1f",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "nisshi-test-test-lib",
+    actual = "//build/buck2/graph/test:34f58a881872ec721253",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "reader-test-test-test",
+    actual = "//build/buck2/graph/test:6b0e0d18f254f8f29bce",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-nisshi-test-test-bin",
+    actual = "//build/buck2/graph/test:6c12939517d30ae9f88b",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-nisshi-helper-test-test-bin",
+    actual = "//build/buck2/graph/test:94e31e7236b849c46546",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "perf-test-test-test",
-    actual = "//build/buck2/graph/test:9aadba792e1689a19a08",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "look-test-test-test",
-    actual = "//build/buck2/graph/test:f3180ea740d9284071c1",
+    actual = "//build/buck2/graph/test:c035743d397286cff7d8",
     visibility = ["PUBLIC"],
 )
 

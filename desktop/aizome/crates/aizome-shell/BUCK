@@ -10,13 +10,13 @@ cargo_source(
 
 alias(
     name = "aizome_shell-build-dev",
-    actual = "//build/buck2/graph/dev:51005df90f7d27256652",
+    actual = "//build/buck2/graph/dev:8266c1c0941d1134a618",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-shell-build-dev",
-    actual = "//build/buck2/graph/dev:efff0adc523d475e1918",
+    actual = "//build/buck2/graph/dev:b913d107e15d00afae73",
     visibility = ["PUBLIC"],
 )
 
@@ -45,104 +45,104 @@ alias(
 )
 
 alias(
-    name = "auth-test-test-test",
-    actual = "//build/buck2/graph/test:04d4e6bde8bc8cff3cc8",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "perf-test-test-test",
-    actual = "//build/buck2/graph/test:46184f788ddac7cef384",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "lock-test-test-test",
-    actual = "//build/buck2/graph/test:557e5bf7c2a40733b4d9",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "media-test-test-test",
-    actual = "//build/buck2/graph/test:5faa09b1616209fca9af",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "recording-test-test-test",
-    actual = "//build/buck2/graph/test:68e6f5799295fe806c17",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "panels-test-test-test",
-    actual = "//build/buck2/graph/test:743fb9061a68b7bf3f15",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-shell-test-test-bin",
-    actual = "//build/buck2/graph/test:75350f50f97a65635675",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "settings-test-test-test",
-    actual = "//build/buck2/graph/test:7f2fee248ec99ad266b4",
+    name = "aizome_shell-test-test-lib",
+    actual = "//build/buck2/graph/test:01e70ca29a91b861f7ec",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "desktop-test-test-test",
-    actual = "//build/buck2/graph/test:8d87e7d6d2858b8c1cb9",
+    actual = "//build/buck2/graph/test:118daee13d81061152f6",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "menus-test-test-test",
-    actual = "//build/buck2/graph/test:9053ec3675bde82c3159",
+    actual = "//build/buck2/graph/test:18d2338802a438f5839e",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "menubar-test-test-test",
-    actual = "//build/buck2/graph/test:9e9229cdf982960ca967",
+    name = "settings-test-test-test",
+    actual = "//build/buck2/graph/test:1d896a825e89a3a35bd3",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "sharing-test-test-test",
-    actual = "//build/buck2/graph/test:ab0dbe2a2a8c79ed6970",
+    name = "lock-test-test-test",
+    actual = "//build/buck2/graph/test:23ea1f262058991073af",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "session-test-test-test",
-    actual = "//build/buck2/graph/test:aeed64cc279dba93eb36",
+    name = "aizome-shell-test-test-bin",
+    actual = "//build/buck2/graph/test:39402ca4092d09cf790a",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_shell-test-test-lib",
-    actual = "//build/buck2/graph/test:b0fb20d30d4eef4380b2",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "deskbar-test-test-test",
-    actual = "//build/buck2/graph/test:beb5caeb7492666fd941",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "palette-test-test-test",
-    actual = "//build/buck2/graph/test:e9849f9caff9e26ed93f",
+    name = "recording-test-test-test",
+    actual = "//build/buck2/graph/test:62920a705d9c1dc1a53b",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "deskbar_designs-test-test-test",
-    actual = "//build/buck2/graph/test:f82d8effa648d43b8a68",
+    actual = "//build/buck2/graph/test:8a799eaea0bc81fed4d5",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "palette-test-test-test",
+    actual = "//build/buck2/graph/test:9492ef07a290f415c987",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "deskbar-test-test-test",
+    actual = "//build/buck2/graph/test:a221bb0315a5bed4f61b",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "sharing-test-test-test",
+    actual = "//build/buck2/graph/test:b39219ffacc0bb4606b3",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "menubar-test-test-test",
+    actual = "//build/buck2/graph/test:c66ae5db54a37769a9cb",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "auth-test-test-test",
+    actual = "//build/buck2/graph/test:ce7c19ff93de1c26951e",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "perf-test-test-test",
+    actual = "//build/buck2/graph/test:e0f28b1f6ce66f824db8",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "panels-test-test-test",
+    actual = "//build/buck2/graph/test:e2f73f7c341660c0a9a5",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "session-test-test-test",
+    actual = "//build/buck2/graph/test:ed24ebb3936c08ce4406",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "media-test-test-test",
+    actual = "//build/buck2/graph/test:f946061a0b139b55e7df",
     visibility = ["PUBLIC"],
 )
 

@@ -10,25 +10,25 @@ cargo_source(
 
 alias(
     name = "aizome-share-picker-build-dev",
-    actual = "//build/buck2/graph/dev:258f4c8a9faa0ea313d3",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome_ipc-build-dev",
-    actual = "//build/buck2/graph/dev:4209d9f9466bf9b340c1",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-dev-build-dev",
-    actual = "//build/buck2/graph/dev:66859a2991576fe99197",
+    actual = "//build/buck2/graph/dev:07f7499deb755331fa95",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizomectl-build-dev",
-    actual = "//build/buck2/graph/dev:a637862313cede7254b5",
+    actual = "//build/buck2/graph/dev:1b4ccc6ff208bb056be5",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-dev-build-dev",
+    actual = "//build/buck2/graph/dev:24bc429eca7b0b20631d",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_ipc-build-dev",
+    actual = "//build/buck2/graph/dev:a133e705b6f799254984",
     visibility = ["PUBLIC"],
 )
 
@@ -81,26 +81,26 @@ alias(
 )
 
 alias(
-    name = "aizome_ipc-test-test-lib",
-    actual = "//build/buck2/graph/test:56b69ddfe849298b5faa",
-    visibility = ["PUBLIC"],
-)
-
-alias(
     name = "aizomectl-test-test-bin",
-    actual = "//build/buck2/graph/test:63d174b415bb42c2475c",
+    actual = "//build/buck2/graph/test:12d659c245fbdde2bf1f",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome-share-picker-test-test-bin",
-    actual = "//build/buck2/graph/test:898b354f95fbca83a54e",
+    name = "aizome_ipc-test-test-lib",
+    actual = "//build/buck2/graph/test:209e5fa88daf3da73888",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-dev-test-test-bin",
-    actual = "//build/buck2/graph/test:c22e8ae3bafd082a878d",
+    actual = "//build/buck2/graph/test:b1a46ef866497db5de84",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-share-picker-test-test-bin",
+    actual = "//build/buck2/graph/test:bd0e55828a981065c4fc",
     visibility = ["PUBLIC"],
 )
 

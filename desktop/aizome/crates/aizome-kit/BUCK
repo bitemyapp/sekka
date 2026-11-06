@@ -10,7 +10,7 @@ cargo_source(
 
 alias(
     name = "aizome_kit-build-dev",
-    actual = "//build/buck2/graph/dev:ccc9eb4ed5d9b48202c5",
+    actual = "//build/buck2/graph/dev:86b2c94b319f5c418a2b",
     visibility = ["PUBLIC"],
 )
 
@@ -27,188 +27,194 @@ alias(
 )
 
 alias(
-    name = "core-test-test-test",
-    actual = "//build/buck2/graph/test:0a473a076c7d75954203",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "editor-test-test-test",
-    actual = "//build/buck2/graph/test:0d27e44c7d1c85b350b5",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "canvas-test-test-test",
-    actual = "//build/buck2/graph/test:13b3383db04cb600e720",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "widget_timers-test-test-test",
-    actual = "//build/buck2/graph/test:13daecffb97487b8d065",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "lists-test-test-test",
-    actual = "//build/buck2/graph/test:14497bae7b3b0c56be0f",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "goldens-test-test-test",
-    actual = "//build/buck2/graph/test:23044f51455125bdb959",
-    visibility = ["PUBLIC"],
-)
-
-alias(
     name = "popups-test-test-test",
-    actual = "//build/buck2/graph/test:26cde8fc4fad023672a4",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "hidden-test-test-test",
-    actual = "//build/buck2/graph/test:32df7ed47cdb1a20b575",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "shell_api-test-test-test",
-    actual = "//build/buck2/graph/test:33cddf6f8ff576c6e2eb",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "tooltip_refresh-test-test-test",
-    actual = "//build/buck2/graph/test:3c10f1d31c4f13ae11c7",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "menu_hooks-test-test-test",
-    actual = "//build/buck2/graph/test:495fdc67e96f7d44e535",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "smoke-test-test-test",
-    actual = "//build/buck2/graph/test:4e8474cd74ef1c1bf873",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "collections-test-test-test",
-    actual = "//build/buck2/graph/test:670cf9a4dfb89856c791",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "program_popups-test-test-test",
-    actual = "//build/buck2/graph/test:68a65d2eeecc7fe6fd56",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "text_drag-test-test-test",
-    actual = "//build/buck2/graph/test:6cd6c7d0486c252e5712",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "shell_link-test-test-test",
-    actual = "//build/buck2/graph/test:7d21f10dbe4bfde80060",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "panes-test-test-test",
-    actual = "//build/buck2/graph/test:83142fca2dda2c26065b",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "window_state-test-test-test",
-    actual = "//build/buck2/graph/test:83d43dc808368cbf934d",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "text_field-test-test-test",
-    actual = "//build/buck2/graph/test:9ad49f3c960876f3855c",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "drag_out-test-test-test",
-    actual = "//build/buck2/graph/test:ab8353df7017ee584821",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "video_modals-test-test-test",
-    actual = "//build/buck2/graph/test:af5c5b7e922daf821581",
+    actual = "//build/buck2/graph/test:0203210d19c0fd962bce",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "modal_commands-test-test-test",
-    actual = "//build/buck2/graph/test:bc0793110fc07a62ebdc",
+    actual = "//build/buck2/graph/test:1997cad64ce89e0b0f5b",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "inspect-test-test-test",
-    actual = "//build/buck2/graph/test:c4a00fd9d7aef40ab724",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "scrolling-test-test-test",
-    actual = "//build/buck2/graph/test:cb0f77aa9217c6429adb",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "scroll_growth-test-test-test",
-    actual = "//build/buck2/graph/test:cd5527c9a3ec952eaa68",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "field_blur-test-test-test",
-    actual = "//build/buck2/graph/test:e2c9b41b2fdd24364ffc",
+    name = "menu_hooks-test-test-test",
+    actual = "//build/buck2/graph/test:2f3afad266e60c0a704b",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "alert_layout-test-test-test",
-    actual = "//build/buck2/graph/test:f1db5d71a475056985e4",
+    actual = "//build/buck2/graph/test:39627fa066ba0f6bb218",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "aizome_kit-test-test-lib",
-    actual = "//build/buck2/graph/test:f2d9adbcf43920a64eee",
+    name = "lists-test-test-test",
+    actual = "//build/buck2/graph/test:3dfd0b74e40371724525",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "perf-test-test-test",
-    actual = "//build/buck2/graph/test:f3100a9879dd2c928952",
+    name = "program_popups-test-test-test",
+    actual = "//build/buck2/graph/test:4321ee4c1fdba9ee3063",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "goldens-test-test-test",
+    actual = "//build/buck2/graph/test:46686210896f6771af52",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "widget_timers-test-test-test",
+    actual = "//build/buck2/graph/test:482f34265f725f47bd49",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "shell_link-test-test-test",
+    actual = "//build/buck2/graph/test:4b5dec0ba6e9b110b2f9",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "text_drag-test-test-test",
+    actual = "//build/buck2/graph/test:4ce2cadce68463287614",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "dialogs-test-test-test",
-    actual = "//build/buck2/graph/test:f368967dbe8cdde40a29",
+    actual = "//build/buck2/graph/test:5c6434c7b7b14a4fbe8c",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "panes-test-test-test",
+    actual = "//build/buck2/graph/test:60f8b72b460363cc2010",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "video_modals-test-test-test",
+    actual = "//build/buck2/graph/test:739fa4b6d629a50d4ed8",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "pull_down-test-test-test",
+    actual = "//build/buck2/graph/test:7c41136a73df4c8d81a5",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "hidden-test-test-test",
+    actual = "//build/buck2/graph/test:8e26b26eb2338fbe632e",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "field_blur-test-test-test",
+    actual = "//build/buck2/graph/test:914dfaedd55910c90186",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "drag_out-test-test-test",
+    actual = "//build/buck2/graph/test:9b3882dcae2d5b353c38",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "collections-test-test-test",
+    actual = "//build/buck2/graph/test:a34ddf4085b76457cb27",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "canvas-test-test-test",
+    actual = "//build/buck2/graph/test:a4a947f5eeaa58374765",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome_kit-test-test-lib",
+    actual = "//build/buck2/graph/test:a78d151d7fe964d8e9ac",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "tooltip_refresh-test-test-test",
+    actual = "//build/buck2/graph/test:b7ee3745d82c4fc79a12",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "window_state-test-test-test",
+    actual = "//build/buck2/graph/test:c6f268c85672e0338c40",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "editor-test-test-test",
+    actual = "//build/buck2/graph/test:cb2035b9a3f128c7c5c5",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "text_field-test-test-test",
+    actual = "//build/buck2/graph/test:ccd5ef102516e82000c2",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "scroll_growth-test-test-test",
+    actual = "//build/buck2/graph/test:d334f99e2aff255e8ca0",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "perf-test-test-test",
+    actual = "//build/buck2/graph/test:df2c96de63db79b562c3",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "smoke-test-test-test",
+    actual = "//build/buck2/graph/test:e119454479122de75a68",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "inspect-test-test-test",
+    actual = "//build/buck2/graph/test:eed8e02f611101dd93f2",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "nested_modals-test-test-test",
-    actual = "//build/buck2/graph/test:f7c072d0f6f60002c1d0",
+    actual = "//build/buck2/graph/test:f370718f7cabaa3a5f78",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "shell_api-test-test-test",
+    actual = "//build/buck2/graph/test:f41ba0836c604904e300",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "core-test-test-test",
+    actual = "//build/buck2/graph/test:f4eca2e72ba9a9b2068d",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "scrolling-test-test-test",
+    actual = "//build/buck2/graph/test:f63a5d0b080a2cae7b81",
     visibility = ["PUBLIC"],
 )
 

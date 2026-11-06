@@ -9,14 +9,14 @@ cargo_source(
 )
 
 alias(
-    name = "aizome-hako-build-dev",
-    actual = "//build/buck2/graph/dev:d847f01bd9dbf480170c",
+    name = "hako-build-dev",
+    actual = "//build/buck2/graph/dev:61fbe485ca1acc7a7cc5",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "hako-build-dev",
-    actual = "//build/buck2/graph/dev:f44e708fecf6e4fb001c",
+    name = "aizome-hako-build-dev",
+    actual = "//build/buck2/graph/dev:6fd33d177a72bcd39720",
     visibility = ["PUBLIC"],
 )
 
@@ -45,44 +45,44 @@ alias(
 )
 
 alias(
+    name = "file_manager-test-test-test",
+    actual = "//build/buck2/graph/test:220dc75415d4c0adaff3",
+    visibility = ["PUBLIC"],
+)
+
+alias(
     name = "window-test-test-test",
-    actual = "//build/buck2/graph/test:1eb3006a15253eafd37b",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "files-test-test-test",
-    actual = "//build/buck2/graph/test:3ce5a95fbf48b6df067b",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "hako-test-test-lib",
-    actual = "//build/buck2/graph/test:8a915220f7e14454842a",
-    visibility = ["PUBLIC"],
-)
-
-alias(
-    name = "aizome-hako-test-test-bin",
-    actual = "//build/buck2/graph/test:9509a1763d15d183e728",
+    actual = "//build/buck2/graph/test:53e86d76cf2010465711",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "goldens-test-test-test",
-    actual = "//build/buck2/graph/test:9fbf741b50f13a5dd654",
+    actual = "//build/buck2/graph/test:6f969911cfc79d0b832b",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "perf-test-test-test",
-    actual = "//build/buck2/graph/test:a7b65e0bf854a598eaa3",
+    actual = "//build/buck2/graph/test:808421650fa98b50ab30",
     visibility = ["PUBLIC"],
 )
 
 alias(
-    name = "file_manager-test-test-test",
-    actual = "//build/buck2/graph/test:cf044e98853453f20500",
+    name = "files-test-test-test",
+    actual = "//build/buck2/graph/test:939862012ea4126fcbe4",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "hako-test-test-lib",
+    actual = "//build/buck2/graph/test:ba0c269607ba7e47b2de",
+    visibility = ["PUBLIC"],
+)
+
+alias(
+    name = "aizome-hako-test-test-bin",
+    actual = "//build/buck2/graph/test:e81c3b2c8387d6499a1b",
     visibility = ["PUBLIC"],
 )
 

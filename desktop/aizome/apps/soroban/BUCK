@@ -10,13 +10,13 @@ cargo_source(
 
 alias(
     name = "aizome_soroban-build-dev",
-    actual = "//build/buck2/graph/dev:81dbe28b81813aa24b44",
+    actual = "//build/buck2/graph/dev:11d4bc2c55bf6cf60baa",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-soroban-build-dev",
-    actual = "//build/buck2/graph/dev:843c5740c95fa0204df9",
+    actual = "//build/buck2/graph/dev:e9ad135be7f5edecb639",
     visibility = ["PUBLIC"],
 )
 
@@ -46,19 +46,19 @@ alias(
 
 alias(
     name = "soroban-test-test-test",
-    actual = "//build/buck2/graph/test:4ddba3a1574f7b5d7c0f",
+    actual = "//build/buck2/graph/test:393317fd20398da16e4d",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome-soroban-test-test-bin",
-    actual = "//build/buck2/graph/test:6212422603940b10ebd7",
+    actual = "//build/buck2/graph/test:41afa9e54fd0ffeb09b0",
     visibility = ["PUBLIC"],
 )
 
 alias(
     name = "aizome_soroban-test-test-lib",
-    actual = "//build/buck2/graph/test:db26fd935f4657ed2185",
+    actual = "//build/buck2/graph/test:6d5066afc6ca8c12a438",
     visibility = ["PUBLIC"],
 )
 
