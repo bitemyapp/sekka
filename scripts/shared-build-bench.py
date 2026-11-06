@@ -10,7 +10,7 @@ fragments. A failed/interrupted cold trial remains cold; resume never replaces i
 Configuration keys: tool, repo, commit (full frozen SHA), root, client (argv),
 environment (explicit overrides), profiles (dev/release/release-lto, each with
 features and targets), artifacts (leaf/shared/icon selectors), setup (argv lists),
-service (identity, inventory/metrics/restart/eviction/restore_capacity argv and APIs),
+service (identity, inventory/metrics/restart/eviction/restore_capacity/dedupe argv and APIs),
 storage (roots, immutable_roots, command, optional immutable_command, attribution_command
 and max_active_union_bytes),
 test_groups (nine named argv suffixes), soroban_tests, correctness_behavior
@@ -195,6 +195,7 @@ def plan(selection='full'):
         add(f'soroban-reuse-{tree}', trees=(tree,), operation='soroban', expected_tests=11)
     for profile in PROFILES:
         add(f'{profile}-private-headless-startup', profile=profile, operation='startup')
+    add('service-dedupe', operation='dedupe', storage=True)
     add('final-original', reference='dev-cold', storage=True)
     if selection == 'storage':
         stages = [stage for stage in stages if stage['id'] in STORAGE_PLAN]
@@ -208,7 +209,7 @@ STORAGE_PLAN = frozenset(
     + [f'dev-fresh-{tree}' for tree in 'bcde']
     + ['dev-divergent-j4', 'service-eviction', 'dev-post-eviction-original', 'service-restart',
        'dev-restart-original', 'dev-primed-output-loss', 'service-restore-capacity',
-       'release-first', 'release-fresh', 'soroban-11', 'final-original']
+       'release-first', 'release-fresh', 'soroban-11', 'service-dedupe', 'final-original']
     + [f'test-group-{n}' for n in range(1, 10)])
 PLANS = ('full', 'storage')
 
@@ -1193,7 +1194,7 @@ class Bench:
             started = time.monotonic()
             try:
                 operation = stage['operation']
-                if operation in ('eviction', 'restart', 'restore_capacity'):
+                if operation in ('eviction', 'restart', 'restore_capacity', 'dedupe'):
                     service = self.config['service']
                     values = self.values()
                     tree = self.tree('a')
@@ -1484,7 +1485,8 @@ def validate(config, full):
             raise ValueError('private startup requires exact compositor/shell/ctl/koe artifact identities')
         if not config['storage'].get('immutable_roots'):
             raise ValueError('full matrix requires separately measured matched immutable union roots')
-        for key in ('restart', 'eviction', 'restore_capacity', 'restart_api', 'eviction_api', 'restore_capacity_api', 'identity', 'inventory', 'metrics'):
+        for key in ('restart', 'eviction', 'restore_capacity', 'dedupe', 'restart_api', 'eviction_api',
+                    'restore_capacity_api', 'dedupe_api', 'identity', 'inventory', 'metrics'):
             if not config.get('service', {}).get(key):
                 raise ValueError(f'full matrix requires supported service {key}')
 

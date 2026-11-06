@@ -37,17 +37,25 @@ for NSS identities and private-session D-Bus policy, never the host's /etc or bu
 runtime explicitly migrates old manifests, replaces owned workers and restarts
 their schedulers. Regenerate clients afterward: sekka.worker-runtime is part of
 remote action identity.
+dedupe (on the deployment host, with --local) shares extents between persistent
+CAS blobs and byte-identical objects of the user's Buck2 content store, which
+otherwise hold a second copy of every uploaded output on the same filesystem.
 
 Tunnel with: ssh -N -L 17841:127.0.0.1:17841 -L 17842:127.0.0.1:17842 HOST
 """
 import argparse
+import errno
+import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import shlex
 import shutil
+import stat
+import struct
 import subprocess
 import sys
 import tarfile
@@ -149,6 +157,96 @@ def filesystem(path, limit):
                            "block_size": CACHE_BLOCK_SIZE,
                            "eviction_policy": {"max_bytes": limit, "max_seconds": 604800,
                                                "max_count": cache_entry_limit(limit)}}}
+
+
+FIEMAP = 0xC020660B
+FIDEDUPERANGE = 0xC0189436
+DEDUPE_STEP = 16 * 1024**2  # Btrfs dedupes at most 16 MiB per request.
+
+
+def first_extent(fd):
+    """Physical address of a file's first data extent, or None when inline/unmapped."""
+    request = bytearray(32 + 56)
+    struct.pack_into("=QQIII", request, 0, 0, 2**64 - 1, 0, 0, 1)
+    fcntl.ioctl(fd, FIEMAP, request, True)
+    mapped = struct.unpack_from("=I", request, 20)[0]
+    physical, flags = struct.unpack_from("=Q", request, 40)[0], struct.unpack_from("=I", request, 72)[0]
+    return physical if mapped and not flags & 0x306 else None  # UNKNOWN, DELALLOC, NOT_ALIGNED, INLINE
+
+
+def dedupe(m, stores):
+    """Share extents between persistent CAS blobs and identical content-store objects.
+
+    Both are named by SHA-256 and size; the kernel compares the bytes before
+    sharing anything, so a name never substitutes for content. Only files owned
+    by this user on one host are touched, and only their extents change."""
+    if not LOCAL:
+        raise SystemExit("dedupe works on the deployment host's files; run it there with --local")
+    objects = {}
+    for store in stores:
+        for entry in os.scandir(store):
+            match = re.fullmatch(r"SHA256-([0-9a-f]{64})-([0-9]+)", entry.name)
+            if match and entry.is_file(follow_symlinks=False):
+                objects.setdefault((match[1], int(match[2])), entry.path)
+    report = {"schema": 1, "deployment": m["name"], "content_stores": [str(s) for s in stores],
+              "candidates": 0, "already_shared": 0, "deduplicated": 0, "deduplicated_bytes": 0,
+              "skipped_small": 0, "differs": [], "errors": []}
+    for domain in m["domains"]:
+        if m.get("ephemeral_cache"):
+            continue  # A tmpfs cache cannot share extents with the user's store.
+        content = Path(m["directory"]) / domain / "data/cas/content"
+        for blob in content.glob("*/*"):
+            match = re.fullmatch(r"([0-9a-f]{64})-([0-9]+)(-[0-9]+)?", blob.name)
+            source = match and objects.get((match[1], int(match[2])))
+            if not source:
+                continue
+            size = int(match[2])
+            report["candidates"] += 1
+            if size < CACHE_BLOCK_SIZE:
+                report["skipped_small"] += 1  # Inline or single partial block: nothing to share.
+                continue
+            try:
+                src = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+                try:
+                    dst = os.open(blob, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+                    try:
+                        if any(os.fstat(fd).st_size != size or not stat.S_ISREG(os.fstat(fd).st_mode)
+                               for fd in (src, dst)):
+                            raise OSError(errno.EINVAL, "size or type differs from its digest name")
+                        start = first_extent(src)
+                        if start is not None and start == first_extent(dst):
+                            report["already_shared"] += 1
+                            continue
+                        offset = 0
+                        while offset < size:
+                            length = min(DEDUPE_STEP, size - offset)
+                            request = bytearray(24 + 32)
+                            struct.pack_into("=QQHHI", request, 0, offset, length, 1, 0, 0)
+                            struct.pack_into("=qQQiI", request, 24, dst, offset, 0, 0, 0)
+                            fcntl.ioctl(src, FIDEDUPERANGE, request, True)
+                            done, status = struct.unpack_from("=Qi", request, 40)
+                            if status == 1:
+                                report["differs"].append(str(blob))
+                                break
+                            if status < 0:
+                                raise OSError(-status, os.strerror(-status))
+                            if done == 0:
+                                raise OSError(errno.EIO, "kernel shared no bytes")
+                            offset += done
+                        else:
+                            report["deduplicated"] += 1
+                            report["deduplicated_bytes"] += size
+                    finally:
+                        os.close(dst)
+                finally:
+                    os.close(src)
+            except FileNotFoundError:
+                continue  # Evicted by NativeLink or the content store meanwhile.
+            except OSError as error:
+                report["errors"].append({"blob": str(blob), "error": str(error)})
+    print(json.dumps(report, indent=2))
+    if report["differs"] or report["errors"]:
+        raise SystemExit("dedupe found mismatched or unreadable blobs; see the report")
 
 
 def backend_config(m):
@@ -502,6 +600,9 @@ def main():
     physical.add_argument("roots", nargs="+", help="Payload roots to include in the single extent-union measurement")
     destroy = sub.add_parser("destroy")
     destroy.add_argument("--purge-state", action="store_true", help="Remove only the validated owned deployment directory after stopping containers")
+    deduplicate = sub.add_parser("dedupe", help="Share extents between CAS blobs and identical local Buck2 content-store objects")
+    deduplicate.add_argument("--content-store", action="append", type=Path,
+                             help="Content store directory (repeatable; default: the per-user Buck2 store)")
     retain = sub.add_parser("retain")
     retain.add_argument("store_paths", nargs="+", help="Already-provisioned immutable toolchain/native store roots")
     resize = sub.add_parser("resize")
@@ -544,6 +645,10 @@ def main():
         return
     if args.command == "connection-info":
         print(json.dumps(connection_info(m, args.domain)))
+        return
+    if args.command == "dedupe":
+        cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+        dedupe(m, args.content_store or [cache / "sekka/buck2/content-v1"])
         return
     if args.command == "runtime":
         m.update(runtime_paths(args.worker_runtime))
