@@ -113,8 +113,45 @@ impl StoreDb {
                 referrers[to.index()].push(from);
             }
         }
-        Ok(Graph { nodes, index, references, referrers })
+        // What each derivation builds, for Nix's `keep-outputs`. Outputs
+        // not in the store (never built, or collected) don't count.
+        let mut outputs = vec![Vec::new(); nodes.len()];
+        if let Ok(mut statement) = self.conn.prepare("SELECT drv, path FROM DerivationOutputs") {
+            let mut rows = statement.query([])?;
+            while let Some(row) = rows.next()? {
+                let Some(&drv) = by_row.get(&row.get::<_, i64>(0)?) else { continue };
+                let Some(&output) = index.get(&row.get::<_, String>(1)?) else { continue };
+                if drv != output {
+                    outputs[drv.index()].push(output);
+                }
+            }
+        }
+        Ok(Graph { nodes, index, references, referrers, outputs })
     }
+}
+
+/// What Nix's garbage collector keeps besides the closures of its roots
+/// (its `keep-derivations` and `keep-outputs` settings).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Keep {
+    /// The derivation that built each kept path, and what it needs. On by
+    /// default.
+    pub derivations: bool,
+    /// What each kept derivation built. Off by default; development setups
+    /// such as nix-direnv turn it on.
+    pub outputs: bool,
+}
+
+impl Default for Keep {
+    /// Nix's defaults.
+    fn default() -> Keep {
+        Keep { derivations: true, outputs: false }
+    }
+}
+
+impl Keep {
+    /// Only the closures of the roots.
+    pub const CLOSURE: Keep = Keep { derivations: false, outputs: false };
 }
 
 /// A store path's position in a [`Graph`].
@@ -125,6 +162,11 @@ impl PathId {
     pub fn index(self) -> usize {
         self.0 as usize
     }
+
+    /// The path at a position, as [`Graph::ids`] numbers them.
+    pub fn from_index(index: usize) -> PathId {
+        PathId(index as u32)
+    }
 }
 
 /// All valid store paths and the references between them.
@@ -134,6 +176,8 @@ pub struct Graph {
     index: HashMap<String, PathId>,
     references: Vec<Vec<PathId>>,
     referrers: Vec<Vec<PathId>>,
+    /// For a derivation, the outputs it built that are in the store.
+    outputs: Vec<Vec<PathId>>,
 }
 
 impl Graph {
@@ -148,7 +192,18 @@ impl Graph {
                 referrers[to].push(PathId(from as u32));
             }
         }
-        Graph { nodes: paths, index, references, referrers }
+        let outputs = vec![Vec::new(); paths.len()];
+        Graph { nodes: paths, index, references, referrers, outputs }
+    }
+
+    /// This graph, with derivations' outputs: `(derivation, output)`.
+    pub fn with_outputs(mut self, pairs: &[(usize, usize)]) -> Graph {
+        for &(drv, output) in pairs {
+            if drv != output {
+                self.outputs[drv].push(PathId(output as u32));
+            }
+        }
+        self
     }
 
     pub fn len(&self) -> usize {
@@ -186,15 +241,22 @@ impl Graph {
         (0..self.nodes.len() as u32).map(PathId)
     }
 
-    /// Everything the roots need, the roots included.
-    pub fn closure(&self, roots: impl IntoIterator<Item = PathId>) -> Vec<PathId> {
-        self.kept(roots, false)
+    /// What a derivation built that is in the store.
+    pub fn outputs(&self, id: PathId) -> &[PathId] {
+        &self.outputs[id.index()]
     }
 
-    /// Everything the roots keep from garbage collection: their closure and,
-    /// with Nix's `keep-derivations` setting (on by default), the derivation
-    /// that built each kept path, with everything that derivation needs.
-    pub fn kept(&self, roots: impl IntoIterator<Item = PathId>, keep_derivations: bool) -> Vec<PathId> {
+    /// Everything the roots need, the roots included.
+    pub fn closure(&self, roots: impl IntoIterator<Item = PathId>) -> Vec<PathId> {
+        self.kept(roots, Keep::CLOSURE)
+    }
+
+    /// Everything the roots keep from garbage collection, as Nix's collector
+    /// works it out: their closure and, with `keep-derivations` (on by
+    /// default), the derivation that built each kept path, with everything
+    /// that derivation needs; with `keep-outputs`, what each kept derivation
+    /// built, and what that needs.
+    pub fn kept(&self, roots: impl IntoIterator<Item = PathId>, keep: Keep) -> Vec<PathId> {
         let mut seen = vec![false; self.nodes.len()];
         let mut stack: Vec<PathId> = Vec::new();
         let mut out = Vec::new();
@@ -210,11 +272,18 @@ impl Graph {
                     stack.push(next);
                 }
             }
-            if keep_derivations
+            if keep.derivations
                 && let Some(deriver) = self.info(id).deriver.as_deref().and_then(|d| self.index.get(d))
                 && !std::mem::replace(&mut seen[deriver.index()], true)
             {
                 stack.push(*deriver);
+            }
+            if keep.outputs {
+                for &output in self.outputs(id) {
+                    if !std::mem::replace(&mut seen[output.index()], true) {
+                        stack.push(output);
+                    }
+                }
             }
         }
         out
@@ -264,9 +333,9 @@ impl Graph {
 
     /// Paths no root keeps: what garbage collection would remove (apart
     /// from paths that running programs hold open, which only root can see).
-    pub fn dead(&self, roots: impl IntoIterator<Item = PathId>, keep_derivations: bool) -> Vec<PathId> {
+    pub fn dead(&self, roots: impl IntoIterator<Item = PathId>, keep: Keep) -> Vec<PathId> {
         let mut live = vec![false; self.nodes.len()];
-        for id in self.kept(roots, keep_derivations) {
+        for id in self.kept(roots, keep) {
             live[id.index()] = true;
         }
         self.ids().filter(|id| !live[id.index()]).collect()
@@ -310,7 +379,7 @@ mod tests {
         assert_eq!(g.size(&closure), 133);
         assert_eq!(g.referrers(PathId(2)).len(), 3);
         assert!(g.references(PathId(1)).iter().all(|&id| id != PathId(1)));
-        let dead = g.dead([PathId(0)], false);
+        let dead = g.dead([PathId(0)], Keep::CLOSURE);
         assert_eq!(dead, vec![PathId(4), PathId(5)]);
         assert_eq!(g.total_size(), 239);
     }
@@ -322,9 +391,21 @@ mod tests {
             vec![info("nixos-system", 1), info("hello-2.12", 10), info("hello-2.12.drv", 1), info("src", 5)];
         nodes[1].deriver = Some(nodes[2].path.clone());
         let g = Graph::from_parts(nodes, &[(0, 1), (2, 3)]);
-        assert_eq!(g.dead([PathId(0)], false), vec![PathId(2), PathId(3)]);
-        assert!(g.dead([PathId(0)], true).is_empty());
+        assert_eq!(g.dead([PathId(0)], Keep::CLOSURE), vec![PathId(2), PathId(3)]);
+        assert!(g.dead([PathId(0)], Keep::default()).is_empty());
         assert_eq!(g.closure([PathId(0)]).len(), 2);
+    }
+
+    #[test]
+    fn outputs_kept_with_their_derivations_when_asked() {
+        // 0 a shell's root -> 1 shell.drv, which built 2 shell (needing 3)
+        // and 4 shell-doc.
+        let nodes =
+            vec![info("root", 1), info("shell.drv", 1), info("shell", 10), info("lib", 20), info("shell-doc", 5)];
+        let g = Graph::from_parts(nodes, &[(0, 1), (2, 3)]).with_outputs(&[(1, 2), (1, 4)]);
+        assert_eq!(g.outputs(PathId(1)), &[PathId(2), PathId(4)]);
+        assert_eq!(g.dead([PathId(0)], Keep::default()), vec![PathId(2), PathId(3), PathId(4)]);
+        assert!(g.dead([PathId(0)], Keep { derivations: true, outputs: true }).is_empty());
     }
 
     #[test]

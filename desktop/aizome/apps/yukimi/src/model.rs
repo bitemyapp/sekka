@@ -13,7 +13,7 @@ use std::sync::Arc;
 use yukimi_config::edit::{self, ListedPackage};
 use yukimi_config::lock::{FlakeLock, Input};
 use yukimi_config::packages::{self, Choices};
-use yukimi_store::{Graph, PathId, Root, RootKind, StoreDb, StorePath, roots};
+use yukimi_store::{Graph, Keep, PathId, Root, RootKind, StoreDb, StorePath, Tally, Usage, roots};
 use yukimi_system::catalog::{self, Application};
 use yukimi_system::channels::{self, Channel};
 use yukimi_system::diff::{self, Diff};
@@ -21,6 +21,7 @@ use yukimi_system::generations::{self, Generation};
 use yukimi_system::info::SystemInfo;
 use yukimi_system::nix;
 use yukimi_system::profile::{self, Element};
+use yukimi_system::reclaim::{self, Reclaim};
 use yukimi_system::setup::{Kind, Setup};
 
 use crate::paths::Paths;
@@ -33,12 +34,15 @@ pub struct SystemPackage {
     pub size: u64,
 }
 
-/// The store, divided by what keeps each part of it.
+/// The store, divided by what keeps each part of it (NAR sizes). A part
+/// shared by several keepers counts once, with the first of: the running
+/// system (and the started one, and what running programs use), users'
+/// profiles, projects, older generations.
 #[derive(Clone, Debug, Default)]
 pub struct Composition {
-    /// The running (and started) system.
+    /// The running (and started) system, and what programs running now use.
     pub system: u64,
-    /// Kept only by older system generations.
+    /// Kept only by older system generations: what deleting them all lets go.
     pub old_generations: u64,
     /// Kept by users' own packages.
     pub profiles: u64,
@@ -51,12 +55,17 @@ pub struct Composition {
     pub garbage_paths: usize,
 }
 
-/// A package in a store, by name, with the size of all its paths.
+/// A package in a store, at one version or with its versions grouped, with
+/// the size of all its paths.
 #[derive(Clone, Debug)]
 pub struct Heavy {
     pub name: String,
-    pub version: String,
+    /// Its versions, newest first: one, unless grouped by app.
+    pub versions: Vec<String>,
     pub size: u64,
+    /// How many builds the paths come from: two llvm 21.1.8s made
+    /// differently are two copies.
+    pub builds: usize,
 }
 
 /// What the configuration says is installed, as Yukimi can read it.
@@ -80,16 +89,144 @@ pub struct Configured {
 #[derive(Default)]
 pub struct Store {
     pub graph: Graph,
+    /// The links that keep store paths, as Yukimi finds them, to list.
     pub roots: Vec<Root>,
     pub composition: Composition,
+    /// Which paths deleting generations lets go, from every root the
+    /// garbage collector has.
+    pub reclaim: Reclaim,
     /// Packages of the running system's `environment.systemPackages`.
     pub system_packages: Vec<SystemPackage>,
-    /// The heaviest packages in the running system.
+    /// The heaviest packages in the running system, one for each version.
     pub heaviest: Vec<Heavy>,
-    /// How big each system generation is (its closure), oldest first.
+    /// The same with each app's versions grouped.
+    pub heaviest_apps: Vec<Heavy>,
+    /// How big each system generation is, oldest first: everything it
+    /// needs (its closure), shared with the others or not. Not what
+    /// deleting one gives back; that is [`Freeable`].
     pub generation_sizes: Vec<(u32, u64)>,
     /// What the newest generation changed from the one before.
     pub latest: Option<Diff>,
+}
+
+/// What deleting generations would give back on disk, once garbage is
+/// collected: blocks, with hard-linked files counted once.
+#[derive(Clone, Debug)]
+pub struct Freeable {
+    /// What collecting garbage gives back now: what nothing keeps.
+    pub garbage: u64,
+    /// For each generation that may be deleted, what deleting it alone
+    /// gives back besides the garbage.
+    pub generations: BTreeMap<u32, u64>,
+    /// For deleting generations older than a number of days, as Clean Up
+    /// does: the days, the generations that go, and what they give back
+    /// besides the garbage.
+    pub older: Vec<(u32, Vec<u32>, u64)>,
+    /// What prices any set of generations deleted together.
+    pricing: Pricing,
+}
+
+/// How [`Freeable`] prices generations deleted together. Generations next
+/// to each other share most of what they have, so a set can give back far
+/// more than its generations do one at a time.
+#[derive(Clone)]
+pub enum Pricing {
+    /// The store that was measured (its graph and roots), its paths
+    /// measured, and the garbage's, which goes in any case.
+    Measured { store: Arc<Store>, usage: Usage, garbage: Tally },
+    /// Sets of generations, each with what only that set keeps.
+    Listed(Vec<(Vec<u32>, u64)>),
+}
+
+impl std::fmt::Debug for Pricing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Pricing::Measured { usage, .. } => f.debug_struct("Measured").field("usage", usage).finish_non_exhaustive(),
+            Pricing::Listed(sets) => f.debug_tuple("Listed").field(sets).finish(),
+        }
+    }
+}
+
+impl Pricing {
+    /// Whether generation `number`'s link was among the roots priced.
+    fn has(&self, number: u32) -> bool {
+        match self {
+            Pricing::Measured { store, .. } => store.reclaim.has(number),
+            Pricing::Listed(_) => true,
+        }
+    }
+
+    /// What deleting `numbers` together gives back besides the garbage.
+    fn price(&self, numbers: &[u32]) -> u64 {
+        match self {
+            Pricing::Measured { store, usage, garbage } => {
+                usage.freed_beyond(garbage, store.reclaim.only_kept_by(&store.graph, numbers))
+            }
+            Pricing::Listed(sets) => sets
+                .iter()
+                .filter(|(keepers, _)| keepers.iter().all(|k| numbers.contains(k)))
+                .map(|(_, bytes)| bytes)
+                .sum(),
+        }
+    }
+}
+
+/// The ages Clean Up offers, in days.
+pub const CLEAN_UP_DAYS: [u32; 3] = [7, 30, 90];
+
+impl Freeable {
+    /// Measure what deleting each generation, and cleaning up, gives back.
+    /// Reads the store's files: seconds, not milliseconds.
+    pub fn measure(store: Arc<Store>, generations: &[Generation], now: i64) -> Freeable {
+        let usage = Usage::measure(&store.graph, store.reclaim.candidates());
+        Freeable::from_usage(store, usage, generations, now)
+    }
+
+    /// From the store's paths, measured. The store is kept to price sets
+    /// of generations later: a store read since has paths of its own.
+    pub fn from_usage(store: Arc<Store>, usage: Usage, generations: &[Generation], now: i64) -> Freeable {
+        let base = usage.tally(store.reclaim.garbage());
+        let garbage = usage.bytes(&base);
+        Freeable::priced(garbage, Pricing::Measured { store, usage, garbage: base }, generations, now)
+    }
+
+    /// Each generation that may be deleted, alone, and Clean Up's sets, as
+    /// `pricing` prices them.
+    pub fn priced(garbage: u64, pricing: Pricing, generations: &[Generation], now: i64) -> Freeable {
+        let each = generations
+            .iter()
+            .filter(|g| g.deletable() && pricing.has(g.number))
+            .map(|g| (g.number, pricing.price(&[g.number])))
+            .collect();
+        let older = CLEAN_UP_DAYS
+            .iter()
+            .map(|&days| {
+                let numbers = generations::older_than(generations, now - i64::from(days) * 86_400);
+                let bytes = if numbers.is_empty() { 0 } else { pricing.price(&numbers) };
+                (days, numbers, bytes)
+            })
+            .collect();
+        Freeable { garbage, generations: each, older, pricing }
+    }
+
+    /// What deleting generation `number` gives back, once garbage is
+    /// collected, if it may be deleted.
+    pub fn generation(&self, number: u32) -> Option<u64> {
+        self.generations.get(&number).copied()
+    }
+
+    /// What deleting `numbers` together gives back besides the garbage:
+    /// what each has alone, and what only they share. Follows each one's
+    /// closure, so not on the interface thread.
+    pub fn together(&self, numbers: &[u32]) -> u64 {
+        self.pricing.price(numbers)
+    }
+
+    /// Deleting generations older than `days`: which go, and what they give
+    /// back besides the garbage.
+    pub fn older(&self, days: u32) -> (&[u32], u64) {
+        self.older.iter().find(|(d, _, _)| *d == days).map_or((&[], 0), |(_, numbers, bytes)| (numbers, *bytes))
+    }
 }
 
 #[derive(Clone)]
@@ -121,6 +258,8 @@ pub struct Model {
     pub nixpkgs: Option<String>,
     /// The store, once read.
     pub store: Option<Arc<Store>>,
+    /// What deleting generations would give back, once measured.
+    pub freeable: Option<Arc<Freeable>>,
     /// Where the system was read from.
     pub paths: Paths,
     /// What could not be read, to say so instead of failing.
@@ -146,6 +285,7 @@ impl Default for Model {
             channels: Vec::new(),
             nixpkgs: None,
             store: None,
+            freeable: None,
             problems: Vec::new(),
             paths: Paths::default(),
         }
@@ -296,8 +436,8 @@ impl Model {
     }
 
     /// This model with the store read.
-    pub fn with_store(&self, store: Store, problems: Vec<String>) -> Model {
-        let mut model = Model { store: Some(Arc::new(store)), ..self.clone() };
+    pub fn with_store(&self, store: Arc<Store>, problems: Vec<String>) -> Model {
+        let mut model = Model { store: Some(store), ..self.clone() };
         model.problems.extend(problems);
         model
     }
@@ -385,12 +525,21 @@ impl Store {
             Ok(graph) => store.graph = graph,
             Err(e) => problems.push(format!("The store database could not be read: {e}")),
         }
-        // The garbage collector keeps derivations of live paths unless told
-        // not to; Nix's default is to keep them.
-        let keep_derivations = nix::setting("keep-derivations").is_none_or(|value| value != "false");
-        store.composition = composition(&store.graph, &store.roots, keep_derivations);
+        // Every root the garbage collector has, as Nix lists them: with what
+        // running programs use, even other people's. Without Nix to ask, the
+        // links Yukimi can read.
+        let (mut gc_roots, _) = reclaim::system_roots();
+        if !gc_roots.iter().any(|r| r.kind == RootKind::CurrentSystem)
+            && let Some(target) =
+                std::fs::read_link("/run/current-system").ok().and_then(|p| StorePath::parse(p.to_str()?))
+        {
+            gc_roots.push(Root { link: "/run/current-system".into(), target, kind: RootKind::CurrentSystem });
+        }
+        let keep = nix::keep();
+        store.composition = composition(&store.graph, &gc_roots, keep);
+        store.reclaim = Reclaim::new(&store.graph, &gc_roots, keep);
         store.system_packages = system_packages(&store.graph);
-        store.heaviest = heaviest(&store.graph, 24);
+        (store.heaviest, store.heaviest_apps) = heaviest(&store.graph, 24);
         store.generation_sizes = generations
             .iter()
             .map(|g| (g.number, store.closure_of(&g.target).iter().map(|&id| store.graph.info(id).nar_size).sum()))
@@ -412,29 +561,20 @@ fn ids(graph: &Graph, roots: &[&Root]) -> Vec<PathId> {
     roots.iter().filter_map(|r| graph.lookup(r.target.as_str())).collect()
 }
 
-fn composition(graph: &Graph, roots: &[Root], keep_derivations: bool) -> Composition {
+/// What keeps each part of the store. A part counts with the first that
+/// keeps it, in this order, so that "older generations" is what only they
+/// keep: what deleting them all would let go.
+fn composition(graph: &Graph, roots: &[Root], keep: Keep) -> Composition {
     let mut owner: Vec<u8> = vec![0; graph.len()];
+    let of = |kind: fn(&RootKind) -> bool| -> Vec<&Root> { roots.iter().filter(|r| kind(&r.kind)).collect() };
     let groups: [(u8, Vec<&Root>); 4] = [
-        (1, roots.iter().filter(|r| matches!(r.kind, RootKind::CurrentSystem | RootKind::BootedSystem)).collect()),
-        (2, roots.iter().filter(|r| matches!(r.kind, RootKind::SystemGeneration(_))).collect()),
-        (3, roots.iter().filter(|r| matches!(r.kind, RootKind::Profile { .. })).collect()),
-        (
-            4,
-            roots
-                .iter()
-                .filter(|r| matches!(r.kind, RootKind::BuildResult | RootKind::DevShell | RootKind::Other))
-                .collect(),
-        ),
+        (1, of(|k| matches!(k, RootKind::CurrentSystem | RootKind::BootedSystem | RootKind::Running))),
+        (3, of(|k| matches!(k, RootKind::Profile { .. }))),
+        (4, of(|k| matches!(k, RootKind::BuildResult | RootKind::DevShell | RootKind::Other))),
+        (2, of(|k| matches!(k, RootKind::SystemGeneration(_)))),
     ];
-    // If /run/current-system is not among the roots seen, the current system
-    // generation stands in for it.
-    let current = std::fs::read_link("/run/current-system").ok().and_then(|p| graph.lookup(p.to_str()?));
     for (tag, group) in &groups {
-        let mut start = ids(graph, group);
-        if *tag == 1 {
-            start.extend(current);
-        }
-        for id in graph.kept(start, keep_derivations) {
+        for id in graph.kept(ids(graph, group), keep) {
             if owner[id.index()] == 0 {
                 owner[id.index()] = *tag;
             }
@@ -477,28 +617,77 @@ fn system_packages(graph: &Graph) -> Vec<SystemPackage> {
     by_name.into_values().collect()
 }
 
-/// The heaviest packages in the running system's closure, by name.
-fn heaviest(graph: &Graph, count: usize) -> Vec<Heavy> {
+/// The heaviest packages in the running system's closure: one for each
+/// version, and with each app's versions grouped.
+fn heaviest(graph: &Graph, count: usize) -> (Vec<Heavy>, Vec<Heavy>) {
     let Some(current) = std::fs::read_link("/run/current-system").ok().and_then(|p| graph.lookup(p.to_str()?)) else {
-        return Vec::new();
+        return Default::default();
     };
-    let mut by_name: HashMap<String, Heavy> = HashMap::new();
-    for id in graph.closure([current]) {
+    let versions = by_version(graph, current);
+    (heaviest_of(versions.clone(), count), heaviest_of(by_app(versions), count))
+}
+
+/// The `count` largest.
+fn heaviest_of(mut list: Vec<Heavy>, count: usize) -> Vec<Heavy> {
+    list.sort_by_key(|h| std::cmp::Reverse(h.size));
+    list.truncate(count);
+    list
+}
+
+/// The packages in `top`'s closure, one for each name and version: a
+/// build's outputs (`lib32`, `firmware`, `jre`, …) together, named as the
+/// derivation that made them when the store records it, and other versions
+/// (openjdk 25, 21 and 17) apart.
+fn by_version(graph: &Graph, top: PathId) -> Vec<Heavy> {
+    let mut by_version: HashMap<(String, String), (Heavy, BTreeSet<String>)> = HashMap::new();
+    for id in graph.closure([top]) {
         let Some(path) = graph.store_path(id) else { continue };
         if path.is_derivation() {
             continue;
         }
-        let entry = by_name.entry(path.name().to_owned()).or_insert_with(|| Heavy {
-            name: path.name().to_owned(),
-            version: path.version().to_owned(),
-            size: 0,
+        let info = graph.info(id);
+        // openjdk-8u504-b01-jre was made by openjdk-8u504-b01.drv.
+        let made_by = info.deriver.as_deref().and_then(StorePath::parse);
+        let (name, version) = match &made_by {
+            Some(drv) => {
+                let full = drv.full_name();
+                yukimi_store::path::split_name(full.strip_suffix(".drv").unwrap_or(full))
+            }
+            None => (path.name(), path.version()),
+        };
+        let (heavy, builds) = by_version.entry((name.to_owned(), version.to_owned())).or_insert_with(|| {
+            let heavy = Heavy { name: name.to_owned(), versions: vec![version.to_owned()], size: 0, builds: 0 };
+            (heavy, BTreeSet::new())
         });
-        entry.size += graph.info(id).nar_size;
+        heavy.size += info.nar_size;
+        builds.insert(made_by.map_or_else(|| path.as_str().to_owned(), |drv| drv.as_str().to_owned()));
     }
-    let mut list: Vec<Heavy> = by_name.into_values().collect();
-    list.sort_by_key(|h| std::cmp::Reverse(h.size));
-    list.truncate(count);
-    list
+    by_version.into_values().map(|(heavy, builds)| Heavy { builds: builds.len(), ..heavy }).collect()
+}
+
+/// Each app's versions grouped: their sizes and builds added up, the
+/// versions newest first.
+fn by_app(versions: Vec<Heavy>) -> Vec<Heavy> {
+    let mut by_name: HashMap<String, Heavy> = HashMap::new();
+    for heavy in versions {
+        match by_name.get_mut(&heavy.name) {
+            Some(app) => {
+                app.size += heavy.size;
+                app.builds += heavy.builds;
+                app.versions.extend(heavy.versions);
+            }
+            None => {
+                by_name.insert(heavy.name.clone(), heavy);
+            }
+        }
+    }
+    by_name
+        .into_values()
+        .map(|mut app| {
+            app.versions.sort_by(|a, b| yukimi_store::compare_versions(b, a));
+            app
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -566,7 +755,7 @@ mod tests {
         assert!(model.problems.is_empty());
 
         // The store's later arrival preserves the already-known defaults.
-        let model = model.with_store(Store::default(), Vec::new());
+        let model = model.with_store(Arc::new(Store::default()), Vec::new());
         assert!(model.app_installed(&app("fish", Some("calamares.applications")), &model.system_names()));
 
         // A new generation can stop supplying a previously implicit app.
@@ -616,6 +805,155 @@ mod tests {
         system.model.read_configuration();
         assert!(system.model.installer_applications.is_empty());
         assert!(system.model.problems.is_empty());
+    }
+
+    /// A store of three generations, 3 running: 0 base, 1-3 systems, 4 only
+    /// 1 has, 5 that 1 and a user's profile share, 6 garbage, 7 only 1 and
+    /// 2 have.
+    fn small_store() -> (Store, Vec<Generation>) {
+        use yukimi_store::db::PathInfo;
+        let path = |n: usize, name: &str| crate::fixture::store_path(n, name);
+        let names = ["base", "system-1", "system-2", "system-3", "only-1", "shared", "garbage", "only-1-2"];
+        let sizes = [1000, 1, 1, 1, 20, 40, 70, 30];
+        let nodes: Vec<PathInfo> = names
+            .iter()
+            .zip(sizes)
+            .enumerate()
+            .map(|(i, (name, size))| PathInfo { path: path(i, name), nar_size: size, registered: 0, deriver: None })
+            .collect();
+        let graph = Graph::from_parts(nodes, &[(1, 0), (2, 0), (3, 0), (1, 4), (1, 5), (1, 7), (2, 7)]);
+        let root = |link: &str, i: usize| {
+            let link = std::path::PathBuf::from(link);
+            Root { kind: roots::classify(&link), target: StorePath::parse(&path(i, names[i])).unwrap(), link }
+        };
+        let gc_roots = vec![
+            root("/nix/var/nix/profiles/system-1-link", 1),
+            root("/nix/var/nix/profiles/system-2-link", 2),
+            root("/nix/var/nix/profiles/system-3-link", 3),
+            root("/run/current-system", 3),
+            root("/home/ref/.local/state/nix/profiles/profile-1-link", 5),
+        ];
+        let generations: Vec<Generation> = (1..=3)
+            .map(|n| Generation {
+                number: n,
+                link: format!("/nix/var/nix/profiles/system-{n}-link").into(),
+                target: StorePath::parse(&path(n as usize, names[n as usize])).unwrap(),
+                created: i64::from(n) * 86_400,
+                nixos_version: None,
+                kernel_version: None,
+                current: n == 3,
+                active: n == 3,
+                booted: n == 3,
+            })
+            .collect();
+        let store = Store {
+            composition: composition(&graph, &gc_roots, Keep::default()),
+            reclaim: Reclaim::new(&graph, &gc_roots, Keep::default()),
+            graph,
+            ..Store::default()
+        };
+        (store, generations)
+    }
+
+    #[test]
+    fn older_generations_are_what_only_they_keep() {
+        let (store, _) = small_store();
+        let c = &store.composition;
+        // The profile's path counts as the user's, not as generation 1's.
+        assert_eq!(c.profiles, 40);
+        assert_eq!(c.old_generations, 1 + 1 + 20 + 30);
+        assert_eq!(c.system, 1000 + 1);
+        assert_eq!((c.garbage, c.garbage_paths), (70, 1));
+    }
+
+    #[test]
+    fn what_deleting_each_generation_frees_is_measured_on_disk() {
+        let (store, generations) = small_store();
+        let dir = std::env::temp_dir().join(format!("yukimi-freeable-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // Each candidate on disk: a file a hundred times its NAR size.
+        let paths: Vec<(PathId, std::path::PathBuf)> = store
+            .reclaim
+            .candidates()
+            .into_iter()
+            .map(|id| {
+                let file = dir.join(id.index().to_string());
+                std::fs::write(&file, vec![0u8; 100 * store.graph.info(id).nar_size as usize]).unwrap();
+                (id, file)
+            })
+            .collect();
+        let usage = Usage::measure_paths(paths, false);
+        let size = |i: usize| usage.freed([PathId::from_index(i)]);
+        let freeable = Freeable::from_usage(Arc::new(store), usage.clone(), &generations, 10 * 86_400);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(freeable.garbage, size(6));
+        // 1: its build and what only it has, not the profile's share, nor
+        // what it shares with 2.
+        assert_eq!(freeable.generation(1), Some(size(1) + size(4)));
+        assert_eq!(freeable.generation(2), Some(size(2)));
+        // Together, what they share too.
+        assert_eq!(freeable.together(&[1, 2]), size(1) + size(4) + size(2) + size(7));
+        assert_eq!(freeable.together(&[2]), size(2));
+        // The running one isn't offered.
+        assert_eq!(freeable.generation(3), None);
+        // A week ago, 2 was in use, so only 1 goes.
+        assert_eq!(freeable.older(7), (&[1u32][..], size(1) + size(4)));
+        assert_eq!(freeable.older(30), (&[][..], 0));
+    }
+
+    #[test]
+    fn the_heaviest_are_by_version_with_a_builds_outputs_together() {
+        use yukimi_store::db::PathInfo;
+        let path = |n: usize, name: &str| crate::fixture::store_path(n, name);
+        // Each path's name, NAR size and the derivation that made it.
+        let paths: [(&str, u64, Option<&str>); 9] = [
+            ("nixos-system-a-1", 1, None),
+            ("openjdk-25.0.5.0.3+1", 688, Some("openjdk-25.0.5.0.3+1.drv")),
+            ("openjdk-8u504-b01", 94, Some("openjdk-8u504-b01.drv")),
+            ("openjdk-8u504-b01-jre", 109, Some("openjdk-8u504-b01.drv")),
+            ("llvm-21.1.8-lib", 577, Some("llvm-21.1.8.drv")),
+            ("llvm-21.1.8-lib", 564, Some("llvm-21.1.8.drv")),
+            ("nvidia-x11-615.78.08-firmware", 117, Some("nvidia-x11-615.78.08.drv")),
+            ("nvidia-x11-615.78.08", 958, Some("nvidia-x11-615.78.08.drv")),
+            ("zstd-1.5.7-bin", 2, None),
+        ];
+        // The two llvms were made by different derivations; the others'
+        // outputs share one.
+        let drv = |i: usize, name: &str| path(if i == 5 { 105 } else { 100 + name.len() }, name);
+        let nodes: Vec<PathInfo> = paths
+            .iter()
+            .enumerate()
+            .map(|(i, &(name, size, made_by))| PathInfo {
+                path: path(i, name),
+                nar_size: size,
+                registered: 0,
+                deriver: made_by.map(|d| drv(i, d)),
+            })
+            .collect();
+        let edges: Vec<(usize, usize)> = (1..paths.len()).map(|i| (0, i)).collect();
+        let graph = Graph::from_parts(nodes, &edges);
+        let versions = by_version(&graph, PathId::from_index(0));
+        let heaviest = heaviest_of(versions.clone(), 10);
+        let row = |name: &str, version: &str| {
+            let h = heaviest.iter().find(|h| h.name == name && h.versions == [version]);
+            h.map(|h| (h.size, h.builds)).unwrap_or_else(|| panic!("{name} {version} in {heaviest:?}"))
+        };
+        assert_eq!(row("llvm", "21.1.8"), (577 + 564, 2));
+        assert_eq!(row("nvidia-x11", "615.78.08"), (117 + 958, 1));
+        assert_eq!(row("openjdk", "25.0.5.0.3+1"), (688, 1));
+        assert_eq!(row("openjdk", "8u504-b01"), (94 + 109, 1));
+        // Without a derivation, the path's own name, its output taken off.
+        assert_eq!(row("zstd", "1.5.7"), (2, 1));
+        assert_eq!(heaviest[0].name, "llvm");
+        assert_eq!(heaviest.len(), 6);
+        // Grouped by app, openjdk's versions together, newest first.
+        let apps = heaviest_of(by_app(versions), 10);
+        let openjdk = apps.iter().find(|h| h.name == "openjdk").expect("openjdk");
+        assert_eq!(openjdk.versions, ["25.0.5.0.3+1", "8u504-b01"]);
+        assert_eq!((openjdk.size, openjdk.builds), (688 + 94 + 109, 2));
+        assert_eq!(apps.len(), 5);
+        assert_eq!(apps[0].name, "llvm");
     }
 
     #[test]

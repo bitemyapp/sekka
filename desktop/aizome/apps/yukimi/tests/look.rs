@@ -37,6 +37,25 @@ fn pictures() {
                 settle(&mut h, |a| a.found.is_some());
             }
             h.save_png(w, dir.join(format!("{}-{name}.png", page.id())), 1.0);
+            if page == Page::History {
+                // An older generation opened, then asking to delete it.
+                h.send(Msg::ToggleGeneration(28));
+                h.send(Msg::ToggleGeneration(26));
+                settle(&mut h, |a| matches!(a.changes.get(&26), Some(Changes::Ready { .. })));
+                h.save_png(w, dir.join(format!("history-delete-{name}.png")), 1.0);
+                h.send(Msg::Delete(26));
+                h.save_png(w, dir.join(format!("history-delete-asking-{name}.png")), 1.0);
+                cancel(&mut h, w);
+                // Every older generation selected, then asking to delete them.
+                h.send(Msg::ToggleGeneration(26));
+                h.send(Msg::TickAll(true));
+                settle(&mut h, |a| a.ticked.priced().is_some());
+                h.save_png(w, dir.join(format!("history-ticked-{name}.png")), 1.0);
+                h.send(Msg::DeleteTicked);
+                h.save_png(w, dir.join(format!("history-ticked-asking-{name}.png")), 1.0);
+                cancel(&mut h, w);
+                h.send(Msg::TickAll(false));
+            }
             if page == Page::Desktops {
                 let pick = |setting: &str, id: &str, on: bool| Msg::Pick { setting: setting.into(), id: id.into(), on };
                 h.send(pick("calamares.desktops", "gnome", false));
@@ -193,5 +212,18 @@ fn narrow_pictures() {
     for page in [Page::Overview, Page::Updates, Page::Installed, Page::Storage] {
         h.send(Msg::Show(page));
         h.save_png(w, dir.join(format!("narrow-{}.png", page.id())), 1.0);
+    }
+    // Selecting generations: the toolbar's line and buttons.
+    h.send(Msg::Show(Page::History));
+    h.send(Msg::TickAll(true));
+    settle(&mut h, |a| a.ticked.priced().is_some());
+    h.save_png(w, dir.join("narrow-history-ticked.png"), 1.0);
+}
+
+/// Press an alert's Cancel.
+fn cancel(h: &mut Harness<Yukimi>, w: aizome_kit::WindowKey) {
+    let cancel = h.semantics(w).into_iter().find(|(s, _)| s.label.as_deref() == Some("Cancel"));
+    if let Some((_, r)) = cancel {
+        h.click(w, r.center());
     }
 }

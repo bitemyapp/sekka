@@ -1662,6 +1662,102 @@ never connects to a compositor or follows a user's PATH. See
 [reload and completion advice](desktop/aizome/docs/reload.md#yukimis-update-advice)
 for the evidence used and remaining limits.
 
+History deletes system generations, one from its opened row or any set
+ticked together, with `yukimi-helper delete <n>... [--collect-garbage]`,
+under the same polkit action as Yukimi's other changes. Generation numbers
+need not be consecutive: `nix-env --delete-generations` takes any list. The
+helper takes only plain generation numbers (digits, no sign or leading zero,
+each once) whose `/nix/var/nix/profiles/system-<n>-link` is a link to a
+store path, and refuses the whole request if it names the generation the
+profile selects for the next start, the running system or the one the
+machine started with; the GUI offers boxes only beside the others. It commits
+first, then deletes the links with `nix-env --delete-generations`, removes
+their kept configurations, and makes the boot menu again with the selected
+system's `switch-to-configuration boot`, as `clean` does, so no boot entry is
+left for a generation whose files are about to be collected. Only then, and
+only with `--collect-garbage`, it collects garbage, which may be stopped.
+Without it the space comes back at the next clean-up (or Nix's own collection
+below `min-free`). The result reports the estimate it made beforehand, as
+root, and, measured with `statvfs` around the collection, what came back.
+Nix deletes its 8 MiB reserve (`gc-reserved-space`, `/nix/var/nix/db/reserved`)
+as a collection starts and makes it again when it next opens the store, so
+the helper has Nix open the store before measuring; without that, the VM
+check saw 8 MiB more come back than stays free.
+
+Yukimi used to show each generation's closure: everything it needs, about 26
+GB per generation on ganymede, nearly all of it shared with the generations
+beside it and the running system. What deleting one frees is far less, and
+isn't its NAR size either. Read-only on ganymede on 2026-11-03, generation 50
+showed 26.2 GB; only 13 store paths were its own, 7.5 MB as NAR and 54.1 MB on
+disk (its `system-path` and `etc` are thousands of symbolic links, each a 4
+KiB block). Generation 56 showed 28.9 GB and had 2.33 GB as NAR, 2.82 GB on
+disk; generation 48 showed 30.6 GB and had nothing of its own, since a
+`result` link held its build.
+
+`yukimi_system::reclaim` takes every root the collector has from
+`nix-store --gc --print-roots`, which through the daemon includes, for any
+user, what running programs use (as `{censored}`) and indirect roots in
+places the user can't read, and keeps what they keep under `keep-derivations`
+and `keep-outputs`. A path counts for a set of generations when no other root
+keeps it and no generation link outside the set does. `yukimi_store::usage`
+measures those paths and the current garbage with `lstat`: `st_blocks` for
+every file, directory and symbolic link, each hard-linked inode once, and
+freed only when the set holds all its links but the store's own in
+`/nix/store/.links`. On Linux Nix's optimiser links identical symbolic links
+as well as files, so in an optimised store a generation's `system-path` and
+`etc`, links like the running system's, cost it next to nothing; counting
+them as its own overestimated the VM check's first run by 111%. A
+generation's figure is what deleting it alone frees beyond the garbage. The
+generations ticked in History are priced as one set (`Freeable::together`,
+off the interface thread, again whenever the selection or the measurement
+changes), which adds what only they share: generations next to each other
+share most of what they have, such as the packages a later update replaced,
+so the set's figure can be far more than theirs added up. `Freeable` keeps
+the `Store` it was measured from for this, since a store read since numbers
+its paths differently. Clean Up's is the garbage plus what
+`nix-env --delete-generations <n>d` would delete (`generations::older_than`
+keeps the generation that was in use at the cutoff, as Nix does). The
+Storage page's composition stays in NAR sizes, now counting a path shared
+with a profile or project as theirs, so "Older generations" is what only
+they keep. `yukimi-helper estimate <n>...` prints the same estimate as JSON,
+for anyone, with the closure Yukimi used to show beside it. The GUI measures
+after the store is read, in the background, and not for another system's
+`/etc`.
+
+The estimate can't promise: Btrfs reports blocks before compression
+(Genkan mounts Btrfs with `compress=zstd:1`), so less can come back there;
+blocks a snapshot or reflink shares stay; a program started, or a root
+added, from those paths before the collection keeps them; an unprivileged
+reading of the store database may lag its write-ahead log; and in an
+optimised store, a file whose one other link is an unoptimised live path
+counts as freed. Nix's own "freed" line adds up file sizes, not blocks, and
+counts files with two links as freed, so it differs from both (8.0 MiB for
+the 10.4 MiB the VM check's generation 3 gave back).
+
+`nix build .#checks.x86_64-linux.yukimi-generations` boots a VM from its own
+ext4 disk (`useBootLoader`, systemd-boot) with five more generations built
+beside it, the newest selected for the next start, each with incompressible
+data, 300 small files, a copy of a running-system file and a file it shares
+with another generation; generation 3 also has a path a user's profile
+keeps, one a running program uses and one generation 4 shares, and 4 and 5
+share a path nothing else has. After optimising and collecting garbage, it
+checks the helper's refusals, deletes 3 with `--collect-garbage` and 2
+without (then cleans up), then 4 and 5 together with `--collect-garbage`,
+and compares the space `statvfs` sees come back with the estimate, as root
+and as an unprivileged user, along with the profile links, boot entries and
+kept configurations left. On 2026-11-03, on wx-workstation,
+generation 3 gave back 10,956,800 bytes and the estimate was 10,956,800, the
+same as root and as `demo`; Yukimi would have shown its 1,844,249,032-byte
+closure (+16,732%), and the NAR size of what only it had, 19,510,448 bytes,
+was +78% (its links and the files it shared with other generations are
+hard-linked in an optimised store). Generation 2, deleted and then cleaned
+up, gave back 8,847,360 bytes for an estimate of 8,859,648 (+0.14%). On
+2026-11-06, on wx-workstation, generations 4 and 5 deleted together gave back
+33,505,280 bytes for an estimate of 33,492,992 together (−0.04%); their two
+figures alone add up to 30,334,976 (−9.5%), short by the path only they
+shared. Generations 3 and 2 matched as before (10,969,088 for 10,969,088;
+8,859,648 for 8,871,936).
+
 Shiori, Aizome's PDF reader (`desktop/aizome/apps/shiori`), draws pages, and
 reads their text, links and the outline, with hayro (Apache-2.0 OR MIT), a
 PDF renderer in Rust, from [bitemyapp/hayro](https://github.com/bitemyapp/hayro)'s

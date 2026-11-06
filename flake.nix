@@ -842,6 +842,11 @@
           inherit (self.packages.${system}) yukimi;
           yukimiModule = inputs.yukimi.nixosModules.default;
         };
+        yukimi-generations = import ./nix/yukimi-generations-test.nix {
+          inherit pkgs;
+          inherit (self.packages.${system}) yukimi;
+          yukimiModule = inputs.yukimi.nixosModules.default;
+        };
         tools = tools;
         site = site;
         aizome-site = aizomeSite;

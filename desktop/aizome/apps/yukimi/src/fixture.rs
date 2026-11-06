@@ -22,7 +22,7 @@ use yukimi_system::setup::{Choice, ChoiceOption, ChoiceValue, Facts, Kind, Setup
 use yukimi_system::updates::Release;
 
 use crate::checks::{self, UpdateCheck};
-use crate::model::{Composition, Configured, Heavy, Model, Store, SystemPackage};
+use crate::model::{Composition, Configured, Freeable, Heavy, Model, Pricing, Store, SystemPackage};
 
 /// The sample's "now": Saturday 17 October 2026, 21:42 UTC.
 pub const NOW: i64 = 1_792_273_320;
@@ -329,7 +329,7 @@ pub fn store(generations: &[Generation], graph: Graph) -> Store {
         .chain(AFTER.iter())
         .map(|(full, size)| {
             let (name, version) = yukimi_store::path::split_name(full);
-            Heavy { name: name.to_owned(), version: version.to_owned(), size: *size }
+            Heavy { name: name.to_owned(), versions: vec![version.to_owned()], size: *size, builds: 1 }
         })
         .collect();
     heaviest.sort_by_key(|h| std::cmp::Reverse(h.size));
@@ -365,11 +365,28 @@ pub fn store(generations: &[Generation], graph: Graph) -> Store {
             paths: 58_214,
             garbage_paths: 9_377,
         },
+        reclaim: Default::default(),
         system_packages,
+        // The sample runs one version of each, so grouping changes nothing.
+        heaviest_apps: heaviest.clone(),
         heaviest,
         latest,
         generation_sizes: generations.iter().zip(sizes).map(|(g, s)| (g.number, (s * GB as f64) as u64)).collect(),
     }
+}
+
+/// What deleting each older generation alone gives back on disk (made up),
+/// and what only all four keep: what 28 updated (`BEFORE`), which only
+/// deleting every one of them frees.
+pub fn freeable(generations: &[Generation]) -> Freeable {
+    let listed = vec![
+        (vec![24], 1_930 * MB),
+        (vec![25], 412 * MB),
+        (vec![26], 96 * MB),
+        (vec![27], 2_640 * MB),
+        (vec![24, 25, 26, 27], 1_870 * MB),
+    ];
+    Freeable::priced(13_400 * MB, Pricing::Listed(listed), generations, NOW)
 }
 
 /// Sekka's choices, as the sample system declares them: three desktops,
@@ -457,6 +474,7 @@ pub fn model() -> Model {
     let (graph, systems) = graph();
     let generations = generations(&systems);
     let store = store(&generations, graph);
+    let freed = freeable(&generations);
     let nixpkgs = store_path(1, "source");
     Model {
         setup: Setup {
@@ -521,6 +539,7 @@ pub fn model() -> Model {
         channels: Vec::new(),
         nixpkgs: Some(nixpkgs),
         store: Some(Arc::new(store)),
+        freeable: Some(Arc::new(freed)),
         problems: Vec::new(),
         paths: crate::paths::Paths::default(),
     }

@@ -9,6 +9,7 @@
 //!   packages) that can be returned to.
 //! - [`diff`]: what changed between two of them, package by package.
 //! - [`profile`]: packages a user installed for themselves.
+//! - [`reclaim`]: what deleting generations gives back, on disk.
 //! - [`catalog`]: well-known applications to offer, Yukimi's and the
 //!   system's.
 //! - [`channels`]: where a system without a flake gets Nixpkgs from.
@@ -27,6 +28,7 @@ pub mod info;
 pub mod log;
 pub mod nix;
 pub mod profile;
+pub mod reclaim;
 pub mod setup;
 pub mod updates;
 

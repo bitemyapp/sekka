@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use aizome_kit::WindowKey;
 use aizome_kit::layout::{Point, Vec2};
+use aizome_kit::sidestep_ui::Modifiers;
 use aizome_kit::testing::Harness;
 use aizome_yukimi::app::{Changes, Clock, Launch, Msg, Page, Runner, Source, Yukimi, launch_from_args};
 use aizome_yukimi::job::Outcome;
@@ -386,6 +387,127 @@ fn going_back_and_cleaning_up_ask_first() {
     assert!(has(&h, w, "Clean up the store?"));
     assert!(click_last(&mut h, w, "Clean up"));
     assert_eq!(ran.lock().unwrap().last(), Some(&Operation::Clean { older_than_days: Some(90) }));
+}
+
+#[test]
+fn deleting_a_generation_says_what_comes_back_and_asks_first() {
+    let (mut h, w, ran) = sample(WORKS);
+    h.send(Msg::Show(Page::History));
+    // Beside each older generation, what deleting it gives back on disk,
+    // not everything it needs.
+    assert!(has(&h, w, "96 MB") && has(&h, w, "2.6 GB"));
+    assert!(!has(&h, w, "18 GB"));
+    h.send(Msg::ToggleGeneration(26));
+    settle(&mut h, |a| matches!(a.changes.get(&26), Some(Changes::Ready { .. })));
+    assert!(h.texts(w).iter().any(|t| t.contains("about 96 MB on disk, comes back once garbage is collected")));
+    assert!(h.click_text(w, "Delete…"));
+    assert!(has(&h, w, "Delete generation 26?"));
+    assert!(h.texts(w).iter().any(|t| t.contains("frees about 96 MB") && t.contains("13 GB that nothing needs")));
+    // Delete alone leaves the garbage for the next clean-up.
+    assert!(click_last(&mut h, w, "Delete"));
+    assert_eq!(ran.lock().unwrap().as_slice(), [Operation::Delete { generations: vec![26], collect: false }]);
+    settle(&mut h, |a| a.job.as_ref().is_some_and(|j| j.outcome.is_some()));
+    h.advance(Duration::from_secs(1));
+    h.send(Msg::Delete(25));
+    assert!(click_last(&mut h, w, "Delete and Clean Up"));
+    assert_eq!(ran.lock().unwrap().last(), Some(&Operation::Delete { generations: vec![25], collect: true }));
+}
+
+#[test]
+fn the_generations_in_use_cant_be_deleted() {
+    let (mut h, w, ran) = sample(WORKS);
+    h.send(Msg::Show(Page::History));
+    h.send(Msg::ToggleGeneration(28));
+    settle(&mut h, |a| matches!(a.changes.get(&28), Some(Changes::Ready { .. })));
+    assert!(!has(&h, w, "Delete…"));
+    // Asked anyway (from a stale view), it says so and runs nothing.
+    h.send(Msg::Delete(28));
+    assert!(!has(&h, w, "Delete generation 28?"));
+    assert!(h.program().notes.iter().any(|(_, n)| n.contains("in use")));
+    assert!(ran.lock().unwrap().is_empty());
+}
+
+#[test]
+fn generations_selected_together_are_priced_and_deleted_together() {
+    let (mut h, w, ran) = sample(WORKS);
+    h.send(Msg::Show(Page::History));
+    let tick = |h: &Harness<Yukimi>, n: u32| h.find_id(w, &format!("tick-{n}")).expect("a box").center();
+    // The running generation can't be selected, or deleted from a stale
+    // selection.
+    assert!(h.find_id(w, "tick-28").is_none());
+    h.send(Msg::Tick { number: 28, on: true, run: false });
+    assert!(h.program().ticked.numbers.is_empty());
+    // Selecting one doesn't open it.
+    h.click(w, tick(&h, 24));
+    assert!(!h.program().opened.contains(&24));
+    assert!(has(&h, w, "1 selected · frees about 1.9 GB"), "{:?}", h.texts(w));
+    // Shift-click: every one from the last clicked.
+    h.click_with(w, tick(&h, 26), Modifiers::SHIFT);
+    assert_eq!(h.program().ticked.numbers.iter().copied().collect::<Vec<_>>(), [24, 25, 26]);
+    // Nothing only 24 to 26 have: what each frees alone, added up.
+    settle(&mut h, |a| a.ticked.priced().is_some());
+    assert!(has(&h, w, "3 selected · frees about 2.4 GB"), "{:?}", h.texts(w));
+    // With 27, what all four kept goes too: more than one at a time frees.
+    assert!(h.click_text(w, "Select All"));
+    settle(&mut h, |a| a.ticked.priced().is_some());
+    assert!(has(&h, w, "4 selected · frees about 6.9 GB"), "{:?}", h.texts(w));
+    assert!(!has(&h, w, "Select All"));
+    assert!(h.click_text(w, "Delete…"));
+    assert!(has(&h, w, "Delete generations 24–27?"), "{:?}", h.texts(w));
+    assert!(h.texts(w).iter().any(|t| t.contains("Deleting them frees about 6.9 GB")
+        && t.contains("nothing older to go back to")
+        && t.contains("13 GB that nothing needs")));
+    assert!(click_last(&mut h, w, "Delete and Clean Up"));
+    assert_eq!(
+        ran.lock().unwrap().as_slice(),
+        [Operation::Delete { generations: vec![24, 25, 26, 27], collect: true }]
+    );
+    settle(&mut h, |a| a.job.as_ref().is_some_and(|j| j.outcome.is_some()));
+}
+
+#[test]
+fn unselecting_runs_and_selecting_none() {
+    let (mut h, w, _) = sample(WORKS);
+    h.send(Msg::Show(Page::History));
+    h.send(Msg::TickAll(true));
+    // Shift-unticking from 27 to 25 leaves 24.
+    h.send(Msg::Tick { number: 27, on: false, run: false });
+    h.send(Msg::Tick { number: 25, on: false, run: true });
+    assert_eq!(h.program().ticked.numbers.iter().copied().collect::<Vec<_>>(), [24]);
+    assert!(has(&h, w, "1 selected · frees about 1.9 GB"));
+    // Only some are selected, so there's one prompt for those, without
+    // the warning about what's left.
+    h.send(Msg::DeleteTicked);
+    assert!(has(&h, w, "Delete generation 24?"));
+    assert!(!h.texts(w).iter().any(|t| t.contains("nothing older")));
+    assert!(click_last(&mut h, w, "Cancel"));
+    assert!(h.click_text(w, "Select None"));
+    assert!(h.program().ticked.numbers.is_empty());
+    assert!(has(&h, w, "5 generations") && !has(&h, w, "Delete…"));
+}
+
+#[test]
+fn the_heaviest_can_be_grouped_by_app() {
+    let (mut h, w, _) = sample(WORKS);
+    h.send(Msg::Show(Page::Storage));
+    let group = h.find_id(w, "group-by-app").expect("the box").center();
+    h.click(w, group);
+    assert!(h.program().by_app);
+    assert!(has(&h, w, "ghc") && has(&h, w, "9.10.3"));
+    h.click(w, group);
+    assert!(!h.program().by_app);
+}
+
+#[test]
+fn cleaning_up_says_what_comes_back() {
+    let (mut h, w, _) = sample(WORKS);
+    h.send(Msg::Show(Page::Storage));
+    h.send(Msg::Older(0));
+    assert!(h.texts(w).iter().any(|t| t.contains("Frees about 15 GB on disk") && t.contains("generation 24")));
+    h.send(Msg::Older(1));
+    assert!(h.texts(w).iter().any(|t| t.contains("No generation is old enough")));
+    h.send(Msg::CleanUp);
+    assert!(h.texts(w).iter().any(|t| t.contains("none is old enough") && t.contains("About 13 GB comes back")));
 }
 
 #[test]
