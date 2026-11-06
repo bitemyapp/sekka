@@ -56,13 +56,47 @@ fn parts() -> Parts {
     }
 }
 
-fn checkpoint_facts(stage: Stage) -> Vec<Fact> {
-    let p = parts();
-    let f = |name, value: Uuid| Fact::new(name, value).unwrap();
+/// Where the free space starts on [`free_space`]'s Mac: where its macOS
+/// container ends, 24576 bytes past a MiB boundary as on the reference
+/// J514S, so a plan for it starts at the next MiB.
+const FREE_START: u64 = 524312576 + 300 * GIB;
+
+/// Where the engine creates the stub, ESP and root for `plan`: one after
+/// another from the start of the space, which behind a shrunk container is
+/// the plan's offset, and in free space is where the free space starts,
+/// short of the plan's offset.
+fn layout(plan: &Plan) -> [Extent; 3] {
+    let shrinks = plan.actions.iter().any(|a| matches!(a, Action::ShrinkContainer { .. }));
+    let stub = if shrinks { plan.target.offset } else { FREE_START };
+    let a = plan.allocation;
+    [
+        Extent { offset: stub, size: a.stub },
+        Extent { offset: stub + a.stub, size: a.esp },
+        Extent { offset: stub + a.stub + a.esp, size: a.root },
+    ]
+}
+
+/// What the engine records for each stage, as the real one does for the
+/// parts it creates.
+fn checkpoint_facts(stage: Stage, plan: &Plan) -> Vec<Fact> {
+    let (p, [stub, esp, root]) = (parts(), layout(plan));
+    let f = |name, value: &dyn std::fmt::Display| Fact::new(name, value).unwrap();
     match stage {
-        Stage::StubPartition => vec![f("stub-partition", p.stub_partition), f("stub-container", p.stub_container)],
-        Stage::StubSystem => vec![f("stub-volume-group", p.stub_group)],
-        Stage::Partitions => vec![f("esp-partition", p.esp), f("root-partition", p.root)],
+        Stage::StubPartition => vec![
+            f("stub-partition", &p.stub_partition),
+            f("stub-container", &p.stub_container),
+            f("stub-offset", &stub.offset),
+            f("stub-size", &stub.size),
+        ],
+        Stage::StubSystem => vec![f("stub-volume-group", &p.stub_group)],
+        Stage::Partitions => vec![
+            f("esp-partition", &p.esp),
+            f("esp-offset", &esp.offset),
+            f("esp-size", &esp.size),
+            f("root-partition", &p.root),
+            f("root-offset", &root.offset),
+            f("root-size", &root.size),
+        ],
         _ => vec![Fact::new("checked", stage.title()).unwrap()],
     }
 }
@@ -290,7 +324,7 @@ impl ScriptedEngine {
                 send(EngineBody::Checkpoint {
                     stage,
                     plan: digest,
-                    facts: checkpoint_facts(stage),
+                    facts: checkpoint_facts(stage, &plan),
                     verification: Verification::Inspected,
                 });
             }
@@ -395,7 +429,38 @@ fn fake(dir: &Path, script: Script) -> Fake {
     }
 }
 
+/// The sample Mac with its macOS container already shrunk to 300 GiB, and
+/// the space behind it free from [`FREE_START`].
+fn free_space() -> Inspection {
+    let mut i = samples::inspection();
+    i.disk.partitions[1].size = 300 * GIB;
+    i.disk.containers[0].size = 300 * GIB;
+    i.disk.containers[0].free = 100 * GIB;
+    i.candidates = vec![Candidate::FreeSpace {
+        extent: Extent {
+            offset: FREE_START,
+            size: 194 * GIB,
+        },
+    }];
+    i.layout_digest = i.disk.layout_digest().unwrap();
+    i.check().unwrap();
+    i
+}
+
+/// Installing into 100 GiB made by shrinking the sample Mac's container.
 fn world(script: Script) -> World {
+    let place = Place::ShrinkContainer {
+        container: "c54f285b-fe6e-4d0c-9bc6-567c62bd7c20".parse().unwrap(),
+    };
+    world_at(script, samples::inspection(), place)
+}
+
+/// Installing into 100 GiB of [`free_space`]'s free space.
+fn free_world(script: Script) -> World {
+    world_at(script, free_space(), Place::FreeSpace { offset: FREE_START })
+}
+
+fn world_at(script: Script, inspection: Inspection, place: Place) -> World {
     let tmp = tempfile::tempdir().unwrap();
     let user = tmp.path().join("user");
     std::fs::create_dir(&user).unwrap();
@@ -423,12 +488,10 @@ fn world(script: Script) -> World {
 
     let request = PlanRequest {
         release: "sekka-j514s-4882dc33".parse().unwrap(),
-        place: Place::ShrinkContainer {
-            container: "c54f285b-fe6e-4d0c-9bc6-567c62bd7c20".parse().unwrap(),
-        },
+        place,
         sekka: 100 * GIB,
     };
-    let plan = derive_plan(&samples::inspection(), &catalog, &request, 0).unwrap();
+    let plan = derive_plan(&inspection, &catalog, &request, 0).unwrap();
     let staged = [
         (ArtifactRole::Payload, payload_path),
         (ArtifactRole::InstallerData, data_path),
@@ -452,7 +515,9 @@ fn world(script: Script) -> World {
         staged,
         owner: "owner".parse().unwrap(),
     };
-    let helper = Helper::new(fake(tmp.path(), script), Paths::at(&tmp.path().join("state")), trust(), "0.1.0".parse().unwrap()).unwrap();
+    let fake = fake(tmp.path(), script);
+    *fake.inspection.lock().unwrap() = inspection;
+    let helper = Helper::new(fake, Paths::at(&tmp.path().join("state")), trust(), "0.1.0".parse().unwrap()).unwrap();
     World {
         _tmp: tmp,
         helper,
@@ -533,10 +598,11 @@ impl World {
     }
     /// The helper process starts again (after a crash, a restart of the
     /// Mac, or an update of the app): nothing in memory survives, while the
-    /// engines it unpacked stay in its cache.
+    /// engines it unpacked stay in its cache, and the Mac is as it was.
     fn restarted(self, script: Script) -> World {
         let fake = fake(self._tmp.path(), script);
         *fake.unpacked.lock().unwrap() = self.fake().unpacked.lock().unwrap().clone();
+        *fake.inspection.lock().unwrap() = self.fake().inspection.lock().unwrap().clone();
         let helper = Helper::new(fake, self.helper.paths_for_tests().clone(), trust(), "0.1.0".parse().unwrap()).unwrap();
         World { helper, ..self }
     }
@@ -553,8 +619,9 @@ fn refused(response: Response) -> (HelperRefusalCode, String) {
     }
 }
 
-/// A journal as a helper that stopped (or a Mac that restarted) inside a
-/// stage that changes nothing leaves it: that stage's intent, no result.
+/// A journal as a helper that stopped (or a Mac that restarted) inside
+/// `open` leaves it: every stage before it finished, as the engine records
+/// them, and that stage's intent with no result.
 fn abandoned(w: &World, open: Stage) -> Uuid {
     let id = Uuid::random().unwrap();
     let mut j = Journal::create(
@@ -570,48 +637,60 @@ fn abandoned(w: &World, open: Stage) -> Uuid {
         },
     )
     .unwrap();
-    j.append(at(), Event::Intent { stage: Stage::Import }).unwrap();
-    if open == Stage::AppleInputs {
-        j.append(
-            at(),
-            Event::Completed {
-                stage: Stage::Import,
-                facts: vec![Fact::new("owner", "owner").unwrap()],
-                verification: Verification::SourceHashed,
-            },
-        )
-        .unwrap();
-        j.append(at(), Event::Intent { stage: Stage::AppleInputs }).unwrap();
+    let shrinks = w.plan.actions.iter().any(|a| matches!(a, Action::ShrinkContainer { .. }));
+    let stages = std::iter::once(Stage::Import).chain(macos_stages(shrinks));
+    for stage in stages.take_while(|s| *s != open) {
+        let (facts, verification) = match stage {
+            Stage::Import => (vec![Fact::new("owner", "owner").unwrap()], Verification::SourceHashed),
+            _ => (checkpoint_facts(stage, &w.plan), Verification::Inspected),
+        };
+        j.append(at(), Event::Intent { stage }).unwrap();
+        j.append(at(), Event::Completed { stage, facts, verification }).unwrap();
     }
+    j.append(at(), Event::Intent { stage: open }).unwrap();
     id
 }
 
-/// This Mac after macOS's part of `plan`: the container shrunk, and the
-/// stub, ESP and root where the plan put them, which the engine reports as
-/// an installation in `state` naming `id`.
+/// This Mac with room made for `plan` and nothing of Sekka in it: the
+/// container shrunk to where the plan starts, or the free space as it was.
+fn room_for(plan: &Plan) -> Inspection {
+    if plan.actions.iter().any(|a| matches!(a, Action::ShrinkContainer { .. })) {
+        let mut i = samples::inspection();
+        let macos = &mut i.disk.partitions[1];
+        macos.size = plan.target.offset - macos.offset;
+        i.disk.containers[0].size = macos.size;
+        i.disk.containers[0].free = 100 * GIB;
+        i.candidates = vec![Candidate::FreeSpace { extent: plan.target }];
+        i.layout_digest = i.disk.layout_digest().unwrap();
+        i.check().unwrap();
+        i
+    } else {
+        free_space()
+    }
+}
+
+/// This Mac after macOS's part of `plan`: the stub, ESP and root where the
+/// engine put them, which it reports as an installation in `state` naming
+/// `id`.
 fn installed(plan: &Plan, id: Option<Uuid>, state: InstallationState) -> Inspection {
-    let mut i = samples::inspection();
-    let (t, a, p) = (plan.target, plan.allocation, parts());
-    let macos = &mut i.disk.partitions[1];
-    macos.size = t.offset - macos.offset;
-    i.disk.containers[0].size = macos.size;
-    i.disk.containers[0].free = 100 * GIB;
-    let partition = |uuid, kind, offset, size| Partition {
+    let mut i = room_for(plan);
+    let ([stub, esp, root], p) = (layout(plan), parts());
+    let partition = |uuid, kind, at: Extent| Partition {
         uuid,
         kind,
         name: "Sekka".parse().unwrap(),
-        offset,
-        size,
+        offset: at.offset,
+        size: at.size,
     };
     i.disk.partitions.extend([
-        partition(p.stub_partition, PartitionKind::Apfs, t.offset, a.stub),
-        partition(p.esp, PartitionKind::Efi, t.offset + a.stub, a.esp),
-        partition(p.root, PartitionKind::Linux, t.offset + a.stub + a.esp, a.root),
+        partition(p.stub_partition, PartitionKind::Apfs, stub),
+        partition(p.esp, PartitionKind::Efi, esp),
+        partition(p.root, PartitionKind::Linux, root),
     ]);
     i.disk.containers.push(Container {
         uuid: p.stub_container,
         partition: p.stub_partition,
-        size: a.stub,
+        size: stub.size,
         free: 0,
         volume_groups: vec![VolumeGroup {
             uuid: p.stub_group,
@@ -648,14 +727,7 @@ fn installed(plan: &Plan, id: Option<Uuid>, state: InstallationState) -> Inspect
 /// This Mac with Sekka's partitions deleted by hand and the space left
 /// unallocated.
 fn emptied(plan: &Plan) -> Inspection {
-    let mut i = samples::inspection();
-    let macos = &mut i.disk.partitions[1];
-    macos.size = plan.target.offset - macos.offset;
-    i.disk.containers[0].size = macos.size;
-    i.candidates = vec![Candidate::FreeSpace { extent: plan.target }];
-    i.layout_digest = i.disk.layout_digest().unwrap();
-    i.check().unwrap();
-    i
+    room_for(plan)
 }
 
 fn fact_of(event: &Event, name: &str) -> Option<String> {
@@ -1093,6 +1165,39 @@ fn recovery_not_finished_changes_nothing() {
     *w.fake().inspection.lock().unwrap() = other;
     assert_eq!(w.reconcile(id), (InstallState::WaitingForRecovery, before));
     assert!(w.lines(id).iter().any(|l| l.contains("nothing recorded")));
+}
+
+#[test]
+fn a_free_space_installation_is_found_where_its_engine_put_it() {
+    let w = free_world(Script::Happy);
+    let id = w.begun();
+    let (state, before) = w.finish(id);
+    assert_eq!(state, InstallState::WaitingForRecovery);
+    // The free space starts short of the plan's aligned offset, and the
+    // engine put the stub there.
+    let stub: u64 = before.iter().find_map(|r| fact_of(&r.event, "stub-offset")).unwrap().parse().unwrap();
+    assert!(stub < w.plan.target.offset && w.plan.target.offset - stub < ALIGN);
+    let finished = installed(&w.plan, Some(id), InstallationState::Complete);
+
+    // Parts that aren't where its stages recorded creating them, or a plan
+    // that doesn't give them that space, change nothing.
+    let mut moved = finished.clone();
+    moved.disk.partitions.last_mut().unwrap().offset += 4096;
+    moved.layout_digest = moved.disk.layout_digest().unwrap();
+    let mut later = w.plan.clone();
+    later.target.offset += ALIGN;
+    for (plan, inspection, why) in [
+        (&w.plan, &moved, "where its own stages created them"),
+        (&later, &finished, "where its plan put them"),
+    ] {
+        let found = crate::reconcile::look(&before, &state, plan, inspection);
+        assert!(matches!(&found, crate::reconcile::Finding::Unchanged(w) if w.ends_with(why)), "{found:?}");
+    }
+
+    *w.fake().inspection.lock().unwrap() = finished;
+    let (state, records) = w.reconcile(id);
+    assert_eq!(state, InstallState::WaitingForSetup);
+    assert_eq!(records.len(), before.len() + 4);
 }
 
 #[test]

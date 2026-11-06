@@ -10,7 +10,7 @@
 //! the parts the installation's own records name. Anything it can't tell
 //! for certain leaves the journal as it is.
 use sekka_mac_contract::{
-    Action, Event, Extent, Fact, Inspection, InstallState, Installation, InstallationKind,
+    ALIGN, Action, Event, Extent, Fact, Inspection, InstallState, Installation, InstallationKind,
     InstallationState, IssueCode, Partition, Plan, Record, Stage, Uuid, Verification,
 };
 
@@ -113,6 +113,29 @@ fn overlaps(extent: Extent, p: &Partition) -> bool {
     p.offset < extent.end() && extent.offset < p.offset.saturating_add(p.size)
 }
 
+/// Where the engine may put a plan's parts: its target, and the rest of the
+/// MiB before it. Free space starts wherever the partition before it ends,
+/// and the plan rounds its offset up to the next MiB; the engine creates the
+/// stub at the start of the free space, so up to a MiB before the plan's
+/// offset (`stage_stub_partition` accepts exactly that).
+fn space(plan: &Plan) -> Extent {
+    let offset = plan.target.offset.saturating_sub(ALIGN - 1);
+    Extent {
+        offset,
+        size: plan.target.end() - offset,
+    }
+}
+
+/// Where a stage recorded creating a part: its `{part}-offset` and
+/// `{part}-size` facts.
+fn recorded_extent(facts: &[Fact], part: &str) -> Option<Extent> {
+    let number = |what| fact(facts, &format!("{part}-{what}"))?.parse().ok();
+    Some(Extent {
+        offset: number("offset")?,
+        size: number("size")?,
+    })
+}
+
 /// The partitions an installation the inspection reports is made of, or
 /// none if it names a part that isn't on the disk.
 fn parts<'a>(found: &Installation, inspection: &'a Inspection) -> Option<Vec<&'a Partition>> {
@@ -136,7 +159,8 @@ fn parts<'a>(found: &Installation, inspection: &'a Inspection) -> Option<Vec<&'a
 /// The engine reports the installation complete: its stub's boot policy
 /// names a custom boot object, which only Recovery's two steps (allowing
 /// the startup software, then installing it) leave. Its stub, ESP and root
-/// must be the ones its own stages created, where its plan put them.
+/// must be the partitions its own stages created, at the offsets and sizes
+/// they recorded, inside the space its plan gave them.
 fn recovery_finished(
     records: &[Record],
     plan: &Plan,
@@ -154,9 +178,20 @@ fn recovery_finished(
     {
         return Err("the installation on the disk isn't made of the parts its record names");
     }
-    let placed = parts(found, inspection)
-        .is_some_and(|ps| ps.len() == 3 && ps.iter().all(|p| within(plan.target, p)));
-    if !placed {
+    let located = parts(found, inspection).and_then(|ps| <[&Partition; 3]>::try_from(ps).ok());
+    let Some([stub_part, esp_part, root_part]) = located else {
+        return Err("the inspection doesn't find all of its parts on the disk");
+    };
+    if recorded("stub-partition") != Some(stub_part.uuid) {
+        return Err("the installation on the disk isn't made of the parts its record names");
+    }
+    let created = [(stub_part, "stub"), (esp_part, "esp"), (root_part, "root")]
+        .iter()
+        .all(|(p, name)| recorded_extent(&facts, name) == Some(Extent { offset: p.offset, size: p.size }));
+    if !created {
+        return Err("its parts aren't where its own stages created them");
+    }
+    if ![stub_part, esp_part, root_part].iter().all(|p| within(space(plan), p)) {
         return Err("its parts aren't where its plan put them");
     }
     let facts = evidence(&[

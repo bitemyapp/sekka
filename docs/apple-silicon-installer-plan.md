@@ -547,7 +547,7 @@ records nothing when the inspection can't see the plan's disk or is ambiguous.
 | Verified assets; no mutation intent | Revalidate/reuse assets or cancel without disk changes; a stage that changes nothing and was cut off by a restart is recorded as interrupted, then cancelled |
 | Mutation started; completion not proved | Inspect actual state; stop for reconciliation if its effect is ambiguous |
 | Payload checkpoint verified; startup authorization failed | Reverify target/content and retry authorization only |
-| macOS's part complete; waiting for Recovery | Finish in Recovery. Once the helper's inspection shows the installation complete (the stub's boot policy names its boot object) and made of the stub, ESP and root its records name, record both Recovery steps as policy read back, with the inspection as their source |
+| macOS's part complete; waiting for Recovery | Finish in Recovery. Once the helper's inspection shows the installation complete (the stub's boot policy names its boot object) and made of the stub, ESP and root its records name, at the offsets and sizes its stages recorded, record both Recovery steps as policy read back, with the inspection as their source |
 | Recovery enrollment uncertain | Read actual policy/selection and preserve matching boot software; never blindly restore an older payload |
 | Waiting for Linux setup | Boot the installed target and resume only that installation's setup transaction |
 | Account/configuration partly committed | Reconcile the existing account and generation; never reset a user's password as a retry |
