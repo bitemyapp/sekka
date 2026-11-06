@@ -6,7 +6,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aizome_kit::sidestep_ui::PointerButton;
+use aizome_kit::sidestep_ui::{Key, Modifiers, NamedKey, PointerButton};
 use aizome_kit::testing::{Harness, assert_golden};
 use aizome_kit::theme::{Appearance, ThemeChoice};
 use aizome_kit::{Point, Size};
@@ -15,7 +15,7 @@ use kura::nix::StoreSize;
 use kura::scan::{ProgressSnapshot, Scan, ScanOptions};
 use kura::tree::{Entry, Kind, NodeId, Tree};
 use kura::ui::rings::{self, Geometry, RINGS};
-use kura::ui::{Kura, Msg, Page};
+use kura::ui::{Cut, Kura, Msg, Page, PathOrder};
 
 const GB: u64 = 1_000_000_000;
 const MB: u64 = 1_000_000;
@@ -943,7 +943,7 @@ fn fake_hints() -> Vec<kura::hints::Hint> {
         K::Command,
         vec![hp("/home/sekka/.cache/google-chrome", 1900 * MB, Some("Chrome's cache"))],
     );
-    let downloads = hint(
+    let mut downloads = hint(
         "old-downloads",
         "Old downloads in /home/sekka/Downloads",
         "Files in Downloads not changed for 90 days. Installers and disk images are often done with, but these are yours: choose.",
@@ -954,6 +954,8 @@ fn fake_hints() -> Vec<kura::hints::Hint> {
             hp("/home/sekka/Downloads/old-backup.zip", 1200 * MB, Some("Archives, untouched 1 year ago")),
         ],
     );
+    downloads.paths[0].modified = Some("2025-07-02T09:14:00Z".into());
+    downloads.paths[1].modified = Some("2024-10-15T18:30:00Z".into());
     let mut dupes = hint(
         "duplicates",
         "Duplicate files",
@@ -1092,6 +1094,127 @@ fn suggestions_list_the_hints_and_light_their_paths() {
     assert!(h.program().pending.is_none());
 }
 
+/// Choose item `j` of the menu that clicking `label` opens, by keyboard.
+fn choose_in_menu(h: &mut Harness<Kura>, label: &str, j: usize) {
+    let w = h.window();
+    assert!(h.click_text(w, label), "{label} in {:?}", h.texts(w));
+    let popup = h.popups(w).last().map(|(p, _)| *p).expect("a menu");
+    h.popup_keyboard(popup, Key::Named(NamedKey::Home), Modifiers::default());
+    for _ in 0..j {
+        h.popup_keyboard(popup, Key::Named(NamedKey::ArrowDown), Modifiers::default());
+    }
+    h.popup_keyboard(popup, Key::Named(NamedKey::Enter), Modifiers::default());
+    assert!(h.popups(w).is_empty());
+}
+
+/// The tick beside the path named `name`, left of its name.
+fn tick_of(h: &Harness<Kura>, name: &str) -> Point {
+    let r = h.find(h.window(), name).unwrap_or_else(|| panic!("{name} shows"));
+    Point::new(r.x0 - 14.0, r.y0 + 8.0)
+}
+
+#[test]
+fn a_hints_paths_tick_in_runs_by_their_order() {
+    let out = scratch("suggest-sort");
+    let mut h = kura(&out, night());
+    h.program_mut().now = Some(1_764_547_200);
+    assert_eq!(kura::time::rfc3339(1_764_547_200), "2025-12-01T00:00:00Z");
+    with_results(&mut h);
+    let w = h.window();
+    // A third download: the smallest, and modified between the other two.
+    let mut a = fake_analysis();
+    let hints = Arc::make_mut(&mut a.hints);
+    let d = hints.iter().position(|x| x.id == "old-downloads").unwrap();
+    let mut p = hp("/home/sekka/Downloads/installer.AppImage", 400 * MB, Some("Apps, untouched 8 months ago"));
+    p.modified = Some("2025-03-20T12:00:00Z".into());
+    hints[d].paths.push(p);
+    hints[d].reclaimable_bytes += 400 * MB;
+    h.send(Msg::Indexed(Ok(a)));
+    h.send(Msg::ShowSide(kura::ui::Side::Suggestions));
+    h.send(Msg::ExpandHint(d, true));
+    // The names from the top of the list down.
+    let listed = |h: &Harness<Kura>| {
+        let mut at = ["sekka-nightly.iso", "old-backup.zip", "installer.AppImage"]
+            .map(|n| (h.find(w, n).unwrap_or_else(|| panic!("{n} shows")).y0, n));
+        at.sort_by(|a, b| a.0.total_cmp(&b.0));
+        at.map(|(_, n)| n)
+    };
+    let chosen = |h: &Harness<Kura>| {
+        let k = h.program();
+        let mut names: Vec<String> = k
+            .chosen_paths(&k.analysis.hints[d])
+            .0
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    };
+    assert_eq!(listed(&h), ["sekka-nightly.iso", "old-backup.zip", "installer.AppImage"], "largest first");
+    assert!(h.texts(w).iter().any(|t| t == "2024-10-15"), "each says when it was last modified");
+    assert!(chosen(&h).is_empty(), "the person's call: none ticked");
+
+    // Largest first, the menu offers what's 1 GB or larger, and says what it frees.
+    choose_in_menu(&mut h, "Select", 0);
+    assert_eq!(chosen(&h), ["old-backup.zip", "sekka-nightly.iso"]);
+    assert!(h.texts(w).iter().any(|x| x == "4.60 GB; freed once the Trash is emptied"));
+
+    // Oldest first: the ticks stay, and the menu offers ages instead.
+    choose_in_menu(&mut h, "Largest first", 2);
+    assert_eq!(listed(&h), ["old-backup.zip", "installer.AppImage", "sekka-nightly.iso"], "oldest first");
+    assert_eq!(chosen(&h).len(), 2);
+    // The menu open, in pictures.
+    assert!(h.click_text(w, "Select"));
+    assert_eq!(h.popups(w).len(), 1);
+    golden_settled(&mut h, w, golden("suggestions-sorted-night.png"), 2.0);
+    h.set_appearance(day());
+    golden_settled(&mut h, w, golden("suggestions-sorted-day.png"), 2.0);
+    h.set_appearance(night());
+    for (p, _) in h.popups(w) {
+        h.popup_keyboard(p, Key::Named(NamedKey::Escape), Modifiers::default());
+    }
+    // "Older than 6 months": the run of the two oldest, and only them.
+    choose_in_menu(&mut h, "Select", 1);
+    assert_eq!(chosen(&h), ["installer.AppImage", "old-backup.zip"]);
+    assert!(h.texts(w).iter().any(|x| x == "1.60 GB; freed once the Trash is emptied"));
+
+    // A run by hand: tick the first, Shift-click the last.
+    assert!(h.click_text(w, "Select None"));
+    assert!(chosen(&h).is_empty());
+    h.click(w, tick_of(&h, "old-backup.zip"));
+    assert_eq!(chosen(&h), ["old-backup.zip"]);
+    h.click_with(w, tick_of(&h, "sekka-nightly.iso"), Modifiers::SHIFT);
+    assert_eq!(chosen(&h).len(), 3, "the run between them");
+    // Shift-clicking a ticked one unticks the run back to the last click.
+    h.click_with(w, tick_of(&h, "installer.AppImage"), Modifiers::SHIFT);
+    assert_eq!(chosen(&h), ["old-backup.zip"]);
+
+    h.send(Msg::SortPaths(d, PathOrder::Newest));
+    assert_eq!(listed(&h), ["sekka-nightly.iso", "installer.AppImage", "old-backup.zip"], "newest first");
+    // Each hint keeps its own order.
+    let k = h.program();
+    assert_eq!(k.path_order(&k.analysis.hints[hint_named(&h, "package-caches")]), PathOrder::Largest);
+
+    // More paths than the window lists: the rest are a click away, and a
+    // cut that ticks any of them shows them all.
+    let mut a = fake_analysis();
+    let hints = Arc::make_mut(&mut a.hints);
+    hints[d].paths =
+        (0..45u64).map(|n| hp(&format!("/home/sekka/Downloads/file-{n:02}.bin"), (50 - n) * MB, None)).collect();
+    h.send(Msg::Indexed(Ok(a)));
+    h.send(Msg::SortPaths(d, PathOrder::Largest));
+    let texts = h.texts(w);
+    assert!(texts.iter().any(|x| x == "Show the other 5 paths"), "{texts:?}");
+    assert!(!texts.iter().any(|x| x == "file-44.bin"));
+    h.send(Msg::ChooseCut(d, Cut::All));
+    assert_eq!(chosen(&h).len(), 45);
+    let texts = h.texts(w);
+    assert!(texts.iter().any(|x| x == "file-44.bin"), "what's ticked shows");
+    assert!(!texts.iter().any(|x| x.starts_with("Show the other")));
+    h.send(Msg::ChooseNone(d));
+    assert!(chosen(&h).is_empty());
+}
+
 /// A home with one of each kind of hint, in a folder of the test's own.
 fn suggest_home(out: &Path) -> (PathBuf, kura::hints::Context) {
     let h = out.join("home");
@@ -1225,6 +1348,7 @@ fn suggestions_fit_the_frame_budget() {
     let mut pick = Vec::new();
     let mut open = Vec::new();
     let mut tick = Vec::new();
+    let mut sort = Vec::new();
     for round in 0..4 {
         for i in 0..n {
             if let Some(d) = frame(&mut h, |h| h.send(Msg::FocusHint(Some(i)))) {
@@ -1239,10 +1363,14 @@ fn suggestions_fit_the_frame_budget() {
         if let Some(t) = frame(&mut h, |h| h.send(Msg::Choose(p.clone(), round % 2 == 0))) {
             tick.push(t);
         }
+        if let Some(t) = frame(&mut h, |h| h.send(Msg::SortPaths(d, PathOrder::ALL[round % 3]))) {
+            sort.push(t);
+        }
     }
     let pick50 = report("picking a hint (the rings move and dim)", pick);
     let open50 = report("opening or closing a hint", open);
     report("ticking a path", tick);
+    report("sorting a hint's paths", sort);
     if !cfg!(debug_assertions) {
         assert!(open50 < Duration::from_millis(4), "opening p50 {open50:?}");
         let _ = pick50;

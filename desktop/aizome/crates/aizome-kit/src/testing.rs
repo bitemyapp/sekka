@@ -741,6 +741,14 @@ impl<P: Program> Harness<P> {
         self.release(key, at, PointerButton::Left);
     }
 
+    /// Press and release the left button at `at` with `mods` held (a
+    /// Shift-click, say).
+    pub fn click_with(&mut self, key: WindowKey, at: Point, mods: Modifiers) {
+        let held = std::mem::replace(&mut self.rt.core.mods, mods);
+        self.click(key, at);
+        self.rt.core.mods = held;
+    }
+
     /// Click the middle of the first element showing `text`; whether
     /// there was one.
     pub fn click_text(&mut self, key: WindowKey, text: &str) -> bool {
