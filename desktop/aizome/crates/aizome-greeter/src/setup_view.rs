@@ -55,7 +55,9 @@ pub fn page(g: &Greeter, s: &Setup, size: Size) -> (Element<Msg>, f64) {
         Page::Unavailable => unavailable(s),
     };
     let power = g.cfg.power;
-    let back = s.page.back() != s.page;
+    // Once the account exists, a failed setup can only be finished.
+    let made = s.page == Page::Failed && s.failure.as_ref().is_some_and(|f| f.account_exists);
+    let back = s.page.back() != s.page && !made;
     let body = focus_keys(aizome_kit::column(parts), move |k| match named(k) {
         Some(NamedKey::Escape) if back => Some(m(SetupMsg::Back)),
         Some(NamedKey::F(3)) if power => Some(Msg::PowerMenu),

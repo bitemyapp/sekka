@@ -66,9 +66,8 @@ fn usage() -> ExitCode {
 fn serve(path: &std::path::Path) -> anyhow::Result<()> {
     let listener = server::activated()?;
     let config = Config::load(path)?;
-    let mut host = Host::new(&config);
-    let greeter = server::uid_of(&host, &config.greeter_user)?;
-    server::serve(&listener, &config, &mut host, greeter, server::IDLE_SERVER)
+    let greeter = server::uid_of(&Host::new(&config), &config.greeter_user)?;
+    server::serve(&listener, &config, || Host::new(&config), greeter, server::IDLE_SERVER)
 }
 
 fn status(path: &std::path::Path) -> anyhow::Result<()> {

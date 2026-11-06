@@ -402,6 +402,8 @@ pub fn write_new(path: &Path, contents: &[u8], mode: u32) -> Result<bool> {
         Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => return Ok(false),
         Err(e) => return Err(e).with_context(|| format!("creating {}", path.display())),
     };
+    // The mode asked for, whatever the umask (the service runs with 0077).
+    f.set_permissions(std::fs::Permissions::from_mode(mode))?;
     f.write_all(contents)?;
     f.sync_all()?;
     sync_dir(path)?;

@@ -119,6 +119,12 @@ let
           version
           ;
       };
+      # The login screen alone, for VM checks against another build's
+      # compositor (greeter-package.nix).
+      greeter = pkgs.callPackage ./greeter-package.nix {
+        inherit aizome;
+        libsecret = libsecretFor pkgs;
+      };
       archivo = pkgs.callPackage ./fonts.nix { };
       # The session's fonts (Archivo, and nixpkgs' IBM Plex Mono and Noto
       # Sans Symbols 2) as files in one folder, for $AIZOME_FONT_DIR

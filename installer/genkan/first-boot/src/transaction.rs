@@ -28,7 +28,7 @@
 
 use std::io::Write;
 use std::os::fd::AsRawFd;
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
 use anyhow::{Context, Result, ensure};
@@ -162,6 +162,8 @@ pub fn write_atomic(path: &Path, contents: &[u8], mode: u32) -> Result<()> {
         .custom_flags(libc::O_NOFOLLOW)
         .open(&tmp)
         .with_context(|| format!("creating {}", tmp.display()))?;
+    // The mode asked for, whatever the umask (the service runs with 0077).
+    f.set_permissions(std::fs::Permissions::from_mode(mode))?;
     f.write_all(contents)?;
     f.sync_all()?;
     drop(f);
@@ -773,6 +775,21 @@ pub(crate) mod tests {
         // Done means done: setup refuses to run again.
         assert!(w.begin(None).is_err());
         assert_eq!(w.sys.shadow["ada"], hash);
+    }
+
+    /// The service's umask is 0077; what others read (setup.nix, the login
+    /// screen's keyboard) still gets its mode, and the secret stays root's.
+    #[test]
+    fn files_get_their_modes_whatever_the_umask() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        // Safety: umask is process-wide; these files are this test's alone.
+        let old = unsafe { libc::umask(0o077) };
+        write_atomic(&dir.path().join("public"), b"x", 0o644).unwrap();
+        write_new(&dir.path().join("secret"), b"x", 0o600).unwrap();
+        unsafe { libc::umask(old) };
+        let mode = |n: &str| std::fs::metadata(dir.path().join(n)).unwrap().permissions().mode() & 0o777;
+        assert_eq!((mode("public"), mode("secret")), (0o644, 0o600));
     }
 
     #[test]

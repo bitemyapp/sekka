@@ -231,6 +231,8 @@ impl Page {
             Page::Account => Page::Region,
             Page::Desktop => Page::Account,
             Page::Review => Page::Desktop,
+            // Nothing was made yet: the choices can still change.
+            Page::Failed => Page::Review,
             p => p,
         }
     }

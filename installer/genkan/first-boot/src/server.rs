@@ -3,8 +3,8 @@
 //! group `sekka-setup`, mode 0660: only the login screen's account is in
 //! the group) and starts the helper with it; the helper also asks the
 //! kernel who connected (`SO_PEERCRED`) and answers only the login
-//! screen's account. It serves one connection at a time and exits once
-//! none has come for a while; systemd starts it again for the next.
+//! screen's account. It exits once no connection has been open for a
+//! while; systemd starts it again for the next.
 
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -74,16 +74,36 @@ fn readable(listener: &UnixListener, wait: Duration) -> Result<bool> {
     }
 }
 
-/// Serve connections from the login screen's account (`allowed`) until
-/// none comes for `idle`.
-pub fn serve<S: System>(listener: &UnixListener, config: &Config, sys: &mut S, allowed: u32, idle: Duration) -> Result<()> {
-    while readable(listener, idle)? {
-        let (stream, _) = listener.accept()?;
-        if let Err(e) = connection(stream, config, sys, allowed) {
-            eprintln!("setup: a connection ended: {e:#}");
+/// Serve connections from the login screen's account (`allowed`), each on
+/// a thread of its own with a system from `make` (the login screen keeps
+/// its connection while the person fills in the pages, and anyone else is
+/// told no at once), until none is open and none comes for `idle`.
+/// Completions take turns on the state directory's lock.
+pub fn serve<S: System + Send + 'static>(
+    listener: &UnixListener,
+    config: &Config,
+    make: impl Fn() -> S,
+    allowed: u32,
+    idle: Duration,
+) -> Result<()> {
+    let open = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    loop {
+        if !readable(listener, idle)? {
+            if open.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+                return Ok(());
+            }
+            continue;
         }
+        let (stream, _) = listener.accept()?;
+        let (config, mut sys, open) = (config.clone(), make(), open.clone());
+        open.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        std::thread::Builder::new().name("setup-connection".into()).spawn(move || {
+            if let Err(e) = connection(stream, &config, &mut sys, allowed) {
+                eprintln!("setup: a connection ended: {e:#}");
+            }
+            open.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+        })?;
     }
-    Ok(())
 }
 
 /// One connection: its peer checked, then its requests in turn.
@@ -314,6 +334,30 @@ mod tests {
         assert_eq!(peer_uid(&s).unwrap(), me);
         c.write_all(b"{\"op\":\"status\"}\n").unwrap();
         assert!(connection(s, &config, &mut sys, me.wrapping_add(1)).is_err());
+    }
+
+    /// The login screen keeps its connection open while the person types:
+    /// another is still answered meanwhile, and the server ends once both
+    /// have gone and none comes.
+    #[test]
+    fn connections_are_served_side_by_side() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = sample(dir.path());
+        let path = dir.path().join("setup.sock");
+        let listener = UnixListener::bind(&path).unwrap();
+        let me = unsafe { libc::getuid() };
+        let server = std::thread::spawn({
+            let config = config.clone();
+            move || serve(&listener, &config, Fake::image, me, Duration::from_millis(300))
+        });
+        let held = UnixStream::connect(&path).unwrap();
+        let mut asking = UnixStream::connect(&path).unwrap();
+        asking.write_all(b"{\"op\":\"status\"}\n").unwrap();
+        let mut answer = String::new();
+        BufReader::new(&asking).read_line(&mut answer).unwrap();
+        assert!(answer.starts_with("{\"status\":"), "{answer}");
+        drop((held, asking));
+        server.join().unwrap().unwrap();
     }
 
     #[test]

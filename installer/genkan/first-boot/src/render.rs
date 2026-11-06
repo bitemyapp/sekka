@@ -126,6 +126,26 @@ mod tests {
         assert!(text.contains(r#"fileSystems."/".device = lib.mkForce "/dev/disk/by-partuuid/63d89be1-72f7-4aff-9679-09cafa7e0c2d";"#));
     }
 
+    /// `test-data/setup.nix` is what setup writes for the staged choices
+    /// below with the handoff's partitions; the module's check evaluates a
+    /// whole system with it (default.nix). `SEKKA_SETUP_GOLDEN=write`
+    /// writes it anew.
+    #[test]
+    fn the_evaluated_example_is_what_setup_writes() {
+        let mut s = staged();
+        s.full_name = "Ada Lovelace".into();
+        s.desktop = "aizome".into();
+        s.groups = vec!["networkmanager".into(), "wheel".into(), "render".into()];
+        s.partitions = Some(("63d89be1-72f7-4aff-9679-09cafa7e0c2d".into(), "910de5ca-7390-4716-9a54-8028916e4d78".into()));
+        let text = setup_nix(&s);
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("test-data/setup.nix");
+        if std::env::var("SEKKA_SETUP_GOLDEN").as_deref() == Ok("write") {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, &text).unwrap();
+        }
+        assert_eq!(text, include_str!("../test-data/setup.nix"));
+    }
+
     #[test]
     fn keyboard_files() {
         assert_eq!(read_greeter_keyboard(&greeter_keyboard("de")).as_deref(), Some("de"));

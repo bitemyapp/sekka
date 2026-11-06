@@ -180,7 +180,21 @@
       # Aizome's own VM checks (desktop/aizome/nix), under the names its
       # flake gave them: `nix build .#aizome-checks.session`. Not among
       # `checks`, which CI runs, as they weren't in Aizome's repository.
-      legacyPackages.${system}.aizome-checks = inputs.aizome.checks.${system};
+      #
+      # First-boot setup (installer/genkan/first-boot): its helper, a
+      # configuration evaluated with the setup.nix it writes, and its VM
+      # test, for PCs and Macs: `nix build .#first-boot.vm-test` (on either
+      # system). Not among `checks` either.
+      legacyPackages = nixpkgs.lib.genAttrs [ system "aarch64-linux" ] (
+        s:
+        {
+          first-boot = import ./installer/genkan/first-boot {
+            inherit nixpkgs inputs;
+            system = s;
+          };
+        }
+        // nixpkgs.lib.optionalAttrs (s == system) { aizome-checks = inputs.aizome.checks.${system}; }
+      );
       apps.${system} = {
         update = {
           type = "app";
