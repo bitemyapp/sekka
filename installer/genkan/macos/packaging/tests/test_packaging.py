@@ -159,6 +159,17 @@ class PublishTest(unittest.TestCase):
         os.unlink(os.path.join(d, "ledger.json"))
         self.assertIn("there is no qualification ledger (ledger.json)", self.plan(d)[1])
 
+    def test_the_channel_file_is_planned_only_if_it_verifies(self):
+        d = self.candidate()
+        self.plan(d)
+        self.assertIn(f"verify {os.path.join(d, 'catalog.signed.json')}", self.calls())
+        self.refuse("verify")
+        uploads, problems = self.plan(d)
+        self.assertEqual(uploads, [])
+        self.assertEqual(problems, ["catalog.signed.json doesn't verify, so no installer would accept it: refused"])
+        os.unlink(os.path.join(d, "catalog.signed.json"))
+        self.assertIn("there is no signed catalog (catalog.signed.json)", self.plan(d)[1])
+
     def test_without_the_tool_nothing_is_promoted(self):
         d = self.candidate()
         problems = publish.plan(d, tool=os.path.join(self.bin.name, "missing"))[1]

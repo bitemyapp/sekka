@@ -165,6 +165,42 @@ fn an_empty_partial_or_unfinished_ledger_is_refused() {
     assert!(dry_run(c.path()).0);
 }
 
+/// The channel file is published as it is, so the dry run refuses any
+/// catalog an installer would refuse.
+#[test]
+fn a_catalog_installers_would_refuse_is_never_planned() {
+    let c = Candidate::new();
+    let at = |name: &str| c.file(name).to_string_lossy().into_owned();
+    let signed = fs::read(c.file("catalog.signed.json")).unwrap();
+
+    let mut newline = signed.clone();
+    newline.push(b'\n');
+    fs::write(c.file("catalog.signed.json"), &newline).unwrap();
+    refused(&c, "catalog.signed.json doesn't verify, so no installer would accept it: the release catalog couldn't be read: the document isn't in canonical form");
+
+    let doc: Value = serde_json::from_slice(&signed).unwrap();
+    fs::write(c.file("catalog.json"), doc["catalog"].to_string()).unwrap();
+    tool(&["keygen", &at("other.key")]);
+    let forged = tool(&["sign", &at("other.key"), sekka_mac_trust::DEVELOPMENT_KEY_ID, &at("catalog.json")]);
+    fs::write(c.file("catalog.signed.json"), forged).unwrap();
+    refused(&c, "the release catalog's signature doesn't verify");
+
+    let mut stable = doc["catalog"].clone();
+    stable["channel"] = json!("stable");
+    fs::write(c.file("catalog.json"), stable.to_string()).unwrap();
+    let stable = tool(&["sign", "--development", sekka_mac_trust::DEVELOPMENT_KEY_ID, &at("catalog.json")]);
+    fs::write(c.file("catalog.signed.json"), stable).unwrap();
+    refused(&c, "the key sekka-development-2026 may not sign the stable channel");
+
+    let mut unsigned = doc.clone();
+    unsigned.as_object_mut().unwrap().remove("signature");
+    fs::write(c.file("catalog.signed.json"), unsigned.to_string()).unwrap();
+    refused(&c, "missing field `signature`");
+
+    fs::write(c.file("catalog.signed.json"), &signed).unwrap();
+    assert!(dry_run(c.path()).0);
+}
+
 #[test]
 fn another_candidates_ledger_is_refused() {
     let c = Candidate::new();

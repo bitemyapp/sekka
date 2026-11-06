@@ -12,9 +12,12 @@ qualification ledger (ledger.json) and every artifact the ledger's
 candidate records, under the names it records them by. Each artifact a
 catalog release names is there under the file name its URL ends with.
 --tool names sekka-mac-tool (by default the one on PATH), which decides
-whether the ledger is complete; this script doesn't keep its own list of
-cases. Refused when:
+whether the catalog verifies and whether the ledger is complete; this
+script keeps no trust roots or list of cases of its own. Refused when:
 
+- the signed catalog doesn't verify: `sekka-mac-tool verify` refuses its
+  exact bytes, which become the channel's catalog-<channel>.signed.json
+  and which every installer on the channel would check the same way;
 - the ledger isn't complete: `sekka-mac-tool ledger check` refuses it;
 - the ledger is for another candidate: an artifact its candidate records
   isn't here with that size and digest, an artifact the catalog names isn't
@@ -104,13 +107,28 @@ def recorded_artifacts(candidate, record):
     return problems, recorded
 
 
+def signed_catalog(candidate, tool):
+    """Problems with the signed catalog, and the catalog when the tool
+    verifies it."""
+    path = os.path.join(candidate, "catalog.signed.json")
+    if not os.path.isfile(path):
+        return ["there is no signed catalog (catalog.signed.json)"], None
+    ok, said = ask(tool, "verify", path)
+    if not ok:
+        return [f"catalog.signed.json doesn't verify, so no installer would accept it: {line}" for line in said], None
+    return [], read_json(path)["catalog"]
+
+
 def plan(candidate, published=None, tool="sekka-mac-tool"):
-    problems, record = ledger_candidate(candidate, tool)
+    problems, catalog = signed_catalog(candidate, tool)
+    found, record = ledger_candidate(candidate, tool)
+    problems += found
+    if catalog is None:
+        return [], problems
     recorded = None
     if record is not None:
         found, recorded = recorded_artifacts(candidate, record)
         problems += found
-    catalog = read_json(os.path.join(candidate, "catalog.signed.json"))["catalog"]
     uploads = []
     for release in catalog["releases"]:
         if record is not None:
