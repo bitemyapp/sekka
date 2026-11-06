@@ -32,7 +32,7 @@ fn main() {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
     }
-    match helper::run(debugfs, Path::new(CHOICE), Path::new(STATUS), on) {
+    match helper::run(debugfs, Path::new("/sys"), Path::new(CHOICE), Path::new(STATUS), on) {
         Ok(s) if s.available => println!("Panel Self Refresh {}", if s.on { "on" } else { "off" }),
         Ok(_) => println!("this panel can't refresh itself"),
         Err(e) => {
