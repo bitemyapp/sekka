@@ -36,6 +36,7 @@ struct Fake {
     /// Every acknowledgement found its intent already in the journal.
     ordering_held: Arc<AtomicBool>,
     engine_runs: Arc<Mutex<u32>>,
+    startup_runs: Arc<Mutex<u32>>,
 }
 
 impl Platform for Fake {
@@ -67,31 +68,38 @@ impl Platform for Fake {
     fn start_engine(
         &self,
         _: &EngineInstall,
+        run: crate::EngineRun<'_>,
         _installation: Uuid,
         plan: &Path,
-        assets: &Path,
         owner: &str,
         password: Secret,
     ) -> Result<Box<dyn EngineProcess>, PlatformError> {
         assert_eq!(owner, "owner");
         assert_eq!(&password[..], PASSWORD);
-        assert!(assets.join("payload.zip").exists());
-        *self.engine_runs.lock().unwrap() += 1;
         let plan: Plan = canonical::from_slice(&std::fs::read(plan).unwrap(), limits::PLAN, PlanSchema::VALUE).unwrap();
+        let (mode, script) = match run {
+            crate::EngineRun::Execute { assets } => {
+                assert!(assets.join("payload.zip").exists());
+                *self.engine_runs.lock().unwrap() += 1;
+                (EngineMode::Execute, *self.script.lock().unwrap())
+            }
+            crate::EngineRun::StartupDisk => {
+                *self.startup_runs.lock().unwrap() += 1;
+                let script = if self.startup_disk_ok.load(Ordering::SeqCst) {
+                    Script::Happy
+                } else {
+                    Script::Fail(Stage::StartupDisk, DiskChanged::No)
+                };
+                (EngineMode::StartupDisk, script)
+            }
+        };
         Ok(Box::new(ScriptedEngine::start(
             plan,
-            *self.script.lock().unwrap(),
+            mode,
+            script,
             self.dir.join("state").join("installations"),
             self.ordering_held.clone(),
         )))
-    }
-    fn set_startup_disk(&self, _: &[Fact], owner: &str, password: &[u8]) -> Result<Vec<Fact>, Failure> {
-        assert_eq!((owner, password), ("owner", PASSWORD));
-        if self.startup_disk_ok.load(Ordering::SeqCst) {
-            Ok(vec![Fact::new("selected", "sekka").unwrap()])
-        } else {
-            Err(failure(DiskChanged::No))
-        }
     }
 }
 
@@ -112,7 +120,7 @@ struct ScriptedEngine {
 }
 
 impl ScriptedEngine {
-    fn start(plan: Plan, script: Script, journals: PathBuf, ordering: Arc<AtomicBool>) -> Self {
+    fn start(plan: Plan, mode: EngineMode, script: Script, journals: PathBuf, ordering: Arc<AtomicBool>) -> Self {
         let (line_tx, lines) = channel();
         let (acks, ack_rx) = channel::<u64>();
         let stop = Arc::new(AtomicBool::new(false));
@@ -136,10 +144,15 @@ impl ScriptedEngine {
                 engine: "0.9.2+sekka.1".parse().unwrap(),
                 asahi: "0.9.2".parse().unwrap(),
                 adapter: Digest::of(b"adapter"),
-                mode: EngineMode::Execute,
+                mode,
                 protocol: ENGINE_PROTOCOL,
             });
-            for stage in macos_stages(shrinks) {
+            let stages = if mode == EngineMode::StartupDisk {
+                vec![Stage::StartupDisk]
+            } else {
+                macos_stages(shrinks)
+            };
+            for stage in stages {
                 if script == Script::Skip(stage) {
                     continue;
                 }
@@ -325,6 +338,7 @@ fn world(script: Script) -> World {
         startup_disk_ok: AtomicBool::new(true),
         ordering_held: Arc::new(AtomicBool::new(true)),
         engine_runs: Arc::new(Mutex::new(0)),
+        startup_runs: Arc::new(Mutex::new(0)),
     };
     let trust = sekka_mac_trust::TrustConfig {
         roots: vec![sekka_mac_trust::development_root()],
@@ -636,7 +650,9 @@ fn only_the_startup_disk_is_retried() {
     );
     let Response::Events { state, .. } = w.ask(Request::RetryStartupDisk { installation: id }, Some(PASSWORD)) else { panic!() };
     assert_eq!(state, InstallState::WaitingForRecovery);
-    assert_eq!(*w.fake().engine_runs.lock().unwrap(), 1, "retrying never reruns the engine");
+    assert_eq!(*w.fake().engine_runs.lock().unwrap(), 1, "retrying never reruns the installation");
+    assert_eq!(*w.fake().startup_runs.lock().unwrap(), 2, "only the startup-disk stage, twice");
+    assert!(w.fake().ordering_held.load(Ordering::SeqCst));
     let (code, _) = refused(w.ask(Request::RetryStartupDisk { installation: id }, Some(PASSWORD)));
     assert_eq!(code, HelperRefusalCode::State);
 }

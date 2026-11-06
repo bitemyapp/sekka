@@ -32,7 +32,7 @@ pub mod macos;
 
 pub use helper::Helper;
 pub use paths::Paths;
-pub use platform::{EngineInstall, Platform, PlatformError, Secret};
+pub use platform::{EngineInstall, EngineRun, PASSWORD_LIMIT, Platform, PlatformError, Secret};
 pub use redact::redact;
 
 #[cfg(test)]

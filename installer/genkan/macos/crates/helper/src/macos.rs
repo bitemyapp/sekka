@@ -11,13 +11,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use sekka_mac_contract::{
-    APP_IDENTIFIER, Digest, Fact, Failure, HELPER_SERVICE, Inspection, Timestamp, Uuid,
+    APP_IDENTIFIER, Digest, HELPER_SERVICE, Inspection, Timestamp, Uuid,
 };
 use sekka_mac_trust::TrustConfig;
 
 use crate::engine::{ChildEngine, EngineProcess};
 use sekka_mac_engine::PATH;
-use crate::{EngineInstall, Helper, Paths, Platform, PlatformError, Secret};
+use crate::{EngineInstall, EngineRun, Helper, PASSWORD_LIMIT, Paths, Platform, PlatformError, Secret};
 
 /// The team that signs release builds, fixed at build time.
 const TEAM: Option<&str> = option_env!("SEKKA_TEAM_ID");
@@ -156,9 +156,9 @@ impl Platform for MacPlatform {
     fn start_engine(
         &self,
         engine: &EngineInstall,
+        run: EngineRun<'_>,
         installation: Uuid,
         plan: &Path,
-        assets: &Path,
         owner: &str,
         password: Secret,
     ) -> Result<Box<dyn EngineProcess>, PlatformError> {
@@ -177,26 +177,29 @@ impl Platform for MacPlatform {
         {
             // SAFETY: we own the write end; File closes it when dropped.
             let mut w = unsafe { <fs::File as std::os::fd::FromRawFd>::from_raw_fd(write_end) };
-            if password.len() >= 16 * 1024 || w.write_all(&password).is_err() {
+            if password.len() > PASSWORD_LIMIT || w.write_all(&password).is_err() {
                 unsafe { libc::close(read_end) };
                 return Err(PlatformError::Engine("The password couldn't be handed to the engine.".into()));
             }
         }
         drop(password);
-        let mut command = sekka_mac_engine::command(
-            engine,
-            &[
+        let id = installation.to_string();
+        let plan = plan.to_str().unwrap_or_default();
+        let args: Vec<&str> = match run {
+            EngineRun::Execute { assets } => vec![
                 "execute",
                 "--plan",
-                plan.to_str().unwrap_or_default(),
+                plan,
                 "--assets",
                 assets.to_str().unwrap_or_default(),
                 "--installation",
-                &installation.to_string(),
+                &id,
                 "--owner",
                 owner,
             ],
-        )
+            EngineRun::StartupDisk => vec!["startup-disk", "--plan", plan, "--installation", &id, "--owner", owner],
+        };
+        let mut command = sekka_mac_engine::command(engine, &args)
         .map_err(|e| PlatformError::Engine(e.to_string()))?;
         command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
         // SAFETY: only async-signal-safe calls between fork and exec.
@@ -213,74 +216,6 @@ impl Platform for MacPlatform {
         let child = child.map_err(|e| PlatformError::Engine(e.to_string()))?;
         Ok(Box::new(ChildEngine::new(child).map_err(|e| PlatformError::Engine(e.to_string()))?))
     }
-
-    fn set_startup_disk(&self, facts: &[Fact], owner: &str, password: &[u8]) -> Result<Vec<Fact>, Failure> {
-        let fail = |code: &str, message: String, apple: Option<String>| Failure {
-            code: code.parse().unwrap(),
-            message: message.chars().take(2000).collect::<String>().parse().unwrap(),
-            apple_diagnostic: apple.and_then(|a| a.chars().take(2000).collect::<String>().parse().ok()),
-            disk_changed: sekka_mac_contract::DiskChanged::No,
-        };
-        let volume = facts
-            .iter()
-            .rev()
-            .find(|f| f.name.as_str() == "stub-system-volume")
-            .and_then(|f| f.value.as_str().parse::<Uuid>().ok())
-            .ok_or_else(|| fail("record", "The installation doesn't record its startup volume.".into(), None))?;
-        let info = run("/usr/sbin/diskutil", &["info", "-plist", &volume.to_upper()])
-            .map_err(|e| fail("diskutil", e.to_string(), None))?;
-        let device = plist_string(&info.stdout, "DeviceIdentifier")
-            .filter(|d| d.starts_with("disk") && d.bytes().all(|b| b.is_ascii_alphanumeric()))
-            .ok_or_else(|| fail("target-gone", "The new system's startup volume isn't on this Mac any more.".into(), None))?;
-        if !plain_account_name(owner) {
-            return Err(fail("account", "That isn't an account name on this Mac.".into(), None));
-        }
-        let mut child = Command::new("/usr/sbin/bless")
-            .args(["--setBoot", "--device", &format!("/dev/{device}"), "--user", owner, "--stdinpass"])
-            .env_clear()
-            .env("PATH", PATH)
-            .env("LC_ALL", "C")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| fail("bless", e.to_string(), None))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            let _ = stdin.write_all(password);
-        }
-        let out = child.wait_with_output().map_err(|e| fail("bless", e.to_string(), None))?;
-        if !out.status.success() {
-            return Err(fail(
-                "bless",
-                "macOS didn't set the startup disk. If your password begins or ends with a space, set the startup disk in Recovery instead.".into(),
-                Some(String::from_utf8_lossy(&out.stderr).trim().to_string()),
-            ));
-        }
-        let now = run("/usr/sbin/bless", &["--getBoot"]).map_err(|e| fail("bless", e.to_string(), None))?;
-        let selected = String::from_utf8_lossy(&now.stdout).trim().to_string();
-        if !selected.starts_with(&format!("/dev/{device}")) {
-            return Err(fail(
-                "not-selected",
-                "macOS reported success, but the startup disk is still another volume.".into(),
-                Some(selected),
-            ));
-        }
-        Ok(vec![
-            Fact::new("stub-system-volume", volume).expect("uuid"),
-            Fact::new("selected-device", device).expect("device"),
-        ])
-    }
-}
-
-/// A string value for `key` at the top of an XML property list, enough for
-/// `diskutil info -plist`.
-fn plist_string(xml: &[u8], key: &str) -> Option<String> {
-    let text = std::str::from_utf8(xml).ok()?;
-    let at = text.find(&format!("<key>{key}</key>"))?;
-    let rest = &text[at..];
-    let start = rest.find("<string>")? + "<string>".len();
-    let end = rest[start..].find("</string>")?;
-    Some(rest[start..start + end].to_string())
 }
 
 fn home_of(uid: u32) -> Option<PathBuf> {

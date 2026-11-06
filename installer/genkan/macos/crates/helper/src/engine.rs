@@ -45,7 +45,9 @@ pub enum DriveError {
 /// `begin` is asked before each stage is journaled: it returns false if
 /// the person cancelled, and otherwise records (under the same lock the
 /// cancel request takes) that the stage is starting, so a cancel can't slip
-/// in between the decision and the acknowledgement.
+/// in between the decision and the acknowledgement. `refusals` is the
+/// stage a refusal before any intent is journaled under (the preparation
+/// stage of a full run); none leaves the journal as it is.
 pub fn drive<S: Storage>(
     process: &mut dyn EngineProcess,
     transcript: &mut Transcript,
@@ -53,6 +55,7 @@ pub fn drive<S: Storage>(
     now: &dyn Fn() -> Timestamp,
     begin: &mut dyn FnMut(Stage) -> bool,
     observe: &mut dyn FnMut(Observation),
+    refusals: Option<Stage>,
 ) -> Result<EngineOutcome, DriveError> {
     let mut started = false;
     loop {
@@ -103,12 +106,13 @@ pub fn drive<S: Storage>(
                     // Refused before any stage began (the engine's own
                     // checks of the plan): nothing could have changed, so it
                     // is the preparation stage that failed.
-                    None if !started => {
-                        journal.append(now(), Event::Intent { stage: Stage::AppleInputs })?;
+                    None if !started && refusals.is_some() => {
+                        let stage = refusals.expect("checked");
+                        journal.append(now(), Event::Intent { stage })?;
                         journal.append(
                             now(),
                             Event::Failed {
-                                stage: Stage::AppleInputs,
+                                stage,
                                 failure: Failure {
                                     disk_changed: DiskChanged::No,
                                     ..failure

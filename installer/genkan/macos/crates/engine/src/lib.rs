@@ -102,34 +102,43 @@ pub fn unpack(archive: &Path, cache: &Path, expected: Option<&Digest>) -> Result
 }
 
 /// The engine's own description of how to start it (`engine-lock.json`
-/// at its root, inside the digest-checked archive).
+/// at its root, inside the digest-checked archive): the bundled Python and
+/// the adapter's entry point, both relative to the root.
 #[derive(serde::Deserialize)]
 struct Entry {
-    /// The Python to run, relative to the engine's root.
-    python: String,
+    runtime: String,
+    entry: String,
 }
 
-/// `python3 -I -m sekka_engine ARGS…`, with nothing inherited from the
-/// caller's environment.
+fn inside(rel: &str) -> bool {
+    !rel.is_empty() && !rel.starts_with('/') && rel.split('/').all(|c| !c.is_empty() && c != "..")
+}
+
+/// `RUNTIME -I ENTRY ARGS…`, as Asahi's own `install.sh` starts its
+/// Python, with nothing inherited from the caller's environment. The entry
+/// is run by path: the bundled Python.framework's signature seals its
+/// site-packages, so the adapter isn't installed there.
 pub fn command(engine: &EngineInstall, args: &[&str]) -> Result<Command, EngineError> {
     let bytes = fs::read(engine.root.join("engine-lock.json"))
         .map_err(|e| EngineError::Missing(format!("The installer's engine is incomplete: {e}")))?;
-    let entry: Entry = serde_json::from_slice(&bytes)
+    let lock: Entry = serde_json::from_slice(&bytes)
         .map_err(|e| EngineError::Missing(format!("The installer's engine is incomplete: {e}")))?;
-    if entry.python.starts_with('/') || entry.python.split('/').any(|c| c == "..") {
+    if !inside(&lock.runtime) || !inside(&lock.entry) {
         return Err(EngineError::Missing("The installer's engine names a program outside itself.".into()));
     }
-    let mut command = Command::new(engine.root.join(&entry.python));
+    let root = &engine.root;
+    let mut command = Command::new(root.join(&lock.runtime));
     command
-        .args(["-I", "-m", "sekka_engine"])
+        .arg("-I")
+        .arg(root.join(&lock.entry))
         .args(args)
-        .current_dir(&engine.root)
+        .current_dir(root)
         .env_clear()
         .env("PATH", PATH)
         .env("LC_ALL", "C")
-        .env("PYTHONDONTWRITEBYTECODE", "1")
-        .env("PYTHONNOUSERSITE", "1")
-        .env("PYTHONPATH", engine.root.as_os_str());
+        .env("DYLD_FRAMEWORK_PATH", root.join("Frameworks"))
+        .env("DYLD_LIBRARY_PATH", root.join("Frameworks/Python.framework/Versions/Current/lib"))
+        .env("PYTHONDONTWRITEBYTECODE", "1");
     Ok(command)
 }
 
@@ -302,10 +311,18 @@ mod tests {
         fs::write(src.join("transcript"), lines).unwrap();
         // The arguments must be exactly the fixed ones, and the environment
         // must be clear.
-        let script = "#!/bin/sh\n[ \"$*\" = \"-I -m sekka_engine inspect\" ] || exit 3\n[ -z \"$HOME\" ] || exit 4\nexec cat transcript\n";
+        let script = "#!/bin/sh\n[ \"$1\" = -I ] && [ \"${2##*/}\" = __main__.py ] && [ \"$3\" = inspect ] && [ $# -eq 3 ] || exit 3\n[ -z \"$HOME\" ] || exit 4\nexec cat transcript\n";
         fs::write(src.join("bin/python3"), script).unwrap();
         fs::set_permissions(src.join("bin/python3"), fs::Permissions::from_mode(0o755)).unwrap();
-        fs::write(src.join("engine-lock.json"), br#"{"python":"bin/python3"}"#).unwrap();
+        fs::create_dir_all(src.join("sekka_engine")).unwrap();
+        fs::write(src.join("sekka_engine/__main__.py"), b"").unwrap();
+        fs::write(src.join("engine-lock.json"), br#"{"entry":"sekka_engine/__main__.py","runtime":"bin/python3","schema":"x"}"#).unwrap();
+        // Started as the lock says, with a cleared environment.
+        let unpacked = EngineInstall {
+            root: src.clone(),
+            digest: Digest::of(b"tree"),
+        };
+        assert_eq!(inspect(&unpacked).unwrap(), sekka_mac_contract::samples::inspection());
         let archive = tmp.path().join("engine.tar.gz");
         let tar = if Path::new("/usr/bin/tar").exists() { "/usr/bin/tar" } else { "tar" };
         assert!(Command::new(tar).arg("-czf").arg(&archive).arg("-C").arg(&src).arg(".").status().unwrap().success());
@@ -324,7 +341,7 @@ mod tests {
     #[test]
     fn engines_naming_programs_outside_themselves_are_refused() {
         let tmp = tempfile::tempdir().unwrap();
-        fs::write(tmp.path().join("engine-lock.json"), br#"{"python":"../../bin/sh"}"#).unwrap();
+        fs::write(tmp.path().join("engine-lock.json"), br#"{"runtime":"../../bin/sh","entry":"x.py"}"#).unwrap();
         let engine = EngineInstall {
             root: tmp.path().into(),
             digest: Digest::of(b"x"),

@@ -437,8 +437,10 @@ impl<P: Platform> Helper<P> {
                 "Only setting the startup disk can be tried again, and only after it failed.",
             );
         }
-        // The facts every completed stage recorded identify the target; the
-        // platform checks they still name what is on the disk.
+        let Event::Opened { plan, plan_digest, .. } = &journal.records()[0].event else {
+            return refuse(HelperRefusalCode::State, "The installation's record has no plan.");
+        };
+        let (plan, digest) = ((**plan).clone(), *plan_digest);
         let facts: Vec<Fact> = journal
             .records()
             .iter()
@@ -455,23 +457,71 @@ impl<P: Platform> Helper<P> {
         if let Err(e) = self.platform.authenticate_owner(&owner, &password) {
             return refuse(HelperRefusalCode::Authorization, e.to_string());
         }
-        let now = self.platform.now();
-        if let Err(e) = journal.append(now, Event::Intent { stage: Stage::StartupDisk }) {
+        // The engine that installed it, finding its stub by the
+        // installation's identity and checking the target is still there.
+        let engine = match self.platform.engine(&plan.release.engine) {
+            Ok(e) => e,
+            Err(e) => return refuse(HelperRefusalCode::Download, e.to_string()),
+        };
+        let dir = self.paths.staging(installation);
+        let plan_path = dir.join("plan.json");
+        let written = fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&dir)
+            .and_then(|_| fs::write(&plan_path, canonical::to_vec(&plan).unwrap_or_default()));
+        if let Err(e) = written {
             return refuse(HelperRefusalCode::Internal, e.to_string());
         }
-        let event = match self.platform.set_startup_disk(&facts, &owner, &password) {
-            Ok(facts) => Event::Completed {
-                stage: Stage::StartupDisk,
-                facts,
-                verification: Verification::PolicyReadBack,
-            },
-            Err(failure) => Event::Failed {
-                stage: Stage::StartupDisk,
-                failure,
-            },
+        let mut process = match self.platform.start_engine(
+            &engine,
+            crate::EngineRun::StartupDisk,
+            installation,
+            &plan_path,
+            &owner,
+            password,
+        ) {
+            Ok(p) => p,
+            Err(e) => return refuse(HelperRefusalCode::Internal, e.to_string()),
         };
-        if let Err(e) = journal.append(self.platform.now(), event) {
-            return refuse(HelperRefusalCode::Internal, e.to_string());
+        let mut transcript = Transcript::startup_disk(digest);
+        let mut log = Vec::new();
+        let result = drive(
+            process.as_mut(),
+            &mut transcript,
+            &mut journal,
+            &|| self.platform.now(),
+            &mut |_| true,
+            &mut |o| {
+                if let Observation::Log(level, line) = o {
+                    log.push(format!("{level:?}: {line}"));
+                }
+            },
+            None,
+        );
+        let _ = process.wait();
+        match result {
+            Ok(_) => {}
+            Err(e) => {
+                if transcript.open_stage() == Some(Stage::StartupDisk) {
+                    let _ = journal.append(
+                        self.platform.now(),
+                        Event::Failed {
+                            stage: Stage::StartupDisk,
+                            failure: Failure {
+                                code: "engine-stopped".parse().unwrap(),
+                                message: text(&e.to_string()),
+                                apple_diagnostic: None,
+                                disk_changed: DiskChanged::No,
+                            },
+                        },
+                    );
+                } else if journal.state() == &InstallState::StartupDiskFailed {
+                    // Refused before trying: say why.
+                    let why = log.last().cloned().unwrap_or_else(|| e.to_string());
+                    return refuse(HelperRefusalCode::State, why);
+                }
+            }
         }
         self.events(installation, 0)
     }
@@ -705,7 +755,14 @@ impl<P: Platform> Run<P> {
         }
 
         let password = std::mem::take(&mut self.password);
-        let mut process = match self.platform.start_engine(&self.engine, self.journal.installation(), &plan_path, &dir, &self.owner, password) {
+        let mut process = match self.platform.start_engine(
+            &self.engine,
+            crate::EngineRun::Execute { assets: &dir },
+            self.journal.installation(),
+            &plan_path,
+            &self.owner,
+            password,
+        ) {
             Ok(p) => p,
             Err(e) => {
                 let _ = self
@@ -755,6 +812,7 @@ impl<P: Platform> Run<P> {
                 &|| platform.now(),
                 &mut begin,
                 &mut observe,
+                Some(Stage::AppleInputs),
             )
         };
         self.active.shared.lock().unwrap().terminate = None;

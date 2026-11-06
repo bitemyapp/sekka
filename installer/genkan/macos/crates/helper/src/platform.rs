@@ -3,7 +3,7 @@
 //! tested anywhere.
 use std::path::{Path, PathBuf};
 
-use sekka_mac_contract::{Digest, Fact, Failure, Inspection, Timestamp, Uuid};
+use sekka_mac_contract::{Digest, Inspection, Timestamp, Uuid};
 
 use zeroize::Zeroizing;
 
@@ -13,6 +13,18 @@ use crate::engine::EngineProcess;
 pub type Secret = Zeroizing<Vec<u8>>;
 
 pub use sekka_mac_engine::EngineInstall;
+
+/// Which of the engine's changing modes to run.
+#[derive(Clone, Copy, Debug)]
+pub enum EngineRun<'a> {
+    /// The whole installation, from the helper's imported assets.
+    Execute { assets: &'a Path },
+    /// Only the startup-disk stage again.
+    StartupDisk,
+}
+
+/// The longest password handed to the engine, as it reads it.
+pub const PASSWORD_LIMIT: usize = 1024;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum PlatformError {
@@ -44,24 +56,16 @@ pub trait Platform: Send + Sync + 'static {
     /// The app's staging folder for the person with this uid.
     fn user_staging(&self, uid: u32) -> Result<PathBuf, PlatformError>;
 
-    /// Start the engine's `execute` for the plan file, with the imported
-    /// assets and the owner's credentials (handed to it privately).
+    /// Start the engine for the plan file, with the owner's credentials
+    /// (handed to it privately): `execute` with the imported assets, or
+    /// `startup-disk` to set the startup disk again.
     fn start_engine(
         &self,
         engine: &EngineInstall,
+        run: EngineRun<'_>,
         installation: Uuid,
         plan: &Path,
-        assets: &Path,
         owner: &str,
         password: Secret,
     ) -> Result<Box<dyn EngineProcess>, PlatformError>;
-
-    /// Set the new system as the startup disk again, using the stage
-    /// facts the journal recorded, and read the selection back.
-    fn set_startup_disk(
-        &self,
-        facts: &[Fact],
-        owner: &str,
-        password: &[u8],
-    ) -> Result<Vec<Fact>, Failure>;
 }
