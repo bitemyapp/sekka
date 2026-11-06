@@ -12,6 +12,8 @@ all from a controller, with a grown-up's PIN on what kids may do.
   --silent       play without sound
   --no-controllers
                  read no controllers (a preview beside a desktop that has them)
+  --no-drives    leave drives plugged in for someone to open (Chanoma opens
+                 them as it starts and as they come)
   --reset-pin    forget the grown-ups' PIN (the next start asks for a new
                  one), for a grown-up who has forgotten it
   --tv           the TV account's Chanoma (its session is Chanoma alone):
@@ -47,6 +49,7 @@ fn main() {
     config.grab = !args.iter().any(|a| a == "--no-grab");
     config.silent = args.iter().any(|a| a == "--silent");
     config.pads = !args.iter().any(|a| a == "--no-controllers");
+    config.drives = !args.iter().any(|a| a == "--no-drives");
     config.tv = args.iter().any(|a| a == "--tv");
     config.signals = true;
     let mut app = Chanoma::new(config);

@@ -11,8 +11,10 @@
 # compositor) and by the pointer, through the bar along the top, stays on
 # its site (a link or a script elsewhere leaves it where it was), and takes
 # typing from Chanoma's keyboard. The PIN is pressed with the controller's
-# buttons. The VM renders in software, so the game's frames take the
-# shared-memory path.
+# buttons. Two USB sticks are plugged in from the start: Chanoma opens the
+# one it can and says once, across starts, that the other couldn't be. The
+# VM renders in software, so the game's frames take the shared-memory
+# path.
 {
   pkgs,
   self,
@@ -48,6 +50,27 @@ let
     open(sys.argv[1] + "/Tetris (World) (Rev 1).gb", "wb").write(rom)
     EOF
   '';
+  # Two USB sticks plugged in from the start, as a television's disks are:
+  # STICK (FAT) holds a game; BROKEN is exFAT, whose kernel module the
+  # machine doesn't load, so it can't be opened.
+  sticks =
+    pkgs.runCommand "chanoma-test-sticks"
+      {
+        nativeBuildInputs = [
+          pkgs.dosfstools
+          pkgs.mtools
+          pkgs.exfatprogs
+        ];
+      }
+      ''
+        mkdir "$out"
+        truncate -s 32M "$out/stick.img"
+        mkfs.vfat -n STICK -i 5717C000 "$out/stick.img"
+        mmd -i "$out/stick.img" ::/gb
+        mcopy -i "$out/stick.img" "${game}/gb/Tetris (World) (Rev 1).gb" "::/gb/Stick Test (World).gb"
+        truncate -s 32M "$out/broken.img"
+        mkfs.exfat -L BROKEN "$out/broken.img"
+      '';
   # A page for the controller to drive in the browser: it says in its
   # title what reached it. Its link and its O key go elsewhere (localhost
   # isn't 127.0.0.1), its I key to its own site's other page; its search
@@ -198,8 +221,14 @@ pkgs.testers.runNixOSTest {
         qemu.options = [
           "-vga none"
           "-device virtio-gpu-pci,xres=1280,yres=800"
+          "-device qemu-xhci,id=xhci"
+          "-drive if=none,id=stick,format=raw,readonly=on,file=${sticks}/stick.img"
+          "-device usb-storage,bus=xhci.0,drive=stick,removable=on"
+          "-drive if=none,id=broken,format=raw,readonly=on,file=${sticks}/broken.img"
+          "-device usb-storage,bus=xhci.0,drive=broken,removable=on"
         ];
       };
+      boot.blacklistedKernelModules = [ "exfat" ];
       services.pipewire.extraConfig.pipewire."91-test-sink"."context.objects" = [
         {
           factory = "adapter";

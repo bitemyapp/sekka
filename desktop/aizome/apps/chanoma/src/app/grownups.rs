@@ -139,6 +139,8 @@ enum Act {
     /// Over to Folders.
     GoFolders,
     Rescan,
+    /// A drive that couldn't be opened, tried again.
+    TryDrive(usize),
     Pair,
     SetUp(u32),
     Confirm,
@@ -428,6 +430,15 @@ impl Chanoma {
                 }
                 rows.push((Row::new("Add a folder…", Value::Action).detail(ADD_DETAIL), Act::AddFolder));
                 rows.push((Row::new("Look again", Value::Action).detail("Reads what's changed since"), Act::Rescan));
+                if !self.drives.unopened.is_empty() {
+                    rows.push((Row::heading("Drives that couldn't be opened"), Act::None));
+                    for (i, u) in self.drives.unopened.iter().enumerate() {
+                        rows.push((
+                            Row::new(u.name.clone(), Value::Action).detail(format!("{} · Try again", u.why)),
+                            Act::TryDrive(i),
+                        ));
+                    }
+                }
                 rows.push((Row::heading("Not sure where your games are?"), Act::None));
                 rows.push((
                     Row::new("Search every drive for games…", Value::Action)
@@ -977,6 +988,7 @@ impl Chanoma {
                 self.rescan(cx);
                 self.toast("Looking…", cx);
             }
+            Act::TryDrive(i) => self.try_drive_again(i, cx),
             Act::Pair => self.start_pairing(cx),
             Act::SetUp(id) => self.start_setup(id, cx),
             Act::ChangePin => {
@@ -1078,7 +1090,11 @@ impl Chanoma {
             return format!("Looking through it: {n} folders so far");
         }
         match self.library.held.iter().find(|h| h.folder == f) {
-            Some(h) if !h.here => "Not plugged in".into(),
+            Some(h) if !h.here => match self.drives.of_folder(f, &self.config.mounts) {
+                Some(super::drives::DriveIs::Opening(name)) => format!("Opening its drive, {name}…"),
+                Some(super::drives::DriveIs::Unopened(name)) => format!("Its drive, {name}, couldn't be opened"),
+                None => "Not plugged in".into(),
+            },
             Some(h) => crate::folders::held_word(h),
             None => "Not looked through yet".into(),
         }

@@ -274,6 +274,7 @@ fn config(dirs: Dirs, cores: PathBuf, clock: ManualClock) -> Config {
         home: root.join("home"),
         mounts: vec![root.join("media")],
         mpris: false,
+        drives: false,
         tv: false,
     }
 }
@@ -1680,4 +1681,87 @@ fn the_tv_accounts_kids_may_log_out_and_a_forgotten_pin_is_a_grown_ups_to_forget
     input(&mut h, Input::Dir(Dir::Right));
     input(&mut h, Input::Ok);
     assert!(h.platform.quit, "left");
+}
+
+fn outcome(name: &str, result: Result<&str, &str>) -> aizome_sys::disks::Outcome {
+    aizome_sys::disks::Outcome {
+        volume: aizome_sys::disks::Volume {
+            block: format!("/org/freedesktop/UDisks2/block_devices/{name}"),
+            name: name.into(),
+            ..Default::default()
+        },
+        label: name.into(),
+        uuid: format!("{name}-UUID"),
+        result: result.map(Into::into).map_err(Into::into),
+    }
+}
+
+fn toast(h: &Harness<Chanoma>) -> Option<&str> {
+    h.program().toast.as_ref().map(|t| t.0.as_str())
+}
+
+#[test]
+fn a_drive_that_wont_open_is_said_once_and_its_folder_comes_back_when_it_opens() {
+    // Drives plugged in are opened as Chanoma starts and as they come
+    // (UDisks; here what it answers). One that couldn't be opened is said
+    // once: not again while it stays broken, nor at the next start. The
+    // settings say which drive and why, and its folder's state, and try it
+    // again; opened, its folder's games come.
+    let (dirs, cores) = household("drives", |_| {});
+    let stick = cores.parent().unwrap().join("media").join("MOVIES");
+    let mut s: Settings = aizome_chanoma::store::read(&dirs.settings());
+    s.folders.push(stick.clone());
+    aizome_chanoma::store::write(&dirs.settings(), &s).unwrap();
+    let start = |dirs: &Dirs| harness(config(dirs.clone(), cores.clone(), ManualClock::at(2026, 11, 5, 17, 0)));
+    let mut h = start(&dirs);
+    let broken = || Msg::Opened(vec![outcome("MOVIES", Err("Error mounting /dev/sdb1: wrong fs type"))]);
+    h.send(broken());
+    assert_eq!(toast(&h), Some("Couldn't open the drive MOVIES"));
+    h.program_mut().toast = None;
+    h.send(broken());
+    assert_eq!(toast(&h), None, "said once");
+
+    into_settings(&mut h);
+    for _ in 0..4 {
+        input(&mut h, Input::Dir(Dir::Down));
+    }
+    input(&mut h, Input::Dir(Dir::Right));
+    let page = h.program().grownups_page();
+    let folder = page
+        .rows
+        .iter()
+        .find(|r| r.detail.contains("couldn't be opened") && !r.detail.contains("Try again"))
+        .expect("the folder");
+    assert!(folder.detail.ends_with("Its drive, MOVIES, couldn't be opened"), "{}", folder.detail);
+    let drive = page.rows.iter().find(|r| r.detail.contains("Try again")).expect("the drive");
+    assert_eq!(drive.detail, "Error mounting /dev/sdb1: wrong fs type · Try again");
+    shot(&mut h, "31-drive-unopened");
+    // Tried again (here UDisks isn't there to answer): the row goes until
+    // it answers.
+    let i = page.rows.iter().position(|r| r.detail.contains("Try again")).unwrap();
+    while h.program().grownups.row < i {
+        input(&mut h, Input::Dir(Dir::Down));
+    }
+    assert_eq!(h.program().grownups.row, i);
+    input(&mut h, Input::Ok);
+    assert!(h.program().drives.unopened.is_empty());
+
+    // The next start: still broken, not said again.
+    drop(h);
+    let mut h = start(&dirs);
+    h.send(broken());
+    assert_eq!(toast(&h), None, "said once, across starts");
+    assert_eq!(h.program().drives.unopened.len(), 1);
+
+    // Opened: its folder is read and its game comes; a later failure is
+    // said again.
+    std::fs::create_dir_all(stick.join("snes")).unwrap();
+    std::fs::write(stick.join("snes/Stick Quest (USA).sfc"), b"CHANOMA test game").unwrap();
+    h.send(Msg::Opened(vec![outcome("MOVIES", Ok(stick.to_str().unwrap()))]));
+    assert!(h.program().drives.unopened.is_empty());
+    until(&mut h, |a| a.library.games.iter().any(|g| g.title == "Stick Quest"));
+    let held = h.program().library.held.iter().find(|x| x.folder == stick).cloned().expect("held");
+    assert!(held.here);
+    h.send(broken());
+    assert_eq!(toast(&h), Some("Couldn't open the drive MOVIES"), "it opened since: said again");
 }
