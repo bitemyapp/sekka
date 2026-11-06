@@ -878,6 +878,22 @@
               python3 -m unittest discover -s tests -p test_publish_nightly.py -v
               touch $out
             '';
+        hourly-nixpkgs =
+          pkgs.runCommand "hourly-nixpkgs-tests"
+            {
+              nativeBuildInputs = [
+                (pkgs.python3.withPackages (ps: [ ps.pyyaml ]))
+                pkgs.git
+                pkgs.bash
+              ];
+            }
+            ''
+              mkdir -p .github/workflows tests
+              cp ${./.github/workflows/hourly.yml} .github/workflows/hourly.yml
+              cp ${./tests/test_hourly_nixpkgs.py} tests/test_hourly_nixpkgs.py
+              python3 -m unittest discover -s tests -p test_hourly_nixpkgs.py -v
+              touch $out
+            '';
         release-workflow =
           pkgs.runCommand "release-workflow-check"
             {
@@ -890,6 +906,7 @@
               # The sole constant-false job is intentional until publication is enabled.
               actionlint -ignore 'constant expression "false" in condition' -config-file ${./.github/actionlint.yaml} ${./.github/workflows/release.yml}
               actionlint -config-file ${./.github/actionlint.yaml} ${./.github/workflows/nightly.yml}
+              actionlint -config-file ${./.github/actionlint.yaml} ${./.github/workflows/hourly.yml}
               touch $out
             '';
         kernel-settings =
