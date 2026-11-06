@@ -640,11 +640,13 @@ mod tests {
         let installed = store.installed(entry).expect("installed without its draft");
         assert!(installed.draft().is_none());
         assert!(matches!(store.state(entry), crate::store::InstallState::Installed { .. }));
+        assert!(!store.complete(entry), "a download still has the draft to fetch");
         let args = preset_args(entry, &installed, &fit, &hw);
         assert!(!args.iter().any(|(k, _)| k.starts_with("spec-")), "{args:?}");
         // With the draft downloaded too, it drafts.
         let draft = entry.draft_file().unwrap();
         fs::File::create(store.file_path(&entry.id, draft)).unwrap().set_len(draft.size.0).unwrap();
+        assert!(store.complete(entry));
         let installed = store.installed(entry).unwrap();
         let args = preset_args(entry, &installed, &fit, &hw);
         let get = |k: &str| args.iter().find(|(key, _)| key == k).map(|(_, v)| v.as_str());

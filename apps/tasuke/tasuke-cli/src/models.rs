@@ -405,6 +405,9 @@ fn models(json: bool) -> Result {
             detail.push(format!("about {s}"));
         }
         detail.push(state_text(ctx.store.state(e)));
+        if matches!(ctx.store.state(e), InstallState::Installed { .. }) && !ctx.store.complete(e) {
+            detail.push(format!("its draft head isn't yet (tasuke download {} fetches it)", e.id));
+        }
         if !e.evaluated {
             detail.push("not yet evaluated".into());
         }
@@ -422,7 +425,11 @@ fn models(json: bool) -> Result {
 }
 
 fn download(ctx: &Context, entry: &Entry) -> Result {
-    if let InstallState::Installed { size } = ctx.store.state(entry) {
+    // An install from before its draft head was catalogued runs, but
+    // downloading again fetches the draft.
+    if let InstallState::Installed { size } = ctx.store.state(entry)
+        && ctx.store.complete(entry)
+    {
         eprintln!("{} is already downloaded ({size}).", entry.id);
         return Ok(());
     }

@@ -103,6 +103,13 @@ impl Store {
         fs::metadata(self.file_path(id, file)).is_ok_and(|m| m.is_file() && m.len() == file.size.0)
     }
 
+    /// Whether every file the catalog lists is here, the draft head included:
+    /// what a download has left to do, where [`Store::state`] answers whether
+    /// the model runs.
+    pub fn complete(&self, entry: &Entry) -> bool {
+        entry.files.iter().all(|f| self.has_file(&entry.id, f))
+    }
+
     pub fn state(&self, entry: &Entry) -> InstallState {
         let total = entry.download_size();
         let mut have = Bytes::ZERO;
