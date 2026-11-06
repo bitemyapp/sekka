@@ -142,6 +142,19 @@ let
     export TZDIR=${tzdata}/share/zoneinfo
   '';
   test = "cargo test --offline --target ${target} --profile release-lto";
+  # The crates with a doctest that must not compile, whose error codes the
+  # package's check verifies (nix/checked-doctests.sh). Each is tested on
+  # its own, so the dependency build compiles what each one's tests need on
+  # its own too. The check stops if this list and the source disagree.
+  doctested = [
+    "aizome-hako"
+    "aizome-hotaru"
+    "aizome-kit"
+    "aizome-media"
+    "aizome-sys"
+    "aizome-tansu"
+    "aizome-typestate"
+  ];
 
   # Everything the build's commands see, the same for the dependency build
   # and the package's: any difference would make Cargo compile the
@@ -254,6 +267,7 @@ let
         ${test} --no-run -p aizome-kit --lib
         ${test} --no-run -p aizome-sys -p aizome-shell -p aizome-hako --lib
         ${cargo}/bin/cargo test --offline --target ${target} --release --no-run -p aizome-comp-process-tests --lib
+        ${lib.concatMapStringsSep "\n        " (package: "${test} --no-run -p ${package} --lib") doctested}
         runHook postCheck
       '';
       installPhase = workspace.saveTarget;
@@ -291,6 +305,18 @@ rustPlatform.buildRustPackage (
       # saver that keeps the screen awake for a video answers real callers
       # on a bus of the test's own, as Files' show-in-folder service does.
       ${test} -p aizome-sys -p aizome-shell -p aizome-hako --lib --test file_manager --test screensaver
+      # The doctests of every crate with one that must not compile, their
+      # error codes checked: what the typestate machines' types rule out.
+      source ${../../../nix/checked-doctests.sh}
+      found=$(compile_fail_packages crates apps | sort | tr '\n' ' ')
+      if [ "$found" != "${lib.concatStringsSep " " doctested} " ]; then
+        echo "error: the crates with compile_fail doctests are: $found" >&2
+        echo "       package.nix's doctested list says: ${toString doctested}" >&2
+        exit 1
+      fi
+      for package in ${toString doctested}; do
+        ${test} --doc -p "$package"
+      done
       runHook postCheck
     '';
 

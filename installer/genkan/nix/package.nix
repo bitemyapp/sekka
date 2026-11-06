@@ -68,7 +68,11 @@ let
       # line under src/ that names either lint outside a // comment (any
       # attribute, cfg_attr or multi-line one included), drops its line
       # number, and fails unless the sorted lines are exactly these.
+      #
+      # The default check's `cargo test` runs the doctests too, their
+      # compile_fail error codes checked.
       preCheck = ''
+        source ${../../../nix/checked-doctests.sh}
         cargo clippy --offline --locked --all-targets -- \
           -A clippy::all -D clippy::disallowed_methods
         found=$(grep -rnE --include='*.rs' '(unsafe_code|disallowed_methods)' src \
@@ -162,9 +166,11 @@ pkgs.rustPlatform.buildRustPackage (
       pkgs.libxkbcommon
       pkgs.wayland
     ];
-    # The window's tests draw its pages offscreen with Aizome's fonts.
+    # The window's tests draw its pages offscreen with Aizome's fonts. Its
+    # doctests' compile_fail error codes are checked.
     doCheck = true;
     preCheck = ''
+      source ${../../../nix/checked-doctests.sh}
       export AIZOME_FONT_DIR=${fonts}
       export TZDIR=${pkgs.tzdata}/share/zoneinfo
     '';

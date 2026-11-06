@@ -42,7 +42,11 @@ rustPlatform.buildRustPackage {
   # The helper runs programs only through its library, which names the ones
   # it may run; yukimi-helper/clippy.toml denies the other ways to start one.
   # Only that lint fails the build, so a toolchain's new lints don't.
+  #
+  # The default check's `cargo test` runs the doctests too, their
+  # compile_fail error codes checked.
   preCheck = ''
+    source ${../../../nix/checked-doctests.sh}
     cargo clippy --offline --locked -p yukimi-helper --all-targets -- \
       -A clippy::all -D clippy::disallowed_methods
 
