@@ -1,0 +1,57 @@
+[package]
+name = "sekka-recovery"
+description = "Finish Installing Sekka: the app that runs in the new system's own Recovery and allows Sekka to start"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "sekka-recovery"
+path = "src/main.rs"
+
+[features]
+# A build that can be looked at anywhere but can never enroll anything.
+preview = []
+
+[dependencies]
+sekka-mac-contract.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+zeroize.workspace = true
+libc.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+sekka-mac-appkit.workspace = true
+block2.workspace = true
+objc2.workspace = true
+objc2-foundation = { workspace = true, features = ["NSArray", "NSNotification", "NSString", "NSTimer", "NSGeometry", "NSObjCRuntime", "block2"] }
+objc2-app-kit = { workspace = true, features = [
+    "objc2-core-foundation",
+    "NSAccessibility",
+    "NSAlert",
+    "NSApplication",
+    "NSButton",
+    "NSControl",
+    "NSGraphics",
+    "NSLayoutAnchor",
+    "NSLayoutConstraint",
+    "NSMenu",
+    "NSMenuItem",
+    "NSPanel",
+    "NSProgressIndicator",
+    "NSResponder",
+    "NSScrollView",
+    "NSSecureTextField",
+    "NSStackView",
+    "NSText",
+    "NSTextField",
+    "NSTextView",
+    "NSUserInterfaceLayout",
+    "NSView",
+    "NSWindow",
+] }
+
+[dev-dependencies]
+tempfile.workspace = true

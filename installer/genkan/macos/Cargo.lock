@@ -488,6 +488,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sekka-recovery"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "libc",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "sekka-mac-appkit",
+ "sekka-mac-contract",
+ "serde",
+ "tempfile",
+ "thiserror",
+ "zeroize",
+]
+
+[[package]]
 name = "semver"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
