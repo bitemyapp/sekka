@@ -161,6 +161,9 @@ in
       graphics = {
         package = toString config.hardware.graphics.package;
         extraPackages = map toString config.hardware.graphics.extraPackages;
+      }
+      # Only x86 has a 32-bit graphics stack (Nixpkgs' i686 package set).
+      // lib.optionalAttrs pkgs.stdenv.hostPlatform.isx86 {
         package32 = toString config.hardware.graphics.package32;
         extraPackages32 = map toString config.hardware.graphics.extraPackages32;
       };
