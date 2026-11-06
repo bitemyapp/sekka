@@ -72,7 +72,11 @@ pub fn client(args: &[String]) -> Result<String> {
     start.arg(format!("--setenv=PATH={PATH}"));
     start.arg(format!("--property=StandardOutput=append:{}/progress.log", dir.display()));
     start.arg(format!("--property=StandardError=append:{}/progress.log", dir.display()));
-    start.arg(std::env::current_exe()?).arg("__worker").arg(&dir).args(args);
+    let helper = std::env::current_exe()?;
+    // However the worker ends, SIGKILL included, systemd runs this after it:
+    // a clean-up killed before it rewrote the boot menu is finished.
+    start.arg(format!("--property=ExecStopPost={} __recover", helper.display()));
+    start.arg(&helper).arg("__worker").arg(&dir).args(args);
     let started = start.output()?;
     if !started.status.success() {
         return Err(Failure(format!(

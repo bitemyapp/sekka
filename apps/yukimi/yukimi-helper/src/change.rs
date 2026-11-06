@@ -28,11 +28,14 @@
 //! ```
 //! use yukimi_helper::process::{Operation, committed};
 //! # fn main() -> yukimi_helper::process::Result<()> {
-//! let mut operation = Operation::begin()?;
+//! let lock = std::env::temp_dir().join(format!("yukimi-doc-{}.lock", std::process::id()));
+//! let mut operation = Operation::begin_at(&lock)?;
 //! // Going back to a generation commits before it changes anything.
 //! let _committed = operation.commit_without_changes()?;
 //! assert!(committed());
-//! assert!(Operation::begin().is_err(), "one operation per process");
+//! assert!(Operation::begin_at(&lock.with_extension("other")).is_err(), "one operation per process");
+//! # std::fs::remove_file(&lock).ok();
+//! # std::fs::remove_file(lock.with_extension("other")).ok();
 //! # Ok(()) }
 //! ```
 //!
