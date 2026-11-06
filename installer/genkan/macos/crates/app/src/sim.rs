@@ -126,6 +126,8 @@ struct SimState {
     reconciled: bool,
     /// The installation the app reopened to was cancelled.
     cancelled: bool,
+    /// The administrator who authorized the installation.
+    owner: Option<String>,
 }
 
 const SIM_ID: Uuid = Uuid::from_bytes([0x5e; 16]);
@@ -149,6 +151,7 @@ impl Simulation {
     /// fails), or all of macOS's part, then `tail`.
     fn records(&self, upto: Option<(usize, Option<Stage>)>, tail: Vec<Event>) -> (Vec<Record>, InstallState) {
         let plan = samples::plan();
+        let owner = self.state.lock().unwrap().owner.clone().unwrap_or_else(|| "chris".into());
         let mut out = Vec::new();
         let mut push = |event: Event| {
             out.push(Record {
@@ -173,7 +176,10 @@ impl Simulation {
             push(Event::Intent { stage: *stage });
             push(Event::Completed {
                 stage: *stage,
-                facts: vec![],
+                facts: match stage {
+                    Stage::Import => vec![Fact::new("owner", &owner).unwrap()],
+                    _ => vec![],
+                },
                 verification: Verification::Inspected,
             });
         }
@@ -459,6 +465,7 @@ impl Environment for Simulation {
             });
         }
         state.installation = Some((SIM_ID, Instant::now()));
+        state.owner = Some(begin.owner.to_string());
         Ok(SIM_ID)
     }
     fn events(&self, _: Uuid, _after: u64) -> Result<Events, String> {

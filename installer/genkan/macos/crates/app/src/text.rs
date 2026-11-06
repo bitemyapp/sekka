@@ -228,6 +228,11 @@ pub fn recheck_failed(e: &str) -> String {
 pub const NEEDS_UPDATE_TITLE: &str = "Sekka Installer needs updating";
 pub const NEEDS_UPDATE: &str = "Sekka's release for this Mac needs a different version of Sekka Installer than this one. Download the latest Sekka Installer from sekka.computer/mac and open that instead.";
 
+/// The retry sheet, given another account than the installation's own.
+pub fn retry_owner(owner: &str) -> String {
+    format!("{owner} authorized this installation. Setting the startup disk again needs the same account: enter its name and password.")
+}
+
 pub const BACKUP: &str = "I have a current backup of this Mac.";
 
 /// After an installation that changed nothing is cancelled.
@@ -242,18 +247,17 @@ pub const INSTALLED: &str = "Recovery's step is done. Start your Mac in Sekka; t
 /// (docs/apple-silicon/encryption.md).
 pub const NOT_ENCRYPTED: &str = "Sekka's partition isn't encrypted. macOS stays protected by FileVault; it doesn't protect Sekka. Encryption will come in a later version.";
 
-pub fn human_step(step: HumanStep, volume: &str, owner: &str) -> String {
+/// A step the owner takes by hand. `owner` is the administrator who
+/// authorized the installation, once it is known.
+pub fn human_step(step: HumanStep, volume: &str, owner: Option<&str>) -> String {
     match step {
         HumanStep::ShutDown => "Shut down your Mac. Wait ten seconds after the screen goes dark.".into(),
         HumanStep::HoldPowerButton => "Press and hold the power button until “Loading startup options” appears.".into(),
         HumanStep::ChooseVolume => format!("Choose {volume}, then click Continue."),
-        HumanStep::AuthorizeInRecovery => {
-            if owner.is_empty() {
-                "Sign in, then follow Finish Installing Sekka.".into()
-            } else {
-                format!("Sign in as {owner}, then follow Finish Installing Sekka.")
-            }
-        }
+        HumanStep::AuthorizeInRecovery => match owner {
+            Some(owner) => format!("Sign in as {owner}, then follow Finish Installing Sekka."),
+            None => "Sign in as the administrator who authorizes the installation, then follow Finish Installing Sekka.".into(),
+        },
         HumanStep::CreateAccount => "Sekka starts and asks you to create your account.".into(),
     }
 }

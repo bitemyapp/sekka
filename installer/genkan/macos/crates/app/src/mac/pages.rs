@@ -201,7 +201,7 @@ impl<'a> Page<'a> {
 /// with them, and they move when what is left to download is measured.
 pub fn key(m: &Model) -> String {
     format!(
-        "{:?}|{:?}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}",
+        "{:?}|{:?}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}|{:?}",
         m.screen,
         m.notice,
         m.download_error.is_some(),
@@ -215,6 +215,7 @@ pub fn key(m: &Model) -> String {
         m.to_download.map(|n| n > 0),
         m.size_range(),
         m.staged.is_empty(),
+        m.owner,
     )
 }
 
@@ -534,14 +535,14 @@ fn review(m: &Model, p: &mut Page) {
     p.note(text::NOT_ENCRYPTED);
     p.gap(2.0);
     p.heading("Then you finish in Recovery");
-    let owner = m.user.0.clone();
     if let Some(plan) = &m.plan {
         let mut n = 1;
         for step in &plan.human_steps {
             if *step == HumanStep::CreateAccount {
                 continue;
             }
-            p.numbered(n, &text::human_step(*step, plan.volume_name.as_str(), &owner));
+            // The administrator is chosen when installing, after this.
+            p.numbered(n, &text::human_step(*step, plan.volume_name.as_str(), None));
             n += 1;
         }
         p.note("Sekka Installer shows these steps again when it's done.");
@@ -655,7 +656,7 @@ fn installing(m: &Model, p: &mut Page) {
 fn recovery(m: &Model, p: &mut Page) {
     p.title("Finish in Recovery");
     p.lede("macOS's part is done and checked. Sekka isn't installed until you finish these steps; it takes about five minutes.");
-    let owner = m.user.0.clone();
+    let owner = m.owner_name();
     let steps = m
         .plan
         .as_ref()
@@ -670,7 +671,7 @@ fn recovery(m: &Model, p: &mut Page) {
             ]
         });
     for (n, step) in steps.iter().enumerate() {
-        p.numbered(n + 1, &text::human_step(*step, "Sekka", &owner));
+        p.numbered(n + 1, &text::human_step(*step, "Sekka", owner.as_deref()));
     }
     p.gap(4.0);
     p.callout(Mark::Warning, "If your Mac starts up in macOS instead, open Sekka Installer again; it picks up where this left off.");

@@ -289,6 +289,41 @@ fn reopening_reconnects_to_an_installation() {
     let j = Journey::start(Scenario::WaitingForRecovery);
     assert_eq!(j.model.screen, Screen::Recovery);
     assert!(j.model.installation.is_some());
+    // Recovery asks for the administrator the record names.
+    assert_eq!(j.model.owner.as_deref(), Some("chris"));
+    assert_eq!(j.model.owner_name().as_deref(), Some("Chris Allen"));
+}
+
+#[test]
+fn the_administrator_who_authorized_is_the_one_recovery_and_a_retry_ask_for() {
+    let mut j = Journey::start(Scenario::StartupDiskFails);
+    j.reach_review().confirm().send(Msg::Install).send(Msg::Authorize {
+        owner: "admin".into(),
+        password: Secret::new(b"right".to_vec()),
+    });
+    assert_eq!(j.model.screen, Screen::Stopped);
+    assert_eq!(j.model.owner.as_deref(), Some("admin"));
+    // Another administrator than the app's user: named as typed.
+    assert_eq!(j.model.owner_name().as_deref(), Some("admin"));
+    assert!(crate::text::human_step(sekka_mac_contract::HumanStep::AuthorizeInRecovery, "Sekka", j.model.owner_name().as_deref()).contains("admin"));
+
+    j.send(Msg::RetryStartupDisk);
+    assert_eq!(j.model.authorization.as_ref().unwrap().owner, "admin");
+    // Another name is refused in the sheet, not silently swapped for the
+    // recorded one.
+    let effects = j.model.update(Msg::Authorize {
+        owner: "chris".into(),
+        password: Secret::new(b"right".to_vec()),
+    });
+    assert!(effects.is_empty());
+    let auth = j.model.authorization.clone().unwrap();
+    assert!(auth.error.unwrap().contains("admin"));
+    assert!(!auth.busy);
+    j.send(Msg::Authorize {
+        owner: "Admin".into(),
+        password: Secret::new(b"right".to_vec()),
+    });
+    assert_eq!(j.model.screen, Screen::Recovery);
 }
 
 /// The start's results, one at a time, from a simulation: what the model

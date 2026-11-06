@@ -185,6 +185,10 @@ pub struct Model {
     pub authorization: Option<Authorization>,
     pub registration: Option<Registration>,
     pub installation: Option<Uuid>,
+    /// The administrator who authorized the installation, by short name, as
+    /// the helper recorded it. Recovery asks for the same account, and so
+    /// does setting the startup disk again.
+    pub owner: Option<String>,
     pub records: Vec<Record>,
     pub state: Option<InstallState>,
     pub progress: Option<Progress>,
@@ -224,6 +228,7 @@ impl Model {
             authorization: None,
             registration: None,
             installation: None,
+            owner: None,
             records: Vec::new(),
             state: None,
             progress: None,
@@ -636,7 +641,7 @@ impl Model {
                 Vec::new()
             }
             Msg::Begun(Ok(installation)) => {
-                self.authorization = None;
+                self.owner = self.authorization.take().map(|a| a.owner);
                 self.installation = Some(installation);
                 self.records.clear();
                 self.screen = Screen::Installing;
@@ -746,6 +751,7 @@ impl Model {
         self.plan_error = None;
         self.rechecking = false;
         self.installation = None;
+        self.owner = None;
         self.records.clear();
         self.state = None;
         self.reconciling = None;
@@ -753,8 +759,13 @@ impl Model {
     }
 
     fn open_authorization(&mut self, retry: bool) {
+        // A retry is authorized by the installation's own administrator.
+        let owner = match (&self.owner, retry) {
+            (Some(owner), true) => owner.clone(),
+            _ => self.user.0.clone(),
+        };
         self.authorization = Some(Authorization {
-            owner: self.user.0.clone(),
+            owner,
             error: None,
             busy: false,
             retry,
@@ -768,6 +779,15 @@ impl Model {
         }
         if password.is_empty() {
             auth.error = Some("Enter the password for this account.".into());
+            return Vec::new();
+        }
+        // The helper authenticates the administrator it recorded, whatever
+        // name is typed: a different one is refused here, not ignored.
+        if auth.retry
+            && let Some(recorded) = &self.owner
+            && !same_account(&owner, recorded, &self.user)
+        {
+            auth.error = Some(text::retry_owner(recorded));
             return Vec::new();
         }
         auth.owner = owner.clone();
@@ -860,6 +880,16 @@ impl Model {
                 self.records.push(r);
             }
         }
+        if let Some(owner) = self.records.iter().find_map(|r| match &r.event {
+            sekka_mac_contract::Event::Completed {
+                stage: Stage::Import,
+                facts,
+                ..
+            } => facts.iter().find(|f| f.name.as_str() == "owner").map(|f| f.value.to_string()),
+            _ => None,
+        }) {
+            self.owner = Some(owner);
+        }
         self.progress = events.progress;
         self.running = events.running;
         let state = events.state;
@@ -902,6 +932,17 @@ impl Model {
                 Vec::new()
             }
         }
+    }
+
+    /// The installation's administrator as recoveryOS lists accounts: by
+    /// full name when it is the account running the app.
+    pub fn owner_name(&self) -> Option<String> {
+        let owner = self.owner.as_ref()?;
+        Some(if *owner == self.user.0 && !self.user.1.is_empty() {
+            self.user.1.clone()
+        } else {
+            owner.clone()
+        })
     }
 
     pub fn failure(&self) -> Option<&sekka_mac_contract::Failure> {
@@ -1209,7 +1250,8 @@ impl Model {
         out.extend(helper_lines.iter().cloned());
         out.push("App log:".into());
         out.extend(self.log.iter().cloned());
-        let names = [self.user.0.as_str()];
+        let mut names = vec![self.user.0.as_str()];
+        names.extend(self.owner.as_deref());
         out.iter()
             .map(|l| sekka_redact(l, &names))
             .collect::<Vec<_>>()
@@ -1251,6 +1293,13 @@ impl Model {
             _ => None,
         }
     }
+}
+
+/// Whether a typed account name is the recorded administrator: its short
+/// name in any case, or the full name of the account running the app.
+fn same_account(typed: &str, recorded: &str, user: &(String, String)) -> bool {
+    let typed = typed.trim();
+    typed.eq_ignore_ascii_case(recorded) || (recorded == user.0 && !user.1.is_empty() && typed == user.1)
 }
 
 fn sekka_redact(line: &str, names: &[&str]) -> String {
