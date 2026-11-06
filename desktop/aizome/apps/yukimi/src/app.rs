@@ -887,14 +887,9 @@ impl Yukimi {
         };
         let one = numbers.len() == 1;
         let frees = match (bytes, one) {
-            (Some(0), true) => "Deleting it frees nothing by itself: all it has is shared with other generations or \
-                                kept by something else."
-                .to_owned(),
-            (Some(0), false) => "Deleting them frees nothing by themselves: all they have is shared with other \
-                                 generations or kept by something else."
-                .to_owned(),
+            (Some(0), _) => "No additional disk space is estimated to be freed by deleting this selection.".to_owned(),
             (Some(bytes), _) => format!(
-                "Deleting {} frees about {} once garbage is collected.",
+                "Deleting {} is estimated to free {} once garbage is collected.",
                 if one { "it" } else { "them" },
                 human_size(bytes)
             ),
@@ -909,7 +904,8 @@ impl Yukimi {
         let last = if every { " Only what's in use stays, with nothing older to go back to." } else { "" };
         let body = format!(
             "{leave} the boot menu, and can't be returned to.{last} {frees} Delete and Clean Up collects it \
-             now{also}; Delete leaves it for the next clean-up. Both ask for an administrator password."
+             now{also}; Delete leaves it for the next clean-up. Compression, shared disk blocks and other activity \
+             can change these estimates. Both ask for an administrator password."
         );
         let alert = Alert::new(format!("Delete {}?", generation_words(&numbers)), body)
             .cancel_button("Cancel")
@@ -1713,7 +1709,10 @@ impl Program for Yukimi {
                 let days = [Some(7), Some(30), Some(90), None][self.older.min(3)];
                 let freeable = self.model.freeable.clone();
                 let comes_back = |extra: u64| match &freeable {
-                    Some(f) => format!(" About {} comes back.", human_size(f.garbage + extra)),
+                    Some(f) => format!(
+                        " Estimated space freed: {}. Compression, shared disk blocks and other activity can change this.",
+                        human_size(f.garbage + extra)
+                    ),
                     None => String::new(),
                 };
                 self.confirm(

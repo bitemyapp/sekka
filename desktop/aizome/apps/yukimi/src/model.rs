@@ -34,7 +34,7 @@ pub struct SystemPackage {
     pub size: u64,
 }
 
-/// The store, divided by what keeps each part of it (NAR sizes). A part
+/// The store in serialized NAR bytes, not allocated disk bytes. A part
 /// shared by several keepers counts once, with the first of: the running
 /// system (and the started one, and what running programs use), users'
 /// profiles, projects, older generations.
@@ -48,7 +48,7 @@ pub struct Composition {
     pub profiles: u64,
     /// Kept by build results and development shells.
     pub projects: u64,
-    /// Kept by nothing: garbage collection would free it.
+    /// Not kept by a visible root. Nix may know additional roots at GC time.
     pub garbage: u64,
     pub total: u64,
     pub paths: usize,
@@ -101,10 +101,10 @@ pub struct Store {
     pub heaviest: Vec<Heavy>,
     /// The same with each app's versions grouped.
     pub heaviest_apps: Vec<Heavy>,
-    /// How big each system generation is, oldest first: everything it
+    /// Full closure NAR bytes for each generation, oldest first: everything it
     /// needs (its closure), shared with the others or not. Not what
     /// deleting one gives back; that is [`Freeable`].
-    pub generation_sizes: Vec<(u32, u64)>,
+    pub generation_nar_sizes: Vec<(u32, u64)>,
     /// What the newest generation changed from the one before.
     pub latest: Option<Diff>,
 }
@@ -540,9 +540,12 @@ impl Store {
         store.reclaim = Reclaim::new(&store.graph, &gc_roots, keep);
         store.system_packages = system_packages(&store.graph);
         (store.heaviest, store.heaviest_apps) = heaviest(&store.graph, 24);
-        store.generation_sizes = generations
+        store.generation_nar_sizes = generations
             .iter()
-            .map(|g| (g.number, store.closure_of(&g.target).iter().map(|&id| store.graph.info(id).nar_size).sum()))
+            .filter_map(|g| {
+                let id = store.graph.lookup(g.target.as_str())?;
+                Some((g.number, store.graph.size(&store.graph.closure([id]))))
+            })
             .collect();
         if let [.., before, after] = generations {
             let (before, after) = (store.closure_of(&before.target), store.closure_of(&after.target));

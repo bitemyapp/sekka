@@ -17,7 +17,7 @@ pub fn parts(c: &Composition) -> [(&'static str, &'static str, u64, Dye); 5] {
         ("Older generations", "Kept only so you can return to them.", c.old_generations, Dye::Hanada),
         ("Packages just for users", "Installed into people's own profiles.", c.profiles, Dye::Violet),
         ("Projects and dev shells", "Build results and development environments.", c.projects, Dye::Green),
-        ("Garbage", "Needed by nothing. Cleaning up removes it.", c.garbage, Dye::Faint),
+        ("Potential garbage", "Cleanup checks which of these packages are still needed.", c.garbage, Dye::Faint),
     ]
 }
 
@@ -97,14 +97,22 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
         row![
             text(human_size(c.total)).mono().tabular().size(30.0).weight(600.0),
             column![
-                text(format!("in {} store paths", group_digits(c.paths))).role(Role::Text2),
-                text(format!("{} of them garbage", group_digits(c.garbage_paths))).size(12.0).role(Role::Text3),
+                text(format!("NAR size across {} store paths", group_digits(c.paths))).role(Role::Text2),
+                text(format!("{} may be garbage", group_digits(c.garbage_paths))).size(12.0).role(Role::Text3),
             ]
             .spacing(1.0),
         ]
         .spacing(14.0)
         .align(Align::Center),
         bar(segments(c), 22.0).width(Fill),
+        text(
+            "Sizes below are uncompressed package archives (NAR), not disk usage. Compression, hardlinks and \
+              shared blocks change the space used on disk. Cleanup estimates below use file allocation and hardlinks; \
+              compression, reflinks, snapshots, incomplete measurements and other activity can change the result."
+        )
+        .size(12.0)
+        .role(Role::Text3)
+        .wrap(),
     ]
     .spacing(12.0)
     .width(Fill);
@@ -115,20 +123,22 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
     let frees = match (app.model.freeable.as_deref(), days) {
         (Some(f), Some(days)) => match f.older(days) {
             (&[], _) => format!(
-                "Frees about {} on disk, what nothing needs now. No generation is old enough to go.",
+                "Estimated space freed: {}, what nothing needs now. No generation is old enough to go.",
                 human_size(f.garbage)
             ),
             (numbers, extra) => format!(
-                "Frees about {} on disk: {} nothing needs now, and {} that deleting {} lets go.",
+                "Estimated space freed: {}: {} nothing needs now, and {} that deleting {} lets go.",
                 human_size(f.garbage + extra),
                 human_size(f.garbage),
                 human_size(extra),
                 crate::app::generation_words(numbers),
             ),
         },
-        (Some(f), None) => format!("Frees about {} on disk, what nothing needs now.", human_size(f.garbage)),
+        (Some(f), None) => format!("Estimated space freed: {}, what nothing needs now.", human_size(f.garbage)),
         (None, _) if app.measuring => "Working out what it frees…".to_owned(),
-        (None, _) => format!("About {} of the store is needed by nothing now.", human_size(c.garbage)),
+        (None, _) => {
+            format!("Potential garbage: {} NAR. Disk space freed has not been measured.", human_size(c.garbage))
+        }
     };
     let clean = column![
         row![

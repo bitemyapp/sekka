@@ -1724,6 +1724,16 @@ for anyone, with the closure Yukimi used to show beside it. The GUI measures
 after the store is read, in the background, and not for another system's
 `/etc`.
 
+History labels the full archive closure separately from "Estimated freed";
+package changes and the Storage/Overview totals are explicitly NAR bytes.
+A generation missing from the store graph has no closure figure, rather
+than a zero. Cleanup and deletion results retain their existing `freed`
+fields for CLI compatibility and also report `available_before_gc` and
+`available_after_gc` (`statvfs.f_bavail`). The GUI uses these observations,
+including decreases and unchanged space, with a caveat about concurrent
+activity and delayed frees. A helper without these fields leaves the disk
+change unmeasured; Nix's textual deletion summary is not a disk observation.
+
 The estimate can't promise: Btrfs reports blocks before compression
 (Genkan mounts Btrfs with `compress=zstd:1`), so less can come back there;
 blocks a snapshot or reflink shares stay; a program started, or a root

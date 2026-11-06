@@ -26,7 +26,8 @@ pub struct StoreDb {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PathInfo {
     pub path: String,
-    /// Size of the path's contents, in bytes.
+    /// Serialized NAR archive size, before compression. This does not
+    /// measure allocated disk blocks or space reclaimable by deletion.
     pub nar_size: u64,
     /// When the path arrived in the store, as Unix time.
     pub registered: i64,

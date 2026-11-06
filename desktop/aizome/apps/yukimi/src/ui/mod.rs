@@ -160,7 +160,7 @@ fn place(app: &Yukimi, page: Page) -> Element<Msg> {
             }
         }
         Page::History => (!app.model.generations.is_empty()).then(|| app.model.generations.len().to_string()),
-        Page::Storage => app.model.store.as_ref().map(|s| short_size(s.composition.total)),
+        Page::Storage => app.model.store.as_ref().map(|s| format!("NAR {}", short_size(s.composition.total))),
         Page::Desktops => (!app.choice_changes().is_empty()).then(|| "changed".to_owned()),
         _ => None,
     };
