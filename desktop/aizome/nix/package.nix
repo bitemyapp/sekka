@@ -440,18 +440,22 @@ let
     }
   );
   session = runCommand "aizome-session-${version}" { } ''
-    mkdir -p $out/bin $out/lib/systemd/user
+    # Match Nixpkgs' canonical user-unit location and compatibility link.
+    # Mixing a real lib/systemd/user directory with the apps' symlink would
+    # leave symlinkJoin with separate, incomplete sets of user units.
+    mkdir -p $out/bin $out/share/systemd/user $out/lib/systemd
+    ln -s ../../share/systemd/user $out/lib/systemd/user
     install -m755 ${path "desktop/aizome/session/aizome-session"} $out/bin/aizome-session
     substituteInPlace $out/bin/aizome-session --replace-fail 'flock -n 9' '${pkgs.util-linux}/bin/flock -n 9'
     install -Dm644 ${path "desktop/aizome/session/aizome.desktop"} $out/share/wayland-sessions/aizome.desktop
     for unit in ${path "desktop/aizome/session"}/*.service ${path "desktop/aizome/session"}/*.target ${path "desktop/aizome/session"}/*.path; do
-      install -m644 "$unit" "$out/lib/systemd/user/$(basename "$unit")"
+      install -m644 "$unit" "$out/share/systemd/user/$(basename "$unit")"
     done
     install -Dm644 ${path "desktop/aizome/session/aizome-portals.conf"} $out/share/xdg-desktop-portal/aizome-portals.conf
     install -Dm644 ${path "desktop/aizome/session/aizome.portal"} $out/share/xdg-desktop-portal/portals/aizome.portal
     mkdir -p $out/share/dbus-1/services
     cp ${path "desktop/aizome/session/dbus"}/*.service $out/share/dbus-1/services/
-    for unit in $out/lib/systemd/user/* $out/share/dbus-1/services/*; do
+    for unit in $out/share/systemd/user/* $out/share/dbus-1/services/*; do
       ${lib.concatMapStringsSep "\n"
         (name: ''
           substituteInPlace "$unit" --replace-quiet @bindir@/aizome-${name} ${commands.${name}}/bin/aizome-${name}
@@ -481,7 +485,19 @@ let
     ]
     ++ builtins.attrValues commands
     ++ builtins.attrValues apps;
-    postBuild = "test -e ${libraryChecks}";
+    postBuild = ''
+      test -e ${libraryChecks}
+      for unit in ${
+        lib.concatMapStringsSep " " (component: "${component}/lib/systemd/user/*") (
+          [ session ] ++ builtins.attrValues apps
+        )
+      }; do
+        [ ! -e "$unit" ] || {
+          cmp "$unit" "$out/lib/systemd/user/$(basename "$unit")"
+          cmp "$unit" "$out/share/systemd/user/$(basename "$unit")"
+        }
+      done
+    '';
     passthru = {
       providedSessions = [ "aizome" ];
       inherit buildEnv;
