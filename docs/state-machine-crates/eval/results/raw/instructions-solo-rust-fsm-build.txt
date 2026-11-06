@@ -1,0 +1,6 @@
+   Compiling rust-fsm-dsl v0.8.0
+   Compiling rust-fsm v0.8.0
+   Compiling impl-rust-fsm v0.1.0 (/tmp/claude-1000/tk/sme/impl-rust-fsm)
+   Compiling bench v0.1.0 (/tmp/claude-1000/tk/sme/bench)
+    Finished `bench` profile [optimized] target(s) in 8.55s
+  Executable benches/instructions.rs (/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-7b9b4b971830157c)

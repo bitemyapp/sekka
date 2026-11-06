@@ -1,0 +1,10 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/state-machines/lock/reject/L4-pending-sleep-after-resume.rs
+  |
+  |     let _still: Delay<SleepPending> = pending.resumed().unwrap();
+  |                 -------------------   ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Delay<SleepPending>`, found `Delay<Held>`
+  |                 |
+  |                 expected due to this
+  |
+  = note: expected struct `Delay<impl_state_machines::lock::SleepPending>`
+             found struct `Delay<impl_state_machines::lock::Held>`

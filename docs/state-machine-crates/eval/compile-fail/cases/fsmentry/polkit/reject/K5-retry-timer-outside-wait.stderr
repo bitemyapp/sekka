@@ -1,0 +1,5 @@
+error[E0599]: no method named `retry` found for struct `impl_fsmentry::polkit::phase::Starting<'state>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/fsmentry/polkit/reject/K5-retry-timer-outside-wait.rs
+  |
+  |         starting.retry(2);
+  |                  ^^^^^ method not found in `impl_fsmentry::polkit::phase::Starting<'_>`

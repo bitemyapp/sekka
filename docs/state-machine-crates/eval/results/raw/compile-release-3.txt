@@ -1,0 +1,25 @@
+implicit: clean 0.34s, crate 0.29s, incremental 0.06s
+enum: clean 0.34s, crate 0.30s, incremental 0.06s
+typestate: clean 0.39s, crate 0.34s, incremental 0.07s
+statig: clean 2.96s, crate 0.47s, incremental 0.29s
+smlang: clean 2.74s, crate 0.58s, incremental 0.30s
+sml: clean 4.43s, crate 0.79s, incremental 0.40s
+finny: clean 4.13s, crate 1.03s, incremental 0.24s
+fsmentry: clean 2.18s, crate 0.42s, incremental 0.11s
+statum: clean 3.96s, crate 1.06s, incremental 0.48s
+state-machines: clean 4.09s, crate 1.56s, incremental 0.29s
+rust-fsm: clean 1.71s, crate 0.34s, incremental 0.08s
+
+| impl | profile | clean (s) | crate only (s) | incremental (s) |
+|---|---|---|---|---|
+| implicit | release | 0.34 | 0.29 | 0.06 |
+| enum | release | 0.34 | 0.3 | 0.06 |
+| typestate | release | 0.39 | 0.34 | 0.07 |
+| statig | release | 2.96 | 0.47 | 0.29 |
+| smlang | release | 2.74 | 0.58 | 0.3 |
+| sml | release | 4.43 | 0.79 | 0.4 |
+| finny | release | 4.13 | 1.03 | 0.24 |
+| fsmentry | release | 2.18 | 0.42 | 0.11 |
+| statum | release | 3.96 | 1.06 | 0.48 |
+| state-machines | release | 4.09 | 1.56 | 0.29 |
+| rust-fsm | release | 1.71 | 0.34 | 0.08 |

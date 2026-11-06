@@ -1,0 +1,7 @@
+error[E0559]: variant `impl_enum::lock::Phase::Locking` has no field named `shake`
+ --> $WORKSPACE/compile-fail/cases/enum/lock/reject/L6-shake-outside-locked.rs
+  |
+  |     let _ = Phase::Locking { shake: 1 };
+  |                              ^^^^^ `impl_enum::lock::Phase::Locking` does not have this field
+  |
+  = note: all struct fields are already assigned

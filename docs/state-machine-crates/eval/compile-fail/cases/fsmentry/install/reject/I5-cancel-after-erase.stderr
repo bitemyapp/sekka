@@ -1,0 +1,5 @@
+error[E0599]: no method named `cancel` found for struct `impl_fsmentry::install::session::Executing<'state>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/fsmentry/install/reject/I5-cancel-after-erase.rs
+  |
+  |         executing.cancel();
+  |                   ^^^^^^ method not found in `impl_fsmentry::install::session::Executing<'_>`

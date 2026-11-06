@@ -1,0 +1,5 @@
+error[E0599]: no method named `done` found for struct `impl_typestate::transfer::Restoring` in the current scope
+ --> $WORKSPACE/compile-fail/cases/typestate/transfer/reject/T3-lost-aside.rs
+  |
+  |     restoring.done(job, Outcome::Failed, out)
+  |               ^^^^ method not found in `impl_typestate::transfer::Restoring`

@@ -1,0 +1,7 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/typestate/polkit/reject/K3-restart-without-backoff.rs
+  |
+  | fn restart_at_once(ctx: &mut Ctx, starting: Starting, out: &mut Vec<Effect>) -> Starting {
+  |                                                                                 -------- expected `impl_typestate::polkit::Starting` because of return type
+  |     starting.failed(ctx, out)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Starting`, found `Backoff`

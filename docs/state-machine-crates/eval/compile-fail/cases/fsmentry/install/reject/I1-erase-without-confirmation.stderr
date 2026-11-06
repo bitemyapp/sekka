@@ -1,0 +1,12 @@
+error[E0423]: cannot initialize a tuple struct which contains private fields
+ --> $WORKSPACE/compile-fail/cases/fsmentry/install/reject/I1-erase-without-confirmation.rs
+  |
+  |         prepared.confirm(Steps(Exec::Erase(true)));
+  |                          ^^^^^
+  |
+  = note: a struct named `Steps` exists in another namespace
+note: constructor is not visible here due to private fields
+ --> src/install.rs
+  |
+  | pub struct Steps(Exec);
+  |                  ^^^^ private field

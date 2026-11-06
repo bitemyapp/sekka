@@ -1,0 +1,431 @@
+# callgrind format
+version: 1
+creator: callgrind-3.27.1
+pid: 2067993
+cmd:  /tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-e344f362be0bbcda --gungraun-run d:d:000000 00000 00001 00005
+part: 1
+thread: 1
+
+
+desc: I1 cache: 32768 B, 64 B, 8-way associative
+desc: D1 cache: 32768 B, 64 B, 8-way associative
+desc: LL cache: 8388608 B, 64 B, 16-way associative
+
+desc: Timerange: Basic block 0 - 4943783
+desc: Trigger: Program termination
+
+positions: line
+events: Ir Dr Dw I1mr D1mr D1mw ILmr DLmr DLmw
+summary: 32052272 6558771 4603188 107 19683 11 106 7
+
+
+ob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2
+fl=???
+fn=0x0000000000022be0
+cob=/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-e344f362be0bbcda
+cfi=???
+cfn=(below main)
+calls=1 0 
+0 32052272 6558771 4603188 107 19683 11 106 7
+
+ob=/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-e344f362be0bbcda
+fl=???
+fn=std::rt::lang_start_internal
+cfn=std::rt::lang_start::<()>::{closure#0}
+calls=1 0 
+0 32052272 6558771 4603188 107 19683 11 106 7
+
+fn=instructions::main
+cfn=instructions::machines::__run
+calls=1 0 
+0 32052272 6558771 4603188 107 19683 11 106 7
+
+fn=__rustc::__rdl_dealloc
+0 8 4 2 0 1
+cob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6
+cfi=???
+cfn=free
+calls=9 0 
+0 130 28 13 10 12 0 10
+
+fn=instructions::wrap_80::__gungraun_wrapper_id_mod_sml::sml
+cfn=instructions::wrap_80::__gungraun_wrapper_mod::wrap_80
+calls=1 0 
+0 32052272 6558771 4603188 107 19683 11 106 7
+
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::tab
+0 16210 4863 1621 1 0 0 1
+
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::scroll_down
+0 144 24 48
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=24 0 
+0 552 72 24
+0 600 120 48 2 0 0 2
+
+fn=__rustc::__rust_dealloc
+0 2
+cfn=__rustc::__rdl_dealloc
+calls=9 0 
+0 138 32 15 10 13 0 10
+
+fn=instructions::machines::__run
+cfn=instructions::wrap_80::__run_sml
+calls=1 0 
+0 32052272 6558771 4603188 107 19683 11 106 7
+
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::repeat_fills_again
+0 6126 410 0 6 0 0 6
+
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::fills
+0 1628928 465408 0 1 0 0 1
+
+fn=main
+cfn=std::rt::lang_start_internal
+calls=1 0 
+0 32052272 6558771 4603188 107 19683 11 106 7
+
+fn=<impl_sml::wrap::WrapStateMachine<impl_sml::wrap::Screen>>::process_event::<impl_sml::wrap::Print>
+0 4104708 517128 1635420 1 6 0 1
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::fills
+calls=116352 0 
+0 1628928 465408 0 1 0 0 1
+0 470850 907 1814
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::print
+calls=907 0 
+0 69865 13605 9070
+0 13405 2083 4166 2 6 0 2
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::fills_again
+calls=2083 0 
+0 29162 8332
+0 18747 2083 4166 0 6
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::overwrite
+calls=2083 0 
+0 148653 26971 18666
+0 9578 884 1795 1 0 0 1
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::fills_after_wrap
+calls=884 0 
+0 4420 2652
+0 7956 884 1768 0 5
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::wrap_print
+calls=884 0 
+0 144092 22984 19448 4 0 5 4
+0 491810 81069 163045 1 6 0 1
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::fills_again
+calls=81069 0 
+0 1134966 324276 0 2 0 0 2
+0 326244 328 656 1 0 0 1
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::overwrite
+calls=328 0 
+0 23632 4264 2952
+0 590297 115445 118713 0 6
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::print
+calls=115445 0 
+0 8895224 1732017 1154716 5 0 0 5
+0 1436147 80741 481517 1 1 0 1
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::overwrite
+calls=80741 0 
+0 5818120 1049617 726657 6 2 1 6 1
+0 1964974 1402716 0 1 0 0 1
+
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::fills_after_wrap
+0 4420 2652
+
+fn=<impl_sml::wrap::Wrap as spec::wrap::Machine>::new
+0 16 1 7 2 0 1 2
+
+fn=<impl_sml::wrap::WrapStateMachine<impl_sml::wrap::Screen>>::process_event::<impl_sml::wrap::CursorTo>
+0 35200 5341 10377 2 7 1 2 1
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::cursor_to
+calls=1577 0 
+0 15770 4731 1577 2 0 0 2
+0 7476 305 1220 1 0 0 1
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::cursor_to
+calls=305 0 
+0 3050 915 305
+0 18158 7528 4069 1 0 0 1
+
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::erase_line
+0 42655 8453 2292 2 0 0 2
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=65 0 
+0 1885 195 65
+0 6291 4194
+
+fn=<impl_sml::wrap::WrapStateMachine<impl_sml::wrap::Screen>>::process_event::<impl_sml::wrap::ReverseIndex>
+0 456 96 96 3 8 0 2
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::scroll_down
+calls=24 0 
+0 1296 216 120 2 0 0 2
+0 240 72 48
+
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::wrap_print
+0 16796 2652 7956 1 0 5 1
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=884 0 
+0 25636 2652 884
+0 19448 2652 4420 2 0 0 2
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=884 0 
+0 20332 2652 884
+0 18564 3536 3536 1 0 0 1
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=884 0 
+0 30940 2652 884
+0 12376 6188 884
+
+fn=<core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write
+0 52 7 7 6 0 0 6
+
+fn=std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+cfn=instructions::main
+calls=1 0 
+0 32052272 6558771 4603188 107 19683 11 106 7
+
+fn=bench::drive::wrap::run::<impl_sml::wrap::Wrap>
+0 13 1 7 1 1 2 1
+cfn=<impl_sml::wrap::Wrap as spec::wrap::Machine>::new
+calls=1 0 
+0 16 1 7 2 0 1 2
+0 4121518 625530 200429 3 19551 0 3 2
+cfn=<impl_sml::wrap::WrapStateMachine<impl_sml::wrap::Screen>>::process_event::<impl_sml::wrap::Print>
+calls=200388 0 
+0 27331778 5854394 4344569 26 38 6 26 1
+0 221766 5899 3690 3 12 0 3 1
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::line_feed
+calls=1060 0 
+0 45580 10600 5300 1 0 0 1
+0 2240 0 24
+cfn=<impl_sml::wrap::WrapStateMachine<impl_sml::wrap::Screen>>::process_event::<impl_sml::wrap::ReverseIndex>
+calls=24 0 
+0 1992 384 264 5 8 0 4
+0 516 0 82 1 0 0 1
+cfn=<impl_sml::wrap::WrapStateMachine<impl_sml::wrap::Screen>>::process_event::<impl_sml::wrap::Repeat>
+calls=82 0 
+0 53559 5783 4129 17 28 0 17
+0 13050 3242 1621 1 1 0 1
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::tab
+calls=1621 0 
+0 16210 4863 1621 1 0 0 1
+0 22900 1621 1882 0 1 0 0 1
+cfn=<impl_sml::wrap::WrapStateMachine<impl_sml::wrap::Screen>>::process_event::<impl_sml::wrap::CursorTo>
+calls=1882 0 
+0 79654 18820 17548 6 7 1 6 1
+0 12427 20 2117 2 0 0 2
+cfn=<impl_sml::wrap::WrapStateMachine<impl_sml::wrap::Screen>>::process_event::<impl_sml::wrap::EraseLine>
+calls=2097 0 
+0 116121 27521 17070 6 16 0 6 1
+0 12569 11 2787 4 1 1 4
+cfn=<impl_sml::wrap::Wrap as spec::wrap::Machine>::state
+calls=1 0 
+0 5 2 0 1 0 0 1
+0 5 0 2 1 0 0 1
+cfn=<core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write
+calls=1 0 
+0 52 7 7 6 0 0 6
+0 75 14 0 4 1 0 4
+
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::cursor_to
+0 18820 5646 1882 2 0 0 2
+
+fn=<impl_sml::wrap::WrapStateMachine<impl_sml::wrap::Screen>>::process_event::<impl_sml::wrap::EraseLine>
+0 24414 4211 6574 2 8 0 2 1
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::erase_line
+calls=17 0 
+0 391 102 17
+0 16666 1848 3696 1 6 0 1
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::erase_line
+calls=1848 0 
+0 45104 11348 2108 2 0 0 2
+0 1160 232 232 0 2
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::erase_line
+calls=232 0 
+0 5336 1392 232
+0 23050 8388 4211 1 0 0 1
+
+fn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+0 7117288 612603 204201 3 1 0 3 1
+
+fn=(below main)
+cob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6
+cfi=???
+cfn=__libc_start_main@@GLIBC_2.34
+calls=1 0 
+0 32052272 6558771 4603188 107 19683 11 106 7
+
+fn=std::rt::lang_start::<()>::{closure#0}
+cfn=std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+calls=1 0 
+0 32052272 6558771 4603188 107 19683 11 106 7
+
+fn=instructions::wrap_80::__gungraun_wrapper_mod::wrap_80
+0 21 7 8 3 1 0 3
+cfn=bench::drive::wrap::replay::<impl_sml::wrap::Wrap>
+calls=1 0 
+0 32052077 6558722 4603162 93 19666 11 92 7
+0 18 2 2 1 1 0 1
+cfn=__rustc::__rust_dealloc
+calls=1 0 
+0 93 21 10 10 8 0 10
+0 8 1 1 0 1
+cfn=__rustc::__rust_dealloc
+calls=1 0 
+0 47 11 5 0 5
+0 8 7 0 0 1
+
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::overwrite
+0 1989175 414484 580788 3 1 1 3
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=81876 0 
+0 2865660 245628 81876 3 1 0 3 1
+0 11205 1245 1245
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=1245 0 
+0 43575 3735 1245
+0 1080790 415760 83121
+
+fn=instructions::wrap_80::__run_sml
+cfn=instructions::wrap_80::__gungraun_wrapper_id_mod_sml::sml
+calls=1 0 
+0 32052272 6558771 4603188 107 19683 11 106 7
+
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::fills_again
+0 1164128 332608 0 2 0 0 2
+
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::repeat_no_autowrap
+0 1566 330 576 1 0 0 1
+
+ob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6
+fl=???
+fn=free
+0 61 11 4 1 7 0 1
+cfn=_int_free_chunk
+calls=1 0 
+0 69 17 9 9 5 0 9
+
+fn=munmap_chunk
+0 31 7 3 3 2 0 3
+cfn=munmap
+calls=1 0 
+0 6 1 0 2 0 0 2
+
+fn=_int_free_chunk
+0 22 5 5 3 3 0 3
+cfn=munmap_chunk
+calls=1 0 
+0 37 8 3 5 2 0 5
+0 10 4 1 1 0 0 1
+
+fn=__libc_start_main@@GLIBC_2.34
+cfn=(below main)
+calls=1 0 
+0 32052272 6558771 4603188 107 19683 11 106 7
+
+ob=/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-e344f362be0bbcda
+fl=???
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::repeat_no_autowrap
+0 70 14 7
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=7 0 
+0 245 21 7
+0 1007 243 169 2 0 0 2
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=81 0 
+0 2835 243 81
+0 4692 782 782
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=782 0 
+0 27370 2346 782
+0 5178 0 863
+
+ob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6
+fl=???
+fn=(below main)
+cob=/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-e344f362be0bbcda
+cfi=???
+cfn=main
+calls=1 0 
+0 32052272 6558771 4603188 107 19683 11 106 7
+
+fn=munmap
+0 5 0 0 2 0 0 2
+
+ob=/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-e344f362be0bbcda
+fl=???
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::repeat_no_autowrap
+0 738 574
+
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::line_feed
+0 11660 3180 2120
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=1060 0 
+0 24380 3180 1060
+0 9540 4240 2120 1 0 0 1
+
+fn=bench::drive::wrap::replay::<impl_sml::wrap::Wrap>
+0 19 4 6 2 0 0 2
+cfn=bench::drive::wrap::run::<impl_sml::wrap::Wrap>
+calls=1 0 
+0 32052046 6558713 4603156 91 19665 11 90 7
+0 12 5 0 0 1
+
+fn=<impl_sml::wrap::WrapStateMachine<impl_sml::wrap::Screen>>::process_event::<impl_sml::wrap::Repeat>
+0 1396 178 438 2 6 0 2
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::repeat_fills_again
+calls=14 0 
+0 1027 70
+0 140 14 28 1 7 0 1
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::repeat_no_autowrap
+calls=14 0 
+0 8372 854 616
+0 436 68 136 2 8 0 2
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::repeat_fills_again
+calls=68 0 
+0 5099 340 0 6 0 0 6
+0 314 7 14
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::repeat_no_autowrap
+calls=7 0 
+0 4280 435 314
+0 361 61 82 2 7 0 2
+cfn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::repeat_no_autowrap
+calls=61 0 
+0 31049 3264 2337 3 0 0 3
+0 1085 492 164 1 0 0 1
+
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::print
+0 1756243 350880 814540 3 0 0 3
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=19 0 
+0 570 57 19
+0 76 19 19
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=19 0 
+0 551 57 19
+0 171 57 57
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=19 0 
+0 437 57 19
+0 458511 114604 38 1 0 0 1
+
+ob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6
+fl=???
+fn=munmap
+0 1 1
+
+ob=/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-e344f362be0bbcda
+fl=???
+fn=<impl_sml::wrap::Screen as impl_sml::wrap::WrapStateMachineContext>::print
+0 266 38 38
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=19 0 
+0 665 57 19
+0 930664 116333 116333 1 0 0 1
+cfn=<spec::Digest as spec::Sink<spec::wrap::Effect>>::push
+calls=116333 0 
+0 4071655 348999 116333
+0 1745280 814464 116352
+
+fn=<impl_sml::wrap::Wrap as spec::wrap::Machine>::state
+0 5 2 0 1 0 0 1
+
+totals: 32052272 6558771 4603188 107 19683 11 106 7

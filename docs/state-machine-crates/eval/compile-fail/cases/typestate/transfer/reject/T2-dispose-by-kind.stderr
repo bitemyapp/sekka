@@ -1,0 +1,5 @@
+error[E0609]: no field `kind` on type `&Job`
+ --> $WORKSPACE/compile-fail/cases/typestate/transfer/reject/T2-dispose-by-kind.rs
+  |
+  |     if job.kind == JobKind::Restore {
+  |            ^^^^ unknown field

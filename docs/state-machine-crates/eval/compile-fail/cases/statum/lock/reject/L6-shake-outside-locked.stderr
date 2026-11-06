@@ -1,0 +1,9 @@
+error[E0599]: no method named `tick` found for struct `LockScreen<impl_statum::lock::Locking>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/statum/lock/reject/L6-shake-outside-locked.rs
+  |
+  |     locking.tick(&mut out);
+  |             ^^^^ method not found in `LockScreen<impl_statum::lock::Locking>`
+  |
+  = note: the method was found for
+          - `LockScreen<impl_statum::lock::Checking>`
+          - `LockScreen<impl_statum::lock::Locked>`

@@ -1,0 +1,10 @@
+error[E0023]: this pattern has 2 fields, but the corresponding tuple variant has 1 field
+ --> $WORKSPACE/compile-fail/cases/fsmentry/install/reject/I6-closure-on-deferred-route.rs
+  |
+  |     if let Session::Prepared(route, closure) = m.session() {
+  |                              ^^^^^  ^^^^^^^ expected 1 field, found 2
+  |
+ ::: src/install.rs
+  |
+  |             Idle -begin-> Preparing(Preparation) -prepared-> Prepared(Route) -confirm-> Executing(Steps) -complete-> Complete,
+  |                                                                       ----- tuple variant has 1 field

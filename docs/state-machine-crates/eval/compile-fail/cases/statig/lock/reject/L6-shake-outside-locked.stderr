@@ -1,0 +1,7 @@
+error[E0559]: variant `impl_statig::lock::State::Locking` has no field named `shake`
+ --> $WORKSPACE/compile-fail/cases/statig/lock/reject/L6-shake-outside-locked.rs
+  |
+  |     let _ = State::Locking { shake: 1 };
+  |                              ^^^^^ `impl_statig::lock::State::Locking` does not have this field
+  |
+  = note: all struct fields are already assigned

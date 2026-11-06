@@ -1,0 +1,5 @@
+error[E0599]: no method named `tick` found for struct `impl_typestate::lock::Locking` in the current scope
+ --> $WORKSPACE/compile-fail/cases/typestate/lock/reject/L6-shake-outside-locked.rs
+  |
+  |     locking.tick(&mut out);
+  |             ^^^^ method not found in `impl_typestate::lock::Locking`

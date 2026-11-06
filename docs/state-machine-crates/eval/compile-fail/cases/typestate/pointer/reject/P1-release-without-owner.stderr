@@ -1,0 +1,18 @@
+error[E0061]: this method takes 2 arguments but 4 arguments were supplied
+  --> $WORKSPACE/compile-fail/cases/typestate/pointer/reject/P1-release-without-owner.rs
+   |
+   |     let _ = hovering.release(Point::new(0, 0), Button::Left, Hit::on(1), &mut out);
+   |                      ^^^^^^^ ----------------  ------------ unexpected argument #2 of type `Button`
+   |                              |
+   |                              unexpected argument #1 of type `Point`
+   |
+note: method defined here
+  --> src/pointer.rs
+   |
+   |     pub fn release(mut self, hit: Hit, out: &mut impl Sink<Effect>) -> Hovering {
+   |            ^^^^^^^
+help: remove the extra arguments
+   |
+10 -     let _ = hovering.release(Point::new(0, 0), Button::Left, Hit::on(1), &mut out);
+10 +     let _ = hovering.release(Hit::on(1), &mut out);
+   |

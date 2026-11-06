@@ -1,0 +1,7 @@
+error[E0599]: no method named `retry` found for struct `Session<impl_statum::polkit::Unavailable>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/statum/polkit/reject/K6-conversation-after-unavailable.rs
+  |
+  |     let _ = unavailable.retry(out);
+  |                         ^^^^^ method not found in `Session<impl_statum::polkit::Unavailable>`
+  |
+  = note: the method was found for `Session<impl_statum::polkit::RetryWait>`

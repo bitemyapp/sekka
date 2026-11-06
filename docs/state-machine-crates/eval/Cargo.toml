@@ -1,0 +1,49 @@
+[workspace]
+resolver = "3"
+members = [
+    "spec",
+    "impl-implicit",
+    "impl-enum",
+    "impl-typestate",
+    "impl-statig",
+    "impl-smlang",
+    "impl-sml",
+    "impl-finny",
+    "impl-fsmentry",
+    "impl-statum",
+    "impl-state-machines",
+    "impl-rust-fsm",
+    "compile-fail",
+    "bench",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+spec = { path = "spec" }
+compile-fail = { path = "compile-fail" }
+impl-implicit = { path = "impl-implicit" }
+impl-enum = { path = "impl-enum" }
+impl-typestate = { path = "impl-typestate" }
+impl-statig = { path = "impl-statig" }
+impl-smlang = { path = "impl-smlang" }
+impl-sml = { path = "impl-sml" }
+impl-finny = { path = "impl-finny" }
+impl-fsmentry = { path = "impl-fsmentry" }
+impl-statum = { path = "impl-statum" }
+impl-state-machines = { path = "impl-state-machines" }
+impl-rust-fsm = { path = "impl-rust-fsm" }
+proptest = { version = "=1.12.0", default-features = false, features = ["std"] }
+trybuild = "=1.0.122"
+criterion = { version = "=0.8.2", default-features = false, features = ["cargo_bench_support"] }
+
+# Benchmarks and size measurements want the shipped code generation.
+[profile.bench]
+debug = false
+
+[profile.release]
+debug = false

@@ -1,0 +1,7 @@
+error[E0599]: no method named `drags_only_pressed_data` found for struct `Router<impl_state_machines::pointer::Hovering>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/state-machines/pointer/reject/P4-press-point-outside-edge-press.rs
+  |
+  |     let _ = hovering.drags_only_pressed_data();
+  |                      ^^^^^^^^^^^^^^^^^^^^^^^ method not found in `Router<impl_state_machines::pointer::Hovering>`
+  |
+  = note: the method was found for `Router<impl_state_machines::pointer::DragsOnlyPressed>`

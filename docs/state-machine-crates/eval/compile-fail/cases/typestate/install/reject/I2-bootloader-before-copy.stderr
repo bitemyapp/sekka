@@ -1,0 +1,7 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/typestate/install/reject/I2-bootloader-before-copy.rs
+  |
+  |     let _: Bootloader = files.done(&mut out);
+  |            ----------   ^^^^^^^^^^^^^^^^^^^^ expected `Bootloader`, found `Step4`
+  |            |
+  |            expected due to this

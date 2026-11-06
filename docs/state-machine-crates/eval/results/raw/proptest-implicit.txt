@@ -1,0 +1,154 @@
+   Compiling serde_core v1.0.229
+   Compiling libc v0.2.191
+   Compiling rand_core v0.10.1
+   Compiling autocfg v1.5.1
+   Compiling cfg-if v1.0.5
+   Compiling getrandom v0.4.3
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.27
+   Compiling zmij v1.0.23
+   Compiling cpufeatures v0.3.1
+   Compiling chacha20 v0.10.2
+   Compiling rand_xorshift v0.5.0
+   Compiling target-tuple v1.0.2
+   Compiling num-traits v0.2.19
+   Compiling bitflags v2.13.2
+   Compiling core_detect v1.0.0
+   Compiling serde_json v1.0.154
+   Compiling serde v1.0.229
+   Compiling unarray v0.1.4
+   Compiling regex-syntax v0.8.11
+   Compiling winnow v1.0.4
+   Compiling syn v3.0.9
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling toml_writer v1.2.0+spec-1.1.0
+   Compiling glob v0.3.4
+   Compiling termcolor v1.4.1
+   Compiling rand v0.10.3
+   Compiling proptest v1.12.0
+   Compiling toml_datetime v1.1.2+spec-1.1.0
+   Compiling serde_spanned v1.1.2
+   Compiling toml v1.2.0+spec-1.1.0
+   Compiling serde_derive v1.0.229
+   Compiling spec v0.1.0 (/tmp/claude-1000/tk/sme/spec)
+   Compiling trybuild v1.0.122
+   Compiling impl-enum v0.1.0 (/tmp/claude-1000/tk/sme/impl-enum)
+   Compiling impl-implicit v0.1.0 (/tmp/claude-1000/tk/sme/impl-implicit)
+   Compiling compile-fail v0.1.0 (/tmp/claude-1000/tk/sme/compile-fail)
+    Finished `release` profile [optimized] target(s) in 6.37s
+     Running unittests src/lib.rs (/tmp/claude-1000/tk/i/t/sme-eval/release/deps/impl_implicit-c1cbf4c7da55eeed)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compile_fail.rs (/tmp/claude-1000/tk/i/t/sme-eval/release/deps/compile_fail-6ad5699e7f9edc52)
+
+running 1 test
+   Compiling serde_core v1.0.229
+   Compiling rand_core v0.10.1
+   Compiling libc v0.2.191
+   Compiling autocfg v1.5.1
+   Compiling proc-macro2 v1.0.107
+   Compiling getrandom v0.4.3
+   Compiling cfg-if v1.0.5
+   Compiling unicode-ident v1.0.27
+   Compiling quote v1.0.47
+   Compiling zmij v1.0.23
+   Compiling cpufeatures v0.3.1
+   Compiling chacha20 v0.10.2
+   Compiling rand_xorshift v0.5.0
+   Compiling num-traits v0.2.19
+   Compiling serde_json v1.0.154
+   Compiling serde v1.0.229
+   Compiling bitflags v2.13.2
+   Compiling unarray v0.1.4
+   Compiling winnow v1.0.4
+   Compiling regex-syntax v0.8.11
+   Compiling target-tuple v1.0.2
+   Compiling core_detect v1.0.0
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling syn v3.0.9
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling toml_writer v1.2.0+spec-1.1.0
+   Compiling termcolor v1.4.1
+   Compiling glob v0.3.4
+   Compiling rand v0.10.3
+   Compiling proptest v1.12.0
+   Compiling serde_spanned v1.1.2
+   Compiling toml_datetime v1.1.2+spec-1.1.0
+   Compiling toml v1.2.0+spec-1.1.0
+   Compiling serde_derive v1.0.229
+   Compiling spec v0.1.0 (/tmp/claude-1000/tk/sme/spec)
+   Compiling trybuild v1.0.122
+   Compiling impl-enum v0.1.0 (/tmp/claude-1000/tk/sme/impl-enum)
+   Compiling impl-implicit v0.1.0 (/tmp/claude-1000/tk/sme/impl-implicit)
+   Compiling compile-fail v0.1.0 (/tmp/claude-1000/tk/sme/compile-fail)
+   Compiling impl-implicit-tests v0.0.0 (/tmp/claude-1000/tk/i/t/sme-eval/tests/trybuild/impl-implicit)
+    Finished `dev` profile [unoptimized] target(s) in 3.37s
+
+
+test [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/pointer/accept/P1-release-without-owner.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/pointer/accept/P2-owner-after-native-drag.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/pointer/accept/P3-click-under-after-drag.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/pointer/accept/P4-press-point-outside-edge-press.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/pointer/accept/P5-hover-outside.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/pointer/accept/P6-owner-mismatch.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/wrap/runtime/W1-pending-off-the-edge.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/wrap/runtime/W2-wrap-without-autowrap.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/wrap/runtime/W3-clear-on-tab.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/wrap/runtime/W4-print-while-pending.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/wrap/runtime/W5-dangling-link.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/polkit/runtime/K1-answer-without-prompt.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/polkit/runtime/K2-stale-conversation.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/polkit/runtime/K4-double-reply.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/polkit/runtime/K5-retry-timer-outside-wait.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/polkit/accept/K3-restart-without-backoff.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/polkit/accept/K6-conversation-after-unavailable.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/transfer/runtime/T1-dispose-before-placed.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/transfer/runtime/T3-lost-aside.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/transfer/runtime/T4-place-without-answer.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/transfer/runtime/T5-response-for-other-item.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/transfer/runtime/T6-merge-non-folders.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/transfer/accept/T2-dispose-by-kind.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/lock/runtime/L1-release-delay-before-confirmed.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/lock/runtime/L2-stale-pam-result.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/lock/runtime/L3-check-while-unlocked.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/lock/accept/L4-pending-sleep-after-resume.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/lock/accept/L5-refusal-as-wrong-password.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/lock/accept/L6-shake-outside-locked.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/lock/accept/L7-double-delay.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/install/runtime/I1-erase-without-confirmation.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/install/runtime/I2-bootloader-before-copy.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/install/runtime/I3-confirm-during-preparation.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/install/runtime/I5-cancel-after-erase.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/install/accept/I4-deferred-without-space-check.rs[0m ... [0m[32mok
+[0mtest [0m[1m/tmp/claude-1000/tk/sme/compile-fail/cases/implicit/install/accept/I6-closure-on-deferred-route.rs[0m ... [0m[32mok
+[0m
+
+test compile_fail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 20.32s
+
+     Running tests/spec.rs (/tmp/claude-1000/tk/i/t/sme-eval/release/deps/spec-22aa72304a191219)
+
+running 6 tests
+test install_conformance ... ok
+test lock_conformance ... ok
+test polkit_conformance ... ok
+test pointer_conformance ... ok
+test wrap_conformance ... ok
+test transfer_conformance ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests impl_implicit
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

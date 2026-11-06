@@ -1,0 +1,12 @@
+error[E0599]: no method named `cancel` found for struct `Helper<impl_statum::install::Erase>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/statum/install/reject/I5-cancel-after-erase.rs
+  |
+  |     let _ = erase.cancel(&mut out);
+  |                   ^^^^^^ method not found in `Helper<impl_statum::install::Erase>`
+  |
+  = note: the method was found for
+          - `Helper<impl_statum::install::Build>`
+          - `Helper<impl_statum::install::Cache>`
+          - `Helper<impl_statum::install::Checks>`
+          - `Helper<impl_statum::install::Configuration>`
+          and 3 more types

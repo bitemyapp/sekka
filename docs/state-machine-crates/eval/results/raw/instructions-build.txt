@@ -1,0 +1,67 @@
+   Compiling libc v0.2.191
+   Compiling serde v1.0.229
+   Compiling serde_derive v1.0.229
+   Compiling serde_core v1.0.229
+   Compiling rustversion v1.0.23
+   Compiling zmij v1.0.23
+   Compiling gungraun-macros v0.10.0
+   Compiling serde_json v1.0.154
+   Compiling proc-macro-error-attr3 v3.1.1
+   Compiling bincode-next v3.1.1
+   Compiling memchr v2.8.3
+   Compiling gungraun-common v0.1.0
+   Compiling itoa v1.0.18
+   Compiling zerocopy v0.8.63
+   Compiling proc-macro-error3 v3.1.1
+   Compiling zerocopy-derive v0.8.63
+   Compiling gungraun v0.20.0
+   Compiling shlex v2.0.1
+   Compiling rapidhash v4.5.1
+   Compiling pastey v0.2.3
+   Compiling unty-next v0.1.2
+   Compiling find-msvc-tools v0.1.15
+   Compiling cc v1.11.0
+   Compiling ciborium-io v0.2.2
+   Compiling clap_lex v1.1.1
+   Compiling anstyle v1.0.14
+   Compiling getrandom v0.4.3
+   Compiling either v1.19.0
+   Compiling clap_builder v4.6.7
+   Compiling rand v0.10.3
+   Compiling regex-automata v0.4.18
+   Compiling itertools v0.13.0
+   Compiling proptest v1.12.0
+   Compiling alloca v0.4.0
+   Compiling same-file v1.0.6
+   Compiling cast v0.3.0
+   Compiling either-or-both v0.3.1
+   Compiling criterion-plot v0.8.2
+   Compiling gungraun-runner v0.20.0
+   Compiling clap v4.6.7
+   Compiling walkdir v2.5.0
+   Compiling spec v0.1.0 (/tmp/claude-1000/tk/sme/spec)
+   Compiling regex v1.13.1
+   Compiling impl-statig v0.1.0 (/tmp/claude-1000/tk/sme/impl-statig)
+   Compiling half v2.7.1
+   Compiling impl-enum v0.1.0 (/tmp/claude-1000/tk/sme/impl-enum)
+   Compiling impl-rust-fsm v0.1.0 (/tmp/claude-1000/tk/sme/impl-rust-fsm)
+   Compiling impl-state-machines v0.1.0 (/tmp/claude-1000/tk/sme/impl-state-machines)
+   Compiling impl-statum v0.1.0 (/tmp/claude-1000/tk/sme/impl-statum)
+   Compiling impl-sml v0.1.0 (/tmp/claude-1000/tk/sme/impl-sml)
+   Compiling impl-fsmentry v0.1.0 (/tmp/claude-1000/tk/sme/impl-fsmentry)
+   Compiling impl-smlang v0.1.0 (/tmp/claude-1000/tk/sme/impl-smlang)
+   Compiling impl-finny v0.1.0 (/tmp/claude-1000/tk/sme/impl-finny)
+   Compiling impl-typestate v0.1.0 (/tmp/claude-1000/tk/sme/impl-typestate)
+   Compiling impl-implicit v0.1.0 (/tmp/claude-1000/tk/sme/impl-implicit)
+   Compiling ciborium-ll v0.2.2
+   Compiling tinytemplate v1.2.1
+   Compiling ciborium v0.2.2
+   Compiling page_size v0.6.0
+   Compiling anes v0.1.6
+   Compiling oorandom v11.1.5
+   Compiling bench v0.1.0 (/tmp/claude-1000/tk/sme/bench)
+   Compiling criterion v0.8.2
+    Finished `bench` profile [optimized] target(s) in 14.82s
+warning: the following packages contain code that will be rejected by a future version of Rust: proc-macro-error2 v2.0.1
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+  Executable benches/instructions.rs (/tmp/claude-1000/tk/i/t/sme-eval/release/deps/instructions-e344f362be0bbcda)

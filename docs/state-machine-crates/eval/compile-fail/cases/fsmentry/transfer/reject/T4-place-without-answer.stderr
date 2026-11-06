@@ -1,0 +1,5 @@
+error[E0599]: no method named `free` found for struct `impl_fsmentry::transfer::job::AskingFiles<'state>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/fsmentry/transfer/reject/T4-place-without-answer.rs
+  |
+  |         asking.free(i);
+  |                ^^^^ method not found in `impl_fsmentry::transfer::job::AskingFiles<'_>`

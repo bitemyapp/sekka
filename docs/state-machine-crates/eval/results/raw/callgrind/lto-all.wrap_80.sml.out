@@ -1,0 +1,152 @@
+# callgrind format
+version: 1
+creator: callgrind-3.27.1
+pid: 2085470
+cmd:  /tmp/claude-1000/tk/i/t/sme-eval-lto/release/deps/instructions-1111fb703a9111b5 --gungraun-run d:d:000000 00000 00001 00005
+part: 1
+thread: 1
+
+
+desc: I1 cache: 32768 B, 64 B, 8-way associative
+desc: D1 cache: 32768 B, 64 B, 8-way associative
+desc: LL cache: 8388608 B, 64 B, 16-way associative
+
+desc: Timerange: Basic block 0 - 1954961
+desc: Trigger: Program termination
+
+positions: line
+events: Ir Dr Dw I1mr D1mr D1mw ILmr DLmr DLmw
+summary: 12732814 1860932 621784 103 19577 5 103 4
+
+
+ob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6
+fl=???
+fn=__libc_start_main@@GLIBC_2.34
+cfn=(below main)
+calls=1 0 
+0 12732814 1860932 621784 103 19577 5 103 4
+
+fn=munmap_chunk
+0 31 7 3 3 2 0 3
+cfn=munmap
+calls=1 0 
+0 6 1 0 2 0 0 2
+
+fn=_int_free_chunk
+0 22 5 5 3 3 0 3
+cfn=munmap_chunk
+calls=1 0 
+0 37 8 3 5 2 0 5
+0 10 4 1 1 0 0 1
+
+fn=free
+0 61 11 4 1 7 0 1
+cfn=_int_free_chunk
+calls=1 0 
+0 69 17 9 9 5 0 9
+
+fn=munmap
+0 6 1 0 2 0 0 2
+
+fn=(below main)
+cob=/tmp/claude-1000/tk/i/t/sme-eval-lto/release/deps/instructions-1111fb703a9111b5
+cfi=???
+cfn=main
+calls=1 0 
+0 12732814 1860932 621784 103 19577 5 103 4
+
+ob=/tmp/claude-1000/tk/i/t/sme-eval-lto/release/deps/instructions-1111fb703a9111b5
+fl=???
+fn=instructions::wrap_80::__run_sml
+cfn=instructions::wrap_80::__gungraun_wrapper_id_mod_sml::sml
+calls=1 0 
+0 12732814 1860932 621784 103 19577 5 103 4
+
+fn=bench::drive::wrap::replay::<impl_sml::wrap::Wrap>
+0 19 4 6 2 0 1 2
+cfn=bench::drive::wrap::run::<impl_sml::wrap::Wrap>
+calls=1 0 
+0 12732605 1860877 621754 88 19560 4 88 4
+0 12 5 0 0 1
+
+fn=main
+cfn=std::rt::lang_start_internal
+calls=1 0 
+0 12732814 1860932 621784 103 19577 5 103 4
+
+fn=std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+cfn=instructions::main
+calls=1 0 
+0 12732814 1860932 621784 103 19577 5 103 4
+
+fn=instructions::wrap_80::__gungraun_wrapper_id_mod_sml::sml
+cfn=instructions::wrap_80::__gungraun_wrapper_mod::wrap_80
+calls=1 0 
+0 12732814 1860932 621784 103 19577 5 103 4
+
+fn=std::rt::lang_start::<()>::{closure#0}
+cfn=std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()>
+calls=1 0 
+0 12732814 1860932 621784 103 19577 5 103 4
+
+fn=bench::drive::wrap::run::<impl_sml::wrap::Wrap>
+0 12732478 1860856 621747 78 19560 4 78 4
+cfn=<core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write
+calls=1 0 
+0 52 7 7 6 0 0 6
+0 75 14 0 4 0 0 4
+
+fn=(below main)
+cob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6
+cfi=???
+cfn=__libc_start_main@@GLIBC_2.34
+calls=1 0 
+0 12732814 1860932 621784 103 19577 5 103 4
+
+fn=<core::hash::sip::Hasher<core::hash::sip::Sip13Rounds> as core::hash::Hasher>::write
+0 52 7 7 6 0 0 6
+
+fn=std::rt::lang_start_internal
+cfn=std::rt::lang_start::<()>::{closure#0}
+calls=1 0 
+0 12732814 1860932 621784 103 19577 5 103 4
+
+fn=instructions::main
+cfn=instructions::machines::__run
+calls=1 0 
+0 12732814 1860932 621784 103 19577 5 103 4
+
+fn=instructions::machines::__run
+cfn=instructions::wrap_80::__run_sml
+calls=1 0 
+0 12732814 1860932 621784 103 19577 5 103 4
+
+fn=instructions::wrap_80::__gungraun_wrapper_mod::wrap_80
+0 21 7 8 2 1 0 2
+cfn=bench::drive::wrap::replay::<impl_sml::wrap::Wrap>
+calls=1 0 
+0 12732636 1860886 621760 90 19561 5 90 4
+0 14 3 2 1 2 0 1
+cob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6
+cfi=???
+cfn=free
+calls=1 0 
+0 88 19 9 10 7 0 10
+0 5 1 1
+cob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/libc.so.6
+cfi=???
+cfn=free
+calls=1 0 
+0 42 9 4 0 5
+0 8 7 0 0 1
+
+ob=/nix/store/pqyiidz5mi73wv5f91d48s9plcqyj5bz-glibc-2.44-57/lib/ld-linux-x86-64.so.2
+fl=???
+fn=0x0000000000022be0
+cob=/tmp/claude-1000/tk/i/t/sme-eval-lto/release/deps/instructions-1111fb703a9111b5
+cfi=???
+cfn=(below main)
+calls=1 0 
+0 12732814 1860932 621784 103 19577 5 103 4
+
+totals: 12732814 1860932 621784 103 19577 5 103 4

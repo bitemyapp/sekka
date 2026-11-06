@@ -1,0 +1,5 @@
+error[E0063]: missing field `owner` in initializer of `impl_statig::pointer::State`
+ --> $WORKSPACE/compile-fail/cases/statig/pointer/reject/P6-owner-mismatch.rs
+  |
+  |     let _ = State::Pressed { hover: Hover::default() };
+  |             ^^^^^^^^^^^^^^ missing `owner`

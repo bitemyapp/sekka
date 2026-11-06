@@ -1,0 +1,5 @@
+error[E0026]: variant `impl_statig::install::State::Prepared` does not have a field named `closure`
+ --> $WORKSPACE/compile-fail/cases/statig/install/reject/I6-closure-on-deferred-route.rs
+  |
+  |     if let State::Prepared { deferred: true, closure } = m.state_enum() {
+  |                                              ^^^^^^^ variant `impl_statig::install::State::Prepared` does not have this field

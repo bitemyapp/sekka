@@ -1,0 +1,5 @@
+error[E0609]: no field `at` on type `PressedData`
+ --> $WORKSPACE/compile-fail/cases/statum/pointer/reject/P4-press-point-outside-edge-press.rs
+  |
+  |     let _ = pressed.state_data.at;
+  |                                ^^ unknown field

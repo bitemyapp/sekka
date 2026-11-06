@@ -1,0 +1,10 @@
+error[E0624]: method `soft_wrap` is private
+ --> $WORKSPACE/compile-fail/cases/statum/wrap/reject/W5-dangling-link.rs
+  |
+  |     pending.soft_wrap(&mut out);
+  |             ^^^^^^^^^ private method
+  |
+ ::: src/wrap.rs
+  |
+  |     fn soft_wrap(&mut self, out: &mut impl Sink<Effect>) {
+  |     ---------------------------------------------------- private method defined here

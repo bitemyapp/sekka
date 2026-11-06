@@ -1,0 +1,7 @@
+error[E0599]: no method named `submit` found for struct `LockScreen<impl_statum::lock::Locking>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/statum/lock/reject/L3-check-while-unlocked.rs
+  |
+  |     let _ = locking.submit(&mut out);
+  |                     ^^^^^^ method not found in `LockScreen<impl_statum::lock::Locking>`
+  |
+  = note: the method was found for `LockScreen<impl_statum::lock::Locked>`

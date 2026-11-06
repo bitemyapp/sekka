@@ -1,0 +1,7 @@
+error[E0609]: no field `at` on type `&Node`
+ --> $WORKSPACE/compile-fail/cases/fsmentry/pointer/reject/P4-press-point-outside-edge-press.rs
+  |
+  |         let _ = pressed.as_ref().at;
+  |                                  ^^ unknown field
+  |
+  = note: available field is: `0`

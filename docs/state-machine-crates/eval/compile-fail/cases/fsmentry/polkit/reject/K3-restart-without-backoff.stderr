@@ -1,0 +1,5 @@
+error[E0599]: no method named `restart` found for struct `impl_fsmentry::polkit::phase::Starting<'state>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/fsmentry/polkit/reject/K3-restart-without-backoff.rs
+  |
+  |         starting.restart(2);
+  |                  ^^^^^^^ method not found in `impl_fsmentry::polkit::phase::Starting<'_>`

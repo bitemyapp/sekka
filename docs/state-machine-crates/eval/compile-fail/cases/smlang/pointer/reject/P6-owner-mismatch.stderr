@@ -1,0 +1,5 @@
+error[E0063]: missing field `edge` in initializer of `EdgePress`
+ --> $WORKSPACE/compile-fail/cases/smlang/pointer/reject/P6-owner-mismatch.rs
+  |
+  |     let _ = States::DragsOnlyPressed(EdgePress {
+  |                                      ^^^^^^^^^ missing `edge`

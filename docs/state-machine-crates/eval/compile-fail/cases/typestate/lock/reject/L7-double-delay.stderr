@@ -1,0 +1,13 @@
+error[E0308]: mismatched types
+ --> $WORKSPACE/compile-fail/cases/typestate/lock/reject/L7-double-delay.rs
+  |
+  |     NoDelay::take(fd, out)
+  |     ------------- ^^ expected `NoDelay`, found `DelayFd`
+  |     |
+  |     arguments to this function are incorrect
+  |
+note: method defined here
+ --> src/lock.rs
+  |
+  |     pub fn take(self, out: &mut impl Sink<Effect>) -> DelayFd {
+  |            ^^^^

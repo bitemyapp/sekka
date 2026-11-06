@@ -1,0 +1,9 @@
+error[E0599]: no method named `placed` found for struct `Job<impl_statum::transfer::Restoring>` in the current scope
+ --> $WORKSPACE/compile-fail/cases/statum/transfer/reject/T1-dispose-before-placed.rs
+  |
+  |     restoring.placed(out)
+  |               ^^^^^^ method not found in `Job<impl_statum::transfer::Restoring>`
+  |
+  = note: the method was found for
+          - `Job<impl_statum::transfer::Placing>`
+          - `Job<impl_statum::transfer::PlacingReplacement>`

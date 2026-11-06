@@ -1,0 +1,15 @@
+error[E0061]: this enum variant takes 1 argument but 0 arguments were supplied
+ --> $WORKSPACE/compile-fail/cases/sml/pointer/reject/P6-owner-mismatch.rs
+  |
+  |     let _ = PointerInsideStates::Pressed();
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^-- argument #1 of type `spec::pointer::Node` is missing
+  |
+note: tuple variant defined here
+ --> src/pointer.rs
+  |
+  |          DragsOnlyPressed(EdgePress) + event<Capture> / capture_edge = Pressed(Node),
+  |                                                                        ^^^^^^^
+help: provide the argument
+  |
+5 |     let _ = PointerInsideStates::Pressed(/* Node */);
+  |                                          ++++++++++

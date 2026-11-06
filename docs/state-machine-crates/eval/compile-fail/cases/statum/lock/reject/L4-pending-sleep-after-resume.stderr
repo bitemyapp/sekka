@@ -1,0 +1,15 @@
+error[E0382]: use of moved value: `pending`
+ --> $WORKSPACE/compile-fail/cases/statum/lock/reject/L4-pending-sleep-after-resume.rs
+  |
+  | fn resume_then_confirm(pending: Inhibitor<SleepPending>, locking: LockScreen<Locking>, out: &mut Vec<Effect>) {
+  |                        ------- move occurs because `pending` has type `Inhibitor<impl_statum::lock::SleepPending>`, which does not implement the `Copy` trait
+  |     let _held = pending.resumed();
+  |                         --------- `pending` moved due to this method call
+  |     let _ = locking.confirm(&mut SomeState::SleepPending(pending), out);
+  |                                                          ^^^^^^^ value used here after move
+  |
+note: `impl_statum::lock::Inhibitor::<impl_statum::lock::SleepPending>::resumed` takes ownership of the receiver `self`, which moves `pending`
+ --> src/lock.rs
+  |
+  |     pub fn resumed(self) -> Inhibitor<Held> {
+  |                    ^^^^
