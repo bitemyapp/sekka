@@ -26,3 +26,13 @@ Sekka integrates the NixOS-specific Rust installer from bitemyapp/calamares
 remain in their source directories. The root Apache-2.0 license applies to
 original image orchestration; it does not replace component or artwork licenses.
 See docs/imports.json for exact source revisions and paths.
+
+Sekka's installer for Apple Silicon Macs (installer/genkan/macos) runs the
+Asahi Linux installer (AsahiLinux/asahi-installer, MIT), pinned by version and
+digest and not copied into this repository, with Sekka's own adapter. Its
+Recovery app's prompt handling for bputil, kmutil and bless
+(installer/genkan/macos/crates/recovery/src/pty.rs) is adapted from
+omacom/omarchy-mac-installer, revision
+c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9, Recovery/Native/Authorization.c
+(MIT, Copyright (c) David Heinemeier Hansson). Sekka uses none of Omarchy's
+signing identities, trust keys, download locations or support claims.
