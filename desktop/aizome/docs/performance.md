@@ -45,6 +45,11 @@ noise (`docs/reload.md`). Two kinds of number:
   seconds) from a release app on Aizome's headless compositor at
   2880 × 1800, scale 2, driven with `aizomectl input`.
 
+Neither includes the atomic commit to a real display. `aizomectl stats` on
+real displays (Settei → Performance) does: on Intel's xe driver that commit
+took close to 3 ms of every flip on this laptop, rebuilding a display page
+table. Sekka's DEVELOPERS.md ("Intel page flips") describes the fix.
+
 | Part | Typical interaction | p50 ms | p95 ms | 4 ms |
 |---|---|---|---|---|
 | Compositor, GLES | Moving a window | 0.46 | 0.61 | within |

@@ -19,5 +19,6 @@
     ./tuning.nix
     ./usb-wake.nix
     ./wpa-supplicant
+    ./xe-dpt
   ];
 }
