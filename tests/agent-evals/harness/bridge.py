@@ -83,9 +83,18 @@ def brief(system, tools, task):
     return f"{system}\n\n{tools}\n\n# Her request\n\n{task}\n"
 
 
+def writable(path):
+    """Make a tree removable: skills copied from the store are read-only."""
+    for root, dirs, _ in os.walk(path):
+        for name in dirs:
+            os.chmod(os.path.join(root, name), 0o755)
+    os.chmod(path, 0o755)
+
+
 def prepare(bridge, system, tools, task, skills):
     """The directory the agent works in."""
     if os.path.exists(bridge):
+        writable(bridge)
         shutil.rmtree(bridge)
     os.makedirs(os.path.join(bridge, ".req"))
     os.makedirs(os.path.join(bridge, ".resp"))
@@ -96,8 +105,10 @@ def prepare(bridge, system, tools, task, skills):
         f.write(CLIENT)
     os.chmod(client, 0o755)
     if skills and os.path.isdir(skills):
-        shutil.copytree(skills, os.path.join(bridge, "skills"))
-        for root, dirs, files in os.walk(os.path.join(bridge, "skills")):
+        copy = os.path.join(bridge, "skills")
+        shutil.copytree(skills, copy)
+        os.chmod(copy, 0o755)
+        for root, dirs, files in os.walk(copy):
             for name in dirs + files:
                 os.chmod(os.path.join(root, name), 0o755 if name in dirs else 0o644)
 
