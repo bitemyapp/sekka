@@ -1174,7 +1174,11 @@ initiates a reboot. Clean Up deletes old generations and rewrites the boot
 menu as one step that Stop waits for, and only then collects garbage.
 
 The helper's typed steps live in its library (`yukimi_helper`), each
-guarantee shown by a `compile_fail` doctest. Run them with
+guarantee shown by a `compile_fail` doctest. The helper runs programs only
+through `yukimi_helper::process`, which names those it may run; the ones that
+change what a restore point or the boot menu covers are named only in the
+step that covers them, and `yukimi-helper/clippy.toml` denies the other ways
+to start a program. Run them with
 `RUSTC_BOOTSTRAP=1 cargo test --doc`, so that rustdoc checks the error codes.
 `cargo test -p yukimi-helper --test namespace -- --ignored` runs the real
 helper worker against stand-in Nix tools, in an unprivileged user and mount

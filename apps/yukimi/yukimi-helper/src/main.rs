@@ -49,6 +49,7 @@
 //! standard input is a pipe and Yukimi closes it, the helper stops what it
 //! is doing and puts the configuration back, unless the new system is
 //! already being started, which is never interrupted.
+#![deny(clippy::disallowed_methods)]
 use std::io::Write;
 
 mod transaction;
@@ -59,10 +60,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use yukimi_config::packages;
 use yukimi_config::sekka;
 use yukimi_config::{branch, edit, lock};
-use yukimi_helper::change::RestorePoint;
-use yukimi_helper::clean::{self as cleaning, Generations};
+use yukimi_helper::change::{Committed, RestorePoint};
+use yukimi_helper::clean::{Generations, generation_words};
 use yukimi_helper::process::{
-    Failure, PATH, Result, command, nix, output, report, run, stage, stage_done, stop, watch_for_stop,
+    Failure, Nix, Operation, PATH, Program, Result, command, nix, output, report, stage, stage_done, stop,
+    watch_for_stop,
 };
 use yukimi_helper::{process, snapshots};
 use yukimi_system::catalog;
@@ -102,8 +104,8 @@ fn valid_user(name: &str) -> bool {
 /// the build that adds it. The daemon takes them from root.
 fn build_flake(setup: &Setup, host: &str) -> std::result::Result<String, Failure> {
     let system = format!("{}#nixosConfigurations.\"{host}\"", setup.flake());
-    let mut build = nix();
-    build.args(["build", "--log-format", "internal-json", "-v", "--no-link", "--print-out-paths"]);
+    let mut build = nix(Nix::Build);
+    build.args(["--log-format", "internal-json", "-v", "--no-link", "--print-out-paths"]);
     if let Some((substituters, keys)) = caches(&system) {
         build.args(["--option", "extra-substituters", &substituters.join(" ")]);
         build.args(["--option", "extra-trusted-public-keys", &keys.join(" ")]);
@@ -177,8 +179,8 @@ fn with_room<T>(work: impl FnOnce() -> Result<T>) -> Result<T> {
 /// The binary caches and their keys a system's configuration names, if it
 /// names any. A configuration that doesn't evaluate is reported by the build.
 fn caches(system: &str) -> Option<(Vec<String>, Vec<String>)> {
-    let mut eval = nix();
-    eval.args(["eval", "--json", &format!("{system}.config.nix.settings"), "--apply"]);
+    let mut eval = nix(Nix::Eval);
+    eval.args(["--json", &format!("{system}.config.nix.settings"), "--apply"]);
     eval.arg(
         "s: { substituters = (s.substituters or [ ]) ++ (s.extra-substituters or [ ]); \
          keys = (s.trusted-public-keys or [ ]) ++ (s.extra-trusted-public-keys or [ ]); }",
@@ -202,16 +204,16 @@ fn caches(system: &str) -> Option<(Vec<String>, Vec<String>)> {
 /// only one), or `configuration.nix` with the channels' Nixpkgs.
 fn build(setup: &Setup) -> Result<String> {
     if setup.kind == Kind::Channels {
-        let mut build = nix();
-        build.args(["build", "--impure", "--log-format", "internal-json", "-v", "--no-link", "--print-out-paths"]);
+        let mut build = nix(Nix::Build);
+        build.args(["--impure", "--log-format", "internal-json", "-v", "--no-link", "--print-out-paths"]);
         build.args(["--file", "<nixpkgs/nixos>", "system"]);
         build.env("NIXOS_CONFIG", setup.dir.join("configuration.nix"));
         // Nix's own setting says where `<nixpkgs>` is; NixOS before 24.05
         // said so only in the environment, which pkexec clears.
         let configured = output(
             {
-                let mut c = nix();
-                c.args(["config", "show", "nix-path"]);
+                let mut c = nix(Nix::Config);
+                c.args(["show", "nix-path"]);
                 c
             },
             "Reading Nix's settings",
@@ -234,8 +236,8 @@ fn build(setup: &Setup) -> Result<String> {
     }
     // Usually the configuration is named after the computer; only when it
     // isn't, ask the flake what it has.
-    let mut names = nix();
-    names.args(["eval", "--json", &format!("{}#nixosConfigurations", setup.flake()), "--apply", "builtins.attrNames"]);
+    let mut names = nix(Nix::Eval);
+    names.args(["--json", &format!("{}#nixosConfigurations", setup.flake()), "--apply", "builtins.attrNames"]);
     let listed: Vec<String> = serde_json::from_str(&output(names, "Reading the configurations")?)?;
     let host = if listed.contains(&setup.host) {
         setup.host.clone()
@@ -258,15 +260,13 @@ fn build(setup: &Setup) -> Result<String> {
 /// Make a built system the current generation and start it (`switch`) or
 /// make it the one the next start uses (`boot`), as nixos-rebuild does:
 /// inside the independent system operation, with persistent output files.
-fn activate(setup: &Setup, system: &str, mode: &str) -> Result<()> {
-    let mut set = command("nix-env");
-    set.args(["-p", PROFILE, "--set", system]);
-    run(set, "Setting the system profile")?;
+fn activate(committed: &Committed, setup: &Setup, system: &str, mode: &str) -> Result<()> {
+    committed.set_system_profile(Path::new(system))?;
     // The configuration that built it, for going back to it later.
     if let Some(generation) = current_generation() {
         let _ = snapshots::save(setup, Path::new(SAVED), &generation);
     }
-    switch(&format!("{system}/bin/switch-to-configuration"), mode)
+    committed.switch_to_configuration(Path::new(system), mode)
 }
 
 type Entries = std::collections::BTreeMap<String, Option<PathBuf>>;
@@ -310,27 +310,19 @@ fn refresh_launchers(before: &Path, after: &Path) {
     if launchable(before) == launchable(after) {
         return;
     }
-    let mut list = command("loginctl");
+    let mut list = command(Program::LOGINCTL);
     list.args(["list-users", "--no-legend"]);
     let Ok(users) = output(list, "Listing signed-in users") else {
         return;
     };
     // UID USER LINGER STATE
     for user in users.lines().filter_map(|line| line.split_whitespace().nth(1)).filter(|u| valid_user(u)) {
-        let mut restart = command("systemctl");
+        let mut restart = command(Program::SYSTEMCTL);
         restart.args(["--user", &format!("--machine={user}@.host"), "try-restart", "tatami-elephant.service"]);
         if output(restart, "Refreshing the application launcher").is_err() {
             report(1, &format!("{user}'s application launcher shows the change after their next sign-in"));
         }
     }
-}
-
-fn switch(program: &str, mode: &str) -> Result<()> {
-    // The entire helper already runs in a system service with persistent logs.
-    // Never reconnect this process to the GUI's file descriptors.
-    let mut c = command(program);
-    c.arg(mode);
-    run(c, "Switching to the new system")
 }
 
 fn activation_mode(requested: &str, reasons: &[String]) -> Result<&'static str> {
@@ -503,7 +495,7 @@ fn unlist(text: &str, path: &[&str], attr: &str) -> Result<String> {
         .ok_or_else(|| Failure(format!("{attr} isn't in {} in the configuration", path.join("."))))
 }
 
-fn change(args: &[String]) -> Result<String> {
+fn change(operation: &mut Operation, args: &[String]) -> Result<String> {
     let change = Change::parse(args)?;
     let setup = Setup::detect();
     // Validate migration before touching any files. The GUI's detection is
@@ -560,7 +552,7 @@ fn change(args: &[String]) -> Result<String> {
     touched.extend(main.clone());
     touched.extend(packages_file.clone());
     // Everything up to the plan is put back if it fails or Yukimi stops it.
-    let committed = RestorePoint::take(&touched)?.attempt(|changing| {
+    let (committed, (system, reasons, mode)) = RestorePoint::take(&touched)?.attempt(operation, |changing| {
         if let Some(text) = &sekka_flake {
             stage(1, "Preparing your Sekka configuration");
             changing.write_file(&setup, &flake_file, text)?;
@@ -641,11 +633,9 @@ fn change(args: &[String]) -> Result<String> {
                     // Inputs that follow Sekka's move with it, to what its
                     // nightly build checked; on their own they can't move.
                     let following = sekka_flake.as_deref().map(sekka::following).unwrap_or_default();
-                    let mut c = nix();
-                    let flake = setup.flake();
-                    c.args(["flake", "update", "--refresh", "--log-format", "internal-json", "-v", "--flake", &flake]);
-                    c.args(change.update.iter().filter(|i| !following.contains(&i.as_str())));
-                    changing.rewrite(&lock_file, c, "Updating the flake inputs")?;
+                    let inputs: Vec<&str> =
+                        change.update.iter().map(String::as_str).filter(|i| !following.contains(i)).collect();
+                    changing.update_lock(&setup, &inputs)?;
                 }
             }
             stage_done(2);
@@ -665,13 +655,12 @@ fn change(args: &[String]) -> Result<String> {
         let mode = activation_mode(&change.mode, &reasons)?;
         Ok((system, reasons, mode))
     })?;
-    let (system, reasons, mode) = committed.into_planned();
     let activating = Receipt::activating(PathBuf::from(&system), reasons);
     save_update(activating.receipt())?;
     stage(4, if mode == "switch" { "Switching to the new system" } else { "Setting it up for the next start" });
     // Only for refreshing the launcher afterwards, which never fails an update.
     let before = std::fs::canonicalize("/run/current-system").ok();
-    activate(&setup, &system, mode)?;
+    activate(&committed, &setup, &system, mode)?;
     if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_deref() != Some(Path::new(&system)) {
         return Err(Failure("Activation returned without making the built system current".into()));
     }
@@ -696,7 +685,7 @@ fn save_update(receipt: &Receipt) -> Result<()> {
     Ok(())
 }
 
-fn rollback(args: &[String]) -> Result<String> {
+fn rollback(operation: &mut Operation, args: &[String]) -> Result<String> {
     let generation: u32 = args
         .first()
         .and_then(|g| g.parse().ok())
@@ -716,10 +705,8 @@ fn rollback(args: &[String]) -> Result<String> {
     }
     stage(1, &format!("Returning to generation {generation}"));
     // Nothing is changed before the commit, so there is nothing to put back.
-    let _committed = RestorePoint::nothing().attempt(|_| Ok(()))?;
-    let mut set = command("nix-env");
-    set.args(["-p", PROFILE, "--switch-generation", &generation.to_string()]);
-    run(set, "Choosing the generation")?;
+    let committed = operation.commit_without_changes()?;
+    committed.switch_generation(generation)?;
     let system = std::fs::canonicalize(PROFILE)?;
     let activating = Receipt::activating(system.clone(), reasons);
     save_update(activating.receipt())?;
@@ -735,7 +722,7 @@ fn rollback(args: &[String]) -> Result<String> {
             report(1, &format!("{} was changed by hand since, so it was left as it is", file.display()));
         }
     }
-    switch(&format!("{PROFILE}/bin/switch-to-configuration"), mode)?;
+    committed.switch_to_configuration(Path::new(PROFILE), mode)?;
     if mode == "switch" && std::fs::canonicalize("/run/current-system").ok().as_ref() != Some(&system) {
         return Err(Failure("Rollback did not make the selected generation current".into()));
     }
@@ -750,7 +737,7 @@ fn rollback(args: &[String]) -> Result<String> {
     .to_string())
 }
 
-fn clean(args: &[String]) -> Result<String> {
+fn clean(operation: &mut Operation, args: &[String]) -> Result<String> {
     let mut days = None;
     let mut it = args.iter();
     while let Some(flag) = it.next() {
@@ -768,12 +755,12 @@ fn clean(args: &[String]) -> Result<String> {
     }
     // Deleting generations and updating the boot menu is one step a stop
     // waits for; only then can garbage be collected.
-    let generations = Generations::hold()?;
+    let generations = Generations::hold(operation)?;
     let menu = match days {
         Some(days) => generations.delete_older_than(days).update_boot_menu()?,
         None => generations.update_boot_menu()?,
     };
-    let freed = cleaning::collect_garbage(&menu).map_err(|Failure(message)| match days {
+    let freed = menu.collect_garbage().map_err(|Failure(message)| match days {
         Some(_) => Failure(format!(
             "{}. The old generations were deleted, and the boot menu lists only the ones left",
             if message == "Stopped" { "Collecting garbage was stopped" } else { &message }
@@ -869,7 +856,7 @@ fn refusal(
     None
 }
 
-fn delete(args: &[String]) -> Result<String> {
+fn delete(operation: &mut Operation, args: &[String]) -> Result<String> {
     let deletion = Deletion::parse(args)?;
     let selected = current_generation().map(|g| g.number());
     let running = std::fs::canonicalize("/run/current-system").ok();
@@ -880,7 +867,7 @@ fn delete(args: &[String]) -> Result<String> {
             return Err(Failure(why));
         }
     }
-    let what = cleaning::generation_words(&deletion.generations);
+    let what = generation_words(&deletion.generations);
     // What deleting gives back, worked out as root, who sees every root.
     let estimate = yukimi_system::reclaim::estimate(&deletion.generations);
     match &estimate {
@@ -896,7 +883,7 @@ fn delete(args: &[String]) -> Result<String> {
     }
     // Deleting the generations and updating the boot menu is one step a
     // stop waits for; only then can garbage be collected.
-    let menu = Generations::hold()?.delete(&deletion.generations).update_boot_menu()?;
+    let menu = Generations::hold(operation)?.delete(&deletion.generations).update_boot_menu()?;
     let mut report_json = serde_json::json!({
         "ok": true,
         "deleted": deletion.generations,
@@ -905,7 +892,7 @@ fn delete(args: &[String]) -> Result<String> {
     });
     if deletion.collect {
         let before = blocks_free("/nix/store");
-        match cleaning::collect_garbage(&menu) {
+        match menu.collect_garbage() {
             Ok(summary) => {
                 report_json["collected"] = true.into();
                 report_json["summary"] = summary.into();
@@ -1047,12 +1034,13 @@ fn worker(args: &[String]) -> Result<String> {
             Ok(file)
         })
         .map_err(|e| Failure(format!("Another Yukimi operation is running, or its lock is unavailable: {e}")))?;
+    let mut operation = Operation::begin()?;
     watch_for_stop();
     match command.as_str() {
-        "change" => change(rest),
-        "rollback" => rollback(rest),
-        "clean" => clean(rest),
-        "delete" => delete(rest),
+        "change" => change(&mut operation, rest),
+        "rollback" => rollback(&mut operation, rest),
+        "clean" => clean(&mut operation, rest),
+        "delete" => delete(&mut operation, rest),
         _ => Err(Failure("Usage: yukimi-helper change|rollback|clean|delete … (or estimate …)".into())),
     }
 }
@@ -1165,8 +1153,8 @@ mod tests {
             assert!(Deletion::parse(&args(bad)).is_err(), "{bad:?}");
         }
         assert_eq!(parse_generation("4294967295"), Some(u32::MAX));
-        assert_eq!(cleaning::generation_words(&[3]), "generation 3");
-        assert_eq!(cleaning::generation_words(&[2, 3, 4]), "generations 2, 3 and 4");
+        assert_eq!(generation_words(&[3]), "generation 3");
+        assert_eq!(generation_words(&[2, 3, 4]), "generations 2, 3 and 4");
     }
 
     #[test]
