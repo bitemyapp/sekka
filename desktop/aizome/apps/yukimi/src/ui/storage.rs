@@ -160,7 +160,13 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
             row![
                 column![
                     text(p.name.clone()).weight(600.0),
-                    text(p.version.clone()).mono().size(11.0).role(Role::Text3),
+                    text(match p.builds {
+                        0 | 1 => p.version.clone(),
+                        n => format!("{} · {n} builds", p.version),
+                    })
+                    .mono()
+                    .size(11.0)
+                    .role(Role::Text3),
                 ]
                 .spacing(1.0)
                 .width(Length::fill_portion::<2>()),

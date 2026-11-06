@@ -55,12 +55,15 @@ pub struct Composition {
     pub garbage_paths: usize,
 }
 
-/// A package in a store, by name, with the size of all its paths.
+/// A package in a store at one version, with the size of all its paths.
 #[derive(Clone, Debug)]
 pub struct Heavy {
     pub name: String,
     pub version: String,
     pub size: u64,
+    /// How many builds of that version the paths come from: two llvm
+    /// 21.1.8s made differently are two copies.
+    pub builds: usize,
 }
 
 /// What the configuration says is installed, as Yukimi can read it.
@@ -610,25 +613,43 @@ fn system_packages(graph: &Graph) -> Vec<SystemPackage> {
     by_name.into_values().collect()
 }
 
-/// The heaviest packages in the running system's closure, by name.
+/// The heaviest packages in the running system's closure.
 fn heaviest(graph: &Graph, count: usize) -> Vec<Heavy> {
     let Some(current) = std::fs::read_link("/run/current-system").ok().and_then(|p| graph.lookup(p.to_str()?)) else {
         return Vec::new();
     };
-    let mut by_name: HashMap<String, Heavy> = HashMap::new();
-    for id in graph.closure([current]) {
+    heaviest_from(graph, current, count)
+}
+
+/// The heaviest packages in `top`'s closure, one for each name and version:
+/// a build's outputs (`lib32`, `firmware`, `jre`, …) together, named as the
+/// derivation that made them when the store records it, and other versions
+/// (openjdk 25, 21 and 17) apart.
+fn heaviest_from(graph: &Graph, top: PathId, count: usize) -> Vec<Heavy> {
+    let mut by_version: HashMap<(String, String), (Heavy, BTreeSet<String>)> = HashMap::new();
+    for id in graph.closure([top]) {
         let Some(path) = graph.store_path(id) else { continue };
         if path.is_derivation() {
             continue;
         }
-        let entry = by_name.entry(path.name().to_owned()).or_insert_with(|| Heavy {
-            name: path.name().to_owned(),
-            version: path.version().to_owned(),
-            size: 0,
+        let info = graph.info(id);
+        // openjdk-8u504-b01-jre was made by openjdk-8u504-b01.drv.
+        let made_by = info.deriver.as_deref().and_then(StorePath::parse);
+        let (name, version) = match &made_by {
+            Some(drv) => {
+                let full = drv.full_name();
+                yukimi_store::path::split_name(full.strip_suffix(".drv").unwrap_or(full))
+            }
+            None => (path.name(), path.version()),
+        };
+        let (heavy, builds) = by_version.entry((name.to_owned(), version.to_owned())).or_insert_with(|| {
+            (Heavy { name: name.to_owned(), version: version.to_owned(), size: 0, builds: 0 }, BTreeSet::new())
         });
-        entry.size += graph.info(id).nar_size;
+        heavy.size += info.nar_size;
+        builds.insert(made_by.map_or_else(|| path.as_str().to_owned(), |drv| drv.as_str().to_owned()));
     }
-    let mut list: Vec<Heavy> = by_name.into_values().collect();
+    let mut list: Vec<Heavy> =
+        by_version.into_values().map(|(heavy, builds)| Heavy { builds: builds.len(), ..heavy }).collect();
     list.sort_by_key(|h| std::cmp::Reverse(h.size));
     list.truncate(count);
     list
@@ -844,6 +865,52 @@ mod tests {
         // A week ago, 2 was in use, so only 1 goes.
         assert_eq!(freeable.older(7), (&[1u32][..], size(1) + size(4)));
         assert_eq!(freeable.older(30), (&[][..], 0));
+    }
+
+    #[test]
+    fn the_heaviest_are_by_version_with_a_builds_outputs_together() {
+        use yukimi_store::db::PathInfo;
+        let path = |n: usize, name: &str| crate::fixture::store_path(n, name);
+        // Each path's name, NAR size and the derivation that made it.
+        let paths: [(&str, u64, Option<&str>); 9] = [
+            ("nixos-system-a-1", 1, None),
+            ("openjdk-25.0.5.0.3+1", 688, Some("openjdk-25.0.5.0.3+1.drv")),
+            ("openjdk-8u504-b01", 94, Some("openjdk-8u504-b01.drv")),
+            ("openjdk-8u504-b01-jre", 109, Some("openjdk-8u504-b01.drv")),
+            ("llvm-21.1.8-lib", 577, Some("llvm-21.1.8.drv")),
+            ("llvm-21.1.8-lib", 564, Some("llvm-21.1.8.drv")),
+            ("nvidia-x11-615.78.08-firmware", 117, Some("nvidia-x11-615.78.08.drv")),
+            ("nvidia-x11-615.78.08", 958, Some("nvidia-x11-615.78.08.drv")),
+            ("zstd-1.5.7-bin", 2, None),
+        ];
+        // The two llvms were made by different derivations; the others'
+        // outputs share one.
+        let drv = |i: usize, name: &str| path(if i == 5 { 105 } else { 100 + name.len() }, name);
+        let nodes: Vec<PathInfo> = paths
+            .iter()
+            .enumerate()
+            .map(|(i, &(name, size, made_by))| PathInfo {
+                path: path(i, name),
+                nar_size: size,
+                registered: 0,
+                deriver: made_by.map(|d| drv(i, d)),
+            })
+            .collect();
+        let edges: Vec<(usize, usize)> = (1..paths.len()).map(|i| (0, i)).collect();
+        let graph = Graph::from_parts(nodes, &edges);
+        let heaviest = heaviest_from(&graph, PathId::from_index(0), 10);
+        let row = |name: &str, version: &str| {
+            let h = heaviest.iter().find(|h| h.name == name && h.version == version);
+            h.map(|h| (h.size, h.builds)).unwrap_or_else(|| panic!("{name} {version} in {heaviest:?}"))
+        };
+        assert_eq!(row("llvm", "21.1.8"), (577 + 564, 2));
+        assert_eq!(row("nvidia-x11", "615.78.08"), (117 + 958, 1));
+        assert_eq!(row("openjdk", "25.0.5.0.3+1"), (688, 1));
+        assert_eq!(row("openjdk", "8u504-b01"), (94 + 109, 1));
+        // Without a derivation, the path's own name, its output taken off.
+        assert_eq!(row("zstd", "1.5.7"), (2, 1));
+        assert_eq!(heaviest[0].name, "llvm");
+        assert_eq!(heaviest.len(), 6);
     }
 
     #[test]
