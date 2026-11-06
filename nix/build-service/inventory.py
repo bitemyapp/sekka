@@ -446,10 +446,15 @@ print(json.dumps({'roots': sorted(set(map(str, roots))), 'allowed_roots': list(m
                                        capture=True).splitlines()
         if not requisites or any(not re.fullmatch(r"/nix/store/[0-9a-z]{32}-[^/]+", p) for p in requisites):
             raise SystemExit("Unresolved retained Nix closure")
+        # A store path can itself be a symlink (e.g. a man output pointing at
+        # another output). It has no file data extents, and its target is in the
+        # closure, so it is recorded but never passed to the observer as a root.
+        symlinks = set(controller.remote(manifest, "find", *sorted(set(requisites)), "-maxdepth", "0",
+                                         "-type", "l", capture=True).splitlines())
         nix_inputs = {"roots": native, "requisites": sorted(set(requisites)),
-                      "gc_root_links": selected["nix_links"]}
+                      "symlink_requisites": sorted(symlinks), "gc_root_links": selected["nix_links"]}
         roots.extend({"path": p, "category": "retained_nix_closure", "exclusive": False}
-                     for p in nix_inputs["requisites"])
+                     for p in nix_inputs["requisites"] if p not in symlinks)
     # Parent mounts bootstrap the observer's own ID/snapshot, not measurement
     # roots. Never enumerate foreign containers/snapshots or measure these parents.
     mounts = {"/nix/store", *selected["roots"]}
