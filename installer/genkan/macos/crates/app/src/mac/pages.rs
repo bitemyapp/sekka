@@ -16,8 +16,8 @@ use sekka_mac_contract::{
     Acknowledgement, Candidate, HumanStep, InstallState, NextAction, Stage,
 };
 
-use super::ui::{self, Targets, Weight};
-use super::views::{DiskBar, DiskLayout, Mark, MarkView};
+use sekka_mac_appkit::ui::{self, Targets, Weight};
+use sekka_mac_appkit::views::{DiskBar, DiskLayout, Mark, MarkView};
 use crate::model::{CheckState, Model, Msg, Screen};
 use crate::text;
 

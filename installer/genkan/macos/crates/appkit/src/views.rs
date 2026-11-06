@@ -13,7 +13,7 @@ use objc2_app_kit::{
 };
 use objc2_foundation::{NSCopying, NSPoint, NSRect, NSSize, NSString};
 
-use super::ui;
+use crate::ui;
 
 fn point(x: f64, y: f64) -> NSPoint {
     NSPoint::new(x, y)
@@ -287,8 +287,8 @@ define_class!(
             let l = self.ivars().layout.borrow();
             NSString::from_str(&format!(
                 "{} for Sekka; macOS keeps {}",
-                crate::text::bytes(l.size),
-                crate::text::bytes((l.macos + l.adjacent_free).saturating_sub(l.size))
+                bytes(l.size),
+                bytes((l.macos + l.adjacent_free).saturating_sub(l.size))
             ))
         }
 
@@ -494,5 +494,24 @@ impl FlippedView {
     pub fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = Self::alloc(mtm);
         unsafe { msg_send![this, initWithFrame: rect(0.0, 0.0, 100.0, 100.0)] }
+    }
+}
+
+/// Bytes as Finder counts them (decimal units), for accessibility values.
+pub fn bytes(n: u64) -> String {
+    if n < 1000 {
+        return format!("{n} bytes");
+    }
+    let units = ["KB", "MB", "GB", "TB"];
+    let mut value = n as f64 / 1000.0;
+    let mut unit = 0;
+    while value >= 1000.0 && unit < units.len() - 1 {
+        value /= 1000.0;
+        unit += 1;
+    }
+    if value >= 100.0 {
+        format!("{value:.0} {}", units[unit])
+    } else {
+        format!("{value:.1} {}", units[unit])
     }
 }

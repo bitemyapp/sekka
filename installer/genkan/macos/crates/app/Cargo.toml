@@ -31,6 +31,7 @@ zeroize.workspace = true
 [target.'cfg(target_os = "macos")'.dependencies]
 sekka-mac-xpc.workspace = true
 sekka-mac-engine.workspace = true
+sekka-mac-appkit.workspace = true
 libc.workspace = true
 block2.workspace = true
 objc2.workspace = true

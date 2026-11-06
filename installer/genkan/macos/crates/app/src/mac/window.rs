@@ -23,8 +23,8 @@ use objc2_foundation::{NSPoint, NSRect, NSSize, NSTimer};
 use zeroize::Zeroize;
 
 use super::pages::{self, Built, Live};
-use super::ui::{self, Targets, Weight};
-use super::views::{CrestView, FlippedView, Mark, MarkView};
+use sekka_mac_appkit::ui::{self, Targets, Weight};
+use sekka_mac_appkit::views::{CrestView, FlippedView, Mark, MarkView};
 use crate::env::Environment;
 use crate::model::{Effect, Model, Msg, Screen, Step};
 use crate::runtime::Runtime;

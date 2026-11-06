@@ -21,6 +21,7 @@ sekka-mac-journal = { path = "crates/journal" }
 sekka-mac-engine = { path = "crates/engine" }
 sekka-mac-helper = { path = "crates/helper" }
 sekka-mac-xpc = { path = "crates/xpc" }
+sekka-mac-appkit = { path = "crates/appkit" }
 objc2 = "0.6.4"
 block2 = "0.6"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std"] }

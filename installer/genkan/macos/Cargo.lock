@@ -383,6 +383,7 @@ dependencies = [
  "objc2-app-kit",
  "objc2-foundation",
  "objc2-service-management",
+ "sekka-mac-appkit",
  "sekka-mac-contract",
  "sekka-mac-engine",
  "sekka-mac-stage",
@@ -392,6 +393,16 @@ dependencies = [
  "serde_json",
  "tempfile",
  "zeroize",
+]
+
+[[package]]
+name = "sekka-mac-appkit"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
 ]
 
 [[package]]

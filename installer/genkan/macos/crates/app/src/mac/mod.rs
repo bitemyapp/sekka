@@ -23,8 +23,7 @@ pub mod live;
 mod pages;
 #[cfg(feature = "simulation")]
 mod shots;
-mod ui;
-mod views;
+use sekka_mac_appkit::ui;
 mod window;
 
 use crate::env::Environment;
