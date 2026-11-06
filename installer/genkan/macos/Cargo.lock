@@ -300,6 +300,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sekka-mac-stage"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "sekka-mac-contract",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "sekka-mac-trust"
 version = "0.1.0"
 dependencies = [

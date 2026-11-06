@@ -249,7 +249,7 @@ impl Release {
         }
         let image = &self.image;
         if image.root_image.size == 0
-            || image.root_image.size % 4096 != 0
+            || !image.root_image.size.is_multiple_of(4096)
             || image.root_image.size > a.payload.size
         {
             return Err(invalid(format!(

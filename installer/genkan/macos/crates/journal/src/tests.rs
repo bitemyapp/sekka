@@ -197,7 +197,7 @@ fn every_interruption_leaves_a_believable_journal() {
                 id(),
             )
             .unwrap();
-            let result = faulty.append(at(), completed(Stage::Import)).map(|r| r.clone());
+            let result = faulty.append(at(), completed(Stage::Import)).cloned();
             if result.is_err() {
                 assert_eq!(faulty.records(), &before[..], "{mode:?}@{fail_at}: memory unchanged");
             }
