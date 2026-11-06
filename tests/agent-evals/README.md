@@ -65,6 +65,18 @@ Every scenario is validated before it scores a model: with no agent its check fa
 
 `--agent omp` runs the diagnostics through [oh-my-pi](https://github.com/can1357/oh-my-pi) instead (the flake's pinned `omp` input, installed in the VM): `omp -p --mode json` as root inside the VM, against the same model server on the host (QEMU's user network reaches the host's loopback at 10.0.2.2), with omp's own system prompt and tools and the diagnostics brief appended. It runs with a 30-minute limit and no turn limit, and its event stream, without the streaming updates, is the transcript (`omp-events.jsonl`). Run it beside a bare-loop run against one server with more slots (`--no-serve`, `--port`), so the comparison costs no extra wall-clock time.
 
+### Vendor agents through the bridge
+
+`--agent bridge` gives an episode to an agent outside the VM, a vendor's own agent with its own account (`harness/bridge.py`).
+
+- **The directory.** The driver prepares a directory under `$SEKKA_EVAL_BRIDGES`. It holds the brief (the bare loop's system prompt and the request), Tasuke's skills as reference notes (`$SEKKA_EVAL_BRIDGE_SKILLS`), and a `vm` command.
+- **The requests.** Each `vm` request is a file that the driver runs through the bare loop's tools: `vm sh 'COMMAND'` for the root shell, and `vm look`, `click`, `type`, `key`, `scroll`, `drag` or `wait` on the desktop, with a screenshot and every control's centre. These carry the same refusals and output limits, and the same checks grade the episode.
+- **The clock.** It starts at the agent's first request. The agent ends the episode with `vm finish 'REPORT'`. If it exits without finishing, its last message counts as its report.
+- **`--runner codex`** starts `$SEKKA_EVAL_CODEX` (for example the Codex desktop app's own binary, for its login) in a bubblewrap sandbox, `harness/run-codex.sh`. The host is read-only, /run and $HOME are hidden but for Codex's state, its configuration is replaced by `--runner-model` and `--reasoning`, and the directory is the one writable place.
+- **`--runner claude-code`** waits, for up to an hour, for a Claude Code session to be started in each directory with `ready`.
+
+The labels are `MODEL+RUNNER`. The briefs say she has agreed to the changes a fix needs, the condition Tasuke's results are counted under after its one "yes".
+
 ### Screen coordinates
 
 Vision models answer in their own coordinate conventions, whatever they are told: 0–1000 of each axis (Qwen3.x, Holo4, Muse Glimmer), 0–1 (Nemotron Bolt) or pixels (Gemma). `grounding.py MODEL` asks a running server where three known things are on a real screenshot and prints the convention that fits; put it in the model's `coords` in `models.toml` (or `--coords` for a run).

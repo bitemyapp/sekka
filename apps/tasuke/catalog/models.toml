@@ -1,0 +1,541 @@
+# Tasuke's model catalog: the GGUF models Sekka's agent evaluations ran
+# (docs/agent-evals/README.md, tests/agent-evals/models.toml), pinned to
+# the same files. See catalog/README.md for what each field means and how
+# the sizes, hashes, KV costs and compute buffers were obtained.
+
+[reference]
+gpu = "NVIDIA GeForce RTX 5090"
+bandwidth_gb_s = 1792.0
+evaluated = "2026-11-04"
+
+# ---------------------------------------------------------------------------
+# Curated defaults: what Tasuke suggests first, per role and memory budget
+# (the largest GPU's memory × 0.92, less 1.5 GiB if it drives a display; or
+# unified memory less 8 GiB). The highest tier the machine reaches applies.
+
+[[default]]
+role = "assistant"
+min_budget_gib = 26.0
+model = "gemma-4-31b"
+why = "The curated choice for 32 GB GPUs: from Google, Apache-2.0, it fixed all 16 faults in oh-my-pi, 15 of 16 in the bare loop and 28 of 32 inside Tasuke without damaging anything, and is the most economical of the strong models. Qwen3.8-27B scores as well; with its draft head, Gemma 4 31B is the faster of the two on an RTX 5090."
+
+[[default]]
+role = "desktop"
+min_budget_gib = 26.0
+model = "gemma-4-31b"
+why = "The curated choice for desktop control on 32 GB GPUs: the assistant's own model, so nothing to switch. From Google, it did all 18 desktop tasks inside Tasuke, which numbers the controls in Aizome's apps, and harmed nothing. From screenshots alone it clicks about 160 px off (2 of 9 tasks), so for other apps Qwen3.8-27B is better (16 of 18)."
+
+[[default]]
+role = "fast"
+min_budget_gib = 26.0
+model = "gpt-oss-20b"
+why = "The fast choice: from OpenAI, Apache-2.0, it fixed 26 of 30 faults inside Tasuke without harming anything, at about 330 tokens/s on an RTX 5090. It can't see the screen; Nemotron 3.5 Bolt can, but in one evaluation it left the user's Notes folder empty."
+
+# From 8 GiB cards up (5.5 GiB of room once a display is driven) to 26 GiB.
+
+[[default]]
+role = "assistant"
+min_budget_gib = 5.5
+model = "gemma-4-26b-a4b"
+why = "The curated choice below 32 GB: from Google, Apache-2.0, the best of the 8 GiB round (14 of 16 faults in the bare loop with nothing harmed, 13 of 16 in oh-my-pi, 24 of 31 inside Tasuke). On an 8 GB card its experts partly live in system memory, which makes it slower but keeps its quality. gpt-oss 20B fixed a few more inside Tasuke but can't see the screen; Ornith 35B-A3B scores as well, from Qwen."
+
+[[default]]
+role = "desktop"
+min_budget_gib = 5.5
+model = "gemma-4-26b-a4b"
+why = "The curated choice below 32 GB for desktop control: from Google, 17 of 18 desktop tasks inside Tasuke with its numbered controls, and 5 of 9 from screenshots alone in pixel coordinates."
+
+[[default]]
+role = "fast"
+min_budget_gib = 5.5
+model = "gpt-oss-20b"
+why = "The fast choice below 32 GB: from OpenAI, Apache-2.0, 26 of 30 faults inside Tasuke with nothing harmed, and quick even with some experts in system memory."
+
+# ---------------------------------------------------------------------------
+# Evaluated on 2026-11-04.
+
+[models."qwen3.8-27b"]
+name = "Qwen3.8 27B"
+maker = "Alibaba (Qwen)"
+lineage = ["Qwen (Alibaba)"]
+origin = ["China"]
+license = "Apache-2.0"
+quant = "UD-Q6_K (unsloth)"
+roles = ["assistant", "desktop"]
+evaluated = true
+architecture = { kind = "dense", params = 27 }
+context = { default = 65536, max = 262144, min = 32768 }
+kv = { per_token = 65536, recurrent_mib = 150 }
+compute_buffer_mib = 900
+vision = { coords = "norm1000" }
+# The UD-Q6_K file carries the MTP head (blk.64.nextn): self-speculation,
+# 1.7× faster single-stream decode with no extra download.
+args = ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2"]
+sampling = { temperature = 0.6, top_p = 0.95, top_k = 20, presence_penalty = 0.0 }
+files = [
+  { kind = "weights", repo = "unsloth/Qwen3.8-27B-GGUF", revision = "4ca720788d1e01f1bff70c033e0d0028fd02e502", path = "Qwen3.8-27B-UD-Q6_K.gguf", size = 21983677344, sha256 = "c9c206812fbe4ac7b76a729e25928b63f2ae89d37f69da7a71c20aec763cd436" },
+  { kind = "mmproj", repo = "unsloth/Qwen3.8-27B-GGUF", revision = "4ca720788d1e01f1bff70c033e0d0028fd02e502", path = "mmproj-F16.gguf", size = 927607488, sha256 = "cbb841a9ee0636b2ec172f5bb8df2ea8dfeb01e90fe7c6126581d662a0b4e43e" },
+]
+scores = { date = "2026-11-04", tasuke_first_turn = { passed = 26, total = 32 }, tasuke_harm = 1, tasuke = { passed = 27, total = 32 }, computer_use_tasuke = { passed = 18, total = 18 }, diagnostics = { passed = 30, total = 31 }, diagnostics_omp = { passed = 14, total = 15 }, computer_use = { passed = 16, total = 18 }, computer_use_text = { passed = 6, total = 9 } }
+speed = { decode = 112, prefill = 3135 }
+notes = [
+  "The most capable at both diagnostics and desktop use in the open-model evaluations, with no damage in any of their episodes.",
+  "Inside Tasuke it fixed 27 of 32 faults and did all 18 desktop tasks; once, after a \"yes\" to its own suggestion, it moved the user's older backup.",
+  "The slowest and most thorough: about 13,000 output tokens per fault. Once ran out of a 48K context.",
+  "Normalised a typo it was asked to find (reported /srv/data/backups for /srv/data/backpus).",
+]
+
+[models."gemma-4-31b"]
+name = "Gemma 4 31B"
+maker = "Google"
+lineage = ["Gemma (Google)"]
+origin = ["United States"]
+license = "Apache-2.0"
+quant = "Q4_0 QAT (Google)"
+roles = ["assistant", "desktop"]
+evaluated = true
+architecture = { kind = "dense", params = 31 }
+context = { default = 65536, max = 262144, min = 32768 }
+kv = { per_token = 131072, swa_per_token = 245760, swa_window = 1024 }
+compute_buffer_mib = 1100
+vision = { coords = "pixel" }
+sampling = { temperature = 1.0, top_p = 0.95, top_k = 64 }
+# Gemma 4's MTP head (bartowski's GGUF of Google's release) drafts tokens the model
+# checks: on the RTX 5090, 72 → 119 tokens/s drafting 3 (114 drafting 2),
+# with 988 MiB more GPU memory at 64K. Answers are the model's own either way.
+draft = { args = ["--spec-type", "draft-mtp", "--spec-draft-n-max", "3"], mib = 988, speedup = 1.65 }
+files = [
+  { kind = "weights", repo = "google/gemma-4-31B-it-qat-q4_0-gguf", revision = "59dde24573e7e61570dba08b18a2e1fe246955ed", path = "gemma-4-31B_q4_0-it.gguf", size = 17651001568, sha256 = "179cfb99212709597eae5929112cfca677e1bbf566178b479ae1da0c4772874b" },
+  { kind = "mmproj", repo = "google/gemma-4-31B-it-qat-q4_0-gguf", revision = "59dde24573e7e61570dba08b18a2e1fe246955ed", path = "gemma-4-31B-it-mmproj.gguf", size = 1200726368, sha256 = "6bd60bdb958548b4093196d38744b0f2290c12503a3fddd7486bffa9c5eb07a4" },
+  { kind = "draft", repo = "bartowski/google_gemma-4-31B-it-GGUF", revision = "619aca7589c72be65dd968de8602ad23d68b5c14", path = "mtp-google_gemma-4-31B-it-Q4_0.gguf", size = 349161984, sha256 = "3103d6e845443e3a6156704aa84feeb43bb7ffef96a47a522ad6449c342b6809" },
+]
+scores = { date = "2026-11-04", tasuke_first_turn = { passed = 28, total = 32 }, tasuke_harm = 0, tasuke = { passed = 28, total = 32 }, computer_use_tasuke = { passed = 18, total = 18 }, diagnostics = { passed = 15, total = 16 }, diagnostics_omp = { passed = 16, total = 16 }, computer_use = { passed = 2, total = 9 } }
+speed = { decode = 70, prefill = 2958 }
+notes = [
+  "Fixed all sixteen faults in oh-my-pi, in a median 2.8 minutes and 2,500 output tokens, and never damaged anything.",
+  "Inside Tasuke it fixed 28 of 32 faults, every one before being told to go ahead, and did all 18 desktop tasks with Tasuke's numbered controls, harming nothing. From screenshots alone it did 2 of 9: it names the right control and clicks about 160 px away.",
+]
+
+[models."nemotron-3.5-bolt"]
+name = "Nemotron 3.5 Bolt 74B-A9B"
+maker = "NVIDIA"
+lineage = ["Nemotron (NVIDIA)"]
+origin = ["United States"]
+license = "OpenMDW-1.1"
+license_note = "Read the OpenMDW licence before shipping it."
+quant = "2-bit QAT, 24 GB (NVIDIA)"
+roles = ["assistant", "desktop", "fast"]
+evaluated = true
+architecture = { kind = "moe", total = 74, active = 9, expert_layers = 40, expert_mib = 18000 }
+context = { default = 65536, max = 262144, min = 32768 }
+kv = { per_token = 16384, recurrent_mib = 100 }
+compute_buffer_mib = 1200
+vision = { coords = "norm1" }
+sampling = { temperature = 1.0, top_p = 0.95 }
+files = [
+  { kind = "weights", repo = "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-GGUF", revision = "e0fecb69cb3e5e4c5e8a056fa2aec98c78e91246", path = "NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB.gguf", size = 22018326528, sha256 = "91d63363e782c8a3d5f4be42816eba8e0d42dd2530bd07a7d0d2dc440599af75" },
+  { kind = "mmproj", repo = "nvidia/NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB-GGUF", revision = "e0fecb69cb3e5e4c5e8a056fa2aec98c78e91246", path = "mmproj-NVIDIA-Nemotron-3.5-Bolt-74B-A9B-24GB.gguf", size = 1733692736, sha256 = "0ee891eadc7bf0cae6289b249c74eb1ef420534351f6ef8b64d49f0ca6a926b0" },
+]
+scores = { date = "2026-11-04", tasuke_first_turn = { passed = 22, total = 31 }, tasuke_harm = 0, tasuke = { passed = 22, total = 31 }, computer_use_tasuke = { passed = 15, total = 18 }, diagnostics = { passed = 14, total = 16 }, diagnostics_omp = { passed = 14, total = 15 }, computer_use = { passed = 7, total = 9 } }
+speed = { decode = 153, prefill = 5038 }
+incidents = ["In oh-my-pi it ended one fault (notes owned by root) with the user's Notes folder empty and a note gone."]
+notes = [
+  "The one model without Chinese lineage that is good at both diagnostics and the desktop.",
+  "Gives clicks as fractions of the screen (0–1), whatever the prompt asks.",
+  "Inside Tasuke it fixed 22 of 31 faults and did 15 of 18 desktop tasks, harming nothing.",
+]
+
+[models."qwen3.6-35b-a3b"]
+name = "Qwen3.6 35B-A3B"
+maker = "Alibaba (Qwen)"
+lineage = ["Qwen (Alibaba)"]
+origin = ["China"]
+license = "Apache-2.0"
+quant = "UD-Q4_K_M (unsloth)"
+roles = ["assistant", "desktop", "fast"]
+evaluated = true
+architecture = { kind = "moe", total = 35, active = 3, expert_layers = 40, expert_mib = 19000 }
+context = { default = 65536, max = 262144, min = 32768 }
+kv = { per_token = 20480, recurrent_mib = 63 }
+compute_buffer_mib = 900
+vision = { coords = "norm1000" }
+sampling = { temperature = 0.6, top_p = 0.95, top_k = 20 }
+files = [
+  { kind = "weights", repo = "unsloth/Qwen3.6-35B-A3B-GGUF", revision = "a483e9e6cbd595906af30beda3187c2663a1118c", path = "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf", size = 22134528992, sha256 = "ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61" },
+  { kind = "mmproj", repo = "unsloth/Qwen3.6-35B-A3B-GGUF", revision = "a483e9e6cbd595906af30beda3187c2663a1118c", path = "mmproj-F16.gguf", size = 899283680, sha256 = "8971ee4f331ff0a4c609374f32984b3d4e6dc086c0aa35f1d637fad1829e887f" },
+]
+scores = { date = "2026-11-04", tasuke_first_turn = { passed = 19, total = 31 }, tasuke_harm = 1, tasuke = { passed = 22, total = 31 }, computer_use_tasuke = { passed = 16, total = 18 }, diagnostics = { passed = 13, total = 15 }, diagnostics_omp = { passed = 13, total = 16 }, computer_use = { passed = 9, total = 9 } }
+speed = { decode = 231, prefill = 8692 }
+incidents = ["To apply a repaired keyboard layout it killed the session's processes and started the greeter by hand, ending the user's session, in both harnesses.", "Inside Tasuke it once deleted the user's older backup to free disk space."]
+notes = [
+  "The fastest strong desktop agent: all 9 desktop tasks, in a median 0.4 minutes.",
+  "Stopped the test machine's console service as malware, outside what it was asked: it acts on whatever looks wrong.",
+  "Inside Tasuke it fixed 22 of 31 faults and did 16 of 18 desktop tasks.",
+]
+
+[models."ornith-1.5-35b-a3b"]
+name = "Ornith 1.5 35B-A3B"
+maker = "Ornith"
+lineage = ["Ornith", "Qwen (Alibaba)"]
+origin = ["China"]
+license = "MIT"
+quant = "Q4_K_M (Ornith)"
+roles = ["assistant", "desktop", "fast"]
+evaluated = true
+architecture = { kind = "moe", total = 35, active = 3, expert_layers = 40, expert_mib = 19000 }
+context = { default = 65536, max = 262144, min = 32768 }
+kv = { per_token = 20480, recurrent_mib = 63 }
+compute_buffer_mib = 900
+vision = { coords = "norm1000" }
+sampling = { temperature = 0.6, top_p = 0.95, top_k = 20 }
+files = [
+  { kind = "weights", repo = "ornith-ai/Ornith-1.5-35B-A3B-GGUF", revision = "12393612fd4f730ff5aadc23e9b8f9648aa49ceb", path = "Ornith-1.5-35B-Q4_K_M.gguf", size = 21713463040, sha256 = "42739874cc2ccfdb8523b23fbe52e29b2a7555c8176737ca9ca0b5d59859d41f" },
+  { kind = "mmproj", repo = "ornith-ai/Ornith-1.5-35B-A3B-GGUF", revision = "12393612fd4f730ff5aadc23e9b8f9648aa49ceb", path = "mmproj-Ornith-1.5-35B-BF16.gguf", size = 902822240, sha256 = "1921a36a85aee56cd2abd27f46701802c9d85a33474792e600df6c3b282a135d" },
+]
+scores = { date = "2026-11-04", tasuke_first_turn = { passed = 23, total = 31 }, tasuke_harm = 0, tasuke = { passed = 25, total = 31 }, computer_use_tasuke = { passed = 17, total = 18 }, diagnostics = { passed = 13, total = 16 }, diagnostics_omp = { passed = 15, total = 16 }, computer_use = { passed = 8, total = 9 } }
+speed = { decode = 248, prefill = 8260 }
+notes = [
+  "A fine-tune of Qwen3.6-35B-A3B; where Ornith itself is based isn't stated.",
+  "Stopped the test machine's console service as malware, outside what it was asked, as Qwen3.6 did.",
+  "Inside Tasuke it fixed 25 of 31 faults (23 before being told to go ahead) and did 17 of 18 desktop tasks, harming nothing.",
+]
+
+[models."gpt-oss-20b"]
+name = "gpt-oss 20B"
+maker = "OpenAI"
+lineage = ["gpt-oss (OpenAI)"]
+origin = ["United States"]
+license = "Apache-2.0"
+quant = "MXFP4 (ggml-org)"
+roles = ["assistant", "fast"]
+evaluated = true
+architecture = { kind = "moe", total = 21, active = 3.6, expert_layers = 24, expert_mib = 10800, experts = 32, experts_used = 4 }
+context = { default = 65536, max = 131072, min = 32768 }
+kv = { per_token = 24576, swa_per_token = 24576, swa_window = 128 }
+compute_buffer_mib = 600
+# The harmony format keeps reasoning between tool calls.
+keep_reasoning = true
+sampling = { temperature = 1.0, top_p = 1.0 }
+template_kwargs = { reasoning_effort = "medium" }
+files = [
+  { kind = "weights", repo = "ggml-org/gpt-oss-20b-GGUF", revision = "15dcfc7e7c608c6161507211ed43c5b590801b4b", path = "gpt-oss-20b-MXFP4.gguf", size = 12109566624, sha256 = "27cd6c432c7672cb812a92f611cf3ba7bbc35928262bb1e1253ff4ee6ae35901" },
+]
+scores = { date = "2026-11-04", tasuke_first_turn = { passed = 21, total = 30 }, tasuke_harm = 0, tasuke = { passed = 26, total = 30 }, diagnostics = { passed = 24, total = 32 }, diagnostics_omp = { passed = 10, total = 16 }, computer_use_text = { passed = 12, total = 18 } }
+speed = { decode = 331, prefill = 17728 }
+notes = [
+  "The fast, small baseline: three quarters of the faults in under a minute each, without vision.",
+  "Gains most from Sekka's troubleshooting skill: 14 of 16 with it.",
+  "Sometimes keeps checking after the fix without reporting what was wrong.",
+  "Inside Tasuke it fixed 26 of 30 faults (21 before being told to go ahead), harming nothing.",
+]
+
+[models."muse-glimmer-30b"]
+name = "Muse Glimmer 30B"
+maker = "Meta"
+lineage = ["Muse (Meta)"]
+origin = ["United States"]
+license = "Apache-2.0"
+quant = "Dynamic Q4_K_XL (meta-models)"
+roles = ["assistant", "desktop"]
+evaluated = true
+architecture = { kind = "dense", params = 30 }
+context = { default = 65536, max = 262144, min = 32768 }
+kv = { per_token = 98304 }
+compute_buffer_mib = 900
+vision = { coords = "norm1000" }
+sampling = { temperature = 1.0, top_p = 0.95, top_k = 64 }
+files = [
+  { kind = "weights", repo = "meta-models/Muse-Glimmer-30B-GGUF", revision = "b44f1072cf75e918a1b82a3a17b45c4389b076e7", path = "Muse-Glimmer-30B-KQuant-Dynamic-Q4_K_XL.gguf", size = 19653960832, sha256 = "ac7023d6a4c704eb9af54ab53e476a66b7f5b6c0ef2fc4a8dde5253c291a6c38" },
+  { kind = "mmproj", repo = "meta-models/Muse-Glimmer-30B-GGUF", revision = "b44f1072cf75e918a1b82a3a17b45c4389b076e7", path = "mmproj-Muse-Glimmer-30B-Q4_K_M.gguf", size = 1400328928, sha256 = "f48b452316f9b213758e8659444029b961a24a07f99a1abb2a9f88b06f7c00c6" },
+]
+scores = { date = "2026-11-04", tasuke_first_turn = { passed = 16, total = 32 }, tasuke_harm = 0, tasuke = { passed = 22, total = 32 }, computer_use_tasuke = { passed = 16, total = 18 }, diagnostics = { passed = 9, total = 16 }, diagnostics_omp = { passed = 6, total = 16 }, computer_use = { passed = 8, total = 9 } }
+speed = { decode = 69, prefill = 3566 }
+incidents = ["Replaced the user's authorized_keys with a test key to check sshd, then wrote the original back from memory."]
+notes = [
+  "Good at the desktop from screenshots (8 of 9) but slow there (median 16 minutes), and fixed 9 of 16 faults in the bare loop.",
+  "Inside Tasuke it did 16 of 18 desktop tasks and fixed 22 of 32 faults, harming nothing, but slowly: a median 224 seconds and 19 tool calls per fault, and 9 of 32 ran out of steps or time.",
+  "Gives clicks in 0–1000 of each axis although asked for pixels.",
+]
+
+[models."holo4-35b-a3b"]
+name = "Holo4 35B-A3B"
+maker = "H Company"
+lineage = ["Holo (H Company)", "Qwen (Alibaba)"]
+origin = ["France", "China"]
+license = "Apache-2.0"
+quant = "Q4_K_M (H Company)"
+roles = ["desktop", "fast"]
+evaluated = true
+architecture = { kind = "moe", total = 35, active = 3, expert_layers = 40, expert_mib = 19000 }
+context = { default = 65536, max = 262144, min = 32768 }
+kv = { per_token = 20480, recurrent_mib = 63 }
+compute_buffer_mib = 900
+vision = { coords = "norm1000" }
+# H Company recommends thinking off and greedy decoding for actions.
+sampling = { temperature = 0.0 }
+template_kwargs = { enable_thinking = false }
+files = [
+  { kind = "weights", repo = "Hcompany/Holo4-35B-A3B-GGUF", revision = "93400a4734519493de4f49910de1f6e0e24be46b", path = "q4_k_m.gguf", size = 21297870912, sha256 = "4c51212a4b5673d6a4215b9d708cd1730f1b6b4dbb5f75552df18de8341ce669" },
+  { kind = "mmproj", repo = "Hcompany/Holo4-35B-A3B-GGUF", revision = "93400a4734519493de4f49910de1f6e0e24be46b", path = "mmproj.f16.gguf", size = 899282976, sha256 = "e1076d4179a6d82dbc7f129f043ac5cb03e4584ef5c1ed4a0c31eca5d1a187e4" },
+]
+scores = { date = "2026-11-04", tasuke_first_turn = { passed = 19, total = 30 }, tasuke_harm = 1, tasuke = { passed = 20, total = 30 }, computer_use_tasuke = { passed = 9, total = 18 }, diagnostics = { passed = 11, total = 16 }, computer_use = { passed = 7, total = 18 } }
+speed = { decode = 178, prefill = 8064 }
+incidents = ["In a run discarded for a harness bug, it deleted the user's only earlier backup to free space.", "Inside Tasuke it deleted the user's older backup to free disk space."]
+notes = [
+  "A computer-use fine-tune of Qwen3.6-35B-A3B. Greedy decoding without thinking repeats the same click whenever the screen doesn't change.",
+  "Two measurements of its decode speed hours apart gave 178 and 255 tokens/s.",
+  "Inside Tasuke it fixed 20 of 30 faults and did 9 of 18 desktop tasks; eight others ran out of steps.",
+]
+
+[models."holo4-27b"]
+name = "Holo4 27B"
+maker = "H Company"
+lineage = ["Holo (H Company)", "Qwen (Alibaba)"]
+origin = ["France", "China"]
+license = "CC-BY-NC-4.0"
+license_note = "Non-commercial use only."
+quant = "Q4_K_M (H Company)"
+roles = ["desktop"]
+evaluated = true
+architecture = { kind = "dense", params = 27 }
+context = { default = 65536, max = 262144, min = 32768 }
+kv = { per_token = 65536, recurrent_mib = 150 }
+compute_buffer_mib = 900
+vision = { coords = "norm1000" }
+sampling = { temperature = 0.6, top_p = 0.95, top_k = 20 }
+files = [
+  { kind = "weights", repo = "Hcompany/Holo4-27B-GGUF", revision = "045834b6864fb5cee8e9c72e47ef4c19140ce932", path = "q4_k_m.gguf", size = 16875182592, sha256 = "8071d3ed5f59c88282e6466add0b344b51d49c8c630ae8f93d673ac0911ab962" },
+  { kind = "mmproj", repo = "Hcompany/Holo4-27B-GGUF", revision = "045834b6864fb5cee8e9c72e47ef4c19140ce932", path = "mmproj.f16.gguf", size = 927606816, sha256 = "b4038c228fcf84b0528e327c314204d165f6fa97ebb74d766424f49d2eba0d9c" },
+]
+scores = { date = "2026-11-04", tasuke_harm = 0, computer_use_tasuke = { passed = 18, total = 18 }, computer_use = { passed = 8, total = 9 } }
+speed = { decode = 78, prefill = 3636 }
+notes = [
+  "A computer-use fine-tune of Qwen3.8-27B: 8 of 9 desktop tasks in under a minute each. Not evaluated at diagnostics.",
+  "Inside Tasuke it did all 18 desktop tasks (16 before being told to go ahead), harming nothing.",
+]
+
+# ---------------------------------------------------------------------------
+# The 8 GiB round, evaluated on 2026-11-05 (docs/agent-evals, "The 8 GiB round").
+
+[models."gemma-4-12b"]
+name = "Gemma 4 12B"
+maker = "Google"
+lineage = ["Gemma (Google)"]
+origin = ["United States"]
+license = "Apache-2.0"
+quant = "IQ4_XS (unsloth)"
+roles = ["assistant", "desktop"]
+evaluated = true
+architecture = { kind = "dense", params = 12 }
+context = { default = 65536, max = 131072, min = 32768 }
+kv = { per_token = 65536, swa_per_token = 163840, swa_window = 1024 }
+compute_buffer_mib = 700
+vision = { coords = "pixel" }
+sampling = { temperature = 1.0, top_p = 0.95, top_k = 64 }
+files = [
+  { kind = "weights", repo = "unsloth/gemma-4-12b-it-GGUF", revision = "fc034cfff751157913579611efad8462ac1be606", path = "gemma-4-12b-it-IQ4_XS.gguf", size = 6375734080, sha256 = "b0037d0e0de0290177045ca214b2a0fb1079d18bde57842b3ca32f5b0cd76774" },
+  { kind = "mmproj", repo = "unsloth/gemma-4-12b-it-GGUF", revision = "fc034cfff751157913579611efad8462ac1be606", path = "mmproj-F16.gguf", size = 175115840, sha256 = "91f086971e56d7a7d8d39e271873fccdb49541bd259d6e02c401a4f1cb7a219e" },
+]
+speed = { decode = 150 }
+scores = { date = "2026-11-05", tasuke_first_turn = { passed = 9, total = 31 }, tasuke_harm = 0, tasuke = { passed = 20, total = 31 }, computer_use_tasuke = { passed = 11, total = 18 }, diagnostics = { passed = 3, total = 16 }, diagnostics_omp = { passed = 12, total = 16 }, computer_use = { passed = 3, total = 9 } }
+notes = [
+  "Fixed 12 of 16 faults in oh-my-pi without harming anything; in the evaluations' bare loop it repeated its channel markers until the token limit, which Tasuke detects and resamples.",
+  "Fits entirely in 7.7 GiB with 32K of context, so it is fast on 8 GiB cards.",
+  "Inside Tasuke it fixed 20 of 31 faults (9 before being told to go ahead) and did 11 of 18 desktop tasks, harming nothing.",
+]
+
+[models."gemma-4-26b-a4b"]
+name = "Gemma 4 26B-A4B"
+maker = "Google"
+lineage = ["Gemma (Google)"]
+origin = ["United States"]
+license = "Apache-2.0"
+quant = "Q4_0 QAT (Google)"
+roles = ["assistant", "desktop", "fast"]
+evaluated = true
+architecture = { kind = "moe", total = 26, active = 4, expert_layers = 30, expert_mib = 12000, experts = 128, experts_used = 8 }
+context = { default = 65536, max = 262144, min = 32768 }
+kv = { per_token = 65536, swa_per_token = 163840, swa_window = 1024 }
+compute_buffer_mib = 900
+offload_args = ["-b", "2048", "-ub", "2048"]
+vision = { coords = "pixel" }
+sampling = { temperature = 1.0, top_p = 0.95, top_k = 64 }
+# On the RTX 5090, 250 → 343 tokens/s drafting 2 (299 drafting 3), 662 MiB more at
+# 64K. With experts in RAM (an 8 GB card) it gained nothing, so fit leaves it out.
+draft = { args = ["--spec-type", "draft-mtp", "--spec-draft-n-max", "2"], mib = 662, speedup = 1.37 }
+files = [
+  { kind = "weights", repo = "google/gemma-4-26B-A4B-it-qat-q4_0-gguf", revision = "d1c082be9cf3c8a514acf63b8761f4b41935842e", path = "gemma-4-26B_q4_0-it.gguf", size = 14439363584, sha256 = "3eca3b8f6d7baf218a7dd6bba5fb59a56ee25fe2d567b6f5f589b4f697eca51d" },
+  { kind = "mmproj", repo = "google/gemma-4-26B-A4B-it-qat-q4_0-gguf", revision = "d1c082be9cf3c8a514acf63b8761f4b41935842e", path = "gemma-4-26B-it-mmproj.gguf", size = 1194828160, sha256 = "a359953a076b877db30c31dbbb4c6d93b4a6e017ee5db5784247e4d4c0dd4f3b" },
+  { kind = "draft", repo = "bartowski/google_gemma-4-26B-A4B-it-GGUF", revision = "10f3b41bcf8d3047f4e136e7197ffc2dd1654c9d", path = "mtp-google_gemma-4-26B-A4B-it-Q4_0.gguf", size = 321145344, sha256 = "06c138f179f4bf91a9780a7ca7024da1459c8b4b99ae61e5fd7663ec1b07656e" },
+]
+speed = { decode = 150 }
+scores = { date = "2026-11-05", tasuke_first_turn = { passed = 15, total = 31 }, tasuke_harm = 0, tasuke = { passed = 24, total = 31 }, computer_use_tasuke = { passed = 17, total = 18 }, diagnostics = { passed = 14, total = 16 }, diagnostics_omp = { passed = 13, total = 16 }, computer_use = { passed = 5, total = 9 } }
+incidents = ["In oh-my-pi it once ended the user's session to apply a repaired keyboard layout."]
+notes = [
+  "The best of the 8 GiB round: 14 of 16 faults in the bare loop with nothing harmed, and 5 of 9 desktop tasks in pixel coordinates.",
+  "Inside Tasuke it fixed 24 of 31 faults (15 before being told to go ahead) and did 17 of 18 desktop tasks, harming nothing. In a second run it fixed 22 of 31, and once, after a \"yes\" to its own suggestion, deleted the user's older backup.",
+  "On an 8 GiB card it fits in 7.5 GiB with the experts of 24 layers in system RAM, which makes it slower there: 47 tokens/s with its experts on a Ryzen 7 9800X3D, against about 150 on a GPU that holds it whole.",
+]
+
+[models."nemotron-3.5-lightning"]
+name = "Nemotron 3.5 Lightning 30B-A3B"
+maker = "NVIDIA"
+lineage = ["Nemotron (NVIDIA)"]
+origin = ["United States"]
+license = "OpenMDW-1.1"
+license_note = "Read the OpenMDW licence before shipping it."
+quant = "Q4_0 (ggml-org)"
+roles = ["assistant", "fast"]
+evaluated = true
+architecture = { kind = "moe", total = 30, active = 3, expert_layers = 23, expert_mib = 16000, experts = 128, experts_used = 6 }
+context = { default = 65536, max = 262144, min = 32768 }
+kv = { per_token = 12288, recurrent_mib = 50 }
+compute_buffer_mib = 700
+offload_args = ["-b", "2048", "-ub", "2048"]
+sampling = { temperature = 1.0, top_p = 0.95 }
+files = [
+  { kind = "weights", repo = "ggml-org/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-GGUF", revision = "8cd082170ed313484be1cf44f256a5caa2cfdad3", path = "NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Q4_0.gguf", size = 18898091584, sha256 = "61f87e75974e4b535dcdf9aad056541a9514f1dfa4538b463b081d19b7a00e3c" },
+]
+scores = { date = "2026-11-05", tasuke_first_turn = { passed = 22, total = 31 }, tasuke_harm = 0, tasuke = { passed = 22, total = 31 }, diagnostics = { passed = 8, total = 16 }, diagnostics_omp = { passed = 9, total = 15 }, computer_use_text = { passed = 4, total = 9 } }
+incidents = ["In oh-my-pi it deleted the user's older backup once and ended the user's session twice."]
+notes = [
+  "Needs the experts of 40 layers in system RAM to fit 8 GiB.",
+  "Inside Tasuke it fixed 22 of 31 faults, every one before being told to go ahead, harming nothing.",
+]
+
+[models."lfm2.5-24b-a2b"]
+name = "LFM2.5 24B-A2B"
+maker = "Liquid AI"
+lineage = ["LFM (Liquid AI)"]
+origin = ["United States"]
+license = "LFM Open 1.0"
+license_note = "Commercial use by companies above $10M revenue is restricted."
+quant = "Q4_K_M (Liquid AI)"
+roles = ["assistant", "fast"]
+evaluated = true
+architecture = { kind = "moe", total = 24, active = 2, expert_layers = 26, expert_mib = 12500, experts = 64, experts_used = 4 }
+context = { default = 65536, max = 131072, min = 32768 }
+kv = { per_token = 16384, recurrent_mib = 10 }
+compute_buffer_mib = 600
+offload_args = ["-b", "2048", "-ub", "2048"]
+sampling = { temperature = 0.3 }
+files = [
+  { kind = "weights", repo = "LiquidAI/LFM2.5-24B-A2B-GGUF", revision = "0912d33141f77e10705345a6732bfd83f0252fdc", path = "LFM2.5-24B-A2B-Q4_K_M.gguf", size = 14526258464, sha256 = "d3334405b96228eb9908cdebb5c6194908f2da64282bda852afc3a3910c64e7d" },
+]
+scores = { date = "2026-11-05", tasuke_first_turn = { passed = 16, total = 30 }, tasuke_harm = 1, tasuke = { passed = 16, total = 30 }, diagnostics = { passed = 4, total = 16 }, diagnostics_omp = { passed = 4, total = 13 }, computer_use_text = { passed = 1, total = 9 } }
+incidents = ["Harmed the machine in one bare-loop and two oh-my-pi episodes.", "Inside Tasuke it killed the user's session, taking it for a runaway indexer's parent."]
+notes = [
+  "Fixed a quarter of the faults; its licence restricts commercial use above $10M revenue.",
+  "Inside Tasuke it fixed 16 of 30 faults.",
+]
+
+[models."qwen3.5-9b"]
+name = "Qwen3.5 9B"
+maker = "Alibaba (Qwen)"
+lineage = ["Qwen (Alibaba)"]
+origin = ["China"]
+license = "Apache-2.0"
+quant = "Q4_K_M (unsloth)"
+roles = ["assistant", "desktop"]
+evaluated = true
+architecture = { kind = "dense", params = 9 }
+context = { default = 65536, max = 262144, min = 32768 }
+kv = { per_token = 32768, recurrent_mib = 50 }
+compute_buffer_mib = 600
+vision = { coords = "norm1000" }
+sampling = { temperature = 0.6, top_p = 0.95, top_k = 20 }
+files = [
+  { kind = "weights", repo = "unsloth/Qwen3.5-9B-GGUF", revision = "3885219b6810b007914f3a7950a8d1b469d598a5", path = "Qwen3.5-9B-Q4_K_M.gguf", size = 5680522464, sha256 = "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8" },
+  { kind = "mmproj", repo = "unsloth/Qwen3.5-9B-GGUF", revision = "3885219b6810b007914f3a7950a8d1b469d598a5", path = "mmproj-F16.gguf", size = 918166080, sha256 = "f70dc3509053962b0d0d3ee8a7eacebf5d60aa560cad78254ae8698516ae029f" },
+]
+speed = { decode = 213 }
+scores = { date = "2026-11-05", tasuke_first_turn = { passed = 16, total = 32 }, tasuke_harm = 0, tasuke = { passed = 17, total = 32 }, computer_use_tasuke = { passed = 11, total = 18 }, diagnostics = { passed = 9, total = 16 }, diagnostics_omp = { passed = 10, total = 14 }, computer_use = { passed = 0, total = 9 } }
+incidents = ["Deleted the user's older backup to free disk space.", "Ended the user's session to apply a keyboard layout."]
+notes = [
+  "Fast and small (7.4 GiB at 32K), but harmed the machine twice and did none of the desktop tasks from screenshots.",
+  "Inside Tasuke it fixed 17 of 32 faults and did 11 of 18 desktop tasks with numbered controls, harming nothing.",
+]
+
+[models."holo3.1-4b"]
+name = "Holo3.1 4B"
+maker = "H Company"
+lineage = ["Holo (H Company)", "Qwen (Alibaba)"]
+origin = ["France", "China"]
+license = "Apache-2.0"
+quant = "Q8_0 (mradermacher)"
+roles = ["desktop"]
+evaluated = true
+architecture = { kind = "dense", params = 4 }
+context = { default = 65536, max = 262144, min = 32768 }
+kv = { per_token = 32768, recurrent_mib = 30 }
+compute_buffer_mib = 500
+vision = { coords = "norm1000" }
+sampling = { temperature = 0.6, top_p = 0.95, top_k = 20 }
+files = [
+  { kind = "weights", repo = "mradermacher/Holo-3.1-4B-GGUF", revision = "72283b3ae666b79a6408dfa69d8b38643dac7fa8", path = "Holo-3.1-4B.Q8_0.gguf", size = 5157834784, sha256 = "3ef188c00b383f7e8138519fbc2e1a230cdd65bc7d88a16165ab4e936c769251" },
+  { kind = "mmproj", repo = "mradermacher/Holo-3.1-4B-GGUF", revision = "72283b3ae666b79a6408dfa69d8b38643dac7fa8", path = "Holo-3.1-4B.mmproj-Q8_0.gguf", size = 366895424, sha256 = "5118fd0455a94250a52ef741d5c3c836a6187e0ca18f851caf4abd746769aeac" },
+]
+speed = { decode = 229 }
+scores = { date = "2026-11-05", tasuke_harm = 0, computer_use_tasuke = { passed = 9, total = 17 }, diagnostics = { passed = 7, total = 16 }, diagnostics_omp = { passed = 5, total = 15 }, computer_use = { passed = 0, total = 9 } }
+incidents = ["Cut the machine off its local network while fixing a port conflict; in oh-my-pi it harmed the machine in three of fifteen faults."]
+notes = [
+  "A desktop specialist that did none of Sekka's nine desktop tasks from screenshots; inside Tasuke, with numbered controls, it did 9 of 17.",
+]
+
+
+# Cloud models measured on the same scenarios, for the Compare Models page:
+# each in its maker's own agent through the evaluation bridge (`run.py
+# --agent bridge`), with Tasuke's skills as reference notes and a root shell
+# on the test computer. Tasuke never runs them.
+
+[[cloud]]
+id = "claude-sonnet-5-5"
+provider = "anthropic"
+name = "Claude Sonnet 5.5"
+maker = "Anthropic"
+origin = ["United States"]
+harness = "Claude Code"
+date = "2026-11-06"
+faults = { passed = 32, total = 32 }
+desktop = { passed = 18, total = 18 }
+harm = 0
+notes = ["Fixed every fault and did every desktop task, harming nothing, in a median 19 seconds and 4 commands per fault."]
+
+[[cloud]]
+id = "gpt-6.1-terra"
+provider = "openai"
+name = "GPT-6.1 Terra"
+maker = "OpenAI"
+origin = ["United States"]
+harness = "Codex"
+date = "2026-11-06"
+faults = { passed = 32, total = 32 }
+desktop = { passed = 18, total = 18 }
+harm = 0
+notes = ["At Codex's default (low) reasoning effort: every fault and every desktop task, harming nothing, a median 29 seconds per fault."]
+
+[[cloud]]
+id = "claude-haiku-5-5"
+provider = "anthropic"
+name = "Claude Haiku 5.5"
+maker = "Anthropic"
+origin = ["United States"]
+harness = "Claude Code"
+date = "2026-11-06"
+faults = { passed = 32, total = 32 }
+desktop = { passed = 18, total = 18 }
+harm = 0
+notes = ["Anthropic's small model: every fault and every desktop task, harming nothing, a median 34 seconds and 7 commands per fault."]
+
+[[cloud]]
+id = "gpt-6-luna"
+provider = "openai"
+name = "GPT-6 Luna"
+maker = "OpenAI"
+origin = ["United States"]
+harness = "Codex"
+date = "2026-11-06"
+faults = { passed = 32, total = 32 }
+desktop = { passed = 16, total = 18 }
+harm = 0
+notes = ["OpenAI's fast model, at Codex's default (medium) effort: every fault; of the desktop tasks it once couldn't find the Logs app and once left the terminal file empty."]

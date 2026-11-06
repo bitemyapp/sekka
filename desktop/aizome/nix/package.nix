@@ -51,6 +51,7 @@
   src,
   yukimiSrc,
   hotaruSrc,
+  tasukeSrc,
   ghosttyLicense,
   uucodeLicense,
   unicodeLicense,
@@ -70,6 +71,7 @@ let
     cp -r ${src} $out/desktop/aizome
     cp -r ${yukimiSrc} $out/apps/yukimi
     cp -r ${hotaruSrc} $out/apps/hotaru
+    cp -r ${tasukeSrc} $out/apps/tasuke
   '';
   # Libraries opened at run time with dlopen rather than linked: EGL and
   # GLES through libglvnd (the drivers come from /run/opengl-driver),
@@ -177,6 +179,10 @@ rustPlatform.buildRustPackage {
   GGML_AVX2 = "OFF";
   GGML_FMA = "OFF";
   GGML_F16C = "OFF";
+
+  # Tasuke keeps Claude and OpenAI API keys in the keyring through this
+  # secret-tool: the libsecret with the Secret Service key-exchange fix.
+  TASUKE_SECRET_TOOL_PATH = "${libsecret}/bin/secret-tool";
 
   postPatch = ''
     patchShebangs scripts

@@ -193,6 +193,7 @@ impl Compositor {
             window: None,
             area: None,
             clipboard: false,
+            quiet: false,
         }) {
             Response::Screenshot { .. } => {}
             r => panic!("{r:?}"),

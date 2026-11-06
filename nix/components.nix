@@ -35,6 +35,17 @@ rec {
       nativeYukimi = aizome.packages.${system}.aizome.yukimi;
     };
   };
+  # Tasuke, the local assistant: its command, root helper and model server.
+  # Its window is Aizome's.
+  tasuke = {
+    outPath = ../apps/tasuke;
+    nixosModules.default = import ../apps/tasuke/nix/module.nix tasuke;
+    # Cloud API keys go to the keyring through the libsecret with the Secret
+    # Service key-exchange fix.
+    packages.${system}.tasuke = pkgs.callPackage ../apps/tasuke/nix/package.nix {
+      libsecret = import ./libsecret-dh-padding.nix { inherit (pkgs) lib libsecret; };
+    };
+  };
   kakehashi = {
     outPath = ../apps/kakehashi;
     packages.${system}.kakehashi = (import ./kakehashi.nix { inherit pkgs; }).package;

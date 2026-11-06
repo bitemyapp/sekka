@@ -513,7 +513,7 @@ level bar, for 1.2 s. Sound plays a click at each step unless muted
 
 A background surface per output:
 
-- The wallpaper for the theme (config `appearance.wallpaper.{night,day}`,
+- The wallpaper for the theme (config `appearance.wallpaper_night` and `wallpaper_day`,
   else `AIZOME_WALLPAPER_NIGHT`/`DAY`, else `desktop` colour), scaled to cover
   and cropped, decoded once per output size and cached.
 - Icons down the left from the top (C2-Desktop): Home (the user's name),

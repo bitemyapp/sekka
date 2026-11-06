@@ -146,6 +146,7 @@
         tatami = inputs.tatami.nixosModules.default;
         yukimi = inputs.yukimi.nixosModules.default;
         aizome = inputs.aizome.nixosModules.default;
+        tasuke = inputs.tasuke.nixosModules.default;
       };
       lib = {
         inherit installedLock;
@@ -190,6 +191,25 @@
           inherit pkgs localModels;
           desktopsModule = inputs.calamares.nixosModules.desktops;
           ompPackage = inputs.omp.packages.${system}.omp;
+        };
+        # Tasuke's window's first run downloading a real model from
+        # Hugging Face (apps/tasuke/nix/vm-download-test.nix). Not among
+        # `checks`: it needs the internet. Run its driver outside the sandbox.
+        tasuke-download = import ./apps/tasuke/nix/vm-download-test.nix {
+          inherit pkgs;
+          inherit (self.packages.${system}) tasuke;
+          tasukeModule = inputs.tasuke.nixosModules.default;
+          aizomeModule = inputs.aizome.nixosModules.default;
+        };
+        # The window on Aizome answering through a real model served on the
+        # host (apps/tasuke/nix/vm-live-test.nix). Not among `checks`: the
+        # sandbox can't reach the host's model server.
+        tasuke-live = import ./apps/tasuke/nix/vm-live-test.nix {
+          inherit pkgs;
+          inherit (pkgs) lib;
+          inherit (self.packages.${system}) tasuke;
+          tasukeModule = inputs.tasuke.nixosModules.default;
+          aizomeModule = inputs.aizome.nixosModules.default;
         };
       };
       apps.${system} = {
@@ -260,6 +280,7 @@
           wallpapers
           ;
         inherit (inputs.yukimi.packages.${system}) yukimi;
+        inherit (inputs.tasuke.packages.${system}) tasuke;
         installed-lock = pkgs.writeText "sekka-installed-flake.lock" (builtins.toJSON installedLock);
         # An installed system for every desktop the media offers, one with all
         # of those desktops together, and one with every free application in
@@ -845,6 +866,23 @@
               touch $out
             '';
         yukimi = self.packages.${system}.yukimi;
+        # Tasuke: its tests (in the build), and its module, helper, polkit
+        # action, model server unit and `tasuke ask` in a VM with a scripted
+        # model (apps/tasuke/nix/vm-test.nix).
+        tasuke = self.packages.${system}.tasuke;
+        tasuke-vm = import ./apps/tasuke/nix/vm-test.nix {
+          inherit pkgs;
+          inherit (self.packages.${system}) tasuke;
+          tasukeModule = inputs.tasuke.nixosModules.default;
+        };
+        # Tasuke's window on Aizome, through the real polkit password
+        # dialog (apps/tasuke/nix/vm-dialog-test.nix).
+        tasuke-dialog = import ./apps/tasuke/nix/vm-dialog-test.nix {
+          inherit pkgs;
+          inherit (self.packages.${system}) tasuke;
+          tasukeModule = inputs.tasuke.nixosModules.default;
+          aizomeModule = inputs.aizome.nixosModules.default;
+        };
         yukimi-tatami = self.packages.${system}.yukimi-discover;
         yukimi-x11 = import ./nix/yukimi-x11-test.nix {
           inherit pkgs;

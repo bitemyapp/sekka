@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Sekka</vendor>
+  <vendor_url>https://github.com/bitemyapp/sekka/tree/main/apps/tasuke</vendor_url>
+  <icon_name>org.aizome.Tasuke</icon_name>
+  <!-- One command the person approved in Tasuke, run as root. The helper
+       refuses what Tasuke never runs, enforces a timeout and an output
+       cap, and logs the command and its purpose to the journal. -->
+  <action id="io.github.bitemyapp.Tasuke.run-as-root">
+    <description>Run a command Tasuke proposed, as administrator</description>
+    <message>Tasuke needs an administrator's password to run the command you approved</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@helper@</annotate>
+  </action>
+</policyconfig>

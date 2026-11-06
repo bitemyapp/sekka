@@ -237,10 +237,17 @@ class ShellTools(Tools):
         return SHELL_TOOLS + [FINISH_DIAGNOSIS]
 
     def console_pids(self):
-        """The test driver's console (backdoor.service) and what runs in it."""
+        """The test driver's console (backdoor.service): its main process and
+        the shells in its cgroup that run these commands. Not everything in
+        the cgroup: a scenario's setup starts its processes through the
+        console too (port-conflict's stray server), and stopping those is
+        the fix."""
         if not hasattr(self, "_console"):
-            out = self.vm.out_of("cat /sys/fs/cgroup/system.slice/backdoor.service/cgroup.procs 2>/dev/null")
-            self._console = set(out.split())
+            out = self.vm.out_of(
+                "systemctl show -p MainPID --value backdoor.service; "
+                "for p in $(cat /sys/fs/cgroup/system.slice/backdoor.service/cgroup.procs 2>/dev/null); do "
+                "case $(cat /proc/$p/comm 2>/dev/null) in bash|sh|timeout|runuser|setsid) echo $p;; esac; done")
+            self._console = set(out.split()) - {"0"}
         return self._console
 
     def call(self, name, args):

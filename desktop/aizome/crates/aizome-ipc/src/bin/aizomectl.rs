@@ -377,6 +377,7 @@ fn parse(command: &str, mut args: Vec<String>) -> Result<Request, String> {
                 })
                 .transpose()?;
             let clipboard = flag(&mut args, "--clipboard");
+            let quiet = flag(&mut args, "--quiet");
             let path = args.first().map(|p| {
                 let p = std::path::Path::new(p);
                 if p.is_absolute() {
@@ -385,7 +386,7 @@ fn parse(command: &str, mut args: Vec<String>) -> Result<Request, String> {
                     std::env::current_dir().map(|d| d.join(p)).unwrap_or(p.to_path_buf()).to_string_lossy().into_owned()
                 }
             });
-            Request::Screenshot { output, path, window, area, clipboard }
+            Request::Screenshot { output, path, window, area, clipboard, quiet }
         }
         "reload-config" => Request::ReloadConfig,
         "output" => {

@@ -33,6 +33,7 @@ fn capture(c: &Compositor, output: &str) -> Image {
         window: None,
         area: None,
         clipboard: false,
+        quiet: false,
     });
     Image::load(&path)
 }

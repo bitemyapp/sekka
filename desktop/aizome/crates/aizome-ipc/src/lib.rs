@@ -291,6 +291,10 @@ pub enum Request {
         /// Also put the image on the clipboard as image/png.
         #[serde(default)]
         clipboard: bool,
+        /// Don't announce it (no "Screenshot saved" notification): for
+        /// programs that look at the screen, such as the assistant.
+        #[serde(default)]
+        quiet: bool,
     },
     /// Re-reads settings.toml and applies it.
     ReloadConfig,

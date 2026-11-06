@@ -34,6 +34,17 @@ pub struct Image {
 
 /// Takes a screenshot; returns where it went.
 pub fn take(state: &mut State, what: What, path: Option<PathBuf>, clipboard: bool) -> Result<PathBuf, String> {
+    take_with(state, what, path, clipboard, true)
+}
+
+/// [`take`], announcing it (the shell's "Screenshot saved") only when `announce`.
+pub fn take_with(
+    state: &mut State,
+    what: What,
+    path: Option<PathBuf>,
+    clipboard: bool,
+    announce: bool,
+) -> Result<PathBuf, String> {
     let image = capture(state, what)?;
     let png = encode_png(&image)?;
     let path = match path {
@@ -50,7 +61,9 @@ pub fn take(state: &mut State, what: What, path: Option<PathBuf>, clipboard: boo
     }
     let p = path.to_string_lossy().into_owned();
     tracing::info!("screenshot {p}");
-    state.az.ipc.emit(&Event::ScreenshotTaken { path: p });
+    if announce {
+        state.az.ipc.emit(&Event::ScreenshotTaken { path: p });
+    }
     Ok(path)
 }
 

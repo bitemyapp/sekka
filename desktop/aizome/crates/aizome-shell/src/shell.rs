@@ -937,6 +937,7 @@ impl Shell {
                 window: None,
                 area: None,
                 clipboard: false,
+                quiet: false,
             }),
             Action::Record(ask) => self.record(ask, cx),
             Action::StopRecording => self.stop_recording(cx),

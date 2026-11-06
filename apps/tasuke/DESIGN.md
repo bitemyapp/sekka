@@ -1,0 +1,256 @@
+# Tasuke 助 — Sekka's local assistant: design
+
+Status: v1 design, November 2026. Tasuke is its name, as the other Aizome apps have theirs; **Assistant** is its generic name.
+
+Tasuke is a private assistant that runs entirely on the user's machine. It helps with three kinds of request:
+
+1. **Conversation**: general questions, writing and explanation. No tools are needed.
+2. **Help with Sekka and Aizome**: how to do something ("how do I switch desks?"). It answers with exact steps and offers to do them.
+3. **Doing it**: diagnosing and fixing faults ("my sound stopped working"), maintenance ("free some disk space") and operating the desktop ("switch to the Day theme"). It inspects freely and changes nothing without asking.
+
+The design follows the agent evaluations in `tests/agent-evals` (docs/agent-evals/README.md). Their bare tool loop is what Tasuke's agent is, and the same scenarios check it (`run.py --agent tasuke`).
+
+## Principles
+
+- **Private and local.** The model runs in llama.cpp on this machine. Nothing leaves it unless the user asks for something that does (a download, a web page). The one exception is the person's own choice: a Claude or GPT model through their own Anthropic or OpenAI account (see "Cloud models"), for when this computer is too small for a good model. Then the conversation, screenshots included, goes to that company, and the window says so wherever the model shows. Commands still run here, behind the same policy and approvals.
+- **Trustworthy before clever.**
+  - Inspection is automatic. Anything that changes the system needs the user's approval, shown as the exact command with the model's stated purpose.
+  - Root needs approval plus polkit authentication.
+  - Never delete user data or end the session.
+  - The policy that classifies commands is default-deny: a command runs without asking only if every part of it is on a read-only allowlist.
+- **What enters the context is ours and correct.**
+  - The system prompt is short and stable, so llama.cpp's prefix cache hits.
+  - Skills are verified against the source and loaded on demand.
+  - The environment block is gathered deterministically by Rust, not by the model.
+  - Memory is shown to the user and can be removed. It is framed as notes, not instructions.
+- **Fast without taking over the machine.**
+  - One llama-server in router mode, as a systemd user unit at low CPU and IO weight, leaving two cores free.
+    Measured on runnymede (Ryzen 7 9800X3D) with Gemma 4 26B-A4B decoding in the 8 GB configuration (experts of 24 layers on the processor): an app's 2 ms timer woke as on an idle machine (p99 0.067 ms against 0.063), and 20 s of work on all 16 threads lost 1–5% to the model under the unit's settings against 12–16% at default priority. Under that load the model nearly stops (3 tokens/s, from 57) at either priority: the person's work comes first.
+    On the GPU that drives the display (runnymede's RTX 5090), a compositor-sized frame (2560×1440, four blended layers, every 4.17 ms) took a median 0.06–0.12 ms with no model working and about 1 ms while Gemma 4 31B or 26B-A4B decoded or read 10K-token prompts through Tasuke's router; p99 stayed near 2.3 ms. The worst frame, 6.4 ms, came while the 31B read long prompts: two of 4,795 frames would have missed a 240 Hz refresh, none a 120 Hz one.
+  - A draft head drafts tokens for speculative decoding where the model fits whole on a dedicated GPU beside it: Gemma 4 31B 72 → 119 tokens/s and 26B-A4B 250 → 343 on the RTX 5090, answers unchanged (the model checks every drafted token). With experts in RAM it gained nothing, so fit leaves it out there.
+  - Models load on first use and unload after a period of idleness (`--sleep-idle-seconds`), so a game or a render gets the GPU back.
+  - The window never blocks: inference, commands and downloads run off the UI thread.
+- **Fits the hardware.** Recommendations come from measured evaluation results and the machine's actual GPU memory, unified memory or system RAM.
+
+## Pieces
+
+```
+apps/tasuke/                  Cargo workspace, independent of Aizome's
+  crates/tasuke-models/       hardware, catalog, recommendations, downloads, model server
+  crates/tasuke-agent/        LLM client, agent loop, tools, command policy, skills, memory, sessions
+  tasuke-cli/                 `tasuke`: the headless interface (also what the eval VM runs)
+  tasuke-helper/              `tasuke-helper`: runs one approved command as root, via pkexec
+  catalog/models.toml         the curated, eval-backed model catalog (sha256-pinned files)
+  skills/                     SKILL.md knowledge files, loaded on demand
+  nix/                        package and NixOS module (programs.tasuke)
+desktop/aizome/apps/tasuke/   `aizome-tasuke`: the native window (org.aizome.Tasuke)
+```
+
+The libraries are UI-independent, as with Yukimi (`apps/yukimi` holds the libraries and the helper, `desktop/aizome/apps/yukimi` the window). The window depends on `tasuke-models` and `tasuke-agent` by path.
+
+## Files and processes
+
+| What | Where |
+|---|---|
+| Settings | `~/.config/tasuke/config.toml` (`[model] id, provider, context`, `[server] port, idle_minutes`, `[agent] act, desktop_control`); `provider` (`anthropic`, `openai`) makes `id` a cloud model |
+| Cloud API keys | The Secret Service (the keyring), one item per provider with the attributes `application tasuke provider anthropic` or `openai`, written and read through libsecret's `secret-tool` (Sekka's patched libsecret, its path built in). Never in Tasuke's files. The CLI also reads `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`. |
+| Timings | `~/.local/share/tasuke/speeds.toml`: each model's last timing here (`tasuke bench`, Measure Speed), by catalog id or `anthropic/claude-…` |
+| Downloaded models | `~/.local/share/tasuke/models/<model-id>/<file>`. `<file>.partial` while downloading, renamed once its sha256 matches. |
+| Router presets | `~/.local/share/tasuke/models.ini`, written by `tasuke-models` from the catalog and the downloaded files |
+| Conversations | `~/.local/share/tasuke/sessions/<id>.jsonl`: append-only, one event per line, crash-safe. The title and timestamps come from the first lines. |
+| Memory | `~/.local/share/tasuke/memory.toml` (`[[note]] id, text, created`), at most 40 notes and 4,000 characters in the prompt |
+| API key | `$XDG_RUNTIME_DIR/tasuke/api-key` (0600), created by the unit's ExecStartPre. Clients read it. |
+| Model server | user unit `tasuke-llm.service`: `llama-server --models-preset … --models-max 1 --host 127.0.0.1 --port 8737 --api-key-file … --sleep-idle-seconds N`; `Nice=10`, `CPUWeight=20`, `IOWeight=20`, `OOMScoreAdjust=500` |
+| Root helper | `tasuke-helper run` through pkexec, polkit action `io.github.bitemyapp.Tasuke.run-as-root` (`auth_admin_keep`). It takes one JSON request on stdin, enforces a timeout and an output cap, and logs the command to the journal. |
+
+## The agent (`tasuke-agent`)
+
+### Loop
+
+- Use the OpenAI-compatible chat API with streaming (SSE) and native tool calls.
+- Fall back to text tool calls when the model writes them in its content, ported from `tests/agent-evals/harness/agent.py` (`text_tool_calls`).
+- Recover from malformed calls by telling the model and retrying, up to 3 times.
+- `finish_reason == "length"` ends the turn with a visible notice.
+- A turn ends when the model answers without tool calls.
+- Each user turn has a step budget (default 40 tool calls) and can be cancelled.
+
+### Context
+
+- **System prompt:** role and rules (≤ 300 words), then the skill index (name plus description), then memory notes.
+- **Environment block:** the first user turn of a session also carries a block gathered by Rust: hostname, user, Sekka and NixOS version, desktop, GPU and RAM, time zone, local time.
+- **Trimming:**
+  - Keep the last 2 screenshots and the last 4 tool outputs in full. Older ones become a one-line stub.
+  - Above 75% of the model's context (`n_ctx` from the server's `/props`, else the catalog), older turns are summarized by the model into one "Earlier in this conversation" note.
+
+### Tools and approval
+
+`run_command` runs a command as the user; `run_as_root` runs one as root. Both take `{command, purpose}`.
+
+| Tool | Runs as | Approval |
+|---|---|---|
+| `run_command {command, purpose}` | the user, `bash --noprofile --norc -c` in the home folder (no `BASH_ENV`, `ENV` or exported functions), no stdin, timeout 60 s (max 300), output capped at 32 KB (head and tail) | none if the policy classifies it read-only; otherwise ask |
+| `run_as_root {command, purpose}` | root, through tasuke-helper | always ask, then polkit |
+| `read_file {path, offset?, limit?}` | the user | none, except for sensitive paths (keys, keyrings, browser profiles, password stores) |
+| `write_file {path, content}`, `edit_file {path, old, new}` | the user | always ask, showing a diff |
+| `load_skill {name}` | — | none |
+| `remember {text}`, `forget {id}` | — | none; shown in the transcript and the Memory list |
+| `screenshot {}` | Aizome (`aizomectl screenshot`), scaled to at most 1600 px across, controls numbered (set-of-marks) | needs Desktop control on; vision models only |
+| `list_windows {}`, `ui_elements {}` | Aizome (`aizomectl --json windows`, kit inspection files when present) | needs Desktop control on |
+| `click_element {mark}`, `type_into {mark, text}` | Aizome, at the centre of control [mark] from the last look | needs Desktop control on; asks with the other actions |
+| `click {x,y,button?}`, `double_click`, `drag`, `scroll`, `type_text {text}`, `key {keys}`, `open_app {name}`, `wait {seconds}` | Aizome (`aizomectl input …`, palette or desktop entries) | needs Desktop control on; the first action of a turn asks once |
+
+**Modes.** A conversation's composer has two toggles:
+
+- **Act** (default on): when off, Tasuke only inspects and explains. State-changing tools are not offered to the model at all.
+- **Desktop control** (default off until the user turns it on).
+
+**Policy** (`policy.rs`). The command is split on `|`, `&&`, `||` and `;`. It needs approval if any of these hold:
+
+- it contains a redirection, `$(`, a backtick, `<(`, a background `&` or an environment assignment;
+- it uses `sudo`, `pkexec`, `su` or `doas`;
+- any segment's program is not on the read-only allowlist, or uses a subcommand or flag outside the allowlist's per-program rules. For example, `systemctl` is allowed only with status/show/is-*/list-*/cat, and `find` never with -delete/-exec/-ok/-fprint.
+
+Sensitive read paths need approval too. The policy has exhaustive unit tests; when in doubt it asks.
+
+### Events (the GUI and the CLI consume the same stream)
+
+```rust
+pub enum Event {
+    TurnStarted { turn: u32 },
+    ReasoningDelta { text: String },
+    TextDelta { text: String },
+    ToolCall { id: String, call: ToolCall, needs: Approval },  // Approval::None | Ask { reason } | AskRoot { reason }
+    ToolStarted { id: String },
+    ToolOutput { id: String, output: ToolOutput },            // text (capped), exit code, optional image path
+    MemoryChanged,
+    Notice { level: Level, text: String },                    // context trimmed, step budget hit, model loading…
+    TurnFinished { reason: FinishReason, usage: Usage, decode_tps: Option<f32> },
+    Error { text: String, retryable: bool },
+}
+```
+
+`Agent::start(session, user_text, options) -> TurnHandle` runs the turn on its own thread. `TurnHandle` has `events: Receiver<Event>`, `decide(id, Decision::{Allow, Deny { note }})`, `cancel()` and a waker hook, so the window redraws when events arrive. Sessions persist every event as it happens, so a crash loses at most the token being streamed.
+
+## Models (`tasuke-models`)
+
+**Hardware.**
+
+- GPUs:
+  - NVIDIA: `nvidia-smi --query-gpu=…`, falling back to `/proc/driver/nvidia`. A GB10-class device reports no dedicated memory, so it is unified.
+  - AMD: sysfs `mem_info_vram_total` and `mem_info_gtt_total`. An APU is unified.
+  - Intel: unified unless the driver reports VRAM.
+- Which card drives a connected display: `/sys/class/drm/card*-*/status`.
+- RAM from `/proc/meminfo`; CPU cores and AVX2/AVX-512 from `/proc/cpuinfo`.
+
+**Catalog.**
+
+- **Each entry:** id; name; maker and lineage; licence; quant; files (repo, revision, path, size, sha256); mmproj; architecture (dense, or MoE with total and active parameters); KV bytes per token; default context; llama.cpp args, with per-tier overrides such as `-ncmoe`; vision and its coordinate convention; measured eval scores and speeds with their date.
+- **Roles:** assistant, desktop, fast.
+- **Notes:** honest notes, including incidents seen in the evaluations.
+
+**Fit.**
+
+- A model needs weights + KV(context) + compute buffer.
+- It fits on a GPU when that is ≤ 92% of the GPU's free memory. A GPU that drives a display keeps 1.5 GiB back.
+- An MoE can fit with its experts in RAM (`-ncmoe`) when the dense part fits on the GPU and the experts fit in available RAM.
+- On unified memory the budget is RAM minus 8 GiB, for integrated GPUs whose bandwidth is known (a Strix Halo, Strix Point, Phoenix, a GB10). Others, like desktop Ryzens' Radeon 610M, are display GPUs: on a Ryzen 7 9800X3D it ran Gemma 4 26B-A4B at half the processor's speed, so models run on the processor.
+- When nothing fits on a GPU, it runs on the CPU, recommended only for small MoEs. Anywhere but a GPU's own memory, a model must be estimated at 10 tokens/s or more.
+
+**Recommendations.**
+
+- Per role, rank the fitting models by measured score, then by trust (no destructive incidents) and speed. One basis for the whole list: Tasuke's own results when every evaluated model in it has one, the evaluation harnesses otherwise.
+- The fast role ranks by speed, but only among models that fixed at least two thirds of the faults, trusted ones first; the rest follow. A quick answer still has to be right and harmless.
+- Show maker and lineage. A user setting can hide model families by origin.
+- The curated default per tier is stated in the catalog, with the reason.
+
+**Downloads.**
+
+- `https://huggingface.co/<repo>/resolve/<revision>/<path>` with HTTP Range resume.
+- Hash the sha256 while downloading; check free disk space first.
+- Run at low IO priority, one at a time, cancellable, with progress events.
+
+**Server.**
+
+- Write `models.ini`, then start, stop or restart `tasuke-llm.service` through `systemctl --user`.
+- Status comes from `/health`, `/models` and `/props`.
+- The CLI's `--foreground` runs llama-server directly, for machines without the unit.
+
+## Cloud models
+
+Sekka measured Claude and GPT models on the same scenarios as the local ones (docs/agent-evals/tasuke.md), and a person can use one through their own account: the catalog's `[[cloud]]` entries carry the API's id and the provider. The agent loop, tools, policy, approvals, skills and memory are the same; what differs is the wire and what the history may lose.
+
+- **Wires** (`tasuke-agent/src/provider.rs`): llama.cpp speaks Chat Completions; Claude speaks Anthropic's Messages API (`anthropic.rs`); GPT speaks OpenAI's Responses API (`responses.rs`). Each streams, and each reply keeps the provider's own output (`Message::raw`), which goes back unchanged on the next request.
+- **Claude's history is append-only.** Claude's thinking blocks are signed and must come back unchanged, so for Claude the loop doesn't drop old screenshots, trim or summarize; its 1M-token context leaves room. Adaptive thinking (summarized), prompt caching, eager tool-input streaming, and server-side fallbacks (`fallbacks: "default"`) on the models that have them (Opus 5.5, Fable 5.1, Sonnet 5.5).
+- **GPT** gets `store: false` with its encrypted reasoning returned and sent back; the loop may drop old screenshots there as it does locally.
+- **The prompt says where it runs**: "You run in Anthropic's cloud through the person's own account, by their choice", in place of "You run privately on this machine".
+- **Errors** come back in the person's words: a refused key says to connect the account again, a refusal says the model declined, and busy or rate-limited services (429, 503, 529) are retried with backoff.
+- **Keys** are checked with the provider's `/v1/models` before they are kept (a 401 is "not accepted", a 402 or `insufficient_quota` is billing), and looked up on the turn's own thread: a locked keyring may ask to be unlocked, and the window doesn't wait.
+
+**Timing.** `tasuke bench` and Measure Speed send every model the same request (about 200 words of plain prose, at most 400 tokens; thinking off locally, low effort in the cloud) and time it from the stream: first token, then tokens a second until the last, plus llama.cpp's own prompt rate. A local model is loaded by a warm-up request first, so loading isn't counted; a cloud model is timed as this computer sees it, network included.
+
+## CLI (`tasuke`)
+
+```
+tasuke hardware [--json]
+tasuke recommend [--role assistant|desktop|fast] [--json]
+tasuke models [--json]                      catalog with fit and download state
+tasuke download ID | tasuke remove ID | tasuke use ID
+tasuke use anthropic/ID | openai/ID         a cloud model through a connected account
+tasuke account [list] [--json]              the accounts connected
+tasuke account add|remove anthropic|openai  paste a key (checked, kept in the keyring); forget it
+tasuke bench [ID | anthropic/ID | openai/ID] [--json]   time a model here (default: Tasuke's own)
+tasuke server start|stop|status [--foreground]
+tasuke ask [--act] [--desktop] [--approve never|ask|all] [--model ID|anthropic/ID] [--base-url URL --model NAME] "request"
+```
+
+`ask` streams the turn to the terminal, asking approvals on the TTY. The eval VM runs it as root with `--approve all --base-url http://10.0.2.2:PORT`, so the same scenarios grade the product's agent. As root, `run_as_root` runs directly, without pkexec.
+
+## The window (`aizome-tasuke`)
+
+The window follows Omperor's principles (`~/work/omperor-aizome/docs/PRODUCT_DIRECTION.md`): conversation at the centre, evidence inline and inspectable, nothing modal except short decisions, and state retained when switching.
+
+- **Sidebar:** New conversation; conversations by recency; Models; Memory. Compare Models opens from the Go menu and the Models page.
+- **Transcript:**
+  - Markdown answers.
+  - Each tool call is a compact row (verb and command or target, then its state), expanding to the full output.
+  - Approval cards are inline. They show the command in monospace, the purpose, and why approval is needed. The buttons are **Run** / **Run as administrator** and **Don't run**, with no default button.
+  - Screenshots show as thumbnails.
+- **Composer:** the Act and Desktop control toggles. The model chip shows its state: loading, ready, or asleep (it loads on send), plus speed; a cloud model's says whose cloud ("in Anthropic's cloud") or that its account isn't connected, and the first page's privacy line says what is sent to whom. Stop is there while a turn runs.
+- **Models:**
+  - The hardware summary.
+  - Recommended models per role, with fit, size, speed estimate, scores, maker and lineage, licence and notes.
+  - Download (with progress, pause and cancel), Use, and Remove.
+  - The server's state and its idle-unload setting.
+  - Cloud accounts: Anthropic and OpenAI, each connected (with its key's ends) or not, Connect… or Disconnect, and the connected account's models with Use.
+- **Compare Models** (⇧⌘3, or Compare All on Models): every model Sekka measured in one table, sortable by faults fixed, desktop tasks, harm, where it runs and how fast, and download size. The selected model's details carry what can be done with it: a local model's download, Use and Remove; a cloud model's Use, or Connect when its account isn't. Measure Speed times the selected model here (a downloaded local model that runs well here, or a cloud model with its account), on a worker thread with its steps shown; the timing replaces the estimate in the table and is kept. "Only models this computer runs well" keeps those that fit and reach the same 10 tokens/s floor the recommendations use. Cloud models were measured in their makers' own agents through the eval bridge. Models hidden by origin stay hidden here, with a count.
+- **Connecting an account** is a sheet: Claude or OpenAI, what using one means (what is sent, who bills it), a button opening the provider's API-key page, a password field for the key, Connect. The key is checked in the background and kept in the keyring; a refused key, a billing problem or no network says so under the field. Connected, it lists the models the account can use; opened from Use, or from first run, it also switches to the model.
+- **First run:** detect the hardware, recommend a model, download it, and say hello. While it downloads, the window explains what is happening and how long it will take. Use a Cloud Account… beside Download connects an account instead (the primary button when nothing fits), and goes straight to the conversation.
+
+## Since the first draft (2026-11-05)
+
+- **Set-of-marks is built.** Every look at the screen (the first comes with the request) lists the windows and numbers each control kit apps report; vision models also get the screenshot with the numbers drawn on it. `click_element`/`type_into` take a number; x/y clicks go through the model's coordinate convention (`Coords`, including per-axis affine).
+- **Acting, not asking twice.** The prompt says the approval card is the person's yes, and to retry with `run_as_root` when the person's permissions fall short. Skills write root commands as `sudo CMD`; each says that means `run_as_root` in Tasuke.
+- **Robustness.** A reply that turns into a loop (one short unit repeated through the last 1,200 bytes) is cut off and resampled once; Gemma 4 12B otherwise repeats its channel markers until the token limit. Connection retries back off 1–8 s, and a turn starts `tasuke-llm.service` when Tasuke's own port is dead.
+- **Routines.** `tasuke checkup [--notify]` runs the read-only `sekka-checkup` skill with Act off; the module's opt-in weekly timer notifies only when something needs attention.
+- **The helper** is installed in `libexec` and found through `tasuke_agent::root::find_helper` (the path the polkit action names).
+- **Evaluation.** `run.py --agent tasuke` grades this agent in the VM; when the turn ends on a question, the harness answers "Yes, please go ahead." once and keeps the first turn's result apart.
+
+## Prior art: Omperor and Hermes Agent
+
+Both were read closely on 2026-11-05 before deciding what Tasuke takes from them.
+
+**Omperor** (`github.com/bitemyapp/omperor`, its `aizome` branch, and Sekka PR #133) is a native Aizome front end to oh-my-pi, a cloud coding agent run as a child process. Tasuke doesn't embed it or depend on it:
+- its agent's fixed prompt prefix is about 7K tokens, too much for the 32K contexts of 8 GiB-class models, and its job (coding with cloud models) isn't Tasuke's;
+- oh-my-pi builds from source with patches and a downloaded Python, which doesn't fit how Sekka packages software;
+- it has no approvals, which Tasuke's design centres on.
+
+What Tasuke took, with attribution where code came over (Omperor is MIT OR Apache-2.0): the product direction for the window (conversation first, evidence inline, nothing modal but short decisions), its Markdown rendering approach, and its discipline about the prompt cache (a stable prefix and a summary that keeps the person's words). Once PR #133 lands its kit features (selectable text with links, `scroll.follow_end`, a growing text editor), the window's stand-ins in `widgets/{follow,prose,composer}.rs` should give way to them.
+
+**Hermes Agent** (Nous Research, MIT, Python) is a general agent with a learning loop. Tasuke took:
+- **session search** (`search_conversations`), but answering from the saved conversations directly rather than through a second model;
+- a **prompt prefix that stays fixed** while a turn runs (new memory takes effect next turn);
+- **summaries that keep the person's request word for word**, with a summary built without the model when the model's fails;
+- **routines that skip the model when there's nothing to say** (`tasuke checkup` looks first);
+- skills read **by section**, so a small model doesn't spend a third of its context on one guide.
+
+What Tasuke deliberately didn't take: skills the agent writes for itself (what enters the context must be checked against the source, and small models write unreliable procedures), approval by a second model (weaker than the default-deny policy), messaging gateways (a remote way in to an agent that can act as root), and a 64K-token minimum context.

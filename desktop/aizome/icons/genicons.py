@@ -258,6 +258,16 @@ def koe():
     return g
 
 
+@icon("org.aizome.Tasuke", "Tasuke (Assistant)")
+def tasuke():
+    # A speech bubble on paper with its tail stepping down to the left,
+    # and in it three dots, the middle one amber: an answer on its way.
+    g = R(10, 12, 40, 28, PAPER) + R(10, 12, 40, 2, PALE)
+    g += R(14, 40, 10, 2, PAPER) + R(14, 42, 8, 2, PAPER) + R(14, 44, 6, 2, PAPER) + R(14, 46, 4, 2, PAPER) + R(14, 48, 2, 2, PAPER)
+    g += R(14, 22, 8, 8, DEEP) + R(26, 22, 8, 8, AMBER) + R(38, 22, 8, 8, DEEP)
+    return g
+
+
 @icon("org.aizome.Toolchest", "Toolchest")
 def toolchest():
     return R(10, 10, 20, 10, AMBER) + R(10, 20, 40, 10, PALE) + R(10, 30, 40, 10, MID) + R(10, 40, 40, 10, DEEP)

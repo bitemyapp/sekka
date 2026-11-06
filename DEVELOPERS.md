@@ -2279,6 +2279,83 @@ nix run .#agent-evals.run -- --agent oracle --track diagnostics
 nix run .#agent-evals.run -- --models qwen3.8-27b --track diagnostics --parallel 4
 ```
 
+## Tasuke, the local assistant
+
+Tasuke 助 (its generic name is Assistant) is an agent that runs on the machine's own
+GPU or CPU. [apps/tasuke/DESIGN.md](apps/tasuke/DESIGN.md) is the contract
+between its pieces:
+
+- `apps/tasuke` is its own Cargo workspace. `tasuke-models` detects the
+  hardware, reads the eval-backed catalog (`catalog/models.toml`, every
+  file pinned by sha256), works out what fits and recommends per role,
+  downloads with resume, and runs llama.cpp in router mode.
+  `tasuke-agent` is the loop, tools, command policy, context, skills,
+  memory and sessions. `tasuke-cli` is `tasuke` (`hardware`, `recommend`,
+  `models`, `download`, `use`, `server`, `ask`, `checkup`);
+  `tasuke-helper` runs one approved command as root behind pkexec.
+- `desktop/aizome/apps/tasuke` is the window, `aizome-tasuke`
+  (`org.aizome.Tasuke`), on the same libraries. `--fixture NAME` plays
+  made-up conversations and machines for screenshots and golden renders.
+- `apps/tasuke/skills` holds the knowledge loaded on demand. Each skill
+  was checked against this repository's source; `skills/README.md` lists
+  what each was checked against.
+
+How a turn stays safe and fast:
+
+- **Approvals.** `policy.rs` classifies every command default-deny: a
+  bash-faithful lexer, a per-program allowlist of read-only forms, private
+  paths that ask, and refusals (ending the session, wiping home, stopping
+  Tasuke's server) that look through sudo, `bash -c`, eval and pipes into
+  shells. Commands run as `bash --noprofile --norc` in the home folder
+  with `BASH_ENV`, `ENV` and exported functions removed, so what the
+  policy read is what runs. Root goes through `tasuke-helper` and the
+  polkit action `io.github.bitemyapp.Tasuke.run-as-root`.
+- **Context.** The system prompt is short and stable (llama.cpp's prompt
+  cache keeps hitting); a Rust-gathered environment block opens each
+  conversation; old screenshots drop out, old outputs become stubs at
+  55 % of the context, and the model summarizes past 75 %.
+- **Robustness.** Text tool calls are recovered, malformed ones are
+  told back, a reply that turns into a loop is cut off and resampled,
+  and a turn starts `tasuke-llm.service` when Tasuke's port is dead.
+- **Desktop.** Kit apps report their controls (`AIZOME_KIT_INSPECT`);
+  Tasuke numbers them on the screenshot and in a list (set-of-marks) so
+  models click `[7]` rather than guess pixels.
+
+`programs.tasuke` (`apps/tasuke/nix/module.nix`) installs the package and
+the helper's polkit action and runs the user unit `tasuke-llm.service`
+(llama.cpp's router on 127.0.0.1:8737, `Nice=10`, `CPUWeight=20`,
+`IOWeight=20`, idle unload); `checkup.enable` adds a weekly read-only
+check-up that notifies only when something needs attention. It is opt-in
+and not part of `calamares.nixosModules.desktops`.
+
+```sh
+# The libraries, CLI and helper; the window; the VM test with a scripted model
+bash -c 'cd apps/tasuke && cargo test'
+bash -c 'cd desktop/aizome && cargo test -p aizome-tasuke'
+nix build .#checks.x86_64-linux.tasuke-vm
+# The window on Aizome: Run as administrator, and a password typed into the
+# shell's real polkit dialog (no rule stands in for it)
+nix build .#checks.x86_64-linux.tasuke-dialog
+# First run downloading a real model from Hugging Face through the window
+# (needs the internet, so not a check: run the driver outside the sandbox)
+nix build .#tasuke-download.driver && ./result/bin/nixos-test-driver
+# The window on Aizome answering through a real model: start `tasuke server
+# start` on the host with port 18737, then name its key (not a check either)
+nix build .#tasuke-live.driver
+TASUKE_LIVE_KEY=$XDG_RUNTIME_DIR/tasuke/api-key ./result/bin/nixos-test-driver
+# The window on a real model without a VM, in the kit's test harness
+bash -c 'cd desktop/aizome && cargo test -p aizome-tasuke --test live_model -- --ignored'
+```
+
+The evaluations grade the product itself: `run.py --agent tasuke` runs
+`tasuke ask` inside the VM (as root, its commands as alice through
+`--user-prefix as-alice`, every approval granted) against the host's
+server. `SEKKA_EVAL_TASUKE` names a store path holding `bin/tasuke`,
+`libexec/tasuke-helper` and `share/tasuke/skills` (the VM shares the
+host's store). `--marks` turns on set-of-marks for computer use. When
+Tasuke ends a turn with a question, the harness answers once ("Yes,
+please go ahead.") and records the first turn's result apart.
+
 ## Boot splash
 
 Genkan writes `calamares.bootSplash.enable = true;` into every installation; the

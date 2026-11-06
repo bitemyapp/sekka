@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Tasuke
+GenericName=Assistant
+Comment=Ask about your computer, find what's wrong and fix it, privately, with a model running on this computer
+Keywords=assistant;AI;help;chat;question;troubleshoot;fix;diagnose;problem;LLM;local;private;Tasuke;
+Categories=System;Utility;
+Icon=org.aizome.Tasuke
+Exec=aizome-tasuke
+Terminal=false
+StartupNotify=true
+StartupWMClass=org.aizome.Tasuke
+DBusActivatable=false

@@ -181,6 +181,51 @@ other desktops, and Super in Aizome.
 
 *Current application in Tatami, in a NixOS test VM.*
 
+### Tasuke: help that never leaves your computer
+
+Ask Tasuke 助, Sekka's assistant, in your own words: "my sound stopped
+working", "why is my disk filling up?", "how do I share my screen?", or
+anything else you'd ask a knowledgeable friend. It runs a language model on
+your own graphics card, so nothing you ask, and nothing it sees on your
+computer, is sent anywhere.
+
+It looks before it acts. Reading logs, settings and system state happens at
+once; anything that would change something appears as a card with the exact
+command or file change and why Tasuke wants it, and runs only when
+you press **Run**. Administrator changes then ask for your password, as
+any other app would. It won't end your session, delete your files or weaken
+your security to make something work. It knows Sekka and Aizome from
+guides checked against their source, and it says so when it isn't sure.
+
+**Give my computer a check-up** looks over services, errors, disk space,
+memory, updates, network and battery, and reports what needs attention
+first. A weekly check-up can run on its own and stays quiet unless
+something is wrong. With **Desktop control** on, it can also do things on
+your screen for you, such as switching the theme or making a note, pressing
+the controls Aizome's apps describe to it.
+
+The **Models** page looks at your computer's graphics memory (or shared
+memory on machines that have it) and recommends models that fit, with who
+made each one, where it comes from, its licence, and how it did in Sekka's
+own evaluations. You choose, download once, and switch any time.
+**Compare Models** puts every model Sekka measured side by side, local and
+cloud, and **Measure Speed** times any of them on your computer.
+
+[![Tasuke explaining a full disk and asking before it frees space](desktop/aizome/docs/screenshots/tasuke/night-diagnose.png)](desktop/aizome/docs/screenshots/tasuke/night-diagnose.png)
+
+*A made-up conversation (the window's `diagnose` fixture) in Aizome's Night theme.*
+
+Today Tasuke needs a graphics card with at least 8 GB of memory, or
+a machine with at least 16 GB of shared memory, to be useful; smaller models
+make more mistakes, and the window says how each one measured. Without that,
+Tasuke can use a Claude or GPT model through your own Anthropic or OpenAI
+account instead: you paste an API key once (it stays in your keyring), the
+company bills your account by use, and while that model is in use, what you
+ask and what Tasuke sees is sent to that company. The window says so
+wherever the model shows, and commands still wait for your **Run**. Desktop
+control works best in Aizome's own apps. It is opt-in for now
+(`programs.tasuke.enable`), not yet one of Genkan's choices.
+
 ### Prefer a familiar desktop?
 
 Plasma, GNOME and Xfce are available too. Multiple installed desktops share your account and one login screen: Aizome's own when Aizome is installed, listing every desktop you chose, and GDM when GNOME is, since GNOME locks its screen only under GDM (`calamares.loginScreen` chooses otherwise).
