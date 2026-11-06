@@ -4,7 +4,7 @@
 //! and confirming it only shows the Install page.
 //!
 //! In debug builds, `CALAMARES_UI_PREVIEW=welcome|disk|account|github|
-//! desktop|applications|location|keyboard|review|ready|prepfail|install|done|failed`
+//! desktop|applications|location|keyboard|review|ready|prepfail|install|done|failed|bootfail`
 //! opens the window on that page; `CALAMARES_UI_SIZE=800x600` sizes it.
 //! Release builds never read either.
 use crate::app::{Genkan, Msg, Review, Step};
@@ -17,6 +17,7 @@ use calamares_nixos::{
     github::{self, GithubUser},
     install::{Event, Summary},
     memory::MemInfo,
+    record::{Report, RetryOffer},
     timezone::Source,
 };
 
@@ -154,7 +155,7 @@ pub fn show(app: &mut Genkan, cx: &mut Cx<Msg>, page: &str) {
         "location" => Step::Location,
         "keyboard" => Step::Keyboard,
         "review" | "ready" | "prepfail" => Step::Review,
-        "install" | "done" | "failed" => Step::Install,
+        "install" | "done" | "failed" | "bootfail" => Step::Install,
         _ => Step::Welcome,
     };
     if step < Step::Review {
@@ -291,12 +292,63 @@ pub fn show(app: &mut Genkan, cx: &mut Cx<Msg>, page: &str) {
             );
             app.helper_event(Event::Complete, cx);
         }
-        "failed" => app.helper_event(
-            Event::Failed {
-                message: "nix failed (exit status: 1): error: writing to file: No space left on device (sample preview failure)".into(),
-            },
-            cx,
-        ),
+        "failed" => {
+            let message = "Copying the system to the new disk failed: nix failed (exit status: 1): error: writing to file: No space left on device (sample preview failure)";
+            app.helper_event(
+                Event::Recovery {
+                    report: Report {
+                        message: message.into(),
+                        changed: "Samsung SSD 990 PRO 1TB (/dev/nvme0n1) was erased and the system's configuration written to it. Copying the system didn't finish, so it can't start.".into(),
+                        next: "Genkan won't continue on this disk by itself. Copy the details, then close the installer and open it again to install from the start, which erases the disk again.".into(),
+                        retry: None,
+                        support: SUPPORT.into(),
+                    },
+                },
+                cx,
+            );
+            app.helper_event(
+                Event::Failed {
+                    message: message.into(),
+                },
+                cx,
+            );
+        }
+        "bootfail" => {
+            app.helper_event(
+                Event::Copying {
+                    bytes: 6300 * 1024 * 1024,
+                    total: 6300 * 1024 * 1024,
+                },
+                cx,
+            );
+            app.helper_event(
+                Event::Progress {
+                    step: 5,
+                    message: "Installing the bootloader and activating the system".into(),
+                },
+                cx,
+            );
+            app.helper_event(
+                Event::Recovery {
+                    report: Report {
+                        message: "nixos-install failed (exit status: 1): efibootmgr: Could not set variable Boot0000: No space left on device (sample preview failure)".into(),
+                        changed: "Samsung SSD 990 PRO 1TB (/dev/nvme0n1) was erased, and the system was copied to it and checked. Installing the bootloader didn't finish, so the disk can't start yet.".into(),
+                        next: "Try the bootloader again. Genkan first checks that this is the same disk, with the same filesystems and the same copied system, and changes nothing else on it.".into(),
+                        retry: Some(RetryOffer {
+                            stage: "bootloader".into(),
+                            record: "5f1c0de4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6".into(),
+                            attempt: 2,
+                            attempts: 3,
+                        }),
+                        support: SUPPORT.into(),
+                    },
+                },
+                cx,
+            );
+        }
         _ => {}
     }
 }
+
+/// A sample support record: the shape of the real one, its digests made up.
+const SUPPORT: &str = "Genkan installation record 0f1e2d3c-4b5a-4978-8695-a4b3c2d1e0f9, redacted for support.\nFull record: /run/sekka-install/0f1e2d3c-4b5a-4978-8695-a4b3c2d1e0f9.jsonl in the live session, /var/log/sekka-install/0f1e2d3c-4b5a-4978-8695-a4b3c2d1e0f9.jsonl on the installed disk.\n{\"schema\":\"sekka.genkan.record/1\",\"installation\":\"0f1e2d3c-4b5a-4978-8695-a4b3c2d1e0f9\",\"sequence\":1,\"previous\":null,\"at\":1793750400,\"kind\":\"opened\",\"facts\":[[\"disk\",\"/dev/nvme0n1\"],[\"disk-model\",\"Samsung SSD 990 PRO 1TB\"],[\"disk-serial\",\"sha256:3f9a1c0b7e52\"]]}\n";

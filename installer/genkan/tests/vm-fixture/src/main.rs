@@ -4,7 +4,7 @@
 use anyhow::{Context, Result, ensure};
 use calamares_nixos::{
     Desktop, Filesystem, Firmware, Hostname, Kernel, RawRequest, Settings, SuperKey, config, disk,
-    filesystem::Identities, install::Event, memory, process::output, session::Confirmation,
+    filesystem::Identities, install::Event, memory, process::output, record, session::Confirmation,
 };
 use std::{
     fs,
@@ -57,10 +57,10 @@ fn invoke_session(mut request: RawRequest) -> Result<()> {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;
-    let mut stdin = child.stdin.take().unwrap();
+    let mut stdin = child.stdin.take();
     let mut line = serde_json::to_vec(&request)?;
     line.push(b'\n');
-    stdin.write_all(&line)?;
+    stdin.as_mut().unwrap().write_all(&line)?;
     let mut confirmed = None;
     let mut complete = false;
     for text in BufReader::new(child.stdout.take().unwrap()).lines() {
@@ -73,7 +73,12 @@ fn invoke_session(mut request: RawRequest) -> Result<()> {
                     confirmation: phrase.clone(),
                 })?;
                 line.push(b'\n');
+                // Then close stdin: the fixture never answers an offer to
+                // try the bootloader again, so a failure ends the session
+                // instead of waiting for the window.
+                let mut stdin = stdin.take().context("Prepared twice")?;
                 stdin.write_all(&line)?;
+                drop(stdin);
                 confirmed = Some(Instant::now());
             }
             Ok(Event::Complete) => complete = true,
@@ -932,6 +937,36 @@ fn main() -> Result<()> {
             println!(
                 "INSTALL_RECORD={}",
                 serde_json::to_string(&record["stages"])?
+            );
+            // The installation record: one, read and checked by the same
+            // parser as the helper's, ending where the installed system's
+            // copy ends (the flush's intent), and for this root.
+            let records = fs::read_dir("/var/log/sekka-install")?
+                .map(|entry| Ok(entry?.path()))
+                .collect::<Result<Vec<_>>>()?;
+            ensure!(
+                records.len() == 1,
+                "Expected one installation record, found {records:?}"
+            );
+            let journal = record::Record::read(&records[0])?;
+            ensure!(
+                journal.state() == &record::State::Started(record::Stage::Flush)
+                    && journal.next() == [record::Next::Restart],
+                "The installation record stops at {:?}",
+                journal.state()
+            );
+            let (storage, _) = journal
+                .completed(record::Stage::Storage)
+                .context("The installation record has no storage")?;
+            ensure!(
+                storage.require("root-uuid")?
+                    == output("findmnt", &["--noheadings", "--output", "UUID", "/"], 10)?.trim(),
+                "The installation record is for another root filesystem"
+            );
+            println!(
+                "INSTALL_JOURNAL={} entries, bootloader attempts {}",
+                journal.entries().len(),
+                journal.attempts()
             );
             if configuration.contains("calamares.tuning.enable = true;") {
                 output("systemctl", &["is-active", "ananicy-cpp"], 15)?;

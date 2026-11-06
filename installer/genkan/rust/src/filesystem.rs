@@ -109,7 +109,7 @@ impl Identities {
     }
 }
 
-fn random<const N: usize>() -> Result<[u8; N]> {
+pub(crate) fn random<const N: usize>() -> Result<[u8; N]> {
     use std::io::Read;
     let mut bytes = [0u8; N];
     fs::File::open("/dev/urandom")
