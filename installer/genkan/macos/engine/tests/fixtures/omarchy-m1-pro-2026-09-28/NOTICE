@@ -1,0 +1,33 @@
+These files are real diskutil, bless and nvram outputs recorded on a 14-inch
+MacBook Pro (M1 Pro, j314sap) by the Omarchy Mac installer project:
+
+  omacom/omarchy-mac-installer c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9
+  Tests/OmarchyAppleInstallerTrustCoreTests/Fixtures/m1-pro-2026-09-28/
+    legacy/{list,apfs-list,apfs-volumegroups}.plist, legacy/bless-getboot.txt,
+    legacy/info/disk0*.plist,
+    legacy/evidence/esp-disk0s4/asahi_stub_info.json (as legacy/asahi_stub_info.json),
+    after-make-space/macos-limits.plist, nvram-boot-volume.txt
+
+They are copied unchanged. Sekka's tests read them to build a fake Mac with an
+existing Asahi installation on a board the J514S profile doesn't admit.
+
+Copyright (c) David Heinemeier Hansson
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

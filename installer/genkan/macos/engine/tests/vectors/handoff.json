@@ -1,0 +1,16 @@
+{
+  "created": "2027-01-15T08:00:00Z",
+  "esp": "da711448-96c8-4a19-a4b2-d2bc815a47c5",
+  "hints": {
+    "computer_name": "Chris's MacBook Pro",
+    "full_name": "Chris Allen",
+    "keyboard": "us",
+    "locale": "en_US.UTF-8",
+    "timezone": "America/Chicago"
+  },
+  "installation": "1f7d9c62-4a1b-4c8e-9d3f-2b6a8e0c5d47",
+  "release": "sekka-j514s-4882dc33",
+  "root": "be6521cc-3e24-44e3-baf0-27bc08d6af57",
+  "schema": "sekka.mac.handoff/1",
+  "source_revision": "4882dc33652612e7475f467f6373d8b607e5407c"
+}

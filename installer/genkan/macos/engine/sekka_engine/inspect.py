@@ -1,0 +1,768 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Build the contract's Inspection from Asahi's own model of the Mac.
+
+Everything here reads; nothing changes a disk. Run unprivileged (the app
+inspects before it asks for a password), volumes are mounted read-only and
+unmounted again, and what only root can read (boot policies, the admin-user
+records) is reported as unavailable rather than guessed.
+"""
+
+import logging
+import os
+import re
+
+from . import canonical
+from . import contract as c
+
+log = logging.getLogger("sekka_engine.inspect")
+
+PARTITION_KINDS = {
+    "Apple_APFS_ISC": "apple-isc",
+    "Apple_APFS": "apfs",
+    "Apple_APFS_Recovery": "apple-recovery",
+    "EFI": "efi",
+    "Linux Filesystem": "linux",
+    "Linux": "linux",
+    "Linux Swap": "linux-swap",
+}
+
+RECOVERY_APP = "Sekka Recovery.app"
+ASAHI_STEP2_APP = "Finish Installation.app"
+
+
+class InspectionError(RuntimeError):
+    """The Mac couldn't be described with confidence."""
+
+
+def walk(node):
+    yield node
+    for child in node.get("IORegistryEntryChildren", None) or []:
+        yield from walk(child)
+
+
+def platform_uuid(sysinfo):
+    """IOPlatformUUID, from the IOService plane Asahi's SystemInfo read."""
+    for node in walk(sysinfo.ioservice):
+        if node.get("IOObjectClass") == "IOPlatformExpertDevice" and "IOPlatformUUID" in node:
+            return node["IOPlatformUUID"]
+    raise InspectionError("this Mac's hardware UUID isn't in the I/O Registry")
+
+
+def gpt_disk_uuid(sysinfo, bsd_name):
+    """The GPT disk GUID IOGUIDPartitionScheme publishes as `UUID` under the
+    whole disk's IOMedia (IOStorageFamily's IOGUIDPartitionScheme.cpp)."""
+    for node in walk(sysinfo.ioservice):
+        if node.get("BSD Name") == bsd_name and node.get("Whole") is True:
+            for child in node.get("IORegistryEntryChildren", None) or []:
+                if child.get("IOObjectClass") == "IOGUIDPartitionScheme" and "UUID" in child:
+                    return c.uuid_any(child["UUID"])
+    raise InspectionError(f"{bsd_name}'s GPT identity isn't in the I/O Registry")
+
+
+def run_text(host, argv):
+    result = host.run(argv, timeout=120)
+    return result.returncode, (result.stdout or b"").decode("utf-8", "replace")
+
+
+def read_power(host):
+    """pmset -g batt: 'AC Power' or 'Battery Power', and the internal
+    battery's charge."""
+    rc, out = run_text(host, ["pmset", "-g", "batt"])
+    if rc != 0 or ("'AC Power'" not in out and "'Battery Power'" not in out and "'UPS Power'" not in out):
+        return None
+    has_battery = "InternalBattery" in out
+    percent = None
+    match = re.search(r"InternalBattery-\d+[^\n]*?\t(\d{1,3})%", out)
+    if match and int(match.group(1)) <= 100:
+        percent = int(match.group(1))
+    on_ac = "'AC Power'" in out or not has_battery
+    return {"has_battery": has_battery, "on_ac": on_ac, "battery_percent": percent}
+
+
+def read_filevault(host, data_volume):
+    rc, out = run_text(host, ["fdesetup", "status"])
+    if rc == 0:
+        if "Encryption in progress" in out or "Decryption in progress" in out:
+            return "converting"
+        if "FileVault is On" in out:
+            return "on"
+        if "FileVault is Off" in out:
+            return "off"
+    # Asahi's own model has the volume's state from `diskutil apfs list`.
+    if data_volume is not None:
+        if data_volume.get("CryptoMigrationOn") is True:
+            return "converting"
+        if data_volume.get("FileVault") is True:
+            return "on"
+        if data_volume.get("FileVault") is False:
+            return "off"
+    return "unknown"
+
+
+def parse_version(value):
+    try:
+        c.version(value)
+        return value
+    except (c.Invalid, TypeError):
+        return None
+
+
+class Inspector:
+    """One inspection: Asahi's View plus what Sekka needs on top."""
+
+    def __init__(self, asahi, host, profile, view, privileged):
+        self.a = asahi
+        self.host = host
+        self.profile = profile
+        self.view = view
+        self.privileged = privileged
+        self.issues = []
+        self.unavailable = []
+        self.notes = []
+
+    def issue(self, code, blocking, detail):
+        if code not in c.ISSUE_CODES:
+            raise ValueError(code)
+        self.issues.append({"code": code, "blocking": blocking, "detail": c.text(c.plain_text(detail, keep="start"))})
+
+    # The parts ---------------------------------------------------------------
+
+    def machine(self):
+        s = self.view.sysinfo
+        binding = c.machine_binding(platform_uuid(s))
+        return {
+            "product_type": c.text(s.product_type),
+            "device_class": c.text(s.device_class),
+            "chip_id": c.u32(s.chip_id),
+            "board_id": c.u32(s.board_id),
+            "product_name": c.text(s.product_name),
+            "soc_name": c.text(s.soc_name),
+            "system_firmware": c.text(s.sys_firmware),
+            "binding": binding,
+        }
+
+    def disk(self):
+        v = self.view
+        whole = v.dutil.disks[v.sys_disk]
+        size = v.dutil.disk_parts[v.sys_disk]["Size"]
+        partitions, containers = [], []
+        for p in v.parts:
+            if p.free:
+                continue
+            info = p.info or {}
+            kind = PARTITION_KINDS.get(p.type, "other")
+            if kind == "efi" and info.get("VolumeName"):
+                name = info["VolumeName"]
+            else:
+                name = info.get("IORegistryEntryName") or p.label or p.type or ""
+            partitions.append(
+                {
+                    "uuid": c.uuid_any(p.uuid),
+                    "kind": kind,
+                    "name": c.plain_text(name, limit=255, keep="start"),
+                    "offset": c.u64(p.offset),
+                    "size": c.u64(p.size),
+                }
+            )
+            if kind == "apfs" and p.container is not None:
+                containers.append(self.container(p))
+        doc = {
+            "device": c.text(v.sys_disk),
+            "uuid": gpt_disk_uuid(v.sysinfo, v.sys_disk),
+            "size": c.u64(size),
+            "block_size": c.u32(whole.get("DeviceBlockSize", 0)),
+            "partitions": partitions,
+            "containers": containers,
+        }
+        c.check_disk(doc)
+        return doc
+
+    def container(self, p):
+        ct = p.container
+        volumes = {vol["DeviceIdentifier"]: vol for vol in ct.get("Volumes", [])}
+        groups = []
+        for vg in ct.get("VolumeGroups", []) or []:
+            gid = c.uuid_any(vg["APFSVolumeGroupUUID"])
+            system = [x for x in vg.get("Volumes", []) if x.get("Role") == "System"]
+            data = [x for x in vg.get("Volumes", []) if x.get("Role") == "Data"]
+            name = ""
+            if system and system[0]["DeviceIdentifier"] in volumes:
+                name = volumes[system[0]["DeviceIdentifier"]].get("Name", "")
+            elif data and data[0]["DeviceIdentifier"] in volumes:
+                name = volumes[data[0]["DeviceIdentifier"]].get("Name", "").removesuffix(" - Data")
+            groups.append(
+                {
+                    "uuid": gid,
+                    "name": c.plain_text(name, limit=255, keep="start"),
+                    "system_volume": c.uuid_any(system[0]["DiskUUID"]) if len(system) == 1 else None,
+                    "data_volume": c.uuid_any(data[0]["DiskUUID"]) if len(data) == 1 else None,
+                    "os": self.group_os(p, gid),
+                }
+            )
+        resize = self.resize_limits(p) if self.holds_macos(p) else None
+        return {
+            "uuid": c.uuid_any(ct["APFSContainerUUID"]),
+            "partition": c.uuid_any(p.uuid),
+            "size": c.u64(ct["CapacityCeiling"]),
+            "free": c.u64(ct["CapacityFree"]),
+            "volume_groups": groups,
+            "resize": resize,
+            "snapshots": self.snapshots(p),
+        }
+
+    def group_os(self, p, gid):
+        for o in p.os or []:
+            if (o.vgid or "").lower() != gid:
+                continue
+            if o.stub:
+                return {"kind": "stub", "for_system": c.plain_text(o.label or "", limit=255, keep="start")}
+            version = parse_version(o.version)
+            if version:
+                return {"kind": "macos", "version": version}
+        return {"kind": "unknown"}
+
+    def holds_macos(self, p):
+        return any(o.version and not o.stub for o in (p.os or []))
+
+    def min_free(self, p):
+        """Asahi's get_min_free_space: macOS keeps 38 GB (MIN_FREE_OS) for its
+        updates, except on 128 GB education Macs."""
+        main = self.a.main
+        edu = self.view.dutil.get_disk_size(self.view.sys_disk) < 150 * 1024 * 1024 * 1024
+        if p.os and any(o.version for o in p.os) and not edu:
+            return main.MIN_FREE_OS
+        return main.MIN_FREE
+
+    def resize_limits(self, p):
+        """Asahi's action_resize arithmetic: the smallest the container may
+        become is the larger of its used space plus macOS's reserve (aligned)
+        and diskutil's preferred minimum."""
+        main, util = self.a.main, self.a.util
+        ct = p.container
+        try:
+            limits = self.view.dutil.get_resize_limits(p.name)
+            preferred = int(limits["MinimumSizePreferred"])
+        except Exception as error:
+            log.warning("resize limits for %s: %s", p.name, error)
+            self.notes.append(("resize-limits", p.uuid))
+            return None
+        total, free = ct["CapacityCeiling"], ct["CapacityFree"]
+        min_size_raw = util.align_up(total - free + self.min_free(p), main.PART_ALIGN)
+        minimum = max(min_size_raw, preferred)
+        return {"minimum": c.u64(minimum), "recommended": c.u64(max(minimum, preferred))}
+
+    def snapshots(self, p):
+        """Local snapshots that can stop a shrink: every snapshot on a
+        container's volumes except a System volume's own sealed one, which
+        diskutil marks as not limiting."""
+        count = 0
+        for vol in p.container.get("Volumes", []):
+            roles = vol.get("Roles") or []
+            try:
+                listing = self.view.dutil.get("apfs", "listSnapshots", vol["DeviceIdentifier"], "-plist")
+            except Exception:
+                if "Data" in roles and self.holds_macos(p):
+                    self.notes.append(("snapshots", vol["DeviceIdentifier"]))
+                continue
+            for snap in listing.get("Snapshots", []) or []:
+                if "System" in roles and snap.get("LimitingContainerShrink") is not True:
+                    continue
+                count += 1
+        return c.u32(count)
+
+    # Recognizing installations ----------------------------------------------
+
+    def read_mounted(self, mountpoint, *path):
+        if not mountpoint:
+            return None
+        full = os.path.join(mountpoint, *path)
+        try:
+            with open(full, "rb") as f:
+                return f.read(c.LIMIT_RECOVERY + 1)
+        except OSError:
+            return None
+
+    def esp_mount(self, part):
+        try:
+            return self.view.dutil.mount(part.name)
+        except Exception as error:
+            log.info("couldn't mount %s to look at it: %s", part.name, error)
+            return None
+
+    def installations(self, cur_os):
+        v = self.view
+        found = []
+        attached = set()
+        for i, p in enumerate(v.parts):
+            if p.free or p.type != "Apple_APFS" or p.container is None:
+                continue
+            oses = p.os or []
+            if cur_os is not None and any(o is cur_os for o in oses):
+                continue
+            if any(o.version and not o.stub for o in oses):
+                continue  # another macOS: not an installation of a second system
+            stubs = [o for o in oses if o.stub]
+            if not stubs:
+                found.append(self.empty_container(p, i))
+                for q in self.following(i):
+                    attached.add(q.uuid)
+                continue
+            for o in stubs:
+                for q in o.attached_partitions or []:
+                    attached.add(q.uuid)
+                found.append(self.stub_installation(p, o))
+        for p in v.parts:
+            if p.free or p.uuid in attached:
+                continue
+            if p.type in ("EFI", "Linux Filesystem", "Linux"):
+                found.append(self.orphan(p))
+        return [x for x in found if x is not None]
+
+    def following(self, index):
+        """The partitions OSEnum.collect would attach to a stub at `index`:
+        an ESP directly after it, then Linux partitions after that."""
+        parts = self.view.parts
+        if index + 1 >= len(parts) or parts[index + 1].free or parts[index + 1].type != "EFI":
+            return []
+        out = [parts[index + 1]]
+        for q in parts[index + 2 : min(len(parts), index + 5)]:
+            if not q.free and q.type == "Linux Filesystem":
+                out.append(q)
+        return out
+
+    def empty_container(self, p, index):
+        """An APFS container that holds no system: an interrupted stub, or
+        something else. Nothing is assumed about it."""
+        label = p.label or ""
+        vols = p.container.get("Volumes", [])
+        nxt = self.view.parts[index + 1] if index + 1 < len(self.view.parts) else None
+        esp = c.uuid_any(nxt.uuid) if nxt is not None and not nxt.free and nxt.type == "EFI" else None
+        if label == c.VOLUME_NAME and len(vols) <= 4:
+            self.issue(
+                "partial-installation",
+                True,
+                f"The APFS container {p.name} is named {label} but holds no system: an earlier "
+                "installation may have stopped part way. The installer won't change it; remove it "
+                "in Disk Utility, or ask for help, before installing again.",
+            )
+        else:
+            self.issue(
+                "unrecognized-layout",
+                False,
+                f"The APFS container {p.name} ({label or 'unnamed'}) holds no system the installer "
+                "recognizes. It will be left as it is.",
+            )
+        return {
+            "kind": "unknown",
+            "name": c.plain_text(label or p.name, limit=255, keep="start"),
+            "state": "partial",
+            "stub_group": None,
+            "esp": esp,
+            "root": None,
+            "installation_id": None,
+        }
+
+    def stub_installation(self, p, o):
+        esp_part = None
+        root_part = None
+        for q in o.attached_partitions or []:
+            if q.type == "EFI" and esp_part is None:
+                esp_part = q
+            elif q.type in ("Linux Filesystem", "Linux") and root_part is None:
+                root_part = q
+        config = handoff = None
+        raw = self.read_mounted(o.system, c.RECOVERY_DATA_DIR, c.RECOVERY_CONFIG_FILE)
+        if raw is not None:
+            try:
+                config = c.parse_recovery_config(raw)
+            except (c.Invalid, canonical.CanonicalError, KeyError, TypeError) as error:
+                log.info("%s: unreadable Sekka Recovery configuration: %s", o.label, error)
+                config = False
+        esp_mount = self.esp_mount(esp_part) if esp_part is not None else None
+        raw = self.read_mounted(esp_mount, c.HANDOFF_PATH)
+        if raw is not None:
+            try:
+                handoff = c.parse_handoff(raw)
+            except (c.Invalid, canonical.CanonicalError, KeyError, TypeError) as error:
+                log.info("%s: unreadable Sekka handoff: %s", o.label, error)
+                handoff = False
+        name = c.plain_text(o.label or p.label or p.name, limit=255, keep="start")
+        stub_group = c.uuid_any(o.vgid)
+        esp = c.uuid_any(esp_part.uuid) if esp_part is not None else None
+        root = c.uuid_any(root_part.uuid) if root_part is not None else None
+        bp_known = o.bp is not None
+        enrolled = bool(o.bp and o.bp.get("coih"))
+        if config is not None or handoff is not None:
+            ids = set()
+            consistent = config is not False and handoff is not False
+            if config:
+                ids.add(config["installation"])
+                consistent &= config["esp"] == esp and config["root"] == root
+            if handoff:
+                ids.add(handoff["installation"])
+                consistent &= handoff["esp"] == esp and handoff["root"] == root
+            consistent &= len(ids) == 1
+            present = (
+                bool(config)
+                and bool(handoff)
+                and esp is not None
+                and root is not None
+                and os.path.isdir(os.path.join(o.system, RECOVERY_APP))
+                and os.path.isfile(os.path.join(o.system, c.RECOVERY_DATA_DIR, "boot.bin"))
+            )
+            if not consistent:
+                state = "unknown"
+            elif not present:
+                state = "partial"
+            elif not bp_known:
+                state = "unknown"
+            else:
+                state = "complete" if enrolled else "waiting-for-recovery"
+            if state == "partial":
+                self.issue(
+                    "partial-installation",
+                    True,
+                    f"Sekka's installation on {name} is incomplete: some of its parts are missing. "
+                    "The installer won't repair or remove it yet; nothing will be changed.",
+                )
+            else:
+                self.issue(
+                    "existing-sekka",
+                    True,
+                    f"Sekka is already installed on this Mac ({name}). A second installation isn't "
+                    "offered yet, and the installer won't change the existing one.",
+                )
+            return {
+                "kind": "sekka",
+                "name": name,
+                "state": state,
+                "stub_group": stub_group,
+                "esp": esp,
+                "root": root,
+                "installation_id": next(iter(ids)) if len(ids) == 1 else None,
+            }
+        asahi_markers = bool(o.m1n1_ver) or os.path.isdir(os.path.join(o.system or "", ASAHI_STEP2_APP))
+        if not asahi_markers and esp_mount:
+            asahi_markers = os.path.isdir(os.path.join(esp_mount, "asahi"))
+        if asahi_markers:
+            if not bp_known:
+                state = "unknown"
+            elif enrolled:
+                state = "complete"
+            elif os.path.isdir(os.path.join(o.system or "", ASAHI_STEP2_APP)):
+                state = "waiting-for-recovery"
+            else:
+                state = "partial"
+            kind = "other-linux"
+        else:
+            kind, state = "unknown", "unknown"
+            self.issue(
+                "unrecognized-layout",
+                False,
+                f"{name} is a startup volume for another system the installer doesn't recognize. "
+                "It will be left as it is.",
+            )
+        return {
+            "kind": kind,
+            "name": name,
+            "state": state,
+            "stub_group": stub_group,
+            "esp": esp,
+            "root": root,
+            "installation_id": None,
+        }
+
+    def orphan(self, p):
+        """An EFI or Linux partition that no startup volume claims."""
+        handoff = None
+        if p.type == "EFI":
+            raw = self.read_mounted(self.esp_mount(p), c.HANDOFF_PATH)
+            if raw is not None:
+                try:
+                    handoff = c.parse_handoff(raw)
+                except (c.Invalid, canonical.CanonicalError, KeyError, TypeError):
+                    handoff = None
+        is_efi = p.type == "EFI"
+        if handoff:
+            self.issue(
+                "partial-installation",
+                True,
+                f"{p.name} holds Sekka's boot files but no startup volume goes with it: an "
+                "installation was interrupted or partly removed. Nothing will be changed.",
+            )
+        else:
+            self.issue(
+                "unrecognized-layout",
+                False,
+                f"{p.name} ({p.type}) belongs to no system the installer recognizes. It will be "
+                "left as it is.",
+            )
+        return {
+            "kind": "sekka" if handoff else "unknown",
+            "name": c.plain_text((p.info or {}).get("VolumeName") or p.name, limit=255, keep="start"),
+            "state": "partial",
+            "stub_group": None,
+            "esp": c.uuid_any(p.uuid) if is_efi else None,
+            "root": None if is_efi else c.uuid_any(p.uuid),
+            "installation_id": handoff["installation"] if handoff else None,
+        }
+
+    # Candidates --------------------------------------------------------------
+
+    def candidates(self, containers):
+        v = self.view
+        main = self.a.main
+        found = []
+        for p in v.parts:
+            if p.free and p.size >= main.STUB_SIZE:
+                found.append({"kind": "free-space", "extent": {"offset": p.offset, "size": p.size}})
+        by_partition = {k["partition"]: k for k in containers}
+        for i, p in enumerate(v.parts):
+            if p.free or p.type != "Apple_APFS" or p.container is None or not self.holds_macos(p):
+                continue
+            k = by_partition.get(c.uuid_any(p.uuid))
+            if k is None or k["resize"] is None:
+                continue
+            # Asahi's can_resize: free space beyond macOS's reserve and 500 MB.
+            if p.container["CapacityFree"] <= self.min_free(p) + self.a.util.psize("500MB"):
+                continue
+            available = k["size"] - k["resize"]["minimum"]
+            if available < 2 * main.PART_ALIGN:
+                continue
+            nxt = v.parts[i + 1] if i + 1 < len(v.parts) else None
+            adjacent = nxt.size if nxt is not None and nxt.free and nxt.offset == p.offset + p.size else 0
+            found.append(
+                {
+                    "kind": "shrink-container",
+                    "container": k["uuid"],
+                    "partition": k["partition"],
+                    "current_size": k["size"],
+                    "available": available,
+                    "available_recommended": k["size"] - k["resize"]["recommended"],
+                    "adjacent_free": adjacent,
+                }
+            )
+        found.sort(key=c.candidate_capacity, reverse=True)
+        return found
+
+    # Checks ------------------------------------------------------------------
+
+    def machine_issues(self, machine, macos_version):
+        s = self.view.sysinfo
+        main = self.a.main
+        facts = {
+            "product_type": machine["product_type"],
+            "device_class": machine["device_class"],
+            "chip_id": machine["chip_id"],
+            "system_firmware": machine["system_firmware"],
+            "macos": macos_version,
+        }
+        refusals, acks = c.admit(self.profile, facts)
+        self.admission = (refusals, acks)
+        if main.DEVICES.get(s.device_class) is None or main.CHIP_MIN_VER.get(s.chip_id) is None:
+            self.issue(
+                "unsupported-machine",
+                True,
+                f"Asahi's installer doesn't support this Mac ({s.product_type}, {s.device_class}).",
+            )
+        for kind, details in refusals + acks:
+            blocking = (kind, details) in refusals
+            if kind in ("unknown-machine", "chip-mismatch"):
+                self.issue(
+                    "unsupported-machine",
+                    True,
+                    f"This release is built for the {self.profile['name']} only. This Mac is a "
+                    f"{s.product_name} ({s.product_type}, {s.device_class}, chip {s.chip_id:#x}).",
+                )
+            elif kind == "untested-system-firmware":
+                self.issue(
+                    "untested-firmware",
+                    blocking,
+                    f"This Mac's system firmware is {details['found']}; Sekka's boot software has "
+                    f"been tested on {', '.join(details['tested'])} only.",
+                )
+            elif kind == "macos-too-old":
+                self.issue(
+                    "macos-too-old",
+                    True,
+                    f"macOS {details['found']} is too old; update to macOS {details['minimum']} or later.",
+                )
+            elif kind == "known-issue":
+                self.issue("known-macos-issue", blocking, f"{details['summary']} ({details['reference']})")
+        if c.version_parts(macos_version) < c.version_parts(main.MIN_MACOS_VERSION):
+            self.issue(
+                "macos-too-old",
+                True,
+                f"Asahi's installer needs macOS {main.MIN_MACOS_VERSION} or later; this Mac runs {macos_version}.",
+            )
+        holder = type("Main", (), {"sysinfo": s})()
+        try:
+            self.a.bugs.run_checks(holder)
+        except SystemExit:
+            self.issue(
+                "known-macos-issue",
+                True,
+                "Asahi's installer refuses this combination of a ProMotion display and macOS or system "
+                "firmware older than 14.2: it can leave the Mac unable to start. Update macOS first.",
+            )
+
+    def boot_issues(self, cur_os):
+        s = self.view.sysinfo
+        if cur_os is None:
+            self.issue(
+                "not-normal-boot",
+                True,
+                "The installer couldn't find the macOS it is running from on the internal disk. "
+                "Start up from the internal disk's macOS and try again.",
+            )
+            return False
+        if s.boot_mode == "macOS":
+            return True
+        if s.boot_mode == "Unknown" and not self.privileged:
+            # bputil needs root; the booted volume group is the running macOS.
+            self.unavailable.append("boot policy (bputil needs administrator rights)")
+            return True
+        self.issue(
+            "not-normal-boot",
+            True,
+            f"This Mac is running {s.boot_mode}, not its normal macOS. Start up from the internal "
+            "disk's macOS and try again.",
+        )
+        return False
+
+    def power_issues(self, power):
+        if power is None:
+            self.issue("on-battery", True, "The installer couldn't tell whether this Mac is on its charger. Connect it.")
+            return {"has_battery": True, "on_ac": False, "battery_percent": None}
+        if power["has_battery"] and not power["on_ac"]:
+            self.issue("on-battery", True, "Connect this Mac to its charger: installing mustn't run on battery.")
+        pct = power["battery_percent"]
+        if power["has_battery"] and pct is not None and pct < 20:
+            self.issue("battery-low", False, f"The battery is at {pct}%. Let it charge a little before installing.")
+        return power
+
+    def disk_issues(self, doc, candidates):
+        v = self.view
+        internal = 0
+        for name, dsk in v.dutil.disks.items():
+            try:
+                if dsk.get("VirtualOrPhysical") == "Virtual" or not dsk.get("Internal"):
+                    continue
+                if v.dutil.disk_parts[name]["Partitions"][0]["Content"] == "Apple_APFS_ISC":
+                    internal += 1
+            except (KeyError, IndexError):
+                continue
+        if internal != 1:
+            self.issue(
+                "ambiguous-disk",
+                True,
+                f"The installer found {internal} internal disks with Apple's system container; it "
+                "installs only where there is exactly one.",
+            )
+        if not any(c.candidate_capacity(k) > self.a.main.MIN_INSTALL_FREE for k in candidates):
+            self.issue(
+                "not-enough-space",
+                True,
+                "There is neither enough free space nor a macOS container that can shrink far enough "
+                "for Sekka.",
+            )
+        for k in doc["containers"]:
+            if self.holds_macos(v.partition(k["partition"])):
+                if k["resize"] is None:
+                    self.issue(
+                        "resize-limits-unavailable",
+                        False,
+                        "diskutil couldn't say how far the macOS container can shrink, so shrinking "
+                        "isn't offered.",
+                    )
+                if k["snapshots"]:
+                    self.issue(
+                        "local-snapshots",
+                        False,
+                        f"macOS keeps {k['snapshots']} local snapshot(s), which can stop Apple's resize. "
+                        "The installer never deletes them; Time Machine's can be removed in its settings.",
+                    )
+        if any(kind == "snapshots" for kind, _ in self.notes):
+            self.issue(
+                "local-snapshots",
+                False,
+                "The installer couldn't list the macOS volume's snapshots; if a resize fails, local "
+                "Time Machine snapshots are a known cause.",
+            )
+
+    # The whole ------------------------------------------------------------------
+
+    def build(self):
+        v = self.view
+        s = v.sysinfo
+        machine = self.machine()
+        cur_os = v.current_os()
+        macos_version = parse_version(s.macos_ver)
+        sfr_version = parse_version(s.sfr_ver)
+        if macos_version is None or not s.macos_build:
+            raise InspectionError("macOS's version couldn't be read")
+        if sfr_version is None:
+            raise InspectionError("the system firmware's macOS version (SFR) couldn't be read")
+        if cur_os is not None and cur_os.partition is not None:
+            if cur_os.partition.name.rsplit("s", 1)[0] != v.sys_disk:
+                cur_os = None
+        self.machine_issues(machine, macos_version)
+        normal = self.boot_issues(cur_os)
+        data_volume = None
+        if cur_os is not None:
+            for vol in cur_os.partition.container.get("Volumes", []):
+                if vol.get("Roles") == ["Data"] and vol.get("DeviceIdentifier") == cur_os.data_volume:
+                    data_volume = vol
+        disk = self.disk()
+        candidates = self.candidates(disk["containers"])
+        installations = self.installations(cur_os)
+        power = self.power_issues(read_power(self.host))
+        filevault = read_filevault(self.host, data_volume)
+        if filevault == "converting":
+            self.issue(
+                "file-vault-converting",
+                True,
+                "FileVault is turning on or off. Wait until it finishes; resizing waits for it.",
+            )
+        elif filevault == "unknown":
+            self.unavailable.append("FileVault status")
+        self.disk_issues(disk, candidates)
+        if self.view.read_only:
+            self.view.close()
+        doc = {
+            "schema": c.INSPECTION_SCHEMA,
+            "machine": machine,
+            "macos": {
+                "version": macos_version,
+                "build": c.text(s.macos_build),
+                "system_firmware_version": sfr_version,
+                "volume_group": c.uuid_any(cur_os.vgid) if cur_os is not None else c.uuid_any(s.boot_uuid),
+                "internal_boot": bool(normal and cur_os is not None),
+            },
+            "power": power,
+            "filevault": filevault,
+            "disk": disk,
+            "layout_digest": c.layout_digest(disk),
+            "candidates": candidates,
+            "installations": installations,
+            "issues": self.issues,
+        }
+        c.check_inspection(doc)
+        if len(canonical.dumps(doc)) > c.LIMIT_INSPECTION:
+            raise InspectionError("the inspection is larger than the contract allows")
+        self.cur_os = cur_os
+        return doc
+
+
+def inspect_mac(asahi, host, profile, privileged):
+    """Inspect with Asahi's model. Returns (inspection, inspector)."""
+    from .asahi import View
+
+    view = View(asahi, read_only=not privileged)
+    try:
+        inspector = Inspector(asahi, host, profile, view, privileged)
+        doc = inspector.build()
+    finally:
+        if not privileged:
+            view.close()
+    return doc, inspector

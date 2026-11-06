@@ -1,0 +1,42 @@
+{
+  "boot_object": {
+    "digest": "sha256:5f4e9675c623da79ccea8ba7b5298772abbdaed012a469dd78fd07134b900ba4",
+    "path": "boot.bin",
+    "size": 1147016
+  },
+  "esp": "da711448-96c8-4a19-a4b2-d2bc815a47c5",
+  "firmware": [
+    {
+      "digest": "sha256:6cdcf8e29aa07b9559f0c827c7bbcfe624a07c2e9b5e9726b7cefeaad75a6bec",
+      "path": "firmware/firmware.cpio",
+      "size": 8956
+    },
+    {
+      "digest": "sha256:2347a0540b2981da5e60375ce1497c05885fa61f72abe18d09bac704d07c5fb8",
+      "path": "firmware/firmware.tar",
+      "size": 20480
+    },
+    {
+      "digest": "sha256:0d3aca6f9436e7087045a041b50dd27b6d475c2e1524652f98db1da486e4818a",
+      "path": "firmware/manifest.txt",
+      "size": 665
+    }
+  ],
+  "installation": "1f7d9c62-4a1b-4c8e-9d3f-2b6a8e0c5d47",
+  "os_firmware": "14.8.3",
+  "owner": {
+    "full_name": "Chris Allen",
+    "macos_volume_group": "f3c64af7-75a8-4294-82cd-789a380208a9",
+    "short_name": "callen"
+  },
+  "release": "sekka-j514s-4882dc33",
+  "root": "be6521cc-3e24-44e3-baf0-27bc08d6af57",
+  "schema": "sekka.mac.recovery/1",
+  "stub": {
+    "container": "803468b6-b610-49f7-b927-0f4eb8b333a8",
+    "data_volume": "81f9c1f6-6c0f-4459-b79b-17aeefba91fc",
+    "system_volume": "3099fdf5-ab99-454a-a901-e35cd47d380d",
+    "volume_group": "81f9c1f6-6c0f-4459-b79b-17aeefba91fc"
+  },
+  "volume_name": "Sekka"
+}

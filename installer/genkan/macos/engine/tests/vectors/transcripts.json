@@ -1,0 +1,36 @@
+{
+  "execute-free-space.jsonl": {
+    "mode": "execute",
+    "outcome": "WaitingForRecovery",
+    "plan": "sha256:6e22fd2d9797c976f831f8ccdd4acc948bfb27322abd8cdcc7059797cc54dbc5",
+    "shrinks": false
+  },
+  "execute-happy.jsonl": {
+    "mode": "execute",
+    "outcome": "WaitingForRecovery",
+    "plan": "sha256:52b200d1650fae2f5370b8a39107fd0af35e04094c582fd6814516e173a9ba49",
+    "shrinks": true
+  },
+  "execute-layout-changed.jsonl": {
+    "mode": "execute",
+    "outcome": "Failed",
+    "plan": "sha256:52b200d1650fae2f5370b8a39107fd0af35e04094c582fd6814516e173a9ba49",
+    "shrinks": true
+  },
+  "execute-resize-69606.jsonl": {
+    "mode": "execute",
+    "outcome": "Failed",
+    "plan": "sha256:52b200d1650fae2f5370b8a39107fd0af35e04094c582fd6814516e173a9ba49",
+    "shrinks": true
+  },
+  "execute-root-read-back.jsonl": {
+    "mode": "execute",
+    "outcome": "Failed",
+    "plan": "sha256:52b200d1650fae2f5370b8a39107fd0af35e04094c582fd6814516e173a9ba49",
+    "shrinks": true
+  },
+  "inspect-j514s-clean.jsonl": {
+    "mode": "inspect",
+    "outcome": "Inspected"
+  }
+}
