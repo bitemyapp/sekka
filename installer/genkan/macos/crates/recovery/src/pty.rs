@@ -82,6 +82,20 @@ pub fn redact(output: &str, password: &str) -> String {
 /// How long a command may take before it is stopped.
 pub const TIMEOUT: Duration = Duration::from_secs(600);
 
+/// Once the output since the last answer passes 4 KB, keep its last 2 KB:
+/// more than any prompt. The cut is moved forward to where a character
+/// starts, as output that isn't ASCII (or a character split between two
+/// reads, which arrives as U+FFFD) can put a character across it.
+fn keep_tail(pending: &mut String) {
+    if pending.len() > 4096 {
+        let mut cut = pending.len() - 2048;
+        while !pending.is_char_boundary(cut) {
+            cut += 1;
+        }
+        pending.drain(..cut);
+    }
+}
+
 /// Run `program` with `args` under a pseudo-terminal, answering its user,
 /// password and (only for `kmutil configure-boot`) confirmation prompts
 /// once each. `log` receives redacted output as it arrives.
@@ -237,9 +251,7 @@ pub fn run(
             continue;
         }
         pending.push_str(&String::from_utf8_lossy(bytes));
-        if pending.len() > 4096 {
-            pending = pending[pending.len() - 2048..].to_string();
-        }
+        keep_tail(&mut pending);
         match prompt(&pending) {
             Some(Prompt::Confirm) => {
                 if !confirm || confirm_sent {
@@ -321,6 +333,27 @@ mod tests {
         assert!(rejected("bputil: failed to set credential: Password rejected"));
     }
 
+    #[test]
+    fn long_output_is_trimmed_where_a_character_starts() {
+        // Two-byte characters, then three-byte ones (U+FFFD, what a
+        // character split between reads becomes), then the prompt: the cut
+        // falls on a character's start, in its middle, or one byte later.
+        let mut inside = 0;
+        for replaced in [0, 700] {
+            for pad in 0..3 {
+                let mut pending = "é".repeat(2100) + &"\u{fffd}".repeat(replaced) + "Password: " + &" ".repeat(pad);
+                inside += usize::from(!pending.is_char_boundary(pending.len() - 2048));
+                keep_tail(&mut pending);
+                assert!((2046..=2048).contains(&pending.len()), "{}", pending.len());
+                assert_eq!(prompt(&pending), Some(Prompt::Password));
+            }
+        }
+        assert_eq!(inside, 3, "half of these cut a character");
+        let mut short = "é".repeat(100);
+        keep_tail(&mut short);
+        assert_eq!(short, "é".repeat(100));
+    }
+
     /// The test environment's own `stty`, by absolute path: the commands run
     /// with a fixed PATH that a build sandbox doesn't populate.
     fn stty() -> String {
@@ -397,6 +430,25 @@ mod tests {
             run(SH, &[&again], "owner", "wrong", false, Duration::from_secs(10), &mut |_| {}),
             Err(AuthError::PasswordRejected)
         );
+    }
+
+    #[test]
+    fn a_tool_that_says_a_lot_that_isnt_ascii_is_followed_to_its_prompt() {
+        if !sh() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        // More than 4 KB with no prompt, in characters of two bytes each
+        // and one of one, so that some cut falls inside a character.
+        let tool = script(
+            dir.path(),
+            "i=0; while [ $i -lt 3000 ]; do printf 'é'; i=$((i+1)); done; printf x; \
+             i=0; while [ $i -lt 3000 ]; do printf 'é'; i=$((i+1)); done; echo; \
+             printf 'Authorized user: '; read u; [ \"$u\" = owner ] && echo done && exit 0; exit 9\n",
+        );
+        let mut log = String::new();
+        run(SH, &[&tool], "owner", "pw", false, Duration::from_secs(10), &mut |s| log.push_str(s)).unwrap();
+        assert!(log.contains("done"));
     }
 
     #[test]
