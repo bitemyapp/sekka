@@ -173,7 +173,7 @@ a mouse button.
 
 See what's installed and why, find software, check for updates, return to an earlier generation, and free up store space. Everyday changes do not require editing Nix configuration by hand.
 
-History shows, beside each older generation, the disk space deleting it would give back: only what nothing else keeps, since most of a generation is shared with the others and the running system. You can delete one from there; the running one, the one the computer started with and the one selected for the next start stay. The space comes back when garbage is collected, which Yukimi can do right away. The figure is an estimate: on Btrfs with compression less may come back, and a program started from those files before the collection keeps them.
+History shows, beside each older generation, the disk space deleting it would give back: only what nothing else keeps, since most of a generation is shared with the others and the running system. You can delete one from there, or tick any several, next to each other or not, and delete them together; the running one, the one the computer started with and the one selected for the next start stay. Ticked together, they show what deleting all of them frees, which can be more than their figures added up: generations next to each other share what a later update replaced. The space comes back when garbage is collected, which Yukimi can do right away. The figure is an estimate: on Btrfs with compression less may come back, and a program started from those files before the collection keeps them.
 
 Every desktop uses Aizome's native Yukimi. It opens directly on Wayland and
 inside a nested Wayland window on X11. Commands use Ctrl in Tatami and the

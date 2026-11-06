@@ -22,7 +22,7 @@ use yukimi_system::setup::{Choice, ChoiceOption, ChoiceValue, Facts, Kind, Setup
 use yukimi_system::updates::Release;
 
 use crate::checks::{self, UpdateCheck};
-use crate::model::{CLEAN_UP_DAYS, Composition, Configured, Freeable, Heavy, Model, Store, SystemPackage};
+use crate::model::{Composition, Configured, Freeable, Heavy, Model, Pricing, Store, SystemPackage};
 
 /// The sample's "now": Saturday 17 October 2026, 21:42 UTC.
 pub const NOW: i64 = 1_792_273_320;
@@ -373,20 +373,18 @@ pub fn store(generations: &[Generation], graph: Graph) -> Store {
     }
 }
 
-/// What deleting each older generation gives back on disk, and what
-/// cleaning up does: 27 alone had the older office suite, 24 a kernel.
+/// What deleting each older generation alone gives back on disk (made up),
+/// and what only all four keep: what 28 updated (`BEFORE`), which only
+/// deleting every one of them frees.
 pub fn freeable(generations: &[Generation]) -> Freeable {
-    let generations_freed = [(24, 1_930 * MB), (25, 412 * MB), (26, 96 * MB), (27, 2_640 * MB)];
-    let each: BTreeMap<u32, u64> = generations_freed.into_iter().collect();
-    let older = CLEAN_UP_DAYS
-        .iter()
-        .map(|&days| {
-            let numbers = yukimi_system::generations::older_than(generations, NOW - i64::from(days) * DAY);
-            let bytes = numbers.iter().filter_map(|n| each.get(n)).sum();
-            (days, numbers, bytes)
-        })
-        .collect();
-    Freeable { garbage: 13_400 * MB, generations: each, older }
+    let listed = vec![
+        (vec![24], 1_930 * MB),
+        (vec![25], 412 * MB),
+        (vec![26], 96 * MB),
+        (vec![27], 2_640 * MB),
+        (vec![24, 25, 26, 27], 1_870 * MB),
+    ];
+    Freeable::priced(13_400 * MB, Pricing::Listed(listed), generations, NOW)
 }
 
 /// Sekka's choices, as the sample system declares them: three desktops,

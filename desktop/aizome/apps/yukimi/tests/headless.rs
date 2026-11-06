@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 use aizome_kit::WindowKey;
 use aizome_kit::layout::{Point, Vec2};
+use aizome_kit::sidestep_ui::Modifiers;
 use aizome_kit::testing::Harness;
 use aizome_yukimi::app::{Changes, Clock, Launch, Msg, Page, Runner, Source, Yukimi, launch_from_args};
 use aizome_yukimi::job::Outcome;
@@ -424,6 +425,65 @@ fn the_generations_in_use_cant_be_deleted() {
     assert!(!has(&h, w, "Delete generation 28?"));
     assert!(h.program().notes.iter().any(|(_, n)| n.contains("in use")));
     assert!(ran.lock().unwrap().is_empty());
+}
+
+#[test]
+fn generations_selected_together_are_priced_and_deleted_together() {
+    let (mut h, w, ran) = sample(WORKS);
+    h.send(Msg::Show(Page::History));
+    let tick = |h: &Harness<Yukimi>, n: u32| h.find_id(w, &format!("tick-{n}")).expect("a box").center();
+    // The running generation can't be selected, or deleted from a stale
+    // selection.
+    assert!(h.find_id(w, "tick-28").is_none());
+    h.send(Msg::Tick { number: 28, on: true, run: false });
+    assert!(h.program().ticked.numbers.is_empty());
+    // Selecting one doesn't open it.
+    h.click(w, tick(&h, 24));
+    assert!(!h.program().opened.contains(&24));
+    assert!(has(&h, w, "1 selected · frees about 1.9 GB"), "{:?}", h.texts(w));
+    // Shift-click: every one from the last clicked.
+    h.click_with(w, tick(&h, 26), Modifiers::SHIFT);
+    assert_eq!(h.program().ticked.numbers.iter().copied().collect::<Vec<_>>(), [24, 25, 26]);
+    // Nothing only 24 to 26 have: what each frees alone, added up.
+    settle(&mut h, |a| a.ticked.priced().is_some());
+    assert!(has(&h, w, "3 selected · frees about 2.4 GB"), "{:?}", h.texts(w));
+    // With 27, what all four kept goes too: more than one at a time frees.
+    assert!(h.click_text(w, "Select All"));
+    settle(&mut h, |a| a.ticked.priced().is_some());
+    assert!(has(&h, w, "4 selected · frees about 6.9 GB"), "{:?}", h.texts(w));
+    assert!(!has(&h, w, "Select All"));
+    assert!(h.click_text(w, "Delete…"));
+    assert!(has(&h, w, "Delete generations 24–27?"), "{:?}", h.texts(w));
+    assert!(h.texts(w).iter().any(|t| t.contains("Deleting them frees about 6.9 GB")
+        && t.contains("nothing older to go back to")
+        && t.contains("13 GB that nothing needs")));
+    assert!(click_last(&mut h, w, "Delete and Clean Up"));
+    assert_eq!(
+        ran.lock().unwrap().as_slice(),
+        [Operation::Delete { generations: vec![24, 25, 26, 27], collect: true }]
+    );
+    settle(&mut h, |a| a.job.as_ref().is_some_and(|j| j.outcome.is_some()));
+}
+
+#[test]
+fn unselecting_runs_and_selecting_none() {
+    let (mut h, w, _) = sample(WORKS);
+    h.send(Msg::Show(Page::History));
+    h.send(Msg::TickAll(true));
+    // Shift-unticking from 27 to 25 leaves 24.
+    h.send(Msg::Tick { number: 27, on: false, run: false });
+    h.send(Msg::Tick { number: 25, on: false, run: true });
+    assert_eq!(h.program().ticked.numbers.iter().copied().collect::<Vec<_>>(), [24]);
+    assert!(has(&h, w, "1 selected · frees about 1.9 GB"));
+    // Only some are selected, so there's one prompt for those, without
+    // the warning about what's left.
+    h.send(Msg::DeleteTicked);
+    assert!(has(&h, w, "Delete generation 24?"));
+    assert!(!h.texts(w).iter().any(|t| t.contains("nothing older")));
+    assert!(click_last(&mut h, w, "Cancel"));
+    assert!(h.click_text(w, "Select None"));
+    assert!(h.program().ticked.numbers.is_empty());
+    assert!(has(&h, w, "5 generations") && !has(&h, w, "Delete…"));
 }
 
 #[test]

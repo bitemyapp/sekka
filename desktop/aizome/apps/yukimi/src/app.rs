@@ -149,6 +149,34 @@ pub enum Changes {
     },
 }
 
+/// Generations ticked in History, to delete together.
+#[derive(Debug, Default)]
+pub struct Ticked {
+    /// The generations ticked.
+    pub numbers: BTreeSet<u32>,
+    /// The one last ticked or unticked, where a Shift-click's run starts.
+    anchor: Option<u32>,
+    /// What deleting them together gives back besides the garbage, and
+    /// for which generations, once priced.
+    priced: Option<(Vec<u32>, u64)>,
+    /// The latest pricing asked for; an earlier one's answer is dropped.
+    asked: u64,
+}
+
+impl Ticked {
+    /// What deleting `numbers` together gives back besides the garbage,
+    /// if they are what was priced.
+    pub fn frees(&self, numbers: &[u32]) -> Option<u64> {
+        self.priced.as_ref().filter(|(priced, _)| priced == numbers).map(|&(_, bytes)| bytes)
+    }
+
+    /// What deleting the ticked generations gives back, once priced.
+    pub fn priced(&self) -> Option<u64> {
+        let numbers: Vec<u32> = self.numbers.iter().copied().collect();
+        self.frees(&numbers)
+    }
+}
+
 /// Choosing another branch for an input to follow.
 pub struct BranchChooser {
     pub sheet: WindowKey,
@@ -289,6 +317,24 @@ pub enum Msg {
     ReturnTo(u32),
     /// Ask before deleting a generation.
     Delete(u32),
+    /// Tick or untick a generation to delete with others; with Shift
+    /// (`run`), every one from the last ticked or unticked.
+    Tick {
+        number: u32,
+        on: bool,
+        run: bool,
+    },
+    /// Tick every generation that may be deleted, or none.
+    TickAll(bool),
+    /// Ask before deleting the ticked generations.
+    DeleteTicked,
+    /// What deleting the ticked generations together gives back, for the
+    /// pricing asked for `asked`.
+    Priced {
+        asked: u64,
+        numbers: Vec<u32>,
+        bytes: u64,
+    },
 
     // Storage.
     Older(usize),
@@ -382,6 +428,8 @@ pub struct Yukimi {
 
     pub opened: BTreeSet<u32>,
     pub changes: HashMap<u32, Changes>,
+    /// Generations ticked to delete together.
+    pub ticked: Ticked,
 
     /// Delete generations older than: a week, a month, three months, or
     /// keep them all.
@@ -463,6 +511,7 @@ impl Yukimi {
             show_all: false,
             opened: BTreeSet::new(),
             changes: HashMap::new(),
+            ticked: Ticked::default(),
             older: 1,
             roots_open: false,
             branch: None,
@@ -556,6 +605,11 @@ impl Yukimi {
         // What has been applied is no longer a change.
         let configured = self.model.configured.choices.clone();
         self.draft.retain(|setting, values| configured.get(setting) != Some(values));
+        // Deleted, or now in use, they are no longer ticked.
+        let deletable: BTreeSet<u32> = self.deletable().collect();
+        self.ticked.numbers.retain(|n| deletable.contains(n));
+        self.ticked.anchor = self.ticked.anchor.filter(|n| deletable.contains(n));
+        self.price_ticked(cx);
         let draft = &self.draft;
         self.moved.retain(|setting| draft.contains_key(setting));
         if let Some(launch) = self.launch.take() {
@@ -586,7 +640,8 @@ impl Yukimi {
             let (store, problems) = Store::load(&generations);
             let store = Arc::new(store);
             tx.send(Msg::StoreRead { epoch, store: store.clone(), problems });
-            let freeable = measure.then(|| Arc::new(Freeable::measure(&store, &generations, yukimi_system::now())));
+            let freeable =
+                measure.then(|| Arc::new(Freeable::measure(store.clone(), &generations, yukimi_system::now())));
             Msg::Measured { epoch, freeable }
         });
     }
@@ -796,40 +851,114 @@ impl Yukimi {
         cx.alert(self.window, alert);
     }
 
-    /// Ask before deleting a generation: what it gives back and when, and
+    /// Ask before deleting generations: what they give back and when, and
     /// whether to collect garbage now to get it.
-    fn ask_delete(&mut self, number: u32, cx: &mut Cx<Msg>) {
-        let Some(generation) = self.model.generations.iter().find(|g| g.number == number) else { return };
-        if !generation.deletable() {
-            self.note(format!("Generation {number} is in use, so it stays"), cx);
+    fn ask_delete(&mut self, numbers: Vec<u32>, cx: &mut Cx<Msg>) {
+        let known: Vec<(u32, bool)> = numbers
+            .iter()
+            .filter_map(|n| self.model.generations.iter().find(|g| g.number == *n))
+            .map(|g| (g.number, g.deletable()))
+            .collect();
+        if known.is_empty() {
             return;
         }
-        let delete = |collect| Operation::Delete { generations: vec![number], collect };
+        let in_use: Vec<u32> = known.iter().filter(|(_, deletable)| !deletable).map(|&(n, _)| n).collect();
+        if !in_use.is_empty() {
+            let stays = if in_use.len() == 1 { "is in use, so it stays" } else { "are in use, so they stay" };
+            self.note(format!("{} {stays}", ops::capitalized(&generation_words(&in_use))), cx);
+            return;
+        }
+        let numbers: Vec<u32> = known.iter().map(|&(n, _)| n).collect();
+        let every = self.deletable().all(|n| numbers.contains(&n));
+        let delete = |collect| Operation::Delete { generations: numbers.clone(), collect };
         if let Some(why) = self.cannot_run(&delete(false)) {
             self.note(why, cx);
             return;
         }
         let freeable = self.model.freeable.as_deref();
-        let frees = match freeable.and_then(|f| f.generation(number)) {
-            Some(0) => "Deleting it frees nothing by itself: all it has is shared with other generations or kept by \
-                        something else."
+        let bytes = match numbers.as_slice() {
+            [one] => freeable.and_then(|f| f.generation(*one)),
+            _ => self.ticked.frees(&numbers),
+        };
+        let one = numbers.len() == 1;
+        let frees = match (bytes, one) {
+            (Some(0), true) => "Deleting it frees nothing by itself: all it has is shared with other generations or \
+                                kept by something else."
                 .to_owned(),
-            Some(bytes) => format!("Deleting it frees about {} once garbage is collected.", human_size(bytes)),
-            None => "What only it has goes once garbage is collected.".to_owned(),
+            (Some(0), false) => "Deleting them frees nothing by themselves: all they have is shared with other \
+                                 generations or kept by something else."
+                .to_owned(),
+            (Some(bytes), _) => format!(
+                "Deleting {} frees about {} once garbage is collected.",
+                if one { "it" } else { "them" },
+                human_size(bytes)
+            ),
+            (None, true) => "What only it has goes once garbage is collected.".to_owned(),
+            (None, false) => "What only they have goes once garbage is collected.".to_owned(),
         };
         let also = match freeable {
             Some(f) if f.garbage > 0 => format!(", with {} that nothing needs already", human_size(f.garbage)),
             _ => String::new(),
         };
+        let leave = if one { "It leaves" } else { "They leave" };
+        let last = if every { " Only what's in use stays, with nothing older to go back to." } else { "" };
         let body = format!(
-            "It leaves the boot menu, and can't be returned to. {frees} Delete and Clean Up collects it now{also}; \
-             Delete leaves it for the next clean-up. Both ask for an administrator password."
+            "{leave} the boot menu, and can't be returned to.{last} {frees} Delete and Clean Up collects it \
+             now{also}; Delete leaves it for the next clean-up. Both ask for an administrator password."
         );
-        let alert = Alert::new(format!("Delete generation {number}?"), body)
+        let alert = Alert::new(format!("Delete {}?", generation_words(&numbers)), body)
             .cancel_button("Cancel")
             .button("Delete", Msg::Run(delete(false)))
             .destructive_button("Delete and Clean Up", Msg::Run(delete(true)));
         cx.alert(self.window, alert);
+    }
+
+    /// Tick or untick `number`, or with `run` every generation from the one
+    /// last ticked or unticked to it, then price them together.
+    fn tick(&mut self, number: u32, on: bool, run: bool, cx: &mut Cx<Msg>) {
+        let (low, high) = match self.ticked.anchor {
+            Some(anchor) if run => (anchor.min(number), anchor.max(number)),
+            _ => (number, number),
+        };
+        let numbers: Vec<u32> = self.deletable().filter(|n| (low..=high).contains(n)).collect();
+        for n in numbers {
+            if on {
+                self.ticked.numbers.insert(n);
+            } else {
+                self.ticked.numbers.remove(&n);
+            }
+        }
+        self.ticked.anchor = Some(number);
+        self.price_ticked(cx);
+    }
+
+    /// The generations that may be deleted: not the running one, the one
+    /// the next start uses, or the one this computer started with.
+    pub fn deletable(&self) -> impl Iterator<Item = u32> + '_ {
+        self.model.generations.iter().filter(|g| g.deletable()).map(|g| g.number)
+    }
+
+    /// Price the ticked generations together, unless that is known: away
+    /// from the interface, since each one's closure is followed.
+    fn price_ticked(&mut self, cx: &mut Cx<Msg>) {
+        let numbers: Vec<u32> = self.ticked.numbers.iter().copied().collect();
+        if self.ticked.frees(&numbers).is_some() {
+            return;
+        }
+        self.ticked.asked += 1;
+        self.ticked.priced = None;
+        let Some(freeable) = self.model.freeable.clone() else { return };
+        match numbers.as_slice() {
+            [] => {}
+            [one] => self.ticked.priced = freeable.generation(*one).map(|bytes| (numbers, bytes)),
+            _ => {
+                let asked = self.ticked.asked;
+                cx.spawn(move || {
+                    let bytes = freeable.together(&numbers);
+                    Msg::Priced { asked, numbers, bytes }
+                });
+            }
+        }
     }
 
     fn close_details(&mut self, cx: &mut Cx<Msg>) {
@@ -1348,6 +1477,8 @@ impl Program for Yukimi {
                     self.measuring = false;
                     if freeable.is_some() {
                         self.model = Arc::new(Model { freeable, ..(*self.model).clone() });
+                        self.ticked.priced = None;
+                        self.price_ticked(cx);
                     }
                 }
             }
@@ -1559,7 +1690,19 @@ impl Program for Yukimi {
                 );
             }
 
-            Msg::Delete(number) => self.ask_delete(number, cx),
+            Msg::Delete(number) => self.ask_delete(vec![number], cx),
+            Msg::Tick { number, on, run } => self.tick(number, on, run, cx),
+            Msg::TickAll(on) => {
+                self.ticked.numbers = if on { self.deletable().collect() } else { BTreeSet::new() };
+                self.ticked.anchor = None;
+                self.price_ticked(cx);
+            }
+            Msg::DeleteTicked => self.ask_delete(self.ticked.numbers.iter().copied().collect(), cx),
+            Msg::Priced { asked, numbers, bytes } => {
+                if asked == self.ticked.asked {
+                    self.ticked.priced = Some((numbers, bytes));
+                }
+            }
             Msg::Older(choice) => self.older = choice.min(3),
             Msg::CleanUp => {
                 let days = [Some(7), Some(30), Some(90), None][self.older.min(3)];
@@ -1797,11 +1940,29 @@ pub fn words(items: &[String]) -> String {
     }
 }
 
-/// "generation 24", "generations 24 and 25".
+/// "generation 24", "generations 24 and 25", "generations 20, 24–27 and 30":
+/// three or more in a row as a range.
 pub fn generation_words(numbers: &[u32]) -> String {
-    let numbers: Vec<String> = numbers.iter().map(u32::to_string).collect();
-    match numbers.as_slice() {
-        [one] => format!("generation {one}"),
-        _ => format!("generations {}", words(&numbers)),
+    let mut sorted = numbers.to_vec();
+    sorted.sort_unstable();
+    sorted.dedup();
+    let mut runs: Vec<(u32, u32)> = Vec::new();
+    for n in sorted {
+        match runs.last_mut() {
+            Some((_, last)) if n == *last + 1 => *last = n,
+            _ => runs.push((n, n)),
+        }
+    }
+    let parts: Vec<String> = runs
+        .iter()
+        .flat_map(|&(first, last)| match last - first {
+            0 => vec![first.to_string()],
+            1 => vec![first.to_string(), last.to_string()],
+            _ => vec![format!("{first}–{last}")],
+        })
+        .collect();
+    match (parts.as_slice(), runs.as_slice()) {
+        ([one], [(first, last)]) if first == last => format!("generation {one}"),
+        _ => format!("generations {}", words(&parts)),
     }
 }

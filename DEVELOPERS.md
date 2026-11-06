@@ -1662,12 +1662,15 @@ never connects to a compositor or follows a user's PATH. See
 [reload and completion advice](desktop/aizome/docs/reload.md#yukimis-update-advice)
 for the evidence used and remaining limits.
 
-History deletes single system generations with `yukimi-helper delete <n>...
-[--collect-garbage]`, under the same polkit action as Yukimi's other changes.
-The helper takes only plain generation numbers (digits, no sign or leading
-zero, each once) whose `/nix/var/nix/profiles/system-<n>-link` is a link to a
-store path, and refuses the generation the profile selects for the next
-start, the running system and the one the machine started with. It commits
+History deletes system generations, one from its opened row or any set
+ticked together, with `yukimi-helper delete <n>... [--collect-garbage]`,
+under the same polkit action as Yukimi's other changes. Generation numbers
+need not be consecutive: `nix-env --delete-generations` takes any list. The
+helper takes only plain generation numbers (digits, no sign or leading zero,
+each once) whose `/nix/var/nix/profiles/system-<n>-link` is a link to a
+store path, and refuses the whole request if it names the generation the
+profile selects for the next start, the running system or the one the
+machine started with; the GUI offers boxes only beside the others. It commits
 first, then deletes the links with `nix-env --delete-generations`, removes
 their kept configurations, and makes the boot menu again with the selected
 system's `switch-to-configuration boot`, as `clean` does, so no boot entry is
@@ -1704,8 +1707,14 @@ freed only when the set holds all its links but the store's own in
 as well as files, so in an optimised store a generation's `system-path` and
 `etc`, links like the running system's, cost it next to nothing; counting
 them as its own overestimated the VM check's first run by 111%. A
-generation's figure is what deleting it alone frees
-beyond the garbage; Clean Up's is the garbage plus what
+generation's figure is what deleting it alone frees beyond the garbage. The
+generations ticked in History are priced as one set (`Freeable::together`,
+off the interface thread, again whenever the selection or the measurement
+changes), which adds what only they share: generations next to each other
+share most of what they have, such as the packages a later update replaced,
+so the set's figure can be far more than theirs added up. `Freeable` keeps
+the `Store` it was measured from for this, since a store read since numbers
+its paths differently. Clean Up's is the garbage plus what
 `nix-env --delete-generations <n>d` would delete (`generations::older_than`
 keeps the generation that was in use at the cutoff, as Nix does). The
 Storage page's composition stays in NAR sizes, now counting a path shared

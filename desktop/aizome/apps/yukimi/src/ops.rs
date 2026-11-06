@@ -300,7 +300,7 @@ impl Operation {
 }
 
 /// `what` with its first letter a capital: "The login screen".
-fn capitalized(what: &str) -> String {
+pub fn capitalized(what: &str) -> String {
     let mut chars = what.chars();
     chars.next().map(|c| c.to_uppercase().chain(chars).collect()).unwrap_or_default()
 }
@@ -531,6 +531,12 @@ mod tests {
             Operation::Delete { generations: vec![24, 25], collect: false }.done(),
             "Generations 24 and 25 are deleted"
         );
+        // Three or more in a row read as a range.
+        assert_eq!(
+            Operation::Delete { generations: vec![24, 25, 26, 27], collect: false }.title(),
+            "Deleting generations 24–27"
+        );
+        assert_eq!(crate::app::generation_words(&[31, 20, 24, 25, 26, 30]), "generations 20, 24–26, 30 and 31");
         assert_eq!(
             delete.outcome(r#"{"ok":true,"deleted":[26],"collected":true,"freed":412000000}"#),
             "Generation 26 is deleted, and 412 MB came back"

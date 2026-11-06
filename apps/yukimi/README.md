@@ -62,11 +62,16 @@ something you edit and hope.
   disk space deleting it would give back. Open one to see what changed from
   the one before: upgrades, downgrades, additions and removals, with sizes.
   Going back to one also brings back the choices it was built from, so your
-  next change starts from there. You can also delete one you no longer need,
-  except the running one, the one the computer started with and the one
-  selected for the next start: it leaves the boot menu, and its space comes
-  back when garbage is collected, right away if you choose **Delete and Clean
-  Up**, otherwise at the next clean-up.
+  next change starts from there. You can also delete generations you no
+  longer need, except the running one, the one the computer started with and
+  the one selected for the next start: delete one from its row, or tick
+  several (Shift-click ticks a run, **Select All** every one you can) and
+  delete them together, with one password. Any of them can be picked; they
+  don't have to be next to each other. Ticked, they show what deleting them
+  together frees, which can be more than the figures beside them added up.
+  Deleted generations leave the boot menu, and their space comes back when
+  garbage is collected, right away if you choose **Delete and Clean Up**,
+  otherwise at the next clean-up.
 - **Storage.** The Nix store split into what the running system needs, older
   generations, user profiles, projects and dev shells, and garbage. It lists
   the heaviest packages and every garbage-collector root, and can clean up
@@ -79,8 +84,11 @@ system, users' profiles, build results and dev shells, and programs still
 running from it. The space Yukimi shows beside a generation is only what
 nothing else keeps, measured as the blocks those files take on disk, with a
 file hard-linked into several store paths (`auto-optimise-store`) counted
-once and only when all its links go. It is an estimate made when Yukimi
-reads the store, and it can't promise:
+once and only when all its links go. What generations next to each other
+share, such as the packages an update then replaced, comes back only when
+all of them go: the figure for several ticked together counts it, and the
+figure beside each doesn't. It is an estimate made when Yukimi reads the
+store, and it can't promise:
 
 - On Btrfs with compression, which Sekka's installer uses when you choose
   Btrfs, the space that comes back can be less: files are measured before

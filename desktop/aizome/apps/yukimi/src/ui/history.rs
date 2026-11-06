@@ -14,6 +14,13 @@ use crate::app::{Changes, Msg, Yukimi};
 /// How many changes show for one generation.
 const SHOWN: usize = 200;
 
+/// The width of a generation's box.
+const BOX: f64 = 16.0;
+
+/// Where an opened generation's rows start: under its name, past its box
+/// and chevron.
+const INDENT: f64 = 12.0 + BOX + 12.0 + 14.0 + 12.0;
+
 fn change_row(change: &Change) -> Element<Msg> {
     let (icon_name, role, versions) = match change.kind {
         ChangeKind::Upgraded => {
@@ -34,7 +41,7 @@ fn change_row(change: &Change) -> Element<Msg> {
         text(versions).mono().size(12.0).role(Role::Text2).width(Length::fill_portion::<3>()),
     ]
     .spacing(10.0)
-    .padding([5.0, 12.0, 5.0, 40.0])
+    .padding([5.0, 12.0, 5.0, INDENT])
     .width(Fill);
     let delta = if change.size_delta == 0 {
         String::new()
@@ -44,6 +51,22 @@ fn change_row(change: &Change) -> Element<Msg> {
     };
     r = r.push(mono(delta).role(Role::Text3).width(80.0));
     r.into()
+}
+
+/// The box that selects a generation to delete with others. One in use has
+/// none: its tag says why, and opening it says more.
+fn tick_box(app: &Yukimi, generation: &Generation) -> Element<Msg> {
+    let number = generation.number;
+    if !generation.deletable() {
+        return space(BOX);
+    }
+    checkbox("", app.ticked.numbers.contains(&number))
+        .on_toggle(move |on| Msg::Tick { number, on, run: false })
+        .on_shift_toggle(move |on| Msg::Tick { number, on, run: true })
+        .tooltip("Select to delete with others; Shift-click selects every one from the last clicked")
+        .label(format!("Select generation {number}"))
+        .id(format!("tick-{number}"))
+        .into()
 }
 
 /// Deleting a generation: what it gives back and when, or why it stays.
@@ -79,7 +102,7 @@ fn deletion(app: &Yukimi, generation: &Generation) -> Option<Element<Msg>> {
             button("Delete…").destructive().icon(Icon::Trash).on_press(Msg::Delete(generation.number)),
         ]
         .spacing(12.0)
-        .padding([8.0, 12.0, 8.0, 40.0])
+        .padding([8.0, 12.0, 8.0, INDENT])
         .width(Fill)
         .into(),
     )
@@ -115,7 +138,7 @@ fn opened(app: &Yukimi, generation: &Generation) -> Vec<Element<Msg>> {
                 button("Return…").icon(Icon::Undo2).on_press(Msg::ReturnTo(number)),
             ]
             .spacing(12.0)
-            .padding([8.0, 12.0, 8.0, 40.0])
+            .padding([8.0, 12.0, 8.0, INDENT])
             .width(Fill)
             .into(),
         );
@@ -148,8 +171,9 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
     let intro = heading(
         "Every version of your system",
         "Each time the system changes, NixOS keeps the version before as a generation. Any of them can be started \
-         from the boot menu, or returned to here. Nothing is lost until a generation is deleted here or old ones are \
-         cleaned up in Storage. Beside each is the disk space deleting it would give back.",
+         from the boot menu, or returned to here, until it is deleted here or cleaned up in Storage. Beside each is \
+         the disk space deleting it alone gives back. Generations next to each other share most of what they have, \
+         so select several to see what deleting them together frees.",
     );
     let gens = &model.generations;
     let mut rows: Vec<Element<Msg>> = Vec::new();
@@ -167,6 +191,7 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
             facts.push(format!("Linux {kernel}"));
         }
         let mut head = row![
+            tick_box(app, generation),
             icon(if open { Icon::ChevronDown } else { Icon::ChevronRight }).size(14.0).role(Role::Text3),
             column![
                 text(format!("Generation {}", generation.number)).weight(650.0),
@@ -204,6 +229,50 @@ pub fn page(app: &Yukimi) -> Element<Msg> {
         }
     }
     column![intro, super::list(rows)].spacing(18.0).width(Fill).into()
+}
+
+/// Selecting generations, and deleting those selected, at the toolbar's
+/// right.
+pub fn tools(app: &Yukimi) -> Vec<Element<Msg>> {
+    let deletable = app.deletable().count();
+    let ticked = app.ticked.numbers.len();
+    let mut out: Vec<Element<Msg>> = Vec::new();
+    if ticked < deletable {
+        out.push(
+            button("Select All")
+                .toolbar()
+                .on_press(Msg::TickAll(true))
+                .tooltip("Select every generation that isn't in use")
+                .into(),
+        );
+    }
+    if ticked > 0 {
+        out.push(button("Select None").toolbar().on_press(Msg::TickAll(false)).into());
+        out.push(
+            button("Delete…")
+                .destructive()
+                .icon(Icon::Trash)
+                .on_press(Msg::DeleteTicked)
+                .tooltip("Delete the selected generations, after saying what that frees")
+                .into(),
+        );
+    }
+    out
+}
+
+/// How many are selected, and what deleting them together frees, beside
+/// the page's name.
+pub fn ticked_line(app: &Yukimi) -> Option<String> {
+    let selected = match app.ticked.numbers.len() {
+        0 => return None,
+        n => format!("{n} selected"),
+    };
+    let they = if app.ticked.numbers.len() == 1 { "it frees" } else { "they free" };
+    Some(match app.ticked.priced() {
+        Some(bytes) => format!("{selected} · frees about {}", human_size(bytes)),
+        None if app.measuring || app.model.freeable.is_some() => format!("{selected} · working out what {they}…"),
+        None => selected,
+    })
 }
 
 /// Rows keep their place by their generation's number.

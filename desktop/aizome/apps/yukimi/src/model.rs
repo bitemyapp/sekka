@@ -13,7 +13,7 @@ use std::sync::Arc;
 use yukimi_config::edit::{self, ListedPackage};
 use yukimi_config::lock::{FlakeLock, Input};
 use yukimi_config::packages::{self, Choices};
-use yukimi_store::{Graph, Keep, PathId, Root, RootKind, StoreDb, StorePath, Usage, roots};
+use yukimi_store::{Graph, Keep, PathId, Root, RootKind, StoreDb, StorePath, Tally, Usage, roots};
 use yukimi_system::catalog::{self, Application};
 use yukimi_system::channels::{self, Channel};
 use yukimi_system::diff::{self, Diff};
@@ -104,7 +104,7 @@ pub struct Store {
 
 /// What deleting generations would give back on disk, once garbage is
 /// collected: blocks, with hard-linked files counted once.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Freeable {
     /// What collecting garbage gives back now: what nothing keeps.
     pub garbage: u64,
@@ -115,6 +115,53 @@ pub struct Freeable {
     /// does: the days, the generations that go, and what they give back
     /// besides the garbage.
     pub older: Vec<(u32, Vec<u32>, u64)>,
+    /// What prices any set of generations deleted together.
+    pricing: Pricing,
+}
+
+/// How [`Freeable`] prices generations deleted together. Generations next
+/// to each other share most of what they have, so a set can give back far
+/// more than its generations do one at a time.
+#[derive(Clone)]
+pub enum Pricing {
+    /// The store that was measured (its graph and roots), its paths
+    /// measured, and the garbage's, which goes in any case.
+    Measured { store: Arc<Store>, usage: Usage, garbage: Tally },
+    /// Sets of generations, each with what only that set keeps.
+    Listed(Vec<(Vec<u32>, u64)>),
+}
+
+impl std::fmt::Debug for Pricing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Pricing::Measured { usage, .. } => f.debug_struct("Measured").field("usage", usage).finish_non_exhaustive(),
+            Pricing::Listed(sets) => f.debug_tuple("Listed").field(sets).finish(),
+        }
+    }
+}
+
+impl Pricing {
+    /// Whether generation `number`'s link was among the roots priced.
+    fn has(&self, number: u32) -> bool {
+        match self {
+            Pricing::Measured { store, .. } => store.reclaim.has(number),
+            Pricing::Listed(_) => true,
+        }
+    }
+
+    /// What deleting `numbers` together gives back besides the garbage.
+    fn price(&self, numbers: &[u32]) -> u64 {
+        match self {
+            Pricing::Measured { store, usage, garbage } => {
+                usage.freed_beyond(garbage, store.reclaim.only_kept_by(&store.graph, numbers))
+            }
+            Pricing::Listed(sets) => sets
+                .iter()
+                .filter(|(keepers, _)| keepers.iter().all(|k| numbers.contains(k)))
+                .map(|(_, bytes)| bytes)
+                .sum(),
+        }
+    }
 }
 
 /// The ages Clean Up offers, in days.
@@ -123,38 +170,49 @@ pub const CLEAN_UP_DAYS: [u32; 3] = [7, 30, 90];
 impl Freeable {
     /// Measure what deleting each generation, and cleaning up, gives back.
     /// Reads the store's files: seconds, not milliseconds.
-    pub fn measure(store: &Store, generations: &[Generation], now: i64) -> Freeable {
+    pub fn measure(store: Arc<Store>, generations: &[Generation], now: i64) -> Freeable {
         let usage = Usage::measure(&store.graph, store.reclaim.candidates());
-        Freeable::from_usage(store, &usage, generations, now)
+        Freeable::from_usage(store, usage, generations, now)
     }
 
-    /// From the store's paths, measured.
-    pub fn from_usage(store: &Store, usage: &Usage, generations: &[Generation], now: i64) -> Freeable {
-        let (graph, reclaim) = (&store.graph, &store.reclaim);
-        let base = usage.tally(reclaim.garbage());
-        let freed = |numbers: &[u32]| usage.freed_beyond(&base, reclaim.only_kept_by(graph, numbers));
-        Freeable {
-            garbage: usage.bytes(&base),
-            generations: generations
-                .iter()
-                .filter(|g| g.deletable() && reclaim.has(g.number))
-                .map(|g| (g.number, freed(&[g.number])))
-                .collect(),
-            older: CLEAN_UP_DAYS
-                .iter()
-                .map(|&days| {
-                    let numbers = generations::older_than(generations, now - i64::from(days) * 86_400);
-                    let bytes = if numbers.is_empty() { 0 } else { freed(&numbers) };
-                    (days, numbers, bytes)
-                })
-                .collect(),
-        }
+    /// From the store's paths, measured. The store is kept to price sets
+    /// of generations later: a store read since has paths of its own.
+    pub fn from_usage(store: Arc<Store>, usage: Usage, generations: &[Generation], now: i64) -> Freeable {
+        let base = usage.tally(store.reclaim.garbage());
+        let garbage = usage.bytes(&base);
+        Freeable::priced(garbage, Pricing::Measured { store, usage, garbage: base }, generations, now)
+    }
+
+    /// Each generation that may be deleted, alone, and Clean Up's sets, as
+    /// `pricing` prices them.
+    pub fn priced(garbage: u64, pricing: Pricing, generations: &[Generation], now: i64) -> Freeable {
+        let each = generations
+            .iter()
+            .filter(|g| g.deletable() && pricing.has(g.number))
+            .map(|g| (g.number, pricing.price(&[g.number])))
+            .collect();
+        let older = CLEAN_UP_DAYS
+            .iter()
+            .map(|&days| {
+                let numbers = generations::older_than(generations, now - i64::from(days) * 86_400);
+                let bytes = if numbers.is_empty() { 0 } else { pricing.price(&numbers) };
+                (days, numbers, bytes)
+            })
+            .collect();
+        Freeable { garbage, generations: each, older, pricing }
     }
 
     /// What deleting generation `number` gives back, once garbage is
     /// collected, if it may be deleted.
     pub fn generation(&self, number: u32) -> Option<u64> {
         self.generations.get(&number).copied()
+    }
+
+    /// What deleting `numbers` together gives back besides the garbage:
+    /// what each has alone, and what only they share. Follows each one's
+    /// closure, so not on the interface thread.
+    pub fn together(&self, numbers: &[u32]) -> u64 {
+        self.pricing.price(numbers)
     }
 
     /// Deleting generations older than `days`: which go, and what they give
@@ -694,19 +752,20 @@ mod tests {
     }
 
     /// A store of three generations, 3 running: 0 base, 1-3 systems, 4 only
-    /// 1 has, 5 that 1 and a user's profile share, 6 garbage.
+    /// 1 has, 5 that 1 and a user's profile share, 6 garbage, 7 only 1 and
+    /// 2 have.
     fn small_store() -> (Store, Vec<Generation>) {
         use yukimi_store::db::PathInfo;
         let path = |n: usize, name: &str| crate::fixture::store_path(n, name);
-        let names = ["base", "system-1", "system-2", "system-3", "only-1", "shared", "garbage"];
-        let sizes = [1000, 1, 1, 1, 20, 40, 70];
+        let names = ["base", "system-1", "system-2", "system-3", "only-1", "shared", "garbage", "only-1-2"];
+        let sizes = [1000, 1, 1, 1, 20, 40, 70, 30];
         let nodes: Vec<PathInfo> = names
             .iter()
             .zip(sizes)
             .enumerate()
             .map(|(i, (name, size))| PathInfo { path: path(i, name), nar_size: size, registered: 0, deriver: None })
             .collect();
-        let graph = Graph::from_parts(nodes, &[(1, 0), (2, 0), (3, 0), (1, 4), (1, 5)]);
+        let graph = Graph::from_parts(nodes, &[(1, 0), (2, 0), (3, 0), (1, 4), (1, 5), (1, 7), (2, 7)]);
         let root = |link: &str, i: usize| {
             let link = std::path::PathBuf::from(link);
             Root { kind: roots::classify(&link), target: StorePath::parse(&path(i, names[i])).unwrap(), link }
@@ -746,7 +805,7 @@ mod tests {
         let c = &store.composition;
         // The profile's path counts as the user's, not as generation 1's.
         assert_eq!(c.profiles, 40);
-        assert_eq!(c.old_generations, 1 + 1 + 20);
+        assert_eq!(c.old_generations, 1 + 1 + 20 + 30);
         assert_eq!(c.system, 1000 + 1);
         assert_eq!((c.garbage, c.garbage_paths), (70, 1));
     }
@@ -770,12 +829,16 @@ mod tests {
             .collect();
         let usage = Usage::measure_paths(paths, false);
         let size = |i: usize| usage.freed([PathId::from_index(i)]);
-        let freeable = Freeable::from_usage(&store, &usage, &generations, 10 * 86_400);
+        let freeable = Freeable::from_usage(Arc::new(store), usage.clone(), &generations, 10 * 86_400);
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(freeable.garbage, size(6));
-        // 1: its build and what only it has, not the profile's share.
+        // 1: its build and what only it has, not the profile's share, nor
+        // what it shares with 2.
         assert_eq!(freeable.generation(1), Some(size(1) + size(4)));
         assert_eq!(freeable.generation(2), Some(size(2)));
+        // Together, what they share too.
+        assert_eq!(freeable.together(&[1, 2]), size(1) + size(4) + size(2) + size(7));
+        assert_eq!(freeable.together(&[2]), size(2));
         // The running one isn't offered.
         assert_eq!(freeable.generation(3), None);
         // A week ago, 2 was in use, so only 1 goes.

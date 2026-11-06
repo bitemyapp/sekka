@@ -248,6 +248,7 @@ fn subtitle(app: &Yukimi) -> Option<String> {
             (None, true) => Some("getting to know Nixpkgs…".to_owned()),
             _ => None,
         },
+        Page::History if !app.ticked.numbers.is_empty() => history::ticked_line(app),
         Page::History if !model.generations.is_empty() => Some(format!("{} generations", model.generations.len())),
         Page::Updates => app.check.as_ref().map(|c| format!("checked {}", yukimi_system::human_age(c.when, app.now()))),
         Page::Storage => model.store.as_ref().map(|s| format!("{} paths", group_digits(s.composition.paths))),
@@ -269,6 +270,7 @@ fn page_tools(app: &Yukimi) -> Vec<Element<Msg>> {
         ],
         Page::Updates => updates::tools(app),
         Page::Desktops => desktops::tools(app),
+        Page::History => history::tools(app),
         Page::Storage => vec![
             button("Clean Up…")
                 .toolbar()

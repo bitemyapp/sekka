@@ -66,6 +66,18 @@ fn goldens() {
     h.send(Msg::ToggleGeneration(26));
     settle(&mut h, |a| matches!(a.changes.get(&26), Some(Changes::Ready { .. })));
     assert_golden(&mut h, w, golden("history-delete-night"), 1.0);
+    // Every older generation selected, and what deleting them together
+    // frees.
+    h.send(Msg::ToggleGeneration(26));
+    h.send(Msg::TickAll(true));
+    settle(&mut h, |a| a.ticked.priced().is_some());
+    assert_golden(&mut h, w, golden("history-ticked-night"), 1.0);
+    // Asking before deleting them, then not.
+    h.send(Msg::DeleteTicked);
+    assert_golden(&mut h, w, golden("history-ticked-asking-night"), 1.0);
+    let cancel = h.semantics(w).into_iter().find(|(s, _)| s.label.as_deref() == Some("Cancel"));
+    h.click(w, cancel.expect("the alert's Cancel").1.center());
+    h.send(Msg::TickAll(false));
     h.send(Msg::Show(Page::Storage));
     assert_golden(&mut h, w, golden("storage-night"), 1.0);
     h.send(Msg::Show(Page::Desktops));
