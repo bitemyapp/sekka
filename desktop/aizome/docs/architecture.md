@@ -103,6 +103,7 @@ apps, as ⌘ does on a Mac. The system takes only:
 | ❖⇧[, ❖⇧] | Previous, next tab of the window's group (⌘⇧[ ⌘⇧] on a Mac) |
 | ⌃⇧❖[, ⌃⇧❖] | Move the tab left, right in its group |
 | ⌃❖F | Full screen |
+| ⌃❖D | Hide or show the Deskbar (the menu bar's Hide Deskbar / `N apps` controls) |
 | ❖Return | Terminal (Hotaru, or the one chosen in Settei) in the Desk's folder |
 | ⌃❖Q | Lock |
 | ⌃⌥Del | Recovery: force quit stuck apps, reset input, restart the shell (`docs/recovery.md`) |

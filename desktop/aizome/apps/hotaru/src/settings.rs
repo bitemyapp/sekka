@@ -595,7 +595,7 @@ pub fn shortcut_for(event: &KeyEvent) -> Option<Shortcut> {
 /// Shortcuts Aizome's compositor keeps for the desktop: Hotaru never hears
 /// them (`aizome-comp-logic`'s default bindings).
 pub fn desktop_shortcut(shortcut: Shortcut) -> bool {
-    const DESKTOP: [&str; 28] = [
+    const DESKTOP: [&str; 29] = [
         "super+space",
         "super+alt+space",
         "super+alt+m",
@@ -618,6 +618,7 @@ pub fn desktop_shortcut(shortcut: Shortcut) -> bool {
         "super+alt+[",
         "super+alt+]",
         "super+ctrl+f",
+        "super+ctrl+d",
         "super+enter",
         "super+ctrl+q",
         "super+ctrl+r",
