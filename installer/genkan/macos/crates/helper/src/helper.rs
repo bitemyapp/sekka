@@ -79,6 +79,38 @@ impl Active {
             }),
         }
     }
+
+    fn log(&self, line: String) {
+        let mut s = self.shared.lock().unwrap();
+        if s.log.len() == LOG_LINES {
+            s.log.pop_front();
+        }
+        s.log.push_back(line);
+    }
+
+    /// What the engine reports, for Events and diagnostics.
+    fn observe(&self, o: Observation) {
+        match o {
+            Observation::Stage(stage) => {
+                self.shared.lock().unwrap().progress = Some(Progress {
+                    stage,
+                    done: 0,
+                    total: 0,
+                });
+            }
+            Observation::Progress(p) => self.shared.lock().unwrap().progress = Some(p),
+            Observation::Log(level, line) => self.log(format!("{level:?}: {line}")),
+            Observation::Refusal(why) => self.log(format!("Refused: {why}")),
+        }
+    }
+
+    fn stop(&self) {
+        let mut s = self.shared.lock().unwrap();
+        s.running = false;
+        s.mutating = false;
+        s.progress = None;
+        s.terminate = None;
+    }
 }
 
 fn refuse(code: HelperRefusalCode, message: impl AsRef<str>) -> Response {
@@ -544,6 +576,11 @@ impl<P: Platform> Helper<P> {
         if let Err(e) = written {
             return refuse(HelperRefusalCode::Internal, e.to_string());
         }
+        // Running from here: Events says so, the engine's lines are kept for
+        // diagnostics, and it can't be cancelled (it is one step, and it
+        // changes how the Mac starts up).
+        let active = self.start(installation, &owner, true);
+        let before = journal.records().len();
         let mut process = match self.platform.start_engine(
             &engine,
             crate::EngineRun::StartupDisk,
@@ -553,10 +590,13 @@ impl<P: Platform> Helper<P> {
             password,
         ) {
             Ok(p) => p,
-            Err(e) => return refuse(HelperRefusalCode::Internal, e.to_string()),
+            Err(e) => {
+                active.stop();
+                return refuse(HelperRefusalCode::Internal, e.to_string());
+            }
         };
         let mut transcript = Transcript::startup_disk(digest);
-        let mut log = Vec::new();
+        let mut refusal = None;
         let result = drive(
             process.as_mut(),
             &mut transcript,
@@ -564,35 +604,41 @@ impl<P: Platform> Helper<P> {
             &|| self.platform.now(),
             &mut |_| true,
             &mut |o| {
-                if let Observation::Log(level, line) = o {
-                    log.push(format!("{level:?}: {line}"));
+                if let Observation::Refusal(why) = &o {
+                    refusal = Some(why.clone());
                 }
+                active.observe(o);
             },
             None,
         );
         let _ = process.wait();
-        match result {
-            Ok(_) => {}
-            Err(e) => {
-                if transcript.open_stage() == Some(Stage::StartupDisk) {
-                    let _ = journal.append(
-                        self.platform.now(),
-                        Event::Failed {
-                            stage: Stage::StartupDisk,
-                            failure: Failure {
-                                code: "engine-stopped".parse().unwrap(),
-                                message: text(&e.to_string()),
-                                apple_diagnostic: None,
-                                disk_changed: DiskChanged::No,
-                            },
+        if let Err(e) = &result {
+            active.log(e.to_string());
+            if open_stage(journal.records()) == Some(Stage::StartupDisk) {
+                let failed = journal.append(
+                    self.platform.now(),
+                    Event::Failed {
+                        stage: Stage::StartupDisk,
+                        failure: Failure {
+                            code: "engine-stopped".parse().unwrap(),
+                            message: text(&e.to_string()),
+                            apple_diagnostic: None,
+                            disk_changed: DiskChanged::No,
                         },
-                    );
-                } else if journal.state() == &InstallState::StartupDiskFailed {
-                    // Refused before trying: say why.
-                    let why = log.last().cloned().unwrap_or_else(|| e.to_string());
-                    return refuse(HelperRefusalCode::State, why);
+                    },
+                );
+                if let Err(e) = failed {
+                    active.log(format!("The record couldn't be written: {e}"));
                 }
             }
+        }
+        active.stop();
+        if journal.records().len() == before {
+            // Refused before trying, so nothing was recorded: say why here.
+            let why = refusal
+                .or_else(|| result.err().map(|e| e.to_string()))
+                .unwrap_or_else(|| "The startup disk wasn't set again, and the engine didn't say why.".into());
+            return refuse(HelperRefusalCode::State, why);
         }
         self.events(installation, 0)
     }
@@ -717,6 +763,14 @@ fn recorded_facts(records: &[Record]) -> Vec<Fact> {
         .collect()
 }
 
+/// The stage the journal says started and has no result.
+fn open_stage(records: &[Record]) -> Option<Stage> {
+    match records.last().map(|r| &r.event) {
+        Some(Event::Intent { stage }) => Some(*stage),
+        _ => None,
+    }
+}
+
 /// The last value recorded under `name`.
 fn fact(facts: &[Fact], name: &str) -> Option<String> {
     facts
@@ -801,11 +855,7 @@ struct Run<P: Platform> {
 
 impl<P: Platform> Run<P> {
     fn log(&self, line: String) {
-        let mut s = self.active.shared.lock().unwrap();
-        if s.log.len() == LOG_LINES {
-            s.log.pop_front();
-        }
-        s.log.push_back(line);
+        self.active.log(line);
     }
 
     fn fail(&mut self, stage: Stage, code: &str, message: &str, disk_changed: DiskChanged) {
@@ -827,11 +877,7 @@ impl<P: Platform> Run<P> {
         if let Err(e) = remove_downloads(&self.paths.staging(self.journal.installation())) {
             self.log(format!("The imported downloads couldn't all be removed: {e}"));
         }
-        let mut s = self.active.shared.lock().unwrap();
-        s.running = false;
-        s.mutating = false;
-        s.progress = None;
-        s.terminate = None;
+        self.active.stop();
     }
 
     fn install(&mut self) {
@@ -914,25 +960,7 @@ impl<P: Platform> Run<P> {
                 s.mutating = stage.mutates();
                 true
             };
-            let mut observe = |o: Observation| {
-                let mut s = active.shared.lock().unwrap();
-                match o {
-                    Observation::Stage(stage) => {
-                        s.progress = Some(Progress {
-                            stage,
-                            done: 0,
-                            total: 0,
-                        });
-                    }
-                    Observation::Progress(p) => s.progress = Some(p),
-                    Observation::Log(level, line) => {
-                        if s.log.len() == LOG_LINES {
-                            s.log.pop_front();
-                        }
-                        s.log.push_back(format!("{level:?}: {line}"));
-                    }
-                }
-            };
+            let mut observe = |o: Observation| active.observe(o);
             drive(
                 process.as_mut(),
                 &mut transcript,

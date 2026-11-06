@@ -104,10 +104,10 @@ impl Platform for Fake {
             }
             crate::EngineRun::StartupDisk => {
                 *self.startup_runs.lock().unwrap() += 1;
-                let script = if self.startup_disk_ok.load(Ordering::SeqCst) {
-                    Script::Happy
-                } else {
-                    Script::Fail(Stage::StartupDisk, DiskChanged::No)
+                let script = match *self.script.lock().unwrap() {
+                    Script::Refuse(why) => Script::Refuse(why),
+                    _ if self.startup_disk_ok.load(Ordering::SeqCst) => Script::Happy,
+                    _ => Script::Fail(Stage::StartupDisk, DiskChanged::No),
                 };
                 (EngineMode::StartupDisk, script)
             }
@@ -791,6 +791,26 @@ fn only_the_startup_disk_is_retried() {
     assert!(w.fake().ordering_held.load(Ordering::SeqCst));
     let (code, _) = refused(w.ask(Request::RetryStartupDisk { installation: id }, Some(PASSWORD)));
     assert_eq!(code, HelperRefusalCode::State);
+}
+
+#[test]
+fn a_retry_the_engine_refuses_says_why() {
+    let w = world(Script::Fail(Stage::StartupDisk, DiskChanged::No));
+    let id = w.begun();
+    let (_, records) = w.finish(id);
+    let why = "No startup volume on this Mac holds this installation any more.";
+    *w.fake().script.lock().unwrap() = Script::Refuse(why);
+    let (code, message) = refused(w.ask(Request::RetryStartupDisk { installation: id }, Some(PASSWORD)));
+    assert_eq!(code, HelperRefusalCode::State);
+    assert_eq!(message, why);
+    // Nothing was recorded; the reason is in the diagnostics too.
+    let Response::Events { state, records: now, running, .. } =
+        w.ask(Request::Events { installation: id, after: 0 }, None)
+    else {
+        panic!()
+    };
+    assert_eq!((state, now.len(), running), (InstallState::StartupDiskFailed, records.len(), false));
+    assert!(w.lines(id).iter().any(|l| l.contains(why)));
 }
 
 #[test]
