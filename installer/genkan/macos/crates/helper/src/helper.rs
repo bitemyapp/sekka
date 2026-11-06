@@ -349,16 +349,19 @@ impl<P: Platform> Helper<P> {
     }
 
     fn events(&self, installation: Uuid, after: u64) -> Response {
-        let journal = match self.open(installation) {
-            Ok(j) => j,
-            Err(e) => return refuse(HelperRefusalCode::State, e.to_string()),
-        };
+        // Whether it is running is read before the journal: a run that ends
+        // in between then shows as running one more time, never as stopped
+        // with its last records missing.
         let (running, progress) = match self.active(installation) {
             Some(a) => {
                 let s = a.shared.lock().unwrap();
                 (s.running, s.progress)
             }
             None => (false, None),
+        };
+        let journal = match self.open(installation) {
+            Ok(j) => j,
+            Err(e) => return refuse(HelperRefusalCode::State, e.to_string()),
         };
         Response::Events {
             records: journal
