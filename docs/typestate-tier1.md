@@ -376,6 +376,7 @@ The check kinds are kept apart, as `AGENTS.md` asks.
   | BIOS GUI install, confirmed while preparing | pass, as the first, with GRUB |
   | Deferred route, a 26 GiB disk too small for Firefox and Uta, confirmed early | pass: refused before any write ("needs at least 23.0 GiB on the root filesystem; it would have 21.0 GiB"); the queued confirmation was dropped and the window returned to Review; the disk image's hash didn't change |
   | Deferred route, an 80 GiB disk | fail, from a defect older than this branch (below) |
+  | The same, rebased onto main with #305, from an ISO built from `3d6ff2c7` (SHA-256 `01ea26da…ffa5`) | pass: Uta compiled on the target, then the system; the installed system booted to the greeter and passed the fixture's checks |
   | Scripted helper session | pass: confirmation sent only after `prepared`, then `complete`; the installed system passed the fixture's checks |
 
   The deferred route chose its route, passed the room check, erased the
@@ -386,6 +387,9 @@ The check kinds are kept apart, as `AGENTS.md` asks.
   and main hides it because the cache serves its Uta; this branch's Uta
   isn't cached, so it compiled. The same Uta builds on the host. An earlier
   attempt also hit a transient download error, which aborts the install
-  after erasing because the build doesn't fall back. Both are follow-ups,
-  not tier 1 changes.
+  after erasing because the build doesn't fall back. #305 fixed both on
+  main: the build runs in the target's own `/nix/var/nix/builds`, and a
+  failed download is retried, the last time with `--fallback`. Rebased onto
+  it, this branch calls #305's `build_on_target` from its
+  `Build::OnTarget` arm, and the same case passed.
 - **Hardware:** no physical hardware was tested.
