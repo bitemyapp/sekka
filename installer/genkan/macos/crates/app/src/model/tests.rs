@@ -211,6 +211,89 @@ fn reopening_reconnects_to_an_installation() {
     assert!(j.model.installation.is_some());
 }
 
+/// The start's results, one at a time, from a simulation: what the model
+/// asks for next is returned rather than run.
+fn start(scenario: Scenario) -> (Simulation, Model, Vec<Effect>) {
+    let env = Simulation::new(scenario, 0.0);
+    let (mut m, _) = Model::new("0.1.0".parse().unwrap(), env.user());
+    let mut effects = m.update(Msg::HelperStatus(env.helper_status()));
+    effects.extend(m.update(Msg::Catalog(env.catalog())));
+    effects.extend(m.update(Msg::Inspected(env.inspect())));
+    for e in std::mem::take(&mut effects) {
+        match e {
+            Effect::MeasureDownload(r) => effects.extend(m.update(Msg::ToDownload(env.still_to_download(&r)))),
+            other => effects.push(other),
+        }
+    }
+    (env, m, effects)
+}
+
+#[test]
+fn reopening_after_recovery_finished_shows_sekka_installed() {
+    let (_, m, effects) = start(Scenario::RecoveryFinished);
+    // The record still waits for Recovery, the disk says it's done: the
+    // helper is asked to look before anything is shown.
+    assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "{effects:?}");
+    assert_eq!(m.screen, Screen::Checking);
+
+    let j = Journey::start(Scenario::RecoveryFinished);
+    assert_eq!(j.model.screen, Screen::Existing);
+    assert_eq!(j.model.state, Some(InstallState::WaitingForSetup));
+    assert!(j.model.installed());
+    assert_eq!(j.model.step(), Step::Account);
+    assert_eq!(j.model.unfinished().map(|s| s.state.clone()), Some(InstallState::WaitingForSetup));
+}
+
+#[test]
+fn a_complete_sekka_is_shown_installed_even_when_the_helper_cant_say_so() {
+    let refusal = || HelperRefusal {
+        code: HelperRefusalCode::State,
+        message: "This helper can't look at the Mac for an installation yet.".parse().unwrap(),
+    };
+    let (_, mut m, _) = start(Scenario::RecoveryFinished);
+    let effects = m.update(Msg::Reconciled(Err(refusal())));
+    assert_eq!(m.screen, Screen::Existing, "never Finish in Recovery");
+    assert!(m.installed());
+    assert!(effects.is_empty(), "the helper is asked once: {effects:?}");
+
+    // Nor when it looks and changes nothing.
+    let (env, mut m, _) = start(Scenario::RecoveryFinished);
+    let unchanged = env.events(Uuid::from_bytes([0x5e; 16]), 0).unwrap();
+    assert_eq!(unchanged.state, InstallState::WaitingForRecovery);
+    m.update(Msg::Reconciled(Ok(unchanged)));
+    assert_eq!(m.screen, Screen::Existing);
+}
+
+#[test]
+fn an_installation_removed_by_hand_lets_a_new_one_begin() {
+    let mut j = Journey::start(Scenario::RemovedByHand);
+    assert_eq!(j.model.screen, Screen::Plan);
+    assert_eq!(j.model.notice.as_deref(), Some(crate::text::REMOVED));
+    assert!(j.model.installation.is_none());
+    assert!(j.model.unfinished().is_none());
+    j.reach_review().confirm().send(Msg::Install).password("right");
+    assert_eq!(j.model.screen, Screen::Recovery);
+}
+
+#[test]
+fn an_installation_found_removed_while_watching_it_is_closed() {
+    let mut j = Journey::start(Scenario::InstallFails);
+    j.reach_review().confirm().send(Msg::Install).password("right");
+    assert_eq!(j.model.screen, Screen::Stopped);
+    let mut events = j.env.events(j.model.installation.unwrap(), 0).unwrap();
+    events.state = InstallState::Removed;
+    j.send(Msg::Events(Ok(events)));
+    assert_eq!(j.model.screen, Screen::Plan);
+    assert_eq!(j.model.notice.as_deref(), Some(crate::text::REMOVED));
+    assert!(j.model.installation.is_none());
+}
+
+#[test]
+fn a_record_waiting_for_recovery_that_the_disk_agrees_with_is_left_alone() {
+    let (_, _, effects) = start(Scenario::WaitingForRecovery);
+    assert!(effects.iter().all(|e| !matches!(e, Effect::Reconcile(_))), "{effects:?}");
+}
+
 #[test]
 fn an_existing_installation_is_recognized_not_replaced() {
     let j = Journey::start(Scenario::Existing);

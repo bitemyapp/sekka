@@ -38,6 +38,12 @@ pub enum Scenario {
     StartupDiskFails,
     /// The app reopens with macOS's part done.
     WaitingForRecovery,
+    /// The app reopens after Recovery finished; the helper's record still
+    /// waits for Recovery until the helper looks at the Mac.
+    RecoveryFinished,
+    /// The app reopens after the owner removed an unfinished installation
+    /// in Disk Utility.
+    RemovedByHand,
     /// Sekka is already installed.
     Existing,
     /// The helper must be allowed in Login Items first.
@@ -45,7 +51,7 @@ pub enum Scenario {
 }
 
 impl Scenario {
-    pub const ALL: [Scenario; 13] = [
+    pub const ALL: [Scenario; 15] = [
         Scenario::Normal,
         Scenario::Unsupported,
         Scenario::NotReady,
@@ -57,6 +63,8 @@ impl Scenario {
         Scenario::InstallFails,
         Scenario::StartupDiskFails,
         Scenario::WaitingForRecovery,
+        Scenario::RecoveryFinished,
+        Scenario::RemovedByHand,
         Scenario::Existing,
         Scenario::NeedsApproval,
     ];
@@ -74,6 +82,8 @@ impl Scenario {
             Scenario::InstallFails => "install-fails",
             Scenario::StartupDiskFails => "startup-disk-fails",
             Scenario::WaitingForRecovery => "waiting-for-recovery",
+            Scenario::RecoveryFinished => "recovery-finished",
+            Scenario::RemovedByHand => "removed-by-hand",
             Scenario::Existing => "existing",
             Scenario::NeedsApproval => "needs-approval",
         }
@@ -99,6 +109,8 @@ struct SimState {
     startup_retried: bool,
     /// The release's files are "staged".
     downloaded: bool,
+    /// The helper looked at the Mac and brought its record up to date.
+    reconciled: bool,
 }
 
 const SIM_ID: Uuid = Uuid::from_bytes([0x5e; 16]);
@@ -118,7 +130,9 @@ impl Simulation {
         }
     }
 
-    fn records(&self, upto: Option<(usize, Option<Stage>)>) -> (Vec<Record>, InstallState) {
+    /// An installation's records: up to `upto` (stages done, and one that
+    /// fails), or all of macOS's part, then `tail`.
+    fn records(&self, upto: Option<(usize, Option<Stage>)>, tail: Vec<Event>) -> (Vec<Record>, InstallState) {
         let plan = samples::plan();
         let mut out = Vec::new();
         let mut push = |event: Event| {
@@ -171,9 +185,63 @@ impl Simulation {
         } else if done < stages.len() {
             push(Event::Intent { stage: stages[done] });
         }
+        for event in tail {
+            push(event);
+        }
         let state = InstallState::observe(&out).unwrap_or(InstallState::Planned);
         (out, state)
     }
+
+    /// What the helper records when it looks at the Mac, in scenarios where
+    /// it finds the record behind.
+    fn reconciliation(&self) -> Option<Vec<Event>> {
+        let completed = |stage| Event::Completed {
+            stage,
+            facts: vec![],
+            verification: Verification::PolicyReadBack,
+        };
+        match self.scenario {
+            Scenario::RecoveryFinished => Some(vec![
+                Event::Intent { stage: Stage::Enrollment },
+                completed(Stage::Enrollment),
+                Event::Intent { stage: Stage::StartupSelection },
+                completed(Stage::StartupSelection),
+            ]),
+            Scenario::RemovedByHand => Some(vec![Event::Removed {
+                facts: vec![Fact::new("target-extent", "free").unwrap()],
+            }]),
+            _ => None,
+        }
+    }
+
+    /// The records of the installation the app reopens to.
+    fn reopened(&self) -> (Vec<Record>, InstallState) {
+        let reconciled = self.state.lock().unwrap().reconciled;
+        let tail = if reconciled { self.reconciliation().unwrap_or_default() } else { Vec::new() };
+        self.records(None, tail)
+    }
+}
+
+/// Sekka on the disk, as the engine's inspection reports it.
+fn sekka(state: InstallationState, installation_id: Option<Uuid>) -> (Installation, Issue) {
+    (
+        Installation {
+            kind: InstallationKind::Sekka,
+            name: "Sekka".parse().unwrap(),
+            state,
+            stub_group: None,
+            esp: None,
+            root: None,
+            installation_id,
+        },
+        Issue {
+            code: IssueCode::ExistingSekka,
+            blocking: true,
+            detail: "Sekka is already installed on this Mac (Sekka). A second installation isn't offered yet, and the installer won't change the existing one."
+                .parse()
+                .unwrap(),
+        },
+    )
 }
 
 fn sim_inspection(scenario: Scenario) -> Inspection {
@@ -206,15 +274,18 @@ fn sim_inspection(scenario: Scenario) -> Inspection {
             });
         }
         Scenario::Existing => {
-            i.installations.push(Installation {
-                kind: InstallationKind::Sekka,
-                name: "Sekka".parse().unwrap(),
-                state: InstallationState::Complete,
-                stub_group: None,
-                esp: None,
-                root: None,
-                installation_id: None,
-            });
+            i.installations.push(sekka(InstallationState::Complete, None).0);
+        }
+        // The installation the helper knows, by its identity.
+        Scenario::WaitingForRecovery | Scenario::RecoveryFinished => {
+            let state = if scenario == Scenario::WaitingForRecovery {
+                InstallationState::WaitingForRecovery
+            } else {
+                InstallationState::Complete
+            };
+            let (installation, issue) = sekka(state, Some(SIM_ID));
+            i.installations.push(installation);
+            i.issues.push(issue);
         }
         _ => {}
     }
@@ -254,10 +325,10 @@ impl Environment for Simulation {
     }
     fn helper_status(&self) -> Result<Vec<Summary>, HelperProblem> {
         Ok(match self.scenario {
-            Scenario::WaitingForRecovery => vec![Summary {
+            Scenario::WaitingForRecovery | Scenario::RecoveryFinished | Scenario::RemovedByHand => vec![Summary {
                 installation: SIM_ID,
                 release: "sekka-j514s-4882dc33".parse().unwrap(),
-                state: InstallState::WaitingForRecovery,
+                state: self.reopened().1,
                 opened: Timestamp::now(),
                 running: false,
             }],
@@ -349,7 +420,7 @@ impl Environment for Simulation {
     fn events(&self, _: Uuid, _after: u64) -> Result<Events, String> {
         let started = self.state.lock().unwrap().installation.map(|(_, t)| t);
         let Some(started) = started else {
-            let (records, state) = self.records(None);
+            let (records, state) = self.reopened();
             return Ok(Events {
                 records,
                 state,
@@ -371,7 +442,7 @@ impl Environment for Simulation {
         if let Some(f) = failing {
             let at = stages.iter().position(|s| *s == f).unwrap();
             if done >= at {
-                let (records, state) = self.records(Some((at, Some(f))));
+                let (records, state) = self.records(Some((at, Some(f))), Vec::new());
                 return Ok(Events {
                     records,
                     state,
@@ -380,7 +451,7 @@ impl Environment for Simulation {
                 });
             }
         }
-        let (records, state) = self.records(Some((done, None)));
+        let (records, state) = self.records(Some((done, None)), Vec::new());
         let running = done < stages.len();
         Ok(Events {
             records,
@@ -404,11 +475,26 @@ impl Environment for Simulation {
     fn retry_startup_disk(&self, id: Uuid, _: Secret) -> Result<Events, HelperRefusal> {
         self.wait(800);
         self.state.lock().unwrap().startup_retried = true;
-        let (records, _) = self.records(None);
+        let (records, _) = self.records(None, Vec::new());
         let _ = id;
         Ok(Events {
             records,
             state: InstallState::WaitingForRecovery,
+            running: false,
+            progress: None,
+        })
+    }
+    fn reconcile(&self, _: Uuid) -> Result<Events, HelperRefusal> {
+        self.wait(700);
+        // Where the record is behind the Mac the helper brings it up to
+        // date; elsewhere it finds nothing to change.
+        if self.reconciliation().is_some() {
+            self.state.lock().unwrap().reconciled = true;
+        }
+        let (records, state) = self.reopened();
+        Ok(Events {
+            records,
+            state,
             running: false,
             progress: None,
         })
@@ -454,6 +540,7 @@ pub fn settle(env: &Simulation, model: &mut Model, effects: Vec<Effect>) -> Vec<
             Effect::Poll { installation, after, .. } => vec![Msg::Events(env.events(installation, after))],
             Effect::Cancel(id) => vec![Msg::CancelAnswered(env.cancel(id))],
             Effect::RetryStartupDisk(id, p) => vec![Msg::Retried(env.retry_startup_disk(id, p))],
+            Effect::Reconcile(id) => vec![Msg::Reconciled(env.reconcile(id))],
             Effect::Diagnostics(id) => vec![Msg::Diagnostics(env.diagnostics(id))],
             Effect::CopyToPasteboard(text) => {
                 copied.push(text);

@@ -13,7 +13,7 @@ use objc2_app_kit::{
     NSStackView, NSTextField, NSView,
 };
 use sekka_mac_contract::{
-    Acknowledgement, Candidate, HumanStep, InstallState, NextAction, Stage,
+    Acknowledgement, Candidate, HumanStep, NextAction, Stage,
 };
 
 use sekka_mac_appkit::ui::{self, Targets, Weight};
@@ -349,9 +349,9 @@ fn no_release(m: &Model, p: &mut Page) {
 }
 
 fn existing(m: &Model, p: &mut Page) {
-    if m.state == Some(InstallState::WaitingForSetup) {
+    if m.installed() {
         p.title("Sekka is installed");
-        p.lede("Start your Mac in Sekka to create your account.");
+        p.lede(text::INSTALLED);
         p.numbered(1, "Shut down your Mac.");
         p.numbered(2, "Press and hold the power button until “Loading startup options” appears.");
         p.numbered(3, "Choose Sekka. To return to macOS later, choose Macintosh HD the same way.");

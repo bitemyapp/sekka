@@ -104,6 +104,27 @@ fn refusal(message: String) -> HelperRefusal {
     }
 }
 
+/// The helper's answer to a request it answers with the installation's
+/// records.
+fn events_reply(reply: Result<Response, String>) -> Result<Events, HelperRefusal> {
+    match reply {
+        Ok(Response::Events {
+            records,
+            state,
+            running,
+            progress,
+        }) => Ok(Events {
+            records,
+            state,
+            running,
+            progress,
+        }),
+        Ok(Response::Refused(r)) => Err(r),
+        Ok(_) => Err(refusal("The helper answered something unexpected.".into())),
+        Err(e) => Err(refusal(e)),
+    }
+}
+
 /// One GET through Apple's URL loading system: its trust store, proxies and
 /// idle timeout.
 fn get(url: &str, range: Option<(u64, u64)>) -> Result<(u16, Option<String>, Vec<u8>), TransportError> {
@@ -337,22 +358,11 @@ impl Environment for Live {
     }
 
     fn retry_startup_disk(&self, installation: Uuid, password: Secret) -> Result<Events, HelperRefusal> {
-        match self.helper(Request::RetryStartupDisk { installation }, Some(&password)) {
-            Ok(Response::Events {
-                records,
-                state,
-                running,
-                progress,
-            }) => Ok(Events {
-                records,
-                state,
-                running,
-                progress,
-            }),
-            Ok(Response::Refused(r)) => Err(r),
-            Ok(_) => Err(refusal("The helper answered something unexpected.".into())),
-            Err(e) => Err(refusal(e)),
-        }
+        events_reply(self.helper(Request::RetryStartupDisk { installation }, Some(&password)))
+    }
+
+    fn reconcile(&self, installation: Uuid) -> Result<Events, HelperRefusal> {
+        events_reply(self.helper(Request::Reconcile { installation }, None))
     }
 
     fn diagnostics(&self, installation: Uuid) -> Vec<String> {

@@ -83,6 +83,11 @@ pub trait Environment: Send + Sync + 'static {
     fn events(&self, installation: Uuid, after: u64) -> Result<Events, String>;
     fn cancel(&self, installation: Uuid) -> Result<(), HelperRefusal>;
     fn retry_startup_disk(&self, installation: Uuid, password: Secret) -> Result<Events, HelperRefusal>;
+    /// Ask the helper to look at the Mac as root and bring a stopped
+    /// installation's record up to date with it: Recovery's steps once the
+    /// boot policy shows them, or that nothing of it is left. It may also
+    /// find nothing to change.
+    fn reconcile(&self, installation: Uuid) -> Result<Events, HelperRefusal>;
     fn diagnostics(&self, installation: Uuid) -> Vec<String>;
     /// Delete the app's downloads once the helper has its own copies.
     fn remove_staging(&self);

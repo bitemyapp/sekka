@@ -207,6 +207,14 @@ pub fn to_download(bytes: u64, staged: bool) -> String {
 
 pub const BACKUP: &str = "I have a current backup of this Mac.";
 
+/// After an installation that changed nothing is cancelled.
+pub const CANCELLED: &str = "Cancelled. Nothing on your Mac's disk changed.";
+/// After the helper found nothing of an unfinished installation left.
+pub const REMOVED: &str = "Nothing of the earlier installation was found on your Mac's disk, so you can install Sekka again.";
+/// The existing screen, for the installation this app made, once Recovery's
+/// step is done. Whether Sekka has started since isn't known here.
+pub const INSTALLED: &str = "Recovery's step is done. Start your Mac in Sekka; the first time it starts, Sekka asks you to create your account.";
+
 /// Said on the review, before anything is installed
 /// (docs/apple-silicon/encryption.md).
 pub const NOT_ENCRYPTED: &str = "Sekka's partition isn't encrypted. macOS stays protected by FileVault; it doesn't protect Sekka. Encryption will come in a later version.";

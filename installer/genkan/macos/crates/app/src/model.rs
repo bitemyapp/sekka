@@ -8,9 +8,9 @@ use std::collections::{BTreeSet, VecDeque};
 
 use sekka_mac_contract::{
     Acknowledgement, ArtifactRole, Begin, Candidate, Confirmation, DiskChanged, HelperRefusal,
-    HelperRefusalCode, InstallState, Inspection, InstallationKind, IssueCode, Place, Plan,
-    PlanError, PlanRequest, Progress, Record, Release, Stage, StagedFile as WireStagedFile,
-    Summary, Uuid, capacity, derive_plan, suggested_size,
+    HelperRefusalCode, InstallState, Inspection, InstallationKind, InstallationState, IssueCode,
+    Place, Plan, PlanError, PlanRequest, Progress, Record, Release, Stage,
+    StagedFile as WireStagedFile, Summary, Uuid, capacity, derive_plan, suggested_size,
 };
 use sekka_mac_trust::Verified;
 
@@ -69,6 +69,16 @@ pub struct CheckRow {
     pub state: CheckState,
 }
 
+/// Asking the helper to bring a stopped installation's record up to date
+/// with the Mac ([`Model::decide`]). It is asked once in each check.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reconciling {
+    /// The helper hasn't answered yet.
+    Asked(Uuid),
+    /// It answered, or couldn't.
+    Answered(Uuid),
+}
+
 /// The authorization sheet, while it is open.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Authorization {
@@ -94,6 +104,7 @@ pub enum Msg {
     Events(Result<Events, String>),
     CancelAnswered(Result<(), HelperRefusal>),
     Retried(Result<Events, HelperRefusal>),
+    Reconciled(Result<Events, HelperRefusal>),
     Diagnostics(Vec<String>),
 
     CheckAgain,
@@ -133,6 +144,7 @@ pub enum Effect {
     Poll { installation: Uuid, after: u64, delay_ms: u64 },
     Cancel(Uuid),
     RetryStartupDisk(Uuid, Secret),
+    Reconcile(Uuid),
     Diagnostics(Uuid),
     CopyToPasteboard(String),
     ShutDown,
@@ -174,6 +186,8 @@ pub struct Model {
     pub notice: Option<String>,
     /// The cancel button was pressed and the helper hasn't answered.
     pub cancelling: bool,
+    /// The installation the helper was asked to reconcile in this check.
+    pub reconciling: Option<Reconciling>,
 }
 
 impl Model {
@@ -208,6 +222,7 @@ impl Model {
             log: VecDeque::new(),
             notice: None,
             cancelling: false,
+            reconciling: None,
         };
         (model, vec![Effect::Inspect, Effect::LoadCatalog, Effect::HelperStatus])
     }
@@ -222,6 +237,8 @@ impl Model {
     /// Where the person is in the journey.
     pub fn step(&self) -> Step {
         match self.screen {
+            // Recovery's step is done: all that's left is Sekka's own.
+            Screen::Existing if self.installed() => Step::Account,
             Screen::Checking | Screen::Unsupported | Screen::NotReady | Screen::Existing | Screen::NoRelease => {
                 Step::Check
             }
@@ -376,6 +393,24 @@ impl Model {
             .unwrap_or_default()
     }
 
+    /// Whether the installation the helper knows is installed: Recovery's
+    /// step is done, by its record or by the disk.
+    pub fn installed(&self) -> bool {
+        self.state == Some(InstallState::WaitingForSetup)
+            || self
+                .installation
+                .is_some_and(|id| self.on_disk(id).is_some_and(|x| x.state == InstallationState::Complete))
+    }
+
+    /// What this Mac's own inspection shows of an installation the helper
+    /// knows: the installation on the disk that names it, if any.
+    fn on_disk(&self, installation: Uuid) -> Option<&sekka_mac_contract::Installation> {
+        self.inspection()?
+            .installations
+            .iter()
+            .find(|x| x.installation_id == Some(installation))
+    }
+
     /// Installations the helper knows that need the person's attention.
     pub fn unfinished(&self) -> Option<&Summary> {
         let Some(Ok(list)) = &self.helper else { return None };
@@ -437,17 +472,11 @@ impl Model {
                 self.download_error = Some(e);
                 Vec::new()
             }
+            // A running installation or download is already being watched.
+            Msg::CheckAgain if self.running || self.downloading => Vec::new(),
             Msg::CheckAgain => {
-                self.screen = Screen::Checking;
-                self.inspection = None;
-                self.catalog = None;
-                self.helper = None;
-                self.release = None;
-                self.to_download = None;
-                self.plan = None;
-                self.plan_error = None;
                 self.notice = None;
-                vec![Effect::Inspect, Effect::LoadCatalog, Effect::HelperStatus]
+                self.check_again()
             }
             Msg::SetSize(bytes) => {
                 self.size = bytes;
@@ -585,6 +614,27 @@ impl Model {
                 self.events(events)
             }
             Msg::Retried(Err(refusal)) => self.refused(refusal),
+            Msg::Reconciled(result) => {
+                let Some(Reconciling::Asked(id)) = self.reconciling else { return Vec::new() };
+                self.reconciling = Some(Reconciling::Answered(id));
+                match result {
+                    Ok(events) => {
+                        if let Some(Ok(list)) = &mut self.helper
+                            && let Some(summary) = list.iter_mut().find(|s| s.installation == id)
+                        {
+                            summary.state = events.state.clone();
+                            summary.running = events.running;
+                        }
+                        if events.state == InstallState::Removed {
+                            self.notice = Some(text::REMOVED.into());
+                        }
+                    }
+                    Err(refusal) => {
+                        self.log(format!("The helper didn't bring the installation's record up to date: {}", refusal.message));
+                    }
+                }
+                self.decide()
+            }
             Msg::CopyDiagnostics => match self.installation {
                 Some(id) => vec![Effect::Diagnostics(id)],
                 None => vec![Effect::CopyToPasteboard(self.report(&[]))],
@@ -600,6 +650,24 @@ impl Model {
                 Vec::new()
             }
         }
+    }
+
+    /// Look at everything again from the checking screen: this Mac, the
+    /// catalog and the helper's installations.
+    fn check_again(&mut self) -> Vec<Effect> {
+        self.screen = Screen::Checking;
+        self.inspection = None;
+        self.catalog = None;
+        self.helper = None;
+        self.release = None;
+        self.to_download = None;
+        self.plan = None;
+        self.plan_error = None;
+        self.installation = None;
+        self.records.clear();
+        self.state = None;
+        self.reconciling = None;
+        vec![Effect::Inspect, Effect::LoadCatalog, Effect::HelperStatus]
     }
 
     fn open_authorization(&mut self, retry: bool) {
@@ -728,11 +796,20 @@ impl Model {
                 self.screen = Screen::Recovery;
                 vec![Effect::RemoveStaging]
             }
-            InstallState::Cancelled => {
-                self.installation = None;
-                self.notice = Some("Cancelled. Nothing on your Mac's disk changed.".into());
-                self.screen = Screen::Plan;
-                Vec::new()
+            InstallState::Cancelled | InstallState::Removed => {
+                let notice = if state == InstallState::Removed { text::REMOVED } else { text::CANCELLED };
+                // An installation started in this run goes back to its
+                // plan; one reconnected to has none, so this Mac is looked
+                // at again.
+                let effects = if self.plan.is_some() {
+                    self.installation = None;
+                    self.screen = Screen::Plan;
+                    Vec::new()
+                } else {
+                    self.check_again()
+                };
+                self.notice = Some(notice.into());
+                effects
             }
             InstallState::WaitingForSetup => {
                 self.screen = Screen::Existing;
@@ -830,39 +907,20 @@ impl Model {
         // attention, comes first: reopening the app reconnects to it rather
         // than starting another.
         if let Some(summary) = self.unfinished().cloned() {
-            self.installation = Some(summary.installation);
-            self.state = Some(summary.state.clone());
-            return match summary.state {
-                _ if summary.running => {
-                    self.screen = Screen::Installing;
-                    self.running = true;
-                    vec![Effect::Poll {
-                        installation: summary.installation,
-                        after: 0,
-                        delay_ms: 0,
-                    }]
-                }
-                InstallState::WaitingForRecovery => {
-                    self.screen = Screen::Recovery;
-                    vec![Effect::Poll {
-                        installation: summary.installation,
-                        after: 0,
-                        delay_ms: 0,
-                    }]
-                }
-                InstallState::WaitingForSetup => {
-                    self.screen = Screen::Existing;
-                    Vec::new()
-                }
-                _ => {
-                    self.screen = Screen::Stopped;
-                    vec![Effect::Poll {
-                        installation: summary.installation,
-                        after: 0,
-                        delay_ms: 0,
-                    }]
-                }
-            };
+            if summary.running {
+                self.installation = Some(summary.installation);
+                self.state = Some(summary.state.clone());
+                self.screen = Screen::Installing;
+                self.running = true;
+                return vec![Effect::Poll {
+                    installation: summary.installation,
+                    after: 0,
+                    delay_ms: 0,
+                }];
+            }
+            if let Some(effects) = self.reconnect(&summary) {
+                return effects;
+            }
         }
         let (Some(inspection), Some(catalog), Some(_)) = (&self.inspection, &self.catalog, &self.helper) else {
             return Vec::new();
@@ -920,6 +978,68 @@ impl Model {
             }
         }
         Vec::new()
+    }
+
+    /// Reconnect to a stopped installation the helper knows, or `None` when
+    /// it no longer stands in the way. Its record is read against this Mac's
+    /// own inspection first: the record knows nothing of what Recovery did,
+    /// or of partitions removed by hand. When the two disagree, the helper
+    /// is asked (once) to look as root and bring the record up to date, and
+    /// this is decided again from its answer.
+    fn reconnect(&mut self, summary: &Summary) -> Option<Vec<Effect>> {
+        let id = summary.installation;
+        let Some(inspection) = &self.inspection else { return Some(Vec::new()) };
+        let inspected = inspection.is_ok();
+        let found = self.on_disk(id).map(|x| x.state);
+        let complete = found == Some(InstallationState::Complete);
+        let gone = inspected && found.is_none();
+        match self.reconciling {
+            Some(Reconciling::Asked(asked)) if asked == id => return Some(Vec::new()),
+            Some(Reconciling::Answered(answered)) if answered == id => {}
+            _ => {
+                let recovered = complete
+                    && matches!(
+                        summary.state,
+                        InstallState::WaitingForRecovery | InstallState::EnrollmentUncertain
+                    );
+                let removed = gone && !summary.state.allows_new_installation();
+                if recovered || removed {
+                    self.reconciling = Some(Reconciling::Asked(id));
+                    return Some(vec![Effect::Reconcile(id)]);
+                }
+            }
+        }
+        // Finished, then removed by hand: nothing of it stands in the way.
+        if summary.state == InstallState::WaitingForSetup && gone {
+            return None;
+        }
+        self.installation = Some(id);
+        self.state = Some(summary.state.clone());
+        let poll = vec![Effect::Poll {
+            installation: id,
+            after: 0,
+            delay_ms: 0,
+        }];
+        Some(match summary.state {
+            // Whatever the record says, a complete Sekka on the disk is
+            // installed and never needs finishing in Recovery.
+            _ if complete => {
+                self.screen = Screen::Existing;
+                Vec::new()
+            }
+            InstallState::WaitingForRecovery => {
+                self.screen = Screen::Recovery;
+                poll
+            }
+            InstallState::WaitingForSetup => {
+                self.screen = Screen::Existing;
+                Vec::new()
+            }
+            _ => {
+                self.screen = Screen::Stopped;
+                poll
+            }
+        })
     }
 
     /// Derive the plan the helper will derive, from the latest inspection.

@@ -96,6 +96,9 @@ impl Runtime {
             Effect::RetryStartupDisk(id, password) => self.spawn("retry", move |env, tx| {
                 let _ = tx.send(Msg::Retried(env.retry_startup_disk(id, password)));
             }),
+            Effect::Reconcile(id) => self.spawn("reconcile", move |env, tx| {
+                let _ = tx.send(Msg::Reconciled(env.reconcile(id)));
+            }),
             Effect::Diagnostics(id) => self.spawn("diagnostics", move |env, tx| {
                 let _ = tx.send(Msg::Diagnostics(env.diagnostics(id)));
             }),
