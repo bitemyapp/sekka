@@ -107,26 +107,50 @@ pub enum Nix {
     Config,
 }
 
-/// The one privileged operation this process runs. A change and a clean-up
-/// borrow it for as long as they can still change the system, so that one
-/// can't start inside or alongside another; only the first
+/// The lock that keeps Yukimi's operations, from the GUI, the terminal or
+/// a recovery, from running at once. The kernel releases it even after a
+/// crash.
+pub const LOCK: &str = "/run/lock/yukimi.lock";
+
+/// The one privileged operation this process runs, holding [`LOCK`]. A
+/// change and a clean-up borrow it for as long as they can still change the
+/// system, so that one can't start inside or alongside another in this
+/// process, and the lock keeps other processes out; only the first
 /// [`begin`](Self::begin) in a process gets it.
 #[derive(Debug)]
-pub struct Operation(());
+pub struct Operation {
+    _lock: Option<std::fs::File>,
+}
 
 static BEGUN: AtomicBool = AtomicBool::new(false);
 
 impl Operation {
+    /// Takes [`LOCK`], unless another operation holds it.
     pub fn begin() -> Result<Operation> {
+        Operation::begin_at(Path::new(LOCK))
+    }
+
+    /// The same with another lock file.
+    pub fn begin_at(lock: &Path) -> Result<Operation> {
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(lock)
+            .and_then(|file| {
+                file.try_lock()?;
+                Ok(file)
+            })
+            .map_err(|e| Failure(format!("Another Yukimi operation is running, or its lock is unavailable: {e}")))?;
         if BEGUN.swap(true, Ordering::SeqCst) {
             return Err(Failure("This process has run its operation already".into()));
         }
-        Ok(Operation(()))
+        Ok(Operation { _lock: Some(file) })
     }
 
     #[cfg(test)]
     pub(crate) fn for_test() -> Operation {
-        Operation(())
+        Operation { _lock: None }
     }
 }
 

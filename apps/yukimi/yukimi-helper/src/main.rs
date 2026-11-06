@@ -62,7 +62,7 @@ use yukimi_config::packages;
 use yukimi_config::sekka;
 use yukimi_config::{branch, edit, lock};
 use yukimi_helper::change::{Committed, RestorePoint};
-use yukimi_helper::clean::{Generations, generation_words};
+use yukimi_helper::clean::{self as cleaning, Generations, generation_words};
 use yukimi_helper::process::{
     Failure, Nix, Operation, PATH, Program, Result, command, nix, output, report, stage, stage_done, stop,
     watch_for_stop,
@@ -952,6 +952,26 @@ fn main() -> ExitCode {
         report(0, "yukimi-helper must be started through pkexec");
         return ExitCode::from(2);
     }
+    // The operation's unit runs this after its worker ends, however it
+    // ended (ExecStopPost=, SIGKILL included): it finishes a clean-up that
+    // was killed before it rewrote the boot menu. While another operation
+    // holds the lock, that operation's own start does it instead.
+    if args.first().is_some_and(|s| s == "__recover") {
+        let mut operation = match Operation::begin() {
+            Ok(operation) => operation,
+            Err(Failure(message)) => {
+                report(1, &format!("Not recovering now: {message}"));
+                return ExitCode::SUCCESS;
+            }
+        };
+        return match cleaning::recover(&mut operation) {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(Failure(message)) => {
+                report(0, &format!("Finishing an interrupted clean-up failed: {message}"));
+                ExitCode::FAILURE
+            }
+        };
+    }
     if args.first().is_some_and(|s| s == "__worker") {
         let Some((directory, args)) = args.get(1..).and_then(|args| args.split_first()) else {
             return ExitCode::FAILURE;
@@ -1013,19 +1033,14 @@ fn check_activation(args: &[String]) -> Result<()> {
 fn worker(args: &[String]) -> Result<String> {
     let (command, rest) = args.split_first().ok_or_else(|| Failure("Missing operation".into()))?;
     // CLI and GUI must not edit the configuration or activate generations
-    // concurrently. The kernel releases this lock even after a crash.
-    let _guard = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .open("/run/lock/yukimi.lock")
-        .and_then(|file| {
-            file.try_lock()?;
-            Ok(file)
-        })
-        .map_err(|e| Failure(format!("Another Yukimi operation is running, or its lock is unavailable: {e}")))?;
+    // concurrently: the operation holds the lock until it ends.
     let mut operation = Operation::begin()?;
     watch_for_stop();
+    // A clean-up killed, or cut off by a power failure, before it rewrote
+    // the boot menu: finish that first.
+    if let Err(Failure(message)) = cleaning::recover(&mut operation) {
+        report(0, &format!("Finishing an interrupted clean-up failed: {message}"));
+    }
     match command.as_str() {
         "change" => change(&mut operation, rest),
         "rollback" => rollback(&mut operation, rest),

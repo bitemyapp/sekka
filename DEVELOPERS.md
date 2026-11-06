@@ -1183,6 +1183,10 @@ generation exists: a new copy for that generation sets it aside as
 `generation-<n>.unrecorded`. Activation is allowed to finish once started; it
 never initiates a reboot. Clean Up deletes old generations and rewrites the
 boot menu as one step that Stop waits for, and only then collects garbage.
+It records the deletion in `/var/lib/yukimi/clean-up.json` before it starts
+and removes the record once the menu is rewritten. After a kill or a power
+cut in between, the operation's unit (`ExecStopPost=`) or the next operation
+rewrites the menu, never while another operation holds the lock.
 
 The helper's typed steps live in its library (`yukimi_helper`), each
 guarantee shown by a `compile_fail` doctest. The helper runs programs only

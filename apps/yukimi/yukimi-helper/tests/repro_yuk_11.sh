@@ -64,7 +64,7 @@ stub "$T/sw/bin/nix-env" 'cd /nix/var/nix/profiles' 'case "$*" in' \
   '*--set*) max=0; for l in system-*-link; do n=${l#system-}; n=${n%-link}; (( n > max )) && max=$n; done' \
   '  ln -s "${@: -1}" "system-$((max+1))-link"; ln -sfn "system-$((max+1))-link" system;;' \
   '*--switch-generation*) ln -sfn "system-${@: -1}-link" system;;' \
-  '*--delete-generations*) cur=$(readlink system); for l in system-*-link; do [[ $l == "$cur" ]] && continue; rm "$l"' \
+  '*--delete-generations*) echo $$ >"$T/state/delete-pid"; cur=$(readlink system); for l in system-*-link; do [[ $l == "$cur" ]] && continue; rm "$l"' \
   '    if [[ -e $T/ctl/slow-delete ]]; then touch "$T/state/delete-started"; sleep 1; fi; done;;' \
   'esac'
 stub "$T/sw/bin/nix-store" 'case $(cat "$T/ctl/gc") in' \
@@ -102,6 +102,16 @@ helper_stopped() { # marker args…: run the worker, interrupt it once marker ap
   until [[ -e $marker ]]; do sleep 0.02; i=$((i + 1)); ((i < 1500)) || { echo "never reached $marker"; exit 2; }; done
   kill -INT "$pid"; wait "$pid" || true
   cat "$dir/result.json"
+}
+helper_killed() { # marker args…: run the worker, SIGKILL it and the program it runs once marker appears (systemd's control-group kill)
+  local marker=$1; shift
+  local dir; dir=$(mktemp -d /var/lib/yukimi/operations/op.XXXXXX)
+  rm -f "$marker" "$T/state/delete-pid"
+  "$T/yukimi-helper" __worker "$dir" "$@" </dev/null 2>"$dir.stderr" &
+  local pid=$! i=0
+  until [[ -e $marker ]]; do sleep 0.02; i=$((i + 1)); ((i < 1500)) || { echo "never reached $marker"; exit 2; }; done
+  kill -KILL "$pid"; [[ -e $T/state/delete-pid ]] && { kill -KILL "$(cat "$T/state/delete-pid")" 2>/dev/null || true; }; wait "$pid" || true
+  echo "killed, result: $(cat "$dir/result.json" 2>/dev/null || echo none)"
 }
 check_isolated() { # nothing real is reachable through the helper's fixed paths
   [[ $(readlink -f /run/current-system/sw/bin/nix) == "$T/sw/bin/nix" ]]
@@ -148,6 +158,53 @@ setup; echo ok >"$T/ctl/gc"; touch "$T/ctl/slow-delete"
 echo "result: $(helper_stopped "$T/state/delete-started" clean --older-than-days 7)"
 rm "$T/ctl/slow-delete"
 expect "boot menu lists only what exists after Stop during the deletion" "$(menu)" "$(links)"
+
+# D-F: a clean-up killed (SIGKILL, as at a power cut, nothing of it runs
+# after) between deleting generations and rewriting the boot menu.
+record=/var/lib/yukimi/clean-up.json
+recorded() { [[ -e $record ]] && echo recorded || echo gone; }
+stale() { [[ $(menu) != "$(links)" ]] && echo stale || echo current; }
+
+echo "== D: Clean Up killed while deleting; the unit's ExecStopPost runs the recovery"
+setup; echo ok >"$T/ctl/gc"; touch "$T/ctl/slow-delete"
+helper_killed "$T/state/delete-started" clean --older-than-days 7
+rm "$T/ctl/slow-delete"
+expect "the killed clean-up left its record" "$(recorded)" "recorded"
+expect "the record names the deletion" "$(grep -o '"older_than_days":7' $record)" '"older_than_days":7'
+expect "the boot menu is stale after the kill" "$(stale)" "stale"
+"$T/yukimi-helper" __recover </dev/null 2>"$T/recover.log" || true
+expect "boot menu lists only what exists after the ExecStopPost recovery" "$(menu)" "$(links)"
+expect "the record is gone after the recovery" "$(recorded)" "gone"
+"$T/yukimi-helper" __recover </dev/null 2>>"$T/recover.log" || true
+expect "running the recovery again changes nothing" "$(menu)" "$(links)"
+
+echo "== E: Clean Up killed while deleting; the next operation's start recovers (after a power cut)"
+setup; touch "$T/ctl/slow-delete"
+helper_killed "$T/state/delete-started" clean --older-than-days 7
+rm "$T/ctl/slow-delete"
+expect "the boot menu is stale after the kill" "$(stale)" "stale"
+# The next operation's build fails, so only the recovery writes the menu.
+echo fail >"$T/ctl/build"
+echo "result: $(helper change --packages htop --mode auto)"
+expect "boot menu lists only what exists after the next start" "$(menu)" "$(links)"
+expect "the record is gone after the next start" "$(recorded)" "gone"
+
+echo "== F: the recovery doesn't run while a live Clean Up holds the lock"
+setup; echo ok >"$T/ctl/gc"; touch "$T/ctl/slow-delete"; rm -f "$T/state/delete-started"
+dir=$(mktemp -d /var/lib/yukimi/operations/op.XXXXXX)
+"$T/yukimi-helper" __worker "$dir" clean --older-than-days 7 </dev/null 2>"$dir.stderr" &
+live=$! i=0
+until [[ -e $T/state/delete-started ]]; do sleep 0.02; i=$((i + 1)); ((i < 1500)) || { echo "never started"; exit 2; }; done
+: >"$T/calls"
+"$T/yukimi-helper" __recover </dev/null 2>"$T/recover-busy.log" || true
+expect "the recovery stood aside" "$(grep -c 'Not recovering now' "$T/recover-busy.log")" "1"
+expect "the recovery didn't touch the boot menu" "$(grep -c switch-to-configuration "$T/calls")" "0"
+expect "the live clean-up's record is still there" "$(recorded)" "recorded"
+wait "$live" || true
+rm "$T/ctl/slow-delete"
+echo "result: $(cat "$dir/result.json")"
+expect "boot menu lists only what exists after the live clean-up" "$(menu)" "$(links)"
+expect "the live clean-up removed its record" "$(recorded)" "gone"
 
 echo "== helper calls (A, B and C)"; cat "$T/calls"
 exit $FAILED
