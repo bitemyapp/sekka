@@ -59,7 +59,11 @@ fn plist_string(xml: &str, key: &str) -> Option<String> {
 }
 
 /// The real Mac, from inside its Recovery.
-pub struct Mac;
+pub struct Mac {
+    /// Shared with the app delegate, which keeps the app open while it is
+    /// set.
+    changing: screen::Changing,
+}
 
 impl System for Mac {
     fn volume(&self, path: &Path) -> Result<(Uuid, Uuid), String> {
@@ -99,20 +103,22 @@ impl System for Mac {
             log(&format!("Preview: would run {} {}", program.path(), args.join(" ")));
             return Err(AuthError::Failed("This preview build never changes how a Mac starts up.".into()));
         }
-        pty::authorized(program, args, user, password, log)
+        self.changing.during(|| pty::authorized(program, args, user, password, log))
     }
     fn disable_autolaunch(&self, volume: &Path) -> Result<(), String> {
-        run("/sbin/mount", &["-u", "-w", &volume.to_string_lossy()])?;
-        let media = volume.join(".IAPhysicalMedia");
-        if media.exists() {
-            fs::rename(&media, volume.join("IAPhysicalMedia-disabled.plist")).map_err(|e| e.to_string())?;
-        }
-        let services = volume.join("System/Library/CoreServices");
-        let disabled = services.join("SystemVersion-disabled.plist");
-        if disabled.exists() {
-            fs::rename(&disabled, services.join("SystemVersion.plist")).map_err(|e| e.to_string())?;
-        }
-        Ok(())
+        self.changing.during(|| {
+            run("/sbin/mount", &["-u", "-w", &volume.to_string_lossy()])?;
+            let media = volume.join(".IAPhysicalMedia");
+            if media.exists() {
+                fs::rename(&media, volume.join("IAPhysicalMedia-disabled.plist")).map_err(|e| e.to_string())?;
+            }
+            let services = volume.join("System/Library/CoreServices");
+            let disabled = services.join("SystemVersion-disabled.plist");
+            if disabled.exists() {
+                fs::rename(&disabled, services.join("SystemVersion.plist")).map_err(|e| e.to_string())?;
+            }
+            Ok(())
+        })
     }
     fn startup_device(&self) -> Result<String, String> {
         Ok(run("/usr/sbin/bless", &["--getBoot"])?.trim().to_string())
@@ -145,6 +151,7 @@ struct Window {
     tx: Sender<Event>,
     rx: Receiver<Event>,
     shown: Option<Screen>,
+    changing: screen::Changing,
     details: Option<Retained<NSPanel>>,
     details_text: Option<Retained<NSTextView>>,
     details_shown: screen::Shown,
@@ -194,8 +201,13 @@ impl Window {
                 }
             }
         }
-        // Install changes the screen itself, before any event: the window
-        // follows at once, so its close button is off from the start.
+        // The close button is off only while macOS changes how the Mac
+        // starts up, which isn't all of "Finishing…": a step's checks come
+        // first, and the app may go while they run.
+        if let Some(close) = self.window.standardWindowButton(NSWindowButton::CloseButton) {
+            close.setEnabled(!self.changing.now());
+        }
+        // Install changes the screen itself, before any event.
         self.render();
         if self.details.as_ref().is_some_and(|p| p.isVisible()) {
             self.sync_details();
@@ -238,9 +250,6 @@ impl Window {
         }
         self.shown = Some(screen.clone());
         let mtm = self.mtm;
-        if let Some(close) = self.window.standardWindowButton(NSWindowButton::CloseButton) {
-            close.setEnabled(!screen.busy());
-        }
         for v in self.column.arrangedSubviews().iter() {
             self.column.removeArrangedSubview(&v);
             v.removeFromSuperview();
@@ -409,6 +418,7 @@ fn buttons(mtm: MainThreadMarker, buttons: &[&NSButton]) -> Retained<NSStackView
 pub struct DelegateIvars {
     window: RefCell<Option<Rc<RefCell<Window>>>>,
     targets: RefCell<Targets>,
+    changing: screen::Changing,
 }
 
 define_class!(
@@ -424,7 +434,7 @@ define_class!(
         #[unsafe(method(applicationDidFinishLaunching:))]
         fn did_finish_launching(&self, _: &NSNotification) {
             let mtm = self.mtm();
-            let w = open(mtm);
+            let w = open(mtm, self.ivars().changing.clone());
             menus(mtm, &mut self.ivars().targets.borrow_mut(), &w);
             w.borrow().window.setDelegate(Some(ProtocolObject::from_ref(self)));
             *self.ivars().window.borrow_mut() = Some(w);
@@ -448,8 +458,8 @@ define_class!(
     }
 
     unsafe impl NSWindowDelegate for Delegate {
-        // The close button is off while a step runs; this is for any other
-        // way of closing the window.
+        // The close button is off while macOS changes how the Mac starts
+        // up; this is for any other way of closing the window.
         #[unsafe(method(windowShouldClose:))]
         fn window_should_close(&self, _: &NSWindow) -> bool {
             !self.refuse_while_busy()
@@ -457,7 +467,7 @@ define_class!(
     }
 );
 
-fn open(mtm: MainThreadMarker) -> Rc<RefCell<Window>> {
+fn open(mtm: MainThreadMarker, changing: screen::Changing) -> Rc<RefCell<Window>> {
     let window = unsafe {
         NSWindow::initWithContentRect_styleMask_backing_defer(
             NSWindow::alloc(mtm),
@@ -485,7 +495,8 @@ fn open(mtm: MainThreadMarker) -> Rc<RefCell<Window>> {
     // Find the installation from where the app is, before anything else.
     let bundle = PathBuf::from(objc2_foundation::NSBundle::mainBundle().bundlePath().to_string());
     let loaded = volume_of(&bundle).ok_or_else(|| "The app isn't on a volume.".to_string()).and_then(|v| Install::load(&v));
-    let (screen, owner, finisher) = match loaded.and_then(|i| Finisher::open(Mac, i)) {
+    let mac = Mac { changing: changing.clone() };
+    let (screen, owner, finisher) = match loaded.and_then(|i| Finisher::open(mac, i)) {
         Ok(f) => {
             let owner = (f.owner().0.to_string(), f.owner().1.to_string());
             (Screen::Checking, owner, Some(f))
@@ -508,6 +519,7 @@ fn open(mtm: MainThreadMarker) -> Rc<RefCell<Window>> {
         tx,
         rx,
         shown: None,
+        changing,
         details: None,
         details_text: None,
         details_shown: screen::Shown::default(),
@@ -586,21 +598,15 @@ impl Delegate {
         let this = Self::alloc(mtm).set_ivars(DelegateIvars {
             window: RefCell::new(None),
             targets: RefCell::new(Targets::default()),
+            changing: screen::Changing::default(),
         });
         unsafe { msg_send![super(this), init] }
     }
 
-    /// While a step runs, say why the app stays, and refuse. A state that
-    /// can't be read counts as running: staying open is always safe.
+    /// While macOS changes how the Mac starts up, say why the app stays,
+    /// and refuse.
     fn refuse_while_busy(&self) -> bool {
-        let busy = match self.ivars().window.borrow().as_ref() {
-            None => false,
-            Some(w) => w
-                .try_borrow()
-                .ok()
-                .and_then(|w| w.state.try_borrow().ok().map(|s| s.screen.busy()))
-                .unwrap_or(true),
-        };
+        let busy = self.ivars().changing.now();
         if busy {
             let alert = NSAlert::new(self.mtm());
             alert.setMessageText(&NSString::from_str(screen::BUSY));

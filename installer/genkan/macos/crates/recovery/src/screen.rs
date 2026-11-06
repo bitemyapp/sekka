@@ -3,6 +3,8 @@
 //! screens, when it may close, and the output behind Show Details, kept so
 //! that the view is only ever sent what is new.
 use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::finish::Phase;
 
@@ -17,13 +19,32 @@ pub enum Screen {
     Done,
 }
 
-impl Screen {
-    /// Whether `bputil`, `kmutil` or `bless` may be running. Each answers
-    /// to the app's pseudo-terminal, and one stopped part way can leave the
-    /// startup policy or the boot object half changed, so while a step runs
-    /// the window stays open and the app doesn't quit.
-    pub fn busy(&self) -> bool {
-        matches!(self, Screen::Working(_))
+/// Whether macOS is changing how the Mac starts up: `bputil`, `kmutil` or
+/// `bless` is running, or Recovery is being told to stop opening the app.
+/// Each tool answers to the app's pseudo-terminal, and one stopped part way
+/// can leave the startup policy or the boot object half changed, so while
+/// one runs the window stays open and the app doesn't quit. The reads
+/// around them (`diskutil`, `bputil -d`) don't count: the app may go then,
+/// and a read that never answers can't keep it.
+#[derive(Clone, Debug, Default)]
+pub struct Changing(Arc<AtomicUsize>);
+
+impl Changing {
+    /// Run `change`, counted until it returns or unwinds.
+    pub fn during<T>(&self, change: impl FnOnce() -> T) -> T {
+        struct Done<'a>(&'a AtomicUsize);
+        impl Drop for Done<'_> {
+            fn drop(&mut self) {
+                self.0.fetch_sub(1, Ordering::SeqCst);
+            }
+        }
+        self.0.fetch_add(1, Ordering::SeqCst);
+        let _done = Done(&self.0);
+        change()
+    }
+
+    pub fn now(&self) -> bool {
+        self.0.load(Ordering::SeqCst) > 0
     }
 }
 
@@ -110,19 +131,19 @@ mod tests {
     }
 
     #[test]
-    fn only_a_running_step_keeps_the_app_open() {
-        assert!(Screen::Working(Phase::Allowing).busy());
-        assert!(Screen::Working(Phase::Selecting).busy());
-        for screen in [
-            Screen::Checking,
-            Screen::Broken("x".into()),
-            Screen::WrongRecovery,
-            Screen::NotOneTrue,
-            Screen::Ready { error: None },
-            Screen::Done,
-        ] {
-            assert!(!screen.busy(), "{screen:?}");
-        }
+    fn only_a_change_under_way_keeps_the_app_open() {
+        let changing = Changing::default();
+        let window = changing.clone();
+        assert!(!window.now());
+        changing.during(|| {
+            assert!(window.now());
+            changing.during(|| assert!(window.now()));
+            assert!(window.now(), "still inside the outer change");
+        });
+        assert!(!window.now());
+        let stopped = std::panic::catch_unwind(|| changing.during(|| panic!("a step that stops part way")));
+        assert!(stopped.is_err());
+        assert!(!window.now(), "a step that unwinds doesn't keep the app");
     }
 
     #[test]
