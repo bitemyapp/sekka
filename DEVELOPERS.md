@@ -435,11 +435,12 @@ A conservative 64 MiB logical staging budget charges two snapshots per
 destination; larger individual objects run alone and must fit the store's
 limits. Distinct canonical digests are reserved once per group.
 Every staged file is still synchronized individually. A lazy, process-wide
-16-thread executor overlaps these synchronizations without duplicating file
-descriptors or using Tokio's blocking pool; a single staged file synchronizes
-inline. Each group joins its synchronization work before accounting commits,
-publication or staging cleanup. A synchronization error prevents that group's
-publication. Object accounting commits before canonical publication.
+16-thread executor overlaps independent cloning, digest verification and file
+synchronization without duplicating descriptors or using Tokio's blocking pool;
+singleton work stays inline. Each group joins all workers before accounting
+commits, publication or staging cleanup. Failed verification or file
+synchronization prevents that group's publication. Object accounting commits
+before canonical publication.
 Cached-only staging groups share a SQLite FULL metadata transaction across at
 most 256 destinations or 256 MiB charged as two snapshots per destination.
 A larger individual object runs alone at this level too. Both store locks
@@ -447,13 +448,15 @@ remain held until this transaction commits or rolls back. New canonical
 accounting or namespace removals commit before publication and end the
 metadata quantum early. Weak-path hints may precede publication because they
 are advisory and reverified on use; pending LRU updates remain visible to
-later groups in the same transaction. This does not increase the live staging
-or descriptor bounds, change the database schema, or weaken file/directory
-synchronization.
-Sixteen fixed canonical staging slots
-are removed and the directory synchronized under the shared lock before each
-group's admission, so an already-open peer can recover abandoned stages
-without reopening the store or scanning all canonical objects.
+later groups in the same transaction. View renames share one directory barrier
+per distinct parent per metadata quantum, before its successful return and
+cached metadata commit. Canonical publication barriers remain unchanged. This
+does not increase the live staging or descriptor bounds, change the database
+schema, or weaken file/directory synchronization.
+Sixteen fixed canonical staging slots are removed and the directory synchronized
+under the shared lock before each quantum's admission, so an already-open peer
+can recover abandoned stages without reopening the store or scanning all
+canonical objects.
 CAS download paths remain singleton operations; grouped tree ingestion does
 not establish a fresh-worktree download performance improvement.
 Private cache configuration, TLS material and store settings participate in
@@ -662,6 +665,15 @@ rewrite their observations. Compression-aware physical accounting measures
 all selected worktrees and shared stores in one union, not a sum of `du`
 results. Service protocol checks alone do not establish frontend correctness,
 full-matrix performance or ISO qualification.
+
+Service-operation evidence records each cache root's apparent bytes,
+block-rounded policy bytes, content-entry count and configured byte/entry
+limits from the official `cache-inventory` API. Incomplete or erroneous
+snapshots are rejected. Exceeding a bound before an operation prevents the
+mutation; exceeding one afterward fails the observation. Removed-entry,
+restart-retention, metrics and original apparent-byte-cap checks remain
+required. These retained-cache snapshot bounds establish neither physical
+usage nor automatic total-state enforcement.
 
 The harness creates private evidence and publishes observations create-only.
 Completed command timings survive failed postprocessing; an interrupted trial
