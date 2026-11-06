@@ -34,9 +34,14 @@ lsblk=${SEKKA_LSBLK:-lsblk}
 fail() {
 	local message="Sekka cannot start: $*"
 	echo "<2>sekka-identity: $message" >"$kmsg" 2>/dev/null || true
-	# The boot splash would hide the message; emergency mode follows.
-	if [ -z "${SEKKA_CMDLINE:-}" ] && command -v plymouth >/dev/null 2>&1; then
-		plymouth quit 2>/dev/null || true
+	if [ -z "${SEKKA_CMDLINE:-}" ]; then
+		# A console whose driver is a module (a VM's virtio console) is
+		# only there once udev has loaded it; then the boot splash, which
+		# would hide the message, goes. Emergency mode follows.
+		udevadm settle --timeout=10 2>/dev/null || true
+		if command -v plymouth >/dev/null 2>&1; then
+			plymouth quit 2>/dev/null || true
+		fi
 	fi
 	{
 		echo
