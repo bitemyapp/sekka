@@ -18,6 +18,7 @@
 {
   config,
   lib,
+  options,
   pkgs,
   ...
 }:
@@ -48,6 +49,11 @@ let
   '';
 in
 {
+  imports = [
+    ./identity.nix
+    ./image-system.nix
+  ];
+
   options.calamares.appleSilicon = {
     enable = lib.mkEnableOption "Sekka's Apple Silicon platform: Omarchy's linux-aurora kernel, m1n1-aurora and U-Boot, and Apple's peripheral firmware from the EFI system partition";
     t6030Handoff = lib.mkOption {
@@ -72,7 +78,13 @@ in
     };
     graphicsUsers = lib.mkOption {
       type = lib.types.listOf lib.types.str;
-      default = lib.optional (config.calamares ? installUser) config.calamares.installUser;
+      # A product image has no account until first-boot setup creates one
+      # (its installUser is root until then).
+      default = lib.filter (user: user != "root") (
+        lib.optional (
+          options.calamares ? installUser && options.calamares.installUser.isDefined
+        ) config.calamares.installUser
+      );
       defaultText = lib.literalExpression "[ config.calamares.installUser ]";
       description = "Users who may open the M3 Pro's render node (the render group).";
     };
