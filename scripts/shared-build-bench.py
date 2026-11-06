@@ -11,13 +11,16 @@ Configuration keys: tool, repo, commit (full frozen SHA), root, client (argv),
 environment (explicit overrides), profiles (dev/release/release-lto, each with
 features and targets), artifacts (leaf/shared/icon selectors), setup (argv lists),
 service (identity, inventory/metrics/restart/eviction/restore_capacity argv and APIs),
-storage (roots, immutable_roots, command, optional immutable_command and max_active_union_bytes),
+storage (roots, immutable_roots, command, optional immutable_command, attribution_command
+and max_active_union_bytes),
 test_groups (nine named argv suffixes), soroban_tests, correctness_behavior
 (argv producing the eleven real libtest results), startup (private headless argv),
 startup_result (test-startup.py result.json path; exact executables and PNGs checked),
 runtime_artifacts (Bazel runtime placeholder -> artifact selector key) or
 runtime_targets (Buck runtime placeholder -> target name; ergonomic runtime API),
-nix_identity (evidence paths), variants (client/service/source identity metadata).
+nix_identity (evidence paths), variants (client/service/source identity metadata),
+plan (full, the default, or storage: one observation per storage/reuse/correctness
+scenario, edit latency reported but not gated, no churn, release-LTO or startup).
 Artifact selectors have target, optional file_regex, output_group and member
 (e.g. icons.rs); selectors may be keyed by profile. Runtime artifact placeholders
 include compositor/shell/ctl/koe. The compositor also runs --build-info.
@@ -62,7 +65,7 @@ Credentials belong in private client rc/manifest files, not literal argv tokens.
 Placeholders: {tree}, {root}, {profile}, {jobs}, {trial}, {state}, {output},
 {python}; these are literal substitutions, never shell expansions.
 
-Examples: shared-build-bench.py plan
+Examples: shared-build-bench.py plan --kind storage
           shared-build-bench.py smoke config.json --kind shared --edit
           shared-build-bench.py run config.json --go
           shared-build-bench.py summarize /owned/run/root
@@ -143,7 +146,7 @@ def load(path):
     return json.loads(Path(path).read_text())
 
 
-def plan():
+def plan(selection='full'):
     stages = []
     def add(name, trees=('a',), profile='dev', jobs=16, edits=None, operation='build', **extra):
         stages.append(dict(id=name, trees=list(trees), profile=profile, jobs=jobs,
@@ -191,7 +194,21 @@ def plan():
     for profile in PROFILES:
         add(f'{profile}-private-headless-startup', profile=profile, operation='startup')
     add('final-original', reference='dev-cold', storage=True)
+    if selection == 'storage':
+        stages = [stage for stage in stages if stage['id'] in STORAGE_PLAN]
     return stages
+
+
+# Storage-first qualification: one observation per scenario, the full plan's
+# definitions and order. Latency medians, job sweeps and churn are left out.
+STORAGE_PLAN = frozenset(
+    ['dev-cold', 'dev-noop-1', 'dev-leaf-1', 'dev-shared-1', 'dev-icon-1', 'dev-revert']
+    + [f'dev-fresh-{tree}' for tree in 'bcde']
+    + ['dev-divergent-j4', 'service-eviction', 'dev-post-eviction-original', 'service-restart',
+       'dev-restart-original', 'dev-primed-output-loss', 'service-restore-capacity',
+       'release-first', 'release-fresh', 'soroban-11', 'final-original']
+    + [f'test-group-{n}' for n in range(1, 10)])
+PLANS = ('full', 'storage')
 
 
 def expand(argv, values):
@@ -478,6 +495,7 @@ class Bench:
         if config['tool'] not in ('bazel', 'buck2'):
             raise ValueError('tool must be bazel or buck2')
         self.env = dict(os.environ, **config.get('environment', {}))
+        self.plan = plan(config.get('plan', 'full'))
         self.fingerprint = digest(canonical(config))
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         marker = self.root / OWNER
@@ -492,7 +510,7 @@ class Bench:
                           'source_commit': self.commit, 'created': time.time(), 'host': socket.gethostname()}
             save(marker, self.owner)
             save(self.root / 'config.json', config)
-            save(self.root / 'plan.json', plan())
+            save(self.root / 'plan.json', self.plan)
         self.lock = (self.root / '.lock').open('a')
         fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         self.original = {}
@@ -1122,6 +1140,14 @@ class Bench:
             value['passed'] &= value['immutable_union']['passed']
         if match:
             value.update(physical_disk_bytes=int(match[1]), unique_uncompressed_bytes=int(match[2]), referenced_bytes=int(match[3]))
+        if root_key == 'roots' and config.get('attribution_command'):
+            # Per-root uncompressed extents (btrfs filesystem du --raw): explains growth, never gates it.
+            rec = self.command(expand(config['attribution_command'], self.values()) + [str(path) for path in roots],
+                               self.root, directory, 'attribution')
+            rows = re.findall(r'(?m)^\s*(\d+)\s+(\d+)\s+(\d+)\s+(/.*)$', Path(rec['log']).read_text())
+            value['attribution'] = {'command': rec, 'method': 'uncompressed FIEMAP extents; exclusive is fs-wide single-reference',
+                                    'roots': {path: {'total': int(total), 'exclusive': int(exclusive), 'set_shared': int(shared)}
+                                              for total, exclusive, shared, path in rows}}
         save(directory / 'storage.json', value)
         return value
 
@@ -1130,7 +1156,7 @@ class Bench:
 
     def run(self, selected):
         self.prepare()
-        stages = plan()
+        stages = self.plan
         for index, stage in enumerate(stages):
             if selected and stage['id'] not in selected:
                 continue
@@ -1254,22 +1280,32 @@ def stage_trial_observations(root, stage, tool, completed=None):
 
 
 def qualification_gates(root):
-    """Prior-matrix thresholds: absent or unmatched evidence never passes."""
+    """Prior-matrix thresholds: absent or unmatched evidence never passes.
+
+    The storage plan keeps every storage, reuse and correctness gate. It takes
+    one observation where the full plan takes five, and reports edit latency
+    without gating on it."""
     config = load(root / 'config.json')
+    kind = config.get('plan', 'full')
+    planned = {stage['id'] for stage in plan(kind)}
+    samples = 5 if kind == 'full' else 1
     stages = {path.parent.name: load(path) for path in (root / 'stages').glob('*/complete.json')}
-    trials = [trial for stage in plan()
+    trials = [trial for stage in plan(kind)
               for trial in stage_trial_observations(root, stage, config['tool'], stages.get(stage['id']))]
     gates = {}
 
-    def record(name, observed, passed, requirement):
-        gates[name] = {'status': 'unmeasured' if passed is None else ('pass' if passed else 'fail'),
+    def record(name, observed, passed, requirement, informational=False):
+        status = 'unmeasured' if passed is None else ('pass' if passed else 'fail')
+        gates[name] = {'status': 'informational' if informational and passed is not None else status,
                        'observed': observed, 'requirement': requirement}
+        if informational:
+            gates[name]['would_pass'] = passed
 
     noops = [trial for trial in trials if re.fullmatch('dev-noop-[1-5]', trial['stage']['id'])]
     times = [trial['build']['wall_seconds'] for trial in noops]
     median = statistics.median(times) if times else None
-    record('noop', median, median <= 2 and all(trial['passed'] for trial in noops) if len(noops) == 5 else None,
-           'five noops, median <=2 seconds')
+    record('noop', median, median <= 2 and all(trial['passed'] for trial in noops) if len(noops) == samples else None,
+           f'{samples} noop(s), median <=2 seconds')
     fresh = [trial for trial in trials if re.fullmatch('dev-fresh-[bcde]', trial['stage']['id'])]
     compiles = [trial.get('telemetry', {}).get('compiler_executions') for trial in fresh]
     record('warm_identical_zero_compilers', compiles,
@@ -1289,16 +1325,17 @@ def qualification_gates(root):
         same_inputs = bool(config.get('comparison_identity')) and baseline.get('comparison_identity') == config['comparison_identity']
         if not (same_commit or same_inputs) or baseline.get('features') != config['profiles']['dev']['features']:
             baseline = None
-    for kind in ('leaf', 'shared', 'icon'):
-        selected = [trial for trial in trials if re.fullmatch(f'dev-{kind}-[1-5]', trial['stage']['id'])]
+    for edit in ('leaf', 'shared', 'icon'):
+        selected = [trial for trial in trials if re.fullmatch(f'dev-{edit}-[1-5]', trial['stage']['id'])]
         values = [trial['build']['wall_seconds'] for trial in selected]
         measured = statistics.median(values) if values else None
-        cargo = baseline.get(kind + '_median_seconds') if baseline else None
+        cargo = baseline.get(edit + '_median_seconds') if baseline else None
         threshold = max(2., 1.5 * cargo) if cargo is not None else None
-        record(kind + '_edit', {'median_seconds': measured, 'cargo_median_seconds': cargo, 'threshold_seconds': threshold},
+        record(edit + '_edit', {'median_seconds': measured, 'cargo_median_seconds': cargo, 'threshold_seconds': threshold},
                measured <= threshold and all(trial['passed'] for trial in selected)
-               if len(selected) == 5 and threshold is not None else None,
-               'five edits, median <=max(2 seconds,1.5 * matched frozen-source/features Cargo median)')
+               if len(selected) == samples and threshold is not None else None,
+               f'{samples} edit(s), median <=max(2 seconds,1.5 * matched frozen-source/features Cargo median)',
+               informational=samples != 5)
     # Match the retained cache workload AFTER edits/revert, not the smaller cold cache.
     sharing_base = stages.get('dev-revert', {}).get('storage', {})
     denominator = sharing_base.get('immutable_union', {}).get('physical_disk_bytes')
@@ -1318,12 +1355,12 @@ def qualification_gates(root):
                                'per_tree_limit_bytes': limit, 'baseline': 'dev-revert', 'workload_boundaries': boundaries},
            sharing_storage_valid and all(value <= limit for value in deltas) if len(deltas) == 4 and limit is not None else None,
            'each extra worktree <=5% matched one-tree immutable payload +32 MiB metadata; cache+all outputs union')
-    churn = [stages.get(f'dev-churn-{n}', {}).get('storage', {}).get('physical_disk_bytes') for n in range(1, 11)]
+    churn = [] if kind != 'full' else [stages.get(f'dev-churn-{n}', {}).get('storage', {}).get('physical_disk_bytes') for n in range(1, 11)]
     budget = config.get('storage', {}).get('max_active_union_bytes')
     churn_storage_valid = all(stages.get(f'dev-churn-{n}', {}).get('storage', {}).get('passed', False)
                               for n in range(1, 11))
     record('observed_churn_budget', {'churn_union_bytes': churn, 'configured_budget_bytes': budget},
-           churn_storage_valid and all(value <= budget for value in churn) if budget and None not in churn else None,
+           churn_storage_valid and all(value <= budget for value in churn) if budget and churn and None not in churn else None,
            'ten observed churn unions fit the configured budget; this does not prove automatic total-state enforcement')
     record('automatic_total_state_bound', None, None,
            'unmeasured: cache caps and finite churn observations do not demonstrate automatic enforcement over all owned state')
@@ -1332,6 +1369,7 @@ def qualification_gates(root):
         ('eviction_recovery', ['service-eviction', 'dev-post-eviction-original', 'dev-post-eviction-known']),
         ('primed_output_loss', ['dev-primed-output-loss']),
     ):
+        required = [item for item in required if item in planned]
         record(name, required, all(stages[item]['passed'] for item in required) if all(item in stages for item in required) else None,
                'supported owned service operation and successful exact-source artifact/behavior checks')
     record('correctness', {'observations': len(trials), 'failed': sum(not trial['passed'] for trial in trials)},
@@ -1341,12 +1379,14 @@ def qualification_gates(root):
 
 def summarize(root):
     root = Path(root)
-    tool = load(root / 'config.json')['tool']
+    config = load(root / 'config.json')
+    tool = config['tool']
+    stages = plan(config.get('plan', 'full'))
     rows = []
     interrupted = []
     retained_partial_trials = []
     groups = {}
-    for stage in plan():
+    for stage in stages:
         directory = root / 'stages' / stage['id']
         complete = directory / 'complete.json'
         if complete.exists():
@@ -1371,8 +1411,8 @@ def summarize(root):
                'raw_failed_stages': sum(not row['passed'] for row in rows) + len(interrupted),
                'interrupted_or_harness_failed_stages': interrupted,
                'durable_observations_from_incomplete_stages': retained_partial_trials,
-               'missing_stages': [stage['id'] for stage in plan() if not (root / 'stages' / stage['id']).exists()],
-               'groups': {}, 'gates': {'all_required_stages_passed': len(rows) == len(plan()) and all(row['passed'] for row in rows),
+               'missing_stages': [stage['id'] for stage in stages if not (root / 'stages' / stage['id']).exists()],
+               'groups': {}, 'gates': {'all_required_stages_passed': len(rows) == len(stages) and all(row['passed'] for row in rows),
                                      'host_load_gating': False, 'global_host_gc': False}}
     summary['raw_failed_build_commands'] = sum(
         load(path)['exit_status'] != 0 for path in (root / 'stages').glob('*/*/build.json'))
@@ -1411,16 +1451,20 @@ def validate(config, full):
             raise ValueError(f'{kind}: declared artifact target required for every profile')
     if config['tool'] == 'buck2' and not config.get('buck_telemetry_flags'):
         raise ValueError('Buck native event log/build report flags required')
+    kind = config.get('plan', 'full')
+    if kind not in PLANS:
+        raise ValueError(f'plan must be one of {PLANS}')
     if full:
         if config['tool'] == 'buck2' and not config.get('buck_engine'):
             raise ValueError('Buck native engine argv required for same-path output-loss recovery')
         if len(config.get('test_groups', [])) != 9:
             raise ValueError('full matrix requires exactly nine explicit package test groups')
         runtime_key = 'runtime_targets' if config['tool'] == 'buck2' else 'runtime_artifacts'
-        for key in ('soroban_tests', 'startup', 'startup_result', runtime_key, 'correctness_behavior', 'storage', 'nix_identity', 'variants'):
+        startup = ('startup', 'startup_result', runtime_key) if kind == 'full' else ()
+        for key in ('soroban_tests', 'correctness_behavior', 'storage', 'nix_identity', 'variants') + startup:
             if not config.get(key):
-                raise ValueError(f'full matrix requires {key}')
-        if set(config[runtime_key]) != {'compositor', 'shell', 'ctl', 'koe'}:
+                raise ValueError(f'{kind} plan requires {key}')
+        if startup and set(config[runtime_key]) != {'compositor', 'shell', 'ctl', 'koe'}:
             raise ValueError('private startup requires exact compositor/shell/ctl/koe artifact identities')
         if not config['storage'].get('immutable_roots'):
             raise ValueError('full matrix requires separately measured matched immutable union roots')
@@ -1433,7 +1477,8 @@ def main():
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest='command', required=True)
-    sub.add_parser('plan', help='print exact required scenarios as JSON')
+    listing = sub.add_parser('plan', help='print exact required scenarios as JSON')
+    listing.add_argument('--kind', choices=PLANS, default='full')
     execute = sub.add_parser('run', help='run/resume frozen configuration; no automatic reruns')
     execute.add_argument('config', type=Path)
     execute.add_argument('--stage', action='append', help='execute/resume explicit ordered matrix stages')
@@ -1448,7 +1493,7 @@ def main():
     report.add_argument('root', type=Path)
     args = parser.parse_args()
     if args.command == 'plan':
-        value = plan()
+        value = plan(args.kind)
     elif args.command == 'summarize':
         value = summarize(args.root)
     elif args.command == 'smoke':
@@ -1471,7 +1516,7 @@ def main():
         config = load(args.config)
         if not args.go:
             parser.error('matrix stages require explicit --go after qualified implementation freeze; use smoke before GO')
-        if args.stage and set(args.stage) - {stage['id'] for stage in plan()}:
+        if args.stage and set(args.stage) - {stage['id'] for stage in plan(config.get('plan', 'full'))}:
             parser.error('unknown stage')
         validate(config, True)
         value = Bench(config).run(set(args.stage or []))
