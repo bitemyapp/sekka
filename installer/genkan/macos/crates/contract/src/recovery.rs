@@ -97,9 +97,13 @@ impl RecoveryConfig {
         for f in &self.firmware {
             f.check(256 * 1024 * 1024)?;
         }
+        // A volume group made with `diskutil apfs addVolume … -groupWith`
+        // (as Asahi's installer makes the stub's) takes its Data volume's
+        // UUID: Omarchy's recorded M1 Pro stub has group and Data volume
+        // 0BF26A61-…. So the group may share the Data volume's identity;
+        // every other pair must differ.
         let ids = [
             self.stub.container,
-            self.stub.volume_group,
             self.stub.system_volume,
             self.stub.data_volume,
             self.esp,
@@ -109,6 +113,11 @@ impl RecoveryConfig {
             if ids[i + 1..].contains(a) {
                 return Err(invalid("two of the target's identities are the same"));
             }
+        }
+        if [self.stub.container, self.stub.system_volume, self.esp, self.root]
+            .contains(&self.stub.volume_group)
+        {
+            return Err(invalid("two of the target's identities are the same"));
         }
         if self.stub.volume_group == self.owner.macos_volume_group {
             return Err(invalid("the stub can't be the owner's own macOS"));
@@ -170,5 +179,15 @@ mod tests {
         let mut c = sample();
         c.owner.macos_volume_group = c.stub.volume_group;
         assert!(c.check().is_err());
+        let mut c = sample();
+        c.stub.volume_group = c.stub.system_volume;
+        assert!(c.check().is_err());
+    }
+
+    #[test]
+    fn a_group_may_carry_its_data_volumes_identity() {
+        let mut c = sample();
+        c.stub.volume_group = c.stub.data_volume;
+        c.check().unwrap();
     }
 }
