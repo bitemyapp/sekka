@@ -19,6 +19,8 @@
 //! - [`index`]: every package in Nixpkgs, searchable.
 //! - [`log`]: Nix's progress while it downloads and builds.
 //! - [`nix`]: running Nix itself.
+//! - [`sys`]: the system calls Yukimi makes, the only unsafe code here.
+#![deny(unsafe_code)]
 pub mod catalog;
 pub mod channels;
 pub mod completion;
@@ -32,6 +34,10 @@ pub mod profile;
 pub mod reclaim;
 pub mod saved;
 pub mod setup;
+// The one module that may use unsafe code; the helper's Nix check fails
+// if another is allowed it.
+#[allow(unsafe_code)]
+pub mod sys;
 pub mod updates;
 
 /// The directory a NixOS system is configured in.

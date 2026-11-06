@@ -45,6 +45,41 @@ rustPlatform.buildRustPackage {
   preCheck = ''
     cargo clippy --offline --locked -p yukimi-helper --all-targets -- \
       -A clippy::all -D clippy::disallowed_methods
+
+    # Unsafe code lives only in yukimi-system's sys module. Every attribute
+    # that names the unsafe_code lint must be one of these, and the one
+    # allow must be on `pub mod sys;`. Nothing outside sys.rs may contain an
+    # unsafe block, function, impl, trait or extern block, including tests,
+    # examples and the programs.
+    lint_levels() {
+      grep -rnE --include='*.rs' "$1" crates yukimi-helper | sed -E 's/^([^:]*):[0-9]+:/\1:/' | sort
+    }
+    found=$(lint_levels '(allow|expect|warn|deny|forbid)\([^)]*unsafe_code')
+    expected=$(sort <<'EOF'
+    crates/yukimi-config/src/lib.rs:#![forbid(unsafe_code)]
+    crates/yukimi-store/src/lib.rs:#![forbid(unsafe_code)]
+    crates/yukimi-system/src/lib.rs:#![deny(unsafe_code)]
+    crates/yukimi-system/src/lib.rs:#[allow(unsafe_code)]
+    yukimi-helper/src/bin/sekka-update.rs:#![forbid(unsafe_code)]
+    yukimi-helper/src/lib.rs:#![forbid(unsafe_code)]
+    yukimi-helper/src/main.rs:#![forbid(unsafe_code)]
+    EOF
+    )
+    expected=$(printf '%s\n' "$expected" | sed -E 's/^ +//' | sort)
+    if [ "$found" != "$expected" ]; then
+      echo "The unsafe_code lint levels differ from the allowed ones:"
+      printf 'found:\n%s\nallowed:\n%s\n' "$found" "$expected"
+      exit 1
+    fi
+    if [ "$(grep -A1 -F '#[allow(unsafe_code)]' crates/yukimi-system/src/lib.rs | tail -n1)" != "pub mod sys;" ]; then
+      echo "yukimi-system allows unsafe code on something other than its sys module"
+      exit 1
+    fi
+    if grep -rnE --include='*.rs' '\bunsafe\s*(\{|fn\b|impl\b|trait\b|extern\b)' crates yukimi-helper \
+      | grep -v '^crates/yukimi-system/src/sys.rs:'; then
+      echo "Unsafe code outside yukimi-system's sys module"
+      exit 1
+    fi
   '';
   buildInputs = [ sqlite ];
   postInstall = ''

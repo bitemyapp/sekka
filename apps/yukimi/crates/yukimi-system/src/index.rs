@@ -7,7 +7,6 @@
 //! available on this machine, and the program it provides. That takes a
 //! minute; the result is cached, and searching it ([`PackageIndex::search`])
 //! is instant.
-use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
@@ -131,13 +130,7 @@ pub fn make(cache: &Path, nixpkgs: &str) -> Result<PackageIndex, String> {
         .args(["eval", "--json", "--impure", "--expr", &expression(nixpkgs)])
         .stdin(Stdio::null())
         .stderr(Stdio::piped());
-    // SAFETY: setpriority is async-signal-safe and touches only this process.
-    unsafe {
-        command.pre_exec(|| {
-            libc::setpriority(libc::PRIO_PROCESS, 0, 19);
-            Ok(())
-        });
-    }
+    crate::sys::at_lowest_priority(&mut command);
     let output = command.output().map_err(|e| format!("Nix could not be started: {e}"))?;
     if !output.status.success() {
         let stderr = crate::log::strip_ansi(&String::from_utf8_lossy(&output.stderr));

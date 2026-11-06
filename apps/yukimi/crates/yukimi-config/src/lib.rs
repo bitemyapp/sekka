@@ -13,6 +13,7 @@
 //! - [`lock`]: `flake.lock`: which revision of each input a system is built
 //!   from, how old it is, and whether a new lock file changes only what it
 //!   should.
+#![forbid(unsafe_code)]
 pub mod branch;
 pub mod edit;
 pub mod lock;
