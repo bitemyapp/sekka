@@ -131,17 +131,57 @@ let
         chmod 644 $out/*
       '';
 
-      storePaths = [ toplevel ] ++ seeds;
+      # What the first rebuilds read beyond the system's own closure: the
+      # first generation that names this installation's partitions
+      # (identity.nix) and the owner's choices (setup.nix) change the initrd,
+      # /etc and the system itself, whose build inputs (the initrd's modules,
+      # units and splash, the generic builder) aren't in a system's closure.
+      # Kept from garbage collection by a root in the image
+      # (/nix/var/nix/gcroots/sekka-offline-rebuild), so they build offline.
+      # A derivation's inputs, as a file naming them (stdenv's inputDerivation
+      # misses structured attributes, which the initrd uses).
+      inputsOf =
+        drv: pkgs.writeText "${drv.name}-inputs.json" (builtins.toJSON (removeAttrs drv.drvAttrs [ "name" ]));
+      rebuildInputs = pkgs.linkFarm "${name}-${variant}-rebuild-inputs" [
+        {
+          name = "stdenv";
+          path = pkgs.stdenvNoCC;
+        }
+        {
+          # The initrd's units are linked together with it.
+          name = "lndir";
+          path = pkgs.lndir;
+        }
+        {
+          name = "initrd";
+          path = inputsOf nixos.config.system.build.initialRamdisk;
+        }
+        {
+          name = "etc";
+          path = inputsOf nixos.config.system.build.etc;
+        }
+        {
+          name = "system";
+          path = inputsOf toplevel;
+        }
+      ];
+
+      storePaths = [
+        toplevel
+        rebuildInputs
+      ]
+      ++ seeds;
       closureInfo = pkgs.closureInfo { rootPaths = storePaths; };
       rootImage = pkgs.callPackage "${nixpkgs}/nixos/lib/make-ext4-fs.nix" {
         inherit storePaths;
         volumeLabel = rootLabel;
         uuid = rootUuid;
         populateImageCommands = ''
-          mkdir -p ./files/etc/nixos
+          mkdir -p ./files/etc/nixos ./files/nix/var/nix/gcroots
           cp ${etcNixos}/* ./files/etc/nixos/
           chmod 755 ./files/etc ./files/etc/nixos
           chmod 644 ./files/etc/nixos/*
+          ln -s ${rebuildInputs} ./files/nix/var/nix/gcroots/sekka-offline-rebuild
         '';
       };
 

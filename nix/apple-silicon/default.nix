@@ -117,6 +117,7 @@ in
   mac-release-j514s-root = image.product.rootImage;
   mac-release-j514s-etc-nixos = image.product.etcNixos;
   mac-release-j514s-image-check = image.product.imageCheck;
+  mac-release-j514s-rebuild-inputs = image.product.rebuildInputs;
   # The image's scripts and its installed flake against Genkan's own
   # template parser (tests.nix).
   mac-image-tests = tests.all;
