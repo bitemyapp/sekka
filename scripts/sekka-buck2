@@ -18,6 +18,7 @@ inputs=(
   nix/buck2/patches/cas-recovery.patch
   nix/buck2/patches/critical-path-priority.patch
   nix/buck2/patches/priority-dependencies.patch
+  nix/buck2/patches/parallel-sync-dependencies.patch
   nix/buck2/patches/incremental-source-cache.patch
   nix/bazel/toolchains.nix nix/bazel/aizome-inputs.nix
   nix/libsecret-dh-padding.nix nix/patches/libsecret-gnutls-dh-padding.patch

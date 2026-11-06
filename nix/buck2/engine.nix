@@ -28,8 +28,9 @@ platform.buildRustPackage {
   cargoPatches = [
     ./patches/drop-unused-bindgen.patch
     ./patches/priority-dependencies.patch
+    ./patches/parallel-sync-dependencies.patch
   ];
-  cargoHash = "sha256-AMASQm4PK9Ebus6xVCioNAp6IYhXUCY10vWnFAimP3k=";
+  cargoHash = "sha256-bQiNyy/k6DA+Wwt4kHJn13KMcmZ1ouos3Dwn/I+4Sn4=";
   nativeBuildInputs = [ pkgs.clang pkgs.mold pkgs.pkg-config pkgs.git ];
   cargoBuildFlags = [ "--bin" "buck2" ];
   RUSTFLAGS = "--cfg tokio_unstable -C linker=clang -C link-arg=-fuse-ld=mold";

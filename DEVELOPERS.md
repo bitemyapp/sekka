@@ -414,8 +414,13 @@ across at most 16 destinations, retaining at most 32 stage/source descriptors.
 A conservative 64 MiB logical staging budget charges two snapshots per
 destination; larger individual objects run alone and must fit the store's
 limits. Distinct canonical digests are reserved once per group.
-Every staged file is still synchronized individually, and object accounting
-commits before canonical publication. Sixteen fixed canonical staging slots
+Every staged file is still synchronized individually. A lazy, process-wide
+16-thread executor overlaps these synchronizations without duplicating file
+descriptors or using Tokio's blocking pool; a single staged file synchronizes
+inline. Each group joins its synchronization work before accounting commits,
+publication or staging cleanup. A synchronization error prevents that group's
+publication. Object accounting commits before canonical publication.
+Sixteen fixed canonical staging slots
 are removed and the directory synchronized under the shared lock before each
 group's admission, so an already-open peer can recover abandoned stages
 without reopening the store or scanning all canonical objects.
