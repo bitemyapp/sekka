@@ -265,9 +265,22 @@ pub fn stopped(state: &InstallState) -> (String, String) {
             "The Recovery step didn't finish".into(),
             "Start up in Recovery again (hold the power button, choose Sekka) and Finish Installing Sekka picks up where it stopped.".into(),
         ),
-        other => ("The installation stopped".into(), format!("{other:?}")),
+        InstallState::Planned | InstallState::AssetsVerified => (
+            "The installation stopped before it began".into(),
+            "Sekka Installer's helper stopped while it was getting ready, before anything on your Mac's disk changed. Another installation can't start until this one is cancelled.".into(),
+        ),
+        InstallState::WaitingForRecovery => (
+            "macOS's part is done".into(),
+            "Sekka isn't installed until you finish in Recovery.".into(),
+        ),
+        InstallState::WaitingForSetup => ("Sekka is installed".into(), INSTALLED.into()),
+        InstallState::Cancelled => ("The installation was cancelled".into(), CANCELLED.into()),
+        InstallState::Removed => ("The installation is gone".into(), REMOVED.into()),
     }
 }
+
+/// What cancelling a stopped installation that changed nothing does.
+pub const CANCEL_STOPPED: &str = "Cancel this installation, then choose a size again. Nothing on your disk changed, so there's nothing to undo.";
 
 /// Plain-English names for the bars on the disk picture.
 pub const MACOS: &str = "macOS";

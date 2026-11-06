@@ -684,8 +684,15 @@ fn stopped(m: &Model, p: &mut Page) {
     p.divider();
     p.heading("What you can do");
     let actions = m.stopped_actions();
+    let cancel = actions.contains(&NextAction::Cancel);
     for a in &actions {
         match a {
+            // Checking again finds this installation again until it is
+            // cancelled.
+            NextAction::Reinspect if cancel => {}
+            NextAction::Cancel => {
+                p.body(text::CANCEL_STOPPED);
+            }
             NextAction::Reinspect => {
                 p.body("Check this Mac again and review a new plan. If the same step fails again, copy the diagnostics and ask for help.");
             }
@@ -704,6 +711,8 @@ fn stopped(m: &Model, p: &mut Page) {
     p.left("Copy Diagnostics", || Msg::CopyDiagnostics);
     if actions.contains(&NextAction::RetryStartupDisk) {
         p.primary("Set Startup Disk Again…", || Msg::RetryStartupDisk);
+    } else if cancel {
+        p.primary("Cancel This Installation", || Msg::CancelInstallation);
     } else if actions.contains(&NextAction::Reinspect) {
         p.primary("Check This Mac Again", || Msg::CheckAgain);
     } else {

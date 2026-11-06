@@ -44,6 +44,9 @@ pub enum Scenario {
     /// The app reopens after the owner removed an unfinished installation
     /// in Disk Utility.
     RemovedByHand,
+    /// The app reopens to an installation whose helper stopped while
+    /// downloading Apple's files, before anything on the disk changed.
+    StoppedEarly,
     /// Sekka is already installed.
     Existing,
     /// The helper must be allowed in Login Items first.
@@ -51,7 +54,7 @@ pub enum Scenario {
 }
 
 impl Scenario {
-    pub const ALL: [Scenario; 15] = [
+    pub const ALL: [Scenario; 16] = [
         Scenario::Normal,
         Scenario::Unsupported,
         Scenario::NotReady,
@@ -65,6 +68,7 @@ impl Scenario {
         Scenario::WaitingForRecovery,
         Scenario::RecoveryFinished,
         Scenario::RemovedByHand,
+        Scenario::StoppedEarly,
         Scenario::Existing,
         Scenario::NeedsApproval,
     ];
@@ -84,6 +88,7 @@ impl Scenario {
             Scenario::WaitingForRecovery => "waiting-for-recovery",
             Scenario::RecoveryFinished => "recovery-finished",
             Scenario::RemovedByHand => "removed-by-hand",
+            Scenario::StoppedEarly => "stopped-early",
             Scenario::Existing => "existing",
             Scenario::NeedsApproval => "needs-approval",
         }
@@ -111,6 +116,8 @@ struct SimState {
     downloaded: bool,
     /// The helper looked at the Mac and brought its record up to date.
     reconciled: bool,
+    /// The installation the app reopened to was cancelled.
+    cancelled: bool,
 }
 
 const SIM_ID: Uuid = Uuid::from_bytes([0x5e; 16]);
@@ -216,9 +223,19 @@ impl Simulation {
 
     /// The records of the installation the app reopens to.
     fn reopened(&self) -> (Vec<Record>, InstallState) {
-        let reconciled = self.state.lock().unwrap().reconciled;
-        let tail = if reconciled { self.reconciliation().unwrap_or_default() } else { Vec::new() };
-        self.records(None, tail)
+        let (reconciled, cancelled) = {
+            let s = self.state.lock().unwrap();
+            (s.reconciled, s.cancelled)
+        };
+        let mut tail = if reconciled { self.reconciliation().unwrap_or_default() } else { Vec::new() };
+        if cancelled {
+            tail.push(Event::Cancelled);
+        }
+        match self.scenario {
+            // Import done, Apple's files started.
+            Scenario::StoppedEarly => self.records(Some((1, None)), tail),
+            _ => self.records(None, tail),
+        }
     }
 }
 
@@ -325,7 +342,10 @@ impl Environment for Simulation {
     }
     fn helper_status(&self) -> Result<Vec<Summary>, HelperProblem> {
         Ok(match self.scenario {
-            Scenario::WaitingForRecovery | Scenario::RecoveryFinished | Scenario::RemovedByHand => vec![Summary {
+            Scenario::WaitingForRecovery
+            | Scenario::RecoveryFinished
+            | Scenario::RemovedByHand
+            | Scenario::StoppedEarly => vec![Summary {
                 installation: SIM_ID,
                 release: "sekka-j514s-4882dc33".parse().unwrap(),
                 state: self.reopened().1,
@@ -465,6 +485,10 @@ impl Environment for Simulation {
         })
     }
     fn cancel(&self, _: Uuid) -> Result<(), HelperRefusal> {
+        if self.scenario == Scenario::StoppedEarly {
+            self.state.lock().unwrap().cancelled = true;
+            return Ok(());
+        }
         Err(HelperRefusal {
             code: HelperRefusalCode::State,
             message: "Sekka is changing the disk right now, and stopping in the middle isn't safe. This step will finish or fail on its own."

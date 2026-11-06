@@ -295,6 +295,49 @@ fn a_record_waiting_for_recovery_that_the_disk_agrees_with_is_left_alone() {
 }
 
 #[test]
+fn an_installation_stopped_before_any_change_can_be_cancelled() {
+    let mut j = Journey::start(Scenario::StoppedEarly);
+    assert_eq!(j.model.screen, Screen::Stopped);
+    let state = j.model.state.clone().unwrap();
+    assert_eq!(state, InstallState::AssetsVerified);
+    let (_, explanation) = crate::text::stopped(&state);
+    assert!(explanation.contains("before anything on your Mac's disk changed"), "{explanation}");
+    assert!(j.model.stopped_actions().contains(&sekka_mac_contract::NextAction::Cancel));
+    // Checking again finds the same installation; cancelling is the way on.
+    j.send(Msg::CheckAgain);
+    assert_eq!(j.model.screen, Screen::Stopped);
+    j.send(Msg::CancelInstallation);
+    assert_eq!(j.model.screen, Screen::Plan);
+    assert_eq!(j.model.notice.as_deref(), Some(crate::text::CANCELLED));
+    assert!(j.model.unfinished().is_none());
+    assert!(j.model.installation.is_none());
+}
+
+#[test]
+fn every_stopped_state_is_explained_in_words() {
+    let states = [
+        InstallState::Planned,
+        InstallState::AssetsVerified,
+        InstallState::MutationStarted { stage: Stage::Root },
+        InstallState::Failed {
+            stage: Stage::Shrink,
+            disk_changed: DiskChanged::Unknown,
+        },
+        InstallState::StartupDiskFailed,
+        InstallState::WaitingForRecovery,
+        InstallState::EnrollmentUncertain,
+        InstallState::WaitingForSetup,
+        InstallState::Cancelled,
+        InstallState::Removed,
+    ];
+    for state in states {
+        let (headline, explanation) = crate::text::stopped(&state);
+        assert_ne!(explanation, format!("{state:?}"), "{headline}");
+        assert!(explanation.ends_with('.'), "{explanation}");
+    }
+}
+
+#[test]
 fn an_existing_installation_is_recognized_not_replaced() {
     let j = Journey::start(Scenario::Existing);
     assert_eq!(j.model.screen, Screen::Existing);

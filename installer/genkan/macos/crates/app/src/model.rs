@@ -600,10 +600,20 @@ impl Model {
             },
             Msg::CancelAnswered(result) => {
                 self.cancelling = false;
-                if let Err(r) = result {
-                    self.notice = Some(r.message.to_string());
+                match (result, self.installation) {
+                    (Err(r), _) => {
+                        self.notice = Some(r.message.to_string());
+                        Vec::new()
+                    }
+                    // A stopped installation reports nothing more by
+                    // itself: ask for the record that closes it.
+                    (Ok(()), Some(installation)) if !self.running => vec![Effect::Poll {
+                        installation,
+                        after: self.records.last().map_or(0, |r| r.sequence),
+                        delay_ms: 0,
+                    }],
+                    (Ok(()), _) => Vec::new(),
                 }
-                Vec::new()
             }
             Msg::RetryStartupDisk => {
                 self.open_authorization(true);
