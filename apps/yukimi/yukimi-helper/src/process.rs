@@ -2,11 +2,15 @@
 //! Running programs for the helper, and stopping when Yukimi asks.
 //!
 //! A stop is a phase of the whole process: once asked for, no new program
-//! starts and the running one is sent SIGTERM. After the commit
-//! ([`change::RestorePoint::attempt`]) the work finishes whatever happens,
-//! so that the system is never left half switched.
+//! starts and the running one is sent SIGTERM. Two kinds of step change
+//! that. After the commit ([`change::RestorePoint::attempt`]) the work
+//! finishes whatever happens, so that the system is never left half
+//! switched. An [`Unstoppable`] step (deleting generations and updating the
+//! boot menu, [`clean`]) finishes first, and a stop asked for meanwhile
+//! takes effect when it ends.
 //!
 //! [`change::RestorePoint::attempt`]: crate::change::RestorePoint::attempt
+//! [`clean`]: crate::clean
 use std::io::Read;
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
@@ -34,6 +38,11 @@ enum Phase {
     Working,
     /// Yukimi asked to stop.
     Stopping,
+    /// A step that a stop must not split is running; `asked` says whether a
+    /// stop waits for it to end.
+    Unstoppable {
+        asked: bool,
+    },
     /// The new system is being started: too late to stop.
     Committed,
 }
@@ -55,6 +64,10 @@ pub fn stop() {
     let mut state = state();
     match state.0 {
         Phase::Committed => return,
+        Phase::Unstoppable { .. } => {
+            state.0 = Phase::Unstoppable { asked: true };
+            return;
+        }
         Phase::Working | Phase::Stopping => state.0 = Phase::Stopping,
     }
     if let Some(pid) = state.1 {
@@ -65,7 +78,7 @@ pub fn stop() {
 
 /// Whether a stop was asked for (and hasn't been refused by a commit).
 pub fn stop_requested() -> bool {
-    state().0 == Phase::Stopping
+    matches!(state().0, Phase::Stopping | Phase::Unstoppable { asked: true })
 }
 
 /// Whether the work is past its commit, so it no longer puts anything back.
@@ -116,20 +129,43 @@ fn check_stopped() -> Result<()> {
 pub(crate) fn commit() -> Result<()> {
     let mut state = state();
     match state.0 {
-        Phase::Stopping => Err(Failure("Stopped".into())),
-        Phase::Working | Phase::Committed => {
+        Phase::Stopping | Phase::Unstoppable { asked: true } => Err(Failure("Stopped".into())),
+        Phase::Working | Phase::Unstoppable { asked: false } | Phase::Committed => {
             state.0 = Phase::Committed;
             Ok(())
         }
     }
 }
 
-/// The system is whole again: what follows may be stopped. Only a
-/// committed change's [`settle`](crate::change::Committed::settle) does it.
-pub(crate) fn settle() {
-    let mut state = state();
-    if state.0 == Phase::Committed {
-        state.0 = Phase::Working;
+/// A step that a stop doesn't split, while this lives: its programs aren't
+/// sent SIGTERM, and a stop asked for meanwhile takes effect when it ends.
+#[must_use = "the step is unstoppable only while this lives"]
+pub(crate) struct Unstoppable {
+    /// Only the outermost one ends the step.
+    outer: bool,
+}
+
+impl Unstoppable {
+    /// Starts the step, unless a stop was asked for already.
+    pub(crate) fn begin() -> Result<Unstoppable> {
+        let mut state = state();
+        match state.0 {
+            Phase::Stopping => Err(Failure("Stopped".into())),
+            Phase::Working => {
+                state.0 = Phase::Unstoppable { asked: false };
+                Ok(Unstoppable { outer: true })
+            }
+            Phase::Unstoppable { .. } | Phase::Committed => Ok(Unstoppable { outer: false }),
+        }
+    }
+}
+
+impl Drop for Unstoppable {
+    fn drop(&mut self) {
+        let mut state = state();
+        if let (true, Phase::Unstoppable { asked }) = (self.outer, state.0) {
+            state.0 = if asked { Phase::Stopping } else { Phase::Working };
+        }
     }
 }
 
@@ -219,6 +255,30 @@ mod tests {
         stop();
         assert!(stop_requested() && commit().is_err() && check_stopped().is_err());
         state().0 = Phase::Working;
+        commit().unwrap();
+        stop();
+        assert!(committed() && !stop_requested());
+        state().0 = Phase::Working;
+    }
+
+    #[test]
+    fn an_unstoppable_step_defers_a_stop_until_it_ends() {
+        let _phase = phase_for_test();
+        {
+            let _step = Unstoppable::begin().unwrap();
+            stop();
+            assert!(stop_requested());
+            // Its programs still run.
+            assert!(check_stopped().is_ok());
+            let _inner = Unstoppable::begin().unwrap();
+        }
+        assert!(check_stopped().is_err(), "the stop applies once the step ends");
+        assert!(Unstoppable::begin().is_err() && commit().is_err());
+        state().0 = Phase::Working;
+        {
+            let _step = Unstoppable::begin().unwrap();
+        }
+        assert!(!stop_requested());
         commit().unwrap();
         stop();
         assert!(committed() && !stop_requested());

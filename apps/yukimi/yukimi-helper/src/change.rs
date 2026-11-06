@@ -221,14 +221,6 @@ impl<T> Committed<T> {
     pub fn into_planned(self) -> T {
         self.planned
     }
-
-    /// The system is whole again (generations deleted and the boot menu
-    /// made without them): what follows, collecting garbage, may be
-    /// stopped.
-    pub fn settle(self) -> T {
-        process::settle();
-        self.planned
-    }
 }
 
 /// Root's channels profile as it was: which generation it pointed at, and
