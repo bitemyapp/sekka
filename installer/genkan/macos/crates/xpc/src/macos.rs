@@ -3,11 +3,13 @@
 use std::ffi::{CString, c_char, c_int, c_void};
 use std::ptr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{RecvTimeoutError, channel};
 
 use block2::{Block, RcBlock};
 use zeroize::Zeroizing;
 
-use crate::{MESSAGE_LIMIT, PASSWORD_KEY, Peer, REQUEST_KEY, RESPONSE_KEY, XpcError};
+use crate::{MESSAGE_LIMIT, PASSWORD_KEY, Peer, REPLY_TIMEOUT, REQUEST_KEY, RESPONSE_KEY, XpcError};
 
 #[allow(non_camel_case_types)]
 type xpc_object_t = *mut c_void;
@@ -44,10 +46,12 @@ unsafe extern "C" {
     fn xpc_connection_get_euid(connection: xpc_object_t) -> libc::uid_t;
     fn xpc_connection_get_pid(connection: xpc_object_t) -> libc::pid_t;
     fn xpc_connection_send_message(connection: xpc_object_t, message: xpc_object_t);
-    fn xpc_connection_send_message_with_reply_sync(
+    fn xpc_connection_send_message_with_reply(
         connection: xpc_object_t,
         message: xpc_object_t,
-    ) -> xpc_object_t;
+        replyq: dispatch_queue_t,
+        handler: &Block<dyn Fn(xpc_object_t)>,
+    );
     fn xpc_dictionary_create(
         keys: *const *const c_char,
         values: *const xpc_object_t,
@@ -61,6 +65,7 @@ unsafe extern "C" {
     fn xpc_retain(object: xpc_object_t) -> xpc_object_t;
     fn xpc_release(object: xpc_object_t);
     fn dispatch_main() -> !;
+    fn dispatch_get_global_queue(identifier: isize, flags: usize) -> dispatch_queue_t;
 }
 
 fn type_of(object: xpc_object_t) -> xpc_type_t {
@@ -177,6 +182,8 @@ pub fn listen(
 /// The app's connection to the helper.
 pub struct Client {
     connection: usize,
+    /// Cancelled already, when a reply took too long.
+    cancelled: AtomicBool,
 }
 
 // The connection is used from one worker thread at a time; libxpc
@@ -208,11 +215,12 @@ impl Client {
         }
         Ok(Self {
             connection: connection as usize,
+            cancelled: AtomicBool::new(false),
         })
     }
 
-    /// Send one request and wait for its reply. Blocks: call it from a
-    /// worker thread, never the main thread.
+    /// Send one request and wait for its reply, at most [`REPLY_TIMEOUT`].
+    /// Blocks: call it from a worker thread, never the main thread.
     pub fn send(&self, request: &[u8], password: Option<&[u8]>) -> Result<Vec<u8>, XpcError> {
         // SAFETY: an empty dictionary we own.
         let message = unsafe { xpc_dictionary_create(ptr::null(), ptr::null(), 0) };
@@ -220,26 +228,55 @@ impl Client {
         if let Some(password) = password {
             set_data(message, PASSWORD_KEY, password);
         }
-        // SAFETY: a live connection and message; the reply is ours to release.
-        let reply = unsafe { xpc_connection_send_message_with_reply_sync(self.connection as xpc_object_t, message) };
-        unsafe { xpc_release(message) };
-        let result = if is(reply, unsafe { &_xpc_type_dictionary }) {
-            data(reply, RESPONSE_KEY)
-                .map(|bytes| bytes.to_vec())
-                .ok_or(XpcError::BadReply)
-        } else {
-            Err(XpcError::Unavailable)
-        };
-        unsafe { xpc_release(reply) };
-        result
+        let (tx, rx) = channel();
+        // Called once, on a dispatch queue, with the reply or an error
+        // object. The reply is libxpc's and lives only for the call, so its
+        // bytes are copied out here.
+        let on_reply = RcBlock::new(move |reply: xpc_object_t| {
+            let result = if is(reply, unsafe { &_xpc_type_dictionary }) {
+                data(reply, RESPONSE_KEY)
+                    .map(|bytes| bytes.to_vec())
+                    .ok_or(XpcError::BadReply)
+            } else {
+                Err(XpcError::Unavailable)
+            };
+            let _ = tx.send(result);
+        });
+        // SAFETY: a live connection and message; libxpc copies the block and
+        // keeps what it needs of the message, which is ours to release. A
+        // global queue needs no release.
+        unsafe {
+            xpc_connection_send_message_with_reply(
+                self.connection as xpc_object_t,
+                message,
+                dispatch_get_global_queue(0, 0),
+                &on_reply,
+            );
+            xpc_release(message);
+        }
+        match rx.recv_timeout(REPLY_TIMEOUT) {
+            Ok(result) => result,
+            Err(RecvTimeoutError::Disconnected) => Err(XpcError::Unavailable),
+            Err(RecvTimeoutError::Timeout) => {
+                // Stop waiting: cancelling hands the pending reply handler
+                // an error, which nobody reads any more.
+                if !self.cancelled.swap(true, Ordering::SeqCst) {
+                    // SAFETY: the connection is ours and not yet cancelled.
+                    unsafe { xpc_connection_cancel(self.connection as xpc_object_t) };
+                }
+                Err(XpcError::Timeout)
+            }
+        }
     }
 }
 
 impl Drop for Client {
     fn drop(&mut self) {
-        // SAFETY: the connection is ours.
+        // SAFETY: the connection is ours; it is cancelled once.
         unsafe {
-            xpc_connection_cancel(self.connection as xpc_object_t);
+            if !self.cancelled.swap(true, Ordering::SeqCst) {
+                xpc_connection_cancel(self.connection as xpc_object_t);
+            }
             xpc_release(self.connection as xpc_object_t);
         }
     }

@@ -22,6 +22,11 @@ pub const PASSWORD_KEY: &str = "owner-password";
 pub const RESPONSE_KEY: &str = "response";
 /// The largest request or response accepted.
 pub const MESSAGE_LIMIT: usize = 1024 * 1024;
+/// How long the app waits for a reply before giving up on it. The slowest
+/// requests (Begin, Reconcile) unpack the engine and inspect the Mac, and
+/// the helper stops an inspection after five minutes; this is well past
+/// that, so only a helper that is stuck runs into it.
+pub const REPLY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10 * 60);
 
 /// Who sent a request, as the kernel reports it for the connection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -38,6 +43,10 @@ pub enum XpcError {
     Untrusted,
     #[error("the helper's reply couldn't be read")]
     BadReply,
+    /// No reply within [`REPLY_TIMEOUT`]. The helper may still finish what
+    /// it was asked; its record says so.
+    #[error("Sekka Installer's helper didn't answer in time; what it was doing may still finish")]
+    Timeout,
 }
 
 /// The code-signing requirement for this build's peer. Release builds name
