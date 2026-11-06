@@ -50,6 +50,7 @@
 //! is doing and puts the configuration back, unless the new system is
 //! already being started, which is never interrupted.
 #![deny(clippy::disallowed_methods)]
+#![forbid(unsafe_code)]
 use std::io::Write;
 
 mod transaction;
@@ -123,12 +124,7 @@ fn build_flake(setup: &Setup, host: &str) -> std::result::Result<String, Failure
 
 /// The free space, in bytes, of the filesystem holding `path`.
 fn free_space(path: &str) -> Option<u64> {
-    let path = std::ffi::CString::new(path).ok()?;
-    // SAFETY: statvfs writes only into the struct it is given.
-    unsafe {
-        let mut stat: libc::statvfs = std::mem::zeroed();
-        (libc::statvfs(path.as_ptr(), &mut stat) == 0).then(|| stat.f_bavail as u64 * stat.f_frsize as u64)
-    }
+    yukimi_system::sys::free_space(Path::new(path))
 }
 
 fn least_room() -> Option<u64> {
@@ -825,12 +821,7 @@ fn clean(operation: &mut Operation, args: &[String]) -> Result<String> {
 /// The free blocks of the filesystem holding `path`, in bytes, counting
 /// those kept for root: what deleting files changes.
 fn blocks_free(path: &str) -> Option<u64> {
-    let path = std::ffi::CString::new(path).ok()?;
-    // SAFETY: statvfs writes only into the struct it is given.
-    unsafe {
-        let mut stat: libc::statvfs = std::mem::zeroed();
-        (libc::statvfs(path.as_ptr(), &mut stat) == 0).then(|| stat.f_bfree as u64 * stat.f_frsize as u64)
-    }
+    yukimi_system::sys::blocks_free(Path::new(path))
 }
 
 /// A generation number as given: digits, without sign or leading zero.
@@ -1030,8 +1021,7 @@ fn main() -> ExitCode {
             }
         };
     }
-    // SAFETY: geteuid has no preconditions.
-    if unsafe { libc::geteuid() } != 0 {
+    if !yukimi_system::sys::is_root() {
         report(0, "yukimi-helper must be started through pkexec");
         return ExitCode::from(2);
     }
