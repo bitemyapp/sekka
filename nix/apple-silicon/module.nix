@@ -249,11 +249,13 @@ in
         # the user manager and removes them at logout. The greeter needs the
         # same stack before its private compositor starts (PAM can replace
         # the daemon's environment, so put it on the command itself).
-        environment.etc."xdg/aizome/environment".text = lib.mkIf config.programs.aizome.enable (
-          lib.mkAfter (
+        # The whole entry is conditional: one with no text fails to evaluate
+        # on systems without Aizome.
+        environment.etc."xdg/aizome/environment" = lib.mkIf config.programs.aizome.enable {
+          text = lib.mkAfter (
             lib.concatStrings (lib.mapAttrsToList (name: value: "${name}=${value}\n") aizomeEnvironment)
-          )
-        );
+          );
+        };
         services.greetd.settings.default_session.command = lib.mkIf config.programs.aizome.greeter.enable (
           lib.mkForce "${pkgs.coreutils}/bin/env ${
             lib.concatStringsSep " " (
