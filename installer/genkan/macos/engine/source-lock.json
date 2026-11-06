@@ -1,0 +1,78 @@
+{
+  "schema": "sekka.mac.engine-source-lock/1",
+  "engine": "0.9.2+sekka.1",
+  "asahi_installer": {
+    "repository": "https://github.com/AsahiLinux/asahi-installer",
+    "tag": "v0.9.2",
+    "commit": "dffbb38ef0c00c0431c609ecd8a00f42deb5b24c",
+    "license": "MIT",
+    "tarball": {
+      "url": "https://cdn.asahilinux.org/installer/installer-v0.9.2.tar.gz",
+      "sha256": "484d999e53b4aef27d17c4478e49567e96842f8a6cb35c073a0df5bf0bbe8276",
+      "sri": "sha256-SE2ZnlO0rvJ9F8RHjklWfpaEL4pss1wHOg31vwu+gnY="
+    },
+    "runtime": "Python 3.13 as Frameworks/Python.framework/Versions/3.13, with its own code signature (Versions/3.13/_CodeSignature/CodeResources seals lib/python3.13/site-packages)",
+    "checked": "2026-11-06: the tarball's main.py, osinstall.py, stub.py, diskutil.py, system.py, osenum.py, urlcache.py, util.py, m1n1.py, bugs.py, reporting.py, asahi_firmware/ and step2/ are byte-identical to src/ and asahi_firmware/ at the tag",
+    "used": [
+      "system.SystemInfo (ioreg device tree and service planes, nvram, bputil, SystemVersion and SFR plists, console user)",
+      "diskutil.DiskUtil (diskutil plists, get_partitions, get_resize_limits, addPartition, mount, action)",
+      "osenum.OSEnum (operating systems per container, stubs, admin users, boot policies, attached ESP and Linux partitions)",
+      "main constants (STUB_SIZE, PART_ALIGN, MIN_FREE_OS, MIN_FREE, MIN_INSTALL_FREE, MIN_MACOS_VERSION, DEVICES, CHIP_MIN_VER, IPSW_VERSIONS)",
+      "bugs.run_checks (ProMotion and early-Sonoma refusal)",
+      "stub.StubInstaller (load_ipsw, load_identity, prepare_volume, check_volume, install_files, collect_firmware, collect_installer_data, prepare_for_bless, prepare_for_step2)",
+      "urlcache.URLCache (through load_ipsw)",
+      "osinstall.OSInstaller (partition_disk, extract_tree)",
+      "asahi_firmware.core.FWPackage",
+      "m1n1.build",
+      "boot/m1n1.bin, logo.icns, step2/IAPhysicalMedia.plist"
+    ],
+    "not_used": "main.InstallerMain and its prompts; Asahi's step2.sh and Finish Installation.app (removed from the stub after install_files); osinstall.OSInstaller.install (its parts run as separate stages); reporting"
+  },
+  "omarchy": {
+    "repository": "https://github.com/omacom/omarchy-mac-installer",
+    "commit": "c07e54c2134a8ec1415e7e2b917589ae1d3d7dc9",
+    "license": "MIT",
+    "copyright": "Copyright (c) David Heinemeier Hansson",
+    "adapted": [
+      {
+        "path": "Engine/overlay/src/omarchy_asahi.py",
+        "what": "OmarchyOSInstaller.extract_tree: create the ESP files' parent folders before Asahi's extract_tree",
+        "into": "installer/genkan/macos/engine/sekka_engine/engine.py (Engine.stage_esp)"
+      },
+      {
+        "path": "Engine/overlay/src/omarchy_asahi.py",
+        "what": "verify_default_boot: read the startup selection back after bless (bless --getBoot, diskutil info APFSVolumeGroupID) instead of trusting bless's exit status",
+        "into": "installer/genkan/macos/engine/sekka_engine/engine.py (Engine.stage_startup_disk)"
+      },
+      {
+        "path": "Engine/overlay/src/omarchy_recovery.py",
+        "what": "is_appledouble_sidecar and remove_appledouble_sidecars",
+        "into": "installer/genkan/macos/engine/sekka_engine/engine.py"
+      }
+    ],
+    "fixtures": [
+      {
+        "path": "Tests/OmarchyAppleInstallerTrustCoreTests/Fixtures/m1-pro-2026-09-28/",
+        "files": [
+          "legacy/list.plist",
+          "legacy/apfs-list.plist",
+          "legacy/apfs-volumegroups.plist",
+          "legacy/bless-getboot.txt",
+          "legacy/info/disk0.plist",
+          "legacy/info/disk0s1.plist",
+          "legacy/info/disk0s2.plist",
+          "legacy/info/disk0s3.plist",
+          "legacy/info/disk0s4.plist",
+          "legacy/info/disk0s5.plist",
+          "legacy/info/disk0s6.plist",
+          "legacy/evidence/esp-disk0s4/asahi_stub_info.json",
+          "after-make-space/macos-limits.plist",
+          "nvram-boot-volume.txt"
+        ],
+        "into": "installer/genkan/macos/engine/tests/fixtures/omarchy-m1-pro-2026-09-28/",
+        "modified": false
+      }
+    ],
+    "not_inherited": "identities, URLs, trust keys, signing, support claims, encryption, the Python overlay patch and its runtime base"
+  }
+}
