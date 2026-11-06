@@ -336,20 +336,30 @@ pub fn installations(storage: &impl Storage, root: &Path) -> Result<Vec<Uuid>, J
     Ok(found)
 }
 
-/// Two copies of one installation's records (the helper's, and the copy
-/// Recovery extends on the stub) agree only if one is a prefix of the
-/// other, record for record. The longer one is then the history; any
-/// divergence means one of them can't be trusted and nothing is
-/// reconciled automatically. Taking whichever copy claims more progress
-/// would be unsafe, so this never does.
-pub fn reconcile(a: &[Record], b: &[Record]) -> Result<Vec<Record>, JournalError> {
-    let (short, long) = if a.len() <= b.len() { (a, b) } else { (b, a) };
-    if short.iter().zip(long).any(|(x, y)| x != y) {
+/// Check another copy of an installation's records against the helper's
+/// own, which is the history: the other copy may lag it, record for record,
+/// but never differ from it or go further. A copy that diverges is refused.
+/// So is one that extends it: the chain's digests have no key, so anyone
+/// who can write that copy can add records the chain and the state machine
+/// accept, and an extension nobody authenticated is never adopted. Taking
+/// whichever copy claims more progress would be unsafe, so this never does.
+///
+/// Nothing calls this yet: Recovery keeps no copy of these records (it
+/// writes its own receipt on the stub, which the helper doesn't trust
+/// either), and the helper learns what Recovery did from its own inspection
+/// of the Mac. It is the rule any second copy must follow.
+pub fn reconcile(own: &[Record], other: &[Record]) -> Result<Vec<Record>, JournalError> {
+    if other.len() > own.len() {
+        return Err(JournalError::Refused(
+            "the other copy of the installation record goes further than the helper's own, and nothing authenticates the records it adds".into(),
+        ));
+    }
+    if own.iter().zip(other).any(|(x, y)| x != y) {
         return Err(JournalError::Damaged(
             "the two copies of the installation record disagree".into(),
         ));
     }
-    Ok(long.to_vec())
+    Ok(own.to_vec())
 }
 
 /// The lock that makes the helper run one installation at a time. Held for

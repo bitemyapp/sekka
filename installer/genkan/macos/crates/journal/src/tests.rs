@@ -264,15 +264,18 @@ fn a_journal_that_never_began_is_taken_away() {
 }
 
 #[test]
-fn copies_reconcile_only_when_one_extends_the_other() {
+fn another_copy_may_lag_the_helpers_own_but_never_lead_or_differ() {
     let dir = tempfile::tempdir().unwrap();
     let mut j = Journal::create(FsStorage, dir.path(), id(), at(), opened()).unwrap();
     j.append(at(), Event::Intent { stage: Stage::Import }).unwrap();
     let short = j.records().to_vec();
     j.append(at(), completed(Stage::Import)).unwrap();
     let long = j.records().to_vec();
-    assert_eq!(reconcile(&short, &long).unwrap(), long);
     assert_eq!(reconcile(&long, &short).unwrap(), long);
+    assert_eq!(reconcile(&long, &long).unwrap(), long);
+    // A copy that goes further is refused, however well its records chain:
+    // nothing authenticates what it adds.
+    assert!(matches!(reconcile(&short, &long), Err(JournalError::Refused(_))));
 
     let dir2 = tempfile::tempdir().unwrap();
     let mut k = Journal::create(FsStorage, dir2.path(), id(), at(), opened()).unwrap();
