@@ -65,6 +65,9 @@ then.
   gained Gemma 4's draft heads: download sizes include the draft, and on
   the 32 GB desktop Gemma 4 31B's fit bar and speed include it; the other
   fourteen were pixel-identical and were kept.
+  The four Compare Models pictures were taken with the release profile
+  (`cargo build --release -p aizome-tasuke`) at `132f30eb`. The six
+  Models pictures, whose header gained Compare All, were not taken again.
 - **Display**: a private headless sway 1.12 with the pixman renderer
   (`desktop/aizome/sukumo/scripts/headless-wayland`, `SIZE=1440x900`),
   with `WAYLAND_DISPLAY`, `DISPLAY` and `AIZOME_SHELL_SOCKET` unset. The
