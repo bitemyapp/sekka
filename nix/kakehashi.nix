@@ -64,6 +64,11 @@ in
     ];
     buildInputs = libraries;
     env.KAKEHASHI_TOOL_PATH = lib.makeBinPath tools;
+    # The default check's `cargo test` runs the doctests too, their
+    # compile_fail error codes checked.
+    preCheck = ''
+      source ${./checked-doctests.sh}
+    '';
     # Sekka's app icon, from the brand's generated logos.
     postInstall = ''
       install -Dm644 linux/computer.sekka.Kakehashi.desktop -t $out/share/applications

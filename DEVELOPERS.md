@@ -354,6 +354,11 @@ state, transitions that consume the state they leave, proofs that a check ran
 doesn't compile. Show each guarantee with a `compile_fail,EXXXX` doctest beside
 a twin that compiles, and run them with `RUSTC_BOOTSTRAP=1 cargo test --doc -p
 <crate>`, which makes rustdoc check the error codes as it does on nightly.
+The Nix checks run them that way: each Rust package's check sources
+`nix/checked-doctests.sh`, which gives `RUSTC_BOOTSTRAP=1` to rustdoc alone
+and stops if a wrong code would still pass. Aizome's and Sukumo's checks run
+the doctests of every crate with a `compile_fail` one; the other packages'
+`cargo test` runs all their doctests.
 `docs/typestate-tier1.md` lists the machines done so far and what their types
 still can't rule out.
 
