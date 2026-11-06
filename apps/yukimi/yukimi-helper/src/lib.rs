@@ -6,8 +6,11 @@
 //!
 //! - [`change`]: a change to the system as a transaction, which ends in
 //!   its commit or in putting back everything it covered.
+//! - [`clean`]: deleting old generations together with the boot menu's
+//!   entries for them, then collecting garbage.
 //! - [`snapshots`]: the configuration kept for each generation.
 //! - [`process`]: running programs, and stopping when Yukimi asks.
 pub mod change;
+pub mod clean;
 pub mod process;
 pub mod snapshots;

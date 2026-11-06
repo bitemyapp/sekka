@@ -27,14 +27,14 @@
 //!     the Sekka input, preserving all independent dependency pins.
 //! - `rollback <generation>` switches to an earlier system generation, and
 //!   puts back the configuration it was built from.
-//! - `clean [--older-than-days n]` deletes old system generations and
-//!   collects garbage.
+//! - `clean [--older-than-days n]` deletes old system generations, updates
+//!   the boot menu, and collects garbage ([`yukimi_helper::clean`]).
 //! - `delete <generation>... [--collect-garbage]` deletes particular system
 //!   generations: never the one selected for the next start, the running
 //!   one or the one the computer started with. Their kept configurations go
-//!   with them, and the boot menu is made again without them. What only
-//!   they kept goes when garbage is collected: then, with
-//!   `--collect-garbage`, or at the next clean-up.
+//!   with them, and the boot menu is made again without them, in the same
+//!   step as `clean`'s. What only they kept goes when garbage is collected:
+//!   then, with `--collect-garbage`, or at the next clean-up.
 //! - `estimate <generation>...`, which needs no administrator, says what
 //!   deleting generations would give back (see `yukimi_system::reclaim`).
 //!
@@ -53,15 +53,16 @@ use std::io::Write;
 
 mod transaction;
 use std::path::{Path, PathBuf};
-use std::process::{ExitCode, Stdio};
+use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use yukimi_config::packages;
 use yukimi_config::sekka;
 use yukimi_config::{branch, edit, lock};
 use yukimi_helper::change::RestorePoint;
+use yukimi_helper::clean::{self as cleaning, Generations};
 use yukimi_helper::process::{
-    Failure, PATH, Result, command, nix, output, report, run, stage, stage_done, stop, wait, watch_for_stop,
+    Failure, PATH, Result, command, nix, output, report, run, stage, stage_done, stop, watch_for_stop,
 };
 use yukimi_helper::{process, snapshots};
 use yukimi_system::catalog;
@@ -765,46 +766,21 @@ fn clean(args: &[String]) -> Result<String> {
             other => return Err(Failure(format!("Unknown option {other}"))),
         }
     }
-    if let Some(days) = days {
-        stage(1, "Deleting old generations");
-        let mut delete = command("nix-env");
-        delete.args(["-p", PROFILE, "--delete-generations", &format!("{days}d")]);
-        run(delete, "Deleting old generations")?;
-        snapshots::prune(Path::new(SAVED), Path::new(PROFILE));
-        stage_done(1);
-    }
-    stage(2, "Collecting garbage");
-    let freed = collect_garbage()?;
-    stage_done(2);
-    // The boot menu lists only generations that still exist.
-    stage(3, "Updating the boot menu");
-    let _committed = RestorePoint::nothing().attempt(|_| Ok(()))?;
-    switch(&format!("{PROFILE}/bin/switch-to-configuration"), "boot")?;
-    stage_done(3);
+    // Deleting generations and updating the boot menu is one step a stop
+    // waits for; only then can garbage be collected.
+    let generations = Generations::hold()?;
+    let menu = match days {
+        Some(days) => generations.delete_older_than(days).update_boot_menu()?,
+        None => generations.update_boot_menu()?,
+    };
+    let freed = cleaning::collect_garbage(&menu).map_err(|Failure(message)| match days {
+        Some(_) => Failure(format!(
+            "{}. The old generations were deleted, and the boot menu lists only the ones left",
+            if message == "Stopped" { "Collecting garbage was stopped" } else { &message }
+        )),
+        None => Failure(message),
+    })?;
     Ok(serde_json::json!({"ok": true, "freed": freed}).to_string())
-}
-
-/// Collect garbage, passing Nix's report on, and return its last line
-/// ("… store paths deleted, … freed").
-fn collect_garbage() -> Result<String> {
-    let mut gc = command("nix-store");
-    gc.arg("--gc");
-    let out = wait(gc.stdout(Stdio::piped()).stderr(Stdio::piped()))?;
-    let text = String::from_utf8_lossy(&out.stderr).into_owned() + &String::from_utf8_lossy(&out.stdout);
-    for line in text.lines() {
-        eprintln!("{line}");
-    }
-    // Nix deletes its reserve (`gc-reserved-space`, 8 MiB in
-    // /nix/var/nix/db/reserved) as a collection starts, so it can work on a
-    // full disk, and makes it again whenever it next opens the store. Open
-    // it now, so that free space measured afterwards is what stays free.
-    let mut reopen = command("nix-store");
-    reopen.args(["--query", "--hash", PROFILE]);
-    let _ = wait(reopen.stdout(Stdio::null()).stderr(Stdio::null()));
-    if !out.status.success() {
-        return Err(Failure("Collecting garbage failed".into()));
-    }
-    Ok(text.lines().rev().find(|l| l.contains("freed")).unwrap_or("").trim().to_owned())
 }
 
 /// The free blocks of the filesystem holding `path`, in bytes, counting
@@ -824,16 +800,6 @@ fn parse_generation(text: &str) -> Option<u32> {
         return None;
     }
     text.parse().ok()
-}
-
-/// "generation 3", "generations 3 and 4", "generations 2, 3 and 4".
-fn generation_words(numbers: &[u32]) -> String {
-    let n: Vec<String> = numbers.iter().map(u32::to_string).collect();
-    match n.as_slice() {
-        [one] => format!("generation {one}"),
-        [rest @ .., last] => format!("generations {} and {last}", rest.join(", ")),
-        [] => "no generations".into(),
-    }
 }
 
 /// What `delete` was asked to do.
@@ -914,7 +880,7 @@ fn delete(args: &[String]) -> Result<String> {
             return Err(Failure(why));
         }
     }
-    let what = generation_words(&deletion.generations);
+    let what = cleaning::generation_words(&deletion.generations);
     // What deleting gives back, worked out as root, who sees every root.
     let estimate = yukimi_system::reclaim::estimate(&deletion.generations);
     match &estimate {
@@ -928,20 +894,9 @@ fn delete(args: &[String]) -> Result<String> {
         ),
         Err(e) => report(1, &format!("What deleting {what} gives back couldn't be worked out: {e}")),
     }
-    stage(1, &format!("Deleting {what}"));
-    // The links, the kept configurations and the boot menu change together.
-    let committed = RestorePoint::nothing().attempt(|_| Ok(()))?;
-    let mut delete = command("nix-env");
-    delete.args(["-p", PROFILE, "--delete-generations"]).args(deletion.generations.iter().map(u32::to_string));
-    run(delete, "Deleting the generation")?;
-    // Their kept configurations go with them.
-    snapshots::prune(Path::new(SAVED), Path::new(PROFILE));
-    stage_done(1);
-    // The boot menu lists only generations that still exist.
-    stage(2, "Updating the boot menu");
-    switch(&format!("{PROFILE}/bin/switch-to-configuration"), "boot")?;
-    stage_done(2);
-    committed.settle();
+    // Deleting the generations and updating the boot menu is one step a
+    // stop waits for; only then can garbage be collected.
+    let menu = Generations::hold()?.delete(&deletion.generations).update_boot_menu()?;
     let mut report_json = serde_json::json!({
         "ok": true,
         "deleted": deletion.generations,
@@ -949,9 +904,8 @@ fn delete(args: &[String]) -> Result<String> {
         "estimate": estimate.ok(),
     });
     if deletion.collect {
-        stage(3, "Collecting garbage");
         let before = blocks_free("/nix/store");
-        match collect_garbage() {
+        match cleaning::collect_garbage(&menu) {
             Ok(summary) => {
                 report_json["collected"] = true.into();
                 report_json["summary"] = summary.into();
@@ -961,12 +915,12 @@ fn delete(args: &[String]) -> Result<String> {
                 // back at the next clean-up.
                 report(1, &format!("Collecting garbage didn't finish: {message}"));
                 report_json["collect_error"] = message.into();
+                stage_done(3);
             }
         }
         if let (Some(before), Some(after)) = (before, blocks_free("/nix/store")) {
             report_json["freed"] = after.saturating_sub(before).into();
         }
-        stage_done(3);
     }
     Ok(report_json.to_string())
 }
@@ -1211,8 +1165,8 @@ mod tests {
             assert!(Deletion::parse(&args(bad)).is_err(), "{bad:?}");
         }
         assert_eq!(parse_generation("4294967295"), Some(u32::MAX));
-        assert_eq!(generation_words(&[3]), "generation 3");
-        assert_eq!(generation_words(&[2, 3, 4]), "generations 2, 3 and 4");
+        assert_eq!(cleaning::generation_words(&[3]), "generation 3");
+        assert_eq!(cleaning::generation_words(&[2, 3, 4]), "generations 2, 3 and 4");
     }
 
     #[test]
