@@ -156,6 +156,7 @@ impl Platform for MacPlatform {
     fn start_engine(
         &self,
         engine: &EngineInstall,
+        installation: Uuid,
         plan: &Path,
         assets: &Path,
         owner: &str,
@@ -190,6 +191,8 @@ impl Platform for MacPlatform {
                 plan.to_str().unwrap_or_default(),
                 "--assets",
                 assets.to_str().unwrap_or_default(),
+                "--installation",
+                &installation.to_string(),
                 "--owner",
                 owner,
             ],

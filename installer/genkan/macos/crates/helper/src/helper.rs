@@ -705,7 +705,7 @@ impl<P: Platform> Run<P> {
         }
 
         let password = std::mem::take(&mut self.password);
-        let mut process = match self.platform.start_engine(&self.engine, &plan_path, &dir, &self.owner, password) {
+        let mut process = match self.platform.start_engine(&self.engine, self.journal.installation(), &plan_path, &dir, &self.owner, password) {
             Ok(p) => p,
             Err(e) => {
                 let _ = self

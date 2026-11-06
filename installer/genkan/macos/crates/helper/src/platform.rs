@@ -3,7 +3,7 @@
 //! tested anywhere.
 use std::path::{Path, PathBuf};
 
-use sekka_mac_contract::{Digest, Fact, Failure, Inspection, Timestamp};
+use sekka_mac_contract::{Digest, Fact, Failure, Inspection, Timestamp, Uuid};
 
 use zeroize::Zeroizing;
 
@@ -49,6 +49,7 @@ pub trait Platform: Send + Sync + 'static {
     fn start_engine(
         &self,
         engine: &EngineInstall,
+        installation: Uuid,
         plan: &Path,
         assets: &Path,
         owner: &str,

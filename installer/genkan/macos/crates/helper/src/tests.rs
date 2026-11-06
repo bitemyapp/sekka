@@ -67,6 +67,7 @@ impl Platform for Fake {
     fn start_engine(
         &self,
         _: &EngineInstall,
+        _installation: Uuid,
         plan: &Path,
         assets: &Path,
         owner: &str,
