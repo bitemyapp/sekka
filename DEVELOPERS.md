@@ -454,6 +454,28 @@ cached metadata commit. Canonical publication barriers remain unchanged. This
 does not increase the live staging or descriptor bounds, change the database
 schema, or weaken file/directory synchronization.
 
+A view of an object already in the store holds the locks only for its lookup
+and recorded access. It is cloned from the open object, verified, synced and
+renamed after the locks are released, and its parent directory is synced
+before the access returns. The open descriptor keeps the object's extents if a
+peer evicts it meanwhile. Nothing is renamed unless every snapshot in the
+group verified; a failed publication removes that group's view hints, and any
+object whose view failed to stage is removed if it no longer verifies. At most
+one group of these views holds descriptors at a time. New objects keep the
+fully locked path, and staging slots are cleared before the first canonical
+stage of a quantum rather than on every access. Worktrees materializing at once
+no longer take turns hashing each other's views.
+
+LRU accesses and view hints are advisory, so each process buffers them and
+writes them in order with its next durable commit, before any eviction
+decision (which therefore sees them), or after 256 entries or one second. A
+cached lookup's transaction then usually writes nothing and needs no
+synchronous commit. Object accounting stays FULL and durable before canonical
+renames. A process that exits with buffered writes loses only LRU order and
+recovery hints. A fresh worktree materializes ~22,500 files for a shared-crate
+rebuild, 18,768 of them incremental state; before buffering, four doing so at
+once queued on one WAL sync per file.
+
 The index uses FULL-synchronous WAL and a 256-page automatic-checkpoint threshold.
 Its 4 MiB journal-size setting trims retained WAL space after reset, not peak
 transaction space. All SQLite sidecars receive the same regular-file, owner and
@@ -502,7 +524,11 @@ NARs. Auxiliary reference HTML still differs in grammar-section ordering;
 that documentation output is outside the SDK closure, not claimed reproducible.
 
 The native cache path makes authoritative CAS presence checks and rejects
-cached results whose required outputs are missing. Rejected action-cache
+cached results whose required outputs are missing. Cache uploads ask the CAS
+about every output, even one whose remembered expiration says it is present:
+NativeLink evicts by LRU rather than honouring expirations, and an upload that
+trusted one wrote action results naming blobs that were already gone, which
+the completeness-checking action cache then hid. Rejected action-cache
 results remain rejected across depfile verification and hybrid fallback.
 Typed missing-content failures use Buck's existing bounded, single-restart
 recovery; this repository explicitly enables the restarter. Authentication,
