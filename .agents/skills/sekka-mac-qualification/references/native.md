@@ -19,8 +19,28 @@ with the release build:
 - M3-05: VoiceOver reads every screen, the disk divider is a slider, and
   the whole journey works with the keyboard alone; larger text and the
   smallest window still show everything.
-- M3-06: downloads with the network off and on again, through a proxy,
-  with too little space, cancelled and resumed.
+- M3-06: the catalog and the downloads with the network off and on again
+  and through a proxy; downloads with too little space, cancelled and
+  resumed.
 
 `--simulate SCENARIO` shows any path without touching anything; use it to
-review failure screens the hardware run shouldn't reach on purpose.
+review failure screens the hardware run shouldn't reach on purpose. A
+simulated screen is M3-04's evidence only: each scenario's real path has
+its own rows, and a scenario with no passing real-path row is a path the
+candidate hasn't shown.
+
+| Scenario | Real path |
+| --- | --- |
+| `normal` | M4-03 to M4-06, M5-01 |
+| `unsupported` | M0-03, M4-01 |
+| `not-ready` | M0-08, M4-12 |
+| `offline` | M3-06 |
+| `low-space` | M0-08, M4-11 |
+| `wrong-password` | M0-09, M4-13 |
+| `download-fails` | M3-06 |
+| `resize-fails` | M4-02 |
+| `install-fails` | M0-09, M4-16 |
+| `startup-disk-fails` | M0-09, M4-17 |
+| `waiting-for-recovery` | M0-09, M4-15 |
+| `existing` | M0-08, M4-14 |
+| `needs-approval` | M3-03 |

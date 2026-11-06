@@ -5,7 +5,8 @@
 //! An untested case is never a pass. Every row starts `not-run`; `fail`,
 //! `blocked` and `not-applicable` need a concrete reason, and `pass` needs
 //! what was observed and where the evidence is. A candidate is complete
-//! only when every row is `pass` or `not-applicable`.
+//! only when every row is `pass` or `not-applicable`. The rows are exactly
+//! this revision's cases: none dropped, repeated, added or reworded.
 use serde::{Deserialize, Serialize};
 
 use sekka_mac_contract::{Digest, GitRevision, Text, Timestamp, schema_tag};
@@ -88,6 +89,8 @@ pub const GATES: &[(&str, &str, &[Case])] = &[
         ("M0-05", "A layout that changed after review makes the helper and the engine refuse the confirmed plan.", ""),
         ("M0-06", "Torn, reordered, edited, foreign and forged journal records are refused, never repaired.", ""),
         ("M0-07", "A second installation request while one runs, or while an earlier one needs reconciling, is refused.", ""),
+        ("M0-08", "Existing free space is planned without a resize; too little space, a Mac that isn't ready (on battery, FileVault converting) and an existing or partial Sekka stop before any plan.", ""),
+        ("M0-09", "The app asks again in place for a refused password, reconnects to an unfinished installation instead of starting another, never retries an interrupted disk stage, and retries only the startup disk.", ""),
     ]),
     ("M1", IMAGE, &[
         ("M1-01", "The image's store is registered exactly once and holds exactly the system's closure.", ""),
@@ -115,7 +118,7 @@ pub const GATES: &[(&str, &str, &[Case])] = &[
         ("M3-03", "SMAppService registration, approval in Login Items, and an app update that keeps unfinished records.", ""),
         ("M3-04", "Every simulated scenario's screens, light and dark, captured with --screenshots and reviewed.", ""),
         ("M3-05", "VoiceOver, keyboard-only use, larger text and the smallest window.", ""),
-        ("M3-06", "Offline, proxy, full disk, cancel and resume of downloads through NSURLSession.", ""),
+        ("M3-06", "The catalog and the downloads through NSURLSession offline and through a proxy; downloads with a full disk, cancelled and resumed.", ""),
     ]),
     ("M4", RECOVERY, &[
         ("M4-01", "The J514S inspects as supported; another Mac and untested firmware are refused.", ""),
@@ -125,6 +128,16 @@ pub const GATES: &[(&str, &str, &[Case])] = &[
         ("M4-05", "Paired Recovery opens Finish Installing Sekka by itself.", ""),
         ("M4-06", "Enrollment with the owner's password, a wrong password retried in place, and startup selection read back.", ""),
         ("M4-07", "A Recovery step interrupted by a restart resumes without repeating a completed step.", ""),
+        ("M4-08", "Before any disk change the run's controls are in place and recorded: a verified backup and written restore route, macOS starting normally and its Recovery reachable from startup options, and disposable credentials for every account the run creates.", ""),
+        ("M4-09", "An installation with FileVault on and one with it off, each with fdesetup status recorded before and after; macOS stays encrypted when it was.", ""),
+        ("M4-10", "An installation into existing free space: no resize is offered or run, macOS's container is unchanged, and the new partitions use only that space.", ""),
+        ("M4-11", "With too little space the app says why, offers no plan, asks for no password and changes nothing.", ""),
+        ("M4-12", "A Mac that isn't ready (on battery, FileVault converting) is told why and what to do, and nothing is offered until Check Again finds it ready.", ""),
+        ("M4-13", "A wrong administrator password at Install is refused by the helper before anything changes and asked for again in place; the right one starts the installation.", ""),
+        ("M4-14", "A Mac that already has Sekka, complete or partial, is recognized: the app says what it found and offers no new installation.", ""),
+        ("M4-15", "Quitting the app while the helper installs, and restarting the Mac after macOS's part, both reopen that installation at its next step, never a new one.", "A restart in the middle of a disk stage is a separately reviewed interruption test, not this row."),
+        ("M4-16", "A disk stage that fails after the disk changed stops with the stage named and what changed, offers only what the journal allows, and never repeats the stage.", "If it can't be induced safely, record it as blocked or not-applicable with the reason; the row is never dropped."),
+        ("M4-17", "After macOS's startup-disk stage fails, Set Startup Disk Again checks the target again and runs only the startup-disk stage; the stub then starts into Recovery and opens Finish Installing Sekka.", "If it can't be induced safely, record it as blocked or not-applicable with the reason; the row is never dropped."),
     ]),
     ("M5", HARDWARE, &[
         ("M5-01", "m1n1, U-Boot and systemd-boot start the installed system.", ""),
@@ -186,16 +199,23 @@ pub fn rows() -> Vec<Row> {
 /// Problems with a ledger, and whether it is complete.
 pub fn check(ledger: &Ledger) -> (Vec<String>, bool) {
     let mut problems = Vec::new();
-    let expected: Vec<String> = rows().into_iter().map(|r| r.id).collect();
+    let expected = rows();
     let found: Vec<&str> = ledger.rows.iter().map(|r| r.id.as_str()).collect();
-    for id in &expected {
-        if !found.contains(&id.as_str()) {
-            problems.push(format!("{id} is missing: no required case may be dropped"));
+    for e in &expected {
+        if !found.contains(&e.id.as_str()) {
+            problems.push(format!("{} is missing: no required case may be dropped", e.id));
         }
     }
     for (i, r) in ledger.rows.iter().enumerate() {
         if found[..i].contains(&r.id.as_str()) {
             problems.push(format!("{} appears twice", r.id));
+        }
+        match expected.iter().find(|e| e.id == r.id) {
+            None => problems.push(format!("{} isn't a required case of this revision's ledger", r.id)),
+            Some(e) if (&e.gate, &e.case, &e.limit) != (&r.gate, &r.case, &r.limit) => {
+                problems.push(format!("{} doesn't say what the required case says: start the ledger from this revision's tool", r.id));
+            }
+            Some(_) => {}
         }
         match r.status {
             Status::Pass if r.observed.trim().is_empty() || r.evidence.trim().is_empty() => {
@@ -255,6 +275,50 @@ mod tests {
         assert_eq!(problems.len(), 3, "{problems:?}");
         l.rows.remove(5);
         assert!(check(&l).0.iter().any(|p| p.contains("missing")));
+    }
+
+    #[test]
+    fn cases_are_numbered_in_order_within_their_gate() {
+        for (gate, _, cases) in GATES {
+            for (n, (id, case, _)) in cases.iter().enumerate() {
+                assert_eq!(*id, format!("{gate}-{:02}", n + 1));
+                assert!(!case.is_empty());
+            }
+        }
+    }
+
+    /// The plan's known controls and the paths the app offers each have a
+    /// row on the J514S, not only a simulated screen.
+    #[test]
+    fn controls_and_offered_paths_have_hardware_rows() {
+        let m4: Vec<String> = rows().into_iter().filter(|r| r.gate == "M4").map(|r| r.case).collect();
+        for words in [
+            "verified backup",
+            "FileVault on and one with it off",
+            "existing free space",
+            "too little space",
+            "isn't ready",
+            "wrong administrator password",
+            "already has Sekka, complete or partial",
+            "reopen that installation",
+            "disk stage that fails",
+            "Set Startup Disk Again",
+        ] {
+            assert!(m4.iter().any(|c| c.contains(words)), "no M4 row for {words:?}");
+        }
+    }
+
+    #[test]
+    fn rows_that_are_not_the_required_cases_are_refused() {
+        let mut l = ledger();
+        l.rows[3].case = "Something easier.".into();
+        let mut extra = l.rows[0].clone();
+        extra.id = "M0-99".into();
+        l.rows.push(extra);
+        let (problems, complete) = check(&l);
+        assert!(!complete);
+        assert!(problems.iter().any(|p| p.starts_with("M0-04 doesn't say")), "{problems:?}");
+        assert!(problems.iter().any(|p| p.starts_with("M0-99 isn't a required case")), "{problems:?}");
     }
 
     #[test]

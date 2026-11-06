@@ -21,6 +21,8 @@ Map the rows to the tests that show them:
 | M0-05 | `plan::tests::a_changed_layout_changes_the_plan`, the helper's `a_changed_mac_needs_a_new_review`, the engine's stale-plan tests |
 | M0-06 | `sekka-mac-journal` tests, including every interruption of an append |
 | M0-07 | the helper's busy refusals and `journal::tests::one_installation_at_a_time` |
+| M0-08 | `plan::tests::free_space_needs_no_shrink`, `plan::tests::blocking_issues_and_other_macs_stop_planning`; the engine's `test_free_space_is_offered_beside_the_shrink`, `test_free_space_needs_no_shrink`, `test_without_resize_limits_no_shrink_is_offered`, `test_power_filevault_snapshots_and_disks`, `test_an_existing_sekka_is_recognized_and_stops_installation`, `test_a_partial_installation_stops_without_a_guess`; the app model's `a_mac_on_battery_is_not_ready`, `offline_and_low_space_stop_early`, `an_existing_installation_is_recognized_not_replaced` |
+| M0-09 | the app model's `a_wrong_password_is_asked_for_again_in_place`, `reopening_reconnects_to_an_installation`, `an_interrupted_write_is_never_retried_by_the_app`, `only_the_startup_disk_is_retried` |
 
 Component results say nothing about macOS APIs or real disks; those rows
 pass here only for what they claim.
