@@ -13,8 +13,9 @@
 # run time on NixOS: no host name, time zone or locale fixed by the
 # configuration (each a default the setup.nix it writes overrides), localectl
 # and hostnamectl allowed to write theirs, and every locale setup offers
-# installed. Once setup.nix is in the configuration (`applied`), the helper,
-# its socket and the login screen's way to it are gone.
+# installed, in an order no choice changes. Once setup.nix is in the
+# configuration (`applied`), the helper, its socket and the login screen's
+# way to it are gone.
 {
   config,
   lib,
@@ -71,6 +72,21 @@ let
   keyboardFile = "/etc/aizome/keyboard.toml";
   socket = "/run/sekka-setup.sock";
   waiting = cfg.enable && !cfg.applied;
+  # Every offered locale, in one order whichever is the default: glibc's
+  # locale archive is built from this list as written, so the image's serves
+  # every choice and setup.nix's language rebuilds nothing. Anything else
+  # the configuration names (nixpkgs' own default list) follows.
+  locales = lib.unique (
+    [ "C.UTF-8/UTF-8" ]
+    ++ map (l: "${l}/UTF-8") offered.locales
+    ++ options.i18n.supportedLocales.default
+  );
+  # /etc/vconsole.conf as NixOS's console module writes it (console.nix's
+  # vconsoleConf, the same file), which it leaves out under imperativeLocale.
+  vconsoleConf = pkgs.writeText "vconsole.conf" ''
+    KEYMAP=${config.console.keyMap}
+    ${lib.optionalString (config.console.font != null) "FONT=${config.console.font}"}
+  '';
 in
 {
   options.calamares.firstBootSetup = {
@@ -189,6 +205,16 @@ in
         # needs a rebuild to work.
         i18n.imperativeLocale = true;
         i18n.extraLocales = map (l: "${l}/UTF-8") offered.locales;
+        i18n.supportedLocales = lib.mkDefault locales;
+        # The language is the system's own; the keyboard is the
+        # configuration's (setup.nix's services.xserver.xkb.layout), and so
+        # the console's (console.useXkbConfig): /etc/vconsole.conf stays
+        # NixOS's, which imperativeLocale would leave as first seeded, so
+        # the console's keymap follows setup's keyboard at the first rebuild.
+        environment.etc."vconsole.conf" = lib.mkIf config.console.enable { source = vconsoleConf; };
+        systemd.services.reload-systemd-vconsole-setup.restartTriggers = lib.mkIf config.console.enable [
+          vconsoleConf
+        ];
         # With no host name configured, hostnamed keeps the static one in
         # /etc/hostname (NixOS points it at /etc/static/hostname, which
         # doesn't exist then), so hostnamectl's change lasts, and boot reads it.

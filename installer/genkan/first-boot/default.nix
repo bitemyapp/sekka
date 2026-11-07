@@ -6,7 +6,9 @@
 # - configuration: a Sekka installed system evaluated before and after
 #   setup.nix (test-data/setup.nix, what the helper writes), proving the
 #   account's groups, host name, locale, keyboard and desktop agree with
-#   what setup applied at run time, and that the result evaluates;
+#   what setup applied at run time, that setup.nix leaves the system's
+#   locales as they were and its console keymap follows the keyboard, and
+#   that the result evaluates;
 # - vm-test: the login screen's setup in a disposable VM, typed at as a
 #   person would (vm-test.nix).
 {
@@ -22,7 +24,7 @@ let
   # image.nix), its account left to setup.
   installed =
     extra:
-    nixpkgs.lib.nixosSystem {
+    (nixpkgs.lib.nixosSystem {
       inherit system;
       specialArgs = {
         applicationPkgs = import inputs.applications {
@@ -62,15 +64,17 @@ let
             fsType = "vfat";
           };
           networking.networkmanager.enable = true;
+          console.useXkbConfig = true;
           users.mutableUsers = true;
           nixpkgs.config.allowUnfree = true;
           system.stateVersion = "26.11";
         }
-        extra
-      ];
-    };
-  before = (installed { }).config;
-  after = (installed ./test-data/setup.nix).config;
+      ]
+      ++ extra;
+    }).config;
+  before = installed [ ];
+  after = installed [ ./test-data/setup.nix ];
+  offered = lib.importJSON ./offered.json;
   sorted = l: lib.sort lib.lessThan (lib.unique l);
   check = what: ok: if ok then true else throw "first-boot setup's configuration: ${what}";
 in
@@ -86,7 +90,14 @@ in
       before.systemd.services.systemd-hostnamed.environment.SYSTEMD_ETC_HOSTNAME == "/etc/hostname"
     );
     assert check "the image's locales include every one setup offers" (
-      lib.all (l: lib.elem "${l}/UTF-8" before.i18n.supportedLocales) (lib.importJSON ./offered.json).locales
+      lib.all (l: lib.elem "${l}/UTF-8" before.i18n.supportedLocales) offered.locales
+    );
+    # glibc's archive is built from the list as written: the language
+    # chosen mustn't reorder it, or every choice but the first rebuilds it.
+    assert check "every language setup offers keeps the image's glibc locales" (
+      lib.all (
+        l: (installed [ { i18n.defaultLocale = l; } ]).i18n.glibcLocales.drvPath == before.i18n.glibcLocales.drvPath
+      ) offered.locales
     );
     assert check "the image's login screen asks the helper" (
       before.programs.aizome.greeter.setup.socket == "/run/sekka-setup.sock"
@@ -106,6 +117,11 @@ in
       && after.services.xserver.xkb.layout == "gb"
       && after.services.displayManager.defaultSession == "aizome"
       && after.fileSystems."/".device == "/dev/disk/by-partuuid/63d89be1-72f7-4aff-9679-09cafa7e0c2d"
+    );
+    assert check "the console's keymap is the configuration's, and follows setup.nix's keyboard" (
+      before.environment.etc ? "vconsole.conf"
+      && toString before.environment.etc."vconsole.conf".source
+        != toString after.environment.etc."vconsole.conf".source
     );
     assert check "once applied, the helper and its socket are gone" (
       !(after.systemd.sockets ? sekka-setup) && after.programs.aizome.greeter.setup.socket == null

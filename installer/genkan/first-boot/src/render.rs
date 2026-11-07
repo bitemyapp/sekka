@@ -44,10 +44,12 @@ pub fn setup_nix(s: &Staged) -> String {
     # (users.mutableUsers keeps it); change it with passwd or in Settings.
   }};
   networking.hostName = {hostname};
-  i18n.defaultLocale = {locale};
   services.xserver.xkb.layout = {keyboard};
-  # The time zone, {zone}, is the system's own setting: Settings changes
-  # it, and updates keep it.
+  # The language, {locale_text}, and the time zone, {zone}, are
+  # the system's own settings: Settings changes them, and updates keep
+  # them. The line below only seeds /etc/locale.conf, should it ever be
+  # missing.
+  i18n.defaultLocale = {locale};
 {partitions}}}
 "#,
         name = q(&s.username),
@@ -57,6 +59,7 @@ pub fn setup_nix(s: &Staged) -> String {
         hostname = q(&s.hostname),
         locale = q(&s.locale),
         keyboard = q(&s.keyboard),
+        locale_text = s.locale,
         zone = s.time_zone,
     )
 }
