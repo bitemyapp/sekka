@@ -276,6 +276,34 @@ pub fn choose_sekka(macos: &str) -> String {
 /// are done.
 pub const RECOVERY_UNCONFIRMED: &str = "If you've already done these steps, Sekka is installed: start your Mac in Sekka. Sekka Installer's helper couldn't look at how your Mac starts up this time, so it can't tell whether they're done.";
 
+/// Allowing the helper in System Settings, step by step.
+pub const APPROVAL_STEPS: [&str; 3] = [
+    "Open System Settings › General › Login Items & Extensions.",
+    "Under Allow in the Background, turn on Sekka Installer.",
+    "Come back here. Sekka Installer continues on its own.",
+];
+pub const WAITING_FOR_PERMISSION: &str = "Waiting for permission…";
+
+/// Install, once the helper could be asked, found an earlier installation
+/// in its records.
+pub const EARLIER_FIRST: &str = "Sekka Installer's helper keeps a record of an earlier installation, so that comes first. Nothing was installed.";
+
+/// The page for when the installations the helper keeps a record of
+/// aren't known: it refused to list them (a record it can't read, say)…
+pub const HELPER_UNKNOWN_TITLE: &str = "Sekka Installer can't see its earlier installations";
+pub const HELPER_REFUSED: &str = "Sekka Installer's helper keeps a record of every installation, and it couldn't list them. One of them may be unfinished, so Sekka Installer won't plan another until it can. Nothing on your Mac was changed.";
+/// …or didn't answer…
+pub const HELPER_UNREACHABLE: &str = "Sekka Installer's helper keeps a record of every installation, and it didn't answer. One of them may be unfinished, so Sekka Installer won't plan another until it can see them. Nothing on your Mac was changed.";
+pub const HELPER_UNKNOWN_NEXT: &str = "Check again in a moment. If the same thing happens, copy the diagnostics and ask for help.";
+/// …or macOS doesn't let it run…
+pub const HELPER_OFF_TITLE: &str = "Allow Sekka Installer's helper to run";
+pub const HELPER_OFF: &str = "Sekka Installer's helper keeps a record of every installation, and macOS isn't letting it run: it may have been turned off in Login Items. Until it runs, Sekka Installer can't see whether an earlier installation is unfinished, so it won't plan another. Nothing on your Mac was changed.";
+/// …which, once it is set up from this page, is the owner's to allow…
+pub const HELPER_ALLOW: &str = "macOS asks you to allow Sekka Installer's helper before it runs. Then Sekka Installer checks this Mac again. Nothing on your Mac was changed.";
+/// …or it isn't set up, and Sekka is on the disk.
+pub const HELPER_ABSENT_TITLE: &str = "Sekka Installer's helper isn't set up";
+pub const HELPER_ABSENT: &str = "Sekka is on this disk. Sekka Installer's helper keeps the record of every installation it makes, and it isn't set up on this Mac now, so whether this one finished, or what it still needs, can't be checked. Set up the helper, and Sekka Installer checks again. Nothing on your Mac was changed.";
+
 /// The page for an unfinished installation the helper keeps a record of,
 /// but that this Mac's own look at the disk doesn't find.
 pub const MISSING_TITLE: &str = "The earlier installation wasn't found";

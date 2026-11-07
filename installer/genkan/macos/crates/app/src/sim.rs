@@ -63,10 +63,17 @@ pub enum Scenario {
     Existing,
     /// The helper must be allowed in Login Items first.
     NeedsApproval,
+    /// The helper can't read the record of an earlier installation (one
+    /// cut off as it was being opened), and won't list any until it is
+    /// looked at.
+    RecordUnreadable,
+    /// The app reopens with macOS's part done, and the helper turned off in
+    /// Login Items since.
+    HelperOff,
 }
 
 impl Scenario {
-    pub const ALL: [Scenario; 20] = [
+    pub const ALL: [Scenario; 22] = [
         Scenario::Normal,
         Scenario::Unsupported,
         Scenario::NotReady,
@@ -87,6 +94,8 @@ impl Scenario {
         Scenario::StoppedEarly,
         Scenario::Existing,
         Scenario::NeedsApproval,
+        Scenario::RecordUnreadable,
+        Scenario::HelperOff,
     ];
 
     pub fn name(self) -> &'static str {
@@ -111,6 +120,8 @@ impl Scenario {
             Scenario::StoppedEarly => "stopped-early",
             Scenario::Existing => "existing",
             Scenario::NeedsApproval => "needs-approval",
+            Scenario::RecordUnreadable => "record-unreadable",
+            Scenario::HelperOff => "helper-off",
         }
     }
 
@@ -136,6 +147,9 @@ pub struct Simulation {
 #[derive(Default)]
 struct SimState {
     password_tries: u32,
+    /// What macOS says of the helper.
+    registration: Option<Registration>,
+    /// When the owner allowed the helper in Login Items.
     approved_at: Option<Instant>,
     installation: Option<(Uuid, Instant)>,
     /// What retrying the startup disk added after its failure.
@@ -226,8 +240,22 @@ impl Simulation {
             pace,
             reconcile_refusal: None,
             hold: None,
-            state: Mutex::new(SimState::default()),
+            state: Mutex::new(SimState {
+                registration: Some(match scenario {
+                    Scenario::NeedsApproval => Registration::Absent,
+                    Scenario::HelperOff => Registration::NeedsApproval,
+                    _ => Registration::Ready,
+                }),
+                ..SimState::default()
+            }),
         }
+    }
+
+    /// The same simulation, with the helper as macOS has it at the start:
+    /// not set up, waiting for the owner, or allowed.
+    pub fn registered(self, registration: Registration) -> Self {
+        self.state.lock().unwrap().registration = Some(registration);
+        self
     }
 
     /// The same simulation, with a run that stays in `stage` until it is
@@ -486,7 +514,7 @@ fn sim_inspection(scenario: Scenario, downloaded: bool) -> Inspection {
         // The installation the helper knows, by its identity. The app's
         // inspection runs as the person using it and can't read the boot
         // policy, so it can't tell whether Recovery's step is done.
-        Scenario::WaitingForRecovery | Scenario::RecoveryFinished => {
+        Scenario::WaitingForRecovery | Scenario::RecoveryFinished | Scenario::HelperOff => {
             let (installation, issue) = sekka(InstallationState::Unknown, Some(SIM_ID));
             i.installations.push(installation);
             i.issues.push(issue);
@@ -542,11 +570,21 @@ impl Environment for Simulation {
         Ok(sim_catalog(self.scenario))
     }
     fn helper_status(&self) -> Result<Vec<Summary>, HelperProblem> {
+        // As the helper refuses for the whole list.
+        if self.scenario == Scenario::RecordUnreadable {
+            return Err(HelperProblem::Other(format!(
+                "The record of installation {SIM_ID} can't be read (records are missing from the sequence). Nothing more will be installed until it is looked at; choose Copy Diagnostics."
+            )));
+        }
         let begun = self.state.lock().unwrap().installation.is_some();
         let known = begun
             || matches!(
                 self.scenario,
-                Scenario::WaitingForRecovery | Scenario::RecoveryFinished | Scenario::RemovedByHand | Scenario::StoppedEarly
+                Scenario::WaitingForRecovery
+                    | Scenario::RecoveryFinished
+                    | Scenario::RemovedByHand
+                    | Scenario::StoppedEarly
+                    | Scenario::HelperOff
             );
         if !known {
             return Ok(Vec::new());
@@ -607,28 +645,54 @@ impl Environment for Simulation {
         .collect())
     }
     fn registration(&self) -> Registration {
-        let state = self.state.lock().unwrap();
-        match (self.scenario, state.approved_at) {
-            (Scenario::NeedsApproval, None) => Registration::Absent,
-            (Scenario::NeedsApproval, Some(t)) if t.elapsed() < Duration::from_secs(3) && self.pace > 0.0 => {
-                Registration::NeedsApproval
-            }
-            _ => Registration::Ready,
+        let mut state = self.state.lock().unwrap();
+        // Allowed in Login Items: macOS takes a moment to say so.
+        if state.registration == Some(Registration::NeedsApproval)
+            && state
+                .approved_at
+                .is_some_and(|t| self.pace == 0.0 || t.elapsed() >= Duration::from_secs(3))
+        {
+            state.registration = Some(Registration::Ready);
         }
+        state.registration.unwrap_or(Registration::Ready)
     }
     fn register_helper(&self) -> Result<Registration, String> {
         self.wait(300);
         let mut state = self.state.lock().unwrap();
-        if self.scenario == Scenario::NeedsApproval && state.approved_at.is_none() {
-            state.approved_at = Some(Instant::now());
-            return Ok(Registration::NeedsApproval);
+        if state.registration == Some(Registration::Absent) {
+            state.registration = Some(Registration::NeedsApproval);
         }
         drop(state);
         Ok(self.registration())
     }
-    fn open_login_items(&self) {}
+    /// The owner allows the helper there.
+    fn open_login_items(&self) {
+        self.state.lock().unwrap().approved_at.get_or_insert_with(Instant::now);
+    }
     fn begin(&self, begin: Begin, password: Secret) -> Result<Uuid, HelperRefusal> {
         self.wait(1200);
+        // As the helper refuses while an earlier installation stands in
+        // the way, before it looks at the password.
+        let busy = |message: String| HelperRefusal {
+            code: HelperRefusalCode::Busy,
+            message: message.parse().unwrap(),
+        };
+        match self.helper_status() {
+            Err(_) => {
+                return Err(busy(
+                    "An earlier installation's record can't be read (records are missing from the sequence). Nothing more will be installed until it is looked at."
+                        .into(),
+                ));
+            }
+            Ok(list) => {
+                if let Some(s) = list.iter().find(|s| !s.state.allows_new_installation()) {
+                    return Err(busy(format!(
+                        "An earlier installation hasn't finished ({}). Finish or look at it before starting another.",
+                        describe(&s.state)
+                    )));
+                }
+            }
+        }
         let mut state = self.state.lock().unwrap();
         state.password_tries += 1;
         if password.is_empty()
@@ -771,8 +835,9 @@ pub fn settle(env: &Simulation, model: &mut Model, effects: Vec<Effect>) -> Vec<
             Effect::Inspect => vec![Msg::Inspected(env.inspect())],
             Effect::CheckEngine => vec![Msg::Engine(env.bundled_engine())],
             Effect::LoadCatalog => vec![Msg::Catalog(env.catalog())],
+            // Asked only while macOS lets it run, as the runtime asks.
             Effect::HelperStatus => vec![
-                Msg::HelperStatus(env.helper_status()),
+                Msg::HelperStatus(crate::env::status(env)),
                 Msg::Registration(Ok(env.registration())),
             ],
             Effect::MeasureDownload(r) => vec![Msg::ToDownload(env.still_to_download(&r))],
@@ -798,7 +863,11 @@ pub fn settle(env: &Simulation, model: &mut Model, effects: Vec<Effect>) -> Vec<
                 copied.push(text);
                 vec![]
             }
-            Effect::StopDownload | Effect::RemoveStaging | Effect::OpenLoginItems | Effect::ShutDown => vec![],
+            Effect::OpenLoginItems => {
+                env.open_login_items();
+                vec![]
+            }
+            Effect::StopDownload | Effect::RemoveStaging | Effect::ShutDown => vec![],
         };
         for msg in msgs {
             queue.extend(model.update(msg));

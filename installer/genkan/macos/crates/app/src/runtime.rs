@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::time::Duration;
 
-use crate::env::{Environment, HelperProblem};
+use crate::env::Environment;
 use crate::model::{Effect, Msg};
 
 pub struct Runtime {
@@ -53,11 +53,7 @@ impl Runtime {
                 let _ = tx.send(Msg::Catalog(env.catalog()));
             }),
             Effect::HelperStatus => self.spawn("helper status", |env, tx| {
-                let status = match env.registration() {
-                    crate::env::Registration::Ready => env.helper_status(),
-                    _ => Err(HelperProblem::Unavailable),
-                };
-                let _ = tx.send(Msg::HelperStatus(status));
+                let _ = tx.send(Msg::HelperStatus(crate::env::status(env)));
                 let _ = tx.send(Msg::Registration(Ok(env.registration())));
             }),
             Effect::MeasureDownload(release) => self.spawn("measure", move |env, tx| {

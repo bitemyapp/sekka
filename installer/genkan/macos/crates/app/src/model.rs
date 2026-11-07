@@ -27,6 +27,11 @@ pub enum Screen {
     NotReady,
     /// Sekka (or something unfinished) is already on this disk.
     Existing,
+    /// The installations the helper keeps a record of aren't known: it
+    /// refused to list them or didn't answer, or macOS doesn't let it run.
+    /// One of them may be unfinished, so nothing is planned until they
+    /// are known.
+    HelperUnknown,
     /// The helper's record keeps an unfinished installation this Mac's own
     /// inspection doesn't find, and the helper couldn't close the record.
     Missing,
@@ -129,6 +134,8 @@ pub enum Msg {
     Authorize { owner: String, password: Secret },
     CancelAuthorization,
     OpenLoginItems,
+    /// Set up the helper, so its installations can be known.
+    RegisterHelper,
     /// Once a second while waiting for the helper to be allowed.
     Tick,
     CancelInstallation,
@@ -195,6 +202,10 @@ pub struct Model {
     pub acknowledged: BTreeSet<Acknowledgement>,
     pub authorization: Option<Authorization>,
     pub registration: Option<Registration>,
+    /// Install was chosen before the helper could say which installations
+    /// it knows: the authorization sheet opens once it is allowed to run
+    /// and has said, and only if none of them stands in the way.
+    pub authorize_next: bool,
     pub installation: Option<Uuid>,
     /// The administrator who authorized the installation, by short name, as
     /// the helper recorded it. Recovery asks for the same account, and so
@@ -240,6 +251,7 @@ impl Model {
             acknowledged: BTreeSet::new(),
             authorization: None,
             registration: None,
+            authorize_next: false,
             installation: None,
             owner: None,
             owner_full_name: None,
@@ -275,6 +287,7 @@ impl Model {
             | Screen::Unsupported
             | Screen::NotReady
             | Screen::Existing
+            | Screen::HelperUnknown
             | Screen::Missing
             | Screen::NoRelease
             | Screen::NeedsUpdate => Step::Check,
@@ -510,6 +523,11 @@ impl Model {
         self.engine.is_some() && self.release.is_none() && !self.admitted().is_empty()
     }
 
+    /// What the helper said when it couldn't list its installations.
+    pub fn helper_problem(&self) -> Option<&HelperProblem> {
+        self.helper.as_ref()?.as_ref().err()
+    }
+
     /// Installations the helper knows that need the person's attention.
     pub fn unfinished(&self) -> Option<&Summary> {
         let Some(Ok(list)) = &self.helper else { return None };
@@ -555,7 +573,13 @@ impl Model {
                 effects
             }
             Msg::HelperStatus(result) => {
+                if let Err(problem) = &result {
+                    self.log(format!("The helper's installations aren't known: {problem}"));
+                }
                 self.helper = Some(result);
+                if self.authorize_next && self.screen == Screen::Review {
+                    return self.authorize_once_known();
+                }
                 self.decide()
             }
             Msg::ToDownload(left) => {
@@ -642,47 +666,68 @@ impl Model {
             Msg::BackToPlan => {
                 self.screen = Screen::Plan;
                 self.plan = None;
+                self.authorize_next = false;
                 Vec::new()
             }
+            // The sheet opens once the helper runs and has said which
+            // installations it knows: it may have been set up, or allowed,
+            // only now.
             Msg::Install => {
                 if !self.ready_to_install() {
                     return Vec::new();
                 }
-                match self.registration {
-                    Some(Registration::Ready) => {
+                match (self.registration, &self.helper) {
+                    (Some(Registration::Ready), Some(Ok(_))) => {
                         self.open_authorization(false);
                         Vec::new()
                     }
-                    _ => vec![Effect::RegisterHelper],
+                    (Some(Registration::Ready), _) => {
+                        self.authorize_next = true;
+                        vec![Effect::HelperStatus]
+                    }
+                    _ => {
+                        self.authorize_next = true;
+                        vec![Effect::RegisterHelper]
+                    }
                 }
             }
             Msg::Registration(Ok(r)) => {
-                self.registration = Some(r);
+                let before = self.registration.replace(r);
                 match (r, self.screen) {
-                    (Registration::Ready, Screen::Review | Screen::Approval) => {
+                    (Registration::Ready, Screen::Review | Screen::Approval) if self.authorize_next => {
                         self.screen = Screen::Review;
-                        self.open_authorization(false);
-                        Vec::new()
+                        match self.helper {
+                            Some(Ok(_)) => self.authorize_once_known(),
+                            _ => vec![Effect::HelperStatus],
+                        }
                     }
-                    (Registration::NeedsApproval, Screen::Review) => {
+                    (Registration::NeedsApproval, Screen::Review) if self.authorize_next => {
                         self.screen = Screen::Approval;
+                        vec![Effect::OpenLoginItems]
+                    }
+                    // Allowed to run now: its installations can be asked for.
+                    (Registration::Ready, Screen::HelperUnknown) if self.helper_off() => self.check_again(),
+                    // Set up from that page just now: the owner allows it next.
+                    (Registration::NeedsApproval, Screen::HelperUnknown) if before == Some(Registration::Absent) => {
                         vec![Effect::OpenLoginItems]
                     }
                     _ => Vec::new(),
                 }
             }
             Msg::Registration(Err(e)) => {
+                self.authorize_next = false;
                 self.notice = Some(format!("Sekka Installer's helper couldn't be set up: {e}"));
                 Vec::new()
             }
-            Msg::Tick => {
-                if self.screen == Screen::Approval {
+            Msg::Tick => match self.screen {
+                Screen::Approval => vec![Effect::CheckRegistration],
+                Screen::HelperUnknown if self.registration == Some(Registration::NeedsApproval) => {
                     vec![Effect::CheckRegistration]
-                } else {
-                    Vec::new()
                 }
-            }
+                _ => Vec::new(),
+            },
             Msg::OpenLoginItems => vec![Effect::OpenLoginItems],
+            Msg::RegisterHelper => vec![Effect::RegisterHelper],
             Msg::Authorize { owner, password } => self.authorize(owner, password),
             Msg::CancelAuthorization => {
                 self.authorization = None;
@@ -807,6 +852,7 @@ impl Model {
         self.plan = None;
         self.plan_error = None;
         self.rechecking = false;
+        self.authorize_next = false;
         self.installation = None;
         self.owner = None;
         self.owner_full_name = None;
@@ -814,6 +860,38 @@ impl Model {
         self.state = None;
         self.reconciling = None;
         vec![Effect::Inspect, Effect::LoadCatalog, Effect::HelperStatus]
+    }
+
+    /// Open the authorization sheet Install asked for, now that the helper
+    /// has said which installations it knows: never while one of them
+    /// stands in the way, or while they aren't known.
+    fn authorize_once_known(&mut self) -> Vec<Effect> {
+        self.authorize_next = false;
+        match &self.helper {
+            Some(Ok(_)) if self.unfinished().is_none() => {
+                self.open_authorization(false);
+                Vec::new()
+            }
+            // That one comes first, as it would have when the app opened.
+            Some(Ok(_)) => {
+                let effects = self.check_again();
+                self.notice = Some(text::EARLIER_FIRST.into());
+                effects
+            }
+            _ => {
+                self.screen = Screen::HelperUnknown;
+                Vec::new()
+            }
+        }
+    }
+
+    /// Whether the helper's installations aren't known because macOS
+    /// doesn't let it run: it isn't set up, or isn't allowed yet.
+    pub fn helper_off(&self) -> bool {
+        matches!(
+            self.helper,
+            Some(Err(HelperProblem::NotRegistered | HelperProblem::NeedsApproval))
+        )
     }
 
     fn open_authorization(&mut self, retry: bool) {
@@ -1124,7 +1202,7 @@ impl Model {
                 return effects;
             }
         }
-        let (Some(inspection), Some(catalog), Some(_), Some(_)) =
+        let (Some(inspection), Some(catalog), Some(helper), Some(_)) =
             (&self.inspection, &self.catalog, &self.helper, &self.engine)
         else {
             return Vec::new();
@@ -1133,7 +1211,16 @@ impl Model {
             self.screen = Screen::NotReady;
             return Vec::new();
         };
-        if inspection.installations.iter().any(|x| x.kind == InstallationKind::Sekka) {
+        let sekka = inspection.installations.iter().any(|x| x.kind == InstallationKind::Sekka);
+        // Nothing is planned while the helper's installations aren't known:
+        // one may be unfinished, and the helper would refuse another only
+        // after the download and the password. A helper that was never set
+        // up has none from this Mac, unless Sekka is on the disk.
+        if matches!(helper, Err(problem) if *problem != HelperProblem::NotRegistered || sekka) {
+            self.screen = Screen::HelperUnknown;
+            return Vec::new();
+        }
+        if sekka {
             self.screen = Screen::Existing;
             return Vec::new();
         }

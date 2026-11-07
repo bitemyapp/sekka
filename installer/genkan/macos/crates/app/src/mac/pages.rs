@@ -18,6 +18,7 @@ use sekka_mac_contract::{
 
 use sekka_mac_appkit::ui::{self, Targets, Weight};
 use sekka_mac_appkit::views::{DiskBar, DiskLayout, Mark, MarkView};
+use crate::env::{HelperProblem, Registration};
 use crate::model::{CheckState, Model, Msg, Screen};
 use crate::text;
 
@@ -201,7 +202,7 @@ impl<'a> Page<'a> {
 /// with them, and they move when what is left to download is measured.
 pub fn key(m: &Model) -> String {
     format!(
-        "{:?}|{:?}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}|{:?}|{}",
+        "{:?}|{:?}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}|{:?}|{}|{:?}|{:?}",
         m.screen,
         m.notice,
         m.download_error.is_some(),
@@ -218,6 +219,8 @@ pub fn key(m: &Model) -> String {
         m.staged.is_empty(),
         m.owner_name(),
         m.recovery_unconfirmed(),
+        m.registration,
+        m.helper_problem(),
     )
 }
 
@@ -238,6 +241,7 @@ pub fn build(m: &Model, tx: &Sender<Msg>, mtm: MainThreadMarker, targets: &mut T
         Screen::NoRelease => no_release(m, &mut p),
         Screen::NeedsUpdate => needs_update(&mut p),
         Screen::Existing => existing(m, &mut p),
+        Screen::HelperUnknown => helper_unknown(m, &mut p),
         Screen::Missing => missing(m, &mut p),
         Screen::Plan => plan(m, &mut p),
         Screen::Downloading => downloading(m, &mut p),
@@ -390,6 +394,69 @@ fn existing(m: &Model, p: &mut Page) {
     }
     p.quit();
     p.left("Copy Details", || Msg::CopyDiagnostics);
+}
+
+/// A small spinner and what it waits for.
+fn waiting(p: &mut Page, words: &str) {
+    let spinner = NSProgressIndicator::new(p.mtm);
+    spinner.setStyle(NSProgressIndicatorStyle::Spinning);
+    spinner.setControlSize(objc2_app_kit::NSControlSize::Small);
+    unsafe { spinner.startAnimation(None) };
+    let label = ui::secondary(p.mtm, words, 12.0);
+    let row = ui::stack(p.mtm, false, 8.0, &[&spinner, &label]);
+    p.add(&row);
+}
+
+/// The helper's installations aren't known, so nothing is planned: why,
+/// and the way on.
+fn helper_unknown(m: &Model, p: &mut Page) {
+    let problem = m.helper_problem();
+    // Waiting for the owner to allow it: the page checks again by itself
+    // once macOS lets it run.
+    if m.registration == Some(Registration::NeedsApproval) {
+        p.title(text::HELPER_OFF_TITLE);
+        p.lede(if problem == Some(&HelperProblem::NotRegistered) { text::HELPER_ALLOW } else { text::HELPER_OFF });
+        for (n, step) in text::APPROVAL_STEPS.iter().enumerate() {
+            p.numbered(n + 1, step);
+        }
+        waiting(p, text::WAITING_FOR_PERMISSION);
+        p.quit();
+        p.left("Copy Diagnostics", || Msg::CopyDiagnostics);
+        p.right("Check Again", || Msg::CheckAgain);
+        p.primary("Open Login Items", || Msg::OpenLoginItems);
+        return;
+    }
+    if problem == Some(&HelperProblem::NotRegistered) {
+        p.title(text::HELPER_ABSENT_TITLE);
+        p.body(text::HELPER_ABSENT);
+        p.quit();
+        p.left("Copy Diagnostics", || Msg::CopyDiagnostics);
+        p.right("Check Again", || Msg::CheckAgain);
+        p.primary("Set Up Helper…", || Msg::RegisterHelper);
+        return;
+    }
+    p.title(text::HELPER_UNKNOWN_TITLE);
+    match problem {
+        Some(HelperProblem::Unreachable(e)) => {
+            p.body(text::HELPER_UNREACHABLE);
+            p.gap(2.0);
+            p.row(Mark::Bad, "What happened", e);
+        }
+        Some(HelperProblem::Other(said)) => {
+            p.body(text::HELPER_REFUSED);
+            p.gap(2.0);
+            p.row(Mark::Bad, "The helper said", said);
+        }
+        _ => {
+            p.body(text::HELPER_REFUSED);
+        }
+    }
+    p.divider();
+    p.heading("What you can do");
+    p.body(text::HELPER_UNKNOWN_NEXT);
+    p.quit();
+    p.left("Copy Diagnostics", || Msg::CopyDiagnostics);
+    p.primary("Check Again", || Msg::CheckAgain);
 }
 
 fn missing(m: &Model, p: &mut Page) {
@@ -643,16 +710,10 @@ fn review(m: &Model, p: &mut Page) {
 fn approval(p: &mut Page) {
     p.title("Allow Sekka Installer to make changes");
     p.lede("Sekka Installer's helper makes the changes to your disk, and macOS asks you to allow it first.");
-    p.numbered(1, "Open System Settings › General › Login Items & Extensions.");
-    p.numbered(2, "Under Allow in the Background, turn on Sekka Installer.");
-    p.numbered(3, "Come back here. Sekka Installer continues on its own.");
-    let spinner = NSProgressIndicator::new(p.mtm);
-    spinner.setStyle(objc2_app_kit::NSProgressIndicatorStyle::Spinning);
-    spinner.setControlSize(objc2_app_kit::NSControlSize::Small);
-    unsafe { spinner.startAnimation(None) };
-    let waiting = ui::secondary(p.mtm, "Waiting for permission…", 12.0);
-    let row = ui::stack(p.mtm, false, 8.0, &[&spinner, &waiting]);
-    p.add(&row);
+    for (n, step) in text::APPROVAL_STEPS.iter().enumerate() {
+        p.numbered(n + 1, step);
+    }
+    waiting(p, text::WAITING_FOR_PERMISSION);
     p.left("Back", || Msg::BackToPlan);
     p.primary("Open Login Items", || Msg::OpenLoginItems);
 }

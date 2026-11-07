@@ -225,7 +225,7 @@ impl Environment for Live {
             Ok(Response::Status { installations }) => Ok(installations),
             Ok(Response::Refused(r)) => Err(HelperProblem::Other(r.message.to_string())),
             Ok(_) => Err(HelperProblem::Other("The helper answered something unexpected.".into())),
-            Err(_) => Err(HelperProblem::Unavailable),
+            Err(e) => Err(HelperProblem::Unreachable(e)),
         }
     }
 
@@ -331,10 +331,11 @@ impl Environment for Live {
     fn register_helper(&self) -> Result<Registration, String> {
         let service = Self::service();
         if let Err(e) = unsafe { service.registerAndReturnError() } {
-            if self.registration() == Registration::NeedsApproval {
-                return Ok(Registration::NeedsApproval);
-            }
-            return Err(e.localizedDescription().to_string());
+            // Registered already, waiting for the owner or allowed.
+            return match self.registration() {
+                Registration::Absent => Err(e.localizedDescription().to_string()),
+                registered => Ok(registered),
+            };
         }
         Ok(self.registration())
     }

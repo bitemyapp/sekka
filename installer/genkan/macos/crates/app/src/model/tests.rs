@@ -3,7 +3,7 @@
 //! simulation standing in for the Mac: effects run inline, so each test is
 //! the exact sequence of states a person would see.
 use super::*;
-use crate::env::{Environment, ToDownload};
+use crate::env::{Environment, HelperProblem, Registration, ToDownload};
 use crate::sim::{Scenario, Simulation, inspection_failed};
 
 struct Journey {
@@ -877,6 +877,98 @@ fn the_helper_waits_for_approval_in_login_items() {
     j.send(Msg::Tick);
     assert_eq!(j.model.screen, Screen::Review);
     assert!(j.model.authorization.is_some());
+}
+
+#[test]
+fn nothing_is_planned_while_the_helpers_installations_arent_known() {
+    // It can't read one of its records, so it lists none: one may be
+    // unfinished, and it would refuse another installation at the end.
+    let mut j = Journey::start(Scenario::RecordUnreadable);
+    assert_eq!(j.model.screen, Screen::HelperUnknown);
+    assert_eq!(j.model.step(), Step::Check);
+    assert!(j.model.plan.is_none() && !j.model.downloading);
+    assert!(matches!(j.model.helper_problem(), Some(HelperProblem::Other(said)) if said.contains("can't be read")));
+    // What it said, naming the record, is in the diagnostics.
+    j.send(Msg::CopyDiagnostics);
+    assert!(j.copied[0].contains("can't be read") && j.copied[0].contains(&SIM_ID.to_string()), "{}", j.copied[0]);
+    // Checking again asks again, and stops in the same place.
+    j.send(Msg::CheckAgain);
+    assert_eq!(j.model.screen, Screen::HelperUnknown);
+
+    // Nor while a helper that is allowed to run doesn't answer.
+    let env = Simulation::new(Scenario::Normal, 0.0);
+    let (m, effects) = hear(&env, Err(HelperProblem::Unreachable("The connection was interrupted.".into())), env.inspect());
+    assert!(effects.is_empty(), "{effects:?}");
+    assert_eq!(m.screen, Screen::HelperUnknown);
+}
+
+#[test]
+fn the_password_is_asked_for_once_the_helper_has_said_what_it_knows() {
+    // Never set up: nothing was installed from here, so a plan is offered,
+    // and the helper is set up and allowed when it is needed.
+    let mut j = Journey::start(Scenario::NeedsApproval);
+    assert_eq!(j.model.helper_problem(), Some(&HelperProblem::NotRegistered));
+    assert_eq!(j.model.screen, Screen::Plan);
+    j.reach_review().confirm().send(Msg::Install);
+    assert_eq!(j.model.screen, Screen::Approval);
+    assert!(j.model.authorization.is_none());
+    // Allowed: its installations are asked for, and only then the password.
+    j.send(Msg::Tick);
+    assert!(matches!(&j.model.helper, Some(Ok(list)) if list.is_empty()));
+    assert!(j.model.authorization.is_some());
+
+    // When it knows one that stands in the way, that one comes first, and
+    // no password is asked for: here the helper looks, finds nothing of
+    // it left, and closes it.
+    let mut j = Journey::with(Simulation::new(Scenario::RemovedByHand, 0.0).registered(Registration::Absent));
+    assert_eq!(j.model.screen, Screen::Plan);
+    j.reach_review().confirm().send(Msg::Install).send(Msg::Tick);
+    assert!(j.model.authorization.is_none());
+    // The downloads are kept, so the review comes back, of the Mac as it
+    // is now.
+    assert_eq!(j.model.screen, Screen::Review);
+    assert_eq!(j.model.notice.as_deref(), Some(crate::text::REMOVED));
+    j.confirm().send(Msg::Install);
+    assert!(j.model.authorization.is_some());
+    j.password("right");
+    assert_eq!(j.model.screen, Screen::Recovery);
+
+    // Checking again comes back to the review, and opens no sheet by
+    // itself.
+    let mut j = Journey::start(Scenario::Normal);
+    j.reach_review().send(Msg::CheckAgain);
+    assert_eq!(j.model.screen, Screen::Review);
+    assert!(j.model.authorization.is_none());
+}
+
+#[test]
+fn an_installation_is_found_again_once_its_helper_may_run() {
+    // Turned off in Login Items: the record waiting for Recovery can't be
+    // read, and nothing else is offered meanwhile.
+    let mut j = Journey::start(Scenario::HelperOff);
+    assert_eq!(j.model.screen, Screen::HelperUnknown);
+    assert!(j.model.installation.is_none() && j.model.plan.is_none());
+    let effects = j.model.update(Msg::Tick);
+    assert!(matches!(effects.as_slice(), [Effect::CheckRegistration]), "it waits for the owner: {effects:?}");
+    j.settle(effects);
+    assert_eq!(j.model.screen, Screen::HelperUnknown);
+    // Allowed again: this Mac is checked again, and the installation found.
+    j.send(Msg::OpenLoginItems).send(Msg::Tick);
+    assert_eq!(j.model.screen, Screen::Recovery);
+    assert_eq!(j.model.installation, Some(SIM_ID));
+    assert_eq!(j.model.state, Some(InstallState::WaitingForRecovery));
+
+    // Not set up, with Sekka on the disk: whether it is unfinished is the
+    // helper's to say, so it is set up from the page, then allowed.
+    let mut j = Journey::with(Simulation::new(Scenario::WaitingForRecovery, 0.0).registered(Registration::Absent));
+    assert_eq!(j.model.screen, Screen::HelperUnknown);
+    assert_eq!(j.model.helper_problem(), Some(&HelperProblem::NotRegistered));
+    j.send(Msg::RegisterHelper);
+    assert_eq!(j.model.registration, Some(Registration::NeedsApproval));
+    assert_eq!(j.model.screen, Screen::HelperUnknown);
+    j.send(Msg::Tick);
+    assert_eq!(j.model.screen, Screen::Recovery);
+    assert_eq!(j.model.installation, Some(SIM_ID));
 }
 
 #[test]

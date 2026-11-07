@@ -50,12 +50,32 @@ pub struct Events {
     pub progress: Option<Progress>,
 }
 
+/// Why the helper's installations aren't known. Until they are, nothing is
+/// planned: one of them may be unfinished.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum HelperProblem {
-    /// Not installed or not allowed yet: no installation can be known.
-    Unavailable,
-    /// The helper answered with a refusal or something unreadable.
+    /// macOS has no helper registered for this app: nothing has been
+    /// installed through it from here, unless the disk says otherwise.
+    NotRegistered,
+    /// Registered, but macOS won't run it until the owner allows it in
+    /// System Settings › Login Items, where it may have been turned off.
+    NeedsApproval,
+    /// Allowed to run, and it didn't answer.
+    Unreachable(String),
+    /// It answered with a refusal (a record it can't read, say) or
+    /// something unreadable.
     Other(String),
+}
+
+impl std::fmt::Display for HelperProblem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HelperProblem::NotRegistered => f.write_str("the helper isn't set up"),
+            HelperProblem::NeedsApproval => f.write_str("the helper isn't allowed to run (Login Items)"),
+            HelperProblem::Unreachable(e) => write!(f, "the helper couldn't be reached: {e}"),
+            HelperProblem::Other(m) => write!(f, "the helper said: {m}"),
+        }
+    }
 }
 
 /// What is left to download of a release, given what an earlier run left
@@ -94,6 +114,8 @@ pub trait Environment: Send + Sync + 'static {
     fn bundled_engine(&self) -> Result<Digest, String>;
     /// Fetch and verify this build's release catalog.
     fn catalog(&self) -> Result<Verified, String>;
+    /// The installations the helper keeps a record of. Asked only while
+    /// macOS lets it run: see [`status`].
     fn helper_status(&self) -> Result<Vec<Summary>, HelperProblem>;
     /// What is left to download of the release.
     fn still_to_download(&self, release: &Release) -> ToDownload;
@@ -125,4 +147,14 @@ pub trait Environment: Send + Sync + 'static {
     fn remove_staging(&self);
     fn copy_to_pasteboard(&self, text: &str);
     fn shut_down(&self) -> Result<(), String>;
+}
+
+/// The helper's installations, asked for only while macOS lets it run;
+/// otherwise why they can't be known.
+pub fn status(env: &dyn Environment) -> Result<Vec<Summary>, HelperProblem> {
+    match env.registration() {
+        Registration::Ready => env.helper_status(),
+        Registration::NeedsApproval => Err(HelperProblem::NeedsApproval),
+        Registration::Absent => Err(HelperProblem::NotRegistered),
+    }
 }

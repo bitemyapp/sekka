@@ -2874,7 +2874,13 @@ with Genkan's Linux workspaces.
 **How an installation goes.** The app inspects the Mac by running the
 bundled engine's `inspect` as the person using it, fetches the catalog for
 its channel and verifies it, and offers the release whose profile admits
-this Mac. The person chooses Sekka's size by dragging the divider on a
+this Mac. It also asks the helper, while macOS lets it run, which
+installations it keeps a record of: one it knows comes first, and while it
+can't say (it can't read a record, doesn't answer, is turned off in Login
+Items, or isn't set up while Sekka is on the disk) the app stops on a page
+saying so, with Check Again and Copy Diagnostics, and plans nothing. A
+helper that was never set up has nothing from this Mac; then the app asks
+it, once it is set up and allowed at Install, before the password. The person chooses Sekka's size by dragging the divider on a
 picture of the disk (or with the arrow keys; VoiceOver sees a slider). The
 app downloads the release's files into
 `~/Library/Application Support/Sekka Installer/Staging`, inspects the Mac
@@ -2948,7 +2954,8 @@ installer/genkan/macos/packaging/build-app.sh --engine ENGINE.tar.gz --icon AppI
 `resize-fails`, `install-fails`, `startup-disk-fails`,
 `startup-disk-refused`, `startup-disk-fails-again`,
 `waiting-for-recovery`, `recovery-finished`, `removed-by-hand`,
-`stopped-early`, `existing`, `needs-approval`). Its helper answers as the
+`stopped-early`, `existing`, `needs-approval`, `record-unreadable`,
+`helper-off`). Its helper answers as the
 real one does: asked to reconcile, it looks at the Mac and records
 Recovery's steps (`recovery-finished`) or that nothing of an installation
 is left (`removed-by-hand`); it cancels a run only while it is in a stage
