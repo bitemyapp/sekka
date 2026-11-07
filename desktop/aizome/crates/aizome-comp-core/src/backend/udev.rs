@@ -1310,6 +1310,11 @@ fn apply_device_settings(d: &mut libinput::Device, input: &aizome_config::Input)
         let _ = d.config_left_handed_set(input.pointer.left_handed);
     }
     if touchpad {
+        let _ = d.config_send_events_set_mode(if input.touchpad.enabled() {
+            libinput::SendEventsMode::ENABLED
+        } else {
+            libinput::SendEventsMode::DISABLED
+        });
         let _ = d.config_tap_set_enabled(input.touchpad.tap);
         if d.config_dwt_is_available() {
             let _ = d.config_dwt_set_enabled(input.touchpad.disable_while_typing);
