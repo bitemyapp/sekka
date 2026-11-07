@@ -373,7 +373,10 @@ available and preserving sparse allocation in the fallback. Native post-action
 mode normalization also detaches shared inodes, including on early failure.
 
 Successful local or remote incremental execution publishes a source-key cache
-alias so a fresh worktree can hit the warm result. Action/executor write policy
+alias so a fresh worktree can hit the warm result. The alias assumes the
+tool's output depends only on its sources, as rustc's incremental mode is
+designed to; a tool whose bytes depend on its own history would share one
+worktree's result with the others. Action/executor write policy
 and upload-size limits still apply; failed actions do not publish successful
 aliases. Actual LAN probes cover fresh-root hits, disabled writes, compiler
 failures, reverts and shared-donor preservation. These are correctness checks,
