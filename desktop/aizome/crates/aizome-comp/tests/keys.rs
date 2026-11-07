@@ -232,3 +232,76 @@ fn the_system_bell_rings_for_the_shell() {
     });
     assert_eq!(got, Some(("bell".to_string(), Some("HEADLESS-1".to_string()))));
 }
+
+#[test]
+fn an_app_keeps_its_home_key_over_a_window_it_opened() {
+    const KEY_HOME: u32 = 102;
+    const KEY_F1: u32 = 59;
+    let c = Compositor::start(Options::default());
+    let a = c.client(Spec::new("org.example.browser", 0x2222cc));
+    let wa = c.wait_window("org.example.browser");
+    let b = c.client(Spec::new("org.example.other", 0xcc2222));
+    let wb = c.wait_window("org.example.other");
+    let focus = |id: u64, who: &TestClient| {
+        c.ok(Request::Focus { id });
+        who.wait_seen("keyboard focus", |s| s.keyboard_focus);
+    };
+    let tap = |key: &str| {
+        let key = |pressed| Synthetic::Key { key: key.into(), pressed };
+        c.ok(Request::Synthesize { events: vec![key(true), key(false)] });
+    };
+    let caught = |events: &mut aizome_ipc::Events| {
+        events.by_ref().find_map(|e| match e {
+            Ok(Event::KeyCaught { tag, code, .. }) => Some((tag, code)),
+            _ => None,
+        })
+    };
+    let home = |windows: Vec<u64>| Request::CatchKeys {
+        tag: "home".into(),
+        keys: if windows.is_empty() { Vec::new() } else { vec!["home".into(), "f1".into()] },
+        windows,
+    };
+
+    // Asked on a connection that doesn't listen, nobody would hear it.
+    let mut plain = aizome_ipc::Client::connect_to(&c.ipc).unwrap();
+    assert!(matches!(plain.request(&home(vec![wa.id])).unwrap(), aizome_ipc::Response::Error { .. }));
+    let mut keeper = aizome_ipc::Client::connect_to(&c.ipc).unwrap().events().unwrap();
+    keeper.stream().set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    let bad = Request::CatchKeys { tag: "home".into(), keys: vec!["no-such-key".into()], windows: vec![wa.id] };
+    assert!(matches!(keeper.request(&bad).unwrap(), aizome_ipc::Response::Error { .. }));
+    assert_eq!(keeper.request(&home(vec![wa.id])).unwrap(), aizome_ipc::Response::Ok);
+
+    // Over the window: Home and F1 come to the keeper alone; other keys,
+    // and Home with Ctrl, are the window's.
+    focus(wa.id, &a);
+    tap("home");
+    assert_eq!(caught(&mut keeper), Some(("home".into(), KEY_HOME)));
+    tap("f1");
+    assert_eq!(caught(&mut keeper), Some(("home".into(), KEY_F1)));
+    tap("a");
+    chord(&c, "ctrl+home");
+    let s = a.wait_seen("Ctrl+Home", |s| s.keys.iter().any(|(k, _)| *k == KEY_HOME));
+    assert!(s.keys.iter().any(|(k, _)| *k == KEY_A), "{:?}", s.keys);
+    assert!(!s.keys.iter().any(|(k, _)| *k == KEY_F1), "F1 was caught: {:?}", s.keys);
+    let homes: Vec<u32> = s.keys.iter().filter(|(k, _)| *k == KEY_HOME).map(|(_, m)| *m).collect();
+    assert_eq!(homes.len(), 1, "Home alone was caught: {:?}", s.keys);
+    assert_ne!(homes[0] & CTRL, 0, "the one that came held Ctrl");
+
+    // Another window with the keys: Home is its own.
+    focus(wb.id, &b);
+    tap("home");
+    b.wait_seen("Home", |s| s.keys.iter().any(|(k, _)| *k == KEY_HOME));
+
+    // Let go: Home is the window's again.
+    focus(wa.id, &a);
+    assert_eq!(keeper.request(&home(Vec::new())).unwrap(), aizome_ipc::Response::Ok);
+    tap("home");
+    a.wait_seen("Home let go", |s| s.keys.iter().filter(|(k, _)| *k == KEY_HOME).count() == 2);
+
+    // The keeper gone (Chanoma quit), nothing is caught.
+    assert_eq!(keeper.request(&home(vec![wa.id])).unwrap(), aizome_ipc::Response::Ok);
+    drop(keeper);
+    c.settle();
+    tap("f1");
+    a.wait_seen("F1", |s| s.keys.iter().any(|(k, _)| *k == KEY_F1));
+}

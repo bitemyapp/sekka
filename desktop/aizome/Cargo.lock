@@ -62,6 +62,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "aizome-chanoma"
+version = "0.1.0"
+dependencies = [
+ "aizome-config",
+ "aizome-gamepad",
+ "aizome-index",
+ "aizome-ipc",
+ "aizome-kit",
+ "aizome-media",
+ "aizome-mpris",
+ "aizome-sofa",
+ "aizome-sys",
+ "aizome-theme",
+ "crc32fast",
+ "env_logger",
+ "image",
+ "libc",
+ "libloading",
+ "log",
+ "miniz_oxide 0.8.9",
+ "pipewire",
+ "roxmltree 0.21.1",
+ "serde",
+ "serde_json",
+ "sha2",
+ "ureq",
+]
+
+[[package]]
 name = "aizome-comp"
 version = "0.1.0"
 dependencies = [
@@ -160,12 +189,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "aizome-gamepad"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "log",
+ "serde",
+]
+
+[[package]]
 name = "aizome-greeter"
 version = "0.1.0"
 dependencies = [
  "aizome-config",
  "aizome-face",
+ "aizome-gamepad",
  "aizome-kit",
+ "aizome-sofa",
  "aizome-sys",
  "aizome-theme",
  "env_logger",
@@ -216,6 +256,15 @@ dependencies = [
  "serde",
  "serde_json",
  "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "aizome-index"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "log",
+ "rusqlite",
 ]
 
 [[package]]
@@ -310,6 +359,14 @@ dependencies = [
  "log",
  "pipewire",
  "sidestep-ui",
+]
+
+[[package]]
+name = "aizome-mpris"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "zbus",
 ]
 
 [[package]]
@@ -480,6 +537,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aizome-sofa"
+version = "0.1.0"
+dependencies = [
+ "aizome-gamepad",
+ "aizome-kit",
+ "aizome-theme",
+]
+
+[[package]]
 name = "aizome-soroban"
 version = "0.1.0"
 dependencies = [
@@ -520,6 +586,7 @@ dependencies = [
  "roxmltree 0.21.1",
  "serde",
  "sha-crypt",
+ "toml 0.9.12+spec-1.1.0",
  "zbus",
 ]
 
@@ -578,13 +645,13 @@ version = "0.1.0"
 dependencies = [
  "aizome-kit",
  "aizome-media",
+ "aizome-mpris",
  "env_logger",
  "image",
  "log",
  "serde",
  "serde_json",
  "sidestep-engine",
- "zbus",
 ]
 
 [[package]]

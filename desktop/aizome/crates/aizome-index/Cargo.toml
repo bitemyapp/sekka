@@ -1,0 +1,14 @@
+[package]
+name = "aizome-index"
+description = "What's in folders and drives, kept in one SQLite database apps share, refreshed by listing only the folders that changed"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+log.workspace = true
+libc = "0.2"
+# SQLite built in, as Aizome's other SQLite (Yukimi's store) is: one copy.
+rusqlite = { version = "0.40", features = ["bundled"] }

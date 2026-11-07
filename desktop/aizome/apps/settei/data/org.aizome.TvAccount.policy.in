@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Aizome</vendor>
+  <vendor_url>https://github.com/bitemyapp/sekka/tree/main/desktop/aizome</vendor_url>
+  <icon_name>org.aizome.Chanoma</icon_name>
+  <!-- The TV account's helper as root: it makes, changes or removes the
+       one account that opens straight into Chanoma, and nothing else. -->
+  <action id="org.aizome.Settei.tv-account">
+    <description>Set up the TV account</description>
+    <message>Settings needs an administrator's password to change the TV account</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@helper@</annotate>
+  </action>
+</policyconfig>

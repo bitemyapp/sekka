@@ -19,6 +19,7 @@ use aizome_theme::{NIGHT, Rgba, typeface};
 
 use crate::app::{Greeter, Msg, Stage};
 use crate::login::{Step, Tone};
+use crate::pads::Spot;
 
 const FIELD_W: f64 = 260.0;
 /// A person in the row: their picture and name.
@@ -46,13 +47,53 @@ pub fn view(g: &Greeter, _window: WindowKey, output: Option<u32>) -> Element<Msg
         column.push(content);
         block_h += h;
     }
-    let top = ((size.height - block_h) / 2.0 - 40.0).max(56.0);
+    let mut top = ((size.height - block_h) / 2.0 - 40.0).max(56.0);
+    // The controller's keyboard along the foot: the field stays in sight
+    // above it.
+    let sofa = if main { g.sofa() } else { None };
+    if sofa.as_ref().is_some_and(|s| s.keys.is_some()) {
+        let fit = aizome_sofa::Fit::of_size(size);
+        let keys = fit.to_window(aizome_sofa::keyboard::Keyboard::frame());
+        top = top.min(keys.y0 - block_h - 16.0).max(8.0);
+    }
     layers.push(aizome_kit::column(column).padding([top, 0.0, 0.0, 0.0]).into());
     if main {
         layers.push(top_bar(g, size));
-        layers.push(mark(size));
+        // Not under the keyboard's foot.
+        if !sofa.as_ref().is_some_and(|s| s.keys.is_some()) {
+            layers.push(mark(size));
+        }
+    }
+    if let Some(scene) = sofa {
+        layers.push(overlay(scene));
     }
     aizome_kit::stack(layers).width(size.width).height(size.height).into()
+}
+
+/// What a controller brought up, over everything ([`crate::sofa`]). The
+/// pointer moving off its panels gives the screen back to the mouse.
+fn overlay(scene: crate::sofa::Scene) -> Element<Msg> {
+    use aizome_kit::widget::Event;
+    aizome_kit::canvas(scene, |c, b, s: &crate::sofa::Scene, _| s.paint(c, b, &aizome_kit::Theme::night()))
+        .on_event(|e, size, s: &crate::sofa::Scene| {
+            let b = Rect::from_origin_size(Point::ZERO, size);
+            match e {
+                Event::PointerMove { pos, .. } if !s.over_panel(b, *pos) => Some(Msg::Pointer),
+                Event::PointerDown { pos, .. } => Some(Msg::Sofa(s.hit(b, *pos))),
+                _ => None,
+            }
+        })
+        .into()
+}
+
+/// The ring round what the controller is on, inside `r`.
+fn ring(cx: &mut aizome_kit::widget::PaintCx, r: Rect) {
+    aizome_kit::draw::border(cx.canvas, r, color(NIGHT.focus), 2.0);
+}
+
+/// What the controller is on, if a controller was used last.
+fn on(g: &Greeter, spot: Spot) -> bool {
+    g.couch.active && g.couch.spot == spot && g.couch.keys.is_none() && !g.couch.pin
 }
 
 /// The wallpaper, covering the display, under the kachi scrim at 70%.
@@ -104,18 +145,36 @@ fn top_bar(g: &Greeter, size: Size) -> Element<Msg> {
     })
     .text(g.hostname.clone(), SemanticRole::Label);
     let mut items: Vec<(f64, Element<Msg>)> = vec![(0.0, name.into())];
-    if g.cfg.power {
-        let button = drawn(32.0, 28.0, "power", |cx| {
+    let icon_button = |icon: Icon, lit: bool, open: bool| {
+        drawn(32.0, 28.0, (icon.name(), lit, open), move |cx| {
             let b = cx.bounds();
-            if cx.is_hovered() {
+            if cx.is_hovered() || open {
                 cx.canvas.fill_rect(b, color(Rgba::hexa(0xc0caf5, 0.12)));
             }
-            Icon::Power.draw(cx.canvas, Point::new(8.0, 6.0), 16.0, color(NIGHT.text2));
+            icon.draw(cx.canvas, Point::new(8.0, 6.0), 16.0, color(if open { NIGHT.text } else { NIGHT.text2 }));
+            if lit {
+                ring(cx, b);
+            }
         })
         .hoverable()
-        .on_click(Msg::PowerMenu)
-        .text("Power", SemanticRole::Button);
-        items.push((size.width - 24.0 - 32.0, Element::from(button).id("greeter-power")));
+    };
+    let mut x = size.width - 24.0;
+    if g.cfg.power {
+        x -= 32.0;
+        let button = icon_button(Icon::Power, on(g, Spot::Power), g.couch.power.is_some())
+            .on_click(Msg::PowerMenu)
+            .text("Power", SemanticRole::Button);
+        items.push((x, Element::from(button).id("greeter-power")));
+        x -= 4.0;
+    }
+    // Game controllers work here: what they do, on a click (or a
+    // controller's Home).
+    if g.cfg.controllers {
+        x -= 32.0;
+        let button = icon_button(Icon::Gamepad2, on(g, Spot::Controllers), g.couch.help)
+            .on_click(Msg::Help)
+            .text("Game controllers", SemanticRole::Button);
+        items.push((x, Element::from(button).id("greeter-controllers")));
     }
     aizome_kit::stack(
         items
@@ -138,10 +197,15 @@ fn mark(size: Size) -> Element<Msg> {
     aizome_kit::container(m).padding([size.height - 72.0, 0.0, 0.0, 0.0]).into()
 }
 
-/// A picture, or the initial on the selection colour, 72pt square.
-fn picture(cx: &mut aizome_kit::widget::PaintCx, tile: Rect, picture: Option<&Image>, initial: &str) {
+/// A picture, or the initial on the selection colour, 72pt square; the TV
+/// account's, a television.
+fn picture(cx: &mut aizome_kit::widget::PaintCx, tile: Rect, picture: Option<&Image>, initial: &str, tv: bool) {
     match picture {
         Some(p) => cx.canvas.draw_image(p, tile),
+        None if tv => {
+            cx.canvas.fill_rect(tile, color(NIGHT.selection));
+            Icon::Tv.draw(cx.canvas, Point::new(tile.x0 + 18.0, tile.y0 + 18.0), 36.0, color(NIGHT.on_selection));
+        }
         None => {
             cx.canvas.fill_rect(tile, color(NIGHT.selection));
             let s = look::ui(34.0, typeface::WEIGHT_SEMIBOLD, color(NIGHT.on_selection));
@@ -162,17 +226,21 @@ fn people(g: &Greeter, size: Size) -> (Element<Msg>, f64) {
         .enumerate()
         .map(|(i, u)| {
             let selected = i == g.selected;
+            let lit = selected && on(g, Spot::People);
             let pic = g.avatars.get(&u.name).cloned();
-            let (initial, real) = (u.initial(), u.real_name.clone());
-            drawn(TILE_W, WHO_H, (real.clone(), selected, pic.is_some()), move |cx| {
+            let (initial, real, tv) = (u.initial(), u.real_name.clone(), u.tv.is_some());
+            drawn(TILE_W, WHO_H, (real.clone(), selected, lit, pic.is_some(), tv), move |cx| {
                 let b = cx.bounds();
                 let tile =
                     Rect::new(((b.width() - PICTURE) / 2.0).round(), 8.0, ((b.width() + PICTURE) / 2.0).round(), 80.0);
-                picture(cx, tile, pic.as_ref(), &initial);
+                picture(cx, tile, pic.as_ref(), &initial, tv);
                 if selected {
                     cx.canvas.fill_rect(Rect::new(tile.x0, tile.y1 + 4.0, tile.x1, tile.y1 + 6.0), color(NIGHT.focus));
                 } else {
                     cx.canvas.fill_rect(tile, color(Rgba::hexa(0x16161e, 0.45)));
+                }
+                if lit {
+                    ring(cx, tile.inflate(4.0, 4.0));
                 }
                 let (weight, ink) =
                     if selected { (typeface::WEIGHT_TAB, NIGHT.text) } else { (typeface::WEIGHT_REGULAR, NIGHT.text3) };
@@ -192,7 +260,9 @@ fn people(g: &Greeter, size: Size) -> (Element<Msg>, f64) {
     let mut parts: Vec<Element<Msg>> = vec![row.into(), hint.into()];
     parts.push(message(g, size));
     let power = g.cfg.power;
+    let help = g.couch.help;
     let body = focus_keys(aizome_kit::column(parts), move |k| match named(k) {
+        Some(NamedKey::Escape) if help => Some(Msg::Help),
         Some(NamedKey::ArrowLeft) => Some(Msg::Previous),
         Some(NamedKey::ArrowRight) => Some(Msg::Next),
         Some(NamedKey::Enter) => Some(Msg::Pick(usize::MAX)),
@@ -212,6 +282,7 @@ fn named(k: &KeyEvent) -> Option<NamedKey> {
 
 /// The person logging in, the field, their session, and what's to say.
 fn password(g: &Greeter, size: Size, typed: bool) -> (Element<Msg>, f64) {
+    let tv = !typed && g.tv_auth().is_some();
     let (real, initial, pic) = match (typed, g.user()) {
         (false, Some(u)) => (u.real_name.clone(), u.initial(), g.avatars.get(&u.name).cloned()),
         _ => {
@@ -220,46 +291,61 @@ fn password(g: &Greeter, size: Size, typed: bool) -> (Element<Msg>, f64) {
             (n, i, None)
         }
     };
-    let who = drawn(size.width, WHO_H, (real.clone(), pic.is_some()), move |cx| {
+    let who = drawn(size.width, WHO_H, (real.clone(), pic.is_some(), tv), move |cx| {
         let b = cx.bounds();
         let tile = Rect::new(((b.width() - PICTURE) / 2.0).round(), 8.0, ((b.width() + PICTURE) / 2.0).round(), 80.0);
-        picture(cx, tile, pic.as_ref(), &initial);
+        picture(cx, tile, pic.as_ref(), &initial, tv);
         let s = look::ui(16.0, typeface::WEIGHT_TAB, color(NIGHT.text));
         cx.draw_text_in(&real, &s, Rect::new(0.0, 88.0, b.x1, 112.0), Align::Center);
     })
     .text(g.user().map(|u| u.real_name.clone()).or(g.login.user.clone()).unwrap_or_default(), SemanticRole::Label);
     let session = g.session().map(|s| s.name.clone()).unwrap_or_default();
-    let (secret, placeholder) = match &g.login.step {
-        Step::Ask { secret, prompt } => (*secret, prompt.clone()),
-        Step::Starting | Step::Done => (true, format!("Starting {session}…")),
-        Step::Failed => (true, "Press Return to try again".to_owned()),
-        Step::Waiting | Step::Nobody => (true, "Checking…".to_owned()),
-    };
-    let mut f = field(&g.password, |_| look::ui(15.0, typeface::WEIGHT_REGULAR, color(NIGHT.text)))
-        .placeholder(placeholder)
-        .height(32.0)
-        .on_change(Msg::Password)
-        .on_submit(Msg::Submit)
-        .on_caps(Msg::Caps);
-    if secret {
-        f = f.secure();
-    }
-    let boxed = boxed_field(Element::from(f).id("greeter-password"), g.login.failed);
     let off = crate::app::shake_offset(g.shake);
+    let field_row = if g.tv_start() {
+        start_button(on(g, Spot::Field))
+    } else {
+        let (secret, placeholder) = match &g.login.step {
+            Step::Ask { secret, prompt } => (*secret, prompt.clone()),
+            Step::Starting | Step::Done => (true, format!("Starting {session}…")),
+            Step::Failed => (true, "Press Return to try again".to_owned()),
+            Step::Waiting | Step::Nobody => (true, "Checking…".to_owned()),
+        };
+        // The TV account's PIN, as its placeholder says.
+        let placeholder = match (g.tv_auth(), &g.login.step) {
+            (Some(aizome_sys::tv::Auth::Pin), Step::Ask { .. }) => "PIN".to_owned(),
+            _ => placeholder,
+        };
+        let mut f = field(&g.password, |_| look::ui(15.0, typeface::WEIGHT_REGULAR, color(NIGHT.text)))
+            .placeholder(placeholder)
+            .height(32.0)
+            .on_change(Msg::Password)
+            .on_submit(Msg::Submit)
+            .on_caps(Msg::Caps);
+        if secret {
+            f = f.secure();
+        }
+        boxed_field(Element::from(f).id("greeter-password"), g.login.failed, on(g, Spot::Field))
+    };
     let field_row =
-        aizome_kit::container(boxed).padding([0.0, 0.0, 0.0, ((size.width - FIELD_W) / 2.0 + off).max(0.0)]);
-    let several = g.sessions.len() > 1;
+        aizome_kit::container(field_row).padding([0.0, 0.0, 0.0, ((size.width - FIELD_W) / 2.0 + off).max(0.0)]);
+    // The TV account's session is Chanoma's, always: said, not offered.
+    let several = g.sessions.len() > 1 && !tv;
+    let lit = on(g, Spot::Session);
+    let label = if tv { "Opens Chanoma".to_owned() } else { session.clone() };
+    let shown = label.clone();
     // As wide as the name (and its chevron), centred: the menu hangs from it.
-    let label = session.clone();
-    let chooser = drawn(0.0, LINE_H, (session.clone(), several), move |cx| {
+    let chooser = drawn(0.0, LINE_H, (label.clone(), several, lit), move |cx| {
         let b = cx.bounds();
         let s = look::ui(13.0, typeface::WEIGHT_REGULAR, color(NIGHT.text2));
-        if several && cx.is_hovered() {
+        if several && (cx.is_hovered() || lit) {
             cx.canvas.fill_rect(Rect::new(0.0, 4.0, b.x1, 30.0), color(Rgba::hexa(0xc0caf5, 0.10)));
         }
-        let w = cx.draw_text_in(&session, &s, Rect::new(8.0, 6.0, b.x1, 28.0), Align::Start);
+        let w = cx.draw_text_in(&shown, &s, Rect::new(8.0, 6.0, b.x1, 28.0), Align::Start);
         if several {
             Icon::ChevronDown.draw(cx.canvas, Point::new(8.0 + w + 6.0, 11.0), 12.0, color(NIGHT.text3));
+        }
+        if lit {
+            ring(cx, Rect::new(0.0, 4.0, b.x1, 30.0));
         }
     })
     .fit(move |cx| {
@@ -268,7 +354,14 @@ fn password(g: &Greeter, size: Size, typed: bool) -> (Element<Msg>, f64) {
         (8.0 + w + if several { 6.0 + 12.0 } else { 0.0 } + 8.0).ceil()
     })
     .hoverable()
-    .text(g.session().map(|s| format!("Session: {}", s.name)).unwrap_or_default(), SemanticRole::Button);
+    .text(
+        if tv {
+            "Opens Chanoma".to_owned()
+        } else {
+            g.session().map(|s| format!("Session: {}", s.name)).unwrap_or_default()
+        },
+        SemanticRole::Button,
+    );
     let chooser = if several { chooser.on_click(Msg::SessionMenu) } else { chooser };
     let chooser = aizome_kit::container(Element::from(chooser).id("greeter-session"))
         .width(size.width)
@@ -278,13 +371,19 @@ fn password(g: &Greeter, size: Size, typed: bool) -> (Element<Msg>, f64) {
     let mut h = WHO_H + FIELD_H + 4.0 + LINE_H + LINE_H;
     let others = g.cfg.user_list && g.users.len() > 1 && !typed;
     if others {
-        let link = drawn(size.width, LINE_H, "others", |cx| {
+        let lit = on(g, Spot::Others);
+        let link = drawn(size.width, LINE_H, ("others", lit), move |cx| {
             let s = look::ui(
                 12.5,
                 typeface::WEIGHT_REGULAR,
-                color(if cx.is_hovered() { NIGHT.text2 } else { NIGHT.text3 }),
+                color(if cx.is_hovered() || lit { NIGHT.text2 } else { NIGHT.text3 }),
             );
-            cx.draw_text_in("Log in as someone else", &s, Rect::new(0.0, 4.0, cx.bounds().x1, 24.0), Align::Center);
+            let b = cx.bounds();
+            cx.draw_text_in("Log in as someone else", &s, Rect::new(0.0, 4.0, b.x1, 24.0), Align::Center);
+            if lit {
+                let w = cx.layout_text("Log in as someone else", &s, None).size().width;
+                ring(cx, Rect::new(((b.x1 - w) / 2.0 - 8.0).round(), 1.0, ((b.x1 + w) / 2.0 + 8.0).round(), 27.0));
+            }
         })
         .hoverable()
         .on_click(Msg::People)
@@ -293,13 +392,40 @@ fn password(g: &Greeter, size: Size, typed: bool) -> (Element<Msg>, f64) {
         h += LINE_H;
     }
     let power = g.cfg.power;
+    let help = g.couch.help;
     let body = keys(aizome_kit::column(parts), move |k| match named(k) {
+        Some(NamedKey::Escape) if help => Some(Msg::Help),
         Some(NamedKey::Escape) if others => Some(Msg::People),
         Some(NamedKey::F(2)) if several => Some(Msg::SessionMenu),
         Some(NamedKey::F(3)) if power => Some(Msg::PowerMenu),
         _ => None,
     });
     (body, h)
+}
+
+/// The TV account's way in when it has nothing to sign in with: Start,
+/// where a field would be (Return or a click, or a controller's yes).
+fn start_button(lit: bool) -> Element<Msg> {
+    let b = drawn(FIELD_W, FIELD_H, ("greeter-start", lit), move |cx| {
+        let b = cx.bounds();
+        cx.canvas.fill_rect(b, color(NIGHT.selection));
+        aizome_kit::draw::border(cx.canvas, b, color(NIGHT.bevel_lo), 1.0);
+        if cx.is_hovered() {
+            cx.canvas.fill_rect(b, color(Rgba::hexa(0xffffff, 0.08)));
+        }
+        let s = look::ui(15.0, typeface::WEIGHT_SEMIBOLD, color(NIGHT.on_selection));
+        let w = cx.layout_text("Start", &s, None).size().width;
+        let x = ((b.width() - w - 22.0) / 2.0).round();
+        Icon::Play.draw(cx.canvas, Point::new(x, (b.height() - 14.0) / 2.0), 14.0, color(NIGHT.on_selection));
+        cx.draw_text_in("Start", &s, Rect::new(x + 22.0, 0.0, b.x1, b.y1), Align::Start);
+        if lit {
+            ring(cx, b);
+        }
+    })
+    .hoverable()
+    .on_click(Msg::StartTv)
+    .text("Start", SemanticRole::Button);
+    focus_keys(b, |k| matches!(named(k), Some(NamedKey::Enter)).then_some(Msg::StartTv)).id("greeter-start")
 }
 
 /// The user name to log in as (no list, or no one on it).
@@ -318,20 +444,23 @@ fn name(g: &Greeter, size: Size) -> (Element<Msg>, f64) {
         .height(32.0)
         .on_change(Msg::Name)
         .on_submit(Msg::SubmitName);
-    let boxed = boxed_field(Element::from(f).id("greeter-name"), 0);
+    let boxed = boxed_field(Element::from(f).id("greeter-name"), 0, on(g, Spot::Field));
     let row = aizome_kit::container(boxed).padding([0.0, 0.0, 0.0, ((size.width - FIELD_W) / 2.0).max(0.0)]);
     let parts: Vec<Element<Msg>> = vec![who.into(), row.into(), message(g, size)];
     (aizome_kit::column(parts).into(), WHO_H + FIELD_H + LINE_H)
 }
 
 /// The field in its box: sunk, a hairline, and the focus rail at the left
-/// (red once a try failed).
-fn boxed_field(f: Element<Msg>, failed: u32) -> Element<Msg> {
-    around(f, [0.0, 10.0, 0.0, 12.0], Size::new(FIELD_W, FIELD_H), ("greeter-field", failed > 0), move |cx| {
+/// (red once a try failed); ringed while the controller is on it.
+fn boxed_field(f: Element<Msg>, failed: u32, lit: bool) -> Element<Msg> {
+    around(f, [0.0, 10.0, 0.0, 12.0], Size::new(FIELD_W, FIELD_H), ("greeter-field", failed > 0, lit), move |cx| {
         let b = cx.bounds();
         cx.canvas.fill_rect(b, color(NIGHT.sunk));
         aizome_kit::draw::border(cx.canvas, b, color(NIGHT.line2), 1.0);
         cx.canvas.fill_rect(Rect::new(0.0, 0.0, 2.0, b.y1), color(NIGHT.focus));
+        if lit {
+            ring(cx, b);
+        }
     })
     .into()
 }

@@ -28,6 +28,27 @@ with the same pieces (`aizome-face`).
 - *Log in as someone else*, or Escape, goes back to the people.
 - Without a list (`user_list = false`), or with nobody on it, the user name
   is typed.
+- **The TV account** (`aizome_sys::tv`, made in Settings), last in the row
+  as a television. Its session is Chanoma's alone, whatever's picked, so
+  no session is offered, only *Opens Chanoma*. With nothing to sign in
+  with it shows Start, and starts only when that's chosen (logging out
+  of it doesn't start it again); with a PIN, the field takes digits and a
+  controller presses them on the PIN pad.
+- **A game controller** (`pads.rs`). The button with a controller on it,
+  beside the power button, says what a controller does here. Any
+  controller is read from the start, listening only, and changes nothing
+  until one of its buttons is pressed (or its arrows or stick pushed): that
+  first touch shows a ring round what it's on and its buttons along the
+  foot, hides the pointer, and does nothing else. The arrows or the stick
+  move between the people, the field, the session, *Log in as someone
+  else* and the buttons at the top; yes chooses and no goes back, each
+  controller's own (Nintendo's the other way round); Start logs in; Home
+  (or Select and Start held) opens the panel about controllers. A password
+  is typed on Chanoma's on-screen keyboard (`aizome-sofa`), which comes up
+  by itself with the field raised above it; the TV account's PIN on its
+  PIN pad, sent as soon as it's as long as the one set. A key typed or the
+  pointer moved (off the controller's panels) puts it all away, and the
+  login screen is the keyboard's and the mouse's again.
 
 Whoever logged in last starts at their password. Other displays show the
 wallpaper and the time.
@@ -77,7 +98,9 @@ the first person's session.
   root-owned directories. On NixOS these are the store paths in
   `/etc/aizome/greeter.toml`.
 - **What it reads:** `/etc/passwd` and `login.defs` (accounts in
-  `UID_MIN`–`UID_MAX` with a login shell), AccountsService's pictures and
+  `UID_MIN`–`UID_MAX` with a login shell, and the TV account's record,
+  `/var/lib/aizome/tv-account.toml`), the game controllers' event devices
+  (logind gives the person at the login screen them), AccountsService's pictures and
   public display scales, and
   its own state, `/var/lib/aizome-greeter/state.toml` (mode 0700, the
   greeter's). The state holds who logged in last and each person's
@@ -121,6 +144,9 @@ Its keys:
 | `wallpaper_night`, `wallpaper_day` | Aizome's wallpapers | |
 | `wallpaper` | `auto` | `night`, `day` or `auto` |
 | `power` | true | the power menu |
+| `controllers` | true | a game controller works it (`programs.aizome.greeter.controllers`) |
+| `controller_database` | SDL's, from nixpkgs | for controllers whose drivers name their buttons their own way |
+| `tv_session` | `aizome-chanoma-session` | the TV account's session |
 | `compositor`, `compositor_settings` | Aizome's, with the system's keyboard layout | |
 
 On NixOS, the X11 session wrapper imports the display environment and starts
@@ -130,7 +156,8 @@ The `greeter-x11` VM check covers Xfce followed by an Aizome login.
 
 `services.displayManager.autoLogin` becomes greetd's initial session,
 `aizome-greeter --session ID`. It starts the default session at boot with
-the environment the greeter would give it, without showing the greeter.
+the environment the greeter would give it, without showing the greeter. If
+the TV account logs in by itself, it's Chanoma's session that starts.
 
 On Sekka, `calamares.loginScreen` (`auto`) picks Aizome's login screen
 whenever Aizome is chosen, listing each chosen desktop once. The exception
@@ -153,7 +180,12 @@ stands in for greetd and takes anyone, with the password `aizome`.
     `cargo test -p aizome-sys --test display_scales`);
   - the conversation: a wrong password, several questions, cancelling, and
     late answers;
-  - the screens, headless, with pictures in `target/greeter-shots/`.
+  - the screens, headless, with pictures in `target/greeter-shots/`;
+  - a controller: nothing until pressed, the first press doing nothing
+    else, choosing and typing a password on the keyboard, a key typed or the
+    pointer putting it away, the panel about controllers from the corner
+    button and Home, the power menu; the TV account starting only when
+    asked, its session Chanoma's, and its PIN pressed on the PIN pad.
 - `nix build .#aizome-checks.greeter` runs the VM test: two people,
   and Aizome, sway and xterm's X11 session, typed at as a person would. It
   checks:
@@ -165,3 +197,12 @@ stands in for greetd and takes anyone, with the password `aizome`.
     login screen, with private homes and per-user isolation;
   - Bob in sway, then in X11;
   - the power menu.
+- `nix build .#aizome-checks.tv` runs a virtual controller alone through
+  the login screen: untouched, it changes nothing; it types Alice's
+  password on the on-screen keyboard and her desktop starts, with a user
+  service every login starts; Settings' helper makes the TV account with
+  a PIN, which the controller presses on the PIN pad; the TV account's
+  session is Chanoma alone (no shell), its systemd with the session bus
+  and sound but that service masked, set up for the first time by the
+  controller and in kids' mode; *Log Out* ends it, and the login screen
+  comes back.

@@ -95,17 +95,26 @@ pub fn spawn(az: &Aizome, argv: &[String], cwd: Option<PathBuf>) -> Result<u32, 
 /// [`spawn`] with the session's environment taken already, for a thread
 /// that can't reach the compositor's state.
 pub fn spawn_with(env: Vec<(String, String)>, argv: &[String], cwd: Option<PathBuf>) -> Result<u32, String> {
+    spawn_then(env, argv, cwd, None)
+}
+
+/// [`spawn_with`], and `then` called (on the reaping thread) once the
+/// program has ended.
+pub fn spawn_then(
+    env: Vec<(String, String)>,
+    argv: &[String],
+    cwd: Option<PathBuf>,
+    then: Option<Box<dyn FnOnce() + Send>>,
+) -> Result<u32, String> {
     let Some((prog, args)) = argv.split_first() else { return Err("nothing to run".into()) };
     // Keybindings and IPC launches must leave the compositor's service,
     // just as desktop-entry launches already do. In a nested/headless
     // session without a user manager, keep the direct-spawn behaviour.
-    let manager = std::env::var_os("XDG_RUNTIME_DIR")
-        .map(PathBuf::from)
-        .is_some_and(|dir| dir.join("systemd/private").exists());
+    let manager =
+        std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).is_some_and(|dir| dir.join("systemd/private").exists());
     let mut cmd = if let Some(systemd_run) = which("systemd-run").filter(|_| manager) {
         let mut cmd = Command::new(systemd_run);
-        cmd.args(["--user", "--scope", "--collect", "--quiet", "--slice=app.slice",
-            "--expand-environment=no", "--"]);
+        cmd.args(["--user", "--scope", "--collect", "--quiet", "--slice=app.slice", "--expand-environment=no", "--"]);
         cmd.arg(prog);
         cmd
     } else {
@@ -131,6 +140,9 @@ pub fn spawn_with(env: Vec<(String, String)>, argv: &[String], cwd: Option<PathB
         .name("aizome-reap".into())
         .spawn(move || {
             let _ = child.wait();
+            if let Some(then) = then {
+                then();
+            }
         })
         .ok();
     info!(pid, "spawned {prog}");
@@ -172,7 +184,7 @@ pub fn start(state: &mut State) {
     state.az.children.env.push(("AIZOME_SESSION".into(), if real { "1" } else { "0" }.into()));
     // Only someone's own session moves their terminal to Hotaru: a test or
     // nested run must not rewrite the person's lists.
-    if real {
+    if real && !opts.kiosk {
         crate::terminal::move_to_hotaru_once(state.az.settings.keys.legacy_terminal.clone());
     }
 
@@ -229,15 +241,30 @@ pub fn start(state: &mut State) {
         }
         run_quietly(dbus.args(&names).envs(env.clone()));
         notify_ready();
-        if under_systemd {
+        // A kiosk's session is its one program: none of the desktop's
+        // services.
+        if under_systemd && !opts.kiosk {
             run_quietly(Command::new("systemctl").args(["--user", "--no-block", "start", "aizome-session.target"]));
         }
     }
 
     if !opts.command.is_empty() {
         let argv = opts.command.clone();
-        if let Err(e) = spawn(&state.az, &argv, None) {
+        // A kiosk ends with its program, and the session with it.
+        let then: Option<Box<dyn FnOnce() + Send>> = opts.kiosk.then(|| {
+            let signal = state.az.signal.clone();
+            Box::new(move || {
+                info!("the kiosk's program ended: ending the session");
+                notify_stopping();
+                signal.stop();
+                signal.wakeup();
+            }) as Box<dyn FnOnce() + Send>
+        });
+        if let Err(e) = spawn_then(session_env(&state.az), &argv, None, then) {
             warn!("{e}");
+            if opts.kiosk {
+                state.az.signal.stop();
+            }
         }
     }
 }

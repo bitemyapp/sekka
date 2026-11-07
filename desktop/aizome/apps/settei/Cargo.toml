@@ -15,6 +15,11 @@ path = "src/lib.rs"
 name = "aizome-settei"
 path = "src/main.rs"
 
+# The TV account's changes, as root through pkexec (src/bin/tv-account.rs).
+[[bin]]
+name = "aizome-tv-account"
+path = "src/bin/tv-account.rs"
+
 [dependencies]
 aizome-kit.workspace = true
 aizome-theme.workspace = true

@@ -1,13 +1,16 @@
 //! Users & Groups: your name, picture and password; the other accounts,
 //! administrator or standard, added and removed; who logs in by
-//! themselves. Through AccountsService (polkit asks through the shell's
-//! agent); accounts the system configuration fixes
-//! (`users.mutableUsers = false`) say so.
+//! themselves; and the TV account, which opens straight into Chanoma.
+//! Through AccountsService (polkit asks through the shell's agent), and
+//! the TV account through its own helper (`aizome_sys::tv`, an
+//! administrator's password through pkexec); accounts the system
+//! configuration fixes (`users.mutableUsers = false`) say so.
 
 use std::path::PathBuf;
 
 use aizome_kit::prelude::*;
 use aizome_kit::{column, row};
+use aizome_sys::tv::{self, Auth, TvAccount};
 use aizome_sys::users::{AccountType, PasswordMode, User};
 
 use crate::form;
@@ -38,6 +41,17 @@ enum Sheet {
         home: String,
         delete_files: bool,
     },
+    /// Set up the TV account (`new`), or change what it signs in with.
+    Tv {
+        new: bool,
+        auth: Auth,
+        secret: String,
+        again: String,
+        error: Option<String>,
+    },
+    TvRemove {
+        delete_files: bool,
+    },
 }
 
 #[derive(Default)]
@@ -47,6 +61,26 @@ pub struct Users {
     pictures: crate::widgets::Pictures,
     /// A password to set once a new account appears.
     pending_password: Option<(String, String)>,
+    /// The sample's TV account (a live one is the system's record).
+    sample_tv: Option<TvAccount>,
+    /// What a TV change will make the record, once it's done (the sample).
+    tv_pending: Option<Option<TvAccount>>,
+}
+
+/// How the TV account may sign in, as the menus say it.
+const TV_AUTHS: [Auth; 3] = [Auth::None, Auth::Pin, Auth::Password];
+
+fn tv_auth_words(a: Auth) -> &'static str {
+    match a {
+        Auth::None => "Nothing",
+        Auth::Pin => "A PIN",
+        Auth::Password => "A password",
+    }
+}
+
+/// Whether there's a television to set up: Chanoma is installed.
+fn chanoma_installed() -> bool {
+    std::path::Path::new("/run/current-system/sw/bin/aizome-chanoma-session").exists()
 }
 
 #[derive(Clone, Debug)]
@@ -76,6 +110,20 @@ pub enum Msg {
     DeleteFiles(bool),
     RemoveConfirmed,
     Done(&'static str, Result<(), String>),
+    TvSetUp,
+    /// What it signs in with: from the menu in the sheet, or in the pane.
+    TvAuth(usize),
+    TvSheetAuth(usize),
+    TvSecret(String),
+    TvAgain(String),
+    TvChange,
+    TvSave,
+    TvRemove,
+    TvDeleteFiles(bool),
+    TvRemoveConfirmed,
+    TvForgetPin,
+    TvForgetPinConfirmed,
+    TvDone(&'static str, Result<(), String>),
 }
 
 /// A login name from a full name: "Aiko Mori" → "aiko".
@@ -209,7 +257,85 @@ impl Users {
             .spacing(12.0)
             .width(420.0)
             .into(),
+            Sheet::Tv { new, auth, secret, again, error } => {
+                let title = if *new { "Set Up the TV Account" } else { "How the TV Account Signs In" };
+                let mut parts: Vec<Element<Msg>> = vec![
+                    text(title).size(15.0).weight(650.0).into(),
+                    form::note(
+                        "It opens straight into Chanoma in kids' mode and can't open anything else; leaving \
+                         Chanoma logs out. Chanoma's grown-up PIN still unlocks grown-up mode.",
+                    ),
+                    dropdown(
+                        [
+                            "Nothing: choose TV and it starts".to_owned(),
+                            "A PIN, pressed on a controller".to_owned(),
+                            "A password".to_owned(),
+                        ],
+                        TV_AUTHS.iter().position(|a| a == auth).unwrap_or(0),
+                    )
+                    .on_select(Msg::TvSheetAuth)
+                    .width(Fill)
+                    .into(),
+                ];
+                let ok = match auth {
+                    Auth::None => true,
+                    Auth::Pin => tv::valid_pin(secret) && !again.is_empty(),
+                    Auth::Password => !secret.is_empty() && !again.is_empty(),
+                };
+                if *auth != Auth::None {
+                    let pin = *auth == Auth::Pin;
+                    parts.push(
+                        text_field(secret)
+                            .password()
+                            .placeholder(if pin { "PIN: four to eight digits" } else { "Password" })
+                            .on_change(Msg::TvSecret)
+                            .id("tv-secret")
+                            .width(Fill)
+                            .into(),
+                    );
+                    parts.push(
+                        text_field(again)
+                            .password()
+                            .placeholder("The same again")
+                            .on_change(Msg::TvAgain)
+                            .error(error.clone())
+                            .width(Fill)
+                            .into(),
+                    );
+                    if pin {
+                        parts.push(form::note(
+                            "At the login screen each digit is a controller's button: the arrows are 1 to \
+                                 4, the shoulders 5 and 6, the top and left face buttons 7 and 8, and the \
+                                 triggers 9 and 0. A keyboard types them.",
+                        ));
+                    }
+                }
+                parts.push(buttons(if *new { "Set Up" } else { "Save" }, ok, Msg::TvSave, false));
+                aizome_kit::column(parts).spacing(10.0).width(440.0).into()
+            }
+            Sheet::TvRemove { delete_files } => column![
+                text("Remove the TV account?").size(15.0).weight(650.0),
+                form::note("TV won't be at the login screen any more."),
+                checkbox("Also delete its home folder, and its Chanoma settings with it", *delete_files)
+                    .on_toggle(Msg::TvDeleteFiles),
+                buttons("Remove TV Account", true, Msg::TvRemoveConfirmed, true),
+            ]
+            .spacing(12.0)
+            .width(420.0)
+            .into(),
         }
+    }
+
+    /// The TV account: the system's record, or the sample's.
+    fn tv(&self, sample: bool) -> Option<TvAccount> {
+        if sample { self.sample_tv.clone() } else { TvAccount::read() }
+    }
+
+    /// Ask the helper for `change`; the sample's record becomes `after`.
+    fn change_tv(&mut self, cx: &mut PaneCx<Msg>, change: tv::Change, after: Option<TvAccount>, what: &'static str) {
+        self.tv_pending = Some(after);
+        let task = cx.sys().accounts.change_tv(change);
+        cx.wait(task, move |r| Msg::TvDone(what, r.map_err(|e| e.to_string())));
     }
 }
 
@@ -256,6 +382,14 @@ impl Pane for Users {
                 "automatic login",
                 "autologin",
                 "no password",
+            ]),
+            SettingEntry::new("tv", "TV account").keywords(&[
+                "television",
+                "chanoma",
+                "living room",
+                "kiosk",
+                "kids",
+                "controller",
             ]),
         ]
     }
@@ -464,6 +598,111 @@ impl Pane for Users {
             }
             Msg::Done(what, Ok(())) => cx.say(what),
             Msg::Done(what, Err(e)) => cx.failed(what, e),
+            Msg::TvSetUp => {
+                self.sheet =
+                    Some(Sheet::Tv { new: true, auth: Auth::None, secret: String::new(), again: String::new(), error: None });
+                cx.open_sheet();
+            }
+            Msg::TvChange => {
+                let Some(t) = self.tv(cx.sample()) else { return };
+                self.sheet =
+                    Some(Sheet::Tv { new: false, auth: t.auth, secret: String::new(), again: String::new(), error: None });
+                cx.open_sheet();
+                cx.focus("tv-secret");
+            }
+            // In the pane: nothing to type for Nothing; a PIN or a password
+            // is asked for.
+            Msg::TvAuth(i) => {
+                let (Some(t), Some(auth)) = (self.tv(cx.sample()), TV_AUTHS.get(i).copied()) else { return };
+                if auth == t.auth {
+                    return;
+                }
+                if auth == Auth::None {
+                    let after = TvAccount { auth, pin_length: None, ..t };
+                    let change = tv::Change::Set { auth, secret: String::new() };
+                    self.change_tv(cx, change, Some(after), "The TV account signs in with nothing");
+                } else {
+                    self.sheet =
+                        Some(Sheet::Tv { new: false, auth, secret: String::new(), again: String::new(), error: None });
+                    cx.open_sheet();
+                    cx.focus("tv-secret");
+                }
+            }
+            Msg::TvSheetAuth(i) => {
+                if let Some(Sheet::Tv { auth, secret, again, error, .. }) = &mut self.sheet {
+                    *auth = TV_AUTHS.get(i).copied().unwrap_or(Auth::None);
+                    secret.clear();
+                    again.clear();
+                    *error = None;
+                }
+                cx.focus("tv-secret");
+            }
+            Msg::TvSecret(s) => {
+                if let Some(Sheet::Tv { auth, secret, error, .. }) = &mut self.sheet {
+                    // A PIN is digits: nothing else goes in.
+                    *secret = if *auth == Auth::Pin { s.chars().filter(char::is_ascii_digit).take(8).collect() } else { s };
+                    *error = None;
+                }
+            }
+            Msg::TvAgain(s) => {
+                if let Some(Sheet::Tv { again, error, .. }) = &mut self.sheet {
+                    *again = s;
+                    *error = None;
+                }
+            }
+            Msg::TvSave => {
+                let Some(Sheet::Tv { new, auth, secret, again, error }) = &mut self.sheet else { return };
+                if *auth != Auth::None && secret != again {
+                    *error = Some("The two don't match".into());
+                    return;
+                }
+                let (new, auth, secret) = (*new, *auth, std::mem::take(secret));
+                let after = TvAccount {
+                    user: self.tv(cx.sample()).map_or_else(|| tv::NAME.to_owned(), |t| t.user),
+                    auth,
+                    pin_length: (auth == Auth::Pin).then_some(secret.len() as u8),
+                };
+                self.sheet = None;
+                cx.close_sheet();
+                let what = if new { "Set up the TV account" } else { "Changed how the TV account signs in" };
+                self.change_tv(cx, tv::Change::Set { auth, secret }, Some(after), what);
+            }
+            Msg::TvRemove => {
+                self.sheet = Some(Sheet::TvRemove { delete_files: false });
+                cx.open_sheet();
+            }
+            Msg::TvDeleteFiles(on) => {
+                if let Some(Sheet::TvRemove { delete_files }) = &mut self.sheet {
+                    *delete_files = on;
+                }
+            }
+            Msg::TvRemoveConfirmed => {
+                let Some(Sheet::TvRemove { delete_files }) = self.sheet.take() else { return };
+                cx.close_sheet();
+                self.change_tv(cx, tv::Change::Remove { files: delete_files }, None, "Removed the TV account");
+            }
+            Msg::TvForgetPin => cx.confirm(Confirm::new(
+                "Forget Chanoma's PIN on the TV account?",
+                "Chanoma on the TV asks a grown-up to choose a new PIN when it next starts. Until then it stays in kids' mode.",
+                "Forget PIN",
+                Msg::TvForgetPinConfirmed,
+            )),
+            Msg::TvForgetPinConfirmed => {
+                let after = self.tv(cx.sample());
+                self.change_tv(cx, tv::Change::ForgetChanomaPin, after, "Chanoma will ask for a new PIN");
+            }
+            Msg::TvDone(what, Ok(())) => {
+                if let Some(after) = self.tv_pending.take()
+                    && cx.sample()
+                {
+                    self.sample_tv = after;
+                }
+                cx.say(what);
+            }
+            Msg::TvDone(what, Err(e)) => {
+                self.tv_pending = None;
+                cx.failed(what, e);
+            }
         }
     }
 
@@ -562,8 +801,14 @@ impl Pane for Users {
             ));
         }
 
-        // Other people.
-        let others: Vec<&User> = snap.users.iter().filter(|u| Some(u.uid) != me.as_ref().map(|m| m.uid)).collect();
+        // Other people (the TV account has a section of its own).
+        let tv_account = self.tv(vcx.sample());
+        let others: Vec<&User> = snap
+            .users
+            .iter()
+            .filter(|u| Some(u.uid) != me.as_ref().map(|m| m.uid))
+            .filter(|u| tv_account.as_ref().is_none_or(|t| t.user != u.name))
+            .collect();
         let mut rows: Vec<form::Row<Msg>> = others
             .iter()
             .map(|u| {
@@ -619,6 +864,62 @@ impl Pane for Users {
                     .help("The computer starts straight into this account, without asking for a password."),
                 ],
         ));
+
+        // The television's account.
+        if vcx.sample() || chanoma_installed() {
+            let rows = match &tv_account {
+                None => vec![
+                    form::row("TV account", button("Set Up…").icon(Icon::Tv).enabled(!fixed).on_press(Msg::TvSetUp))
+                        .entry("tv")
+                        .help(
+                            "An account for the television: it opens straight into Chanoma in kids' mode, can't \
+                             open anything else, and leaving Chanoma logs out. It can sign in with nothing, a PIN \
+                             pressed on a controller, or a password.",
+                        ),
+                ],
+                Some(t) => {
+                    let mut rows = vec![
+                        form::row(
+                            "TV signs in with",
+                            dropdown(
+                                TV_AUTHS.map(|a| tv_auth_words(a).to_owned()),
+                                TV_AUTHS.iter().position(|a| *a == t.auth).unwrap_or(0),
+                            )
+                            .on_select(Msg::TvAuth)
+                            .enabled(!fixed)
+                            .min_width(160.0),
+                        )
+                        .entry("tv")
+                        .help(match t.auth {
+                            Auth::None => "Choosing TV at the login screen starts Chanoma.",
+                            Auth::Pin => "Pressed on a controller at the login screen, each button a digit, or typed.",
+                            Auth::Password => "Typed at the login screen, on a keyboard or with a controller.",
+                        }),
+                    ];
+                    if t.auth != Auth::None {
+                        let what = if t.auth == Auth::Pin { "Change PIN…" } else { "Change Password…" };
+                        rows.push(form::row("", button(what).enabled(!fixed).on_press(Msg::TvChange)));
+                    }
+                    rows.push(
+                        form::row("Chanoma's PIN", button("Forget…").enabled(!fixed).on_press(Msg::TvForgetPin))
+                            .help("The grown-ups' PIN in Chanoma on the TV: forgotten, it asks for a new one."),
+                    );
+                    rows.push(form::whole(
+                        container(
+                            row![
+                                button("Remove TV Account…").destructive().enabled(!fixed).on_press(Msg::TvRemove),
+                                spacer()
+                            ]
+                            .width(Fill),
+                        )
+                        .padding([8.0, form::INSET])
+                        .width(Fill),
+                    ));
+                    rows
+                }
+            };
+            sections.push(vcx.section("Television", rows));
+        }
         form::page(sections)
     }
 

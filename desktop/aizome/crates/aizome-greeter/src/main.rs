@@ -90,6 +90,19 @@ fn usage(code: i32) -> ! {
 /// computer logs in by itself): its environment, then its command.
 fn start_session(cfg: &Config, id: &str) -> i32 {
     use std::os::unix::process::CommandExt;
+    // The TV account, logging in by itself, opens Chanoma's session all
+    // the same.
+    let tv = aizome_sys::tv::TvAccount::read().is_some_and(|t| Some(t.user) == me());
+    if tv && let Some((prog, args)) = cfg.tv_session.split_first() {
+        let e = std::process::Command::new(prog)
+            .args(args)
+            .env("XDG_SESSION_TYPE", "wayland")
+            .env("XDG_SESSION_DESKTOP", "chanoma")
+            .env("XDG_CURRENT_DESKTOP", "Chanoma")
+            .exec();
+        log::error!("{prog}: {e}");
+        return 1;
+    }
     let sessions = aizome_greeter::sessions::find(&cfg.sessions, &[], !cfg.x11_prefix.is_empty());
     let Some(s) = sessions.iter().find(|s| s.id == id).or_else(|| sessions.first()) else {
         log::error!("no session {id}, nor any other");
@@ -106,4 +119,18 @@ fn start_session(cfg: &Config, id: &str) -> i32 {
     let e = c.exec();
     log::error!("{}: {e}", cmd[0]);
     1
+}
+
+/// The account this runs as.
+fn me() -> Option<String> {
+    // SAFETY: getpwuid_r writes only into the buffers given.
+    unsafe {
+        let mut pw: libc::passwd = std::mem::zeroed();
+        let mut buf = vec![0 as libc::c_char; 4096];
+        let mut out: *mut libc::passwd = std::ptr::null_mut();
+        if libc::getpwuid_r(libc::getuid(), &mut pw, buf.as_mut_ptr(), buf.len(), &mut out) != 0 || out.is_null() {
+            return None;
+        }
+        Some(std::ffi::CStr::from_ptr(pw.pw_name).to_string_lossy().into_owned())
+    }
 }
