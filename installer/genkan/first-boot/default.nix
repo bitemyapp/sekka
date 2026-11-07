@@ -146,7 +146,9 @@ in
       lib.elem (toString ./test-data/configuration.after.nix) (
         map toString afterSetup.options.calamares.defaultDesktop.files
       )
-      && !(lib.elem (toString ./test-data/setup.nix) (map toString afterSetup.options.calamares.defaultDesktop.files))
+      && !(lib.elem (toString ./test-data/setup.nix) (
+        map toString afterSetup.options.calamares.defaultDesktop.files
+      ))
     );
     assert check "setup.nix leaves the disk to the configuration (identity.nix on a Mac)" (
       after.fileSystems."/".device == before.fileSystems."/".device
