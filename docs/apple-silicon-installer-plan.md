@@ -1,8 +1,12 @@
 # Apple Silicon installer implementation plan
 
-Status: proposed work, written on 6 November 2026. The phases below describe
-future implementation and the evidence needed to ship it. This documentation
-change implements none of the new behavior; publication remains inhibited.
+Status: written on 6 November 2026 and implemented on
+`feat/apple-silicon-installer` the same week, as far as source, component
+tests, VM evidence and macOS type-checking reach; see
+[DEVELOPERS.md](../DEVELOPERS.md#sekka-installer-for-mac) for what each part
+has and hasn't been run on. The native Mac builds, the Recovery step and
+every hardware gate still need the Mac. Encryption is
+[deferred](apple-silicon/encryption.md). Publication remains inhibited.
 
 The Sekka baseline is `4882dc33652612e7475f467f6373d8b607e5407c` on
 `fix/apple-silicon-aizome`, rebased onto main
@@ -527,17 +531,32 @@ Define and test which state is authoritative after power loss. Multiple journal
 copies must agree under a documented reconciliation rule; choosing whichever
 copy says the most progress is unsafe.
 
+On the Mac the helper's journal is the only authoritative copy. Recovery keeps
+its own receipt on the stub, which nothing trusts as evidence: anyone who can
+write the stub can write it. Any other copy of the records may lag the
+helper's, record for record, but never differ from it or go further, since the
+chain's digests have no key (`sekka_mac_journal::reconcile`). The helper learns
+what Recovery did, or that an installation was removed, only from its own
+inspection as root with the installation's own engine (`Request::Reconcile`).
+It inspects and records under the install lock, which every engine started
+for an installation also holds until it exits, even past the helper that
+started it, so nothing is recorded while an engine may still be changing the
+disk. It records nothing when the inspection can't see the plan's disk or is
+ambiguous.
+
 | Observed state | Permitted next action |
 | --- | --- |
 | Inspected/planned; no mutation intent | Reinspect and prepare; a changed layout requires a newly reviewed plan |
-| Verified assets; no mutation intent | Revalidate/reuse assets or cancel without disk changes |
-| Mutation started; completion not proved | Inspect actual state; stop for reconciliation if its effect is ambiguous |
+| Verified assets; no mutation intent | Revalidate/reuse assets or cancel without disk changes; a stage that changes nothing and was cut off by a restart is recorded as interrupted, then cancelled |
+| Mutation started; completion not proved | Inspect actual state; stop for reconciliation if its effect is ambiguous. Setting the startup disk is the exception: once the helper holds the install lock, so no engine is still in that stage, the helper records the interruption, then reverifies target and content and retries authorization only, as after it failed |
 | Payload checkpoint verified; startup authorization failed | Reverify target/content and retry authorization only |
+| macOS's part complete; waiting for Recovery | Finish in Recovery. Once the helper's inspection shows the installation complete (the stub's boot policy names its boot object) and made of the stub, ESP and root its records name, at the offsets and sizes its stages recorded, record both Recovery steps as policy read back, with the inspection as their source |
 | Recovery enrollment uncertain | Read actual policy/selection and preserve matching boot software; never blindly restore an older payload |
 | Waiting for Linux setup | Boot the installed target and resume only that installation's setup transaction |
 | Account/configuration partly committed | Reconcile the existing account and generation; never reset a user's password as a retry |
 | Installation complete | Verify booted target and configured system; ordinary updates use Yukimi/NixOS generations |
 | Record missing/corrupt or target changed | Refuse destructive resume; provide redacted diagnostics and a manual recovery path |
+| Stopped, and nothing of it on its plan's disk as the helper inspects it | Record it removed (what was checked: no partition in the plan's extent other than a macOS container from before it, the one it shrank or the one holding its macOS, grown back over the space; no installation naming it; nothing unidentified there); then reinspect and plan afresh |
 
 Checkpoint names and exact write order are phase-0/4 schema deliverables. Test
 process termination, short writes, `ENOSPC`, failed sync and power-loss models

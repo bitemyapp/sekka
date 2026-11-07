@@ -6,7 +6,13 @@
 //! The helper prepares the installation as soon as it receives the plan and
 //! reports `install::Event`s on stdout. Closing stdin before confirming
 //! cancels preparation; nothing has been written to any disk at that point.
-use crate::{InstallPlan, install::Event};
+//!
+//! After confirming, stdin stays open for one more kind of line: when
+//! installing the bootloader failed on a target whose earlier stages were
+//! checked, the helper reports a `Recovery` with a retry offer and waits.
+//! A `RetryRequest` naming that offer asks it to check the target and try
+//! again; closing stdin declines, and the helper unmounts and stops.
+use crate::{InstallPlan, install::Event, record::RetryOffer};
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -21,6 +27,24 @@ use zeroize::Zeroizing;
 #[serde(deny_unknown_fields)]
 pub struct Confirmation {
     pub confirmation: String,
+}
+
+/// Wire data from the window, answering a retry offer. The helper accepts
+/// it only when both fields are exactly the offer's, and checks the record
+/// and the target again before repeating anything.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RetryRequest {
+    /// The stage offered, `bootloader`.
+    pub retry: String,
+    /// The installation record's last entry when it was offered.
+    pub record: String,
+}
+
+/// What the window sends after the plan.
+enum Line {
+    Confirm(String),
+    Retry(RetryRequest),
 }
 
 /// Read one newline-terminated line of at most `limit` bytes. `None` at a
@@ -52,9 +76,28 @@ pub enum Update {
     Finished(Result<(), String>),
 }
 
-/// A running helper. Dropping it without confirming cancels preparation.
+/// A running helper. Dropping it without confirming cancels preparation;
+/// after confirming, it declines any retry offer.
 pub struct Session {
-    writer: Sender<Option<String>>,
+    writer: Sender<Option<Line>>,
+}
+
+/// The line to write for `line`, if it may follow what was written: one
+/// confirmation, then retries.
+fn encode(line: Line, confirmed: &mut bool) -> Option<Zeroizing<Vec<u8>>> {
+    let bytes = match line {
+        Line::Confirm(phrase) if !*confirmed => {
+            *confirmed = true;
+            serde_json::to_vec(&Confirmation {
+                confirmation: phrase,
+            })
+        }
+        Line::Retry(request) if *confirmed => serde_json::to_vec(&request),
+        _ => return None,
+    };
+    let mut bytes = Zeroizing::new(bytes.ok()?);
+    bytes.push(b'\n');
+    Some(bytes)
 }
 impl Session {
     /// Start the privileged helper through Polkit and send the plan. Events
@@ -78,7 +121,7 @@ impl Session {
         let stdout = child.stdout.take().context("Helper stdout")?;
         let mut request = Zeroizing::new(serde_json::to_vec(&plan.into_request())?);
         request.push(b'\n');
-        let (writer, confirmations) = mpsc::channel::<Option<String>>();
+        let (writer, lines) = mpsc::channel::<Option<Line>>();
         // Writes can block until Polkit authorizes and the helper reads; keep
         // them off the caller's thread.
         thread::spawn(move || {
@@ -86,16 +129,16 @@ impl Session {
                 return;
             }
             drop(request);
-            if let Ok(Some(phrase)) = confirmations.recv()
-                && let Ok(mut line) = serde_json::to_vec(&Confirmation {
-                    confirmation: phrase,
-                })
-            {
-                line.push(b'\n');
-                let _ = stdin.write_all(&line);
+            let mut confirmed = false;
+            while let Ok(Some(line)) = lines.recv() {
+                if let Some(bytes) = encode(line, &mut confirmed)
+                    && stdin.write_all(&bytes).is_err()
+                {
+                    break;
+                }
             }
-            // Dropping stdin is the cancellation signal before confirmation
-            // and is ignored by the helper afterwards.
+            // Dropping stdin cancels preparation before confirmation, and
+            // afterwards declines a retry offer.
         });
         thread::spawn(move || {
             for line in BufReader::new(stdout).lines() {
@@ -117,9 +160,18 @@ impl Session {
     /// Send the typed phrase. The helper checks it against its own parsed
     /// plan; destructive work starts only if it matches.
     pub fn confirm(&self, phrase: &str) {
-        let _ = self.writer.send(Some(phrase.to_owned()));
+        let _ = self.writer.send(Some(Line::Confirm(phrase.to_owned())));
     }
-    /// Withdraw an unconfirmed request. Has no effect after confirming.
+    /// Answer a retry offer. The helper checks the request, its record and
+    /// the target before it repeats anything.
+    pub fn retry(&self, offer: &RetryOffer) {
+        let _ = self.writer.send(Some(Line::Retry(RetryRequest {
+            retry: offer.stage.clone(),
+            record: offer.record.clone(),
+        })));
+    }
+    /// Withdraw an unconfirmed request; after confirming, decline any
+    /// retry offer.
     pub fn cancel(&self) {
         let _ = self.writer.send(None);
     }
@@ -154,5 +206,30 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn one_confirmation_then_only_retries() {
+        let retry = || {
+            Line::Retry(RetryRequest {
+                retry: "bootloader".into(),
+                record: "ab".repeat(32),
+            })
+        };
+        let mut confirmed = false;
+        // A retry can't come first, nor a second confirmation later.
+        assert!(encode(retry(), &mut confirmed).is_none());
+        let line = encode(Line::Confirm("ERASE /dev/vda".into()), &mut confirmed).unwrap();
+        assert_eq!(line.as_slice(), b"{\"confirmation\":\"ERASE /dev/vda\"}\n");
+        assert!(encode(Line::Confirm("ERASE /dev/sda".into()), &mut confirmed).is_none());
+        let line = encode(retry(), &mut confirmed).unwrap();
+        let mut reader = std::io::Cursor::new(line.to_vec());
+        let parsed: RetryRequest =
+            serde_json::from_slice(&read_line(&mut reader, 4096).unwrap().unwrap()).unwrap();
+        assert_eq!(parsed.retry, "bootloader");
+        assert_eq!(parsed.record, "ab".repeat(32));
+        // The two kinds of line can't be mistaken for each other.
+        assert!(serde_json::from_slice::<Confirmation>(&line[..line.len() - 1]).is_err());
+        assert!(serde_json::from_slice::<RetryRequest>(br#"{"confirmation":"x"}"#).is_err());
     }
 }

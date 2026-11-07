@@ -1,0 +1,4 @@
+{"message":{"payload":{"adapter":"sha256:e12e8537607985ac42045188c01e77b2a312e6e2d1748a9689b0aeb94633fa02","asahi":"0.9.2","engine":"0.9.2+sekka.1","mode":"execute","protocol":1},"type":"hello"},"schema":"sekka.mac.engine/1","seq":1}
+{"message":{"payload":{"level":"info","text":"Asahi sees the layout sha256:482450b97c11242446820fae2fa6897fec2334d06dd64e8c203f721d48f89c9c."},"type":"log"},"schema":"sekka.mac.engine/1","seq":2}
+{"message":{"payload":{"failure":{"apple_diagnostic":null,"code":"layout-changed","disk_changed":"no","message":"This Mac's disk has changed since the plan was made. Check this Mac again and review a new plan."},"stage":null},"type":"failure"},"schema":"sekka.mac.engine/1","seq":3}
+{"message":{"payload":{"outcome":"failed"},"type":"completion"},"schema":"sekka.mac.engine/1","seq":4}

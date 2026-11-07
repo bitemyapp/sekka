@@ -8,9 +8,9 @@ use aizome_ipc::{KeyboardBus, KeyboardInfo};
 use aizome_kit::testing::Harness;
 use aizome_kit::theme::{Appearance, ThemeChoice};
 use aizome_kit::{Point, WindowKey};
-use calamares_nixos::{SuperKey, applications};
+use calamares_nixos::{SuperKey, applications, install::Event};
 use genkan::Step;
-use genkan::app::{Field, Genkan, KeyCheck, Msg, StepState};
+use genkan::app::{Field, Genkan, Helper, KeyCheck, Msg, StepState};
 
 fn open_in(page: &str, theme: ThemeChoice) -> (Harness<Genkan>, WindowKey) {
     let appearance = Appearance {
@@ -31,7 +31,7 @@ fn says(h: &Harness<Genkan>, w: WindowKey, what: &str) -> bool {
     h.texts(w).iter().any(|t| t.contains(what))
 }
 
-const PAGES: [(&str, &str); 14] = [
+const PAGES: [(&str, &str); 15] = [
     ("welcome", "This installer erases one whole disk"),
     ("disk", "Samsung SSD 990 PRO 1TB"),
     ("account", "Create Your Account"),
@@ -52,6 +52,7 @@ const PAGES: [(&str, &str); 14] = [
     ("install", "Copy the prepared system"),
     ("done", "NixOS Is Installed"),
     ("failed", "Installation Failed"),
+    ("bootfail", "Try the Bootloader Again"),
 ];
 
 #[test]
@@ -299,6 +300,150 @@ fn a_finished_installation_offers_shutting_down() {
     assert_eq!(h.program().installed_in(), Some(47.3));
     assert!(h.find_id(w, "shut-down").is_some());
     assert!((h.program().fraction() - 1.0).abs() < 1e-9);
+}
+
+#[test]
+fn a_failed_copy_says_what_changed_and_offers_no_retry() {
+    let (mut h, w) = open("failed");
+    assert!(says(&h, w, "Copying the system didn't finish"));
+    assert!(says(
+        &h,
+        w,
+        "install from the start, which erases the disk again"
+    ));
+    assert!(h.find_id(w, "recovery-next").is_some());
+    assert!(h.find_id(w, "retry-bootloader").is_none());
+    assert_eq!(h.program().steps[3], StepState::Failed);
+    // Once the helper has stopped, the window may be closed.
+    h.send(Msg::Session(
+        0,
+        Helper::Finished(Err("The installation helper stopped".into())),
+    ));
+    assert!(h.program().finished());
+    assert_eq!(h.program().next_label(), "Close Installer");
+    // Copy Details carries the record's account and the redacted record.
+    h.send(Msg::CopyFailure);
+    let copied = h.platform.clipboard.clone().expect("copied details");
+    assert!(copied.contains("No space left on device"));
+    assert!(copied.contains("What changed: "));
+    assert!(copied.contains("redacted for support"));
+}
+
+#[test]
+fn a_failed_bootloader_offers_to_try_again() {
+    let (mut h, w) = open("bootfail");
+    assert!(says(&h, w, "Installation Failed"));
+    assert!(says(&h, w, "Installing the bootloader didn't finish"));
+    assert!(says(&h, w, "Attempt 2 of 3"));
+    assert_eq!(h.program().steps[4], StepState::Failed);
+    assert!(h.find_id(w, "retry-bootloader").is_some());
+    // The helper waits for an answer: the window isn't writing anything,
+    // so it may be closed, which declines.
+    assert!(!h.program().installing);
+    assert!(h.program().finished());
+
+    assert!(h.click_text(w, "Try the Bootloader Again"));
+    assert!(h.program().installing);
+    assert!(!h.program().failed);
+    assert!(h.program().recovery.is_none());
+    assert_eq!(h.program().steps[4], StepState::Current);
+    assert!(says(&h, w, "Checking the disk and the copied system"));
+    assert!(h.find_id(w, "retry-bootloader").is_none());
+    h.request_close(w);
+    assert_eq!(h.windows().len(), 1, "no closing while installing again");
+
+    // What the helper says once its checks pass, as it would say it.
+    let helper = |event| Msg::Session(0, Helper::Event(event));
+    for (step, message) in [
+        (5, "Installing the bootloader again"),
+        (6, "Flushing writes and unmounting the installed system"),
+    ] {
+        h.send(helper(Event::Progress {
+            step,
+            message: message.into(),
+        }));
+    }
+    assert!(says(&h, w, "Flushing writes"));
+    h.send(helper(Event::Complete));
+    assert!(says(&h, w, "NixOS Is Installed"));
+}
+
+/// The report a real record gives when the disk couldn't be claimed after
+/// confirming: mounted meanwhile, so the erase never started.
+fn refused_claim(message: &str) -> calamares_nixos::record::Report {
+    use calamares_nixos::record::{Digest, Facts, Journal, Stage, Verification};
+    let dir = std::env::temp_dir().join(format!("genkan-pages-{}", std::process::id()));
+    let mut opened = Facts::default();
+    opened.add("disk", "/dev/nvme0n1").unwrap();
+    opened.add("disk-model", "Samsung SSD 990 PRO 1TB").unwrap();
+    let mut journal = Journal::open(&dir, opened, vec![]).unwrap();
+    journal
+        .intent(Stage::Preparation, Facts::default())
+        .unwrap();
+    journal
+        .completed(
+            Stage::Preparation,
+            Facts::default(),
+            Verification::Inspected,
+        )
+        .unwrap();
+    let mut confirmed = Facts::default();
+    confirmed
+        .add("configuration", Digest::of(b"configuration.nix"))
+        .unwrap();
+    journal.confirmed(confirmed).unwrap();
+    journal.refused(message).unwrap();
+    let report = journal.report(message, true);
+    std::fs::remove_dir_all(&dir).unwrap();
+    report
+}
+
+#[test]
+fn a_disk_that_couldnt_be_claimed_is_said_to_be_as_it_was() {
+    let message =
+        "Disk is unavailable: Contains a mounted filesystem or active swap (including live media)";
+    let report = refused_claim(message);
+    let (mut h, w) = open("ready");
+    h.send(Msg::Next);
+    assert_eq!(h.program().step, Step::Install);
+    let helper = |event| Msg::Session(0, Helper::Event(event));
+    h.send(helper(Event::Recovery { report }));
+    h.send(helper(Event::Failed {
+        message: message.into(),
+    }));
+    h.send(Msg::Session(
+        0,
+        Helper::Finished(Err("The installation helper stopped".into())),
+    ));
+    assert!(says(&h, w, "Installation Failed"));
+    assert!(says(
+        &h,
+        w,
+        "Nothing was written to Samsung SSD 990 PRO 1TB (/dev/nvme0n1)."
+    ));
+    assert!(says(&h, w, "The disk is as it was."));
+    assert!(!says(&h, w, "treat everything that was on it as lost"));
+    assert!(h.find_id(w, "retry-bootloader").is_none());
+    assert!(h.program().finished());
+    h.send(Msg::CopyFailure);
+    let copied = h.platform.clipboard.clone().expect("copied details");
+    assert!(copied.contains("What changed: Nothing was written"));
+}
+
+#[test]
+fn a_retry_offer_ends_with_the_helper() {
+    let (mut h, w) = open("bootfail");
+    h.send(Msg::Session(
+        0,
+        Helper::Finished(Err("The installation helper stopped".into())),
+    ));
+    let recovery = h.program().recovery.clone().expect("the record's account");
+    assert!(recovery.retry.is_none());
+    assert!(h.find_id(w, "retry-bootloader").is_none());
+    assert!(says(&h, w, "can't be tried again from here"));
+    // A late click does nothing.
+    h.send(Msg::RetryBootloader);
+    assert!(h.program().failed && !h.program().installing);
 }
 
 #[test]

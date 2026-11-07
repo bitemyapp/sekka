@@ -14,6 +14,8 @@ pub mod plan;
 pub mod power;
 pub mod precache;
 pub mod process;
+pub mod record;
+pub mod retry;
 pub mod session;
 pub use filesystem::Filesystem;
 pub use plan::{ConfirmedInstall, Hostname, InstallPlan, RawRequest, Username};

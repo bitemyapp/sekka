@@ -1,0 +1,72 @@
+{
+  "acknowledgements": [
+    "known-macos-issue",
+    "development-release"
+  ],
+  "actions": [
+    {
+      "container": "05b6e6e3-07d4-4edc-9143-1193e6c3f339",
+      "from": 494384795648,
+      "kind": "shrink-container",
+      "to": 290373738496
+    },
+    {
+      "kind": "create-stub",
+      "size": 2499805184
+    },
+    {
+      "kind": "create-esp",
+      "size": 1073741824
+    },
+    {
+      "kind": "create-root",
+      "size": 200437399552
+    }
+  ],
+  "allocation": {
+    "esp": 1073741824,
+    "macos_container_after": 290373738496,
+    "root": 200437399552,
+    "sekka": 204010946560,
+    "stub": 2499805184
+  },
+  "disk": {
+    "disk": "cd613e30-d8f1-4adf-91b7-584a2265b1f5",
+    "layout_digest": "sha256:ece07dc6a3a8b0ee1c5d2ef8e6399fa00a7bebc6b34ae0de3b74303cb532b62a",
+    "macos_volume_group": "f3c64af7-75a8-4294-82cd-789a380208a9"
+  },
+  "human_steps": [
+    "shut-down",
+    "hold-power-button",
+    "choose-volume",
+    "authorize-in-recovery",
+    "create-account"
+  ],
+  "machine": {
+    "binding": "sha256:f32e9b3c2b684017f2d0cbe147e8cf23ebb959afac4886fdb1ad30bda22fb2f0",
+    "chip_id": 24624,
+    "device_class": "j514sap",
+    "product_type": "Mac15,6",
+    "system_firmware": "mBoot-20457.1.29"
+  },
+  "release": {
+    "catalog_serial": 1,
+    "channel": "development",
+    "engine": "sha256:ed9f6f25068608efd412958da4dfc19328ca3511251fa6d5f9c42baf230e32f8",
+    "installer_data": "sha256:101e1799b5f188cf19c236f801cd0f71dafa0d4c1e125ed99fe1f00a6fda5800",
+    "manifest": "sha256:2e7251298dbe69a6db73e797d56674fb82f6fdc8395b78d7834b44e0d0b2ccd6",
+    "payload": "sha256:83ea53469017da01e9efcda482b91bbcded41ff829e0275ba2eea32fdbbd2d8f",
+    "profile": "j514s",
+    "profile_digest": "sha256:610c5ec8fac12bc87d3351071277c846ca3dfd5199545a9693552caef4c6e815",
+    "recovery_app": "sha256:3da2937229c2f0ac9a64a057bc0416a592be61889be3fd929859c2f8c2a2c597",
+    "release": "sekka-j514s-4882dc33",
+    "root_image": "sha256:8de601bf3c792f1d0058b4a32bf50943ad181a5f4ee922ae969071c405d66e59",
+    "source_revision": "4882dc33652612e7475f467f6373d8b607e5407c"
+  },
+  "schema": "sekka.mac.plan/1",
+  "target": {
+    "offset": 290898051072,
+    "size": 204010946560
+  },
+  "volume_name": "Sekka"
+}

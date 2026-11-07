@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The installation as it goes, what went wrong if it failed, and what to
 //! do once it's done.
-use super::{group, review::failure, sections};
+use super::{group, note_row, review::failure, sections};
 use crate::app::{Genkan, INSTALL_STEPS, Msg, StepState};
 use crate::format::{clock, duration};
 use aizome_kit::prelude::*;
@@ -68,11 +68,53 @@ pub fn page(app: &Genkan) -> Element<Msg> {
         form_section("", steps),
     ];
     if let Some(message) = &app.failure {
+        // The installation record's account, when the helper could give it.
+        let changed = app.recovery.as_ref().map_or(
+            "The disk may have been modified. Copy these details before closing; storage diagnostics, if any, are saved under /run.",
+            |recovery| recovery.changed.as_str(),
+        );
         items.push(group(
             "Installation did not complete",
-            "The disk may have been modified. Copy these details before closing; storage diagnostics, if any, are saved under /run.",
+            changed,
             vec![container(failure(message)).padding(12.0).width(Fill).into()],
         ));
+    }
+    if let (Some(recovery), Some(_)) = (&app.recovery, &app.failure) {
+        let mut rows = vec![
+            container(
+                text(recovery.next.clone())
+                    .wrap()
+                    .width(Fill)
+                    .id("recovery-next"),
+            )
+            .padding([10.0, 12.0])
+            .width(Fill)
+            .into(),
+        ];
+        if let Some(offer) = &recovery.retry {
+            rows.push(
+                row![
+                    text(format!("Attempt {} of {}", offer.attempt, offer.attempts))
+                        .size(12.0)
+                        .role(Role::Text3)
+                        .width(Fill),
+                    button("Try the Bootloader Again")
+                        .icon(Icon::RotateCcw)
+                        .primary()
+                        .on_press(Msg::RetryBootloader)
+                        .id("retry-bootloader"),
+                ]
+                .spacing(10.0)
+                .align(Align::Center)
+                .padding([10.0, 12.0])
+                .width(Fill)
+                .into(),
+            );
+        }
+        rows.push(note_row(
+            "Copy Details includes Genkan's installation record, with serial numbers and names left out.",
+        ));
+        items.push(group("Next", "", rows));
     }
     let mut details = vec![
         row![

@@ -1,0 +1,32 @@
+[package]
+name = "sekka-mac-helper"
+description = "Sekka Installer's privileged helper: verifies a reviewed plan again as root and runs the engine under a durable journal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "sekka-installer-helper"
+path = "src/main.rs"
+
+[features]
+production = ["sekka-mac-trust/production"]
+
+[dependencies]
+sekka-mac-contract.workspace = true
+sekka-mac-trust.workspace = true
+sekka-mac-stage.workspace = true
+sekka-mac-journal.workspace = true
+sekka-mac-engine.workspace = true
+sekka-mac-xpc.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+zeroize.workspace = true
+libc.workspace = true
+
+[dev-dependencies]
+sekka-mac-contract = { workspace = true, features = ["samples"] }
+tempfile.workspace = true

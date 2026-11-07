@@ -1,0 +1,100 @@
+{
+  "candidates": [
+    {
+      "adjacent_free": 0,
+      "available": 306384556032,
+      "available_recommended": 306384556032,
+      "container": "05b6e6e3-07d4-4edc-9143-1193e6c3f339",
+      "current_size": 494384795648,
+      "kind": "shrink-container",
+      "partition": "1a2b8f1f-f1fd-42a2-9755-d4c13a902931"
+    }
+  ],
+  "disk": {
+    "block_size": 4096,
+    "containers": [
+      {
+        "free": 344384795648,
+        "partition": "1a2b8f1f-f1fd-42a2-9755-d4c13a902931",
+        "resize": {
+          "minimum": 188000239616,
+          "recommended": 188000239616
+        },
+        "size": 494384795648,
+        "snapshots": 0,
+        "uuid": "05b6e6e3-07d4-4edc-9143-1193e6c3f339",
+        "volume_groups": [
+          {
+            "data_volume": "8d88348a-7eed-4d14-b06d-3fef701966a0",
+            "name": "Macintosh HD",
+            "os": {
+              "kind": "macos",
+              "version": "27.0.1"
+            },
+            "system_volume": "025b413f-8a9a-421e-a648-a7dd06839eb9",
+            "uuid": "f3c64af7-75a8-4294-82cd-789a380208a9"
+          }
+        ]
+      }
+    ],
+    "device": "disk0",
+    "partitions": [
+      {
+        "kind": "apple-isc",
+        "name": "iBootSystemContainer",
+        "offset": 24576,
+        "size": 524288000,
+        "uuid": "78e51061-7311-48a3-82ce-6f447ed4d57b"
+      },
+      {
+        "kind": "apfs",
+        "name": "Container",
+        "offset": 524312576,
+        "size": 494384795648,
+        "uuid": "1a2b8f1f-f1fd-42a2-9755-d4c13a902931"
+      },
+      {
+        "kind": "apple-recovery",
+        "name": "RecoveryOSContainer",
+        "offset": 494909108224,
+        "size": 5368664064,
+        "uuid": "6a8ac4ba-0580-4975-ad2f-89d94a2f20aa"
+      }
+    ],
+    "size": 500277792768,
+    "uuid": "cd613e30-d8f1-4adf-91b7-584a2265b1f5"
+  },
+  "filevault": "on",
+  "installations": [],
+  "issues": [
+    {
+      "blocking": false,
+      "code": "known-macos-issue",
+      "detail": "On macOS 27.0.1, Apple's APFS resize has failed for another owner with error -69606 despite clean First Aid. If it fails here, nothing is installed and macOS stays as it was; going back to macOS 26 helped that owner. (https://github.com/AsahiLinux/asahi-installer/issues/448)"
+    }
+  ],
+  "layout_digest": "sha256:ece07dc6a3a8b0ee1c5d2ef8e6399fa00a7bebc6b34ae0de3b74303cb532b62a",
+  "machine": {
+    "binding": "sha256:f32e9b3c2b684017f2d0cbe147e8cf23ebb959afac4886fdb1ad30bda22fb2f0",
+    "board_id": 68,
+    "chip_id": 24624,
+    "device_class": "j514sap",
+    "product_name": "MacBook Pro (14-inch, Nov 2023)",
+    "product_type": "Mac15,6",
+    "soc_name": "Apple M3 Pro",
+    "system_firmware": "mBoot-20457.1.29"
+  },
+  "macos": {
+    "build": "26A434",
+    "internal_boot": true,
+    "system_firmware_version": "27.0.1",
+    "version": "27.0.1",
+    "volume_group": "f3c64af7-75a8-4294-82cd-789a380208a9"
+  },
+  "power": {
+    "battery_percent": 80,
+    "has_battery": true,
+    "on_ac": true
+  },
+  "schema": "sekka.mac.inspection/1"
+}

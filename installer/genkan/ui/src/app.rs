@@ -20,6 +20,7 @@ use calamares_nixos::{
     install::{Event, Summary},
     memory::{self, MemInfo},
     precache,
+    record::Report,
     session::{Session, Update},
     timezone::{self, Source},
     zonemap::Zones,
@@ -362,6 +363,8 @@ pub enum Msg {
     Tick,
     ToggleLog,
     CopyFailure,
+    /// Answer the helper's offer to install the bootloader again.
+    RetryBootloader,
     Power(&'static str),
     PowerRequested(&'static str, Result<(), String>),
     Close,
@@ -588,6 +591,9 @@ pub struct Genkan {
     pub completed: bool,
     pub failed: bool,
     pub failure: Option<String>,
+    /// What the installation record shows after a failure, and what to do;
+    /// with an offer to try the bootloader again while the helper waits.
+    pub recovery: Option<Report>,
     pub total_seconds: Option<f64>,
     pub log: Rc<VecDeque<String>>,
     pub log_open: bool,
@@ -709,6 +715,7 @@ impl Genkan {
             completed: false,
             failed: false,
             failure: None,
+            recovery: None,
             total_seconds: None,
             log: Rc::default(),
             log_open: false,
@@ -1785,6 +1792,66 @@ impl Genkan {
         }
     }
 
+    /// What the installation record shows after a failure. With an offer to
+    /// try the bootloader again, the helper waits for an answer: nothing is
+    /// being written, and closing the window declines.
+    pub fn show_recovery(&mut self, report: Report, cx: &mut Cx<Msg>) {
+        self.append_log(&report.changed);
+        if report.retry.is_some() && self.step == Step::Install {
+            self.show_failure(&report.message, cx);
+            self.installing = false;
+            self.install_message = "The bootloader could not be installed. Everything before it is on the disk and checked.".into();
+        }
+        self.recovery = Some(report);
+    }
+
+    /// Ask the helper to try the bootloader again. It checks its record, the
+    /// disk and the copied system before writing anything.
+    fn retry_bootloader(&mut self, cx: &mut Cx<Msg>) {
+        let Some(offer) = self.recovery.as_ref().and_then(|r| r.retry.clone()) else {
+            return;
+        };
+        match &self.session {
+            Some(session) => session.retry(&offer),
+            None if self.preview.is_some() => {}
+            None => {
+                self.note(
+                    "The installation helper is no longer running, so the bootloader can't be tried again.",
+                    cx,
+                );
+                return;
+            }
+        }
+        self.recovery = None;
+        self.failed = false;
+        self.failure = None;
+        self.installing = true;
+        self.set_install_step(5);
+        self.install_message =
+            "Checking the disk and the copied system before trying the bootloader again…".into();
+        self.started = Instant::now().checked_sub(Duration::from_secs(self.elapsed));
+        if self.preview.is_none() {
+            self.tick = Some(cx.every(Duration::from_millis(500), Msg::Tick));
+        }
+    }
+
+    /// What Copy Details copies: the failure and, once the disk was
+    /// confirmed, what changed, what to do next and the installation
+    /// record redacted for support.
+    pub fn failure_details(&self) -> Option<String> {
+        let failure = self
+            .failure
+            .as_ref()
+            .or(self.preparation.failure.as_ref())?;
+        Some(match &self.recovery {
+            Some(recovery) => format!(
+                "{failure}\n\nWhat changed: {}\nNext: {}\n\n{}",
+                recovery.changed, recovery.next, recovery.support
+            ),
+            None => failure.clone(),
+        })
+    }
+
     pub fn show_done(&mut self, cx: &mut Cx<Msg>) {
         self.installing = false;
         self.completed = true;
@@ -1872,9 +1939,16 @@ impl Genkan {
                         "Nothing was written. Go back and review again to continue.".into();
                 }
             }
+            Helper::Event(Event::Recovery { report }) => self.show_recovery(report, cx),
             Helper::Event(Event::Failed { message }) => self.show_failure(&message, cx),
             Helper::Finished(result) => {
                 self.session.take();
+                // Nobody is left to answer an offer.
+                if let Some(recovery) = &mut self.recovery
+                    && recovery.retry.take().is_some()
+                {
+                    recovery.next = "The installation helper stopped, so the bootloader can't be tried again from here. Copy the details, then close the installer and open it again to install from the start, which erases the disk again.".into();
+                }
                 let was_installing = std::mem::replace(&mut self.installing, false);
                 if self.completed {
                     return;
@@ -2263,10 +2337,11 @@ impl Program for Genkan {
             }
             Msg::ToggleLog => self.log_open = !self.log_open,
             Msg::CopyFailure => {
-                if let Some(text) = self.failure.as_ref().or(self.preparation.failure.as_ref()) {
-                    cx.set_clipboard_text(text);
+                if let Some(text) = self.failure_details() {
+                    cx.set_clipboard_text(&text);
                 }
             }
+            Msg::RetryBootloader => self.retry_bootloader(cx),
             Msg::Power(action) => self.power(action, cx),
             Msg::PowerRequested(action, result) => {
                 if let Err(error) = result {

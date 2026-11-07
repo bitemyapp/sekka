@@ -1,0 +1,16 @@
+[package]
+name = "sekka-mac-xpc"
+description = "The narrow XPC channel between Sekka Installer and its privileged helper"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+zeroize.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2.workspace = true
+libc.workspace = true

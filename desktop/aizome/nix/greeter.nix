@@ -56,6 +56,9 @@ let
       compositor_settings = "${compositorSettings}";
     }
     // lib.optionalAttrs (g.defaultSession != null) { default_session = g.defaultSession; }
+    // lib.optionalAttrs (g.setup.socket != null) { setup_socket = g.setup.socket; }
+    // lib.optionalAttrs (g.setup.logo != null) { setup_logo = "${g.setup.logo}"; }
+    // lib.optionalAttrs (g.keyboardFile != null) { keyboard_file = g.keyboardFile; }
     // lib.optionalAttrs (cfg.wallpapers.night != null) { wallpaper_night = "${cfg.wallpapers.night}"; }
     // lib.optionalAttrs (cfg.wallpapers.day != null) { wallpaper_day = "${cfg.wallpapers.day}"; }
   );
@@ -103,6 +106,36 @@ in
       type = lib.types.bool;
       default = true;
       description = "Offer Sleep, Restart and Shut Down on the login screen.";
+    };
+    setup = {
+      socket = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "/run/sekka-setup.sock";
+        description = ''
+          A first-boot setup helper's socket (docs/greeter.md). Where nobody
+          has an account, the login screen asks it whether to set the
+          computer up, and does so instead of listing people: language,
+          keyboard and time zone, the owner's account, their desktop. Only
+          the `greeter` user needs to reach it; the helper does the work.
+        '';
+      };
+      logo = lib.mkOption {
+        type = lib.types.nullOr lib.types.path;
+        default = null;
+        description = "The picture setup's welcome shows (an SVG); without one, Aizome's mark.";
+      };
+    };
+    keyboardFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "/etc/aizome/keyboard.toml";
+      description = ''
+        A root-owned TOML file, written at run time, whose `layouts`,
+        `variant`, `options` and `model` replace the system's keyboard on
+        the login screen: what first-boot setup chose, until the
+        configuration's own `services.xserver.xkb` names it.
+      '';
     };
   };
 

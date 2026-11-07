@@ -68,7 +68,10 @@ fn main() {
             }
         }
     };
-    let code = match aizome_kit::try_run(Greeter::new(cfg, true, demo)) {
+    let mut greeter = Greeter::new(cfg, true, demo);
+    // Setup changes the keyboard in it as the person chooses one.
+    greeter.settings_file = display_settings.as_ref().map(|s| s.path().clone());
+    let code = match aizome_kit::try_run(greeter) {
         Ok(_) => 0,
         Err(e) => {
             log::error!("{e}");

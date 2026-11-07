@@ -225,8 +225,12 @@ fn footer(app: &Genkan) -> Element<Msg> {
             .on_press(Msg::Next)
             .enabled(app.next_enabled())
             .id("next");
+        // Trying the bootloader again, on the page, is the recommended way on.
+        let retrying = app.recovery.as_ref().is_some_and(|r| r.retry.is_some());
         items.push(if app.step == Step::Review {
             next.destructive().into()
+        } else if retrying {
+            next.into()
         } else {
             next.primary().into()
         });

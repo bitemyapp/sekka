@@ -8,6 +8,11 @@
 //! confirmation it partitions, formats, copies the prepared system to the
 //! target and installs the bootloader, so the time after clicking Install is
 //! dominated by writing the target disk.
+//!
+//! Every stage from preparation on is recorded (`record`): an intent before
+//! each change to the disk, and its checked result after it. After a
+//! failure the window is told what changed and the next safe action; only
+//! the bootloader may be tried again (`retry`).
 use crate::{
     ConfirmedInstall, Firmware, InstallPlan, Settings,
     config::{self, Template},
@@ -15,6 +20,8 @@ use crate::{
     filesystem::{self, Identities},
     memory, nixlog, precache,
     process::{self, output, output_lines},
+    record::{self, Digest, DiskChanged, Facts, Journal, Report, Verification},
+    retry::{self, Answers, Closure, Expected},
 };
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -70,6 +77,14 @@ pub enum Event {
     Complete,
     /// The GUI withdrew the request before confirming; nothing was written.
     Cancelled,
+    /// After a failure once the installation was confirmed: what the
+    /// installation record shows changed, and the next safe action. With a
+    /// retry offer the helper waits for the window's answer
+    /// (`session::RetryRequest`), or for its stdin to close; otherwise
+    /// `Failed` follows.
+    Recovery {
+        report: Report,
+    },
     Failed {
         message: String,
     },
@@ -267,19 +282,66 @@ pub enum InstallMode {
 pub struct Prepared {
     // Held until the installation finishes: one installer at a time.
     _lock: fs::File,
+    journal: Journal,
+    built: Built,
+}
+/// The prepared system and the files that describe it.
+struct Built {
     staging: tempfile::TempDir,
     template: Template,
     ids: Identities,
     layout: Layout,
     configuration: String,
+    hardware: String,
     /// Toplevel derivation and output path of the installed system.
     derivation: String,
     system: String,
+    /// The system's closure in the live store; none when it is built on
+    /// the target.
+    closure: Option<Closure>,
     summary: Summary,
+}
+impl Built {
+    /// What preparation established, for the record.
+    fn facts(&self) -> Result<Facts> {
+        let mut facts = Facts::default();
+        facts.add("system", &self.system)?;
+        facts.add("derivation", &self.derivation)?;
+        facts.flag("deferred", self.summary.deferred)?;
+        if let Some(closure) = self.closure {
+            facts.add("closure", closure.digest)?;
+            facts.add("closure-paths", closure.paths)?;
+            facts.add("closure-bytes", closure.bytes)?;
+        }
+        Ok(facts)
+    }
+    /// Digests of the files `retry::FILES` names, as they will be written.
+    fn files(&self) -> [Digest; 4] {
+        [
+            Digest::of(self.configuration.as_bytes()),
+            Digest::of(self.template.flake.as_bytes()),
+            Digest::of(&self.template.lock),
+            Digest::of(self.hardware.as_bytes()),
+        ]
+    }
 }
 impl Prepared {
     pub fn summary(&self) -> &Summary {
-        &self.summary
+        &self.built.summary
+    }
+    /// The window withdrew the request: nothing was written.
+    pub fn cancel(mut self) {
+        let _ = self.journal.cancelled();
+    }
+    /// The confirmation was refused (malformed, or not this plan's phrase):
+    /// record it, tell the window nothing was written, and pass the error on.
+    pub fn refuse(mut self, error: anyhow::Error) -> anyhow::Error {
+        let message = format!("{error:#}");
+        let _ = self.journal.refused(&message);
+        event(Event::Recovery {
+            report: self.journal.report(&message, false),
+        });
+        error
     }
 }
 
@@ -339,6 +401,40 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
         "Firmware changed since review"
     );
     let lock = installer_lock()?;
+    // From here on, how preparation ends is recorded.
+    let mut journal = Journal::open(
+        Path::new(record::LIVE_DIR),
+        retry::opening(plan)?,
+        retry::personal(plan),
+    )?;
+    journal.intent(record::Stage::Preparation, Facts::default())?;
+    match build(plan, started, stage) {
+        Ok(built) => {
+            journal.completed(
+                record::Stage::Preparation,
+                built.facts()?,
+                Verification::Inspected,
+            )?;
+            Ok(Prepared {
+                _lock: lock,
+                journal,
+                built,
+            })
+        }
+        Err(error) => {
+            let _ = if process::cancelled() {
+                journal.cancelled()
+            } else {
+                journal.failed(record::Stage::Preparation, &error, DiskChanged::No)
+            };
+            Err(error)
+        }
+    }
+}
+
+/// Preparation after the checks: everything up to a built, cached system.
+fn build(plan: &InstallPlan, started: Instant, stage: Stage) -> Result<Built> {
+    let settings = plan.settings();
     disk::revalidate(plan.disk())?;
     preparing("Checking filesystem support before erasing the disk");
     plan.filesystem().preflight(plan.firmware())?;
@@ -436,6 +532,7 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
         deferred,
         ..Summary::default()
     };
+    let mut live = None;
     if deferred {
         preparing(&format!(
             "The selection needs {:.1} GiB of downloads, more than fits in memory: the system will be built on the target disk after formatting",
@@ -475,6 +572,8 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
             300,
         )?)?;
         summary.closure_bytes = closure_size(&closure_info)?;
+        // What the target's store must hold once the system is copied.
+        live = Some(retry::Probe::closure(&mut retry::Real, None, &system)?);
         // Reserve room for updates and the installation workspace.
         let required = summary
             .closure_bytes
@@ -504,15 +603,16 @@ pub fn prepare(plan: &InstallPlan) -> Result<Prepared> {
         stage.done();
     }
     summary.seconds = started.elapsed().as_secs_f64();
-    Ok(Prepared {
-        _lock: lock,
+    Ok(Built {
         staging,
         template,
         ids,
         layout,
         configuration,
+        hardware,
         derivation,
         system,
+        closure: live,
         summary,
     })
 }
@@ -633,9 +733,41 @@ fn build_on_target(
     })
 }
 
-/// Shared destructive storage phase; tests call this only on a marked VM disk.
+/// Lock the disk for editing its partition table, then re-probe its stable
+/// identity and all mount/holder state. Nothing is written: a failure here
+/// leaves the disk as it was. The lock is held until storage is prepared.
+fn claim_disk(identity: &disk::Identity) -> Result<fs::File> {
+    let device = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&identity.path)
+        .with_context(|| format!("Opening {}", identity.path))?;
+    ensure!(
+        unsafe { libc::flock(device.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0,
+        "Disk is locked by another installer"
+    );
+    disk::revalidate(identity)?;
+    Ok(device)
+}
+
+/// Claim the disk before the storage intent is recorded. A disk that can't
+/// be claimed (gone, changed, mounted, locked) is a refusal: the record
+/// says nothing was written, which is true.
+fn claim(
+    journal: &mut Journal,
+    identity: &disk::Identity,
+    claim: impl FnOnce(&disk::Identity) -> Result<fs::File>,
+) -> Result<fs::File> {
+    claim(identity).inspect_err(|error| {
+        let _ = journal.refused(&format!("{error:#}"));
+    })
+}
+
+/// Shared destructive storage phase, on a disk `claim_disk` locked and
+/// checked; tests call this only on a marked VM disk.
 fn prepare_storage(
     request: &InstallPlan,
+    device: fs::File,
     ids: &Identities,
     layout: &Layout,
     passphrase: &str,
@@ -643,24 +775,7 @@ fn prepare_storage(
     mappings: &mut crate::encryption::Mappings,
 ) -> Result<()> {
     let firmware = request.firmware();
-    // Lock while editing the partition table. Re-probe its stable identity and
-    // all mount/holder state immediately before the first write.
-    let mut device = Some(
-        fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(&request.disk().path)?,
-    );
-    ensure!(
-        unsafe {
-            libc::flock(
-                device.as_ref().unwrap().as_raw_fd(),
-                libc::LOCK_EX | libc::LOCK_NB,
-            )
-        } == 0,
-        "Disk is locked by another installer"
-    );
-    disk::revalidate(request.disk())?;
+    let mut device = Some(device);
     let dev = request.disk().path.as_str();
     let mount = target.0.to_str().context("Target path encoding")?;
     let storage = (|| -> Result<()> {
@@ -759,73 +874,223 @@ fn prepare_storage(
     Ok(())
 }
 
-/// Destructive installation of a prepared, confirmed plan.
-pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
-    let started = Instant::now();
-    // From before the first disk write until the system is complete.
-    let awake = crate::power::stay_awake("Installing NixOS");
-    let mut request = confirmed.into_plan();
-    // The prepared files must be exactly what this confirmed plan generates.
+/// A stage's failure, recorded. The error is the stage's own; a record that
+/// couldn't be updated is added to it.
+fn failed(
+    journal: &mut Journal,
+    stage: record::Stage,
+    error: anyhow::Error,
+    changed: DiskChanged,
+) -> anyhow::Error {
+    match journal.failed(stage, &error, changed) {
+        Ok(()) => error,
+        Err(record) => anyhow::anyhow!(
+            "{error:#}\nThe installation record could not be updated either: {record:#}"
+        ),
+    }
+}
+
+/// The system profile of the target's root, following its links inside
+/// the target, never the live system's.
+fn profile(root: &Path) -> Result<String> {
+    let profiles = root.join("nix/var/nix/profiles");
+    let mut link = profiles.join("system");
+    for _ in 0..4 {
+        let target = fs::read_link(&link).with_context(|| format!("Reading {}", link.display()))?;
+        if target.is_absolute() {
+            return target
+                .to_str()
+                .map(str::to_owned)
+                .context("System profile encoding");
+        }
+        ensure!(
+            target.components().count() == 1,
+            "Unexpected system profile link {}",
+            target.display()
+        );
+        link = profiles.join(target);
+    }
+    anyhow::bail!("The system profile's links don't end")
+}
+
+/// The bootloader each firmware gets, and the configuration it writes.
+fn loader(firmware: Firmware) -> (&'static str, &'static str) {
+    match firmware {
+        Firmware::Uefi => ("systemd-boot", "boot/loader/loader.conf"),
+        Firmware::Bios => ("GRUB", "boot/grub/grub.cfg"),
+    }
+}
+
+/// What installing the bootloader left on the target, read back: the
+/// media's lock, the system profile, and the bootloader's configuration.
+fn installed(root: &Path, system: &str, firmware: Firmware, lock: &[u8]) -> Result<Facts> {
     ensure!(
-        config::configuration(&request, &prepared.ids)? == prepared.configuration,
+        fs::read(root.join("etc/nixos/flake.lock"))? == lock,
+        "Installed lock differs from the installation media"
+    );
+    let profile = profile(root)?;
+    ensure!(
+        profile == system,
+        "The installed system profile is {profile}, not the prepared system"
+    );
+    let (name, config) = loader(firmware);
+    ensure!(
+        fs::symlink_metadata(root.join(config)).is_ok_and(|meta| meta.is_file()),
+        "{name} left no /{config} on the new disk"
+    );
+    let mut facts = Facts::default();
+    facts.add("profile", profile)?;
+    facts.add("bootloader", name)?;
+    Ok(facts)
+}
+
+/// The confirmed plan must generate exactly the prepared files. Returns the
+/// password's hash; the password itself goes no further.
+fn confirm(request: &mut InstallPlan, built: &Built) -> Result<Zeroizing<String>> {
+    ensure!(
+        config::configuration(request, &built.ids)? == built.configuration,
         "The confirmed plan differs from the prepared system"
     );
     let params = Sha512Params::new(100_000)
         .map_err(|e| anyhow::anyhow!("Password hashing parameters: {e:?}"))?;
     let password = request.take_password();
-    let hash = Zeroizing::new(
+    Ok(Zeroizing::new(
         sha512_simple(&password, &params)
             .map_err(|_| anyhow::anyhow!("Password hashing failed"))?,
-    );
-    drop(password);
+    ))
+}
+
+/// Destructive installation of a prepared, confirmed plan. After a failure
+/// the window gets the record's account of what changed; `answers` is how
+/// it can ask for the bootloader to be tried again.
+pub fn execute(
+    confirmed: ConfirmedInstall,
+    prepared: Prepared,
+    answers: &mut dyn Answers,
+) -> Result<()> {
+    let Prepared {
+        _lock,
+        mut journal,
+        built,
+    } = prepared;
+    let result = write_target(confirmed.into_plan(), &built, &mut journal, answers);
+    if let Err(error) = &result {
+        event(Event::Recovery {
+            report: journal.report(&format!("{error:#}"), false),
+        });
+    }
+    result
+}
+
+fn write_target(
+    mut request: InstallPlan,
+    built: &Built,
+    journal: &mut Journal,
+    answers: &mut dyn Answers,
+) -> Result<()> {
+    let started = Instant::now();
+    // From before the first disk write until the system is complete.
+    let awake = crate::power::stay_awake("Installing NixOS");
+    let hash = match confirm(&mut request, built) {
+        Ok(hash) => hash,
+        Err(error) => {
+            let _ = journal.refused(&format!("{error:#}"));
+            return Err(error);
+        }
+    };
+    // The configuration this confirmation is for, by digest: the files
+    // themselves name the person and the computer.
+    let mut confirmed = Facts::default();
+    for ((name, _), digest) in retry::FILES.iter().zip(built.files()) {
+        confirmed.add(name, digest)?;
+    }
+    journal.confirmed(confirmed)?;
     let passphrase = request.take_encryption_password();
     // Drop order matters: unmount before closing this install's mappings.
     let mut mappings = crate::encryption::Mappings::default();
     let target = Target::new()?;
     let mount = target.0.to_str().context("Target path encoding")?;
+    let expected = Expected {
+        disk: request.disk(),
+        firmware: request.firmware(),
+        filesystem: request.filesystem(),
+        layout: &built.layout,
+        ids: &built.ids,
+        mount: &target.0,
+        system: &built.system,
+        files: built.files(),
+    };
+
     let stage = Stage::start("storage");
-    prepare_storage(
+    // Lock and recheck the disk before announcing the erase: until the
+    // intent is recorded, a refusal truthfully says nothing was written.
+    let device = claim(journal, request.disk(), claim_disk)?;
+    journal.intent(
+        record::Stage::Storage,
+        retry::planned(&built.ids, &built.layout)?,
+    )?;
+    let stored = prepare_storage(
         &request,
-        &prepared.ids,
-        &prepared.layout,
+        device,
+        &built.ids,
+        &built.layout,
         &passphrase,
         &target,
         &mut mappings,
-    )?;
+    )
+    .and_then(|()| retry::storage(&expected, &mut retry::Real));
     drop(passphrase);
+    let facts = stored
+        .map_err(|error| failed(journal, record::Stage::Storage, error, DiskChanged::Unknown))?;
+    journal.completed(record::Stage::Storage, facts, Verification::Inspected)?;
+    // The new root is this installation's, checked and mounted: from now on
+    // the record is kept on it too.
+    journal.mirror_to(&target.0)?;
     stage.done();
 
     let stage = Stage::start("files");
     progress(3, "Writing the configuration, account and Wi-Fi settings");
-    let dir = target.0.join("etc/nixos");
-    fs::create_dir_all(&dir)?;
-    prepared.template.write(&dir)?;
-    fs::write(dir.join("configuration.nix"), &prepared.configuration)?;
-    fs::copy(
-        prepared.staging.path().join("hardware-configuration.nix"),
-        dir.join("hardware-configuration.nix"),
-    )?;
-    // Do not put secrets inside the flake source: use a sibling under /etc.
-    // configuration.nix uses this external absolute runtime path.
-    let secret_dir = target.0.join("etc/nixos-secrets");
-    fs::create_dir(&secret_dir)?;
-    fs::set_permissions(&secret_dir, fs::Permissions::from_mode(0o700))?;
-    config::write_secret(&secret_dir.join("user-password.hash"), &hash)?;
-    request.wifi().write_to(&target.0)?;
-    // Seed the first activation with the user's selected zone. Aizome makes
-    // time.timeZone mutable and preserves /etc/localtime across rebuilds;
-    // a fresh target has no previous zone for it to preserve. Its activation
-    // converts this NixOS-style link to timedated's mutable relative link.
-    std::os::unix::fs::symlink(
-        Path::new("/etc/zoneinfo").join(request.timezone().as_str()),
-        target.0.join("etc/localtime"),
-    )?;
+    journal.intent(record::Stage::Files, Facts::default())?;
+    let written = (|| -> Result<Facts> {
+        let dir = target.0.join("etc/nixos");
+        fs::create_dir_all(&dir)?;
+        built.template.write(&dir)?;
+        fs::write(dir.join("configuration.nix"), &built.configuration)?;
+        fs::copy(
+            built.staging.path().join("hardware-configuration.nix"),
+            dir.join("hardware-configuration.nix"),
+        )?;
+        // Do not put secrets inside the flake source: use a sibling under /etc.
+        // configuration.nix uses this external absolute runtime path.
+        let secret_dir = target.0.join("etc/nixos-secrets");
+        fs::create_dir(&secret_dir)?;
+        fs::set_permissions(&secret_dir, fs::Permissions::from_mode(0o700))?;
+        config::write_secret(&secret_dir.join("user-password.hash"), &hash)?;
+        request.wifi().write_to(&target.0)?;
+        // Seed the first activation with the user's selected zone. Aizome makes
+        // time.timeZone mutable and preserves /etc/localtime across rebuilds;
+        // a fresh target has no previous zone for it to preserve. Its activation
+        // converts this NixOS-style link to timedated's mutable relative link.
+        std::os::unix::fs::symlink(
+            Path::new("/etc/zoneinfo").join(request.timezone().as_str()),
+            target.0.join("etc/localtime"),
+        )?;
+        retry::files(&expected, &mut retry::Real, request.wifi().profile_count())
+    })();
+    drop(hash);
+    let facts =
+        written.map_err(|error| failed(journal, record::Stage::Files, error, DiskChanged::Yes))?;
+    journal.completed(record::Stage::Files, facts, Verification::ReadBack)?;
     stage.done();
 
     let stage = Stage::start("copy");
+    let mut intent = Facts::default();
+    intent.add("system", &built.system)?;
+    intent.flag("deferred", built.summary.deferred)?;
+    journal.intent(record::Stage::Copy, intent)?;
     let store = format!("local?root={mount}");
     let tracker = Mutex::new(nixlog::Tracker::default());
-    let total = prepared.summary.closure_bytes;
+    let total = built.summary.closure_bytes;
     let last = Mutex::new(Instant::now());
     let on_line = |line: &str| {
         let mut tracker = tracker.lock().unwrap();
@@ -844,66 +1109,94 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
             None => {}
         }
     };
-    if prepared.summary.deferred {
-        progress(
-            4,
-            "Downloading and building the system on the new disk (this can take a while)",
-        );
-        build_on_target(&target.0, &store, &prepared.derivation, &tracker, &on_line)
-            .context("Building the system on the new disk failed")?;
-    } else {
-        progress(4, "Copying the prepared system to the new disk");
-        // Measured against a direct parallel file copy with database
-        // registration: nix copy was faster both in VMs and on the host.
-        output_lines(
-            "nix",
-            &[
-                "copy",
-                "--no-check-sigs",
-                "--log-format",
-                "internal-json",
-                "--to",
-                &store,
-                &prepared.system,
-            ],
-            7200,
-            &on_line,
-        )
-        .map_err(|error| nix_failure(error, &tracker))
-        .context("Copying the system to the new disk failed")?;
-        event(Event::Copying {
-            bytes: total,
-            total,
-        });
-    }
+    let copied = (|| -> Result<Facts> {
+        if built.summary.deferred {
+            progress(
+                4,
+                "Downloading and building the system on the new disk (this can take a while)",
+            );
+            build_on_target(&target.0, &store, &built.derivation, &tracker, &on_line)
+                .context("Building the system on the new disk failed")?;
+        } else {
+            progress(4, "Copying the prepared system to the new disk");
+            // Measured against a direct parallel file copy with database
+            // registration: nix copy was faster both in VMs and on the host.
+            output_lines(
+                "nix",
+                &[
+                    "copy",
+                    "--no-check-sigs",
+                    "--log-format",
+                    "internal-json",
+                    "--to",
+                    &store,
+                    &built.system,
+                ],
+                7200,
+                &on_line,
+            )
+            .map_err(|error| nix_failure(error, &tracker))
+            .context("Copying the system to the new disk failed")?;
+            event(Event::Copying {
+                bytes: total,
+                total,
+            });
+        }
+        retry::copied(&expected, built.closure, &mut retry::Real)
+    })();
+    let facts =
+        copied.map_err(|error| failed(journal, record::Stage::Copy, error, DiskChanged::Yes))?;
+    journal.completed(record::Stage::Copy, facts, Verification::Registered)?;
     stage.done();
 
     let stage = Stage::start("bootloader");
-    progress(5, "Installing the bootloader and activating the system");
-    // The closure is already in the target store: nixos-install only sets the
-    // system profile and installs the bootloader.
-    output(
-        "nixos-install",
-        &[
-            "--root",
-            mount,
-            "--system",
-            &prepared.system,
-            "--no-root-passwd",
-            "--no-channel-copy",
-        ],
-        1800,
+    let firmware = request.firmware();
+    let mut tries = 0;
+    let mut emit = event;
+    retry::bootloader(
+        journal,
+        answers,
+        &mut emit,
+        || {
+            tries += 1;
+            progress(
+                5,
+                if tries == 1 {
+                    "Installing the bootloader and activating the system"
+                } else {
+                    "Installing the bootloader again"
+                },
+            );
+            // The closure is already in the target store: nixos-install
+            // only sets the system profile and installs the bootloader.
+            output(
+                "nixos-install",
+                &[
+                    "--root",
+                    mount,
+                    "--system",
+                    &built.system,
+                    "--no-root-passwd",
+                    "--no-channel-copy",
+                ],
+                1800,
+            )?;
+            installed(&target.0, &built.system, firmware, &built.template.lock)
+        },
+        |record| {
+            progress(
+                5,
+                "Checking the disk and the copied system before trying the bootloader again",
+            );
+            retry::recheck(record, &expected, &mut retry::Real)
+        },
     )?;
-    ensure!(
-        fs::read(dir.join("flake.lock"))? == prepared.template.lock,
-        "Installed lock differs from the installation media"
-    );
     stage.done();
 
     // A record for measuring real hardware: read it after booting the
     // installed system. No secrets; flushing and unmounting follow.
-    let record = serde_json::json!({
-        "prepared": prepared.summary,
+    let timings = serde_json::json!({
+        "prepared": built.summary,
         "stages": TIMINGS
             .lock()
             .unwrap()
@@ -917,14 +1210,51 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
     fs::create_dir_all(&log_dir)?;
     fs::write(
         log_dir.join("install.json"),
-        serde_json::to_vec_pretty(&record)?,
+        serde_json::to_vec_pretty(&timings)?,
     )?;
+
+    // Before handing the disk over, read it back against the record as a
+    // retry would: the same disk, storage, files and system.
+    let stage = Stage::start("verification");
+    progress(6, "Checking the installed system against its record");
+    journal.intent(record::Stage::Verification, Facts::default())?;
+    let verified = journal.reread().and_then(|record| {
+        retry::recheck(&record, &expected, &mut retry::Real)?;
+        installed(&target.0, &built.system, firmware, &built.template.lock)
+    });
+    let facts = verified.map_err(|error| {
+        failed(
+            journal,
+            record::Stage::Verification,
+            error,
+            DiskChanged::Yes,
+        )
+    })?;
+    journal.completed(record::Stage::Verification, facts, Verification::ReadBack)?;
+    stage.done();
 
     let stage = Stage::start("flush");
     progress(6, "Flushing writes and unmounting the installed system");
-    output("sync", &["--file-system", mount], 300)?;
-    target.unmount()?;
-    mappings.close()?;
+    // The installed system's copy ends here: this entry is flushed with
+    // everything else, and an unmounted disk can't be written to.
+    journal.intent(record::Stage::Flush, Facts::default())?;
+    journal.detach_mirror();
+    let flushed = (|| -> Result<()> {
+        output("sync", &["--file-system", mount], 300)?;
+        target.unmount()?;
+        mappings.close()?;
+        ensure!(
+            output("findmnt", &["--noheadings", "--mountpoint", mount], 15).is_err(),
+            "The new disk is still mounted at {mount}"
+        );
+        Ok(())
+    })();
+    flushed.map_err(|error| failed(journal, record::Stage::Flush, error, DiskChanged::Yes))?;
+    journal.completed(
+        record::Stage::Flush,
+        Facts::default(),
+        Verification::Inspected,
+    )?;
     stage.done();
     timing("install", started.elapsed().as_secs_f64());
     progress(
@@ -936,18 +1266,20 @@ pub fn execute(confirmed: ConfirmedInstall, prepared: Prepared) -> Result<()> {
 }
 
 /// One-shot preflight or installation of an already-confirmed request.
+/// Nothing is offered again after a failure: there is no window to ask.
 pub fn install(confirmed: ConfirmedInstall, mode: InstallMode) -> Result<()> {
     let plan = confirmed.into_plan();
     let prepared = prepare(&plan)?;
     event(Event::Prepared {
-        summary: prepared.summary.clone(),
+        summary: prepared.summary().clone(),
     });
     if mode == InstallMode::Preflight {
+        prepared.cancel();
         preparing("Preflight passed; no disk writes were made");
         return Ok(());
     }
     let phrase = format!("ERASE {}", plan.disk().path);
-    execute(plan.confirm(&phrase)?, prepared)
+    execute(plan.confirm(&phrase)?, prepared, &mut retry::NoAnswers)
 }
 
 fn closure_size(value: &serde_json::Value) -> Result<u64> {
@@ -1121,6 +1453,200 @@ mod tests {
             serde_json::to_string(&Event::Complete).unwrap(),
             r#"{"kind":"complete"}"#
         );
+        let recovery = serde_json::to_string(&Event::Recovery {
+            report: Report {
+                message: "efibootmgr failed".into(),
+                ..Report::default()
+            },
+        })
+        .unwrap();
+        assert!(
+            recovery.starts_with(r#"{"kind":"recovery","report":{"message":"efibootmgr failed""#)
+        );
+        assert!(matches!(
+            serde_json::from_str(&recovery).unwrap(),
+            Event::Recovery { report } if report.retry.is_none()
+        ));
+    }
+
+    /// A confirmed installation's journal, as `write_target` has it before
+    /// claiming the disk.
+    fn confirmed_journal(dir: &Path, plan: &InstallPlan) -> Journal {
+        let mut journal = Journal::open(
+            &dir.join("records"),
+            retry::opening(plan).unwrap(),
+            retry::personal(plan),
+        )
+        .unwrap();
+        journal
+            .intent(record::Stage::Preparation, Facts::default())
+            .unwrap();
+        journal
+            .completed(
+                record::Stage::Preparation,
+                Facts::default(),
+                Verification::Inspected,
+            )
+            .unwrap();
+        let mut confirmed = Facts::default();
+        confirmed
+            .add("configuration", Digest::of(b"configuration.nix"))
+            .unwrap();
+        journal.confirmed(confirmed).unwrap();
+        journal
+    }
+
+    #[test]
+    fn a_disk_that_cant_be_claimed_is_refused_with_nothing_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_zoneinfo, settings, raw) = crate::plan_tests::fixture();
+        let plan = raw.parse(&settings).unwrap();
+        let mut journal = confirmed_journal(dir.path(), &plan);
+        let error = claim(&mut journal, plan.disk(), |_| {
+            anyhow::bail!(
+                "Disk is unavailable: Contains a mounted filesystem or active swap (including live media)"
+            )
+        })
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("mounted filesystem"));
+        let record = record::Record::read(journal.live_path()).unwrap();
+        assert_eq!(record.state(), &record::State::Refused);
+        assert!(!record.changed_disk());
+        assert_eq!(record.next(), [record::Next::Review]);
+        let report = journal.report(&format!("{error:#}"), true);
+        assert!(
+            report.changed.starts_with("Nothing was written to"),
+            "{}",
+            report.changed
+        );
+        assert!(
+            report.next.starts_with("The disk is as it was"),
+            "{}",
+            report.next
+        );
+        assert!(report.retry.is_none());
+        // Nothing can be started after the refusal, the erase least of all.
+        assert!(
+            journal
+                .intent(record::Stage::Storage, Facts::default())
+                .is_err()
+        );
+
+        // A disk that can be claimed lets the storage intent follow.
+        let dir = tempfile::tempdir().unwrap();
+        let mut journal = confirmed_journal(dir.path(), &plan);
+        let file = tempfile::tempfile().unwrap();
+        claim(&mut journal, plan.disk(), |_| Ok(file)).unwrap();
+        journal
+            .intent(record::Stage::Storage, Facts::default())
+            .unwrap();
+    }
+
+    #[test]
+    fn a_missing_or_locked_disk_cant_be_claimed() {
+        // Never a block device: a path that doesn't exist, and a regular file
+        // another descriptor holds locked. Both fail before any disk is read.
+        let (_zoneinfo, settings, raw) = crate::plan_tests::fixture();
+        let mut identity = raw.parse(&settings).unwrap().disk().clone();
+        identity.path = "/nonexistent/genkan-test-disk".into();
+        assert!(claim_disk(&identity).is_err());
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let held = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(file.path())
+            .unwrap();
+        assert_eq!(
+            unsafe { libc::flock(held.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) },
+            0
+        );
+        identity.path = file.path().to_str().unwrap().into();
+        let error = claim_disk(&identity).unwrap_err();
+        assert_eq!(format!("{error:#}"), "Disk is locked by another installer");
+    }
+
+    #[test]
+    fn a_refused_confirmation_is_recorded_with_nothing_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let (_zoneinfo, settings, raw) = crate::plan_tests::fixture();
+        let plan = raw.parse(&settings).unwrap();
+        let mut journal = Journal::open(
+            &dir.path().join("records"),
+            retry::opening(&plan).unwrap(),
+            retry::personal(&plan),
+        )
+        .unwrap();
+        journal
+            .intent(record::Stage::Preparation, Facts::default())
+            .unwrap();
+        journal
+            .completed(
+                record::Stage::Preparation,
+                Facts::default(),
+                Verification::Inspected,
+            )
+            .unwrap();
+        let live = journal.live_path().to_path_buf();
+        let prepared = Prepared {
+            _lock: tempfile::tempfile().unwrap(),
+            journal,
+            built: Built {
+                staging: tempfile::tempdir().unwrap(),
+                template: Template {
+                    flake: String::new(),
+                    lock: Vec::new(),
+                },
+                ids: Identities::generate(Firmware::Uefi, false).unwrap(),
+                layout: Layout::new(40 * memory::GIB, Firmware::Uefi, None).unwrap(),
+                configuration: String::new(),
+                hardware: String::new(),
+                derivation: String::new(),
+                system: String::new(),
+                closure: None,
+                summary: Summary::default(),
+            },
+        };
+        let error = prepared.refuse(
+            plan.confirm("ERASE /dev/sda")
+                .err()
+                .expect("another disk's phrase"),
+        );
+        assert!(format!("{error:#}").contains("Type ERASE"));
+        let record = record::Record::read(&live).unwrap();
+        assert_eq!(record.state(), &record::State::Refused);
+        assert_eq!(record.next(), [record::Next::Review]);
+    }
+
+    #[test]
+    fn the_profile_and_bootloader_are_read_from_the_target() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path();
+        let system = "/nix/store/0123456789abcdfghijklmnpqrsvwxyz-nixos-system-test-26.11";
+        let profiles = root.join("nix/var/nix/profiles");
+        fs::create_dir_all(&profiles).unwrap();
+        std::os::unix::fs::symlink("system-1-link", profiles.join("system")).unwrap();
+        std::os::unix::fs::symlink(system, profiles.join("system-1-link")).unwrap();
+        fs::create_dir_all(root.join("etc/nixos")).unwrap();
+        fs::write(root.join("etc/nixos/flake.lock"), b"lock").unwrap();
+        assert_eq!(profile(root).unwrap(), system);
+        // nixos-install succeeded, yet left no bootloader configuration.
+        assert!(installed(root, system, Firmware::Uefi, b"lock").is_err());
+        fs::create_dir_all(root.join("boot/loader")).unwrap();
+        fs::write(root.join("boot/loader/loader.conf"), "timeout 5\n").unwrap();
+        let facts = installed(root, system, Firmware::Uefi, b"lock").unwrap();
+        assert_eq!(facts.get("profile"), Some(system));
+        assert_eq!(facts.get("bootloader"), Some("systemd-boot"));
+        assert!(installed(root, system, Firmware::Bios, b"lock").is_err());
+        fs::create_dir_all(root.join("boot/grub")).unwrap();
+        fs::write(root.join("boot/grub/grub.cfg"), "").unwrap();
+        installed(root, system, Firmware::Bios, b"lock").unwrap();
+        assert!(installed(root, system, Firmware::Uefi, b"another lock").is_err());
+        let other = "/nix/store/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz-nixos-system-other";
+        assert!(installed(root, other, Firmware::Uefi, b"lock").is_err());
+        // Links are followed inside the profiles directory only.
+        fs::remove_file(profiles.join("system")).unwrap();
+        std::os::unix::fs::symlink("../../../../etc/os-release", profiles.join("system")).unwrap();
+        assert!(profile(root).is_err());
     }
 }
 
@@ -1204,7 +1730,16 @@ mod encryption_tests {
                 )?;
                 let mut mappings = encryption::Mappings::default();
                 let target = Target::new()?;
-                prepare_storage(&plan, &ids, &layout, PASSPHRASE, &target, &mut mappings)?;
+                let device = claim_disk(plan.disk())?;
+                prepare_storage(
+                    &plan,
+                    device,
+                    &ids,
+                    &layout,
+                    PASSPHRASE,
+                    &target,
+                    &mut mappings,
+                )?;
                 // The normal disk selector must still reject our open holders.
                 assert!(disk::revalidate(&identity).is_err());
                 fs::write(target.0.join("encrypted-sentinel"), b"written by Genkan")?;

@@ -1380,8 +1380,9 @@ while installing hold. Set `AIZOME_FONT_DIR` (`nix build .#aizome-fonts`) for
 Aizome's type and `TZDIR` for the map; the package's check phase sets both.
 `GENKAN_PICTURES=dir` also writes each page in Night and Day.
 
-In debug builds, `CALAMARES_UI_PREVIEW=welcome|disk|account|github|desktop|applications|location|keyboard|review|ready|prepfail|install|done|failed`
-opens the window on that page with sample data, touching no disks, network or
+In debug builds, `CALAMARES_UI_PREVIEW=welcome|disk|account|github|desktop|applications|location|keyboard|review|ready|prepfail|install|done|failed|bootfail`
+opens the window on that page with sample data (`bootfail` is the
+bootloader retry offer), touching no disks, network or
 helper, and `CALAMARES_UI_SIZE=800x600` sizes it. Release builds read
 neither. Outside the live media only previews are useful: reviewing reads the
 media's root-owned settings and starts the helper through Polkit.
@@ -2566,9 +2567,11 @@ check.
 ## Apple Silicon
 
 The [Apple Silicon installer implementation plan](docs/apple-silicon-installer-plan.md)
-describes the proposed product image, first-boot setup, native macOS and Recovery
+describes the product image, first-boot setup, native macOS and Recovery
 apps, authenticated delivery, installation journals and qualification gates.
-It is a plan; the implementation and current limits below remain the baseline.
+[Sekka Installer for Mac](#sekka-installer-for-mac) implements it; what each
+part has and hasn't been run on is said there. No Mac release has been
+qualified or published.
 
 `packages.aarch64-linux` (`nix/apple-silicon/`) builds Sekka for Apple
 Silicon Macs. The first target is the 14-inch MacBook Pro with an M3 Pro
@@ -2844,6 +2847,162 @@ J514S can show those:
 - the speakers working through speakersafetyd.
 
 aarch64 builders and cache for the nightly come after that.
+
+### Sekka Installer for Mac
+
+`installer/genkan/macos/` is the Cargo workspace for installing Sekka beside
+macOS from a Mac app, as the [plan](docs/apple-silicon-installer-plan.md)
+describes. It is Rust throughout; the AppKit interfaces use
+[objc2](https://github.com/madsmtm/objc2) directly (no Swift, no web view),
+as [Omperor](https://github.com/bitemyapp/omperor) does. It shares no crates
+with Genkan's Linux workspaces.
+
+| Crate | What it is |
+| --- | --- |
+| `contract` | The documents everything passes: hardware profile (`profiles/j514s.json`), signed catalog, inspection, plan and confirmation, journal record, engine transcript, helper protocol, Recovery configuration, first-boot handoff. Canonical JSON (keys in byte order, integers only), a versioned `schema` checked first, size limits; the plan derivation, the transcript validator and the journal's state machine |
+| `trust` | Catalog verification: Ed25519 over domain-separated canonical bytes, trust roots with channel and validity windows, delivery hosts, clock and expiry, and the accepted-serial store against rollback |
+| `stage` | Resumable 16 MiB ranged downloads into private staging, verified against the catalog; the helper's import from the app's staging |
+| `journal` | Hash-chained records, each published by hard link after an fsync, with fault-injection tests at every storage step |
+| `engine` | Unpacking the engine archive, starting it with a fixed command line and reading its transcript |
+| `xpc` | The app–helper channel: one mach service, code-signing requirements on both sides |
+| `helper` | `sekka-installer-helper`, the root daemon: re-derives the plan, imports downloads, runs the engine under the journal |
+| `app` | `Sekka Installer.app`: the model (portable, tested), the simulation, and the AppKit interface (`src/mac`) |
+| `appkit` | AppKit pieces both apps share: the crest, marks, the disk bar, view helpers |
+| `recovery` | `Sekka Recovery.app` ("Finish Installing Sekka"), the Recovery step |
+| `tool` | `sekka-mac-tool`: catalogs, signing, verification, the qualification ledger |
+
+**How an installation goes.** The app inspects the Mac by running the
+bundled engine's `inspect` as the person using it, fetches the catalog for
+its channel and verifies it, and offers the release whose profile admits
+this Mac. It also asks the helper, while macOS lets it run, which
+installations it keeps a record of: one it knows comes first, and while it
+can't say (it can't read a record, doesn't answer, is turned off in Login
+Items, or isn't set up while Sekka is on the disk) the app stops on a page
+saying so, with Check Again and Copy Diagnostics, and plans nothing. A
+helper that was never set up has nothing from this Mac, so the plan is
+offered; at Install, once the helper is set up and allowed, the app asks
+it before the password. The person chooses Sekka's size by dragging the
+divider on a picture of the disk (or with the arrow keys; VoiceOver sees a slider). The
+app downloads the release's files into
+`~/Library/Application Support/Sekka Installer/Staging`, inspects the Mac
+again (the downloads took space) and derives the plan exactly as the helper
+will. The review lists every change and the Recovery steps; Install needs
+the backup and every acknowledgement the plan asks for. The app registers
+its helper with `SMAppService` (the owner allows it in System Settings ›
+General › Login Items) and sends the helper the catalog, the request, the
+plan's digest, the confirmation, the staged paths and the owner's account,
+with the password in its own XPC field. The helper verifies the catalog
+with its own trust and store, checks the owner (administrator, password
+through PAM, secure token), inspects as root, derives the plan and requires
+the same digest, copies the downloads into its own staging hashing them
+against the catalog, and runs the engine's `execute`. Each stage's intent
+is journaled durably before the engine is acknowledged and may begin; each
+checkpoint is journaled with its facts and how far it was verified. When
+macOS's part is done the app shows the Recovery steps; Finish Installing
+Sekka does the rest from Sekka's own Recovery.
+
+**Where state lives.**
+
+| Path | What |
+| --- | --- |
+| `/var/db/computer.sekka.installer/` | The helper's state, root-only: `installations/<id>/` journals, `staging/<id>/`, `accepted-catalogs.json`, `engine/<digest>/` |
+| `~/Library/Application Support/Sekka Installer/` | The app's staging and its own accepted-catalog store |
+| `~/Library/Caches/computer.sekka.installer/engine/` | The engine unpacked for the app's unprivileged inspection |
+| Stub System volume: `Sekka Recovery.app`, `Sekka/InstallData/`, `Sekka/State/receipt.json` | The Recovery app, its per-installation data, and its receipt |
+| ESP: `sekka/install.json` | The first-boot handoff |
+
+**Recovery.** recoveryOS opens `Sekka Recovery.app` (named by the stub's
+`.IAPhysicalMedia`). It checks that it is on the configured stub volume,
+that the ESP's handoff names the same installation, and that the boot
+object and firmware beside it are the installation's bytes; then that it is
+in Sekka's paired Recovery started by holding the power button. With the
+owner's password it runs `bputil -nc` for the stub's volume group, `kmutil
+configure-boot` with the checked boot object, disables the app's autolaunch
+and runs `bless`, reading the selection back. A receipt records each step
+before and after; a retry repeats only these steps with the same boot
+object. The pseudo-terminal that answers the tools' prompts follows
+omacom/omarchy-mac-installer's Recovery (MIT).
+
+**Trust.** Development builds trust the development key
+(`crates/trust/keys/development.key`, public on purpose) for the
+`development` channel only; production builds (`--no-default-features
+--features production`) trust only `PRODUCTION_ROOTS`, which is empty until
+the maintainers generate a key offline and add its public half in a reviewed
+change. Publication stays inhibited: nothing here uploads.
+
+**Building and testing.** Everything but AppKit is tested on Linux;
+`installer/genkan/macos/default.nix` runs the same tests in the sandbox:
+
+```sh
+cargo test --locked --manifest-path installer/genkan/macos/Cargo.toml
+cargo clippy --locked --all-targets --target aarch64-apple-darwin --manifest-path installer/genkan/macos/Cargo.toml
+python3 -I -m unittest discover -s installer/genkan/macos/packaging/tests
+```
+
+The AppKit code is type-checked for `aarch64-apple-darwin` from Linux
+(`rustup target add aarch64-apple-darwin`; no SDK is needed to check).
+Linking and running need a Mac with Xcode's command line tools
+(`xcode-select --install`), rustup and Python 3.11 or later as `python3`
+(macOS's own is older; `build-app.sh` stops at once without one). The
+engine archive and icon come from Linux, as above:
+
+```sh
+installer/genkan/macos/packaging/build-app.sh --engine ENGINE.tar.gz --icon AppIcon.icns
+"installer/genkan/macos/target/package/Sekka Installer.app/Contents/MacOS/sekka-installer" --simulate normal
+"installer/genkan/macos/target/package/Sekka Installer.app/Contents/MacOS/sekka-installer" --screenshots shots
+```
+
+`--simulate SCENARIO` runs the whole journey with nothing real behind it
+(`normal`, `unsupported`, `not-ready`, `offline`, `outdated`,
+`low-space`, `wrong-password`, `download-fails`, `unplugged`,
+`resize-fails`, `install-fails`, `startup-disk-fails`,
+`startup-disk-refused`, `startup-disk-fails-again`,
+`waiting-for-recovery`, `recovery-finished`, `removed-by-hand`,
+`stopped-early`, `existing`, `needs-approval`, `record-unreadable`,
+`helper-off`). Its helper answers as the real one does: asked to
+reconcile, it looks at the Mac and records Recovery's steps
+(`recovery-finished`) or that nothing of an installation is left
+(`removed-by-hand`); it cancels a run only while it is in a stage that
+changes nothing; and it retries only the startup disk, adding the retry's
+records after the failure, or refusing with nothing recorded when the
+installation isn't as it was left. The model's tests also give it the
+real helper's refusals to reconcile (busy, or the Mac couldn't be
+inspected). `--screenshots DIR` renders every screen of every scenario
+in light and dark through AppKit. Production builds refuse both.
+Development builds also read their catalog from `SEKKA_INSTALLER_CATALOG`
+(a file, still verified with the development key). A release
+(`build-app.sh --release`) needs a clean checkout, `SEKKA_TEAM_ID`,
+`SEKKA_SIGNING_IDENTITY` and `SEKKA_ENGINE_TEAM_ID` (the team that signed
+the engine's Python runtime, which must be the one
+`engine/source-lock.json` pins); the app and helper name each other's team
+in their code-signing requirements and won't build for production without
+it. Its Mach-O audit (`macho-audit.json`) accepts the runtime's team only
+inside the engine archive, and libffi, which Asahi ships signed ad hoc,
+only by its pinned digest. `packaging/notarize.sh` and
+`packaging/make-dmg.sh` finish a release; `packaging/publish-dry-run.py
+--tool PATH-TO-sekka-mac-tool CANDIDATE` checks a candidate (its ledger
+through `sekka-mac-tool ledger check`, its catalog through `verify`) and
+prints what publication would upload, catalog last, and uploads nothing.
+`build-app.sh` replaces its output folder only if it made it; delete a
+`target/package` left by an older version once.
+
+**Catalogs.** `sekka-mac-tool catalog SPEC` makes a catalog (checked like
+any other), `sign KEYFILE KEY-ID` or `sign --development …` signs it,
+`verify` checks it with this build's trust. Artifact URLs live under
+`https://downloads.sekka.computer/mac/v1/releases/<release>/`, immutable;
+`catalog-<channel>.signed.json` is the only mutable file.
+
+**Qualification.** A Mac release is qualified as a candidate set with
+[the Mac skill](.agents/skills/sekka-mac-qualification/SKILL.md) and its
+ledger (`sekka-mac-tool ledger init|check`). Encryption isn't offered yet
+([decision](docs/apple-silicon/encryption.md)); removal, replacement and
+other Macs are scoped in [their own record](docs/apple-silicon/removal-and-boards.md).
+
+**What has run where.** Every crate's tests, the PTY driver against
+scripted terminals and the packaging scripts run on Linux (aarch64). The
+macOS code (XPC, PAM, `bless`, `SMAppService`, `NSURLSession`, both
+interfaces) is type-checked for macOS and has not been linked or run on a
+Mac yet; nothing has installed or enrolled anything on hardware.
 
 ## Releases
 

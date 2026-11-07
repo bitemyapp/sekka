@@ -1,0 +1,12 @@
+{
+  "developer": {
+    "root_label": "sekka-root",
+    "root_uuid": "5ecca000-0000-4000-8000-000000000001",
+    "esp_volume_id": "0x5ecca5e1"
+  },
+  "product": {
+    "root_label": "sekka-system",
+    "root_uuid": "5ecca000-0000-4000-8000-000000000002",
+    "esp_volume_id": null
+  }
+}

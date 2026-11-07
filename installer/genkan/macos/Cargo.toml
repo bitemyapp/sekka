@@ -1,0 +1,43 @@
+# Sekka's installer for Apple Silicon Macs: the macOS companion app, its
+# privileged helper, the Recovery app and the portable contracts they share
+# with the engine and with Linux first-boot setup. A Cargo workspace of its
+# own; it shares no crates with Genkan's Linux workspaces (rust/, ui/).
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "GPL-3.0-or-later"
+publish = false
+
+[workspace.dependencies]
+sekka-mac-contract = { path = "crates/contract" }
+sekka-mac-trust = { path = "crates/trust" }
+sekka-mac-stage = { path = "crates/stage" }
+sekka-mac-journal = { path = "crates/journal" }
+sekka-mac-engine = { path = "crates/engine" }
+sekka-mac-helper = { path = "crates/helper" }
+sekka-mac-xpc = { path = "crates/xpc" }
+sekka-mac-appkit = { path = "crates/appkit" }
+objc2 = "0.6.4"
+block2 = "0.6"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std"] }
+objc2-service-management = { version = "0.3.2", default-features = false, features = ["std"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+sha2 = "0.10.9"
+thiserror = "2"
+base64 = "0.22"
+ed25519-dalek = { version = "2.2", default-features = false, features = ["std", "zeroize"] }
+zeroize = "1.8.2"
+libc = "0.2.177"
+tempfile = "3.23.0"
+
+[profile.release]
+lto = "thin"
+panic = "abort"
+strip = "symbols"

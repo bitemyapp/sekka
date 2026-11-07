@@ -1,0 +1,157 @@
+{
+  "candidates": [
+    {
+      "adjacent_free": 0,
+      "available": 717093126144,
+      "available_recommended": 717093126144,
+      "container": "828bf48f-49fe-43ab-9aa1-3e69a41cb033",
+      "current_size": 953999998976,
+      "kind": "shrink-container",
+      "partition": "1edfbfbf-3123-4142-bf27-a7215b874733"
+    }
+  ],
+  "disk": {
+    "block_size": 4096,
+    "containers": [
+      {
+        "free": 755093893120,
+        "partition": "1edfbfbf-3123-4142-bf27-a7215b874733",
+        "resize": {
+          "minimum": 236906872832,
+          "recommended": 236906872832
+        },
+        "size": 953999998976,
+        "snapshots": 0,
+        "uuid": "828bf48f-49fe-43ab-9aa1-3e69a41cb033",
+        "volume_groups": [
+          {
+            "data_volume": "59a1b79d-79e9-4af5-9ce7-a55c3ddec6e4",
+            "name": "Macintosh HD",
+            "os": {
+              "kind": "macos",
+              "version": "15.6"
+            },
+            "system_volume": "093c5841-1622-465f-a859-4d8f1c7e8d63",
+            "uuid": "3ee75828-1f54-4365-9ba7-e7217e81d869"
+          }
+        ]
+      },
+      {
+        "free": 1480105984,
+        "partition": "30cdc397-e8d7-4a8e-a9e3-7811d1392936",
+        "resize": null,
+        "size": 2499805184,
+        "snapshots": 0,
+        "uuid": "b8a012f0-40ac-4373-bd1c-20800a595641",
+        "volume_groups": [
+          {
+            "data_volume": "0bf26a61-4aff-49ed-814f-9323ee7602a4",
+            "name": "Asahi Alarm Minimal",
+            "os": {
+              "for_system": "Asahi Alarm Minimal",
+              "kind": "stub"
+            },
+            "system_volume": "2a145b8f-35cc-4ad3-a8d1-e901aeb524f6",
+            "uuid": "0bf26a61-4aff-49ed-814f-9323ee7602a4"
+          }
+        ]
+      }
+    ],
+    "device": "disk0",
+    "partitions": [
+      {
+        "kind": "apple-isc",
+        "name": "iBootSystemContainer",
+        "offset": 24576,
+        "size": 524288000,
+        "uuid": "beec8b7c-6f5e-419a-b5a6-0a6bd74250ae"
+      },
+      {
+        "kind": "apfs",
+        "name": "Container",
+        "offset": 524312576,
+        "size": 953999998976,
+        "uuid": "1edfbfbf-3123-4142-bf27-a7215b874733"
+      },
+      {
+        "kind": "apfs",
+        "name": "Untitled 3",
+        "offset": 954524311552,
+        "size": 2499805184,
+        "uuid": "30cdc397-e8d7-4a8e-a9e3-7811d1392936"
+      },
+      {
+        "kind": "efi",
+        "name": "EFI - ASAHI",
+        "offset": 957024116736,
+        "size": 524288000,
+        "uuid": "1bc56391-63e4-4bbd-9485-4517bc7f3aa7"
+      },
+      {
+        "kind": "linux",
+        "name": "Untitled 5",
+        "offset": 957548404736,
+        "size": 37637586944,
+        "uuid": "362cb451-0d83-46a6-a9a4-e68760757d3e"
+      },
+      {
+        "kind": "apple-recovery",
+        "name": "RecoveryOSContainer",
+        "offset": 995186896896,
+        "size": 5368664064,
+        "uuid": "e1be34a1-d1b8-4f79-bd30-bb50603fd230"
+      }
+    ],
+    "size": 1000555581440,
+    "uuid": "cd613e30-d8f1-4adf-91b7-584a2265b1f5"
+  },
+  "filevault": "on",
+  "installations": [
+    {
+      "developer": false,
+      "esp": "1bc56391-63e4-4bbd-9485-4517bc7f3aa7",
+      "installation_id": null,
+      "kind": "other-linux",
+      "name": "Asahi Alarm Minimal",
+      "root": "362cb451-0d83-46a6-a9a4-e68760757d3e",
+      "state": "complete",
+      "stub_group": "0bf26a61-4aff-49ed-814f-9323ee7602a4"
+    }
+  ],
+  "issues": [
+    {
+      "blocking": true,
+      "code": "unsupported-machine",
+      "detail": "This release is built for the MacBook Pro (14-inch, M3 Pro, Nov 2023) only. This Mac is a MacBook Pro (14-inch, 2021) (MacBookPro18,3, j314sap, chip 0x6000)."
+    },
+    {
+      "blocking": true,
+      "code": "untested-firmware",
+      "detail": "This Mac's system firmware is iBoot-11881.140.96; Sekka's boot software has been tested on 20457.1.29 only."
+    }
+  ],
+  "layout_digest": "sha256:12508a55aa5e8c9935a83596cca2a55fa1097dfc31ed62dbdf925d01f58750c3",
+  "machine": {
+    "binding": "sha256:f32e9b3c2b684017f2d0cbe147e8cf23ebb959afac4886fdb1ad30bda22fb2f0",
+    "board_id": 8,
+    "chip_id": 24576,
+    "device_class": "j314sap",
+    "product_name": "MacBook Pro (14-inch, 2021)",
+    "product_type": "MacBookPro18,3",
+    "soc_name": "Apple M1 Pro",
+    "system_firmware": "iBoot-11881.140.96"
+  },
+  "macos": {
+    "build": "24G84",
+    "internal_boot": true,
+    "system_firmware_version": "15.6",
+    "version": "15.6",
+    "volume_group": "3ee75828-1f54-4365-9ba7-e7217e81d869"
+  },
+  "power": {
+    "battery_percent": 80,
+    "has_battery": true,
+    "on_ac": true
+  },
+  "schema": "sekka.mac.inspection/1"
+}

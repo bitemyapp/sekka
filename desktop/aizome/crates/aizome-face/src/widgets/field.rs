@@ -35,6 +35,7 @@ pub fn field<Msg>(value: &str, spec: impl Fn(&aizome_kit::Theme) -> TextSpec + '
             on_submit: None,
             on_caps: None,
             height: 24.0,
+            frame: None,
         },
         _m: std::marker::PhantomData,
     }
@@ -73,6 +74,16 @@ impl<Msg> Field<Msg> {
         self.w.height = h;
         self
     }
+
+    /// Draw its own box, as the lock screen's field sits in one: the sunk
+    /// well with a hairline, the text inset from its edges, and the focus
+    /// rail at its left only while it has the focus, so a form of several
+    /// shows which one is typed in. `invalid` edges it in red (and the
+    /// rail).
+    pub fn framed(mut self, invalid: bool) -> Self {
+        self.w.frame = Some(invalid);
+        self
+    }
 }
 
 impl<Msg> From<Field<Msg>> for Element<Msg> {
@@ -91,7 +102,13 @@ struct FieldWidget {
     /// Told when Caps Lock turns on or off, as keys show it.
     on_caps: Option<MsgMap<bool>>,
     height: f64,
+    /// Its own box (`framed`), red-edged when `true`.
+    frame: Option<bool>,
 }
+
+/// The text's inset in a framed field: past the rail on the left.
+const FRAME_LEFT: f64 = 12.0;
+const FRAME_RIGHT: f64 = 10.0;
 
 /// What the field keeps between views: the caret and the selection's
 /// other end, as byte offsets, and the value they were for.
@@ -190,6 +207,39 @@ impl FieldWidget {
         let (a, b) = (st.caret.min(st.anchor), st.caret.max(st.anchor));
         self.value[a..b].to_owned()
     }
+
+    /// The text, its selection and the caret, in `b`.
+    fn paint_text(&self, cx: &mut PaintCx, spec: &aizome_kit::text::TextSpec, b: Rect, focused: bool) {
+        let t = cx.theme();
+        let st = cx.state::<FieldState>();
+        let (caret, anchor, preedit, blink_off) = match st {
+            Some(s) => (s.caret.min(self.value.len()), s.anchor.min(self.value.len()), s.preedit.clone(), s.blink_off),
+            None => (self.value.len(), self.value.len(), String::new(), false),
+        };
+        if self.value.is_empty() && preedit.is_empty() {
+            let mut p = spec.clone();
+            p.color = t.faint();
+            cx.draw_text_in(&self.placeholder, &p, b, aizome_kit::Align::Start);
+        }
+        let before = self.shown(&self.value[..caret.min(anchor)]);
+        let sel = self.shown(&self.value[caret.min(anchor)..caret.max(anchor)]);
+        let all = format!("{}{}", self.shown(&self.value), preedit);
+        let layout = cx.layout_text(&all, spec, None);
+        let h = layout.size().height;
+        let y = ((b.height() - h) / 2.0).round();
+        let w_before = cx.layout_text(&before, spec, None).size().width;
+        if !sel.is_empty() {
+            let w_sel = cx.layout_text(&sel, spec, None).size().width;
+            let c = if focused { t.selection() } else { t.line2() };
+            cx.canvas.fill_rect(Rect::new(w_before, y, w_before + w_sel, y + h), c);
+        }
+        cx.canvas.draw_text(&layout, Point::new(0.0, y));
+        if focused && sel.is_empty() && !blink_off {
+            let upto = format!("{}{}", self.shown(&self.value[..caret]), preedit);
+            let x = cx.layout_text(&upto, spec, None).size().width.round();
+            cx.canvas.fill_rect(Rect::new(x, y + 1.0, x + 2.0, y + h - 1.0), t.focus());
+        }
+    }
 }
 
 impl Widget for FieldWidget {
@@ -205,41 +255,29 @@ impl Widget for FieldWidget {
 
     fn paint(&self, cx: &mut PaintCx) {
         let t = cx.theme();
-        let b = cx.bounds();
-        let spec = (self.spec)(t);
-        let st = cx.state::<FieldState>();
-        let (caret, anchor, preedit, blink_off) = match st {
-            Some(s) => (s.caret.min(self.value.len()), s.anchor.min(self.value.len()), s.preedit.clone(), s.blink_off),
-            None => (self.value.len(), self.value.len(), String::new(), false),
-        };
+        let mut b = cx.bounds();
         let focused = cx.is_focused();
-        if self.value.is_empty() && preedit.is_empty() {
-            let mut p = spec.clone();
-            p.color = t.faint();
-            cx.draw_text_in(&self.placeholder, &p, b, aizome_kit::Align::Start);
+        if let Some(invalid) = self.frame {
+            let red = aizome_kit::theme::color(t.palette.red);
+            cx.canvas.fill_rect(b, t.sunk());
+            aizome_kit::draw::border(cx.canvas, b, if invalid { red } else { t.line2() }, 1.0);
+            if focused {
+                cx.canvas.fill_rect(Rect::new(0.0, 0.0, 2.0, b.y1), if invalid { red } else { t.focus() });
+            }
+            cx.canvas.save();
+            cx.canvas.clip_rect(Rect::new(FRAME_LEFT, 0.0, (b.x1 - FRAME_RIGHT).max(FRAME_LEFT), b.y1));
+            cx.canvas.translate((FRAME_LEFT, 0.0));
+            b = Rect::new(0.0, 0.0, (b.width() - FRAME_LEFT - FRAME_RIGHT).max(0.0), b.height());
         }
-        let before = self.shown(&self.value[..caret.min(anchor)]);
-        let sel = self.shown(&self.value[caret.min(anchor)..caret.max(anchor)]);
-        let all = format!("{}{}", self.shown(&self.value), preedit);
-        let layout = cx.layout_text(&all, &spec, None);
-        let h = layout.size().height;
-        let y = ((b.height() - h) / 2.0).round();
-        let w_before = cx.layout_text(&before, &spec, None).size().width;
-        if !sel.is_empty() {
-            let w_sel = cx.layout_text(&sel, &spec, None).size().width;
-            let c = if focused { t.selection() } else { t.line2() };
-            cx.canvas.fill_rect(Rect::new(w_before, y, w_before + w_sel, y + h), c);
-        }
-        cx.canvas.draw_text(&layout, Point::new(0.0, y));
-        if focused && sel.is_empty() && !blink_off {
-            let upto = format!("{}{}", self.shown(&self.value[..caret]), preedit);
-            let x = cx.layout_text(&upto, &spec, None).size().width.round();
-            cx.canvas.fill_rect(Rect::new(x, y + 1.0, x + 2.0, y + h - 1.0), t.focus());
+        let spec = (self.spec)(t);
+        self.paint_text(cx, &spec, b, focused);
+        if self.frame.is_some() {
+            cx.canvas.restore();
         }
     }
 
     fn hash(&self, h: &mut PaintHasher) {
-        h.str(&self.value).str(&self.placeholder).add(&self.secure);
+        h.str(&self.value).str(&self.placeholder).add(&self.secure).add(&self.frame);
     }
 
     fn hit(&self) -> bool {
@@ -282,7 +320,8 @@ impl Widget for FieldWidget {
                 Status::Handled
             }
             Event::Focus(on) => {
-                cx.set_text_input(*on, Some(Rect::new(0.0, 0.0, 2.0, self.height)));
+                let x = if self.frame.is_some() { FRAME_LEFT } else { 0.0 };
+                cx.set_text_input(*on, Some(Rect::new(x, 0.0, x + 2.0, self.height)));
                 if *on {
                     // The caret shows at once, then blinks.
                     cx.state::<FieldState>().blink_off = false;

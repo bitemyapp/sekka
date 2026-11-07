@@ -20,5 +20,6 @@
     ./usb-wake.nix
     ./wpa-supplicant
     ../../../../nix/apple-silicon/module.nix
+    ../../first-boot/module.nix
   ];
 }

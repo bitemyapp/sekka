@@ -1,0 +1,3 @@
+/* Recovery opens the app by this localized name. */
+CFBundleDisplayName = "Finish Installing Sekka";
+CFBundleName = "Sekka Recovery";

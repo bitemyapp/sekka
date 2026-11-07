@@ -78,6 +78,28 @@
       tools = import ./nix/tools.nix { inherit pkgs; };
       pushCache = import ./nix/push-cache.nix { inherit pkgs; };
       publishNightly = import ./nix/publish-nightly.nix { inherit pkgs; };
+      # Sekka Installer for Mac's parts that Linux builds
+      # (installer/genkan/macos): the engine archive the app carries, its
+      # icon, sekka-mac-tool, the workspace source and the tests. The Mac
+      # build (packaging/build-app.sh) takes the archive and the icon.
+      macInstaller =
+        s:
+        let
+          pkgs = nixpkgs.legacyPackages.${s};
+          installer = import ./installer/genkan/macos {
+            inherit pkgs;
+            appIcon = ./docs/brand/logos/sekka-app-icon.svg;
+          };
+          engine = import ./installer/genkan/macos/engine { inherit pkgs; };
+        in
+        {
+          mac-engine = engine.archive;
+          mac-engine-tests = engine.tests;
+          mac-installer-checks = installer.checks;
+          mac-installer-icon = installer.icon;
+          mac-installer-tool = installer.tool;
+          mac-installer-source = installer.source;
+        };
       kakehashi = import ./nix/kakehashi.nix { inherit pkgs; };
       site = import ./nix/site.nix {
         inherit pkgs;
@@ -180,7 +202,21 @@
       # Aizome's own VM checks (desktop/aizome/nix), under the names its
       # flake gave them: `nix build .#aizome-checks.session`. Not among
       # `checks`, which CI runs, as they weren't in Aizome's repository.
-      legacyPackages.${system}.aizome-checks = inputs.aizome.checks.${system};
+      #
+      # First-boot setup (installer/genkan/first-boot): its helper, a
+      # configuration evaluated with the setup.nix it writes, and its VM
+      # test, for PCs and Macs: `nix build .#first-boot.vm-test` (on either
+      # system). Not among `checks` either.
+      legacyPackages = nixpkgs.lib.genAttrs [ system "aarch64-linux" ] (
+        s:
+        {
+          first-boot = import ./installer/genkan/first-boot {
+            inherit nixpkgs inputs;
+            system = s;
+          };
+        }
+        // nixpkgs.lib.optionalAttrs (s == system) { aizome-checks = inputs.aizome.checks.${system}; }
+      );
       apps.${system} = {
         update = {
           type = "app";
@@ -313,10 +349,17 @@
         meta.description = "Update an installed Sekka system";
       };
       # Apple Silicon Macs (nix/apple-silicon).
-      packages.aarch64-linux = import ./nix/apple-silicon {
-        inherit inputs nixpkgs hyprlandOverlay;
-        revision = self.shortRev or self.dirtyShortRev or "unknown";
-      };
+      packages.aarch64-linux =
+        import ./nix/apple-silicon {
+          inherit
+            inputs
+            nixpkgs
+            hyprlandOverlay
+            self
+            ;
+          revision = self.shortRev or self.dirtyShortRev or "unknown";
+        }
+        // macInstaller "aarch64-linux";
       checks.${system} = {
         pipewire-packages = import ./nix/pipewire-packages-test.nix {
           inherit
@@ -866,6 +909,19 @@
           } > /dev/null
           touch $out
         '';
+        # Sekka Installer for Mac: the Rust workspace's and the packaging
+        # scripts' tests, and the engine adapter's against a fake Mac. Nothing
+        # in them is macOS-specific.
+        mac-installer = (macInstaller system).mac-installer-checks;
+        mac-engine = (macInstaller system).mac-engine-tests;
+        # The Mac images' installed flake and lock (nix/apple-silicon), through
+        # the same backend parser.
+        apple-installed-template =
+          (import ./nix/apple-silicon/tests.nix {
+            inherit pkgs self;
+            inherit (nixpkgs) lib;
+          }).templateCheck
+            { inherit pkgs fixture; };
         release-assets = pkgs.runCommand "release-asset-tests" { nativeBuildInputs = [ pkgs.python3 ]; } ''
           mkdir -p scripts tests
           cp ${./scripts/prepare-release.py} scripts/prepare-release.py

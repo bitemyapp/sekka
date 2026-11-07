@@ -18,6 +18,7 @@
 {
   config,
   lib,
+  options,
   pkgs,
   ...
 }:
@@ -34,6 +35,14 @@ let
   };
   esp = config.boot.loader.efi.efiSysMountPoint;
   switches = lib.optionals cfg.t6030Handoff m1n1.t6030Switches;
+  # Replaces m1n1/boot.bin verified, keeping the copy it replaces
+  # (boot-bin/boot_bin.py): the boot loader installation and
+  # sekka-boot-bin.service run it, and its owner, to restore the previous
+  # copy, release a held one or see its status.
+  bootBinTool = pkgs.writeShellScriptBin "sekka-boot-bin" ''
+    exec ${pkgs.python3.interpreter} ${./boot-bin/boot_bin.py} "$@"
+  '';
+  sekkaBootBin = "${bootBinTool}/bin/sekka-boot-bin";
 
   # m1n1's second stage: m1n1, every Apple device tree (m1n1 picks the Mac's),
   # U-Boot, then m1n1's settings, one per line.
@@ -45,6 +54,11 @@ let
   '';
 in
 {
+  imports = [
+    ./identity.nix
+    ./image-system.nix
+  ];
+
   options.calamares.appleSilicon = {
     enable = lib.mkEnableOption "Sekka's Apple Silicon platform: Omarchy's linux-aurora kernel, m1n1-aurora and U-Boot, and Apple's peripheral firmware from the EFI system partition";
     t6030Handoff = lib.mkOption {
@@ -69,7 +83,13 @@ in
     };
     graphicsUsers = lib.mkOption {
       type = lib.types.listOf lib.types.str;
-      default = lib.optional (config.calamares ? installUser) config.calamares.installUser;
+      # A product image has no account until first-boot setup creates one
+      # (its installUser is root until then).
+      default = lib.filter (user: user != "root") (
+        lib.optional (
+          options.calamares ? installUser && options.calamares.installUser.isDefined
+        ) config.calamares.installUser
+      );
       defaultText = lib.literalExpression "[ config.calamares.installUser ]";
       description = "Users who may open the M3 Pro's render node (the render group).";
     };
@@ -125,6 +145,33 @@ in
     };
   };
 
+  # Before NixOS's systemd-boot installer writes anything:
+  # - with the installer's handoff (identity.nix), no other partition may
+  #   carry the GPT UUID of the root or ESP mounted now: the initrd counts
+  #   them once, as soon as they appear, and a copy of this disk on USB
+  #   usually appears later, when /boot may have been mounted from it;
+  # - NixOS's builder deletes every file its extraFiles markers list, and
+  #   syncs that, before extraInstallCommands run. A generation from before
+  #   boot_bin.py installed m1n1/boot.bin that way (the original J514S
+  #   installation's, or one rolled back to): its marker is removed first,
+  #   so boot.bin stays in place until boot_bin.py replaces it.
+  options.system.build.installBootLoader = lib.mkOption {
+    apply =
+      install:
+      if cfg.enable && config.boot.loader.systemd-boot.enable then
+        pkgs.writeScript "install-systemd-boot-sekka.sh" ''
+          #!${pkgs.runtimeShell}
+          set -euo pipefail
+          ${lib.optionalString cfg.identity.handoff ''
+            PATH=${pkgs.util-linux}/bin:$PATH ${pkgs.python3.interpreter} ${./identity/install_identity.py} unique --esp ${esp}
+          ''}
+          ${sekkaBootBin} forget-extra-files --esp ${esp}
+          exec ${install} "$@"
+        ''
+      else
+        install;
+  };
+
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
       {
@@ -159,7 +206,12 @@ in
 
         # U-Boot has no EFI variables to write.
         boot.loader.efi.canTouchEfiVariables = lib.mkForce false;
-        boot.loader.systemd-boot.extraFiles."m1n1/boot.bin" = bootBin;
+        # m1n1/boot.bin is shared by every generation, so it is replaced in
+        # the order FAT needs, verified, and a copy that booted is kept
+        # (boot-bin/boot_bin.py), not with systemd-boot's extraFiles, which
+        # delete it first. A system that had it in extraFiles keeps NixOS's
+        # marker for it, from which NixOS's builder would delete it again:
+        # installBootLoader (below) removes the marker first.
         boot.loader.systemd-boot.extraInstallCommands = ''
           if [ -f ${esp}/vendorfw/firmware.cpio ]; then
             for entry in ${esp}/loader/entries/nixos-*.conf; do
@@ -169,8 +221,32 @@ in
               fi
             done
           fi
+          PATH=${config.nix.package.out}/bin:$PATH ${sekkaBootBin} install \
+            --esp ${esp} --source ${bootBin} --system "$1" --recover-from /run/current-system
         '';
         system.build.appleSiliconBootBin = bootBin;
+        environment.systemPackages = [ bootBinTool ];
+        # Which copy of boot.bin started this Mac: an installation keeps that
+        # one as boot.bin.previous, and a copy put back from macOS is held.
+        # Then it finishes a replacement a power cut interrupted, where
+        # fsck.vfat may have truncated boot.bin, before m1n1 reads it again.
+        # It never fails the boot. Only at a start: a switch installs the
+        # boot loader before it restarts changed units and starts new ones,
+        # so boot.bin is then a copy that never booted. A change to the unit
+        # doesn't restart it, and mark-booted does nothing when the running
+        # system isn't the one that booted (the unit's first switch).
+        systemd.services.sekka-boot-bin = {
+          description = "Record that m1n1/boot.bin started this Mac, and finish its interrupted replacement";
+          wantedBy = [ "multi-user.target" ];
+          after = [ "local-fs.target" ];
+          restartIfChanged = false;
+          unitConfig.RequiresMountsFor = [ esp ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            ExecStart = "${sekkaBootBin} mark-booted --esp ${esp}";
+          };
+        };
 
         boot.initrd.systemd.initrdBin = [
           pkgs.coreutils
@@ -239,11 +315,13 @@ in
         # the user manager and removes them at logout. The greeter needs the
         # same stack before its private compositor starts (PAM can replace
         # the daemon's environment, so put it on the command itself).
-        environment.etc."xdg/aizome/environment".text = lib.mkIf config.programs.aizome.enable (
-          lib.mkAfter (
+        # The whole entry is conditional: one with no text fails to evaluate
+        # on systems without Aizome.
+        environment.etc."xdg/aizome/environment" = lib.mkIf config.programs.aizome.enable {
+          text = lib.mkAfter (
             lib.concatStrings (lib.mapAttrsToList (name: value: "${name}=${value}\n") aizomeEnvironment)
-          )
-        );
+          );
+        };
         services.greetd.settings.default_session.command = lib.mkIf config.programs.aizome.greeter.enable (
           lib.mkForce "${pkgs.coreutils}/bin/env ${
             lib.concatStringsSep " " (

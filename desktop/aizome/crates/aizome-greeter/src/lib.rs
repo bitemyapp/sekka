@@ -10,6 +10,8 @@ pub mod displays;
 pub mod greetd;
 pub mod login;
 pub mod sessions;
+pub mod setup;
+pub mod setup_view;
 pub mod users;
 pub mod view;
 
