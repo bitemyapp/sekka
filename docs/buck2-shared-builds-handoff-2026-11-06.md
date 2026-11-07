@@ -14,18 +14,20 @@ over long benchmark matrices. Builds, tests and measurements go to
 ## State
 
 - Checkout `/home/callen/work/sekka-shared-builds`, rebased onto `origin/main`
-  `2711942e` with no merge commits. Local commits since the rebase:
-  - `cc20783f`: the harness's storage plan.
-  - `75d98d79`: build state measured apart from tracked source.
-  - `aaf232ea`: the observer accepts symlinked store paths.
-  - `f3f4dc9c`: CAS/content-store `dedupe`.
-  - A final commit with these docs and the evidence.
-- The remote branch still has the pre-rebase `d6a83edc` until a
-  `--force-with-lease` push.
-- The Buck graph is current after the rebase (`scripts/sekka-buck2 check`).
-- `checks.build-service-inventory` and `.#build-service` build at `f3f4dc9c` on
-  wx. No broad flake check was run.
-- PR CI: only the trust check has ever run green on #291; `build` was skipped.
+  `2711942e` with no merge commits, pushed to `origin/feat/buck2-shared-builds`.
+- Since the storage run, three engine patches:
+  - `presence-consistent-hits.patch`: cache uploads ask NativeLink about every
+    output; no more action results naming evicted blobs.
+  - `content-store-unlocked-views.patch`: views are cloned, verified and synced
+    after the store locks are released.
+  - `content-store-advisory-writes.patch`: LRU and hint writes are buffered
+    instead of each costing a synchronous commit.
+- `scripts/sekka-buck2` now fingerprints every engine patch by glob.
+- On wx, the engine's check phase, `checks.buck2-backend`,
+  `checks.build-service-inventory` and `.#build-service` pass at these
+  commits. No broad flake check was run.
+- PR CI: the trust check passes; the Nix `build` job is skipped, so CI does
+  not exercise Buck2.
 
 ## What is proved
 
@@ -58,28 +60,46 @@ it. Incremental state is private per worktree (~0.7 GB after a dev build).
 
 ## Open work, in order
 
-1. **Push** the rebased branch with `--force-with-lease` (lease on
-   `d6a83edc9ee30407af8ab114cb7bdcf11c9d4878`). Then check PR CI and decide
-   how its `build` job should cover this work.
-2. **Lost cache entries after a restart.** Uploads made right after a backend
-   restart reported success but 85 of 742 later missed (see the results'
-   open findings). Reproduce it in isolation: restart, build cold, build a
-   fresh worktree. Then check whether NativeLink's filesystem store loses
-   blobs that are written while it rescans its content directory at startup.
-3. **Make dedupe routine.** Today it is a manual command. Decide between a
-   timer on the deployment host and a hook after large builds. Rerun the
-   storage plan once to record its `service-dedupe` stage.
-4. **Bounds.** Consider raising the content store's 10 GiB default to the dev
-   plus release working set (~14 GiB physical, ~20 GiB logical). Consider
-   whether the 64 GiB CAS default suits a storage-first workstation.
-5. **Warm latency.** The first fresh worktree took 23% of cold (limit 20%),
-   probably store eviction under its bound. It is low priority under the
-   current guidance.
-6. **Scope decisions for the user:** whether Bazel stays in this PR beside
-   Buck2, and when to start the laptop phase. Measured on 2026-11-06, Btrfs
-   on runnymede (ext4 today) would save ~89 GiB of its ~140 GiB of build state
-   by compression alone; the scripts are in the session scratchpad.
-   Shipping Nix packages remain separate from this development path.
+1. **Option 2, on its own branch `feat/buck2-single-cas`:** one physical copy
+   of each output on a host.
+   - Phase 1 (Buck2 only): the content store reads NativeLink's CAS
+     directory, through a digest index because names carry a generation, and
+     reflinks from it. Uploaded outputs are deduplicated against the CAS inline.
+   - Phase 2: a NativeLink built from source with stable digest paths, local
+     reads counted in its LRU, a free-space floor, and casita-style retention.
+     That retention means roots that keep their whole graph, leases for
+     in-flight uploads and reads, and eviction of action-cache entries before
+     the blobs they name.
+   - The casita investigation found casita itself unsuitable today: it stores
+     chunks with no reflinks, speaks no REAPI or substituter protocol, and is
+     pre-release.
+2. **Writers under concurrency.** Four worktrees materializing at once take
+   68–93 s against 37 s with the store off. A single worktree is at its
+   baseline. The cost is ingesting new outputs, mostly incremental state,
+   under the exclusive lock. Option 2 replaces that ingest path; revisit after it.
+3. **Make dedupe routine** until option 2 makes it unnecessary: a timer on the
+   deployment host or a hook after large builds.
+4. **Bounds.** The content store's 10 GiB default is below the dev plus
+   release working set. The 64 GiB CAS default has no free-space awareness.
+5. **CI.** Decide how PR CI's `build` job should exercise this work.
+6. **When PR 333 (per-application Aizome packages) lands**, or this branch
+   lands after it:
+   - move `nix/bazel/without-build-files.nix` into its `package-sources.nix`;
+     otherwise BUCK/BUILD edits rebuild Nix packages;
+   - rerun `scripts/sekka-buck2 generate` for the lock change;
+   - point `checks.bazel-native-inputs` at `components.compositor`.
+
+   Measured combination on wx:
+   - Buck2: PR 333 invalidates 0 of 706 actions.
+   - A Soroban edit rebuilds only Soroban in Nix: 24 s and +17 MiB, against
+     7:23 and +573 MiB.
+   - Full check evaluation: 72.8 s against 68.8 s.
+
+   Details are in `/home/callen/sekka-work/pr333-combo-20261106/results/` on wx.
+7. **Scope decisions for the user:** whether Bazel stays beside Buck2, and
+   when to start the laptop phase. Btrfs on runnymede (ext4 today) would save
+   ~89 GiB of its ~140 GiB of build state by compression alone (2026-11-06
+   estimate). Shipping Nix packages remain separate from this development path.
 
 ## Resume
 
