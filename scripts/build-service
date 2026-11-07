@@ -206,11 +206,13 @@ def resize_cache(m, manifest, cas_bytes, ac_bytes):
         raise SystemExit("New cache budget exceeds the job's immutable tmpfs quota; provision a larger job instead")
     m.update(cas_bytes=cas_bytes, ac_bytes=ac_bytes)
     for domain in m["domains"]:
-        for role in ("worker", "backend"):
-            assert_owned(m, name(m, domain, role))
-            docker(m, "stop", "--timeout", "3600", name(m, domain, role))
+        assert_owned(m, name(m, domain, "worker"))
+        docker(m, "stop", "--timeout", "3600", name(m, domain, "worker"))
+
+    def reconfigure(domain):
         put(m, domain + "/backend.json", json.dumps(backend_config(m)), 0o644)
         put(m, domain + "/worker.json", json.dumps(worker_config(m)), 0o644)
+    restart_backends(m, 300, reconfigure)
     up(m)
     manifest.write_text(json.dumps(m, indent=2) + "\n")
 

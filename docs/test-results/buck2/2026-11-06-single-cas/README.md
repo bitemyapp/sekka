@@ -81,7 +81,7 @@ restarted, gateway kept) lands a few seconds into a build of a different
 | --- | --- | --- |
 | HTML 502 while the backend is down | primed worktree, 55 actions executed and uploaded | pass, 18.1 s; uploads retried on GOAWAY |
 | HTML 502 while the backend is down | fresh worktree, 3 s in | **fail**: 30 blob reads (`BatchReadBlobs`) got the 502, which gRPC clients cannot retry |
-| `UNAVAILABLE` (this branch) | fresh worktree, twice, 3 s in | pass: 706 actions, 651 cached; in the second, 15 requests retried, reaching attempt 3 of 5 |
+| `UNAVAILABLE`, before the pause below (`9bd7a3ef`) | fresh worktree, twice, 3 s in | pass: 706 actions, 651 cached; in the second, 15 requests retried, reaching attempt 3 of 5 |
 
 All 225 502s fell within one second, as the gateway's log shows. Buck2
 retries `UNAVAILABLE` for about 1.5 s (100–800 ms backoff), so a markedly
@@ -90,6 +90,29 @@ slower restart would still fail reads. `autosize` therefore also waits for
 of these builds counted 30,279 requests and deferred. The gateway also stops
 retiring connections after 1000 requests (nginx's default), which had caused
 GOAWAY retries in builds with no restart at all.
+
+**At the CAS's maximum size.** A disposable service was given synthetic CAS
+entries (startup reads only names and metadata). A probe through the gateway
+every 50 ms timed what clients saw during a `resize`:
+
+| CAS entries | Clients see `UNAVAILABLE` for |
+| --- | --- |
+| 0 | 0.48 s |
+| 42,000 (today's 24 GB) | 0.54–0.60 s |
+| 500,000 (about the 256 GiB maximum) | 1.67–2.57 s |
+
+NativeLink loads its whole index before it listens, so a full cache outlasts
+Buck2's 1.5 s of retries. `resize` and `runtime` now pause the gateway during
+the restart and resume it once the backend accepts connections. At 500,000
+entries, eight concurrent probe loops through two resizes got no errors in
+1,573 probes, and the longest stall was 1.74 s. On the same service, a cold
+prime (706 actions, 90.8 s) was followed by two fresh worktrees, each with a
+held resize landing 3 s and 7 s in. Both built all 706 actions from the cache
+(8.6 s and 9.6 s). The first saw six requests retried once.
+
+The prime's post-build pass shared 5.4 GB of outputs with their CAS blobs in
+about 6.7 s, which is the kernel comparing the bytes. Fresh worktrees whose
+hits are clones journal nothing.
 
 Two things this repro turned up were not faults:
 - A primed build missed the cache entirely because its isolation directory
@@ -100,7 +123,8 @@ Two things this repro turned up were not faults:
   looking them up.
 
 A transient `systemd-run --user` timer for `autosize` failed on wx because
-its user service manager predates the user's `docker` group.
+its user service manager predates the user's `docker` group. The same timer
+ran `autosize` and exited cleanly through `sg docker -c`.
 
 ## Storage-plan run on this branch
 
