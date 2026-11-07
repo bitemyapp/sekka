@@ -164,3 +164,6 @@ On wx, at the branch's commits:
 
 No broad flake check was run. These are build-system observations, not image,
 installer or hardware qualification.
+
+Both services used here were destroyed with their state afterwards. The run
+directory stays on wx under `/home/callen/sekka-work/buck2-singlecas-20261106`.

@@ -144,10 +144,12 @@ Three earlier starts on this day were discarded before producing evidence, and
 their run roots and services destroyed: a configuration error of mine (the
 harness owns `--write-build-id`), a change to measure worktree build state apart
 from tracked source, and an observer that refused symlinked store paths in the
-retained closure (fixed in `aaf232ea`). The run directory, quarantined output
-evidence and the service's state remain on `wx-workstation` under
-`/home/callen/sekka-work/buck2-storage-20261106` and
-`/home/callen/sekka-work/shared-build-service-5ce137e61808`.
+retained closure (fixed in `aaf232ea`). The run directory and quarantined
+output evidence remain on `wx-workstation` under
+`/home/callen/sekka-work/buck2-storage-20261106`. The service
+(`shared-build-service-5ce137e61808`) served the later
+[single-CAS repros](../2026-11-06-single-cas/README.md), which resized and
+refilled its cache. It was then destroyed with its state.
 
 These are workstation build and storage observations. They do not qualify an
 image, an installer or hardware.
