@@ -177,3 +177,14 @@ Captures are crops of the 2880 × 1800 display (scale 2, pixman) to the window
 with its tab and frame, unscaled. They were taken on 2026-10-30 on
 wx-workstation and are not screenshots of an installed release. The captures
 include the left-only recommendation, preserving right Alt (AltGr).
+
+The two captures in `agent-evals/screenshots/` are original 1440 × 900 QEMU
+screendumps from the agent evaluations of 2026-11-04 on runnymede, copied byte
+for byte: the screens the models were shown, rendered by Aizome with pixman in
+a disposable VM (`tests/agent-evals/machine.nix`). `logs-backpus.png` is
+Qwen3.8-27B's last view in the Logs task, Nisshi showing the injected error
+`backup destination /srv/data/backpus does not exist`, which the model then
+reported as `/srv/data/backups`. `sound-panel.png` is Qwen3.6-35B-A3B's view
+after it opened the Sound panel from the menu bar, before it chose Desk
+Headphones. The outputs are the VM's null sinks; the wallpaper is Aizome's
+default. Every input was the model's, sent through `aizomectl input`.
