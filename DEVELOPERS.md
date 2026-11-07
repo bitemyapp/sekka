@@ -627,8 +627,17 @@ then asks the kernel (`FIDEDUPERANGE`) to share identical bytes; the kernel
 compares them, and any mismatch fails the command. `--content-store PATH`
 selects stores other than the default `~/.cache/sekka/buck2/content-v1`.
 Pairs that already share their first extent are skipped, so repeating it is
-cheap; run it after large builds or from a timer. Ephemeral CI caches are not
-touched.
+cheap. Ephemeral CI caches are not touched.
+
+Clients on the deployment host do this themselves. A client file generated
+there with `client --domain trusted --access writer --format buck2 --local-cas`
+names the CAS directory (`[sekka] local_cas_dir`), and `scripts/sekka-buck2`
+then shares extents between that CAS and its content store after every `build`
+or `test`, through the same `build/buck2/cas_dedupe.py`. A mismatched digest
+fails the command; a CAS on another filesystem is reported once and skipped.
+On wx-workstation, a fresh worktree's 3.5 GB of downloaded hits and an edit's
+uploads left 46 MB of an 8.6 GB content store unshared with the CAS, with no
+separate pass.
 
 The gateway binds host loopback. From another machine, forward it explicitly:
 
@@ -650,9 +659,9 @@ on the workstation and use `retain /nix/store/CLIENT /nix/store/VENDOR`.
 `retain` does not evaluate sources or import unsigned arbitrary build outputs.
 
 For worktrees on the workstation's Btrfs filesystem, the qualified setup is
-local execution with a writer client, `scripts/sekka-buck2 --cache cache
---cache-write --config-file FILE build`, the default per-user content store,
-and `build-service --local dedupe` after large builds. In the 2026-11-06
+local execution with a writer client generated with `--local-cas`,
+`scripts/sekka-buck2 --cache cache --cache-write --config-file FILE build`,
+and the default per-user content store. In the 2026-11-06
 storage run, a fresh worktree of an already-built source reused all 706
 actions and kept 8 MiB of its own build state beside 3.47 GB reflinked from
 the store; deduplicating the CAS against the store then cut the physical
