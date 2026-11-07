@@ -750,6 +750,27 @@ against 0.76), and a whole-frame offscreen buffer costs nothing (`calloc`
 gets zero pages mapped) against 0.34 ms. Lower thresholds do cost frames:
 1 MB and 4 MB took a window opening from 0.24 to 0.68 ms.
 
+The index's walk no longer leaves the shell bigger (6 November). Its
+threads (up to twelve) made a string for each path (300,000 paths, 33 MB,
+in a large home), so each thread's arena grew by its share, a few MB, and
+kept it once freed, below the 16 MB trim threshold above. The next walk's
+threads took the same arenas and grew them a little further, and reading
+back an index that was still fresh, only to drop it, added a little more.
+Headless at 3840 × 2160, 2×, with those thresholds and that home
+reindexed every minute (a walk every two minutes, a read between), the
+shell went from 97 to 152 MB anonymous in ten minutes, still climbing,
+while the heap it used stayed near 15 MB (and the wallpaper's 33 MB): the
+rest was free memory in its arenas. A live shell after five hours (a walk
+every twenty minutes) held 147 MB in fifteen arenas. The walk now appends
+every path to the index's own arena, reserved on the calling thread
+before it starts (growing past it reallocates there, never on a walker's
+arena), and a refresh while the palette is closed doesn't read an index
+that's still fresh. Over twenty-five minutes of the same, the shell went
+from 60 to 72 MB by the sixth walk and 73.5 MB after the thirteenth (55 MB
+without an index): what's left is the walk library's own short-lived
+allocations, about three per path. A walk takes as long as before:
+108–124 ms after the first, against 112–117.
+
 ### Exceptions
 
 - **The palette's first opening**: *fixed* on 19 October. The palette's

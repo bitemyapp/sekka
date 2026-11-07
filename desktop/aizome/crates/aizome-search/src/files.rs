@@ -79,6 +79,15 @@ struct Entry {
     folder: bool,
 }
 
+/// Room reserved in the arena for each entry a walk may find: the paths in
+/// a large home folder average about 115 bytes.
+const PATH_BYTES: usize = 128;
+
+/// An entry's path relative to its root.
+fn rel_in<'a>(arena: &'a str, e: &Entry) -> &'a str {
+    &arena[e.start as usize..(e.start + e.len) as usize]
+}
+
 /// An index of files under some roots.
 #[derive(Default)]
 pub struct FileIndex {
@@ -108,7 +117,20 @@ impl FileIndex {
     /// Walks `roots` (in parallel) and returns their index.
     pub fn build(roots: &[PathBuf], limits: &Limits) -> FileIndex {
         let started = Instant::now();
-        let found: Mutex<Vec<(u16, String, u32, bool)>> = Mutex::new(Vec::new());
+        // The walkers append to the arena and the entries, both reserved here,
+        // on the calling thread. A `String` per path made on the walkers'
+        // threads came from a dozen malloc arenas, a few MB each, and freeing
+        // it all left each arena that much bigger for good (below glibc's
+        // trim threshold), a little more at every rebuild. Memory reserved
+        // and not written costs nothing, and past the reservation it's
+        // reallocated where it was allocated, never on a walker's arena.
+        let room = limits.max_entries.min(Limits::default().max_entries);
+        let found = Mutex::new(FileIndex {
+            roots: roots.to_vec(),
+            arena: String::with_capacity(room * PATH_BYTES),
+            entries: Vec::with_capacity(room),
+            ..Default::default()
+        });
         for (r, root) in roots.iter().enumerate() {
             if limits.skip.iter().any(|s| root.starts_with(s)) {
                 continue;
@@ -155,9 +177,12 @@ impl FileIndex {
                         .and_then(|m| m.modified().ok())
                         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                         .map_or(0, |d| d.as_secs().min(u32::MAX as u64) as u32);
+                    let name = rel.rfind('/').map_or(0, |i| i + 1) as u32;
                     let mut found = found.lock().unwrap_or_else(PoisonError::into_inner);
-                    found.push((r as u16, rel.to_owned(), modified, folder));
-                    if found.len() >= limits.max_entries {
+                    let start = found.arena.len() as u32;
+                    found.arena.push_str(rel);
+                    found.entries.push(Entry { root: r as u16, start, len: rel.len() as u32, name, modified, folder });
+                    if found.entries.len() >= limits.max_entries {
                         ignore::WalkState::Quit
                     } else {
                         ignore::WalkState::Continue
@@ -165,18 +190,14 @@ impl FileIndex {
                 })
             });
         }
-        let mut found = found.into_inner().unwrap_or_else(PoisonError::into_inner);
+        let mut index = found.into_inner().unwrap_or_else(PoisonError::into_inner);
         // Newest first, so an empty query and ties offer what was just
-        // worked on.
-        found.sort_unstable_by(|a, b| b.2.cmp(&a.2).then_with(|| a.1.cmp(&b.1)));
-        let mut index = FileIndex { roots: roots.to_vec(), ..Default::default() };
-        index.arena.reserve(found.iter().map(|f| f.1.len()).sum());
-        for (root, rel, modified, folder) in found {
-            let name = rel.rfind('/').map_or(0, |i| i + 1) as u32;
-            let start = index.arena.len() as u32;
-            index.arena.push_str(&rel);
-            index.entries.push(Entry { root, start, len: rel.len() as u32, name, modified, folder });
-        }
+        // worked on. The arena stays in the order the walkers found things.
+        let FileIndex { arena, entries, .. } = &mut index;
+        entries
+            .sort_unstable_by(|a, b| b.modified.cmp(&a.modified).then_with(|| rel_in(arena, a).cmp(rel_in(arena, b))));
+        index.arena.shrink_to_fit();
+        index.entries.shrink_to_fit();
         index.built = Some(SystemTime::now());
         log::debug!("indexed {} files in {:?}", index.entries.len(), started.elapsed());
         index
@@ -196,7 +217,7 @@ impl FileIndex {
     }
 
     fn rel(&self, e: &Entry) -> &str {
-        &self.arena[e.start as usize..(e.start + e.len) as usize]
+        rel_in(&self.arena, e)
     }
 
     fn full_path(&self, e: &Entry) -> PathBuf {
@@ -321,6 +342,9 @@ impl FileIndex {
             return None;
         }
         let mut index = FileIndex { built, ..Default::default() };
+        // The paths are most of the file: one allocation rather than every
+        // power of two up to twice their size.
+        index.arena.reserve(text.len());
         for line in lines.by_ref() {
             if line.is_empty() {
                 break;
@@ -341,7 +365,14 @@ impl FileIndex {
             index.arena.push_str(rel);
             index.entries.push(Entry { root, start, len: rel.len() as u32, name, modified, folder });
         }
+        index.arena.shrink_to_fit();
         Some(index)
+    }
+
+    /// How long ago the index saved at `path` was walked, without reading
+    /// it: the age [`FileIndex::load`] would give it.
+    pub fn saved_age(path: &Path) -> Option<Duration> {
+        std::fs::metadata(path).and_then(|m| m.modified()).ok()?.elapsed().ok()
     }
 
     /// The default cache path: `$XDG_CACHE_HOME/aizome/files.idx`.
@@ -408,6 +439,31 @@ mod tests {
         let none =
             FileIndex::build(std::slice::from_ref(&root), &Limits { skip: vec![root.clone()], ..Default::default() });
         assert!(none.entries.is_empty(), "a skipped root isn't walked");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn newest_first_then_by_path() {
+        let root = fixture("order");
+        let modified = |rel: &str, secs: u64| {
+            let f = fs::File::options().write(true).open(root.join(rel)).unwrap();
+            f.set_modified(UNIX_EPOCH + Duration::from_secs(secs)).unwrap();
+        };
+        modified("work/sidestep/crates/sidestep-engine/src/trace/replay.rs", 1_000_000);
+        modified("naïve/résumé.md", 2_000_000);
+        modified("Pictures/日本語.png", 2_000_000);
+        modified("Documents/replay notes.md", 3_000_000);
+        let index = FileIndex::build(std::slice::from_ref(&root), &Limits { folders: false, ..Default::default() });
+        let rels: Vec<&str> = index.entries.iter().map(|e| index.rel(e)).collect();
+        assert_eq!(
+            rels,
+            [
+                "Documents/replay notes.md",
+                "Pictures/日本語.png",
+                "naïve/résumé.md",
+                "work/sidestep/crates/sidestep-engine/src/trace/replay.rs",
+            ]
+        );
         let _ = fs::remove_dir_all(root);
     }
 
