@@ -5,7 +5,7 @@ mod common;
 
 use aizome_kit::prelude::*;
 use aizome_kit::testing::Harness;
-use aizome_shell::auth::{AuthMsg, AuthView, view};
+use aizome_shell::auth::{AuthMsg, AuthView, Submit, view};
 use common::*;
 
 struct Preview {
@@ -47,6 +47,7 @@ fn dialog(identities: usize) -> AuthView {
         password: String::new(),
         note: Some(("Sorry, try again.".into(), true)),
         busy: false,
+        submit: Submit::Answer,
     }
 }
 

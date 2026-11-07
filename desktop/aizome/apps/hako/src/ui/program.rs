@@ -553,6 +553,11 @@ impl Program for Hako {
                 };
                 self.answer(cx, id, Some(a));
             }
+            Msg::Replace(id, pressed) => {
+                if let Some(agreed) = pressed.take() {
+                    self.replace(cx, id, agreed);
+                }
+            }
             Msg::AskAll(id, on) => {
                 for s in self.sheets.values_mut() {
                     if let Sheet::Ask { job, all } = s

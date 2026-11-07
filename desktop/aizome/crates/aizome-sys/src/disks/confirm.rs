@@ -1,9 +1,11 @@
 //! Confirmations for operations that change what is on a disk.
 //!
 //! Every such [`Disks`](super::Disks) method takes a [`Confirm<Op, B>`],
-//! made from the [`Identity`] of the device as the person saw it when they
-//! agreed, and a brand `B` that only the code that showed it to them can
-//! make: `Confirm::new(state.identity(&block)?, brand)`. An identity holds
+//! made from the person's agreement to the device as an alert or sheet
+//! showed it to them (an [`Agreed`] of its [`Identity`], which only Aizome's
+//! kit makes, as a person presses the button that agrees), and a brand `B`
+//! that only the code that showed it to them can make:
+//! `Confirm::new(&agreed, brand)`. An identity holds
 //! what stays with a device, not only what another device can take over
 //! (an object path, a `/dev` name, a size): the drive it is on (its serial,
 //! its WWN, the USB port it is in, and when UDisks detected it and the
@@ -35,11 +37,17 @@
 //! - The identities are UDisks's values, so comparing them can only happen
 //!   when the operation runs; and UDisks has no "only if still" call, so
 //!   the device could still change between the check and UDisks acting.
-//! - An identity read from any state but the one the person reviewed (the
-//!   snapshot when the operation runs, or a `DisksState` put together by
-//!   hand) confirms whatever is there. This module can't know when the
-//!   person looked; the caller's brand must keep its other code from making
-//!   confirmations (Tansu's are branded by its queued operations).
+//! - That the identity agreed to is the one the alert described: the kit
+//!   binds the agreement to the value the caller gave the button, not to
+//!   what it drew. An identity read from live state (the snapshot when the
+//!   operation runs) confirms nothing by itself any more; it needs a
+//!   person's press of a button agreeing to it. The caller's brand still
+//!   keeps its other code from naming an operation the person didn't queue
+//!   (Tansu's are branded by its queued operations).
+//! - That a person, not a program the compositor takes input from, pressed
+//!   it ([`aizome_kit::agree`]); and the privileged side can't check the
+//!   agreement at all: UDisks and polkit see only the call, and keep their
+//!   own checks.
 //! - A card swapped for another in the same reader faster than the kernel
 //!   polls for media (about two seconds) may keep the reader's
 //!   `TimeMediaDetected`; then only the partitions' and filesystems' UUIDs
@@ -52,6 +60,7 @@
 
 use super::model::{BlockDevice, DisksState};
 use crate::error::{Error, Result};
+use aizome_kit::agree::Agreed;
 use aizome_typestate::{Confirmed, Reviewed, SameTarget};
 use std::marker::PhantomData;
 use std::time::{Duration, Instant};
@@ -102,8 +111,8 @@ pub struct Resize;
 /// Repair a filesystem: the repair may discard what it can't save.
 pub struct Repair;
 /// Make a partition in a disk's free space (and perhaps a filesystem in
-/// it). Held to the disk, not its partitions, which earlier operations of
-/// the same plan may have changed.
+/// it, and its flags, set on the partition made). Held to the disk, not its
+/// partitions, which earlier operations of the same plan may have changed.
 pub struct CreatePartition;
 /// Change a filesystem's label.
 pub struct Relabel;
@@ -216,6 +225,14 @@ struct Contents {
     table: Option<(String, Vec<(String, String)>)>,
 }
 
+/// An agreement to an identity, or to something showing one (Tansu's
+/// operations show the identity of the device they act on).
+impl AsRef<Identity> for Identity {
+    fn as_ref(&self) -> &Identity {
+        self
+    }
+}
+
 impl Identity {
     /// The block device's object path.
     pub fn path(&self) -> &str {
@@ -324,7 +341,30 @@ struct Seen<Op> {
 
 impl<Op: Change> SameTarget<Identity> for Seen<Op> {
     fn same_target(&self, fresh: &Identity) -> bool {
-        self.identity.same(fresh, Op::HOLDS) && self.sizes.is_none_or(|sizes| sizes.hold(fresh.size))
+        held(&self.identity, Op::HOLDS, self.sizes, fresh)
+    }
+}
+
+/// Whether `fresh` is still the device `seen` was, held to `holds` (and a
+/// resize's partition to its sizes).
+fn held(seen: &Identity, holds: Holds, sizes: Option<Sizes>, fresh: &Identity) -> bool {
+    seen.same(fresh, holds) && sizes.is_none_or(|sizes| sizes.hold(fresh.size))
+}
+
+impl Identity {
+    /// Whether `state` still has this device as a confirmation of `Op` made
+    /// from it would hold it, as each step's [`check`](Confirm::check) will:
+    /// for a plan that keeps checking what it has queued before anyone has
+    /// agreed to it. It confirms nothing. A resize's is
+    /// [`still_there_to_resize`](Self::still_there_to_resize).
+    pub fn still_there<Op: AsSeen>(&self, state: &DisksState) -> bool {
+        state.identity(self.path()).is_some_and(|fresh| held(self, Op::HOLDS, None, &fresh))
+    }
+
+    /// The same for a resize of this partition from `from` bytes to `to`
+    /// ([`Confirm::resize`]).
+    pub fn still_there_to_resize(&self, state: &DisksState, from: u64, to: u64) -> bool {
+        state.identity(self.path()).is_some_and(|fresh| held(self, Resize::HOLDS, Some(Sizes { from, to }), &fresh))
     }
 }
 
@@ -350,11 +390,15 @@ impl Sizes {
 
 /// The person agreed to `Op` on this device, as they saw it.
 ///
+/// It's made from their [`Agreed`], which only Aizome's kit makes, as a
+/// person presses the destructive button of an alert or sheet that showed
+/// the device; so code can't confirm a device nobody agreed to.
+///
 /// `B` is the brand of the review: a type only the caller's reviewing code
 /// can make. The operations take any brand; the caller's own interface
 /// names the one it accepts (Tansu's backend takes
-/// `Confirm<_, tansu::plan::Queued>`), so the caller's other code can't make
-/// a confirmation of a device nobody reviewed.
+/// `Confirm<_, tansu::plan::Queued>`), so the caller's other code can't name
+/// an operation the person didn't queue.
 #[must_use = "a confirmation does nothing until it is passed to the operation"]
 pub struct Confirm<Op: Change, B> {
     reviewed: Reviewed<Seen<Op>, B>,
@@ -368,9 +412,46 @@ impl<Op: Change, B> std::fmt::Debug for Confirm<Op, B> {
 }
 
 impl<Op: AsSeen, B> Confirm<Op, B> {
-    /// The person agreed to `Op` on the device they saw: `seen`, read with
-    /// [`DisksState::identity`] from the state they reviewed, and the brand
-    /// of the code that showed it to them.
+    /// The person agreed to `Op` on the device they saw: `agreed`, their
+    /// agreement to its identity (read with [`DisksState::identity`] from the
+    /// state they reviewed, or something showing one), and the brand of the
+    /// code that showed it to them. The agreement is borrowed: one press of
+    /// the button agrees to every step of the operation, each confirmed as it
+    /// starts.
+    ///
+    /// An identity read from live state isn't a confirmation by itself, with
+    /// any brand: it needs a person's agreement to it. (Tier 1 let code read
+    /// the device when the operation ran, and confirm whatever was there.)
+    ///
+    /// ```compile_fail,E0308
+    /// use aizome_sys::disks::{Confirm, DisksState, Format};
+    /// /// A brand of the caller's own.
+    /// struct Mine;
+    /// fn confirm_what_is_there(state: &DisksState, path: &str) -> Confirm<Format, Mine> {
+    ///     Confirm::new(state.identity(path).unwrap(), Mine)
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// use aizome_kit::agree::Agreed;
+    /// use aizome_sys::disks::{Confirm, Format, Identity};
+    /// struct Mine;
+    /// fn confirm_what_they_agreed_to(agreed: &Agreed<Identity>) -> Confirm<Format, Mine> {
+    ///     Confirm::new(agreed, Mine)
+    /// }
+    /// ```
+    ///
+    /// The confirmation is of the device the agreement holds; there's no
+    /// other device to name beside it:
+    ///
+    /// ```compile_fail,E0061
+    /// use aizome_kit::agree::Agreed;
+    /// use aizome_sys::disks::{Confirm, Format, Identity};
+    /// struct Mine;
+    /// fn retarget(agreed: &Agreed<Identity>, other: Identity) -> Confirm<Format, Mine> {
+    ///     Confirm::new(agreed, other, Mine)
+    /// }
+    /// ```
     ///
     /// A block device's record alone can't confirm anything: it doesn't
     /// know the drive it is on. (SYA-13: the confirmation for a new
@@ -393,6 +474,7 @@ impl<Op: AsSeen, B> Confirm<Op, B> {
     /// the path and name the person saw:
     ///
     /// ```compile_fail,E0451
+    /// use aizome_kit::agree::testing::agreed;
     /// use aizome_sys::disks::{Confirm, Identity, NewPartitionTable};
     /// struct Sheet;
     /// fn forge(another: Identity) -> Confirm<NewPartitionTable, Sheet> {
@@ -401,16 +483,16 @@ impl<Op: AsSeen, B> Confirm<Op, B> {
     ///         device: "/dev/sdb".into(),
     ///         ..another
     ///     };
-    ///     Confirm::new(seen, Sheet)
+    ///     Confirm::new(&agreed(seen), Sheet)
     /// }
     /// ```
     ///
     /// and a confirmation made for one operation can't be rebuilt as another's
     /// (one held only to a partition's place, for its flags, as a format's): its
-    /// review is private, and its brand can't be moved out. An [`Identity`]
-    /// carries no operation, though: any `Confirm<Op, B>` takes one (a
-    /// resize's with its sizes), with any brand its caller can make. So the
-    /// caller's brand must be made only where each operation is reviewed,
+    /// review is private, and its brand can't be moved out. An agreement to an
+    /// [`Identity`] carries no operation, though: any `Confirm<Op, B>` takes
+    /// one (a resize's with its sizes), with any brand its caller can make. So
+    /// the caller's brand must be made only where each operation is reviewed,
     /// for that operation (Tansu: only `plan.rs` makes `Queued`, of each
     /// operation's own kind).
     ///
@@ -422,9 +504,11 @@ impl<Op: AsSeen, B> Confirm<Op, B> {
     /// ```
     ///
     /// The identity read from the state the person saw holds the drive, so
-    /// the confirmation doesn't hold for another stick at the same name:
+    /// the confirmation doesn't hold for another stick at the same name (the
+    /// test's agreement stands for the person's press):
     ///
     /// ```
+    /// use aizome_kit::agree::testing::agreed;
     /// use aizome_sys::disks::{BlockDevice, Confirm, DisksState, Drive, NewPartitionTable, PartitionTable};
     /// /// Where the person sees the stick.
     /// struct Sheet;
@@ -447,17 +531,22 @@ impl<Op: AsSeen, B> Confirm<Op, B> {
     ///     ..Default::default()
     /// };
     /// let (a, b) = (stick("4C530001230101112233", "gpt"), stick("4C530001990304445566", "dos"));
-    /// let confirm = || Confirm::<NewPartitionTable, Sheet>::new(a.identity(disk).unwrap(), Sheet);
+    /// let agreed = agreed(a.identity(disk).unwrap());
+    /// let confirm = || Confirm::<NewPartitionTable, Sheet>::new(&agreed, Sheet);
     /// assert!(confirm().check(&b).is_err());
     /// assert_eq!(confirm().check(&a).unwrap().target().device(), "/dev/sdb");
     /// ```
-    pub fn new(seen: Identity, brand: B) -> Confirm<Op, B> {
+    pub fn new<T: AsRef<Identity>>(agreed: &Agreed<T>, brand: B) -> Confirm<Op, B> {
+        Confirm::of(agreed.target().as_ref().clone(), brand)
+    }
+
+    fn of(seen: Identity, brand: B) -> Confirm<Op, B> {
         Confirm::seen(Seen { identity: seen, sizes: None, op: PhantomData }, brand)
     }
 }
 
 impl<B> Confirm<Resize, B> {
-    /// The person agreed to resize the partition they saw (`seen`, as for
+    /// The person agreed to resize the partition they saw (`agreed`, as for
     /// [`Confirm::new`]) from `from` bytes, its size then, to `to`. Each
     /// step's check holds the partition to one of those sizes, give or take
     /// the MiB that aligning its end may move it: a partition another tool
@@ -466,21 +555,24 @@ impl<B> Confirm<Resize, B> {
     /// can't be confirmed without them:
     ///
     /// ```compile_fail,E0599
+    /// use aizome_kit::agree::Agreed;
     /// use aizome_sys::disks::{Confirm, Identity, Resize};
     /// struct Sheet;
-    /// fn grow(seen: Identity) -> Confirm<Resize, Sheet> {
-    ///     Confirm::<Resize, Sheet>::new(seen, Sheet)
+    /// fn grow(agreed: &Agreed<Identity>) -> Confirm<Resize, Sheet> {
+    ///     Confirm::<Resize, Sheet>::new(agreed, Sheet)
     /// }
     /// ```
     ///
     /// ```
+    /// use aizome_kit::agree::Agreed;
     /// use aizome_sys::disks::{Confirm, Identity, Resize};
     /// struct Sheet;
-    /// fn grow(seen: Identity, from: u64, to: u64) -> Confirm<Resize, Sheet> {
-    ///     Confirm::resize(seen, from, to, Sheet)
+    /// fn grow(agreed: &Agreed<Identity>, from: u64, to: u64) -> Confirm<Resize, Sheet> {
+    ///     Confirm::resize(agreed, from, to, Sheet)
     /// }
     /// ```
-    pub fn resize(seen: Identity, from: u64, to: u64, brand: B) -> Confirm<Resize, B> {
+    pub fn resize<T: AsRef<Identity>>(agreed: &Agreed<T>, from: u64, to: u64, brand: B) -> Confirm<Resize, B> {
+        let seen = agreed.target().as_ref().clone();
         Confirm::seen(Seen { identity: seen, sizes: Some(Sizes { from, to }), op: PhantomData }, brand)
     }
 }
@@ -503,13 +595,6 @@ impl<Op: Change, B> Confirm<Op, B> {
     /// How long ago the confirmation was made.
     pub fn age(&self) -> Duration {
         self.at.elapsed()
-    }
-
-    /// Whether the device as `state` has it is still the one confirmed, as
-    /// [`check`](Self::check) would find it, without spending the
-    /// confirmation: for a plan that keeps checking what it has queued.
-    pub fn matches(&self, state: &DisksState) -> bool {
-        state.identity(self.block()).is_some_and(|fresh| self.reviewed.matches(&fresh))
     }
 
     /// Spends the confirmation: the device as `state` has it now, if it is
@@ -535,10 +620,10 @@ impl<Op: Change, B> Confirm<Op, B> {
     }
 }
 
-/// A confirmation of `identity`, as a test reviews it (any brand will do).
+/// A confirmation of `identity`, as a test agrees to it (any brand will do).
 #[cfg(test)]
 fn confirm<Op: AsSeen>(identity: Identity) -> Confirm<Op, ()> {
-    Confirm::new(identity, ())
+    Confirm::new(&aizome_kit::agree::testing::agreed(identity), ())
 }
 
 #[cfg(test)]
@@ -683,7 +768,7 @@ mod tests {
         // Shrunk (by a resize's earlier step): the resize goes on, a delete
         // confirmed before it doesn't.
         let shrunk = on(stick(), vec![part("aaaa", 50)]);
-        assert!(Confirm::resize(identity(), 100, 50, ()).check(&shrunk).is_ok());
+        assert!(Confirm::resize(&aizome_kit::agree::testing::agreed(identity()), 100, 50, ()).check(&shrunk).is_ok());
         assert!(confirm::<DeletePartition>(identity()).check(&shrunk).is_err());
         // Moved: nothing holds.
         let mut moved = part("aaaa", 100);
@@ -702,14 +787,17 @@ mod tests {
         };
         let at = |size: u64| on(stick(), vec![part(size)]);
         let seen = at(100 * MIB).identity("/b/sdb1").unwrap();
-        let grow = || Confirm::resize(seen.clone(), 100 * MIB, 160 * MIB, ());
+        let agreed = aizome_kit::agree::testing::agreed(seen.clone());
+        let grow = || Confirm::resize(&agreed, 100 * MIB, 160 * MIB, ());
+        // The plan's check of it while it's pending, before anyone agrees.
+        let pending = |state: &DisksState| seen.still_there_to_resize(state, 100 * MIB, 160 * MIB);
         // Where it starts, and where its steps take it, aligned or not.
-        assert!(grow().matches(&at(100 * MIB)));
+        assert!(pending(&at(100 * MIB)));
         assert!(grow().check(&at(160 * MIB)).is_ok());
         assert!(grow().check(&at(160 * MIB - MIB / 2)).is_ok());
         // Another tool grew it past the size chosen: growing it "from 100"
         // would move its end back, under its filesystem.
-        assert!(!grow().matches(&at(200 * MIB)));
+        assert!(!pending(&at(200 * MIB)));
         assert!(matches!(grow().check(&at(200 * MIB)), Err(Error::InvalidArgument(_))));
         // Or shrank it, to neither size.
         assert!(grow().check(&at(80 * MIB)).is_err());

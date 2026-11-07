@@ -9,6 +9,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
+use aizome_kit::agree::Pressed;
 use aizome_kit::prelude::*;
 use aizome_sys::Task;
 use aizome_sys::disks::{DisksState, Encryption, Erase, SelfTest, SmartAttribute, TableKind};
@@ -17,7 +18,7 @@ use crate::backend::Backend;
 use crate::drives::{self, Entry};
 use crate::fs;
 use crate::layout::{Chosen, Flags, Layout, MIB, Target};
-use crate::plan::{Action, NewFs, NewPartition, Plan};
+use crate::plan::{Action, NewFs, NewPartition, Plan, Shown};
 use crate::run::{Outcome, Run};
 
 pub const APP_ID: &str = "org.aizome.Tansu";
@@ -135,6 +136,9 @@ pub enum SheetMsg {
     Chosen(Option<Vec<PathBuf>>),
     SelfTest(SelfTest),
     Submit,
+    /// The Apply sheet's button: the person agreed to the operations it
+    /// listed.
+    Apply(Pressed<Vec<Shown>>),
 }
 
 #[derive(Clone, Debug)]
@@ -762,7 +766,19 @@ impl Tansu {
                     t.1 = text;
                 }
             }
+            // Return in a name field: on to the Apply button, whose press is
+            // the person's agreement. Return itself agrees to nothing.
             (SheetKind::Apply(f), SheetMsg::Submit) => {
+                let problems = self.plan.problems(&state);
+                if !problems.is_empty() {
+                    sheet.error = Some(problems.join(" "));
+                } else if f.typed.iter().any(|(name, typed)| typed.trim() != name) {
+                    sheet.error = Some("Type each disk's name as shown to confirm.".into());
+                } else {
+                    cx.focus("apply");
+                }
+            }
+            (SheetKind::Apply(f), SheetMsg::Apply(pressed)) => {
                 let problems = self.plan.problems(&state);
                 if !problems.is_empty() {
                     sheet.error = Some(problems.join(" "));
@@ -772,8 +788,16 @@ impl Tansu {
                     sheet.error = Some("Type each disk's name as shown to confirm.".into());
                     return;
                 }
-                // The person agreed to the plan as shown: confirm it so.
-                let run = Run::agree(&self.plan, &state);
+                let Some(agreed) = pressed.take() else { return };
+                // The person agreed to the plan as the sheet listed it: the run
+                // refuses it if the plan has changed since.
+                let run = match Run::agree(agreed, &self.plan, &state) {
+                    Ok(run) => run,
+                    Err(changed) => {
+                        sheet.error = Some(changed.to_string());
+                        return;
+                    }
+                };
                 sheet.kind = SheetKind::Running;
                 self.run = Some(run);
                 self.run_timer = Some(cx.every(Duration::from_millis(250), Msg::Tick));
@@ -829,7 +853,8 @@ impl Tansu {
                 | SheetMsg::Typed(..)
                 | SheetMsg::Choose
                 | SheetMsg::Chosen(_)
-                | SheetMsg::SelfTest(_),
+                | SheetMsg::SelfTest(_)
+                | SheetMsg::Apply(_),
             ) => {}
         }
     }

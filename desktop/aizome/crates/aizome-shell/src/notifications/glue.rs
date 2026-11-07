@@ -117,7 +117,7 @@ impl Shell {
 
     /// Whether the screen is locked (notifications are only filed then).
     pub fn locked(&self) -> bool {
-        self.wm.locked || self.lock.phase != crate::lock::Phase::Unlocked
+        self.wm.locked || self.lock.phase() != crate::lock::Phase::Unlocked
     }
 
     /// Prefer an explicit desktop identity, then the sender's process.

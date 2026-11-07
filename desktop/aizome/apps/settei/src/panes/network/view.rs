@@ -701,7 +701,7 @@ pub fn sheet(n: &Network, sheet: &Sheet, _vcx: &ViewCx) -> Element<Msg> {
     let body: Element<Msg> = match sheet {
         Sheet::Password { security, title, message, password, show, error, .. } => {
             let field = text_field(password).placeholder("Password").on_change(Msg::SheetPassword).on_submit(Msg::SheetSubmit).id("network-password").width(Fill);
-            let field = if *show { field } else { field.password() };
+            let field = field.password_when(!*show);
             let ok = logic::password_ok(*security, password);
             column![
                 text(title.clone()).size(15.0).weight(650.0),

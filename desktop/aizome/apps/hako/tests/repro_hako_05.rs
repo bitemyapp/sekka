@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use hako::fsops::transfer::{restore, trash_items};
 use hako::fsops::trash::Trash;
 use hako::fsops::undo::{History, Record, Step, invert};
-use hako::fsops::{Always, Control, Env, ErrorChoice, Resolution};
+use hako::fsops::{Asker, Choice, Conflict, Control, Env, ErrorChoice, Failure, JobKey, ReplaceAll, Replacing};
 
 /// A folder of the test's own under the private TMPDIR, removed when dropped.
 struct Tmp(PathBuf);
@@ -33,6 +33,24 @@ impl Drop for Tmp {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.0);
     }
+}
+
+/// Replace at every conflict, as a person who pressed Replace with "Apply
+/// to all" (the kit's test agreement stands for their press).
+struct Replacer(ReplaceAll);
+
+impl Asker for Replacer {
+    fn conflict(&mut self, c: &Conflict) -> Choice {
+        Choice::Replace(self.0.consent(c))
+    }
+    fn error(&mut self, _: &Failure) -> ErrorChoice {
+        ErrorChoice::Skip
+    }
+}
+
+fn replace_all() -> Replacer {
+    let agreed = aizome_kit::agree::testing::agreed(Replacing { job: 1, target: PathBuf::new(), all: true });
+    Replacer(ReplaceAll::new(agreed, &JobKey::for_tests(1)).expect("an \"Apply to all\" Replace for job 1"))
 }
 
 /// A Trash entirely inside the test folder (no mount points looked at).
@@ -59,7 +77,7 @@ fn put_back_replace_moves_the_newer_item_to_the_trash() {
     let trash = trash_in(&t);
     let a = t.file("home/docs/a.txt", "old a");
     let control = Control::new();
-    let mut asker = Always(Resolution::Replace, ErrorChoice::Skip);
+    let mut asker = replace_all();
     let (r, trashed) = trash_items(std::slice::from_ref(&a), &trash, &mut Env::new(&control, &mut asker, &mut ()));
     assert!(r.is_clean() && trashed.len() == 1, "{r:?}");
     // Something new takes the name meanwhile.
@@ -82,7 +100,7 @@ fn undo_of_move_to_trash_replace_moves_the_newer_item_to_the_trash() {
     let trash = trash_in(&t);
     let a = t.file("home/docs/a.txt", "old a");
     let control = Control::new();
-    let mut asker = Always(Resolution::Replace, ErrorChoice::Skip);
+    let mut asker = replace_all();
     let (_, items) = trash_items(std::slice::from_ref(&a), &trash, &mut Env::new(&control, &mut asker, &mut ()));
     t.file("home/docs/a.txt", "newer a");
     // ⌘Z of the Move to Trash: the inverse is a restore.

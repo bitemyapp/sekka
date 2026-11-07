@@ -14,6 +14,7 @@ use std::time::Duration;
 use sidestep_ui::kurbo::Circle;
 use sidestep_ui::{Color, Cursor, Image, ImageOptions, Key, NamedKey, PointerButton};
 
+use crate::agree::{AgreeFn, Pressed};
 use crate::draw;
 use crate::element::{Common, Element, MsgFn, MsgMap, RawElement};
 use crate::hash::PaintHasher;
@@ -53,6 +54,7 @@ pub struct Button<Msg> {
     label: Option<Arc<str>>,
     icon: Option<Icon>,
     on_press: Option<MsgFn>,
+    agree: Option<AgreeFn>,
     style: ButtonStyle,
     destructive: bool,
     enabled: bool,
@@ -75,6 +77,7 @@ pub fn button<Msg>(label: impl Into<Arc<str>>) -> Button<Msg> {
         label: Some(label.into()),
         icon: None,
         on_press: None,
+        agree: None,
         style: ButtonStyle::Normal,
         destructive: false,
         enabled: true,
@@ -98,6 +101,7 @@ pub fn icon_button<Msg>(icon: Icon) -> Button<Msg> {
 impl<Msg: Clone + Send + 'static> Button<Msg> {
     pub fn on_press(mut self, msg: Msg) -> Self {
         self.on_press = Some(MsgFn::new(msg));
+        self.agree = None;
         self
     }
 
@@ -105,6 +109,37 @@ impl<Msg: Clone + Send + 'static> Button<Msg> {
     pub fn on_press_maybe(mut self, msg: Option<Msg>) -> Self {
         self.enabled &= msg.is_some();
         self.on_press = msg.map(MsgFn::new);
+        self.agree = None;
+        self
+    }
+
+    /// Asks the person to agree to `target`, what the view around the button
+    /// shows it acts on (its style is the caller's: `.destructive()` when it
+    /// destroys something). When a person presses it
+    /// (pointer, or Space or Return while it has the focus) it sends `msg`
+    /// with an [`Agreed`](crate::agree::Agreed) of `target`. It never answers
+    /// Return for its sheet, so Return in a field doesn't press it.
+    ///
+    /// ```
+    /// use aizome_kit::agree::Pressed;
+    /// use aizome_kit::prelude::*;
+    /// #[derive(Clone, Debug)]
+    /// enum Msg { Erase(Pressed<String>) }
+    /// let _: Element<Msg> = button("Erase").on_agree("/dev/sdb".to_owned(), Msg::Erase).into();
+    /// ```
+    pub fn on_agree<T: Clone + Send + 'static>(mut self, target: T, msg: impl Fn(Pressed<T>) -> Msg + 'static) -> Self {
+        self.agree = Some(AgreeFn::new(target, msg));
+        self.on_press = None;
+        self
+    }
+}
+
+impl<Msg> Button<Msg> {
+    /// An alert's agreeing button: its press closes the alert (`on_press`)
+    /// and sends the agreement.
+    pub(crate) fn agree_raw(mut self, agree: AgreeFn) -> Self {
+        self.agree = Some(agree);
+        self.destructive = true;
         self
     }
 }
@@ -197,6 +232,7 @@ impl<Msg> From<Button<Msg>> for Element<Msg> {
             label: b.label,
             icon: b.icon,
             on_press: b.on_press,
+            agree: b.agree,
             style: b.style,
             destructive: b.destructive,
             enabled: b.enabled,
@@ -217,6 +253,7 @@ struct ButtonWidget {
     label: Option<Arc<str>>,
     icon: Option<Icon>,
     on_press: Option<MsgFn>,
+    agree: Option<AgreeFn>,
     style: ButtonStyle,
     destructive: bool,
     enabled: bool,
@@ -261,7 +298,18 @@ impl ButtonWidget {
     }
 
     fn usable(&self) -> bool {
-        self.enabled && self.on_press.is_some()
+        self.enabled && (self.on_press.is_some() || self.agree.is_some())
+    }
+
+    /// A press by the person (the pointer released over it, or the keyboard):
+    /// its message, and its agreement, which the engine makes only from input.
+    fn pressed(&self, cx: &mut EventCx) {
+        if let Some(m) = &self.on_press {
+            cx.emit(m);
+        }
+        if let Some(a) = &self.agree {
+            cx.agree(a);
+        }
     }
 }
 
@@ -406,7 +454,7 @@ impl Widget for ButtonWidget {
     fn hash(&self, h: &mut PaintHasher) {
         h.add(&(self.label.as_deref(), self.icon, self.style, self.destructive, self.enabled, self.compact));
         h.add(&(self.selected, self.mono, self.weight.map(f32::to_bits), self.italic, self.on_press.is_some()));
-        h.add(&self.wrap_label);
+        h.add(&(self.wrap_label, self.agree.is_some()));
     }
 
     fn hit(&self) -> bool {
@@ -425,10 +473,8 @@ impl Widget for ButtonWidget {
             }
             Event::PointerUp { pos, button: PointerButton::Left, .. } if self.usable() => {
                 cx.invalidate();
-                if cx.bounds().contains(*pos)
-                    && let Some(m) = &self.on_press
-                {
-                    cx.emit(m);
+                if cx.bounds().contains(*pos) {
+                    self.pressed(cx);
                 }
                 Status::Handled
             }
@@ -437,22 +483,23 @@ impl Widget for ButtonWidget {
     }
 
     fn activate(&mut self, cx: &mut EventCx) -> bool {
-        match &self.on_press {
-            Some(m) if self.enabled => {
-                cx.emit(m);
-                cx.invalidate();
-                true
-            }
-            _ => false,
+        if !self.usable() {
+            return false;
         }
+        self.pressed(cx);
+        cx.invalidate();
+        true
     }
 
+    /// An agreeing button never answers Return for its sheet: only Return
+    /// (or Space) while it has the focus presses it.
     fn is_default(&self) -> bool {
-        self.default && self.usable()
+        self.default && self.usable() && self.agree.is_none()
     }
 
+    /// Nor Escape.
     fn is_cancel(&self) -> bool {
-        self.cancel && self.usable()
+        self.cancel && self.usable() && self.agree.is_none()
     }
 
     fn semantics(&self) -> Option<Semantics> {

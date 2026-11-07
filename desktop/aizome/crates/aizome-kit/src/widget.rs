@@ -13,7 +13,7 @@ use std::any::{Any, TypeId};
 use std::num::NonZeroU16;
 use std::time::{Duration, Instant};
 
-use sidestep_ui::{Canvas, Cursor, Ime, KeyEvent, Modifiers, PointerButton, ScrollPhase, TextLayout};
+use sidestep_ui::{Canvas, Cursor, Ime, KeyEvent, Modifiers, PointerButton, ScrollPhase, TextLayout, TextPurpose};
 
 use crate::element::{AnyMsg, Common, MsgFn, RawElement};
 use crate::hash::{FxHashMap, PaintHasher};
@@ -714,7 +714,9 @@ pub(crate) struct Out {
     pub focus: Option<FocusRequest>,
     pub capture: Option<bool>,
     pub cursor: Option<Cursor>,
-    pub ime: Option<(bool, Option<Rect>)>,
+    pub ime: Option<(bool, TextPurpose, Option<Rect>)>,
+    /// The widget dropped what an input method was composing.
+    pub ime_reset: bool,
     pub ticks: Vec<(NodeId, Duration)>,
     pub widget_timers: Vec<(NodeId, u32, Option<Duration>)>,
     pub menus: Vec<MenuRequest>,
@@ -723,6 +725,9 @@ pub(crate) struct Out {
     pub begin_move: bool,
     pub drag: Option<sidestep_ui::DragSource>,
     pub handled_by: Option<usize>,
+    /// Agreeing buttons a person pressed: the engine makes their agreements
+    /// ([`crate::agree`]) when it applies this, if presses make them.
+    pub agreements: Vec<(usize, crate::agree::AgreeFn)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -754,6 +759,12 @@ impl EventCx<'_, '_> {
 
     pub(crate) fn emit_any(&mut self, msg: AnyMsg) {
         self.out.msgs.push((self.node, msg));
+    }
+
+    /// An agreeing button was pressed: the engine makes its agreement and
+    /// message, from input only ([`crate::agree`]).
+    pub(crate) fn agree(&mut self, f: &crate::agree::AgreeFn) {
+        self.out.agreements.push((self.node, f.clone()));
     }
 
     pub fn id(&self) -> NodeId {
@@ -878,8 +889,21 @@ impl EventCx<'_, '_> {
     /// Take text from input methods, with the caret at `caret` (its own
     /// coordinates), or stop.
     pub fn set_text_input(&mut self, wanted: bool, caret: Option<Rect>) {
+        self.set_text_input_as(TextPurpose::Normal, wanted, caret);
+    }
+
+    /// Take text of `purpose` from input methods, with the caret at `caret`
+    /// (its own coordinates), or stop. A password's purpose asks them not
+    /// to compose, predict or learn what's typed.
+    pub(crate) fn set_text_input_as(&mut self, purpose: TextPurpose, wanted: bool, caret: Option<Rect>) {
         let origin = self.tree.nodes[self.node].rect.origin().to_vec2();
-        self.out.ime = Some((wanted, caret.map(|r| r + origin)));
+        self.out.ime = Some((wanted, purpose, caret.map(|r| r + origin)));
+    }
+
+    /// The widget dropped what an input method was composing in it: the
+    /// input method starts over.
+    pub fn reset_text_input(&mut self) {
+        self.out.ime_reset = true;
     }
 
     /// Hear [`Event::Tick`] after `after`.

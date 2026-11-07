@@ -10,8 +10,13 @@ repository.workspace = true
 [dependencies]
 # Installed applications; this crate adds launching them (apps.rs).
 aizome-apps.workspace = true
-# Confirmations of a disk operation's target (disks/confirm.rs).
+# Confirmations of a disk operation's target (disks/confirm.rs), and
+# logind's sleeps (power/logind.rs).
 aizome-typestate.workspace = true
+# A person's agreement to a disk operation's target, which only the kit makes
+# as a person presses the button that agrees (disks/confirm.rs): every
+# program that links this crate is a kit program.
+aizome-kit.workspace = true
 log.workspace = true
 # D-Bus: the blocking API for calls, the async one (on a thread of our own)
 # for following each daemon's signals.
@@ -31,3 +36,5 @@ serde.workspace = true
 
 [dev-dependencies]
 aizome-apps = { workspace = true, features = ["test-util"] }
+# Agreements made for tests, as if a person had pressed (kit `testing`).
+aizome-kit = { workspace = true, features = ["testing"] }
