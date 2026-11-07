@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Aizome</vendor>
+  <vendor_url>https://github.com/bitemyapp/sekka/tree/main/desktop/aizome</vendor_url>
+  <icon_name>battery</icon_name>
+  <!-- Panel Self Refresh's helper as root: it turns the built-in panel's
+       self refresh on or off, and nothing else. Whoever is at the computer
+       may, as they may pick a power mode. -->
+  <action id="org.aizome.panel-refresh">
+    <description>Turn Panel Self Refresh on or off</description>
+    <message>Changing Panel Self Refresh needs an administrator's password</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@helper@</annotate>
+  </action>
+</policyconfig>

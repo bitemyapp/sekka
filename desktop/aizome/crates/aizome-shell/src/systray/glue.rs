@@ -43,6 +43,9 @@ impl Shell {
             }
             if let Panel::Battery(b) = &mut p {
                 b.keep_awake = self.awake;
+                if b.panel_refresh.is_some() {
+                    b.panel_refresh = self.panel_refresh.or(b.panel_refresh);
+                }
             }
             return p;
         }
@@ -138,6 +141,12 @@ impl Shell {
             TrayWidget::Awake => Panel::Awake(AwakePanel { status: self.awake }),
             TrayWidget::Battery => {
                 let mut p = BatteryPanel { keep_awake: self.awake, ..BatteryPanel::default() };
+                // Only where the built-in panel can refresh itself.
+                if self.opts.live
+                    && let Some(s) = aizome_sys::panel_refresh::status()
+                {
+                    p.panel_refresh = Some(self.panel_refresh.unwrap_or(s.on));
+                }
                 if let Some(u) = &self.sys.upower {
                     let s = u.snapshot();
                     if let Some(d) = &s.display {
@@ -380,6 +389,16 @@ impl Shell {
                     self.set_keep_awake(on, cx);
                 }
             }
+            PanelMsg::PanelRefresh(on) => {
+                // Shown at once; its helper sets it on a thread.
+                self.panel_refresh = Some(on);
+                if self.opts.live {
+                    cx.spawn(move || {
+                        let task = aizome_sys::panel_refresh::set(&aizome_sys::Wake::none(), on);
+                        Msg::PanelRefreshSet(on, task.wait().map_err(|e| e.to_string()))
+                    });
+                }
+            }
             PanelMsg::DoNotDisturb(on) => {
                 if self.notes_cfg.do_not_disturb != on {
                     self.run(crate::actions::Action::ToggleDoNotDisturb, cx);
@@ -402,6 +421,17 @@ impl Shell {
                 if let Some(p) = &sys.profiles {
                     let _ = p.set_active(&mode);
                 }
+            }
+        }
+    }
+
+    /// Panel Self Refresh's helper finished: refused or failed, the switch
+    /// goes back to what its status says.
+    pub fn panel_refresh_set(&mut self, on: bool, result: Result<(), String>) {
+        if let Err(e) = result {
+            log::warn!("Panel Self Refresh {}: {e}", if on { "on" } else { "off" });
+            if self.panel_refresh == Some(on) {
+                self.panel_refresh = None;
             }
         }
     }

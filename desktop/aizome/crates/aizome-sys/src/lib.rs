@@ -48,6 +48,7 @@
 //! | [`keyboard`] | layouts, variants, XKB options | xkeyboard-config's `evdev.xml` | — |
 //! | [`location`] | where the computer is, for sunrise and sunset | GeoClue 2 | `services.geoclue2.enable` |
 //! | [`tv`] | the TV account: the one that opens straight into Chanoma | `aizome-tv-account` through pkexec | `programs.aizome.chanoma.enable` |
+//! | [`panel_refresh`] | Panel Self Refresh (PSR, Panel Replay) on a laptop's panel | `aizome-panel-refresh` through pkexec, Intel's debugfs | `programs.aizome.enable` (its boot service) |
 //!
 //! Each module's documentation says more about what it needs and how it
 //! degrades without it.
@@ -68,6 +69,7 @@ pub mod notifications;
 mod oneshot;
 #[cfg(feature = "pam")]
 pub mod pam;
+pub mod panel_refresh;
 pub mod polkit;
 pub mod power;
 pub mod printers;
