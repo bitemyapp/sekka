@@ -11,21 +11,12 @@ use calamares_nixos::config::nix_string as q;
 use crate::transaction::Staged;
 
 /// The configuration for `s`: the account (without a password: NixOS keeps
-/// the one set), its host name, locale, keyboard and desktop, and, when
-/// the installer's handoff named this installation's partitions, those.
+/// the one set), its host name, keyboard, desktop and language. Nothing
+/// about the disk: this installation's partitions are identity.nix's
+/// (`calamares.appleSilicon.identity`), so a setup.nix copied to another
+/// installation mounts nothing of this one.
 pub fn setup_nix(s: &Staged) -> String {
     let groups = s.groups_declared.iter().map(|g| q(g)).collect::<Vec<_>>().join(" ");
-    let partitions = match &s.partitions {
-        Some((root, esp)) => format!(
-            "  # This installation's own partitions, as the Mac installer handed them\n  \
-             # over: by GPT partition UUID, which no other installation shares.\n  \
-             fileSystems.\"/\".device = lib.mkForce {};\n  \
-             fileSystems.\"/boot\".device = lib.mkForce {};\n",
-            q(&format!("/dev/disk/by-partuuid/{root}")),
-            q(&format!("/dev/disk/by-partuuid/{esp}")),
-        ),
-        None => String::new(),
-    };
     format!(
         r#"# Written by Sekka's first-boot setup: what was chosen when this computer
 # was set up. configuration.nix imports it. Change it as you would the rest
@@ -34,12 +25,18 @@ pub fn setup_nix(s: &Staged) -> String {
 {{
   calamares.firstBootSetup.applied = true;
   calamares.installUser = {name};
-  calamares.defaultDesktop = {desktop};
+  # Over the image's default, and under a plain value in configuration.nix,
+  # which is where Yukimi changes the default desktop.
+  calamares.defaultDesktop = lib.mkOverride 900 {desktop};
   users.users.{name} = {{
     isNormalUser = true;
     uid = {uid};
     description = {full_name};
     extraGroups = [ {groups} ];
+    # The shell it was made with (users.defaultUserShell), by its path: the
+    # system has it already, and naming its package again would rebuild the
+    # system's packages for nothing.
+    shell = {shell};
     # The password is the one set at setup, in /etc/shadow
     # (users.mutableUsers keeps it); change it with passwd or in Settings.
   }};
@@ -50,12 +47,13 @@ pub fn setup_nix(s: &Staged) -> String {
   # them. The line below only seeds /etc/locale.conf, should it ever be
   # missing.
   i18n.defaultLocale = {locale};
-{partitions}}}
+}}
 "#,
         name = q(&s.username),
         desktop = q(&s.desktop),
         uid = s.uid,
         full_name = q(&s.full_name),
+        shell = q(&s.shell),
         hostname = q(&s.hostname),
         locale = q(&s.locale),
         keyboard = q(&s.keyboard),
@@ -100,6 +98,7 @@ mod tests {
             username: "ada".into(),
             full_name: "Ada \"Countess\" ${Lovelace}".into(),
             uid: 1000,
+            shell: "/run/current-system/sw/bin/bash".into(),
             hostname: "analytical".into(),
             locale: "en_GB.UTF-8".into(),
             keyboard: "gb".into(),
@@ -107,7 +106,6 @@ mod tests {
             desktop: "tatami".into(),
             groups: vec!["networkmanager".into(), "wheel".into(), "render".into()],
             groups_declared: vec!["networkmanager".into(), "wheel".into()],
-            partitions: None,
         }
     }
 
@@ -119,27 +117,23 @@ mod tests {
         // Quoted for Nix: no interpolation can come from a name.
         assert!(text.contains(r#"description = "Ada \"Countess\" \${Lovelace}";"#), "{text}");
         assert!(text.contains(r#"extraGroups = [ "networkmanager" "wheel" ];"#));
+        assert!(text.contains(r#"shell = "/run/current-system/sw/bin/bash";"#));
         assert!(text.contains(r#"networking.hostName = "analytical";"#));
-        assert!(text.contains(r#"calamares.defaultDesktop = "tatami";"#));
-        assert!(!text.contains("fileSystems"));
+        assert!(text.contains(r#"calamares.defaultDesktop = lib.mkOverride 900 "tatami";"#));
+        // The disk is identity.nix's alone.
+        assert!(!text.contains("fileSystems") && !text.contains("partuuid") && !text.contains("identity"));
         assert!(!text.to_lowercase().contains("hashedpassword") && !text.contains("$6$"));
-        let mut with = staged();
-        with.partitions = Some(("63d89be1-72f7-4aff-9679-09cafa7e0c2d".into(), "910de5ca-7390-4716-9a54-8028916e4d78".into()));
-        let text = setup_nix(&with);
-        assert!(text.contains(r#"fileSystems."/".device = lib.mkForce "/dev/disk/by-partuuid/63d89be1-72f7-4aff-9679-09cafa7e0c2d";"#));
     }
 
     /// `test-data/setup.nix` is what setup writes for the staged choices
-    /// below with the handoff's partitions; the module's check evaluates a
-    /// whole system with it (default.nix). `SEKKA_SETUP_GOLDEN=write`
-    /// writes it anew.
+    /// below; the module's check evaluates a whole system with it
+    /// (default.nix), and the Mac image's VM check its flake.
+    /// `SEKKA_SETUP_GOLDEN=write` writes it anew.
     #[test]
     fn the_evaluated_example_is_what_setup_writes() {
         let mut s = staged();
         s.full_name = "Ada Lovelace".into();
-        s.desktop = "aizome".into();
         s.groups = vec!["networkmanager".into(), "wheel".into(), "render".into()];
-        s.partitions = Some(("63d89be1-72f7-4aff-9679-09cafa7e0c2d".into(), "910de5ca-7390-4716-9a54-8028916e4d78".into()));
         let text = setup_nix(&s);
         let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("test-data/setup.nix");
         if std::env::var("SEKKA_SETUP_GOLDEN").as_deref() == Ok("write") {

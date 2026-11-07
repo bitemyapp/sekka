@@ -79,11 +79,7 @@ fn serve(path: &std::path::Path) -> anyhow::Result<()> {
 fn status(path: &std::path::Path) -> anyhow::Result<()> {
     let config = Config::load(path)?;
     let host = Host::new(&config);
-    let hints = sekka_setup_helper::handoff::read(
-        &config.handoff,
-        &std::fs::read_to_string("/proc/cmdline").unwrap_or_default(),
-        &config.zoneinfo,
-    );
+    let hints = sekka_setup_helper::handoff::read(&config.handoff, &config.zoneinfo);
     let status = server::status(&config, &host, &hints)?;
     let mut out = std::io::stdout();
     protocol::write(&mut out, &protocol::Response::Status(status))?;

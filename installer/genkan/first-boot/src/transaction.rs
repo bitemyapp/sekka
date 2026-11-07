@@ -52,6 +52,8 @@ pub struct Staged {
     pub username: String,
     pub full_name: String,
     pub uid: u32,
+    /// The account's login shell (`users.defaultUserShell`, by its path).
+    pub shell: String,
     pub hostname: String,
     pub locale: String,
     pub keyboard: String,
@@ -61,8 +63,6 @@ pub struct Staged {
     pub groups: Vec<String>,
     /// Those setup.nix declares.
     pub groups_declared: Vec<String>,
-    /// The installation's root and ESP partition UUIDs, from the handoff.
-    pub partitions: Option<(String, String)>,
 }
 
 /// The completion marker: who was set up, when, and the system the
@@ -280,7 +280,7 @@ fn failed<S: System>(sys: &S, staged: Option<&Staged>, what: &str, e: anyhow::Er
 
 impl<S: System> Run<'_, S> {
     /// Begin setup with `plan`, then finish it.
-    pub fn begin(&mut self, plan: Plan, partitions: Option<(String, String)>) -> Result<Done, Failure> {
+    pub fn begin(&mut self, plan: Plan) -> Result<Done, Failure> {
         let _lock = lock(self.config).map_err(|e| failed(self.sys, None, "start", e))?;
         (self.progress)(Step::Check);
         tidy(self.config).map_err(|e| failed(self.sys, None, "start", e))?;
@@ -308,7 +308,7 @@ impl<S: System> Run<'_, S> {
                 return Err(Failure::choices("This computer already has an account, so it doesn't need setting up."));
             }
         }
-        let staged = self.stage(&plan, partitions).map_err(|e| failed(self.sys, None, "save your choices", e))?;
+        let staged = self.stage(&plan).map_err(|e| failed(self.sys, None, "save your choices", e))?;
         drop(plan);
         self.finish(staged)
     }
@@ -329,7 +329,7 @@ impl<S: System> Run<'_, S> {
         }
     }
 
-    fn stage(&mut self, plan: &Plan, partitions: Option<(String, String)>) -> Result<Staged> {
+    fn stage(&mut self, plan: &Plan) -> Result<Staged> {
         let c = self.config;
         for g in &c.groups {
             ensure!(self.sys.group_exists(g)?, "this system has no {g} group for the account");
@@ -340,6 +340,7 @@ impl<S: System> Run<'_, S> {
             username: plan.username.as_str().into(),
             full_name: plan.full_name.clone(),
             uid: free_uid(self.sys)?,
+            shell: c.shell.clone(),
             hostname: plan.hostname.as_str().into(),
             locale: plan.locale.clone(),
             keyboard: plan.keyboard.clone(),
@@ -347,7 +348,6 @@ impl<S: System> Run<'_, S> {
             desktop: plan.desktop.id().into(),
             groups: c.groups.clone(),
             groups_declared: c.declared_groups.clone(),
-            partitions,
         };
         let hash = hash(&plan.password)?;
         let mut line = Zeroizing::new(format!("{}\n", hash.as_str()));
@@ -396,7 +396,7 @@ impl<S: System> Run<'_, S> {
                     primary_group: self.config.primary_group.clone(),
                     groups: s.groups.clone(),
                     home: self.config.home_base.join(&s.username),
-                    shell: self.config.shell.clone(),
+                    shell: s.shell.clone(),
                 })?;
                 (self.stop)(Point::Account)?;
                 self.sys.account(&s.username)?.context("the account wasn't there after it was made")?
@@ -711,7 +711,7 @@ pub(crate) mod tests {
             let steps = &mut self.steps;
             let mut progress = |s: Step| steps.push(s);
             let mut stop = |p: Point| if Some(p) == stop_at { anyhow::bail!("stopped at {p:?}") } else { Ok(()) };
-            Run { config: &self.config, sys: &mut self.sys, progress: &mut progress, stop: &mut stop }.begin(plan, None)
+            Run { config: &self.config, sys: &mut self.sys, progress: &mut progress, stop: &mut stop }.begin(plan)
         }
 
         fn resume(&mut self, stop_at: Option<Point>) -> Result<Done, Failure> {
@@ -773,6 +773,7 @@ pub(crate) mod tests {
         assert_eq!(w.files(), ["complete", "lock"]);
         let marker = std::fs::read_to_string(w.config.marker()).unwrap();
         let setup = std::fs::read_to_string(w.config.setup_nix()).unwrap();
+        assert!(setup.contains(r#"shell = "/run/current-system/sw/bin/fish";"#), "the account's own: {setup}");
         for text in [&marker, &setup] {
             assert!(!text.contains(PASSWORD) && !text.contains(&hash) && !text.contains("$6$"), "{text}");
         }

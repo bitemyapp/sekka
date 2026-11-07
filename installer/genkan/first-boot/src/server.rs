@@ -156,12 +156,8 @@ fn close_gently(stream: &mut UnixStream) {
     zeroize::Zeroize::zeroize(&mut sink[..]);
 }
 
-fn cmdline() -> String {
-    std::fs::read_to_string("/proc/cmdline").unwrap_or_default()
-}
-
 fn hints(config: &Config) -> Hints {
-    handoff::read(&config.handoff, &cmdline(), &config.zoneinfo)
+    handoff::read(&config.handoff, &config.zoneinfo)
 }
 
 /// Answer one request on `out`.
@@ -181,13 +177,12 @@ pub fn answer<S: System>(request: Request, config: &Config, sys: &mut S, out: &m
                 Err(message) => return Ok(protocol::write(out, &Response::Failed(Failure::choices(message)))?),
             };
             drop(password);
-            let partitions = hints(config).partitions;
             let result = {
                 let mut progress = |s| {
                     let _ = protocol::write(out, &Response::Progress(Progress::of(s)));
                 };
                 let mut go = |_| Ok(());
-                Run { config, sys, progress: &mut progress, stop: &mut go }.begin(plan, partitions)
+                Run { config, sys, progress: &mut progress, stop: &mut go }.begin(plan)
             };
             finished(out, result)?;
         }
@@ -405,7 +400,6 @@ mod tests {
             locale: Some("de_DE.UTF-8".into()),
             keyboard: Some("de".into()),
             time_zone: Some("Europe/Berlin".into()),
-            partitions: None,
         };
         let s = status(&config, &sys, &hints).unwrap().suggested;
         assert_eq!(

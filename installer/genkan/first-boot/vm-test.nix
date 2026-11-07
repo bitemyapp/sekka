@@ -56,7 +56,7 @@ let
     {
       outputs = { self }:
         let
-          setup = import ./setup.nix { lib.mkForce = x: x; };
+          setup = import ./setup.nix { lib.mkOverride = _: x: x; };
         in
         {
           nixosConfigurations.''${setup.networking.hostName}.config.system.build.toplevel = derivation {
@@ -338,8 +338,9 @@ pkgs.testers.runNixOSTest {
         setup = machine.succeed("cat /etc/nixos/setup.nix")
         for want in ('users.users."ada"', 'networking.hostName = "adas-macbook-pro";',
                      'i18n.defaultLocale = "de_DE.UTF-8";', 'services.xserver.xkb.layout = "de";',
-                     'calamares.defaultDesktop = "aizome";'):
+                     'calamares.defaultDesktop = lib.mkOverride 900 "aizome";'):
             assert want in setup, setup
+        assert "fileSystems" not in setup, "the disk is identity.nix's"
         marker = json.loads(machine.succeed("cat /var/lib/sekka-setup/complete"))
         assert marker["username"] == "ada" and marker["uid"] == 1000, marker
         assert marker["system"].endswith("-first-boot-setup-check.drv"), "the flake was evaluated"

@@ -5,12 +5,18 @@
 {
   calamares.firstBootSetup.applied = true;
   calamares.installUser = "ada";
-  calamares.defaultDesktop = "aizome";
+  # Over the image's default, and under a plain value in configuration.nix,
+  # which is where Yukimi changes the default desktop.
+  calamares.defaultDesktop = lib.mkOverride 900 "tatami";
   users.users."ada" = {
     isNormalUser = true;
     uid = 1000;
     description = "Ada Lovelace";
     extraGroups = [ "networkmanager" "wheel" ];
+    # The shell it was made with (users.defaultUserShell), by its path: the
+    # system has it already, and naming its package again would rebuild the
+    # system's packages for nothing.
+    shell = "/run/current-system/sw/bin/bash";
     # The password is the one set at setup, in /etc/shadow
     # (users.mutableUsers keeps it); change it with passwd or in Settings.
   };
@@ -21,8 +27,4 @@
   # them. The line below only seeds /etc/locale.conf, should it ever be
   # missing.
   i18n.defaultLocale = "en_GB.UTF-8";
-  # This installation's own partitions, as the Mac installer handed them
-  # over: by GPT partition UUID, which no other installation shares.
-  fileSystems."/".device = lib.mkForce "/dev/disk/by-partuuid/63d89be1-72f7-4aff-9679-09cafa7e0c2d";
-  fileSystems."/boot".device = lib.mkForce "/dev/disk/by-partuuid/910de5ca-7390-4716-9a54-8028916e4d78";
 }

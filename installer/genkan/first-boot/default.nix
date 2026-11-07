@@ -5,11 +5,11 @@
 # - helper: sekka-setup-helper, with its tests;
 # - configuration: a Sekka installed system evaluated before and after
 #   setup.nix (test-data/setup.nix, what the helper writes), proving the
-#   account's groups, host name, locale, keyboard and desktop agree with
-#   what setup applied at run time, that setup.nix leaves the system's
-#   locales as they were and its console keymap follows the keyboard, that
-#   the module asserts nothing once it's applied, and that the result
-#   evaluates;
+#   account's groups, shell, host name, locale, keyboard and desktop agree
+#   with what setup applied at run time, that setup.nix leaves the disk,
+#   the system's packages and its locales as they were and the console
+#   keymap follows the keyboard, that the module asserts nothing once it's
+#   applied, and that the result evaluates;
 # - vm-test: the login screen's setup in a disposable VM, typed at as a
 #   person would (vm-test.nix).
 {
@@ -45,7 +45,8 @@ let
               "aizome"
               "tatami"
             ];
-            defaultDesktop = "aizome";
+            # As the image's configuration.nix has it: setup.nix's choice wins.
+            defaultDesktop = lib.mkDefault "aizome";
             appleSilicon = lib.mkIf (system == "aarch64-linux") {
               enable = true;
               t6030Handoff = true;
@@ -75,7 +76,16 @@ let
     }).config;
   before = installed [ ];
   after = installed [ ./test-data/setup.nix ];
+  # The default desktop as Yukimi changes it: a plain value in
+  # configuration.nix.
+  changedLater = installed [
+    ./test-data/setup.nix
+    { calamares.defaultDesktop = "aizome"; }
+  ];
   offered = lib.importJSON ./offered.json;
+  helperConfig = builtins.fromJSON (
+    builtins.unsafeDiscardStringContext before.environment.etc."sekka-setup/helper.json".text
+  );
   # What the owner may choose once set up, and the image may not.
   owners = {
     calamares.loginScreen = "gdm";
@@ -132,8 +142,20 @@ in
       && after.networking.hostName == "analytical"
       && after.i18n.defaultLocale == "en_GB.UTF-8"
       && after.services.xserver.xkb.layout == "gb"
-      && after.services.displayManager.defaultSession == "aizome"
-      && after.fileSystems."/".device == "/dev/disk/by-partuuid/63d89be1-72f7-4aff-9679-09cafa7e0c2d"
+      && after.services.displayManager.defaultSession == "tatami"
+    );
+    assert check "setup.nix names the shell the helper makes the account with" (
+      after.users.users.ada.shell == helperConfig.shell
+    );
+    assert check "a plain default desktop, as Yukimi writes it, wins over setup.nix's" (
+      changedLater.calamares.defaultDesktop == "aizome"
+    );
+    assert check "setup.nix leaves the disk to the configuration (identity.nix on a Mac)" (
+      after.fileSystems."/".device == before.fileSystems."/".device
+      && after.fileSystems."/boot".device == before.fileSystems."/boot".device
+    );
+    assert check "setup.nix changes none of the system's packages" (
+      before.system.path.drvPath == after.system.path.drvPath
     );
     assert check "the console's keymap is the configuration's, and follows setup.nix's keyboard" (
       before.environment.etc ? "vconsole.conf"
