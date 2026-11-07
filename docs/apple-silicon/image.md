@@ -432,6 +432,12 @@ Minimum allocation 31,985,762,304 bytes, recommended 114,911,346,688.
 | updated generation | pass: generation 2 with the update, mounted by partition UUID, no identity service; `nixos-rebuild boot --rollback` |
 | rolled back | pass: generation 1 again, update gone, `by-sekka` mounts |
 
+First-boot setup's own VM test (`first-boot.vm-test`, a generic NixOS
+guest, not this image) passed all ten subtests on the same tree, with the
+Aizome built from it and `userspaceIrqchip = true`; with KVM's in-kernel
+interrupt controller its guest stalled at boot ("Shell did not start in
+time"), as its documentation says it does on this host.
+
 Earlier runs found and fixed: the debug shell's PATH; build users counted
 as accounts; the placeholder message written before the virtio console
 existed; KVM's stage-2 allocation failing under fragmented memory; and the
