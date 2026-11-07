@@ -87,13 +87,19 @@ def consumer_lease(generation):
         return json.loads(path.read_text())
     except FileNotFoundError:
         return None
+    except ValueError:
+        # Only a writer killed before the atomic rename below leaves this, and
+        # its run is gone: an unreadable lease must not stop all retention.
+        return None
 
 
 def lease_consumers(generation, key, now=None):
     now = time.time() if now is None else now
-    (generation / ".consumer.json").write_text(json.dumps({
+    temporary = generation / f".consumer.json.{os.getpid()}"
+    temporary.write_text(json.dumps({
         "run": key, "expires": now + CONSUMER_LEASE_SECONDS,
     }) + "\n")
+    os.replace(temporary, generation / ".consumer.json")
 
 
 def release_consumers(root, key):
