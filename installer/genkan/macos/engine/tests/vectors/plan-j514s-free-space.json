@@ -47,7 +47,7 @@
     "catalog_serial": 1,
     "channel": "development",
     "engine": "sha256:ed9f6f25068608efd412958da4dfc19328ca3511251fa6d5f9c42baf230e32f8",
-    "installer_data": "sha256:052110a8ccb3d5993fbf19da8a496e051838d99aa285839023714bd5a99d27f7",
+    "installer_data": "sha256:101e1799b5f188cf19c236f801cd0f71dafa0d4c1e125ed99fe1f00a6fda5800",
     "manifest": "sha256:2e7251298dbe69a6db73e797d56674fb82f6fdc8395b78d7834b44e0d0b2ccd6",
     "payload": "sha256:83ea53469017da01e9efcda482b91bbcded41ff829e0275ba2eea32fdbbd2d8f",
     "profile": "j514s",

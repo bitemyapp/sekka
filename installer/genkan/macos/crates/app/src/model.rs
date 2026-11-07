@@ -511,6 +511,41 @@ impl Model {
         *state == InstallState::WaitingForSetup && self.reconciling == Some(Reconciling::Answered(installation))
     }
 
+    /// Whether this Mac's own inspection found Sekka's developer image on
+    /// the disk, which `install-sekka.sh` installs and Sekka Installer
+    /// never does.
+    pub fn developer(&self) -> bool {
+        self.inspection()
+            .is_some_and(|i| i.installations.iter().any(|x| x.developer))
+    }
+
+    /// Whether a Sekka installation on the disk has its startup volume and
+    /// isn't missing parts, as far as this Mac's own look can tell: one the
+    /// owner could choose when the Mac starts. Partitions an installation
+    /// left behind can't be.
+    pub fn startable(&self) -> bool {
+        self.inspection().is_some_and(|i| {
+            i.installations.iter().any(|x| {
+                x.kind == InstallationKind::Sekka
+                    && x.stub_group.is_some()
+                    && x.state != InstallationState::Partial
+            })
+        })
+    }
+
+    /// What the engine said of the Sekka on the disk that stops
+    /// installation: which partitions are whose, and, for a developer
+    /// installation, how to remove it.
+    pub fn sekka_issues(&self) -> Vec<&sekka_mac_contract::Issue> {
+        self.inspection()
+            .map(|i| {
+                i.blocking()
+                    .filter(|x| matches!(x.code, IssueCode::ExistingSekka | IssueCode::PartialInstallation))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// What this Mac's own inspection shows of the installation the helper
     /// knows.
     pub fn found(&self) -> Option<InstallationState> {
@@ -1411,11 +1446,20 @@ impl Model {
             return Vec::new();
         };
         let sekka = inspection.installations.iter().any(|x| x.kind == InstallationKind::Sekka);
+        // Sekka Installer never makes a developer installation, so its
+        // helper has no record of one to check, and one stops installation
+        // until the owner removes it, whatever the helper would say.
+        let developer_only = sekka
+            && inspection
+                .installations
+                .iter()
+                .filter(|x| x.kind == InstallationKind::Sekka)
+                .all(|x| x.developer);
         // Nothing is planned while the helper's installations aren't known:
         // one may be unfinished, and the helper would refuse another only
         // after the download and the password. A helper that was never set
         // up has none from this Mac, unless Sekka is on the disk.
-        if matches!(helper, Err(problem) if *problem != HelperProblem::NotRegistered || sekka) {
+        if !developer_only && matches!(helper, Err(problem) if *problem != HelperProblem::NotRegistered || sekka) {
             self.screen = Screen::HelperUnknown;
             return Vec::new();
         }

@@ -108,6 +108,7 @@
   "filevault": "on",
   "installations": [
     {
+      "developer": false,
       "esp": "1bc56391-63e4-4bbd-9485-4517bc7f3aa7",
       "installation_id": null,
       "kind": "other-linux",

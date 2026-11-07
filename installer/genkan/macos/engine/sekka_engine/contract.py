@@ -382,6 +382,10 @@ def check_inspection(doc):
         if inst["kind"] not in INSTALLATION_KINDS or inst["state"] not in INSTALLATION_STATES:
             raise Invalid("unknown installation kind or state")
         text(inst["name"])
+        if not isinstance(inst["developer"], bool):
+            raise Invalid("an installation's developer flag isn't a boolean")
+        if inst["developer"] and (inst["kind"] != "sekka" or inst["installation_id"] is not None):
+            raise Invalid("a developer installation is Sekka's and has no installation ID")
     check_disk(disk)
     if doc["layout_digest"] != layout_digest(disk):
         raise Invalid("the inspection's layout digest doesn't match its disk")

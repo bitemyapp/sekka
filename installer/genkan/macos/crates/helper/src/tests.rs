@@ -769,6 +769,7 @@ fn installed(plan: &Plan, id: Option<Uuid>, state: InstallationState) -> Inspect
         esp: Some(p.esp),
         root: Some(p.root),
         installation_id: id,
+        developer: false,
     });
     i.issues.push(Issue {
         code: IssueCode::ExistingSekka,
@@ -1532,6 +1533,7 @@ fn an_unrelated_empty_container_doesnt_stop_a_removal() {
         esp: None,
         root: None,
         installation_id: None,
+        developer: false,
     });
     i.issues.push(Issue {
         code: IssueCode::UnrecognizedLayout,
@@ -1567,6 +1569,7 @@ fn an_ambiguous_inspection_changes_nothing() {
         esp: Some(parts().esp),
         root: None,
         installation_id: None,
+        developer: false,
     });
     for (case, inspection) in [
         ("another disk", another_disk),

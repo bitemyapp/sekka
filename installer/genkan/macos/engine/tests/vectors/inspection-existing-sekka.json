@@ -108,6 +108,7 @@
   "filevault": "on",
   "installations": [
     {
+      "developer": false,
       "esp": "da711448-96c8-4a19-a4b2-d2bc815a47c5",
       "installation_id": "8e2f6c1a-6b3d-4c1e-9a55-0d4f2f2b7c11",
       "kind": "sekka",

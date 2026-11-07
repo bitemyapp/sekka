@@ -281,6 +281,16 @@ pub const FINISHED_UNFOUND_NEXT: &str = "If you removed Sekka, you can install i
 /// the disk found something that stops installation.
 pub const FINISHED_UNFOUND_REFUSED: &str = "Nothing was installed. When Sekka Installer's helper looked at the disk to begin, it found something there that stops installation, most likely the Sekka it installed: the helper can read what Sekka Installer can't. To see, shut down your Mac, press and hold the power button until the startup options appear, and choose Sekka. If Sekka doesn't start, copy the details and ask for help.";
 
+/// The existing screen, for Sekka's developer image, which install-sekka.sh
+/// installs and this app never does. The engine's details below it name
+/// the partitions to delete.
+pub const DEVELOPER_TITLE: &str = "A developer installation of Sekka is on this Mac";
+pub const DEVELOPER: &str = "It was installed with install-sekka.sh, not Sekka Installer, which doesn't install beside it or remove it: to install Sekka from here, remove it in macOS first, as the details below describe, then check again.";
+/// The existing screen, for partitions a Sekka installation left behind,
+/// with no startup volume to choose or parts missing.
+pub const LEFT_BEHIND_TITLE: &str = "Part of a Sekka installation is still on this Mac";
+pub const LEFT_BEHIND: &str = "Sekka Installer found part of a Sekka installation that was interrupted or partly removed: it doesn't install beside it, and this version doesn't repair or remove it.";
+
 /// The existing screen's last step, naming this Mac's macOS volume.
 pub fn choose_sekka(macos: &str) -> String {
     format!("Choose Sekka. To return to macOS later, choose {macos} the same way.")

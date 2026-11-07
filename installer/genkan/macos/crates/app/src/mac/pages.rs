@@ -390,6 +390,21 @@ fn installations(m: &Model, p: &mut Page) {
     }
 }
 
+/// Sekka on the disk that the owner removes before installing, if they
+/// want to install from here: what it is, and what the engine said of it,
+/// which partitions are whose and how to remove them.
+fn to_remove(m: &Model, p: &mut Page, title: &str, body: &str) {
+    p.title(title);
+    p.body(body);
+    installations(m, p);
+    for issue in m.sekka_issues() {
+        p.row(Mark::Bad, issue_label(issue.code), issue.detail.as_str());
+    }
+    p.quit();
+    p.left("Copy Details", || Msg::CopyDiagnostics);
+    p.primary("Check Again", || Msg::CheckAgain);
+}
+
 fn existing(m: &Model, p: &mut Page) {
     let finished = m.state == Some(sekka_mac_contract::InstallState::WaitingForSetup);
     if m.installed() {
@@ -398,6 +413,9 @@ fn existing(m: &Model, p: &mut Page) {
         p.numbered(1, "Shut down your Mac.");
         p.numbered(2, "Press and hold the power button until “Loading startup options” appears.");
         p.numbered(3, &text::choose_sekka(&m.macos_volume()));
+    } else if m.developer() {
+        // Installed with install-sekka.sh, never by this app.
+        return to_remove(m, p, text::DEVELOPER_TITLE, text::DEVELOPER);
     } else if m.finished_unfound() {
         // The owner knows whether they removed it: the plan is theirs to
         // ask for, until the helper's own look finds what stops it.
@@ -421,6 +439,10 @@ fn existing(m: &Model, p: &mut Page) {
         p.title(text::FINISHED_PARTIAL_TITLE);
         p.body(text::FINISHED_PARTIAL);
         installations(m, p);
+    } else if !m.startable() {
+        // Nothing to choose when the Mac starts: what is left is the
+        // owner's to remove.
+        return to_remove(m, p, text::LEFT_BEHIND_TITLE, text::LEFT_BEHIND);
     } else {
         p.title("Sekka is already on this Mac");
         p.body("Sekka Installer found a Sekka installation on this disk. It doesn't install a second one beside it, and this version doesn't remove or replace an installation.");

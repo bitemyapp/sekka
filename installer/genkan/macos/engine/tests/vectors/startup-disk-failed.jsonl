@@ -1,5 +1,5 @@
 {"message":{"payload":{"adapter":"sha256:e12e8537607985ac42045188c01e77b2a312e6e2d1748a9689b0aeb94633fa02","asahi":"0.9.2","engine":"0.9.2+sekka.1","mode":"startup-disk","protocol":1},"type":"hello"},"schema":"sekka.mac.engine/1","seq":1}
 {"message":{"payload":{"level":"info","text":"Setting the startup disk again for installation 1f7d9c62-4a1b-4c8e-9d3f-2b6a8e0c5d47 on Sekka."},"type":"log"},"schema":"sekka.mac.engine/1","seq":2}
-{"message":{"payload":{"plan":"sha256:52b200d1650fae2f5370b8a39107fd0af35e04094c582fd6814516e173a9ba49","stage":"startup-disk"},"type":"intent"},"schema":"sekka.mac.engine/1","seq":3}
+{"message":{"payload":{"plan":"sha256:8eaf874b1915d7a69ae3c0c07e54d9ae7a64a4c60fb753aae53807b9f75826a2","stage":"startup-disk"},"type":"intent"},"schema":"sekka.mac.engine/1","seq":3}
 {"message":{"payload":{"failure":{"apple_diagnostic":"Could not set boot device property: 0xe00002bc\n(bless exited with status 3)","code":"startup-disk-failed","disk_changed":"yes","message":"macOS didn't make Sekka the startup disk. Everything else is in place and verified; the startup disk can be set again without changing anything else."},"stage":"startup-disk"},"type":"failure"},"schema":"sekka.mac.engine/1","seq":4}
 {"message":{"payload":{"outcome":"failed"},"type":"completion"},"schema":"sekka.mac.engine/1","seq":5}

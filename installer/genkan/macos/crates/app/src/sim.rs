@@ -462,10 +462,12 @@ fn sekka(state: InstallationState, installation_id: Option<Uuid>) -> (Installati
             kind: InstallationKind::Sekka,
             name: "Sekka".parse().unwrap(),
             state,
-            stub_group: None,
+            // Its stub, which Startup Disk shows.
+            stub_group: Some(Uuid::from_bytes([0x5f; 16])),
             esp: None,
             root: None,
             installation_id,
+            developer: false,
         },
         Issue {
             code: IssueCode::ExistingSekka,

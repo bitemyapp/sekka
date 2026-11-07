@@ -1006,12 +1006,12 @@ ASAHI_ESP_FILES = {
 }
 
 
-def add_asahi_system(mac, label, esp_name, files, serial=None, root_size=ROOT[1], enrolled="deadbeef", stub=True, root=True):
+def add_asahi_system(mac, label, esp_name, files, serial=None, root_size=ROOT[1], enrolled="deadbeef", stub=True, root=True, esp=True):
     """A system Asahi's installer put beside macOS where Sekka is on the
     reference J514S: its stub (unless gone, or "empty" when the installer
-    stopped before the stub's system), its FAT ESP with `files`, and its
-    Linux root (unless gone). Enrolled in Recovery unless `enrolled` is
-    None."""
+    stopped before the stub's system), its FAT ESP with `files` (unless
+    gone), and its Linux root (unless gone). Enrolled in Recovery unless
+    `enrolled` is None."""
     group = None
     if stub == "empty":
         add_stub(mac, *STUB, label, with_os=False)
@@ -1019,29 +1019,44 @@ def add_asahi_system(mac, label, esp_name, files, serial=None, root_size=ROOT[1]
         _, _, (system, _, group) = add_stub(mac, *STUB, label)
         os.makedirs(os.path.join(system.dir, "Finish Installation.app", "Contents"))
         mac.policies[group.upper()] = enrolled
-    esp = mac.add_part("EFI", *ESP, gpt_name="Untitled", volume_name=esp_name)
-    if serial is not None:
-        esp.serial = serial
-    for rel, data in files.items():
-        path = os.path.join(esp.dir, rel)
+    esp_part = mac.add_part("EFI", *ESP, gpt_name="Untitled", volume_name=esp_name) if esp else None
+    if esp_part is not None and serial is not None:
+        esp_part.serial = serial
+    for rel, data in files.items() if esp_part is not None else ():
+        path = os.path.join(esp_part.dir, rel)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as f:
             f.write(data)
     root_part = mac.add_part("Linux Filesystem", ROOT[0], root_size, gpt_name="Untitled") if root else None
-    return esp, root_part, group
+    return esp_part, root_part, group
 
 
-def j514s_developer(directory, free_space=False, files=None, **kw):
+def j514s_developer(directory, free_space=False, files=None, label="Sekka", **kw):
     """Sekka's developer image as install-sekka.sh leaves it, which is how
     the reference J514S itself runs Sekka: Asahi's stub, an ESP with the
     developer image's serial, and the root, with no handoff and no Recovery
     configuration. With `free_space`, a smaller root leaves room after it;
-    `enrolled`, `stub`, `root` and `serial` are add_asahi_system's."""
-    system = {k: kw.pop(k) for k in ("enrolled", "stub", "root", "serial") if k in kw}
+    `label` is the name the owner gave it in Asahi's installer; `enrolled`,
+    `stub`, `root`, `esp` and `serial` are add_asahi_system's."""
+    system = {k: kw.pop(k) for k in ("enrolled", "stub", "root", "esp", "serial") if k in kw}
     mac = base_mac(directory, container_size=CONTAINER_AFTER, **kw)
     system.setdefault("serial", DEVELOPER_SERIAL)
     size = 100 * GIB if free_space else ROOT[1]
-    add_asahi_system(mac, "Sekka", "EFI - SEKKA", SEKKA_ESP_FILES if files is None else files, root_size=size, **system)
+    add_asahi_system(mac, label, "EFI - SEKKA", SEKKA_ESP_FILES if files is None else files, root_size=size, **system)
+    return mac
+
+
+def j514s_owner_container_before_developer_esp(directory, volumes=("Photos",), grow=0, **kw):
+    """What a removed developer stub can leave: the owner made an APFS
+    container of their own, with `volumes`, where the stub was (`grow`
+    bytes larger, taken from macOS), in front of the developer ESP and its
+    root."""
+    mac = base_mac(directory, container_size=CONTAINER_AFTER - grow, **kw)
+    part = mac.add_part("Apple_APFS", STUB[0] - grow, STUB[1] + grow, gpt_name="Untitled")
+    ct = mac.add_container(part, used=1 * GIB)
+    for name in volumes:
+        mac.add_volume(ct, name, [])
+    add_asahi_system(mac, "Sekka", "EFI - SEKKA", SEKKA_ESP_FILES, serial=DEVELOPER_SERIAL, stub=False)
     return mac
 
 
@@ -1282,7 +1297,7 @@ def make_release(directory, root_image_size=3 * MIB, recovery_members=None, tamp
                 "package": "sekka-j514s-test.zip",
                 "supported_fw": ["14.8.3"],
                 "partitions": [
-                    {"name": "EFI", "type": "EFI", "size": f"{GIB}B", "format": "fat", "volume_id": "0x5ecca5e1", "copy_firmware": True, "copy_installer_data": True, "source": "esp"},
+                    {"name": "EFI", "type": "EFI", "size": f"{GIB}B", "format": "fat", "copy_firmware": True, "copy_installer_data": True, "source": "esp"},
                     {"name": "Root", "type": "Linux", "size": f"{len(root_image)}B", "expand": True, "image": "root.img"},
                 ],
             }

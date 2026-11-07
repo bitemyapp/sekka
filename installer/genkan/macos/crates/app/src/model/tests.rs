@@ -652,6 +652,7 @@ fn on_disk(kind: InstallationKind, state: InstallationState, id: Option<Uuid>) -
         esp: None,
         root: None,
         installation_id: id,
+        developer: false,
     }
 }
 
@@ -1188,6 +1189,87 @@ fn every_stopped_state_is_explained_in_words() {
 fn an_existing_installation_is_recognized_not_replaced() {
     let j = Journey::start(Scenario::Existing);
     assert_eq!(j.model.screen, Screen::Existing);
+    // Its startup volume is there to choose.
+    assert!(j.model.startable() && !j.model.developer());
+}
+
+/// This Mac with Sekka's developer image on it, as the engine reports one:
+/// Sekka, with no installation ID, and its existing-sekka (or, in part,
+/// partial-installation) issue naming its partitions.
+fn developer_on_disk(env: &Simulation, state: InstallationState, stub: bool) -> Inspection {
+    let mut i = env.inspect().unwrap();
+    i.installations.push(sekka_mac_contract::Installation {
+        stub_group: stub.then(|| Uuid::from_bytes([0x5f; 16])),
+        developer: true,
+        ..on_disk(InstallationKind::Sekka, state, None)
+    });
+    let (code, detail) = if state == InstallationState::Partial {
+        (IssueCode::PartialInstallation, "The EFI partition disk0s3 has the developer image's serial, 5ECC-A5E1, but no startup volume goes with it.")
+    } else {
+        (IssueCode::ExistingSekka, "A developer installation of Sekka, as install-sekka.sh makes, is on this Mac (Sekka).")
+    };
+    i.issues.push(sekka_mac_contract::Issue {
+        code,
+        blocking: true,
+        detail: detail.parse().unwrap(),
+    });
+    i
+}
+
+#[test]
+fn a_developer_installation_stops_before_the_helper_is_asked_about() {
+    // install-sekka.sh's, on a Mac where Sekka Installer's helper was never
+    // set up: it has no record of it to check, so setting it up isn't
+    // asked for; the developer installation is what stops installation.
+    let env = Simulation::new(Scenario::Normal, 0.0);
+    let developer = developer_on_disk(&env, InstallationState::Complete, true);
+    for status in [
+        Err(HelperProblem::NotRegistered),
+        Err(HelperProblem::Unreachable("The connection was interrupted.".into())),
+        Ok(Vec::new()),
+    ] {
+        let (m, effects) = hear(&env, status.clone(), Ok(developer.clone()));
+        assert!(effects.is_empty(), "{effects:?}");
+        assert_eq!(m.screen, Screen::Existing, "{status:?}");
+        assert_eq!(m.step(), Step::Check);
+        assert!(m.developer() && m.startable() && !m.installed());
+        // What the engine said of it, naming its partitions, is on the page.
+        let [issue] = m.sekka_issues()[..] else { panic!("{:?}", m.sekka_issues()) };
+        assert!(issue.detail.as_str().starts_with("A developer installation of Sekka"), "{}", issue.detail);
+        assert!(m.plan.is_none() && !m.downloading);
+    }
+    // Once the owner has removed it, checking again offers a plan.
+    let (mut m, _) = hear(&env, Err(HelperProblem::NotRegistered), Ok(developer.clone()));
+    let effects = m.update(Msg::CheckAgain);
+    drive(&env, &mut m, effects, &|| Err(HelperProblem::NotRegistered), &|| env.inspect());
+    assert_eq!(m.screen, Screen::Plan);
+
+    // Beside a Sekka that may be the helper's, the helper is still asked.
+    let mut both = developer.clone();
+    both.installations.push(on_disk(InstallationKind::Sekka, InstallationState::Unknown, None));
+    let (m, _) = hear(&env, Err(HelperProblem::NotRegistered), Ok(both));
+    assert_eq!(m.screen, Screen::HelperUnknown);
+}
+
+#[test]
+fn what_an_installation_left_behind_isnt_offered_to_start() {
+    // A developer ESP whose stub was removed: there is nothing to choose
+    // when the Mac starts.
+    let env = Simulation::new(Scenario::Normal, 0.0);
+    let (m, _) = hear(&env, Err(HelperProblem::NotRegistered), Ok(developer_on_disk(&env, InstallationState::Partial, false)));
+    assert_eq!(m.screen, Screen::Existing);
+    assert!(m.developer() && !m.startable());
+    assert_eq!(m.sekka_issues()[0].code, IssueCode::PartialInstallation);
+    // A stub missing parts can't be started either.
+    let (m, _) = hear(&env, Err(HelperProblem::NotRegistered), Ok(developer_on_disk(&env, InstallationState::Partial, true)));
+    assert!(!m.startable());
+    // Nor the ESP an installation of Sekka Installer's left, which its
+    // helper may know of.
+    let mut left = env.inspect().unwrap();
+    left.installations.push(on_disk(InstallationKind::Sekka, InstallationState::Partial, Some(SIM_ID)));
+    let (m, _) = hear(&env, Ok(Vec::new()), Ok(left));
+    assert_eq!(m.screen, Screen::Existing);
+    assert!(!m.developer() && !m.startable());
 }
 
 #[test]

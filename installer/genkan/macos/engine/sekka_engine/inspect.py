@@ -92,6 +92,38 @@ def listed(names):
     return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
 
 
+def size_text(size):
+    """A size as `diskutil list` prints it: decimal units, one place."""
+    for power, unit in ((4, "TB"), (3, "GB"), (2, "MB"), (1, "KB")):
+        if size >= 1000**power:
+            return f"{size / 1000**power:.1f} {unit}"
+    return f"{size} B"
+
+
+def removal(stub, esp, roots, name=None):
+    """How the owner removes a developer installation (or what is left of
+    one) before installing, naming its partitions by what `diskutil list`
+    shows of them: diskN numbers aren't stable once one is deleted
+    (removal-and-boards.md, after Asahi's partitioning cheatsheet). `stub`
+    is its APFS container, named `name`."""
+    parts = []
+    if stub is not None:
+        named = name or stub.label or stub.name
+        parts.append(f'its APFS container "{named}" ({size_text(stub.size)}, now {stub.name})')
+    if esp is not None:
+        volume = (esp.info or {}).get("VolumeName")
+        named = f' "{volume}"' if isinstance(volume, str) and volume else ""
+        parts.append(f"its EFI partition{named} ({size_text(esp.size)}, now {esp.name})")
+    for q in roots:
+        parts.append(f"its Linux partition ({size_text(q.size)}, now {q.name})")
+    startup = ", make macOS the startup disk" if stub is not None else ""
+    return (
+        f"To install Sekka here, copy off what you want to keep{startup}, then delete {listed(parts)} in macOS with "
+        f"diskutil, as {REMOVAL_DOC} describes. Partition numbers can change once one is deleted, so check each one "
+        "with diskutil list before deleting it."
+    )
+
+
 def walk(node):
     yield node
     for child in node.get("IORegistryEntryChildren", None) or []:
@@ -379,19 +411,22 @@ class Inspector:
                 continue  # another macOS: not an installation of a second system
             stubs = [o for o in oses if o.stub]
             if not stubs:
-                found.append(self.empty_container(p, i))
-                for q in self.following(i):
-                    attached.add(q.uuid)
+                container = self.empty_container(p, i)
+                found.append(container)
+                if container["esp"] is not None:
+                    attached.update(q.uuid for q in self.following(i))
                 continue
             for o in stubs:
                 for q in o.attached_partitions or []:
                     attached.add(q.uuid)
                 found.append(self.stub_installation(p, o))
-        for p in v.parts:
+        for i, p in enumerate(v.parts):
             if p.free or p.uuid in attached:
                 continue
             if p.type in ("EFI", "Linux Filesystem", "Linux"):
-                found.append(self.orphan(p))
+                orphan, claimed = self.orphan(p, i, attached)
+                found.append(orphan)
+                attached.update(q.uuid for q in claimed)
         return [x for x in found if x is not None]
 
     def following(self, index):
@@ -406,22 +441,42 @@ class Inspector:
                 out.append(q)
         return out
 
+    def linux_after(self, index, attached=()):
+        """The Linux partitions directly after the ESP at `index`, as many
+        as OSEnum.collect would attach with it, stopping at anything else:
+        what install-sekka.sh's Asahi installer put after a developer ESP."""
+        out = []
+        for q in self.view.parts[index + 1 : index + 4]:
+            if q.free or q.type != "Linux Filesystem" or q.uuid in attached:
+                break
+            out.append(q)
+        return out
+
     def empty_container(self, p, index):
         """An APFS container that holds no system: an interrupted stub, or
-        something else. Nothing is assumed about it."""
+        something else. Nothing is assumed about it: it is a developer
+        installation's stub only when it could be a stub (no more volumes
+        than one has, and named Sekka or no larger than one) and the ESP
+        after it has the developer image's serial. A container of the
+        owner's own, made where a developer stub was, isn't, and the
+        developer ESP after it is reported as left behind."""
         label = p.label or ""
         vols = p.container.get("Volumes", [])
         nxt = self.view.parts[index + 1] if index + 1 < len(self.view.parts) else None
         esp = c.uuid_any(nxt.uuid) if nxt is not None and not nxt.free and nxt.type == "EFI" else None
-        developer = esp is not None and has_developer_serial(nxt)
+        stub_like = len(vols) <= 4 and (label == c.VOLUME_NAME or p.size <= self.a.main.STUB_SIZE)
+        developer_esp = esp is not None and has_developer_serial(nxt)
+        developer = developer_esp and stub_like
+        roots = []
         if developer:
+            roots = [q for q in self.following(index) if q.type != "EFI"]
             self.issue(
                 "partial-installation",
                 True,
                 f"The APFS container {p.name} ({label or 'unnamed'}) holds no system, and the EFI partition "
                 f"after it, {nxt.name}, has the developer image's serial, {DEVELOPER_ESP_NAME}: a developer "
-                "installation of Sekka may have stopped part way. The installer won't change it; remove it "
-                f"with diskutil before installing ({REMOVAL_DOC}).",
+                "installation of Sekka may have stopped part way. The installer won't change it or install "
+                f"beside it. {removal(p, nxt, roots, name=label or None)}",
             )
         elif label == c.VOLUME_NAME and len(vols) <= 4:
             self.issue(
@@ -438,14 +493,18 @@ class Inspector:
                 f"The APFS container {p.name} ({label or 'unnamed'}) holds no system the installer "
                 "recognizes. It will be left as it is.",
             )
+        if developer_esp and not developer:
+            # Not this container's to claim: the ESP is reported on its own.
+            esp = None
         return {
             "kind": "sekka" if developer else "unknown",
             "name": c.plain_text(label or p.name, limit=255, keep="start"),
             "state": "partial",
             "stub_group": None,
             "esp": esp,
-            "root": None,
+            "root": c.uuid_any(roots[0].uuid) if roots else None,
             "installation_id": None,
+            "developer": developer,
         }
 
     def stub_installation(self, p, o):
@@ -526,17 +585,15 @@ class Inspector:
                 "esp": esp,
                 "root": root,
                 "installation_id": next(iter(ids)) if len(ids) == 1 else None,
+                "developer": False,
             }
         # No installer's records: Sekka's developer image, by its ESP's
         # serial, or Sekka's boot record on an ESP nothing else identifies.
         files = self.boot_files(esp_mount)
         developer = esp_part is not None and has_developer_serial(esp_part)
         if developer or (files and files[BOOT_BIN_RECORD]):
-            parts = [x.name for x in (p, esp_part, root_part) if x is not None]
-            removal = (
-                f"To install Sekka here, copy off what you want to keep, then remove it in macOS: delete "
-                f"{listed(parts)} with diskutil and grow macOS's container into the space ({REMOVAL_DOC})."
-            )
+            roots = [q for q in o.attached_partitions or [] if q.type in ("Linux Filesystem", "Linux")]
+            remove = removal(p, esp_part, roots, name=name)
             if not developer:
                 # Sekka's, but the developer image's or the installer's whose
                 # handoff is gone? Neither is guessed.
@@ -546,7 +603,7 @@ class Inspector:
                     True,
                     f"Sekka's boot record ({BOOT_BIN_RECORD}) is on {esp_part.name}, the EFI partition of {name}, "
                     "with neither the installer's records nor the developer image's serial, so the installer "
-                    f"can't tell which Sekka installation it is. It won't install beside it or change it. {removal}",
+                    f"can't tell which Sekka installation it is. It won't install beside it or change it. {remove}",
                 )
             else:
                 if files is None:
@@ -567,14 +624,14 @@ class Inspector:
                         "partial-installation",
                         True,
                         f"An incomplete developer installation of Sekka is on this Mac ({name}): {serial}, but "
-                        f"{missing}. The installer won't repair it or install beside it. {removal}",
+                        f"{missing}. The installer won't repair it or install beside it. {remove}",
                     )
                 else:
                     self.issue(
                         "existing-sekka",
                         True,
                         f"A developer installation of Sekka, as install-sekka.sh makes, is on this Mac ({name}): "
-                        f"{serial}. The installer won't install beside it or change it. {removal}",
+                        f"{serial}. The installer won't install beside it or change it. {remove}",
                     )
             return {
                 "kind": "sekka",
@@ -584,6 +641,7 @@ class Inspector:
                 "esp": esp,
                 "root": root,
                 "installation_id": None,
+                "developer": developer,
             }
         asahi_markers = bool(o.m1n1_ver) or os.path.isdir(os.path.join(o.system or "", ASAHI_STEP2_APP))
         if not asahi_markers and esp_mount:
@@ -607,12 +665,17 @@ class Inspector:
             "esp": esp,
             "root": root,
             "installation_id": None,
+            "developer": False,
         }
 
-    def orphan(self, p):
-        """An EFI or Linux partition that no startup volume claims."""
+    def orphan(self, p, index, attached=()):
+        """An EFI or Linux partition that no startup volume claims, and the
+        partitions it claims with it: a developer ESP the Linux partitions
+        directly after it, which install-sekka.sh's Asahi installer put
+        there and which macOS can't read."""
         handoff = files = None
         developer = False
+        claimed = []
         if p.type == "EFI":
             mountpoint = self.esp_mount(p)
             raw = self.read_mounted(mountpoint, c.HANDOFF_PATH)
@@ -622,7 +685,8 @@ class Inspector:
                 except (c.Invalid, canonical.CanonicalError, KeyError, TypeError):
                     handoff = None
             files = self.boot_files(mountpoint)
-            developer = has_developer_serial(p)
+            # A handoff names the installation, whatever its serial.
+            developer = not handoff and has_developer_serial(p)
         is_efi = p.type == "EFI"
         sekka = bool(handoff) or developer or bool(files and files[BOOT_BIN_RECORD])
         if handoff:
@@ -633,13 +697,13 @@ class Inspector:
                 "installation was interrupted or partly removed. Nothing will be changed.",
             )
         elif developer:
+            claimed = self.linux_after(index, attached)
             self.issue(
                 "partial-installation",
                 True,
                 f"The EFI partition {p.name} has the developer image's serial, {DEVELOPER_ESP_NAME}, but no "
                 "startup volume goes with it: a developer installation of Sekka was interrupted or partly "
-                f"removed. Nothing will be changed. To install Sekka here, delete it with diskutil first "
-                f"({REMOVAL_DOC}).",
+                f"removed. The installer won't change it or install beside it. {removal(None, p, claimed)}",
             )
         elif sekka:
             self.issue(
@@ -656,15 +720,17 @@ class Inspector:
                 f"{p.name} ({p.type}) belongs to no system the installer recognizes. It will be "
                 "left as it is.",
             )
+        root = p if not is_efi else claimed[0] if claimed else None
         return {
             "kind": "sekka" if sekka else "unknown",
             "name": c.plain_text((p.info or {}).get("VolumeName") or p.name, limit=255, keep="start"),
             "state": "partial",
             "stub_group": None,
             "esp": c.uuid_any(p.uuid) if is_efi else None,
-            "root": None if is_efi else c.uuid_any(p.uuid),
+            "root": c.uuid_any(root.uuid) if root is not None else None,
             "installation_id": handoff["installation"] if handoff else None,
-        }
+            "developer": developer,
+        }, claimed
 
     # Candidates --------------------------------------------------------------
 

@@ -222,6 +222,11 @@ pub struct Installation {
     pub root: Option<Uuid>,
     /// Read from its handoff or Recovery configuration, if it is Sekka's.
     pub installation_id: Option<Uuid>,
+    /// Sekka's developer image, as `install-sekka.sh` installs it with
+    /// Asahi's installer, which the engine knows by its EFI partition's FAT
+    /// serial: Sekka, with no installation ID. Sekka Installer never makes
+    /// one, so its helper keeps no record of it.
+    pub developer: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -339,6 +344,13 @@ impl Inspection {
                     }
                 }
             }
+        }
+        if self
+            .installations
+            .iter()
+            .any(|i| i.developer && (i.kind != InstallationKind::Sekka || i.installation_id.is_some()))
+        {
+            return Err(invalid("a developer installation is Sekka's and has no installation ID"));
         }
         Ok(())
     }
@@ -464,6 +476,27 @@ mod tests {
         s.disk.partitions[2].offset -= crate::GIB;
         s.layout_digest = s.disk.layout_digest().unwrap();
         assert!(s.check().is_err());
+    }
+
+    #[test]
+    fn a_developer_installation_is_sekka_without_an_installation_id() {
+        let developer = |kind, installation_id| {
+            let mut s = sample();
+            s.installations.push(Installation {
+                kind,
+                name: "Sekka".parse().unwrap(),
+                state: InstallationState::Complete,
+                stub_group: None,
+                esp: None,
+                root: None,
+                installation_id,
+                developer: true,
+            });
+            s
+        };
+        developer(InstallationKind::Sekka, None).check().unwrap();
+        assert!(developer(InstallationKind::OtherLinux, None).check().is_err());
+        assert!(developer(InstallationKind::Sekka, Some(Uuid::from_bytes([0x5e; 16]))).check().is_err());
     }
 
     #[test]

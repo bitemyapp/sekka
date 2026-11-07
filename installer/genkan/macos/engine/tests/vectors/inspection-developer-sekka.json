@@ -108,6 +108,7 @@
   "filevault": "on",
   "installations": [
     {
+      "developer": true,
       "esp": "da711448-96c8-4a19-a4b2-d2bc815a47c5",
       "installation_id": null,
       "kind": "sekka",
@@ -126,7 +127,7 @@
     {
       "blocking": true,
       "code": "existing-sekka",
-      "detail": "A developer installation of Sekka, as install-sekka.sh makes, is on this Mac (Sekka): its EFI partition disk0s4 has the developer image's serial, 5ECC-A5E1. The installer won't install beside it or change it. To install Sekka here, copy off what you want to keep, then remove it in macOS: delete disk0s3, disk0s4 and disk0s5 with diskutil and grow macOS's container into the space (docs/apple-silicon/removal-and-boards.md)."
+      "detail": "A developer installation of Sekka, as install-sekka.sh makes, is on this Mac (Sekka): its EFI partition disk0s4 has the developer image's serial, 5ECC-A5E1. The installer won't install beside it or change it. To install Sekka here, copy off what you want to keep, make macOS the startup disk, then delete its APFS container \"Sekka\" (2.5 GB, now disk0s3), its EFI partition \"EFI - SEKKA\" (1.1 GB, now disk0s4) and its Linux partition (200.1 GB, now disk0s5) in macOS with diskutil, as docs/apple-silicon/removal-and-boards.md describes. Partition numbers can change once one is deleted, so check each one with diskutil list before deleting it."
     }
   ],
   "layout_digest": "sha256:321dc0937ac929dfb5130318ab54179cca14b664d8968e26ba1b4a0be431a7e8",

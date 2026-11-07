@@ -150,6 +150,7 @@ class InspectTests(unittest.TestCase):
                 outcome, doc = self.inspect(lambda root, **kw: S.j514s_existing_sekka(root, esp_serial=serial, **kw)[0])
                 [inst] = doc["installations"]
                 self.assertEqual((inst["kind"], inst["installation_id"]), ("sekka", "8e2f6c1a-6b3d-4c1e-9a55-0d4f2f2b7c11"))
+                self.assertFalse(inst["developer"])
                 [detail] = details(doc, "existing-sekka")
                 self.assertTrue(detail.startswith("Sekka is already installed on this Mac (Sekka)."), detail)
                 self.assertNotIn("developer", detail)
@@ -196,6 +197,7 @@ class InspectTests(unittest.TestCase):
                 self.assertEqual(outcome, "inspected")
                 [inst] = doc["installations"]
                 self.assertEqual((inst["kind"], inst["state"], inst["installation_id"], inst["name"]), ("sekka", state, None, "Sekka"))
+                self.assertTrue(inst["developer"])
                 parts = {p["kind"]: p["uuid"] for p in doc["disk"]["partitions"] if p["kind"] in ("efi", "linux")}
                 self.assertEqual((inst["esp"], inst["root"]), (parts["efi"], parts["linux"]))
                 self.assertIsNotNone(inst["stub_group"])
@@ -204,7 +206,14 @@ class InspectTests(unittest.TestCase):
                 [detail] = details(doc, "existing-sekka")
                 self.assertTrue(detail.startswith("A developer installation of Sekka, as install-sekka.sh makes, is on this Mac (Sekka)"), detail)
                 self.assertIn("disk0s4 has the developer image's serial, 5ECC-A5E1", detail)
-                self.assertIn("delete disk0s3, disk0s4 and disk0s5 with diskutil", detail)
+                # Its partitions by what diskutil list shows of them, whose
+                # numbers can change once one is deleted.
+                self.assertIn(
+                    'make macOS the startup disk, then delete its APFS container "Sekka" (2.5 GB, now disk0s3), its EFI '
+                    'partition "EFI - SEKKA" (1.1 GB, now disk0s4) and its Linux partition (200.1 GB, now disk0s5) in macOS',
+                    detail,
+                )
+                self.assertIn("check each one with diskutil list before deleting it", detail)
                 self.assertIn("docs/apple-silicon/removal-and-boards.md", detail)
                 self.assertEqual({mode for _, mode in mac.mount_log}, {"ro"})
                 self.assertEqual(mac.mounted_now(), [])
@@ -232,7 +241,7 @@ class InspectTests(unittest.TestCase):
                 self.t = S.TempDir()
                 outcome, doc = self.inspect(developer(**kw))
                 [inst] = doc["installations"]
-                self.assertEqual((inst["kind"], inst["state"], inst["installation_id"]), ("sekka", "partial", None))
+                self.assertEqual((inst["kind"], inst["state"], inst["installation_id"], inst["developer"]), ("sekka", "partial", None, True))
                 self.assertEqual(codes(doc, blocking=True), ["partial-installation"])
                 [detail] = details(doc, "partial-installation")
                 self.assertIn("incomplete developer installation of Sekka", detail)
@@ -240,25 +249,88 @@ class InspectTests(unittest.TestCase):
 
     def test_a_developer_install_stopped_before_its_stub_is_partial(self):
         """The stub's container holds no system; the ESP after it has the
-        developer image's serial, which the issue says."""
-        outcome, doc = self.inspect(lambda root, **kw: S.j514s_developer(root, stub="empty", **kw))
-        [inst] = doc["installations"]
-        self.assertEqual((inst["kind"], inst["state"], inst["installation_id"]), ("sekka", "partial", None))
-        self.assertEqual(codes(doc, blocking=True), ["partial-installation"])
-        [detail] = details(doc, "partial-installation")
-        self.assertIn("the EFI partition after it, disk0s4, has the developer image's serial, 5ECC-A5E1", detail)
+        developer image's serial, which the issue says. A container that
+        could be a stub, a renamed one too, is claimed with the ESP and the
+        root after it."""
+        for label in ("Sekka", "Sekka Dev"):
+            with self.subTest(label=label):
+                self.t.cleanup()
+                self.t = S.TempDir()
+                outcome, doc = self.inspect(developer(stub="empty", label=label))
+                [inst] = doc["installations"]
+                self.assertEqual((inst["kind"], inst["state"], inst["installation_id"], inst["developer"]), ("sekka", "partial", None, True))
+                parts = {p["kind"]: p["uuid"] for p in doc["disk"]["partitions"] if p["kind"] in ("efi", "linux")}
+                self.assertEqual((inst["esp"], inst["root"]), (parts["efi"], parts["linux"]))
+                self.assertEqual(codes(doc, blocking=True), ["partial-installation"])
+                self.assertNotIn("unrecognized-layout", codes(doc))
+                [detail] = details(doc, "partial-installation")
+                self.assertIn("the EFI partition after it, disk0s4, has the developer image's serial, 5ECC-A5E1", detail)
+                self.assertIn(f'its APFS container "{label}" (2.5 GB, now disk0s3), its EFI partition "EFI - SEKKA"', detail)
+
+    def test_a_container_of_the_owners_in_front_of_a_developer_esp_isnt_claimed(self):
+        """Where a removed developer stub was, the owner made a container of
+        their own: more volumes than a stub has, or larger than one and not
+        named Sekka. It isn't the developer installation's, so it is left
+        unrecognized, and the developer ESP and the root after it are
+        reported on their own, naming only those to delete."""
+        cases = (
+            ({"volumes": ("Photos", "Projects", "Music", "Archive", "Scratch")}, "disk0s3", "disk0s4", "disk0s5"),
+            ({"grow": 10 * S.GIB}, "disk0s3", "disk0s4", "disk0s5"),
+        )
+        for kw, container, esp, root in cases:
+            with self.subTest(kw=list(kw)):
+                self.t.cleanup()
+                self.t = S.TempDir()
+                outcome, doc = self.inspect(lambda directory, **more: S.j514s_owner_container_before_developer_esp(directory, **kw, **more))
+                owner, left = doc["installations"]
+                self.assertEqual((owner["kind"], owner["name"], owner["esp"], owner["developer"]), ("unknown", "Photos", None, False))
+                parts = {p["kind"]: p["uuid"] for p in doc["disk"]["partitions"] if p["kind"] in ("efi", "linux")}
+                self.assertEqual((left["kind"], left["state"], left["developer"]), ("sekka", "partial", True))
+                self.assertEqual((left["esp"], left["root"], left["stub_group"]), (parts["efi"], parts["linux"], None))
+                self.assertEqual(codes(doc, blocking=True), ["partial-installation"])
+                [unrecognized] = details(doc, "unrecognized-layout")
+                self.assertIn(f"The APFS container {container} (Photos) holds no system the installer recognizes", unrecognized)
+                [detail] = details(doc, "partial-installation")
+                self.assertIn(f"The EFI partition {esp} has the developer image's serial, 5ECC-A5E1", detail)
+                self.assertIn(f'delete its EFI partition "EFI - SEKKA" (1.1 GB, now {esp}) and its Linux partition', detail)
+                self.assertIn(f"now {root})", detail)
+                self.assertNotIn(container, detail)
+                self.assertNotIn("Photos", detail)
+                self.assertNotIn("startup disk", detail)
 
     def test_what_a_removed_developer_install_left_stops_installation(self):
         """Its ESP, which no startup volume claims, still has the developer
-        image's serial. The root beside it can't be read from macOS and stays
-        unknown."""
+        image's serial, and claims the Linux partition directly after it,
+        which macOS can't read: both are named to delete."""
         outcome, doc = self.inspect(developer(stub=False))
-        kinds = sorted((i["kind"], i["state"]) for i in doc["installations"])
-        self.assertEqual(kinds, [("sekka", "partial"), ("unknown", "partial")])
+        [inst] = doc["installations"]
+        parts = {p["kind"]: p["uuid"] for p in doc["disk"]["partitions"] if p["kind"] in ("efi", "linux")}
+        self.assertEqual((inst["kind"], inst["state"], inst["developer"], inst["name"]), ("sekka", "partial", True, "EFI - SEKKA"))
+        self.assertEqual((inst["esp"], inst["root"], inst["stub_group"]), (parts["efi"], parts["linux"], None))
         self.assertEqual(codes(doc, blocking=True), ["partial-installation"])
+        self.assertNotIn("unrecognized-layout", codes(doc))
         [detail] = details(doc, "partial-installation")
         self.assertIn("The EFI partition disk0s3 has the developer image's serial, 5ECC-A5E1", detail)
-        self.assertEqual(codes(doc, blocking=False).count("unrecognized-layout"), 1)
+        self.assertIn('delete its EFI partition "EFI - SEKKA" (1.1 GB, now disk0s3) and its Linux partition (200.1 GB, now disk0s4)', detail)
+
+    def test_a_developer_install_without_its_esp_is_not_recognized(self):
+        """The serial is the one sign of a developer installation macOS can
+        see: diskutil reports no label or UUID for its root. Without its
+        ESP, its stub is another Asahi system and its root an unknown
+        partition, and neither stops installation (engine.md). A developer
+        installation can't start without its ESP."""
+        for kw, kinds in (
+            ({"esp": False}, [("other-linux", "complete"), ("unknown", "partial")]),
+            ({"esp": False, "stub": False}, [("unknown", "partial")]),
+        ):
+            with self.subTest(kw=list(kw)):
+                self.t.cleanup()
+                self.t = S.TempDir()
+                outcome, doc = self.inspect(developer(**kw))
+                self.assertEqual(sorted((i["kind"], i["state"]) for i in doc["installations"]), kinds)
+                self.assertFalse(any(i["developer"] for i in doc["installations"]))
+                self.assertEqual(codes(doc, blocking=True), [])
+                self.assertEqual(codes(doc, blocking=False).count("unrecognized-layout"), 1)
 
     def test_sekkas_boot_record_without_an_identity_is_not_guessed(self):
         """An ESP with Sekka's boot record but neither a handoff nor the
@@ -266,7 +338,7 @@ class InspectTests(unittest.TestCase):
         isn't guessed: its state is unknown, and installation stops."""
         outcome, doc = self.inspect(developer(serial=0x12345678))
         [inst] = doc["installations"]
-        self.assertEqual((inst["kind"], inst["state"], inst["installation_id"]), ("sekka", "unknown", None))
+        self.assertEqual((inst["kind"], inst["state"], inst["installation_id"], inst["developer"]), ("sekka", "unknown", None, False))
         [detail] = details(doc, "existing-sekka")
         self.assertIn("can't tell which Sekka installation it is", detail)
         self.assertIn("existing-sekka", codes(doc, blocking=True))
@@ -281,7 +353,7 @@ class InspectTests(unittest.TestCase):
         is another system: it stops nothing."""
         outcome, doc = self.inspect(S.j514s_asahi)
         [inst] = doc["installations"]
-        self.assertEqual((inst["kind"], inst["state"], inst["name"]), ("other-linux", "complete", "Asahi Linux"))
+        self.assertEqual((inst["kind"], inst["state"], inst["name"], inst["developer"]), ("other-linux", "complete", "Asahi Linux", False))
         self.assertEqual(codes(doc, blocking=True), [])
 
     def test_a_partial_installation_stops_without_a_guess(self):

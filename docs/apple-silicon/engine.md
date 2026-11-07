@@ -164,12 +164,16 @@ Installations are recognized, never repaired:
   `partial-installation` issue: the initial release installs once.
 - **Sekka, the developer image** (below): a stub without those records whose
   ESP has the developer image's FAT serial. It is `sekka` with no
-  `installation_id`, its state Asahi's (`coih`, `Finish Installation.app`),
-  or `partial` when its root is missing or its ESP holds neither
-  `m1n1/boot.bin` nor `sekka/boot-bin.json`, `unknown` when the ESP can't be
-  mounted. A blocking `existing-sekka` (or `partial-installation`) issue says
-  that it is a developer installation and which partitions to delete in
-  macOS before installing ([removal](removal-and-boards.md#a-developer-installation)).
+  `installation_id` and `developer` true, its state Asahi's (`coih`, `Finish
+  Installation.app`), or `partial` when its root is missing or its ESP holds
+  neither `m1n1/boot.bin` nor `sekka/boot-bin.json`, `unknown` when the ESP
+  can't be mounted. A blocking `existing-sekka` (or `partial-installation`)
+  issue says that it is a developer installation and which partitions to
+  delete in macOS before installing, each by what `diskutil list` shows of
+  it (the stub's name, the ESP's volume name, sizes) with its number at the
+  time, since numbers can change once one is deleted; and to make macOS the
+  startup disk first
+  ([removal](removal-and-boards.md#a-developer-installation)).
 - **Sekka, unidentified**: a stub without those records whose ESP holds
   `sekka/boot-bin.json` (the record only Sekka's boot-bin writes) but not the
   developer serial. It is Sekka's, but whether the developer image's or an
@@ -179,11 +183,18 @@ Installations are recognized, never repaired:
   Installation.app`, an ESP with `asahi/`) and none of the above.
 - **unknown**: any other stub, an APFS container with no system (blocking
   `partial-installation` if it is named Sekka, otherwise a non-blocking
-  `unrecognized-layout`), and EFI or Linux partitions no stub claims. An
-  empty container followed by an ESP with the developer serial, and an ESP
-  no stub claims that has a handoff, the developer serial or Sekka's boot
-  record, are `sekka` instead, `partial`, with a blocking
-  `partial-installation`.
+  `unrecognized-layout`), and EFI or Linux partitions no stub claims. These
+  are `sekka` instead, `partial`, with a blocking `partial-installation`:
+  - an empty container that could be a stub (at most 4 volumes, and named
+    Sekka or no larger than a stub) followed by an ESP with the developer
+    serial: the developer image's (`developer`), with that ESP and the
+    Linux partitions OSEnum would attach. Any other container in front of
+    such an ESP (one the owner made where a stub was, say) is left
+    `unknown`, and the ESP is reported on its own, as below;
+  - an ESP no stub claims with the developer serial and no handoff: the
+    developer image's, with the Linux partitions directly after it (up to
+    three, stopping at anything else), which are named to delete with it;
+  - an ESP no stub claims with a handoff, or with Sekka's boot record.
 
 Sekka's developer image (`nix/apple-silicon/developer/`, installed by
 `install-sekka.sh` with the unmodified Asahi installer, as on the reference
@@ -204,9 +215,26 @@ M1 Pro's ESP, 128,000 blocks, has the UUID of serial `CEF8-B598`, the only
 The derivation is msdosfs's source and that recording; no developer
 installation's `diskutil info` has been recorded. An ESP whose sectors
 newfs_msdos counted otherwise wouldn't match, which is why Sekka's boot
-record alone still stops installation. A handoff wins over the serial: a
-release whose installer data names that serial gives it to an installation
-the handoff identifies, as the tests' release does.
+record alone still stops installation. A handoff wins over the serial: an
+ESP with both is the installation the handoff identifies. No product
+release has the serial (its installer data gives the ESP no `volume_id`,
+which `manifest.py` holds it to), and neither does the tests' release.
+
+So a developer installation without its ESP isn't recognized from macOS:
+its stub, with Asahi's marks, is `other-linux`, and its root, or a root
+left alone, an `unknown` partition with a non-blocking
+`unrecognized-layout` (`test_a_developer_install_without_its_esp_is_not_recognized`).
+Neither stops installation. Such an installation can't start (its stub
+chain-loads from the ESP), and the product mounts its own partitions by
+identities of its own, so a product installation beside it mounts nothing
+of it; the owner can remove it with the same steps
+([removal](removal-and-boards.md#a-developer-installation)).
+
+The `developer` flag is what the app goes by. Sekka Installer never makes
+a developer installation, so where every Sekka installation on the disk is
+one, the app doesn't ask for its helper, which has no record of one to
+check; and wherever one is, its Existing page says that a developer
+installation is on the Mac, with the issue's details and Check Again.
 
 Issues come from the J514S profile's admission (board, chip, system firmware
 `block`, macOS minimum, the macOS 27.0 resize warning), Asahi's own device
@@ -289,7 +317,7 @@ found afterwards, by identity (GPT and APFS UUIDs), never by `diskN`.
 | shrink | limits rechecked, then only `diskutil apfs resizeContainer PART BYTES` through Asahi's DiskUtil, output captured | container, partition, size-before, size-after, free-offset, free-size | inspected |
 | stub-partition | Asahi's `addPartition(after, "apfs", "Sekka", STUB_SIZE)`; the new partition must be APFS, STUB_SIZE, and start within 1 MiB before the plan's offset (exactly at it after a shrink) | stub-partition, stub-container, stub-offset, stub-size | inspected |
 | stub-system | Asahi's `prepare_volume`, `check_volume`, `install_files` (including its admin-user copy for paired Recovery), then Asahi's `Finish Installation.app` and `.IAPhysicalMedia` are removed | stub-volume-group, stub-system-volume, stub-data-volume, stub-macos, build, admin-users | inspected |
-| partitions | Asahi's `OSInstaller.partition_disk` from the template: the FAT ESP (`newfs_msdos -I 0x5ecca5e1`) and the root, sizes and places checked | esp-partition, esp-offset, esp-size, esp-volume-id, root-partition, root-offset, root-size | inspected |
+| partitions | Asahi's `OSInstaller.partition_disk` from the template: the FAT ESP, with the serial `newfs_msdos` chooses (the product's installer data gives no `volume_id`; esp-volume-id is `none`), and the root, sizes and places checked | esp-partition, esp-offset, esp-size, esp-volume-id, root-partition, root-offset, root-size | inspected |
 | firmware | Asahi's `collect_firmware` into a `FWPackage`, copied to the ESP's `vendorfw/`; unmounted, mounted, read back and hashed | firmware-files, firmware-cpio, firmware-cpio-size, firmware-inventory | read-back |
 | esp | the payload's `esp/` tree (Asahi's `extract_tree`, CRC-checked); the boot entry's `@SEKKA_ROOT_PARTUUID@`/`@SEKKA_ESP_PARTUUID@` filled with the real GPT UUIDs; `sekka/install.json`; Asahi's `asahi/` installer data; AppleDouble files removed; unmounted, mounted, every file read back and compared with what was written, nothing extra | esp-inventory, esp-files, esp-bytes, boot-entry, kernel-arguments (as the filled entry passes them), handoff, installation, setup-hints | read-back |
 | root | `root.img` streamed from the package to `/dev/rDISKsN`, hashed as read, flushed (`F_FULLFSYNC`, else `DKIOCSYNCHRONIZECACHE`, else `fsync`), then read back from the raw device and hashed; both must be the manifest's digest | root-partition, root-image-size, root-image, root-read-back, flush | read-back |
@@ -482,10 +510,13 @@ derives it from its serial, which `newfs_msdos -I` sets. They cover:
   developer serial; the developer image alone (enrolled, waiting for
   Recovery, unprivileged, and without boot-bin's record), beside free space
   (described, not offered, and execute refusing a plan for it), without its
-  root or boot files, and as an ESP a removed stub left; Sekka's boot record
-  without an identity, not guessed; another Asahi system on the J514S and the
-  M1 Pro's, still `other-linux`; msdosfs's UUID for the M1 Pro's recorded
-  ESP;
+  root or boot files, stopped before its stub's system (also renamed), and
+  as an ESP and root a removed stub left, naming those partitions by name
+  and size; a container of the owner's in front of a developer ESP, not
+  claimed; a developer stub and root without their ESP, and a root alone,
+  not recognized and stopping nothing; Sekka's boot record without an
+  identity, not guessed; another Asahi system on the J514S and the M1 Pro's,
+  still `other-linux`; msdosfs's UUID for the M1 Pro's recorded ESP;
 - the helper's inspection for an owner refusing exactly the owners and
   passwords execute and startup-disk refuse (`UNUSABLE_OWNERS`), with their
   codes, and otherwise reporting the same inspection;
