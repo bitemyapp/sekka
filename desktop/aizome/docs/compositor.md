@@ -351,6 +351,17 @@ Notes for client authors:
   That matters when logind doesn't suspend on the lid (Keep Awake,
   docked); a panel another output mirrors stays on, since its frames
   drive the mirror's. `powered` in the IPC's outputs says which are off.
+  The lid is known as the session starts: what libinput queued as it
+  took the seat (its devices, and a closed lid as the switch's device
+  comes) is handled before any display is set up, and again on coming
+  back from another VT (`drain_libinput` in `backend/udev.rs`). libinput's
+  fd tells only of what the kernel sends after, so those used to wait for
+  the first key or movement: a docked start lit the panel behind the lid,
+  and the TV account's Chanoma, driven by a game controller libinput
+  doesn't hear, stayed on that panel. Starting docked with the lid
+  closed, other displays are set up first and the panel is left dark (no
+  modeset, a second or two on some panels), as opening the lid lights it;
+  if no other display comes on, it does.
 - **Night Light**: `[night_light]` `enabled`, `temperature` (K, default
   4000), `schedule` (`sunset`: from sunset to sunrise where the computer
   is, which is `latitude` and `longitude` when set by hand, else

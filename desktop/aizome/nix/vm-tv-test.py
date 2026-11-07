@@ -57,7 +57,8 @@ def greeter_log():
 
 
 def session_log():
-    return machine.succeed("journalctl -t chanoma-session --no-pager -o cat")
+    # The compositor colours its log's field names; without the colours.
+    return re.sub(r"\x1b\[[0-9;]*m", "", machine.succeed("journalctl -t chanoma-session --no-pager -o cat"))
 
 
 def greeter_up():
@@ -152,6 +153,9 @@ with subtest("the TV account's PIN, pressed on the PIN pad"):
 
 with subtest("the TV account's session is Chanoma alone"):
     until("Chanoma holds the controller", lambda: "is player 1" in session_log())
+    # The compositor knows the input devices (and a laptop's lid) as it
+    # starts, before any key or movement: nothing has been pressed since.
+    until("the keyboard known at once", lambda: "keyboard device=" in session_log(), timeout=20)
     assert machine.execute("pgrep -u tv -f aizome-shell")[0] != 0, "no shell"
     assert machine.execute("pgrep -u tv -x xwayland-satellite")[0] != 0, "no X11 bridge"
     # Its systemd starts the bus and sound, not what every account's does.

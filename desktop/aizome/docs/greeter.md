@@ -202,7 +202,8 @@ stands in for greetd and takes anyone, with the password `aizome`.
   password on the on-screen keyboard and her desktop starts, with a user
   service every login starts; Settings' helper makes the TV account with
   a PIN, which the controller presses on the PIN pad; the TV account's
-  session is Chanoma alone (no shell), its systemd with the session bus
-  and sound but that service masked, set up for the first time by the
-  controller and in kids' mode; *Log Out* ends it, and the login screen
+  session is Chanoma alone (no shell), the compositor knowing the
+  keyboard before anything is pressed (the lid would be known the same
+  way), its systemd with the session bus and sound but that service
+  masked, set up for the first time by the controller and in kids' mode; *Log Out* ends it, and the login screen
   comes back.
