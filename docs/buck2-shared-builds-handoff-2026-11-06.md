@@ -15,8 +15,9 @@ over long benchmark matrices. Builds, tests and measurements go to
 
 - `feat/buck2-shared-builds` (PR #291, draft) is pushed with the lost-writes
   and contention fixes, the paused-gateway restart (`251253d7`), stale
-  cleaning (`1356dfba`) and a ByteStream upload fix (`ea3a1a5d`). Its CI
-  trust check passes; the build job is skipped.
+  cleaning (`1356dfba`), a ByteStream upload fix (`ea3a1a5d`) and the
+  private config layer in the daemon identity (`61497353`). Its CI trust
+  check passes; the build job is skipped.
 - Independent reviews (2026-11-06) read every #291 engine patch in the
   storage and upload paths, and the single-CAS code:
   - The content-store patches had no confirmed defects. One cliff is now
@@ -25,6 +26,17 @@ over long benchmark matrices. Builds, tests and measurements go to
   - The upload paths had one: a truncated large output was reported
     uploaded without being sent. That is fixed in `ea3a1a5d`, with a test.
   - The single-CAS review's five findings are fixed in `bdc406ca`.
+  - The privacy and config patches had two engine fixes, both in
+    `61497353` with tests:
+    - the daemon identity now names the private config layer the client
+      selects;
+    - a missing RE certificate or unset variable no longer fails local-only
+      commands.
+  - The privacy review's other findings echo values given on the command
+    line. Sekka never passes credentials that way, and DEVELOPERS.md says
+    not to.
+  - The scheduling and incremental source-cache patches had no defects.
+    DEVELOPERS.md now states the source-key alias's assumption.
 - `feat/buck2-single-cas` is rebased onto it and pushed; it has no PR yet.
   It makes NativeLink's CAS the only store on the CAS host:
   - hits are cloned from it (`local-cas-downloads.patch`);
