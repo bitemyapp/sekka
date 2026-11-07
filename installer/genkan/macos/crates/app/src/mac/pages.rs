@@ -511,10 +511,15 @@ fn plan(m: &Model, p: &mut Page) {
         ));
     }
     p.quit();
-    if m.plan_error.is_some() {
+    // Nothing is downloaded until macOS has room for what goes there; the
+    // callout above says how much.
+    let room = m.macos_room().is_ok();
+    if m.plan_error.is_some() && room {
         p.right("Check Again", || Msg::CheckAgain);
     }
-    if own > 0 {
+    if !room {
+        p.primary("Check Again", || Msg::CheckAgain);
+    } else if own > 0 {
         p.primary("Download", || Msg::StartDownload);
     } else {
         p.primary("Continue", || Msg::Review);

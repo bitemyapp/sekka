@@ -602,6 +602,8 @@ impl Model {
                 }
                 Vec::new()
             }
+            // Nothing is downloaded for a plan macOS has no room for.
+            Msg::StartDownload if self.macos_room().is_err() => Vec::new(),
             Msg::StartDownload => {
                 let Some(release) = self.release.clone() else { return Vec::new() };
                 self.screen = Screen::Downloading;
@@ -1172,6 +1174,9 @@ impl Model {
                 if self.screen == Screen::Review {
                     return self.prepare_review();
                 }
+                if let Err(e) = self.macos_room() {
+                    self.plan_error = Some(text::plan_error(&e));
+                }
             }
             None => {
                 self.screen = Screen::NotReady;
@@ -1385,6 +1390,20 @@ impl Model {
     /// What a stopped installation lets the person do.
     pub fn stopped_actions(&self) -> Vec<sekka_mac_contract::NextAction> {
         self.state.as_ref().map(|s| s.permitted().to_vec()).unwrap_or_default()
+    }
+
+    /// Whether macOS has room, beside free space, for what goes there while
+    /// Sekka installs, the downloads still to come among it. It depends on
+    /// the place alone, so the plan screen says so before anything is
+    /// downloaded, and offers no download until it has. Ok until the place
+    /// and what is left to download are known.
+    pub fn macos_room(&self) -> Result<(), PlanError> {
+        let (Some(inspection), Some(release), Some(candidate), Some(to_download)) =
+            (self.inspection(), self.release.as_ref(), self.candidate(), self.to_download)
+        else {
+            return Ok(());
+        };
+        sekka_mac_contract::macos_room(inspection, release, candidate, to_download)
     }
 
     pub fn disk_changed(&self) -> Option<DiskChanged> {

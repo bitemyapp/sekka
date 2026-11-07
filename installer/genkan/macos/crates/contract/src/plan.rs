@@ -172,9 +172,11 @@ pub enum PlanError {
     #[error("at most {maximum} bytes are available here")]
     TooLarge { maximum: u64 },
     /// Free space can take Sekka, but macOS, which isn't resized, has too
-    /// little free for what goes there while Sekka installs.
+    /// little free for what goes there while Sekka installs ([`macos_room`]):
+    /// `needed` in all, `downloads` of it Sekka's own downloads still to
+    /// come.
     #[error("macOS needs {needed} bytes free while Sekka installs and has {free}")]
-    MacosNeedsRoom { needed: u64, free: u64 },
+    MacosNeedsRoom { needed: u64, free: u64, downloads: u64 },
     #[error("{0}")]
     Invalid(String),
 }
@@ -294,6 +296,38 @@ pub fn capacity(release: &Release, candidate: &Candidate, staging: u64) -> u64 {
     (raw / ALIGN * ALIGN).saturating_sub(ALIGN)
 }
 
+/// Whether macOS has room for what goes there while Sekka installs beside
+/// it in free space: the `staging` bytes still to download, then the
+/// release's Apple inputs, with [`MACOS_MARGIN`] beside them. A shrunk
+/// macOS keeps that room in what [`capacity`] leaves it, so only free space
+/// can lack it. Nothing about it depends on Sekka's size, so the plan screen
+/// knows before anything is downloaded.
+pub fn macos_room(
+    inspection: &Inspection,
+    release: &Release,
+    candidate: &Candidate,
+    staging: u64,
+) -> Result<(), PlanError> {
+    if !matches!(candidate, Candidate::FreeSpace { .. }) {
+        return Ok(());
+    }
+    let free = inspection
+        .disk
+        .containers
+        .iter()
+        .find(|k| k.volume_groups.iter().any(|g| g.uuid == inspection.macos.volume_group))
+        .map_or(0, |k| k.free);
+    let needed = staging + release.reserved() + MACOS_MARGIN;
+    if free < needed {
+        return Err(PlanError::MacosNeedsRoom {
+            needed,
+            free,
+            downloads: staging,
+        });
+    }
+    Ok(())
+}
+
 /// The size the plan screen starts at: the release's recommendation, within
 /// what this place allows.
 pub fn suggested_size(release: &Release, candidate: &Candidate, staging: u64) -> Option<u64> {
@@ -360,16 +394,7 @@ pub fn derive_plan(
             // Nothing is taken from macOS, so what goes there meanwhile (the
             // downloads still to come, then Apple's files) must fit in what
             // it has free, with the room the engine keeps beside them.
-            let free = inspection
-                .disk
-                .containers
-                .iter()
-                .find(|k| k.volume_groups.iter().any(|g| g.uuid == inspection.macos.volume_group))
-                .map_or(0, |k| k.free);
-            let needed = staging + release.reserved() + MACOS_MARGIN;
-            if free < needed {
-                return Err(PlanError::MacosNeedsRoom { needed, free });
-            }
+            macos_room(inspection, release, candidate, staging)?;
             (Vec::new(), Extent { offset, size: sekka }, None)
         }
         Candidate::ShrinkContainer {
@@ -633,8 +658,19 @@ mod tests {
         s.disk.containers[0].free = enough - 1;
         assert_eq!(
             derive_plan(&s, &c, &r, staging),
-            Err(PlanError::MacosNeedsRoom { needed: enough, free: enough - 1 })
+            Err(PlanError::MacosNeedsRoom {
+                needed: enough,
+                free: enough - 1,
+                downloads: staging
+            })
         );
+        // Known before the downloads from the place alone, whatever Sekka's
+        // size; a shrunk macOS keeps the room in what capacity leaves it.
+        let release = &c.releases[0];
+        assert_eq!(macos_room(&s, release, &s.candidates[0], staging), derive_plan(&s, &c, &r, staging).map(|_| ()));
+        let shrink = sample();
+        assert!(matches!(shrink.candidates[0], Candidate::ShrinkContainer { .. }));
+        assert_eq!(macos_room(&shrink, release, &shrink.candidates[0], 400 * GIB), Ok(()));
         // Once downloaded, the downloads are in what macOS uses.
         s.disk.containers[0].free = reserved + MACOS_MARGIN;
         assert!(derive_plan(&s, &c, &r, 0).is_ok());

@@ -220,6 +220,58 @@ fn a_stopped_download_can_be_resumed() {
 }
 
 #[test]
+fn free_space_beside_a_full_macos_is_said_before_anything_is_downloaded() {
+    // A large free region after a nearly full macOS: the downloads and
+    // Apple's files would go into macOS, which isn't resized.
+    let plan_for = |free: u64| {
+        let env = Simulation::new(Scenario::Normal, 0.0);
+        let (mut m, _) = Model::new("0.1.0".parse().unwrap(), env.user());
+        m.update(Msg::HelperStatus(env.helper_status()));
+        m.update(Msg::Engine(env.bundled_engine()));
+        m.update(Msg::Catalog(env.catalog()));
+        let mut inspection = env.inspect().unwrap();
+        let group = inspection.macos.volume_group;
+        let macos = inspection
+            .disk
+            .containers
+            .iter_mut()
+            .find(|k| k.volume_groups.iter().any(|g| g.uuid == group))
+            .unwrap();
+        macos.free = free;
+        inspection.candidates = vec![Candidate::FreeSpace {
+            extent: sekka_mac_contract::Extent {
+                offset: 300 * sekka_mac_contract::GIB,
+                size: 190 * sekka_mac_contract::GIB,
+            },
+        }];
+        m.update(Msg::Inspected(Ok(inspection)));
+        let release = m.release.clone().unwrap();
+        m.update(Msg::ToDownload(release.download_bytes()));
+        assert_eq!(m.screen, Screen::Plan);
+        (m, release)
+    };
+    let (mut m, release) = plan_for(sekka_mac_contract::GIB);
+    let error = m.plan_error.clone().expect("said on the plan screen");
+    assert!(error.starts_with("macOS needs") && error.contains("nothing is downloaded until it has room"), "{error}");
+    assert!(m.macos_room().is_err());
+    assert!(m.update(Msg::StartDownload).is_empty());
+    assert!(m.update(Msg::Review).is_empty());
+    assert_eq!((m.screen, m.downloading), (Screen::Plan, false));
+    // With room for the downloads, Apple's files and the margin, it goes on.
+    let enough = release.download_bytes() + release.reserved() + sekka_mac_contract::MACOS_MARGIN;
+    let (mut m, _) = plan_for(enough);
+    assert_eq!((m.plan_error.as_deref(), m.macos_room()), (None, Ok(())));
+    assert!(matches!(m.update(Msg::StartDownload).as_slice(), [Effect::Download(_)]));
+    // Once downloaded, only Apple's files are still to come.
+    let words = text::plan_error(&PlanError::MacosNeedsRoom {
+        needed: 2,
+        free: 1,
+        downloads: 0,
+    });
+    assert!(words.contains("for Apple's startup files") && !words.contains("downloaded"), "{words}");
+}
+
+#[test]
 fn a_charger_unplugged_during_the_download_is_named_before_the_review() {
     let mut j = Journey::start(Scenario::Unplugged);
     assert_eq!(j.model.screen, Screen::Plan);
