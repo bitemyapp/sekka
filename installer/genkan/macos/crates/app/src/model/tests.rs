@@ -53,6 +53,23 @@ impl Journey {
         }
         self
     }
+    /// Install and begin, hearing the helper's answer and its first poll;
+    /// the polls after that are the test's to make, as the run goes on.
+    fn begin_unwatched(&mut self) -> Uuid {
+        self.reach_review().confirm().send(Msg::Install);
+        let effects = self.model.update(Msg::Authorize {
+            owner: "chris".into(),
+            password: Secret::new(b"right".to_vec()),
+        });
+        let Some(Effect::Begin(begin, password)) = effects.into_iter().next() else { panic!("the helper is asked to begin") };
+        let id = self.env.begin(*begin, password).unwrap();
+        for effect in self.model.update(Msg::Begun(Ok(id))) {
+            if let Effect::Poll { installation, after, .. } = effect {
+                let _ = self.model.update(Msg::Events(self.env.events(installation, after)));
+            }
+        }
+        id
+    }
 }
 
 #[test]
@@ -777,6 +794,32 @@ fn an_installation_stopped_before_any_change_can_be_cancelled() {
     assert_eq!(j.model.notice.as_deref(), Some(crate::text::CANCELLED));
     assert!(j.model.unfinished().is_none());
     assert!(j.model.installation.is_none());
+}
+
+#[test]
+fn a_run_can_be_cancelled_until_the_disk_starts_to_change() {
+    // Kept downloading Apple's files, which changes nothing.
+    let mut j = Journey::with(Simulation::new(Scenario::Normal, 0.0).holding_at(Stage::AppleInputs));
+    let id = j.begin_unwatched();
+    assert_eq!(j.model.screen, Screen::Installing);
+    assert!(j.model.cancel_allowed());
+    j.send(Msg::CancelInstallation);
+    assert!(j.model.notice.is_none(), "{:?}", j.model.notice);
+    // The run closes itself as cancelled, and its next poll says so.
+    j.send(Msg::Events(j.env.events(id, 0)));
+    assert!(!j.model.running);
+    assert_eq!(j.model.screen, Screen::Plan);
+    assert_eq!(j.model.notice.as_deref(), Some(crate::text::CANCELLED));
+    assert!(j.model.installation.is_none());
+
+    // Once the disk is changing, the helper doesn't stop it, and says why.
+    let mut j = Journey::with(Simulation::new(Scenario::Normal, 0.0).holding_at(Stage::Shrink));
+    let id = j.begin_unwatched();
+    assert!(!j.model.cancel_allowed());
+    j.send(Msg::CancelInstallation);
+    assert!(j.model.notice.as_deref().unwrap().contains("changing the disk right now"));
+    assert_eq!(j.model.screen, Screen::Installing);
+    assert!(j.env.events(id, 0).unwrap().running);
 }
 
 #[test]

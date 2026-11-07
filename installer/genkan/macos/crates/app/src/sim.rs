@@ -117,6 +117,9 @@ pub struct Simulation {
     /// ([`Simulation::refusing_reconcile`]). Otherwise it looks at the Mac,
     /// as the real helper does.
     reconcile_refusal: Option<HelperRefusal>,
+    /// A stage the run stays in until it is cancelled
+    /// ([`Simulation::holding_at`]).
+    hold: Option<Stage>,
     state: Mutex<SimState>,
 }
 
@@ -132,11 +135,60 @@ struct SimState {
     reconciled: bool,
     /// The installation the app reopened to was cancelled.
     cancelled: bool,
+    /// The run begun here was cancelled in this stage, which changes
+    /// nothing.
+    cancelled_at: Option<Stage>,
     /// The administrator who authorized the installation.
     owner: Option<String>,
 }
 
 const SIM_ID: Uuid = Uuid::from_bytes([0x5e; 16]);
+
+/// The stages a simulated installation runs; its plan shrinks macOS.
+fn sim_stages() -> Vec<Stage> {
+    let mut stages = vec![Stage::Import];
+    stages.extend(macos_stages(true));
+    stages
+}
+
+/// A stage's failure, as the helper records it.
+fn failed(stage: Stage, code: &str, message: &str, apple: Option<&str>, disk_changed: DiskChanged) -> Event {
+    Event::Failed {
+        stage,
+        failure: Failure {
+            code: code.parse().unwrap(),
+            message: message.parse().unwrap(),
+            apple_diagnostic: apple.map(|a| a.parse().unwrap()),
+            disk_changed,
+        },
+    }
+}
+
+/// How the helper describes a state in its refusals.
+fn describe(state: &InstallState) -> String {
+    match state {
+        InstallState::Planned => "it was planned and nothing has changed".into(),
+        InstallState::AssetsVerified => "its downloads were checked and nothing on the disk has changed".into(),
+        InstallState::MutationStarted { stage } => {
+            format!("it stopped during or after “{}”, after the disk changed", stage.title())
+        }
+        InstallState::Failed { stage, disk_changed } => format!(
+            "“{}” failed{}",
+            stage.title(),
+            match disk_changed {
+                DiskChanged::No => ", and nothing on the disk changed",
+                DiskChanged::Yes => ", after the disk changed",
+                DiskChanged::Unknown => "; whether the disk changed isn't known",
+            }
+        ),
+        InstallState::StartupDiskFailed => "setting the startup disk failed; everything else is in place".into(),
+        InstallState::WaitingForRecovery => "it is waiting for its step in Recovery".into(),
+        InstallState::EnrollmentUncertain => "its step in Recovery started and didn't finish".into(),
+        InstallState::WaitingForSetup => "it is installed and waiting for its first start".into(),
+        InstallState::Cancelled => "it was cancelled before anything changed".into(),
+        InstallState::Removed => "nothing of it is left on the disk".into(),
+    }
+}
 
 /// What the helper says when another request holds its install lock.
 pub fn busy() -> HelperRefusal {
@@ -162,8 +214,16 @@ impl Simulation {
             scenario,
             pace,
             reconcile_refusal: None,
+            hold: None,
             state: Mutex::new(SimState::default()),
         }
+    }
+
+    /// The same simulation, with a run that stays in `stage` until it is
+    /// cancelled: at pace 0 a run otherwise finishes as it starts.
+    pub fn holding_at(mut self, stage: Stage) -> Self {
+        self.hold = Some(stage);
+        self
     }
 
     /// The same simulation, with a helper that refuses to reconcile, as the
@@ -202,8 +262,7 @@ impl Simulation {
             app: "0.1.0".parse().unwrap(),
             helper: "0.1.0".parse().unwrap(),
         });
-        let mut stages = vec![Stage::Import];
-        stages.extend(macos_stages(true));
+        let stages = sim_stages();
         let (done, failing) = upto.unwrap_or((stages.len(), None));
         for stage in stages.iter().take(done) {
             push(Event::Intent { stage: *stage });
@@ -227,15 +286,7 @@ impl Simulation {
                 Stage::StartupDisk => (DiskChanged::No, "macOS didn't set the startup disk.", Some("bless: Couldn't set the startup disk")),
                 _ => (DiskChanged::Unknown, "The engine stopped while writing Sekka.", None),
             };
-            push(Event::Failed {
-                stage,
-                failure: Failure {
-                    code: "simulated".parse().unwrap(),
-                    message: message.parse().unwrap(),
-                    apple_diagnostic: apple.map(|a| a.parse().unwrap()),
-                    disk_changed: changed,
-                },
-            });
+            push(failed(stage, "simulated", message, apple, changed));
         } else if done < stages.len() {
             push(Event::Intent { stage: stages[done] });
         }
@@ -274,15 +325,24 @@ impl Simulation {
             let s = self.state.lock().unwrap();
             (s.reconciled, s.cancelled)
         };
+        // Import done and Apple's files started, when the helper stopped.
+        let upto = (self.scenario == Scenario::StoppedEarly).then_some((1, None));
         let mut tail = if reconciled { self.reconciliation().unwrap_or_default() } else { Vec::new() };
         if cancelled {
+            // As the helper closes it: the stage its run stopped in changed
+            // nothing, and the record says so first.
+            if let Some((done, None)) = upto {
+                tail.push(failed(
+                    sim_stages()[done],
+                    "interrupted",
+                    "This step stopped part way, when the helper or the Mac restarted. Nothing on the disk changed.",
+                    None,
+                    DiskChanged::No,
+                ));
+            }
             tail.push(Event::Cancelled);
         }
-        match self.scenario {
-            // Import done, Apple's files started.
-            Scenario::StoppedEarly => self.records(Some((1, None)), tail),
-            _ => self.records(None, tail),
-        }
+        self.records(upto, tail)
     }
 
     /// The installation as the helper has it now: the one begun in this
@@ -300,27 +360,43 @@ impl Simulation {
             };
         };
         let elapsed = if self.pace > 0.0 { started.elapsed().as_secs_f64() / self.pace } else { 1e9 };
-        let mut stages = vec![Stage::Import];
-        stages.extend(macos_stages(true));
+        let stages = sim_stages();
+        let at = |stage| stages.iter().position(|s| *s == stage).unwrap();
+        let cancelled_at = self.state.lock().unwrap().cancelled_at;
+        if let Some(stage) = cancelled_at {
+            let tail = vec![
+                failed(stage, "cancelled", "Cancelled before anything on the disk changed.", None, DiskChanged::No),
+                Event::Cancelled,
+            ];
+            let (records, state) = self.records(Some((at(stage), None)), tail);
+            return Events {
+                records,
+                state,
+                running: false,
+                progress: None,
+            };
+        }
         let per = 1.6;
-        let done = ((elapsed / per) as usize).min(stages.len());
+        let mut done = ((elapsed / per) as usize).min(stages.len());
+        if let Some(stage) = self.hold {
+            done = done.min(at(stage));
+        }
         let failing = match self.scenario {
             Scenario::ResizeFails => Some(Stage::Shrink),
             Scenario::InstallFails => Some(Stage::Root),
             Scenario::StartupDiskFails if !self.state.lock().unwrap().startup_retried => Some(Stage::StartupDisk),
             _ => None,
         };
-        if let Some(f) = failing {
-            let at = stages.iter().position(|s| *s == f).unwrap();
-            if done >= at {
-                let (records, state) = self.records(Some((at, Some(f))), Vec::new());
-                return Events {
-                    records,
-                    state,
-                    running: false,
-                    progress: None,
-                };
-            }
+        if let Some(f) = failing
+            && done >= at(f)
+        {
+            let (records, state) = self.records(Some((at(f), Some(f))), Vec::new());
+            return Events {
+                records,
+                state,
+                running: false,
+                progress: None,
+            };
         }
         let (records, state) = self.records(Some((done, None)), Vec::new());
         let running = done < stages.len();
@@ -556,17 +632,36 @@ impl Environment for Simulation {
     fn events(&self, _: Uuid, _after: u64) -> Result<Events, String> {
         Ok(self.current())
     }
+    /// As the helper answers: a run in a stage that changes nothing stops
+    /// at once and is closed as cancelled, and one changing the disk isn't
+    /// stopped; a stopped installation is closed only if nothing that
+    /// changes the disk ever started.
     fn cancel(&self, _: Uuid) -> Result<(), HelperRefusal> {
-        if self.scenario == Scenario::StoppedEarly {
-            self.state.lock().unwrap().cancelled = true;
+        let now = self.current();
+        if now.running {
+            let stage = now.progress.map_or(Stage::Import, |p| p.stage);
+            if stage.mutates() {
+                return Err(HelperRefusal {
+                    code: HelperRefusalCode::State,
+                    message: "Sekka is changing the disk right now, and stopping in the middle isn't safe. This step will finish or fail on its own."
+                        .parse()
+                        .unwrap(),
+                });
+            }
+            self.state.lock().unwrap().cancelled_at = Some(stage);
             return Ok(());
         }
-        Err(HelperRefusal {
-            code: HelperRefusalCode::State,
-            message: "Sekka is changing the disk right now, and stopping in the middle isn't safe. This step will finish or fail on its own."
-                .parse()
-                .unwrap(),
-        })
+        match now.state {
+            InstallState::Planned | InstallState::AssetsVerified => {
+                self.state.lock().unwrap().cancelled = true;
+                Ok(())
+            }
+            InstallState::Cancelled => Ok(()),
+            other => Err(HelperRefusal {
+                code: HelperRefusalCode::State,
+                message: format!("This installation can't be cancelled now: {}.", describe(&other)).parse().unwrap(),
+            }),
+        }
     }
     fn retry_startup_disk(&self, id: Uuid, _: Secret) -> Result<Events, HelperRefusal> {
         self.wait(800);
