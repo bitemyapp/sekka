@@ -1135,6 +1135,8 @@ dependencies = [
  "diesel_migrations",
  "hex",
  "hmac",
+ "http-body",
+ "http-body-util",
  "httpdate",
  "parking_lot",
  "reqwest",
@@ -1142,8 +1144,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "tokio",
- "tower",
- "tower-http",
 ]
 
 [[package]]
