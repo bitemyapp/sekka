@@ -259,7 +259,7 @@ impl Window {
             Screen::Broken(message) => {
                 add(&self.column, &title("This installation can't be finished here"));
                 add(&self.column, &body(message));
-                add(&self.column, &ui::secondary(mtm, "Nothing was changed. To start up in macOS, hold the power button while your Mac starts and choose Macintosh HD.", 13.0));
+                add(&self.column, &ui::secondary(mtm, screen::BROKEN_NEXT, 13.0));
                 let b = ui::primary(mtm, &mut self.targets, "Shut Down", shut_down);
                 add(&self.column, &buttons(mtm, &[&b]));
             }

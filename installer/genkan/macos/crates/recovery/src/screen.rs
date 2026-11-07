@@ -50,6 +50,11 @@ impl Changing {
     }
 }
 
+/// Said under why an installation can't be finished here. Recovery isn't
+/// told what the owner's macOS volume is called (and may not have its
+/// configuration at all), so it isn't named.
+pub const BROKEN_NEXT: &str = "Nothing was changed. To start up in macOS, hold the power button while your Mac starts and choose your macOS volume, usually Macintosh HD.";
+
 /// Said when someone tries to quit or close the window while a step runs.
 pub const BUSY: &str = "Wait for this step to finish";
 pub const BUSY_DETAIL: &str = "macOS is changing how your Mac starts up, and stopping it part way isn't safe. Finish Installing Sekka can quit when this step is done.";
