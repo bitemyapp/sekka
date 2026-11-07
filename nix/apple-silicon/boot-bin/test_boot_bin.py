@@ -20,6 +20,11 @@ import boot_bin as bb
 A, B, C = b"m1n1 A" * 1000, b"m1n1 B" * 1200, b"m1n1 C" * 900
 
 
+def name(data):
+    """A copy's name in messages: A, B, C, "empty" or None."""
+    return {A: "A", B: "B", C: "C", b"": "empty"}.get(data, None if data is None else "other")
+
+
 class Interrupted(Exception):
     pass
 
@@ -258,6 +263,24 @@ class BootBin(unittest.TestCase):
                 self.assertEqual(self.record()["current"]["digest"], bb.digest(B))
                 self.assertIn("booted", bb.mark_booted(self.esp, warn=self.warnings.append))
                 self.assertTrue(bb.status(self.esp)["consistent"])
+
+    def test_a_truncated_record_is_its_staged_copy(self):
+        # fsck.vfat truncated the record as its staged copy was renamed over
+        # it (sharing clusters): the staged copy is the newer record.
+        self.install(A)
+        self.booted()
+        self.install(B)
+        self.booted()
+        self.restore()
+        record = self.esp / bb.RECORD
+        (self.esp / bb.STAGED_RECORD).write_bytes(record.read_bytes())
+        record.write_bytes(b"")
+        self.assertEqual(bb.load_record(bb.Disk(self.esp), self.warnings.append)["held"]["kept"], bb.digest(A))
+        # A retry of the restore sees it done, rather than swapping back.
+        self.assertIn("already the restored", self.restore())
+        self.assertEqual((self.active(), self.previous()), (A, B))
+        self.assertEqual(self.record()["held"]["kept"], bb.digest(A))
+        self.assertEqual(self.leftovers(), [])
 
     def test_missing_active_copy_recovers_the_running_systems(self):
         # boot.bin gone from the ESP (NixOS's extraFiles cleanup, before
@@ -682,6 +705,27 @@ class FatModel:
         shared = {name for name, start, _ in live if start and starts.count(start) > 1}
         return out, shared
 
+    @staticmethod
+    def fsck(choice):
+        """What fsck.vfat -a, which systemd runs on the ESP before mounting it
+        at every start (/boot is fsck pass 2), may make of a state: of two
+        names sharing clusters it truncates one, which here is to nothing, as
+        they share their first. Which one depends on the order it meets them,
+        so each is a state the next start may find. Without sharing, the
+        state as it is."""
+        owners = {}
+        for d, entries in choice.items():
+            for pos, e in enumerate(entries):
+                if e is not None and e != DELETED and e[1]:
+                    owners.setdefault(e[1], []).append((d, pos))
+        groups = [g for g in owners.values() if len(g) > 1]
+        assert all(len(g) == 2 for g in groups), groups
+        for picks in itertools.product(*groups):
+            out = {d: list(entries) for d, entries in choice.items()}
+            for d, pos in picks:
+                out[d][pos] = (out[d][pos][0], 0, 0)
+            yield out
+
     def mounted(self, snapshot, choice):
         """A new model holding one state the disk may be in: `choice` picks
         each directory's content, and each FAT entry and cluster takes its
@@ -756,10 +800,10 @@ class OnFat(unittest.TestCase):
                 active = files.get("boot.bin")
                 self.assertIsNotNone(active, f"{where}: no boot.bin")
                 self.assertEqual(len(active), 1, f"{where}: boot.bin twice")
-                self.assertIn(active[0], allowed, f"{where}: boot.bin isn't a complete copy")
+                self.assertTrue(active[0] in allowed, f"{where}: boot.bin isn't a complete copy")
                 if kept_when and active[0] == kept_when[0]:
-                    self.assertEqual(files.get("boot.bin.previous"), [kept_when[1]],
-                                     f"{where}: the replaced copy isn't certainly kept")
+                    self.assertTrue(files.get("boot.bin.previous") == [kept_when[1]],
+                                    f"{where}: the replaced copy isn't certainly kept")
                 certain = {x for v in files.values() for x in v if x is not None}
                 for copy in always:
                     self.assertIn(copy, certain, f"{where}: a copy is lost")
@@ -768,34 +812,45 @@ class OnFat(unittest.TestCase):
         return states
 
     def recover(self, m, states, retry, label):
-        """From each state, mounted again: `retry` finishes, or, where names
-        share clusters, refuses and leaves boot.bin as it was."""
+        """From each state, mounted again as the next start mounts it, after
+        fsck.vfat (FatModel.fsck): `retry` finishes. Mounted without the
+        check, a state where names share clusters is refused, leaving
+        boot.bin as it was ("refused"); each such state also finishes once
+        checked ("after fsck")."""
         outcomes, tried = set(), set()
         for snap, m1n1 in states:
             for sekka in FatModel.states(snap, "sekka"):
-                again = m.mounted(snap, {"": [], "m1n1": m1n1, "sekka": sekka})
-                starts = [again.inodes[i]["start"] for i in again.names.values() if again.inodes[i]["start"]]
-                shared = len(starts) != len(set(starts))
-                # States the next run can't tell apart: the same files with
-                # the same bytes, sharing the same way.
-                key = (shared, tuple(sorted((d, n, bb.digest(again.read(f"{d}/{n}"))) for (d, n) in again.names)))
-                if key in tried:
-                    continue
-                tried.add(key)
-                before = again.read(bb.ACTIVE)
-                again.recording = True
-                try:
-                    retry(again)
-                except bb.Failed as e:
-                    self.assertTrue(shared, f"{label}: {e}")
-                    self.assertIn("share their clusters", str(e))
-                    self.assertEqual(again.read(bb.ACTIVE), before)
-                    outcomes.add("refused")
-                    continue
-                self.assertFalse(shared, f"{label}: a leftover sharing clusters was not refused")
-                outcomes.add((again.read(bb.ACTIVE), again.read(bb.PREVIOUS)))
-                self.check(again, {A, B}, None, f"{label}, recovering")
-        return outcomes
+                raw = {"": [], "m1n1": m1n1, "sekka": sekka}
+                for choice in [raw, *FatModel.fsck(raw)]:
+                    again = m.mounted(snap, choice)
+                    starts = [again.inodes[i]["start"] for i in again.names.values() if again.inodes[i]["start"]]
+                    shared = len(starts) != len(set(starts))
+                    # States the next run can't tell apart: the same files
+                    # with the same bytes, sharing the same way.
+                    key = (shared, tuple(sorted((d, n, bb.digest(again.read(f"{d}/{n}"))) for (d, n) in again.names)))
+                    if key in tried:
+                        continue
+                    tried.add(key)
+                    before = again.read(bb.ACTIVE) if again.exists(bb.ACTIVE) else None
+                    again.recording = True
+                    try:
+                        retry(again)
+                    except bb.Failed as e:
+                        self.assertTrue(shared, f"{label}: {e}")
+                        self.assertIn("share their clusters", str(e))
+                        self.assertEqual(again.read(bb.ACTIVE), before)
+                        outcomes.add("refused")
+                        continue
+                    self.assertFalse(shared, f"{label}: a leftover sharing clusters was not refused")
+                    if choice is not raw and choice != raw:
+                        outcomes.add("after fsck")
+                    previous = again.read(bb.PREVIOUS) if again.exists(bb.PREVIOUS) else None
+                    outcomes.add((again.read(bb.ACTIVE), previous))
+                    # Never worse than the state it started from: after
+                    # fsck.vfat, boot.bin may be empty until it is finished.
+                    self.check(again, {A, B, before}, None, f"{label}, recovering")
+        self.assertEqual("refused" in outcomes, "after fsck" in outcomes, f"{label}: {outcomes}")
+        return outcomes - {"refused", "after fsck"}, "after fsck" in outcomes
 
     def test_installing_keeps_one_complete_copy_on_any_sector_layout(self):
         for per_sector in (128, 16, 2, 1):
@@ -804,8 +859,32 @@ class OnFat(unittest.TestCase):
                 bb.install(None, B, say=lambda _: None, warn=lambda _: None, disk=m)
                 states = self.check(m, {A, B}, (B, A), f"{per_sector} per sector", always=(A,))
                 retry = lambda d: bb.install(None, B, say=lambda _: None, warn=lambda _: None, disk=d)  # noqa: E731
-                outcomes = self.recover(m, states, retry, f"{per_sector} per sector")
-                self.assertEqual(outcomes - {"refused"}, {(B, A)})
+                outcomes, after_fsck = self.recover(m, states, retry, f"{per_sector} per sector")
+                self.assertEqual(outcomes, {(B, A)})
+                if per_sector == 1:
+                    # Entries in sectors of their own: the shared state
+                    # happens, and is finished once fsck.vfat has run.
+                    self.assertTrue(after_fsck)
+
+    def test_the_start_after_a_power_cut_finishes_the_replacement(self):
+        """sekka-boot-bin.service at the next start (mark-booted), before any
+        installation: where fsck.vfat truncated boot.bin, it is the staged
+        copy again before m1n1 reads it at the start after."""
+        for per_sector in (16, 1):
+            with self.subTest(per_sector=per_sector):
+                m = self.esp(per_sector)
+                bb.install(None, B, say=lambda _: None, warn=lambda _: None, disk=m)
+                states = self.check(m, {A, B}, (B, A), f"{per_sector} per sector", always=(A,))
+                start = lambda d: bb.mark_booted(None, say=lambda _: None, warn=lambda _: None, disk=d)  # noqa: E731
+                outcomes, after_fsck = self.recover(m, states, start, f"start, {per_sector} per sector")
+                # boot.bin is one complete copy (never what fsck.vfat left
+                # of it), B only with A kept; a replacement it can't finish
+                # is the next installation's to do.
+                names = {(name(a), name(p)) for a, p in outcomes}
+                self.assertTrue(all(a in ("A", "B") for a, _ in names), names)
+                self.assertTrue(all(p == "A" for a, p in names if a == "B"), names)
+                self.assertIn(("B", "A"), names)
+                self.assertTrue(after_fsck)
 
     def test_restoring_keeps_the_restored_copy(self):
         for per_sector in (128, 1):
@@ -818,9 +897,10 @@ class OnFat(unittest.TestCase):
                 # changes.
                 states = self.check(m, {A, B}, None, f"restore, {per_sector} per sector", always=(A,))
                 retry = lambda d: bb.restore_previous(None, say=lambda _: None, warn=lambda _: None, disk=d)  # noqa: E731
-                outcomes = self.recover(m, states, retry, f"restore, {per_sector} per sector")
-                self.assertTrue(outcomes - {"refused"} <= {(A, B), (A, A)}, outcomes)
-                self.assertIn((A, B), outcomes)
+                outcomes, _ = self.recover(m, states, retry, f"restore, {per_sector} per sector")
+                names = {(name(a), name(p)) for a, p in outcomes}
+                self.assertTrue(names <= {("A", "B"), ("A", "A")}, names)
+                self.assertIn(("A", "B"), names)
 
     def test_the_model_catches_the_old_procedure(self):
         """The control: boot_bin.py before this model (os.replace, then an

@@ -307,13 +307,19 @@ ones, written, read back and flushed before the rename.
 The one state it can't exclude: a writeback of the renamed inode during the
 rename, or in the microseconds before the directory's `fsync`, then a power
 cut, leaves the target and its staged copy (`boot.bin` and `boot.bin.new`)
-naming the same new clusters. `boot.bin` is complete in it. Deleting or
-truncating either would free the other's clusters, so `boot_bin.py` checks
-every leftover with `FIBMAP` before removing it and refuses, changing
-nothing, when it shares the target's first block. `fsck.vfat`, which
-systemd runs on `/boot` at every start, resolves shared clusters by
-truncating one of the two names, so the message says to copy `boot.bin`
-somewhere safe first.
+naming the same new clusters. `boot.bin` is complete in it, and m1n1 starts
+from it. But `/boot` is fsck pass 2, so systemd runs `fsck.vfat -a` on it
+before mounting it, which truncates the second of the two names it meets.
+When that is `boot.bin`, the staged copy and the pending record still hold
+the replacement, and `sekka-boot-bin.service` (`mark-booted`) finishes it at
+the same start, as an installation would, before m1n1 reads `boot.bin`
+again. When it is the record (`sekka/boot-bin.json`), its staged copy is
+the newer record: it is read in its place and renamed over it. Mounted
+without that check, deleting or truncating either name would free the
+other's clusters, so `boot_bin.py` checks every leftover with `FIBMAP`
+before removing it and refuses, changing nothing, when it shares the
+target's first block; the message says to run `fsck.vfat -a` on the
+unmounted ESP and install again.
 
 `boot-bin/test_boot_bin.py` runs the real procedure against `FatModel`, a
 model of these semantics (directory sectors, inode writeback at any moment,
@@ -323,11 +329,14 @@ every system call it takes every state a power cut can leave, with 128, 16, 2
 or 1 entries per directory sector, and checks that `boot.bin` is certainly
 one complete copy, that once the new copy can be active the replaced one is
 certainly `boot.bin.previous`, and that only a file and its staged copy ever
-share clusters. It mounts every such state again and checks that the next
-run finishes with the new copy active and the old one kept, or refuses with
-`boot.bin` complete. The old procedure fails the same checks, and so does
-this one when it closes the replaced file right after `syncfs`, before the
-flush.
+share clusters. It mounts every such state again, as `fsck.vfat` leaves it
+(either name of a pair that shares clusters truncated), and checks that the
+next installation finishes with the new copy active and the old one kept,
+and that the next start's `mark-booted` leaves `boot.bin` one complete copy
+(the new one only with the old one kept); mounted unchecked, a state with
+shared clusters is refused with `boot.bin` complete. The old procedure
+fails the same checks, and so does this one when it closes the replaced
+file right after `syncfs`, before the flush.
 
 On every boot loader installation:
 
@@ -353,7 +362,7 @@ On every boot loader installation:
    the current and previous copies (digest, size, store source, system,
    time, whether it booted), any hold, and the last ten installations. A
    record that isn't what `boot_bin.py` writes (unreadable, another shape)
-   is rebuilt from the files.
+   is rebuilt from the files, unless its staged copy is whole.
 
 The image's ESP carries the record for the copy it installs, not yet
 booted; the first start marks it.

@@ -222,9 +222,11 @@ in
         system.build.appleSiliconBootBin = bootBin;
         # Which copy of boot.bin started this Mac: an installation keeps that
         # one as boot.bin.previous, and a copy put back from macOS is held.
+        # Then it finishes a replacement a power cut interrupted, where
+        # fsck.vfat may have truncated boot.bin, before m1n1 reads it again.
         # It never fails the boot.
         systemd.services.sekka-boot-bin = {
-          description = "Record that m1n1/boot.bin started this Mac";
+          description = "Record that m1n1/boot.bin started this Mac, and finish its interrupted replacement";
           wantedBy = [ "multi-user.target" ];
           after = [ "local-fs.target" ];
           unitConfig.RequiresMountsFor = [ esp ];

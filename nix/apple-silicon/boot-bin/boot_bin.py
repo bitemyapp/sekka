@@ -41,11 +41,16 @@ the old clusters, still allocated and intact, or the new ones, written and
 flushed before the rename. One state remains possible: a write-back of the
 renamed inode during the rename, or in the microseconds before the
 directory's fsync, then a power cut, leaves the target and its staged copy
-naming the same new clusters. The target is complete in it; deleting or
-truncating either would free the other's clusters, so a leftover that shares
-its first block with the file it was renamed over (FIBMAP) is refused, not
-deleted. test_boot_bin.py runs every operation against a model of these
-semantics and checks every state a power cut can leave.
+naming the same new clusters. The target is complete in it, and m1n1 starts
+from it. But systemd runs fsck.vfat on the ESP before mounting it, which
+truncates one of the two names: when that is the target, the staged copy and
+the pending record still hold the replacement, so `mark-booted`, at the same
+start, finishes it as an installation would, before m1n1 reads boot.bin
+again. Where the ESP was mounted unchecked, deleting or truncating either
+name would free the other's clusters, so a leftover that shares its first
+block with the file it was renamed over (FIBMAP) is refused, not deleted.
+test_boot_bin.py runs every operation against a model of these semantics and
+checks every state a power cut can leave, and what fsck.vfat makes of it.
 
 On every boot loader installation:
 1. An interrupted replacement is finished from its staged copies, or, when
@@ -67,7 +72,8 @@ On every boot loader installation:
   boot_bin.py install --esp /boot --source BOOT.BIN [--system TOPLEVEL]
   boot_bin.py restore-previous --esp /boot   swap the two copies, and hold
   boot_bin.py release --esp /boot            let installations replace a held copy
-  boot_bin.py mark-booted --esp /boot        at every start: this copy booted
+  boot_bin.py mark-booted --esp /boot        at every start: this copy booted;
+      then finish an interrupted replacement
   boot_bin.py status --esp /boot
   boot_bin.py forget-extra-files --esp /boot before NixOS's systemd-boot
       installer: stop it deleting boot.bin, which a generation from before
@@ -90,6 +96,7 @@ SCHEMA = "sekka.mac.boot-bin/1"
 ACTIVE = "m1n1/boot.bin"
 PREVIOUS = "m1n1/boot.bin.previous"
 RECORD = "sekka/boot-bin.json"
+STAGED_RECORD = RECORD + ".new"
 # What NixOS's systemd-boot builder deletes before copying extraFiles back
 # (systemd-boot-builder.py, remove_extra_files).
 EXTRA_FILES_MARKER = "EFI/nixos/.extra-files/m1n1/boot.bin"
@@ -236,10 +243,11 @@ def refuse_shared(disk, tmp: str) -> None:
     if shared:
         raise Failed(
             f"{tmp} and {target} share their clusters on the disk (a power cut as {tmp} was renamed "
-            f"over it). {target} is complete; deleting either would free the other's clusters, so "
-            f"nothing was changed. fsck.vfat, which systemd runs on the ESP at every start, truncates "
-            f"one of the two: copy {target} somewhere safe first, then restart or run fsck.vfat on the "
-            f"unmounted ESP, and install again."
+            f"over it). fsck.vfat, which systemd runs on /boot before mounting it at every start, "
+            f"truncates one of the two, but this ESP was mounted without it. {target} is complete; "
+            f"deleting either would free the other's clusters, so nothing was changed. Copy {target} "
+            f"somewhere safe, unmount the ESP, run `fsck.vfat -a` on it, mount it again and install "
+            f"again."
         )
 
 
@@ -315,51 +323,72 @@ def valid_entry(item) -> bool:
     )
 
 
-def load_record(disk, warn) -> dict:
-    """sekka/boot-bin.json, or an empty record when it is missing or anything
-    in it is not what this script writes; the files on the ESP then say what
-    is there."""
-    if not disk.exists(RECORD):
-        return empty_record()
+def parse_record(data: bytes) -> dict:
+    """A record as this script writes it; ValueError (or TypeError,
+    AttributeError, KeyError) for anything else."""
+    value = json.loads(data)
+    if not isinstance(value, dict) or value.get("schema") != SCHEMA:
+        raise ValueError(f"schema {value.get('schema') if isinstance(value, dict) else value!r}")
+    for key in ("current", "previous"):
+        if value.get(key) is not None and not valid_entry(value[key]):
+            raise ValueError(f"{key} is {value[key]!r}")
+    history = value.get("history")
+    if not isinstance(history, list) or not all(valid_entry(h) for h in history):
+        raise ValueError("history isn't a list of entries")
+    pending = value.get("pending")
+    if pending is not None and valid_entry(pending):
+        # An older record's pending entry: an installation's new copy.
+        pending = {"kind": "install", "active": pending, "previous": value.get("previous")}
+    if pending is not None and not (
+        isinstance(pending, dict)
+        and pending.get("kind") in ("install", "restore")
+        and valid_entry(pending.get("active"))
+        and (pending.get("previous") is None or valid_entry(pending["previous"]))
+    ):
+        raise ValueError(f"pending is {pending!r}")
+    held = value.get("held")
+    if held is not None and not (
+        isinstance(held, dict)
+        and all(isinstance(held.get(k), str) for k in ("kept", "replaced", "how", "since"))
+    ):
+        raise ValueError(f"held is {held!r}")
+    record = empty_record()
+    record.update(
+        current=value.get("current"),
+        previous=value.get("previous"),
+        pending=pending,
+        held=held,
+        history=history,
+    )
+    return record
+
+
+def read_record(disk, rel: str):
+    """(the record in rel, None), or (None, why not)."""
+    if not disk.exists(rel):
+        return None, "missing"
     try:
-        value = json.loads(disk.read(RECORD))
-        if not isinstance(value, dict) or value.get("schema") != SCHEMA:
-            raise ValueError(f"schema {value.get('schema') if isinstance(value, dict) else value!r}")
-        for key in ("current", "previous"):
-            if value.get(key) is not None and not valid_entry(value[key]):
-                raise ValueError(f"{key} is {value[key]!r}")
-        history = value.get("history")
-        if not isinstance(history, list) or not all(valid_entry(h) for h in history):
-            raise ValueError("history isn't a list of entries")
-        pending = value.get("pending")
-        if pending is not None and valid_entry(pending):
-            # An older record's pending entry: an installation's new copy.
-            pending = {"kind": "install", "active": pending, "previous": value.get("previous")}
-        if pending is not None and not (
-            isinstance(pending, dict)
-            and pending.get("kind") in ("install", "restore")
-            and valid_entry(pending.get("active"))
-            and (pending.get("previous") is None or valid_entry(pending["previous"]))
-        ):
-            raise ValueError(f"pending is {pending!r}")
-        held = value.get("held")
-        if held is not None and not (
-            isinstance(held, dict)
-            and all(isinstance(held.get(k), str) for k in ("kept", "replaced", "how", "since"))
-        ):
-            raise ValueError(f"held is {held!r}")
-        record = empty_record()
-        record.update(
-            current=value.get("current"),
-            previous=value.get("previous"),
-            pending=pending,
-            held=held,
-            history=history,
-        )
-        return record
+        return parse_record(disk.read(rel)), None
     except (ValueError, TypeError, AttributeError, KeyError) as e:
-        warn(f"{RECORD} is unreadable ({e}); it is rebuilt from the files on the ESP")
-        return empty_record()
+        return None, f"unreadable ({e})"
+
+
+def load_record(disk, warn) -> dict:
+    """sekka/boot-bin.json. Where it is missing or unreadable, its staged copy
+    if that is whole: fsck.vfat may have truncated the record as the staged
+    copy was renamed over it (the module's docstring), which leaves the staged
+    copy the newer one, and `settle` puts it in place. Else an empty record,
+    and the files on the ESP say what is there."""
+    record, why = read_record(disk, RECORD)
+    if record is not None:
+        return record
+    staged, _ = read_record(disk, STAGED_RECORD)
+    if staged is not None:
+        warn(f"{RECORD} is {why}; its staged copy, {STAGED_RECORD}, is the record")
+        return staged
+    if why != "missing":
+        warn(f"{RECORD} is {why}; it is rebuilt from the files on the ESP")
+    return empty_record()
 
 
 def save_record(disk, record: dict) -> None:
@@ -411,9 +440,13 @@ def finish(disk, record: dict) -> bool:
 def settle(disk, record: dict, say, warn):
     """Before anything else: finish or give up an interrupted replacement,
     then remove leftovers. Returns the kind of replacement it finished."""
-    leftovers = (ACTIVE + ".new", PREVIOUS + ".new", RECORD + ".new")
+    leftovers = (ACTIVE + ".new", PREVIOUS + ".new", STAGED_RECORD)
     for tmp in leftovers:
         refuse_shared(disk, tmp)
+    # The record's own replacement, interrupted where the record isn't whole
+    # (load_record read the staged copy).
+    if read_record(disk, RECORD)[0] is None and read_record(disk, STAGED_RECORD)[0] is not None:
+        commit(disk, STAGED_RECORD, RECORD)
     finished = None
     p = record.get("pending")
     if p is not None:
@@ -589,13 +622,25 @@ def release(esp, disk=None, warn=None) -> str:
 
 
 def mark_booted(esp, say=print, warn=None, disk=None) -> str:
-    """At every start: the copy at m1n1/boot.bin is the one m1n1 started."""
+    """At every start: the copy at m1n1/boot.bin is the one m1n1 started.
+    Then an interrupted replacement is finished, or given up, as the next
+    installation would: fsck.vfat, which ran before the ESP was mounted, may
+    have truncated a boot.bin that shared its clusters with its staged copy
+    (the module's docstring), and m1n1 reads boot.bin at the next start."""
     warn = warn or (lambda m: print(f"warning: {m}", file=sys.stderr))
     disk = disk or Disk(esp)
-    if not disk.exists(ACTIVE):
-        return f"{ACTIVE} is missing"
     record = load_record(disk, warn)
+    if not disk.exists(ACTIVE):
+        settle(disk, record, say, warn)
+        return f"{ACTIVE} is missing"
+    # What m1n1 started, before settling changes anything.
     d = file_digest(disk, ACTIVE)
+    result = _mark(disk, record, d, warn)
+    settle(disk, record, say, warn)
+    return result
+
+
+def _mark(disk, record, d, warn) -> str:
     p = record.get("pending") or {}
     changed = False
     for e in (record.get("current"), record.get("previous"), p.get("active"), p.get("previous")):
