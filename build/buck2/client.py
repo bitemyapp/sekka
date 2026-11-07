@@ -238,6 +238,10 @@ def main():
     os.chdir(root)
     content_dirs = local_cas_dirs(args.config_file) if args.command in ["build", "test"] else []
     if content_dirs and os.environ.get("BUCK2_LOCAL_CONTENT_STORE"):
+        # New objects are renamed into the store directory; lookups only
+        # write worktree views. An unchanged directory has nothing to share.
+        store = Path(os.environ["BUCK2_LOCAL_CONTENT_STORE"])
+        before = store.stat().st_mtime_ns
         process = subprocess.Popen(command)
         while True:
             try:
@@ -245,7 +249,7 @@ def main():
                 break
             except KeyboardInterrupt:
                 continue  # Buck receives the same SIGINT and cancels its own command.
-        shared = share_with_cas(content_dirs)
+        shared = share_with_cas(content_dirs) if store.stat().st_mtime_ns != before else 0
         raise SystemExit(status or shared)
     if args.command == "runtime":
         completed = subprocess.run(command, check=True, text=True, stdout=subprocess.PIPE)
