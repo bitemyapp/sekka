@@ -1114,13 +1114,17 @@ Aizome: `programs.aizome.chanoma.enable` installs it with its game cores
 - **Home** is shelves of tiles under spaced captions: *Keep playing*
   (games where they were left, with a picture of where; shows and films
   part watched), *Watch* (the services), *Games*, *Films and shows*, and
-  the grown-ups' door. It's Aizome's look at twice the size, for a room:
-  the theme's colours (Night, Day or High contrast, and the focus colour
-  from Settings), square flat faces, Archivo and IBM Plex Mono, the kit's
-  icons. A service's tile is its colour on a square with its initial and
-  its name, never its logo. The tile the controller is on wears the focus
-  ring, its name under it. The arrows or the left stick move, held they
-  repeat; the confirm button opens. The hints along the foot show the
+  the grown-ups' door. A shelf with more than shows starts with the way
+  to all of it (*All games*, *Everything*). While folders are read, the
+  header says which, how far through, and how many files so far. The
+  Games screen's systems are tabs that scroll to keep the chosen one in
+  sight, named beside the title too. It's Aizome's look at twice the
+  size, for a room: the theme's colours (Night, Day or High contrast,
+  and the focus colour from Settings), square flat faces, Archivo and IBM
+  Plex Mono, the kit's icons. A service's tile is its colour on a square
+  with its initial and its name, never its logo. The tile the controller
+  is on wears the focus ring, its name under it. The arrows or the left
+  stick move, held they repeat; the confirm button opens. The hints along the foot show the
   controller's own buttons: Xbox's letters in their colours, PlayStation's
   shapes, Nintendo's letters (with A, on the right, saying yes), or for
   any other controller the four buttons as a diamond with the one meant

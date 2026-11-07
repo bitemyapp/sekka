@@ -13,7 +13,7 @@ use crate::services::{self, CATALOG};
 use crate::ui::Focus;
 use crate::ui::home::{self, Grid, Home, Shelf, Symbol, Tile, TileLook, TileSize};
 
-/// Games a shelf shows before "All games".
+/// Games a shelf shows, after "All games".
 const SHELF_GAMES: usize = 11;
 const SHELF_FILMS: usize = 15;
 
@@ -252,17 +252,20 @@ impl Chanoma {
                 })
                 .collect();
             if watchable.len() > SHELF_FILMS {
-                films.push((
-                    Tile {
-                        label: "Everything".into(),
-                        sub: String::new(),
-                        look: TileLook::Symbol { symbol: Symbol::Film },
-                        badge: None,
-                        progress: None,
-                        more: String::new(),
-                    },
-                    Act::AllFilms,
-                ));
+                films.insert(
+                    0,
+                    (
+                        Tile {
+                            label: "Everything".into(),
+                            sub: String::new(),
+                            look: TileLook::Symbol { symbol: Symbol::Film },
+                            badge: None,
+                            progress: None,
+                            more: String::new(),
+                        },
+                        Act::AllFilms,
+                    ),
+                );
             }
             out.push(shelf("Films and shows", TileSize::Poster, films));
         }
@@ -273,17 +276,20 @@ impl Chanoma {
             let mut tiles: Vec<(Tile, Act)> =
                 games.iter().take(SHELF_GAMES).map(|g| (self.game_tile(g, false), Act::Game(g.key.clone()))).collect();
             if games.len() > SHELF_GAMES || grownup {
-                tiles.push((
-                    Tile {
-                        label: "All games".into(),
-                        sub: format!("{}", games.len()),
-                        look: TileLook::Symbol { symbol: Symbol::Grid },
-                        badge: None,
-                        progress: None,
-                        more: String::new(),
-                    },
-                    Act::AllGames,
-                ));
+                tiles.insert(
+                    0,
+                    (
+                        Tile {
+                            label: "All games".into(),
+                            sub: format!("{}", games.len()),
+                            look: TileLook::Symbol { symbol: Symbol::Grid },
+                            badge: None,
+                            progress: None,
+                            more: String::new(),
+                        },
+                        Act::AllGames,
+                    ),
+                );
             }
             out.insert(games_at, shelf("Games", TileSize::Wide, tiles));
             // With two controllers or more, the games that many can play
@@ -297,17 +303,20 @@ impl Chanoma {
                         .map(|g| (self.game_tile(g, false), Act::Game(g.key.clone())))
                         .collect();
                     if together.len() > SHELF_GAMES {
-                        tiles.push((
-                            Tile {
-                                label: "All of them".into(),
-                                sub: format!("{}", together.len()),
-                                look: TileLook::Symbol { symbol: Symbol::Grid },
-                                badge: None,
-                                progress: None,
-                                more: String::new(),
-                            },
-                            Act::AllTogether,
-                        ));
+                        tiles.insert(
+                            0,
+                            (
+                                Tile {
+                                    label: "All of them".into(),
+                                    sub: format!("{}", together.len()),
+                                    look: TileLook::Symbol { symbol: Symbol::Grid },
+                                    badge: None,
+                                    progress: None,
+                                    more: String::new(),
+                                },
+                                Act::AllTogether,
+                            ),
+                        );
                     }
                     out.insert(games_at, shelf(&format!("For {n} players"), TileSize::Wide, tiles));
                 }
@@ -594,9 +603,16 @@ impl Chanoma {
     pub fn games_view(&self) -> Grid {
         let tabs = self.game_tabs();
         let games = self.games_in_tab();
+        // How many, and in a system's tab which system: said beside the
+        // title too, whatever the tabs show.
+        let count = crate::ui::grouped(games.len());
+        let subtitle = match tabs.get(self.games_tab) {
+            Some(t) if self.games_tab > 0 && tabs.len() > 2 => format!("{} · {count}", t.label()),
+            _ => count,
+        };
         let mut g = Grid {
             title: "Games".into(),
-            subtitle: format!("{}", games.len()),
+            subtitle,
             tabs: tabs.iter().map(GameTab::label).collect(),
             tab: self.games_tab,
             size: TileSize::Wide,

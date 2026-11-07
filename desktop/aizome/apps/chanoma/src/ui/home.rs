@@ -17,7 +17,7 @@ use aizome_kit::sidestep_ui::{Canvas, Color, Image, ImageOptions};
 use aizome_kit::theme::{Role, Theme};
 
 use super::look::*;
-use super::{Fit, Focus, H, HEAD_Y, MARGIN, TOP, W};
+use super::{Fit, Focus, H, MARGIN, TOP, W};
 
 /// A tile's size.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -117,6 +117,8 @@ pub struct Home {
 }
 
 pub const GAP: f64 = 30.0;
+/// Between the grid's tabs.
+const TAB_GAP: f64 = 12.0;
 /// From a shelf's caption to its tiles.
 const TITLE_H: f64 = 52.0;
 /// Below the tiles: room for the focused tile's name.
@@ -295,30 +297,90 @@ impl Grid {
         (0..self.tiles.len()).find(|i| self.showing(*i) && self.tile_rect(*i).contains(p))
     }
 
+    /// Each tab's rectangle along the strip, which runs from margin to
+    /// margin: longer than that, it's scrolled to put the chosen tab in
+    /// the middle (or as near as the ends allow), whole, with its
+    /// neighbours showing either side, however many systems there are.
+    pub fn tab_rects(&self, theme: &Theme) -> Vec<Rect> {
+        let spec = font(SMALL + 2.0, MEDIUM);
+        let widths: Vec<f64> = self.tabs.iter().map(|t| (measure(theme, t, spec).width + 44.0).round()).collect();
+        let mut starts = Vec::with_capacity(widths.len());
+        let mut x = 0.0;
+        for w in &widths {
+            starts.push(x);
+            x += w + TAB_GAP;
+        }
+        let total = (x - TAB_GAP).max(0.0);
+        let room = W - 2.0 * MARGIN;
+        let scroll = match widths.len() {
+            0 => 0.0,
+            _ if total <= room => 0.0,
+            n => {
+                let i = self.tab.min(n - 1);
+                (starts[i] + widths[i] / 2.0 - room / 2.0).clamp(0.0, total - room)
+            }
+        };
+        starts
+            .iter()
+            .zip(&widths)
+            .map(|(s, w)| Rect::new(MARGIN + s - scroll, TOP - 6.0, MARGIN + s - scroll + w, TOP + 46.0))
+            .collect()
+    }
+
+    /// The tab a click on the strip lands on.
+    pub fn tab_hit(&self, p: Point) -> Option<usize> {
+        // The fonts are the same in every theme, so any measures them.
+        let visible = |r: &Rect| r.x1 > MARGIN && r.x0 < W - MARGIN;
+        let rects = self.tab_rects(&Theme::night());
+        rects.iter().position(|r| visible(r) && r.contains(p) && p.x >= MARGIN && p.x <= W - MARGIN)
+    }
+
     pub fn paint(&self, c: &mut Canvas, theme: &Theme, focus: Focus, art: &HashMap<PathBuf, Image>) {
         // The title where Home has its name, the systems under it as tabs
         // (as the palette's scopes are).
         let head = Rect::new(0.0, 30.0, W, self.body_top() - 10.0);
         if c.needs(head) {
-            let w = text_mid(c, theme, &self.title, MARGIN, HEAD_Y, font(HEADLINE - 4.0, BOLD), theme.text());
-            if !self.subtitle.is_empty() {
-                let spec = font(SMALL + 2.0, REGULAR);
-                text_mid(c, theme, &self.subtitle, MARGIN + w + 24.0, HEAD_Y + 3.0, spec, theme.text3());
+            super::head_title(c, theme, &self.title, &self.subtitle);
+            let rects = self.tab_rects(theme);
+            let spec = font(SMALL + 2.0, MEDIUM);
+            // Cut at the margins, where the arrows say there's more.
+            c.saved(|c| {
+                c.clip_rect(Rect::new(MARGIN - 8.0, TOP - 14.0, W - MARGIN + 8.0, TOP + 54.0));
+                for (i, (t, r)) in self.tabs.iter().zip(&rects).enumerate() {
+                    if r.x1 < MARGIN - 8.0 || r.x0 > W - MARGIN + 8.0 {
+                        continue;
+                    }
+                    let ink = if i == self.tab {
+                        lit(c, theme, *r);
+                        theme.on_selection()
+                    } else {
+                        face(c, theme, *r, theme.raised(), theme.line());
+                        theme.text2()
+                    };
+                    text_centred(c, theme, t, r.center(), spec, ink);
+                }
+                // The ends fade into the screen where the strip goes on.
+                let more_left = rects.first().is_some_and(|r| r.x0 < MARGIN - 0.5);
+                let more_right = rects.last().is_some_and(|r| r.x1 > W - MARGIN + 0.5);
+                for k in 0..8 {
+                    let alpha = (1.0 - f64::from(k) / 8.0) as _;
+                    let x = f64::from(k) * 8.0;
+                    if more_left {
+                        let r = Rect::new(MARGIN - 8.0 + x, TOP - 14.0, MARGIN + x, TOP + 54.0);
+                        c.fill_rect(r, theme.surface().with_alpha(alpha));
+                    }
+                    if more_right {
+                        let r = Rect::new(W - MARGIN - x, TOP - 14.0, W - MARGIN + 8.0 - x, TOP + 54.0);
+                        c.fill_rect(r, theme.surface().with_alpha(alpha));
+                    }
+                }
+            });
+            let y = TOP + 20.0;
+            if rects.first().is_some_and(|r| r.x0 < MARGIN - 0.5) {
+                icon(c, Icon::ChevronLeft, Point::new(MARGIN / 2.0, y), 32.0, theme.text2());
             }
-            let mut x = MARGIN;
-            for (i, t) in self.tabs.iter().enumerate() {
-                let spec = font(SMALL + 2.0, MEDIUM);
-                let w = (measure(theme, t, spec).width + 44.0).round();
-                let r = Rect::new(x, TOP - 6.0, x + w, TOP + 46.0);
-                let ink = if i == self.tab {
-                    lit(c, theme, r);
-                    theme.on_selection()
-                } else {
-                    face(c, theme, r, theme.raised(), theme.line());
-                    theme.text2()
-                };
-                text_centred(c, theme, t, r.center(), spec, ink);
-                x += w + 12.0;
+            if rects.last().is_some_and(|r| r.x1 > W - MARGIN + 0.5) {
+                icon(c, Icon::ChevronRight, Point::new(W - MARGIN / 2.0, y), 32.0, theme.text2());
             }
         }
         c.saved(|c| {
@@ -502,7 +564,8 @@ pub fn paint_tile(c: &mut Canvas, theme: &Theme, t: &Tile, r: Rect, focused: boo
         let sub = sub.as_str();
         if !label.is_empty() || !sub.is_empty() {
             let y = r.y1 + RING + 30.0;
-            let room = r.width() + 300.0;
+            // Past the tile, but not past the margin (a tile at the right).
+            let room = (r.width() + 300.0).min(W - MARGIN - r.x0);
             let mut x = r.x0;
             if !label.is_empty() {
                 let spec = font(BODY, SEMIBOLD);
@@ -533,5 +596,51 @@ mod tests {
         assert_eq!(start_for(3, 4, TileSize::Wide), 0, "all showing");
         assert_eq!(top_for(0), 0);
         assert_eq!(top_for(3), 2);
+    }
+
+    fn grid(tabs: &[&str], tab: usize) -> Grid {
+        Grid {
+            title: "Games".into(),
+            subtitle: String::new(),
+            tabs: tabs.iter().map(|t| (*t).to_owned()).collect(),
+            tab,
+            size: TileSize::Wide,
+            tiles: Vec::new(),
+            first_line: 0,
+        }
+    }
+
+    #[test]
+    fn the_chosen_tab_shows_whole_with_its_neighbours_however_many_systems() {
+        let theme = Theme::night();
+        let inside = |r: &Rect| r.x0 >= MARGIN - 0.5 && r.x1 <= W - MARGIN + 0.5;
+        let peeks = |r: &Rect| r.x1 > MARGIN && r.x0 < W - MARGIN;
+        // Every system Chanoma knows, and the tab for two players.
+        let mut tabs = vec!["All", "2 players"];
+        tabs.extend(crate::library::SYSTEMS.iter().map(|s| s.short));
+        for tab in 0..tabs.len() {
+            let g = grid(&tabs, tab);
+            let rects = g.tab_rects(&theme);
+            assert!(inside(&rects[tab]), "{} at {:?}", tabs[tab], rects[tab]);
+            if tab > 0 {
+                assert!(peeks(&rects[tab - 1]), "before {}", tabs[tab]);
+            }
+            if tab + 1 < tabs.len() {
+                assert!(peeks(&rects[tab + 1]), "after {}", tabs[tab]);
+            }
+            // A click on it chooses it.
+            assert_eq!(g.tab_hit(rects[tab].center()), Some(tab));
+        }
+        // The strip is longer than the screen: the last tab chosen, the
+        // first is off to the left, and a click there finds nothing.
+        let last = grid(&tabs, tabs.len() - 1);
+        let rects = last.tab_rects(&theme);
+        assert!(rects[0].x1 < MARGIN, "scrolled: {:?}", rects[0]);
+        assert_eq!(last.tab_hit(Point::new(MARGIN / 2.0, rects[0].center().y)), None);
+        // Few enough to fit: they start at the margin and don't move.
+        let few = ["All", "NES", "Game Boy"];
+        for tab in 0..few.len() {
+            assert_eq!(grid(&few, tab).tab_rects(&theme)[0].x0, MARGIN);
+        }
     }
 }

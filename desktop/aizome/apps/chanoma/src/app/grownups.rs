@@ -1084,10 +1084,14 @@ impl Chanoma {
     /// How one of the folders is: being looked through, its drive out, or
     /// what it holds.
     fn folder_state(&self, f: &std::path::Path) -> String {
-        if let Some((l, n)) = &self.looking
-            && l == f
+        if let Some(l) = &self.looking
+            && l.folder.as_deref() == Some(f)
         {
-            return format!("Looking through it: {n} folders so far");
+            let files = crate::ui::grouped(l.files);
+            return match l.parts {
+                Some((done, n)) => format!("Looking through it: {done} of its {n} folders, {files} files"),
+                None => format!("Looking through it: {} folders, {files} files so far", crate::ui::grouped(l.folders)),
+            };
         }
         match self.library.held.iter().find(|h| h.folder == f) {
             Some(h) if !h.here => match self.drives.of_folder(f, &self.config.mounts) {
