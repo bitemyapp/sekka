@@ -53,8 +53,17 @@ over long benchmark matrices. Builds, tests and measurements go to
 
 ## What is proved
 
-**[The storage-plan run](test-results/buck2/2026-11-06-storage-plan/README.md)**
-covered 31 stages on the current engine. Local execution used a writer cache,
+**[The final storage-plan run](test-results/buck2/2026-11-06-final/README.md)**
+repeated the 31 stages at the single-CAS tip (`7fef66a8`), with a
+`--local-cas` writer client. Every gate passed, eviction recovery included:
+- each added worktree cost +14.0 to +14.8 MB;
+- a warm worktree took 4.6–5.3% of the cold build's time;
+- the final union was 20.16 GB, 29% below the first storage run's 28.52 GB.
+
+The review fixes in `bdc406ca` came after it.
+
+**[The first storage-plan run](test-results/buck2/2026-11-06-storage-plan/README.md)**
+covered the same 31 stages on PR #291's engine. Local execution used a writer cache,
 the reflinking content store and Cargo incremental state:
 
 - **Gates:** every storage, reuse and correctness gate passed. Four fresh
@@ -94,28 +103,23 @@ it. Incremental state is private per worktree (~0.7 GB after a dev build).
    form there; that form ran `autosize` cleanly. No timer is installed:
    the only long-lived services on wx are 2026-11-05's, which are not this
    work's to manage.
-3. **Rerun the storage plan** once, if a full record is wanted. It would
-   record the eviction stages. It would also correct the cold and release
-   stages, which predate `54ff881a`: that commit reclaimed each locally
-   built content-based output's leftover copy, so those unions overstate
-   the cost.
-4. **NativeLink fork**, only if needed: stable digest paths (dropping the
+3. **NativeLink fork**, only if needed: stable digest paths (dropping the
    client's index) and casita-style retention (roots, and action-cache-first
    eviction). Cloned blobs are already kept recent: `has()` touches each key
    in 1.8.3. Its evicting map also leases keys, but only the worker's input
    staging takes those leases. Free-space sizing is already covered by
    `autosize`.
-5. **Laptop phase.** On a host without the CAS, the content store and
+4. **Laptop phase.** On a host without the CAS, the content store and
    downloads work as before. runnymede is ext4, so it gets no reflinks.
-6. **CI.** Decide how PR CI's `build` job should exercise this work.
-7. **When PR 333 (per-application Aizome packages) lands:**
+5. **CI.** Decide how PR CI's `build` job should exercise this work.
+6. **When PR 333 (per-application Aizome packages) lands:**
    - move `nix/bazel/without-build-files.nix` into its `package-sources.nix`;
    - rerun `scripts/sekka-buck2 generate`;
    - point `checks.bazel-native-inputs` at `components.compositor`.
 
    It invalidates none of the 706 Buck2 actions. Details are in
    `/home/callen/sekka-work/pr333-combo-20261106/results/` on wx.
-8. **Scope decisions for the user:**
+7. **Scope decisions for the user:**
    - Does Bazel stay beside Buck2?
    - Does runnymede move to Btrfs? About 89 GiB of its 140 GiB of build state
      would be saved by compression alone.

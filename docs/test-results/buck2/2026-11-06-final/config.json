@@ -1,0 +1,595 @@
+{
+  "artifacts": {
+    "icon": {
+      "dev": {
+        "member": "out/icons.rs",
+        "target": "//build/buck2/graph/dev:eacaba82e7b958ba4a41"
+      },
+      "release": {
+        "member": "out/icons.rs",
+        "target": "//build/buck2/graph/release:e60fd6c5a953ed3e616e"
+      },
+      "release-lto": {
+        "member": "out/icons.rs",
+        "target": "//build/buck2/graph/release-lto:ef4f363f4659e622e665"
+      }
+    },
+    "leaf": {
+      "dev": {
+        "file_regex": "(^|/)aizome_soroban-e9ad135be7f5edecb639$",
+        "target": "//desktop/aizome/apps/soroban:aizome-soroban-build-dev"
+      },
+      "release": {
+        "file_regex": "(^|/)aizome_soroban-4ac34893ec87ae5750a1$",
+        "target": "//desktop/aizome/apps/soroban:aizome-soroban-build-release"
+      },
+      "release-lto": {
+        "file_regex": "(^|/)aizome_soroban-72009d20aea8642f8cb4$",
+        "target": "//desktop/aizome/apps/soroban:aizome-soroban-build-release-lto"
+      }
+    },
+    "shared": {
+      "dev": {
+        "file_regex": "(^|/)libaizome_theme-005266b695de72ffe985\\.rlib$",
+        "target": "//desktop/aizome/crates/aizome-theme:aizome_theme-build-dev"
+      },
+      "release": {
+        "file_regex": "(^|/)libaizome_theme-4ea8ef0dc8c7f96796fa\\.rlib$",
+        "target": "//desktop/aizome/crates/aizome-theme:aizome_theme-build-release"
+      },
+      "release-lto": {
+        "file_regex": "(^|/)libaizome_theme-cbcfc53427b0e241a78b\\.rlib$",
+        "target": "//desktop/aizome/crates/aizome-theme:aizome_theme-build-release-lto"
+      }
+    }
+  },
+  "buck_engine": [
+    "/nix/store/vzgxcxw07i4q00iwi9fb71vpp758fsdf-sekka-buck2-2026-10-15-local-content-store/bin/buck2"
+  ],
+  "buck_isolation": "shared-bench",
+  "buck_telemetry_flags": [
+    "--buck-arg=--build-report={telemetry}.report.json",
+    "--buck-arg=--event-log={telemetry}.events.json-lines.gz"
+  ],
+  "client": [
+    "{tree}/scripts/sekka-buck2"
+  ],
+  "client_flags": [
+    "--cache",
+    "cache",
+    "--cache-write",
+    "--config-file",
+    "/home/callen/.config/sekka/buck2-final-20261106.writer.rc",
+    "--local-content-store",
+    "{root}/cache/content-store",
+    "--local-content-store-max-bytes",
+    "10737418240",
+    "--local-content-store-max-entries",
+    "100000"
+  ],
+  "commit": "7fef66a8ae5b3f592194dd2104b1afa354ca6dfb",
+  "correctness_behavior": [
+    "{tree}/scripts/sekka-buck2",
+    "--profile",
+    "{profile}",
+    "--isolation-dir",
+    "shared-bench",
+    "-j",
+    "{jobs}",
+    "--cache",
+    "cache",
+    "--cache-write",
+    "--config-file",
+    "/home/callen/.config/sekka/buck2-final-20261106.writer.rc",
+    "--local-content-store",
+    "{root}/cache/content-store",
+    "--local-content-store-max-bytes",
+    "10737418240",
+    "--local-content-store-max-entries",
+    "100000",
+    "test",
+    "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+  ],
+  "environment": {
+    "CARGO_HOME": "/home/callen/sekka-work/buck2-final-20261106/run/cache/cargo",
+    "PATH": "/nix/store/a6298pi1pgjfaks9igzq7wcy99z57ih4-bench-tools/bin:/run/wrappers/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin",
+    "SEKKA_BUCK2_CLIENT_CACHE": "/home/callen/sekka-work/buck2-final-20261106/bootstrap",
+    "TMPDIR": "/tmp/sekka-buck2-final",
+    "XDG_CACHE_HOME": "/home/callen/sekka-work/buck2-final-20261106/run/cache/xdg",
+    "XDG_RUNTIME_DIR": "/tmp/sekka-buck2-final",
+    "XDG_STATE_HOME": "/home/callen/sekka-work/buck2-final-20261106/run/state/xdg"
+  },
+  "nix_identity": [
+    "/nix/store/zrnyw7fwqdy4swzrfwmfhx4mhhkf46hb-sekka-buck2-environment/env.json",
+    "/nix/store/vzgxcxw07i4q00iwi9fb71vpp758fsdf-sekka-buck2-2026-10-15-local-content-store/bin/buck2"
+  ],
+  "plan": "storage",
+  "profiles": {
+    "dev": {
+      "features": [
+        "default"
+      ],
+      "requested_extra_features": [],
+      "targets": [
+        "//desktop/aizome/apps/annai:aizome-annai-build-dev",
+        "//desktop/aizome/apps/annai:aizome_annai-build-dev",
+        "//desktop/aizome/apps/fusen:aizome-fusen-build-dev",
+        "//desktop/aizome/apps/fusen:aizome_fusen-build-dev",
+        "//desktop/aizome/apps/hako:aizome-hako-build-dev",
+        "//desktop/aizome/apps/hako:hako-build-dev",
+        "//desktop/aizome/apps/hotaru:aizome-hotaru-build-dev",
+        "//desktop/aizome/apps/hotaru:aizome_hotaru-build-dev",
+        "//desktop/aizome/apps/koe:aizome-koe-build-dev",
+        "//desktop/aizome/apps/koe:koe-build-dev",
+        "//desktop/aizome/apps/koyomi:aizome-koyomi-build-dev",
+        "//desktop/aizome/apps/koyomi:koyomi-build-dev",
+        "//desktop/aizome/apps/kura:aizome-kura-build-dev",
+        "//desktop/aizome/apps/kura:kura-build-dev",
+        "//desktop/aizome/apps/myaku:aizome-myaku-build-dev",
+        "//desktop/aizome/apps/myaku:myaku-build-dev",
+        "//desktop/aizome/apps/nisshi:aizome-nisshi-build-dev",
+        "//desktop/aizome/apps/nisshi:aizome-nisshi-helper-build-dev",
+        "//desktop/aizome/apps/nisshi:nisshi-build-dev",
+        "//desktop/aizome/apps/settei:aizome-settei-build-dev",
+        "//desktop/aizome/apps/settei:settei-build-dev",
+        "//desktop/aizome/apps/shashin:aizome-shashin-build-dev",
+        "//desktop/aizome/apps/shashin:aizome_shashin-build-dev",
+        "//desktop/aizome/apps/shiori:aizome-shiori-build-dev",
+        "//desktop/aizome/apps/shiori:aizome_shiori-build-dev",
+        "//desktop/aizome/apps/soroban:aizome-soroban-build-dev",
+        "//desktop/aizome/apps/soroban:aizome_soroban-build-dev",
+        "//desktop/aizome/apps/sumi:aizome-sumi-build-dev",
+        "//desktop/aizome/apps/sumi:aizome_sumi-build-dev",
+        "//desktop/aizome/apps/tansu:aizome-tansu-build-dev",
+        "//desktop/aizome/apps/tansu:tansu-build-dev",
+        "//desktop/aizome/apps/tenki:aizome-tenki-build-dev",
+        "//desktop/aizome/apps/tenki:aizome_tenki-build-dev",
+        "//desktop/aizome/apps/tokei:aizome-tokei-build-dev",
+        "//desktop/aizome/apps/tokei:aizome_tokei-build-dev",
+        "//desktop/aizome/apps/utsushi:aizome-utsushi-build-dev",
+        "//desktop/aizome/apps/utsushi:aizome_utsushi-build-dev",
+        "//desktop/aizome/apps/yukimi:aizome-yukimi-build-dev",
+        "//desktop/aizome/apps/yukimi:aizome_yukimi-build-dev",
+        "//desktop/aizome/crates/aizome-apps:aizome_apps-build-dev",
+        "//desktop/aizome/crates/aizome-awake:aizome-awake-build-dev",
+        "//desktop/aizome/crates/aizome-awake:aizome_awake-build-dev",
+        "//desktop/aizome/crates/aizome-comp-core:aizome_comp_core-build-dev",
+        "//desktop/aizome/crates/aizome-comp-logic:aizome_comp_logic-build-dev",
+        "//desktop/aizome/crates/aizome-comp:aizome-build-dev",
+        "//desktop/aizome/crates/aizome-config:aizome_config-build-dev",
+        "//desktop/aizome/crates/aizome-face:aizome_face-build-dev",
+        "//desktop/aizome/crates/aizome-greeter:aizome-greeter-build-dev",
+        "//desktop/aizome/crates/aizome-greeter:aizome_greeter-build-dev",
+        "//desktop/aizome/crates/aizome-ipc:aizome-dev-build-dev",
+        "//desktop/aizome/crates/aizome-ipc:aizome-share-picker-build-dev",
+        "//desktop/aizome/crates/aizome-ipc:aizome_ipc-build-dev",
+        "//desktop/aizome/crates/aizome-ipc:aizomectl-build-dev",
+        "//desktop/aizome/crates/aizome-kit:aizome_kit-build-dev",
+        "//desktop/aizome/crates/aizome-media:aizome_media-build-dev",
+        "//desktop/aizome/crates/aizome-network-agent:aizome-network-agent-build-dev",
+        "//desktop/aizome/crates/aizome-network-agent:aizome_network_agent-build-dev",
+        "//desktop/aizome/crates/aizome-portal:aizome-portal-build-dev",
+        "//desktop/aizome/crates/aizome-portal:aizome_portal-build-dev",
+        "//desktop/aizome/crates/aizome-power-meter:aizome-power-meter-build-dev",
+        "//desktop/aizome/crates/aizome-search:aizome_search-build-dev",
+        "//desktop/aizome/crates/aizome-shell-proto:aizome_shell_proto-build-dev",
+        "//desktop/aizome/crates/aizome-shell:aizome-shell-build-dev",
+        "//desktop/aizome/crates/aizome-shell:aizome_shell-build-dev",
+        "//desktop/aizome/crates/aizome-sys:aizome_sys-build-dev",
+        "//desktop/aizome/crates/aizome-theme:aizome_theme-build-dev",
+        "//desktop/aizome/crates/hotaru-link-regex:hotaru_link_regex-build-dev"
+      ]
+    },
+    "release": {
+      "features": [
+        "default"
+      ],
+      "requested_extra_features": [],
+      "targets": [
+        "//desktop/aizome/apps/annai:aizome-annai-build-release",
+        "//desktop/aizome/apps/annai:aizome_annai-build-release",
+        "//desktop/aizome/apps/fusen:aizome-fusen-build-release",
+        "//desktop/aizome/apps/fusen:aizome_fusen-build-release",
+        "//desktop/aizome/apps/hako:aizome-hako-build-release",
+        "//desktop/aizome/apps/hako:hako-build-release",
+        "//desktop/aizome/apps/hotaru:aizome-hotaru-build-release",
+        "//desktop/aizome/apps/hotaru:aizome_hotaru-build-release",
+        "//desktop/aizome/apps/koe:aizome-koe-build-release",
+        "//desktop/aizome/apps/koe:koe-build-release",
+        "//desktop/aizome/apps/koyomi:aizome-koyomi-build-release",
+        "//desktop/aizome/apps/koyomi:koyomi-build-release",
+        "//desktop/aizome/apps/kura:aizome-kura-build-release",
+        "//desktop/aizome/apps/kura:kura-build-release",
+        "//desktop/aizome/apps/myaku:aizome-myaku-build-release",
+        "//desktop/aizome/apps/myaku:myaku-build-release",
+        "//desktop/aizome/apps/nisshi:aizome-nisshi-build-release",
+        "//desktop/aizome/apps/nisshi:aizome-nisshi-helper-build-release",
+        "//desktop/aizome/apps/nisshi:nisshi-build-release",
+        "//desktop/aizome/apps/settei:aizome-settei-build-release",
+        "//desktop/aizome/apps/settei:settei-build-release",
+        "//desktop/aizome/apps/shashin:aizome-shashin-build-release",
+        "//desktop/aizome/apps/shashin:aizome_shashin-build-release",
+        "//desktop/aizome/apps/shiori:aizome-shiori-build-release",
+        "//desktop/aizome/apps/shiori:aizome_shiori-build-release",
+        "//desktop/aizome/apps/soroban:aizome-soroban-build-release",
+        "//desktop/aizome/apps/soroban:aizome_soroban-build-release",
+        "//desktop/aizome/apps/sumi:aizome-sumi-build-release",
+        "//desktop/aizome/apps/sumi:aizome_sumi-build-release",
+        "//desktop/aizome/apps/tansu:aizome-tansu-build-release",
+        "//desktop/aizome/apps/tansu:tansu-build-release",
+        "//desktop/aizome/apps/tenki:aizome-tenki-build-release",
+        "//desktop/aizome/apps/tenki:aizome_tenki-build-release",
+        "//desktop/aizome/apps/tokei:aizome-tokei-build-release",
+        "//desktop/aizome/apps/tokei:aizome_tokei-build-release",
+        "//desktop/aizome/apps/utsushi:aizome-utsushi-build-release",
+        "//desktop/aizome/apps/utsushi:aizome_utsushi-build-release",
+        "//desktop/aizome/apps/yukimi:aizome-yukimi-build-release",
+        "//desktop/aizome/apps/yukimi:aizome_yukimi-build-release",
+        "//desktop/aizome/crates/aizome-apps:aizome_apps-build-release",
+        "//desktop/aizome/crates/aizome-awake:aizome-awake-build-release",
+        "//desktop/aizome/crates/aizome-awake:aizome_awake-build-release",
+        "//desktop/aizome/crates/aizome-comp-core:aizome_comp_core-build-release",
+        "//desktop/aizome/crates/aizome-comp-logic:aizome_comp_logic-build-release",
+        "//desktop/aizome/crates/aizome-comp:aizome-build-release",
+        "//desktop/aizome/crates/aizome-config:aizome_config-build-release",
+        "//desktop/aizome/crates/aizome-face:aizome_face-build-release",
+        "//desktop/aizome/crates/aizome-greeter:aizome-greeter-build-release",
+        "//desktop/aizome/crates/aizome-greeter:aizome_greeter-build-release",
+        "//desktop/aizome/crates/aizome-ipc:aizome-dev-build-release",
+        "//desktop/aizome/crates/aizome-ipc:aizome-share-picker-build-release",
+        "//desktop/aizome/crates/aizome-ipc:aizome_ipc-build-release",
+        "//desktop/aizome/crates/aizome-ipc:aizomectl-build-release",
+        "//desktop/aizome/crates/aizome-kit:aizome_kit-build-release",
+        "//desktop/aizome/crates/aizome-media:aizome_media-build-release",
+        "//desktop/aizome/crates/aizome-network-agent:aizome-network-agent-build-release",
+        "//desktop/aizome/crates/aizome-network-agent:aizome_network_agent-build-release",
+        "//desktop/aizome/crates/aizome-portal:aizome-portal-build-release",
+        "//desktop/aizome/crates/aizome-portal:aizome_portal-build-release",
+        "//desktop/aizome/crates/aizome-power-meter:aizome-power-meter-build-release",
+        "//desktop/aizome/crates/aizome-search:aizome_search-build-release",
+        "//desktop/aizome/crates/aizome-shell-proto:aizome_shell_proto-build-release",
+        "//desktop/aizome/crates/aizome-shell:aizome-shell-build-release",
+        "//desktop/aizome/crates/aizome-shell:aizome_shell-build-release",
+        "//desktop/aizome/crates/aizome-sys:aizome_sys-build-release",
+        "//desktop/aizome/crates/aizome-theme:aizome_theme-build-release",
+        "//desktop/aizome/crates/hotaru-link-regex:hotaru_link_regex-build-release"
+      ]
+    },
+    "release-lto": {
+      "features": [
+        "default"
+      ],
+      "requested_extra_features": [],
+      "targets": [
+        "//desktop/aizome/apps/annai:aizome-annai-build-release-lto",
+        "//desktop/aizome/apps/annai:aizome_annai-build-release-lto",
+        "//desktop/aizome/apps/fusen:aizome-fusen-build-release-lto",
+        "//desktop/aizome/apps/fusen:aizome_fusen-build-release-lto",
+        "//desktop/aizome/apps/hako:aizome-hako-build-release-lto",
+        "//desktop/aizome/apps/hako:hako-build-release-lto",
+        "//desktop/aizome/apps/hotaru:aizome-hotaru-build-release-lto",
+        "//desktop/aizome/apps/hotaru:aizome_hotaru-build-release-lto",
+        "//desktop/aizome/apps/koe:aizome-koe-build-release-lto",
+        "//desktop/aizome/apps/koe:koe-build-release-lto",
+        "//desktop/aizome/apps/koyomi:aizome-koyomi-build-release-lto",
+        "//desktop/aizome/apps/koyomi:koyomi-build-release-lto",
+        "//desktop/aizome/apps/kura:aizome-kura-build-release-lto",
+        "//desktop/aizome/apps/kura:kura-build-release-lto",
+        "//desktop/aizome/apps/myaku:aizome-myaku-build-release-lto",
+        "//desktop/aizome/apps/myaku:myaku-build-release-lto",
+        "//desktop/aizome/apps/nisshi:aizome-nisshi-build-release-lto",
+        "//desktop/aizome/apps/nisshi:aizome-nisshi-helper-build-release-lto",
+        "//desktop/aizome/apps/nisshi:nisshi-build-release-lto",
+        "//desktop/aizome/apps/settei:aizome-settei-build-release-lto",
+        "//desktop/aizome/apps/settei:settei-build-release-lto",
+        "//desktop/aizome/apps/shashin:aizome-shashin-build-release-lto",
+        "//desktop/aizome/apps/shashin:aizome_shashin-build-release-lto",
+        "//desktop/aizome/apps/shiori:aizome-shiori-build-release-lto",
+        "//desktop/aizome/apps/shiori:aizome_shiori-build-release-lto",
+        "//desktop/aizome/apps/soroban:aizome-soroban-build-release-lto",
+        "//desktop/aizome/apps/soroban:aizome_soroban-build-release-lto",
+        "//desktop/aizome/apps/sumi:aizome-sumi-build-release-lto",
+        "//desktop/aizome/apps/sumi:aizome_sumi-build-release-lto",
+        "//desktop/aizome/apps/tansu:aizome-tansu-build-release-lto",
+        "//desktop/aizome/apps/tansu:tansu-build-release-lto",
+        "//desktop/aizome/apps/tenki:aizome-tenki-build-release-lto",
+        "//desktop/aizome/apps/tenki:aizome_tenki-build-release-lto",
+        "//desktop/aizome/apps/tokei:aizome-tokei-build-release-lto",
+        "//desktop/aizome/apps/tokei:aizome_tokei-build-release-lto",
+        "//desktop/aizome/apps/utsushi:aizome-utsushi-build-release-lto",
+        "//desktop/aizome/apps/utsushi:aizome_utsushi-build-release-lto",
+        "//desktop/aizome/apps/yukimi:aizome-yukimi-build-release-lto",
+        "//desktop/aizome/apps/yukimi:aizome_yukimi-build-release-lto",
+        "//desktop/aizome/crates/aizome-apps:aizome_apps-build-release-lto",
+        "//desktop/aizome/crates/aizome-awake:aizome-awake-build-release-lto",
+        "//desktop/aizome/crates/aizome-awake:aizome_awake-build-release-lto",
+        "//desktop/aizome/crates/aizome-comp-core:aizome_comp_core-build-release-lto",
+        "//desktop/aizome/crates/aizome-comp-logic:aizome_comp_logic-build-release-lto",
+        "//desktop/aizome/crates/aizome-comp:aizome-build-release-lto",
+        "//desktop/aizome/crates/aizome-config:aizome_config-build-release-lto",
+        "//desktop/aizome/crates/aizome-face:aizome_face-build-release-lto",
+        "//desktop/aizome/crates/aizome-greeter:aizome-greeter-build-release-lto",
+        "//desktop/aizome/crates/aizome-greeter:aizome_greeter-build-release-lto",
+        "//desktop/aizome/crates/aizome-ipc:aizome-dev-build-release-lto",
+        "//desktop/aizome/crates/aizome-ipc:aizome-share-picker-build-release-lto",
+        "//desktop/aizome/crates/aizome-ipc:aizome_ipc-build-release-lto",
+        "//desktop/aizome/crates/aizome-ipc:aizomectl-build-release-lto",
+        "//desktop/aizome/crates/aizome-kit:aizome_kit-build-release-lto",
+        "//desktop/aizome/crates/aizome-media:aizome_media-build-release-lto",
+        "//desktop/aizome/crates/aizome-network-agent:aizome-network-agent-build-release-lto",
+        "//desktop/aizome/crates/aizome-network-agent:aizome_network_agent-build-release-lto",
+        "//desktop/aizome/crates/aizome-portal:aizome-portal-build-release-lto",
+        "//desktop/aizome/crates/aizome-portal:aizome_portal-build-release-lto",
+        "//desktop/aizome/crates/aizome-power-meter:aizome-power-meter-build-release-lto",
+        "//desktop/aizome/crates/aizome-search:aizome_search-build-release-lto",
+        "//desktop/aizome/crates/aizome-shell-proto:aizome_shell_proto-build-release-lto",
+        "//desktop/aizome/crates/aizome-shell:aizome-shell-build-release-lto",
+        "//desktop/aizome/crates/aizome-shell:aizome_shell-build-release-lto",
+        "//desktop/aizome/crates/aizome-sys:aizome_sys-build-release-lto",
+        "//desktop/aizome/crates/aizome-theme:aizome_theme-build-release-lto",
+        "//desktop/aizome/crates/hotaru-link-regex:hotaru_link_regex-build-release-lto"
+      ]
+    }
+  },
+  "python": "/nix/store/a6298pi1pgjfaks9igzq7wcy99z57ih4-bench-tools/bin/python3",
+  "repo": "/home/callen/sekka-work/buck2-final-20261106/repo",
+  "root": "/home/callen/sekka-work/buck2-final-20261106/run",
+  "service": {
+    "dedupe": [
+      "/nix/store/r21z8qj4ajl30kwxmag5b6ma7bfj863v-sekka-build-service/bin/sekka-build-service",
+      "--local",
+      "--manifest",
+      "/home/callen/.config/sekka/buck2-final-20261106.json",
+      "dedupe",
+      "--content-store",
+      "{root}/cache/content-store"
+    ],
+    "dedupe_api": "CAS/content-store extent sharing; every cache entry retained",
+    "eviction": [
+      "/nix/store/r21z8qj4ajl30kwxmag5b6ma7bfj863v-sekka-build-service/bin/sekka-build-service",
+      "--local",
+      "--manifest",
+      "/home/callen/.config/sekka/buck2-final-20261106.json",
+      "resize",
+      "--cas-bytes",
+      "4294967296",
+      "--ac-bytes",
+      "67108864"
+    ],
+    "eviction_api": "NativeLink supported resize eviction policy with actual retained-entry removal inventory",
+    "eviction_max_apparent_bytes": 4362076160,
+    "identity": {
+      "access": "writer",
+      "controller": "/nix/store/r21z8qj4ajl30kwxmag5b6ma7bfj863v-sekka-build-service/bin/sekka-build-service",
+      "deployment": "shared-build-service-d35abc95eaca",
+      "domain": "trusted",
+      "endpoint": "grpc://127.0.0.1:17891",
+      "instance": "sekka",
+      "scratch_bytes": 34359738368,
+      "worker_slots": 32
+    },
+    "inventory": [
+      "/nix/store/r21z8qj4ajl30kwxmag5b6ma7bfj863v-sekka-build-service/bin/sekka-build-service",
+      "--local",
+      "--manifest",
+      "/home/callen/.config/sekka/buck2-final-20261106.json",
+      "cache-inventory"
+    ],
+    "metrics": [
+      "/nix/store/r21z8qj4ajl30kwxmag5b6ma7bfj863v-sekka-build-service/bin/sekka-build-service",
+      "--local",
+      "--manifest",
+      "/home/callen/.config/sekka/buck2-final-20261106.json",
+      "metrics"
+    ],
+    "restart": [
+      "/nix/store/r21z8qj4ajl30kwxmag5b6ma7bfj863v-sekka-build-service/bin/sekka-build-service",
+      "--local",
+      "--manifest",
+      "/home/callen/.config/sekka/buck2-final-20261106.json",
+      "restart"
+    ],
+    "restart_api": "Owned deployment controller restart; cache roots retained",
+    "restore_capacity": [
+      "/nix/store/r21z8qj4ajl30kwxmag5b6ma7bfj863v-sekka-build-service/bin/sekka-build-service",
+      "--local",
+      "--manifest",
+      "/home/callen/.config/sekka/buck2-final-20261106.json",
+      "resize",
+      "--cas-bytes",
+      "68719476736",
+      "--ac-bytes",
+      "1073741824"
+    ],
+    "restore_capacity_api": "Owned supported capacity restoration; existing cache retained"
+  },
+  "setup": [
+    [
+      "mkdir",
+      "-p",
+      "{root}/state",
+      "{root}/cache/cargo",
+      "{root}/cache/xdg",
+      "{root}/state/xdg",
+      "{root}/scratch",
+      "{root}/trials",
+      "{root}/summaries",
+      "/tmp/sekka-buck2-final"
+    ],
+    [
+      "mkdir",
+      "-m",
+      "700",
+      "{root}/cache/content-store"
+    ],
+    [
+      "{tree}/scripts/sekka-buck2",
+      "--cache",
+      "cache",
+      "--cache-write",
+      "--config-file",
+      "/home/callen/.config/sekka/buck2-final-20261106.writer.rc",
+      "--local-content-store",
+      "{root}/cache/content-store",
+      "--local-content-store-max-bytes",
+      "10737418240",
+      "--local-content-store-max-entries",
+      "100000",
+      "check"
+    ]
+  ],
+  "soroban_tests": {
+    "args": [
+      "//desktop/aizome/apps/soroban:aizome_soroban-test-test-lib"
+    ],
+    "name": "soroban-pure-library-11"
+  },
+  "source_locks": [
+    "flake.lock",
+    "desktop/aizome/Cargo.lock",
+    "build/buck2/graph.lock.json",
+    "build/buck2/targets.json",
+    "build/buck2/units.json"
+  ],
+  "storage": {
+    "attribution_command": [
+      "/nix/store/wgm5fv4jg18f7r85hpx1w1a5jxpncb6n-btrfs-progs-7.1/bin/btrfs",
+      "filesystem",
+      "du",
+      "-s",
+      "--raw"
+    ],
+    "command": [
+      "/nix/store/r21z8qj4ajl30kwxmag5b6ma7bfj863v-sekka-build-service/bin/sekka-build-service",
+      "--local",
+      "--manifest",
+      "/home/callen/.config/sekka/buck2-final-20261106.json",
+      "physical-inventory",
+      "--scope",
+      "active",
+      "--compsize",
+      "/nix/store/iq0ifcxdi8hisakrh6qc5iy0mm3s285g-compsize-1.5-unstable-2023-12-24/bin/compsize",
+      "--allow-root",
+      "/home/callen/sekka-work/buck2-final-20261106",
+      "--allow-root",
+      "/home/callen/sekka-work/shared-build-service-d35abc95eaca",
+      "--allow-root",
+      "/tmp/sekka-buck2-final",
+      "--allow-root",
+      "/home/callen/.buck/buckd/home/callen/sekka-work/buck2-final-20261106/run/trees"
+    ],
+    "immutable_command": [
+      "/nix/store/r21z8qj4ajl30kwxmag5b6ma7bfj863v-sekka-build-service/bin/sekka-build-service",
+      "--local",
+      "--manifest",
+      "/home/callen/.config/sekka/buck2-final-20261106.json",
+      "physical-inventory",
+      "--scope",
+      "immutable",
+      "--compsize",
+      "/nix/store/iq0ifcxdi8hisakrh6qc5iy0mm3s285g-compsize-1.5-unstable-2023-12-24/bin/compsize",
+      "--allow-root",
+      "/home/callen/sekka-work/buck2-final-20261106",
+      "--allow-root",
+      "/home/callen/sekka-work/shared-build-service-d35abc95eaca",
+      "--allow-root",
+      "/tmp/sekka-buck2-final",
+      "--allow-root",
+      "/home/callen/.buck/buckd/home/callen/sekka-work/buck2-final-20261106/run/trees"
+    ],
+    "immutable_roots": [
+      "{root}/cache/content-store",
+      "glob:{root}/trees/*/buck-out/shared-bench/art",
+      "/home/callen/sekka-work/shared-build-service-d35abc95eaca/trusted/data"
+    ],
+    "max_active_union_bytes": 137438953472,
+    "roots": [
+      "untracked:{root}/trees/*",
+      "{root}/state",
+      "{root}/cache",
+      "{root}/scratch",
+      "{root}/trials",
+      "{root}/stages",
+      "{root}/setup",
+      "{root}/summaries",
+      "{root}/.lock",
+      "{root}/.sekka-shared-build-bench.json",
+      "{root}/config.json",
+      "{root}/plan.json",
+      "/home/callen/sekka-work/buck2-final-20261106/bootstrap",
+      "/home/callen/sekka-work/buck2-final-20261106/repo",
+      "/home/callen/sekka-work/shared-build-service-d35abc95eaca",
+      "/tmp/sekka-buck2-final",
+      "/home/callen/.buck/buckd/home/callen/sekka-work/buck2-final-20261106/run/trees"
+    ]
+  },
+  "test_groups": [
+    {
+      "args": [
+        "//desktop/aizome/apps/yukimi:aizome_yukimi-test-test-lib"
+      ],
+      "name": "//desktop/aizome/apps/yukimi:aizome_yukimi-test-test-lib"
+    },
+    {
+      "args": [
+        "//desktop/aizome/apps/yukimi:headless-test-test-test"
+      ],
+      "name": "//desktop/aizome/apps/yukimi:headless-test-test-test"
+    },
+    {
+      "args": [
+        "//desktop/aizome/apps/yukimi:look-test-test-test"
+      ],
+      "name": "//desktop/aizome/apps/yukimi:look-test-test-test"
+    },
+    {
+      "args": [
+        "//desktop/aizome/apps/yukimi:golden-test-test-test"
+      ],
+      "name": "//desktop/aizome/apps/yukimi:golden-test-test-test"
+    },
+    {
+      "args": [
+        "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+      ],
+      "name": "//desktop/aizome/crates/aizome-kit:aizome_kit-test-test-lib"
+    },
+    {
+      "args": [
+        "//desktop/aizome/crates/aizome-sys:aizome_sys-test-test-lib"
+      ],
+      "name": "//desktop/aizome/crates/aizome-sys:aizome_sys-test-test-lib"
+    },
+    {
+      "args": [
+        "//desktop/aizome/crates/aizome-shell:aizome_shell-test-test-lib"
+      ],
+      "name": "//desktop/aizome/crates/aizome-shell:aizome_shell-test-test-lib"
+    },
+    {
+      "args": [
+        "//desktop/aizome/apps/hako:hako-test-test-lib"
+      ],
+      "name": "//desktop/aizome/apps/hako:hako-test-test-lib"
+    },
+    {
+      "args": [
+        "//desktop/aizome/apps/hako:file_manager-test-test-test"
+      ],
+      "name": "//desktop/aizome/apps/hako:file_manager-test-test-test"
+    }
+  ],
+  "tool": "buck2",
+  "variants": [
+    {
+      "client_machine": "wx-workstation/theophrastus",
+      "engine": "/nix/store/vzgxcxw07i4q00iwi9fb71vpp758fsdf-sekka-buck2-2026-10-15-local-content-store/bin/buck2",
+      "execution": "Local execution with the owned local-CAS writer cache (--cache cache --cache-write, client --local-cas): hits cloned from the CAS, produced outputs journaled and shared with it; Cargo dev incremental state; native local libtest",
+      "frontend": "/nix/store/zrnyw7fwqdy4swzrfwmfhx4mhhkf46hb-sekka-buck2-environment",
+      "near_cache_policy": "Explicit 10 GiB/100000-entry per-user reflink content store (the client default bounds)",
+      "plan": "storage: one observation per storage/reuse/correctness scenario; latency reported, not gated",
+      "storage_scope": "Run root, frozen repository, client bootstrap, short TMP, external buckd namespace, owned service directory; active scope adds service image/containers/retained closures",
+      "workload": "All 67 Cargo-authoritative roots in dev and release, default features"
+    }
+  ]
+}

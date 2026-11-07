@@ -640,12 +640,15 @@ client file there with `client --domain trusted --access writer --format buck2
   A clone does not read through NativeLink, but its LRU still sees the blob:
   the completeness check behind each action-cache hit, like
   `FindMissingBlobs`, touches every blob it asks about (`has`, not a peek);
-- with `--cache-write`, keeps produced outputs out of the content store
-  (`local-cas-outputs.patch`). The engine lists each output the cache
-  uploader put in the CAS in `buck-out/ISOLATION/local-cas-journal`, and after
-  every `build` or `test` the client shares those files' extents with their
-  CAS blobs through `build/buck2/cas_dedupe.py`. Outputs that changed since
-  are skipped. A content-based output exists twice, at the placeholder it
+- with `--cache cache --cache-write`, keeps produced outputs out of the
+  content store (`local-cas-outputs.patch`); `--cache local` uploads nothing,
+  so it keeps ingesting them. The engine lists each output the cache
+  uploader put in the CAS in `buck-out/ISOLATION/local-cas-journal`. After
+  every command that builds (`build`, `test`, `run`, `outputs`, `runtime`),
+  the client shares those files' extents with their CAS blobs through
+  `build/buck2/cas_dedupe.py`. Passes take turns on the journal's lock, and
+  a pass that was killed leaves its renamed journal for the next. Outputs
+  that changed since are skipped. A content-based output exists twice, at the placeholder it
   was written to and as the copy published at its content path; both are
   listed, as are other materialized copies;
 - first, shares content-store objects that the CAS also holds, after builds

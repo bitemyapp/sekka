@@ -1,0 +1,829 @@
+{
+  "durable_observations_from_incomplete_stages": [],
+  "gates": {
+    "all_required_stages_passed": true,
+    "global_host_gc": false,
+    "host_load_gating": false
+  },
+  "generated_unix": 1794024076.0280476,
+  "groups": {
+    "buck2/dev/dev-cold/j16": {
+      "all_wall_median": 83.57100033399183,
+      "all_wall_range": [
+        83.57100033399183,
+        83.57100033399183
+      ],
+      "compiler_executions": [
+        631
+      ],
+      "final_attempt_compiler_executions": [
+        631
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 83.57100033399183,
+      "passed_wall_range": [
+        83.57100033399183,
+        83.57100033399183
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/dev-divergent-j4/j4": {
+      "all_wall_median": 34.43313221697463,
+      "all_wall_range": [
+        31.22758943203371,
+        34.73327786300797
+      ],
+      "compiler_executions": [
+        54,
+        54,
+        54,
+        54,
+        54
+      ],
+      "final_attempt_compiler_executions": [
+        54,
+        54,
+        54,
+        54,
+        54
+      ],
+      "observations": 5,
+      "observed_failed_native_attempts": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "passed_wall_median": 34.43313221697463,
+      "passed_wall_range": [
+        31.22758943203371,
+        34.73327786300797
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/dev-fresh-b/j16": {
+      "all_wall_median": 4.07407630700618,
+      "all_wall_range": [
+        4.07407630700618,
+        4.07407630700618
+      ],
+      "compiler_executions": [
+        0
+      ],
+      "final_attempt_compiler_executions": [
+        0
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 4.07407630700618,
+      "passed_wall_range": [
+        4.07407630700618,
+        4.07407630700618
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/dev-fresh-c/j16": {
+      "all_wall_median": 4.173979107988998,
+      "all_wall_range": [
+        4.173979107988998,
+        4.173979107988998
+      ],
+      "compiler_executions": [
+        0
+      ],
+      "final_attempt_compiler_executions": [
+        0
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 4.173979107988998,
+      "passed_wall_range": [
+        4.173979107988998,
+        4.173979107988998
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/dev-fresh-d/j16": {
+      "all_wall_median": 4.424262342974544,
+      "all_wall_range": [
+        4.424262342974544,
+        4.424262342974544
+      ],
+      "compiler_executions": [
+        0
+      ],
+      "final_attempt_compiler_executions": [
+        0
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 4.424262342974544,
+      "passed_wall_range": [
+        4.424262342974544,
+        4.424262342974544
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/dev-fresh-e/j16": {
+      "all_wall_median": 3.872582481999416,
+      "all_wall_range": [
+        3.872582481999416,
+        3.872582481999416
+      ],
+      "compiler_executions": [
+        0
+      ],
+      "final_attempt_compiler_executions": [
+        0
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 3.872582481999416,
+      "passed_wall_range": [
+        3.872582481999416,
+        3.872582481999416
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/dev-icon/j16": {
+      "all_wall_median": 16.34686218801653,
+      "all_wall_range": [
+        16.34686218801653,
+        16.34686218801653
+      ],
+      "compiler_executions": [
+        50
+      ],
+      "final_attempt_compiler_executions": [
+        50
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 16.34686218801653,
+      "passed_wall_range": [
+        16.34686218801653,
+        16.34686218801653
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/dev-leaf/j16": {
+      "all_wall_median": 1.61770422704285,
+      "all_wall_range": [
+        1.61770422704285,
+        1.61770422704285
+      ],
+      "compiler_executions": [
+        1
+      ],
+      "final_attempt_compiler_executions": [
+        1
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 1.61770422704285,
+      "passed_wall_range": [
+        1.61770422704285,
+        1.61770422704285
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/dev-noop/j16": {
+      "all_wall_median": 0.2142890459508635,
+      "all_wall_range": [
+        0.2142890459508635,
+        0.2142890459508635
+      ],
+      "compiler_executions": [
+        0
+      ],
+      "final_attempt_compiler_executions": [
+        0
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 0.2142890459508635,
+      "passed_wall_range": [
+        0.2142890459508635,
+        0.2142890459508635
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/dev-post-eviction-original/j16": {
+      "all_wall_median": 83.87951511697611,
+      "all_wall_range": [
+        83.87951511697611,
+        83.87951511697611
+      ],
+      "compiler_executions": [
+        631
+      ],
+      "final_attempt_compiler_executions": [
+        631
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 83.87951511697611,
+      "passed_wall_range": [
+        83.87951511697611,
+        83.87951511697611
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/dev-primed-output-loss/j16": {
+      "all_wall_median": 83.92598810599884,
+      "all_wall_range": [
+        83.92598810599884,
+        83.92598810599884
+      ],
+      "compiler_executions": [
+        631
+      ],
+      "final_attempt_compiler_executions": [
+        631
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 83.92598810599884,
+      "passed_wall_range": [
+        83.92598810599884,
+        83.92598810599884
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/dev-restart-original/j16": {
+      "all_wall_median": 0.21419463498750702,
+      "all_wall_range": [
+        0.21419463498750702,
+        0.21419463498750702
+      ],
+      "compiler_executions": [
+        0
+      ],
+      "final_attempt_compiler_executions": [
+        0
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 0.21419463498750702,
+      "passed_wall_range": [
+        0.21419463498750702,
+        0.21419463498750702
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/dev-revert/j16": {
+      "all_wall_median": 1.7698721909546293,
+      "all_wall_range": [
+        1.7698721909546293,
+        1.7698721909546293
+      ],
+      "compiler_executions": [
+        0
+      ],
+      "final_attempt_compiler_executions": [
+        0
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 1.7698721909546293,
+      "passed_wall_range": [
+        1.7698721909546293,
+        1.7698721909546293
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/dev-shared/j16": {
+      "all_wall_median": 15.793427791970316,
+      "all_wall_range": [
+        15.793427791970316,
+        15.793427791970316
+      ],
+      "compiler_executions": [
+        54
+      ],
+      "final_attempt_compiler_executions": [
+        54
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 15.793427791970316,
+      "passed_wall_range": [
+        15.793427791970316,
+        15.793427791970316
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/final-original/j16": {
+      "all_wall_median": 0.21409351599868387,
+      "all_wall_range": [
+        0.21409351599868387,
+        0.21409351599868387
+      ],
+      "compiler_executions": [
+        0
+      ],
+      "final_attempt_compiler_executions": [
+        0
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 0.21409351599868387,
+      "passed_wall_range": [
+        0.21409351599868387,
+        0.21409351599868387
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/soroban/j16": {
+      "all_wall_median": 0.36445350002031773,
+      "all_wall_range": [
+        0.36445350002031773,
+        0.36445350002031773
+      ],
+      "compiler_executions": [
+        0
+      ],
+      "final_attempt_compiler_executions": [
+        0
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 0.36445350002031773,
+      "passed_wall_range": [
+        0.36445350002031773,
+        0.36445350002031773
+      ],
+      "raw_failures": 0
+    },
+    "buck2/dev/test-group/j16": {
+      "all_wall_median": 9.63262842205586,
+      "all_wall_range": [
+        4.019237624015659,
+        43.20503059803741
+      ],
+      "compiler_executions": [
+        38,
+        3,
+        1,
+        1,
+        1,
+        69,
+        36,
+        2,
+        3
+      ],
+      "final_attempt_compiler_executions": [
+        38,
+        3,
+        1,
+        1,
+        1,
+        69,
+        36,
+        2,
+        3
+      ],
+      "observations": 9,
+      "observed_failed_native_attempts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "passed_wall_median": 9.63262842205586,
+      "passed_wall_range": [
+        4.019237624015659,
+        43.20503059803741
+      ],
+      "raw_failures": 0
+    },
+    "buck2/release/release-first/j16": {
+      "all_wall_median": 106.17892770800972,
+      "all_wall_range": [
+        106.17892770800972,
+        106.17892770800972
+      ],
+      "compiler_executions": [
+        661
+      ],
+      "final_attempt_compiler_executions": [
+        661
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 106.17892770800972,
+      "passed_wall_range": [
+        106.17892770800972,
+        106.17892770800972
+      ],
+      "raw_failures": 0
+    },
+    "buck2/release/release-fresh/j16": {
+      "all_wall_median": 3.7220501390402205,
+      "all_wall_range": [
+        3.7220501390402205,
+        3.7220501390402205
+      ],
+      "compiler_executions": [
+        0
+      ],
+      "final_attempt_compiler_executions": [
+        0
+      ],
+      "observations": 1,
+      "observed_failed_native_attempts": [
+        0
+      ],
+      "passed_wall_median": 3.7220501390402205,
+      "passed_wall_range": [
+        3.7220501390402205,
+        3.7220501390402205
+      ],
+      "raw_failures": 0
+    }
+  },
+  "interrupted_or_harness_failed_stages": [],
+  "missing_stages": [],
+  "observed_failed_native_attempts": 0,
+  "qualification_gates": {
+    "automatic_total_state_bound": {
+      "observed": null,
+      "requirement": "unmeasured: cache caps and finite churn observations do not demonstrate automatic enforcement over all owned state",
+      "status": "unmeasured"
+    },
+    "correctness": {
+      "observed": {
+        "failed": 0,
+        "observations": 31
+      },
+      "requirement": "all raw client and correctness observations pass",
+      "status": "pass"
+    },
+    "eviction_recovery": {
+      "observed": [
+        "service-eviction",
+        "dev-post-eviction-original"
+      ],
+      "requirement": "supported owned service operation and successful exact-source artifact/behavior checks",
+      "status": "pass"
+    },
+    "icon_edit": {
+      "observed": {
+        "cargo_median_seconds": null,
+        "median_seconds": 16.34686218801653,
+        "threshold_seconds": null
+      },
+      "requirement": "1 edit(s), median <=max(2 seconds,1.5 * matched frozen-source/features Cargo median)",
+      "status": "unmeasured",
+      "would_pass": null
+    },
+    "leaf_edit": {
+      "observed": {
+        "cargo_median_seconds": null,
+        "median_seconds": 1.61770422704285,
+        "threshold_seconds": null
+      },
+      "requirement": "1 edit(s), median <=max(2 seconds,1.5 * matched frozen-source/features Cargo median)",
+      "status": "unmeasured",
+      "would_pass": null
+    },
+    "noop": {
+      "observed": 0.2142890459508635,
+      "requirement": "1 noop(s), median <=2 seconds",
+      "status": "pass"
+    },
+    "observed_churn_budget": {
+      "observed": {
+        "churn_union_bytes": [],
+        "configured_budget_bytes": 137438953472
+      },
+      "requirement": "ten observed churn unions fit the configured budget; this does not prove automatic total-state enforcement",
+      "status": "unmeasured"
+    },
+    "physical_sharing": {
+      "observed": {
+        "baseline": "dev-revert",
+        "incremental_union_bytes": [
+          13988797,
+          14537718,
+          14238865,
+          14823632
+        ],
+        "one_tree_immutable_union_bytes": 8433720316,
+        "per_tree_limit_bytes": 455240447.8,
+        "workload_boundaries": [
+          {
+            "completed_stages": [
+              "dev-cold",
+              "dev-icon-1",
+              "dev-leaf-1",
+              "dev-noop-1",
+              "dev-revert",
+              "dev-shared-1"
+            ],
+            "profile": "dev",
+            "trees": [
+              "b"
+            ]
+          },
+          {
+            "completed_stages": [
+              "dev-cold",
+              "dev-fresh-b",
+              "dev-icon-1",
+              "dev-leaf-1",
+              "dev-noop-1",
+              "dev-revert",
+              "dev-shared-1"
+            ],
+            "profile": "dev",
+            "trees": [
+              "c"
+            ]
+          },
+          {
+            "completed_stages": [
+              "dev-cold",
+              "dev-fresh-b",
+              "dev-fresh-c",
+              "dev-icon-1",
+              "dev-leaf-1",
+              "dev-noop-1",
+              "dev-revert",
+              "dev-shared-1"
+            ],
+            "profile": "dev",
+            "trees": [
+              "d"
+            ]
+          },
+          {
+            "completed_stages": [
+              "dev-cold",
+              "dev-fresh-b",
+              "dev-fresh-c",
+              "dev-fresh-d",
+              "dev-icon-1",
+              "dev-leaf-1",
+              "dev-noop-1",
+              "dev-revert",
+              "dev-shared-1"
+            ],
+            "profile": "dev",
+            "trees": [
+              "e"
+            ]
+          }
+        ]
+      },
+      "requirement": "each extra worktree <=5% matched one-tree immutable payload +32 MiB metadata; cache+all outputs union",
+      "status": "pass"
+    },
+    "primed_output_loss": {
+      "observed": [
+        "dev-primed-output-loss"
+      ],
+      "requirement": "supported owned service operation and successful exact-source artifact/behavior checks",
+      "status": "pass"
+    },
+    "restart": {
+      "observed": [
+        "service-restart",
+        "dev-restart-original"
+      ],
+      "requirement": "supported owned service operation and successful exact-source artifact/behavior checks",
+      "status": "pass"
+    },
+    "shared_edit": {
+      "observed": {
+        "cargo_median_seconds": null,
+        "median_seconds": 15.793427791970316,
+        "threshold_seconds": null
+      },
+      "requirement": "1 edit(s), median <=max(2 seconds,1.5 * matched frozen-source/features Cargo median)",
+      "status": "unmeasured",
+      "would_pass": null
+    },
+    "warm_identical_wall": {
+      "observed": [
+        0.04874988082856635,
+        0.049945305085588,
+        0.05294016255989472,
+        0.0463388312515421
+      ],
+      "requirement": "successful original cold and four successful identical fresh builds, each <=20% of original cold observation",
+      "status": "pass"
+    },
+    "warm_identical_zero_compilers": {
+      "observed": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "requirement": "four independent fresh worktrees, zero eligible compiler actions each",
+      "status": "pass"
+    }
+  },
+  "raw_failed_build_commands": 0,
+  "raw_failed_correctness_observations": 0,
+  "raw_failed_stages": 0,
+  "root": "/home/callen/sekka-work/buck2-final-20261106/run",
+  "schema": 1,
+  "stages": [
+    {
+      "id": "dev-cold",
+      "makespan_seconds": 83.57100033399183,
+      "passed": true
+    },
+    {
+      "id": "dev-noop-1",
+      "makespan_seconds": 0.2142890459508635,
+      "passed": true
+    },
+    {
+      "id": "dev-leaf-1",
+      "makespan_seconds": 1.61770422704285,
+      "passed": true
+    },
+    {
+      "id": "dev-shared-1",
+      "makespan_seconds": 15.793427791970316,
+      "passed": true
+    },
+    {
+      "id": "dev-icon-1",
+      "makespan_seconds": 16.34686218801653,
+      "passed": true
+    },
+    {
+      "id": "dev-revert",
+      "makespan_seconds": 1.7698721909546293,
+      "passed": true
+    },
+    {
+      "id": "dev-fresh-b",
+      "makespan_seconds": 4.07407630700618,
+      "passed": true
+    },
+    {
+      "id": "dev-fresh-c",
+      "makespan_seconds": 4.173979107988998,
+      "passed": true
+    },
+    {
+      "id": "dev-fresh-d",
+      "makespan_seconds": 4.424262342974544,
+      "passed": true
+    },
+    {
+      "id": "dev-fresh-e",
+      "makespan_seconds": 3.872582481999416,
+      "passed": true
+    },
+    {
+      "id": "dev-divergent-j4",
+      "makespan_seconds": 34.733308508992195,
+      "passed": true
+    },
+    {
+      "id": "service-eviction",
+      "makespan_seconds": 4.825504079053644,
+      "passed": true
+    },
+    {
+      "id": "dev-post-eviction-original",
+      "makespan_seconds": 83.87951511697611,
+      "passed": true
+    },
+    {
+      "id": "service-restart",
+      "makespan_seconds": 1.2657725820317864,
+      "passed": true
+    },
+    {
+      "id": "dev-restart-original",
+      "makespan_seconds": 0.21419463498750702,
+      "passed": true
+    },
+    {
+      "id": "dev-primed-output-loss",
+      "makespan_seconds": 83.92598810599884,
+      "passed": true
+    },
+    {
+      "id": "service-restore-capacity",
+      "makespan_seconds": 1.1661307019530796,
+      "passed": true
+    },
+    {
+      "id": "release-first",
+      "makespan_seconds": 106.17892770800972,
+      "passed": true
+    },
+    {
+      "id": "release-fresh",
+      "makespan_seconds": 3.7220501390402205,
+      "passed": true
+    },
+    {
+      "id": "test-group-1",
+      "makespan_seconds": 43.20503059803741,
+      "passed": true
+    },
+    {
+      "id": "test-group-2",
+      "makespan_seconds": 9.63262842205586,
+      "passed": true
+    },
+    {
+      "id": "test-group-3",
+      "makespan_seconds": 4.37215044896584,
+      "passed": true
+    },
+    {
+      "id": "test-group-4",
+      "makespan_seconds": 4.019237624015659,
+      "passed": true
+    },
+    {
+      "id": "test-group-5",
+      "makespan_seconds": 4.9233681809855625,
+      "passed": true
+    },
+    {
+      "id": "test-group-6",
+      "makespan_seconds": 35.435529617010616,
+      "passed": true
+    },
+    {
+      "id": "test-group-7",
+      "makespan_seconds": 22.45621343702078,
+      "passed": true
+    },
+    {
+      "id": "test-group-8",
+      "makespan_seconds": 7.4777465389925055,
+      "passed": true
+    },
+    {
+      "id": "test-group-9",
+      "makespan_seconds": 11.184684971987735,
+      "passed": true
+    },
+    {
+      "id": "soroban-11",
+      "makespan_seconds": 0.36445350002031773,
+      "passed": true
+    },
+    {
+      "id": "service-dedupe",
+      "makespan_seconds": 0.16405160300200805,
+      "passed": true
+    },
+    {
+      "id": "final-original",
+      "makespan_seconds": 0.21409351599868387,
+      "passed": true
+    }
+  ]
+}
