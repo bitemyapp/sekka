@@ -13,8 +13,8 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use aizome_chanoma::app::play::FilmItem;
-use aizome_chanoma::app::state::Subtitles as StateSubtitles;
+use aizome_chanoma::app::play::{FilmItem, START_WAIT};
+use aizome_chanoma::app::state::{Item, Recent, Subtitles as StateSubtitles};
 use aizome_chanoma::app::{Input, MenuKind, Modal, Screen};
 use aizome_chanoma::clock::ManualClock;
 use aizome_chanoma::devtools::{Field, Focused};
@@ -51,6 +51,10 @@ static LOADED: AtomicBool = AtomicBool::new(false);
 static INITED: AtomicBool = AtomicBool::new(false);
 static mut SRAM: [u8; 32] = [0; 32];
 static OPTION: Mutex<String> = Mutex::new(String::new());
+/// A game whose bytes start `STUCK` or `SLOW` is still loading until the
+/// test lets it go: then a stuck one fails, a slow one starts.
+static LOADING: AtomicBool = AtomicBool::new(false);
+static LET_GO: AtomicBool = AtomicBool::new(false);
 
 unsafe extern "C" fn set_environment(cb: retro_environment_t) {
     *ENV.lock().unwrap() = Some(cb);
@@ -173,8 +177,16 @@ unsafe extern "C" fn load_game(game: *const retro_game_info) -> bool {
     let mut format = RETRO_PIXEL_FORMAT_XRGB8888;
     unsafe { env(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, (&mut format as *mut c_uint).cast()) };
     let g = unsafe { &*game };
-    let ok =
-        !g.data.is_null() && unsafe { std::slice::from_raw_parts(g.data.cast::<u8>(), g.size) }.starts_with(b"CHANOMA");
+    let data =
+        if g.data.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(g.data.cast::<u8>(), g.size) } };
+    if data.starts_with(b"STUCK") || data.starts_with(b"SLOW") {
+        LOADING.store(true, Ordering::SeqCst);
+        while !LET_GO.load(Ordering::SeqCst) {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        LOADING.store(false, Ordering::SeqCst);
+    }
+    let ok = data.starts_with(b"CHANOMA") || data.starts_with(b"SLOW");
     LOADED.store(ok, Ordering::SeqCst);
     ok
 }
@@ -684,6 +696,148 @@ fn a_game_plays_pauses_and_carries_on_where_it_was_left() {
     input(&mut h, Input::Dir(Dir::Down));
     input(&mut h, Input::Dir(Dir::Down));
     input(&mut h, Input::Ok);
+}
+
+/// Choose the tile called `label` at Home.
+fn choose(h: &mut Harness<Chanoma>, label: &str) {
+    let home = h.program().home_view();
+    let at = home
+        .shelves
+        .iter()
+        .enumerate()
+        .find_map(|(row, s)| s.tiles.iter().position(|t| t.label == label).map(|col| (row, col)));
+    let Some((row, col)) = at else { panic!("no {label:?} at Home") };
+    h.program_mut().focus = aizome_chanoma::ui::Focus { row, col };
+    input(h, Input::Ok);
+}
+
+/// Wait until a game stuck or slow is in its core's hands.
+fn loading() {
+    let start = Instant::now();
+    while !LOADING.load(Ordering::SeqCst) {
+        assert!(start.elapsed() < Duration::from_secs(10), "the game didn't reach its core");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+/// Let a stuck game's core go, and wait until Chanoma has seen it end.
+fn let_go(h: &mut Harness<Chanoma>) {
+    LET_GO.store(true, Ordering::SeqCst);
+    until(h, |a| !a.starts.stuck());
+    LET_GO.store(false, Ordering::SeqCst);
+}
+
+/// The games in Keep playing, by key.
+fn recent_games(h: &Harness<Chanoma>) -> Vec<String> {
+    let items = &h.program().recent.items;
+    items.iter().filter_map(|i| if let Item::Game { key } = i { Some(key.clone()) } else { None }).collect()
+}
+
+/// The question over a game taking long to start: its title.
+fn slow_note(h: &Harness<Chanoma>) -> Option<String> {
+    match &h.program().modal {
+        Some(Modal::Menu { kind: MenuKind::Slow, menu }) => Some(menu.title.clone()),
+        _ => None,
+    }
+}
+
+fn starting(h: &Harness<Chanoma>, title: &str) -> bool {
+    matches!(&h.program().screen, Screen::Starting(t) if t == title)
+}
+
+#[test]
+fn a_game_slow_to_start_is_asked_about_and_back_or_home_always_stops_it() {
+    let _core = core_lock();
+    let stuck = "snes/snes/Stuck Quest (USA).sfc";
+    let slow = "snes/snes/Slow Quest (USA).sfc";
+    let test = "snes/snes/Test Quest (USA).sfc";
+    let (dirs, cores) = household("slow", |s| {
+        s.games_allowed.insert(stuck.into());
+        s.games_allowed.insert(slow.into());
+    });
+    let games = cores.parent().unwrap().join("Games/snes");
+    std::fs::write(games.join("Stuck Quest (USA).sfc"), b"STUCK test game").unwrap();
+    std::fs::write(games.join("Slow Quest (USA).sfc"), b"SLOW test game").unwrap();
+    // The stuck one was played before: it's in Keep playing.
+    Recent { items: vec![Item::Game { key: stuck.into() }], ..Recent::default() }.save(&dirs);
+    let clock = ManualClock::at(2026, 10, 31, 17, 0);
+    let mut h = harness(config(dirs, cores, clock));
+
+    // Back while it starts: called off at once, though its core is stuck.
+    // Called off this soon, it keeps its place in Keep playing.
+    choose(&mut h, "Stuck Quest");
+    assert!(starting(&h, "Stuck Quest"), "{:?}", h.program().screen);
+    loading();
+    shot(&mut h, "30-game-starting");
+    press(&mut h, Button::East);
+    assert_eq!(h.program().screen, Screen::Home);
+    assert!(h.program().starts.stuck(), "its core hasn't let go");
+    assert_eq!(recent_games(&h), [stuck]);
+
+    // Another game waits for that core to let go, and after a while it's
+    // asked about. Kept waiting for, it starts once the core lets go.
+    choose(&mut h, "Test Quest");
+    assert!(starting(&h, "Test Quest") && h.program().starts.behind());
+    h.advance(START_WAIT - Duration::from_secs(1));
+    assert_eq!(slow_note(&h), None, "not asked yet");
+    h.advance(Duration::from_secs(1));
+    assert_eq!(slow_note(&h).as_deref(), Some("The game before is stuck"));
+    shot(&mut h, "31-game-behind-a-stuck-one");
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    assert!(h.program().modal.is_none() && starting(&h, "Test Quest"), "Keep waiting");
+    assert!(h.program().starts.slow());
+    LET_GO.store(true, Ordering::SeqCst);
+    until(&mut h, |a| a.screen == Screen::Playing);
+    LET_GO.store(false, Ordering::SeqCst);
+    assert!(LOADED.load(Ordering::SeqCst) && !h.program().starts.stuck());
+    press(&mut h, Button::Guide);
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::Home);
+    assert_eq!(recent_games(&h), [test, stuck]);
+
+    // Stuck again: after a while, Stop it now. Stopped after taking that
+    // long, it leaves Keep playing.
+    choose(&mut h, "Stuck Quest");
+    loading();
+    h.advance(START_WAIT);
+    assert_eq!(slow_note(&h).as_deref(), Some("Taking a long time to start"));
+    shot(&mut h, "32-game-slow");
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::Home);
+    assert_eq!(recent_games(&h), [test]);
+    let_go(&mut h);
+
+    // Once more: the question put away with Back is waiting on, and Home
+    // stops it whenever.
+    choose(&mut h, "Stuck Quest");
+    loading();
+    h.advance(START_WAIT);
+    assert!(slow_note(&h).is_some());
+    press(&mut h, Button::East);
+    assert!(h.program().modal.is_none() && starting(&h, "Stuck Quest"));
+    shot(&mut h, "33-game-still-starting");
+    press(&mut h, Button::Guide);
+    assert_eq!(h.program().screen, Screen::Home);
+    let_go(&mut h);
+
+    // A game slow but not stuck: the question goes when it starts.
+    choose(&mut h, "Slow Quest");
+    loading();
+    h.advance(START_WAIT);
+    assert!(slow_note(&h).is_some());
+    LET_GO.store(true, Ordering::SeqCst);
+    until(&mut h, |a| a.screen == Screen::Playing);
+    LET_GO.store(false, Ordering::SeqCst);
+    assert!(h.program().modal.is_none(), "the question went");
+    assert_eq!(recent_games(&h)[0], slow);
+    press(&mut h, Button::Guide);
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Dir(Dir::Down));
+    input(&mut h, Input::Ok);
+    assert_eq!(h.program().screen, Screen::Home);
 }
 
 #[test]

@@ -132,6 +132,16 @@ impl Session {
             let _ = t.join();
         }
     }
+
+    /// Give up on a game still starting: it's told to end without keeping
+    /// where it was left, and nobody waits for it, since a core stuck
+    /// loading may never come back. Its thread ends by itself if it does;
+    /// it's handed back to see when.
+    pub fn abandon(mut self) -> Option<std::thread::JoinHandle<()>> {
+        self.live.store(false, Ordering::Release);
+        let _ = self.tx.send(Ctl::Stop { keep: false });
+        self.thread.take()
+    }
 }
 
 impl Drop for Session {

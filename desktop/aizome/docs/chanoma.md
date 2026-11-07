@@ -117,6 +117,7 @@ Wherever Chanoma is, and whatever is in hand, there's a way back to Home:
 |---|---|---|---|
 | Chanoma's screens | Back, Home | Esc, Home or F1 | the hints along the foot are buttons (*Back*, *Home*), as are a screen's own (*Cancel*, *Back home*) |
 | A menu or the PIN pad | Back (on the pad, once its presses are taken back) | Esc | a click beside it |
+| A game starting | Back, Home: called off | Esc, Home or F1 | the *Back* hint |
 | A game or a film | Home: its menu | Esc, Home or F1: its menu | moving it brings a bar down from the top, *Home* at its left; a click on the picture is the menu too |
 | A page in the browser | Home: the menu over the page | Home or F1, kept from the page | the pointer pushed up to the top of the screen brings the bar down |
 
@@ -192,6 +193,17 @@ pausing, saving and leaving are Chanoma's.
   one process-wide pointer: one game at a time. Cores run in Chanoma's
   process; a core that crashes takes Chanoma with it, and the autostart
   service starts it again.
+- **Starting**: Back and Home call a game off while it starts, at once,
+  however long its core takes. After 15 seconds a menu says it's *Taking
+  a long time to start* (or that *The game before is stuck*) and asks:
+  *Stop it now* (first: a start that long is more likely stuck than
+  slow) or *Keep waiting*, with Back and Home still stopping it after, as
+  the screen then says. A game goes into *Keep playing* once
+  it has started, and leaves it when it fails to start or is stopped
+  after that long, so that a kid doesn't come back to it first. A core
+  given up on is told to end and isn't waited for, as it may never come
+  back from loading; until it does, the next game waits for it (two of one
+  core in a process don't mix) and is asked about the same way.
 
 ### Services
 
@@ -786,8 +798,13 @@ cargo run --release -p aizome-chanoma --example library -- FOLDER… \
   PINs and their wait, surviving a restart; a game played through a
   libretro core written in the test (frames reaching the window's video
   sink enlarged, the controller reaching the core, pausing under the Home
-  menu, its state and picture kept, *Keep playing*, carrying on); time
-  running out mid-game, with the warning, the game kept, the closed
+  menu, its state and picture kept, *Keep playing*, carrying on); games
+  that core keeps loading until the test lets go (Back calling one off
+  at once, the next game waiting for that core and asked about after 15
+  seconds, kept waiting for and starting when it lets go; *Stop it now*
+  taking it out of *Keep playing*; the question put away with Back, and
+  Home stopping it after; a slow one starting under the question, which
+  goes); time running out mid-game, with the warning, the game kept, the closed
   screen, and a grown-up's grant; bedtime; a folder added with the
   controller alone (*Suggested* offering a drive's `roms` and home's
   `ROMs`, the drive's first; one press adding it, the settings back on
@@ -988,6 +1005,9 @@ before calling any of it tested on hardware.
 
 ## Limits
 
+- A core stuck loading for good keeps its thread in Chanoma's process:
+  Chanoma comes back Home, and films and pages work, but no other game
+  starts until Chanoma is opened again (the screen says so).
 - Box art is fetched by each game's name from thumbnails.libretro.com,
   a server of the libretro project's, as its tile shows: it hears which
   games are on the TV. *Box art from the internet* in Games turns that
