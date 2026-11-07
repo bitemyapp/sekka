@@ -463,8 +463,9 @@ impl Model {
             .is_some_and(|i| i.installations.iter().any(|x| x.installation_id.is_none()))
     }
 
-    /// Whether the record waits for Recovery, and the helper couldn't read
-    /// the boot policy to say whether Recovery's steps are done already.
+    /// Whether the record waits for Recovery, and the helper couldn't look
+    /// at the boot policy this time to say whether Recovery's steps are
+    /// done already.
     pub fn recovery_unconfirmed(&self) -> bool {
         self.screen == Screen::Recovery
             && matches!(self.reconciling, Some(Reconciling::Refused(id)) if Some(id) == self.installation)

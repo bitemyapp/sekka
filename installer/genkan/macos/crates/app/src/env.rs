@@ -114,8 +114,8 @@ pub trait Environment: Send + Sync + 'static {
     /// Ask the helper to look at the Mac as root and bring a stopped
     /// installation's record up to date with it: Recovery's steps once the
     /// boot policy shows them, or that nothing of it is left. It may also
-    /// find nothing to change, or refuse (the helper on this branch can't
-    /// look yet).
+    /// find nothing to change, or refuse: busy while an engine holds the
+    /// disk, or because the Mac couldn't be inspected.
     fn reconcile(&self, installation: Uuid) -> Result<Events, HelperRefusal>;
     /// An account's full name, as Users & Groups and recoveryOS show it,
     /// when this Mac knows the account.

@@ -4,7 +4,7 @@
 //! the exact sequence of states a person would see.
 use super::*;
 use crate::env::{Environment, ToDownload};
-use crate::sim::{Scenario, Simulation};
+use crate::sim::{Scenario, Simulation, inspection_failed};
 
 struct Journey {
     env: Simulation,
@@ -401,15 +401,15 @@ fn reopening_reconnects_to_an_installation() {
     // Recovery asks for the administrator the record names.
     assert_eq!(j.model.owner.as_deref(), Some("chris"));
     assert_eq!(j.model.owner_name().as_deref(), Some("Chris Allen"));
-    // This branch's helper can't read the boot policy, so whether Recovery
-    // is done already is said to be unknown.
-    assert!(j.model.recovery_unconfirmed());
-
-    // A helper that looks, and finds Recovery's step still to do.
-    let j = Journey::with(Simulation::new(Scenario::WaitingForRecovery, 0.0).reconciling());
-    assert_eq!(j.model.screen, Screen::Recovery);
+    // The helper looked, and found Recovery's step still to do.
     assert_eq!(j.model.state, Some(InstallState::WaitingForRecovery));
     assert!(!j.model.recovery_unconfirmed());
+
+    // A helper that couldn't look can't say whether Recovery is done
+    // already, and the page says so.
+    let j = Journey::with(Simulation::new(Scenario::WaitingForRecovery, 0.0).refusing_reconcile(inspection_failed()));
+    assert_eq!(j.model.screen, Screen::Recovery);
+    assert!(j.model.recovery_unconfirmed());
 }
 
 #[test]
@@ -492,14 +492,6 @@ fn known(state: InstallState) -> Result<Vec<Summary>, crate::env::HelperProblem>
     }])
 }
 
-/// What the helper on this branch answers when asked to reconcile.
-fn cant_look() -> HelperRefusal {
-    HelperRefusal {
-        code: HelperRefusalCode::State,
-        message: "This helper can't look at the Mac for an installation yet.".parse().unwrap(),
-    }
-}
-
 /// An installation on the disk, as this Mac's own inspection reports it.
 fn on_disk(kind: InstallationKind, state: InstallationState, id: Option<Uuid>) -> sekka_mac_contract::Installation {
     sekka_mac_contract::Installation {
@@ -523,7 +515,7 @@ fn reopening_after_recovery_finished_shows_sekka_installed() {
     assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "{effects:?}");
     assert_eq!(m.screen, Screen::Checking);
 
-    let j = Journey::with(Simulation::new(Scenario::RecoveryFinished, 0.0).reconciling());
+    let j = Journey::start(Scenario::RecoveryFinished);
     assert_eq!(j.model.screen, Screen::Existing);
     assert_eq!(j.model.state, Some(InstallState::WaitingForSetup));
     assert!(j.model.installed());
@@ -533,7 +525,7 @@ fn reopening_after_recovery_finished_shows_sekka_installed() {
 
 #[test]
 fn reopening_after_recovery_with_a_helper_that_cant_look_says_what_isnt_known() {
-    let j = Journey::start(Scenario::RecoveryFinished);
+    let j = Journey::with(Simulation::new(Scenario::RecoveryFinished, 0.0).refusing_reconcile(inspection_failed()));
     assert_eq!(j.model.screen, Screen::Recovery);
     assert_eq!(j.model.state, Some(InstallState::WaitingForRecovery));
     assert!(j.model.recovery_unconfirmed());
@@ -550,7 +542,7 @@ fn a_complete_sekka_is_shown_installed_even_when_the_helper_cant_say_so() {
     };
     let (mut m, effects) = hear(&env, env.helper_status(), complete());
     assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "{effects:?}");
-    let effects = m.update(Msg::Reconciled(Err(cant_look())));
+    let effects = m.update(Msg::Reconciled(Err(inspection_failed())));
     assert_eq!(m.screen, Screen::Existing, "never Finish in Recovery");
     assert!(m.installed());
     assert!(effects.is_empty(), "the helper is asked once: {effects:?}");
@@ -565,7 +557,7 @@ fn a_complete_sekka_is_shown_installed_even_when_the_helper_cant_say_so() {
 
 #[test]
 fn an_installation_removed_by_hand_lets_a_new_one_begin() {
-    let mut j = Journey::with(Simulation::new(Scenario::RemovedByHand, 0.0).reconciling());
+    let mut j = Journey::start(Scenario::RemovedByHand);
     assert_eq!(j.model.screen, Screen::Plan);
     assert_eq!(j.model.notice.as_deref(), Some(crate::text::REMOVED));
     assert!(j.model.installation.is_none());
@@ -579,7 +571,7 @@ fn an_installation_removed_by_hand_is_named_when_the_helper_cant_close_it() {
     let (_, _, effects) = start(Scenario::RemovedByHand);
     assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "{effects:?}");
 
-    let mut j = Journey::start(Scenario::RemovedByHand);
+    let mut j = Journey::with(Simulation::new(Scenario::RemovedByHand, 0.0).refusing_reconcile(inspection_failed()));
     // Never the Recovery steps for an installation that isn't there.
     assert_eq!(j.model.screen, Screen::Missing);
     assert_eq!(j.model.step(), Step::Check);
@@ -594,7 +586,7 @@ fn an_installation_removed_by_hand_is_named_when_the_helper_cant_close_it() {
     // A helper that looks and leaves the record as it was is no better.
     let env = Simulation::new(Scenario::RemovedByHand, 0.0);
     let (mut m, _) = hear(&env, env.helper_status(), env.inspect());
-    m.update(Msg::Reconciled(env.events(SIM_ID, 0).map_err(|_| cant_look())));
+    m.update(Msg::Reconciled(env.events(SIM_ID, 0).map_err(|_| inspection_failed())));
     assert_eq!(m.screen, Screen::Missing);
 
     // Every state that names itself on the disk, and isn't there.
@@ -609,7 +601,7 @@ fn an_installation_removed_by_hand_is_named_when_the_helper_cant_close_it() {
     ] {
         let (mut m, effects) = hear(&env, known(state.clone()), env.inspect());
         assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "{state:?}: {effects:?}");
-        m.update(Msg::Reconciled(Err(cant_look())));
+        m.update(Msg::Reconciled(Err(inspection_failed())));
         assert_eq!(m.screen, Screen::Missing, "{state:?}");
     }
 }
@@ -655,19 +647,19 @@ fn a_finished_installation_this_mac_cant_identify_is_not_offered_a_second() {
     };
     let (mut m, effects) = hear(&env, known(InstallState::WaitingForSetup), unread());
     assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "the helper is asked: {effects:?}");
-    m.update(Msg::Reconciled(Err(cant_look())));
+    m.update(Msg::Reconciled(Err(inspection_failed())));
     assert_eq!(m.screen, Screen::Existing);
     assert!(m.installed());
 
     // On a disk the inspection accounts for, a finished installation that
     // is gone doesn't stand in the way, whatever the helper says.
     let (mut m, _) = hear(&env, known(InstallState::WaitingForSetup), env.inspect());
-    m.update(Msg::Reconciled(Err(cant_look())));
+    m.update(Msg::Reconciled(Err(inspection_failed())));
     assert_eq!(m.screen, Screen::Plan);
 
     // Nor is an unfinished one called gone beside something unidentified.
     let (mut m, _) = hear(&env, known(InstallState::WaitingForRecovery), unread());
-    m.update(Msg::Reconciled(Err(cant_look())));
+    m.update(Msg::Reconciled(Err(inspection_failed())));
     assert_eq!(m.screen, Screen::Recovery);
 }
 
@@ -686,7 +678,7 @@ fn an_installation_found_removed_while_watching_it_is_closed() {
 
 #[test]
 fn the_helper_is_asked_about_recovery_once_in_each_check() {
-    let mut j = Journey::with(Simulation::new(Scenario::WaitingForRecovery, 0.0).reconciling());
+    let mut j = Journey::start(Scenario::WaitingForRecovery);
     assert_eq!(j.model.reconciling, Some(Reconciling::Answered(SIM_ID)));
     let effects = j.model.update(Msg::CheckAgain);
     j.settle(effects);

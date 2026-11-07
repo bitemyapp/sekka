@@ -2947,8 +2947,11 @@ installer/genkan/macos/packaging/build-app.sh --engine ENGINE.tar.gz --icon AppI
 `low-space`, `wrong-password`, `download-fails`, `unplugged`,
 `resize-fails`, `install-fails`, `startup-disk-fails`,
 `waiting-for-recovery`, `recovery-finished`, `removed-by-hand`,
-`stopped-early`, `existing`, `needs-approval`); its helper refuses to
-reconcile, as the real one does for now. `--screenshots DIR` renders
+`stopped-early`, `existing`, `needs-approval`). Its helper answers as the
+real one does: asked to reconcile, it looks at the Mac and records
+Recovery's steps (`recovery-finished`) or that nothing of an installation
+is left (`removed-by-hand`); the model's tests also give it the real
+helper's refusals (busy, or the Mac couldn't be inspected). `--screenshots DIR` renders
 every screen of every scenario in light and dark through AppKit. Production builds refuse both.
 Development builds also read their catalog from `SEKKA_INSTALLER_CATALOG`
 (a file, still verified with the development key). A release

@@ -42,12 +42,12 @@ pub enum Scenario {
     StartupDiskFails,
     /// The app reopens with macOS's part done.
     WaitingForRecovery,
-    /// The app reopens after Recovery finished; the helper's record still
-    /// waits for Recovery until the helper looks at the Mac, which only a
-    /// [`Simulation::reconciling`] helper does.
+    /// The app reopens after Recovery finished; the helper's record waits
+    /// for Recovery until the helper looks at the Mac and records its
+    /// steps.
     RecoveryFinished,
     /// The app reopens after the owner removed an unfinished installation
-    /// in Disk Utility; only a [`Simulation::reconciling`] helper closes
+    /// in Disk Utility; the helper looks, finds nothing of it, and closes
     /// its record.
     RemovedByHand,
     /// The app reopens to an installation whose helper stopped while
@@ -113,10 +113,10 @@ pub struct Simulation {
     scenario: Scenario,
     /// How fast time passes: 1.0 is a believable pace; screenshots use 0.
     pace: f64,
-    /// The helper looks at the Mac when asked to reconcile, as the contract
-    /// describes. The helper on this branch refuses, and so does the
-    /// simulation's unless it is made [`Simulation::reconciling`].
-    reconciles: bool,
+    /// What the helper answers when asked to reconcile, when it refuses
+    /// ([`Simulation::refusing_reconcile`]). Otherwise it looks at the Mac,
+    /// as the real helper does.
+    reconcile_refusal: Option<HelperRefusal>,
     state: Mutex<SimState>,
 }
 
@@ -138,19 +138,39 @@ struct SimState {
 
 const SIM_ID: Uuid = Uuid::from_bytes([0x5e; 16]);
 
+/// What the helper says when another request holds its install lock.
+pub fn busy() -> HelperRefusal {
+    HelperRefusal {
+        code: HelperRefusalCode::Busy,
+        message: "Sekka Installer's helper is busy with another request, or an earlier step is still finishing. Try again in a moment."
+            .parse()
+            .unwrap(),
+    }
+}
+
+/// What the helper says when its own inspection of the Mac fails.
+pub fn inspection_failed() -> HelperRefusal {
+    HelperRefusal {
+        code: HelperRefusalCode::State,
+        message: "This Mac couldn't be inspected (the engine stopped). Nothing was changed.".parse().unwrap(),
+    }
+}
+
 impl Simulation {
     pub fn new(scenario: Scenario, pace: f64) -> Self {
         Self {
             scenario,
             pace,
-            reconciles: false,
+            reconcile_refusal: None,
             state: Mutex::new(SimState::default()),
         }
     }
 
-    /// The same simulation, with a helper that reconciles.
-    pub fn reconciling(mut self) -> Self {
-        self.reconciles = true;
+    /// The same simulation, with a helper that refuses to reconcile, as the
+    /// real one does when it is busy ([`busy`]) or can't inspect the Mac
+    /// ([`inspection_failed`]).
+    pub fn refusing_reconcile(mut self, refusal: HelperRefusal) -> Self {
+        self.reconcile_refusal = Some(refusal);
         self
     }
 
@@ -262,6 +282,57 @@ impl Simulation {
             // Import done, Apple's files started.
             Scenario::StoppedEarly => self.records(Some((1, None)), tail),
             _ => self.records(None, tail),
+        }
+    }
+
+    /// The installation as the helper has it now: the one begun in this
+    /// run, as far as the clock has taken it, or the one the app reopens
+    /// to.
+    fn current(&self) -> Events {
+        let started = self.state.lock().unwrap().installation.map(|(_, t)| t);
+        let Some(started) = started else {
+            let (records, state) = self.reopened();
+            return Events {
+                records,
+                state,
+                running: false,
+                progress: None,
+            };
+        };
+        let elapsed = if self.pace > 0.0 { started.elapsed().as_secs_f64() / self.pace } else { 1e9 };
+        let mut stages = vec![Stage::Import];
+        stages.extend(macos_stages(true));
+        let per = 1.6;
+        let done = ((elapsed / per) as usize).min(stages.len());
+        let failing = match self.scenario {
+            Scenario::ResizeFails => Some(Stage::Shrink),
+            Scenario::InstallFails => Some(Stage::Root),
+            Scenario::StartupDiskFails if !self.state.lock().unwrap().startup_retried => Some(Stage::StartupDisk),
+            _ => None,
+        };
+        if let Some(f) = failing {
+            let at = stages.iter().position(|s| *s == f).unwrap();
+            if done >= at {
+                let (records, state) = self.records(Some((at, Some(f))), Vec::new());
+                return Events {
+                    records,
+                    state,
+                    running: false,
+                    progress: None,
+                };
+            }
+        }
+        let (records, state) = self.records(Some((done, None)), Vec::new());
+        let running = done < stages.len();
+        Events {
+            records,
+            state: if running { state } else { InstallState::WaitingForRecovery },
+            running,
+            progress: stages.get(done).map(|s| Progress {
+                stage: *s,
+                done: ((elapsed % per) / per * 100.0) as u64,
+                total: 100,
+            }),
         }
     }
 }
@@ -381,19 +452,23 @@ impl Environment for Simulation {
         Ok(sim_catalog(self.scenario))
     }
     fn helper_status(&self) -> Result<Vec<Summary>, HelperProblem> {
-        Ok(match self.scenario {
-            Scenario::WaitingForRecovery
-            | Scenario::RecoveryFinished
-            | Scenario::RemovedByHand
-            | Scenario::StoppedEarly => vec![Summary {
-                installation: SIM_ID,
-                release: "sekka-j514s-4882dc33".parse().unwrap(),
-                state: self.reopened().1,
-                opened: Timestamp::now(),
-                running: false,
-            }],
-            _ => vec![],
-        })
+        let begun = self.state.lock().unwrap().installation.is_some();
+        let known = begun
+            || matches!(
+                self.scenario,
+                Scenario::WaitingForRecovery | Scenario::RecoveryFinished | Scenario::RemovedByHand | Scenario::StoppedEarly
+            );
+        if !known {
+            return Ok(Vec::new());
+        }
+        let now = self.current();
+        Ok(vec![Summary {
+            installation: SIM_ID,
+            release: "sekka-j514s-4882dc33".parse().unwrap(),
+            state: now.state,
+            opened: Timestamp::now(),
+            running: now.running,
+        }])
     }
     fn still_to_download(&self, release: &Release) -> ToDownload {
         if self.state.lock().unwrap().downloaded { ToDownload::NOTHING } else { ToDownload::all(release) }
@@ -479,51 +554,7 @@ impl Environment for Simulation {
         Ok(SIM_ID)
     }
     fn events(&self, _: Uuid, _after: u64) -> Result<Events, String> {
-        let started = self.state.lock().unwrap().installation.map(|(_, t)| t);
-        let Some(started) = started else {
-            let (records, state) = self.reopened();
-            return Ok(Events {
-                records,
-                state,
-                running: false,
-                progress: None,
-            });
-        };
-        let elapsed = if self.pace > 0.0 { started.elapsed().as_secs_f64() / self.pace } else { 1e9 };
-        let mut stages = vec![Stage::Import];
-        stages.extend(macos_stages(true));
-        let per = 1.6;
-        let done = ((elapsed / per) as usize).min(stages.len());
-        let failing = match self.scenario {
-            Scenario::ResizeFails => Some(Stage::Shrink),
-            Scenario::InstallFails => Some(Stage::Root),
-            Scenario::StartupDiskFails if !self.state.lock().unwrap().startup_retried => Some(Stage::StartupDisk),
-            _ => None,
-        };
-        if let Some(f) = failing {
-            let at = stages.iter().position(|s| *s == f).unwrap();
-            if done >= at {
-                let (records, state) = self.records(Some((at, Some(f))), Vec::new());
-                return Ok(Events {
-                    records,
-                    state,
-                    running: false,
-                    progress: None,
-                });
-            }
-        }
-        let (records, state) = self.records(Some((done, None)), Vec::new());
-        let running = done < stages.len();
-        Ok(Events {
-            records,
-            state: if running { state } else { InstallState::WaitingForRecovery },
-            running,
-            progress: stages.get(done).map(|s| Progress {
-                stage: *s,
-                done: ((elapsed % per) / per * 100.0) as u64,
-                total: 100,
-            }),
-        })
+        Ok(self.current())
     }
     fn cancel(&self, _: Uuid) -> Result<(), HelperRefusal> {
         if self.scenario == Scenario::StoppedEarly {
@@ -549,27 +580,30 @@ impl Environment for Simulation {
             progress: None,
         })
     }
+    /// As the helper answers: never while its engine runs; with the record
+    /// as it stands when it lets another installation begin; otherwise
+    /// after looking at the Mac, bringing the record up to date where it is
+    /// behind it, and changing nothing elsewhere.
     fn reconcile(&self, _: Uuid) -> Result<Events, HelperRefusal> {
         self.wait(700);
-        if !self.reconciles {
-            // As the helper on this branch answers.
+        let now = self.current();
+        if now.running {
             return Err(HelperRefusal {
-                code: HelperRefusalCode::State,
-                message: "This helper can't look at the Mac for an installation yet.".parse().unwrap(),
+                code: HelperRefusalCode::Busy,
+                message: "The installation is still running.".parse().unwrap(),
             });
         }
-        // Where the record is behind the Mac the helper brings it up to
-        // date; elsewhere it finds nothing to change.
+        if let Some(refusal) = &self.reconcile_refusal {
+            return Err(refusal.clone());
+        }
+        let recovery = matches!(now.state, InstallState::WaitingForRecovery | InstallState::EnrollmentUncertain);
+        if !recovery && now.state.allows_new_installation() {
+            return Ok(now);
+        }
         if self.reconciliation().is_some() {
             self.state.lock().unwrap().reconciled = true;
         }
-        let (records, state) = self.reopened();
-        Ok(Events {
-            records,
-            state,
-            running: false,
-            progress: None,
-        })
+        Ok(self.current())
     }
     fn full_name(&self, account: &str) -> Option<String> {
         match account {

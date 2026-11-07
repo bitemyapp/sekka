@@ -272,8 +272,9 @@ pub fn choose_sekka(macos: &str) -> String {
 }
 
 /// The Recovery page for an installation reconnected to, when the helper
-/// couldn't read the boot policy to say whether these steps are done.
-pub const RECOVERY_UNCONFIRMED: &str = "If you've already done these steps, Sekka is installed: start your Mac in Sekka. Sekka Installer can't yet tell from macOS whether they're done.";
+/// couldn't look at the boot policy this time to say whether these steps
+/// are done.
+pub const RECOVERY_UNCONFIRMED: &str = "If you've already done these steps, Sekka is installed: start your Mac in Sekka. Sekka Installer's helper couldn't look at how your Mac starts up this time, so it can't tell whether they're done.";
 
 /// The page for an unfinished installation the helper keeps a record of,
 /// but that this Mac's own look at the disk doesn't find.
