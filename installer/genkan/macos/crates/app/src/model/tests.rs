@@ -286,7 +286,7 @@ fn free_space_beside_a_full_macos_is_said_before_anything_is_downloaded() {
         }];
         m.update(Msg::Inspected(Ok(inspection)));
         let release = m.release.clone().unwrap();
-        m.update(Msg::ToDownload(release.download_bytes()));
+        m.update(Msg::ToDownload(ToDownload::all(&release)));
         assert_eq!(m.screen, Screen::Plan);
         (m, release)
     };

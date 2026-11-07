@@ -1695,7 +1695,7 @@ impl Model {
         else {
             return Ok(());
         };
-        sekka_mac_contract::macos_room(inspection, release, candidate, to_download)
+        sekka_mac_contract::macos_room(inspection, release, candidate, to_download.space)
     }
 
     pub fn disk_changed(&self) -> Option<DiskChanged> {
