@@ -641,6 +641,17 @@ mod tests {
         assert_eq!(found, sekka_mac_contract::samples::inspection());
     }
 
+    /// `cat` by its absolute path. The engine starts its "Python" with a
+    /// cleared environment, and a build sandbox has no `cat` where a shell
+    /// looks without a PATH.
+    fn cat() -> String {
+        std::env::var_os("PATH")
+            .and_then(|path| std::env::split_paths(&path).map(|d| d.join("cat")).find(|c| c.is_file()))
+            .unwrap_or_else(|| PathBuf::from("/bin/cat"))
+            .display()
+            .to_string()
+    }
+
     /// An engine whose "Python" is a shell script that writes `log` to its
     /// standard error and `messages` as its transcript.
     fn scripted(dir: &Path, log: &str, messages: &[EngineBody]) -> EngineInstall {
@@ -657,7 +668,7 @@ mod tests {
         }
         fs::write(dir.join("transcript"), lines).unwrap();
         fs::write(dir.join("log"), log).unwrap();
-        let script = "#!/bin/sh\ncat log >&2\ncat transcript\n";
+        let script = format!("#!/bin/sh\n{cat} log >&2\n{cat} transcript\n", cat = cat());
         fs::write(dir.join("bin/python3"), script).unwrap();
         fs::set_permissions(dir.join("bin/python3"), fs::Permissions::from_mode(0o755)).unwrap();
         fs::write(dir.join("engine-lock.json"), br#"{"entry":"sekka_engine/__main__.py","runtime":"bin/python3"}"#).unwrap();
@@ -730,7 +741,10 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let engine = scripted(tmp.path(), "", &[]);
         fs::copy(&vector, tmp.path().join("transcript")).unwrap();
-        let script = "#!/bin/sh\n[ \"$4\" = inspect ] && [ \"$5\" = --owner ] && [ \"$6\" = owner ] && [ $# -eq 6 ] || exit 3\ncat <&3 > password\ncat transcript\n";
+        let script = format!(
+            "#!/bin/sh\n[ \"$4\" = inspect ] && [ \"$5\" = --owner ] && [ \"$6\" = owner ] && [ $# -eq 6 ] || exit 3\n{cat} <&3 > password\n{cat} transcript\n",
+            cat = cat()
+        );
         fs::write(tmp.path().join("bin/python3"), script).unwrap();
         let Err(EngineError::Owner(message)) = inspect_for(&engine, "owner", b"hunter2 ") else { panic!() };
         assert!(message.contains("starts or ends with a space"), "{message}");
