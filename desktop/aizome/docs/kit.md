@@ -61,7 +61,13 @@ fn main() {
 - **Messages** are `Clone + Send`. Widgets send them (`on_press`,
   `on_change`); timers, background work and other threads send them through
   `Cx`. `update` gets one at a time; after a batch the kit views every
-  window again.
+  window again by default. An update that changes only particular windows
+  can call `cx.refresh_window(key)` for each one; an update that changes
+  no views can call `cx.skip_view_refresh()`. These requests accumulate
+  across the batch, and an unannotated update still refreshes all windows.
+  Sheets refresh their containing window. Opening, showing, resizing and
+  other kit operations retain their own required refreshes, and menus
+  still update. Use the default when shared state affects other windows.
 - **Views are cheap to make and are made often.** An element is a
   description; the kit mounts it, lays it out, and diffs the result against
   the window's last tree by **key path**: each node's identity is its
