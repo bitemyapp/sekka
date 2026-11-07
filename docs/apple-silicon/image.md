@@ -671,11 +671,18 @@ driver for QEMU's), which only affects recorded times.
 order, booted copy and hold; the product image's own names; the manifest in
 the engine's shape and `Release::check`'s floor; `imports.nix` and the plain
 default desktop; the offline post-setup inputs, seed root and one
-glibc-locales; the install-time copy check; and the kept host name. Their
-script tests pass in `mac-image-tests` (the FAT model, the engine's reader on
-`manifest.py`'s output, Yukimi's edits on the shipped file), the Mac
-installer's workspace tests pass, and the product, developer and reference
-systems evaluate. Neither image was built and the VM run above was not
-repeated with them: the disk had about 13 GB free, less than a build of the
-release set takes. Its new checks (the developer stand-ins, the offline
-build with `de_DE`, the seed root, `sekka-boot-bin.service`) have not run.
+glibc-locales; the install-time copy check; and the kept host name. Then,
+after a second review: the flush before a replaced copy's clusters are
+freed, the start that finishes what `fsck.vfat` cut short, marking only at
+a start, the `sekka-boot-bin` command, and the systems setup leaves
+evaluated without `mkForce`. Their script tests pass in `mac-image-tests`
+(the FAT model with the drive's cache and `fsck.vfat`, the engine's reader
+on `manifest.py`'s output, Yukimi's edits on the shipped file, the systems
+setup leaves for Aizome and Tatami evaluated), the Mac installer's
+workspace tests pass, and the product, developer and reference systems and
+both release sets evaluate. Neither image was built and the VM run above
+was not repeated with them: the disk had about 12 GB free, less than a
+build of the release set takes. Its new checks (the developer stand-ins,
+the offline build with `de_DE`, the seed root, `sekka-boot-bin.service`)
+have not run, and the offline build of the first update after setup is
+still unproven on a built image.
