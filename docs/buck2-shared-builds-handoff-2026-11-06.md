@@ -68,6 +68,9 @@ it. Incremental state is private per worktree (~0.7 GB after a dev build).
 
 1. **Review and land.** Land PR #291 first. Then open a PR for
    `feat/buck2-single-cas` or fold it in; the user decides.
+   - If #291 lands alone, take the gateway hunk of `9bd7a3ef` with it.
+     #291's `restart`, `resize` and `runtime` otherwise fail blob reads in
+     running builds with an HTML 502.
    - Its storage-plan run passed every gate except eviction recovery. That
      failure was a controller bug, fixed in `84954a1a`, and a targeted
      eviction repro passed.
