@@ -106,6 +106,8 @@ mod tests {
             desktop: "tatami".into(),
             groups: vec!["networkmanager".into(), "wheel".into(), "render".into()],
             groups_declared: vec!["networkmanager".into(), "wheel".into()],
+            before: Default::default(),
+            applied: Default::default(),
         }
     }
 

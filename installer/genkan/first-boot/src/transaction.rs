@@ -1,32 +1,41 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Completing setup, as a transaction that only goes forward. Its intent
-//! is written down before anything changes, and every step after it
-//! checks what is already done before doing it, so finishing an
-//! interrupted setup (a crash, a power cut, the login screen restarted)
-//! does what's missing and nothing twice:
+//! is written down before anything changes, and every part after it is
+//! recorded once it's done, so finishing an interrupted setup (a crash, a
+//! power cut, the login screen restarted) does what's missing and nothing
+//! twice:
 //!
 //! 1. **Check**: Genkan's validation, a free uid, the groups there.
 //! 2. **Stage**, under `/var/lib/sekka-setup` (root's alone): the password's
-//!    hash (`credential`, 0600: never the password), then the choices
-//!    (`staged.json`, the intent: from here on setup finishes rather than
-//!    starts again), then the configuration it will write.
+//!    hash (`credential`, 0600: never the password), then the choices and
+//!    the settings they replace (`staged.json`, the intent: from here on
+//!    setup finishes rather than starts again), then the configuration it
+//!    will write.
 //! 3. **Account**: made with the staged uid if it isn't there, its groups
 //!    and home completed, and only then given the staged hash, while it
-//!    has no password of its own: no one can log in to it before it's
-//!    whole. An account of that name with another uid is someone else's,
-//!    and setup stops rather than touch it.
+//!    has no password of its own; the credential is deleted then. An
+//!    account of that name with another uid is someone else's, and setup
+//!    stops rather than touch it.
 //! 4. **Settings**: host name, time zone, locale, and the login screen's
-//!    and the person's keyboard, each set only if it differs.
+//!    and the person's keyboard.
 //! 5. **Configuration**: `/etc/nixos/setup.nix`.
-//! 6. **Verify** all of that, and evaluate the installed flake offline for
-//!    the new host name, proving the configuration the first update builds.
+//! 6. **Verify**: the account, and the installed flake evaluated offline
+//!    for the new host name, proving the configuration the first update
+//!    builds.
 //! 7. **Finish**: the marker (`complete`, no secrets), then the staged
-//!    credential and choices are deleted.
+//!    choices are deleted.
 //!
-//! A retry never gives an account a password it already has, and never
-//! changes its uid. Setup refuses to start where people have accounts:
-//! an installation set up some other way is never put back into setup.
+//! Once the account has its password the person may log in while setup
+//! waits to finish (a failure says so), and change what setup set. So each
+//! part after the account's is recorded in `staged.json` as it's done, and a
+//! retry never does a recorded part again; and a part not yet done changes
+//! a setting only from the value it had when setup was staged: one changed
+//! since is the person's, and stays. A retry never gives an account a
+//! password it already has, and never changes its uid. Setup refuses to
+//! start where people have accounts: an installation set up some other way
+//! is never put back into setup.
 
+use std::collections::BTreeSet;
 use std::io::Write;
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
@@ -45,7 +54,8 @@ use crate::system::{Account, NewAccount, System, UID_MAX, UID_MIN, unset, write_
 pub const STAGED_SCHEMA: &str = "sekka.setup.staged/1";
 pub const MARKER_SCHEMA: &str = "sekka.setup.complete/1";
 
-/// The choices staged, which setup finishes from: no secrets.
+/// The choices staged, which setup finishes from, the settings they
+/// replace, and the parts done: no secrets.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Staged {
@@ -64,6 +74,44 @@ pub struct Staged {
     pub groups: Vec<String>,
     /// Those setup.nix declares.
     pub groups_declared: Vec<String>,
+    /// What the system had when setup was staged.
+    pub before: Before,
+    /// The parts done, which a retry leaves alone.
+    pub applied: BTreeSet<Part>,
+}
+
+/// The settings setup replaces, as they were when it was staged: a part
+/// changes one only from this, so that a value set since (by the person,
+/// logged in while setup waited to finish) stays.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Before {
+    pub hostname: String,
+    pub time_zone: String,
+    pub locale: String,
+    pub greeter_keyboard: Option<String>,
+    /// `/etc/nixos/setup.nix`, if there was one.
+    pub setup_nix: Option<String>,
+}
+
+/// The parts of finishing setup that are each done once, and recorded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Part {
+    /// The account's groups and home.
+    Groups,
+    Password,
+    Hostname,
+    TimeZone,
+    Locale,
+    /// The login screen's keyboard and the person's.
+    Keyboard,
+    SetupNix,
+}
+
+impl Part {
+    pub const ALL: [Part; 7] =
+        [Part::Groups, Part::Password, Part::Hostname, Part::TimeZone, Part::Locale, Part::Keyboard, Part::SetupNix];
 }
 
 /// The completion marker: who was set up, when, and the system the
@@ -89,35 +137,30 @@ pub enum Point {
     Intent,
     Configuration,
     Account,
-    Groups,
-    Password,
-    Hostname,
-    TimeZone,
-    Locale,
-    Keyboard,
-    SetupNix,
+    /// A part's change is made (or found made), and not yet recorded.
+    Made(Part),
+    /// The part is recorded.
+    Recorded(Part),
+    /// The credential is deleted, the account having its password.
+    Forgotten,
     Verified,
     Marker,
     Cleaned,
 }
 
 impl Point {
-    pub const ALL: [Point; 14] = [
-        Point::Credential,
-        Point::Intent,
-        Point::Configuration,
-        Point::Account,
-        Point::Groups,
-        Point::Password,
-        Point::Hostname,
-        Point::TimeZone,
-        Point::Locale,
-        Point::Keyboard,
-        Point::SetupNix,
-        Point::Verified,
-        Point::Marker,
-        Point::Cleaned,
-    ];
+    /// Every point, in the order a transaction reaches them.
+    pub fn all() -> Vec<Point> {
+        let mut all = vec![Point::Credential, Point::Intent, Point::Configuration, Point::Account];
+        for part in Part::ALL {
+            all.extend([Point::Made(part), Point::Recorded(part)]);
+            if part == Part::Password {
+                all.push(Point::Forgotten);
+            }
+        }
+        all.extend([Point::Verified, Point::Marker, Point::Cleaned]);
+        all
+    }
 }
 
 /// One run of the transaction: the system it changes, who hears its
@@ -177,6 +220,15 @@ fn remove(path: &Path) -> Result<()> {
         Ok(()) => crate::system::sync_dir(path),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(e).with_context(|| format!("removing {}", path.display())),
+    }
+}
+
+/// A file's text, or nothing if there's no file.
+fn read_text(path: &Path) -> Result<Option<String>> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
     }
 }
 
@@ -248,9 +300,18 @@ fn tidy(config: &Config) -> Result<()> {
         remove(&config.staged_nix())?;
         if done {
             remove(&config.staged())?;
+            let _ = std::fs::remove_dir_all(config.state_dir.join("cache"));
         }
     }
     Ok(())
+}
+
+/// Tidy what a stopped run left, as the helper starts: a run stopped
+/// after its marker is never resumed (the login screen sees setup
+/// complete), so its leftovers go here.
+pub fn settle(config: &Config) -> Result<()> {
+    let _lock = lock(config)?;
+    tidy(config)
 }
 
 fn now() -> u64 {
@@ -268,6 +329,28 @@ fn free_uid<S: System>(sys: &S) -> Result<u32> {
 pub fn hash(password: &str) -> Result<Zeroizing<String>> {
     let params = sha_crypt::Sha512Params::new(100_000).map_err(|e| anyhow::anyhow!("password hashing: {e:?}"))?;
     Ok(Zeroizing::new(sha_crypt::sha512_simple(password, &params).map_err(|_| anyhow::anyhow!("password hashing failed"))?))
+}
+
+/// What a part does with a setting that is `now`, was `before` when setup
+/// was staged, and was chosen as `chosen`.
+#[derive(Debug, PartialEq, Eq)]
+enum Change {
+    /// It is the choice already.
+    Done,
+    /// It is as setup found it: change it.
+    Make,
+    /// It was changed since setup was staged, by someone else: it stays.
+    Keep,
+}
+
+fn change<T: PartialEq>(now: &T, before: &T, chosen: &T) -> Change {
+    if now == chosen {
+        Change::Done
+    } else if now == before {
+        Change::Make
+    } else {
+        Change::Keep
+    }
 }
 
 /// What a failure in a step tells the person.
@@ -358,6 +441,14 @@ impl<S: System> Run<'_, S> {
             desktop: plan.desktop.id().into(),
             groups: c.groups.clone(),
             groups_declared: c.declared_groups.clone(),
+            before: Before {
+                hostname: self.sys.hostname()?,
+                time_zone: self.sys.time_zone()?,
+                locale: self.sys.locale()?,
+                greeter_keyboard: self.sys.greeter_keyboard()?,
+                setup_nix: read_text(&c.setup_nix())?,
+            },
+            applied: BTreeSet::new(),
         };
         let hash = hash(&plan.password)?;
         let mut line = Zeroizing::new(format!("{}\n", hash.as_str()));
@@ -372,16 +463,15 @@ impl<S: System> Run<'_, S> {
         Ok(staged)
     }
 
-    fn finish(&mut self, s: Staged) -> Result<Done, Failure> {
+    fn finish(&mut self, mut s: Staged) -> Result<Done, Failure> {
         (self.progress)(Step::Account);
-        let credential = read_credential(self.config).map_err(|e| failed(self.sys, Some(&s), "read the password", e))?;
-        let account = self.account(&s, credential.as_ref()).map_err(|e| self.fail(&s, "make your account", e))?;
+        let account = self.account(&mut s).map_err(|e| self.fail(&s, "make your account", e))?;
         (self.progress)(Step::Settings);
-        self.settings(&s, &account).map_err(|e| self.fail(&s, "apply your settings", e))?;
+        self.settings(&mut s, &account).map_err(|e| self.fail(&s, "apply your settings", e))?;
         (self.progress)(Step::Configuration);
-        self.configuration(&s).map_err(|e| self.fail(&s, "save the configuration", e))?;
+        self.configuration(&mut s).map_err(|e| self.fail(&s, "save the configuration", e))?;
         (self.progress)(Step::Verify);
-        let system = self.verify(&s, credential.as_ref()).map_err(|e| self.fail(&s, "check the result", e))?;
+        let system = self.verify(&s).map_err(|e| self.fail(&s, "check the result", e))?;
         (self.progress)(Step::Finish);
         self.complete(&s, system).map_err(|e| self.fail(&s, "finish", e))?;
         Ok(Done { username: s.username, full_name: s.full_name, uid: s.uid, desktop: s.desktop })
@@ -391,9 +481,25 @@ impl<S: System> Run<'_, S> {
         failed(self.sys, Some(s), what, e)
     }
 
-    fn account(&mut self, s: &Staged, credential: Option<&Zeroizing<String>>) -> Result<Account> {
+    /// `part` is done: what it changed made to last (the tools it ran don't
+    /// all sync), then recorded, so a retry leaves it alone.
+    fn record(&mut self, s: &mut Staged, part: Part) -> Result<()> {
+        (self.stop)(Point::Made(part))?;
+        self.sys.sync()?;
+        s.applied.insert(part);
+        write_atomic(&self.config.staged(), &serde_json::to_vec_pretty(s)?, 0o600)?;
+        (self.stop)(Point::Recorded(part))
+    }
+
+    fn account(&mut self, s: &mut Staged) -> Result<Account> {
         let account = match self.sys.account(&s.username)? {
             None => {
+                // Given its password, it was the person's to keep or remove.
+                ensure!(
+                    !s.applied.contains(&Part::Password),
+                    "the account {} was removed after setup made it, and setup won't make it again",
+                    s.username
+                );
                 ensure!(
                     !self.sys.accounts()?.iter().any(|a| a.uid == s.uid),
                     "user id {} was taken meanwhile",
@@ -419,77 +525,110 @@ impl<S: System> Run<'_, S> {
             ),
         };
         // The account whole before anyone can log in to it.
-        let has = self.sys.groups_of(&s.username)?;
-        let missing: Vec<String> = s.groups.iter().filter(|g| !has.contains(g)).cloned().collect();
-        if !missing.is_empty() {
-            self.sys.add_groups(&s.username, &missing)?;
+        if !s.applied.contains(&Part::Groups) {
+            let has = self.sys.groups_of(&s.username)?;
+            let missing: Vec<String> = s.groups.iter().filter(|g| !has.contains(g)).cloned().collect();
+            if !missing.is_empty() {
+                self.sys.add_groups(&s.username, &missing)?;
+            }
+            self.sys.ensure_home(&account)?;
+            let has = self.sys.groups_of(&s.username)?;
+            let missing: Vec<&String> = s.groups.iter().filter(|g| !has.contains(g)).collect();
+            ensure!(missing.is_empty(), "the account isn't in {missing:?}");
+            self.record(s, Part::Groups)?;
         }
-        self.sys.ensure_home(&account)?;
-        (self.stop)(Point::Groups)?;
-        let current = self.sys.password_hash(&s.username)?.unwrap_or_default();
-        if unset(&current) {
-            let hash = credential.context("the password given at setup is gone; set up the account again")?;
-            self.sys.set_password_hash(&s.username, hash)?;
-            (self.stop)(Point::Password)?;
+        if !s.applied.contains(&Part::Password) {
+            // Only while it has none: one it has (set before an
+            // interruption, or by the person since) stays.
+            if unset(&self.sys.password_hash(&s.username)?.unwrap_or_default()) {
+                let credential = read_credential(self.config)?;
+                let hash = credential.as_ref().context("the password given at setup is gone; set up the account again")?;
+                self.sys.set_password_hash(&s.username, hash)?;
+            }
+            ensure!(!unset(&self.sys.password_hash(&s.username)?.unwrap_or_default()), "the account has no password");
+            self.record(s, Part::Password)?;
         }
+        // The account has its password: the staged hash isn't needed again.
+        remove(&self.config.credential())?;
+        (self.stop)(Point::Forgotten)?;
         Ok(account)
     }
 
-    fn settings(&mut self, s: &Staged, account: &Account) -> Result<()> {
-        if self.sys.hostname()? != s.hostname {
-            self.sys.set_hostname(&s.hostname)?;
+    fn settings(&mut self, s: &mut Staged, account: &Account) -> Result<()> {
+        if !s.applied.contains(&Part::Hostname) {
+            let now = self.sys.hostname()?;
+            match change(&now, &s.before.hostname, &s.hostname) {
+                Change::Make => {
+                    self.sys.set_hostname(&s.hostname)?;
+                    ensure!(self.sys.hostname()? == s.hostname, "the host name didn't change");
+                }
+                Change::Keep => eprintln!("setup: the host name was changed to {now} meanwhile; it stays"),
+                Change::Done => {}
+            }
+            self.record(s, Part::Hostname)?;
         }
-        (self.stop)(Point::Hostname)?;
-        if self.sys.time_zone()? != s.time_zone {
-            self.sys.set_time_zone(&s.time_zone)?;
+        if !s.applied.contains(&Part::TimeZone) {
+            let now = self.sys.time_zone()?;
+            match change(&now, &s.before.time_zone, &s.time_zone) {
+                Change::Make => {
+                    self.sys.set_time_zone(&s.time_zone)?;
+                    ensure!(self.sys.time_zone()? == s.time_zone, "the time zone didn't change");
+                }
+                Change::Keep => eprintln!("setup: the time zone was changed to {now} meanwhile; it stays"),
+                Change::Done => {}
+            }
+            self.record(s, Part::TimeZone)?;
         }
-        (self.stop)(Point::TimeZone)?;
-        if self.sys.locale()? != s.locale {
-            self.sys.set_locale(&s.locale)?;
+        if !s.applied.contains(&Part::Locale) {
+            let now = self.sys.locale()?;
+            match change(&now, &s.before.locale, &s.locale) {
+                Change::Make => {
+                    self.sys.set_locale(&s.locale)?;
+                    ensure!(self.sys.locale()? == s.locale, "the language didn't change");
+                }
+                Change::Keep => eprintln!("setup: the language was changed to {now} meanwhile; it stays"),
+                Change::Done => {}
+            }
+            self.record(s, Part::Locale)?;
         }
-        (self.stop)(Point::Locale)?;
-        if self.sys.greeter_keyboard()?.as_deref() != Some(s.keyboard.as_str()) {
-            self.sys.set_greeter_keyboard(&s.keyboard)?;
+        if !s.applied.contains(&Part::Keyboard) {
+            let now = self.sys.greeter_keyboard()?;
+            let chosen = Some(s.keyboard.clone());
+            if change(&now, &s.before.greeter_keyboard, &chosen) == Change::Make {
+                self.sys.set_greeter_keyboard(&s.keyboard)?;
+            }
+            // The session starts from the system's keyboard; only another
+            // one needs saying, and never over settings the person has.
+            if s.keyboard != self.config.keyboard {
+                self.sys.set_user_keyboard(account, &s.keyboard)?;
+            }
+            self.record(s, Part::Keyboard)?;
         }
-        // The session starts from the system's keyboard; only another one
-        // needs saying.
-        if s.keyboard != self.config.keyboard {
-            self.sys.set_user_keyboard(account, &s.keyboard)?;
-        }
-        (self.stop)(Point::Keyboard)?;
         Ok(())
     }
 
-    fn configuration(&mut self, s: &Staged) -> Result<()> {
-        let text = render::setup_nix(s);
-        let path = self.config.setup_nix();
-        if std::fs::read_to_string(&path).ok().as_deref() != Some(text.as_str()) {
-            write_atomic(&path, text.as_bytes(), 0o644)?;
+    fn configuration(&mut self, s: &mut Staged) -> Result<()> {
+        if !s.applied.contains(&Part::SetupNix) {
+            let path = self.config.setup_nix();
+            let text = render::setup_nix(s);
+            let now = read_text(&path)?;
+            match change(&now.as_deref(), &s.before.setup_nix.as_deref(), &Some(text.as_str())) {
+                Change::Make => write_atomic(&path, text.as_bytes(), 0o644)?,
+                Change::Keep => eprintln!("setup: {} was written meanwhile; it stays", path.display()),
+                Change::Done => {}
+            }
+            self.record(s, Part::SetupNix)?;
         }
-        (self.stop)(Point::SetupNix)?;
         Ok(())
     }
 
-    fn verify(&mut self, s: &Staged, credential: Option<&Zeroizing<String>>) -> Result<Option<String>> {
+    fn verify(&mut self, s: &Staged) -> Result<Option<String>> {
+        // Each part checked its own result as it was done; what the person
+        // has changed since is theirs.
         let a = self.sys.account(&s.username)?.context("the account is missing")?;
         ensure!(a.uid == s.uid, "the account has user id {}, not {}", a.uid, s.uid);
-        let has = self.sys.groups_of(&s.username)?;
-        let missing: Vec<&String> = s.groups.iter().filter(|g| !has.contains(g)).collect();
-        ensure!(missing.is_empty(), "the account isn't in {missing:?}");
-        let hash = self.sys.password_hash(&s.username)?.unwrap_or_default();
-        ensure!(!unset(&hash), "the account has no password");
-        // Set from the staged hash; unless the person has changed it since,
-        // which a retry keeps.
-        if let Some(c) = credential
-            && hash.as_str() != c.as_str()
-        {
-            eprintln!("setup: {}'s password was changed after it was set; it stays as it is", s.username);
-        }
-        ensure!(self.sys.hostname()? == s.hostname, "the host name didn't change");
-        ensure!(self.sys.time_zone()? == s.time_zone, "the time zone didn't change");
-        ensure!(self.sys.locale()? == s.locale, "the language didn't change");
-        let written = std::fs::read_to_string(self.config.setup_nix())?;
-        ensure!(written == render::setup_nix(s), "{} isn't what setup wrote", self.config.setup_nix().display());
+        let missing: Vec<&Part> = Part::ALL.iter().filter(|p| !s.applied.contains(p)).collect();
+        ensure!(missing.is_empty(), "these weren't done: {missing:?}");
         let flake = &self.config.nixos_dir;
         let system = if self.config.verify && flake.join("flake.nix").exists() {
             Some(self.sys.evaluate(flake, &s.hostname)?)
@@ -682,6 +821,9 @@ pub(crate) mod tests {
             self.evaluated.push(host.into());
             Ok(format!("/nix/store/00000000000000000000000000000000-nixos-system-{host}.drv"))
         }
+        fn sync(&self) -> Result<()> {
+            Ok(())
+        }
     }
 
     pub fn draft() -> Draft {
@@ -736,6 +878,10 @@ pub(crate) mod tests {
             state(&self.config, &self.sys).unwrap().0
         }
 
+        fn staged(&self) -> Staged {
+            read_staged(&self.config).unwrap().expect("staged choices")
+        }
+
         /// Everything that isn't a secret or a time, for comparing runs.
         fn outcome(&self) -> (Fake, String, Marker) {
             let mut sys = self.sys.clone();
@@ -760,6 +906,18 @@ pub(crate) mod tests {
                 .collect();
             v.sort();
             v
+        }
+
+        /// Setup interrupted after the account can log in: the evaluation
+        /// fails, as it would with the installed flake's inputs missing.
+        fn handed_over(&mut self) -> Failure {
+            std::fs::write(self.config.nixos_dir.join("flake.nix"), "{ }").unwrap();
+            self.sys.fail = Some("evaluate");
+            let f = self.begin(None).unwrap_err();
+            assert!(f.can_log_in && f.account_exists && f.can_retry, "{f:?}");
+            assert!(f.message.contains("you can also log in now"), "{}", f.message);
+            self.sys.fail = None;
+            f
         }
     }
 
@@ -822,44 +980,42 @@ pub(crate) mod tests {
         // An evaluation that fails stops setup short of done; fixed, a
         // retry finishes.
         let mut w = world();
-        std::fs::write(w.config.nixos_dir.join("flake.nix"), "{ }").unwrap();
-        w.sys.fail = Some("evaluate");
-        let f = w.begin(None).unwrap_err();
-        assert!(f.can_retry && f.account_exists && f.can_log_in, "{f:?}");
+        let f = w.handed_over();
         assert!(f.message.starts_with("Setup couldn't check the result: evaluate failed"), "{}", f.message);
         assert_eq!(w.state(), State::Interrupted);
-        w.sys.fail = None;
         w.resume(None).unwrap();
         assert_eq!(w.state(), State::Complete);
     }
 
-    /// Stopped at each durable point, then finished: the same account,
-    /// password, settings and files as setup that was never interrupted.
+    /// Stopped at each durable point, then finished as the login screen
+    /// would (a retry, or nothing once complete, the helper tidying as it
+    /// starts): the same account, password, settings and files as setup
+    /// that was never interrupted, and nothing done twice.
     #[test]
     fn an_interruption_anywhere_is_finished_by_a_retry() {
         let mut reference = world();
         reference.begin(None).unwrap();
         let expected = reference.outcome();
-        for point in Point::ALL {
+        let all = Point::all();
+        let forgotten = all.iter().position(|p| *p == Point::Forgotten).unwrap();
+        for (at, point) in all.iter().copied().enumerate() {
             let mut w = world();
-            let stopped = w.begin(Some(point));
-            if point == Point::Cleaned {
-                // Stopped after its last step: done, a few files left over.
-                assert!(stopped.is_err());
-            } else {
-                assert!(stopped.is_err(), "{point:?}");
-            }
+            assert!(w.begin(Some(point)).is_err(), "{point:?}");
             let state = w.state();
             let first_hash = w.sys.shadow.get("ada").cloned();
+            // The credential lasts until the account has its password.
+            assert_eq!(w.config.credential().exists(), at < forgotten, "{point:?}");
             match point {
                 // No intent yet: it starts again (and tidies the stray credential).
                 Point::Credential => {
                     assert_eq!(state, State::Needed, "{point:?}");
                     w.begin(None).unwrap();
                 }
+                // Done: the login screen asks no more; the helper tidies as
+                // it next starts.
                 Point::Marker | Point::Cleaned => {
                     assert_eq!(state, State::Complete, "{point:?}");
-                    w.resume(None).unwrap();
+                    settle(&w.config).unwrap();
                 }
                 _ => {
                     assert_eq!(state, State::Interrupted, "{point:?}");
@@ -874,9 +1030,12 @@ pub(crate) mod tests {
                 assert_eq!(w.sys.shadow["ada"], h, "{point:?}");
             }
             assert_eq!(w.files(), ["complete", "lock"], "{point:?}");
-            // Nothing done twice: one account made, one password set.
-            let made = w.sys.calls.iter().filter(|c| **c == "create_account").count();
-            assert!(made <= 1, "{point:?}: {:?}", w.sys.calls);
+            // Nothing done twice: one account made, one password set, each
+            // setting changed once.
+            for op in ["create_account", "set_password_hash", "set_hostname", "set_time_zone", "set_locale", "set_greeter_keyboard"] {
+                let n = w.sys.calls.iter().filter(|c| **c == op).count();
+                assert!(n <= 1, "{point:?}: {op} {n} times: {:?}", w.sys.calls);
+            }
         }
     }
 
@@ -912,11 +1071,17 @@ pub(crate) mod tests {
     fn a_retry_never_resets_a_password_or_moves_a_uid() {
         // Interrupted after the password was set; then the person changed it.
         let mut w = world();
-        assert!(w.begin(Some(Point::Password)).is_err());
+        assert!(w.begin(Some(Point::Made(Part::Password))).is_err());
         let theirs = hash("their own new password").unwrap().to_string();
         w.sys.shadow.insert("ada".into(), theirs.clone());
         w.resume(None).unwrap();
         assert_eq!(w.sys.shadow["ada"], theirs);
+        // Locked by the person after setup gave it one: it stays locked.
+        let mut w = world();
+        w.handed_over();
+        w.sys.shadow.insert("ada".into(), format!("!{theirs}"));
+        w.resume(None).unwrap();
+        assert_eq!(w.sys.shadow["ada"], format!("!{theirs}"));
         // An account of that name with another uid is someone else's.
         let mut w = world();
         assert!(w.begin(Some(Point::Intent)).is_err());
@@ -934,6 +1099,62 @@ pub(crate) mod tests {
         assert!(!f.account_exists && !f.can_log_in, "{f:?}");
         assert_eq!(w.sys.shadow["ada"], "$6$theirs");
         assert_eq!(w.sys.account("ada").unwrap().unwrap().uid, 4242);
+    }
+
+    /// Told it could log in, the person did, and changed what setup set:
+    /// the retry the login screen sends when they log out keeps all of it.
+    #[test]
+    fn a_retry_keeps_what_the_person_changed_after_logging_in() {
+        let mut w = world();
+        w.handed_over();
+        assert_eq!(w.staged().applied, Part::ALL.into_iter().collect(), "everything but the check done");
+        w.sys.hostname = "babbage".into();
+        // Back to what it was before setup: still theirs.
+        w.sys.time_zone = "UTC".into();
+        w.sys.locale = "ja_JP.UTF-8".into();
+        w.sys.groups.get_mut("render").unwrap().remove("ada");
+        let mine = "# Mine now.\n{ ... }: { }\n";
+        std::fs::write(w.config.setup_nix(), mine).unwrap();
+        let calls = w.sys.calls.len();
+        w.resume(None).unwrap();
+        assert_eq!(w.state(), State::Complete);
+        assert_eq!((w.sys.hostname.as_str(), w.sys.time_zone.as_str(), w.sys.locale.as_str()), ("babbage", "UTC", "ja_JP.UTF-8"));
+        assert_eq!(w.sys.groups_of("ada").unwrap(), ["networkmanager", "wheel"]);
+        assert_eq!(std::fs::read_to_string(w.config.setup_nix()).unwrap(), mine);
+        assert_eq!(w.sys.calls[calls..], ["evaluate"], "only the check again");
+        assert_eq!(w.files(), ["complete", "lock"]);
+    }
+
+    /// What wasn't done yet when the person logged in is done, but never
+    /// over a setting they changed meanwhile.
+    #[test]
+    fn a_part_not_yet_done_never_replaces_the_persons_change() {
+        let mut w = world();
+        w.sys.fail = Some("set_time_zone");
+        let f = w.begin(None).unwrap_err();
+        assert!(f.can_log_in, "the account had its password: {f:?}");
+        assert_eq!(w.sys.hostname, "analytical");
+        // Logged in, they set their own time zone (and the language stays the image's).
+        w.sys.time_zone = "Asia/Tokyo".into();
+        w.sys.fail = None;
+        w.resume(None).unwrap();
+        assert_eq!(w.sys.time_zone, "Asia/Tokyo");
+        assert_eq!(w.sys.locale, "de_DE.UTF-8", "not done yet, and still as setup found it: done now");
+        assert_eq!(w.sys.greeter_keyboard.as_deref(), Some("de"));
+        assert!(w.config.setup_nix().exists());
+        // A setup.nix written meanwhile is theirs too.
+        let mut w = world();
+        w.sys.fail = Some("set_locale");
+        assert!(w.begin(None).unwrap_err().can_log_in);
+        std::fs::write(w.config.setup_nix(), "{ }\n").unwrap();
+        w.sys.fail = None;
+        w.resume(None).unwrap();
+        assert_eq!(std::fs::read_to_string(w.config.setup_nix()).unwrap(), "{ }\n");
+        // One that was there before setup began is replaced.
+        let mut w = world();
+        std::fs::write(w.config.setup_nix(), "# stale\n").unwrap();
+        w.begin(None).unwrap();
+        assert!(std::fs::read_to_string(w.config.setup_nix()).unwrap().starts_with("# Written by Sekka's first-boot setup"));
     }
 
     #[test]

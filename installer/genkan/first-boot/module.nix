@@ -15,7 +15,8 @@
 # and hostnamectl allowed to write theirs, and every locale setup offers
 # installed, in an order no choice changes. Once setup.nix is in the
 # configuration (`applied`), the helper, its socket, the login screen's way
-# to it and the module's assertions are gone.
+# to it and the module's assertions are gone, and so is anything setup left
+# in its state directory.
 {
   config,
   lib,
@@ -41,7 +42,7 @@ let
   ];
   helperConfig = {
     greeter_user = "greeter";
-    state_dir = "/var/lib/sekka-setup";
+    state_dir = stateDir;
     nixos_dir = "/etc/nixos";
     inherit (cfg) handoff;
     zoneinfo = "/etc/zoneinfo";
@@ -71,6 +72,7 @@ let
   };
   keyboardFile = "/etc/aizome/keyboard.toml";
   socket = "/run/sekka-setup.sock";
+  stateDir = "/var/lib/sekka-setup";
   waiting = cfg.enable && !cfg.applied;
   # Every offered locale, in one order whichever is the default: glibc's
   # locale archive is built from this list as written, so the image's serves
@@ -280,7 +282,19 @@ in
             LimitCORE = 0;
           };
         };
-        systemd.tmpfiles.rules = [ "d /var/lib/sekka-setup 0700 root root -" ];
+        systemd.tmpfiles.rules = [ "d ${stateDir} 0700 root root -" ];
+      })
+      (lib.mkIf cfg.applied {
+        # Setup is over and its helper gone: whatever an unfinished one left
+        # in its state directory goes (its completion record stays).
+        systemd.tmpfiles.rules =
+          map (f: "r ${stateDir}/${f}") [
+            "credential"
+            "staged.json"
+            "setup.nix"
+            "*.new"
+          ]
+          ++ [ "R ${stateDir}/cache" ];
       })
     ]
   );

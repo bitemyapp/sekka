@@ -8,7 +8,7 @@ use std::process::ExitCode;
 
 use sekka_setup_helper::config::{self, Config};
 use sekka_setup_helper::system::Host;
-use sekka_setup_helper::{protocol, server};
+use sekka_setup_helper::{protocol, server, transaction};
 
 const USAGE: &str = "\
 usage: sekka-setup-helper [--config PATH] serve | status | offered
@@ -72,6 +72,11 @@ fn serve(path: &std::path::Path) -> anyhow::Result<()> {
     }
     let listener = server::activated()?;
     let config = Config::load(path)?;
+    // What a run stopped after its marker left (the login screen never
+    // asks again once setup is complete).
+    if let Err(e) = transaction::settle(&config) {
+        eprintln!("sekka-setup-helper: tidying setup's state: {e:#}");
+    }
     let greeter = server::uid_of(&Host::new(&config), &config.greeter_user)?;
     server::serve(&listener, &config, || Host::new(&config), greeter, server::IDLE_SERVER)
 }

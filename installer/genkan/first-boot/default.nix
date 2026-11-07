@@ -165,6 +165,10 @@ in
     assert check "once applied, the helper and its socket are gone" (
       !(after.systemd.sockets ? sekka-setup) && after.programs.aizome.greeter.setup.socket == null
     );
+    assert check "once applied, what setup left in its state directory goes" (
+      lib.elem "r /var/lib/sekka-setup/credential" after.systemd.tmpfiles.rules
+      && !(lib.elem "r /var/lib/sekka-setup/credential" before.systemd.tmpfiles.rules)
+    );
     assert check "once applied, the module asserts nothing (the login screen and accounts are the owner's)" (
       lib.length (ours (installed [ owners ])) == 3
       && ours (installed [

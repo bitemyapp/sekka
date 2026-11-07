@@ -80,7 +80,7 @@ pub trait System {
     fn locale(&self) -> Result<String>;
     fn set_locale(&mut self, locale: &str) -> Result<()>;
     /// The keyboard of `account`'s Aizome session, unless they have
-    /// settings already.
+    /// settings already (never replacing theirs).
     fn set_user_keyboard(&mut self, account: &Account, layout: &str) -> Result<()>;
     /// The login screen's keyboard.
     fn set_greeter_keyboard(&mut self, layout: &str) -> Result<()>;
@@ -88,6 +88,9 @@ pub trait System {
     /// Evaluate the installed flake's configuration for `host`, offline:
     /// its system's derivation.
     fn evaluate(&mut self, flake: &Path, host: &str) -> Result<String>;
+    /// Make what the tools changed last, before setup records it done:
+    /// systemd's services write their files without syncing them.
+    fn sync(&self) -> Result<()>;
 }
 
 /// Whether a shadow password field lets nobody in yet: locked or unset, as
@@ -398,6 +401,12 @@ impl System for Host {
         let drv = String::from_utf8_lossy(&out.stdout).trim().to_owned();
         ensure!(drv.starts_with("/nix/store/") && drv.ends_with(".drv"), "nix gave {drv:?} for the system");
         Ok(drv)
+    }
+
+    fn sync(&self) -> Result<()> {
+        // Safety: sync takes nothing and can't fail.
+        unsafe { libc::sync() };
+        Ok(())
     }
 }
 
