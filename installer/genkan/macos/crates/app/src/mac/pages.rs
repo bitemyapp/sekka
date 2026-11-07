@@ -202,7 +202,7 @@ impl<'a> Page<'a> {
 /// with them, and they move when what is left to download is measured.
 pub fn key(m: &Model) -> String {
     format!(
-        "{:?}|{:?}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}|{:?}|{}|{:?}|{:?}|{:?}|{:?}|{}",
+        "{:?}|{:?}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}|{:?}|{}|{:?}|{:?}|{:?}|{:?}|{}|{}",
         m.screen,
         m.notice,
         m.download_error.is_some(),
@@ -224,6 +224,7 @@ pub fn key(m: &Model) -> String {
         // A retry that fails again, or is refused, changes what the page says.
         m.failed().map(|(sequence, _)| sequence),
         m.retry_refusal(),
+        m.install_again_refused(),
         // The installing page's rows: the stages the plan runs, known once
         // the record of an installation reconnected to arrives.
         m.stages().len(),
@@ -399,17 +400,22 @@ fn existing(m: &Model, p: &mut Page) {
         p.numbered(3, &text::choose_sekka(&m.macos_volume()));
     } else if m.finished_unfound() {
         // The owner knows whether they removed it: the plan is theirs to
-        // ask for.
+        // ask for, until the helper's own look finds what stops it.
         p.title(text::FINISHED_UNFOUND_TITLE);
         p.body(text::FINISHED_UNFOUND);
         installations(m, p);
         p.divider();
         p.heading("What you can do");
-        p.body(text::FINISHED_UNFOUND_NEXT);
+        let refused = m.install_again_refused();
+        p.body(if refused { text::FINISHED_UNFOUND_REFUSED } else { text::FINISHED_UNFOUND_NEXT });
         p.quit();
         p.left("Copy Details", || Msg::CopyDiagnostics);
-        p.right("Check Again", || Msg::CheckAgain);
-        p.primary("Install Again", || Msg::InstallAgain);
+        if refused {
+            p.primary("Check Again", || Msg::CheckAgain);
+        } else {
+            p.right("Check Again", || Msg::CheckAgain);
+            p.primary("Install Again", || Msg::InstallAgain);
+        }
         return;
     } else if finished {
         p.title(text::FINISHED_PARTIAL_TITLE);

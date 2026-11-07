@@ -857,6 +857,56 @@ fn a_finished_installation_this_mac_cant_find_isnt_called_installed() {
 }
 
 #[test]
+fn installing_again_past_what_the_helper_finds_stops_there() {
+    let env = Simulation::new(Scenario::Normal, 0.0);
+    let finished = || known(InstallState::WaitingForSetup);
+    // The stub, its records unreadable to this Mac's own look.
+    let unread = || {
+        let mut i = env.inspect().unwrap();
+        i.installations.push(on_disk(InstallationKind::OtherLinux, InstallationState::Unknown, None));
+        Ok(i)
+    };
+    let (mut m, _) = hear(&env, finished(), unread());
+    assert!(m.finished_unfound() && !m.install_again_refused());
+    // Nothing promises a second Sekka beside it.
+    assert!(!crate::text::FINISHED_UNFOUND_NEXT.contains("installed beside it"));
+    let effects = m.update(Msg::InstallAgain);
+    drive(&env, &mut m, effects, &finished, &unread);
+    let left = install(&env, &mut m, &finished, &unread);
+    assert!(left.is_empty(), "{left:?}");
+    let effects = m.update(Msg::Authorize {
+        owner: "chris".into(),
+        password: Secret::new(b"right".to_vec()),
+    });
+    assert!(matches!(effects.as_slice(), [Effect::Begin(..)]), "{effects:?}");
+    // The helper, looking as root, reads the stub's records: Sekka is
+    // there, and nothing is installed beside it.
+    let refusal = HelperRefusal {
+        code: HelperRefusalCode::PlanChanged,
+        message: "This Mac changed since the plan was reviewed (something on this Mac stops installation). Check it again and review the new plan."
+            .parse()
+            .unwrap(),
+    };
+    let effects = m.update(Msg::Begun(Err(refusal)));
+    drive(&env, &mut m, effects, &finished, &unread);
+    // Back to the installation it may be, with what the helper said, and
+    // never round to the review again.
+    assert_eq!(m.screen, Screen::Existing);
+    assert!(m.finished_unfound() && m.install_again_refused());
+    assert!(m.notice.as_deref().unwrap().contains("stops installation"));
+    assert!(m.update(Msg::InstallAgain).is_empty());
+    // This Mac's own look doesn't overturn the helper's.
+    let effects = m.update(Msg::CheckAgain);
+    drive(&env, &mut m, effects, &finished, &unread);
+    assert_eq!(m.screen, Screen::Existing);
+    assert!(m.install_again_refused());
+    // Once nothing of it is left on the disk, a plan is offered again.
+    let effects = m.update(Msg::CheckAgain);
+    drive(&env, &mut m, effects, &finished, &|| env.inspect());
+    assert_eq!(m.screen, Screen::Review);
+}
+
+#[test]
 fn a_finished_installation_on_a_mac_that_couldnt_be_looked_at_is_neither_found_nor_lost() {
     let env = Simulation::new(Scenario::Normal, 0.0);
     let (mut m, effects) = hear(&env, known(InstallState::WaitingForSetup), Err("The engine stopped.".into()));

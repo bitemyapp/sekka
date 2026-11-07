@@ -242,6 +242,10 @@ pub struct Model {
     /// A finished installation this Mac can't find, which the owner chose
     /// to install again past.
     pub set_aside: Option<Uuid>,
+    /// One set aside, past which the helper then wouldn't install: its own
+    /// look at the disk found something that stops installation, which may
+    /// be that installation. This Mac's own look can't say otherwise.
+    pub refused_past: Option<Uuid>,
 }
 
 impl Model {
@@ -285,6 +289,7 @@ impl Model {
             reconcile_busy: 0,
             retry_refused: None,
             set_aside: None,
+            refused_past: None,
         };
         (
             model,
@@ -531,6 +536,12 @@ impl Model {
             .installations
             .iter()
             .find(|x| x.installation_id == Some(installation))
+    }
+
+    /// Whether the helper wouldn't install past the finished installation
+    /// shown, when the owner set it aside.
+    pub fn install_again_refused(&self) -> bool {
+        self.refused_past.is_some() && self.refused_past == self.installation
     }
 
     /// Whether this Mac's own inspection found a system or partition it
@@ -949,7 +960,7 @@ impl Model {
             // helper would let another begin; it is what may be the
             // unidentified system beside it that the owner decides about.)
             Msg::InstallAgain => match self.installation {
-                Some(id) if self.screen == Screen::Existing && self.finished_unfound() => {
+                Some(id) if self.screen == Screen::Existing && self.finished_unfound() && !self.install_again_refused() => {
                     self.set_aside = Some(id);
                     self.notice = None;
                     self.check_again()
@@ -1135,6 +1146,12 @@ impl Model {
                 self.authorization = None;
                 self.plan = None;
                 self.notice = Some(message);
+                // Installing past a finished installation this Mac can't
+                // find: what the helper found may be it, so it is shown
+                // again, and not offered to be installed past.
+                if let Some(id) = self.set_aside.take() {
+                    self.refused_past = Some(id);
+                }
                 self.screen = Screen::Checking;
                 self.inspection = None;
                 vec![Effect::Inspect]

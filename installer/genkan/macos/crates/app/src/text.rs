@@ -276,7 +276,10 @@ pub const FINISHED_PARTIAL: &str = "Sekka Installer's record says Sekka was inst
 /// beside a system it can't identify.
 pub const FINISHED_UNFOUND_TITLE: &str = "Sekka Installer can't find the Sekka it installed";
 pub const FINISHED_UNFOUND: &str = "Its record says Sekka was installed on this Mac, but looking at the disk it doesn't find that installation. The disk holds a system Sekka Installer can't identify, and that may be it.";
-pub const FINISHED_UNFOUND_NEXT: &str = "If you removed Sekka, you can install it again: the system Sekka Installer can't identify is left as it is. If that system is Sekka, the new one is installed beside it.";
+pub const FINISHED_UNFOUND_NEXT: &str = "If you removed Sekka, you can install it again: the system Sekka Installer can't identify is left as it is. If that system is Sekka, Sekka Installer's helper sees so when it looks at the disk, after you enter your password, and installs nothing beside it.";
+/// …once the owner chose to install again, and the helper's own look at
+/// the disk found something that stops installation.
+pub const FINISHED_UNFOUND_REFUSED: &str = "Nothing was installed. When Sekka Installer's helper looked at the disk to begin, it found something there that stops installation, most likely the Sekka it installed: the helper can read what Sekka Installer can't. To see, shut down your Mac, press and hold the power button until the startup options appear, and choose Sekka. If Sekka doesn't start, copy the details and ask for help.";
 
 /// The existing screen's last step, naming this Mac's macOS volume.
 pub fn choose_sekka(macos: &str) -> String {
