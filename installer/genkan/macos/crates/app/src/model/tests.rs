@@ -3,7 +3,7 @@
 //! simulation standing in for the Mac: effects run inline, so each test is
 //! the exact sequence of states a person would see.
 use super::*;
-use crate::env::Environment;
+use crate::env::{Environment, ToDownload};
 use crate::sim::{Scenario, Simulation};
 
 struct Journey {
@@ -90,7 +90,7 @@ fn the_plan_waits_for_the_release_and_its_download_size_in_any_order() {
     // The plan's limits and its button depend on what is left to download.
     assert_eq!(m.screen, Screen::Checking);
     assert_eq!(m.size_range(), None);
-    m.update(Msg::ToDownload(release.download_bytes()));
+    m.update(Msg::ToDownload(ToDownload::all(&release)));
     assert_eq!(m.screen, Screen::Plan);
     let (_, max) = m.size_range().unwrap();
     assert_eq!(max, capacity(&release, m.candidate().unwrap(), release.download_bytes()));
@@ -100,11 +100,34 @@ fn the_plan_waits_for_the_release_and_its_download_size_in_any_order() {
 fn files_an_earlier_run_downloaded_are_checked_before_the_review() {
     let mut j = Journey::start(Scenario::Normal);
     // Every file is on the disk already, but none is checked in this run.
-    j.send(Msg::ToDownload(0));
+    j.send(Msg::ToDownload(ToDownload::NOTHING));
     assert!(j.model.staged.is_empty());
     j.send(Msg::Review);
     assert_eq!(j.model.screen, Screen::Review);
     assert_eq!(j.model.staged.len(), 4, "the review installs the files it checked");
+}
+
+#[test]
+fn another_releases_files_are_room_for_the_download_not_part_of_it() {
+    let mut j = Journey::start(Scenario::Normal);
+    let release = j.model.release.clone().unwrap();
+    // Every file an earlier run left is another release's: staging removes
+    // them before it downloads, so they are room, and none of their bytes
+    // is this release's.
+    j.send(Msg::ToDownload(ToDownload {
+        fetch: release.download_bytes(),
+        space: 0,
+    }));
+    assert_eq!(j.model.screen, Screen::Plan);
+    assert_eq!(j.model.to_fetch(), release.download_bytes(), "the plan says all of it is downloaded");
+    let (_, max) = j.model.size_range().unwrap();
+    assert_eq!(max, capacity(&release, j.model.candidate().unwrap(), 0));
+    // So the download is a download, which can be paused, not a check.
+    let effects = j.model.update(Msg::StartDownload);
+    assert!(matches!(effects.as_slice(), [Effect::Download(_)]));
+    assert!(!j.model.checking_download());
+    j.settle(effects);
+    assert_eq!(j.model.screen, Screen::Review);
 }
 
 #[test]
@@ -321,7 +344,7 @@ fn a_look_before_the_review_that_loses_the_release_says_why() {
 fn the_largest_size_after_the_download_still_leaves_room_for_apples_files() {
     let mut j = Journey::start(Scenario::Normal);
     j.reach_review().send(Msg::BackToPlan).send(Msg::SetSize(u64::MAX));
-    assert_eq!(j.model.to_download, Some(0));
+    assert_eq!(j.model.to_download, Some(ToDownload::NOTHING));
     let release = j.model.release.clone().unwrap();
     assert!(release.reserved() > 0);
     let Some(Candidate::ShrinkContainer { available, adjacent_free, .. }) = j.model.candidate().cloned() else {
@@ -736,7 +759,7 @@ fn continuing_from_the_plan_looks_again_without_a_download_page() {
     // Files an earlier run left whole are only checked, which can't be
     // paused.
     let mut j = Journey::start(Scenario::Normal);
-    j.send(Msg::ToDownload(0));
+    j.send(Msg::ToDownload(ToDownload::NOTHING));
     let effects = j.model.update(Msg::Review);
     assert!(matches!(effects.as_slice(), [Effect::Download(_)]));
     assert!(j.model.checking_download());

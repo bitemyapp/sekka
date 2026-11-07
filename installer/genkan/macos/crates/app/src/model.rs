@@ -14,7 +14,7 @@ use sekka_mac_contract::{
 };
 use sekka_mac_trust::Verified;
 
-use crate::env::{DownloadProgress, Events, HelperProblem, Registration, Secret, Staged};
+use crate::env::{DownloadProgress, Events, HelperProblem, Registration, Secret, Staged, ToDownload};
 use crate::text;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -104,7 +104,7 @@ pub enum Msg {
     Engine(Result<Digest, String>),
     Catalog(Result<Verified, String>),
     HelperStatus(Result<Vec<Summary>, HelperProblem>),
-    ToDownload(u64),
+    ToDownload(ToDownload),
     DownloadProgress(DownloadProgress),
     Downloaded(Result<Vec<Staged>, String>),
     Registration(Result<Registration, String>),
@@ -178,9 +178,11 @@ pub struct Model {
     pub place: Option<Place>,
     /// Bytes for Sekka.
     pub size: u64,
-    /// Bytes still to download before installing; none until measured for
-    /// the release offered.
-    pub to_download: Option<u64>,
+    /// What is still to download before installing: the bytes to fetch,
+    /// which the plan screen states, and the space fetching them takes,
+    /// which the plan's sizes leave room for. None until measured for the
+    /// release offered.
+    pub to_download: Option<ToDownload>,
     pub download: Option<DownloadProgress>,
     pub download_error: Option<String>,
     pub downloading: bool,
@@ -306,7 +308,7 @@ impl Model {
         let release = self.release.as_ref()?;
         let candidate = self.candidate()?;
         let min = release.allocation.minimum.div_ceil(sekka_mac_contract::ALIGN) * sekka_mac_contract::ALIGN;
-        let max = capacity(release, candidate, self.to_download?);
+        let max = capacity(release, candidate, self.to_download?.space);
         (max >= min).then_some((min, max))
     }
 
@@ -471,7 +473,12 @@ impl Model {
     /// Whether the download is only checking files an earlier run left
     /// whole, which can't be paused part way.
     pub fn checking_download(&self) -> bool {
-        self.downloading && self.to_download == Some(0)
+        self.downloading && self.to_download.is_some_and(|d| d.fetch == 0)
+    }
+
+    /// The bytes the download still fetches, as the plan screen says.
+    pub fn to_fetch(&self) -> u64 {
+        self.to_download.map_or(0, |d| d.fetch)
     }
 
     /// The catalog's releases whose profile admits this Mac.
@@ -550,8 +557,8 @@ impl Model {
                 self.helper = Some(result);
                 self.decide()
             }
-            Msg::ToDownload(bytes) => {
-                self.to_download = Some(bytes);
+            Msg::ToDownload(left) => {
+                self.to_download = Some(left);
                 self.clamp_size();
                 self.decide()
             }
@@ -566,7 +573,7 @@ impl Model {
                 self.downloading = false;
                 self.download_error = None;
                 self.staged = files;
-                self.to_download = Some(0);
+                self.to_download = Some(ToDownload::NOTHING);
                 // The downloads took space macOS could have given; plan
                 // from a fresh look at the disk.
                 self.rechecking = true;
@@ -1159,8 +1166,8 @@ impl Model {
         let best = inspection
             .candidates
             .iter()
-            .max_by_key(|c| capacity(&release, c, to_download));
-        match best.and_then(|c| suggested_size(&release, c, to_download).map(|s| (c, s))) {
+            .max_by_key(|c| capacity(&release, c, to_download.space));
+        match best.and_then(|c| suggested_size(&release, c, to_download.space).map(|s| (c, s))) {
             Some((c, size)) => {
                 self.place = Some(match c {
                     Candidate::FreeSpace { extent } => Place::FreeSpace { offset: extent.offset },
@@ -1284,7 +1291,7 @@ impl Model {
             place,
             sekka: self.size,
         };
-        match derive_plan(&inspection, verified.catalog(), &request, self.to_download.unwrap_or(0)) {
+        match derive_plan(&inspection, verified.catalog(), &request, self.to_download.map_or(0, |d| d.space)) {
             Ok(plan) => {
                 self.plan = Some(plan);
                 self.plan_error = None;

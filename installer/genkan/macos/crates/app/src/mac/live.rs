@@ -229,8 +229,8 @@ impl Environment for Live {
         }
     }
 
-    fn still_to_download(&self, release: &Release) -> u64 {
-        let Ok(dir) = self.staging() else { return release.download_bytes() };
+    fn still_to_download(&self, release: &Release) -> ToDownload {
+        let Ok(dir) = self.staging() else { return ToDownload::all(release) };
         let a = &release.artifacts;
         let files = [
             ("payload.zip", Expect::from(&a.payload)),
@@ -239,7 +239,12 @@ impl Environment for Live {
             ("recovery.zip", Expect::from(&a.recovery_app)),
         ];
         let refs: Vec<(&str, &Expect)> = files.iter().map(|(n, e)| (*n, e)).collect();
-        dir.bytes_needed(&refs)
+        // Another release's files take room until staging removes them,
+        // but none of their bytes is fetched for this one.
+        ToDownload {
+            fetch: dir.bytes_to_fetch(&refs),
+            space: dir.bytes_needed(&refs),
+        }
     }
 
     fn download(
@@ -265,7 +270,7 @@ impl Environment for Live {
             // A whole file an earlier run left is hashed before it is kept,
             // which takes as long as checking a download, and reports
             // nothing until it's done.
-            if dir.bytes_needed(&[(name, &expect)]) == 0 {
+            if dir.bytes_to_fetch(&[(name, &expect)]) == 0 {
                 on(DownloadProgress {
                     role,
                     done: before + artifact.size,

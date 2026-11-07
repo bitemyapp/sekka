@@ -213,7 +213,7 @@ pub fn key(m: &Model) -> String {
         m.checks().iter().map(|c| format!("{:?}", c.state)).collect::<String>(),
         m.details,
         m.release.is_some(),
-        m.to_download.map(|n| n > 0),
+        m.to_download.map(|d| d.fetch > 0),
         m.size_range(),
         m.staged.is_empty(),
         m.owner_name(),
@@ -449,7 +449,7 @@ pub fn size_words(m: &Model) -> (String, String) {
             let free = m
                 .inspection()
                 .and_then(|i| i.disk.containers.iter().find(|c| &c.uuid == container))
-                .map(|c| (c.free + adjacent_free).saturating_sub(m.size).saturating_sub(m.to_download.unwrap_or(0)))
+                .map(|c| (c.free + adjacent_free).saturating_sub(m.size).saturating_sub(m.to_download.map_or(0, |d| d.space)))
                 .unwrap_or(0);
             format!("macOS keeps {} ({} free)", text::bytes(after), text::bytes(free))
         }
@@ -502,7 +502,7 @@ fn plan(m: &Model, p: &mut Page) {
     }
     p.divider();
     let apple: u64 = m.release.as_ref().map(|r| r.reserved()).unwrap_or(0);
-    let own = m.to_download.unwrap_or(0);
+    let own = m.to_fetch();
     p.body(&text::to_download(own, !m.staged.is_empty()));
     if apple > 0 {
         p.note(&format!(

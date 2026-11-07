@@ -58,6 +58,32 @@ pub enum HelperProblem {
     Other(String),
 }
 
+/// What is left to download of a release, given what an earlier run left
+/// in staging.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ToDownload {
+    /// Bytes still to fetch. A whole file of the release's size counts as
+    /// fetched (it is checked byte for byte before the review), and a
+    /// download in progress counts only for the digest it was started for.
+    pub fetch: u64,
+    /// The peak extra space fetching them takes: what staging removes
+    /// first (another release's files) is room they get back.
+    pub space: u64,
+}
+
+impl ToDownload {
+    pub const NOTHING: Self = Self { fetch: 0, space: 0 };
+
+    /// All of the release, when nothing of it is staged.
+    pub fn all(release: &Release) -> Self {
+        let bytes = release.download_bytes();
+        Self {
+            fetch: bytes,
+            space: bytes,
+        }
+    }
+}
+
 pub trait Environment: Send + Sync + 'static {
     /// The account running the app: short name and full name.
     fn user(&self) -> (String, String);
@@ -69,9 +95,8 @@ pub trait Environment: Send + Sync + 'static {
     /// Fetch and verify this build's release catalog.
     fn catalog(&self) -> Result<Verified, String>;
     fn helper_status(&self) -> Result<Vec<Summary>, HelperProblem>;
-    /// Bytes of the release still to download (zero when all are staged and
-    /// verified).
-    fn still_to_download(&self, release: &Release) -> u64;
+    /// What is left to download of the release.
+    fn still_to_download(&self, release: &Release) -> ToDownload;
     /// Download and verify the release's files. Blocks; reports progress.
     fn download(
         &self,

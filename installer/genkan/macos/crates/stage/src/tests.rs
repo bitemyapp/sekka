@@ -372,8 +372,36 @@ fn what_staging_removes_first_is_room_the_estimate_counts() {
         ("manifest.json", &expect(&manifest)),
     ]);
     assert_eq!(estimate, SIZE as u64 - 2 * PART - 4096 + 400);
+    // None of it is this release's, so all of it is still to fetch.
+    let fetch = dir.bytes_to_fetch(&[
+        ("payload.zip", &expect(&payload)),
+        ("manifest.json", &expect(&manifest)),
+    ]);
+    assert_eq!(fetch, SIZE as u64 + 1000);
     let peak = peak_extra(&dir, &[("manifest.json", &manifest), ("payload.zip", &payload)]);
     assert_eq!(estimate, peak);
+}
+
+#[test]
+fn only_this_releases_bytes_are_left_out_of_what_is_fetched() {
+    let (_t, dir) = staging();
+    let payload = data(SIZE);
+    let manifest = data(1000);
+    let recovery = data(2000);
+    // Two parts of this payload, this manifest whole, and another release's
+    // larger recovery.zip whole.
+    fs::write(in_progress(&dir, "payload.zip", &payload), &payload[..2 * PART as usize]).unwrap();
+    fs::write(dir.path().join("manifest.json"), &manifest).unwrap();
+    fs::write(dir.path().join("recovery.zip"), [0; 3000]).unwrap();
+    let files = [
+        ("payload.zip", &expect(&payload)),
+        ("manifest.json", &expect(&manifest)),
+        ("recovery.zip", &expect(&recovery)),
+    ];
+    let refs: Vec<(&str, &Expect)> = files.iter().map(|(n, e)| (*n, *e)).collect();
+    assert_eq!(dir.bytes_to_fetch(&refs), SIZE as u64 - 2 * PART + 2000);
+    // The space estimate counts the other recovery.zip as room it gets back.
+    assert_eq!(dir.bytes_needed(&refs), SIZE as u64 - 2 * PART);
 }
 
 #[test]

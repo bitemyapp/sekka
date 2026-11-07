@@ -395,8 +395,8 @@ impl Environment for Simulation {
             _ => vec![],
         })
     }
-    fn still_to_download(&self, release: &Release) -> u64 {
-        if self.state.lock().unwrap().downloaded { 0 } else { release.download_bytes() }
+    fn still_to_download(&self, release: &Release) -> ToDownload {
+        if self.state.lock().unwrap().downloaded { ToDownload::NOTHING } else { ToDownload::all(release) }
     }
     fn download(
         &self,

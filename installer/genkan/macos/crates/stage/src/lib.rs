@@ -215,6 +215,26 @@ impl StagingDir {
             .sum()
     }
 
+    /// The bytes the files named here still have to fetch: none for a
+    /// finished file of the right size (it is hashed before it is kept),
+    /// and for any other what its download in progress for this digest
+    /// hasn't brought yet. What staging removes first is room, never
+    /// progress, so unlike [`bytes_needed`](Self::bytes_needed) it doesn't
+    /// count here.
+    pub fn bytes_to_fetch(&self, files: &[(&str, &Expect)]) -> u64 {
+        files
+            .iter()
+            .map(|(name, expect)| {
+                let Ok(path) = self.file(name) else { return expect.size };
+                if regular_size(&path) == Some(expect.size) {
+                    return 0;
+                }
+                let kept = regular_size(&partial_name(&path, &expect.digest)).unwrap_or(0);
+                expect.size.saturating_sub(kept)
+            })
+            .sum()
+    }
+
     /// Every download in progress for `name` but `keep`: those for another
     /// digest, and those whose name doesn't say which. None of them can
     /// become this file, and each may hold gigabytes.
