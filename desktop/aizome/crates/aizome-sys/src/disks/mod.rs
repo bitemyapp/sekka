@@ -37,8 +37,8 @@ mod smart;
 pub mod types;
 
 pub use confirm::{
-    Change, ChangePassphrase, Confirm, CreatePartition, DeletePartition, Format, Holds, Identity, NewPartitionTable,
-    PartitionEntry, Relabel, Repair, Resize,
+    AsSeen, Change, ChangePassphrase, Confirm, CreatePartition, DeletePartition, Format, Holds, Identity,
+    NewPartitionTable, PartitionEntry, Relabel, Repair, Resize,
 };
 pub use model::{
     BlockDevice, DisksState, Drive, Encrypted, Filesystem, FreeSpace, Health, Job, LoopDevice, Partition,
@@ -698,8 +698,9 @@ impl Disks {
 
     /// Check and repair a filesystem as the first step of resizing it (ext
     /// refuses an offline resize otherwise), as the resize was confirmed:
-    /// held, as the resize is, to the filesystem rather than its size, so a
-    /// resize that stopped part way can be applied again.
+    /// held, as the resize is, to the filesystem and to either of the sizes
+    /// it goes between, so a resize that stopped part way can be applied
+    /// again.
     pub fn repair_before_resize<B: Send + 'static>(&self, confirm: Confirm<Resize, B>) -> Task<bool> {
         self.confirmed(confirm, move |bus, block, _| {
             bus.call_with(LONG, UDISKS, block, IFACE_FILESYSTEM, "Repair", &(empty(),))
