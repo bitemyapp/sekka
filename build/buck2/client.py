@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 
+import cas_dedupe
 from generate import root_dir
 
 
@@ -56,6 +57,40 @@ def configure_startup(root, config_files):
         finally:
             Path(temporary.name).unlink(missing_ok=True)
     os.environ["BUCK2_EXTRA_EXTERNAL_CONFIG"] = str(destination)
+
+
+def local_cas_dirs(config_files):
+    """[sekka] local_cas_dir entries of the private client files: a CAS on this host."""
+    found = []
+    for path in config_files:
+        section = None
+        for line in Path(path).read_text().splitlines():
+            line = line.strip()
+            if line.startswith("["):
+                section = line
+            elif section == "[sekka]" and line.startswith("local_cas_dir") and "=" in line:
+                directory = Path(line.split("=", 1)[1].strip())
+                if directory.is_dir():
+                    found.append(directory)
+    return found
+
+
+def share_with_cas(content_dirs):
+    """After a build, share extents between new CAS blobs and content-store objects.
+
+    Both kept every uploaded or downloaded output: one physical copy remains."""
+    store = os.environ.get("BUCK2_LOCAL_CONTENT_STORE")
+    if not store or not content_dirs:
+        return 0
+    report = cas_dedupe.dedupe(content_dirs, [Path(store)])
+    if report["cross_filesystem"]:
+        print("Local CAS is on another filesystem than the content store; extents not shared.", file=sys.stderr)
+        return 0
+    if report["differs"] or report["errors"]:
+        print("Content store and CAS disagree or are unreadable: " + json.dumps(
+            {"differs": report["differs"][:5], "errors": report["errors"][:5]}), file=sys.stderr)
+        return 1
+    return 0
 
 
 def configure_content_store(root, args):
@@ -201,6 +236,17 @@ def main():
         command += ["--show-full-json-output"]
     command += args.buck_arg + extra + passthrough
     os.chdir(root)
+    content_dirs = local_cas_dirs(args.config_file) if args.command in ["build", "test"] else []
+    if content_dirs and os.environ.get("BUCK2_LOCAL_CONTENT_STORE"):
+        process = subprocess.Popen(command)
+        while True:
+            try:
+                status = process.wait()
+                break
+            except KeyboardInterrupt:
+                continue  # Buck receives the same SIGINT and cancels its own command.
+        shared = share_with_cas(content_dirs)
+        raise SystemExit(status or shared)
     if args.command == "runtime":
         completed = subprocess.run(command, check=True, text=True, stdout=subprocess.PIPE)
         stage_runtime(root, (root / args.runtime_dir).resolve(), targets, json.loads(completed.stdout))
