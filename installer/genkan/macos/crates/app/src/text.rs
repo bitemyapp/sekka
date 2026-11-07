@@ -341,6 +341,13 @@ pub fn stopped(state: &InstallState) -> (String, String) {
             format!("“{}” didn't finish", stage.title()),
             disk_changed(*stage, *changed).into(),
         ),
+        // The one stage that stopped part way which can be run again.
+        InstallState::MutationStarted {
+            stage: Stage::StartupDisk,
+        } => (
+            "Setting the startup disk stopped part way".into(),
+            "Your Mac or Sekka Installer's helper restarted while the startup disk was being set, so it isn't known whether it changed. Everything before that step was installed and checked. Set the startup disk again with your password; nothing else will be repeated.".into(),
+        ),
         InstallState::MutationStarted { stage } => (
             "The installation stopped part way".into(),
             format!(
@@ -427,5 +434,24 @@ mod tests {
         assert_eq!(stopped(&failed).0, stage_announcement(Stage::Root, CheckState::Bad).unwrap());
         assert_eq!(installation_ended(&InstallState::StartupDiskFailed), None);
         assert_eq!(installation_ended(&InstallState::Cancelled), None);
+    }
+
+    #[test]
+    fn a_startup_disk_stopped_part_way_is_set_again_not_left_for_help() {
+        // The stopped page offers what the record permits, here setting the
+        // startup disk again first, and its words lead there too.
+        let interrupted = InstallState::MutationStarted {
+            stage: Stage::StartupDisk,
+        };
+        assert_eq!(interrupted.permitted()[0], sekka_mac_contract::NextAction::RetryStartupDisk);
+        let (headline, explanation) = stopped(&interrupted);
+        assert_eq!(headline, "Setting the startup disk stopped part way");
+        assert!(explanation.contains("Set the startup disk again with your password"), "{explanation}");
+        assert!(!explanation.contains("ask for help"), "{explanation}");
+        assert_eq!(installation_ended(&interrupted).as_deref(), Some(headline.as_str()));
+        // Any other stage stopped part way is left for someone to look at.
+        let other = InstallState::MutationStarted { stage: Stage::Root };
+        assert_eq!(other.permitted()[0], sekka_mac_contract::NextAction::InspectActualState);
+        assert!(stopped(&other).1.contains("ask for help"));
     }
 }

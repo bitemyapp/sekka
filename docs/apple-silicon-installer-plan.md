@@ -548,7 +548,7 @@ ambiguous.
 | --- | --- |
 | Inspected/planned; no mutation intent | Reinspect and prepare; a changed layout requires a newly reviewed plan |
 | Verified assets; no mutation intent | Revalidate/reuse assets or cancel without disk changes; a stage that changes nothing and was cut off by a restart is recorded as interrupted, then cancelled |
-| Mutation started; completion not proved | Inspect actual state; stop for reconciliation if its effect is ambiguous |
+| Mutation started; completion not proved | Inspect actual state; stop for reconciliation if its effect is ambiguous. Setting the startup disk is the exception: once the helper holds the install lock, so no engine is still in that stage, the helper records the interruption, then reverifies target and content and retries authorization only, as after it failed |
 | Payload checkpoint verified; startup authorization failed | Reverify target/content and retry authorization only |
 | macOS's part complete; waiting for Recovery | Finish in Recovery. Once the helper's inspection shows the installation complete (the stub's boot policy names its boot object) and made of the stub, ESP and root its records name, at the offsets and sizes its stages recorded, record both Recovery steps as policy read back, with the inspection as their source |
 | Recovery enrollment uncertain | Read actual policy/selection and preserve matching boot software; never blindly restore an older payload |
