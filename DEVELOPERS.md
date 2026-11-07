@@ -629,15 +629,31 @@ selects stores other than the default `~/.cache/sekka/buck2/content-v1`.
 Pairs that already share their first extent are skipped, so repeating it is
 cheap. Ephemeral CI caches are not touched.
 
-Clients on the deployment host do this themselves. A client file generated
-there with `client --domain trusted --access writer --format buck2 --local-cas`
-names the CAS directory (`[sekka] local_cas_dir`), and `scripts/sekka-buck2`
-then shares extents between that CAS and its content store after every `build`
-or `test`, through the same `build/buck2/cas_dedupe.py`. A mismatched digest
-fails the command; a CAS on another filesystem is reported once and skipped.
-On wx-workstation, a fresh worktree's 3.5 GB of downloaded hits and an edit's
-uploads left 46 MB of an 8.6 GB content store unshared with the CAS, with no
-separate pass.
+Clients on the deployment host make the CAS their only store. Generate their
+client file there with `client --domain trusted --access writer --format buck2
+--local-cas`; it names the CAS directory (`[sekka] local_cas_dir`), and
+`scripts/sekka-buck2` then:
+
+- clones cache hits from the CAS file instead of downloading them, verifies
+  them like downloads, and records only a view hint in the content store
+  (`local-cas-downloads.patch`). An evicted blob falls back to the network;
+- with `--cache-write`, keeps produced outputs out of the content store
+  (`local-cas-outputs.patch`). The engine lists each output the cache
+  uploader put in the CAS in `buck-out/ISOLATION/local-cas-journal`, and after
+  every `build` or `test` the client shares those files' extents with their
+  CAS blobs through `build/buck2/cas_dedupe.py`. Outputs that changed since
+  are skipped;
+- shares content-store objects that the CAS also holds, after builds that
+  added any.
+
+A mismatched digest fails the command; a CAS on another filesystem is
+reported once and skipped. Read-only clients still clone hits but keep
+ingesting their own outputs. On wx-workstation, a fresh worktree whose 706
+actions were all cached built in 10 s (28 s when downloading). Four fresh
+worktrees each rebuilding a different shared-crate edit at once took 40 s
+each, as with the content store off, against 222 s on the engine of the
+2026-11-06 storage run. Their content store held 109 MB, and each worktree
+kept 23 MB of its 6.3 GB `buck-out` unshared with the CAS.
 
 The gateway binds host loopback. From another machine, forward it explicitly:
 
@@ -659,9 +675,8 @@ on the workstation and use `retain /nix/store/CLIENT /nix/store/VENDOR`.
 `retain` does not evaluate sources or import unsigned arbitrary build outputs.
 
 For worktrees on the workstation's Btrfs filesystem, the qualified setup is
-local execution with a writer client generated with `--local-cas`,
-`scripts/sekka-buck2 --cache cache --cache-write --config-file FILE build`,
-and the default per-user content store. In the 2026-11-06
+local execution with a writer client generated with `--local-cas`:
+`scripts/sekka-buck2 --cache cache --cache-write --config-file FILE build`. In the 2026-11-06
 storage run, a fresh worktree of an already-built source reused all 706
 actions and kept 8 MiB of its own build state beside 3.47 GB reflinked from
 the store; deduplicating the CAS against the store then cut the physical
