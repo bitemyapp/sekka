@@ -2,6 +2,7 @@
 //! `tatami`: session launcher and desktop commands for the Tatami session
 //! (keyboard-driven Hyprland inspired by Omarchy), replacing the Bash `omarchy-*` scripts of Omarchy 4
 //! (https://github.com/omacom/omarchy, MIT) that it is modelled on.
+mod aizome_displays;
 mod awake;
 mod background;
 mod browser;
@@ -104,6 +105,8 @@ fn session() -> ExitCode {
     // The runtime directory outlives a session that ends while another is open.
     window::forget_monitors();
     display_recovery::prepare_session();
+    // Displays set up only in Aizome start as Aizome shows them.
+    aizome_displays::write();
     let user = format!("{}/.config/tatami/hyprland.lua", util::home());
     let session = window::session_dir().map(|dir| dir.join("hyprland.lua"));
     let config = if Path::new(&user).is_file() {

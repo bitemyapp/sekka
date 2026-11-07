@@ -746,6 +746,10 @@
           inherit pkgs;
           desktopsModule = inputs.calamares.nixosModules.desktops;
         };
+        tatami-aizome-displays = import ./nix/tatami-aizome-displays-vm-test.nix {
+          inherit pkgs;
+          desktopsModule = inputs.calamares.nixosModules.desktops;
+        };
         display-recovery-vm = import ./nix/display-recovery-vm-test.nix {
           inherit pkgs;
           inherit (hyprlandPkgs) hyprland;

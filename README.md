@@ -157,6 +157,11 @@ you turn it on again or log in again. If a display change leaves a window off
 screen, Tatami brings it back, and **Super + Ctrl + D** always brings the Displays
 window to the screen you are using.
 
+A display you set up in Aizome's Settings, such as one turned to portrait,
+comes up the same way in Tatami: its resolution, scale, rotation and place in
+the arrangement follow Aizome until you change that display in Tatami. From
+then on each desktop keeps its own settings for it.
+
 [![The Displays window](docs/images/sekka/displays.png)](docs/images/sekka/displays.png)
 
 Docked, the laptop stays awake with its lid closed on battery power too. With
