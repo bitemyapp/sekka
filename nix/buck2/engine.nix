@@ -29,6 +29,7 @@ platform.buildRustPackage {
     ./patches/bytestream-empty-source.patch
     ./patches/startup-identity-config-layer.patch
     ./patches/local-cas-downloads.patch
+    ./patches/local-cas-outputs.patch
   ];
   # Cargo loads Git patch manifests even when the lock records them as unused.
   # Remove this dead patch in both source and vendoring; no resolved dep changes.

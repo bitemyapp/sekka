@@ -75,20 +75,23 @@ def local_cas_dirs(config_files):
     return found
 
 
-def share_with_cas(content_dirs):
-    """After a build, share extents between new CAS blobs and content-store objects.
+def share_with_cas(content_dirs, store_changed, journal):
+    """After a build, share extents between the CAS and this host's other copies.
 
-    Both kept every uploaded or downloaded output: one physical copy remains."""
+    Uploaded outputs are listed in the journal; content-store objects that the
+    CAS also holds are matched by name. One physical copy remains of each."""
+    reports = []
+    if journal is not None:
+        reports.append(cas_dedupe.share_journal(content_dirs, journal))
     store = os.environ.get("BUCK2_LOCAL_CONTENT_STORE")
-    if not store or not content_dirs:
+    if store and store_changed:
+        reports.append(cas_dedupe.dedupe(content_dirs, [Path(store)]))
+    if any(report["cross_filesystem"] for report in reports):
+        print("Local CAS is on another filesystem than this worktree; extents not shared.", file=sys.stderr)
         return 0
-    report = cas_dedupe.dedupe(content_dirs, [Path(store)])
-    if report["cross_filesystem"]:
-        print("Local CAS is on another filesystem than the content store; extents not shared.", file=sys.stderr)
-        return 0
-    if report["differs"] or report["errors"]:
-        print("Content store and CAS disagree or are unreadable: " + json.dumps(
-            {"differs": report["differs"][:5], "errors": report["errors"][:5]}), file=sys.stderr)
+    problems = [problem for report in reports for problem in report.get("differs", []) + report["errors"]]
+    if problems:
+        print("Local CAS sharing found mismatched or unreadable files: " + json.dumps(problems[:5]), file=sys.stderr)
         return 1
     return 0
 
@@ -225,9 +228,16 @@ def main():
     configure_startup(root, args.config_file)
     configure_content_store(root, args)
     content_dirs = local_cas_dirs(args.config_file)
+    journal = None
     if content_dirs:
         # The daemon clones cache hits from this CAS instead of downloading them.
         os.environ["BUCK2_LOCAL_CAS_DIR"] = str(content_dirs[0])
+        if args.cache_write:
+            # Uploaded outputs skip the content store; the CAS keeps them, and
+            # their extents are shared with it after each build.
+            journal = root / "buck-out" / args.isolation_dir / "local-cas-journal"
+            journal.parent.mkdir(parents=True, exist_ok=True)
+            os.environ["BUCK2_LOCAL_CAS_JOURNAL"] = str(journal)
     command = [os.environ["SEKKA_BUCK2_BIN"], "--isolation-dir", args.isolation_dir, "build" if args.command in ["outputs", "runtime"] else args.command, "--config-file", os.environ["SEKKA_BUCK2_CONFIG"], "--config", "sekka.execution=" + args.cache, "--config", "sekka.cache_write=" + str(args.cache_write).lower()]
     if os.environ.get("SEKKA_BUCK2_RUNTIME"):
         command += ["--config", "sekka.runtime=" + os.environ["SEKKA_BUCK2_RUNTIME"]]
@@ -240,11 +250,11 @@ def main():
         command += ["--show-full-json-output"]
     command += args.buck_arg + extra + passthrough
     os.chdir(root)
-    if args.command in ["build", "test"] and content_dirs and os.environ.get("BUCK2_LOCAL_CONTENT_STORE"):
+    if args.command in ["build", "test"] and content_dirs:
         # New objects are renamed into the store directory; lookups only
         # write worktree views. An unchanged directory has nothing to share.
-        store = Path(os.environ["BUCK2_LOCAL_CONTENT_STORE"])
-        before = store.stat().st_mtime_ns
+        store = os.environ.get("BUCK2_LOCAL_CONTENT_STORE")
+        before = Path(store).stat().st_mtime_ns if store else None
         process = subprocess.Popen(command)
         while True:
             try:
@@ -252,7 +262,8 @@ def main():
                 break
             except KeyboardInterrupt:
                 continue  # Buck receives the same SIGINT and cancels its own command.
-        shared = share_with_cas(content_dirs) if store.stat().st_mtime_ns != before else 0
+        changed = bool(store) and Path(store).stat().st_mtime_ns != before
+        shared = share_with_cas(content_dirs, changed, journal)
         raise SystemExit(status or shared)
     if args.command == "runtime":
         completed = subprocess.run(command, check=True, text=True, stdout=subprocess.PIPE)
