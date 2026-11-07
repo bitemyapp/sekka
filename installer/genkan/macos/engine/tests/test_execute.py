@@ -6,12 +6,14 @@ import json
 import logging
 import os
 import plistlib
+import signal
 import unittest
 
 import scenarios
 import support as S
 from sekka_engine import canonical
 from sekka_engine import contract as c
+from sekka_engine.engine import Terminated
 
 logging.disable(logging.CRITICAL)
 
@@ -422,6 +424,69 @@ class ExecuteTests(unittest.TestCase):
         failure = channel.messages()[-2]["message"]["payload"]
         self.assertEqual((failure["stage"], failure["failure"]["code"], failure["failure"]["disk_changed"]), ("apple-inputs", "apple-inputs-failed", "no"))
         self.assertEqual(mac.state_digest(), before)
+
+    # Asked to stop ---------------------------------------------------------------
+
+    def stopped(self, channel=S.Channel, before=None):
+        """Execute in a working folder of the engine's own, as a real run
+        does, until SIGTERM stops it."""
+        mac = S.j514s_clean(self.t.sub("mac"))
+        asahi, host = S.load_asahi(mac)
+        _, doc, _ = S.inspect(mac, asahi, host, self.t.sub("w0"))
+        release = S.make_release(self.t.sub("assets"))
+        plan = S.derive_plan(doc, release, 190 * S.GIB)
+        if before:
+            before(mac)
+        state = mac.state_digest()
+        channel = channel(mac)
+        with self.assertRaises(Terminated):
+            S.run_engine("execute", mac, asahi, host, None, plan=plan, release=release, channel=channel)
+        return Run({"mac": mac, "channel": channel, "plan": plan, "state_before": state})
+
+    def test_a_cancel_while_apples_files_download_cleans_up(self):
+        """The helper cancels with SIGTERM while Apple's files download: the
+        engine stops there, deletes its working folder with Apple's files in
+        it, leaves nothing mounted, and says nothing more."""
+
+        class Cancelling(S.Channel):
+            sent = False
+
+            def write(self, data):
+                n = super().write(data)
+                message = json.loads(self.lines[-1])["message"]
+                if not self.sent and message["type"] == "progress" and message["payload"]["stage"] == "apple-inputs":
+                    self.sent = True
+                    os.kill(os.getpid(), signal.SIGTERM)
+                return n
+
+        run = self.stopped(Cancelling)
+        workdir = run.channel.engine.workdir
+        self.assertTrue(workdir and not os.path.exists(workdir), workdir)
+        self.assertEqual(run.types()[-1], "progress")
+        self.assertNotIn("failure", run.types())
+        self.assertEqual(run.mac.mounted_now(), [])
+        self.assertEqual(run.mac.state_digest(), run.state_before)
+
+    def test_a_stop_asked_while_the_disk_changes_waits_for_the_stage(self):
+        """SIGTERM while the container is being resized interrupts nothing:
+        the resize finishes and is recorded, and no other stage starts."""
+
+        def before(mac):
+            original = mac.resize
+
+            def resize(args):
+                if args[1:] != ["limits", "-plist"]:
+                    os.kill(os.getpid(), signal.SIGTERM)
+                return original(args)
+
+            mac.resize = resize
+
+        run = self.stopped(before=before)
+        self.assertEqual([p["stage"] for p in run.payloads("intent")], ["apple-inputs", "shrink"])
+        self.assertEqual([p["stage"] for p in run.payloads("checkpoint")], ["apple-inputs", "shrink"])
+        self.assertEqual(run.mac.ordered()[1].size, run.plan["actions"][0]["to"])
+        self.assertEqual(run.mac.mounted_now(), [])
+        self.assertFalse(os.path.exists(run.channel.engine.workdir))
 
     def test_apple_inputs_fetch_only_what_the_stub_needs(self):
         run = self.run_plan()

@@ -80,7 +80,15 @@ of that run's Esp checkpoint from the journal, and only that stage (below).
   stops it: it writes a `failure` for that stage (`not-acknowledged`) and a
   failed `completion`, and the stage never starts.
 - **Exit status.** 0 after `inspected` or `waiting-for-recovery`, 1 after
-  `failed`, 2 for a usage error (nothing is written to standard output).
+  `failed`, 2 for a usage error (nothing is written to standard output),
+  143 when stopped by SIGTERM.
+- **SIGTERM.** The helper's Cancel and its inspection's time limit send it.
+  Outside a stage that changes the disk the engine stops where it is,
+  through the run's own cleanup: what it mounted is unmounted and its
+  working folder, with Apple's files in it, is deleted; nothing more is
+  written to the transcript. During such a stage nothing is interrupted
+  (Apple's tools are never stopped part way): the stage finishes and no
+  other starts.
 - **Commands.** Every command, the adapter's and Asahi's, goes through one
   `Host`: only `bless bputil chflags diskutil fdesetup hdiutil ioreg log mount
   newfs_msdos nvram pmset scutil sync sysctl tar xattr`, found only in the

@@ -28,6 +28,7 @@ no other options: no simulation, no other installer, profile or command.
 
 import logging
 import os
+import signal
 import sys
 
 
@@ -97,7 +98,7 @@ def main(argv=None):
 
     from . import provenance
     from .asahi import load
-    from .engine import Engine
+    from .engine import Engine, Terminated
 
     root = os.path.dirname(provenance.package_dir())
     # A fixed environment: the helper's is already fixed; this makes sure.
@@ -147,22 +148,28 @@ def main(argv=None):
         adapter=adapter,
         password=password,
     )
-    if mode == "inspect":
-        outcome = engine.run_inspect()
-    else:
-        try:
-            with open(options["--plan"], "rb") as f:
-                plan_bytes = f.read(64 * 1024 + 1)
-        except OSError as error:
-            logging.error("the plan can't be read: %s", error)
-            plan_bytes = b""  # refused as unreadable, through the transcript
-        if mode == "execute":
-            outcome = engine.run_execute(plan_bytes, options["--assets"], options["--installation"], options["--owner"])
-        else:
-            outcome = engine.run_startup_disk(
-                plan_bytes, options["--installation"], options["--owner"], options["--esp-inventory"]
-            )
+    engine.handle_sigterm()
+    try:
+        outcome = run(engine, mode, options)
+    except Terminated:
+        # The run cleaned up after itself on the way here.
+        logging.info("stopped when asked")
+        return 128 + signal.SIGTERM
     return 0 if outcome in ("inspected", "waiting-for-recovery") else 1
+
+
+def run(engine, mode, options):
+    if mode == "inspect":
+        return engine.run_inspect()
+    try:
+        with open(options["--plan"], "rb") as f:
+            plan_bytes = f.read(64 * 1024 + 1)
+    except OSError as error:
+        logging.error("the plan can't be read: %s", error)
+        plan_bytes = b""  # refused as unreadable, through the transcript
+    if mode == "execute":
+        return engine.run_execute(plan_bytes, options["--assets"], options["--installation"], options["--owner"])
+    return engine.run_startup_disk(plan_bytes, options["--installation"], options["--owner"], options["--esp-inventory"])
 
 
 def _read_lock(root, adapter):

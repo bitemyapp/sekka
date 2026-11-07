@@ -260,7 +260,10 @@ pub trait EngineProcess: Send {
     fn ack(&mut self, seq: u64) -> io::Result<()>;
     /// Something another thread can call to ask it to stop. Only used while
     /// no stage that changes the disk is running: disk tools are never
-    /// killed mid-operation.
+    /// killed mid-operation. The engine stops through its own cleanup,
+    /// unmounting what it mounted and deleting its working folder, and
+    /// writes nothing more (and if a stage that changes the disk is running
+    /// after all, it lets that stage finish and starts no other).
     fn terminator(&self) -> Box<dyn FnMut() + Send>;
     /// Wait for it to exit; whether it exited successfully.
     fn wait(&mut self) -> io::Result<bool>;

@@ -21,6 +21,7 @@ import os
 import plistlib
 import random
 import shutil
+import signal
 import struct
 import sys
 import tempfile
@@ -1397,20 +1398,25 @@ def run_engine(mode, mac, asahi, host, workdir, plan=None, release=None, passwor
         privileged=privileged,
     )
     served = []
-    quiet = io.StringIO()  # Asahi's progress printing; a real run sends it to stderr
-    with asahi_patches(asahi, mac, restore_zip=restore if restore is not None else make_restore_zip(), served=served), contextlib.redirect_stdout(quiet), warnings.catch_warnings():
-        # Asahi's modules leave plist files for the garbage collector.
-        warnings.simplefilter("ignore", ResourceWarning)
-        if mode == "inspect":
-            outcome = engine.run_inspect()
-        elif mode == "startup-disk":
-            plan_bytes = canonical.dumps(plan) if isinstance(plan, dict) else plan
-            outcome = engine.run_startup_disk(plan_bytes, installation, owner, esp_inventory)
-        else:
-            plan_bytes = canonical.dumps(plan) if isinstance(plan, dict) else plan
-            outcome = engine.run_execute(plan_bytes, release["dir"], installation, owner)
     channel.served = served
     channel.engine = engine
+    quiet = io.StringIO()  # Asahi's progress printing; a real run sends it to stderr
+    # SIGTERM stops it as it does a real run, which raises Terminated here.
+    previous = engine.handle_sigterm()
+    try:
+        with asahi_patches(asahi, mac, restore_zip=restore if restore is not None else make_restore_zip(), served=served), contextlib.redirect_stdout(quiet), warnings.catch_warnings():
+            # Asahi's modules leave plist files for the garbage collector.
+            warnings.simplefilter("ignore", ResourceWarning)
+            if mode == "inspect":
+                outcome = engine.run_inspect()
+            elif mode == "startup-disk":
+                plan_bytes = canonical.dumps(plan) if isinstance(plan, dict) else plan
+                outcome = engine.run_startup_disk(plan_bytes, installation, owner, esp_inventory)
+            else:
+                plan_bytes = canonical.dumps(plan) if isinstance(plan, dict) else plan
+                outcome = engine.run_execute(plan_bytes, release["dir"], installation, owner)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
     return outcome, channel
 
 

@@ -27,6 +27,7 @@ import os
 import plistlib
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import tempfile
@@ -59,6 +60,15 @@ class Refusal(Exception):
         self.code = code
         self.message = message
         self.diagnostic = diagnostic
+
+
+class Terminated(BaseException):
+    """Asked to stop (SIGTERM: the helper cancelling, or its inspection
+    taking too long), where nothing is changing the disk. Raised where the
+    run is, so that its own cleanup (unmounting what it mounted, deleting
+    its working folder and Apple's files in it) runs before it exits. Not an
+    Exception: nothing that reports a stage's errors catches it, and nothing
+    more is written to the transcript."""
 
 
 class StageFailure(Exception):
@@ -161,6 +171,27 @@ class Engine:
         # planned stub's container once it exists, and the planned ESP.
         self.writable_container = None
         self.writable_esp = None
+        # A stage that changes the disk is running, and a stop was asked
+        # for during one.
+        self.changing_disk = False
+        self.stop_asked = False
+
+    def handle_sigterm(self):
+        """Stop on SIGTERM through the run's own cleanup (see Terminated);
+        returns the handler it replaced."""
+        return signal.signal(signal.SIGTERM, self.on_sigterm)
+
+    def on_sigterm(self, signum, frame):
+        if self.changing_disk:
+            # Apple's tools are never stopped part way (subprocess.run would
+            # kill the one running): the stage finishes, and the run stops
+            # before the next.
+            log.warning("asked to stop during the %s stage; stopping once it ends", self.stage)
+            self.stop_asked = True
+            return
+        # A second request while cleaning up stops at once.
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
+        raise Terminated()
 
     # inspect -----------------------------------------------------------------
 
@@ -226,6 +257,9 @@ class Engine:
         if stages is None:
             stages = c.macos_stages(self.shrink is not None)
         for stage in stages:
+            if self.stop_asked:
+                # Asked during the last stage: nothing more starts.
+                raise Terminated()
             seq = self.t.intent(stage, self.plan_digest)
             try:
                 self.t.wait_ack(seq)
@@ -242,6 +276,7 @@ class Engine:
                 self.t.completion("failed")
                 return "failed"
             self.stage = stage
+            self.changing_disk = stage != "apple-inputs"
             try:
                 facts, verification = getattr(self, "stage_" + stage.replace("-", "_"))()
             except StageFailure as failure:
@@ -259,6 +294,8 @@ class Engine:
                 log.exception("stage %s failed", stage)
                 self.fail(stage, "internal-error", f"The {stage} stage stopped: {error}", None)
                 return "failed"
+            finally:
+                self.changing_disk = False
             self.t.checkpoint(stage, self.plan_digest, facts, verification)
             if stage != "apple-inputs":
                 self.changed = True
