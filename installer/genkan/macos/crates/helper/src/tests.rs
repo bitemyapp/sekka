@@ -1153,6 +1153,55 @@ fn only_the_startup_disk_is_retried() {
 }
 
 #[test]
+fn a_startup_disk_stopped_part_way_is_retried_once_no_engine_runs() {
+    // The helper or the Mac restarted while the startup disk was being set,
+    // in execute or in an earlier retry.
+    for retried in [false, true] {
+        let w = world(Script::Happy);
+        let id = abandoned(&w, Stage::StartupDisk);
+        if retried {
+            let mut j = Journal::open(FsStorage, &w.journals(), id).unwrap();
+            let failure = failure(DiskChanged::No);
+            j.append(at(), Event::Failed { stage: Stage::StartupDisk, failure }).unwrap();
+            j.append(at(), Event::Intent { stage: Stage::StartupDisk }).unwrap();
+        }
+        let w = w.restarted(Script::Happy);
+        let Response::Events { state, records, .. } = w.ask(Request::Events { installation: id, after: 0 }, None) else {
+            panic!()
+        };
+        assert_eq!(state, InstallState::MutationStarted { stage: Stage::StartupDisk });
+        assert_eq!(state.permitted()[0], NextAction::RetryStartupDisk);
+        // While the engine that was setting it may still be running, nothing
+        // is tried or recorded.
+        let engine = InstallLock::try_acquire(&w.helper.paths_for_tests().lock()).unwrap().unwrap();
+        let (code, _) = refused(w.ask(Request::RetryStartupDisk { installation: id }, Some(PASSWORD)));
+        assert_eq!(code, HelperRefusalCode::Busy);
+        drop(engine);
+        // Nor with the wrong password.
+        let (code, _) = refused(w.ask(Request::RetryStartupDisk { installation: id }, Some(b"nope")));
+        assert_eq!(code, HelperRefusalCode::Authorization);
+        let Response::Events { records: unchanged, .. } = w.ask(Request::Events { installation: id, after: 0 }, None) else {
+            panic!()
+        };
+        assert_eq!(unchanged, records);
+        let Response::Events { state, records: after, .. } =
+            w.ask(Request::RetryStartupDisk { installation: id }, Some(PASSWORD))
+        else {
+            panic!()
+        };
+        assert_eq!(state, InstallState::WaitingForRecovery, "retried: {retried}");
+        assert!(matches!(
+            &after[records.len()].event,
+            Event::Failed { stage: Stage::StartupDisk, failure }
+                if failure.code.as_str() == "interrupted" && failure.disk_changed == DiskChanged::Unknown
+        ));
+        assert!(matches!(after[records.len() + 1].event, Event::Intent { stage: Stage::StartupDisk }));
+        assert_eq!(*w.fake().startup_runs.lock().unwrap(), 1);
+        assert_eq!(*w.fake().engine_runs.lock().unwrap(), 0, "only that stage runs");
+    }
+}
+
+#[test]
 fn a_retry_the_engine_refuses_says_why() {
     let w = world(Script::Fail(Stage::StartupDisk, DiskChanged::No));
     let id = w.begun();

@@ -72,6 +72,13 @@ impl InstallState {
         match self {
             InstallState::Planned => &[Reinspect, Cancel, ExportDiagnostics],
             InstallState::AssetsVerified => &[ReuseAssets, Reinspect, Cancel, ExportDiagnostics],
+            // The one stage built to run again, whatever it left: the retry
+            // checks everything else is in place before it starts. The
+            // helper records the interruption first, once it holds the
+            // install lock and so knows no engine is still in the stage.
+            InstallState::MutationStarted {
+                stage: Stage::StartupDisk,
+            } => &[RetryStartupDisk, ExportDiagnostics],
             InstallState::MutationStarted { .. } => &[InspectActualState, ExportDiagnostics],
             InstallState::Failed {
                 disk_changed: DiskChanged::No,
@@ -426,6 +433,45 @@ mod tests {
         }
         bad.fail(Stage::StartupDisk, DiskChanged::No).push(Event::Intent { stage: Stage::Root });
         assert!(bad.state().is_err());
+    }
+
+    #[test]
+    fn an_interrupted_startup_disk_is_retried_like_a_failed_one() {
+        // The helper or the Mac restarted while the startup disk was being
+        // set, in execute or in a retry: the retry is offered, and once the
+        // interruption is recorded the record reads as a failure of that
+        // stage, which it may follow.
+        for retried in [false, true] {
+            let mut c = Chain::new();
+            for s in &MACOS[..10] {
+                c.stage(*s);
+            }
+            if retried {
+                c.fail(Stage::StartupDisk, DiskChanged::No);
+            }
+            c.push(Event::Intent { stage: Stage::StartupDisk });
+            let s = c.state().unwrap();
+            assert_eq!(s, InstallState::MutationStarted { stage: Stage::StartupDisk });
+            assert_eq!(s.permitted(), &[NextAction::RetryStartupDisk, NextAction::ExportDiagnostics]);
+            assert!(!s.allows_new_installation());
+            c.push(Event::Failed {
+                stage: Stage::StartupDisk,
+                failure: Failure {
+                    code: "interrupted".parse().unwrap(),
+                    message: "Setting the startup disk stopped part way.".parse().unwrap(),
+                    apple_diagnostic: None,
+                    disk_changed: DiskChanged::Unknown,
+                },
+            });
+            assert_eq!(c.state().unwrap(), InstallState::StartupDiskFailed);
+            c.stage(Stage::StartupDisk);
+            assert_eq!(c.state().unwrap(), InstallState::WaitingForRecovery);
+        }
+        // No other stage that changes the disk is.
+        for stage in &MACOS[2..10] {
+            let s = InstallState::MutationStarted { stage: *stage };
+            assert_eq!(s.permitted(), &[NextAction::InspectActualState, NextAction::ExportDiagnostics]);
+        }
     }
 
     #[test]

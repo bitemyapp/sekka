@@ -266,6 +266,14 @@ with this mode, which runs `stage_startup_disk` exactly as execute does
 Recovery app. A retry of bless alone would leave SystemVersion as bless needs
 it and the stub would start normally. No other stage runs in this mode.
 
+The same retry follows a startup-disk stage that stopped part way, when the
+helper or the Mac restarted during it and the journal ends with its intent
+(in execute or in an earlier retry). It is the one interrupted stage the
+contract lets run again, since everything below is checked first whatever
+it left. The helper retries only while it holds the install lock, so no
+engine is still in the stage, and records the interruption as that stage's
+failure (`interrupted`, `disk_changed: unknown`) before it starts this mode.
+
 Before its one intent, with nothing changed, it refuses (`stage: null`,
 `disk_changed: no`) unless:
 

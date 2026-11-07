@@ -586,10 +586,15 @@ impl<P: Platform> Helper<P> {
             Ok(j) => j,
             Err(e) => return refuse(HelperRefusalCode::State, e.to_string()),
         };
-        if *journal.state() != InstallState::StartupDiskFailed {
+        // Setting the startup disk stopped part way: the helper or the Mac
+        // restarted during it. This request holds the install lock, which
+        // every engine holds until it exits, so none is still in the stage.
+        let interrupted = *journal.state() == InstallState::MutationStarted { stage: Stage::StartupDisk }
+            && open_stage(journal.records()) == Some(Stage::StartupDisk);
+        if *journal.state() != InstallState::StartupDiskFailed && !interrupted {
             return refuse(
                 HelperRefusalCode::State,
-                "Only setting the startup disk can be tried again, and only after it failed.",
+                "Only setting the startup disk can be tried again, and only after it failed or stopped part way.",
             );
         }
         let Event::Opened { plan, plan_digest, .. } = &journal.records()[0].event else {
@@ -626,6 +631,25 @@ impl<P: Platform> Helper<P> {
             .and_then(|_| fs::write(&plan_path, canonical::to_vec(&plan).unwrap_or_default()));
         if let Err(e) = written {
             return refuse(HelperRefusalCode::Internal, e.to_string());
+        }
+        // The record says the stage stopped, as it would had this helper
+        // seen its engine stop, before it is tried again.
+        if interrupted {
+            let failure = Failure {
+                code: "interrupted".parse().unwrap(),
+                message: text("Setting the startup disk stopped part way, when the helper or the Mac restarted. Everything else was in place and checked."),
+                apple_diagnostic: None,
+                disk_changed: DiskChanged::Unknown,
+            };
+            if let Err(e) = journal.append(
+                self.platform.now(),
+                Event::Failed {
+                    stage: Stage::StartupDisk,
+                    failure,
+                },
+            ) {
+                return refuse(HelperRefusalCode::State, e.to_string());
+            }
         }
         // Running from here: Events says so, the engine's lines are kept for
         // diagnostics, and it can't be cancelled (it is one step, and it
