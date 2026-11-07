@@ -119,7 +119,7 @@
     "desktop/aizome/sukumo/Cargo.toml": "a4048d8c20c6afb5ecfc4cd5d90b355fdb59ed3c857851dd8eb0f2de44633a5e",
     "desktop/aizome/sukumo/crates/sidestep-engine/Cargo.toml": "a8790efccc8a745f3fffa199e5511f86153b60e3649ac4effcc9d46e86893381",
     "desktop/aizome/sukumo/crates/sidestep-ui/Cargo.toml": "14fe9f88c6f606836f7a136cddc9cea5b9a68d43d3e7558c03dfe8b1916ac639",
-    "flake.lock": "21246ef9f1d2082c73d415efcc42ef63fab4621f3ae9c18b74c8ec9d0d1c2791"
+    "flake.lock": "ab39bf2fee304bd09a9e96c30cfb8b2bc8329300c32846bfde65ba0a74e2b1f8"
   },
   "manifest": "desktop/aizome/Cargo.toml",
   "no_default_features": false,
