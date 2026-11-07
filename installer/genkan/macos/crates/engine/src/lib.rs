@@ -565,11 +565,21 @@ mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
 
+    /// Tests write a stand-in Python and then start it. Another test's
+    /// fork while that file is still open for writing keeps it open in the
+    /// child until its exec, and the start fails with "Text file busy", so
+    /// tests that write a program or start one take turns.
+    fn one_at_a_time() -> std::sync::MutexGuard<'static, ()> {
+        static PROGRAMS: Mutex<()> = Mutex::new(());
+        PROGRAMS.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     /// A real archive, unpacked by the real tar, started through
     /// `engine-lock.json` with a cleared environment: here the "Python" is a
     /// shell script that prints a canned inspection transcript.
     #[test]
     fn unpack_start_and_read_an_inspection() {
+        let _turn = one_at_a_time();
         let tmp = tempfile::tempdir().unwrap();
         let src = tmp.path().join("src");
         fs::create_dir_all(src.join("bin")).unwrap();
@@ -669,6 +679,7 @@ mod tests {
 
     #[test]
     fn a_failed_inspection_keeps_the_end_of_the_engines_log() {
+        let _turn = one_at_a_time();
         let tmp = tempfile::tempdir().unwrap();
         let mut log: String = (0..LOG_LINES + 100).map(|n| format!("line {n}\n")).collect();
         log.push_str(&"x".repeat(5000));
@@ -711,6 +722,7 @@ mod tests {
 
     #[test]
     fn an_inspection_for_an_owner_hands_over_the_password_and_refuses_as_the_engine_does() {
+        let _turn = one_at_a_time();
         // The engine's own transcript for an owner whose password ends with
         // a space (engine/tests/vectors), from a "Python" that checks its
         // arguments and keeps what it read on descriptor 3.
@@ -733,6 +745,7 @@ mod tests {
     #[test]
     fn an_engine_holds_the_install_lock_until_it_exits() {
         use std::os::fd::AsRawFd;
+        let _turn = one_at_a_time();
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("installing.lock");
         let open = || {
