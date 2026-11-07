@@ -331,7 +331,7 @@ nix build .#legacyPackages.aarch64-linux.first-boot.configuration
 nix build .#legacyPackages.aarch64-linux.first-boot.vm-test -L
 ```
 
-- **Helper** (33): the protocol's bounds and strictness; Genkan's verdicts
+- **Helper** (36): the protocol's bounds and strictness; Genkan's verdicts
   field by field and the whole parse; handoff hints kept and dropped;
   setup.nix (quoting, no secret, nothing about the disk or the desktop,
   the golden example); the first helper's staged setup finished, an
@@ -421,6 +421,23 @@ the fixed locale order, the console keymap, assertions only while waiting):
 | The product image's system with identity.nix, with and without setup.nix (English/US, German/German, German/US) | evaluated; what setup.nix changes is listed above |
 | `vm-test` | not run again: the J514S had too little free disk for the VM; its stand-in flake's reading of setup.nix was evaluated alone |
 
+Later the same day, after the second review (the default desktop in
+configuration.nix by Yukimi's edit, setup.nix naming the computer as it's
+called, `sekka.setup.staged/2` with the first helper's `/1` finished):
+
+| Check | Result |
+| --- | --- |
+| Helper `cargo test --locked` and its Nix build (check phase, with `yukimi-config` from its narrow source) | 36 passed |
+| `configuration`, aarch64 | passed; both systems evaluated to derivations, the default desktop defined by `configuration.after.nix` alone |
+| `mac-image-tests` | passed |
+| The product image's system (`mac-release-j514s-system`) | evaluated; against the previous commit only the helper and what names it (its unit, `system-units`, `etc`, `activate`) differ. The developer image's system and `installed-j514s` are unchanged |
+| `vm-test` | evaluated (and its script compiled), not run: too little free disk for the VM. Its new check of setup's edit to configuration.nix is unverified |
+| `aizome-greeter` | not run again: neither the greeter nor the protocol changed |
+
+What the first rebuild builds was not evaluated again: the configuration's
+values are the same, only the default desktop's now comes from
+configuration.nix.
+
 ## Limits and what isn't verified
 
 - The VM test was run on the J514S (aarch64, `userspaceIrqchip`) with the
@@ -444,6 +461,11 @@ the fixed locale order, the console keymap, assertions only while waiting):
 - The language is the system's own after setup, as the time zone is:
   editing `i18n.defaultLocale` in setup.nix changes nothing a rebuild
   applies (setup.nix says so); Settings changes it.
+- A default desktop configuration.nix names other than as a plain string
+  (`lib.mkDefault "aizome"`, as earlier images shipped it)
+  is left alone: the login screen starts the owner's choice, but the
+  system's default stays until it is edited by hand, and Yukimi can't
+  change it either.
 - A retry keeps what the person changed by comparing each setting with
   what it was when setup was staged; a setting someone changed and then
   changed back to exactly that, before its part was done, is taken as
