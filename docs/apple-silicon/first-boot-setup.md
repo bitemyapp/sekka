@@ -127,7 +127,7 @@ default desktop:
 | --- | --- | --- |
 | Account | `useradd` (staged uid, group `users`, the groups below, home 0700, `users.defaultUserShell`), `chpasswd --encrypted` | `users.users.NAME` (`isNormalUser`, `uid`, `description`, `extraGroups = [ "networkmanager" "wheel" ]`, and `shell` by the path it was made with) and `calamares.installUser = NAME`; no password (`mutableUsers` keeps `/etc/shadow`'s) |
 | Groups | `networkmanager`, `wheel`, and `render` on the M3 Pro's GPU | `render` comes from `calamares.appleSilicon.graphicsUsers`, whose default is `installUser` |
-| Host name | `hostnamectl --static --transient hostname` (hostnamed is pointed at `/etc/hostname` while `networking.hostName` is empty) | `networking.hostName` |
+| Host name | `hostnamectl --static --transient hostname` (hostnamed is pointed at `/etc/hostname` while `networking.hostName` is empty) | `networking.hostName`: the name the computer has when setup.nix is written, the chosen one unless the owner renamed it meanwhile |
 | Time zone | `timedatectl set-timezone` | none: Aizome's mutable time zone keeps `/etc/localtime` across rebuilds; setup.nix says so in a comment |
 | Language | `localectl set-locale LANG=…` (`i18n.imperativeLocale`), and `systemctl set-environment` so the person's user manager starts with it before the next boot (systemd reads locale.conf only as it starts) | `i18n.defaultLocale`, which only seeds `/etc/locale.conf` should it be missing: the language stays the system's own, which Settings changes and rebuilds keep; setup.nix says so |
 | Keyboard | `/etc/aizome/keyboard.toml` (the login screen's, `keyboardFile`) and, if not the image's layout, `~/.config/aizome/settings.toml` `[input.keyboard]` | `services.xserver.xkb.layout`, and so the console's keymap (`console.useXkbConfig`; the module keeps `/etc/vconsole.conf` NixOS's under `imperativeLocale`) |
@@ -194,7 +194,8 @@ recorded as it's done:
    password is recorded.
 4. **Settings.** Host name, time zone, locale, keyboards.
 5. **Configuration.** The default desktop in `/etc/nixos/configuration.nix`
-   (its mode kept), then `/etc/nixos/setup.nix` (0644), each atomically.
+   (its mode kept), then `/etc/nixos/setup.nix` (0644), each atomically;
+   setup.nix names the host name the computer has by then.
 6. **Verify.** The account and its uid, every part recorded; and, with
    `verifyConfiguration` and an `/etc/nixos/flake.nix`, `nix eval
    --offline` of
@@ -213,7 +214,13 @@ password (a failure offers Log In then), and it stays. So a retry, which
 the login screen sends by itself each time it starts while setup is
 unfinished, never undoes what the owner changed after logging in: a time
 zone, a language, a host name, a group they left, a locked password, a
-default desktop chosen in Yukimi or an edited setup.nix.
+default desktop chosen in Yukimi or an edited setup.nix. A host name they
+gave the computer before setup.nix was written, whether before or after
+the host name's part, is the one setup.nix names and the check evaluates,
+so the configuration and the running system agree, and `nixos-rebuild`,
+which looks the system up by the running name, finds it; a name the
+configuration can't hold (not one DNS label, such as `babbage.local`)
+gives way to the chosen one, which the first update sets.
 
 Files are written to a new name, synced and renamed, and their directory
 synced. Interrupted anywhere:
@@ -330,7 +337,9 @@ nix build .#legacyPackages.aarch64-linux.first-boot.vm-test -L
   the person logged in keeping their host name, time zone (even one put
   back as it was), language, groups, default desktop and setup.nix; a part
   not yet done never replacing a setting they changed meanwhile, nor their
-  other edits to configuration.nix; an interrupted status
+  other edits to configuration.nix; setup.nix naming, and the check
+  evaluating, the computer as they renamed it before setup.nix was
+  written, or the chosen name for one the configuration can't hold; an interrupted status
   saying whether its account can log in; an installation with people never
   set up and untouched; SO_PEERCRED refusal, over a socket pair and a real
   socket; connections side by side; files' modes under the service's 0077

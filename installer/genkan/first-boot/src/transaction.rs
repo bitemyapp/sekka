@@ -19,9 +19,10 @@
 //! 4. **Settings**: host name, time zone, locale, and the login screen's
 //!    and the person's keyboard.
 //! 5. **Configuration**: the default desktop in `/etc/nixos/configuration.nix`,
-//!    changed as Yukimi changes it, then `/etc/nixos/setup.nix`.
+//!    changed as Yukimi changes it, then `/etc/nixos/setup.nix`, naming the
+//!    host name the computer has by then.
 //! 6. **Verify**: the account, and the installed flake evaluated offline
-//!    for the new host name, proving the configuration the first update
+//!    for that host name, proving the configuration the first update
 //!    builds.
 //! 7. **Finish**: the marker (`complete`, no secrets), then the staged
 //!    choices are deleted.
@@ -43,6 +44,7 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
 use anyhow::{Context, Result, ensure};
+use calamares_nixos::Hostname;
 use serde::{Deserialize, Serialize};
 use yukimi_config::edit;
 use zeroize::Zeroizing;
@@ -67,6 +69,8 @@ pub struct Staged {
     pub uid: u32,
     /// The account's login shell (`users.defaultUserShell`, by its path).
     pub shell: String,
+    /// The host name chosen; once setup.nix is written, the one it names
+    /// (the person's own, had they renamed the computer before then).
     pub hostname: String,
     pub locale: String,
     pub keyboard: String,
@@ -636,6 +640,7 @@ impl<S: System> Run<'_, S> {
     fn configuration(&mut self, s: &mut Staged) -> Result<()> {
         self.desktop(s)?;
         if !s.applied.contains(&Part::SetupNix) {
+            self.name_the_computer(s)?;
             let path = self.config.setup_nix();
             let text = render::setup_nix(s);
             let now = read_text(&path)?;
@@ -645,6 +650,27 @@ impl<S: System> Run<'_, S> {
                 Change::Done => {}
             }
             self.record(s, Part::SetupNix)?;
+        }
+        Ok(())
+    }
+
+    /// The host name setup.nix names, and the check evaluates: the one the
+    /// computer has as setup.nix is written. That is the one chosen, unless
+    /// the person renamed the computer since (logged in while setup waited
+    /// to finish); then theirs, so that the configuration and the running
+    /// system agree: nixos-rebuild looks up the system by the running name,
+    /// and the first update keeps it. A name the configuration can't hold
+    /// (not one DNS label) gives way to the chosen one, which that update
+    /// sets.
+    fn name_the_computer(&mut self, s: &mut Staged) -> Result<()> {
+        let now = self.sys.hostname()?;
+        if now != s.hostname {
+            if Hostname::parse(&now).is_ok() {
+                eprintln!("setup: the computer was renamed {now} meanwhile; setup.nix names it so");
+                s.hostname = now;
+            } else {
+                eprintln!("setup: the configuration can't name the computer {now:?}; setup.nix names it {}", s.hostname);
+            }
         }
         Ok(())
     }
@@ -1207,6 +1233,42 @@ pub(crate) mod tests {
         assert_eq!(w.configuration(), theirs);
         assert_eq!(w.sys.calls[calls..], ["evaluate"], "only the check again");
         assert_eq!(w.files(), ["complete", "lock"]);
+    }
+
+    /// Renamed by the person before setup.nix was written (logged in after
+    /// a failure): setup.nix names the computer as it's called, and the
+    /// check evaluates that system, so the configuration, the running
+    /// system and the system nixos-rebuild looks up agree.
+    #[test]
+    fn setup_nix_names_the_computer_as_the_person_renamed_it() {
+        // Before its host name was set, and after.
+        for (op, kept) in [("set_hostname", "analytical"), ("set_time_zone", "analytical")] {
+            let mut w = world();
+            std::fs::write(w.config.nixos_dir.join("flake.nix"), "{ }").unwrap();
+            w.sys.fail = Some(op);
+            assert!(w.begin(None).unwrap_err().can_log_in, "{op}");
+            assert_eq!(w.sys.hostname, if op == "set_hostname" { "" } else { kept }, "{op}");
+            w.sys.hostname = "babbage".into();
+            w.sys.fail = None;
+            w.resume(None).unwrap();
+            assert_eq!(w.sys.hostname, "babbage", "{op}: the person's name stays");
+            let setup = std::fs::read_to_string(w.config.setup_nix()).unwrap();
+            assert!(setup.contains(r#"networking.hostName = "babbage";"#), "{op}: {setup}");
+            assert_eq!(w.sys.evaluated, ["babbage"], "{op}");
+            let system = read_marker(&w.config).unwrap().unwrap().system;
+            assert_eq!(system.as_deref(), Some("/nix/store/00000000000000000000000000000000-nixos-system-babbage.drv"));
+        }
+        // A name the configuration can't hold: setup.nix names the chosen
+        // one, which the first update sets.
+        let mut w = world();
+        w.sys.fail = Some("set_time_zone");
+        assert!(w.begin(None).unwrap_err().can_log_in);
+        w.sys.hostname = "babbage.local".into();
+        w.sys.fail = None;
+        w.resume(None).unwrap();
+        let setup = std::fs::read_to_string(w.config.setup_nix()).unwrap();
+        assert!(setup.contains(r#"networking.hostName = "analytical";"#), "{setup}");
+        assert_eq!(w.sys.hostname, "babbage.local");
     }
 
     /// What wasn't done yet when the person logged in is done, but never
