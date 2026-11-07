@@ -41,6 +41,10 @@ def store_objects(stores):
     return objects
 
 
+class Changed(Exception):
+    """A file's size or type no longer matches its digest."""
+
+
 def share(source, blob, size):
     """Share `blob`'s extents with `source`. Returns 'shared', 'already' or 'differs'."""
     src = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
@@ -50,7 +54,7 @@ def share(source, blob, size):
             for fd in (src, dst):
                 status = os.fstat(fd)
                 if status.st_size != size or not stat.S_ISREG(status.st_mode):
-                    raise OSError(errno.EINVAL, "size or type differs from its digest name")
+                    raise Changed()
             start = first_extent(src)
             if start is not None and start == first_extent(dst):
                 return "already"
@@ -101,6 +105,9 @@ def dedupe(content_dirs, stores):
                 outcome = share(source, blob, size)
             except FileNotFoundError:
                 continue  # Evicted by NativeLink or the content store meanwhile.
+            except Changed:
+                report["errors"].append({"blob": str(blob), "error": "size or type differs from its digest name"})
+                continue
             except OSError as error:
                 if error.errno == errno.EXDEV:
                     report["cross_filesystem"] = True
@@ -114,4 +121,68 @@ def dedupe(content_dirs, stores):
             else:
                 report["deduplicated"] += 1
                 report["deduplicated_bytes"] += size
+    return report
+
+
+def cas_index(content_dirs):
+    """(SHA-256, size) to the newest-generation blob file."""
+    index = {}
+    for content in content_dirs:
+        for blob in Path(content).glob("*/*"):
+            match = re.fullmatch(r"([0-9a-f]{64})-([0-9]+)(?:-([0-9]+))?", blob.name)
+            if match:
+                key, generation = (match[1], int(match[2])), int(match[3] or 0)
+                if key not in index or generation > index[key][0]:
+                    index[key] = (generation, blob)
+    return {key: blob for key, (_, blob) in index.items()}
+
+
+def share_journal(content_dirs, journal):
+    """Share extents of journaled outputs (HASH SIZE PATH lines) with their CAS blobs.
+
+    The engine lists every produced output it found in or put into the CAS. The
+    journal is renamed first, so new entries start a new file. An output that
+    changed or vanished since it was listed is skipped, not an error."""
+    report = {"schema": 1, "entries": 0, "already_shared": 0, "deduplicated": 0, "deduplicated_bytes": 0,
+              "skipped_small": 0, "missing_blob": 0, "changed": 0, "cross_filesystem": False, "errors": []}
+    pending = Path(str(journal) + ".sharing")
+    try:
+        os.rename(journal, pending)
+    except FileNotFoundError:
+        if not pending.exists():
+            return report  # Nothing listed; a leftover .sharing file is retried.
+    entries = {}
+    for line in pending.read_text().splitlines():
+        parts = line.split(" ", 2)
+        if len(parts) == 3 and parts[1].isdigit():
+            entries[parts[2]] = (parts[0], int(parts[1]))  # The latest listing of a path wins.
+    index = cas_index(content_dirs)
+    for path, (digest, size) in entries.items():
+        report["entries"] += 1
+        blob = index.get((digest, size))
+        if blob is None:
+            report["missing_blob"] += 1
+            continue
+        if size < BLOCK:
+            report["skipped_small"] += 1
+            continue
+        try:
+            outcome = share(blob, path, size)
+        except (FileNotFoundError, Changed):
+            report["changed"] += 1
+            continue
+        except OSError as error:
+            if error.errno == errno.EXDEV:
+                report["cross_filesystem"] = True
+                break
+            report["errors"].append({"path": path, "error": str(error)})
+            continue
+        if outcome == "differs":
+            report["changed"] += 1  # Rewritten in place since it was listed.
+        elif outcome == "already":
+            report["already_shared"] += 1
+        else:
+            report["deduplicated"] += 1
+            report["deduplicated_bytes"] += size
+    pending.unlink()
     return report

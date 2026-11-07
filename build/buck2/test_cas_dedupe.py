@@ -58,7 +58,30 @@ def main():
         again = cas_dedupe.dedupe([root / "cas"], [root / "store"])
         assert again["already_shared"] == 3 and again["deduplicated"] == 0, again
         assert not again["differs"] and not again["errors"], again
-    print("CAS dedupe: shared, mismatch and repeat checks passed")
+        # Journaled outputs share extents with their blobs; changed ones are skipped.
+        outputs = root / "buck-out"
+        outputs.mkdir()
+        journal = outputs / "local-cas-journal"
+        lines = []
+        for index, blob in enumerate(shared[:2]):
+            output = outputs / f"out-{index}"
+            output.write_bytes(blob.read_bytes())
+            digest, size = blob.name.split("-")[:2]
+            lines.append(f"{digest} {size} {output}")
+        changed = outputs / "changed"
+        changed.write_bytes(b"later")
+        digest, size = shared[2].name.split("-")[:2]
+        lines.append(f"{digest} {size} {changed}")
+        lines.append(f"{'0' * 64} 8192 {outputs / 'not-in-cas'}")
+        journal.write_text("\n".join(lines) + "\n")
+        listed = cas_dedupe.share_journal([root / "cas"], journal)
+        assert listed["deduplicated"] == 2 and listed["changed"] == 1, listed
+        assert listed["missing_blob"] == 1 and not listed["errors"], listed
+        assert not journal.exists() and not Path(str(journal) + ".sharing").exists()
+        journal.write_text(lines[0] + "\n")
+        repeat = cas_dedupe.share_journal([root / "cas"], journal)
+        assert repeat["already_shared"] == 1 and repeat["deduplicated"] == 0, repeat
+    print("CAS dedupe: shared, mismatch, journal and repeat checks passed")
 
 
 if __name__ == "__main__":
