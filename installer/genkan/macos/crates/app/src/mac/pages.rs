@@ -202,7 +202,7 @@ impl<'a> Page<'a> {
 /// with them, and they move when what is left to download is measured.
 pub fn key(m: &Model) -> String {
     format!(
-        "{:?}|{:?}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}|{:?}|{}|{:?}|{:?}|{:?}|{:?}",
+        "{:?}|{:?}|{}|{}|{}|{}|{}|{:?}|{}|{}|{}|{:?}|{:?}|{}|{:?}|{}|{:?}|{:?}|{:?}|{:?}|{}",
         m.screen,
         m.notice,
         m.download_error.is_some(),
@@ -224,6 +224,9 @@ pub fn key(m: &Model) -> String {
         // A retry that fails again, or is refused, changes what the page says.
         m.failed().map(|(sequence, _)| sequence),
         m.retry_refused,
+        // The installing page's rows: the stages the plan runs, known once
+        // the record of an installation reconnected to arrives.
+        m.stages().len(),
     )
 }
 
@@ -792,8 +795,7 @@ fn recovery(m: &Model, p: &mut Page) {
     p.lede("macOS's part is done and checked. Sekka isn't installed until you finish these steps; it takes about five minutes.");
     let owner = m.owner_name();
     let steps = m
-        .plan
-        .as_ref()
+        .recorded_plan()
         .map(|plan| plan.human_steps.clone())
         .unwrap_or_else(|| {
             vec![

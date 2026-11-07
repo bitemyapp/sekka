@@ -1121,6 +1121,47 @@ fn an_installation_is_found_again_once_its_helper_may_run() {
 }
 
 #[test]
+fn a_running_installation_reopened_to_lists_the_stages_its_plan_runs() {
+    let env = Simulation::new(Scenario::Normal, 0.0);
+    let running = Ok(vec![Summary {
+        installation: SIM_ID,
+        release: "sekka-j514s-4882dc33".parse().unwrap(),
+        state: InstallState::AssetsVerified,
+        opened: sekka_mac_contract::Timestamp::now(),
+        running: true,
+    }]);
+    let (mut m, effects) = hear(&env, running, env.inspect());
+    assert!(matches!(effects.as_slice(), [Effect::Poll { after: 0, .. }]), "{effects:?}");
+    assert_eq!(m.screen, Screen::Installing);
+    assert!(m.plan.is_none(), "this run reviewed no plan");
+    // Its record opens with a plan for free space, which shrinks nothing.
+    let mut plan = sekka_mac_contract::samples::plan();
+    plan.actions.retain(|a| !matches!(a, sekka_mac_contract::Action::ShrinkContainer { .. }));
+    let opened = Record {
+        schema: sekka_mac_contract::RecordSchema,
+        installation: SIM_ID,
+        sequence: 1,
+        previous: None,
+        at: sekka_mac_contract::Timestamp::now(),
+        event: sekka_mac_contract::Event::Opened {
+            plan_digest: plan.digest().unwrap(),
+            plan: Box::new(plan),
+            app: "0.1.0".parse().unwrap(),
+            helper: "0.1.0".parse().unwrap(),
+        },
+    };
+    m.update(Msg::Events(Ok(Events {
+        records: vec![opened],
+        state: InstallState::Planned,
+        running: true,
+        progress: None,
+    })));
+    let stages: Vec<Stage> = m.stages().into_iter().map(|(s, _)| s).collect();
+    assert!(!stages.contains(&Stage::Shrink), "{stages:?}");
+    assert_eq!(stages[1..], sekka_mac_contract::macos_stages(false)[..]);
+}
+
+#[test]
 fn downloading_and_installing_can_be_caught_part_way() {
     // As the screenshots catch them: what the last step starts is left
     // going, so the page is the one it names.

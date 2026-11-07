@@ -1224,11 +1224,21 @@ impl Model {
         })
     }
 
-    /// The stages to show while installing, with their state.
+    /// The plan the installation follows: the one reviewed here, or, for
+    /// one reconnected to, the plan its record opened with.
+    pub fn recorded_plan(&self) -> Option<&Plan> {
+        self.plan.as_ref().or_else(|| match &self.records.first()?.event {
+            sekka_mac_contract::Event::Opened { plan, .. } => Some(&**plan),
+            _ => None,
+        })
+    }
+
+    /// The stages to show while installing, with their state: those its
+    /// plan runs, so Shrink only when it shrinks macOS. Until the record of
+    /// one reconnected to arrives, Shrink is listed.
     pub fn stages(&self) -> Vec<(Stage, CheckState)> {
         let shrinks = self
-            .plan
-            .as_ref()
+            .recorded_plan()
             .map(|p| p.actions.iter().any(|a| matches!(a, sekka_mac_contract::Action::ShrinkContainer { .. })))
             .unwrap_or(true);
         let mut stages = vec![Stage::Import];
