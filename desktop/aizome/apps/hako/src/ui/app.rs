@@ -184,6 +184,8 @@ pub enum Msg {
     Forward(WindowKey),
     Up(WindowKey),
     OpenSelection(WindowKey),
+    /// MIME detection completed on a worker, including ambiguous names.
+    OpenDetected(PathBuf, String),
     Loaded(WindowKey, u64, Arc<Result<Vec<Entry>, String>>),
     DirChanged(PathBuf),
     Reload(PathBuf, u64),
@@ -718,10 +720,9 @@ impl Hako {
             self.previews.clear();
         }
         let (path, size, cache) = (e.path.clone(), e.size, self.opts.thumbnails.clone());
-        let mime = e.mime.to_string();
         cx.spawn(move || {
             let db = MimeDb::get();
-            let mime = if mime == crate::model::mime::UNKNOWN { db.for_file(&path, true).to_string() } else { mime };
+            let mime = db.for_file(&path, true).to_string();
             let mut p = Preview { mime: Some(mime.clone()), full, ..Default::default() };
             if thumbs::can_thumbnail(&mime) {
                 p.image = if full && size < 12 << 20 {
@@ -930,22 +931,25 @@ impl Hako {
             }
             return;
         }
-        self.launch_default(cx, &e.path, &e.mime);
+        self.launch_default(cx, &e.path);
     }
 
-    pub(crate) fn launch_default(&mut self, cx: &mut Cx<Msg>, path: &Path, mime: &str) {
+    pub(crate) fn launch_default(&mut self, cx: &mut Cx<Msg>, path: &Path) {
         if !self.opts.services {
             // A sandbox (tests) starts nothing: it notes what it would open.
             self.opened.push(path.to_path_buf());
             return;
         }
-        let mime = if mime == crate::model::mime::UNKNOWN {
-            MimeDb::get().for_file(path, true).to_string()
-        } else {
-            mime.to_owned()
-        };
+        let path = path.to_owned();
+        cx.spawn(move || {
+            let mime = MimeDb::get().for_file(&path, true).to_string();
+            Msg::OpenDetected(path, mime)
+        });
+    }
+
+    pub(crate) fn launch_detected(&self, cx: &mut Cx<Msg>, path: &Path, mime: &str) {
         if let Some(apps) = &self.apps
-            && let Some(id) = apps.default_for(&mime)
+            && let Some(id) = apps.default_for(mime)
             && let Some(app) = apps.get(&id)
         {
             launch_app(app.clone(), path);
@@ -964,7 +968,7 @@ impl Hako {
             }
             many => {
                 for e in many.iter().filter(|e| !e.is_folder()).cloned().collect::<Vec<_>>() {
-                    self.launch_default(cx, &e.path, &e.mime);
+                    self.launch_default(cx, &e.path);
                 }
             }
         }

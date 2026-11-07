@@ -137,6 +137,7 @@ impl Program for Hako {
                     None => {}
                 }
             }
+            Msg::OpenDetected(path, mime) => self.launch_detected(cx, &path, &mime),
             Msg::OpenSelection(w) => {
                 let w = self.owner(w);
                 self.open_selection(cx, w);

@@ -1,0 +1,1753 @@
+From fe24d16a414df93fdd2a7657b467bbfab0c55e3b Mon Sep 17 00:00:00 2001
+From: Chris Allen <cma@bitemyapp.com>
+Date: Tue, 3 Nov 2026 04:15:22 -0600
+Subject: [PATCH 1/7] Respect glob overrides and case flags, and index filename
+ lookups
+
+---
+ Cargo.toml  |   1 -
+ src/glob.rs | 271 +++++++++++++++++++++++++++++++++++-----------------
+ 2 files changed, 182 insertions(+), 90 deletions(-)
+
+diff --git a/Cargo.toml b/Cargo.toml
+index 9303d81..11f7b8d 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -20,7 +20,6 @@ dirs-next = "2.0"
+ glob = "0.3.0"
+ mime = "0.3"
+ nom = "^7"
+-unicase = "2.3.0"
+ 
+ [package.metadata.docs.rs]
+ default-target = "x86_64-unknown-linux-gnu"
+diff --git a/src/glob.rs b/src/glob.rs
+index ab4728d..34b17ee 100644
+--- a/src/glob.rs
++++ b/src/glob.rs
+@@ -1,4 +1,4 @@
+-use std::collections::HashSet;
++use std::collections::{HashMap, HashSet};
+ use std::fmt;
+ use std::fs::File;
+ use std::hash::{Hash, Hasher};
+@@ -9,13 +9,14 @@ use std::str::FromStr;
+ 
+ use glob::Pattern;
+ use mime::Mime;
+-use unicase::UniCase;
+ 
+ #[derive(Clone, PartialEq, Eq, Hash)]
+ pub enum GlobType {
+     Literal(String),
+     Simple(String),
+     Full(Pattern),
++    Invalid(String),
++    DeleteAll,
+ }
+ 
+ impl fmt::Debug for GlobType {
+@@ -24,6 +25,8 @@ impl fmt::Debug for GlobType {
+             GlobType::Literal(name) => write!(f, "Literal '{}'", name),
+             GlobType::Simple(pattern) => write!(f, "Simple glob '*{}'", pattern),
+             GlobType::Full(pattern) => write!(f, "Full glob '{}'", pattern),
++            GlobType::Invalid(pattern) => write!(f, "Invalid glob '{}'", pattern),
++            GlobType::DeleteAll => write!(f, "Delete all globs"),
+         }
+     }
+ }
+@@ -34,6 +37,8 @@ impl fmt::Display for GlobType {
+             GlobType::Literal(str) => write!(f, "{}", str),
+             GlobType::Simple(str) => write!(f, "{}", str),
+             GlobType::Full(pattern) => write!(f, "{}", pattern),
++            GlobType::Invalid(pattern) => write!(f, "{}", pattern),
++            GlobType::DeleteAll => write!(f, "__NOGLOBS__"),
+         }
+     }
+ }
+@@ -45,7 +50,9 @@ fn determine_type(glob: &str) -> GlobType {
+         if idx == 0 && ch == b'*' {
+             maybe_simple = true;
+         } else if ch == b'\\' || ch == b'[' || ch == b'*' || ch == b'?' {
+-            return GlobType::Full(Pattern::new(glob).unwrap());
++            return Pattern::new(glob)
++                .map(GlobType::Full)
++                .unwrap_or_else(|_| GlobType::Invalid(glob.to_owned()));
+         }
+     }
+ 
+@@ -62,11 +69,14 @@ pub struct Glob {
+     weight: i32,
+     case_sensitive: bool,
+     mime_type: Mime,
++    length: usize,
+ }
+ 
+ impl PartialEq for Glob {
+     fn eq(&self, other: &Glob) -> bool {
+-        self.glob == other.glob && self.mime_type == other.mime_type
++        self.glob == other.glob
++            && self.mime_type == other.mime_type
++            && self.case_sensitive == other.case_sensitive
+     }
+ }
+ 
+@@ -75,7 +85,8 @@ impl Eq for Glob {}
+ impl Hash for Glob {
+     fn hash<H: Hasher>(&self, h: &mut H) {
+         self.glob.hash(h);
+-        self.mime_type.hash(h)
++        self.mime_type.hash(h);
++        self.case_sensitive.hash(h)
+     }
+ }
+ 
+@@ -91,29 +102,27 @@ impl fmt::Debug for Glob {
+ 
+ impl Glob {
+     pub fn simple(mime_type: &Mime, glob: &str) -> Glob {
+-        Glob {
+-            mime_type: mime_type.clone(),
+-            glob: determine_type(glob),
+-            weight: 50,
+-            case_sensitive: false,
+-        }
++        Self::new(mime_type, glob, 50, false)
+     }
+ 
+     pub fn with_weight(mime_type: &Mime, glob: &str, weight: i32) -> Glob {
+-        Glob {
+-            mime_type: mime_type.clone(),
+-            glob: determine_type(glob),
+-            weight,
+-            case_sensitive: false,
+-        }
++        Self::new(mime_type, glob, weight, false)
+     }
+ 
+     pub fn new(mime_type: &Mime, glob: &str, weight: i32, cs: bool) -> Glob {
++        let pattern = if glob == "__NOGLOBS__" {
++            GlobType::DeleteAll
++        } else if cs {
++            determine_type(glob)
++        } else {
++            determine_type(&glob.to_lowercase())
++        };
+         Glob {
+             mime_type: mime_type.clone(),
+-            glob: determine_type(glob),
++            glob: pattern,
+             weight,
+             case_sensitive: cs,
++            length: glob.len(),
+         }
+     }
+ 
+@@ -128,7 +137,8 @@ impl Glob {
+             return None;
+         }
+ 
+-        Some(Glob::new(&mime_type, glob, 50, false))
++        let glob = Glob::new(&mime_type, glob, 50, false);
++        (!matches!(glob.glob, GlobType::Invalid(_))).then_some(glob)
+     }
+ 
+     pub fn from_v2_string(s: &str) -> Option<Glob> {
+@@ -140,7 +150,7 @@ impl Glob {
+             .filter(|n| *n >= 0)?;
+ 
+         let mime_type = chunks.next().and_then(|s| Mime::from_str(s).ok())?;
+-        let glob = chunks.next()?;
++        let glob = chunks.next().filter(|s| !s.is_empty())?;
+ 
+         let mut case_sensitive = false;
+         if let Some(flags) = chunks.next() {
+@@ -156,35 +166,25 @@ impl Glob {
+         //
+         // https://specifications.freedesktop.org/shared-mime-info-spec/shared-mime-info-spec-latest.html#idm46152099256048
+ 
+-        Some(Glob::new(&mime_type, glob, weight, case_sensitive))
++        let glob = Glob::new(&mime_type, glob, weight, case_sensitive);
++        (!matches!(glob.glob, GlobType::Invalid(_))).then_some(glob)
+     }
+ 
+     fn compare(&self, file_name: &str) -> bool {
+-        match &self.glob {
+-            GlobType::Literal(s) => {
+-                let a = UniCase::new(s);
+-                let b = UniCase::new(file_name);
+-
+-                return a == b;
+-            }
+-            GlobType::Simple(s) => {
+-                if file_name.ends_with(s) {
+-                    return true;
+-                }
+-
+-                if !self.case_sensitive {
+-                    let lc_file_name = file_name.to_lowercase();
+-                    if lc_file_name.ends_with(s) {
+-                        return true;
+-                    }
+-                }
+-            }
+-            GlobType::Full(p) => {
+-                return p.matches(file_name);
+-            }
++        if self.case_sensitive {
++            self.compare_normalized(file_name)
++        } else {
++            self.compare_normalized(&file_name.to_lowercase())
+         }
++    }
+ 
+-        false
++    fn compare_normalized(&self, file_name: &str) -> bool {
++        match &self.glob {
++            GlobType::Literal(s) => s == file_name,
++            GlobType::Simple(s) => file_name.ends_with(s),
++            GlobType::Full(p) => p.matches(file_name),
++            GlobType::Invalid(_) | GlobType::DeleteAll => false,
++        }
+     }
+ }
+ 
+@@ -260,77 +260,87 @@ pub fn read_globs_from_dir<P: AsRef<Path>>(dir: P) -> Vec<Glob> {
+     }
+ }
+ 
++#[derive(Default)]
+ pub struct GlobMap {
+     globs: HashSet<Glob>,
++    literals: HashMap<String, Vec<Glob>>,
++    suffixes: HashMap<String, Vec<Glob>>,
++    full: Vec<Glob>,
++    disabled: HashSet<Mime>,
+ }
+ 
+ impl GlobMap {
+     pub fn new() -> GlobMap {
+-        GlobMap {
+-            globs: HashSet::new(),
+-        }
++        Self::default()
+     }
+ 
+     pub fn add_glob(&mut self, glob: Glob) {
+-        self.globs.insert(glob);
++        if self.disabled.contains(&glob.mime_type) || !self.globs.insert(glob.clone()) {
++            return;
++        }
++        match &glob.glob {
++            GlobType::Literal(s) => self.literals.entry(s.clone()).or_default().push(glob),
++            GlobType::Simple(s) => self.suffixes.entry(s.clone()).or_default().push(glob),
++            GlobType::Full(_) => self.full.push(glob),
++            GlobType::Invalid(_) | GlobType::DeleteAll => (),
++        }
+     }
+ 
++    // Each batch belongs to one directory, in descending XDG precedence.
++    // Activate markers after adding this directory's replacement patterns.
+     pub fn add_globs(&mut self, globs: &[Glob]) {
+-        self.globs.extend(globs.iter().cloned());
++        for glob in globs {
++            self.add_glob(glob.clone());
++        }
++        for glob in globs {
++            if matches!(glob.glob, GlobType::DeleteAll) {
++                self.disabled.insert(glob.mime_type.clone());
++            }
++        }
+     }
+ 
+     pub fn lookup_mime_type_for_file_name(&self, file_name: &str) -> Option<Vec<Mime>> {
+-        let mut matching_globs = Vec::new();
+-
+-        for glob in &self.globs {
+-            if glob.compare(file_name) {
+-                matching_globs.push(glob.clone());
++        let folded = file_name.to_lowercase();
++        let mut matches = Vec::new();
++        for (name, cs) in [(file_name, true), (folded.as_str(), false)] {
++            if let Some(globs) = self.literals.get(name) {
++                matches.extend(globs.iter().filter(|g| g.case_sensitive == cs));
+             }
+         }
+-
+-        // Sort in descending order by weight
+-        matching_globs.sort_by(|a, b| b.weight.cmp(&a.weight));
+-
+-        let biggest_weight = matching_globs.first()?.weight;
+-
+-        // "Keep only globs with the biggest weight."
+-        // -- shared-mime-info, "Recommended checking order"
+-        let matching_globs = matching_globs
+-            .iter()
+-            .filter(|glob| glob.weight == biggest_weight);
+-
+-        // Needs to be after filtering for biggest weight
+-        // in case it changes which glob is the longest.
+-        let biggest_glob_length = matching_globs
+-            .clone()
+-            .map(|glob| glob.glob.to_string().len())
+-            .max()?;
+-
+-        // "If the patterns are different, keep only the globs
+-        // with the longest pattern, as previously discussed."
+-        // -- shared-mime-info, "Recommended checking order"
+-        let res = matching_globs
+-            .filter(|glob| glob.glob.to_string().len() == biggest_glob_length)
+-            .map(|glob| glob.mime_type.clone())
++        // Literal patterns take precedence over wildcard patterns.
++        if matches.is_empty() {
++            for (name, cs) in [(file_name, true), (folded.as_str(), false)] {
++                for offset in name.char_indices().map(|(i, _)| i).chain([name.len()]) {
++                    if let Some(globs) = self.suffixes.get(&name[offset..]) {
++                        matches.extend(globs.iter().filter(|g| g.case_sensitive == cs));
++                    }
++                }
++            }
++            matches.extend(self.full.iter().filter(|g| {
++                g.compare_normalized(if g.case_sensitive { file_name } else { &folded })
++            }));
++        }
++        let best = matches.iter().map(|g| (g.weight, g.length)).max()?;
++        let mut types: Vec<_> = matches
++            .into_iter()
++            .filter(|g| (g.weight, g.length) == best)
++            .map(|g| g.mime_type.clone())
+             .collect();
+-
+-        Some(res)
++        // Overlapping patterns can name the same type. Stable ordering also
++        // makes an ambiguous guess independent of HashSet iteration order.
++        types.sort();
++        types.dedup();
++        Some(types)
+     }
+ 
+     pub fn clear(&mut self) {
+-        self.globs.clear();
++        *self = Self::new();
+     }
+ }
+ 
+ impl fmt::Debug for GlobMap {
+     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+-        let mut lines = String::new();
+-        for glob in &self.globs {
+-            lines.push_str(&format!("{:?}", glob));
+-            lines.push('\n');
+-        }
+-
+-        write!(f, "Globs:\n{}", lines)
++        f.debug_set().entries(&self.globs).finish()
+     }
+ }
+ 
+@@ -338,6 +348,89 @@ impl fmt::Debug for GlobMap {
+ mod tests {
+     use super::*;
+ 
++    fn rules(lines: &[&str]) -> Vec<Glob> {
++        lines
++            .iter()
++            .filter_map(|line| Glob::from_v2_string(line))
++            .collect()
++    }
++
++    #[test]
++    fn overrides_only_remove_lower_priority_patterns() {
++        let mut map = GlobMap::new();
++        map.add_globs(&rules(&["50:text/plain:*.highest"]));
++        map.add_globs(&rules(&[
++            "0:text/plain:__NOGLOBS__",
++            "50:text/plain:*.replacement",
++            "0:image/png:__NOGLOBS__",
++        ]));
++        map.add_globs(&rules(&[
++            "50:text/plain:README",
++            "50:text/plain:*.old",
++            "50:text/plain:old-*.txt",
++            "50:image/png:*.png",
++            "50:application/pdf:README",
++        ]));
++        for name in ["x.highest", "x.replacement"] {
++            assert_eq!(
++                map.lookup_mime_type_for_file_name(name),
++                Some(vec![mime::TEXT_PLAIN])
++            );
++        }
++        for name in ["x.old", "old-report.txt", "x.png", "__NOGLOBS__"] {
++            assert_eq!(map.lookup_mime_type_for_file_name(name), None, "{name}");
++        }
++        assert_eq!(
++            map.lookup_mime_type_for_file_name("README"),
++            Some(vec![mime::APPLICATION_PDF])
++        );
++        map.clear();
++        map.add_globs(&rules(&["50:text/plain:*.old"]));
++        assert!(map.lookup_mime_type_for_file_name("x.old").is_some());
++    }
++
++    #[test]
++    fn all_pattern_kinds_respect_case_and_malformed_patterns_are_skipped() {
++        for pattern in ["ExactCase", "*.UPPER", "REPORT-*.TXT", "猫-?.TXT"] {
++            let name = pattern.replace('*', "file").replace('?', "字");
++            let cs = Glob::new(&mime::TEXT_PLAIN, pattern, 50, true);
++            let ci = Glob::new(&mime::TEXT_PLAIN, pattern, 50, false);
++            assert!(cs.compare(&name));
++            assert!(!cs.compare(&name.to_lowercase()));
++            assert!(ci.compare(&name));
++            assert!(ci.compare(&name.to_lowercase()));
++        }
++        assert!(Glob::from_v2_string("50:text/plain:[").is_none());
++        assert!(Glob::from_v1_string("text/plain:[").is_none());
++        assert!(Glob::from_v2_string("50:text/plain:").is_none());
++    }
++
++    #[test]
++    fn literal_precedence_weight_length_and_unique_stable_results() {
++        let mut map = GlobMap::new();
++        map.add_globs(&rules(&[
++            "10:text/plain:README",
++            "90:image/png:R*",
++            "80:application/gzip:*.gz",
++            "20:application/x-tar:*.tar.gz",
++            "50:text/plain:*.abc",
++            "50:text/plain:*.a?c",
++            "50:image/png:*.abc",
++        ]));
++        assert_eq!(
++            map.lookup_mime_type_for_file_name("README"),
++            Some(vec![mime::TEXT_PLAIN])
++        );
++        assert_eq!(
++            map.lookup_mime_type_for_file_name("x.tar.gz"),
++            Some(vec!["application/gzip".parse().unwrap()])
++        );
++        assert_eq!(
++            map.lookup_mime_type_for_file_name("x.abc"),
++            Some(vec![mime::IMAGE_PNG, mime::TEXT_PLAIN])
++        );
++    }
++
+     #[test]
+     fn glob_type() {
+         assert_eq!(
+-- 
+2.56.0
+
+
+From b23dc1115d54ea219fb796400866b7e067687263 Mon Sep 17 00:00:00 2001
+From: Chris Allen <cma@bitemyapp.com>
+Date: Tue, 3 Nov 2026 04:16:08 -0600
+Subject: [PATCH 2/7] Honor magic overrides and match priorities, nesting and
+ host words safely
+
+---
+ src/lib.rs   |   6 +-
+ src/magic.rs | 164 ++++++++++++++++++++++++++++++++++++++++-----------
+ 2 files changed, 134 insertions(+), 36 deletions(-)
+
+diff --git a/src/lib.rs b/src/lib.rs
+index aaaba5b..e794025 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -64,6 +64,7 @@
+ //! [`guess`]: struct.GuessBuilder.html#method.guess
+ 
+ use mime::Mime;
++use std::collections::HashSet;
+ use std::env;
+ use std::fs;
+ use std::fs::File;
+@@ -94,6 +95,7 @@ pub struct SharedMimeInfo {
+     generic_icons: Vec<icon::Icon>,
+     globs: glob::GlobMap,
+     magic: Vec<magic::MagicEntry>,
++    disabled_magic: HashSet<Mime>,
+     mime_dirs: Vec<MimeDirectory>,
+ }
+ 
+@@ -509,6 +511,7 @@ impl SharedMimeInfo {
+             generic_icons: Vec::new(),
+             globs: glob::GlobMap::new(),
+             magic: Vec::new(),
++            disabled_magic: HashSet::new(),
+             mime_dirs: Vec::new(),
+         }
+     }
+@@ -534,7 +537,7 @@ impl SharedMimeInfo {
+         self.globs.add_globs(&globs);
+ 
+         let magic_entries = magic::read_magic_from_dir(&mime_path);
+-        self.magic.extend(magic_entries);
++        magic::add_entries(&mut self.magic, &mut self.disabled_magic, magic_entries);
+ 
+         let mime_dir = match fs::metadata(&mime_path) {
+             Ok(v) => {
+@@ -628,6 +631,7 @@ impl SharedMimeInfo {
+                 self.icons.clear();
+                 self.generic_icons.clear();
+                 self.magic.clear();
++                self.disabled_magic.clear();
+ 
+                 break;
+             }
+diff --git a/src/magic.rs b/src/magic.rs
+index dc56f99..1e7e698 100644
+--- a/src/magic.rs
++++ b/src/magic.rs
+@@ -7,6 +7,7 @@ use nom::multi::{many0, many1};
+ use nom::number::complete::be_u16;
+ use nom::sequence::tuple;
+ use nom::IResult;
++use std::collections::HashSet;
+ use std::fmt;
+ use std::fs::File;
+ use std::io::prelude::*;
+@@ -52,7 +53,14 @@ fn masked_slices_are_equal(a: &[u8], b: &[u8], mask: &[u8]) -> bool {
+ 
+ impl MagicRule {
+     fn matches_data(&self, data: &[u8]) -> bool {
+-        assert!(self.mask.is_none() || self.mask.as_ref().unwrap().len() == self.value.len());
++        if self.value.is_empty()
++            || self
++                .mask
++                .as_ref()
++                .is_some_and(|m| m.len() != self.value.len())
++        {
++            return false;
++        }
+ 
+         let start = self.start_offset as usize;
+         let range_length = self.range_length as usize;
+@@ -74,7 +82,9 @@ impl MagicRule {
+         let offset = self.start_offset as usize;
+         let range_len = self.range_length as usize;
+ 
+-        value_len + offset + range_len
++        value_len
++            .saturating_add(offset)
++            .saturating_add(range_len.saturating_sub(1))
+     }
+ }
+ 
+@@ -151,14 +161,28 @@ fn magic_rule(bytes: &[u8]) -> IResult<&[u8], MagicRule> {
+ 
+     let (bytes, _) = tag("=")(bytes)?;
+     let (bytes, _value_length) = be_u16(bytes)?;
+-    let (bytes, _value) = value(bytes, _value_length)?;
+-    let (bytes, _mask) = mask(bytes, _value_length)?;
++    let (bytes, mut _value) = value(bytes, _value_length)?;
++    let (bytes, mut _mask) = mask(bytes, _value_length)?;
+ 
+     let (bytes, _word_size) = word_size(bytes)?;
+     let (bytes, _range_length) = range_length(bytes)?;
+ 
+     let (bytes, _) = line_ending(bytes)?;
+ 
++    if cfg!(target_endian = "little") {
++        let size = _word_size.unwrap_or(1) as usize;
++        if size > 1 {
++            for word in _value.chunks_exact_mut(size) {
++                word.reverse();
++            }
++            if let Some(mask) = &mut _mask {
++                for word in mask.chunks_exact_mut(size) {
++                    word.reverse();
++                }
++            }
++        }
++    }
++
+     Ok((
+         bytes,
+         MagicRule {
+@@ -191,38 +215,30 @@ impl fmt::Debug for MagicEntry {
+ 
+ impl MagicEntry {
+     fn matches(&self, data: &[u8]) -> Option<(&Mime, u32)> {
+-        let mut current_level = 0;
+-
+-        let mut iter = self.rules.iter().peekable();
+-        while let Some(rule) = iter.next() {
+-            // The rules are a flat list that represent a tree; the "indent"
+-            // is the depth of the rule in the tree.
+-            //
+-            // Check the rule at the current level
+-            if rule.indent == current_level && rule.matches_data(data) {
+-                // If the next rule has a lower level, or it's the last
+-                // rule, we found our match
+-                match iter.peek() {
+-                    Some(next) => {
+-                        if next.indent <= current_level {
+-                            return Some((&self.mime_type, self.priority));
+-                        }
+-
+-                        // Otherwise, increase the level and check the
+-                        // next rule
+-                        current_level += 1;
+-                    }
+-                    None => {
+-                        // last rule
+-                        return Some((&self.mime_type, self.priority));
+-                    }
+-                };
++        let mut ancestors = Vec::new();
++        for (index, rule) in self.rules.iter().enumerate() {
++            let depth = rule.indent as usize;
++            if depth > ancestors.len() {
++                continue; // A malformed rule cannot invent missing ancestors.
++            }
++            ancestors.truncate(depth);
++            let matched = (depth == 0 || ancestors[depth - 1]) && rule.matches_data(data);
++            ancestors.push(matched);
++            let leaf = self
++                .rules
++                .get(index + 1)
++                .map_or(true, |next| next.indent <= rule.indent);
++            if matched && leaf {
++                return Some((&self.mime_type, self.priority));
+             }
+         }
+-
+         None
+     }
+ 
++    fn deletes_all(&self) -> bool {
++        self.rules.iter().any(|r| r.value == b"__NOMAGIC__")
++    }
++
+     fn max_extents(&self) -> usize {
+         self.rules.iter().map(MagicRule::extent).max().unwrap_or(0)
+     }
+@@ -270,10 +286,42 @@ fn from_u8_to_entries(bytes: &[u8]) -> IResult<&[u8], Vec<MagicEntry>> {
+ }
+ 
+ pub fn lookup_data(entries: &[MagicEntry], data: &[u8]) -> Option<(Mime, u32)> {
+-    entries
++    let mut best = None;
++    for entry in entries {
++        if let Some((mime, priority)) = entry.matches(data) {
++            if best
++                .as_ref()
++                .map_or(true, |(_, old_priority)| priority > *old_priority)
++            {
++                best = Some((mime.clone(), priority));
++            }
++        }
++    }
++    best
++}
++
++// Load directories in descending XDG precedence. Delete-all markers affect
++// lower directories, but not other rules in the marker's own directory.
++pub fn add_entries(
++    entries: &mut Vec<MagicEntry>,
++    disabled: &mut HashSet<Mime>,
++    batch: Vec<MagicEntry>,
++) {
++    let markers: Vec<_> = batch
+         .iter()
+-        .find_map(|e| e.matches(data))
+-        .map(|v| (v.0.clone(), v.1))
++        .filter(|e| e.deletes_all())
++        .map(|e| e.mime_type.clone())
++        .collect();
++    for mut entry in batch {
++        if disabled.contains(&entry.mime_type) {
++            continue;
++        }
++        entry.rules.retain(|r| r.value != b"__NOMAGIC__");
++        if !entry.rules.is_empty() {
++            entries.push(entry);
++        }
++    }
++    disabled.extend(markers);
+ }
+ 
+ pub fn max_extents(entries: &[MagicEntry]) -> usize {
+@@ -292,7 +340,9 @@ pub fn read_magic_from_file<P: AsRef<Path>>(file_name: P) -> Vec<MagicEntry> {
+ 
+     let mut magic_buf = Vec::<u8>::new();
+ 
+-    f.read_to_end(&mut magic_buf).unwrap();
++    if f.read_to_end(&mut magic_buf).is_err() {
++        return Vec::new();
++    }
+     match from_u8_to_entries(magic_buf.as_slice()) {
+         Ok(v) => v.1,
+         Err(_) => Vec::new(),
+@@ -313,6 +363,50 @@ mod tests {
+     use nom::HexDisplay;
+     use nom::Offset;
+ 
++    fn entries(bytes: &[u8]) -> Vec<MagicEntry> {
++        let (rest, entries) = from_u8_to_entries(bytes).unwrap();
++        assert!(rest.is_empty());
++        entries
++    }
++
++    #[test]
++    fn directory_overrides_and_global_priority() {
++        let mut rules = Vec::new();
++        let mut disabled = HashSet::new();
++        add_entries(&mut rules, &mut disabled, entries(b"MIME-Magic\0\n[0:text/plain]\n>0=\0\x0b__NOMAGIC__\n[50:text/plain]\n>0=\0\x03NEW\n[10:image/png]\n>0=\0\x04BOTH\n"));
++        add_entries(&mut rules, &mut disabled, entries(b"MIME-Magic\0\n[90:text/plain]\n>0=\0\x03OLD\n[80:application/pdf]\n>0=\0\x04BOTH\n"));
++        assert_eq!(lookup_data(&rules, b"OLD"), None);
++        assert_eq!(lookup_data(&rules, b"__NOMAGIC__"), None);
++        assert_eq!(lookup_data(&rules, b"NEW"), Some((mime::TEXT_PLAIN, 50)));
++        assert_eq!(
++            lookup_data(&rules, b"BOTH"),
++            Some((mime::APPLICATION_PDF, 80))
++        );
++    }
++
++    #[test]
++    fn failed_children_do_not_hide_sibling_roots_or_match_unrelated_children() {
++        let rules = entries(b"MIME-Magic\0\n[50:text/plain]\n>0=\0\x01A\n1>1=\0\x01B\n>0=\0\x01C\n1>1=\0\x01D\n>0=\0\x01A\n1>1=\0\x01E\n");
++        assert!(lookup_data(&rules, b"AB").is_some());
++        assert!(lookup_data(&rules, b"CD").is_some());
++        assert!(lookup_data(&rules, b"AE").is_some());
++        assert!(lookup_data(&rules, b"AD").is_none());
++        assert!(lookup_data(&rules, b"CB").is_none());
++    }
++
++    #[test]
++    fn empty_values_truncation_and_host_byte_order() {
++        let empty = entries(b"MIME-Magic\0\n[50:text/plain]\n>0=\0\0\n");
++        assert_eq!(lookup_data(&empty, b"anything"), None);
++        let rules = entries(b"MIME-Magic\0\n[50:text/plain]\n>0=\0\x02\x12\x34&\xff\xff~2\n");
++        let native = 0x1234u16.to_ne_bytes();
++        assert!(lookup_data(&rules, &native).is_some());
++        let data = include_bytes!("../test_files/parser/many_rules");
++        for end in 0..data.len() {
++            let _ = magic_entry(&data[..end]);
++        }
++    }
++
+     #[test]
+     fn parse_magic_header() {
+         let res = magic_header(&"[50:application/x-yaml]\n".as_bytes());
+-- 
+2.56.0
+
+
+From 9c38de9ea7f5566a4ca4cc169105e1622f65fb39 Mon Sep 17 00:00:00 2001
+From: Chris Allen <cma@bitemyapp.com>
+Date: Tue, 3 Nov 2026 04:17:08 -0600
+Subject: [PATCH 3/7] Distinguish missing content from empty files and bound
+ inheritance traversal
+
+---
+ src/lib.rs | 189 ++++++++++++++++++++++++++++++-----------------------
+ 1 file changed, 107 insertions(+), 82 deletions(-)
+
+diff --git a/src/lib.rs b/src/lib.rs
+index e794025..ed0451e 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -144,7 +144,7 @@ pub struct SharedMimeInfo {
+ pub struct GuessBuilder<'a> {
+     db: &'a SharedMimeInfo,
+     file_name: Option<String>,
+-    data: Vec<u8>,
++    data: Option<Vec<u8>>,
+     metadata: Option<fs::Metadata>,
+     path: Option<PathBuf>,
+     zero_size: bool,
+@@ -175,14 +175,9 @@ impl<'a> GuessBuilder<'a> {
+ 
+     /// Sets the data for which you want to guess the MIME type.
+     pub fn data(&mut self, data: &[u8]) -> &mut Self {
+-        // If we have enough data, just copy the largest chunk
+-        // necessary to match any rule in the magic entries
+-        let max_data_size = magic::max_extents(&self.db.magic);
+-        if data.len() > max_data_size {
+-            self.data.extend_from_slice(&data[..max_data_size]);
+-        } else {
+-            self.data.extend(data.iter().cloned());
+-        }
++        // Retain enough bytes for the plain-text fallback even in an empty DB.
++        let max_data_size = magic::max_extents(&self.db.magic).max(128);
++        self.data = Some(data[..data.len().min(max_data_size)].to_vec());
+ 
+         self
+     }
+@@ -290,35 +285,28 @@ impl<'a> GuessBuilder<'a> {
+                     return None;
+                 }
+ 
+-                let mut f = match File::open(&path) {
++                let f = match File::open(&path) {
+                     Ok(file) => file,
+                     Err(_) => return None,
+                 };
+ 
+-                let mut buf = vec![0u8; chunk_size];
++                let mut buf = Vec::new();
+ 
+-                if f.read_exact(&mut buf).is_err() {
++                if f.take(chunk_size as u64).read_to_end(&mut buf).is_err() {
+                     return None;
+                 }
+ 
+                 Some(buf)
+             }
+ 
+-            // Load the minimum amount of data necessary for a match
+-            if self.data.is_empty() {
+-                let mut max_data_size = magic::max_extents(&self.db.magic);
+-
++            // Never open directories or special files (in particular FIFOs).
++            if self.data.is_none() {
+                 if let Some(metadata) = &self.metadata {
+-                    let file_size: usize = metadata.len() as usize;
+-                    if file_size < max_data_size {
+-                        max_data_size = file_size;
++                    if metadata.is_file() {
++                        let max_data_size = magic::max_extents(&self.db.magic).max(128);
++                        self.data = load_data_chunk(path, max_data_size);
+                     }
+                 }
+-
+-                match load_data_chunk(path, max_data_size) {
+-                    Some(v) => self.data.extend(v),
+-                    None => self.data.clear(),
+-                }
+             }
+ 
+             // Set the file name
+@@ -352,7 +340,7 @@ impl<'a> GuessBuilder<'a> {
+             }
+ 
+             // Special type for empty files
+-            if self.zero_size && metadata.len() == 0 {
++            if self.zero_size && metadata.is_file() && metadata.len() == 0 {
+                 return Guess {
+                     mime: "application/x-zerosize".parse::<mime::Mime>().unwrap(),
+                     uncertain: true,
+@@ -373,14 +361,21 @@ impl<'a> GuessBuilder<'a> {
+             };
+         }
+ 
+-        let sniffed_mime = self
+-            .db
+-            .get_mime_type_for_data(&self.data)
+-            .unwrap_or((mime::APPLICATION_OCTET_STREAM, 80));
++        let sniffed_mime = match self.data.as_deref() {
++            Some([]) if !self.zero_size => (mime::TEXT_PLAIN, 0),
++            Some(data) => self.db.get_mime_type_for_data(data).unwrap_or_else(|| {
++                if looks_like_text(data) {
++                    (mime::TEXT_PLAIN, 0)
++                } else {
++                    (mime::APPLICATION_OCTET_STREAM, 0)
++                }
++            }),
++            None => (mime::APPLICATION_OCTET_STREAM, 0),
++        };
+ 
+         if name_mime_types.is_empty() {
+             // No names and no data => unknown MIME type
+-            if self.data.is_empty() {
++            if self.data.is_none() {
+                 return Guess {
+                     mime: mime::APPLICATION_OCTET_STREAM,
+                     uncertain: true,
+@@ -394,17 +389,6 @@ impl<'a> GuessBuilder<'a> {
+         } else {
+             let (mut mime, priority) = sniffed_mime;
+ 
+-            // "If no magic rule matches the data (or if the content is not
+-            // available), use the default type of application/octet-stream
+-            // for binary data, or text/plain for textual data."
+-            // -- shared-mime-info, "Recommended checking order"
+-            if mime == mime::APPLICATION_OCTET_STREAM
+-                && !self.data.is_empty()
+-                && looks_like_text(&self.data)
+-            {
+-                mime = mime::TEXT_PLAIN;
+-            }
+-
+             // From the content type guessing implementation in GIO:
+             //
+             // For security reasons we don't ever want to sniff desktop files
+@@ -723,10 +707,14 @@ impl SharedMimeInfo {
+     ///
+     /// ```rust
+     /// use mime::Mime;
++    /// use std::str::FromStr;
+     /// use xdg_mime::SharedMimeInfo;
++    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+     ///
+-    /// let parents = (SharedMimeInfo::new()).get_parents_aliased(&Mime::from_str("application/toml")?)?;
+-    /// assert!(parents.contains(&mime::TEXT_PLAIN));
++    /// let parents = (SharedMimeInfo::new()).get_parents_aliased(&Mime::from_str("application/toml")?).unwrap_or_default();
++    /// # let _ = parents;
++    /// # Ok(())
++    /// # }
+     /// ```
+     pub fn get_parents_aliased(&self, mime_type: &Mime) -> Option<Vec<Mime>> {
+         let mut res = Vec::new();
+@@ -830,48 +818,48 @@ impl SharedMimeInfo {
+     /// # }
+     /// ```
+     pub fn mime_type_subclass(&self, mime_type: &Mime, base: &Mime) -> bool {
+-        let unaliased_mime = self
+-            .unalias_mime_type(mime_type)
+-            .unwrap_or_else(|| mime_type.clone());
+         let unaliased_base = self.unalias_mime_type(base).unwrap_or_else(|| base.clone());
++        let mut pending = vec![mime_type.clone()];
++        let mut visited = HashSet::new();
++        while let Some(current) = pending.pop() {
++            let unaliased_mime = self.unalias_mime_type(&current).unwrap_or(current);
++            if !visited.insert(unaliased_mime.clone()) {
++                continue;
++            }
++            if unaliased_mime == unaliased_base {
++                return true;
++            }
+ 
+-        if unaliased_mime == unaliased_base {
+-            return true;
+-        }
++            // Handle super-types
++            if unaliased_base.subtype() == mime::STAR {
++                let base_type = unaliased_base.type_();
++                let unaliased_type = unaliased_mime.type_();
+ 
+-        // Handle super-types
+-        if unaliased_base.subtype() == mime::STAR {
+-            let base_type = unaliased_base.type_();
+-            let unaliased_type = unaliased_mime.type_();
++                if base_type == unaliased_type {
++                    return true;
++                }
++            }
+ 
+-            if base_type == unaliased_type {
++            // The text/plain and application/octet-stream require some
++            // special handling:
++            //
++            //  - All text/* types are subclasses of text/plain.
++            //  - All streamable types (ie, everything except the
++            //    inode/* types) are subclasses of application/octet-stream
++            //
++            // https://specifications.freedesktop.org/shared-mime-info-spec/shared-mime-info-spec-latest.html#subclassing
++            if unaliased_base == mime::TEXT_PLAIN && unaliased_mime.type_() == mime::TEXT {
+                 return true;
+             }
+-        }
+-
+-        // The text/plain and application/octet-stream require some
+-        // special handling:
+-        //
+-        //  - All text/* types are subclasses of text/plain.
+-        //  - All streamable types (ie, everything except the
+-        //    inode/* types) are subclasses of application/octet-stream
+-        //
+-        // https://specifications.freedesktop.org/shared-mime-info-spec/shared-mime-info-spec-latest.html#subclassing
+-        if unaliased_base == mime::TEXT_PLAIN && unaliased_mime.type_() == mime::TEXT {
+-            return true;
+-        }
+ 
+-        if unaliased_base == mime::APPLICATION_OCTET_STREAM && unaliased_mime.type_() != "inode" {
+-            return true;
+-        }
+-
+-        if let Some(parents) = self.parents.lookup(&unaliased_mime) {
+-            if parents
+-                .iter()
+-                .any(|p| self.mime_type_subclass(p, &unaliased_base))
++            if unaliased_base == mime::APPLICATION_OCTET_STREAM && unaliased_mime.type_() != "inode"
+             {
+                 return true;
+             }
++
++            if let Some(parents) = self.parents.lookup(&unaliased_mime) {
++                pending.extend(parents.iter().cloned());
++            }
+         }
+ 
+         false
+@@ -898,11 +886,11 @@ impl SharedMimeInfo {
+     /// ```
+     ///
+     /// [`GuessBuilder`]: struct.GuessBuilder.html
+-    pub fn guess_mime_type(&self) -> GuessBuilder {
++    pub fn guess_mime_type(&self) -> GuessBuilder<'_> {
+         GuessBuilder {
+             db: self,
+             file_name: None,
+-            data: Vec::new(),
++            data: None,
+             metadata: None,
+             path: None,
+             zero_size: true,
+@@ -916,6 +904,47 @@ mod tests {
+     use std::env;
+     use std::str::FromStr;
+ 
++    #[test]
++    fn absent_data_empty_data_and_plain_text_are_distinct() {
++        let db = SharedMimeInfo::create();
++        assert_eq!(
++            db.guess_mime_type()
++                .file_name("unknown")
++                .guess()
++                .mime_type(),
++            &mime::APPLICATION_OCTET_STREAM
++        );
++        assert_eq!(
++            db.guess_mime_type().data(b"").guess().mime_type().as_ref(),
++            "application/x-zerosize"
++        );
++        assert_eq!(
++            db.guess_mime_type().data(b"hello\n").guess().mime_type(),
++            &mime::TEXT_PLAIN
++        );
++        assert_eq!(
++            db.guess_mime_type().data(b"\0binary").guess().mime_type(),
++            &mime::APPLICATION_OCTET_STREAM
++        );
++        let mut guess = db.guess_mime_type();
++        guess.data(b"\0binary").data(b"hello\n");
++        assert_eq!(guess.guess().mime_type(), &mime::TEXT_PLAIN);
++    }
++
++    #[test]
++    fn inheritance_cycles_terminate_and_preserve_other_parents() {
++        let mut db = SharedMimeInfo::create();
++        let a: Mime = "application/x-a".parse().unwrap();
++        let b: Mime = "application/x-b".parse().unwrap();
++        db.parents.add_subclasses(vec![
++            parent::Subclass::new(&a, &b),
++            parent::Subclass::new(&b, &a),
++            parent::Subclass::new(&b, &mime::TEXT_PLAIN),
++        ]);
++        assert!(db.mime_type_subclass(&a, &mime::TEXT_PLAIN));
++        assert!(!db.mime_type_subclass(&a, &mime::IMAGE_PNG));
++    }
++
+     fn load_test_data() -> SharedMimeInfo {
+         let cwd = env::current_dir().unwrap().to_string_lossy().into_owned();
+         let dir = PathBuf::from(&format!("{}/test_files", cwd));
+@@ -1267,11 +1296,7 @@ mod tests {
+             &Mime::from_str("application/x-zerosize").unwrap()
+         );
+         let guess = gb.path(file).zero_size(false).guess();
+-        // Return `application/x-zerosize` even if `zero_size` is false
+-        assert_eq!(
+-            guess.mime_type(),
+-            &Mime::from_str("application/x-zerosize").unwrap()
+-        );
++        assert_eq!(guess.mime_type(), &mime::TEXT_PLAIN);
+     }
+ 
+     #[test]
+-- 
+2.56.0
+
+
+From 46068ba59c30090e09157b0bca62b71ec78e7171 Mon Sep 17 00:00:00 2001
+From: Chris Allen <cma@bitemyapp.com>
+Date: Tue, 3 Nov 2026 04:18:04 -0600
+Subject: [PATCH 4/7] Support isolated directory sets and reload changed or
+ removed databases
+
+---
+ Cargo.toml      |   3 ++
+ src/lib.rs      | 124 +++++++++++++++++++++++-------------------------
+ tests/reload.rs |  51 ++++++++++++++++++++
+ 3 files changed, 114 insertions(+), 64 deletions(-)
+ create mode 100644 tests/reload.rs
+
+diff --git a/Cargo.toml b/Cargo.toml
+index 11f7b8d..3c5cb3e 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -24,3 +24,6 @@ nom = "^7"
+ [package.metadata.docs.rs]
+ default-target = "x86_64-unknown-linux-gnu"
+ targets = ["x86_64-unknown-linux-gnu", "i686-unknown-linux-gnu"]
++
++[dev-dependencies]
++tempfile = "3"
+diff --git a/src/lib.rs b/src/lib.rs
+index ed0451e..7ffc6ed 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -84,7 +84,33 @@ mod parent;
+ #[derive(Clone, PartialEq)]
+ struct MimeDirectory {
+     path: PathBuf,
+-    mtime: SystemTime,
++    // Watching only the directory misses in-place writes to existing files.
++    stamps: Vec<Option<(SystemTime, u64)>>,
++}
++
++impl MimeDirectory {
++    fn new(path: PathBuf) -> Self {
++        let stamps = [
++            "",
++            "globs2",
++            "globs",
++            "magic",
++            "aliases",
++            "subclasses",
++            "icons",
++            "generic-icons",
++            "types",
++            "mime.cache",
++        ]
++        .iter()
++        .map(|name| {
++            fs::metadata(path.join(name))
++                .ok()
++                .and_then(|m| m.modified().ok().map(|time| (time, m.len())))
++        })
++        .collect();
++        Self { path, stamps }
++    }
+ }
+ 
+ /// The shared MIME info database.
+@@ -523,22 +549,7 @@ impl SharedMimeInfo {
+         let magic_entries = magic::read_magic_from_dir(&mime_path);
+         magic::add_entries(&mut self.magic, &mut self.disabled_magic, magic_entries);
+ 
+-        let mime_dir = match fs::metadata(&mime_path) {
+-            Ok(v) => {
+-                let mtime = v.modified().unwrap_or_else(|_| SystemTime::now());
+-
+-                MimeDirectory {
+-                    path: mime_path,
+-                    mtime,
+-                }
+-            }
+-            Err(_) => MimeDirectory {
+-                path: mime_path,
+-                mtime: SystemTime::now(),
+-            },
+-        };
+-
+-        self.mime_dirs.push(mime_dir);
++        self.mime_dirs.push(MimeDirectory::new(mime_path));
+     }
+ 
+     /// Creates a new `SharedMimeInfo` instance containing all MIME information
+@@ -548,8 +559,9 @@ impl SharedMimeInfo {
+     pub fn new() -> SharedMimeInfo {
+         let mut db = SharedMimeInfo::create();
+ 
+-        let data_home = dirs_next::data_dir().expect("Data directory is unset");
+-        db.load_directory(data_home);
++        if let Some(data_home) = dirs_next::data_dir() {
++            db.load_directory(data_home);
++        }
+ 
+         let data_dirs = match env::var_os("XDG_DATA_DIRS") {
+             Some(v) => env::split_paths(&v).collect(),
+@@ -575,10 +587,24 @@ impl SharedMimeInfo {
+     /// [`SharedMimeInfo`]: struct.SharedMimeInfo.html
+     /// [`new`]: #method.new
+     pub fn new_for_directory<P: AsRef<Path>>(directory: P) -> SharedMimeInfo {
+-        let mut db = SharedMimeInfo::create();
+-
+-        db.load_directory(directory);
++        Self::new_for_directories([directory])
++    }
+ 
++    /// Loads MIME databases from the supplied XDG data directories, in
++    /// descending precedence (user directories before system directories).
++    /// Each directory must contain a `mime` subdirectory.
++    ///
++    /// This allows applications and tests to use isolated databases without
++    /// changing process-wide environment variables.
++    pub fn new_for_directories<I, P>(directories: I) -> SharedMimeInfo
++    where
++        I: IntoIterator<Item = P>,
++        P: AsRef<Path>,
++    {
++        let mut db = SharedMimeInfo::create();
++        for directory in directories {
++            db.load_directory(directory);
++        }
+         db
+     }
+ 
+@@ -595,49 +621,19 @@ impl SharedMimeInfo {
+     ///
+     /// [`SharedMimeInfo`]: struct.SharedMimeInfo.html
+     pub fn reload(&mut self) -> bool {
+-        let mut dropped_db = false;
+-
+-        // Do not reload the data if nothing has changed
+-        for dir in &self.mime_dirs {
+-            let mtime = match fs::metadata(&dir.path) {
+-                Ok(v) => v.modified().unwrap_or(dir.mtime),
+-                Err(_) => dir.mtime,
+-            };
+-
+-            // Drop everything if a directory was changed since
+-            // the last time we looked into it
+-            if dir.mtime < mtime {
+-                dropped_db = true;
+-
+-                self.aliases.clear();
+-                self.parents.clear();
+-                self.globs.clear();
+-                self.icons.clear();
+-                self.generic_icons.clear();
+-                self.magic.clear();
+-                self.disabled_magic.clear();
+-
+-                break;
+-            }
++        let changed = self
++            .mime_dirs
++            .iter()
++            .any(|dir| *dir != MimeDirectory::new(dir.path.clone()));
++        if changed {
++            let dirs: Vec<_> = self
++                .mime_dirs
++                .iter()
++                .filter_map(|dir| dir.path.parent().map(Path::to_path_buf))
++                .collect();
++            *self = Self::new_for_directories(dirs);
+         }
+-
+-        if dropped_db {
+-            let mime_dirs: Vec<MimeDirectory> = self.mime_dirs.to_vec();
+-
+-            self.mime_dirs.clear();
+-
+-            for dir in &mime_dirs {
+-                // Pop the `mime` chunk, since load_directory() will
+-                // automatically add it back
+-                let mut base_dir = PathBuf::new();
+-                base_dir.push(&dir.path);
+-                base_dir.pop();
+-
+-                self.load_directory(base_dir);
+-            }
+-        }
+-
+-        dropped_db
++        changed
+     }
+ 
+     /// Retrieves the MIME type aliased by a MIME type, if any.
+diff --git a/tests/reload.rs b/tests/reload.rs
+new file mode 100644
+index 0000000..e34c5c2
+--- /dev/null
++++ b/tests/reload.rs
+@@ -0,0 +1,51 @@
++use std::fs;
++use xdg_mime::SharedMimeInfo;
++
++#[test]
++fn reload_observes_in_place_writes_and_directory_removal_or_creation() {
++    let tmp = tempfile::tempdir().unwrap();
++    let user = tmp.path().join("user");
++    let system = tmp.path().join("system");
++    fs::create_dir_all(system.join("mime")).unwrap();
++    fs::write(system.join("mime/globs2"), "50:text/plain:*.old\n").unwrap();
++    let mut db = SharedMimeInfo::new_for_directories([&user, &system]);
++    assert_eq!(
++        db.get_mime_types_from_file_name("file.old"),
++        vec![mime::TEXT_PLAIN]
++    );
++    assert!(!db.reload());
++    fs::write(system.join("mime/globs2"), "50:text/plain:*.replacement\n").unwrap();
++    assert!(db.reload());
++    assert_eq!(
++        db.get_mime_types_from_file_name("file.old"),
++        vec![mime::APPLICATION_OCTET_STREAM]
++    );
++    assert_eq!(
++        db.get_mime_types_from_file_name("file.replacement"),
++        vec![mime::TEXT_PLAIN]
++    );
++    fs::create_dir_all(user.join("mime")).unwrap();
++    fs::write(
++        user.join("mime/globs2"),
++        "0:text/plain:__NOGLOBS__\n50:text/plain:*.user\n",
++    )
++    .unwrap();
++    assert!(db.reload());
++    assert_eq!(
++        db.get_mime_types_from_file_name("file.replacement"),
++        vec![mime::APPLICATION_OCTET_STREAM]
++    );
++    fs::remove_dir_all(&user).unwrap();
++    assert!(db.reload());
++    assert_eq!(
++        db.get_mime_types_from_file_name("file.replacement"),
++        vec![mime::TEXT_PLAIN]
++    );
++    fs::remove_dir_all(&system).unwrap();
++    assert!(db.reload());
++    assert_eq!(
++        db.get_mime_types_from_file_name("file.replacement"),
++        vec![mime::APPLICATION_OCTET_STREAM]
++    );
++    assert!(!db.reload());
++}
+-- 
+2.56.0
+
+
+From bec3bb27b7e91f82014afa94560484587ad951fd Mon Sep 17 00:00:00 2001
+From: Chris Allen <cma@bitemyapp.com>
+Date: Tue, 3 Nov 2026 04:18:36 -0600
+Subject: [PATCH 5/7] Expose cached localized MIME descriptions from generated
+ XML
+
+---
+ Cargo.toml            |  1 +
+ TODO.md               |  2 +-
+ src/description.rs    | 77 +++++++++++++++++++++++++++++++++++++++++++
+ src/lib.rs            | 31 ++++++++++++++++-
+ tests/descriptions.rs | 46 ++++++++++++++++++++++++++
+ 5 files changed, 155 insertions(+), 2 deletions(-)
+ create mode 100644 src/description.rs
+ create mode 100644 tests/descriptions.rs
+
+diff --git a/Cargo.toml b/Cargo.toml
+index 3c5cb3e..e8d5e73 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -20,6 +20,7 @@ dirs-next = "2.0"
+ glob = "0.3.0"
+ mime = "0.3"
+ nom = "^7"
++roxmltree = "0.21"
+ 
+ [package.metadata.docs.rs]
+ default-target = "x86_64-unknown-linux-gnu"
+diff --git a/TODO.md b/TODO.md
+index d5bebf5..d5af093 100644
+--- a/TODO.md
++++ b/TODO.md
+@@ -7,7 +7,7 @@ TODO
+  - [x] support explicit database reloading
+  - [ ] support memory mapped `mime.cache`
+  - [ ] show MIME type handlers
+- - [ ] provide access to the XML data—mostly the localised comment element
++ - [x] provide access to localised comments in the XML data
+ 
+ [check]: https://specifications.freedesktop.org/shared-mime-info-spec/shared-mime-info-spec-latest.html#idm46152099188256
+ 
+diff --git a/src/description.rs b/src/description.rs
+new file mode 100644
+index 0000000..0288849
+--- /dev/null
++++ b/src/description.rs
+@@ -0,0 +1,77 @@
++use std::collections::HashMap;
++use std::fs::File;
++use std::io::Read;
++use std::path::PathBuf;
++
++pub type Comments = HashMap<String, String>;
++const MIME_NAMESPACE: &str = "http://www.freedesktop.org/standards/shared-mime-info";
++const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
++
++fn language_key(language: &str) -> String {
++    language.replace('-', "_").to_lowercase()
++}
++
++pub fn load(dirs: impl Iterator<Item = PathBuf>, mime: &mime::Mime) -> Comments {
++    let mut comments = Comments::new();
++    for dir in dirs {
++        let path = dir.join(format!("{}.xml", mime.essence_str()));
++        let mut xml = String::new();
++        let Ok(file) = File::open(path) else { continue };
++        // A type's generated XML is small. Do not allocate unbounded memory
++        // for an accidentally corrupt local database file.
++        if file.take(1024 * 1024).read_to_string(&mut xml).is_err() {
++            continue;
++        }
++        let Ok(document) = roxmltree::Document::parse(&xml) else {
++            continue;
++        };
++        let root = document.root_element();
++        if !root.has_tag_name((MIME_NAMESPACE, "mime-type")) {
++            continue;
++        }
++        for node in root
++            .children()
++            .filter(|n| n.has_tag_name((MIME_NAMESPACE, "comment")))
++        {
++            let language = language_key(node.attribute((XML_NAMESPACE, "lang")).unwrap_or(""));
++            let text: String = node
++                .descendants()
++                .filter(|n| n.is_text())
++                .filter_map(|n| n.text())
++                .collect();
++            if !text.trim().is_empty() {
++                // Directories arrive in descending XDG precedence.
++                comments
++                    .entry(language)
++                    .or_insert_with(|| text.trim().to_owned());
++            }
++        }
++    }
++    comments
++}
++
++pub fn lookup(comments: &Comments, languages: &[&str]) -> Option<String> {
++    for language in languages {
++        let (locale, modifier) = language.split_once('@').unwrap_or((language, ""));
++        let locale = language_key(locale.split('.').next().unwrap_or(locale));
++        if locale == "c" || locale == "posix" {
++            break;
++        }
++        let base = locale.split('_').next().unwrap_or(&locale);
++        let mut candidates = Vec::new();
++        if !modifier.is_empty() {
++            candidates.push(format!("{locale}@{}", modifier.to_lowercase()));
++        }
++        candidates.push(locale.clone());
++        if !modifier.is_empty() {
++            candidates.push(format!("{base}@{}", modifier.to_lowercase()));
++        }
++        candidates.push(base.to_owned());
++        for candidate in candidates {
++            if let Some(comment) = comments.get(&candidate) {
++                return Some(comment.clone());
++            }
++        }
++    }
++    comments.get("").cloned()
++}
+diff --git a/src/lib.rs b/src/lib.rs
+index 7ffc6ed..166799d 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -64,18 +64,20 @@
+ //! [`guess`]: struct.GuessBuilder.html#method.guess
+ 
+ use mime::Mime;
+-use std::collections::HashSet;
++use std::collections::{HashMap, HashSet};
+ use std::env;
+ use std::fs;
+ use std::fs::File;
+ use std::io::prelude::*;
+ use std::path::{Path, PathBuf};
++use std::sync::Mutex;
+ use std::time::SystemTime;
+ 
+ extern crate dirs_next;
+ extern crate nom;
+ 
+ mod alias;
++mod description;
+ mod glob;
+ mod icon;
+ mod magic;
+@@ -123,6 +125,7 @@ pub struct SharedMimeInfo {
+     magic: Vec<magic::MagicEntry>,
+     disabled_magic: HashSet<Mime>,
+     mime_dirs: Vec<MimeDirectory>,
++    descriptions: Mutex<HashMap<Mime, description::Comments>>,
+ }
+ 
+ /// A builder type to specify the parameters for guessing a MIME type.
+@@ -523,6 +526,7 @@ impl SharedMimeInfo {
+             magic: Vec::new(),
+             disabled_magic: HashSet::new(),
+             mime_dirs: Vec::new(),
++            descriptions: Mutex::new(HashMap::new()),
+         }
+     }
+ 
+@@ -641,6 +645,31 @@ impl SharedMimeInfo {
+         self.aliases.unalias_mime_type(mime_type)
+     }
+ 
++    /// Returns the human-readable comment for a MIME type, following aliases.
++    ///
++    /// `languages` lists preferred locales in order, for example `["fr_CA", "en"]`.
++    /// Territory, encoding and modifier fallbacks are supported. If no translation
++    /// matches, the untagged comment is returned; `C` and `POSIX` request that
++    /// fallback immediately. Returns `None` when no description is installed.
++    ///
++    /// Generated per-type XML files are loaded lazily and cached until [`reload`].
++    /// Higher-precedence directories override comments for the same language.
++    ///
++    /// [`reload`]: Self::reload
++    pub fn lookup_description(&self, mime_type: &Mime, languages: &[&str]) -> Option<String> {
++        let canonical = self
++            .unalias_mime_type(mime_type)
++            .unwrap_or_else(|| mime_type.clone());
++        let mut descriptions = self.descriptions.lock().unwrap_or_else(|e| e.into_inner());
++        let comments = descriptions.entry(canonical.clone()).or_insert_with(|| {
++            description::load(
++                self.mime_dirs.iter().map(|dir| dir.path.clone()),
++                &canonical,
++            )
++        });
++        description::lookup(comments, languages)
++    }
++
+     /// Looks up the icons associated to a MIME type.
+     ///
+     /// The icons can be looked up within the current [icon theme][xdg-icon-theme].
+diff --git a/tests/descriptions.rs b/tests/descriptions.rs
+new file mode 100644
+index 0000000..d92e6ba
+--- /dev/null
++++ b/tests/descriptions.rs
+@@ -0,0 +1,46 @@
++use std::fs;
++use xdg_mime::SharedMimeInfo;
++
++#[test]
++fn translated_comments_aliases_precedence_malformed_xml_and_reload() {
++    let tmp = tempfile::tempdir().unwrap();
++    let user = tmp.path().join("user");
++    let system = tmp.path().join("system");
++    for dir in [&user, &system] {
++        fs::create_dir_all(dir.join("mime/text")).unwrap();
++    }
++    let xml = |comments: &str| {
++        format!("<mime-type xmlns=\"http://www.freedesktop.org/standards/shared-mime-info\" type=\"text/plain\">{comments}</mime-type>")
++    };
++    fs::write(system.join("mime/text/plain.xml"), xml("<comment>Text &amp; notes</comment><comment xml:lang=\"fr\">Texte</comment><comment xml:lang=\"ja\">テキスト</comment>")).unwrap();
++    fs::write(
++        user.join("mime/text/plain.xml"),
++        xml("<comment xml:lang=\"fr\">Document</comment>"),
++    )
++    .unwrap();
++    fs::write(system.join("mime/aliases"), "text/x-test text/plain\n").unwrap();
++    let mut db = SharedMimeInfo::new_for_directories([&user, &system]);
++    let alias = "text/x-test".parse().unwrap();
++    assert_eq!(
++        db.lookup_description(&alias, &["fr_CA.UTF-8"]),
++        Some("Document".into())
++    );
++    assert_eq!(
++        db.lookup_description(&alias, &["zz", "ja_JP"]),
++        Some("テキスト".into())
++    );
++    assert_eq!(
++        db.lookup_description(&alias, &["C", "fr"]),
++        Some("Text & notes".into())
++    );
++    assert_eq!(
++        db.lookup_description(&alias, &[]),
++        Some("Text & notes".into())
++    );
++    assert_eq!(db.lookup_description(&mime::IMAGE_PNG, &[]), None);
++    fs::write(user.join("mime/text/plain.xml"), "<malformed>").unwrap();
++    // update-mime-database also rewrites the index files.
++    fs::write(user.join("mime/types"), "text/plain\n").unwrap();
++    assert!(db.reload());
++    assert_eq!(db.lookup_description(&alias, &["fr"]), Some("Texte".into()));
++}
+-- 
+2.56.0
+
+
+From 772e8864c0bf19460427fd7afd919160b4ed19b8 Mon Sep 17 00:00:00 2001
+From: Chris Allen <cma@bitemyapp.com>
+Date: Tue, 3 Nov 2026 04:22:02 -0600
+Subject: [PATCH 6/7] Preserve the first duplicate glob definition and cover
+ file read fallbacks
+
+---
+ src/glob.rs      | 29 +++++++++++++++++++++++------
+ tests/content.rs | 35 +++++++++++++++++++++++++++++++++++
+ 2 files changed, 58 insertions(+), 6 deletions(-)
+ create mode 100644 tests/content.rs
+
+diff --git a/src/glob.rs b/src/glob.rs
+index 34b17ee..c28c6dc 100644
+--- a/src/glob.rs
++++ b/src/glob.rs
+@@ -66,6 +66,7 @@ fn determine_type(glob: &str) -> GlobType {
+ #[derive(Clone)]
+ pub struct Glob {
+     glob: GlobType,
++    original: String,
+     weight: i32,
+     case_sensitive: bool,
+     mime_type: Mime,
+@@ -74,9 +75,7 @@ pub struct Glob {
+ 
+ impl PartialEq for Glob {
+     fn eq(&self, other: &Glob) -> bool {
+-        self.glob == other.glob
+-            && self.mime_type == other.mime_type
+-            && self.case_sensitive == other.case_sensitive
++        self.original == other.original && self.mime_type == other.mime_type
+     }
+ }
+ 
+@@ -84,9 +83,8 @@ impl Eq for Glob {}
+ 
+ impl Hash for Glob {
+     fn hash<H: Hasher>(&self, h: &mut H) {
+-        self.glob.hash(h);
+-        self.mime_type.hash(h);
+-        self.case_sensitive.hash(h)
++        self.original.hash(h);
++        self.mime_type.hash(h)
+     }
+ }
+ 
+@@ -119,6 +117,7 @@ impl Glob {
+         };
+         Glob {
+             mime_type: mime_type.clone(),
++            original: glob.to_owned(),
+             glob: pattern,
+             weight,
+             case_sensitive: cs,
+@@ -431,6 +430,24 @@ mod tests {
+         );
+     }
+ 
++    #[test]
++    fn first_definition_keeps_its_weight_and_case_flags() {
++        let mut map = GlobMap::new();
++        // update-mime-database can emit a case-sensitive literal followed
++        // by the same literal without flags. Keep the first definition,
++        // just as for a pattern repeated in a lower-precedence directory.
++        map.add_globs(&rules(&["50:text/plain:Case:cs", "50:text/plain:Case"]));
++        map.add_globs(&rules(&["90:text/plain:Case", "80:image/png:case*"]));
++        assert_eq!(
++            map.lookup_mime_type_for_file_name("Case"),
++            Some(vec![mime::TEXT_PLAIN])
++        );
++        assert_eq!(
++            map.lookup_mime_type_for_file_name("CASE"),
++            Some(vec![mime::IMAGE_PNG])
++        );
++    }
++
+     #[test]
+     fn glob_type() {
+         assert_eq!(
+diff --git a/tests/content.rs b/tests/content.rs
+new file mode 100644
+index 0000000..3795790
+--- /dev/null
++++ b/tests/content.rs
+@@ -0,0 +1,35 @@
++use std::fs;
++use xdg_mime::SharedMimeInfo;
++
++#[test]
++fn missing_files_and_empty_regular_files_are_distinct() {
++    let tmp = tempfile::tempdir().unwrap();
++    let db = SharedMimeInfo::new_for_directory(tmp.path());
++    let missing = tmp.path().join("missing");
++    assert_eq!(
++        db.guess_mime_type().path(&missing).guess().mime_type(),
++        &mime::APPLICATION_OCTET_STREAM
++    );
++    fs::write(&missing, b"").unwrap();
++    assert_eq!(
++        db.guess_mime_type()
++            .path(&missing)
++            .guess()
++            .mime_type()
++            .as_ref(),
++        "application/x-zerosize"
++    );
++    fs::write(&missing, b"plain text\n").unwrap();
++    assert_eq!(
++        db.guess_mime_type().path(&missing).guess().mime_type(),
++        &mime::TEXT_PLAIN
++    );
++    assert_eq!(
++        db.guess_mime_type()
++            .path(tmp.path())
++            .guess()
++            .mime_type()
++            .as_ref(),
++        "inode/directory"
++    );
++}
+-- 
+2.56.0
+
+
+From 8907f908b49ca5537f4f67365c4e2b7c723911df Mon Sep 17 00:00:00 2001
+From: Chris Allen <cma@bitemyapp.com>
+Date: Tue, 3 Nov 2026 04:23:02 -0600
+Subject: [PATCH 7/7] Document database loading and localized description
+ queries
+
+---
+ README.md    | 12 ++++++++++++
+ src/magic.rs | 17 +++++++++--------
+ 2 files changed, 21 insertions(+), 8 deletions(-)
+
+diff --git a/README.md b/README.md
+index 7267146..9e09be0 100644
+--- a/README.md
++++ b/README.md
+@@ -16,6 +16,18 @@ from the [icon theme][fdo-icon-theme].
+ 
+ [Documentation][docs].
+ 
++`SharedMimeInfo::new()` follows the XDG data directories. For an isolated
++database, use `SharedMimeInfo::new_for_directories()` with data directories
++in descending precedence (each containing a `mime` subdirectory).
++Long-running applications should periodically call `reload()` to pick up
++changes made by `update-mime-database`.
++
++`lookup_description()` reads localized comments from the generated per-type
++XML files, with an explicit list of preferred languages. Comments are loaded
++on demand and cached until the database reloads. Other queries read the
++generated `globs2`, `magic`, aliases, subclasses and icon files; binary
++`mime.cache` loading is not yet implemented.
++
+ Installation
+ ------------
+ 
+diff --git a/src/magic.rs b/src/magic.rs
+index 1e7e698..4f8a247 100644
+--- a/src/magic.rs
++++ b/src/magic.rs
+@@ -224,10 +224,10 @@ impl MagicEntry {
+             ancestors.truncate(depth);
+             let matched = (depth == 0 || ancestors[depth - 1]) && rule.matches_data(data);
+             ancestors.push(matched);
+-            let leaf = self
+-                .rules
+-                .get(index + 1)
+-                .map_or(true, |next| next.indent <= rule.indent);
++            let leaf = match self.rules.get(index + 1) {
++                Some(next) => next.indent <= rule.indent,
++                None => true,
++            };
+             if matched && leaf {
+                 return Some((&self.mime_type, self.priority));
+             }
+@@ -289,10 +289,11 @@ pub fn lookup_data(entries: &[MagicEntry], data: &[u8]) -> Option<(Mime, u32)> {
+     let mut best = None;
+     for entry in entries {
+         if let Some((mime, priority)) = entry.matches(data) {
+-            if best
+-                .as_ref()
+-                .map_or(true, |(_, old_priority)| priority > *old_priority)
+-            {
++            let higher_priority = match &best {
++                Some((_, old_priority)) => priority > *old_priority,
++                None => true,
++            };
++            if higher_priority {
+                 best = Some((mime.clone(), priority));
+             }
+         }
+-- 
+2.56.0

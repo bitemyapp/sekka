@@ -13,6 +13,7 @@ repository.workspace = true
 test-util = []
 
 [dependencies]
+aizome-mime.workspace = true
 log.workspace = true
 # getpwuid_r, access(2), poll(2) and inotify for the index's watcher.
 libc = "0.2"

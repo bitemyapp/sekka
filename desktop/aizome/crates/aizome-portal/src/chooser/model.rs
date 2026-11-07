@@ -5,9 +5,9 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use aizome_mime::MimeDb;
 use hako::fsops::names;
 use hako::model::entry::{self, Entry, Sort};
-use hako::model::mime::MimeDb;
 use hako::model::uri;
 
 use crate::memory::Memory;

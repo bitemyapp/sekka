@@ -422,10 +422,10 @@ impl DesktopEntry {
         self.categories.iter().any(|c| c == category)
     }
 
-    /// Whether `MimeType` lists `mime` (compared case-insensitively, as
-    /// MIME types are).
+    /// Whether `MimeType` lists this type or an ancestor, resolving aliases
+    /// through the same desktop database as file identification.
     pub fn supports_mime(&self, mime: &str) -> bool {
-        self.mime_types.iter().any(|m| m.eq_ignore_ascii_case(mime))
+        self.mime_types.iter().any(|m| aizome_mime::MimeDb::get().is_a(mime, m))
     }
 
     /// Whether `OnlyShowIn`/`NotShowIn` allow showing the entry on these

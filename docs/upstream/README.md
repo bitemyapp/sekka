@@ -11,11 +11,12 @@ its document names, so `git am` applies it there. Sekka's other local patches
 are described in [DEVELOPERS.md](../../DEVELOPERS.md) with the component they
 change.
 
-| Project | Patch | What it fixes | Upstream, 2026-10-25 |
+| Project | Patch | What it fixes | Upstream status |
 | --- | --- | --- | --- |
 | Plymouth | [keyboard-removal](plymouth/keyboard-removal.md) | A crash when the GPU's driver takes over, from a keyboard Plymouth had freed | In review: [plymouth!519](https://gitlab.freedesktop.org/plymouth/plymouth/-/merge_requests/519) |
 | Plymouth | [console-owner](plymouth/console-owner.md) | Nothing typed reaching Plymouth after the GPU's driver takes over, Esc included | In review: [plymouth!520](https://gitlab.freedesktop.org/plymouth/plymouth/-/merge_requests/520) |
 | Plymouth | [abandoned-prompts](plymouth/abandoned-prompts.md) | A question left on the splash after whoever asked it has gone | Not sent: fixed differently on Plymouth's `main` |
+| xdg-mime | [desktop queries](xdg-mime/README.md) | MIME overrides, filename/content matching and reloads; adds localized descriptions | Submitted 2026-11-03: [xdg-mime-rs#39](https://github.com/ebassi/xdg-mime-rs/pull/39) |
 
 [plymouth/README.md](plymouth/README.md) explains where the three Plymouth bugs
 come from, how the fixes were tested, and how they are being submitted.

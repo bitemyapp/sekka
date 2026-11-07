@@ -331,29 +331,29 @@ pub fn save_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
 }
 
 /// The MIME type to tell the recent files list.
-pub fn mime_type(path: &Path) -> &'static str {
-    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
-    match ext.as_str() {
-        "md" | "markdown" => "text/markdown",
-        "rs" => "text/rust",
-        "py" => "text/x-python",
-        "js" | "mjs" | "cjs" => "text/javascript",
-        "ts" => "text/x-typescript",
-        "c" | "h" => "text/x-csrc",
-        "cpp" | "cc" | "cxx" | "hpp" => "text/x-c++src",
-        "go" => "text/x-go",
-        "nix" => "text/x-nix",
-        "sh" | "bash" => "application/x-shellscript",
-        "toml" => "application/toml",
-        "json" => "application/json",
-        "yaml" | "yml" => "application/yaml",
-        _ => "text/plain",
+pub fn mime_type(path: &Path, head: &[u8]) -> aizome_mime::Mime {
+    let db = aizome_mime::MimeDb::get();
+    // Use already-read bytes to distinguish ambiguous names such as .ts
+    // (TypeScript or MPEG transport stream), without I/O on the UI thread.
+    let guess = db.guess(path.file_name().map(Path::new), Some(&head[..head.len().min(16 << 10)])).mime;
+    if matches!(guess.as_ref(), aizome_mime::UNKNOWN | aizome_mime::EMPTY) {
+        db.intern(aizome_mime::TEXT)
+    } else {
+        guess
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recent_types_use_text_to_disambiguate_source_files() {
+        let db = aizome_mime::MimeDb::get();
+        assert!(db.is_text(&mime_type(Path::new("example.ts"), b"const value: number = 1;\n")));
+        assert!(db.equal(&mime_type(Path::new("example.h"), b"int value;\n"), "text/x-chdr"));
+        assert_eq!(mime_type(Path::new("untitled"), b"").as_ref(), aizome_mime::TEXT);
+    }
 
     #[test]
     fn encodings_round_trip() {

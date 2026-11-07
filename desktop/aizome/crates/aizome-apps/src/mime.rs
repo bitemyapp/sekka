@@ -31,8 +31,8 @@
 //! rather than replaced.
 //!
 //! MIME types compare case-insensitively; URL schemes are
-//! `x-scheme-handler/<scheme>`. Subclasses (`text/x-csrc` is a
-//! `text/plain`) are not followed: that needs the shared MIME database.
+//! `x-scheme-handler/<scheme>`. `aizome-mime` resolves aliases and orders
+//! inherited associations from specific types to their ancestors.
 //!
 //! **Terminals**: `xdg-terminals.list` files (desktop-specific first) in
 //! `$XDG_CONFIG_HOME`, `$XDG_CONFIG_DIRS`, then
@@ -50,6 +50,7 @@ use super::index::{AppIndex, file_name};
 use super::keyfile::{self, KeyFile, Line};
 use super::xdg::XdgDirs;
 use crate::{Error, Result};
+use aizome_mime::MimeDb;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -108,58 +109,24 @@ impl DefaultRole {
         DefaultRole::ArchiveManager,
     ];
 
-    /// The MIME types the role covers, the primary one first; empty for
-    /// [`Terminal`](DefaultRole::Terminal), which has none.
+    /// Seed types for each role. File-format families are expanded from
+    /// the selected application's desktop entry, not another format list.
     pub fn mime_types(self) -> &'static [&'static str] {
         match self {
-            DefaultRole::Browser => {
-                &["x-scheme-handler/http", "x-scheme-handler/https", "text/html", "application/xhtml+xml"]
-            }
-            DefaultRole::Mail => &["x-scheme-handler/mailto"],
-            DefaultRole::Terminal => &[],
-            DefaultRole::FileManager => &["inode/directory"],
-            DefaultRole::TextEditor => &["text/plain"],
-            DefaultRole::ImageViewer => &[
-                "image/png",
-                "image/jpeg",
-                "image/gif",
-                "image/webp",
-                "image/avif",
-                "image/bmp",
-                "image/tiff",
-                "image/svg+xml",
-                "image/heif",
-                "image/jxl",
-                "image/x-portable-pixmap",
-            ],
-            DefaultRole::VideoPlayer => &[
-                "video/mp4",
-                "video/x-matroska",
-                "video/webm",
-                "video/quicktime",
-                "video/mpeg",
-                "video/ogg",
-                "video/x-msvideo",
-                "video/x-flv",
-                "video/3gpp",
-                "video/mp2t",
-            ],
-            DefaultRole::MusicPlayer => &[
-                "audio/mpeg",
-                "audio/flac",
-                "audio/x-flac",
-                "audio/ogg",
-                "audio/x-vorbis+ogg",
-                "audio/x-opus+ogg",
-                "audio/mp4",
-                "audio/x-m4a",
-                "audio/aac",
-                "audio/wav",
-                "audio/x-wav",
-            ],
-            DefaultRole::PdfViewer => &["application/pdf"],
-            DefaultRole::Calendar => &["text/calendar"],
-            DefaultRole::ArchiveManager => &[
+            Self::Browser => &["x-scheme-handler/http", "x-scheme-handler/https", "text/html", "application/xhtml+xml"],
+            Self::Mail => &["x-scheme-handler/mailto"],
+            Self::Terminal => &[],
+            Self::FileManager => &["inode/directory"],
+            Self::TextEditor => &["text/plain"],
+            Self::ImageViewer => &["image/png"],
+            Self::VideoPlayer => &["video/mp4"],
+            Self::MusicPlayer => &["audio/mpeg"],
+            Self::PdfViewer => &["application/pdf"],
+            Self::Calendar => &["text/calendar"],
+            // Archive applications can also advertise documents and
+            // executables. Keep this role's existing scope: MIME has no
+            // common archive parent or top-level family to expand.
+            Self::ArchiveManager => &[
                 "application/zip",
                 "application/x-tar",
                 "application/x-compressed-tar",
@@ -172,6 +139,28 @@ impl DefaultRole {
                 "application/x-rar",
             ],
         }
+    }
+
+    fn accepts(self, mime: &str) -> bool {
+        let db = MimeDb::get();
+        let mime = db.canonical(mime);
+        match self {
+            Self::ImageViewer => mime.starts_with("image/"),
+            Self::VideoPlayer => mime.starts_with("video/"),
+            Self::MusicPlayer => mime.starts_with("audio/"),
+            // Web documents keep the browser role's policy.
+            Self::TextEditor => db.is_text(&mime) && !Self::Browser.accepts(&mime),
+            _ => self.mime_types().iter().any(|t| db.equal(&mime, t)),
+        }
+    }
+
+    fn accepts_declared(self, mime: &str, declared: &[String]) -> bool {
+        self.accepts(mime)
+            || (matches!(self, Self::VideoPlayer | Self::MusicPlayer)
+                && !MimeDb::get().equal(mime, aizome_mime::UNKNOWN)
+                // Shared containers, such as Matroska and Ogg, belong
+                // to both roles when the app advertises their subtypes.
+                && declared.iter().any(|child| self.accepts(child) && MimeDb::get().is_a(child, mime)))
     }
 
     /// The type that decides the role's current default and candidates.
@@ -213,17 +202,34 @@ impl Groups {
 
     fn parse(text: &str) -> Groups {
         let file = KeyFile::parse(text);
-        let group = |name: &str| {
-            let mut map = HashMap::new();
-            for (key, value) in file.group(name).into_iter().flatten() {
-                if !key.contains('[') {
-                    map.insert(key.to_ascii_lowercase(), keyfile::split_list(value));
-                }
-            }
-            map
-        };
+        let group = |name: &str| mime_group(&file, name);
         Groups { defaults: group(DEFAULTS), added: group(ADDED), removed: group(REMOVED) }
     }
+}
+
+/// Canonical keys, preserving every association when a file contains both
+/// a type and aliases. Prefer an explicit canonical key, then lexical alias
+/// order, so HashMap iteration cannot change the default between reloads.
+fn mime_group(file: &KeyFile, name: &str) -> HashMap<String, Vec<String>> {
+    let db = MimeDb::get();
+    let mut entries: Vec<_> = file
+        .group(name)
+        .into_iter()
+        .flatten()
+        .filter(|(key, _)| !key.contains('['))
+        .map(|(key, value)| (db.canonical(key).to_string(), key, value))
+        .collect();
+    entries.sort_by_key(|(canonical, key, _)| (canonical.clone(), !key.eq_ignore_ascii_case(canonical), *key));
+    let mut map: HashMap<String, Vec<String>> = HashMap::new();
+    for (canonical, _, value) in entries {
+        let ids = map.entry(canonical).or_default();
+        for id in keyfile::split_list(value) {
+            if !ids.contains(&id) {
+                ids.push(id);
+            }
+        }
+    }
+    map
 }
 
 /// Every MIME and terminal list, read; see the module documentation.
@@ -269,11 +275,7 @@ impl MimeData {
             let cache = std::fs::read(dir.join("mimeinfo.cache"))
                 .map(|text| {
                     let file = KeyFile::parse(&String::from_utf8_lossy(&text));
-                    let mut map: HashMap<String, Vec<String>> = HashMap::new();
-                    for (key, value) in file.group("MIME Cache").into_iter().flatten() {
-                        map.insert(key.to_ascii_lowercase(), keyfile::split_list(value));
-                    }
-                    map
+                    mime_group(&file, "MIME Cache")
                 })
                 .unwrap_or_default();
             data.caches.push(cache);
@@ -405,24 +407,53 @@ impl AppIndex {
     /// applications count. Falls back to the most preferred associated
     /// application when no default is set.
     pub fn default_for(&self, mime: &str) -> Option<String> {
-        let mime = mime.trim().to_ascii_lowercase();
-        let associated = self.mime.associations(self, &mime);
-        self.mime
-            .explicit_default(self, &mime, &associated)
-            .or_else(|| associated.first().copied())
-            .and_then(|i| self.id_at(i))
+        self.apps_for(mime).into_iter().next()
     }
 
-    /// The applications that can open a MIME type, as desktop file IDs:
-    /// the default, then added associations, then the others.
+    /// The applications that can open a MIME type, specific types before
+    /// their ancestors. At each type, defaults precede other associations.
     pub fn apps_for(&self, mime: &str) -> Vec<String> {
-        let mime = mime.trim().to_ascii_lowercase();
-        let mut associated = self.mime.associations(self, &mime);
-        if let Some(default) = self.mime.explicit_default(self, &mime, &associated) {
-            associated.retain(|&i| i != default);
-            associated.insert(0, default);
+        let mut seen = HashSet::new();
+        let mut ids = Vec::new();
+        for mime in self.association_types(mime) {
+            let mut associated = self.mime.associations(self, &mime);
+            if let Some(default) = self.mime.explicit_default(self, &mime, &associated) {
+                associated.retain(|&i| i != default);
+                associated.insert(0, default);
+            }
+            ids.extend(associated.into_iter().filter(|i| seen.insert(*i)).filter_map(|i| self.id_at(i)));
         }
-        associated.into_iter().filter_map(|i| self.id_at(i)).collect()
+        ids
+    }
+
+    /// Only types mentioned by installed apps or association lists can
+    /// contribute a handler. The shared MIME database supplies the ancestry;
+    /// ordering by the
+    /// number of ancestors is a deterministic topological order, including
+    /// multiple inheritance (a partial-order sort comparator is invalid).
+    fn association_types(&self, mime: &str) -> Vec<String> {
+        let db = MimeDb::get();
+        let mime = db.canonical(mime).to_string();
+        let mut types: Vec<String> = self
+            .listed_mime_types()
+            .chain(self.mime.defaults.iter().flat_map(|m| m.keys().map(String::as_str)))
+            .chain(self.mime.caches.iter().flat_map(|m| m.keys().map(String::as_str)))
+            .chain(self.mime.config.iter().chain(&self.mime.data).flat_map(|g| g.added.keys().map(String::as_str)))
+            .filter(|m| db.is_a(&mime, m))
+            .map(str::to_owned)
+            .chain(std::iter::once(mime.clone()))
+            .collect();
+        types.sort();
+        types.dedup();
+        let mut ranked: Vec<_> = types
+            .iter()
+            .map(|m| {
+                let ancestors = types.iter().filter(|other| *other != m && db.is_a(m, other)).count();
+                (std::cmp::Reverse(ancestors), m.clone())
+            })
+            .collect();
+        ranked.sort();
+        ranked.into_iter().map(|(_, m)| m).collect()
     }
 
     /// Make `id` the default application for `mime`, writing
@@ -433,7 +464,9 @@ impl AppIndex {
 
     fn set_defaults(&mut self, mimes: &[&str], id: &str) -> Result<()> {
         let id = self.installed_id(id)?;
-        let mimes = mimes.iter().map(|mime| valid_mime(mime)).collect::<Result<Vec<_>>>()?;
+        let mut mimes = mimes.iter().map(|mime| valid_mime(mime)).collect::<Result<Vec<_>>>()?;
+        mimes.sort();
+        mimes.dedup();
         let path = self.dirs.config_home.join("mimeapps.list");
         edit_file(&path, |editor| {
             for mime in &mimes {
@@ -492,14 +525,20 @@ impl AppIndex {
             self.reload_lists();
             return Ok(());
         }
-        let mimes: Vec<&str> = role
+        let entry = self.get(&canonical).expect("installed application");
+        let mut mimes: Vec<String> = role
             .mime_types()
             .iter()
+            .copied()
             .enumerate()
-            .filter(|(n, mime)| *n == 0 || self.apps_for(mime).contains(&canonical))
-            .map(|(_, mime)| *mime)
+            .filter(|(n, m)| *n == 0 || entry.supports_mime(m))
+            .map(|(_, m)| m)
+            .chain(entry.mime_types.iter().map(String::as_str).filter(|m| role.accepts_declared(m, &entry.mime_types)))
+            .map(str::to_owned)
             .collect();
-        self.set_defaults(&mimes, &canonical)
+        mimes.sort_unstable();
+        mimes.dedup();
+        self.set_defaults(&mimes.iter().map(String::as_str).collect::<Vec<_>>(), &canonical)
     }
 
     /// The applications to offer for a role, as desktop file IDs: those
@@ -628,7 +667,11 @@ fn valid_mime(mime: &str) -> Result<String> {
     let mime = mime.trim().to_ascii_lowercase();
     let valid = mime.split_once('/').is_some_and(|(kind, sub)| !kind.is_empty() && !sub.is_empty())
         && !mime.contains(|c: char| c.is_whitespace() || c.is_control() || matches!(c, '[' | ']' | '=' | ';' | '#'));
-    if valid { Ok(mime) } else { Err(Error::InvalidArgument(format!("not a MIME type: {mime:?}"))) }
+    if valid {
+        Ok(MimeDb::get().canonical(&mime).to_string())
+    } else {
+        Err(Error::InvalidArgument(format!("not a MIME type: {mime:?}")))
+    }
 }
 
 fn join_list(ids: &[String]) -> String {
@@ -669,7 +712,11 @@ impl LineEditor {
         for (n, line) in self.lines.iter().enumerate() {
             match keyfile::parse_line(line) {
                 Line::Group(name) => current = Some(name),
-                Line::Entry { key: k, locale: None, .. } if current == Some(group) && k.eq_ignore_ascii_case(key) => {
+                Line::Entry { key: k, locale: None, .. }
+                    if current == Some(group)
+                        && (k.eq_ignore_ascii_case(key)
+                            || ([DEFAULTS, ADDED, REMOVED].contains(&group) && MimeDb::get().equal(k, key))) =>
+                {
                     found.push(n)
                 }
                 _ => {}
@@ -680,6 +727,11 @@ impl LineEditor {
 
     /// The list value of `key` in `group` (the last one, as readers see).
     pub(crate) fn get_list(&self, group: &str, key: &str) -> Vec<String> {
+        if [DEFAULTS, ADDED, REMOVED].contains(&group) {
+            return mime_group(&KeyFile::parse(&self.text()), group)
+                .remove(MimeDb::get().canonical(key).as_ref())
+                .unwrap_or_default();
+        }
         let Some(&n) = self.find(group, key).last() else {
             return Vec::new();
         };
@@ -1038,6 +1090,66 @@ mod tests {
         assert!(DefaultRole::ALL.iter().all(|role| (*role == DefaultRole::Terminal) == role.mime_types().is_empty()));
         assert_eq!(DefaultRole::Mail.primary_mime_type(), Some("x-scheme-handler/mailto"));
         assert_eq!(DefaultRole::Browser.label(), "Web browser");
+    }
+
+    #[test]
+    fn aliases_apply_to_entries_lists_caches_and_writes() {
+        let tmp = TempDir::new("mime-aliases");
+        tmp.write("usr/share/applications/editor.desktop", &entry("Editor", "text/markdown;", ""));
+        tmp.write("usr/share/applications/other.desktop", &entry("Other", "", ""));
+        tmp.write("usr/share/applications/mimeinfo.cache", "[MIME Cache]\ntext/x-markdown=other.desktop;\n");
+        tmp.write("home/.config/mimeapps.list", "# keep this\n[Default Applications]\ntext/x-markdown=other.desktop;\n[Removed Associations]\ntext/x-markdown=editor.desktop;\n");
+        let mut index = index(&tmp);
+        assert_eq!(index.apps_for("text/markdown"), ["other.desktop"]);
+        assert_eq!(index.default_for("Text/X-Markdown").as_deref(), Some("other.desktop"));
+        index.set_default("text/markdown", "editor").unwrap();
+        assert_eq!(index.default_for("text/x-markdown").as_deref(), Some("editor.desktop"));
+        let saved = std::fs::read_to_string(tmp.path().join("home/.config/mimeapps.list")).unwrap();
+        assert!(saved.starts_with("# keep this\n"));
+        assert!(saved.contains("text/markdown=editor.desktop;"));
+        assert!(!saved.contains("text/x-markdown="));
+        let index = load(&tmp);
+        assert_eq!(index.apps_for("text/x-markdown"), ["editor.desktop", "other.desktop"]);
+    }
+
+    #[test]
+    fn specific_handlers_precede_inherited_defaults() {
+        let tmp = TempDir::new("mime-parents");
+        tmp.write("usr/share/applications/editor.desktop", &entry("Editor", "text/plain;", ""));
+        tmp.write("home/.config/mimeapps.list", "[Default Applications]\ntext/plain=editor.desktop;\n");
+        let mut index = index(&tmp);
+        assert_eq!(index.default_for("text/x-csrc").as_deref(), Some("editor.desktop"));
+        assert_eq!(index.apps_for("application/json"), ["editor.desktop"]);
+        tmp.write("usr/share/applications/c.desktop", &entry("C", "text/x-csrc;", ""));
+        assert!(index.refresh_if_changed());
+        assert_eq!(index.default_for("text/x-csrc").as_deref(), Some("c.desktop"));
+        assert_eq!(index.apps_for("text/x-csrc"), ["c.desktop", "editor.desktop"]);
+        // An explicit choice for the specific type still wins.
+        index.set_default("text/x-csrc", "editor").unwrap();
+        assert_eq!(index.apps_for("text/x-csrc"), ["editor.desktop", "c.desktop"]);
+        tmp.write("usr/share/applications/binary.desktop", &entry("Binary", "application/octet-stream;", ""));
+        assert!(index.refresh_if_changed());
+        assert_eq!(index.default_for("x-scheme-handler/http"), None);
+    }
+
+    #[test]
+    fn role_choices_cover_advertised_formats_without_crossing_media_families() {
+        let tmp = TempDir::new("mime-roles");
+        let desktop = include_str!("../../../apps/utsushi/data/org.aizome.Utsushi.desktop");
+        tmp.write("usr/share/applications/org.aizome.Utsushi.desktop", desktop);
+        let mut index = index(&tmp);
+        index.set_role_default(DefaultRole::VideoPlayer, "org.aizome.Utsushi.desktop").unwrap();
+        let path = tmp.path().join("home/.config/mimeapps.list");
+        let saved = Groups::parse(&std::fs::read_to_string(&path).unwrap());
+        assert!(saved.defaults.contains_key("video/x-ms-wmv"));
+        assert!(!saved.defaults.keys().any(|m| m.starts_with("audio/")));
+        index.set_role_default(DefaultRole::MusicPlayer, "org.aizome.Utsushi.desktop").unwrap();
+        let saved = Groups::parse(&std::fs::read_to_string(&path).unwrap());
+        let advertised = &index.get("org.aizome.Utsushi.desktop").unwrap().mime_types;
+        for mime in advertised {
+            assert!(saved.defaults.contains_key(MimeDb::get().canonical(mime).as_ref()), "{mime}");
+        }
+        assert!(saved.defaults.contains_key("audio/x-ms-wma"));
     }
 
     #[test]

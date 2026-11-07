@@ -21,6 +21,7 @@ aizome-config = { path = "crates/aizome-config" }
 aizome-face = { path = "crates/aizome-face" }
 aizome-kit = { path = "crates/aizome-kit" }
 aizome-apps = { path = "crates/aizome-apps" }
+aizome-mime = { path = "crates/aizome-mime" }
 aizome-sys = { path = "crates/aizome-sys" }
 aizome-search = { path = "crates/aizome-search" }
 # Sukumo's crates, which keep the names they had in Sidestep, the
