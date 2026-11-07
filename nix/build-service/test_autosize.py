@@ -30,5 +30,17 @@ class AutosizeTarget(unittest.TestCase):
         self.assertEqual(self.target(10, 64, 2000), 256 * GiB)
 
 
+class Dispatch(unittest.TestCase):
+    def test_main_does_not_shadow_module_functions(self):
+        # A subparser named like a helper turned `resize` into a parser object.
+        import ast
+        tree = ast.parse(open(loader.path).read())
+        functions = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
+        main = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "main")
+        assigned = {target.id for node in ast.walk(main) if isinstance(node, ast.Assign)
+                    for target in node.targets if isinstance(target, ast.Name)}
+        self.assertEqual(functions & assigned, set())
+
+
 if __name__ == "__main__":
     unittest.main()
