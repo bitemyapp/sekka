@@ -712,6 +712,14 @@ in-progress trusted uploads. Apply this policy to an existing deployment with
 `restart`; persistent cache contents are retained subject to the new bounds.
 `resize --cas-bytes N --ac-bytes N` drains workers and adjusts the existing cache
 without deleting individual objects. Docker logs are bounded separately.
+While `resize` and `runtime` restart a backend, its gateway is paused: clients
+wait rather than fail, and resume once the backend accepts connections. A
+NativeLink backend loads its whole CAS index before listening, about 2.6 s at
+500,000 entries on wx-workstation, longer than Buck2's 1.5 s of retries.
+Requests in flight to the old backend get `UNAVAILABLE`, which clients retry,
+where the gateway used to answer with an HTML 502 that failed them. `up`
+reloads a running gateway's configuration without dropping its connections.
+`restart` still restarts the gateways too, so run it when the service is idle.
 
 For eviction/restart evidence, `cache-inventory --timeout SECONDS` snapshots
 persistent cache names and sizes with the owned backends temporarily paused.
