@@ -3,6 +3,7 @@
 import argparse
 import errno
 import fcntl
+import functools
 import hashlib
 import json
 import os
@@ -10,6 +11,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 
 import cas_dedupe
 from generate import root_dir
@@ -81,11 +83,16 @@ def share_with_cas(content_dirs, store_changed, journal):
     Uploaded outputs are listed in the journal; content-store objects that the
     CAS also holds are matched by name. One physical copy remains of each."""
     reports = []
+    blobs = functools.cache(lambda: cas_dedupe.scan(content_dirs))  # One scan for both passes.
+
+    def timed(run):
+        start = time.monotonic()
+        reports.append(dict(run(), seconds=round(time.monotonic() - start, 3)))
     if journal is not None:
-        reports.append(cas_dedupe.share_journal(content_dirs, journal))
+        timed(lambda: cas_dedupe.share_journal(content_dirs, journal, blobs))
     store = os.environ.get("BUCK2_LOCAL_CONTENT_STORE")
     if store and store_changed:
-        reports.append(cas_dedupe.dedupe(content_dirs, [Path(store)]))
+        timed(lambda: cas_dedupe.dedupe(content_dirs, [Path(store)], blobs))
     if journal is not None and reports:
         # The last pass, for inspection: nothing in it is secret.
         journal.with_name("local-cas-report.json").write_text(json.dumps(reports, indent=2) + "\n")
