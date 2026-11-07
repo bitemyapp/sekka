@@ -88,11 +88,13 @@ def share_with_cas(content_dirs, store_changed, journal):
     def timed(run):
         start = time.monotonic()
         reports.append(dict(run(), seconds=round(time.monotonic() - start, 3)))
-    if journal is not None:
-        timed(lambda: cas_dedupe.share_journal(content_dirs, journal, blobs))
+    # The store pass moves CAS blobs onto store objects' extents, and the journal
+    # pass moves outputs onto CAS blobs' extents; in this order all end on one copy.
     store = os.environ.get("BUCK2_LOCAL_CONTENT_STORE")
     if store and store_changed:
         timed(lambda: cas_dedupe.dedupe(content_dirs, [Path(store)], blobs))
+    if journal is not None:
+        timed(lambda: cas_dedupe.share_journal(content_dirs, journal, blobs))
     if journal is not None and reports:
         # The last pass, for inspection: nothing in it is secret.
         journal.with_name("local-cas-report.json").write_text(json.dumps(reports, indent=2) + "\n")

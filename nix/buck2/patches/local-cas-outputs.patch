@@ -13,8 +13,13 @@ the output pipeline, which then uploads from its private snapshots as it
 does with the store off. After the cache uploader
 finishes, it appends one HASH SIZE PATH line per output file to the
 journal, and the client shares those files' extents with their CAS blobs
-after the build. The journal joins the daemon startup identity. Read-only
-clients and hosts without a local CAS are unchanged.
+after the build. A content-based output is written to a placeholder and
+published as a copy at its content path, which the uploader lists, so
+publication lists the placeholder too. Without that, the placeholder
+alone kept the extents the action wrote: 1.1 GB of a cold dev worktree's
+buck-out on wx-workstation. Other materialized copies are listed rather
+than ingested. The journal joins the daemon startup identity. Read-only clients and hosts without a local CAS are
+unchanged.
 
 diff --git a/app/buck2_common/src/init.rs b/app/buck2_common/src/init.rs
 index f85cad4..701db60 100644
@@ -96,7 +101,7 @@ index 01dd6cb..b448dde 100644
              let mode = if file.metadata.is_executable {
                  0o755
 diff --git a/app/buck2_execute_impl/src/materializers/deferred.rs b/app/buck2_execute_impl/src/materializers/deferred.rs
-index 1593bc5..3f838d2 100644
+index 1593bc5..cdda40f 100644
 --- a/app/buck2_execute_impl/src/materializers/deferred.rs
 +++ b/app/buck2_execute_impl/src/materializers/deferred.rs
 @@ -435,7 +435,8 @@ impl<T: IoHandler + Allocative> Materializer for DeferredMaterializerAccessor<T>
@@ -109,6 +114,53 @@ index 1593bc5..3f838d2 100644
              let fs = self.io.fs().clone();
              let digest_config = self.io.digest_config();
              tokio::task::spawn_blocking(move || {
+@@ -687,6 +688,14 @@ impl<T: IoHandler + Allocative> Materializer for DeferredMaterializerAccessor<T>
+             }],
+         )
+         .await?;
++        if crate::materializers::local_content_store::local_cas_writes() {
++            // The cache uploader lists the copy at `dest`; the placeholder keeps the same
++            // bytes, so list it too, or it alone keeps the extents the action wrote.
++            crate::materializers::local_content_store::note_in_local_cas(
++                &self.io.fs().resolve(&src),
++                value.entry(),
++            )?;
++        }
+         let materializer: &dyn Materializer = self;
+         materializer
+             .declare_copy(
+diff --git a/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs b/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs
+index afa6ba8..2f5fb9d 100644
+--- a/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs
++++ b/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs
+@@ -305,11 +305,22 @@ impl DefaultIoHandler {
+                                 &self.fs.root().join(&a.dest),
+                                 a.executable_bit_override,
+                             )?;
+-                            crate::materializers::local_content_store::artifact(
+-                                &self.fs.root().join(&a.dest),
+-                                &a.dest_entry,
+-                                self.digest_config,
+-                            )?;
++                            if crate::materializers::local_content_store::local_cas_writes() {
++                                // A copy of content the CAS holds, such as a content-based
++                                // output published from its placeholder, which is what the
++                                // cache uploader lists. Listing the copy too lets the client
++                                // share its extents with the blob instead of keeping its own.
++                                crate::materializers::local_content_store::note_in_local_cas(
++                                    &self.fs.root().join(&a.dest),
++                                    &a.dest_entry,
++                                )?;
++                            } else {
++                                crate::materializers::local_content_store::artifact(
++                                    &self.fs.root().join(&a.dest),
++                                    &a.dest_entry,
++                                    self.digest_config,
++                                )?;
++                            }
+                         }
+                         Ok(())
+                     })
 diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
 index e9d55e9..ea9ccc6 100644
 --- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
