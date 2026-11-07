@@ -139,3 +139,35 @@ fn a_grow_that_stopped_part_way_can_be_applied_again() {
     let block = state.block(PART).unwrap();
     assert_eq!((block.size, block.filesystem.as_ref().unwrap().size), (160 * GIB, Some(160 * GIB)));
 }
+
+#[test]
+fn a_partition_another_tool_resized_is_not_resized_from_the_size_queued() {
+    // Queued: grow sda3 from 140 to 160 GiB. Before it runs, another tool
+    // grows it, filesystem and all, to 200 GiB. Taken from the size queued,
+    // the grow would move the partition's end back to 160 GiB, under a
+    // filesystem of 200.
+    for fs in ["vfat", "ext4"] {
+        let (mock, plan, mut run) = fixture_with_plan(fs, 160 * GIB);
+        mock.edit(|s| {
+            let block = s.blocks.iter_mut().find(|b| b.path == PART).unwrap();
+            block.size = 200 * GIB;
+            block.partition.as_mut().unwrap().size = 200 * GIB;
+            block.filesystem.as_mut().unwrap().size = Some(200 * GIB);
+        });
+        // A run agreed to before the other tool's resize refuses at its
+        // first step, and resizes nothing.
+        let outcome = finish(&mock, &mut run);
+        let state = mock.snapshot();
+        let block = state.block(PART).unwrap();
+        assert_eq!(
+            (block.size, block.partition.as_ref().unwrap().size, block.filesystem.as_ref().unwrap().size),
+            (200 * GIB, 200 * GIB, Some(200 * GIB)),
+            "{fs}: nothing was resized"
+        );
+        assert!(matches!(outcome, Outcome::Failed { error, .. } if error.contains("changed since")), "{fs}");
+        // The plan sees it too: refused at Apply, and dropped.
+        let mut plan = plan;
+        assert!(!plan.problems(&state).is_empty(), "{fs}: refused at Apply");
+        assert_eq!(plan.prune(&state), ["Resize /dev/sda3"], "{fs}: dropped from the plan");
+    }
+}

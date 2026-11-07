@@ -23,9 +23,12 @@
 //! ([`Change::HOLDS`]): a format holds the device to exactly what the
 //! person saw, while setting a partition's flags holds it only to its
 //! place, so it can follow a format of the same partition in one plan. A
-//! confirmation is used once: it is moved into the call, and spent by
-//! [`Confirm::check`], whose proof ([`Confirmed`]) carries the device as it
-//! is now. The operation acts on that device, not on one passed beside it.
+//! resize holds a partition to its filesystem and to the two sizes it goes
+//! between ([`Confirm::resize`]): its steps move it from one to the other,
+//! and any other size is another tool's resize. A confirmation is used
+//! once: it is moved into the call, and spent by [`Confirm::check`], whose
+//! proof ([`Confirmed`]) carries the device as it is now. The operation
+//! acts on that device, not on one passed beside it.
 //!
 //! What stays a run-time check, or the caller's:
 //!
@@ -91,8 +94,10 @@ pub struct NewPartitionTable;
 /// Delete a partition and what is on it.
 pub struct DeletePartition;
 /// Change a partition's or filesystem's size: shrinking can lose what is
-/// past the new end. Held to the filesystem rather than the size, which the
-/// steps of one resize change.
+/// past the new end. Held to the filesystem, and to either the size the
+/// partition had when the person saw it or the size they chose, not to one
+/// size: the steps of one resize (or an earlier run's) move it from one to
+/// the other. Confirmed with both ([`Confirm::resize`]).
 pub struct Resize;
 /// Repair a filesystem: the repair may discard what it can't save.
 pub struct Repair;
@@ -153,6 +158,19 @@ impl Change for ChangePassphrase {
     const HOLDS: Holds = Holds::Exactly;
     const REFUSED_IN_USE: bool = false;
 }
+
+/// A change confirmed from what the person saw alone ([`Confirm::new`]):
+/// every one but a [`Resize`], which is held to the sizes it goes between
+/// as well ([`Confirm::resize`]).
+pub trait AsSeen: Change {}
+impl AsSeen for Format {}
+impl AsSeen for NewPartitionTable {}
+impl AsSeen for DeletePartition {}
+impl AsSeen for Repair {}
+impl AsSeen for CreatePartition {}
+impl AsSeen for Relabel {}
+impl AsSeen for PartitionEntry {}
+impl AsSeen for ChangePassphrase {}
 
 /// What identifies a block device: where it is, what it is on, and what is
 /// on it. Only [`DisksState::identity`] makes one.
@@ -299,12 +317,34 @@ impl DisksState {
 /// made for one operation can't be rebuilt as another's.
 struct Seen<Op> {
     identity: Identity,
+    /// A resize's: the sizes it goes between.
+    sizes: Option<Sizes>,
     op: PhantomData<fn() -> Op>,
 }
 
 impl<Op: Change> SameTarget<Identity> for Seen<Op> {
     fn same_target(&self, fresh: &Identity) -> bool {
-        self.identity.same(fresh, Op::HOLDS)
+        self.identity.same(fresh, Op::HOLDS) && self.sizes.is_none_or(|sizes| sizes.hold(fresh.size))
+    }
+}
+
+/// The sizes a resize goes between: the partition's when the person saw it,
+/// and the one they chose.
+#[derive(Clone, Copy, Debug)]
+struct Sizes {
+    from: u64,
+    to: u64,
+}
+
+impl Sizes {
+    /// How far aligning the partition's new end may move it.
+    const SLACK: u64 = 1 << 20;
+
+    /// Whether a partition of `size` is where the resize starts, or where
+    /// its steps (or an earlier run's) took it. Any other size is another
+    /// tool's resize: growing it from `from` would then shrink it.
+    fn hold(self, size: u64) -> bool {
+        size.abs_diff(self.from) <= Self::SLACK || size.abs_diff(self.to) <= Self::SLACK
     }
 }
 
@@ -327,7 +367,7 @@ impl<Op: Change, B> std::fmt::Debug for Confirm<Op, B> {
     }
 }
 
-impl<Op: Change, B> Confirm<Op, B> {
+impl<Op: AsSeen, B> Confirm<Op, B> {
     /// The person agreed to `Op` on the device they saw: `seen`, read with
     /// [`DisksState::identity`] from the state they reviewed, and the brand
     /// of the code that showed it to them.
@@ -368,15 +408,16 @@ impl<Op: Change, B> Confirm<Op, B> {
     /// and a confirmation made for one operation can't be rebuilt as another's
     /// (one held only to a partition's place, for its flags, as a format's): its
     /// review is private, and its brand can't be moved out. An [`Identity`]
-    /// carries no operation, though: any `Confirm<Op, B>` takes one, with any
-    /// brand its caller can make. So the caller's brand must be made only
-    /// where each operation is reviewed, for that operation (Tansu: only
-    /// `plan.rs` makes `Queued`, of each operation's own kind).
+    /// carries no operation, though: any `Confirm<Op, B>` takes one (a
+    /// resize's with its sizes), with any brand its caller can make. So the
+    /// caller's brand must be made only where each operation is reviewed,
+    /// for that operation (Tansu: only `plan.rs` makes `Queued`, of each
+    /// operation's own kind).
     ///
     /// ```compile_fail,E0603
     /// use aizome_sys::disks::{Format, Identity};
     /// fn as_format(flags_seen: Identity) {
-    ///     let _ = aizome_sys::disks::confirm::Seen::<Format> { identity: flags_seen, op: Default::default() };
+    ///     let _ = aizome_sys::disks::confirm::Seen::<Format> { identity: flags_seen, sizes: None, op: Default::default() };
     /// }
     /// ```
     ///
@@ -411,7 +452,42 @@ impl<Op: Change, B> Confirm<Op, B> {
     /// assert_eq!(confirm().check(&a).unwrap().target().device(), "/dev/sdb");
     /// ```
     pub fn new(seen: Identity, brand: B) -> Confirm<Op, B> {
-        Confirm { reviewed: Reviewed::new(Seen { identity: seen, op: PhantomData }, brand), at: Instant::now() }
+        Confirm::seen(Seen { identity: seen, sizes: None, op: PhantomData }, brand)
+    }
+}
+
+impl<B> Confirm<Resize, B> {
+    /// The person agreed to resize the partition they saw (`seen`, as for
+    /// [`Confirm::new`]) from `from` bytes, its size then, to `to`. Each
+    /// step's check holds the partition to one of those sizes, give or take
+    /// the MiB that aligning its end may move it: a partition another tool
+    /// resized meanwhile (grown past `to`, say) isn't resized from a size it
+    /// no longer has, which would shrink it under its filesystem. A resize
+    /// can't be confirmed without them:
+    ///
+    /// ```compile_fail,E0599
+    /// use aizome_sys::disks::{Confirm, Identity, Resize};
+    /// struct Sheet;
+    /// fn grow(seen: Identity) -> Confirm<Resize, Sheet> {
+    ///     Confirm::<Resize, Sheet>::new(seen, Sheet)
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// use aizome_sys::disks::{Confirm, Identity, Resize};
+    /// struct Sheet;
+    /// fn grow(seen: Identity, from: u64, to: u64) -> Confirm<Resize, Sheet> {
+    ///     Confirm::resize(seen, from, to, Sheet)
+    /// }
+    /// ```
+    pub fn resize(seen: Identity, from: u64, to: u64, brand: B) -> Confirm<Resize, B> {
+        Confirm::seen(Seen { identity: seen, sizes: Some(Sizes { from, to }), op: PhantomData }, brand)
+    }
+}
+
+impl<Op: Change, B> Confirm<Op, B> {
+    fn seen(seen: Seen<Op>, brand: B) -> Confirm<Op, B> {
+        Confirm { reviewed: Reviewed::new(seen, brand), at: Instant::now() }
     }
 
     /// The block device's object path.
@@ -427,6 +503,13 @@ impl<Op: Change, B> Confirm<Op, B> {
     /// How long ago the confirmation was made.
     pub fn age(&self) -> Duration {
         self.at.elapsed()
+    }
+
+    /// Whether the device as `state` has it is still the one confirmed, as
+    /// [`check`](Self::check) would find it, without spending the
+    /// confirmation: for a plan that keeps checking what it has queued.
+    pub fn matches(&self, state: &DisksState) -> bool {
+        state.identity(self.block()).is_some_and(|fresh| self.reviewed.matches(&fresh))
     }
 
     /// Spends the confirmation: the device as `state` has it now, if it is
@@ -454,7 +537,7 @@ impl<Op: Change, B> Confirm<Op, B> {
 
 /// A confirmation of `identity`, as a test reviews it (any brand will do).
 #[cfg(test)]
-fn confirm<Op: Change>(identity: Identity) -> Confirm<Op, ()> {
+fn confirm<Op: AsSeen>(identity: Identity) -> Confirm<Op, ()> {
     Confirm::new(identity, ())
 }
 
@@ -600,13 +683,36 @@ mod tests {
         // Shrunk (by a resize's earlier step): the resize goes on, a delete
         // confirmed before it doesn't.
         let shrunk = on(stick(), vec![part("aaaa", 50)]);
-        assert!(confirm::<Resize>(identity()).check(&shrunk).is_ok());
+        assert!(Confirm::resize(identity(), 100, 50, ()).check(&shrunk).is_ok());
         assert!(confirm::<DeletePartition>(identity()).check(&shrunk).is_err());
         // Moved: nothing holds.
         let mut moved = part("aaaa", 100);
         moved.partition.as_mut().unwrap().offset = 2 << 20;
         let moved = on(stick(), vec![moved]);
         assert!(confirm::<PartitionEntry>(identity()).check(&moved).is_err());
+    }
+
+    #[test]
+    fn a_resize_holds_its_partition_to_the_sizes_it_goes_between() {
+        const MIB: u64 = 1 << 20;
+        let part = |size: u64| BlockDevice {
+            size,
+            partition: Some(Partition { table: "/b/sdb".into(), number: 1, offset: MIB, size, ..Default::default() }),
+            ..block("aaaa")
+        };
+        let at = |size: u64| on(stick(), vec![part(size)]);
+        let seen = at(100 * MIB).identity("/b/sdb1").unwrap();
+        let grow = || Confirm::resize(seen.clone(), 100 * MIB, 160 * MIB, ());
+        // Where it starts, and where its steps take it, aligned or not.
+        assert!(grow().matches(&at(100 * MIB)));
+        assert!(grow().check(&at(160 * MIB)).is_ok());
+        assert!(grow().check(&at(160 * MIB - MIB / 2)).is_ok());
+        // Another tool grew it past the size chosen: growing it "from 100"
+        // would move its end back, under its filesystem.
+        assert!(!grow().matches(&at(200 * MIB)));
+        assert!(matches!(grow().check(&at(200 * MIB)), Err(Error::InvalidArgument(_))));
+        // Or shrank it, to neither size.
+        assert!(grow().check(&at(80 * MIB)).is_err());
     }
 }
 #[cfg(test)]

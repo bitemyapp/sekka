@@ -298,10 +298,8 @@ impl Tansu {
             if self.run.is_none() {
                 let dropped = self.plan.prune(&self.state);
                 if !dropped.is_empty() {
-                    self.notice = Some((
-                        format!("Dropped, as the device is gone or another took its place: {}.", dropped.join("; ")),
-                        true,
-                    ));
+                    self.notice =
+                        Some((format!("Dropped, as the device is gone or has changed: {}.", dropped.join("; ")), true));
                 }
             }
             if self.state.available && !self.asked_tools && !self.state.supported_filesystems.is_empty() {

@@ -523,6 +523,9 @@ interface on its in-memory sample disks; it does not test real storage.
 Ext2/3/4 resizing checks and repairs the unmounted filesystem before either
 growing or shrinking it. A failed check stops before changing the partition
 size; a failure in a later step is reported with any earlier changes retained.
+Each step holds the partition to the size it was queued at or the size chosen,
+within a MiB: a partition that another tool resized while its resize was
+pending is left alone, and the pending resize is dropped with a notice.
 `nix build .#aizome-checks.tansu-resize` exercises normal packaged Tansu
 mount, unmount, grow and shrink controls on a disposable VM disk, checking the
 actual filesystem size and preservation of ten files after each resize.

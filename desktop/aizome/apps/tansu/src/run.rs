@@ -335,8 +335,10 @@ impl Run {
                 let has_fs = !fs_type.is_empty();
                 let check = fs::check_before_resize(&fs_type);
                 // Every step, the check before it included, is held as the
-                // resize is: to the partition's place and filesystem, not
-                // its size, which the steps (or an earlier run's) change.
+                // resize is: to the partition's place and filesystem, and to
+                // a size of `from` or `to`, between which the steps (or an
+                // earlier run's) move it. At another size, another tool
+                // resized it, and growing it from `from` could shrink it.
                 let steps: &[&str] = match (to > from, has_fs, check) {
                     // Grow: check ext before changing either size, then the
                     // partition and the filesystem into the added space.

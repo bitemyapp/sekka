@@ -302,6 +302,8 @@ port, or a stick moved to another port, no longer matches.
 
 **Tansu**
 - Operations whose device is gone or replaced are dropped with a notice.
+- So is a pending resize whose partition another tool has resized since,
+  and a run agreed to before that refuses it at its first step.
 - A sheet whose target is gone keeps its title, says why, and can only be
   cancelled.
 
@@ -335,7 +337,9 @@ port, or a stick moved to another port, no longer matches.
   runs.
 - **Aizome-sys's API:** `Destructive` is now `Change`, and making partitions,
   labels, partition type, name and flags, and passphrase changes now needs a
-  confirmation. Only Tansu calls it.
+  confirmation. A resize's is made with `Confirm::resize`, which takes the
+  sizes it goes between; `Confirm::new` makes the others (`AsSeen`). Only
+  Tansu calls it.
 
 ## Checks
 
