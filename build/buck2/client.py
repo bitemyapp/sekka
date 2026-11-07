@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Cargo-authoritative target discovery and Buck action execution (no Nix eval)."""
 import argparse
+import contextlib
 import errno
 import fcntl
 import functools
@@ -244,9 +245,10 @@ def main():
     if content_dirs:
         # The daemon clones cache hits from this CAS instead of downloading them.
         os.environ["BUCK2_LOCAL_CAS_DIR"] = str(content_dirs[0])
-        if args.cache_write:
+        if args.cache_write and args.cache != "local":
             # Uploaded outputs skip the content store; the CAS keeps them, and
-            # their extents are shared with it after each build.
+            # their extents are shared with it after each build. A local build
+            # uploads nothing, so its outputs stay in the content store.
             journal = root / "buck-out" / args.isolation_dir / "local-cas-journal"
             journal.parent.mkdir(parents=True, exist_ok=True)
             os.environ["BUCK2_LOCAL_CAS_JOURNAL"] = str(journal)
@@ -262,20 +264,26 @@ def main():
         command += ["--show-full-json-output"]
     command += args.buck_arg + extra + passthrough
     os.chdir(root)
-    if args.command in ["build", "test"] and content_dirs:
-        # New objects are renamed into the store directory; lookups only
-        # write worktree views. An unchanged directory has nothing to share.
+    if args.command in ["build", "test", "run", "outputs", "runtime"] and content_dirs:
+        # Every command that builds shares extents afterwards. New objects are
+        # renamed into the store directory; lookups only write worktree views,
+        # so an unchanged directory has nothing to share.
         store = os.environ.get("BUCK2_LOCAL_CONTENT_STORE")
         before = Path(store).stat().st_mtime_ns if store else None
-        process = subprocess.Popen(command)
-        while True:
-            try:
-                status = process.wait()
-                break
-            except KeyboardInterrupt:
-                continue  # Buck receives the same SIGINT and cancels its own command.
-        changed = bool(store) and Path(store).stat().st_mtime_ns != before
-        shared = share_with_cas(content_dirs, changed, journal)
+        capture = args.command == "runtime"
+        with tempfile.TemporaryFile("w+") if capture else contextlib.nullcontext() as output:
+            process = subprocess.Popen(command, stdout=output if capture else None)
+            while True:
+                try:
+                    status = process.wait()
+                    break
+                except KeyboardInterrupt:
+                    continue  # Buck receives the same SIGINT and cancels its own command.
+            changed = bool(store) and Path(store).stat().st_mtime_ns != before
+            shared = share_with_cas(content_dirs, changed, journal)
+            if capture and status == 0:
+                output.seek(0)
+                stage_runtime(root, (root / args.runtime_dir).resolve(), targets, json.load(output))
         raise SystemExit(status or shared)
     if args.command == "runtime":
         completed = subprocess.run(command, check=True, text=True, stdout=subprocess.PIPE)

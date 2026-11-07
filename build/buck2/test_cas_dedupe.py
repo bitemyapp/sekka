@@ -89,7 +89,35 @@ def main():
         journal.write_text(lines[0] + "\n")
         repeat = cas_dedupe.share_journal([root / "cas"], journal)
         assert repeat["already_shared"] == 1 and repeat["deduplicated"] == 0, repeat
-    print("CAS dedupe: shared, mismatch, journal and repeat checks passed")
+        # A killed pass's renamed journal is taken up beside the new one, and a
+        # line the engine appends during the pass is shared before it ends.
+        fresh = []
+        for index, blob in enumerate(shared[:3]):
+            output = outputs / f"again-{index}"
+            output.write_bytes(blob.read_bytes())
+            digest, size = blob.name.split("-")[:2]
+            fresh.append(f"{digest} {size} {output}\n")
+        journal.write_text(fresh[1])
+        unnested = outputs / "not-a-directory"
+        unnested.write_bytes(b"x")
+        digest, size = shared[0].name.split("-")[:2]
+        Path(f"{journal}.sharing.1.1").write_text(fresh[0] + f"{digest} {size} {unnested}/inner\n")
+        original = cas_dedupe.share_entries
+        def appending(*args):
+            renamed = sorted(outputs.glob("local-cas-journal.sharing.*"))[-1]
+            if "again-2" not in renamed.read_text():
+                with open(renamed, "a") as late:
+                    late.write(fresh[2])
+            return original(*args)
+        cas_dedupe.share_entries = appending
+        try:
+            resumed = cas_dedupe.share_journal([root / "cas"], journal)
+        finally:
+            cas_dedupe.share_entries = original
+        assert resumed["deduplicated"] == 3 and resumed["changed"] == 1, resumed
+        assert not resumed["errors"], resumed
+        assert not list(outputs.glob("local-cas-journal.sharing*")), list(outputs.iterdir())
+    print("CAS dedupe: shared, mismatch, journal, repeat, leftover and late-append checks passed")
 
 
 if __name__ == "__main__":
