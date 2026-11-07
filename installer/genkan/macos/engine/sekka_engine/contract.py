@@ -632,7 +632,43 @@ def fill_entry(entry, root, esp):
     for placeholder in (ROOT_PLACEHOLDER, ESP_PLACEHOLDER):
         if entry.count(placeholder) != 1:
             raise Invalid(f"the boot entry must contain {placeholder} once")
-    return entry.replace(ROOT_PLACEHOLDER, uuid(root)).replace(ESP_PLACEHOLDER, uuid(esp))
+    filled = entry.replace(ROOT_PLACEHOLDER, uuid(root)).replace(ESP_PLACEHOLDER, uuid(esp))
+    if not names_partitions(filled, root, esp):
+        raise Invalid(
+            f"the boot entry's options must pass {ROOT_ARGUMENT}=PARTUUID={ROOT_PLACEHOLDER} and "
+            f"{ESP_ARGUMENT}=PARTUUID={ESP_PLACEHOLDER}"
+        )
+    return filled
+
+
+def entry_arguments(entry):
+    """What a boot entry passes the kernel: the words of its `options`
+    lines, which systemd-boot joins into the command line."""
+    words = []
+    for line in entry.splitlines():
+        parts = line.split()
+        if parts and parts[0] == "options":
+            words += parts[1:]
+    return words
+
+
+def names_partitions(entry, root, esp):
+    """handoff.rs Handoff::names_partitions: the entry passes
+    sekka.root=PARTUUID=ROOT and sekka.esp=PARTUUID=ESP, each an argument of
+    its own, anywhere and in any order, as first-boot setup reads them from
+    the command line."""
+    words = entry_arguments(entry)
+
+    def passes(argument, partition):
+        prefix = f"{argument}=PARTUUID="
+        return any(w.startswith(prefix) and w[len(prefix) :].lower() == partition.lower() for w in words)
+
+    return passes(ROOT_ARGUMENT, root) and passes(ESP_ARGUMENT, esp)
+
+
+def partition_arguments(entry):
+    """The entry's arguments that name Sekka's partitions, in its order."""
+    return " ".join(w for w in entry_arguments(entry) if w.startswith((ROOT_ARGUMENT + "=", ESP_ARGUMENT + "=")))
 
 
 def kernel_arguments(root, esp):

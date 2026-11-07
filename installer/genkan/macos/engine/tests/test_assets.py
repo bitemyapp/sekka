@@ -14,6 +14,7 @@ import scenarios
 import support as S
 from sekka_engine import assets as A
 from sekka_engine import canonical
+from sekka_engine import contract as c
 
 logging.disable(logging.CRITICAL)
 
@@ -250,6 +251,51 @@ class PayloadAndTemplateTests(unittest.TestCase):
         failure = channel.messages()[-2]["message"]["payload"]["failure"]
         self.assertEqual(failure["code"], "asset-mismatch")
         self.assertIn("@SEKKA_ESP_PARTUUID@", failure["message"])
+
+    def test_a_boot_entry_that_doesnt_pass_the_partitions_is_refused(self):
+        """Each placeholder must be the value of its own argument to the
+        kernel: that is how first-boot setup finds the partitions."""
+        entry = (
+            b"title Sekka\nlinux /EFI/nixos/kernel.efi\n"
+            b"options init=/nix/store/x/init root=PARTUUID=@SEKKA_ROOT_PARTUUID@ sekka.esp=PARTUUID=@SEKKA_ESP_PARTUUID@\n"
+        )
+        mac = S.j514s_clean(self.t.sub("mac"))
+        asahi, host = S.load_asahi(mac)
+        _, doc, _ = S.inspect(mac, asahi, host, self.t.sub("w0"))
+        release = S.make_release(self.t.sub("assets"), boot_entry=entry)
+        plan = S.derive_plan(doc, release, 190 * S.GIB)
+        before = mac.state_digest()
+        outcome, channel = S.run_engine("execute", mac, asahi, host, self.t.sub("w"), plan=plan, release=release)
+        failure = channel.messages()[-2]["message"]["payload"]["failure"]
+        self.assertEqual(failure["code"], "asset-mismatch")
+        self.assertIn("sekka.root=PARTUUID=@SEKKA_ROOT_PARTUUID@", failure["message"])
+        self.assertEqual(mac.state_digest(), before)
+
+    def test_the_partitions_are_named_anywhere_on_the_command_line(self):
+        """handoff.rs's names_partitions, case for case."""
+        root, esp = "63d89be1-72f7-4aff-9679-09cafa7e0c2d", "910de5ca-7390-4716-9a54-8028916e4d78"
+        apart = (
+            "title Sekka\noptions sekka.esp=PARTUUID=910DE5CA-7390-4716-9A54-8028916E4D78 init=/x\n"
+            "options quiet  sekka.root=PARTUUID=63d89be1-72f7-4aff-9679-09cafa7e0c2d\n"
+        )
+        self.assertTrue(c.names_partitions(apart, root, esp))
+        self.assertEqual(
+            c.partition_arguments(apart),
+            "sekka.esp=PARTUUID=910DE5CA-7390-4716-9A54-8028916E4D78 sekka.root=PARTUUID=63d89be1-72f7-4aff-9679-09cafa7e0c2d",
+        )
+        for entry in (
+            f"options sekka.root=PARTUUID={root}\n",
+            f"options sekka.root=PARTUUID={root}x sekka.esp=PARTUUID={esp}\n",
+            f"linux sekka.root=PARTUUID={root} sekka.esp=PARTUUID={esp}\n",
+        ):
+            self.assertFalse(c.names_partitions(entry, root, esp), entry)
+        for entry in (
+            "options root=PARTUUID=@SEKKA_ROOT_PARTUUID@ sekka.esp=PARTUUID=@SEKKA_ESP_PARTUUID@\n",
+            "title @SEKKA_ROOT_PARTUUID@\noptions sekka.esp=PARTUUID=@SEKKA_ESP_PARTUUID@\n",
+            "options sekka.root=PARTUUID=@SEKKA_ROOT_PARTUUID@,sekka.esp=PARTUUID=@SEKKA_ESP_PARTUUID@\n",
+        ):
+            with self.assertRaises(c.Invalid, msg=entry):
+                c.fill_entry(entry, root, esp)
 
 
 class AppleDoubleTests(unittest.TestCase):

@@ -1127,9 +1127,10 @@ def stored_zip(members):
     return buf.getvalue()
 
 
-def make_release(directory, root_image_size=3 * MIB, recovery_members=None, tamper=None):
+def make_release(directory, root_image_size=3 * MIB, recovery_members=None, tamper=None, boot_entry=None):
     """payload.zip, installer_data.json, manifest.json and recovery.zip, as
-    the image producer and the release would make them."""
+    the image producer and the release would make them; `boot_entry` is the
+    boot entry's text, if not the usual one."""
     rng = random.Random(7)
     esp = {
         "m1n1/boot.bin": b"m1n1 stage 2 " * 1000,
@@ -1144,6 +1145,8 @@ def make_release(directory, root_image_size=3 * MIB, recovery_members=None, tamp
             b"sekka.esp=PARTUUID=@SEKKA_ESP_PARTUUID@ quiet\n"
         ),
     }
+    if boot_entry is not None:
+        esp[BOOT_ENTRY] = boot_entry
     root_image = bytes(rng.getrandbits(8) for _ in range(4096)) * (root_image_size // 4096)
     members = [("esp/", b"", 0o40755)]
     dirs = set()

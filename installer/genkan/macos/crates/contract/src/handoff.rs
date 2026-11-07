@@ -11,7 +11,10 @@
 //! - `sekka/install.json` on the ESP: this document;
 //! - `sekka.root=PARTUUID=…` and `sekka.esp=PARTUUID=…` into the first
 //!   generation's boot entry on the same ESP, replacing the image's
-//!   `@SEKKA_ROOT_PARTUUID@` and `@SEKKA_ESP_PARTUUID@` placeholders.
+//!   `@SEKKA_ROOT_PARTUUID@` and `@SEKKA_ESP_PARTUUID@` placeholders. The
+//!   image passes each as the value of its own argument on an `options`
+//!   line (`sekka.root=PARTUUID=@SEKKA_ROOT_PARTUUID@`), anywhere among the
+//!   others and in either order.
 //!
 //! The initrd mounts the partitions those arguments name, and nothing else;
 //! first-boot setup writes the same identities into the installed
@@ -86,16 +89,49 @@ impl Handoff {
     }
 
     /// Replace the boot entry's placeholders, refusing an entry without
-    /// exactly one of each.
+    /// exactly one of each, or one that doesn't then name this
+    /// installation's partitions (see [`Handoff::names_partitions`]).
     pub fn fill_entry(&self, entry: &str) -> Result<String, Error> {
         for p in [ROOT_PLACEHOLDER, ESP_PLACEHOLDER] {
             if entry.matches(p).count() != 1 {
                 return Err(invalid(format!("the boot entry must contain {p} once")));
             }
         }
-        Ok(entry
+        let filled = entry
             .replace(ROOT_PLACEHOLDER, &self.root.to_string())
-            .replace(ESP_PLACEHOLDER, &self.esp.to_string()))
+            .replace(ESP_PLACEHOLDER, &self.esp.to_string());
+        if !self.names_partitions(&filled) {
+            return Err(invalid(format!(
+                "the boot entry's options must pass {ROOT_ARGUMENT}=PARTUUID={ROOT_PLACEHOLDER} and {ESP_ARGUMENT}=PARTUUID={ESP_PLACEHOLDER}"
+            )));
+        }
+        Ok(filled)
+    }
+
+    /// Whether a boot entry passes the kernel this installation's
+    /// partitions: `sekka.root=PARTUUID=…` and `sekka.esp=PARTUUID=…`, each
+    /// an argument of its own on an `options` line, anywhere and in any
+    /// order, as first-boot setup reads them from the command line. The
+    /// engine fills an entry, and checks it before setting the startup disk
+    /// again, by this rule.
+    pub fn names_partitions(&self, entry: &str) -> bool {
+        let words: Vec<&str> = entry
+            .lines()
+            .flat_map(|line| {
+                let mut words = line.split_whitespace();
+                let options = words.next() == Some("options");
+                words.filter(move |_| options)
+            })
+            .collect();
+        let passes = |argument: &str, partition: &Uuid| {
+            let partition = partition.to_string();
+            words.iter().any(|w| {
+                w.strip_prefix(argument)
+                    .and_then(|w| w.strip_prefix("=PARTUUID="))
+                    .is_some_and(|v| v.eq_ignore_ascii_case(&partition))
+            })
+        };
+        passes(ROOT_ARGUMENT, &self.root) && passes(ESP_ARGUMENT, &self.esp)
     }
 }
 
@@ -133,7 +169,36 @@ mod tests {
         let entry = "title Sekka\noptions init=/nix/store/x/init sekka.root=PARTUUID=@SEKKA_ROOT_PARTUUID@ sekka.esp=PARTUUID=@SEKKA_ESP_PARTUUID@ quiet\n";
         let filled = sample().fill_entry(entry).unwrap();
         assert!(filled.contains(&sample().kernel_arguments()));
+        assert!(sample().names_partitions(&filled));
         assert!(sample().fill_entry("title Sekka\n").is_err());
         assert!(sample().fill_entry(&format!("{entry}{entry}")).is_err());
+        // Each placeholder must be the value of its own argument, passed to
+        // the kernel.
+        for unusable in [
+            "options root=PARTUUID=@SEKKA_ROOT_PARTUUID@ sekka.esp=PARTUUID=@SEKKA_ESP_PARTUUID@\n",
+            "title @SEKKA_ROOT_PARTUUID@\noptions sekka.esp=PARTUUID=@SEKKA_ESP_PARTUUID@\n",
+            "options sekka.root=PARTUUID=@SEKKA_ROOT_PARTUUID@,sekka.esp=PARTUUID=@SEKKA_ESP_PARTUUID@\n",
+        ] {
+            assert!(sample().fill_entry(unusable).is_err(), "{unusable}");
+        }
+    }
+
+    #[test]
+    fn the_partitions_are_named_anywhere_on_the_command_line() {
+        // As first-boot setup reads them: apart, in either order, on more
+        // than one options line, the UUIDs in either case.
+        let h = sample();
+        let apart = "title Sekka\noptions sekka.esp=PARTUUID=910DE5CA-7390-4716-9A54-8028916E4D78 init=/x\n\
+                     options quiet  sekka.root=PARTUUID=63d89be1-72f7-4aff-9679-09cafa7e0c2d\n";
+        assert!(h.names_partitions(apart));
+        assert!(h.fill_entry(&apart.replace("910DE5CA-7390-4716-9A54-8028916E4D78", ESP_PLACEHOLDER)
+            .replace("63d89be1-72f7-4aff-9679-09cafa7e0c2d", ROOT_PLACEHOLDER)).is_ok());
+        for not in [
+            "options sekka.root=PARTUUID=63d89be1-72f7-4aff-9679-09cafa7e0c2d\n",
+            "options sekka.root=PARTUUID=63d89be1-72f7-4aff-9679-09cafa7e0c2dx sekka.esp=PARTUUID=910de5ca-7390-4716-9a54-8028916e4d78\n",
+            "linux sekka.root=PARTUUID=63d89be1-72f7-4aff-9679-09cafa7e0c2d sekka.esp=PARTUUID=910de5ca-7390-4716-9a54-8028916e4d78\n",
+        ] {
+            assert!(!h.names_partitions(not), "{not}");
+        }
     }
 }

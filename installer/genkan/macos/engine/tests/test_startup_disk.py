@@ -119,6 +119,23 @@ class StartupDiskRetry(unittest.TestCase):
                 if result is not None:
                     self.assertEqual(result, (0, "accepted: WaitingForRecovery"))
 
+    def test_a_boot_entry_execute_accepted_is_accepted_again(self):
+        """The image passes the partitions apart, the ESP first: execute fills
+        and verifies the entry, and the retry checks it by the same rule, as
+        first-boot setup reads the command line."""
+        entry = (
+            b"title Sekka\nlinux /EFI/nixos/kernel.efi\ninitrd /EFI/nixos/initrd.efi\n"
+            b"options sekka.esp=PARTUUID=@SEKKA_ESP_PARTUUID@ init=/nix/store/x/init\n"
+            b"options quiet sekka.root=PARTUUID=@SEKKA_ROOT_PARTUUID@\n"
+        )
+        r = scenarios.execute(self.t, before=scenarios.bless_fails, release_kw={"boot_entry": entry})
+        esp = [m["message"]["payload"] for m in messages(r) if m["message"]["type"] == "checkpoint" and m["message"]["payload"]["stage"] == "esp"][0]
+        facts = {f["name"]: f["value"] for f in esp["facts"]}
+        root, esp_part = r["mac"].ordered()[4].uuid.lower(), r["mac"].ordered()[3].uuid.lower()
+        self.assertEqual(facts["kernel-arguments"], f"sekka.esp=PARTUUID={esp_part} sekka.root=PARTUUID={root}")
+        rr = scenarios.retry(r, self.t)
+        self.assertEqual(rr["outcome"], "waiting-for-recovery", messages(rr)[-2]["message"]["payload"])
+
     def test_a_retry_that_fails_again_says_so(self):
         r = self.failed_execute()
         rr = scenarios.retry(r, self.t, bless_mode="fail")

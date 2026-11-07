@@ -501,10 +501,10 @@ class Engine:
             config["esp"],
         ):
             changed("its ESP's handoff names another installation")
-        arguments = c.kernel_arguments(config["root"], config["esp"])
         if not entries or any(c.ROOT_PLACEHOLDER in e or c.ESP_PLACEHOLDER in e for e in entries.values()):
             changed("its ESP's boot entries aren't filled in")
-        if not any(arguments in e for e in entries.values()):
+        # By the rule execute filled them by, and first-boot setup reads them.
+        if not any(c.names_partitions(e, config["root"], config["esp"]) for e in entries.values()):
             changed("no boot entry on its ESP names this installation's partitions")
 
     def read_esp(self, esp):
@@ -1160,7 +1160,8 @@ class Engine:
         entry_path = os.path.join(mount, entry_rel)
         with open(entry_path, "rb") as f:
             entry = f.read().decode("utf-8")
-        filled = c.fill_entry(entry, self.root_uuid, self.esp_uuid).encode("utf-8")
+        filled_entry = c.fill_entry(entry, self.root_uuid, self.esp_uuid)
+        filled = filled_entry.encode("utf-8")
         with open(entry_path + ".new", "wb") as f:
             f.write(filled)
             f.flush()
@@ -1218,7 +1219,8 @@ class Engine:
             c.fact("esp-files", len(files)),
             c.fact("esp-bytes", sum(f["size"] for f in files)),
             c.fact("boot-entry", expected[entry_rel][1]),
-            c.fact("kernel-arguments", c.kernel_arguments(self.root_uuid, self.esp_uuid)),
+            # As the entry written and read back passes them.
+            c.fact("kernel-arguments", c.partition_arguments(filled_entry)),
             c.fact("handoff", expected[c.HANDOFF_PATH][1]),
             c.fact("installation", self.installation),
             c.fact("setup-hints", ", ".join(provided) or "none"),

@@ -183,7 +183,7 @@ The assets directory holds exactly:
 
 | File | Checked |
 | --- | --- |
-| `payload.zip` | only `esp/…` and `root.img`; no links, devices, encryption or case-twins; every ESP file's SHA-256 is the manifest's; `root.img`'s size is the manifest's; the boot entry has each placeholder once |
+| `payload.zip` | only `esp/…` and `root.img`; no links, devices, encryption or case-twins; every ESP file's SHA-256 is the manifest's; `root.img`'s size is the manifest's; the boot entry has each placeholder once, as the value of its own argument on an `options` line (`sekka.root=PARTUUID=@SEKKA_ROOT_PARTUUID@`, `sekka.esp=PARTUUID=@SEKKA_ESP_PARTUUID@`), anywhere and in either order, as first-boot setup reads the command line |
 | `installer_data.json` | one OS; partitions exactly a FAT ESP from `esp/` with `copy_firmware`, then an expanding Linux root from `root.img`; `m1n1.bin` chainloading `m1n1/boot.bin`; supports 14.8.3; no `extras` or `icon`; the ESP's size is the plan's |
 | `manifest.json` | `sekka.mac.manifest/1` (below); release, revision and root-image digest are the plan's |
 | `recovery.zip` | every member a plain path inside `Sekka Recovery.app/`: no `..`, `.`, empty or absolute components, backslashes, links, devices, `__MACOSX` or `._` files, name twice ignoring case, encryption or unknown compression; at most 4096 entries and 512 MiB; Info.plist and an executable in Contents/MacOS |
@@ -223,7 +223,7 @@ found afterwards, by identity (GPT and APFS UUIDs), never by `diskN`.
 | stub-system | Asahi's `prepare_volume`, `check_volume`, `install_files` (including its admin-user copy for paired Recovery), then Asahi's `Finish Installation.app` and `.IAPhysicalMedia` are removed | stub-volume-group, stub-system-volume, stub-data-volume, stub-macos, build, admin-users | inspected |
 | partitions | Asahi's `OSInstaller.partition_disk` from the template: the FAT ESP (`newfs_msdos -I 0x5ecca5e1`) and the root, sizes and places checked | esp-partition, esp-offset, esp-size, esp-volume-id, root-partition, root-offset, root-size | inspected |
 | firmware | Asahi's `collect_firmware` into a `FWPackage`, copied to the ESP's `vendorfw/`; unmounted, mounted, read back and hashed | firmware-files, firmware-cpio, firmware-cpio-size, firmware-inventory | read-back |
-| esp | the payload's `esp/` tree (Asahi's `extract_tree`, CRC-checked); the boot entry's `@SEKKA_ROOT_PARTUUID@`/`@SEKKA_ESP_PARTUUID@` filled with the real GPT UUIDs; `sekka/install.json`; Asahi's `asahi/` installer data; AppleDouble files removed; unmounted, mounted, every file read back and compared with what was written, nothing extra | esp-inventory, esp-files, esp-bytes, boot-entry, kernel-arguments, handoff, installation, setup-hints | read-back |
+| esp | the payload's `esp/` tree (Asahi's `extract_tree`, CRC-checked); the boot entry's `@SEKKA_ROOT_PARTUUID@`/`@SEKKA_ESP_PARTUUID@` filled with the real GPT UUIDs; `sekka/install.json`; Asahi's `asahi/` installer data; AppleDouble files removed; unmounted, mounted, every file read back and compared with what was written, nothing extra | esp-inventory, esp-files, esp-bytes, boot-entry, kernel-arguments (as the filled entry passes them), handoff, installation, setup-hints | read-back |
 | root | `root.img` streamed from the package to `/dev/rDISKsN`, hashed as read, flushed (`F_FULLFSYNC`, else `DKIOCSYNCHRONIZECACHE`, else `fsync`), then read back from the raw device and hashed; both must be the manifest's digest | root-partition, root-image-size, root-image, root-read-back, flush | read-back |
 | recovery | `Sekka Recovery.app` from the checked zip, staged and renamed into place on the stub's System volume; `Sekka/InstallData/` with `recovery.json`, `boot.bin` (Asahi's `m1n1.build` of `boot/m1n1.bin` with `chosen.asahi,efi-system-partition` and `chainload=ESP;m1n1/boot.bin`, as `osinstall.install` builds it) and the firmware baseline under `firmware/`; `.IAPhysicalMedia` from Asahi's plist with `AppName` `Sekka Recovery.app`; unmounted, mounted, read back | recovery-app, recovery-app-files, recovery-config, boot-object, boot-object-size, firmware-baseline, iaphysicalmedia | read-back |
 | startup-disk | Asahi's `prepare_for_bless` (SystemVersion visible), then `bless --setBoot --device /dev/SYSTEM --user OWNER --stdinpass`, as Asahi runs it; then the selection is read back twice (`bless --getBoot` → `diskutil info` → APFSVolumeGroupID, and Asahi's `nvram boot-volume` parse) and both must name the stub's group; then Asahi's `prepare_for_step2` hides SystemVersion so the stub opens Recovery | startup-volume-group, bless-boot-device, nvram-boot-volume-group, recovery-app | policy-read-back |
@@ -295,7 +295,8 @@ Before its one intent, with nothing changed, it refuses (`stage: null`,
   it differs). So `m1n1/boot.bin`, which Recovery's `boot.bin` chainloads,
   the kernel, initrd, firmware and boot entries are as verified. Its
   `sekka/install.json` must name this installation, root and ESP, and its boot
-  entries must be filled in and name the same partitions.
+  entries must be filled in and one must name the same partitions, by the
+  rule execute filled it by.
 
 The stub's volumes are only read until these checks pass; then they may be
 mounted read-write for the stage, which renames the stub's SystemVersion. The
