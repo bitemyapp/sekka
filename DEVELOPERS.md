@@ -627,8 +627,52 @@ then asks the kernel (`FIDEDUPERANGE`) to share identical bytes; the kernel
 compares them, and any mismatch fails the command. `--content-store PATH`
 selects stores other than the default `~/.cache/sekka/buck2/content-v1`.
 Pairs that already share their first extent are skipped, so repeating it is
-cheap; run it after large builds or from a timer. Ephemeral CI caches are not
-touched.
+cheap. Ephemeral CI caches are not touched.
+
+Clients on the deployment host make the CAS their only store. Generate their
+client file there with `client --domain trusted --access writer --format buck2
+--local-cas`; it names the CAS directory (`[sekka] local_cas_dir`), and
+`scripts/sekka-buck2` then:
+
+- clones cache hits from the CAS file instead of downloading them, verifies
+  them like downloads, and records only a view hint in the content store
+  (`local-cas-downloads.patch`). An evicted blob falls back to the network.
+  A clone does not read through NativeLink, but its LRU still sees the blob:
+  the completeness check behind each action-cache hit, like
+  `FindMissingBlobs`, touches every blob it asks about (`has`, not a peek);
+- with `--cache cache --cache-write`, keeps produced outputs out of the
+  content store (`local-cas-outputs.patch`); `--cache local` uploads nothing,
+  so it keeps ingesting them. The engine lists each output the cache
+  uploader put in the CAS in `buck-out/ISOLATION/local-cas-journal`. After
+  every command that builds (`build`, `test`, `run`, `outputs`, `runtime`),
+  the client shares those files' extents with their CAS blobs through
+  `build/buck2/cas_dedupe.py`. Passes take turns on the journal's lock, and
+  a pass that was killed leaves its renamed journal for the next. Outputs
+  that changed since are skipped. A content-based output exists twice, at the placeholder it
+  was written to and as the copy published at its content path; both are
+  listed, as are other materialized copies;
+- first, shares content-store objects that the CAS also holds, after builds
+  that added any. That pass moves CAS blobs onto store objects' extents and
+  the journal pass moves outputs onto CAS blobs', so in this order each
+  output ends on one copy.
+
+After a cold dev build on wx-workstation, 0.02 GB of the worktree's 6.64 GB
+`buck-out` was its own; the content store held 28.7 MB.
+
+Both passes share one scan of the CAS directory, which takes 0.6 s at about
+500,000 blobs (the 256 GiB maximum) on wx-workstation. The kernel's byte
+comparison is cheap for outputs still in the page cache: 2.7 GB shared in
+0.2 s. `buck-out/ISOLATION/local-cas-report.json` records each pass's
+seconds.
+
+A mismatched digest fails the command; a CAS on another filesystem is
+reported once and skipped. Read-only clients still clone hits but keep
+ingesting their own outputs. On wx-workstation, a fresh worktree whose 706
+actions were all cached built in 10 s (28 s when downloading). Four fresh
+worktrees each rebuilding a different shared-crate edit at once took 40 s
+each, as with the content store off, against 222 s on the engine of the
+2026-11-06 storage run. Their content store held 109 MB, and each worktree
+kept 23 MB of its 6.3 GB `buck-out` unshared with the CAS.
 
 The gateway binds host loopback. From another machine, forward it explicitly:
 
@@ -650,14 +694,18 @@ on the workstation and use `retain /nix/store/CLIENT /nix/store/VENDOR`.
 `retain` does not evaluate sources or import unsigned arbitrary build outputs.
 
 For worktrees on the workstation's Btrfs filesystem, the qualified setup is
-local execution with a writer client, `scripts/sekka-buck2 --cache cache
---cache-write --config-file FILE build`, the default per-user content store,
-and `build-service --local dedupe` after large builds. In the 2026-11-06
+local execution with a writer client generated with `--local-cas`:
+`scripts/sekka-buck2 --cache cache --cache-write --config-file FILE build`. In the 2026-11-06
 storage run, a fresh worktree of an already-built source reused all 706
 actions and kept 8 MiB of its own build state beside 3.47 GB reflinked from
 the store; deduplicating the CAS against the store then cut the physical
 union by 15%. New build generations, not worktrees, are what grow: each one
-lands in the CAS until its LRU bound. Use `--cache remote` to offload
+lands in the CAS until its LRU bound. An edit's superseded content-based
+outputs stay in the worktree (3.3 GB for a release shared-crate edit),
+sharing their CAS blobs' extents until NativeLink evicts them. The stale
+cleaning described with the content store removes them. On the CAS host, a
+later build clones what it needs back: 742 release actions in 5.0 s after
+`clean --stale=1m`. Use `--cache remote` to offload
 execution, from another machine for example; its action-cache entries are
 separate from local execution's. [Results](docs/test-results/buck2/2026-11-06-storage-plan/README.md)
 
@@ -733,14 +781,47 @@ in-progress trusted uploads. Apply this policy to an existing deployment with
 `restart`; persistent cache contents are retained subject to the new bounds.
 `resize --cas-bytes N --ac-bytes N` drains workers and adjusts the existing cache
 without deleting individual objects. Docker logs are bounded separately.
-While `resize` and `runtime` restart a backend, its gateway is paused: clients
-wait rather than fail, and resume once the backend accepts connections. A
-NativeLink backend loads its whole CAS index before listening, about 2.6 s at
-500,000 entries on wx-workstation, longer than Buck2's 1.5 s of retries.
-Requests in flight to the old backend get `UNAVAILABLE`, which clients retry,
-where the gateway used to answer with an HTML 502 that failed them. `up`
+On the deployment host, `--local ... autosize` fits the CAS bound to the
+filesystem instead: the bound becomes the cache's current logical size plus
+the free space above `--min-free-bytes` (default 10% of the filesystem),
+clamped to `--min-cas-bytes` and `--max-cas-bytes` (4 and 256 GiB). It resizes
+only when that shrinks the bound by more than 5% or grows it by more than 25%,
+since a resize restarts the backend; `--dry-run` reports the decision. Logical
+bytes over-count the physical cost of compressed and shared extents, so the
+floor errs on the safe side. A resize also waits until the gateways have
+logged no requests for `--idle-seconds` (300), unless free space is below half
+the floor. Run it periodically, for example from a user timer every 15
+minutes:
+
+```sh
+nix build --out-link ~/.local/state/sekka/build-service .#build-service
+systemd-run --user --unit sekka-cas-autosize --on-calendar '*:0/15' \
+  ~/.local/state/sekka/build-service/bin/sekka-build-service \
+  --local --manifest /ABSOLUTE/PRIVATE.json autosize
+```
+
+The out-link keeps the controller from garbage collection. `systemd-run`
+makes a transient timer that ends with the user's service manager; for a
+lasting one, install the same command as a user service and timer. Either
+way the user's service manager must hold the `docker` group. One started
+before the user joined it lacks the group until it restarts; until then,
+run the command through `/run/wrappers/bin/sg docker -c '…'`, which takes
+the group from `/etc/group`. On wx-workstation, that form of the timer ran
+`autosize` and exited cleanly.
+
+While `resize` and `runtime` restart a backend, its gateway is paused:
+clients wait rather than fail, and resume once the backend accepts
+connections. A NativeLink backend loads its whole CAS index before listening:
+0.5 s at 42,000 entries (24 GB) and 1.7–2.6 s at 500,000 (about the 256 GiB
+maximum) on wx-workstation. The longer case outlasts Buck2's 1.5 s of
+retries. Requests in flight to the old backend get `UNAVAILABLE`, which
+clients retry; the gateway used to answer with an HTML 502 that failed a
+fresh worktree's blob reads. With the pause, eight probe loops through two
+resizes at 500,000 entries saw no errors, at most a 1.7 s stall. Fresh
+worktrees built through resizes 3 s and 7 s in, with no failures. `up`
 reloads a running gateway's configuration without dropping its connections.
-`restart` still restarts the gateways too, so run it when the service is idle.
+`restart` still restarts the gateways too, so run it when the service is
+idle.
 
 For eviction/restart evidence, `cache-inventory --timeout SECONDS` snapshots
 persistent cache names and sizes with the owned backends temporarily paused.

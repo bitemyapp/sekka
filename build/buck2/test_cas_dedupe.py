@@ -1,0 +1,142 @@
+"""CAS/content-store extent sharing on the builder's filesystem (Btrfs to run)."""
+import errno
+import fcntl
+import hashlib
+import os
+import struct
+from pathlib import Path
+import sys
+import tempfile
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cas_dedupe  # noqa: E402
+
+FICLONE = 0x40049409
+
+
+def reflinks(directory):
+    with tempfile.TemporaryFile(dir=directory) as source, tempfile.TemporaryFile(dir=directory) as copy:
+        source.write(b"probe" * 1024)
+        source.flush()
+        try:
+            fcntl.ioctl(copy.fileno(), FICLONE, source.fileno())
+        except OSError as error:
+            if error.errno in (errno.EOPNOTSUPP, errno.ENOTTY, errno.EINVAL, errno.EXDEV):
+                return False
+            raise
+    return True
+
+
+def put(root, data, corrupt=False):
+    digest = hashlib.sha256(data).hexdigest()
+    (root / "store" / f"SHA256-{digest}-{len(data)}").write_bytes(data)
+    blob = root / "cas/d2" / f"{digest}-{len(data)}-7"
+    blob.write_bytes(data[:-1] + b"X" if corrupt else data)
+    blob.chmod(0o444)
+    return blob
+
+
+def main():
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        if not reflinks(root):
+            print("CAS dedupe not checked: this builder's filesystem does not share extents.")
+            return
+        (root / "store").mkdir()
+        (root / "cas/d2").mkdir(parents=True)
+        shared = [put(root, os.urandom(size // 2) + bytes(size - size // 2))
+                  for size in (40 * 2**20, 3 * 2**20 + 123, 70000)]
+        put(root, os.urandom(100))
+        mismatch = put(root, os.urandom(8192), corrupt=True)
+        report = cas_dedupe.dedupe([root / "cas"], [root / "store"])
+        assert report["candidates"] == 5, report
+        assert report["deduplicated"] == 3 and report["skipped_small"] == 1, report
+        assert report["differs"] == [str(mismatch)] and not report["errors"], report
+        for blob in shared:
+            data = blob.read_bytes()
+            assert blob.name.startswith(hashlib.sha256(data).hexdigest()), blob
+        mismatch.unlink()
+        again = cas_dedupe.dedupe([root / "cas"], [root / "store"])
+        assert again["already_shared"] == 3 and again["deduplicated"] == 0, again
+        assert not again["differs"] and not again["errors"], again
+        # Journaled outputs share extents with their blobs; changed ones are skipped.
+        outputs = root / "buck-out"
+        outputs.mkdir()
+        journal = outputs / "local-cas-journal"
+        lines = []
+        for index, blob in enumerate(shared[:2]):
+            output = outputs / f"out-{index}"
+            output.write_bytes(blob.read_bytes())
+            digest, size = blob.name.split("-")[:2]
+            lines.append(f"{digest} {size} {output}")
+        changed = outputs / "changed"
+        changed.write_bytes(b"later")
+        digest, size = shared[2].name.split("-")[:2]
+        lines.append(f"{digest} {size} {changed}")
+        lines.append(f"{'0' * 64} 8192 {outputs / 'not-in-cas'}")
+        empty = outputs / "empty"
+        empty.touch()
+        journal.write_text("\n".join(lines + [f"{hashlib.sha256().hexdigest()} 0 {empty}"]) + "\n")
+        listed = cas_dedupe.share_journal([root / "cas"], journal)
+        assert listed["deduplicated"] == 2 and listed["changed"] == 1, listed
+        assert listed["skipped_small"] == 1, listed  # Never stored, so never missing.
+        assert listed["missing_blob"] == 1 and not listed["errors"], listed
+        assert not journal.exists() and not Path(str(journal) + ".sharing").exists()
+        # A blob not visible yet is retried once on the next pass, then dropped.
+        retry = Path(str(journal) + ".retry")
+        assert retry.read_text().count("\n") == 1
+        again = cas_dedupe.share_journal([root / "cas"], journal)
+        assert again["missing_blob"] == 1 and not retry.exists(), again
+        journal.write_text(lines[0] + "\n")
+        repeat = cas_dedupe.share_journal([root / "cas"], journal)
+        assert repeat["already_shared"] == 1 and repeat["deduplicated"] == 0, repeat
+        # A pair a killed pass shared only partway is finished, not "already" shared.
+        half = outputs / "half-shared"
+        half.write_bytes(shared[0].read_bytes())
+        request = bytearray(24 + 32)
+        source = os.open(shared[0], os.O_RDONLY)
+        target = os.open(half, os.O_RDONLY)
+        try:
+            struct.pack_into("=QQHHI", request, 0, 0, cas_dedupe.STEP, 1, 0, 0)
+            struct.pack_into("=qQQiI", request, 24, target, 0, 0, 0, 0)
+            fcntl.ioctl(source, cas_dedupe.FIDEDUPERANGE, request, True)
+        finally:
+            os.close(source)
+            os.close(target)
+        size = shared[0].stat().st_size
+        assert size > cas_dedupe.STEP
+        assert cas_dedupe.share(shared[0], half, size) == "shared"
+        assert cas_dedupe.share(shared[0], half, size) == "already"
+        # A killed pass's renamed journal is taken up beside the new one, and a
+        # line the engine appends during the pass is shared before it ends.
+        fresh = []
+        for index, blob in enumerate(shared[:3]):
+            output = outputs / f"again-{index}"
+            output.write_bytes(blob.read_bytes())
+            digest, size = blob.name.split("-")[:2]
+            fresh.append(f"{digest} {size} {output}\n")
+        journal.write_text(fresh[1])
+        unnested = outputs / "not-a-directory"
+        unnested.write_bytes(b"x")
+        digest, size = shared[0].name.split("-")[:2]
+        Path(f"{journal}.sharing.1.1").write_text(fresh[0] + f"{digest} {size} {unnested}/inner\n")
+        original = cas_dedupe.share_entries
+        def appending(*args):
+            renamed = sorted(outputs.glob("local-cas-journal.sharing.*"))[-1]
+            if "again-2" not in renamed.read_text():
+                with open(renamed, "a") as late:
+                    late.write(fresh[2])
+            return original(*args)
+        cas_dedupe.share_entries = appending
+        try:
+            resumed = cas_dedupe.share_journal([root / "cas"], journal)
+        finally:
+            cas_dedupe.share_entries = original
+        assert resumed["deduplicated"] == 3 and resumed["changed"] == 1, resumed
+        assert not resumed["errors"], resumed
+        assert not list(outputs.glob("local-cas-journal.sharing*")), list(outputs.iterdir())
+    print("CAS dedupe: shared, mismatch, journal, repeat, leftover and late-append checks passed")
+
+
+if __name__ == "__main__":
+    main()

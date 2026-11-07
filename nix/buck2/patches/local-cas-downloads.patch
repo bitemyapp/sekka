@@ -1,0 +1,363 @@
+Subject: [PATCH] Clone cache hits from a NativeLink CAS on the same host
+
+Base: facebook/buck2 9a1876786f32806f6b65fc51f4c1c3077efc38a5 plus the
+preceding Sekka patches.
+
+On the CAS host every blob the remote cache serves is already a file in
+NativeLink's filesystem store. With BUCK2_LOCAL_CAS_DIR naming its content
+directory, a missing artifact file is cloned from that file into its
+staged download instead of being fetched over gRPC, before any store
+lookup: a lookup could recover the blob from a peer's view and create a
+store object under the exclusive lock, which four concurrent worktrees
+then queued on. The clone is verified
+by hash like any download, but is not ingested as a second content-store
+object: the CAS file holds the bytes, and the store records only a
+buffered view hint, so it can still recover the bytes from this worktree
+if NativeLink evicts them. Names carry a generation, so an index maps
+SHA-256 digest and size to the newest file and is rescanned on a miss, at
+most once per ten scan durations (50 ms to 1 s). A fixed second made a
+cold remote build download 1.8 GiB that workers had just put in the CAS.
+The rescan runs outside the index's lock, since at
+500,000 blobs holding it would stall every other clone: hits use the
+current index meanwhile, and misses wait for the scan, which may find
+them. An evicted or unopenable blob, another digest
+algorithm, or an injected test miss falls back to the network. The
+directory joins the daemon startup identity.
+
+diff --git a/app/buck2_common/src/init.rs b/app/buck2_common/src/init.rs
+index 8e159ff..b126442 100644
+--- a/app/buck2_common/src/init.rs
++++ b/app/buck2_common/src/init.rs
+@@ -631,6 +631,8 @@ pub struct DaemonStartupConfig {
+     /// The private layer `BUCK2_EXTRA_EXTERNAL_CONFIG` names. The daemon reads it from its
+     /// own environment, so a client naming another layer needs another daemon.
+     pub extra_external_config: Option<String>,
++    /// A NativeLink CAS content directory on this host, cloned instead of downloaded.
++    pub local_cas_dir: Option<String>,
+     pub num_tokio_workers: Option<usize>,
+     pub daemon_buster: Option<String>,
+     pub digest_algorithms: Option<String>,
+@@ -752,6 +754,7 @@ impl DaemonStartupConfig {
+             local_content_store_max_entries: buck2_env!("BUCK2_LOCAL_CONTENT_STORE_MAX_ENTRIES")?
+                 .map(str::to_owned),
+             extra_external_config: buck2_env!("BUCK2_EXTRA_EXTERNAL_CONFIG")?.map(str::to_owned),
++            local_cas_dir: buck2_env!("BUCK2_LOCAL_CAS_DIR")?.map(str::to_owned),
+             num_tokio_workers: config
+                 .parse(BuckconfigKeyRef {
+                     section: "build",
+@@ -859,6 +862,7 @@ impl DaemonStartupConfig {
+             local_content_store_max_bytes: None,
+             local_content_store_max_entries: None,
+             extra_external_config: None,
++            local_cas_dir: None,
+             num_tokio_workers: None,
+             daemon_buster: None,
+             digest_algorithms: None,
+diff --git a/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs b/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs
+index db56c16..afa6ba8 100644
+--- a/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs
++++ b/app/buck2_execute_impl/src/materializers/deferred/io_handler.rs
+@@ -216,7 +216,7 @@ impl DefaultIoHandler {
+                             if let DirectoryEntry::Leaf(ActionDirectoryMember::File(f)) = entry {
+                                 let name = path.join(entry_path.get());
+                                 let absolute = self.fs.resolve(&name);
+-                                let Some(download) =
++                                let Some(mut download) =
+                                     crate::materializers::local_content_store::Download::prepare(
+                                         absolute,
+                                         f.dupe(),
+@@ -225,7 +225,16 @@ impl DefaultIoHandler {
+                                 else {
+                                     continue;
+                                 };
+-                                let digest = maybe_tombstone_digest(f.digest.data())?.to_re();
++                                let tombstoned = maybe_tombstone_digest(f.digest.data())?;
++                                // On the CAS host the blob is a local file: clone it
++                                // instead of downloading. Injected misses still miss.
++                                if std::ptr::eq(tombstoned, f.digest.data())
++                                    && download.clone_from_local_cas()
++                                {
++                                    download.finish(self.digest_config)?;
++                                    continue;
++                                }
++                                let digest = tombstoned.to_re();
+                                 let name = download.name()?;
+                                 missing.push(download);
+                                 files.push(NamedDigestWithPermissions {
+diff --git a/app/buck2_execute_impl/src/materializers/local_content_store.rs b/app/buck2_execute_impl/src/materializers/local_content_store.rs
+index fc397e2..70caea7 100644
+--- a/app/buck2_execute_impl/src/materializers/local_content_store.rs
++++ b/app/buck2_execute_impl/src/materializers/local_content_store.rs
+@@ -1255,6 +1255,138 @@ mod linux {
+         })
+     }
+ 
++    /// A NativeLink filesystem CAS on this host (`BUCK2_LOCAL_CAS_DIR`, its
++    /// content directory) holds every blob the remote cache serves, so cloning
++    /// one replaces a download. Its names carry a generation; an index maps
++    /// digests to files and is rescanned on a miss, at most once per ten scan
++    /// durations (50 ms to 1 s), so scanning takes at most a tenth of the time.
++    struct LocalCas {
++        root: PathBuf,
++        index: Mutex<LocalCasIndex>,
++        /// Signalled when a scan finishes.
++        scan_done: std::sync::Condvar,
++    }
++
++    type LocalCasFiles = HashMap<(String, u64), (u64, PathBuf)>;
++
++    #[derive(Default)]
++    struct LocalCasIndex {
++        files: LocalCasFiles,
++        /// When the latest scan started, whether it is still running, and how
++        /// long the last finished one took.
++        scanned: Option<std::time::Instant>,
++        scanning: bool,
++        scan_took: std::time::Duration,
++    }
++
++    /// Ends a scan, waking its waiters even if the scan unwinds.
++    struct ScanDone<'a>(&'a LocalCas);
++
++    impl Drop for ScanDone<'_> {
++        fn drop(&mut self) {
++            if let Ok(mut index) = self.0.index.lock() {
++                index.scanning = false;
++            }
++            self.0.scan_done.notify_all();
++        }
++    }
++
++    static LOCAL_CAS: LazyLock<Option<LocalCas>> = LazyLock::new(|| {
++        let root = std::env::var_os("BUCK2_LOCAL_CAS_DIR")?;
++        Some(LocalCas::new(PathBuf::from(root)))
++    });
++
++    impl LocalCas {
++        fn new(root: PathBuf) -> Self {
++            Self { root, index: Mutex::new(LocalCasIndex::default()), scan_done: std::sync::Condvar::new() }
++        }
++
++        fn scan(root: &Path) -> LocalCasFiles {
++            let mut files = LocalCasFiles::new();
++            // Digest folders of NativeLink's layouts v2 and v1; string keys are not blobs.
++            for folder in ["d2", "d"] {
++                let Ok(entries) = fs::read_dir(root.join(folder)) else {
++                    continue;
++                };
++                for entry in entries.flatten() {
++                    let name = entry.file_name();
++                    let Some(name) = name.to_str() else { continue };
++                    let mut parts = name.split('-');
++                    let (Some(hash), Some(size)) = (parts.next(), parts.next()) else { continue };
++                    let generation = parts.next().map_or(Some(0), |g| g.parse().ok());
++                    let (Ok(size), Some(generation)) = (size.parse::<u64>(), generation) else { continue };
++                    if hash.len() != 64 || parts.next().is_some() {
++                        continue;
++                    }
++                    let slot = files.entry((hash.to_owned(), size)).or_insert((generation, entry.path()));
++                    if generation > slot.0 {
++                        *slot = (generation, entry.path());
++                    }
++                }
++            }
++            files
++        }
++
++        /// The scan runs outside the lock: at 500,000 blobs it takes long
++        /// enough that holding the lock would stall every other clone. Hits
++        /// use the current index meanwhile; misses wait for the scan, which
++        /// may find them, as at a daemon's first lookups.
++        fn find(&self, hash: &str, size: u64) -> Option<PathBuf> {
++            let key = (hash.to_owned(), size);
++            let found = |files: &LocalCasFiles| files.get(&key).map(|(_, path)| path.clone());
++            let mut index = self.index.lock().ok()?;
++            if let Some(path) = found(&index.files) {
++                return Some(path);
++            }
++            if index.scanning {
++                let index = self.scan_done.wait_while(index, |index| index.scanning).ok()?;
++                return found(&index.files);
++            }
++            let interval = (index.scan_took * 10)
++                .clamp(std::time::Duration::from_millis(50), std::time::Duration::from_secs(1));
++            if index.scanned.is_some_and(|at| at.elapsed() < interval) {
++                return None;
++            }
++            let started = std::time::Instant::now();
++            index.scanned = Some(started);
++            index.scanning = true;
++            drop(index);
++            let _done = ScanDone(self);
++            let files = Self::scan(&self.root);
++            let mut index = self.index.lock().ok()?;
++            index.files = files;
++            index.scan_took = started.elapsed();
++            found(&index.files)
++        }
++    }
++
++    /// Clones a local CAS blob into `destination`, an existing empty file. False
++    /// when there is no local CAS, it lacks the blob, or it cannot be cloned; the
++    /// caller then downloads, and verifies either way.
++    pub(super) fn local_cas_contains(hash: &str, size: u64) -> bool {
++        LOCAL_CAS.as_ref().is_some_and(|cas| cas.find(hash, size).is_some())
++    }
++
++    pub(super) fn clone_from_local_cas(hash: &str, size: u64, destination: &Path) -> bool {
++        let Some(source) = LOCAL_CAS.as_ref().and_then(|cas| cas.find(hash, size)) else {
++            return false;
++        };
++        clone_blob(&source, size, destination)
++    }
++
++    fn clone_blob(source: &Path, size: u64, destination: &Path) -> bool {
++        let (Ok(source), Ok(destination)) = (
++            open_file(&source),
++            OpenOptions::new().write(true).custom_flags(O_NOFOLLOW).open(destination),
++        ) else {
++            return false; // Evicted since the scan, or not ours to open.
++        };
++        if source.metadata().map(|m| m.len()).ok() != Some(size) {
++            return false;
++        }
++        clone_file(&source, &destination).is_ok()
++    }
++
+     #[cfg(test)]
+     mod tests {
+         use buck2_common::cas_digest::DigestAlgorithm;
+@@ -1395,6 +1527,27 @@ mod linux {
+             Ok(())
+         }
+ 
++        #[test]
++        fn local_cas_index_prefers_the_newest_generation_and_clones() -> buck2_error::Result<()> {
++            let temp = tempfile::tempdir()?;
++            let d2 = temp.path().join("d2");
++            fs::create_dir(&d2)?;
++            let hash = "a".repeat(64);
++            fs::write(d2.join(format!("{hash}-5-3")), b"older")?;
++            fs::write(d2.join(format!("{hash}-5-9")), b"newer")?;
++            fs::write(d2.join("not-a-blob"), b"x")?;
++            let cas = LocalCas::new(temp.path().to_path_buf());
++            let newest = cas.find(&hash, 5).expect("indexed blob");
++            assert_eq!(newest, d2.join(format!("{hash}-5-9")));
++            assert_eq!(cas.find(&"b".repeat(64), 5), None);
++            let destination = temp.path().join("download");
++            File::create(&destination)?;
++            assert!(clone_blob(&newest, 5, &destination));
++            assert_eq!(fs::read(&destination)?, b"newer");
++            assert!(!clone_blob(&newest, 6, &destination));
++            Ok(())
++        }
++
+         #[test]
+         fn reflink_store_buffers_advisory_writes_until_eviction() -> buck2_error::Result<()> {
+             let temp = tempfile::tempdir()?;
+@@ -2169,6 +2322,9 @@ pub(crate) struct Download {
+     destination: buck2_fs::paths::abs_norm_path::AbsNormPathBuf,
+     temporary: tempfile::TempPath,
+     metadata: buck2_common::file_ops::metadata::FileMetadata,
++    // Cloned from the local CAS: its file already holds the bytes, so the
++    // content store records only a view hint instead of a second object.
++    local: bool,
+ }
+ 
+ impl Download {
+@@ -2177,13 +2333,18 @@ impl Download {
+         metadata: buck2_common::file_ops::metadata::FileMetadata,
+         config: DigestConfig,
+     ) -> buck2_error::Result<Option<Self>> {
+-        if file(
+-            &destination,
+-            metadata.digest.data(),
+-            metadata.is_executable,
+-            config,
+-            false,
+-        )? {
++        // On the CAS host, a blob in the local CAS is cloned by the caller: that
++        // is cheaper than any store lookup that might recover it from a peer's
++        // view under the exclusive lock.
++        if !Self::in_local_cas(metadata.digest.data())
++            && file(
++                &destination,
++                metadata.digest.data(),
++                metadata.is_executable,
++                config,
++                false,
++            )?
++        {
+             return Ok(None);
+         }
+         let parent = destination.parent().ok_or_else(|| {
+@@ -2200,9 +2361,46 @@ impl Download {
+             destination,
+             temporary,
+             metadata,
++            local: false,
+         }))
+     }
+ 
++    fn local_cas_key(digest: &FileDigest) -> Option<(String, u64)> {
++        if digest.raw_digest().algorithm() != buck2_common::cas_digest::DigestAlgorithmFamily::Sha256 {
++            return None;
++        }
++        let rendered = digest.to_string();
++        let (hash, _) = rendered.split_once(':')?;
++        Some((hash.to_owned(), digest.size()))
++    }
++
++    fn in_local_cas(digest: &FileDigest) -> bool {
++        #[cfg(target_os = "linux")]
++        {
++            Self::local_cas_key(digest).is_some_and(|(hash, size)| linux::local_cas_contains(&hash, size))
++        }
++        #[cfg(not(target_os = "linux"))]
++        {
++            let _ = digest;
++            false
++        }
++    }
++
++    /// On the CAS host, fills the staged download from the local CAS instead of
++    /// the network. `finish` verifies it like any download.
++    pub(crate) fn clone_from_local_cas(&mut self) -> bool {
++        #[cfg(target_os = "linux")]
++        {
++            let Some((hash, size)) = Self::local_cas_key(self.metadata.digest.data()) else {
++                return false;
++            };
++            self.local = linux::clone_from_local_cas(&hash, size, self.temporary.as_ref());
++            self.local
++        }
++        #[cfg(not(target_os = "linux"))]
++        false
++    }
++
+     pub(crate) fn name(&self) -> buck2_error::Result<String> {
+         Ok(
+             buck2_fs::paths::abs_norm_path::AbsNormPathBuf::new(self.temporary.to_path_buf())?
+@@ -2214,13 +2412,15 @@ impl Download {
+     pub(crate) fn finish(self, config: DigestConfig) -> buck2_error::Result<()> {
+         let path =
+             buck2_fs::paths::abs_norm_path::AbsNormPathBuf::new(self.temporary.to_path_buf())?;
+-        if !file(
+-            &path,
+-            self.metadata.digest.data(),
+-            self.metadata.is_executable,
+-            config,
+-            true,
+-        )? {
++        if self.local
++            || !file(
++                &path,
++                self.metadata.digest.data(),
++                self.metadata.is_executable,
++                config,
++                true,
++            )?
++        {
+             // Remote transport is not an integrity authority, even with the
+             // optional shared store disabled.
+             let expected = self.metadata.digest.data();

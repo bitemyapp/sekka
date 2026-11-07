@@ -28,6 +28,8 @@ platform.buildRustPackage {
     ./patches/content-store-advisory-writes.patch
     ./patches/bytestream-empty-source.patch
     ./patches/startup-identity-config-layer.patch
+    ./patches/local-cas-downloads.patch
+    ./patches/local-cas-outputs.patch
   ];
   # Cargo loads Git patch manifests even when the lock records them as unused.
   # Remove this dead patch in both source and vendoring; no resolved dep changes.
@@ -62,6 +64,7 @@ platform.buildRustPackage {
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p host_sharing --lib
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- local_content_store::download_tests
     cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- local_content_store::linux::tests::hint_
+    cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- local_content_store::linux::tests::local_cas_
     for filter in local_content_store::linux::tests::store_rejects_aliased_index_files_without_changing_targets \
       output_pipeline::tests output_watcher::tests prepared_outputs::tests; do
       cargo test --frozen --release --target ${pkgs.stdenv.hostPlatform.rust.rustcTarget} --jobs "$NIX_BUILD_CORES" -p buck2_execute_impl --lib -- "$filter"
