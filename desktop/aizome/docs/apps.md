@@ -163,7 +163,8 @@ palette. Search filters the sidebar and highlights options.
   with that keyboard chosen.
 - **Mouse** and **Trackpad**: pointer speed and acceleration, natural
   scrolling, tap to click, two-finger or corner right-click, disable while
-  typing, scroll speed.
+  typing, scroll speed. Trackpad can also turn every touchpad off; its
+  other settings are greyed out and kept until it's on again.
 - **Printers & Scanners**: printers with status, add (discovered or by
   address), remove, default, test page, queue.
 - **General**: About (the mark, Sekka version, hardware summary, hostname

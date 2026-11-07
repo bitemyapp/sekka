@@ -34,7 +34,9 @@ aizome --build-info                      # how the core was built (what a logic 
   `[input.pointer]` and `[input.touchpad]` `scroll_factor` (scales axis
   events, wheel and finger; `natural_scroll` turns them round in the
   compositor alone, libinput's own natural scrolling always off, so it's
-  turned round once on every device), `[input.keyboard]` `sticky_keys` (a modifier
+  turned round once on every device), `[input.touchpad] enabled` (false
+  sets every touchpad's libinput send-events mode to disabled; read at
+  each device's configuration, so a change applies live), `[input.keyboard]` `sticky_keys` (a modifier
   tapped alone latches for the next key; tapped again it lets go) and
   `slow_keys` with `slow_keys_ms` (a key counts once held that long; a
   brush is dropped), and `[performance] renderer` (at the next start).
