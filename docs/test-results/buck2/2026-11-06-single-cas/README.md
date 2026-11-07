@@ -63,6 +63,38 @@ A fresh worktree whose 706 dev actions were all cached:
 | Downloads, then the post-build extent pass | 28 s | 46 MB of 8.6 GB |
 | Clones from the CAS (`local-cas-downloads.patch`) | 10 s | 9 MB of 54 MB |
 
+## Copies the journal missed
+
+Trace: a cold dev build on a fresh service. The content store's objects were
+matched to `buck-out` files by digest, and every file's first extent was
+compared with its CAS blob's.
+
+The content store still held 1.15 GB after the build: 1,054 objects that the
+CAS also held. They were the published copies of content-based outputs. A
+locally executed content-based output is written to a placeholder
+(`…/output_artifacts/…`) and published as a copy at its content path. The
+copy was ingested into the store, and only the content path was journaled.
+After both passes, one of the two buck-out files kept the extents the action
+wrote:
+
+| Engine and client | buck-out files apart from the CAS | Worktree's exclusive bytes | Content store |
+| --- | --- | --- | --- |
+| Before | 1,066 files, 1,114 MB (the content paths) | 1.10 GB of 6.64 GB | 1.15 GB |
+| Copies listed instead of ingested | 1,066 files, 1,114 MB (the placeholders) | 1.09 GB | 28.7 MB |
+| Placeholders listed too, store pass first (`54ff881a`) | 68 dependency files, 0.4 MB | 0.02 GB | 28.7 MB |
+
+In the first row, the client's store pass, which moves CAS blobs onto store
+objects' extents, ran after the journal pass. It left the journaled content
+paths on extents nothing else used. The fix lists the placeholder at
+publication and runs the store pass first. Fresh worktrees were never
+affected, because their hits are cloned straight to the content path. The
+storage-plan runs' cold and release stages predate the fix.
+
+A cold release build (742 actions) on the fixed engine kept 0.03 GB of its
+16.67 GB `buck-out` to itself. Its 4,636 placeholder and published files
+(12.2 GB) all shared their CAS blobs, and the content store held 36.1 MB. The
+journal pass shared 10.0 GB in 15.8 s.
+
 ## Free-space sizing
 
 `build-service --local … autosize --dry-run` on the qualification service
