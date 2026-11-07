@@ -78,6 +78,11 @@ def main():
         assert listed["deduplicated"] == 2 and listed["changed"] == 1, listed
         assert listed["missing_blob"] == 1 and not listed["errors"], listed
         assert not journal.exists() and not Path(str(journal) + ".sharing").exists()
+        # A blob not visible yet is retried once on the next pass, then dropped.
+        retry = Path(str(journal) + ".retry")
+        assert retry.read_text().count("\n") == 1
+        again = cas_dedupe.share_journal([root / "cas"], journal)
+        assert again["missing_blob"] == 1 and not retry.exists(), again
         journal.write_text(lines[0] + "\n")
         repeat = cas_dedupe.share_journal([root / "cas"], journal)
         assert repeat["already_shared"] == 1 and repeat["deduplicated"] == 0, repeat
