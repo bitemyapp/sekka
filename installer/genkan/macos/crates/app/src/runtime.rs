@@ -95,8 +95,11 @@ impl Runtime {
             Effect::RetryStartupDisk(id, password) => self.spawn("retry", move |env, tx| {
                 let _ = tx.send(Msg::Retried(env.retry_startup_disk(id, password)));
             }),
-            Effect::Reconcile(id) => self.spawn("reconcile", move |env, tx| {
-                let _ = tx.send(Msg::Reconciled(env.reconcile(id)));
+            Effect::Reconcile { installation, delay_ms } => self.spawn("reconcile", move |env, tx| {
+                if delay_ms > 0 {
+                    std::thread::sleep(Duration::from_millis(delay_ms));
+                }
+                let _ = tx.send(Msg::Reconciled(env.reconcile(installation)));
             }),
             Effect::FullName(account) => self.spawn("full name", move |env, tx| {
                 let name = env.full_name(&account);

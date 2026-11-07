@@ -853,7 +853,7 @@ pub fn settle(env: &Simulation, model: &mut Model, effects: Vec<Effect>) -> Vec<
             Effect::Poll { installation, after, .. } => vec![Msg::Events(env.events(installation, after))],
             Effect::Cancel(id) => vec![Msg::CancelAnswered(env.cancel(id))],
             Effect::RetryStartupDisk(id, p) => vec![Msg::Retried(env.retry_startup_disk(id, p))],
-            Effect::Reconcile(id) => vec![Msg::Reconciled(env.reconcile(id))],
+            Effect::Reconcile { installation, .. } => vec![Msg::Reconciled(env.reconcile(installation))],
             Effect::FullName(account) => vec![Msg::FullName {
                 name: env.full_name(&account),
                 account,

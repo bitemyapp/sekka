@@ -316,6 +316,10 @@ pub const HELPER_ALLOW: &str = "macOS asks you to allow Sekka Installer's helper
 pub const HELPER_ABSENT_TITLE: &str = "Sekka Installer's helper isn't set up";
 pub const HELPER_ABSENT: &str = "Sekka is on this disk. Sekka Installer's helper keeps the record of every installation it makes, and it isn't set up on this Mac now, so whether this one finished, or what it still needs, can't be checked. Set up the helper, and Sekka Installer checks again. Nothing on your Mac was changed.";
 
+/// The checking screen, while the helper looks at the Mac for an earlier
+/// installation.
+pub const RECONCILING: &str = "Sekka Installer's helper is looking at the disk for it…";
+
 /// The page for an unfinished installation the helper keeps a record of,
 /// but that this Mac's own look at the disk doesn't find.
 pub const MISSING_TITLE: &str = "The earlier installation wasn't found";

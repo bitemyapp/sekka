@@ -91,6 +91,10 @@ pub enum Reconciling {
     Refused(Uuid),
 }
 
+/// How many times the helper is asked again, a moment apart, when it is
+/// busy as it is asked to reconcile.
+const RECONCILE_TRIES: u8 = 5;
+
 /// The authorization sheet, while it is open.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Authorization {
@@ -164,7 +168,9 @@ pub enum Effect {
     Poll { installation: Uuid, after: u64, delay_ms: u64 },
     Cancel(Uuid),
     RetryStartupDisk(Uuid, Secret),
-    Reconcile(Uuid),
+    /// Ask the helper to look at the Mac for a stopped installation, after
+    /// a moment when it was busy.
+    Reconcile { installation: Uuid, delay_ms: u64 },
     /// Look up the full name recoveryOS lists an account by.
     FullName(String),
     Diagnostics(Uuid),
@@ -226,6 +232,8 @@ pub struct Model {
     pub cancelling: bool,
     /// The installation the helper was asked to reconcile in this check.
     pub reconciling: Option<Reconciling>,
+    /// How many times in this check the helper was busy when asked.
+    pub reconcile_busy: u8,
     /// Why the helper didn't set the startup disk again, when it refused
     /// before trying.
     pub retry_refused: Option<String>,
@@ -272,6 +280,7 @@ impl Model {
             notice: None,
             cancelling: false,
             reconciling: None,
+            reconcile_busy: 0,
             retry_refused: None,
             set_aside: None,
         };
@@ -432,6 +441,13 @@ impl Model {
                 },
             },
         });
+        if matches!(self.reconciling, Some(Reconciling::Asked(_))) {
+            rows.push(CheckRow {
+                label: "Earlier installation",
+                detail: text::RECONCILING.into(),
+                state: CheckState::Pending,
+            });
+        }
         rows
     }
 
@@ -641,8 +657,18 @@ impl Model {
                 Vec::new()
             }
             // A running installation or download is already being watched,
-            // and an open sheet answers for the page it was opened from.
-            Msg::CheckAgain if self.running || self.downloading || self.authorization.is_some() => Vec::new(),
+            // an open sheet answers for the page it was opened from, and
+            // the helper looking at the Mac answers for this check: asked
+            // again meanwhile, it would refuse as busy, and its answer to
+            // the first would go unheard.
+            Msg::CheckAgain
+                if self.running
+                    || self.downloading
+                    || self.authorization.is_some()
+                    || matches!(self.reconciling, Some(Reconciling::Asked(_))) =>
+            {
+                Vec::new()
+            }
             Msg::CheckAgain => {
                 self.notice = None;
                 self.check_again()
@@ -858,6 +884,16 @@ impl Model {
                         if events.state == InstallState::Removed {
                             self.notice = Some(text::REMOVED.into());
                         }
+                    }
+                    // Busy with another request, or an engine still holding
+                    // the disk: not a look that failed. Asked again shortly,
+                    // a few times.
+                    Err(refusal) if refusal.code == HelperRefusalCode::Busy && self.reconcile_busy < RECONCILE_TRIES => {
+                        self.reconcile_busy += 1;
+                        return vec![Effect::Reconcile {
+                            installation: id,
+                            delay_ms: 2000,
+                        }];
                     }
                     Err(refusal) => {
                         self.reconciling = Some(Reconciling::Refused(id));
@@ -1380,7 +1416,11 @@ impl Model {
             Some(Reconciling::Answered(answered) | Reconciling::Refused(answered)) if answered == id => {}
             _ if helper_looks(&summary.state) => {
                 self.reconciling = Some(Reconciling::Asked(id));
-                return Some(vec![Effect::Reconcile(id)]);
+                self.reconcile_busy = 0;
+                return Some(vec![Effect::Reconcile {
+                    installation: id,
+                    delay_ms: 0,
+                }]);
             }
             _ => {}
         }

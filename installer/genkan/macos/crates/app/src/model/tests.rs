@@ -4,7 +4,7 @@
 //! the exact sequence of states a person would see.
 use super::*;
 use crate::env::{Environment, HelperProblem, Registration, ToDownload};
-use crate::sim::{Scenario, Simulation, inspection_failed};
+use crate::sim::{Scenario, Simulation, busy, inspection_failed};
 
 struct Journey {
     env: Simulation,
@@ -589,7 +589,7 @@ fn reopening_after_recovery_finished_shows_sekka_installed() {
     // can't read the boot policy: the helper is asked to look before
     // anything is shown.
     assert_eq!(m.on_disk(SIM_ID).map(|x| x.state), Some(InstallationState::Unknown));
-    assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "{effects:?}");
+    assert!(matches!(effects.as_slice(), [Effect::Reconcile { .. }]), "{effects:?}");
     assert_eq!(m.screen, Screen::Checking);
 
     let j = Journey::start(Scenario::RecoveryFinished);
@@ -618,7 +618,7 @@ fn a_complete_sekka_is_shown_installed_even_when_the_helper_cant_say_so() {
         Ok(i)
     };
     let (mut m, effects) = hear(&env, env.helper_status(), complete());
-    assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "{effects:?}");
+    assert!(matches!(effects.as_slice(), [Effect::Reconcile { .. }]), "{effects:?}");
     let effects = m.update(Msg::Reconciled(Err(inspection_failed())));
     assert_eq!(m.screen, Screen::Existing, "never Finish in Recovery");
     assert!(m.installed());
@@ -646,7 +646,7 @@ fn an_installation_removed_by_hand_lets_a_new_one_begin() {
 #[test]
 fn an_installation_removed_by_hand_is_named_when_the_helper_cant_close_it() {
     let (_, _, effects) = start(Scenario::RemovedByHand);
-    assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "{effects:?}");
+    assert!(matches!(effects.as_slice(), [Effect::Reconcile { .. }]), "{effects:?}");
 
     let mut j = Journey::with(Simulation::new(Scenario::RemovedByHand, 0.0).refusing_reconcile(inspection_failed()));
     // Never the Recovery steps for an installation that isn't there.
@@ -677,7 +677,7 @@ fn an_installation_removed_by_hand_is_named_when_the_helper_cant_close_it() {
         InstallState::EnrollmentUncertain,
     ] {
         let (mut m, effects) = hear(&env, known(state.clone()), env.inspect());
-        assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "{state:?}: {effects:?}");
+        assert!(matches!(effects.as_slice(), [Effect::Reconcile { .. }]), "{state:?}: {effects:?}");
         m.update(Msg::Reconciled(Err(inspection_failed())));
         assert_eq!(m.screen, Screen::Missing, "{state:?}");
     }
@@ -689,7 +689,7 @@ fn every_installation_that_stands_in_the_way_is_looked_at_by_the_helper() {
     // One that never started changing the disk is cancelled instead.
     for state in [InstallState::Planned, InstallState::AssetsVerified] {
         let (m, effects) = hear(&env, known(state.clone()), env.inspect());
-        assert!(effects.iter().all(|e| !matches!(e, Effect::Reconcile(_))), "{state:?}: {effects:?}");
+        assert!(effects.iter().all(|e| !matches!(e, Effect::Reconcile { .. })), "{state:?}: {effects:?}");
         assert_eq!(m.screen, Screen::Stopped, "{state:?}");
         assert!(m.stopped_actions().contains(&sekka_mac_contract::NextAction::Cancel));
     }
@@ -713,7 +713,7 @@ fn every_installation_that_stands_in_the_way_is_looked_at_by_the_helper() {
         // Nothing on the disk names it, as nothing would yet: the helper
         // judges by what is in the plan's space, which the app can't.
         let (mut m, effects) = hear(&env, known(state.clone()), env.inspect());
-        assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "{state:?}: {effects:?}");
+        assert!(matches!(effects.as_slice(), [Effect::Reconcile { .. }]), "{state:?}: {effects:?}");
         // It finds something there, or can't tell: the installation stops
         // the way, and isn't called gone.
         let unchanged = Events {
@@ -740,7 +740,7 @@ fn every_installation_that_stands_in_the_way_is_looked_at_by_the_helper() {
     // A finished one lets another begin, and the helper doesn't look at it
     // again.
     let (_, effects) = hear(&env, known(InstallState::WaitingForSetup), env.inspect());
-    assert!(effects.iter().all(|e| !matches!(e, Effect::Reconcile(_))), "{effects:?}");
+    assert!(effects.iter().all(|e| !matches!(e, Effect::Reconcile { .. })), "{effects:?}");
 }
 
 #[test]
@@ -833,7 +833,45 @@ fn the_helper_is_asked_about_recovery_once_in_each_check() {
     let mut partial = env.inspect().unwrap();
     partial.installations[0].state = InstallationState::Partial;
     let (_, effects) = hear(&env, env.helper_status(), Ok(partial));
-    assert!(matches!(effects.as_slice(), [Effect::Reconcile(_)]), "{effects:?}");
+    assert!(matches!(effects.as_slice(), [Effect::Reconcile { .. }]), "{effects:?}");
+}
+
+#[test]
+fn checking_again_waits_for_the_helpers_look_at_the_mac() {
+    let env = Simulation::new(Scenario::RecoveryFinished, 0.0);
+    let (mut m, effects) = hear(&env, env.helper_status(), env.inspect());
+    assert!(matches!(effects.as_slice(), [Effect::Reconcile { delay_ms: 0, .. }]), "{effects:?}");
+    // The checking page says what it waits for, and Check This Mac Again
+    // asks nothing twice meanwhile.
+    let row = m.checks().into_iter().find(|c| c.label == "Earlier installation").unwrap();
+    assert_eq!(row.state, CheckState::Pending);
+    assert!(m.update(Msg::CheckAgain).is_empty());
+    assert_eq!(m.screen, Screen::Checking);
+    // So its answer is heard.
+    m.update(Msg::Reconciled(env.reconcile(SIM_ID)));
+    assert_eq!(m.screen, Screen::Existing);
+    assert!(m.installed());
+
+    // Busy with another request: asked again shortly, not taken for a
+    // look that failed.
+    let env = Simulation::new(Scenario::RecoveryFinished, 0.0);
+    let (mut m, _) = hear(&env, env.helper_status(), env.inspect());
+    let effects = m.update(Msg::Reconciled(Err(busy())));
+    assert!(matches!(effects.as_slice(), [Effect::Reconcile { delay_ms, .. }] if *delay_ms > 0), "{effects:?}");
+    assert_eq!(m.screen, Screen::Checking);
+    m.update(Msg::Reconciled(env.reconcile(SIM_ID)));
+    assert_eq!(m.screen, Screen::Existing);
+
+    // Busy every time: after a few tries, it couldn't look this time.
+    let (mut m, _) = hear(&env, Simulation::new(Scenario::RecoveryFinished, 0.0).helper_status(), env.inspect());
+    let mut tries = 0;
+    while matches!(m.update(Msg::Reconciled(Err(busy()))).as_slice(), [Effect::Reconcile { .. }]) {
+        tries += 1;
+        assert!(tries < 10, "asked again without end");
+    }
+    assert!(tries > 0);
+    assert_eq!(m.screen, Screen::Recovery);
+    assert!(m.recovery_unconfirmed());
 }
 
 #[test]
