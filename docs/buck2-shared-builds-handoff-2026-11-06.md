@@ -124,10 +124,13 @@ For a new run:
 2. Build `gc/build-service-*` from it.
 3. Run `build-service --local … init --domains trusted --port 17891 --jobs 32`,
    then `up`.
-4. Write the writer client with `client --access writer --format buck2` to a
-   0600 file.
+4. Write the writer client with `client --domain trusted --access writer
+   --format buck2 --local-cas` to a 0600 file.
 5. Regenerate the config.
 6. Start `shared-build-bench.py run CONFIG --go` with `setsid`.
+
+Both of 2026-11-06's services were destroyed with their state, so a rerun
+starts a new one (steps 3–4) with an empty CAS.
 
 Older qualification services from 2026-11-05 are still running there, one
 serving CI jobs; leave them unless the user asks. Never put credentials in a
