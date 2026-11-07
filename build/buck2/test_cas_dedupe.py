@@ -73,9 +73,12 @@ def main():
         digest, size = shared[2].name.split("-")[:2]
         lines.append(f"{digest} {size} {changed}")
         lines.append(f"{'0' * 64} 8192 {outputs / 'not-in-cas'}")
-        journal.write_text("\n".join(lines) + "\n")
+        empty = outputs / "empty"
+        empty.touch()
+        journal.write_text("\n".join(lines + [f"{hashlib.sha256().hexdigest()} 0 {empty}"]) + "\n")
         listed = cas_dedupe.share_journal([root / "cas"], journal)
         assert listed["deduplicated"] == 2 and listed["changed"] == 1, listed
+        assert listed["skipped_small"] == 1, listed  # Never stored, so never missing.
         assert listed["missing_blob"] == 1 and not listed["errors"], listed
         assert not journal.exists() and not Path(str(journal) + ".sharing").exists()
         # A blob not visible yet is retried once on the next pass, then dropped.

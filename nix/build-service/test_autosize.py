@@ -30,6 +30,15 @@ class AutosizeTarget(unittest.TestCase):
         self.assertEqual(self.target(10, 64, 2000), 256 * GiB)
 
 
+class DeferResize(unittest.TestCase):
+    def test_waits_for_an_idle_service(self):
+        self.assertTrue(controller.defer_resize(3, 80 * GiB, 100 * GiB))
+        self.assertFalse(controller.defer_resize(0, 80 * GiB, 100 * GiB))
+
+    def test_disk_pressure_cannot_wait(self):
+        self.assertFalse(controller.defer_resize(3, 49 * GiB, 100 * GiB))
+
+
 class Dispatch(unittest.TestCase):
     def test_main_does_not_shadow_module_functions(self):
         # A subparser named like a helper turned `resize` into a parser object.

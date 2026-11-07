@@ -166,14 +166,15 @@ def share_journal(content_dirs, journal):
     index = cas_index(content_dirs)
     for path, (digest, size) in entries.items():
         report["entries"] += 1
+        if size < BLOCK:
+            # Includes empty outputs, whose blob a CAS never stores.
+            report["skipped_small"] += 1
+            continue
         blob = index.get((digest, size))
         if blob is None:
             report["missing_blob"] += 1
             if path not in retried:
                 later.append(f"{digest} {size} {path}\n")
-            continue
-        if size < BLOCK:
-            report["skipped_small"] += 1
             continue
         try:
             outcome = share(blob, path, size)
