@@ -279,6 +279,9 @@ impl Shell {
                 self.deskbar_visibility.native_drag = None;
                 self.deskbar_drag = None;
             }
+            // Replaced by a new shell (a restart), which closed this one's
+            // Deskbar for its own: it isn't opened again.
+            (true, None) if self.retiring => {}
             (true, None) => {
                 let Some(output) = self.primary().map(|s| s.output.id) else { return };
                 let model = self.deskbar_model();

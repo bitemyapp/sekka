@@ -282,6 +282,9 @@ pub struct Shell {
     pub(crate) wall_failed: std::collections::HashSet<PathBuf>,
     /// The wallpapers' files, Night's and Day's.
     pub(crate) wall_paths: [Option<PathBuf>; 2],
+    /// This shell replaces one still showing (a restart): each output's
+    /// desktop waits for its wallpaper (see `desktop_waits`).
+    pub(crate) replacing: bool,
     pub trash_full: bool,
     /// The user: login and full name.
     pub user: (String, String),
@@ -435,6 +438,7 @@ impl Shell {
             wall_pending: Default::default(),
             wall_failed: Default::default(),
             wall_paths: [None, None],
+            replacing: false,
             trash_full: false,
             user: crate::pam::current_user(),
             drag_grab: aizome_kit::Vec2::ZERO,
@@ -611,19 +615,40 @@ impl Shell {
                 self.screens[i].bar = Some(k);
                 fresh += surface_bytes(aizome_kit::Size::new(frame.width, crate::menubar::HEIGHT), scale);
             }
-            if self.screens[i].desktop.is_none() {
-                let opts = LayerOptions::new(Layer::Background, "aizome-desktop")
-                    .anchors(Anchors::ALL)
-                    .exclusive_zone(-1)
-                    .keyboard(KeyboardInteractivity::OnDemand)
-                    .output(id);
-                let k = cx.open_window(layer(opts, 0.0, 0.0, "Desktop"));
-                self.surfaces.insert(k, Surface::Desktop { output: id });
-                self.screens[i].desktop = Some(k);
-                fresh += surface_bytes(frame, scale);
-            }
+            fresh += self.open_desktop(i, cx);
         }
         cx.reserve_buffers(fresh);
+    }
+
+    /// Opens screen `i`'s desktop, unless it has one or waits for its
+    /// wallpaper: the bytes its first frame draws into.
+    fn open_desktop(&mut self, i: usize, cx: &mut Cx<Msg>) -> usize {
+        let s = &self.screens[i];
+        if s.desktop.is_some() || self.desktop_waits(s) {
+            return 0;
+        }
+        let (id, frame, scale) = (s.output.id, s.output.frame.size(), s.output.scale);
+        let opts = LayerOptions::new(Layer::Background, "aizome-desktop")
+            .anchors(Anchors::ALL)
+            .exclusive_zone(-1)
+            .keyboard(KeyboardInteractivity::OnDemand)
+            .output(id);
+        let k = cx.open_window(layer(opts, 0.0, 0.0, "Desktop"));
+        self.surfaces.insert(k, Surface::Desktop { output: id });
+        self.screens[i].desktop = Some(k);
+        surface_bytes(frame, scale)
+    }
+
+    /// The desktops that waited for their wallpapers, now they're in (not
+    /// one closed for a newer shell's).
+    fn open_waiting_desktops(&mut self, cx: &mut Cx<Msg>) {
+        if !self.replacing || self.retiring {
+            return;
+        }
+        let fresh: usize = (0..self.screens.len()).map(|i| self.open_desktop(i, cx)).sum();
+        if fresh > 0 {
+            cx.reserve_buffers(fresh);
+        }
     }
 
     // The bar.
@@ -1048,6 +1073,7 @@ impl Shell {
         }
         // What the shell before this one held (a restart, or a crash).
         let previous = crate::carry::previous_shell();
+        self.replacing = previous.is_some();
         if let Some(c) = crate::carry::load() {
             log::info!("taking up {} notifications from the shell before (pid {})", c.notes.len(), c.pid);
             // In a restart, ids go on well past the last the old shell gave,
@@ -1604,7 +1630,10 @@ impl Program for Shell {
             Msg::MenuClosed(n) => self.menu_closed(n),
             Msg::Agenda(a) => self.agenda = a,
             Msg::FlashDone(n) => self.flash_done(n, cx),
-            Msg::Wallpaper(key, image) => self.wallpaper_ready(key, image),
+            Msg::Wallpaper(key, image) => {
+                self.wallpaper_ready(key, image);
+                self.open_waiting_desktops(cx);
+            }
             Msg::WarmPalette => {
                 let theme = cx.theme().clone();
                 self.warm_palette(&theme);

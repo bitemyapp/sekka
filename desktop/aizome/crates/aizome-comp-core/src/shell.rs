@@ -679,6 +679,14 @@ impl WlrLayerShellHandler for State {
             surface.send_close();
             return;
         };
+        // In a shell restart the old shell opens nothing more: the new one
+        // replaces what it shows, and a surface it opened again (its
+        // Deskbar, closed for the new one's) would hold the restart open.
+        if self.of_retiring_shell(surface.wl_surface()) {
+            debug!(namespace, "the old shell's layer surface, in a restart: closed");
+            surface.send_close();
+            return;
+        }
         debug!(namespace, output = output.name(), "layer surface");
         // A client that destroys the surface with its role (in one go, as
         // Sidestep does) takes its buffer away before the role's end is

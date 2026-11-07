@@ -400,6 +400,13 @@ impl State {
         self.az.children.handover.is_some()
     }
 
+    /// Whether `surface` is the old shell's, while a shell restart is under
+    /// way.
+    pub fn of_retiring_shell(&self, surface: &WlSurface) -> bool {
+        let Some(h) = &self.az.children.handover else { return false };
+        surface.client().and_then(|c| c.get_credentials(&self.az.dh).ok()).is_some_and(|c| c.pid as u32 == h.old)
+    }
+
     /// A layer surface of the new shell drew its first frame: the old
     /// shell's surface of the same namespace on this output goes, in the
     /// same frame.
@@ -438,23 +445,27 @@ impl State {
         let Some(h) = &self.az.children.handover else { return };
         let (old, new, started) = (h.old, h.new, h.started);
         let pid_of = |s: &WlSurface| s.client().and_then(|c| c.get_credentials(&self.az.dh).ok()).map(|c| c.pid as u32);
-        let old_surfaces = self
+        let left: Vec<String> = self
             .az
             .outputs
             .iter()
-            .map(|o| {
+            .flat_map(|o| {
                 smithay::desktop::layer_map_for_output(o)
                     .layers()
                     .filter(|l| pid_of(l.wl_surface()) == Some(old))
-                    .count()
+                    .map(|l| l.namespace().to_owned())
+                    .collect::<Vec<_>>()
             })
-            .sum::<usize>();
+            .collect();
         let new_alive = self.az.children.supervised.iter().any(|s| s.pid() == Some(new) && s.child.is_some());
-        let done = old_surfaces == 0 || started.elapsed() > Duration::from_secs(8) || !new_alive;
+        let done = left.is_empty() || started.elapsed() > Duration::from_secs(8) || !new_alive;
         if !done {
             return;
         }
-        info!(old, new, old_surfaces, "shell restart finished");
+        if !left.is_empty() {
+            warn!(old, new, ?left, "shell restart cut short: the old shell's surfaces weren't all replaced");
+        }
+        info!(old, new, old_surfaces = left.len(), "shell restart finished");
         self.az.children.handover = None;
         for s in &mut self.az.children.supervised {
             if let Some(mut c) = s.retiring.take() {

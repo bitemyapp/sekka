@@ -76,6 +76,17 @@ impl Shell {
         Some((self.wallpapers.get(&key)?.clone(), id))
     }
 
+    /// Whether `screen`'s desktop waits to open: in a restart, until its
+    /// wallpaper is ready (or doesn't read). The new desktop replaces the
+    /// old shell's as it first draws, and drawn before its wallpaper it
+    /// would show only its colour.
+    pub(crate) fn desktop_waits(&self, screen: &crate::shell::Screen) -> bool {
+        self.replacing
+            && self
+                .wall_key(screen)
+                .is_some_and(|k| !self.wallpapers.contains_key(&k) && !self.wall_failed.contains(&k.path))
+    }
+
     /// Whether every output's wallpaper is ready.
     pub fn wallpapers_ready(&self) -> bool {
         self.screens
@@ -99,8 +110,13 @@ impl Shell {
             }
             self.wall_pending.insert(key.clone());
             cx.spawn(move || {
-                let image = crate::wallpaper::prepare(&key.path, key.width, key.height)
-                    .and_then(|rgba| crate::wallpaper::image(&rgba, key.width, key.height, scale));
+                // One that panics doesn't read either: a desktop waiting
+                // for it (`desktop_waits`) still opens.
+                let image = std::panic::catch_unwind(|| {
+                    crate::wallpaper::prepare(&key.path, key.width, key.height)
+                        .and_then(|rgba| crate::wallpaper::image(&rgba, key.width, key.height, scale))
+                })
+                .unwrap_or(None);
                 Msg::Wallpaper(key, image)
             });
         }
