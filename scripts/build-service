@@ -183,7 +183,7 @@ def autosize_target(current, configured, free, floor, minimum, maximum):
     return target if target < 0.95 * configured or target > 1.25 * configured else None
 
 
-def resize(m, manifest, cas_bytes, ac_bytes):
+def resize_cache(m, manifest, cas_bytes, ac_bytes):
     if min(cas_bytes, ac_bytes) < 1:
         raise SystemExit("Cache bounds must be positive")
     if m.get("ephemeral_cache") and cas_bytes + ac_bytes > m["backend_data_bytes"]:
@@ -694,7 +694,7 @@ def main():
         up(m)
         return
     if args.command == "resize":
-        resize(m, args.manifest, args.cas_bytes, args.ac_bytes)
+        resize_cache(m, args.manifest, args.cas_bytes, args.ac_bytes)
         print(json.dumps({"deployment": m["name"], "cas_bytes": m["cas_bytes"], "ac_bytes": m["ac_bytes"]}))
         return
     if args.command == "autosize":
@@ -716,7 +716,7 @@ def main():
                     "cas_logical_bytes": current, "configured_cas_bytes": m["cas_bytes"],
                     "target_cas_bytes": target, "resized": bool(target and not args.dry_run)}
         if target and not args.dry_run:
-            resize(m, args.manifest, target, m["ac_bytes"])
+            resize_cache(m, args.manifest, target, m["ac_bytes"])
         print(json.dumps(decision))
         return
     if args.command == "metrics":
