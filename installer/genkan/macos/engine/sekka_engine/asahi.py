@@ -100,10 +100,9 @@ def policy_diskutil(asahi, mounts):
                 # Ours, read-only, and now Sekka's own: mount it writable.
                 self.action("unmount", target)
             if want == "rw":
-                self.action("mount", target)
+                self.recorded(identity, want, "mount", target)
             else:
-                self.action("mount", "readOnly", target)
-            mounts.records[identity] = want
+                self.recorded(identity, want, "mount", "readOnly", target)
             return self.get("info", "-plist", target)["MountPoint"]
 
         def mount_read_only(self, target):
@@ -114,9 +113,20 @@ def policy_diskutil(asahi, mounts):
                 if mounts.records.get(identity) == "ro":
                     return info["MountPoint"]
                 self.action("unmount", target)
-            self.action("mount", "readOnly", target)
-            mounts.records[identity] = "ro"
+            self.recorded(identity, "ro", "mount", "readOnly", target)
             return self.get("info", "-plist", target)["MountPoint"]
+
+        def recorded(self, identity, mode, *args):
+            """Mount, recorded before diskutil is asked: a run stopped while
+            it mounts (diskutil is stopped with it, but the mount may still
+            happen) unmounts it all the same. Only a mount that failed is
+            taken off the record."""
+            mounts.records[identity] = mode
+            try:
+                self.action(*args)
+            except Exception:
+                mounts.records.pop(identity, None)
+                raise
 
         def unmount(self, target):
             info = self.get("info", "-plist", target)
@@ -140,9 +150,15 @@ class View:
     def __init__(self, asahi, mounts=None):
         self.asahi = asahi
         self.mounts = mounts if mounts is not None else Mounts()
-        self.sysinfo = asahi.system.SystemInfo()
         self.dutil = None
-        self.refresh()
+        try:
+            self.sysinfo = asahi.system.SystemInfo()
+            self.refresh()
+        except BaseException:
+            # Stopped while it looked (asked to stop, or a failure): nobody
+            # has this view to close, so what it mounted is unmounted here.
+            self.close()
+            raise
 
     def refresh(self):
         a = self.asahi

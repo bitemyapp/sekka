@@ -7,12 +7,14 @@ import logging
 import os
 import plistlib
 import signal
+import sys
 import unittest
 
 import scenarios
 import support as S
 from sekka_engine import canonical
 from sekka_engine import contract as c
+from sekka_engine.asahi import View
 from sekka_engine.engine import Terminated
 
 logging.disable(logging.CRITICAL)
@@ -421,9 +423,14 @@ class ExecuteTests(unittest.TestCase):
 
     # Asked to stop ---------------------------------------------------------------
 
-    def stopped(self, channel=S.Channel, before=None):
-        """Execute in a working folder of the engine's own, as a real run
-        does, until SIGTERM stops it."""
+    def fresh(self):
+        """A new folder for the fake Mac and its files, for each subtest."""
+        self.t = S.TempDir()
+        self.addCleanup(self.t.cleanup)
+
+    def stopped(self, channel=S.Channel, before=None, mode="execute"):
+        """Execute (or inspect) in a working folder of the engine's own, as
+        a real run does, until SIGTERM stops it."""
         mac = S.j514s_clean(self.t.sub("mac"))
         asahi, host = S.load_asahi(mac)
         _, doc, _ = S.inspect(mac, asahi, host, self.t.sub("w0"))
@@ -434,7 +441,7 @@ class ExecuteTests(unittest.TestCase):
         state = mac.state_digest()
         channel = channel(mac)
         with self.assertRaises(Terminated):
-            S.run_engine("execute", mac, asahi, host, None, plan=plan, release=release, channel=channel)
+            S.run_engine(mode, mac, asahi, host, None, plan=plan, release=release, channel=channel)
         return Run({"mac": mac, "channel": channel, "plan": plan, "state_before": state})
 
     def test_a_cancel_while_apples_files_download_cleans_up(self):
@@ -481,6 +488,50 @@ class ExecuteTests(unittest.TestCase):
         self.assertEqual(run.mac.ordered()[1].size, run.plan["actions"][0]["to"])
         self.assertEqual(run.mac.mounted_now(), [])
         self.assertFalse(os.path.exists(run.channel.engine.workdir))
+
+    def test_a_cancel_while_the_mac_is_looked_at_unmounts_what_it_mounted(self):
+        """SIGTERM while a view of the Mac is still being built, as its
+        first volume is mounted (the mount may finish though diskutil was
+        stopped): what it mounted is unmounted again, in an inspection and
+        in execute's own look before its first stage."""
+
+        def building():
+            frame = sys._getframe()
+            while frame is not None:
+                if frame.f_code.co_name == "__init__" and isinstance(frame.f_locals.get("self"), View):
+                    return frame.f_locals["self"]
+                frame = frame.f_back
+            return None
+
+        def before(nth):
+            def change(mac):
+                original = mac.cmd_diskutil
+                views = []
+
+                def diskutil(args, input):
+                    out = original(args, input)
+                    view = building()
+                    if args[0] == "mount" and view is not None and view not in views:
+                        views.append(view)
+                        if len(views) == nth:
+                            os.kill(os.getpid(), signal.SIGTERM)
+                    return out
+
+                mac.cmd_diskutil = diskutil
+
+            return change
+
+        # Execute looks at the Mac, then opens the view its stages work
+        # through.
+        for mode, nth in (("inspect", 1), ("execute", 1), ("execute", 2)):
+            with self.subTest(mode=mode, view=nth):
+                self.fresh()
+                run = self.stopped(before=before(nth), mode=mode)
+                self.assertTrue(run.mac.mount_log)
+                self.assertEqual(run.mac.mounted_now(), [])
+                self.assertNotIn("failure", run.types())
+                self.assertNotIn("intent", run.types())
+                self.assertEqual(run.mac.state_digest(), run.state_before)
 
     def test_apple_inputs_fetch_only_what_the_stub_needs(self):
         run = self.run_plan()

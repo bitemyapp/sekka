@@ -113,7 +113,8 @@ as root. Either way:
 
 - every volume it mounts, Asahi's OSEnum's and other systems' ESPs included,
   is mounted read-only (`diskutil mount readOnly`) and unmounted again before
-  it returns; what macOS had mounted is left as it was; nothing is written;
+  it returns, also when it is stopped part way; what macOS had mounted is
+  left as it was; nothing is written;
 - what only root can read is reported in a `log` line rather than guessed:
   without `bputil` the boot mode is taken from the booted volume group, and a
   stub's state is `unknown`.
@@ -265,7 +266,10 @@ has created it. Everything else Asahi's code or the stages mount (macOS's paired
 Recovery volume, other systems' volumes) is mounted read-only. The esp stage
 unmounts the ESP as soon as its read-back passes, and when the run ends,
 successful or not, everything it mounted is unmounted; volumes macOS mounted
-itself are never touched.
+itself are never touched. A mount is recorded before `diskutil` is asked
+for it, and a view that stops while it is being built unmounts what it
+mounted, so a run stopped at any point, even as `diskutil` mounts, leaves
+nothing of its own mounted.
 
 Asahi's `step2.sh` flow is not installed. The Recovery app takes over what it
 did: check that it runs in the stub's paired One True Recovery, `bputil -nc`,
