@@ -135,7 +135,13 @@ class CommandLine(unittest.TestCase):
         t = S.TempDir()
         try:
             root = t.sub("engine")
-            shutil.copytree(os.path.join(S.ENGINE, "sekka_engine"), os.path.join(root, "sekka_engine"))
+            # As the archive carries it: sources only (a test runner without
+            # -B may have left bytecode beside them).
+            shutil.copytree(
+                os.path.join(S.ENGINE, "sekka_engine"),
+                os.path.join(root, "sekka_engine"),
+                ignore=shutil.ignore_patterns("__pycache__"),
+            )
             p = run_by_path(root, ["inspect"])
             self.assertEqual(p.returncode, 1, p.stderr.decode()[-2000:])
             types = [canonical.loads(line, c.LIMIT_ENGINE_LINE, c.ENGINE_SCHEMA)["message"]["type"] for line in p.stdout.splitlines()]
