@@ -30,7 +30,11 @@ over long benchmark matrices. Builds, tests and measurements go to
     published content path) share the CAS blob's extents (`54ff881a`). One
     had kept its own: 1.1 GB of a cold dev worktree;
   - the engine's index of the CAS directory rescans outside its lock, and
-    misses wait for a scan in progress (`4f41ec88`);
+    misses wait for a scan in progress (`4f41ec88`). It may rescan once ten
+    of the last scan's durations have passed (`cb96b108`). That cut a cold
+    remote build's downloads from 1.8 GiB to 58 MiB;
+  - remote execution through a `--local-cas` client passes: 706 actions on
+    the service's workers, a fresh worktree from the cache, and remote tests;
   - Buck2's daily stale cleaning is on in `.buckconfig` (7 days, or 12
     hours under 10% free), with the deferred write actions it requires. It
     landed on PR #291. An edit's superseded content-based outputs otherwise
