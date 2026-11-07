@@ -14,8 +14,8 @@
 # configuration (each a default the setup.nix it writes overrides), localectl
 # and hostnamectl allowed to write theirs, and every locale setup offers
 # installed, in an order no choice changes. Once setup.nix is in the
-# configuration (`applied`), the helper, its socket and the login screen's
-# way to it are gone.
+# configuration (`applied`), the helper, its socket, the login screen's way
+# to it and the module's assertions are gone.
 {
   config,
   lib,
@@ -178,20 +178,6 @@ in
   config = lib.mkIf cfg.enable (
     lib.mkMerge [
       {
-        assertions = [
-          {
-            assertion = config.users.mutableUsers;
-            message = "calamares.firstBootSetup makes the owner's account imperatively: it needs users.mutableUsers.";
-          }
-          {
-            assertion = config.programs.aizome.greeter.enable or false;
-            message = "calamares.firstBootSetup runs on Aizome's login screen: enable programs.aizome.greeter.";
-          }
-          {
-            assertion = !config.services.displayManager.autoLogin.enable;
-            message = "calamares.firstBootSetup: a computer set up at first boot has no account to log in automatically.";
-          }
-        ];
         # No account can log in until setup makes the owner's.
         users.users.root.initialHashedPassword = lib.mkDefault "!";
         # What setup chooses: defaults that setup.nix overrides, and until
@@ -229,6 +215,22 @@ in
         calamares.installUser = lib.mkDefault "greeter";
       })
       (lib.mkIf waiting {
+        # What setup needs until it is over; afterwards the owner's account
+        # exists and these are theirs to choose.
+        assertions = [
+          {
+            assertion = config.users.mutableUsers;
+            message = "calamares.firstBootSetup makes the owner's account imperatively: it needs users.mutableUsers.";
+          }
+          {
+            assertion = config.programs.aizome.greeter.enable or false;
+            message = "calamares.firstBootSetup runs on Aizome's login screen: enable programs.aizome.greeter.";
+          }
+          {
+            assertion = !config.services.displayManager.autoLogin.enable;
+            message = "calamares.firstBootSetup: a computer set up at first boot has no account to log in automatically.";
+          }
+        ];
         environment.etc."sekka-setup/helper.json".text = builtins.toJSON helperConfig;
         users.groups.sekka-setup = { };
         # Only the login screen's account reaches the helper.

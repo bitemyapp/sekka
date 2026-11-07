@@ -7,8 +7,9 @@
 #   setup.nix (test-data/setup.nix, what the helper writes), proving the
 #   account's groups, host name, locale, keyboard and desktop agree with
 #   what setup applied at run time, that setup.nix leaves the system's
-#   locales as they were and its console keymap follows the keyboard, and
-#   that the result evaluates;
+#   locales as they were and its console keymap follows the keyboard, that
+#   the module asserts nothing once it's applied, and that the result
+#   evaluates;
 # - vm-test: the login screen's setup in a disposable VM, typed at as a
 #   person would (vm-test.nix).
 {
@@ -75,6 +76,22 @@ let
   before = installed [ ];
   after = installed [ ./test-data/setup.nix ];
   offered = lib.importJSON ./offered.json;
+  # What the owner may choose once set up, and the image may not.
+  owners = {
+    calamares.loginScreen = "gdm";
+    services.displayManager.autoLogin = {
+      enable = true;
+      user = "ada";
+    };
+    users.mutableUsers = lib.mkForce false;
+  };
+  # The module's own assertions that fail (only a failing one's message is
+  # sure to evaluate).
+  ours =
+    config:
+    lib.filter (lib.hasPrefix "calamares.firstBootSetup") (
+      map (a: a.message) (lib.filter (a: !a.assertion) config.assertions)
+    );
   sorted = l: lib.sort lib.lessThan (lib.unique l);
   check = what: ok: if ok then true else throw "first-boot setup's configuration: ${what}";
 in
@@ -125,6 +142,13 @@ in
     );
     assert check "once applied, the helper and its socket are gone" (
       !(after.systemd.sockets ? sekka-setup) && after.programs.aizome.greeter.setup.socket == null
+    );
+    assert check "once applied, the module asserts nothing (the login screen and accounts are the owner's)" (
+      lib.length (ours (installed [ owners ])) == 3
+      && ours (installed [
+        ./test-data/setup.nix
+        owners
+      ]) == [ ]
     );
     # Both systems evaluated whole, to their derivations; neither is built.
     pkgs.writeText "first-boot-configuration-${system}" (
